@@ -33,13 +33,13 @@ export function NewThreadBar({
     <div className="flex min-w-0 items-center gap-0.5 px-2.5 text-muted-foreground">
       {machine && (
         <Pick
-          what="Space"
+          what="Project"
           icon={<FolderIcon data-icon="inline-start" />}
           value={spaces.some((s) => s.id === space) ? space : machine}
           choices={[
             {
               id: machine,
-              name: "No Space",
+              name: "No Project",
               about: "A new Thread with its own folder",
             },
             ...spaces.map((space) => ({
@@ -52,7 +52,7 @@ export function NewThreadBar({
           onChange={(id) => onSpace(id as SpaceId)}
           more={
             onAddSpace && {
-              title: "Add Space",
+              title: "Add Project",
               icon: <FolderPlusIcon />,
               run: onAddSpace,
             }

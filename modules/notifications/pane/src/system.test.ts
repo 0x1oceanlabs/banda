@@ -42,7 +42,7 @@ test("many calls at once make one notice that names them all", () => {
   expect(summaryOf([heard("A", "done"), heard("B", "done")]).lasts).toBe(false)
 })
 
-test("with more than one Space, a call's notice and toast name its Space", () => {
+test("with more than one Project, a call's notice and toast name its Project", () => {
   expect(noticeOf(heard("Tests", "done"), true, "banda").title).toBe(
     "Tests · banda"
   )

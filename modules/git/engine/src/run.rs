@@ -321,7 +321,7 @@ impl From<Failure> for Refusal {
 }
 
 /// What the git methods but `status` say in a folder git does not know.
-const NOT_A_REPOSITORY: &str = "This Space's folder is not a git repository.";
+const NOT_A_REPOSITORY: &str = "This Project's folder is not a git repository.";
 /// What they say, and `status` too, in a repository git does not trust.
 const UNTRUSTED: &str = "Git does not trust this folder, as another user owns it: add it to git's safe.directory to use it here.";
 

@@ -701,7 +701,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
   {
     id: "space.add",
     section: "Banda",
-    title: "Add Space",
+    title: "Add Project",
     // The menu lists "Add Space" as its own branch; this opens it there.
     unlisted: true,
     run: (shell) => shell.route("space.add"),

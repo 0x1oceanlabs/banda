@@ -124,7 +124,7 @@ impl Live {
                 }
                 Ok(None) => return,
                 Err(error) => {
-                    tracing::warn!(%error, "a Space no longer hears the machine's accounts");
+                    tracing::warn!(%error, "a Project no longer hears the machine's accounts");
                     return;
                 }
             }
@@ -141,7 +141,7 @@ impl Live {
             .collect();
         for turn in turns {
             if let Err(error) = self.stop(turn) {
-                tracing::warn!(%error, "a turn of a removed Space could not be stopped");
+                tracing::warn!(%error, "a turn of a removed Project could not be stopped");
             }
         }
     }

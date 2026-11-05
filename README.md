@@ -3,9 +3,9 @@
 A tiling workspace for working with Agents: a desktop app first, then your own
 server or our cloud, then teams.
 
-![Banda: a Space with a Thread and a terminal side by side](docs/images/banda.png)
+![Banda: a Project with a Thread and a terminal side by side](docs/images/banda.png)
 
-Each project is a Space. In it, Panes sit side by side in columns you scroll
+Each folder you work in is a Project. In it, Panes sit side by side in columns you scroll
 through: Threads where you work with an Agent (Claude Code or Codex), the
 terminal, a browser, the Diff of what changed. You work with Agents you
 already have, in the folders you already have.
@@ -101,7 +101,7 @@ pnpm --filter @banda/desktop start     # builds the page and opens the window
 A build from a checkout is Banda Local: it keeps its things in folders of
 its own (`~/.config/banda-local`, `~/.local/share/banda-local`,
 `~/.local/state/banda-local`) and its window's class is `banda-local`, so
-it runs beside an installed Banda without touching its Spaces (ADR 0033).
+it runs beside an installed Banda without touching its Projects (ADR 0033).
 `BANDA_CHANNEL=stable` or `dev`, set for `cargo build` and the window's
 build alike, makes it Banda or Banda Dev instead.
 
@@ -127,11 +127,11 @@ scripts/try.sh agents-turn-run   # a worktree's slug in ../banda-worktrees
 ```
 
 It builds the tree and opens a Banda Local window from it, with a trial
-of its own in `~/.local/state/banda-trial/<slug>`: its Spaces and
+of its own in `~/.local/state/banda-trial/<slug>`: its Projects and
 settings never touch the Banda you work in, and trials of several
 branches run at once. The fake agent is its Harness, so a trial costs no
 tokens; `--real` offers Claude Code and Codex instead, `--fresh` forgets
-the trial's Spaces, `--no-build` starts what was built last, `--list` and
+the trial's Projects, `--no-build` starts what was built last, `--list` and
 `--forget` look after the trials. Set `CARGO_TARGET_DIR` to one folder
 for every tree and only Banda's own crates build again.
 

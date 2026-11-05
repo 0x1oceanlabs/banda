@@ -21,7 +21,7 @@ afterEach(() => {
   for (const stop of stops.splice(0)) stop()
 })
 
-test("a run says how it ended in a toast of its Space, a failure with why", () => {
+test("a run says how it ended in a toast of its Project, a failure with why", () => {
   expect(
     toldOf("s", { is: "done", title: "Committed a1b", detail: "Add x" })
   ).toEqual({

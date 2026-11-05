@@ -1234,7 +1234,7 @@ async fn a_sign_in_on_the_machine_starts_each_spaces_harness_again() {
     assert_eq!(
         world.retried(&sent).await.0,
         TurnState::Done,
-        "the Space's Harness started again, and read the account"
+        "the Project's Harness started again, and read the account"
     );
 }
 
@@ -1978,7 +1978,7 @@ fn image_file(root: &Path, image: &Value) -> PathBuf {
 fn space_data(root: &Path) -> PathBuf {
     let mut spaces = std::fs::read_dir(root.join(".data/spaces")).unwrap();
     let space = spaces.next().unwrap().unwrap().path();
-    assert!(spaces.next().is_none(), "one Space");
+    assert!(spaces.next().is_none(), "one Project");
     space
 }
 
@@ -3181,7 +3181,7 @@ async fn threads_one_thread_send_show_visual_and_preview_visual_are_an_agents_to
     );
     let description = send["description"].as_str().unwrap();
     assert!(
-        description.starts_with("Writes into a Thread of this Space"),
+        description.starts_with("Writes into a Thread of this Project"),
         "{description}"
     );
     let given: Vec<_> = send["schema"]["properties"]
@@ -3201,7 +3201,7 @@ async fn threads_one_thread_send_show_visual_and_preview_visual_are_an_agents_to
             {
                 "name": "threads",
                 "method": "agents.threads",
-                "description": "The Threads of this Space, the latest first: each one's ID, \
+                "description": "The Threads of this Project, the latest first: each one's ID, \
                     title and Harness, what it was last asked, how its latest turn stands, and \
                     the Questions it waits on.",
                 "schema": { "type": "object", "properties": {} }
@@ -3209,7 +3209,7 @@ async fn threads_one_thread_send_show_visual_and_preview_visual_are_an_agents_to
             {
                 "name": "read",
                 "method": "agents.thread",
-                "description": "One Thread of this Space as its Person reads it: its messages \
+                "description": "One Thread of this Project as its Person reads it: its messages \
                     and replies, its turns and what each may do now, and its settings.",
                 "schema": {
                     "type": "object",
@@ -3462,7 +3462,7 @@ async fn an_agent_writes_to_another_thread_and_its_answer_comes_back() {
     assert!(asks);
     assert_eq!(world.posted_answers(&b).await, [Value::Null, Value::Null]);
     let from = format!(
-        "message: You said: The Agent of Thread \"hello\" ({}), another Agent of this Space",
+        "message: You said: The Agent of Thread \"hello\" ({}), another Agent of this Project",
         a.as_str().unwrap()
     );
     assert!(said[5].starts_with(&from), "{}", said[5]);
@@ -3480,7 +3480,7 @@ async fn an_agent_writes_to_another_thread_and_its_answer_comes_back() {
     let said_in_a = texts(&view);
     assert_eq!(said_in_a[3], said[5], "the answer is B's last reply");
     let from = format!(
-        "message: You said: The Agent of Thread \"hi there\" ({}), another Agent of this Space, answers",
+        "message: You said: The Agent of Thread \"hi there\" ({}), another Agent of this Project, answers",
         b.as_str().unwrap()
     );
     assert!(said_in_a[5].starts_with(&from), "{}", said_in_a[5]);

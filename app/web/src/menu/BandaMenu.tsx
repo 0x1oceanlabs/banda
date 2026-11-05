@@ -531,7 +531,7 @@ function Menu({
           {note ??
             problem ??
             picker?.problem ??
-            (adding ? "Adding the Space…" : refused.join("; "))}
+            (adding ? "Adding the Project…" : refused.join("; "))}
         </div>
       )}
       <SuggestionList
@@ -786,7 +786,7 @@ function RowView({
       const { how } = row
       const [title, detail] =
         "name" in how
-          ? ["Create Space", how.name]
+          ? ["Create Project", how.name]
           : "locate" in how
             ? ["Locate", how.folder]
             : [how.create ? "Create & Add" : "Add", how.folder]
@@ -826,12 +826,13 @@ function placeholderOf(
   at: string
 ): string {
   if (taking) return `Press the keys for “${taking.title}”…`
-  if (inside?.kind === "source" && inside.source === "new") return "Space name"
+  if (inside?.kind === "source" && inside.source === "new")
+    return "Project name"
   if (isPathField(inside)) return PATH_PLACEHOLDER
   if (inside) return "Search…"
   return at === "actions"
     ? "Search actions…"
-    : "Search actions, Spaces, Threads and files…"
+    : "Search actions, Projects, Threads and files…"
 }
 
 const NO_ROWS: readonly MenuRow[] = []

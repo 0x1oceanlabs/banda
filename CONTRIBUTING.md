@@ -10,13 +10,13 @@ Those rules hold for you too.
   and why. Banda's shape is set by its decisions in
   [`docs/adr/`](docs/adr/), and a change that goes against one needs a new
   decision before it needs code.
-- Read [`GLOSSARY.md`](GLOSSARY.md): Banda's words (Space, Pane, Thread,
+- Read [`GLOSSARY.md`](GLOSSARY.md): Banda's words (Project, Pane, Thread,
   Agent, Harness, Person) mean one thing each, in the code and in the UI.
 
 ## Your change
 
 - Build and run it as the [README](README.md#build-it) says. A build from
-  a checkout is Banda Local and never touches an installed Banda's Spaces.
+  a checkout is Banda Local and never touches an installed Banda's Projects.
 - `scripts/check.sh` must pass: formatting, lints, types, the Rust and
   TypeScript tests, and the window's end-to-end tests.
 - One change per PR, its title saying what it does.

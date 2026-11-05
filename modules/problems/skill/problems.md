@@ -38,7 +38,7 @@ Fix it there, as the repository's `AGENTS.md` says: find the cause from
 the frames, fix it at its root, add a test that broke before the fix,
 and run the checks. Do not draft an issue unless the Person asks for one.
 When `checkout` is another folder, say so: a Thread in that folder's
-Space can fix it.
+Project can fix it.
 
 ### `checkout` is null: find its issue
 

@@ -296,7 +296,7 @@ export function Sidebar({
         </div>
       )}
       {/* Its foot: Banda's settings and keys, its theme, and how the
-          sidebar arranges, with "Add Space" beside it. */}
+          sidebar arranges, with "Add Project" beside it. */}
       <div className="flex items-center gap-0.5 px-1.5 pt-0.5 pb-1.5">
         <Button
           variant="ghost"
@@ -370,8 +370,8 @@ export function Sidebar({
           variant="ghost"
           size="icon-sm"
           className="text-muted-foreground"
-          aria-label="Add Space"
-          title="Add Space"
+          aria-label="Add Project"
+          title="Add Project"
           onClick={onAddSpace}
         >
           <FolderPlusIcon />
@@ -450,7 +450,7 @@ function SectionView({
         <Button
           variant="ghost"
           size="icon-xs"
-          aria-label="New Thread in No Space"
+          aria-label="New Thread in No Project"
           title="New Thread"
           onClick={onNoSpace}
         >
@@ -481,7 +481,7 @@ function SectionView({
               <ContextMenuContent>
                 {row.space.scratch && (
                   <DropdownMenuItem onClick={() => onMakeSpace(row.space)}>
-                    Make a Space from it…
+                    Make a Project from it…
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
@@ -530,8 +530,14 @@ function SpacesList({
   withMenu: WithMenu
 }) {
   return (
-    <div role="group" aria-label="Spaces" className="flex flex-col gap-px pb-1">
-      <div className="px-2 pt-2 pb-1 text-xs text-muted-foreground">Spaces</div>
+    <div
+      role="group"
+      aria-label="Projects"
+      className="flex flex-col gap-px pb-1"
+    >
+      <div className="px-2 pt-2 pb-1 text-xs text-muted-foreground">
+        Projects
+      </div>
       {lines.map(({ space, mark, waiting }) => (
         <Fragment key={space.id}>
           {withMenu(
@@ -660,11 +666,11 @@ function SpaceMenu({
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onPin(space.id, !space.pinned)}>
           {space.pinned ? <PinOffIcon /> : <PinIcon />}
-          {space.pinned ? "Unpin Space" : "Pin Space"}
+          {space.pinned ? "Unpin Project" : "Pin Project"}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onSettings(space.id)}>
           <SettingsIcon />
-          Space settings
+          Project settings
         </DropdownMenuItem>
       </ContextMenuContent>
     </ContextMenu>

@@ -155,7 +155,7 @@ banda_kernel::methods! {
         call switch(SwitchAsk) -> (), Write;
         /// Makes a branch, and switches to it.
         call branch(BranchAsk) -> (), Write;
-        /// Makes the Space's folder a git repository.
+        /// Makes the Project's folder a git repository.
         call init(Nothing) -> (), Write;
         /// The prompt a Harness writes a commit's message from: what the
         /// commit would take, its branch and the repository's last

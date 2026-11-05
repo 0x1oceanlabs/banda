@@ -30,7 +30,7 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   this computer or on a server. The Harness may be any ACP agent.
 - Everything the window can do, the CLI can do.
 - Inside the engine there are no services: it is one process, with one
-  SQLite writer per Space. Modules are crates in one binary.
+  SQLite writer per Project. Modules are crates in one binary.
 - **One program, `banda`.** `banda serve` runs the engine. It listens
   on 127.0.0.1 only, and writes its port and a fresh secret to
   `engine.json` in its state folder, a file only this user can read. A
@@ -68,7 +68,7 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   variables: `BANDA_TOKEN`, a new pass for the session's Agent, and
   `BANDA_ENGINE`, where the API listens. It is a pipe: MCP on stdio, one
   JSON-RPC message per line, written on `serde_json`, and the engine's API
-  on the other side. Its calls name no Space, so they run in the pass's.
+  on the other side. Its calls name no Project, so they run in the pass's.
   Its tools are `spaces.tools`, read once as it connects: the module
   methods marked `tool` in their `methods!` tables. It adds `skill`,
   which it answers itself from the Banda skill. Its
@@ -78,7 +78,7 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   tool result marked `isError`, with the refusal and that nothing was
   done; only an engine that does not answer is a JSON-RPC error.
 - **The CLI prints JSON.** `banda call <method>` prints `{"ok": …}`, as
-  `banda space add <path>` does with the Space it added.
+  `banda space add <path>` does with the Project it added.
   `banda follow` prints events, one per line. When the engine refuses
   the call, the hello or the follow, the CLI prints
   `{"error": {"code", "message"}}` and exits 1. When no engine answers,
@@ -89,53 +89,53 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
 
 The kernel holds only what every module needs, and it names no module.
 
-- **Space.** A folder on disk (a new one goes in `~/Banda/<name>/`) and
+- **Project.** A folder on disk (a new one goes in `~/Banda/<name>/`) and
   its data in the engine's data folder, `~/.local/share/banda/spaces/<id>/`
   (ADR 0026; Banda Dev's is `banda-dev`, a checkout's `banda-local`, ADR
-  0033): `space.json`, which names the folder, the Space's SQLite with
+  0033): `space.json`, which names the folder, the Project's SQLite with
   the modules' migrations and the event log, and the modules' files. The
-  folder holds the work alone. One engine at a time opens a Space: it holds
-  a lock on `spaces/<id>/space.lock` while the Space is open. Spaces from
+  folder holds the work alone. One engine at a time opens a Project: it holds
+  a lock on `spaces/<id>/space.lock` while the Project is open. Projects from
   before ADR 0026 move their `.banda/` there the first time an engine
   starts. The kernel's own methods manage them: `spaces.create` makes a
   new folder, `spaces.add` adds any folder (resolved, so one folder is one
-  Space), `spaces.browse` lists folders as a path is typed,
+  Project), `spaces.browse` lists folders as a path is typed,
   `spaces.update` renames, pins or archives, and `spaces.remove` forgets
-  a Space: its modules stop what runs there (`Module::closing`), its data
+  a Project: its modules stop what runs there (`Module::closing`), its data
   becomes `<id>.gone` and is deleted, and its folder is not touched. A
-  Thread in No Space has a Space of its own, `scratch` in `space.json`
+  Thread in No Project has a Project of its own, `scratch` in `space.json`
   (ADR 0046): `spaces.create { scratch: true }` makes it, with no name, in
   a new folder `~/Banda/scratch/<date>-<id8>/`, and `spaces.update
-  { scratch: false, name }` makes a Space of it.
-- **Event log.** Append-only, with typed events, one per Space. Windows and
+  { scratch: false, name }` makes a Project of it.
+- **Event log.** Append-only, with typed events, one per Project. Windows and
   the CLI subscribe to it. A subscription sends only what its view needs.
   The database itself refuses to change or delete an event.
 - **Access decision.** One function decides whether a Participant may perform
   an action on a target. Every method and every subscription passes through
   it, before any module code runs. On one computer it answers: the owner may
   do everything; an Agent may read and change the work, but neither change
-  the Space itself, decide what an Agent asked a Person, nor run programs
+  the Project itself, decide what an Agent asked a Person, nor run programs
   as the Person in a terminal (an Agent runs them through its Harness);
   nobody else may do anything. Members and roles arrive here later.
-- **The Space wall** (ADR 0019, decision 2). A caller with an Agent's
-  pass calls, subscribes and streams only in that pass's Space. The
-  kernel checks it where it finds the Space, before the access decision
+- **The Project wall** (ADR 0019, decision 2). A caller with an Agent's
+  pass calls, subscribes and streams only in that pass's Project. The
+  kernel checks it where it finds the Project, before the access decision
   (`access::within`), for the API and for callers in the engine alike. A
-  call that names no Space runs in the pass's; any other Space is
+  call that names no Project runs in the pass's; any other Project is
   refused. `spaces.list` shows it only its own.
 - **This machine** (ADR 0025, decision 1). A module whose data holds
-  every Space's, as the workspaces do, is the machine's
-  (`Module::scope`). The kernel keeps one more store like a Space's for
+  every Project's, as the workspaces do, is the machine's
+  (`Module::scope`). The kernel keeps one more store like a Project's for
   those modules, in the engine's state folder (`machine/`), with its own
-  receipts, event log and outbox; a Space's modules never open there, nor
-  the machine's in a Space. Their methods name no Space. The machine is
-  no Space in `spaces.list`; `welcome` names its ID, which a window
+  receipts, event log and outbox; a Project's modules never open there, nor
+  the machine's in a Project. Their methods name no Project. The machine is
+  no Project in `spaces.list`; `welcome` names its ID, which a window
   follows and streams by. An Agent's pass stops at it, but for the
   methods marked `tool` (ADR 0032): the kernel hands each call the pass's
-  wall (`Call::wall`: its Space, and whether that Space's `sees_others`
+  wall (`Call::wall`: its Project, and whether that Project's `sees_others`
   is on), and the module answers with what the wall shows. The
-  workspaces' tools show an Agent its Space's Panes, the others' outline
-  when let, and let it open, move and close only its Space's Panes of
+  workspaces' tools show an Agent its Project's Panes, the others' outline
+  when let, and let it open, move and close only its Project's Panes of
   the kinds that run nothing as the Person, moving and closing only the
   ones it opened (`Pane.by`).
 - **Identity.** A port: it says which Participant a connection's token names.
@@ -144,7 +144,7 @@ The kernel holds only what every module needs, and it names no module.
 - **Passes.** A module asks its `ModuleSpace` for a new pass of an Agent
   (`pass(agent)`), 32 random bytes in hex; the agents module asks as a
   session opens. The kernel keeps passes in memory, so they end with the
-  engine. A `hello` with a pass connects as that Agent, in that Space.
+  engine. A `hello` with a pass connects as that Agent, in that Project.
 - **Module registry and API.** The registry routes commands to their
   module, delivers events to subscribers, and serves the API. `welcome`
   lists the engine's modules, so a window shows only what the engine has.
@@ -160,7 +160,7 @@ The kernel holds only what every module needs, and it names no module.
   window's, such as its pages. A module's method asks the window
   (`Call::ask_window`) and awaits the answer, within a time it gives.
   The window hears every module's requests on one stream that names no
-  Space, `window.requests`, and answers each by `window.answer`; both
+  Project, `window.requests`, and answers each by `window.answer`; both
   need the right to run as the Person, so no Agent holds or answers
   them. The latest window to ask holds the road, and what the one before
   had not answered is refused. With no window, or none that answers in
@@ -206,13 +206,13 @@ command (with its ID)
 
 | Where | What |
 |---|---|
-| The Space's folder | the files of the work |
+| The Project's folder | the files of the work |
 | Text files | the Harnesses, in the config folder; the look (`look.toml`, themes) and the sidebar (`sidebar.toml`, presets), the browser (`browser.toml`) and how Threads start and messages to an Agent are sent (`agents.toml`) in `~/.config/banda/`. Layouts and keys join them later |
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
 | The OS keychain | secrets you give Banda. Its database never holds them |
 | The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
 | The window's storage | the view of the workspaces: the one on screen, each one's focused column and each column's shown Pane; whether the sidebar shows; which finished turn of each Thread the Person has seen; which Panes an Agent opened the Person has looked at |
-| `machine/` SQLite, in the engine's state | this machine's, in no Space: the workspaces, their columns, each Pane with its Space and the widths (ADR 0025) |
+| `machine/` SQLite, in the engine's state | this machine's, in no Project: the workspaces, their columns, each Pane with its Project and the widths (ADR 0025) |
 | `spaces/<id>/` SQLite, in the engine's data | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
 | `spaces/<id>/images/` and `files/` | the bytes of the images messages carry, one file per image, the SQLite saying what each is and which message carries it; the files a message keeps (a dropped file, a long paste), which each Thread's session gets as an extra root |
 
@@ -288,7 +288,7 @@ If Chat is removed, Agents still works through its own Thread.
 | harnesses | Harness, account; the machine's (ADR 0040) | first |
 | terminal | Terminal | first |
 | browser | Tab; the window's, with no engine part; every Agent reaches it over CDP (ADR 0013) | first |
-| files | the Space's files | soon |
+| files | the Project's files | soon |
 | chat | Room, Message, Mention | later |
 | databases | Database, Field, Record, View | later |
 
@@ -300,7 +300,7 @@ If Chat is removed, Agents still works through its own Thread.
   Thread starts with full access and the options its Harness last offered,
   such as its model (`agents.defaults`). Defaults a Person sets per Harness
   entry (ADR 0006, decision 3) are not built yet.
-  - Spaces from before ADR 0006 kept their Agents in
+  - Projects from before ADR 0006 kept their Agents in
     `.banda/agents/<name>.toml`, now `spaces/<id>/agents/` (ADR 0026). Opening the module reads those files
     once to learn each older Thread's Harness, and leaves them as they are.
     Older Threads keep the Agent ID they had, so one old Agent's Threads
@@ -364,7 +364,7 @@ If Chat is removed, Agents still works through its own Thread.
   a restart interrupts it (`opened`). A tool call that changes between
   turns belongs to the turn that ended, as when a command Claude Code sent
   to the background ends, and opens none.
-- **One Harness process per Space and Harness entry.** Every Thread on it is
+- **One Harness process per Project and Harness entry.** Every Thread on it is
   a session in that process. The engine starts it on the first turn, one
   start at a time; starts it again after a growing pause if it keeps dying;
   and lets it go after 30 minutes with nothing to do. It runs in its own
@@ -393,12 +393,12 @@ If Chat is removed, Agents still works through its own Thread.
     account. The Thread runs it in a terminal Pane in a tile below. Once
     its program ended with code 0, that Pane sends the sign-in on the
     machine (`harnesses.sign_in {harness, way}`), then tries the turn that
-    needed it again in its Space (`agents.retry`). The workspace keeps that Pane, so the
+    needed it again in its Project (`agents.retry`). The workspace keeps that Pane, so the
     sign-in lands after a reload or with the Thread closed. The line stays
     to run by hand, after which the Person says so.
   - Codex's adapter signs in by itself in the browser when the engine asks
     (`harnesses.sign_in`).
-  - A sign-in writes nothing to the Space, and its receipt keeps the
+  - A sign-in writes nothing to the Project, and its receipt keeps the
     answer. Every process of that Harness entry is let go, so each reads
     the account when it next starts.
   - A turn that failed for a sign-in offers the ways, and goes again once
@@ -416,8 +416,8 @@ If Chat is removed, Agents still works through its own Thread.
     in, and Sign out where a logout ends the sign-in: an account's, not a
     key's. Check again asks the Harness anew; a sign-in or sign-out
     anywhere reads it again as `account_changed` arrives. It needs no
-    Space: with none, a way in a terminal shows its line to run by hand,
-    and what a new Thread starts with, which a Space offers, does not
+    Project: with none, a way in a terminal shows its line to run by hand,
+    and what a new Thread starts with, which a Project offers, does not
     show. It turns an entry on or off, changes its command, and adds or
     removes one, writing `harnesses.toml` through `banda settings` (ADR
     0016). An entry with a known ID, `claude`
@@ -472,7 +472,7 @@ If Chat is removed, Agents still works through its own Thread.
   up to 4 MB for one command's output, text or diff, which only a runaway
   command reaches; a diff past it says so instead.
 - **A Visual is a page the Agent shows** (ADR 0037): `show_visual` keeps
-  its HTML in the Space's data, `spaces/<id>/visuals/`, and the Agent's
+  its HTML in the Project's data, `spaces/<id>/visuals/`, and the Agent's
   turn that runs gets an item, `visual.shown`, which no fold hides. The
   window serves it at `app://visuals/<space>/<visual>`, an origin of its
   own, sandboxed by its response and its frame (`modules/agents/desktop`),
@@ -493,7 +493,7 @@ If Chat is removed, Agents still works through its own Thread.
   as it starts or ends. A session that has not said them yet leaves the
   Thread's. A list said between turns reaches the Thread at once, like
   what the Agent has used, and a new Thread's message box offers what the
-  Space's Threads on its Harness last learned. The window suggests them as a
+  Project's Threads on its Harness last learned. The window suggests them as a
   message starts with `/`, and adds `/plan` and `/default`, as T3 Code
   does: they switch plan mode and send nothing.
 - **A message can carry images**, as in T3 Code: PNG, JPEG, GIF or
@@ -502,7 +502,7 @@ If Chat is removed, Agents still works through its own Thread.
   Each image goes to the engine as the Person adds it (`agents.attach`),
   in a call of its own, since one WebSocket message holds at most 16 MiB;
   the message then names them. The engine keeps the bytes as a file in
-  the Space, and the window reads them back with `agents.image`. An image
+  the Project, and the window reads them back with `agents.image`. An image
   no message took within a day goes when the next one is added. A Harness
   that takes no images (ACP's `promptCapabilities.image`) says so in what
   it offers, and the window offers no images; a message with images gets
@@ -556,7 +556,7 @@ If Chat is removed, Agents still works through its own Thread.
   Thread. Three rules, in `rules::to_thread::may_write`: no circle (an
   Agent cannot write to its own Thread, nor to one up the chain of asked
   turns still going that waits for its answer), not over a Person's
-  Question (a Thread with an open Question), and only its own Space (the
+  Question (a Thread with an open Question), and only its own Project (the
   kernel's wall). A message's author is
   the other Thread's Agent, which the Thread list names (`agent`); an
   answer says so (`answers`). The Thread Pane shows that Thread's Harness
@@ -575,7 +575,7 @@ If Chat is removed, Agents still works through its own Thread.
 ### harnesses
 
 - **The machine's Harnesses** (ADR 0040): the ones this computer can
-  start, and who is signed in to each, with no Space, so a Person signs in
+  start, and who is signed in to each, with no Project, so a Person signs in
   before making one. `harnesses.list`, `harnesses.account` (with the
   machine's log position it is current at), `harnesses.sign_in {harness,
   way}` and `harnesses.sign_out`. It owns `harnesses.toml`.
@@ -584,7 +584,7 @@ If Chat is removed, Agents still works through its own Thread.
   asked.
 - **A sign-in or sign-out writes `harnesses.account_changed`**, its
   subject the Harness's ID and nothing else. Every holder of that
-  Harness's process lets go of it: this module, and each Space's agents
+  Harness's process lets go of it: this module, and each Project's agents
   module, which hears the machine's log (`ModuleSpace::react_to_machine`)
   and lets go of its own hosts of it without waiting. A host that was
   starting then is let go the next time it is asked for (`hosts.rs`
@@ -617,9 +617,9 @@ If Chat is removed, Agents still works through its own Thread.
 ### terminal
 
 - **A Terminal is a program on a PTY** in the engine, run as the Person:
-  their shell in the Space's folder, or a program with its arguments,
+  their shell in the Project's folder, or a program with its arguments,
   never a shell line, such as a Harness's sign-in. It needs the Run right,
-  and it belongs to its Space. The window chooses its ID, so a Pane names
+  and it belongs to its Project. The window chooses its ID, so a Pane names
   its terminal before the engine answers (`terminal.open`). Opening one
   whose program ended runs the program again.
 - **What it printed stays in memory**, the newest 2 MB, never in the log: a
@@ -646,7 +646,7 @@ If Chat is removed, Agents still works through its own Thread.
     shell: false, done}}`. `done` is a list of commands the Pane sends
     once the program ended with code 0, in order, each only once the one
     before went through, as `a && b` does. Each says where it runs: a
-    Space, or with none, the machine (ADR 0040, decision 5). Its ID keeps
+    Project, or with none, the machine (ADR 0040, decision 5). Its ID keeps
     each once only. Then the Pane closes.
   - It sends what the Person types one call after another, as the engine
     runs calls side by side.
@@ -730,10 +730,10 @@ modules/*/desktop  a module's part in Electron main
 - **A Pane** is a `PaneKind`: a kind, the module it needs, a title, an
   icon, optional start args, what its module lets go of when it leaves
   every workspace (`closed`), and a component. The component gets the
-  engine, its Space, its args, whether it has the focus, `open`,
+  engine, its Project, its args, whether it has the focus, `open`,
   `update`, and `close` for its own tile. `open` opens a Pane of the same
-  Space unless it names another. A Pane's args are all its state; the
-  workspaces keep them, each Pane with its Space.
+  Project unless it names another. A Pane's args are all its state; the
+  workspaces keep them, each Pane with its Project.
 - **A Pane reads a view, then follows.** `useLive` reads the view once,
   applies each event after its `at`, and reads again when the engine says
   so. Events that arrive within one frame render once.
@@ -747,8 +747,8 @@ modules/*/desktop  a module's part in Electron main
     it. Each one is a Strip: columns a third, half, two thirds or all of
     the screen wide, scrolling sideways, each holding Panes one above
     another. The focused column always comes fully into view.
-  - A workspace holds Panes of any Spaces; a Pane's header names its
-    Space when the workspace mixes them.
+  - A workspace holds Panes of any Projects; a Pane's header names its
+    Project when the workspace mixes them.
   - Opening a Pane that is already shown goes to its workspace and focuses
     it. Opened with no place, a Pane takes the place of one of its kind on
     the opener's workspace, or a new column right of the opener.
@@ -796,10 +796,10 @@ modules/*/desktop  a module's part in Electron main
   brings the window's own keys back until the file changes. The settings Pane's
   Keys section shows the file's lines, and opens the key sheet in the
   window for the rest.
-- **The sidebar** lists every Thread of every Space, arranged as a preset
-  and the Person's keys say (ADR 0008): grouped by state, by Space or not
+- **The sidebar** lists every Thread of every Project, arranged as a preset
+  and the Person's keys say (ADR 0008): grouped by state, by Project or not
   at all; sorted by need, by change or by title; shelves at the bottom;
-  a list of Spaces above; rows of one, two or three lines. `arrange.ts` is
+  a list of Projects above; rows of one, two or three lines. `arrange.ts` is
   the one pure rule. `banda look` resolves the keys from `sidebar.toml`
   (`look/src/sidebar.rs`; Banda's presets `inbox`, `spaces` and `places`
   are files in `look/sidebars/`), and the view menu writes the preset
@@ -819,11 +819,11 @@ modules/*/desktop  a module's part in Electron main
   - A turn that finished or failed settles once the Person has seen it: a
     Thread Pane with the focus marks its latest ended turn seen, in the
     window's storage (`seen.ts`). The engine never hears of it.
-- **The bar's Mark** shows the loudest of what every Space calls the Person
+- **The bar's Mark** shows the loudest of what every Project calls the Person
   for, with how many things wait for them when more than one does. A
   module offers a `Watch` for this: a component the window draws for
-  each Space while the engine runs the module, which shows nothing and
-  reports a Mark state, a count and the Space's rows for the sidebar
+  each Project while the engine runs the module, which shows nothing and
+  reports a Mark state, a count and the Project's rows for the sidebar
   (`Report` in `app/ui/src/pane.ts`). The bar and the sidebar read the same
   report, so they never disagree, and the bar knows even while the sidebar
   is hidden. The window combines them (`app/web/src/bar`) and knows
@@ -840,7 +840,7 @@ modules/*/desktop  a module's part in Electron main
     from its `start`, asking the window only what it knows (`WindowApi`:
     `lists`, `sight`, `goTo`, `look`). It compares each list with the one
     before: what starts calling is news, what stops is taken back, and a
-    Space's first list is what already was.
+    Project's first list is what already was.
   - It gathers the news for a tenth of a second and tells of each where
     the Person looks (`tell.ts`): nothing while they look at it; the sound
     when it is on screen; the sound and a toast when it is elsewhere in
@@ -848,10 +848,10 @@ modules/*/desktop  a module's part in Electron main
     and a system notification when the window is behind (`system.ts`).
   - Another part tells the Person in plain data, by running
     `notifications.tell` with a `Told` (`told.ts`): a key, a kind, the
-    words and buttons that are actions by id, and the Space and thing it
-    is of, which name the Space and tell nothing while the thing is on
+    words and buttons that are actions by id, and the Project and thing it
+    is of, which name the Project and tell nothing while the thing is on
     screen. The Problems do (ADR 0039), and git when a run ends with no
-    card of its Space in sight.
+    card of its Project in sight.
     A call's toast is one too (`toldOfCall`), so every notice told is
     data: the last five are kept in the window's storage (`recent.ts`),
     and the bell on the bar shows them again, across a restart.
@@ -966,7 +966,7 @@ banda/
 ## Links in a Thread
 
 An HTTP(S) Markdown link opens in Banda through `browser.open`, in the
-source Thread's Space (ADR 0051). Ctrl+click uses the existing desktop
+source Thread's Project (ADR 0051). Ctrl+click uses the existing desktop
 route to the system browser. The Thread supplies the opener to the UI's
 Markdown renderer; it names no browser module. A Thread in its own window
 relays the action through the existing window bridge. Named links show
@@ -977,8 +977,8 @@ full text and `href` for copying. Local-file links are a separate contract.
 
 Markdown in a Thread shows local images, video and audio (ADR 0037,
 step 6). The agents Pane supplies the markdown renderer a resolver for
-its Space. The agents desktop part resolves relative paths against that
-Space's folder and gives only supported media a signed `app://files`
+its Project. The agents desktop part resolves relative paths against that
+Project's folder and gives only supported media a signed `app://files`
 URL. Its signer lives in the main runtime, never on disk. A URL lasts an
 hour and names the canonical path, device and inode; serving checks the
 identity again through the opened file. Byte ranges let players seek

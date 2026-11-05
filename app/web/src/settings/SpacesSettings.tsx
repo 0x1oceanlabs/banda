@@ -69,7 +69,7 @@ function Space({ engine, lit }: Props) {
   const spaces = listed.value
   const space = spaces.find((one) => one.id === picked) ?? spaces[0]
   if (!space)
-    return <p className="text-sm text-muted-foreground">No Spaces yet.</p>
+    return <p className="text-sm text-muted-foreground">No Projects yet.</p>
 
   const change = (how: Omit<UpdateSpace, "space">) =>
     void act(() => updateSpace(engine, { space: space.id, ...how }))
@@ -92,7 +92,7 @@ function Space({ engine, lit }: Props) {
   return (
     <>
       <div className="flex items-center gap-3">
-        <span className="text-sm font-medium">Space</span>
+        <span className="text-sm font-medium">Project</span>
         <Select
           value={space.id}
           onValueChange={(id) => setPick({ lit, id: id as string })}
@@ -145,10 +145,10 @@ function Space({ engine, lit }: Props) {
         <RowFrame
           dataKey="name"
           title="Name"
-          about="The Space's name in the sidebar and the Space pickers."
+          about="The Project's name in the sidebar and the Project pickers."
         >
           <Field
-            label="Space name"
+            label="Project name"
             value={space.name}
             onCommit={(name) => change({ name: name.trim() })}
           />
@@ -156,10 +156,10 @@ function Space({ engine, lit }: Props) {
         <RowFrame
           dataKey="pin"
           title="Pin"
-          about="Pinned Spaces come first in Space pickers."
+          about="Pinned Projects come first in Project pickers."
         >
           <Switch
-            label="Pin Space"
+            label="Pin Project"
             on={space.pinned}
             onChange={(pinned) => change({ pinned })}
           />
@@ -169,8 +169,8 @@ function Space({ engine, lit }: Props) {
           title="Archive"
           about={
             space.archived
-              ? "Hidden from Space pickers. Threads and files are kept."
-              : "Hides the Space from Space pickers. Threads and files are kept."
+              ? "Hidden from Project pickers. Threads and files are kept."
+              : "Hides the Project from Project pickers. Threads and files are kept."
           }
         >
           <Button
@@ -186,8 +186,8 @@ function Space({ engine, lit }: Props) {
       <Group title="Danger">
         <RowFrame
           dataKey="remove"
-          title="Remove Space"
-          about="Deletes the Space entry and its Threads. Files on disk are not touched."
+          title="Remove Project"
+          about="Deletes the Project entry and its Threads. Files on disk are not touched."
         >
           <Button
             size="sm"
@@ -196,7 +196,7 @@ function Space({ engine, lit }: Props) {
             onClick={() => void ask()}
           >
             <Trash2Icon />
-            Remove Space
+            Remove Project
           </Button>
         </RowFrame>
       </Group>
@@ -213,7 +213,9 @@ function Space({ engine, lit }: Props) {
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-1 text-sm text-muted-foreground">
-              <p>This removes only the Space entries, not the files on disk.</p>
+              <p>
+                This removes only the Project entries, not the files on disk.
+              </p>
               <p>This action cannot be undone.</p>
             </div>
             <DialogFooter>
@@ -221,7 +223,7 @@ function Space({ engine, lit }: Props) {
                 Cancel
               </Button>
               <Button variant="destructive" onClick={remove}>
-                Remove Space
+                Remove Project
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -243,5 +245,5 @@ function questionOf({ space, threads }: Removing): string {
     threads === undefined
       ? "its Threads"
       : `its ${threads} ${threads === 1 ? "Thread" : "Threads"}`
-  return `Remove Space "${space.name}" and delete ${what}?`
+  return `Remove Project "${space.name}" and delete ${what}?`
 }

@@ -73,11 +73,11 @@ banda_kernel::methods! {
         /// The screen so far, then what it prints, then how it ended.
         /// Watching shows what a Person types, such as a sign-in's code.
         stream watch(One) -> Piece, Run;
-        /// The Space's servers, then their list again each time it
+        /// The Project's servers, then their list again each time it
         /// changes: what a terminal or an Agent started that listens on
         /// this computer (ADR 0044).
         stream ports(Nothing) -> Servers, Read;
-        /// Stops a server of the Space's, and what it started.
+        /// Stops a server of the Project's, and what it started.
         call stop_server(StopServer) -> (), Run;
     }
 }
@@ -149,7 +149,7 @@ impl Module for Terminals {
             .any(|terminal| terminal.space == space.id())
         {
             return Err(Refusal::conflict(
-                "Close the open terminals in this Space before moving its folder.",
+                "Close the open terminals in this Project before moving its folder.",
             ));
         }
         Ok(())

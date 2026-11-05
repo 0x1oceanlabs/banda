@@ -5,7 +5,7 @@ const SPACE = "0199d1c2-7f3a-7c11-9e2b-1a2b3c4d5e6f"
 const VISUAL = "0199d1c2-7f3a-7c11-9e2b-6f5e4d3c2b1a"
 const address = `app://visuals/${SPACE}/${VISUAL}`
 
-test("an address names a Space and a Visual by their IDs, or nothing", () => {
+test("an address names a Project and a Visual by their IDs, or nothing", () => {
   expect(named(address)).toEqual({ space: SPACE, visual: VISUAL })
   expect(named(`${address}#banda-look=x`)).toEqual({
     space: SPACE,

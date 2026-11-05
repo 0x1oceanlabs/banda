@@ -680,7 +680,7 @@ function SignOut({
             <DialogTitle>Sign out of {harness.name}?</DialogTitle>
             <DialogDescription>
               This signs {harness.name} out on this computer, in your own
-              terminal too. Its Agents in every Space stop until someone signs
+              terminal too. Its Agents in every Project stop until someone signs
               in again; their Threads stay.
             </DialogDescription>
           </DialogHeader>

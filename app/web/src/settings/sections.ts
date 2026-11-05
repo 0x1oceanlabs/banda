@@ -105,7 +105,7 @@ export const SECTIONS: Section[] = [
   },
   {
     id: "spaces",
-    title: "Spaces",
+    title: "Projects",
     icon: FoldersIcon,
     about:
       "The folders you and your Agents work in. Banda's engine keeps them, not a file.",

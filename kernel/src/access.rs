@@ -32,11 +32,11 @@ pub fn decide(participant: &Participant, right: Right, owner: PersonId) -> Resul
     match (participant, right) {
         (Participant::Person(person), _) if *person == owner => Ok(()),
         (Participant::Person(_), _) => Err(Refusal::forbidden(
-            "Only the owner of this computer's Spaces may do this.",
+            "Only the owner of this computer's Projects may do this.",
         )),
         (Participant::Agent(_), Right::Read | Right::Write) => Ok(()),
         (Participant::Agent(_), Right::Manage) => Err(Refusal::forbidden(
-            "An Agent may not change the Space itself.",
+            "An Agent may not change the Project itself.",
         )),
         (Participant::Agent(_), Right::Decide) => Err(Refusal::forbidden(
             "Only a Person decides what an Agent asked.",
@@ -71,9 +71,9 @@ impl From<Participant> for Caller {
 /// that is still `None` is refused, since it would reach past the wall.
 pub fn within(only: Option<SpaceId>, space: Option<SpaceId>) -> Result<(), Refusal> {
     match only {
-        Some(only) if space != Some(only) => {
-            Err(Refusal::forbidden("An Agent works only in its own Space."))
-        }
+        Some(only) if space != Some(only) => Err(Refusal::forbidden(
+            "An Agent works only in its own Project.",
+        )),
         _ => Ok(()),
     }
 }
@@ -126,7 +126,7 @@ mod tests {
         for space in [Some(other), None] {
             let refusal = within(Some(own), space).unwrap_err();
             assert_eq!(refusal.code, Code::Forbidden);
-            assert_eq!(refusal.message, "An Agent works only in its own Space.");
+            assert_eq!(refusal.message, "An Agent works only in its own Project.");
         }
     }
 

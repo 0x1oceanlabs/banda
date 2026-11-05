@@ -175,7 +175,7 @@ describe("opening", () => {
     expect(current(state).focus).toBe(1)
   })
 
-  test("the same Pane in another Space is another Pane", () => {
+  test("the same Pane in another Project is another Pane", () => {
     let state = open(start(), A, terminal("x1"))
     state = open(state, B, terminal("x1"), { place: "right" })
     expect(columns(state)).toEqual([["x1"], ["x1"]])

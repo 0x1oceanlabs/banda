@@ -108,7 +108,7 @@ test("a Thread at work is never archived", () => {
   expect(ids(working, "shelves")).toEqual([["working", ["headers", "release"]]])
 })
 
-test("spaces: each Space a section, what waits first, with its roll-up", () => {
+test("spaces: each Project a section, what waits first, with its roll-up", () => {
   const bySpace = of("spaces")
   expect(ids(bySpace)).toEqual([
     ["s2", ["letters", "migration", "release"]],
@@ -126,7 +126,7 @@ test("spaces: each Space a section, what waits first, with its roll-up", () => {
   expect(archived.sections[0]?.waiting).toBe(1)
 })
 
-test("places: the Spaces listed above, and a click on one shows its rows", () => {
+test("places: the Projects listed above, and a click on one shows its rows", () => {
   const places = of("places", {}, undefined, undefined, ["logo"])
   expect(
     places.spaces?.map((s) => [s.space.name, s.mark, s.waiting, s.count])
@@ -209,7 +209,7 @@ test("scratch Threads follow grouping, sorting, shelves and filtering like other
     )
     expect(result.spaces?.some((line) => line.space.scratch)).toBe(false)
     if (by === "space") {
-      expect(result.sections.at(-1)?.label).toBe("No Space")
+      expect(result.sections.at(-1)?.label).toBe("No Project")
       expect(result.sections.at(-1)?.rows.map((row) => row.listed.id)).toEqual([
         "busy",
         "loose",

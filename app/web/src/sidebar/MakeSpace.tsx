@@ -63,7 +63,7 @@ export function MakeSpace({
           className="flex flex-col gap-4"
         >
           <DialogHeader>
-            <DialogTitle>Make a Space from this Thread</DialogTitle>
+            <DialogTitle>Make a Project from this Thread</DialogTitle>
             <DialogDescription>
               The Thread, its files and history stay together.
             </DialogDescription>
@@ -131,7 +131,7 @@ export function MakeSpace({
               Cancel
             </Button>
             <Button type="submit" disabled={!ready}>
-              {busy ? "Making Space…" : "Make Space"}
+              {busy ? "Making Project…" : "Make Project"}
             </Button>
           </DialogFooter>
         </form>

@@ -434,7 +434,7 @@ fn migrate(sql: &mut Connection, ledger: &str, steps: &[&str]) -> Result<(), Err
     let known = i64::try_from(steps.len()).unwrap_or(i64::MAX);
     if done > known {
         return Err(Refusal::conflict(format!(
-            "This Space was opened by a newer Banda ({ledger} has {done} steps, this one knows {known})."
+            "This Project was opened by a newer Banda ({ledger} has {done} steps, this one knows {known})."
         ))
         .into());
     }

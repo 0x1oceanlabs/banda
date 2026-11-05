@@ -203,7 +203,7 @@ impl KernelBuilder {
             let manifest = match Manifest::read(&data) {
                 Ok(manifest) => manifest,
                 Err(error) => {
-                    tracing::error!(data = %data.display(), %error, "a Space did not open");
+                    tracing::error!(data = %data.display(), %error, "a Project did not open");
                     continue;
                 }
             };
@@ -212,7 +212,7 @@ impl KernelBuilder {
                     folder = %manifest.folder.display(),
                     kept = %kept.display(),
                     skipped = %data.display(),
-                    "two Spaces name the same folder; the second stays closed"
+                    "two Projects name the same folder; the second stays closed"
                 );
                 continue;
             }
@@ -220,7 +220,7 @@ impl KernelBuilder {
             if !manifest.folder.is_dir() {
                 tracing::warn!(
                     folder = %manifest.folder.display(),
-                    "a Space's folder is gone; it waits to be located"
+                    "a Project's folder is gone; it waits to be located"
                 );
                 let id = manifest.id;
                 let missing = Entry::Missing { data, manifest };
@@ -233,7 +233,7 @@ impl KernelBuilder {
                     kernel.spaces.write().await.insert(id, Entry::Open(space));
                 }
                 Err(error) => {
-                    tracing::error!(data = %data.display(), %error, "a Space did not open")
+                    tracing::error!(data = %data.display(), %error, "a Project did not open")
                 }
             }
         }
@@ -243,25 +243,25 @@ impl KernelBuilder {
 
 crate::methods! {
     Kernel(Own<'_>) as "SpacesMethods" in "./" {
-        /// This computer's Spaces.
+        /// This computer's Projects.
         call list(Nothing) -> Vec<SpaceSummary>, Read;
-        /// Makes a Space: a new folder under the root, by its name. A
-        /// scratch one, for a Thread in No Space, takes no name: its folder
+        /// Makes a Project: a new folder under the root, by its name. A
+        /// scratch one, for a Thread in No Project, takes no name: its folder
         /// is new under `scratch/`.
         command create(CreateSpace) -> SpaceSummary, Manage;
-        /// Adds a folder as a Space. A folder that already is one answers
-        /// that Space, back from the archive if it was there.
+        /// Adds a folder as a Project. A folder that already is one answers
+        /// that Project, back from the archive if it was there.
         command add(AddSpace) -> SpaceSummary, Manage;
         /// The folders that match a path as it is typed, for the field
-        /// that picks a Space's folder. Only the owner browses.
+        /// that picks a Project's folder. Only the owner browses.
         call browse(Browse) -> Browsed, Manage;
-        /// Renames, pins or archives a Space, lets its Agents see the
-        /// other Spaces' Panes, or makes a Space of a scratch one, named.
+        /// Renames, pins or archives a Project, lets its Agents see the
+        /// other Projects' Panes, or makes a Project of a scratch one, named.
         command update(UpdateSpace) -> SpaceSummary, Manage;
-        /// Names the folder a missing Space's work is in now, and opens
-        /// the Space there.
+        /// Names the folder a missing Project's work is in now, and opens
+        /// the Project there.
         command locate(LocateSpace) -> SpaceSummary, Manage;
-        /// Forgets a Space and deletes its Threads; its folder and the
+        /// Forgets a Project and deletes its Threads; its folder and the
         /// files in it stay as they are.
         command remove(OneSpace) -> (), Manage;
         /// The tools an Agent may call, from the methods of the modules.
@@ -389,7 +389,7 @@ const SCRATCH: &str = "scratch";
 /// A pass is for its Space, so it stops at this machine's scope but for
 /// the tools (ADR 0032).
 fn outside_machine() -> Refusal {
-    Refusal::forbidden("An Agent's pass is for its Space, not this machine.")
+    Refusal::forbidden("An Agent's pass is for its Project, not this machine.")
 }
 
 /// The prefixes of the kernel's own methods, which no module takes:
@@ -584,14 +584,14 @@ impl Kernel {
         if module.scope() == Scope::Space {
             let id = named.or(only);
             access::within(only, id)?;
-            let id = id.ok_or_else(|| Refusal::invalid(format!("{method} needs a Space.")))?;
+            let id = id.ok_or_else(|| Refusal::invalid(format!("{method} needs a Project.")))?;
             return Ok((self.space(id).await?, None));
         }
         let machine = (self.machine.as_ref())
             .ok_or_else(|| Refusal::not_found("This engine has no machine's scope."))?;
         if named.is_some_and(|id| id != machine.id()) {
             return Err(Refusal::invalid(format!(
-                "{method} is this machine's: it names no Space."
+                "{method} is this machine's: it names no Project."
             )));
         }
         let wall = match only {
@@ -609,7 +609,7 @@ impl Kernel {
         match self.spaces.read().await.get(&id) {
             Some(Entry::Open(space)) => Ok(space.clone()),
             Some(Entry::Missing { manifest, .. }) => Err(Refusal::not_found(format!(
-                "The folder of the Space \"{}\", {}, is gone: locate it first.",
+                "The folder of the Project \"{}\", {}, is gone: locate it first.",
                 manifest.name,
                 manifest.folder.display()
             ))),
@@ -652,9 +652,9 @@ impl Kernel {
             (None, true) => self.create_scratch(author, command).await,
             (Some(name), false) => self.create_space(&name, author, command).await,
             (Some(_), true) => Err(Refusal::invalid(
-                "A scratch Space has no name until it becomes a Space.",
+                "A scratch Project has no name until it becomes a Project.",
             )),
-            (None, false) => Err(Refusal::invalid("A Space needs a name.")),
+            (None, false) => Err(Refusal::invalid("A Project needs a name.")),
         }
     }
 
@@ -808,7 +808,7 @@ impl Kernel {
         let entry = self.spaces.read().await.get(&id).cloned();
         let Some(Entry::Missing { data, manifest }) = entry else {
             self.space(id).await?;
-            return Err(Refusal::conflict("The Space's folder is not missing."));
+            return Err(Refusal::conflict("The Project's folder is not missing."));
         };
         let mut found = manifest.clone();
         found.folder = folder.to_owned();
@@ -864,23 +864,25 @@ impl Kernel {
         let was = entry.scratch();
         match (was, update.scratch.unwrap_or(was), name.is_some()) {
             (false, true, _) => {
-                return Err(Refusal::invalid("A Space does not go back to No Space."));
+                return Err(Refusal::invalid(
+                    "A Project does not go back to No Project.",
+                ));
             }
             (true, true, true) => {
                 return Err(Refusal::invalid(
-                    "A Thread in No Space has no name until it becomes a Space.",
+                    "A Thread in No Project has no name until it becomes a Project.",
                 ));
             }
             (true, false, false) => {
                 return Err(Refusal::invalid(
-                    "A Space made of a Thread in No Space needs a name.",
+                    "A Project made of a Thread in No Project needs a name.",
                 ));
             }
             _ => {}
         }
         if target.is_some() && update.scratch != Some(false) {
             return Err(Refusal::invalid(
-                "A folder move must make a Space from a Thread in No Space.",
+                "A folder move must make a Project from a Thread in No Project.",
             ));
         }
         let opened = match entry {
@@ -890,7 +892,7 @@ impl Kernel {
         let _moving = match (&opened, &target) {
             (Some(space), Some(_)) => Some(space.moving.try_write().map_err(|_| {
                 Refusal::conflict(
-                    "Another operation is using this Space. Try moving it again when it finishes.",
+                    "Another operation is using this Project. Try moving it again when it finishes.",
                 )
             })?),
             _ => None,
@@ -912,7 +914,7 @@ impl Kernel {
         if let Some(target) = relocating {
             if !was {
                 return Err(Refusal::invalid(
-                    "Only a Thread in No Space can move its folder this way.",
+                    "Only a Thread in No Project can move its folder this way.",
                 ));
             }
             if std::fs::symlink_metadata(target).is_ok() {
@@ -978,7 +980,7 @@ impl Kernel {
         {
             let name = other.summary().name;
             return Err(Refusal::conflict(format!(
-                "{} already is the Space \"{name}\".",
+                "{} already is the Project \"{name}\".",
                 folder.display()
             )));
         }
@@ -1012,7 +1014,7 @@ impl Kernel {
 }
 
 fn no_space() -> Refusal {
-    Refusal::not_found("There is no such Space on this computer.")
+    Refusal::not_found("There is no such Project on this computer.")
 }
 
 /// Moves a removed Space's `data` out of the engine's sight, to `gone`;
@@ -1022,7 +1024,7 @@ fn put_away(data: &Path, gone: PathBuf) -> PathBuf {
         Ok(()) => gone,
         Err(error) => {
             let shown = data.display();
-            tracing::warn!(data = %shown, %error, "a removed Space's data stayed in place");
+            tracing::warn!(data = %shown, %error, "a removed Project's data stayed in place");
             data.to_owned()
         }
     }

@@ -136,7 +136,7 @@ export function arrange(
             ? [
                 section(
                   "no-space",
-                  "No Space",
+                  "No Project",
                   rows.filter((row) => row.space.scratch)
                 ),
               ]

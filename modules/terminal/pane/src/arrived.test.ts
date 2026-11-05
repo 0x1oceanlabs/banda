@@ -13,8 +13,8 @@ const server = (port: number, program = "vite"): Server => ({
 })
 const ports = (list: { server: Server }[]) => list.map((p) => p.server.port)
 
-describe("every Space's servers", () => {
-  it("stand in the order they came, whichever Space they are in", () => {
+describe("every Project's servers", () => {
+  it("stand in the order they came, whichever Project they are in", () => {
     let list = arrived([], here, [server(5173)])
     list = arrived(list, there, [server(3000)])
     list = arrived(list, here, [server(6006), server(5173)])
@@ -22,7 +22,7 @@ describe("every Space's servers", () => {
     expect(list.map((p) => p.space)).toEqual([here, there, here])
   })
 
-  it("lose the ones gone and keep what each Space says of the rest", () => {
+  it("lose the ones gone and keep what each Project says of the rest", () => {
     let list = arrived([], here, [server(5173), server(6006)])
     list = arrived(list, there, [server(3000)])
     list = arrived(list, here, [server(6006, "storybook dev")])

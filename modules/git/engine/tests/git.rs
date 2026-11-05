@@ -827,7 +827,7 @@ async fn a_folder_that_is_no_repository_says_so() {
         assert_eq!(refused.code, Code::Conflict, "{method}");
         assert_eq!(
             refused.message,
-            "This Space's folder is not a git repository."
+            "This Project's folder is not a git repository."
         );
     }
 }

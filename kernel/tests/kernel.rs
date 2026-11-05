@@ -348,7 +348,7 @@ async fn reopen(root: &Path, owner: PersonId, notes: &Notes, count: usize) -> Ar
         drop(again);
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    panic!("the Spaces never opened again");
+    panic!("the Projects never opened again");
 }
 
 /// Waits for `check` to hold, for up to five seconds.
@@ -402,7 +402,7 @@ async fn a_space_is_a_folder_and_opens_again_after_a_restart() {
     assert_eq!(
         again,
         Ok(space.clone()),
-        "the same command gets the same Space"
+        "the same command gets the same Project"
     );
     let twin = create_space(&kernel, person, CommandId::new(), "Research").await;
     assert_eq!(twin.unwrap_err().code, Code::Conflict);
@@ -414,7 +414,7 @@ async fn a_space_is_a_folder_and_opens_again_after_a_restart() {
     let second = open(root.path(), owner, &notes).await;
     assert!(
         second.spaces().await.is_empty(),
-        "a Space opens in one engine at a time"
+        "a Project opens in one engine at a time"
     );
     drop(second);
     drop(kernel);
@@ -991,7 +991,7 @@ async fn a_pass_connects_as_its_agent_and_only_in_its_space() {
         .unwrap();
     assert_eq!(added.last().unwrap().author, Participant::Agent(agent));
 
-    let wall = "An Agent works only in its own Space.";
+    let wall = "An Agent works only in its own Project.";
     let elsewhere = [
         json!({ "type": "call", "id": 2, "method": "notes.list", "space": other.id }),
         json!({ "type": "subscribe", "id": 3, "space": other.id, "after": 0 }),
@@ -1006,7 +1006,7 @@ async fn a_pass_connects_as_its_agent_and_only_in_its_space() {
     let list = ask(json!({ "type": "call", "id": 5, "method": "notes.list" })).await;
     assert_eq!(list["ok"]["items"], json!(["by its agent"]));
     let mine = ask(json!({ "type": "call", "id": 6, "method": "spaces.list" })).await;
-    assert_eq!(mine["ok"], json!([work]), "it sees only its own Space");
+    assert_eq!(mine["ok"], json!([work]), "it sees only its own Project");
     let purge = json!({ "type": "call", "id": 7, "method": "notes.purge", "space": work.id, "command": CommandId::new() });
     assert_eq!(
         ask(purge).await["error"]["code"],
@@ -1292,7 +1292,7 @@ async fn any_folder_is_added_as_a_space_and_one_folder_is_one_space() {
         .await
         .unwrap();
     let app = std::fs::canonicalize(&app).unwrap();
-    assert_eq!(added.name, "app", "a Space is named after its folder");
+    assert_eq!(added.name, "app", "a Project is named after its folder");
     assert_eq!(added.folder, app.display().to_string());
     assert!((!added.pinned) && (!added.archived));
     assert_eq!(
@@ -1307,7 +1307,7 @@ async fn any_folder_is_added_as_a_space_and_one_folder_is_one_space() {
     assert_eq!(
         again,
         Ok(added.clone()),
-        "the same folder is the same Space"
+        "the same folder is the same Project"
     );
 
     let gone = elsewhere.path().join("new/deeper");
@@ -1336,7 +1336,7 @@ async fn any_folder_is_added_as_a_space_and_one_folder_is_one_space() {
     assert_eq!(
         listed,
         vec![made, added],
-        "an added Space opens again from the data"
+        "an added Project opens again from the data"
     );
 }
 
@@ -1445,11 +1445,11 @@ async fn a_scratch_space_is_a_new_folder_with_no_name() {
     let scratch = root.path().join("scratch").canonicalize().unwrap();
     assert_eq!(Path::new(&made.folder).parent(), Some(scratch.as_path()));
     let again = create_scratch(&kernel, owner, command).await.unwrap();
-    assert_eq!(again, made, "the same command gets the same Space");
+    assert_eq!(again, made, "the same command gets the same Project");
     let other = create_scratch(&kernel, owner, CommandId::new()).await;
     assert_ne!(other.unwrap().folder, made.folder, "a Thread each");
     let person = Participant::Person(owner);
-    add(&kernel, person, &made, "works as any Space")
+    add(&kernel, person, &made, "works as any Project")
         .await
         .unwrap();
 
@@ -1478,7 +1478,7 @@ async fn a_scratch_space_becomes_a_space_once_named_and_stays_one() {
         ),
         (
             json!({ "space": made.id, "name": "Expenses" }),
-            "no name in No Space",
+            "no name in No Project",
         ),
     ] {
         assert_eq!(update(bad).await.unwrap_err().code, Code::Invalid, "{why}");
@@ -1545,7 +1545,7 @@ async fn a_removed_space_loses_its_threads_but_keeps_its_files() {
     )
     .await
     .unwrap();
-    assert_ne!(again.id, space.id, "added again, it is a new Space");
+    assert_ne!(again.id, space.id, "added again, it is a new Project");
     let listed = kernel
         .call(person, "notes.list", Some(again.id), None, Value::Null)
         .await
@@ -1647,7 +1647,7 @@ async fn a_missing_folder_added_back_opens_its_space_again() {
     let again = add_folder(&kernel, owner, json!({ "folder": folder }))
         .await
         .unwrap();
-    assert_eq!(again.id, space.id, "the Space it was, not a new one");
+    assert_eq!(again.id, space.id, "the Project it was, not a new one");
     assert!(!again.missing);
 }
 

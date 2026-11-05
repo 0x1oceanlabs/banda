@@ -34,12 +34,12 @@ close: CallMethod<One, null>,
  */
 watch: StreamMethod<One, Piece>, 
 /**
- * The Space's servers, then their list again each time it
+ * The Project's servers, then their list again each time it
  * changes: what a terminal or an Agent started that listens on
  * this computer (ADR 0044).
  */
 ports: StreamMethod<Nothing, Servers>, 
 /**
- * Stops a server of the Space's, and what it started.
+ * Stops a server of the Project's, and what it started.
  */
 stop_server: CallMethod<StopServer, null>, };

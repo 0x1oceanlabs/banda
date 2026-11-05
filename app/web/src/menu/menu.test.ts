@@ -167,13 +167,13 @@ describe("the Banda menu", () => {
     ])
   })
 
-  test("typed into, it finds Threads, Spaces and Actions, then what the sources find with no heading", () => {
+  test("typed into, it finds Threads, Projects and Actions, then what the sources find with no heading", () => {
     expect(labels("hello")).toEqual([
       ["Threads", ["hello from claude", "slow hello"]],
       ["", ["ask: hello", "web: hello"]],
     ])
     expect(labels("ban")).toEqual([
-      ["Spaces", ["banda"]],
+      ["Projects", ["banda"]],
       ["", ["ask: ban", "web: ban"]],
     ])
     expect(labels("new")).toEqual([
@@ -182,7 +182,7 @@ describe("the Banda menu", () => {
     ])
   })
 
-  test("a source's rows go under its heading, between the Spaces and the Actions; Tab lists their acts", () => {
+  test("a source's rows go under its heading, between the Projects and the Actions; Tab lists their acts", () => {
     const open = { title: "Open", key: { code: "Enter" }, run: () => {} }
     const copy = { title: "Copy path", run: () => {} }
     const found: Found[] = [
@@ -241,7 +241,7 @@ describe("the Banda menu", () => {
     expect(labels("", "actions")).toEqual([
       ["Threads", ["New Thread", "Show or hide the sidebar", "Sidebar view"]],
       ["Panes", ["New browser"]],
-      ["Banda", ["Add Space"]],
+      ["Banda", ["Add Project"]],
     ])
     expect(labels("side", "actions")).toEqual([
       ["Actions", ["Sidebar view", "Show or hide the sidebar"]],
@@ -305,7 +305,7 @@ describe("the Banda menu", () => {
 
 describe("its branches and acts", () => {
   const space: Branch = { kind: "space", id: "space:s1", space: spaces[0] }
-  test("a Space holds a new Thread there, then its Threads", () => {
+  test("a Project holds a new Thread there, then its Threads", () => {
     expect(labels("", "root", space)).toEqual([
       ["", ["ask here"]],
       ["Threads", ["slow hello", "hello from claude", "Fix the login form"]],
@@ -316,7 +316,7 @@ describe("its branches and acts", () => {
     ])
   })
 
-  test("Tab on a Space opens it, or starts a new Thread there", () => {
+  test("Tab on a Project opens it, or starts a new Thread there", () => {
     expect(
       actsOf(space, sources).map((act) => [act.title, nameOf(act.row)])
     ).toEqual([
@@ -352,7 +352,7 @@ describe("its branches and acts", () => {
   })
 })
 
-describe("Add Space (ADR 0026)", () => {
+describe("Add Project (ADR 0026)", () => {
   const add: Branch = { kind: "add", id: "space.add" }
   const way = (source: "new" | "folder"): Branch => ({
     kind: "source",
@@ -372,14 +372,14 @@ describe("Add Space (ADR 0026)", () => {
   })
 
   test("it is an Action, and lists its ways", () => {
-    expect(labels("add sp")).toContainEqual(["Actions", ["Add Space"]])
+    expect(labels("add pr")).toContainEqual(["Actions", ["Add Project"]])
     expect(labels("", "root", add)).toEqual([
-      ["", ["New Space", "Local folder"]],
+      ["", ["New Project", "Local folder"]],
     ])
     expect(labels("local", "root", add)).toEqual([["", ["Local folder"]]])
   })
 
-  test("a new Space is made from the name typed", () => {
+  test("a new Project is made from the name typed", () => {
     expect(labels("", "root", way("new"))).toEqual([])
     expect(labels(" Work ", "root", way("new"))).toEqual([
       ["", ["create Work"]],
@@ -405,7 +405,7 @@ describe("Add Space (ADR 0026)", () => {
     ])
   })
 
-  test("a missing Space's folder is located from where it was, once the path is a folder", () => {
+  test("a missing Project's folder is located from where it was, once the path is a folder", () => {
     const gone = {
       ...spaces[0],
       id: "s2",
@@ -414,7 +414,7 @@ describe("Add Space (ADR 0026)", () => {
       missing: true,
     }
     expect(labels("ol", "root", undefined, { spaces: [gone] })[0]).toEqual([
-      "Spaces",
+      "Projects",
       ["Locate folder"],
     ])
     expect(openingOf("space.locate.s2", [gone]).words).toBe("/home/r/")
@@ -479,14 +479,14 @@ describe("banda menu ROUTE", () => {
     const { at, path, words } = openingOf(route, spaces)
     return [at, path.map((branch) => branch.id), words]
   }
-  test("opens at the root, the Actions, the sidebar's view or a Space", () => {
+  test("opens at the root, the Actions, the sidebar's view or a Project", () => {
     expect(where("")).toEqual(["root", [], ""])
     expect(where("actions")).toEqual(["actions", [], ""])
     expect(where("views")).toEqual(["root", ["views"], ""])
     expect(where("space.Banda")).toEqual(["root", ["space:s1"], ""])
     expect(where("space.s1")).toEqual(["root", ["space:s1"], ""])
   })
-  test("space.add opens Add Space, or one of its ways", () => {
+  test("space.add opens Add Project, or one of its ways", () => {
     expect(where("space.add")).toEqual(["root", ["space.add"], ""])
     expect(where("space.add.folder")).toEqual([
       "root",
@@ -499,7 +499,7 @@ describe("banda menu ROUTE", () => {
       "",
     ])
   })
-  test("other words, and a Space there is not, are typed in", () => {
+  test("other words, and a Project there is not, are typed in", () => {
     expect(where(" fix the login ")).toEqual(["root", [], "fix the login"])
     expect(where("space.nope")).toEqual(["root", [], "space.nope"])
   })

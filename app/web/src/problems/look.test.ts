@@ -19,17 +19,17 @@ describe("looking into a Problem", () => {
     space("banda", "/home/p/code/banda"),
   ]
 
-  it("asks to read it and follow the skill's topic, in the home Space", () => {
+  it("asks to read it and follow the skill's topic, in the home Project", () => {
     expect(lookInto("3124d1bf35ad", null, spaces)).toEqual({
       ask: "Look into Banda's Problem 3124d1bf35ad: read it with the `problem` tool, and follow the Banda skill's `problems` topic.",
     })
   })
 
-  it("opens in the Space of the checkout Banda runs from", () => {
+  it("opens in the Project of the checkout Banda runs from", () => {
     expect(lookInto("3124", "/home/p/code/banda", spaces).space).toBe("banda")
   })
 
-  it("opens in the home Space when no Space is the checkout's, or its folder is gone", () => {
+  it("opens in the home Project when no Project is the checkout's, or its folder is gone", () => {
     expect(lookInto("3124", "/home/p/code/other", spaces).space).toBeUndefined()
     const gone = [space("banda", "/home/p/code/banda", true)]
     expect(lookInto("3124", "/home/p/code/banda", gone).space).toBeUndefined()
