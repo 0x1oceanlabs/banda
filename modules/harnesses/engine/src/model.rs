@@ -12,6 +12,9 @@ use ts_rs::TS;
 pub struct HarnessView {
     pub id: String,
     pub name: String,
+    /// What a sentence calls it: `Claude` for Claude Code; its name when
+    /// it has no shorter one.
+    pub short: String,
     /// Whether it is on.
     pub enabled: bool,
     /// How it starts: its program, then its arguments.
@@ -26,6 +29,7 @@ impl HarnessView {
         Self {
             id: harness.id.clone(),
             name: harness.name.clone(),
+            short: (harness.short.clone()).unwrap_or_else(|| harness.name.clone()),
             enabled: harness.enabled,
             command: [&harness.command]
                 .into_iter()

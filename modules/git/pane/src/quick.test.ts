@@ -1,13 +1,6 @@
 import type { Changed, Status } from "@banda/contract/git"
 import { expect, test } from "vitest"
-import {
-  askOf,
-  asksFirst,
-  menuOf,
-  onDefault,
-  quickOf,
-  shortName,
-} from "./quick"
+import { askOf, asksFirst, menuOf, onDefault, quickOf } from "./quick"
 
 const STATUS: Status = {
   at: 0,
@@ -149,12 +142,4 @@ test("only a branch named as the default is on it", () => {
   expect(
     onDefault({ ...STATUS, branch: undefined, default_branch: undefined })
   ).toBe(false)
-})
-
-test("the Harnesses Banda knows go by their short names, another by its own", () => {
-  expect(shortName({ id: "claude", name: "Claude Code" })).toBe("Claude")
-  expect(shortName({ id: "codex", name: "Codex" })).toBe("Codex")
-  expect(shortName({ id: "codex-work", name: "Work account" })).toBe(
-    "Work account"
-  )
 })

@@ -183,6 +183,21 @@ impl Agents {
         Ok(file.map_or_else(Default::default, |file| sending::start(&file, id)))
     }
 
+    /// Where a message goes, or who writes (`agents.write`): a Thread,
+    /// else a new one on `harness`, with what its entry starts it with.
+    fn target(&self, thread: Option<ThreadId>, harness: Option<String>) -> Result<Target, Refusal> {
+        match (thread, harness) {
+            (Some(thread), _) => Ok(Target::Thread(thread)),
+            (None, Some(harness)) => {
+                let start = self.new_start(&harness)?;
+                Ok(Target::New(harness, start))
+            }
+            (None, None) => Err(Refusal::invalid(
+                "Name a Thread, or a Harness to start one on.",
+            )),
+        }
+    }
+
     /// The Harness list it starts from, which the machine's module
     /// `harnesses` shares (ADR 0040).
     pub fn harnesses(&self) -> Harnesses {
@@ -706,8 +721,8 @@ impl Agents {
             prompt,
         }: WriteAsk,
     ) -> Result<banda_kernel::Stream, Refusal> {
-        let (harness, settings) = match (thread, harness) {
-            (Some(thread), None) => {
+        let (harness, settings) = match self.target(thread, harness)? {
+            Target::Thread(thread) => {
                 let found = call
                     .space()
                     .read(move |sql| {
@@ -720,8 +735,7 @@ impl Agents {
                 found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?
             }
             // As a new Thread on it starts.
-            (None, Some(harness)) => {
-                let start = self.new_start(&harness)?;
+            Target::New(harness, start) => {
                 let on = harness.clone();
                 let (settings, _) = call
                     .space()
@@ -729,7 +743,6 @@ impl Agents {
                     .await?;
                 (harness, settings)
             }
-            _ => return Err(Refusal::invalid("Name a Thread or a Harness to write.")),
         };
         if harness.is_empty() {
             return Err(Refusal::conflict("This Thread's Harness is gone."));
@@ -779,18 +792,7 @@ impl Agents {
             steer,
         } = params;
         rules::message::may_send(&text, &images)?;
-        let target = match (thread, harness) {
-            (Some(thread), _) => Target::Thread(thread),
-            (None, Some(harness)) => {
-                let start = self.new_start(&harness)?;
-                Target::New(harness, start)
-            }
-            (None, None) => {
-                return Err(Refusal::invalid(
-                    "A message goes into a Thread, or starts one on a Harness.",
-                ));
-            }
-        };
+        let target = self.target(thread, harness)?;
         let author = call.participant();
         if settings.is_some() {
             rules::message::may_choose(author)?;

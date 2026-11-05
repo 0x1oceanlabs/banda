@@ -47,8 +47,8 @@ const STEPS: Record<Step, string> = {
 
 const runs = new Map<SpaceId, Run>()
 const hearing = new Map<SpaceId, Set<() => void>>()
-/** How to stop each Space's run while its message is written. */
-const stopping = new Map<SpaceId, () => void>()
+/** What stops each Space's run while its message is written. */
+const stopping = new Map<SpaceId, AbortController>()
 
 function set(space: SpaceId, run: Run): void {
   runs.set(space, run)
@@ -75,7 +75,7 @@ export function dismiss(space: SpaceId): void {
 /** Stops the Space's run while its message is written: nothing is
  * committed, and the button is back. */
 export function stop(space: SpaceId): void {
-  stopping.get(space)?.()
+  stopping.get(space)?.abort()
 }
 
 /** Who writes a commit's message: a Thread's Harness, or the one a new
@@ -85,16 +85,15 @@ export type Writer = { name: string } & (
 )
 
 /** What `writer` replies to `prompt`, heard on `agents.write`; null once
- * `stopped`, which lets it go and so stops the Harness's run. */
+ * `signal` aborts, which lets it go and so stops the Harness's run. Heard
+ * once: a reconnect never runs the writer again. */
 function written(
   engine: Engine,
   space: SpaceId,
-  writer: Writer,
+  { name, ...who }: Writer,
   prompt: string,
-  stopped: (stop: () => void) => void
+  signal: AbortSignal
 ): Promise<string | null> {
-  const who =
-    "thread" in writer ? { thread: writer.thread } : { harness: writer.harness }
   return new Promise((resolve, reject) => {
     const letGo = engine.stream(
       space,
@@ -105,14 +104,19 @@ function written(
           ? resolve(piece.text)
           : reject(new Refused(piece.refusal)),
       (refusal) => {
-        const message = `${writer.name} stopped without writing the message.`
+        const message = `${name} stopped without writing the message.`
         reject(new Refused(refusal ?? { code: "conflict", message }))
-      }
+      },
+      { once: true }
     )
-    stopped(() => {
-      letGo()
-      resolve(null)
-    })
+    signal.addEventListener(
+      "abort",
+      () => {
+        letGo()
+        resolve(null)
+      },
+      { once: true }
+    )
   })
 }
 
@@ -139,40 +143,35 @@ export async function run(
   const writes = commits && !own
   if (writes && writer === null)
     return set(space, { is: "failed", message: NO_WRITER })
-  const step = (label: string) =>
-    set(space, { is: "running", label, since: Date.now() })
-  // Stopped while the message is written, the run ends here quietly.
-  let stopped = false
-  let letGo = () => {}
-  const stopper = () => {
-    stopped = true
-    letGo()
-    set(space, IDLE)
-  }
-  if (writes && writer !== null) {
-    stopping.set(space, stopper)
+  const writing = writes ? writer : null
+  const step = (label: string, stops?: true) =>
     set(space, {
       is: "running",
-      label: `${writer.name} is writing the message…`,
+      label,
       since: Date.now(),
-      stops: true,
+      ...(stops && { stops }),
     })
+  // Stopped while the message is written, the run ends here quietly.
+  const stopper = new AbortController()
+  const { signal } = stopper
+  if (writing) {
+    stopping.set(space, stopper)
+    signal.addEventListener("abort", () => set(space, IDLE), { once: true })
+    step(`${writing.name} is writing the message…`, true)
   } else step("Starting…")
   try {
     let message = own
     let branch: string | undefined
     const ask = { space }
-    if (writes && writer !== null) {
+    if (writing) {
       const { prompt } = await engine.call(
         "git.prompt",
         { files, branch: feature },
         ask
       )
-      if (stopped) return
-      const reply = await written(engine, space, writer, prompt, (stop) => {
-        letGo = stop
-      })
-      if (stopped || reply === null) return
+      if (signal.aborted) return
+      const reply = await written(engine, space, writing, prompt, signal)
+      if (reply === null || signal.aborted) return
       // Written: from here it goes on to the end, as a commit does.
       if (stopping.get(space) === stopper) stopping.delete(space)
       step(STEPS[feature ? "branching" : "committing"])
@@ -247,7 +246,7 @@ export async function run(
       { once: true }
     )
   } catch (error) {
-    if (!stopped) set(space, { is: "failed", message: problem(error) })
+    if (!signal.aborted) set(space, { is: "failed", message: problem(error) })
   } finally {
     if (stopping.get(space) === stopper) stopping.delete(space)
   }

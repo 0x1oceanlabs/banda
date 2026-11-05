@@ -5,6 +5,11 @@
  */
 export type HarnessView = { id: string, name: string, 
 /**
+ * What a sentence calls it: `Claude` for Claude Code; its name when
+ * it has no shorter one.
+ */
+short: string, 
+/**
  * Whether it is on.
  */
 enabled: boolean, 

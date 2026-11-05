@@ -20,6 +20,8 @@ pub struct Harness {
     pub id: String,
     /// What the Person reads: `Claude Code`.
     pub name: String,
+    /// What a sentence calls it, when shorter than its name: `Claude`.
+    pub short: Option<String>,
     /// The program that speaks ACP: its name on PATH, or its path.
     pub command: String,
     /// Whether it is on: one turned off starts nothing new.
@@ -224,6 +226,8 @@ struct HarnessEntry {
     id: String,
     /// What the Person reads: `Claude Code`.
     name: Option<String>,
+    /// What a sentence calls it, when shorter than its name: `Claude`.
+    short: Option<String>,
     /// The program that speaks ACP: its name on PATH, or its path.
     command: Option<String>,
     /// Whether it is on. One turned off stays in the list, with how it
@@ -250,6 +254,11 @@ impl HarnessEntry {
             base.args.clear();
             base.cli = None;
         }
+        // Banda's short name goes with Banda's name.
+        let short = match &self.name {
+            None => self.short.or_else(|| base.as_ref()?.short.clone()),
+            Some(_) => self.short,
+        };
         let name = self.name.or_else(|| base.as_ref().map(|b| b.name.clone()));
         let command = self
             .command
@@ -265,6 +274,7 @@ impl HarnessEntry {
         Ok(Harness {
             id: self.id,
             name,
+            short,
             command,
             enabled: self.enabled.unwrap_or(true),
             args: self.args.unwrap_or(args),
@@ -378,11 +388,12 @@ impl Harnesses {
 
 fn known() -> Vec<Harness> {
     let npx = |id: &str,
-               name: &str,
+               (name, short): (&str, &str),
                package: &str,
                (program, variable, minimum): (&str, &str, &str)| Harness {
         id: id.to_owned(),
         name: name.to_owned(),
+        short: Some(short.to_owned()),
         command: "npx".to_owned(),
         args: vec!["-y".to_owned(), package.to_owned()],
         enabled: true,
@@ -397,7 +408,7 @@ fn known() -> Vec<Harness> {
     vec![
         npx(
             "claude",
-            "Claude Code",
+            ("Claude Code", "Claude"),
             "@agentclientprotocol/claude-agent-acp@0.99.1",
             // The adapter's Agent SDK 0.3.312 was built for Claude Code
             // 2.1.312 (its `claudeCodeVersion`).
@@ -405,7 +416,7 @@ fn known() -> Vec<Harness> {
         ),
         npx(
             "codex",
-            "Codex",
+            ("Codex", "Codex"),
             "@agentclientprotocol/codex-acp@2.5.0",
             // The adapter depends on `@openai/codex` ^0.165.0.
             ("codex", "CODEX_PATH", "0.165.0"),
@@ -619,6 +630,13 @@ mod tests {
         )
         .unwrap();
         assert_eq!(own[0].name, "Claude Code");
+        assert_eq!(own[0].short.as_deref(), Some("Claude"));
+        // A name of the entry's own takes its own short name, or none.
+        let named = "[[harness]]\nid = \"claude\"\nname = \"Work\"\n\
+                     [[harness]]\nid = \"codex\"\nname = \"Team Codex\"\nshort = \"Team\"\n";
+        let named = listed_in(Path::new("h"), named).unwrap();
+        let shorts: Vec<_> = named.iter().map(|h| h.short.as_deref()).collect();
+        assert_eq!(shorts, [None, Some("Team")]);
         assert_eq!(
             (own[0].args.len(), own[0].cli.is_none()),
             (0, true),
