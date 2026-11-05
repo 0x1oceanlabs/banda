@@ -222,7 +222,11 @@ impl Places {
     pub fn theme(&self, name: &str, problems: &mut Vec<Problem>) -> Option<Theme> {
         if name == "omarchy" {
             let folder = self.omarchy_current.clone()?;
-            return read_folder("omarchy", Origin::Current, &folder, problems);
+            let mut theme = read_folder("omarchy", Origin::Current, &folder, problems)?;
+            // Hyprland's rounding, border and gaps are this theme's shape
+            // (ADR 0075, decision 3); its own banda.toml may say otherwise.
+            theme.settings.hyprland.get_or_insert(true);
+            return Some(theme);
         }
         if let Some((_, colors, banda)) = BUILT_IN.iter().find(|(n, _, _)| *n == name) {
             let palette = Palette::parse(colors).expect("Banda's own palettes parse");

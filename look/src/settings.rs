@@ -25,7 +25,8 @@ pub struct Settings {
     /// shadcn's `--radius`, in pixels: every corner is a step of it.
     #[schemars(range(min = 0))]
     pub radius: Option<f64>,
-    /// Whether to take Hyprland's rounding, border and gaps.
+    /// Whether to take Hyprland's rounding, border and gaps, glass or not.
+    /// The `omarchy` theme does, whose shape they are.
     pub hyprland: Option<bool>,
     /// Palette entries over the theme's: a palette name or hex.
     #[serde(default)]
@@ -479,7 +480,7 @@ impl Settings {
             theme: None,
             mode: Some(ModeChoice::System),
             radius: Some(10.0),
-            hyprland: Some(true),
+            hyprland: Some(false),
             colors: BTreeMap::new(),
             tokens: BTreeMap::new(),
             gaps: Gaps {

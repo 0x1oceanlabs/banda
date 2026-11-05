@@ -13,7 +13,7 @@
 
 # mode = "system"                    # "system", "light" or "dark"
 # radius = 10                        # every corner is a step of it; 0 squares all
-# hyprland = true                    # take Hyprland's rounding, border and gaps
+# hyprland = false                   # true takes Hyprland's rounding, border and gaps; theme "omarchy" does
 
 # Palette entries over the theme's, by name or hex. For example:
 # accent: "orange" or "#e07a3f"; attention, Banda's signal colour, too.
