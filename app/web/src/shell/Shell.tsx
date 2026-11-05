@@ -664,7 +664,8 @@ export function Shell({
             {
               ...how,
               ...(at?.from ? { from: at.from } : {}),
-              place: "right",
+              // What an Agent opens goes into its Thread's Group.
+              place: at?.from ? "group" : "right",
               // Not again: the one shown, as its kind names it, keeps
               // what it shows.
               ...(again ? { again } : { keep: true }),

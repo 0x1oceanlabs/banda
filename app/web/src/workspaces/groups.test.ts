@@ -1,11 +1,18 @@
 import type { SpaceId } from "@banda/contract"
 import type { PaneState } from "@banda/ui/pane"
 import { describe, expect, test } from "vitest"
-import { columnMoved } from "./arrange"
-import { filling, grouping, regrouping, shiftingInside } from "./groups"
+import { columnMoved, opened } from "./arrange"
+import {
+  filling,
+  grouping,
+  groupState,
+  regrouping,
+  shiftingInside,
+} from "./groups"
 import {
   type Column,
   groupEnds,
+  open,
   runOf,
   send,
   shift,
@@ -13,6 +20,8 @@ import {
   widthIn,
   type Workspaces,
 } from "./model"
+
+const pane = (kind: string) => ({ kind, args: {} }) as PaneState
 
 /** A workspace of columns named by their letters, each in the Group that
  * `groups` names at its place ("." for none), focused at `focus`. */
@@ -139,5 +148,25 @@ describe("a Group", () => {
     expect(widthIn(workspace, c)).toBe("1/2")
     // It stands out into the Strip's padding, not the gaps.
     expect(groupEnds(workspace, 0).pad).toBe(false)
+  })
+
+  test("what a Thread opens goes into its Group, in the Deck right of it", () => {
+    const before = strip("ab", "..", 0)
+    const next = open(before, "s" as SpaceId, pane("git.diff"), {
+      from: "a1",
+      place: "group",
+    })
+    expect(opened(before, next, "a1")?.command.params).toMatchObject({
+      kind: "git.diff",
+      place: { to: "group", pane: "a1" },
+    })
+  })
+
+  test("its colour is its Agent's state", () => {
+    expect(groupState("running")).toBe("working")
+    expect(groupState("asking")).toBe("asking")
+    expect(groupState("done")).toBe("done")
+    expect(groupState("offline")).toBe("failed")
+    expect(groupState("idle")).toBeUndefined()
   })
 })

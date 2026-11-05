@@ -198,7 +198,10 @@ export function opening(
     ...how,
     width: widthOf(pane),
   })
-  const plan = opened(workspaces, next)
+  // In a Group: the Group of the Pane it opens from (ADR 0065).
+  const group =
+    how.place === "group" ? (how.from ?? focused(workspaces)?.id) : undefined
+  const plan = opened(workspaces, next, group)
   if (!plan) return next
   return how.focus === false ? { ...plan, focus: false } : plan
 }

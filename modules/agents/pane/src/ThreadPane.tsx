@@ -358,7 +358,9 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
                   })
                 }
                 onOpenDiff={openDiff}
-                onOpenVisual={(visual) => open(paneOf(visualPane, visual))}
+                onOpenVisual={(visual) =>
+                  open(paneOf(visualPane, visual), "group")
+                }
                 writers={writers}
                 onOpenThread={(other) => open(threadPaneOf(other), "right")}
                 signIn={(turn) => (

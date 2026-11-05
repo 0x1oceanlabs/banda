@@ -866,6 +866,14 @@ test("an Agent's tab opens beside its Thread, in the browser there, and the Pers
   const tabs = page.getByRole("tablist", { name: "Tabs" })
   await expect(tabs).toHaveCount(2)
   await expect(tabs.first().getByRole("tab")).toHaveText(["Mine"])
+  // It is the Thread's Group's: the two stand on one plate, the Person's
+  // browser out of it (ADR 0065, decision 7).
+  const plates = page.locator("[data-group-plate]")
+  await expect(plates).toHaveCount(2)
+  await expect(
+    thread.locator("xpath=ancestor::*[@data-column][1]/*[@data-group-plate]")
+  ).toHaveCount(1)
+  await page.screenshot({ path: "test-results/agent-group.png" })
 
   // The next one is a tab of the browser beside the Thread.
   await agentSays(window, "browser_open", { url: `${address}/second` })

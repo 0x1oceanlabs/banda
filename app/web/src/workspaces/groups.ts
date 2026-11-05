@@ -3,6 +3,8 @@
  * in or out, move a column inside it, fill the screen with it. Moving a
  * Group is moving any of its columns (`model.ts`, `columnMoved`).
  */
+import type { MarkState } from "@banda/ui/components/banda-mark"
+import { works } from "@banda/ui/components/banda-mark"
 import { type Plan, columnTo } from "./arrange"
 import { focusedColumn, runOf, type Workspaces } from "./model"
 
@@ -61,4 +63,18 @@ export function filling(state: Workspaces): Plan | undefined {
       params: { column: column.id, fill: workspace.filled !== column.group },
     },
   }
+}
+
+/** A Group's colour, by its Agent's state, as the sidebar marks it:
+ * none for a Group with no Agent, or one at rest (ADR 0065, decision 6). */
+export type GroupState = "working" | "asking" | "done" | "failed"
+
+export function groupState(
+  mark: MarkState | undefined
+): GroupState | undefined {
+  if (!mark) return undefined
+  if (works(mark)) return "working"
+  if (mark === "asking" || mark === "done") return mark
+  if (mark === "failed" || mark === "offline") return "failed"
+  return undefined
 }
