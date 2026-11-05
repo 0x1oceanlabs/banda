@@ -207,3 +207,6 @@ for any Panes, and an Agent's Panes are simply its Group.
      pointer.
   5. Each Space's Agents on one workspace, and the in-place swap.
   6. The bar: Space badges, the map, and the widget as the switcher.
+
+  _Built_ 2026-11-05, all six: #569, #573, #575, #576, #577, #579
+  and the bar's.

@@ -465,19 +465,27 @@ html:not([data-glass]) [data-group-plate="halo"] {
  * marks it: at work a slow breath, a call brightens twice and stays, done
  * stays green until the Person opens the Thread. No Agent: the text's.
  */
-[data-group-plate][data-state="working"] {
+/* The bar's map (`[data-map]`) takes the same colours, still. */
+[data-map] {
+  --group-color: color-mix(in oklab, var(--foreground) 45%, transparent);
+}
+:is([data-group-plate], [data-map])[data-state="working"] {
   --group-color: var(--working);
+}
+:is([data-group-plate], [data-map])[data-state="asking"] {
+  --group-color: var(--attention);
+}
+:is([data-group-plate], [data-map])[data-state="done"] {
+  --group-color: var(--added);
+}
+:is([data-group-plate], [data-map])[data-state="failed"] {
+  --group-color: var(--destructive);
+}
+[data-group-plate][data-state="working"] {
   animation: group-breath 2.4s ease-in-out infinite;
 }
 [data-group-plate][data-state="asking"] {
-  --group-color: var(--attention);
   animation: group-call 0.7s ease-in-out 2;
-}
-[data-group-plate][data-state="done"] {
-  --group-color: var(--added);
-}
-[data-group-plate][data-state="failed"] {
-  --group-color: var(--destructive);
 }
 [data-group-plate][data-state] {
   --group-fill: 9%;

@@ -13,7 +13,7 @@ import {
   type SpaceSummary,
   type Status,
 } from "@banda/contract"
-import { works } from "@banda/ui/components/banda-mark"
+import { waits, works } from "@banda/ui/components/banda-mark"
 import { Toaster } from "@banda/ui/components/sonner"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
@@ -29,6 +29,7 @@ import { DEFAULT_KEYS } from "@banda/contract/look"
 import type { Action, Args, Thing, WindowApi } from "@banda/ui/module"
 import { actionFor, rebind } from "../actions/actions"
 import { Bar } from "../bar/Bar"
+import { mapOf } from "../bar/Map"
 import { tomlOf } from "@banda/contract/settings"
 import { useWidgets } from "../bar/Widgets"
 import type { Layout } from "../bar/arrange"
@@ -72,7 +73,11 @@ import {
 import { Edge } from "../sidebar/Edge"
 import { Sidebar } from "../sidebar/Sidebar"
 import { pickPreset } from "../sidebar/settings"
-import { settle as keepSettled, toggled } from "../sidebar/settled"
+import {
+  settle as keepSettled,
+  toggled,
+  useIsSettled,
+} from "../sidebar/settled"
 import { useNarrow } from "./narrow"
 import type { Arranged } from "@banda/contract/workspaces"
 import {
@@ -301,7 +306,8 @@ export function Shell({
   // A narrow window hides the sidebar, and shows it over the Strip only
   // when asked; what the Person chose for a wide one is kept (ADR 0025,
   // decision 10).
-  const columnMin = useLookColumns().min
+  const lookColumns = useLookColumns()
+  const columnMin = lookColumns.min
   const narrow = useNarrow(columnMin, sidebarWidth)
   const [over, setOver] = useState(false)
   if (over && !narrow) setOver(false)
@@ -881,6 +887,20 @@ export function Shell({
   const here = focused(workspaces)?.space ?? home
   // The bar's widgets, the window's own and the modules', where the
   // look's `[bar]` puts them (ADR 0024).
+  const listed = useCallback(
+    (entry: Entry) => {
+      const thing = showsOf(entry.pane)
+      return thing
+        ? lists[entry.space]?.find((row) => row.id === thing)
+        : undefined
+    },
+    [lists]
+  )
+  // The Agent's Thread in front, which the bar names with the sidebar
+  // hidden (ADR 0065, decision 9).
+  const ahead = focused(workspaces)
+  const aheadRow = ahead && listed(ahead)
+  const agentAhead = aheadRow?.agent !== undefined ? aheadRow : undefined
   const bar = useWidgets(modules, {
     engine,
     spaces,
@@ -888,6 +908,7 @@ export function Shell({
     window: parts,
     lists,
     sidebarShown,
+    current: agentAhead,
     onOpen: pickPane,
     aside: (ready && live.view.aside) || null,
   })
@@ -1005,19 +1026,29 @@ export function Shell({
       calling.find((call) => isShowing(entry, call, showsOf))?.chime,
     [calling]
   )
-  const listed = useCallback(
-    (entry: Entry) => {
-      const thing = showsOf(entry.pane)
-      return thing
-        ? lists[entry.space]?.find((row) => row.id === thing)
-        : undefined
-    },
-    [lists]
-  )
   const spaceName = useCallback(
     (id: SpaceId) =>
       spaces.find((space) => space.id === id)?.name || "No Space",
     [spaces]
+  )
+
+  // The bar's workspaces: a Space's by its name, with a dot while one of
+  // its Threads calls (ADR 0065, decision 9).
+  const settled = useIsSettled()
+  const barWorkspaces = useMemo(
+    () =>
+      inBar(workspaces).map((w) =>
+        w.space
+          ? {
+              ...w,
+              owner: spaces.find((space) => space.id === w.space),
+              calls: (lists[w.space] ?? []).some(
+                (row) => waits(row.mark) && !settled(row)
+              ),
+            }
+          : w
+      ),
+    [workspaces, lists, spaces, settled]
   )
 
   return (
@@ -1032,7 +1063,8 @@ export function Shell({
       <Bar
         status={status}
         attention={attention}
-        workspaces={inBar(workspaces)}
+        workspaces={barWorkspaces}
+        map={mapOf(current(workspaces), lookColumns, listed)}
         current={workspaces.current}
         sidebar={narrow ? over : sidebar}
         onSidebar={toggleSidebar}
