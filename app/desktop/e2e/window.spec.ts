@@ -2189,7 +2189,7 @@ test("Alt+K is the key sheet: sections and families, and Tab binds or frees a ke
 
   // Tab, then Add a key: the next key pressed is bound, Alt+K too, and
   // written to keys.toml; the row shows it beside its own.
-  await search.fill("whole screen")
+  await search.fill("column the whole screen")
   await search.press("Tab")
   const acts = menu.getByRole("listbox", { name: "Actions" })
   await acts.getByRole("option", { name: "Add a key…" }).click()
@@ -2203,7 +2203,7 @@ test("Alt+K is the key sheet: sections and families, and Tab binds or frees a ke
   await expect
     .poll(() => readFileSync(file, "utf8"))
     .toContain('"Alt+K" = "column.maximize"')
-  await search.fill("whole screen")
+  await search.fill("column the whole screen")
   const row = menu.getByRole("option").first()
   const keys = row.locator("[data-slot=kbd-group]")
   await expect(keys).toHaveCount(2)
