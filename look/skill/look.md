@@ -29,7 +29,7 @@ Every key, with its default:
 - "Square corners": `radius = 0`.
 - "Orange focus": `[colors]` `accent = "orange"`, or a hex.
 - "Columns too narrow in a small window": `[columns]` `min = 36`.
-- "Tabs instead of Panes one above another": `[columns]` `display = "tabs"`.
+- "One Pane at a time, the others' names over it": `[columns]` `display = "deck"` (a Deck, `Alt+T`).
 - "Other heights for Alt+Shift+R": `[columns]` `heights = ["1/4", "1/2", "3/4"]`.
 - "Dragged sizes stick too much", "not at all": `[columns]` `snap = 4`, or
   `snap = 0`; the presets and heights are where they stick.

@@ -3053,7 +3053,7 @@ test("the overview: the arrows and Enter, the window's keys, the drag", async ()
     .toBeGreaterThan((await page.evaluate(() => innerWidth)) * 0.3)
 })
 
-test("Alt+[ takes a Pane into a column, Alt+G shows it as tabs", async () => {
+test("Alt+[ takes a Pane into a column, Alt+T shows it as a Deck", async () => {
   window = await startWindow()
   const { page } = window
   const { thread, composer } = await firstThread(page)
@@ -3070,8 +3070,8 @@ test("Alt+[ takes a Pane into a column, Alt+G shows it as tabs", async () => {
   await expect(thread).toBeVisible()
   await expect(launcher).toBeVisible()
 
-  // As tabs: one shows, the other waits behind its tab.
-  await page.keyboard.press("Alt+KeyG")
+  // As a Deck: one shows, the other waits behind its tab.
+  await page.keyboard.press("Alt+KeyT")
   const tabs = page.getByRole("tab")
   await expect(tabs).toHaveCount(2)
   await expect(tabs.nth(1)).toHaveAttribute("aria-selected", "true")
@@ -3093,14 +3093,14 @@ test("Alt+[ takes a Pane into a column, Alt+G shows it as tabs", async () => {
   await page.screenshot({ path: "test-results/tabs.png" })
 
   // Back to one above another, and out to a column of its own.
-  await page.keyboard.press("Alt+KeyG")
+  await page.keyboard.press("Alt+KeyT")
   await expect(tabs).toHaveCount(0)
   await expect(thread).toBeVisible()
   await page.keyboard.press("Alt+BracketRight")
   await expect(columns).toHaveCount(2)
 })
 
-test("a tab in a column's group bar carries its Pane", async () => {
+test("a tab in a Deck's bar carries its Pane", async () => {
   window = await startWindow()
   const { page } = window
   const { thread, composer } = await firstThread(page)
@@ -3112,7 +3112,7 @@ test("a tab in a column's group bar carries its Pane", async () => {
     [thread, launcher].map((tile) => tile.getAttribute("data-tile"))
   )
   await page.keyboard.press("Alt+BracketLeft")
-  await page.keyboard.press("Alt+KeyG")
+  await page.keyboard.press("Alt+KeyT")
   const tabs = page.getByRole("tab")
   await expect(tabs).toHaveCount(2)
 

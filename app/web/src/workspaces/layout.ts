@@ -87,11 +87,11 @@ export function sized(workspace: Workspace, look: Look) {
 }
 
 /** The columns of `workspace` as a Strip draws them, by the look: their
- * widths, whether they show tabs, and their Panes' heights. */
+ * widths, whether each is a Deck, and their Panes' heights. */
 export function drawnColumns(workspace: Workspace, look: Look) {
   return sized(workspace, look).map((column) => ({
     ...column,
-    tabbed: displayOf(column, look) === "tabs",
+    decked: displayOf(column, look) === "deck",
     heights: heightsOf(column),
   }))
 }

@@ -7,6 +7,7 @@ import {
   close,
   consume,
   current,
+  deck,
   displayOf,
   edge,
   entries,
@@ -27,7 +28,6 @@ import {
   inBar,
   start,
   step,
-  tabs,
   toEdge,
   SIZES,
   type Width,
@@ -446,11 +446,11 @@ describe("heights, and the edges of a Strip", () => {
     expect(even(state)).toBe(state)
   })
 
-  test("a Pane alone or in tabs has no height of its own", () => {
+  test("a Pane alone or in a Deck has no height of its own", () => {
     const alone = open(start(), A, thread("t1"))
     expect(heighten(alone, 1)).toBe(alone)
-    const tabbed = tabs(stacked())
-    expect(heighten(tabbed, 1)).toBe(tabbed)
+    const decked = deck(stacked())
+    expect(heighten(decked, 1)).toBe(decked)
   })
 
   test("Home and End focus the edges, and with Shift move the column there", () => {
@@ -500,18 +500,22 @@ describe("groups", () => {
     expect(consume(alone, "left")).toBe(alone)
   })
 
-  test("Alt+G shows a column's Panes as tabs and back, as the look starts it", () => {
+  test("Alt+T shows a column as a Deck and back, as the look starts it", () => {
     let state = consume(three(), "left")
     expect(display(state)).toEqual(["stack", "stack"])
-    state = tabs(state)
-    expect(display(state)).toEqual(["stack", "tabs"])
+    state = deck(state)
+    expect(display(state)).toEqual(["stack", "deck"])
     // The look's display holds for the columns not set.
-    const tabbed = { ...DEFAULT_COLUMNS, display: "tabs" as const }
-    expect(display(state, tabbed)).toEqual(["tabs", "tabs"])
-    expect(display(tabs(state, tabbed), tabbed)).toEqual(["tabs", "stack"])
-    // It survives a reload.
+    const decked = { ...DEFAULT_COLUMNS, display: "deck" as const }
+    expect(display(state, decked)).toEqual(["deck", "deck"])
+    expect(display(deck(state, decked), decked)).toEqual(["deck", "stack"])
+    // It survives a reload, and a Deck kept by its old name is one.
     const back = parse(JSON.parse(JSON.stringify(state)))!
-    expect(display(back)).toEqual(["stack", "tabs"])
+    expect(display(back)).toEqual(["stack", "deck"])
+    const old = parse(
+      JSON.parse(JSON.stringify(state).replace('"deck"', '"tabs"'))
+    )!
+    expect(display(old)).toEqual(["stack", "deck"])
   })
 })
 

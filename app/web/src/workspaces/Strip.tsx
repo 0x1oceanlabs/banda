@@ -269,7 +269,7 @@ export function Strip({
       )}
       {columns.map((column, c) => {
         const here = workspace.focus === c
-        const bar = column.tabbed && !zooms
+        const bar = column.decked && !zooms
         return (
           <div
             key={column.id}
@@ -308,7 +308,7 @@ export function Strip({
                 marked={marked(entry)}
                 away={away.has(entry.id)}
                 zoomed={entry.id === zoomed}
-                height={column.tabbed ? undefined : column.heights[e]}
+                height={column.decked ? undefined : column.heights[e]}
                 listed={listed(entry)}
                 spaceName={spaceName(entry.space)}
                 mixed={mixed}
@@ -316,7 +316,7 @@ export function Strip({
                 hidden={
                   zooms
                     ? entry.id !== zoomed
-                    : column.tabbed && column.active !== e
+                    : column.decked && column.active !== e
                 }
               />
             ))}

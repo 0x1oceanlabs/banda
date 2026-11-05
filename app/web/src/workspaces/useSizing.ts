@@ -31,7 +31,7 @@ export type Sized = {
   width: Width
   full?: true
   min: number
-  tabbed: boolean
+  decked: boolean
   heights: readonly number[]
   entries: readonly Entry[]
   active: number
@@ -377,7 +377,7 @@ export function useSizing(
 
 /** Whether `column` shows its Panes one above another, two or more. */
 function stacks(column: Sized): boolean {
-  return !column.tabbed && column.entries.length > 1
+  return !column.decked && column.entries.length > 1
 }
 
 /** The ID of the tile `target` is in, if it is in one. */

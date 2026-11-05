@@ -527,9 +527,9 @@
           "const": "stack"
         },
         {
-          "description": "One at a time, the rest as tabs over it, as niri's tabbed column and\nHyprland's group.",
+          "description": "A Deck: one at a time, the others' names in a row over it, as niri's\ntabbed column (ADR 0065).",
           "type": "string",
-          "const": "tabs"
+          "const": "deck"
         }
       ]
     },

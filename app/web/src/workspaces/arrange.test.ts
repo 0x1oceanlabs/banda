@@ -18,6 +18,7 @@ import {
 import {
   close,
   current,
+  deck,
   even,
   focused,
   heighten,
@@ -27,7 +28,6 @@ import {
   shift,
   start,
   step,
-  tabs,
   widen,
   type Workspaces,
 } from "./model"
@@ -249,9 +249,9 @@ describe("plans", () => {
       method: "workspaces.maximize",
       params: { column, full: true },
     })
-    expect(resized(before, tabs(before))?.command).toEqual({
+    expect(resized(before, deck(before))?.command).toEqual({
       method: "workspaces.display",
-      params: { column, display: "tabs" },
+      params: { column, display: "deck" },
     })
     expect(resized(before, before)).toBeUndefined()
   })

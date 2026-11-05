@@ -55,7 +55,7 @@ const ARROWS: Record<string, Direction> = {
   ArrowDown: "down",
 }
 
-/** A tabbed column's group bar, as `Tabs` draws it (`h-6 gap-1`): its
+/** A Deck's bar of names, as `Tabs` draws it (`h-6 gap-1`): its
  * height, and the gap between its segments, in rem. */
 const TABS = { height: 1.5, gap: 0.25 }
 
@@ -748,7 +748,7 @@ function Row({
                   data-called={call ? "" : undefined}
                   aria-label={`${title} in ${space}`}
                   aria-current={entry.id === picked || undefined}
-                  hidden={column.tabbed && !active}
+                  hidden={column.decked && !active}
                   // Clear: the Pane itself shows under it, zoomed out.
                   className={cn(
                     "group/over relative min-h-0 rounded-(--overview-radius) inset-ring-(--overview-frame) transition-[background-color,box-shadow] duration-150 hover:bg-overview-foreground/5 data-lifted:bg-black/50 motion-reduce:transition-none",
@@ -757,7 +757,7 @@ function Row({
                   )}
                   style={
                     {
-                      flex: column.tabbed
+                      flex: column.decked
                         ? "1 1 0"
                         : heightAt(column.heights[e]),
                       "--overview-frame": call
@@ -807,7 +807,7 @@ function Row({
                   )}
                   {/* Over the column's group bar, each tab of it: one
                       carries its Pane. */}
-                  {column.tabbed && active && (
+                  {column.decked && active && (
                     <div
                       data-handle=""
                       className="absolute inset-x-0 top-0 flex"

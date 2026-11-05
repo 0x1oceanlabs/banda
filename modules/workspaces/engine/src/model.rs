@@ -485,7 +485,7 @@ pub fn maximize(list: &mut Arrangement, column: ColumnId, full: bool) -> Result<
     Ok(())
 }
 
-/// Shows a column's Panes one above another or as tabs; left out, as the
+/// Shows a column's Panes one above another or as a Deck; left out, as the
 /// look says.
 pub fn display(
     list: &mut Arrangement,
@@ -993,11 +993,11 @@ mod tests {
         let column = list[0].columns[0].id;
         size(&mut list, column, Some("2/3".into())).unwrap();
         maximize(&mut list, column, true).unwrap();
-        display(&mut list, column, Some(Display::Tabs)).unwrap();
+        display(&mut list, column, Some(Display::Deck)).unwrap();
         let kept = &list[0].columns[0];
         assert_eq!(
             (kept.width.as_deref(), kept.full, kept.display),
-            (Some("2/3"), true, Some(Display::Tabs))
+            (Some("2/3"), true, Some(Display::Deck))
         );
         // A width given ends the whole screen, as niri's.
         size(&mut list, column, None).unwrap();

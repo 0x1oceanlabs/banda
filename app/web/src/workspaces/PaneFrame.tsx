@@ -73,8 +73,8 @@ export function AgentMark({ className = "" }: { className?: string }) {
  * One tile: a header with the Pane's icon and title, and its Space when the
  * workspace mixes Spaces, unless the Pane draws its own; under it, the Pane
  * itself. A Pane that shows a listed thing, as a Thread, has its mark in the
- * icon's place and its Space before the title (ADR 0031). A tabbed
- * column's group bar sits over its tile, outside it (`Tabs`).
+ * icon's place and its Space before the title (ADR 0031). A Deck's
+ * bar of names sits over its tile, outside it (`Tabs`).
  */
 export function PaneFrame({
   entry,

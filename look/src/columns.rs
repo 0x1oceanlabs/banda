@@ -59,15 +59,27 @@ pub enum Center {
 }
 
 /// How a column shows its Panes.
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize, TS, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 #[ts(export, export_to = "look/")]
 pub enum Display {
     /// One above another, sharing the column's height.
     Stack,
-    /// One at a time, the rest as tabs over it, as niri's tabbed column and
-    /// Hyprland's group.
-    Tabs,
+    /// A Deck: one at a time, the others' names in a row over it, as niri's
+    /// tabbed column (ADR 0065).
+    Deck,
+}
+
+/// Reads `"tabs"` as a Deck too, its old name, as a `look.toml` or a kept
+/// arrangement may still say (ADR 0065).
+impl<'de> Deserialize<'de> for Display {
+    fn deserialize<D: serde::Deserializer<'de>>(read: D) -> Result<Self, D::Error> {
+        match String::deserialize(read)?.as_str() {
+            "stack" => Ok(Self::Stack),
+            "deck" | "tabs" => Ok(Self::Deck),
+            other => Err(serde::de::Error::unknown_variant(other, &["stack", "deck"])),
+        }
+    }
 }
 
 /// `[columns]` resolved: valid widths only, narrowest first.
@@ -265,8 +277,10 @@ mod tests {
         assert_eq!(columns.default, "1/2");
         assert_eq!(columns.alone, "1");
         assert_eq!(columns.display, Display::Stack);
-        let tabbed = read("[columns]\ndisplay = \"tabs\"\n");
-        assert_eq!(tabbed.resolve().display, Display::Tabs);
+        let deck = read("[columns]\ndisplay = \"deck\"\n");
+        assert_eq!(deck.resolve().display, Display::Deck);
+        let old = read("[columns]\ndisplay = \"tabs\"\n");
+        assert_eq!(old.resolve().display, Display::Deck);
         let half = read("[columns]\nalone = \"1/2\"\n");
         assert_eq!(half.resolve().alone, "1/2");
         assert_eq!(read("[columns]\nalone = \"all\"\n").problems().len(), 1);
