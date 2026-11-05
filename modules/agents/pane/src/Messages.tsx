@@ -23,6 +23,11 @@ import { clamped } from "./messageText"
 import { useMessageMenu } from "./ThreadMenu"
 import type { Listing } from "./thread"
 
+/** What the Thread's text size sizes: a reply, the Person's message, a
+ * plan, with their code (ADR 0063, decision 5). The header, the work
+ * lines and the composer keep theirs. */
+export const THREAD_ZOOM = "[zoom:var(--thread-zoom,1)]"
+
 /**
  * The Person's message: a bubble on the right, its long text clamped until
  * they open it (ADR 0010, decision 1).
@@ -56,7 +61,7 @@ export function PersonMessage({
       <MessageContent>
         <MessageImages images={images} reader={reader} />
         {text && (
-          <Bubble variant="muted" align="end">
+          <Bubble variant="muted" align="end" className={THREAD_ZOOM}>
             <BubbleContent
               className={cn("whitespace-pre-wrap", clamp.className)}
             >
@@ -183,7 +188,7 @@ export function AgentMessage({
     <Message>
       <MessageContent>
         {from}
-        <div data-quotable ref={menu}>
+        <div data-quotable ref={menu} className={THREAD_ZOOM}>
           <Markdown streaming={live}>{text}</Markdown>
         </div>
         {!live && (

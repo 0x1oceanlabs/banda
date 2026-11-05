@@ -17,6 +17,7 @@ import type {
 } from "@banda/contract/agents"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { spacesChanged } from "@banda/ui/lib/spaces"
+import { keepZoom, zoomOf } from "@banda/ui/lib/zoom"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useInFront } from "@banda/ui/hooks/use-in-front"
 import { READ_AGAIN, type Source, useLive } from "@banda/ui/hooks/use-live"
@@ -65,6 +66,10 @@ export type ThreadArgs = {
 
 /** A Thread not yet started, on this computer's first Harness. */
 export const NEW_THREAD: ThreadArgs = { thread: null, harness: "", title: "" }
+
+/** What a Thread's text size is kept under (ADR 0063, decision 5): a
+ * Thread not yet made has one for all. */
+export const zoomKey = (thread: string | null) => `thread ${thread ?? "new"}`
 
 /** What Implement asks the Agent, once plan mode is off. */
 const IMPLEMENT = "Implement the plan."
@@ -262,6 +267,9 @@ export function useThreadSession({
       )
     })
     if (sent && thread === null) {
+      // Its words keep the size they were given before it was made.
+      keepZoom(zoomKey(sent.thread), zoomOf(zoomKey(null)))
+      keepZoom(zoomKey(null), 1)
       const next = { thread: sent.thread, harness, title: args.title }
       if (target !== space || args.scratch)
         open({ kind: "agents.thread", args: next }, "here", target)

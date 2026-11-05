@@ -24,8 +24,7 @@ import {
   DialogTitle,
 } from "@banda/ui/components/dialog"
 import { Kbd } from "@banda/ui/components/kbd"
-import { matches } from "@banda/ui/lib/keys"
-import { ZOOM_KEYS } from "@banda/ui/lib/zoom"
+import { zoomAfter } from "@banda/ui/lib/zoom"
 import { onThemeChange } from "@banda/ui/lib/look"
 import {
   heard,
@@ -219,11 +218,10 @@ function VisualPreview({
   const by = (steps: number) =>
     setStep((now) => Math.min(ZOOMS.length - 1, Math.max(0, now + steps)))
   const keys = (event: React.KeyboardEvent) => {
-    const bind = ZOOM_KEYS.find((one) => matches(event, one))
-    if (!bind) return
+    const next = zoomAfter(event, zoom)
+    if (next === null) return
     event.preventDefault()
-    if (bind.by === 0) setStep(ACTUAL)
-    else by(bind.by)
+    setStep(ZOOMS.indexOf(next))
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

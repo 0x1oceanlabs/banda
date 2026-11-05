@@ -121,7 +121,7 @@ rest are our defaults, and they stay his to change.
    A path's chip copies as the Agent wrote it.
 
 5. **Ctrl, or ⌘, with + − 0 sizes a Thread's text** (_decided_), as it
-   zooms a terminal: the steps of `@banda/ui/lib/zoom`, the Pane's own
+   zooms a terminal: the steps of `@banda/ui/lib/zoom`, the Thread's own
    until the window starts again, with a badge for a second. It sizes
    the reply, the Person's messages and the code. The Pane's header, the
    work lines and the composer's controls keep their size.
@@ -173,3 +173,9 @@ rest are our defaults, and they stay his to change.
 - The Markdown drops rehype-harden. Streamdown lets every prefix and
   scheme through it, so it only blocked a path to a file; the sanitizer
   still keeps a link's and an image's schemes to the web's.
+- A Pane's kept zoom and its badge are `@banda/ui`'s (`useZoom`,
+  `ZoomBadge`), which the terminal and the Thread share. The Thread sizes
+  its words with CSS `zoom`, so its code, tables and diagrams grow with
+  them, and wrap in the same column. A Thread not yet made has one size
+  for all, which the Thread takes once made. Its thoughts, tool output and
+  Visuals keep their size, as its work lines do.

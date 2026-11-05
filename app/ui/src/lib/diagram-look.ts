@@ -118,11 +118,12 @@ function tokens(): string {
   ].join("|")
 }
 
-/** Mermaid's config in the look now, again whenever the look changes. */
+/** Mermaid's config in the look now, again whenever the look changes,
+ * and the look's tokens it was drawn from, as one string. */
 export function useDiagramLook() {
-  const now = useSyncExternalStore(subscribe, tokens, () => "")
-  return useMemo(() => {
-    const [ground, ink, font, scheme] = now.split("|")
+  const look = useSyncExternalStore(subscribe, tokens, () => "")
+  const config = useMemo(() => {
+    const [ground, ink, font, scheme] = look.split("|")
     const dark = scheme === "dark"
     return diagramConfig(
       rgbOf(ground ?? "", dark ? [10, 10, 10] : [255, 255, 255]),
@@ -130,5 +131,6 @@ export function useDiagramLook() {
       font || "sans-serif",
       dark
     )
-  }, [now])
+  }, [look])
+  return { config, look }
 }

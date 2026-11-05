@@ -65,6 +65,10 @@ const controls = {
   mermaid: { copy: true, download: false, fullscreen: true },
 } as const
 
+/** Links open as the host says (ADR 0051), with no dialog first; one
+ * object, so Streamdown's memo keeps a reply that has not changed. */
+const LINKS_AS_THEY_ARE = { enabled: false }
+
 /**
  * Markdown as an Agent writes it, such as a reply or a thought (ADR 0010,
  * decision 2). While `streaming`, unfinished markdown closes as it comes
@@ -81,8 +85,8 @@ function Markdown({
   streaming?: boolean
   className?: string
 }) {
-  const diagram = useDiagramLook()
-  const mermaid = useMemo(() => ({ config: diagram }), [diagram])
+  const { config, look } = useDiagramLook()
+  const mermaid = useMemo(() => ({ config }), [config])
   // A reply's notes have ids of their own, so two replies' never mix
   // (ADR 0063, decision 1), and show their label.
   const scope = useId()
@@ -98,6 +102,9 @@ function Markdown({
     <Written value={!streaming}>
       <Streamdown
         data-slot="markdown"
+        // Streamdown's memo compares its `data-` props, not `mermaid`: a
+        // new look draws the reply's diagrams again.
+        data-look={look}
         className={cn(
           "min-w-0 space-y-3 text-prose wrap-break-word *:first:mt-0 *:last:mb-0",
           className
@@ -109,7 +116,7 @@ function Markdown({
         rehypePlugins={rehypePlugins}
         remarkRehypeOptions={notes}
         controls={controls}
-        linkSafety={{ enabled: false }}
+        linkSafety={LINKS_AS_THEY_ARE}
         remarkPlugins={remarkPlugins}
       >
         {children}

@@ -42,6 +42,8 @@ import {
   TraceTitle,
 } from "@banda/ui/components/trace"
 import { useLive } from "@banda/ui/hooks/use-live"
+import { ZoomBadge } from "@banda/ui/components/zoom-badge"
+import { useZoom } from "@banda/ui/hooks/use-zoom"
 import { matches } from "@banda/ui/lib/keys"
 import { copyAsMarkdown } from "@banda/ui/lib/markdown-copy"
 import { clock, duration } from "@banda/ui/lib/words"
@@ -100,7 +102,12 @@ import { ModeMenu } from "./ThreadSettings"
 import { SignIn, Warning } from "./SignIn"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { NewThreadBar } from "./NewThread"
-import { NEW_THREAD, type ThreadArgs, useThreadSession } from "./session"
+import {
+  NEW_THREAD,
+  type ThreadArgs,
+  useThreadSession,
+  zoomKey,
+} from "./session"
 
 export const threadPane = definePane<ThreadArgs>({
   kind: "agents.thread",
@@ -201,6 +208,9 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
   // open for a moment on a narrow one.
   const wide = useWide(root)
   const [popped, setPopped] = useState(false)
+  // Ctrl or ⌘ with + − 0 sizes its words, kept till the window starts
+  // again (ADR 0063, decision 5).
+  const zoom = useZoom(zoomKey(thread))
   const detailsShown = wide ? args.details !== false : popped
   const setDetailsShown = wide
     ? (shown: boolean) =>
@@ -213,10 +223,15 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
     <div
       ref={root}
       className="@container/thread flex h-full min-h-0 flex-col"
+      style={{ "--thread-zoom": zoom.zoom } as React.CSSProperties}
       onKeyDownCapture={() => {
         written.current = thread !== null && drafted(thread)
       }}
       onKeyDown={(event) => {
+        if (zoom.press(event)) {
+          event.preventDefault()
+          return
+        }
         if (matches(event, DETAILS_KEY)) {
           event.preventDefault()
           setDetailsShown(!detailsShown)
@@ -275,6 +290,7 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
           // A reply copies as Markdown and HTML (ADR 0063, decision 4).
           onCopy={copyAsMarkdown}
         >
+          <ZoomBadge zoom={zoom.shown} />
           <QuoteSelection
             area={area}
             onQuote={(quote) => composer.current?.quote(quote)}
