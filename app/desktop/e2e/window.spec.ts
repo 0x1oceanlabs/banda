@@ -240,32 +240,50 @@ test("the bar's workspaces come and go on the look's motion, as numbers or dots"
     cell.evaluate((e) => e.getBoundingClientRect().width)
   const x = async (cell: Locator) => (await cell.boundingBox())!.x
 
-  // One that comes widens from nothing, and the mark goes to it.
+  // The Pane goes to the empty workspace at the bottom, which becomes
+  // Workspace 2; a new empty one comes below it, widening from nothing,
+  // and the mark goes to Workspace 2.
   await page.keyboard.press("Alt+KeyN")
   const launcher = page.getByRole("region", { name: "New Pane" })
   await expect(launcher).toHaveAttribute("data-focused", "true")
-  // Every frame's width, from before it comes: one measure after it
-  // came is late on a busy runner, as the motion runs on.
+  // The bar settles from the window's start first: at the slow move the
+  // cells the first Thread made widen for a while, and the one that comes
+  // is told apart from them by its id, not its width.
+  await expect
+    .poll(() =>
+      numbers
+        .locator(":scope > button[data-workspace]")
+        .evaluateAll((cells) =>
+          cells.every((cell) => cell.getBoundingClientRect().width === 26)
+        )
+    )
+    .toBe(true)
+  // Every frame's width of a cell that was not there: one measure after
+  // it came is late on a busy runner, as the motion runs on.
   await page.evaluate(() => {
+    const nav = document.querySelector('nav[aria-label="Workspaces"]')!
+    const cells = () => [
+      ...nav.querySelectorAll<HTMLElement>(":scope > [data-workspace]"),
+    ]
+    const before = new Set(cells().map((cell) => cell.dataset.workspace))
     const seen: number[] = []
     Object.assign(window, { seen })
+    let frames = 0
     const sample = () => {
-      const cell = document.querySelector(
-        'nav[aria-label="Workspaces"] [aria-label="Workspace 2"]'
-      )
-      if (cell) seen.push(cell.getBoundingClientRect().width)
-      if (seen.length < 600) requestAnimationFrame(sample)
+      for (const cell of cells())
+        if (!before.has(cell.dataset.workspace))
+          seen.push(cell.getBoundingClientRect().width)
+      if (++frames < 600) requestAnimationFrame(sample)
     }
     requestAnimationFrame(sample)
   })
   await page.keyboard.press("Alt+Shift+Digit2")
   const two = numbers.getByRole("button", { name: "Workspace 2" })
   await expect(two).toHaveAttribute("aria-current", "true")
-  await expect.poll(() => width(two)).toBe(26)
-  const seen = await page.evaluate(
-    () => (window as unknown as { seen: number[] }).seen
-  )
-  expect(Math.min(...seen)).toBeLessThan(20)
+  const seen = () =>
+    page.evaluate(() => (window as unknown as { seen: number[] }).seen)
+  await expect.poll(async () => (await seen()).at(-1)).toBe(26)
+  expect(Math.min(...(await seen()))).toBeLessThan(20)
   const mark = numbers.locator(":scope > span[aria-hidden]")
   await expect
     .poll(async () => Math.round((await x(mark)) - (await x(two))))
