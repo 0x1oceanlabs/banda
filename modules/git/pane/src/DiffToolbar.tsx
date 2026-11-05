@@ -1,5 +1,5 @@
 /**
- * The Diff's buttons at the end of its header, as T3 Code's: read again,
+ * The Diff's buttons at the end of its header, as T3 Code's: refresh,
  * fold every file or none, stacked or split, the file tree, and the
  * options of how it draws; what can be done to all of it comes first.
  */
@@ -43,7 +43,7 @@ export function DiffToolbar({
   return (
     <div className="ml-auto flex shrink-0 items-center gap-0.5">
       {children}
-      <Tool label="Read again" onClick={onAgain}>
+      <Tool label="Refresh" onClick={onAgain}>
         <RefreshCwIcon />
       </Tool>
       {folded !== null && (

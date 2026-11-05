@@ -1,9 +1,11 @@
 import {
+  useCallback,
   useEffect,
   useEffectEvent,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react"
 import type { ChangeAsk } from "@banda/contract/git"
@@ -28,7 +30,7 @@ import { useAct } from "@banda/ui/hooks/use-act"
 import { definePane, type PaneProps } from "@banda/ui/pane"
 import { ChevronDownIcon, ChevronRightIcon, FileDiffIcon } from "lucide-react"
 import { Acts } from "./Acts"
-import { AT_ONCE, viewOf, type View } from "./diff"
+import { AT_ONCE, TREE_WIDE, viewOf, type View } from "./diff"
 import { DiffToolbar } from "./DiffToolbar"
 import { More, useFiles } from "./files"
 import { useFolds } from "./folds"
@@ -72,9 +74,12 @@ export const diffPane = definePane<DiffArgs>({
 
 function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
   const scope = args.scope
-  const view = viewOf(args.view)
+  const [root, wide] = useWide()
+  const view = viewOf(args.view, wide)
+  // What the Person chose alone is kept: the tree they never toggled
+  // follows the Pane's width.
   const set = (next: Partial<View>) =>
-    update({ ...args, view: { ...view, ...next } })
+    update({ ...args, view: { ...args.view, ...next } })
 
   const thread = scope.kind === "turn" ? scope.thread : (args.thread ?? null)
   const { live, diff, question, words, again, fresh } = useDiffRead(
@@ -183,7 +188,7 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
   const count = diff?.files.length ?? 0
 
   return (
-    <div className="@container/diff flex h-full min-h-0 flex-col">
+    <div ref={root} className="@container/diff flex h-full min-h-0 flex-col">
       <PaneHeader title="Diff" icon={diffPane.icon} onClose={close}>
         <ScopeMenu
           engine={engine}
@@ -359,4 +364,24 @@ const EMPTY: Record<Scope["kind"], string> = {
   staged: "Nothing is staged.",
   commit: "This commit changes no files.",
   turn: "This turn changed no files.",
+}
+
+/** A ref for the Pane's root, and whether it is as wide as shows the
+ * tree, kept current; wide till it is drawn. */
+function useWide(): [(own: HTMLElement | null) => void, boolean] {
+  const [own, setOwn] = useState<HTMLElement | null>(null)
+  const subscribe = useCallback(
+    (hear: () => void) => {
+      if (!own) return () => {}
+      const seen = new ResizeObserver(hear)
+      seen.observe(own)
+      return () => seen.disconnect()
+    },
+    [own]
+  )
+  const wide = useSyncExternalStore(
+    subscribe,
+    () => (own?.offsetWidth ?? TREE_WIDE) >= TREE_WIDE
+  )
+  return [setOwn, wide]
 }
