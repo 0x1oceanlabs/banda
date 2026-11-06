@@ -151,6 +151,7 @@ import {
 } from "./actions"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { holdsAlone, withMore } from "@banda/ui/lib/keys"
+import { ThreadMenus } from "../titles/ThreadMenu"
 
 type Change = (workspaces: State) => Step
 
@@ -620,6 +621,11 @@ export function Shell({
     const listed = entry && thing ? listedOf(entry.project, thing) : undefined
     return listed && snoozeAct(listed, asleep(listed, Date.now()))
   }, [])
+  // The Thread menu's Snooze…: the picker for its Thread.
+  const openSnooze = useCallback(
+    (project: ProjectId, listed: Listed) => setSnoozing({ project, listed }),
+    []
+  )
   // Alt+Z: the picker for the Thread the Person looks at.
   /** The Thread `asked` names, else the one in focus. */
   const threadAsked = useCallback(
@@ -886,6 +892,7 @@ export function Shell({
           .then((thread) => runAction(parts, "thread.new", thread))
           .catch(() => undefined),
       run: (action, args) => runAction(parts, action, args),
+      engine,
       writeSetting: (file, key, value) =>
         window.banda?.settings.set(file, key, value) ??
         Promise.resolve(["Only Banda's app writes the settings."]),
@@ -986,6 +993,9 @@ export function Shell({
       const pressed = pressFor(keyed, event)
       if (!pressed) return handOn(event, target, keyed, mod, handing)
       const { action } = pressed
+      // A key that is not its action's now is the Pane's, as F2 a
+      // terminal's program's while no Thread has the focus.
+      if (action.when && !action.when(parts)) return
       // A dialog that takes the window's keys, as the overview, has only
       // the plain ones of its own.
       const inDialog =
@@ -1209,183 +1219,196 @@ export function Shell({
 
   return (
     <KeysInForce.Provider value={keys}>
-      <div className="flex h-svh flex-col bg-desk text-foreground">
-        <Watches
-          engine={engine}
-          modules={modules}
-          projects={open}
-          onChange={setAttention}
-          onLists={setLists}
-        />
-        <Bar
-          status={status}
-          attention={attention}
-          workspaces={barWorkspaces}
-          map={mapOf(current(workspaces), lookColumns, listed)}
-          current={workspaces.current}
-          sidebar={narrow ? over : sidebar}
-          onSidebar={toggleSidebar}
-          problems={bar.problems}
-          widgets={bar.parts}
-          listed={bar.listed}
-          onArrange={arrangeBar}
-          working={
-            Object.values(lists)
-              .flat()
-              .filter((listed) => works(listed.mark)).length
-          }
-          onPick={(index) =>
-            index === workspaces.current
-              ? toggleOverview()
-              : change((w) => go(w, index))
-          }
-        />
-        <div
-          className="relative flex min-h-0 flex-1"
-          data-sidebar-shown={(sidebarShown && !narrow) || undefined}
-        >
-          {sidebarShown && (
-            <Sidebar
-              engine={engine}
-              over={narrow}
-              onDismiss={narrow ? hideOver : undefined}
-              onMenu={() => setMenu(openingAt("root"))}
-              onSettings={() => settings()}
-              onKeys={() => setMenu(openingAt("actions"))}
-              hiding={hiding}
-              projects={projects}
-              lists={lists}
-              home={home}
-              isCurrent={(project, pane) => {
-                const entry = focused(workspaces)
-                return (
-                  entry !== undefined &&
-                  samePane(entry, { project, pane }, identityOf)
-                )
-              }}
-              onOpen={pickPane}
-              onNewThread={newThreadIn}
-              onNoProject={() => machine && startThread(machine)}
-              onArchive={archiveThread}
-              onSnooze={(project, listed, anchor) =>
-                setSnoozing({ project, listed, ...(anchor ? { anchor } : {}) })
-              }
-              onWake={wakeThread}
-              onAddProject={() => parts.run("project.add")}
-              onPin={(project, pinned) =>
-                updateProject(engine, { project, pinned }).catch(
-                  (error: unknown) =>
-                    console.error("banda: the Project was not pinned", error)
-                )
-              }
-              onProjectSettings={(project) => settings(`projects/${project}`)}
-              onLocate={(project) => route(locateRoute(project))}
-            />
-          )}
-          {sidebarShown && !narrow && (
-            <Edge
-              width={sidebarWidth}
-              columnMin={columnMin}
-              onWidth={setSidebarWidth}
-              onHide={hideSidebar}
-              onHiding={setHiding}
-            />
-          )}
-          <main
-            className="relative min-h-0 min-w-0 flex-1"
-            // A click beside the sidebar over the Strip hides it.
-            onPointerDown={narrow && sidebarShown ? hideOver : undefined}
+      <ThreadMenus
+        engine={engine}
+        projects={projects}
+        archive={archiveThread}
+        snooze={openSnooze}
+        wake={wakeThread}
+      >
+        <div className="flex h-svh flex-col bg-desk text-foreground">
+          <Watches
+            engine={engine}
+            modules={modules}
+            projects={open}
+            onChange={setAttention}
+            onLists={setLists}
+          />
+          <Bar
+            status={status}
+            attention={attention}
+            workspaces={barWorkspaces}
+            map={mapOf(current(workspaces), lookColumns, listed)}
+            current={workspaces.current}
+            sidebar={narrow ? over : sidebar}
+            onSidebar={toggleSidebar}
+            problems={bar.problems}
+            widgets={bar.parts}
+            listed={bar.listed}
+            onArrange={arrangeBar}
+            working={
+              Object.values(lists)
+                .flat()
+                .filter((listed) => works(listed.mark)).length
+            }
+            onPick={(index) =>
+              index === workspaces.current
+                ? toggleOverview()
+                : change((w) => go(w, index))
+            }
+          />
+          <div
+            className="relative flex min-h-0 flex-1"
+            data-sidebar-shown={(sidebarShown && !narrow) || undefined}
           >
-            {ready && (
-              <Workspaces
-                workspaces={workspaces}
-                covered={overview || drawerShown}
-                overview={overview}
+            {sidebarShown && (
+              <Sidebar
                 engine={engine}
-                modules={modules}
-                projectName={projectName}
-                called={called}
-                marked={marked}
-                away={away}
-                zoomed={zoomed}
-                reveal={reveal}
-                listed={listed}
-                frame={frame}
-                onStep={(by) => change((w) => step(w, by))}
-                onGo={goTo}
-                onStart={(pane) =>
-                  // Started on this workspace, it opens here, whatever its
-                  // kind's home.
-                  change((w) =>
-                    opening(w, focused(w)?.project ?? home, pane, {
-                      place: "right",
-                      again: true,
-                    })
+                over={narrow}
+                onDismiss={narrow ? hideOver : undefined}
+                onMenu={() => setMenu(openingAt("root"))}
+                onSettings={() => settings()}
+                onKeys={() => setMenu(openingAt("actions"))}
+                hiding={hiding}
+                projects={projects}
+                lists={lists}
+                home={home}
+                isCurrent={(project, pane) => {
+                  const entry = focused(workspaces)
+                  return (
+                    entry !== undefined &&
+                    samePane(entry, { project, pane }, identityOf)
+                  )
+                }}
+                onOpen={pickPane}
+                onNewThread={newThreadIn}
+                onNoProject={() => machine && startThread(machine)}
+                onSnooze={(project, listed, anchor) =>
+                  setSnoozing({
+                    project,
+                    listed,
+                    ...(anchor ? { anchor } : {}),
+                  })
+                }
+                onWake={wakeThread}
+                onAddProject={() => parts.run("project.add")}
+                onPin={(project, pinned) =>
+                  updateProject(engine, { project, pinned }).catch(
+                    (error: unknown) =>
+                      console.error("banda: the Project was not pinned", error)
                   )
                 }
+                onProjectSettings={(project) => settings(`projects/${project}`)}
+                onLocate={(project) => route(locateRoute(project))}
               />
             )}
-            <Toaster />
-            <SnoozePicker
-              target={snoozing}
-              onClose={() => setSnoozing(undefined)}
-              onSnooze={(target, until) =>
-                snoozeThread(target.project, target.listed, until)
-              }
-              onWake={(target) => wakeThread(target.project, target.listed.id)}
-            />
-            <BandaMenu
-              opening={menu}
-              onClose={closeMenu}
-              onChoose={choose}
-              onAdded={(project) => {
-                // As the engine answered it: the list may not know it yet.
-                onCreated(project)
-                startThread(project.id)
-              }}
-              engine={engine}
-              modules={modules}
-              project={here}
-              lists={lists}
-              asleep={snoozes.asleep}
-              projects={projects.filter((project) => !project.scratch)}
-              actions={keyed}
-              binds={inForce.binds}
-            />
-            {drawer && dropped && (
-              <Drawer
-                entry={drawer}
-                shown={drawerShown}
-                height={drawerLook.height}
+            {sidebarShown && !narrow && (
+              <Edge
+                width={sidebarWidth}
+                columnMin={columnMin}
+                onWidth={setSidebarWidth}
+                onHide={hideSidebar}
+                onHiding={setHiding}
+              />
+            )}
+            <main
+              className="relative min-h-0 min-w-0 flex-1"
+              // A click beside the sidebar over the Strip hides it.
+              onPointerDown={narrow && sidebarShown ? hideOver : undefined}
+            >
+              {ready && (
+                <Workspaces
+                  workspaces={workspaces}
+                  covered={overview || drawerShown}
+                  overview={overview}
+                  engine={engine}
+                  modules={modules}
+                  projectName={projectName}
+                  called={called}
+                  marked={marked}
+                  away={away}
+                  zoomed={zoomed}
+                  reveal={reveal}
+                  listed={listed}
+                  frame={frame}
+                  onStep={(by) => change((w) => step(w, by))}
+                  onGo={goTo}
+                  onStart={(pane) =>
+                    // Started on this workspace, it opens here, whatever its
+                    // kind's home.
+                    change((w) =>
+                      opening(w, focused(w)?.project ?? home, pane, {
+                        place: "right",
+                        again: true,
+                      })
+                    )
+                  }
+                />
+              )}
+              <Toaster />
+              <SnoozePicker
+                target={snoozing}
+                onClose={() => setSnoozing(undefined)}
+                onSnooze={(target, until) =>
+                  snoozeThread(target.project, target.listed, until)
+                }
+                onWake={(target) =>
+                  wakeThread(target.project, target.listed.id)
+                }
+              />
+              <BandaMenu
+                opening={menu}
+                onClose={closeMenu}
+                onChoose={choose}
+                onAdded={(project) => {
+                  // As the engine answered it: the list may not know it yet.
+                  onCreated(project)
+                  startThread(project.id)
+                }}
                 engine={engine}
                 modules={modules}
-                listed={listed(drawer)}
-                projectName={projectName}
-                frame={frame}
-                onLift={liftDrawer}
-                onPin={pinDrawer}
-                onChange={changeDrawer}
-                onClose={closeDrawer}
+                project={here}
+                lists={lists}
+                asleep={snoozes.asleep}
+                projects={projects.filter((project) => !project.scratch)}
+                actions={keyed}
+                binds={inForce.binds}
               />
-            )}
-            {overview && (
-              <Overview
-                open={overviewState === "open"}
-                onExited={leftOverview}
-                workspaces={workspaces}
-                projectName={projectName}
-                listed={listed}
-                called={called}
-                frame={frame}
-                onPick={(entry) => change((w) => focusEntry(w, entry))}
-                onArrow={(direction) => change((w) => across(w, direction))}
-                onGo={goTo}
-                onClose={closeOverview}
-              />
-            )}
-          </main>
+              {drawer && dropped && (
+                <Drawer
+                  entry={drawer}
+                  shown={drawerShown}
+                  height={drawerLook.height}
+                  engine={engine}
+                  modules={modules}
+                  listed={listed(drawer)}
+                  projectName={projectName}
+                  frame={frame}
+                  onLift={liftDrawer}
+                  onPin={pinDrawer}
+                  onChange={changeDrawer}
+                  onClose={closeDrawer}
+                />
+              )}
+              {overview && (
+                <Overview
+                  open={overviewState === "open"}
+                  onExited={leftOverview}
+                  workspaces={workspaces}
+                  projectName={projectName}
+                  listed={listed}
+                  called={called}
+                  frame={frame}
+                  onPick={(entry) => change((w) => focusEntry(w, entry))}
+                  onArrow={(direction) => change((w) => across(w, direction))}
+                  onGo={goTo}
+                  onClose={closeOverview}
+                />
+              )}
+            </main>
+          </div>
         </div>
-      </div>
+      </ThreadMenus>
     </KeysInForce.Provider>
   )
 }

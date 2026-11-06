@@ -4192,6 +4192,178 @@ test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts on
   await expect(menu).toBeHidden()
 })
 
+/** The tile of `thread` by its own mark, as another Thread's tile has
+ * a composer too; and its composer. */
+async function ownTile(page: Page, thread: Locator) {
+  const tile = page.locator(
+    `[data-tile="${await thread.getAttribute("data-tile")}"]`
+  )
+  return {
+    thread: tile,
+    composer: tile.getByRole("textbox", { name: "Message to Fake AI" }),
+  }
+}
+
+test("the Person renames a Thread in place: a double click on its title, F2, and Rename… in its row (ADR 0077)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const first = await firstThread(page)
+  await first.composer.fill("hello")
+  await first.composer.press("Enter")
+  await expect(first.thread).toHaveAccessibleName("hello")
+  const { thread, composer } = await ownTile(page, first.thread)
+  const header = thread.locator("header")
+  const title = (name: string) =>
+    header.getByRole("button", { name, exact: true })
+  const field = header.getByRole("textbox", { name: "Title" })
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const list = sidebar.getByRole("group", { name: "Threads" })
+  const width = async () => (await thread.boundingBox())?.width
+  // Two columns, so a double click on the header would widen one.
+  await page.keyboard.press("Alt+Enter")
+  await composer.click()
+  await settled(thread)
+  const before = await width()
+
+  // A double click on the title opens the field, its text selected; the
+  // column stays as wide. Enter keeps it, in the header and the sidebar.
+  await title("hello").dblclick()
+  await expect(field).toBeFocused()
+  await expect(field).toHaveValue("hello")
+  expect(
+    await field.evaluate((input: HTMLInputElement) => [
+      input.selectionStart,
+      input.selectionEnd,
+    ])
+  ).toEqual([0, 5])
+  await page.screenshot({ path: "test-results/27-title-field.png" })
+  await page.keyboard.type("Fix the   list ")
+  await page.keyboard.press("Enter")
+  await expect(title("Fix the list")).toBeVisible()
+  await expect(list.getByRole("button", { name: /Fix the list/ })).toBeVisible()
+  await settled(thread)
+  expect(await width()).toBe(before)
+  // The focus goes back where it was.
+  await expect(composer).toBeFocused()
+
+  // Esc leaves the old title.
+  await title("Fix the list").dblclick()
+  await field.fill("Not this")
+  await field.press("Escape")
+  await expect(field).toBeHidden()
+  await expect(title("Fix the list")).toBeVisible()
+
+  // F2 on the focused Thread, from its composer; an empty field gives
+  // back the first message's title.
+  await composer.click()
+  await page.keyboard.press("F2")
+  await expect(field).toBeFocused()
+  await field.fill("")
+  await field.press("Enter")
+  await expect(title("hello")).toBeVisible()
+
+  // Rename… in the row's menu opens the field in the row.
+  await list.getByRole("button", { name: /hello/ }).click({ button: "right" })
+  const menu = page.getByRole("menu", { name: "Thread menu" })
+  await menu.getByRole("menuitem", { name: /Rename…/ }).click()
+  const rowField = sidebar.getByRole("textbox", { name: "Title" })
+  await expect(rowField).toBeFocused()
+  await rowField.fill("From the row")
+  await rowField.press("Enter")
+  await expect(title("From the row")).toBeVisible()
+
+  // A click on the title of the focused Pane opens the Thread menu, with
+  // its keys; Previous title brings the one before back.
+  await title("From the row").click()
+  await expect(menu).toBeVisible()
+  await expect(menu.getByRole("menuitem")).toHaveText([
+    /Rename…\s*F2/,
+    /Suggest a title\s*Shift\+F2/,
+    /Previous title/,
+    /Mark as unread\s*Alt\+Shift\+U/,
+    /Snooze…\s*Alt\+Z/,
+    /Archive thread\s*Alt\+S/,
+  ])
+  await page.screenshot({ path: "test-results/27-thread-menu.png" })
+  await menu.getByRole("menuitem", { name: "Previous title" }).click()
+  await expect(title("hello")).toBeVisible()
+
+  // A click, then the second of a double click: the menu closes and the
+  // field opens.
+  await title("hello").click()
+  await expect(menu).toBeVisible()
+  await title("hello").dblclick()
+  await expect(menu).toBeHidden()
+  await expect(field).toBeFocused()
+  await field.press("Escape")
+
+  // On a Pane not focused, the first click on its title only focuses it.
+  await page.keyboard.press("Alt+ArrowRight")
+  await expect(thread).toHaveAttribute("data-focused", "false")
+  await title("hello").click()
+  await expect(thread).toHaveAttribute("data-focused", "true")
+  await expect(menu).toBeHidden()
+})
+
+test("Suggest a title renames in one press with Undo, and Mark as unread calls again (ADR 0077)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const first = await firstThread(page)
+  await first.composer.fill("hello")
+  await first.composer.press("Enter")
+  await expect(first.thread).toHaveAccessibleName("hello")
+  const { thread, composer } = await ownTile(page, first.thread)
+  const header = thread.locator("header")
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const row = sidebar
+    .getByRole("group", { name: "Threads" })
+    .getByRole("button")
+  const toasts = page.getByRole("region", { name: "Notifications" })
+
+  // From the Thread menu: the Harness's model names it, and a toast says
+  // so; Undo gives back the first message's title.
+  await header.getByRole("button", { name: "hello", exact: true }).click()
+  await page.getByRole("menuitem", { name: /Suggest a title/ }).click()
+  const renamed = toasts.getByText(/^Renamed to /)
+  await expect(renamed).toBeVisible()
+  const suggested = (await renamed.textContent())!.replace("Renamed to ", "")
+  await expect(thread).toHaveAccessibleName(suggested)
+  await expect(row).toContainText(suggested)
+  await page.screenshot({ path: "test-results/28-suggested.png" })
+  await toasts.getByRole("button", { name: "Undo" }).click()
+  await expect(thread).toHaveAccessibleName("hello")
+  await expect(row).toContainText("hello")
+
+  // Shift+F2 does it too; again, the title already says it.
+  await composer.click()
+  await page.keyboard.press("Shift+F2")
+  await expect(thread).toHaveAccessibleName(suggested)
+  await expect(row).toContainText(suggested)
+  await page.keyboard.press("Shift+F2")
+  await expect(toasts.getByText("The title already says it")).toBeVisible()
+  await expect(thread).toHaveAccessibleName(suggested)
+
+  // Mark as unread: the Thread is done again, in its row and its header,
+  // while it has the focus; Alt+Shift+U again reads it.
+  const done = (where: Locator) => where.getByRole("img", { name: "Done" })
+  await expect(done(row)).toBeHidden()
+  await page.keyboard.press("Alt+Shift+U")
+  await expect(done(row)).toBeVisible()
+  await expect(done(header)).toBeVisible()
+  await page.keyboard.press("Alt+Shift+U")
+  await expect(done(row)).toBeHidden()
+
+  // From the menu; leaving the Thread and coming back reads it.
+  await header.getByRole("button", { name: suggested, exact: true }).click()
+  await page.getByRole("menuitem", { name: /Mark as unread/ }).click()
+  await expect(done(row)).toBeVisible()
+  await page.keyboard.press("Alt+Enter")
+  await expect(thread).toHaveAttribute("data-focused", "false")
+  await expect(done(row)).toBeVisible()
+  await row.click()
+  await expect(done(row)).toBeHidden()
+})
+
 test("the Banda menu goes into a Project and the sidebar's view, and Tab shows what a row can do", async () => {
   window = await startWindow()
   const { page } = window
@@ -4881,10 +5053,13 @@ test("the Pane menu sizes a column, and the header's right, double and middle cl
   await menu.getByRole("menuitem", { name: "Width 2/3" }).click()
   await expect.poll(() => sharesOf(page)).toEqual([67, 50])
 
-  // A double click: the whole screen wide, and back.
-  await page.mouse.dblclick(at.x, at.y)
+  // A double click past the title, whose own renames it (ADR 0077): the
+  // whole screen wide, and back.
+  const title = (await tile.locator("header h2").boundingBox())!
+  const past = { x: title.x + title.width + 24, y: at.y }
+  await page.mouse.dblclick(past.x, past.y)
   await expect.poll(() => sharesOf(page)).toEqual([100, 50])
-  await page.mouse.dblclick(at.x, at.y)
+  await page.mouse.dblclick(past.x, past.y)
   await expect.poll(() => sharesOf(page)).toEqual([67, 50])
 
   // A middle click closes the Pane.

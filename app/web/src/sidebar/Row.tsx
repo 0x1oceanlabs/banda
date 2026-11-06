@@ -7,13 +7,14 @@ import {
 import { HarnessLogo } from "@banda/ui/components/harness-logo"
 import { ProjectBadge } from "@banda/ui/components/project-badge"
 import { AlarmClockIcon } from "lucide-react"
-import type { ReactNode } from "react"
+import { Fragment, type ReactNode } from "react"
 import { ago, clock, left } from "@banda/ui/lib/words"
 import { cn } from "@banda/ui/lib/utils"
 import { useNow } from "@banda/ui/hooks/use-now"
 import type { Listed } from "@banda/ui/pane"
 import type { Row as Arranged } from "./arrange"
 import type { Part, Settings } from "./settings"
+import { THINKING, useThinking } from "../titles/titles"
 
 /**
  * The built-in layouts (ADR 0008, decision 4). The line with the title is
@@ -37,6 +38,7 @@ export function Row({
   current,
   onOpen,
   action,
+  field,
 }: {
   row: Arranged
   settings: Settings
@@ -47,6 +49,9 @@ export function Row({
   /** A button that shows while the pointer is over the row: its snooze's
    * clock, or Wake (ADR 0074). */
   action?: ReactNode
+  /** The field that names it, in its title's place (ADR 0077): the row
+   * is then no button. */
+  field?: ReactNode
 }) {
   const { lines, hide, layout } = settings.row
   const parts = (layout ?? LAYOUTS[lines] ?? LAYOUTS[3]).map((line) =>
@@ -55,9 +60,10 @@ export function Row({
     )
   )
   const one = parts.length === 1
+  const Element = field ? "div" : "button"
   const button = (
-    <button
-      type="button"
+    <Element
+      type={field ? undefined : "button"}
       aria-current={current ? "true" : undefined}
       className={cn(
         "flex w-full min-w-0 flex-col gap-0.5 rounded-lg border border-transparent px-2 text-left transition-colors outline-none",
@@ -65,21 +71,30 @@ export function Row({
         one ? "py-1" : "py-1.5",
         current && "border-border bg-tile shadow-xs hover:bg-tile"
       )}
-      onClick={onOpen}
+      onClick={field ? undefined : onOpen}
     >
       {parts.map(
         (line, index) =>
           line.length > 0 && (
             <span key={index} className="flex min-w-0 items-center gap-1.5">
-              {line.map((part, at) => (
-                <Piece key={`${part}${at}`} part={part} row={row} wide={!one} />
-              ))}
+              {line.map((part, at) =>
+                part === "title" && field ? (
+                  <Fragment key={`${part}${at}`}>{field}</Fragment>
+                ) : (
+                  <Piece
+                    key={`${part}${at}`}
+                    part={part}
+                    row={row}
+                    wide={!one}
+                  />
+                )
+              )}
             </span>
           )
       )}
-    </button>
+    </Element>
   )
-  if (!action) return button
+  if (!action || field) return button
   return (
     <div data-row className="group/row relative">
       {button}
@@ -113,16 +128,7 @@ function Piece({
         <ThreadMark listed={listed} className={cn(quiet && "opacity-40")} />
       )
     case "title":
-      return (
-        <span
-          className={cn(
-            "min-w-0 flex-1 truncate text-sm",
-            quiet ? "text-foreground/75" : "text-foreground"
-          )}
-        >
-          {listed.title}
-        </span>
-      )
+      return <Title row={row} quiet={quiet} />
     case "project":
       // The mark stands where the Project's badge was: a row with room names
       // the Project; a row of one line shows its badge.
@@ -162,6 +168,24 @@ function Piece({
       )
     }
   }
+}
+
+/** The row's title; while a model writes one, it shimmers (ADR 0077,
+ * decision 3). */
+function Title({ row, quiet }: { row: Arranged; quiet: boolean }) {
+  const thinking = useThinking(row.project.id, row.listed.id)
+  return (
+    <span
+      className={cn(
+        "min-w-0 flex-1 truncate text-sm",
+        quiet ? "text-foreground/75" : "text-foreground"
+      )}
+    >
+      <span data-shimmer={thinking || undefined}>
+        {thinking ? THINKING : row.listed.title}
+      </span>
+    </span>
+  )
 }
 
 /**

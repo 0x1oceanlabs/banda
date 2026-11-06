@@ -12,6 +12,8 @@ export type Kept<V> = {
   read: () => Readonly<Record<string, V>>
   /** Keeps `value` for `id`, the latest kept last: an old one falls off. */
   put: (id: string, value: V) => void
+  /** Forgets what it kept for `id`. */
+  drop: (id: string) => void
   /** The record, kept current. */
   use: () => Readonly<Record<string, V>>
 }
@@ -48,15 +50,26 @@ export function kept<V>(
   }
   const read = () => here ?? load()
 
-  const put = (id: string, value: V) => {
-    const others = Object.entries(read()).filter(([other]) => other !== id)
-    here = Object.fromEntries([...others.slice(-(keep - 1)), [id, value]])
+  const keepAll = (all: Readonly<Record<string, V>>) => {
+    here = all
     try {
       localStorage.setItem(key, JSON.stringify(here))
     } catch {
       // `here` holds it.
     }
     heard.forEach((hear) => hear())
+  }
+  const put = (id: string, value: V) => {
+    const others = Object.entries(read()).filter(([other]) => other !== id)
+    keepAll(Object.fromEntries([...others.slice(-(keep - 1)), [id, value]]))
+  }
+  const drop = (id: string) => {
+    if (!(id in read())) return
+    keepAll(
+      Object.fromEntries(
+        Object.entries(read()).filter(([other]) => other !== id)
+      )
+    )
   }
 
   const listen = (hear: () => void) => {
@@ -77,6 +90,7 @@ export function kept<V>(
   return {
     read,
     put,
+    drop,
     use: () => useSyncExternalStore(listen, read, () => none),
   }
 }

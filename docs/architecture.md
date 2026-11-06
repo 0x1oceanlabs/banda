@@ -236,7 +236,7 @@ modules/<name>/
 A module declares itself in its code and a short `module.toml` (ADR 0022).
 Its engine part is the `Module` it gives the kernel, with its `methods!`
 table. Its window part is one
-`defineModule({ id, engine, panes, watches, actions, sources, bar, threadDetails, start })`
+`defineModule({ id, engine, panes, watches, actions, sources, bar, threadDetails, listed, start })`
 exported from its Pane package; the window lists these in
 `app/web/src/modules.ts`, the one place that names a module, and builds its
 registries from them. `start` runs once with the window API, for a module
@@ -246,6 +246,10 @@ frame hands every Pane the rows of the modules that run, and a Pane puts
 its own buttons in the header the frame draws with `InHeader`. A
 module's key asks the focused Thread's card to show and open a part of
 its rows with `askDetails`, as git's Alt+Shift+G its branch picker.
+`listed` says how the window renames, suggests a title for and marks
+unread a thing the module lists (ADR 0077): the Thread menu is the
+window's, and it finds the module by the first word of the thing's Pane
+kind.
 `module.toml` holds only what no code says.
 `banda modules` prints the three as one JSON per module
 (`engine/src/modules.rs`), and the skill's `modules` topic is written

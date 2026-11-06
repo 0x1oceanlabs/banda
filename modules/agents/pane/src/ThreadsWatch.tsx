@@ -5,7 +5,7 @@ import { harnessName, useHarnesses } from "./harnesses"
 import { threadsSource } from "./list"
 import { attentionOf } from "./marks"
 import { listedOf } from "./rows"
-import { useSeen } from "./seen"
+import { heardEnded, useSeen } from "./seen"
 
 /**
  * What a Project's Threads call their Person for, for the bar's mark, and
@@ -27,6 +27,9 @@ function ThreadsWatch({ engine, project, report }: WatchProps) {
   const seen = useSeen()
   const threads = live.state === "ready" ? live.view.threads : undefined
 
+  useEffect(() => {
+    if (threads) heardEnded(threads)
+  }, [threads])
   const listed = useMemo(
     () =>
       threads?.map((thread) =>

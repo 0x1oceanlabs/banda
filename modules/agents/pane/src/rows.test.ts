@@ -75,3 +75,23 @@ test("what it was asked shows only when it says more than the title", () => {
 test("a new Thread with no title yet is a New Thread", () => {
   expect(listedOf(thread({ title: "" }), {}, "").title).toBe("New Thread")
 })
+
+test("a Thread whose turn finished says whether its Person saw it, for Mark as unread", () => {
+  const ended = (state: "done" | "failed" | "stopped") =>
+    thread({ latest: { turn: "u1", state, began: 3 } })
+  expect(listedOf(ended("done"), {}, "").seen).toBe(false)
+  expect(listedOf(ended("done"), { t1: "u1" }, "").seen).toBe(true)
+  expect(listedOf(ended("failed"), { t1: "u1" }, "").seen).toBe(true)
+  // Stopped by the Person, running, or not begun: nothing to see.
+  expect(listedOf(ended("stopped"), {}, "").seen).toBeUndefined()
+  const running = thread({ latest: { turn: "u1", state: "running", began: 3 } })
+  expect(listedOf(running, {}, "").seen).toBeUndefined()
+  expect(listedOf(thread(), {}, "").seen).toBeUndefined()
+})
+
+test("a renamed Thread lists the title it had before", () => {
+  expect(listedOf(thread({ was: "hello there" }), {}, "").was).toBe(
+    "hello there"
+  )
+  expect(listedOf(thread(), {}, "").was).toBeUndefined()
+})

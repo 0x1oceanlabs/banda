@@ -206,6 +206,9 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - A new workspace: the empty one at the bottom (`workspace.new`)
 - Go to what calls you (`calls.answer`), Alt+U
 - Archive the Thread you look at, or bring it back (`sidebar.archive`), Alt+S
+- Rename the Thread you look at (`thread.rename`), F2
+- Suggest a title for the Thread you look at, and rename it (`thread.suggest-title`), Shift+F2
+- Mark the Thread you look at as unread, or as read (`thread.unread`), Alt+Shift+U
 - Snooze the Thread you look at, or wake it (`thread.snooze`), Alt+Z
 - Wake the snoozed Thread you look at (`thread.wake`)
 - Banda menu (`menu.open`), Alt+Space

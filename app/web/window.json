@@ -579,6 +579,39 @@
       ]
     },
     {
+      "id": "thread.rename",
+      "title": "Rename the Thread you look at",
+      "section": "Threads",
+      "keys": [
+        {
+          "code": "F2"
+        }
+      ]
+    },
+    {
+      "id": "thread.suggest-title",
+      "title": "Suggest a title for the Thread you look at, and rename it",
+      "section": "Threads",
+      "keys": [
+        {
+          "code": "F2",
+          "shift": true
+        }
+      ]
+    },
+    {
+      "id": "thread.unread",
+      "title": "Mark the Thread you look at as unread, or as read",
+      "section": "Threads",
+      "keys": [
+        {
+          "code": "KeyU",
+          "mod": true,
+          "shift": true
+        }
+      ]
+    },
+    {
       "id": "thread.snooze",
       "title": "Snooze the Thread you look at, or wake it",
       "section": "Threads",

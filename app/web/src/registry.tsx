@@ -12,6 +12,7 @@ import { useModules } from "@banda/ui/hooks/use-status"
 import {
   type AnyPaneKind,
   defineModule,
+  type Listing,
   type Module,
   type Source,
   type Widget,
@@ -85,6 +86,13 @@ export function detailsOf(engineModules: readonly string[]): Details[] {
   return all
     .filter((module) => runs(module, engineModules))
     .flatMap((module) => module.threadDetails)
+}
+
+/** How the window names and marks a thing the module of `kind` lists,
+ * found by the kind's first word (ADR 0022, decision 5; ADR 0077). */
+export function listingOf(kind: string): Listing | undefined {
+  const id = kind.split(".", 1)[0]
+  return all.find((module) => module.id === id)?.listed
 }
 
 export function kindOf(kind: string): AnyPaneKind | undefined {
