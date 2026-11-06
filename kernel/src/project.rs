@@ -8,6 +8,7 @@ use crate::kernel::Entry;
 use crate::module::Module;
 use crate::outbox;
 use crate::passes::Passes;
+use crate::sign::{self, Kept, Picked, Sign};
 use crate::store::{Receipt, Store};
 use crate::window::Window;
 use crate::{
@@ -61,6 +62,13 @@ pub(crate) struct Manifest {
     /// `scratch/`, and it has no name until the Person makes a Project of it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub scratch: bool,
+    /// What the Person picked as its sign (ADR 0070); none for a picture
+    /// Banda found, or letters.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sign: Option<Picked>,
+    /// The picture kept beside it as `sign.<ext>`, found or picked.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub picture: Option<Kept>,
 }
 
 impl Manifest {
@@ -77,6 +85,8 @@ impl Manifest {
             archived: false,
             sees_others: false,
             scratch: false,
+            sign: None,
+            picture: None,
         }
     }
 
@@ -91,6 +101,7 @@ impl Manifest {
             sees_others: self.sees_others,
             scratch: self.scratch,
             missing,
+            sign: Sign::of(&self.name, self.sign.as_ref(), self.picture.as_ref()),
         }
     }
 
@@ -123,11 +134,20 @@ impl Manifest {
 
     /// Writes it whole or not at all: beside, then renamed over the old.
     pub fn write(&self, data: &Path) -> Result<(), Error> {
-        let aside = data.join(format!("{MANIFEST}{UNFINISHED}"));
-        std::fs::write(&aside, serde_json::to_vec_pretty(self)?)?;
-        std::fs::rename(&aside, data.join(MANIFEST))?;
-        Ok(())
+        Ok(write_whole(
+            &data.join(MANIFEST),
+            &serde_json::to_vec_pretty(self)?,
+        )?)
     }
+}
+
+/// Writes `bytes` to `path` whole or not at all: beside it first, then
+/// renamed into place.
+pub(crate) fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let mut aside = path.as_os_str().to_owned();
+    aside.push(UNFINISHED);
+    std::fs::write(&aside, bytes)?;
+    std::fs::rename(&aside, path)
 }
 
 /// What a module of the machine counts in every Project's log: see
@@ -329,6 +349,58 @@ impl Project {
 
     pub fn summary(&self) -> ProjectSummary {
         self.manifest.lock().unwrap().summary(false)
+    }
+
+    /// Looks in its folder for its sign's picture again (ADR 0070, decision
+    /// 2), and keeps what it finds, or lets go of what it found before.
+    pub(crate) fn find_sign(&self) -> Result<ProjectSummary, Error> {
+        match self.sign_wanted() {
+            Some((folder, name)) => self.keep_sign(sign::find(&folder, &name)),
+            None => Ok(self.summary()),
+        }
+    }
+
+    /// Where to look for its sign's picture, and for which name; none when
+    /// it is not looked for: a picture the Person picked stays, and No
+    /// Project's has none.
+    pub(crate) fn sign_wanted(&self) -> Option<(PathBuf, String)> {
+        let manifest = self.manifest.lock().unwrap();
+        let picked = matches!(manifest.sign, Some(Picked::Picture { .. }));
+        (!manifest.scratch && !picked).then(|| (manifest.folder.clone(), manifest.name.clone()))
+    }
+
+    /// Keeps `found` as its sign's picture, or lets go of the one found
+    /// before; nothing is written when it is the same.
+    pub(crate) fn keep_sign(&self, found: Option<sign::Found>) -> Result<ProjectSummary, Error> {
+        let before = self.manifest.lock().unwrap().picture.clone();
+        let same = |found: &sign::Found| {
+            before.as_ref().is_some_and(|kept| {
+                kept.found.as_deref() == Some(&found.path)
+                    && kept.version == sign::version(&found.bytes)
+            })
+        };
+        let kept = match found {
+            Some(found) if same(&found) => return Ok(self.summary()),
+            Some(found) => Some(sign::keep(
+                &self.data,
+                found.kind,
+                &found.bytes,
+                Some(found.path),
+            )?),
+            None if before.as_ref().is_none_or(|kept| kept.found.is_none()) => {
+                return Ok(self.summary());
+            }
+            None => {
+                sign::forget(&self.data);
+                None
+            }
+        };
+        self.change(|manifest| manifest.picture = kept)
+    }
+
+    /// The picture its sign keeps, found or picked.
+    pub(crate) fn picture(&self) -> Option<Kept> {
+        self.manifest.lock().unwrap().picture.clone()
     }
 
     /// Changes its `project.json` with `change`, and keeps it once written.

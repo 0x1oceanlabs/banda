@@ -13,6 +13,7 @@ const project = (
   pinned: false,
   archived: false,
   sees_others: false,
+  sign: { kind: "letters", text: "W", picked: false },
   scratch: false,
   missing,
 })

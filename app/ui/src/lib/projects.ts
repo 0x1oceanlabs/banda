@@ -2,6 +2,7 @@ import type {
   Engine,
   ProjectId,
   ProjectSummary,
+  Sign,
   UpdateProject,
 } from "@banda/contract"
 
@@ -39,8 +40,20 @@ export function sameProjects(
         one.pinned === b[n].pinned &&
         one.archived === b[n].archived &&
         one.missing === b[n].missing &&
-        one.scratch === b[n].scratch
+        one.scratch === b[n].scratch &&
+        sameSign(one.sign, b[n].sign)
     )
+  )
+}
+
+/** Whether two signs draw the same (ADR 0070). */
+function sameSign(a: Sign, b: Sign): boolean {
+  return (
+    a.kind === b.kind &&
+    a.text === b.text &&
+    a.color === b.color &&
+    a.picked === b.picked &&
+    a.found === b.found
   )
 }
 

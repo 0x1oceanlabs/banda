@@ -5,14 +5,14 @@ use banda_kernel::api::Identity;
 use banda_kernel::{
     AgentId, Call, Caller, Code, CommandId, Effect, Error, EventFilter, Kernel, Module,
     ModuleProject, OnRestart, Outcome, Participant, PersonId, ProjectId, ProjectSummary, Refusal,
-    Right, Scope, Settled, Stream, Tx, decode,
+    Right, Scope, Settled, SignKind, Stream, Tx, decode,
 };
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::future::Future;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -349,6 +349,30 @@ async fn reopen(root: &Path, owner: PersonId, notes: &Notes, count: usize) -> Ar
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     panic!("the Projects never opened again");
+}
+
+/// Drops `kernel` and waits until nothing holds the Projects whose data
+/// is under `data`, the machine's in `folders` too: an effect still
+/// running, or a Project the machine is held by, lets go a moment later.
+async fn let_go(kernel: Arc<Kernel>, data: &Path, folders: &[&Path]) {
+    drop(kernel);
+    let mut locks: Vec<PathBuf> = std::fs::read_dir(data.join("projects"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.path().join("project.lock"))
+        .collect();
+    locks.extend(folders.iter().map(|folder| folder.join("project.lock")));
+    let free = |lock: &PathBuf| {
+        std::fs::File::open(lock).is_ok_and(|file| file.try_lock().is_ok()) || !lock.exists()
+    };
+    for _ in 0..500 {
+        if locks.iter().all(free) {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("a Project was never let go");
 }
 
 /// Waits for `check` to hold, for up to five seconds.
@@ -1168,7 +1192,8 @@ async fn a_module_of_the_machine_names_no_project_and_keeps_its_own_log() {
 
     // After a restart, it is the same machine, with what it kept.
     drop(log);
-    drop(kernel);
+    let machine_folder = dir.path().join("state").join("machine");
+    let_go(kernel, &dir.path().join("data"), &[&machine_folder]).await;
     let kernel = open().await.unwrap();
     assert_eq!(kernel.machine(), Some(machine));
     let list = kernel.call(person, "desk.list", None, None, Value::Null);
@@ -1676,7 +1701,7 @@ async fn a_missing_folder_added_back_opens_its_project_again() {
     let (owner, notes) = (PersonId::new(), Notes::default());
     let kernel = open(root.path(), owner, &notes).await;
     let project = create(&kernel, owner, "Work").await;
-    drop(kernel);
+    let_go(kernel, &root.path().join(".data"), &[]).await;
     let folder = root.path().join("Work");
     std::fs::rename(&folder, root.path().join("Away")).unwrap();
     let kernel = reopen(root.path(), owner, &notes, 1).await;
@@ -1913,4 +1938,106 @@ async fn a_restart_finishes_a_journaled_folder_move() {
     assert_eq!(recovered.name, "Recovered");
     assert!(!recovered.scratch && !recovered.missing);
     assert_eq!(recovered.folder, destination.to_str().unwrap());
+}
+
+#[tokio::test]
+async fn a_project_s_sign_is_found_picked_and_found_again() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, notes) = (PersonId::new(), Notes::default());
+    let kernel = open(root.path(), owner, &notes).await;
+    let folder = root.path().join("site");
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(
+        folder.join("logo.svg"),
+        "<svg xmlns='http://www.w3.org/2000/svg'/>",
+    )
+    .unwrap();
+
+    // Found in the folder, as the Project is added.
+    let added = add_folder(&kernel, owner, json!({ "folder": folder }))
+        .await
+        .unwrap();
+    assert_eq!(added.sign.kind, SignKind::Picture);
+    assert_eq!(added.sign.found.as_deref(), Some("logo.svg"));
+    assert!(!added.sign.picked);
+    let one = json!({ "project": added.id });
+    let url = projects(&kernel, owner, "sign", one.clone()).await.unwrap();
+    assert!(
+        url.as_str()
+            .unwrap()
+            .starts_with("data:image/svg+xml;base64,")
+    );
+
+    // Picked by hand, then back to what Banda finds.
+    let pick = |sign: Value| json!({ "project": added.id, "sign": sign });
+    let emoji = projects(&kernel, owner, "update", pick(json!({ "emoji": "⌨️" })))
+        .await
+        .unwrap();
+    assert_eq!(emoji["sign"]["kind"], "emoji");
+    assert_eq!(emoji["sign"]["picked"], true);
+    let back = projects(&kernel, owner, "update", pick(Value::Null))
+        .await
+        .unwrap();
+    assert_eq!(back["sign"]["kind"], "picture");
+    assert_eq!(back["sign"]["found"], "logo.svg");
+
+    // A picture picked by hand stays as the folder changes.
+    let png = [
+        &b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR"[..],
+        &32u32.to_be_bytes(),
+        &32u32.to_be_bytes(),
+        &[8, 6, 0, 0, 0],
+    ]
+    .concat();
+    use base64::Engine as _;
+    let picture = base64::engine::general_purpose::STANDARD.encode(&png);
+    let picked = projects(
+        &kernel,
+        owner,
+        "update",
+        pick(json!({ "picture": picture, "kind": "png" })),
+    )
+    .await
+    .unwrap();
+    assert_eq!(picked["sign"]["kind"], "picture");
+    assert_eq!(picked["sign"]["picked"], true);
+    std::fs::remove_file(folder.join("logo.svg")).unwrap();
+    let again = projects(&kernel, owner, "find_sign", one.clone())
+        .await
+        .unwrap();
+    assert_eq!(again["sign"]["picked"], true);
+    let url = projects(&kernel, owner, "sign", one).await.unwrap();
+    assert!(url.as_str().unwrap().starts_with("data:image/png;base64,"));
+
+    // A picture that is no picture is refused.
+    let wrong = projects(
+        &kernel,
+        owner,
+        "update",
+        pick(json!({ "picture": "aGVsbG8=", "kind": "png" })),
+    )
+    .await;
+    assert_eq!(wrong.unwrap_err().code, Code::Invalid);
+}
+
+#[tokio::test]
+async fn letters_that_start_alike_are_told_apart() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, notes) = (PersonId::new(), Notes::default());
+    let kernel = open(root.path(), owner, &notes).await;
+    create(&kernel, owner, "banda").await;
+    create(&kernel, owner, "bandad").await;
+    create(&kernel, owner, "work").await;
+    let mut letters: Vec<(String, String)> = (kernel.projects().await.into_iter())
+        .map(|p| (p.name, p.sign.text))
+        .collect();
+    letters.sort();
+    assert_eq!(
+        letters,
+        [
+            ("banda".to_owned(), "BD".to_owned()),
+            ("bandad".to_owned(), "BN".to_owned()),
+            ("work".to_owned(), "W".to_owned()),
+        ]
+    );
 }

@@ -59,6 +59,13 @@ defaults and stay his to change.
         `src-tauri/icons/icon.png`.
    - In each place SVG comes before PNG. A file the folder's `.gitignore`
      ignores, one under 16 px, and one over 256 KB are passed over.
+     - _Changed on 2026-11-06, as it was built:_ no git is asked, so a
+       search is a few `stat`s and a short walk, not a listing of the
+       whole repository. The walk for a file named as the Project skips
+       hidden folders, `node_modules`, `target`, `dist` and `build`,
+       which is where ignored files mostly are; the fixed places are
+       taken as they are. A new folder made for a Project is not looked
+       in.
    - It looks when a Project is added, as the engine starts, and when the
      Person asks ("Look again"). Watching the file is later.
    - Letters, with nothing found: the first letter of the name, its
