@@ -97,36 +97,36 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --background: #ffffff;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
   --destructive: oklch(0.577 0.245 27.325);
   /* What waits for the Person, such as a Question: Banda's one signal colour. */
-  --attention: oklch(0.68 0.21 41);
+  --attention: #e5590a;
   /* An Agent at work, as its Group's plate shows it (ADR 0065). */
   --working: oklch(0.6 0.15 255);
   --warning: oklch(0.65 0.16 70);
   --added: oklch(0.527 0.137 150.069);
   --removed: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --border: oklch(0 0 0 / 8%);
+  --input: oklch(0 0 0 / 12%);
+  --ring: #0b6fe0;
+  --chart-1: #0b6fe0;
+  --chart-2: #16a34a;
+  --chart-3: #ca8a04;
+  --chart-4: #c026d3;
+  --chart-5: #0891b2;
   /* Each Harness account's colour, in the order of harnesses.toml (ADR
      0055, decision 4): a categorical palette checked for colour-blind
      reading. A sixth account takes the first again. */
@@ -136,58 +136,58 @@
   --account-4: #e87ba4;
   --account-5: #eda100;
   --radius: 0.4375rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: #fafafa;
+  --sidebar-foreground: #18181b;
+  --sidebar-primary: #0b6fe0;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f0f0f2;
+  --sidebar-accent-foreground: #18181b;
+  --sidebar-border: oklch(0 0 0 / 8%);
+  --sidebar-ring: #0b6fe0;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: #19191c;
+  --foreground: #ededef;
+  --card: #1f1f23;
+  --card-foreground: #ededef;
+  --popover: #202024;
+  --popover-foreground: #ededef;
+  --primary: #ededef;
+  --primary-foreground: #19191c;
+  --secondary: #27272a;
+  --secondary-foreground: #ededef;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --accent: #27272a;
+  --accent-foreground: #ededef;
   --destructive: oklch(0.704 0.191 22.216);
-  --attention: oklch(0.72 0.19 45);
+  --attention: #ff8a3d;
   --working: oklch(0.72 0.13 255);
   --warning: oklch(0.8 0.15 80);
   --added: oklch(0.723 0.192 149.579);
   --removed: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: #4ea3ff;
+  --chart-1: #4ea3ff;
+  --chart-2: #4ade80;
+  --chart-3: #facc15;
+  --chart-4: #e879f9;
+  --chart-5: #22d3ee;
   --account-1: #3987e5;
   --account-2: #9085e9;
   --account-3: #1baf7a;
   --account-4: #d55181;
   --account-5: #c98500;
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: #202024;
+  --sidebar-foreground: #ededef;
+  --sidebar-primary: #4ea3ff;
+  --sidebar-primary-foreground: #19191c;
+  --sidebar-accent: #2a2a2e;
+  --sidebar-accent-foreground: #ededef;
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: #4ea3ff;
 }
 
 /*
@@ -229,7 +229,12 @@
      the panel glass, and the tiles only below [tile] opacity 1. */
   --desk-opacity: 40%;
   --tile-opacity: 100%;
-  --desk: color-mix(in oklab, var(--muted) 40%, var(--background));
+  /* A theme may name its solid desk (desk-solid, ADR 0075); else it is
+     the background, a little greyed. */
+  --desk: var(
+    --desk-solid,
+    color-mix(in oklab, var(--muted) 40%, var(--background))
+  );
   --panel: var(--sidebar);
   --tile: var(--background);
   /* The overview follows the desk's theme (ADR 0052). A little of the

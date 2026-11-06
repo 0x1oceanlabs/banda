@@ -158,14 +158,18 @@ fn without_omarchy_banda_shows_its_own_light_and_dark_as_today() {
     assert_eq!(look.vars["--bar-height"], "36px");
     assert_eq!(look.vars["--focus-shadow-strength"], "0.25");
     assert_eq!(look.vars["--tile-dim"], "0");
-    // shadcn's own tokens, as globals.css has them today.
-    assert_eq!(color(&look, false, "--border"), "oklch(0.922 0 0)");
-    assert_eq!(color(&look, true, "--card"), "oklch(0.205 0 0)");
-    assert_eq!(color(&look, false, "--attention"), "oklch(0.68 0.21 41)");
-    // The focused tile takes the strongest colour, --primary.
-    assert_eq!(color(&look, false, "--focus"), "#171717");
-    assert_eq!(color(&look, true, "--focus"), "#e5e5e5");
-    assert_eq!(color(&look, false, "--primary"), "#171717");
+    // Banda's colours (ADR 0075, decision 4), as globals.css has them.
+    assert_eq!(color(&look, false, "--desk-solid"), "#f4f4f5");
+    assert_eq!(color(&look, true, "--desk-solid"), "#111113");
+    assert_eq!(color(&look, true, "--background"), "#19191c");
+    assert_eq!(color(&look, false, "--border"), "oklch(0 0 0 / 8%)");
+    assert_eq!(color(&look, false, "--attention"), "#e5590a");
+    // The focus and the rings are the blue accent; the main buttons are
+    // the text's colour.
+    assert_eq!(color(&look, false, "--focus"), "#0b6fe0");
+    assert_eq!(color(&look, true, "--focus"), "#4ea3ff");
+    assert_eq!(color(&look, false, "--ring"), "#0b6fe0");
+    assert_eq!(color(&look, false, "--primary"), "#18181b");
 }
 
 #[test]
