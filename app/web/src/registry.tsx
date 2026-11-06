@@ -55,6 +55,9 @@ export const launcher: AnyPaneKind = definePane<Args>({
  * 0025, decision 4). */
 const LAUNCHER: Scope = { id: "launcher", title: "Launcher", modHeld: true }
 
+/** The Settings Pane's scope: its search's key (ADR 0071, decision 1). */
+const SETTINGS: Scope = { id: "settings", title: "Settings" }
+
 /** The launcher's letters, each kind's that has one: in its place, and
  * with Shift beside it, the launcher staying. */
 const opening = (id: string, title: string, shift: boolean) =>
@@ -74,7 +77,7 @@ const opening = (id: string, title: string, shift: boolean) =>
   })
 
 /** The window's own things, as a module of their own: the launcher, its
- * letters, and the settings (ADR 0016). */
+ * letters, and the settings and their search (ADR 0016). */
 export const windowModule = defineModule({
   id: "window",
   engine: false,
@@ -82,8 +85,14 @@ export const windowModule = defineModule({
   actions: [
     opening("launcher.open", "Open a Pane in the launcher's place", false),
     opening("launcher.open-beside", "Open a Pane beside the launcher", true),
+    scoped(SETTINGS.id, {
+      id: "settings.search",
+      title: "Search the settings",
+      section: "Settings",
+      keys: [{ code: "Slash" }],
+    }),
   ],
-  scopes: [LAUNCHER],
+  scopes: [LAUNCHER, SETTINGS],
 })
 
 const all: readonly Module[] = [windowModule, ...modules]

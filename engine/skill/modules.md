@@ -299,5 +299,6 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Move the Pane to workspace 9 (`pane.send-9`), Alt+Shift+9
 - Open a Pane in the launcher's place (`launcher.open`), H for agents.thread or T for terminal.terminal or B for browser.browser or D for git.diff or F for files.tree, `[binds.launcher]`; takes `kind` (the kind of Pane, as terminal.terminal)
 - Open a Pane beside the launcher (`launcher.open-beside`), Shift+H for agents.thread or Shift+T for terminal.terminal or Shift+B for browser.browser or Shift+D for git.diff or Shift+F for files.tree, `[binds.launcher]`; takes `kind` (the kind of Pane, as terminal.terminal)
+- Search the settings (`settings.search`), /, `[binds.settings]`
 
-Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `launcher` (the Launcher, whose keys work with the mod still held too).
+Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `launcher` (the Launcher, whose keys work with the mod still held too), `settings` (the Settings).
