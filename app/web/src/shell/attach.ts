@@ -4,7 +4,7 @@
  * and the Panes that had the focus, the latest first. The window knows no
  * module: a Thread says it has a composer, as it says its label.
  */
-import type { ProjectId } from "@banda/contract"
+import type { JsonValue, ProjectId } from "@banda/contract"
 import type { Chip } from "@banda/ui/module"
 
 /** A Pane's composer, and the Project the Pane is in. */
@@ -63,4 +63,26 @@ export function attachTo(
   const entry = composerFor(focused, history, composers)
   const take = entry === null ? undefined : composers.get(entry)?.take
   return entry !== null && take ? { entry, take } : null
+}
+
+/** The chip `file.attach`'s args name: the file at `path`, and the lines
+ * `from` and `to` with what is said of them and how they read, when
+ * given. */
+export function chipOf(
+  path: string,
+  args: { readonly [key: string]: JsonValue }
+): Chip {
+  const { from, to, comment, text } = args
+  const lines =
+    typeof from === "number" && typeof to === "number"
+      ? ([Math.min(from, to), Math.max(from, to)] as const)
+      : undefined
+  return {
+    path,
+    ...(lines && { lines }),
+    ...(typeof comment === "string" && comment.trim()
+      ? { comment: comment.trim() }
+      : {}),
+    ...(lines && typeof text === "string" ? { text } : {}),
+  }
 }

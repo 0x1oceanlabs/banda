@@ -43,6 +43,7 @@ mod skills;
 mod snoozes;
 mod store;
 mod titles;
+mod touching;
 mod transcript;
 mod visual_page;
 mod visuals;
@@ -77,6 +78,7 @@ use std::fmt::Display;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+use touching::Touching;
 use ts_rs::TS;
 use visuals::{Inlined, Visuals};
 
@@ -241,6 +243,12 @@ banda_kernel::methods! {
         /// asks it for a commit's message. It says one piece, the reply or
         /// why there is none; let go before, it stops the run.
         stream write(WriteAsk) -> Written, Write;
+        /// Which file each Thread at work in this Project reads or writes
+        /// now, from its tool calls as they start, with the line they name:
+        /// what Files pulses in its tree and follows (ADR 0073, decision 9).
+        /// It says them all at once, then again each time one changes; a
+        /// Thread's goes as its turn ends.
+        stream touching(Nothing) -> Touching, Read;
         /// Writes into a Thread of this Project, or starts a new Thread on a
         /// Harness. Its Agent reads that the message is from your Thread's
         /// Agent, not its Person; when the turn it asks for ends, its last
@@ -780,6 +788,10 @@ impl Agents {
             }
         });
         Ok(heard)
+    }
+
+    async fn touching(&self, call: Call, _: Nothing) -> Result<banda_kernel::Stream, Refusal> {
+        Ok(self.live.touches().hear(call.project().id()))
     }
 
     async fn defaults(

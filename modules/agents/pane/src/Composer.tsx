@@ -25,17 +25,26 @@ import { Spinner } from "@banda/ui/components/spinner"
 import {
   ArrowUpIcon,
   CornerUpRightIcon,
+  MessageSquareIcon,
   PlusIcon,
   ListPlusIcon,
   SquareIcon,
+  XIcon,
 } from "lucide-react"
 import {
   ContextMenu,
   ContextMenuTrigger,
 } from "@banda/ui/components/context-menu"
 import { AttachmentList, type Attachments } from "./Attachments"
+import {
+  type Comment,
+  commentAt,
+  commentLabel,
+  commentStart,
+  withComments,
+} from "./comments"
 import { ComposerMenu } from "./ComposerMenu"
-import { useDraft } from "./drafts"
+import { useDraft, useDraftComments } from "./drafts"
 import { keyFor, steers, useEnterKey } from "./enter-key"
 import { recall } from "./history"
 import { imagesAmong } from "./images"
@@ -54,7 +63,9 @@ import { stray, typed } from "./stray"
  * into the turn as T3 Code's default, and Ctrl+Enter or Ctrl+click the
  * other. As in T3 Code, ↑ and ↓ in an empty box walk the earlier
  * messages, after the last one that waits, which ↑ opens to edit; and
- * what is written waits as the Thread's draft.
+ * what is written waits as the Thread's draft. Comments on files' lines an
+ * App puts in it wait above the text, each to take out, and go after the
+ * text as the Agent reads them (ADR 0034, decision 9).
  */
 export function Composer({
   name,
@@ -134,6 +145,7 @@ export function Composer({
   ref?: React.Ref<ComposerHandle>
 }) {
   const [text, setText] = useDraft(thread)
+  const [comments, setComments] = useDraftComments(thread)
   // How far back ↑ has walked the history; 0 for not at all.
   const [back, setBack] = useState(0)
   const enter = useEnterKey()
@@ -159,6 +171,7 @@ export function Composer({
     // in it.
     quote: (quote) => field.current?.putLines(`${quoted(quote)}\n\n`),
     point: (path) => field.current?.point(path, "caret"),
+    comment: (added) => setComments((all) => [...all, ...added]),
     putBack: (back, carried) => {
       images.putBack(carried)
       field.current?.add(text && back ? `\n${back}` : back)
@@ -253,7 +266,9 @@ export function Composer({
   // At most one is open, for the word being typed.
   const menus = [slash, fileMenu, skillMenu]
 
-  const trimmed = text.trim().length
+  // The message as it goes: the text, then the comments.
+  const message = withComments(text, comments)
+  const trimmed = message.trim().length
   const written = trimmed > 0 || images.adding.length > 0
   // How far past the longest message a Harness takes it is, if it is.
   const over = trimmed - LONGEST
@@ -262,18 +277,22 @@ export function Composer({
     if (!ready) return
     // A message that is only `/plan` or `/default` switches plan mode.
     const mode =
-      images.adding.length === 0 ? ownCommand(text, commands) : undefined
+      images.adding.length === 0 && comments.length === 0
+        ? ownCommand(text, commands)
+        : undefined
     if (mode !== undefined) {
       onPlanMode(mode)
       setText("")
       return
     }
     const sending = images.attached
-    if (await onSend(text, sending, steer && steering)) {
+    const commented = comments
+    if (await onSend(message, sending, steer && steering)) {
       // What the Person wrote while it went stays.
       setText((now) => (now === text ? "" : now))
       setBack(0)
       images.sent(sending)
+      setComments((all) => all.filter((one) => !commented.includes(one)))
     }
   }
 
@@ -321,6 +340,14 @@ export function Composer({
           <div className="px-3.5 pt-3">
             <AttachmentList images={images} />
           </div>
+        )}
+        {comments.length > 0 && (
+          <CommentList
+            comments={comments}
+            onRemove={(id) =>
+              setComments((all) => all.filter((one) => one.id !== id))
+            }
+          />
         )}
         <ContextMenu>
           <ContextMenuTrigger render={<div className="contents" />}>
@@ -469,9 +496,56 @@ export type ComposerHandle = {
   quote: (text: string) => void
   /** Names the file at `path` in the message, as `@` does, at the caret. */
   point: (path: string) => void
+  /** Puts comments on files' lines in the message, after those there. */
+  comment: (comments: Comment[]) => void
   /** Puts a message back, after what is written, the caret at its end:
    * its text, and the images it carried (ADR 0027, decision 1). */
   putBack: (text: string, images: Image[]) => void
+}
+
+/** The comments on files' lines the message carries, each a chip with
+ * its file, its lines and the start of its words, to take out. */
+function CommentList({
+  comments,
+  onRemove,
+}: {
+  comments: readonly Comment[]
+  onRemove: (id: string) => void
+}) {
+  return (
+    <ul aria-label="Comments" className="flex flex-wrap gap-1.5 px-3.5 pt-3">
+      {comments.map((one) => {
+        const start = commentStart(one.comment)
+        return (
+          <li
+            key={one.id}
+            data-comment
+            title={`${commentAt(one)}${one.comment ? `: ${one.comment}` : ""}`}
+            className="flex h-6 max-w-full min-w-0 items-center gap-1 rounded-md bg-raised pr-0.5 pl-1.5 text-xs"
+          >
+            <MessageSquareIcon className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="shrink-0 font-mono text-[11px]">
+              {commentLabel(one)}
+            </span>
+            {start && (
+              <span className="min-w-0 truncate text-muted-foreground">
+                {start}
+              </span>
+            )}
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="size-5 shrink-0 text-muted-foreground"
+              aria-label={`Remove the comment on ${commentLabel(one)}`}
+              onClick={() => onRemove(one.id)}
+            >
+              <XIcon />
+            </Button>
+          </li>
+        )
+      })}
+    </ul>
+  )
 }
 
 /** A control in the composer's footer (ADR 0058, decision 8): 28px with a

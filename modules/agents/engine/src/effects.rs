@@ -620,6 +620,7 @@ async fn work(
         harness.name.clone(),
         settings,
         running,
+        live.touches(),
     );
     let ended = async {
         done.await

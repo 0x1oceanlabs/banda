@@ -23,3 +23,10 @@ export function fromFolder(
     ? path.slice(base.length)
     : path
 }
+
+/** Lines of a file as an Agent and a compiler read them: `src/a.ts:12`,
+ * or `src/a.ts:12-20`, whichever way they were picked. */
+export function atLines(path: string, from: number, to: number): string {
+  const [first, last] = [Math.min(from, to), Math.max(from, to)]
+  return first === last ? `${path}:${first}` : `${path}:${first}-${last}`
+}

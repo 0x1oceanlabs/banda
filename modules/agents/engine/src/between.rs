@@ -114,6 +114,7 @@ impl Listener {
             self.harness.clone(),
             settings,
             session.running(),
+            self.live.touches(),
         );
         let (to_writer, mut written) = mpsc::unbounded_channel();
         let mut calls = Calls::default();

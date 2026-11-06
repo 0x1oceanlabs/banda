@@ -14,18 +14,22 @@ pub enum Said {
         text: String,
         message: Option<String>,
     },
+    /// `places` are the files it works on, as the Harness names them.
     ToolStarted {
         call: String,
         title: String,
         tool: ToolKind,
         status: ToolStatus,
         content: Vec<ToolPart>,
+        places: Vec<Place>,
     },
-    /// `output` follows what the command printed before.
+    /// `output` follows what the command printed before; `places`, when
+    /// not empty, are the files it works on now.
     ToolChanged {
         call: String,
         change: ToolChange,
         output: Option<String>,
+        places: Vec<Place>,
     },
     /// The steps of the Agent's plan now, all of them.
     Steps(Vec<PlanStep>),
@@ -125,6 +129,7 @@ pub(super) fn said(update: acp::SessionUpdate) -> Option<Said> {
             tool: tool_kind(call.kind),
             status: tool_status(call.status),
             content: tool_content(Some(call.content), call.raw_output).unwrap_or_default(),
+            places: places(call.locations),
         }),
         acp::SessionUpdate::ToolCallUpdate(update) => {
             let terminal = |key: &str| update.meta.as_ref()?.get(key);
@@ -149,6 +154,7 @@ pub(super) fn said(update: acp::SessionUpdate) -> Option<Said> {
                 output: terminal(OUTPUT_META)
                     .and_then(|o| o.get("data")?.as_str())
                     .map(str::to_owned),
+                places: places(update.fields.locations.unwrap_or_default()),
             })
         }
         acp::SessionUpdate::Plan(plan) => Some(Said::Steps(
@@ -170,6 +176,17 @@ pub(super) fn said(update: acp::SessionUpdate) -> Option<Said> {
         })),
         _ => None,
     }
+}
+
+/// The files a tool call works on, as the Harness names them.
+fn places(locations: Vec<acp::ToolCallLocation>) -> Vec<Place> {
+    locations
+        .into_iter()
+        .map(|location| Place {
+            path: location.path.display().to_string(),
+            line: location.line,
+        })
+        .collect()
 }
 
 /// Prefer standard ACP content. Codex ACP 2.5 also carries MCP image

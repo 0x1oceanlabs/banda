@@ -45,6 +45,8 @@
 //!   detached` runs a command that ends after the turn, and nothing more.
 //! - `later`: says what it used after the turn has ended.
 //! - `edit`: edits a file, and shows the change as a diff.
+//! - `walk`: reads `notes.md`, then edits `src/util.ts`, naming each file
+//!   and its line, a step each time a message is sent into its turn.
 //! - `run`: runs the tests, printing as Codex does; `loud` far more than a
 //!   Thread keeps; `at once` as Claude Code does, all at the end.
 //! - `new command`: starts its reply, learns the command `/init`, and ends
@@ -110,8 +112,9 @@ use agent_client_protocol::schema::v1::{
     SessionConfigOptionCategory, SessionConfigOptionValue, SessionConfigSelectOption,
     SessionForkCapabilities, SessionId, SessionNotification, SessionResumeCapabilities,
     SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason,
-    StringPropertySchema, Terminal, TextContent, ToolCall, ToolCallContent, ToolCallStatus,
-    ToolCallUpdate, ToolCallUpdateFields, ToolKind, UnstructuredCommandInput, UsageUpdate,
+    StringPropertySchema, Terminal, TextContent, ToolCall, ToolCallContent, ToolCallLocation,
+    ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind, UnstructuredCommandInput,
+    UsageUpdate,
 };
 use agent_client_protocol::{Agent, Client, ConnectionTo, Error, Responder, Stdio};
 use serde::{Deserialize, Serialize};
@@ -398,6 +401,73 @@ fn seen(prompt: &[ContentBlock]) -> Option<String> {
     }
 }
 
+/// Waits for a message sent into the turn; false when the turn is
+/// cancelled first.
+async fn steered_on(
+    fake: &Fake,
+    session: &SessionId,
+    steered: &mut mpsc::UnboundedReceiver<String>,
+) -> bool {
+    loop {
+        if fake.cancelled(session) {
+            return false;
+        }
+        let heard = tokio::time::timeout(Duration::from_millis(50), steered.recv()).await;
+        if let Ok(Some(_)) = heard {
+            return true;
+        }
+    }
+}
+
+/// `walk`: reads `notes.md` at its second line, then, once a message is
+/// sent into its turn, appends a line to `src/util.ts` and shows the
+/// change, naming each file and line as a real Harness does (ACP's
+/// locations); once another comes, it says it is done.
+async fn walk(
+    fake: &Fake,
+    cx: &ConnectionTo<Client>,
+    session: &SessionId,
+    steered: &mut mpsc::UnboundedReceiver<String>,
+) -> Result<StopReason, Error> {
+    let folder = fake.setup(session).folder;
+    let notes = folder.join("notes.md");
+    let read = ToolCall::new("walk-read", "Read notes.md")
+        .kind(ToolKind::Read)
+        .status(ToolCallStatus::Completed)
+        .locations(vec![ToolCallLocation::new(notes).line(2)]);
+    say(cx, session, SessionUpdate::ToolCall(read))?;
+    if !steered_on(fake, session, steered).await {
+        return Ok(StopReason::Cancelled);
+    }
+    let util = folder.join("src/util.ts");
+    let old = std::fs::read_to_string(&util).ok();
+    let new = format!(
+        "{}export const three = 3\n",
+        old.clone().unwrap_or_default()
+    );
+    // Only in the session's folder: a session it resumed has none here.
+    if folder.is_absolute() {
+        let _ = std::fs::write(&util, &new);
+    }
+    let edit = ToolCall::new("walk-edit", "Edit src/util.ts")
+        .kind(ToolKind::Edit)
+        .status(ToolCallStatus::Completed)
+        .locations(vec![ToolCallLocation::new(util.clone()).line(2)])
+        .content(vec![ToolCallContent::Diff(
+            Diff::new(util, new).old_text(old),
+        )]);
+    say(cx, session, SessionUpdate::ToolCall(edit))?;
+    if !steered_on(fake, session, steered).await {
+        return Ok(StopReason::Cancelled);
+    }
+    say(
+        cx,
+        session,
+        SessionUpdate::AgentMessageChunk(text("I walked the files.")),
+    )?;
+    Ok(StopReason::EndTurn)
+}
+
 async fn turn(
     fake: Fake,
     cx: ConnectionTo<Client>,
@@ -451,6 +521,9 @@ async fn turn(
     }
     if words.contains("quit") {
         return Ok(StopReason::Cancelled);
+    }
+    if words.contains("walk") {
+        return walk(&fake, &cx, &session, &mut steered).await;
     }
     if words.contains("wait") {
         say(

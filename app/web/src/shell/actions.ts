@@ -14,6 +14,7 @@ import {
 } from "@banda/ui/module"
 import { type Listed, type PaneState, paneOf, type Place } from "@banda/ui/pane"
 import { RESET_KEY } from "../actions/actions"
+import { chipOf } from "./attach"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
 import type { At } from "../menu/menu"
@@ -834,15 +835,24 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
   },
   {
     // Files' "Add to chat" and a reply's "Add to message": the file named
-    // in a Thread's message, as `@` names it (ADR 0073, decision 14).
+    // in a Thread's message, as `@` names it; and a comment on some of
+    // its lines, which the message quotes (ADR 0073, decisions 6 and 14).
     id: "file.attach",
-    args: takes({ file: "the file's absolute path; a folder's ends with /" }, [
-      "file",
-    ]),
+    args: takes(
+      {
+        file: "the file's absolute path; a folder's ends with /",
+        from: { number: "the first line commented on, from 1" },
+        to: { number: "the last line commented on" },
+        comment: "what the Person says of those lines",
+        text: "those lines as they read",
+      },
+      ["file"]
+    ),
     section: "Banda",
     title: "Add a file to a Thread's message",
     unlisted: true,
-    run: (shell, args) => present(args, (path) => shell.attach({ path })),
+    run: (shell, args) =>
+      present(args, (path) => shell.attach(chipOf(path, args ?? {}))),
   },
   {
     // A Thread menu's "Show in folder", for a path in a reply.

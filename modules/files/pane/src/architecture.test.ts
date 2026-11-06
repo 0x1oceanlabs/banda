@@ -9,7 +9,10 @@ import { imports, sources } from "@banda/ui/testing/architecture"
 import { expect, test } from "vitest"
 
 const PANE = [
-  /^@banda\/contract(\/files|\/settings)?$/,
+  // And the words of the modules it asks by name: the Agents' Threads and
+  // the files their turns work on, and the Harnesses' colours (ADR 0073,
+  // decision 9).
+  /^@banda\/contract(\/files|\/settings|\/agents|\/harnesses)?$/,
   /^@banda\/ui\//,
   /^react$/,
   /^lucide-react$/,

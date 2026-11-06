@@ -856,7 +856,13 @@ export function Shell({
         }),
       focused: () => {
         const entry = focused(seenNow.current.state)
-        return entry ? { project: entry.project, pane: entry.pane } : null
+        if (!entry) return null
+        const shows = showsOf(entry.pane)
+        return {
+          project: entry.project,
+          pane: entry.pane,
+          ...(shows ? { shows } : {}),
+        }
       },
       beside: (agent) => {
         const at = besideOf(

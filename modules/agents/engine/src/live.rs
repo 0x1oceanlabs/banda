@@ -18,6 +18,7 @@
 use crate::Pipe;
 use crate::acp::{Answer, Connection, Session};
 use crate::model::{ItemId, TurnId, Values};
+use crate::touching::Touches;
 use banda_harnesses::Harness;
 use banda_harnesses::hosts::Hosts;
 use banda_harnesses::model::Program;
@@ -38,6 +39,8 @@ pub struct Live {
     quiet: Duration,
     /// How a session's Agent reaches Banda, if it does.
     pipe: Option<Pipe>,
+    /// The file each running turn works on now.
+    touches: Arc<Touches>,
 }
 
 #[derive(Default)]
@@ -87,7 +90,13 @@ impl Live {
             changed: Notify::new(),
             quiet,
             pipe,
+            touches: Arc::default(),
         }
+    }
+
+    /// The file each running turn works on now, by Project.
+    pub fn touches(&self) -> &Arc<Touches> {
+        &self.touches
     }
 
     /// `banda mcp` as a session of `agent`'s in `project` starts it, with a

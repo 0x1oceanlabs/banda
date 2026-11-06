@@ -31,6 +31,7 @@ import type { ShowVisual } from "./ShowVisual";
 import type { SnoozeAsk } from "./SnoozeAsk";
 import type { ThreadList } from "./ThreadList";
 import type { ThreadView } from "./ThreadView";
+import type { Touching } from "./Touching";
 import type { TurnChanges } from "./TurnChanges";
 import type { VisualPage } from "./VisualPage";
 import type { WriteAsk } from "./WriteAsk";
@@ -67,6 +68,14 @@ changes: CallMethod<ChangesAsk, TurnChanges>,
  * why there is none; let go before, it stops the run.
  */
 write: StreamMethod<WriteAsk, Written>, 
+/**
+ * Which file each Thread at work in this Project reads or writes
+ * now, from its tool calls as they start, with the line they name:
+ * what Files pulses in its tree and follows (ADR 0073, decision 9).
+ * It says them all at once, then again each time one changes; a
+ * Thread's goes as its turn ends.
+ */
+touching: StreamMethod<Nothing, Touching>, 
 /**
  * Writes into a Thread of this Project, or starts a new Thread on a
  * Harness. Its Agent reads that the message is from your Thread's

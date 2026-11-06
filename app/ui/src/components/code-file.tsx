@@ -3,7 +3,8 @@
  * `@pierre/diffs`' file view, numbered and coloured in the window's
  * workers, virtualised. It opens at a line, centred and lit once, and
  * the Person picks lines in its gutter: a click, a drag, or Shift with a
- * click. It reads; editing comes later, behind Banda's own `Editor`.
+ * click, and may write a comment under them. It reads; editing comes
+ * later, behind Banda's own `Editor`.
  */
 import {
   CodeView,
@@ -15,6 +16,7 @@ import { useEffect, useMemo, useRef } from "react"
 import { useDark } from "../hooks/use-dark"
 import { cn } from "../lib/utils"
 import { BASE_CSS, HIGHLIGHTER, POOL, THEMES, VIEW_CLASS } from "./code-look"
+import { LineComment } from "./line-comment"
 
 /** Lines picked in the gutter, first to last as they were dragged. */
 export type LineRange = { start: number; end: number }
@@ -46,7 +48,19 @@ export type CodeFileProps = {
   /** The lines picked; none for none. */
   picked: LineRange | null
   onPick: (range: LineRange | null) => void
+  /** A comment is written under the lines picked: what it says once
+   * written, and its cancel. */
+  comment?: {
+    onComment: (words: string) => void
+    onCancel: () => void
+  } | null
   className?: string
+}
+
+/** Lines as a person names them: `12`, or `12–14` first to last. */
+export function linesWords({ start, end }: LineRange): string {
+  const [first, last] = [Math.min(start, end), Math.max(start, end)]
+  return first === last ? `${first}` : `${first}–${last}`
 }
 
 export function CodeFile({
@@ -56,22 +70,31 @@ export function CodeFile({
   line,
   picked,
   onPick,
+  comment,
   className,
 }: CodeFileProps) {
   const dark = useDark()
   const viewer = useRef<CodeViewHandle<undefined, undefined>>(null)
   const root = useRef<HTMLDivElement | null>(null)
+  // The comment's form sits under the last line picked.
+  const under = comment && picked ? Math.max(picked.start, picked.end) : null
   const items = useMemo<CodeViewItem<undefined>[]>(
     () => [
       {
         id: ID,
         type: "file",
         file: { name, contents: text },
+        ...(under !== null ? { annotations: [{ lineNumber: under }] } : {}),
         version: ++counted,
       },
     ],
-    [name, text]
+    [name, text, under]
   )
+  // What the form does, as it is now: the view keeps the first renderer.
+  const commenting = useRef(comment)
+  useEffect(() => {
+    commenting.current = comment
+  })
   // Pierre draws the file again when its options are a new object.
   const options = useMemo(
     () => ({
@@ -79,12 +102,13 @@ export function CodeFile({
       themeType: dark ? ("dark" as const) : ("light" as const),
       overflow: wrap ? ("wrap" as const) : ("scroll" as const),
       disableFileHeader: true,
-      enableLineSelection: true,
+      // Lines stay as picked while their comment is written.
+      enableLineSelection: under === null,
       unsafeCSS: CSS,
       itemMetrics: METRICS,
       layout: LAYOUT,
     }),
-    [dark, wrap]
+    [dark, wrap, under]
   )
   const selected = useMemo(
     () => (picked ? { id: ID, range: picked } : null),
@@ -137,6 +161,15 @@ export function CodeFile({
         className={cn(VIEW_CLASS, className)}
         selectedLines={selected}
         onSelectedLinesChange={(selection) => onPick(selection?.range ?? null)}
+        renderAnnotation={() =>
+          picked && commenting.current ? (
+            <LineComment
+              lines={linesWords(picked)}
+              onComment={(words) => commenting.current?.onComment(words)}
+              onCancel={() => commenting.current?.onCancel()}
+            />
+          ) : null
+        }
         options={options}
       />
     </WorkerPoolContextProvider>
