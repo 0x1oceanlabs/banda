@@ -36,3 +36,14 @@ export function sizeWords(bytes: number): string {
     size < 10 ? size.toFixed(1).replace(/\.0$/, "") : Math.round(size)
   return `${shown} ${units[unit]}`
 }
+
+/** A count of things in words: `1 row`, `100,000 rows`. */
+export function countWords(count: number, word: string): string {
+  return `${count.toLocaleString("en")} ${word}${count === 1 ? "" : "s"}`
+}
+
+/** When something last changed, as a clock and a calendar read it. */
+export const WHEN = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+})

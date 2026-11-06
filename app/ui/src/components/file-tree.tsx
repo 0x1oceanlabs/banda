@@ -9,7 +9,9 @@
  *   time as it opens, what git ignores greyed, git's marks, a quiet dot on
  *   what an Agent's turn changed, the row of the file an Agent works on
  *   now pulsing in its colour, a quiet spinner on a folder being listed;
- *   rows picked with Ctrl or Shift, and dragged out.
+ *   rows picked with Ctrl or Shift, and dragged out;
+ * - `ListedTree`, names all known at once, as an archive's, each with a
+ *   quiet word at its end, as its size; it only shows.
  *
  * Both fold a folder of one folder into its path (`a/b/c`).
  */
@@ -90,6 +92,67 @@ function Tree({ files, selected, onSelect, className }: FileTreeProps) {
   return (
     <FileTree
       model={model}
+      className={cn("block h-full min-h-0", className)}
+      style={{ colorScheme: dark ? "dark" : "light" }}
+    />
+  )
+}
+
+export type ListedTreeProps = {
+  /** Every name, from the top, `/` between names; a folder's ends with
+   * `/`. A folder only named in its files' paths is there too. */
+  paths: readonly string[]
+  /** A quiet word at a row's end, by its path, as a file's size. */
+  notes?: ReadonlyMap<string, string>
+  /** Every folder open as it is drawn, or only those at the top. */
+  open: "all" | "top"
+  /** A row is picked. */
+  onSelect?: (path: string) => void
+  /** What a screen reader calls it. */
+  label: string
+  className?: string
+}
+
+/** Names all known at once, drawn anew when they change: Pierre's model
+ * keeps the paths it was made with. */
+export function ListedTree(props: ListedTreeProps) {
+  return <Listed key={props.paths.join("\n")} {...props} />
+}
+
+function Listed({
+  paths,
+  notes,
+  open,
+  onSelect,
+  label,
+  className,
+}: ListedTreeProps) {
+  const dark = useDark()
+  const chosen = useRef(onSelect)
+  useEffect(() => {
+    chosen.current = onSelect
+  })
+  const { model } = useFileTree({
+    paths,
+    density: "compact",
+    flattenEmptyDirectories: true,
+    initialExpansion: open === "all" ? "open" : "closed",
+    search: false,
+    icons: ICONS,
+    renderRowDecoration: ({ row }) => {
+      const text = notes?.get(row.path)
+      return text ? { text } : null
+    },
+    onSelectionChange: (picked) => {
+      const path = picked.at(-1)
+      if (path) chosen.current?.(path)
+    },
+    unsafeCSS: CSS,
+  })
+  return (
+    <FileTree
+      model={model}
+      aria-label={label}
       className={cn("block h-full min-h-0", className)}
       style={{ colorScheme: dark ? "dark" : "light" }}
     />

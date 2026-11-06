@@ -13,13 +13,16 @@ import type { Engine, JsonValue, ProjectId } from "@banda/contract"
 export type Magic = { at?: number; bytes: string }
 
 /** What files a previewer draws. A file matches by its extension first,
- * then its MIME type, then the bytes it starts with. */
+ * then its MIME type, then the bytes it starts with; one that draws `any`
+ * file matches every file last, as hex draws any bytes. */
 export type Match = {
   /** Extensions, lower case, with no dot: `pdf`. */
   extensions?: readonly string[]
   /** MIME types, or a family of them: `application/pdf`, `video/*`. */
   mimes?: readonly string[]
   magic?: readonly Magic[]
+  /** It draws any file, after every other match. */
+  any?: boolean
 }
 
 /** A file's bytes, from byte `from` to byte `to`, both in; to its end

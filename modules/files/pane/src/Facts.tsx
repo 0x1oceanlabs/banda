@@ -14,13 +14,7 @@ import {
 import { Spinner } from "@banda/ui/components/spinner"
 import { nameAndFolder } from "@banda/ui/lib/paths"
 import { FileIcon, FileXIcon, FolderIcon } from "lucide-react"
-import { kindWords, sizeWords } from "./words"
-
-/** When it last changed, as a clock and a calendar read it. */
-const WHEN = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "medium",
-  timeStyle: "short",
-})
+import { kindWords, sizeWords, WHEN } from "./words"
 
 /** What the facts are of: a file as `files.stat` says it, or as a
  * previewer is given it. */

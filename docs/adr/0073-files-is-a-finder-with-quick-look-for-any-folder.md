@@ -225,6 +225,41 @@ stay his to change.
    - PDF.js draws with its own canvas and text layer, not its viewer's
      component: the pages are placed at once and drawn only near the view.
 
+   *Amended 2026-11-06, with step F3b:*
+   - **A previewer may draw any file** (`match.any`), after every other
+     match. Hex is Files' for a file nothing else claims, and "Open
+     with…" offers it for every file. The bytes a file starts with are
+     still read when only such a previewer matches.
+   - **Tables.** A CSV's rows are found in one pass over the byte host's
+     ranges, then only the rows in view are read again and parsed; the
+     first rows and the last size the columns. Past 2 000 000 rows the
+     rest is not shown. `@banda/ui`'s `VirtualList` draws them: our own,
+     not TanStack's, as its rows are of one height and the hex grid needs
+     more rows than a page may be tall.
+   - **JSON** past 5 MB, or that does not parse, shows as code. A `.json`
+     with comments parses as JSONC.
+   - **A notebook's HTML outputs** are drawn as a reply's HTML is:
+     sanitized, with no scripts and no styles. The sandbox host serves a
+     file by its link and takes no HTML that is not one; an output that
+     needs its scripts shows its text. The host may take them later, as a
+     part of the notebook's file.
+   - **Fonts** load through `FontFace` from their bytes, and Files reads
+     their names and characters itself. A WOFF2 packs them with Brotli,
+     which Chromium's `DecompressionStream` does not unpack yet: it shows
+     with its file's name.
+   - **Archives** are listed by the engine, `files.archive` (Read): zip,
+     tar, a gzipped tar and 7z, at most 10 000 names, on `zip`, `tar` with
+     `flate2`, and `sevenz-rust2`, none with codecs of their own. A name
+     is only text: `../x` is shown, never resolved. Taking files out comes
+     later.
+   - **Workbooks** (xlsx, xls, ods) are read by the engine, `files.sheet`
+     (Read), on `calamine`: the first 10 000 rows of a sheet, as the
+     workbook kept their values.
+   - **Hex** reads the byte host's ranges as its rows come into view, not
+     the RPC: the host answers ranges already, and bytes need no base64.
+     Ctrl+G (⌘G) goes to an offset, as Files' keys are Ctrl's, not the
+     mod's.
+
 
      *Amended 2026-11-06, with step F2b:* the comment is written under
      the lines, and goes into the Thread's message as a chip with the

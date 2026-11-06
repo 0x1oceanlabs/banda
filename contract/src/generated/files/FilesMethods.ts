@@ -3,6 +3,8 @@ import type { CallMethod } from "../CallMethod";
 import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
 import type { StreamMethod } from "../StreamMethod";
+import type { Archive } from "./Archive";
+import type { ArchiveAsk } from "./ArchiveAsk";
 import type { FindAsk } from "./FindAsk";
 import type { Found } from "./Found";
 import type { ListAsk } from "./ListAsk";
@@ -12,6 +14,8 @@ import type { OpenedAsk } from "./OpenedAsk";
 import type { Places } from "./Places";
 import type { ReadAsk } from "./ReadAsk";
 import type { RecentAsk } from "./RecentAsk";
+import type { Sheet } from "./Sheet";
+import type { SheetAsk } from "./SheetAsk";
 import type { Stat } from "./Stat";
 import type { StatAsk } from "./StatAsk";
 import type { Text } from "./Text";
@@ -56,4 +60,14 @@ opened: CommandMethod<OpenedAsk, null>,
 /**
  * The files opened lately, the latest first, those still there.
  */
-recent: CallMethod<RecentAsk, Array<Opened>>, };
+recent: CallMethod<RecentAsk, Array<Opened>>, 
+/**
+ * The names a zip, a tar, a gzipped tar or a 7z holds, at most
+ * 10 000, each only as text: nothing is taken out.
+ */
+archive: CallMethod<ArchiveAsk, Archive>, 
+/**
+ * A workbook's sheet as rows of text, at most 10 000, with every
+ * sheet's name.
+ */
+sheet: CallMethod<SheetAsk, Sheet>, };

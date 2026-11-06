@@ -2,12 +2,15 @@
  * The files module's words for TypeScript: one folder's names as
  * `files.list` reads them, what `files.stat` says a path is, a file's text
  * from `files.read`, the paths `files.find` finds, the pieces of
- * `files.watch`, the Person's places, the files opened lately, and its
+ * `files.watch`, the Person's places, the files opened lately, what an
+ * archive holds and a workbook's sheet, for the previewers, and its
  * `files.toml` as the look resolves it (ADR 0073, decision 13).
  */
 import type { ModuleFile } from "./look"
 import type { Finder } from "./generated/files/Finder"
 
+export type { Archive } from "./generated/files/Archive"
+export type { ArchiveAsk } from "./generated/files/ArchiveAsk"
 export type { Entry } from "./generated/files/Entry"
 export type { FindAsk } from "./generated/files/FindAsk"
 export type { Found } from "./generated/files/Found"
@@ -25,6 +28,10 @@ export type { Opened } from "./generated/files/Opened"
 export type { OpenedAsk } from "./generated/files/OpenedAsk"
 export type { Places } from "./generated/files/Places"
 export type { RecentAsk } from "./generated/files/RecentAsk"
+export type { Packed } from "./generated/files/Packed"
+export type { Packing } from "./generated/files/Packing"
+export type { Sheet } from "./generated/files/Sheet"
+export type { SheetAsk } from "./generated/files/SheetAsk"
 
 /** What Files shows, as `banda look` gives it with no `files.toml`:
  * nothing pinned, dotfiles hidden, what git ignores greyed, the first

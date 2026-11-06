@@ -1,6 +1,6 @@
 [package]
 name = "banda-files"
-description = "The files module: any folder, listed, read, searched and watched, in the engine."
+description = "The files module: any folder, listed, read, searched and watched, and what an archive or a workbook holds, in the engine."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,7 +11,9 @@ publish.workspace = true
 async-trait.workspace = true
 banda-kernel = { path = "../../../kernel" }
 banda-look = { path = "../../../look" }
+calamine.workspace = true
 dirs.workspace = true
+flate2.workspace = true
 ignore.workspace = true
 infer.workspace = true
 mime_guess.workspace = true
@@ -20,10 +22,13 @@ rusqlite.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sevenz-rust2.workspace = true
 sha2.workspace = true
+tar.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 ts-rs.workspace = true
+zip.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
