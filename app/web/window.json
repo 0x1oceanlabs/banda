@@ -590,6 +590,12 @@
       ]
     },
     {
+      "id": "thread.wake",
+      "title": "Wake the snoozed Thread you look at",
+      "section": "Threads",
+      "keys": []
+    },
+    {
       "id": "menu.open",
       "title": "Banda menu",
       "section": "Banda",
