@@ -23,6 +23,11 @@
 //! - `banda mcp` speaks MCP on stdio for an Agent in a Thread: the agents
 //!   module hands it to each session, with the Agent's pass (ADR 0019).
 //!
+//! An Agent's `banda` acts under its pass: with `BANDA_TOKEN` and
+//! `BANDA_ENGINE` set, as the agents module sets them in an Agent's shell,
+//! each command that connects to the engine says hello with that pass at
+//! that address (`client.rs`).
+//!
 //! When the engine refuses (the call, the hello or the follow), the CLI
 //! prints `{"error": {"code", "message"}}` and exits 1. When no engine
 //! answers, or the program cannot do its part, it says so on stderr and

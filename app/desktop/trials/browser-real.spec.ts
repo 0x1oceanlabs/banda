@@ -168,6 +168,10 @@ test(`real ${harness} exercises Banda's browser`, async () => {
   delete env.ELECTRON_RUN_AS_NODE
   delete env.APPIMAGE
   delete env.APPDIR
+  // Its `banda` is its own engine's owner's: an Agent's shell hands one a
+  // pass of its own.
+  delete env.BANDA_TOKEN
+  delete env.BANDA_ENGINE
   const lab = fixture()
   await new Promise<void>((done) => lab.server.listen(0, "127.0.0.1", done))
   const port = (lab.server.address() as AddressInfo).port

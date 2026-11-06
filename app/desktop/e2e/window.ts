@@ -104,8 +104,13 @@ export async function startWindow({
     join(dir, "config/harnesses.toml"),
     entry("fake", "Fake AI", cli) + (other ? entry("other", "Other AI") : "")
   )
+  // The test's window and `banda` are its own engine's owner's, wherever
+  // the tests run: an Agent's shell hands `banda` a pass of its own.
+  const outside: NodeJS.ProcessEnv = { ...process.env }
+  delete outside.BANDA_TOKEN
+  delete outside.BANDA_ENGINE
   const variables = {
-    ...process.env,
+    ...outside,
     BANDA_ROOT: join(dir, "root"),
     BANDA_DATA: join(dir, "data"),
     BANDA_STATE: join(dir, "state"),
