@@ -552,6 +552,12 @@ async fn work(
         .read(move |sql| store::evidence(sql, thread))
         .await
         .map_err(|e| unplanned(plain(e)))?;
+    // The Thread's session lives in this process alone: one another account
+    // of it had goes (ADR 0078, decision 4).
+    live.forget_elsewhere(project.id(), thread, &harness.id)
+        .await;
+    // Another account of the same Harness goes on with the same session.
+    let kin = |other: &str| (harnesses.find(other)).is_some_and(|o| o.shares_sessions(&harness));
     // A session that opens reaches Banda with a pass of its own (ADR 0019).
     let banda = || live.banda(project, turn.agent);
     let (session, opened) = connection
@@ -560,6 +566,7 @@ async fn work(
             &project.folder(),
             &[kept::folder(project.data())],
             earlier.as_ref(),
+            &kin,
             banda,
         )
         .await?;

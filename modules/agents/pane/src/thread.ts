@@ -509,6 +509,9 @@ function project(state: ThreadState, event: Event): ThreadState {
       }
     case "thread.renamed":
       return { ...next, title: fact.payload.title }
+    case "thread.switched":
+      // It runs on another account of its Harness from its next turn.
+      return { ...next, harness: fact.payload.harness }
   }
 }
 

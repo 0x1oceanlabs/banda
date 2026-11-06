@@ -991,6 +991,15 @@ pub enum Fact {
         title: String,
         was: String,
     },
+    /// The Person moved the Thread to another account of its Harness (ADR
+    /// 0078): `harness` is the entry it runs on from its next turn, `was`
+    /// the one before.
+    #[serde(rename = "thread.switched")]
+    ThreadSwitched {
+        thread: ThreadId,
+        harness: String,
+        was: String,
+    },
     /// The Thread's settings changed, by a Person or by the Harness.
     #[serde(rename = "thread.configured")]
     ThreadConfigured {

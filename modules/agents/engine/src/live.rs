@@ -17,7 +17,7 @@
 
 use crate::Pipe;
 use crate::acp::{Answer, Connection, Session};
-use crate::model::{ItemId, TurnId, Values};
+use crate::model::{ItemId, ThreadId, TurnId, Values};
 use crate::touching::Touches;
 use banda_harnesses::Harness;
 use banda_harnesses::hosts::Hosts;
@@ -124,6 +124,17 @@ impl Live {
             .await?;
         connection.touch();
         Ok(connection)
+    }
+
+    /// Lets go of `thread`'s session in each process of `project` but
+    /// `keep`'s, as one of its turns starts on `keep`: a Thread's session
+    /// is open in one process only, the account it runs on now (ADR 0078).
+    pub async fn forget_elsewhere(&self, project: ProjectId, thread: ThreadId, keep: &str) {
+        for (harness, connection) in self.hosts.running(project).await {
+            if harness != keep {
+                connection.forget_thread(thread).await;
+            }
+        }
     }
 
     /// Lets go of `project`'s process of each Harness whose account changed,

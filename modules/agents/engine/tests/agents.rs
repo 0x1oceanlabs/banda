@@ -4767,3 +4767,97 @@ async fn the_file_a_turns_tool_calls_name_is_heard_as_each_starts_and_goes_as_th
     let view = world.ended(&sent).await;
     assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Done));
 }
+
+/// The fake agent as two accounts of Claude Code, `claude-a` and
+/// `claude-b`, which share their sessions, and one of another Harness.
+fn two_claude_accounts(cli: &Path) -> Agents {
+    let entry = |id: &str, cli: Option<Cli>| Harness {
+        id: id.into(),
+        name: id.into(),
+        short: None,
+        command: fake_agent().display().to_string(),
+        enabled: true,
+        args: Vec::new(),
+        env: Default::default(),
+        cli,
+        of: None,
+        kind: Default::default(),
+        mark: None,
+        colour: None,
+        carried: None,
+        record: None,
+    };
+    let claude = || {
+        Some(Cli {
+            program: cli.display().to_string(),
+            variable: "CLAUDE_CODE_EXECUTABLE".to_owned(),
+            minimum: None,
+        })
+    };
+    Agents::new(Harnesses::new(vec![
+        entry("claude-a", claude()),
+        entry("claude-b", claude()),
+        entry("other", None),
+    ]))
+}
+
+#[tokio::test]
+async fn a_thread_moves_to_another_account_and_keeps_its_session() {
+    let (root, bin) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let cli = fake_cli(bin.path());
+    let world = World::new_on(root.path(), two_claude_accounts(&cli), "claude-a").await;
+    let (thread, (session, on_a)) = ask_session(&world, None).await;
+    let switch = |harness: &str| {
+        let params = json!({ "thread": thread, "harness": harness });
+        world.call(world.person(), "agents.switch", params)
+    };
+
+    switch("claude-b").await.unwrap();
+    assert_eq!(world.thread(&thread).await.thread.harness, "claude-b");
+    let (_, (again, on_b)) = ask_session(&world, Some(&thread)).await;
+    assert_ne!(on_a, on_b, "another account's process");
+    assert_eq!(session, again, "the same session");
+
+    // Back on the first account, whose process still runs: it lets go of
+    // what it knew, and goes on with the session as it is now.
+    switch("claude-a").await.unwrap();
+    let (_, (back, _)) = ask_session(&world, Some(&thread)).await;
+    assert_eq!(session, back);
+    switch("claude-a").await.unwrap();
+    let switched = world.events_of(&thread, "thread.switched").await;
+    let moves: Vec<_> = switched
+        .iter()
+        .map(|e| (e["was"].as_str().unwrap(), e["harness"].as_str().unwrap()))
+        .collect();
+    assert_eq!(
+        moves,
+        [("claude-a", "claude-b"), ("claude-b", "claude-a")],
+        "the same account again writes nothing"
+    );
+
+    let refused = switch("other").await.unwrap_err();
+    assert!(
+        refused
+            .message
+            .contains("another account of its own Harness"),
+        "{refused:?}"
+    );
+    let params = json!({ "thread": thread, "harness": "claude-b" });
+    let by_agent = world.call(world.agent(), "agents.switch", params).await;
+    assert!(by_agent.is_err(), "only a Person moves a Thread");
+    assert!(switch("gone").await.is_err(), "an entry the list has not");
+}
+
+impl World {
+    /// The payloads of `thread`'s facts of `kind`, the first first.
+    async fn events_of(&self, thread: &Value, kind: &str) -> Vec<Value> {
+        let filter = EventFilter {
+            module: Some("agents".to_owned()),
+            subject: thread.as_str().map(str::to_owned),
+            kinds: Some(vec![kind.to_owned()]),
+        };
+        let project = self.kernel.project(self.project).await.unwrap();
+        let events = project.events_after(0, filter, usize::MAX).await.unwrap();
+        events.into_iter().map(|event| event.payload).collect()
+    }
+}
