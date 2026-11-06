@@ -42,12 +42,14 @@ async fn of(repo: Repo, at: i64, repositories: &Repositories) -> Result<Status, 
     let said = repo.porcelain().await?;
     let against = repo.head_or_empty(said.head.as_deref()).await?;
     // Plumbing, as T3 Code: a porcelain diff writes the index even with
-    // GIT_OPTIONAL_LOCKS=0.
+    // GIT_OPTIONAL_LOCKS=0. A submodule changed when its commit is
+    // (`banda_git_cli`).
     let numstat = repo.run(
         [
             "diff-index",
             "-M",
             "--numstat",
+            "--ignore-submodules=dirty",
             "-z",
             against.as_str(),
             "--",

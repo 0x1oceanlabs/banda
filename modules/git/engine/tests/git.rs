@@ -7,8 +7,8 @@ use banda_git::model::{
     Change, Changed, Commit, Contents, Diff, Done, Progress, Ref, Status, Step,
 };
 use banda_kernel::{
-    Call, Code, CommandId, EventFilter, Kernel, Module, Participant, PersonId, ProjectId, Refusal,
-    Right,
+    AgentId, Call, Code, CommandId, EventFilter, Kernel, Module, Participant, PersonId, ProjectId,
+    Refusal, Right,
 };
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -1914,4 +1914,34 @@ async fn a_repository_another_user_owns_says_why_git_will_not_read_it() {
         .await
         .unwrap_err();
     assert_eq!(refused.message, why);
+}
+
+#[tokio::test]
+async fn an_agent_reads_the_repository_but_asks_for_no_act() {
+    let world = World::committed().await;
+    world.write("a.txt", "changed\n");
+    let agent = Participant::Agent(AgentId::new());
+    let call = |method: &'static str, params: Value| {
+        (world.kernel).call(agent, method, Some(world.project), None, params)
+    };
+    call("git.status", json!({})).await.unwrap();
+    let file = json!({ "files": ["a.txt"] });
+    for (method, params) in [
+        ("git.stage", file.clone()),
+        ("git.unstage", file.clone()),
+        ("git.revert", file),
+        ("git.switch", json!({ "name": "main" })),
+        ("git.branch", json!({ "name": "next" })),
+        ("git.init", json!({})),
+    ] {
+        let refused = call(method, params).await.unwrap_err();
+        assert_eq!(refused.code, Code::Forbidden, "{method}");
+    }
+    let act = json!({ "action": "commit", "message": "Mine" });
+    let acting = world
+        .kernel
+        .stream(agent, "git.act", Some(world.project), act);
+    let refused = acting.await.err().map(|refusal| refusal.code);
+    assert_eq!(refused, Some(Code::Forbidden));
+    assert_eq!(world.git(&["status", "--porcelain"]), " M a.txt");
 }

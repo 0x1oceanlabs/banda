@@ -135,8 +135,9 @@ The kernel holds only what every module needs, and it names no module.
   it, before any module code runs. On one computer it answers: the owner may
   do everything; an Agent may read and change the work, but neither change
   the Project itself, decide what an Agent asked a Person, nor run programs
-  as the Person in a terminal (an Agent runs them through its Harness);
-  nobody else may do anything. Members and roles arrive here later.
+  as the Person, in a terminal or as git's acts with their hooks (an Agent
+  runs them through its Harness); nobody else may do anything. Members and
+  roles arrive here later.
 - **The Project wall** (ADR 0019, decision 2). A caller with an Agent's
   pass calls, subscribes and streams only in that pass's Project. The
   kernel checks it where it finds the Project, before the access decision
@@ -1056,7 +1057,7 @@ banda/
     browser/desktop/  Electron main: the browser's pages, extensions, blocker and CDP endpoint (ADR 0028)
     skill/            Rust: the Banda skill, its core and the topics it gathers (ADR 0012)
   look/               Rust: banda look, the look, the sidebar's arrangement and the browser's; skill/ its topics
-  platform/git-cli/   Rust: how Banda starts git: its own bookkeeping, which runs no program a repository names, and the acts asked of it
+  platform/git-cli/   Rust: how Banda starts git: its own bookkeeping, which runs no program a repository names, and the acts the Person asks for
   engine/             the banda program: serve (the kernel and its modules), call, follow, look, skill, mcp, menu, browser
   app/ui/             shadcn/ui and the Pane contract
   app/ghostty/        T3 Code's Ghostty adapter and its WebAssembly, vendored

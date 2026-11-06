@@ -1,19 +1,35 @@
 //! How Banda starts the `git` program in a folder: for its own
-//! bookkeeping ([`bookkeeping`]), or for an act a Participant asked for
+//! bookkeeping ([`bookkeeping`]), or for an act the Person asked for
 //! ([`asked`]).
 //!
 //! Bookkeeping is what Banda runs by itself: a status, a diff, a
 //! checkpoint under Banda's own refs, a watch and the fetch it runs, a
 //! log, an ignore check, a remote's address. A repository's hooks and
 //! config are its Project's, which an Agent may write, so Banda's own git
-//! runs no program they name: no hook, no file system monitor, no filter
-//! or diff driver, no signature check, and none of the repository's own
-//! network commands. The rest of the Person's config holds: their name,
-//! the remotes, and the credential helpers and ssh of their own config,
-//! system and global.
+//! runs no program they name. Whatever the repository says, it runs no
+//! hook of any event, no file system monitor, no pager, no external diff,
+//! no command that lists an alternate's refs, no signature check, no gc
+//! and no maintenance; it fetches no object it lacks, and reaches no
+//! remote but in a fetch, which goes over git's own transports with git's
+//! own upload-pack, the Person's own ssh and credential helpers, and no
+//! proxy command. Every filter driver, diff driver and hook that git's
+//! config names as it is read just before is blanked too. The rest of the
+//! Person's config holds: their name, the remotes, what they ignore.
 //!
-//! An act asked for, as a commit, a push, a pull or a switch, runs as the
-//! Person's own git does: hooks, filters, signing and all.
+//! What this holds only with its callers, or not at all:
+//! - Filter drivers are blanked by the names the config held as it was
+//!   read, just before git starts. Diff drivers and hooks need no name: a
+//!   diff asks for git's own patch (`--no-ext-diff --no-textconv`), and
+//!   every hook event is off.
+//! - A submodule's own config is not read, so a status or a diff looks
+//!   into no submodule's work tree (`--ignore-submodules=dirty`).
+//! - A blanked filter leaves a file's bytes as they are on disk, so what
+//!   keeps objects leaves filtered files out (`:(attr:!filter)`).
+//! - A fetch takes the Person's own ssh command and credential helpers,
+//!   never the repository's, so one that needs the repository's fails.
+//!
+//! An act the Person asked for, as a commit, a push, a pull or a switch,
+//! runs as their own git does: hooks, filters, signing and all.
 //!
 //! Either way git asks nothing on a terminal, takes no optional lock, so
 //! a read beside the Person's own git never takes `.git/index.lock`,
@@ -22,7 +38,7 @@
 //! a git hook.
 
 use std::collections::BTreeSet;
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::Path;
 use std::process::Stdio;
@@ -30,114 +46,213 @@ use std::time::Duration;
 use tokio::process::Command;
 
 /// What git would take from the engine's environment that points it at
-/// another repository.
-const ELSEWHERE: [&str; 4] = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX"];
-
-/// What a bookkeeping git takes from nowhere but its own arguments: the
-/// config given to a git the engine runs inside, and an external diff.
-const INHERITED: [&str; 3] = [
+/// another repository or another config (`git rev-parse
+/// --local-env-vars`), and an external diff.
+const ELSEWHERE: [&str; 16] = [
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CONFIG",
     "GIT_CONFIG_PARAMETERS",
     "GIT_CONFIG_COUNT",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_IMPLICIT_WORK_TREE",
+    "GIT_GRAFT_FILE",
+    "GIT_INDEX_FILE",
+    "GIT_NO_REPLACE_OBJECTS",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_PREFIX",
+    "GIT_SHALLOW_FILE",
+    "GIT_COMMON_DIR",
     "GIT_EXTERNAL_DIFF",
 ];
 
-/// What a bookkeeping git runs with besides, as nobody waits on it: no
-/// password asked, by git, a credential manager or ssh.
-const UNASKED: [(&str, &str); 4] = [
+/// What every bookkeeping git runs with besides, whatever the repository
+/// says: no password asked, by git, a credential manager or ssh; no proxy
+/// command; no object it lacks fetched; and no remote reached, whatever
+/// `protocol.*` allows, but by a fetch ([`TRANSPORTS`]).
+const UNASKED: [(&str, &str); 7] = [
     ("GCM_INTERACTIVE", "never"),
     ("GIT_ASKPASS", ""),
     ("SSH_ASKPASS", ""),
     ("SSH_ASKPASS_REQUIRE", "never"),
+    ("GIT_PROXY_COMMAND", ""),
+    ("GIT_NO_LAZY_FETCH", "1"),
+    ("GIT_ALLOW_PROTOCOL", ""),
 ];
 
-/// What every bookkeeping git runs with, whatever the repository says: no
-/// hook, as there is none at `/dev/null/<name>` on Linux or macOS; no file
-/// system monitor; no signature checked as a log reads; no `ext::`
-/// remote, which is a command; no submodule fetched, as each has config
-/// of its own; and no gc nor maintenance after it, which run hooks of
-/// their own.
-const ALWAYS: [(&str, &str); 7] = [
+/// The transports a fetch Banda runs by itself goes over: git's own, and
+/// none a repository's config names a helper for.
+const TRANSPORTS: &str = "file:git:http:https:ssh";
+
+/// What a fetch Banda runs by itself takes after `fetch`: git's own
+/// upload-pack. A remote's `uploadpack` is the first git reads, so no
+/// config overrides the repository's.
+const UPLOAD_PACK: &str = "--upload-pack=git-upload-pack";
+
+/// Every hook event githooks(5) names: each is off, whatever hooks it
+/// has in a hooks folder or in git's config.
+const EVENTS: [&str; 28] = [
+    "applypatch-msg",
+    "pre-applypatch",
+    "post-applypatch",
+    "pre-commit",
+    "pre-merge-commit",
+    "prepare-commit-msg",
+    "commit-msg",
+    "post-commit",
+    "pre-rebase",
+    "post-checkout",
+    "post-merge",
+    "pre-push",
+    "pre-receive",
+    "update",
+    "proc-receive",
+    "post-receive",
+    "post-update",
+    "reference-transaction",
+    "push-to-checkout",
+    "pre-auto-gc",
+    "post-rewrite",
+    "sendemail-validate",
+    "fsmonitor-watchman",
+    "p4-changelist",
+    "p4-prepare-changelist",
+    "p4-post-changelist",
+    "p4-pre-submit",
+    "post-index-change",
+];
+
+/// What every bookkeeping git is configured with, whatever the
+/// repository says, besides its hook events: no hooks folder, as there is
+/// none at `/dev/null/<name>` on Linux or macOS; no file system monitor;
+/// no signature checked as a log reads; no external diff, which a diff
+/// asked for git's own patch skips and any other fails on; a submodule's
+/// change as its commits, not its diff, which runs in the submodule; no
+/// command that lists an alternate's refs; no submodule fetched, as each
+/// has config of its own; and no gc nor maintenance after it.
+const ALWAYS: [(&str, &str); 9] = [
     ("core.hooksPath", "/dev/null"),
     ("core.fsmonitor", "false"),
     ("log.showSignature", "false"),
-    ("protocol.ext.allow", "never"),
+    ("diff.external", ""),
+    ("diff.submodule", "short"),
+    ("core.alternateRefsCommand", ""),
     ("fetch.recurseSubmodules", "false"),
     ("gc.auto", "0"),
     ("maintenance.auto", "false"),
 ];
 
-/// The config that names a program a bookkeeping git may run, by git's
-/// lowercase names: every filter driver and hook, a diff driver's text
-/// conversion and command, the external diff, the command that lists an
-/// alternate's refs, and the network's ssh command, proxy and credential
-/// helpers.
-const NAMING: &str = r"^filter\.|^hook\.|^diff\..+\.(textconv|command)$|^diff\.external$|^core\.(sshcommand|gitproxy|alternaterefscommand)$|^credential\..*helper$";
+/// What the config is read for first, by git's lowercase names: every
+/// filter driver, diff driver's text conversion and command, and hook it
+/// names; the Person's own ssh command and credential helpers; and
+/// [`PROBE`].
+const NAMING: &str = r"^filter\.|^diff\..+\.(textconv|command)$|^hook\.|^core\.sshcommand$|^credential\..*helper$|^banda\.probe$";
+
+/// A setting the config read is given through its environment, as every
+/// override after it is (`GIT_CONFIG_COUNT`): a git that does not list it
+/// back, one older than 2.31, would take none of them, so none starts.
+const PROBE: &str = "banda.probe";
 
 /// How long the config is read at most.
 const READING: Duration = Duration::from_secs(10);
 
-/// What a fetch Banda runs by itself takes after `fetch`: git's own
-/// upload-pack. A remote's `uploadpack` is the first git reads, so no
-/// `-c` overrides the repository's.
-pub const FETCH: [&str; 1] = ["--upload-pack=git-upload-pack"];
+/// git in `dir` running `args` for an act the Person asked for, as their
+/// own git runs it. Its stdio and the rest are the caller's.
+pub fn asked<I, S>(dir: &Path, args: I) -> Command
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    let mut git = base(dir);
+    git.args(args);
+    git
+}
 
-/// git in `dir` for an act a Participant asked for, as the Person's own
-/// git runs it. Its args, stdio and the rest are the caller's.
-pub fn asked(dir: &Path) -> Command {
+/// git in `dir` running `args`, which name its subcommand, for Banda's
+/// own bookkeeping: it runs no program the repository names (the crate's
+/// doc says how far that holds). A fetch is the one that reaches a
+/// remote, over git's own transports with git's own upload-pack. The
+/// repository's config is read first, for the names of its drivers and
+/// hooks and the Person's own network config; when it cannot be read, as
+/// when it is malformed, past [`READING`] or git is too old, no git
+/// starts. Its stdio and the rest are the caller's.
+pub async fn bookkeeping<I, S>(dir: &Path, args: I) -> io::Result<Command>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    let listed = tokio::time::timeout(READING, configured(dir))
+        .await
+        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "git's config took too long"))??;
+    let config = overrides(&listed, std::env::var_os("GIT_SSH").as_deref())?;
+    let mut git = own(dir);
+    git.env("GIT_CONFIG_COUNT", config.len().to_string());
+    for (at, (key, value)) in config.into_iter().enumerate() {
+        git.env(format!("GIT_CONFIG_KEY_{at}"), os(key)?)
+            .env(format!("GIT_CONFIG_VALUE_{at}"), os(value)?);
+    }
+    let mut args: Vec<OsString> = args.into_iter().map(|a| a.as_ref().to_owned()).collect();
+    if let Some(at) = subcommand(&args).filter(|at| args[*at] == "fetch") {
+        args.insert(at + 1, UPLOAD_PACK.into());
+        git.env("GIT_ALLOW_PROTOCOL", TRANSPORTS);
+    }
+    git.args(args);
+    Ok(git)
+}
+
+/// git in `dir` as every git starts: in C's words, asking nothing on a
+/// terminal, taking no optional lock and nothing [`ELSEWHERE`], and
+/// stopped once its caller lets go of it.
+fn base(dir: &Path) -> Command {
     let mut git = Command::new("git");
     git.current_dir(dir)
         .env("GIT_OPTIONAL_LOCKS", "0")
         .env("GIT_TERMINAL_PROMPT", "0")
-        .env("LC_ALL", "C");
+        .env("LC_ALL", "C")
+        .kill_on_drop(true);
     for name in ELSEWHERE {
         git.env_remove(name);
     }
     git
 }
 
-/// git in `dir` for Banda's own bookkeeping, which runs no program the
-/// repository names. The repository's config is read first, for the
-/// names of its drivers and hooks; when it cannot be read, as when it is
-/// malformed or past [`READING`], no git starts. Its args, stdio and the
-/// rest are the caller's.
-pub async fn bookkeeping(dir: &Path) -> io::Result<Command> {
-    let listed = tokio::time::timeout(READING, configured(dir))
-        .await
-        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "git's config took too long"))??;
-    let Overrides { config, env } = overrides(&listed)?;
-    let mut git = own(dir);
-    git.arg("--no-pager");
-    for (key, value) in config {
-        git.arg("-c").arg(os([key, b"=".to_vec(), value].concat())?);
-    }
-    git.envs(env);
-    Ok(git)
-}
-
 /// git in `dir` as every bookkeeping git starts, before its config.
 fn own(dir: &Path) -> Command {
-    let mut git = asked(dir);
-    for name in INHERITED {
-        git.env_remove(name);
-    }
-    git.envs(UNASKED);
+    let mut git = base(dir);
+    git.arg("--no-pager").envs(UNASKED);
     git
+}
+
+/// Where the subcommand is in `args`: the first that is no option, past
+/// each `-c`'s value. Another option's value that stands apart, as `-C`'s,
+/// is taken for it, so a fetch behind one reaches no remote.
+fn subcommand(args: &[OsString]) -> Option<usize> {
+    let mut at = 0;
+    while let Some(arg) = args.get(at) {
+        match arg.as_encoded_bytes() {
+            b"-c" => at += 2,
+            option if option.starts_with(b"-") => at += 1,
+            _ => return Some(at),
+        }
+    }
+    None
 }
 
 /// The config of `dir` that [`NAMING`] matches, as `git config
 /// --show-scope -z` lists it.
 async fn configured(dir: &Path) -> io::Result<Vec<u8>> {
     let read = own(dir)
-        .args(["--no-pager", "config", "--show-scope", "-z", "--get-regexp"])
-        .arg(NAMING)
+        .env("GIT_CONFIG_COUNT", "1")
+        .env("GIT_CONFIG_KEY_0", PROBE)
+        .env("GIT_CONFIG_VALUE_0", "true")
+        .args(["config", "--show-scope", "-z", "--get-regexp", NAMING])
         .stdin(Stdio::null())
-        .kill_on_drop(true)
         .output()
         .await?;
     match read.status.code() {
-        Some(0) => Ok(read.stdout),
-        // None is set.
-        Some(1) => Ok(Vec::new()),
+        // 1: none is set, as only a git that took no probe says.
+        Some(0 | 1) => Ok(read.stdout),
         _ => {
             let said = String::from_utf8_lossy(&read.stderr);
             Err(io::Error::other(format!(
@@ -148,29 +263,22 @@ async fn configured(dir: &Path) -> io::Result<Vec<u8>> {
     }
 }
 
-/// What a bookkeeping git overrides: config, as `-c` takes it, and
-/// environment.
-#[derive(Debug, Default, PartialEq)]
-struct Overrides {
-    config: Vec<(Vec<u8>, Vec<u8>)>,
-    env: Vec<(&'static str, &'static str)>,
-}
-
-/// What a bookkeeping git overrides, after the config [`configured`]
-/// read. Every filter driver is blanked and need not run; every diff
-/// driver's text conversion and command, the external diff and the
-/// command that lists an alternate's refs are blanked, so a git that
-/// would run one fails instead; every hook git's config names is off. A
-/// network command the repository's own config names, not the Person's
-/// (system or global), gives way: its ssh command to the Person's, or
-/// `ssh`; its credential helpers to the Person's alone; its proxy to
-/// none.
-fn overrides(listed: &[u8]) -> io::Result<Overrides> {
+/// What a bookkeeping git is configured with, as `GIT_CONFIG_KEY_<n>` and
+/// `GIT_CONFIG_VALUE_<n>` take it, after the config [`configured`] read;
+/// `git_ssh` is the engine's `GIT_SSH`.
+///
+/// First [`ALWAYS`], and every hook event off. Then the Person's own
+/// network: their ssh command, from their config (system or global), else
+/// `GIT_SSH`'s program, else `ssh` (their `GIT_SSH_COMMAND` wins over it
+/// as it is); and their credential helpers alone. Then what the config
+/// names: every filter driver blanked, which need not run; every diff
+/// driver's text conversion and command blanked, so a git that would run
+/// one fails instead; and every hook off.
+fn overrides(listed: &[u8], git_ssh: Option<&OsStr>) -> io::Result<Vec<(Vec<u8>, Vec<u8>)>> {
     let (mut filters, mut diffs, mut hooks) = (BTreeSet::new(), BTreeSet::new(), BTreeSet::new());
-    let (mut external, mut alternates) = (false, false);
-    let (mut ssh, mut helpers, mut proxy) = (false, false, false);
     let mut persons_ssh: Option<&[u8]> = None;
     let mut persons_helpers: Vec<(&[u8], &[u8])> = Vec::new();
+    let mut probed = false;
     let mut fields = listed.split(|b| *b == 0);
     while let Some(scope) = fields.next().filter(|scope| !scope.is_empty()) {
         let entry = fields.next().ok_or_else(unreadable)?;
@@ -179,9 +287,10 @@ fn overrides(listed: &[u8]) -> io::Result<Overrides> {
             None => (entry, &b""[..]),
         };
         let persons = scope == b"system" || scope == b"global";
-        let (first, last) = (dot(key, false)?, dot(key, true)?);
+        let first = key.iter().position(|b| *b == b'.').ok_or_else(unreadable)?;
+        let last = key.iter().rposition(|b| *b == b'.').unwrap_or(first);
         let (section, variable) = (&key[..first], &key[last + 1..]);
-        let sub = (first < last).then(|| key[first + 1..last].to_vec());
+        let sub = (first < last).then(|| &key[first + 1..last]);
         match (section, sub, variable) {
             (b"filter", Some(driver), _) => {
                 filters.insert(driver);
@@ -189,23 +298,40 @@ fn overrides(listed: &[u8]) -> io::Result<Overrides> {
             (b"diff", Some(driver), _) => {
                 diffs.insert(driver);
             }
-            (b"diff", None, b"external") => external = true,
             (b"hook", Some(name), _) => {
                 hooks.insert(name);
             }
-            (b"core", None, b"alternaterefscommand") => alternates = true,
             (b"core", None, b"sshcommand") if persons => persons_ssh = Some(value),
-            (b"core", None, b"sshcommand") => ssh = true,
-            (b"core", None, b"gitproxy") => proxy |= !persons,
             (b"credential", _, b"helper") if persons => persons_helpers.push((key, value)),
-            (b"credential", _, b"helper") => helpers = true,
+            (b"banda", None, b"probe") => probed |= scope == b"command",
             _ => {}
         }
     }
-    let mut config: Vec<(Vec<u8>, Vec<u8>)> = (ALWAYS.iter())
-        .map(|(key, value)| (key.as_bytes().to_vec(), value.as_bytes().to_vec()))
-        .collect();
+    if !probed {
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "git took no config from its environment: Banda's own git needs git 2.31 or later",
+        ));
+    }
+    let mut config: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
     let mut set = |parts: &[&[u8]], value: &[u8]| config.push((parts.concat(), value.to_vec()));
+    for (key, value) in ALWAYS {
+        set(&[key.as_bytes()], value.as_bytes());
+    }
+    for event in EVENTS {
+        set(&[b"hook.", event.as_bytes(), b".enabled"], b"false");
+    }
+    let ssh = match (persons_ssh, git_ssh) {
+        (Some(command), _) => command.to_vec(),
+        (None, Some(program)) if !program.is_empty() => quoted(program.as_encoded_bytes()),
+        (None, _) => b"ssh".to_vec(),
+    };
+    set(&[b"core.sshCommand"], &ssh);
+    // An empty helper empties the list git has read so far.
+    set(&[b"credential.helper"], b"");
+    for (key, value) in persons_helpers {
+        set(&[key], value);
+    }
     for driver in &filters {
         for variable in [&b".clean"[..], b".smudge", b".process"] {
             set(&[b"filter.", driver, variable], b"");
@@ -216,61 +342,37 @@ fn overrides(listed: &[u8]) -> io::Result<Overrides> {
         set(&[b"diff.", driver, b".textconv"], b"");
         set(&[b"diff.", driver, b".command"], b"");
     }
-    if external {
-        set(&[b"diff.external"], b"");
-    }
     for name in &hooks {
         set(&[b"hook.", name, b".enabled"], b"false");
     }
-    if alternates {
-        set(&[b"core.alternateRefsCommand"], b"");
-    }
-    if ssh {
-        set(&[b"core.sshCommand"], persons_ssh.unwrap_or(b"ssh"));
-    }
-    if helpers {
-        // An empty helper empties the list git has read so far.
-        set(&[b"credential.helper"], b"");
-        for (key, value) in persons_helpers {
-            set(&[key], value);
-        }
-    }
-    // `-c` cuts its name at the first `=`.
-    if config.iter().any(|(key, _)| key.contains(&b'=')) {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "git's config names a driver, hook or helper with an `=`, which -c cannot override",
-        ));
-    }
-    let mut env = Vec::new();
-    if proxy {
-        // It wins over the config, whose first match would.
-        env.push(("GIT_PROXY_COMMAND", ""));
-    }
-    Ok(Overrides { config, env })
+    Ok(config)
 }
 
-/// Where `key`'s first or last dot is.
-fn dot(key: &[u8], last: bool) -> io::Result<usize> {
-    let at = match last {
-        true => key.iter().rposition(|b| *b == b'.'),
-        false => key.iter().position(|b| *b == b'.'),
-    };
-    at.ok_or_else(unreadable)
+/// `program` as one word of a command the shell runs.
+fn quoted(program: &[u8]) -> Vec<u8> {
+    let mut word = vec![b'\''];
+    for byte in program {
+        match byte {
+            b'\'' => word.extend_from_slice(b"'\\''"),
+            _ => word.push(*byte),
+        }
+    }
+    word.push(b'\'');
+    word
 }
 
 fn unreadable() -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, "git's config was not as read")
 }
 
-/// `bytes` as an argument.
+/// `bytes` as an argument or a variable's value.
 #[cfg(unix)]
 fn os(bytes: Vec<u8>) -> io::Result<OsString> {
     use std::os::unix::ffi::OsStringExt;
     Ok(OsString::from_vec(bytes))
 }
 
-/// `bytes` as an argument: text only, off Unix.
+/// `bytes` as an argument or a variable's value: text only, off Unix.
 #[cfg(not(unix))]
 fn os(bytes: Vec<u8>) -> io::Result<OsString> {
     String::from_utf8(bytes)
@@ -282,19 +384,20 @@ fn os(bytes: Vec<u8>) -> io::Result<OsString> {
 mod tests {
     use super::*;
 
-    /// A listing as `git config --show-scope -z` writes it.
+    /// A listing as `git config --show-scope -z` writes it, the probe
+    /// first.
     fn listing(entries: &[(&str, &str, &str)]) -> Vec<u8> {
-        let mut listed = Vec::new();
+        let mut listed = b"command\0banda.probe\ntrue\0".to_vec();
         for (scope, key, value) in entries {
             listed.extend_from_slice(format!("{scope}\0{key}\n{value}\0").as_bytes());
         }
         listed
     }
 
-    /// The `-c` pairs past [`ALWAYS`], as text.
-    fn set(overrides: &Overrides) -> Vec<(String, String)> {
+    /// The settings past what always holds, as text.
+    fn set(config: &[(Vec<u8>, Vec<u8>)]) -> Vec<(String, String)> {
         let text = |bytes: &[u8]| String::from_utf8(bytes.to_vec()).unwrap();
-        overrides.config[ALWAYS.len()..]
+        config[ALWAYS.len() + EVENTS.len()..]
             .iter()
             .map(|(key, value)| (text(key), text(value)))
             .collect()
@@ -306,10 +409,27 @@ mod tests {
     }
 
     #[test]
-    fn with_no_config_named_only_what_always_holds_is_set() {
-        let none = overrides(b"").unwrap();
-        assert_eq!(none.config.len(), ALWAYS.len());
-        assert!(none.env.is_empty());
+    fn with_nothing_named_what_always_holds_is_set_and_the_network_is_the_persons() {
+        let config = overrides(&listing(&[]), None).unwrap();
+        let text = |bytes: &[u8]| String::from_utf8(bytes.to_vec()).unwrap();
+        let keys: Vec<String> = config.iter().map(|(key, _)| text(key)).collect();
+        assert!(keys.contains(&"core.hooksPath".to_owned()));
+        for event in EVENTS {
+            assert!(keys.contains(&format!("hook.{event}.enabled")), "{event}");
+        }
+        assert_eq!(
+            set(&config),
+            pairs(&[("core.sshCommand", "ssh"), ("credential.helper", "")])
+        );
+    }
+
+    #[test]
+    fn a_git_that_took_no_config_from_its_environment_starts_none() {
+        assert!(overrides(b"", None).is_err());
+        let older = b"local\0filter.x.clean\n./clean\0";
+        assert!(overrides(older, None).is_err());
+        // The Person's own of that name is no probe.
+        assert!(overrides(b"global\0banda.probe\ntrue\0", None).is_err());
     }
 
     #[test]
@@ -318,21 +438,25 @@ mod tests {
             ("global", "filter.lfs.process", "git-lfs filter-process"),
             ("local", "filter.lfs.required", "true"),
             ("local", "filter.Keys.clean", "./clean"),
+            ("local", "filter.a=b.clean", "./clean"),
             ("local", "diff.pdf.textconv", "pdftotext"),
             ("local", "diff.ext.command", "./diff"),
-            ("local", "diff.external", "./diff"),
             ("worktree", "hook.lint.command", "./lint"),
             ("worktree", "hook.lint.event", "reference-transaction"),
-            ("local", "core.alternaterefscommand", "./refs"),
+            ("local", "hook.a.b.command", "./b"),
         ]);
-        let named = overrides(&listed).unwrap();
+        let config = overrides(&listed, None).unwrap();
         assert_eq!(
-            set(&named),
+            set(&config)[2..],
             pairs(&[
                 ("filter.Keys.clean", ""),
                 ("filter.Keys.smudge", ""),
                 ("filter.Keys.process", ""),
                 ("filter.Keys.required", "false"),
+                ("filter.a=b.clean", ""),
+                ("filter.a=b.smudge", ""),
+                ("filter.a=b.process", ""),
+                ("filter.a=b.required", "false"),
                 ("filter.lfs.clean", ""),
                 ("filter.lfs.smudge", ""),
                 ("filter.lfs.process", ""),
@@ -341,9 +465,8 @@ mod tests {
                 ("diff.ext.command", ""),
                 ("diff.pdf.textconv", ""),
                 ("diff.pdf.command", ""),
-                ("diff.external", ""),
+                ("hook.a.b.enabled", "false"),
                 ("hook.lint.enabled", "false"),
-                ("core.alternateRefsCommand", ""),
             ])
         );
     }
@@ -353,14 +476,14 @@ mod tests {
         let listed = listing(&[
             ("global", "credential.https://github.com.helper", ""),
             ("global", "credential.https://github.com.helper", "!gh auth"),
+            ("system", "core.sshcommand", "ssh -i ~/.ssh/old"),
             ("global", "core.sshcommand", "ssh -i ~/.ssh/work"),
             ("local", "credential.helper", "./steal"),
             ("local", "core.sshcommand", "./ssh"),
-            ("local", "core.gitproxy", "./proxy"),
         ]);
-        let named = overrides(&listed).unwrap();
+        let config = overrides(&listed, Some(OsStr::new("/usr/bin/plink"))).unwrap();
         assert_eq!(
-            set(&named),
+            set(&config),
             pairs(&[
                 ("core.sshCommand", "ssh -i ~/.ssh/work"),
                 ("credential.helper", ""),
@@ -368,35 +491,64 @@ mod tests {
                 ("credential.https://github.com.helper", "!gh auth"),
             ])
         );
-        assert_eq!(named.env, [("GIT_PROXY_COMMAND", "")]);
 
-        // With none of the Person's own, git's own ssh.
+        // With none in the Person's config, the program of their GIT_SSH,
+        // which the repository's would win over.
         let listed = listing(&[("local", "core.sshcommand", "./ssh")]);
-        let named = overrides(&listed).unwrap();
-        assert_eq!(set(&named), pairs(&[("core.sshCommand", "ssh")]));
-    }
-
-    #[test]
-    fn the_persons_own_network_config_alone_is_left_as_it_is() {
-        let listed = listing(&[
-            ("system", "credential.helper", "osxkeychain"),
-            ("global", "core.sshcommand", "ssh -i ~/.ssh/work"),
-            ("global", "core.gitproxy", "proxy for example.com"),
-        ]);
-        let named = overrides(&listed).unwrap();
-        assert!(set(&named).is_empty());
-        assert!(named.env.is_empty());
-    }
-
-    #[test]
-    fn a_name_that_has_an_equals_sign_is_refused() {
-        let listed = listing(&[("local", "filter.a=b.clean", "./clean")]);
-        assert!(overrides(&listed).is_err());
+        let config = overrides(&listed, Some(OsStr::new("/opt/my ssh/it's"))).unwrap();
+        assert_eq!(
+            set(&config)[0],
+            pairs(&[("core.sshCommand", r"'/opt/my ssh/it'\''s'")])[0]
+        );
     }
 
     #[test]
     fn a_listing_cut_short_is_refused() {
-        assert!(overrides(b"local\0").is_err());
-        assert!(overrides(b"local\0nodot\nx\0").is_err());
+        let cut = [listing(&[]), b"local\0".to_vec()].concat();
+        assert!(overrides(&cut, None).is_err());
+        let dotless = [listing(&[]), b"local\0nodot\nx\0".to_vec()].concat();
+        assert!(overrides(&dotless, None).is_err());
+    }
+
+    #[tokio::test]
+    async fn a_fetch_alone_reaches_a_remote_and_with_gits_own_upload_pack() {
+        let env = |git: &Command, name: &str| {
+            let named = git.as_std().get_envs().find(|(key, _)| *key == name);
+            named.and_then(|(_, value)| value.map(OsStr::to_owned))
+        };
+        let args = |git: &Command| -> Vec<OsString> {
+            git.as_std().get_args().map(OsStr::to_owned).collect()
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let fetch = ["-c", "a.b=c", "fetch", "--quiet", "--", "up"];
+        let fetch = bookkeeping(dir.path(), fetch).await.unwrap();
+        let read = bookkeeping(dir.path(), ["status"]).await.unwrap();
+        assert_eq!(
+            args(&fetch),
+            [
+                "--no-pager",
+                "-c",
+                "a.b=c",
+                "fetch",
+                UPLOAD_PACK,
+                "--quiet",
+                "--",
+                "up"
+            ]
+        );
+        let allowed = env(&fetch, "GIT_ALLOW_PROTOCOL");
+        assert_eq!(allowed.as_deref(), Some(OsStr::new(TRANSPORTS)));
+        assert_eq!(args(&read), ["--no-pager", "status"]);
+        let allowed = env(&read, "GIT_ALLOW_PROTOCOL");
+        assert_eq!(allowed.as_deref(), Some(OsStr::new("")));
+    }
+
+    #[test]
+    fn every_git_takes_nothing_from_the_engine_that_points_it_elsewhere() {
+        let git = asked(Path::new("."), ["status"]);
+        for name in ELSEWHERE {
+            let named = git.as_std().get_envs().find(|(key, _)| *key == name);
+            assert_eq!(named, Some((OsStr::new(name), None)), "{name}");
+        }
     }
 }

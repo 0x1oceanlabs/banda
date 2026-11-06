@@ -10,15 +10,18 @@ use crate::repo::{Repo, pathspec, plain_path};
 use crate::run::{Failure, Opts};
 use banda_kernel::Refusal;
 
-/// The arguments every diff takes: renames found, no colour, none of the
-/// Person's diff drivers or text conversions, and the `a/` and `b/`
-/// prefixes a patch reader expects.
-const DIFF: [&str; 8] = [
+/// The arguments every diff takes: renames found, no colour, git's own
+/// patch, with none of the Person's diff drivers or text conversions,
+/// which Banda's own git blanks and would fail on (`banda_git_cli`), a
+/// submodule changed when its commit is, and the `a/` and `b/` prefixes a
+/// patch reader expects.
+const DIFF: [&str; 9] = [
     "diff",
     "--find-renames",
     "--no-color",
     "--no-ext-diff",
     "--no-textconv",
+    "--ignore-submodules=dirty",
     "--src-prefix=a/",
     "--dst-prefix=b/",
     "--minimal",

@@ -242,17 +242,17 @@ pub async fn last_commit(path: &Path) -> Option<Commit> {
         (Some(at), Some(name)) if !path.is_dir() => (at, name),
         _ => (path, std::ffi::OsStr::new(".")),
     };
+    let args = [
+        "log",
+        "-1",
+        "--no-color",
+        "--format=%H%x00%an%x00%at%x00%s",
+        "--",
+    ]
+    .map(std::ffi::OsStr::new);
     let git = async {
-        crate::git_in(at)
+        crate::git_in(at, args.iter().chain([&name]))
             .await?
-            .args([
-                "log",
-                "-1",
-                "--no-color",
-                "--format=%H%x00%an%x00%at%x00%s",
-                "--",
-            ])
-            .arg(name)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .output()

@@ -12,10 +12,10 @@
 //! each repository. A folder git does not know is no repository: `status`
 //! says so, `init` makes it one, and the rest refuse.
 //!
-//! What the module runs by itself, the reads, the watch and its fetch,
-//! and the checkpoints, is Banda's own git, which runs no program the
-//! repository names, as its hooks or filters (`banda_git_cli`). The
-//! writes asked of it run as the Person's own git does, hooks and all.
+//! What it runs by itself, the reads, the watch and its fetch, and the
+//! checkpoints, is Banda's own git (`banda_git_cli`). Its writes are acts
+//! the Person asks for, which run as their own git does, hooks and all, so
+//! they need `Right::Run`, which no Agent holds.
 
 pub mod model;
 
@@ -139,13 +139,13 @@ banda_kernel::methods! {
         /// diff leaves out.
         call contents(ContentsAsk) -> Contents, Read;
         /// Stages files, or the lines of one hunk, from the work tree.
-        call stage(ChangeAsk) -> (), Write;
+        call stage(ChangeAsk) -> (), Run;
         /// Takes files, or the lines of one hunk, out of the index, back
         /// to `HEAD`.
-        call unstage(ChangeAsk) -> (), Write;
+        call unstage(ChangeAsk) -> (), Run;
         /// Puts files, or the lines of one hunk, in the work tree back as
         /// the index has them; an untracked file goes. It cannot be undone.
-        call revert(ChangeAsk) -> (), Write;
+        call revert(ChangeAsk) -> (), Run;
         /// The status again each time it changes, first as it is now. It
         /// fetches the upstream's remote every 30 seconds meanwhile.
         stream watch(Nothing) -> Status, Read;
@@ -154,14 +154,14 @@ banda_kernel::methods! {
         /// as it goes, then how it ended. It runs the repository's hooks.
         /// Asked from a Thread's card, it says what each step changed in
         /// its fact `git.acted` about the Thread.
-        stream act(ActAsk) -> Progress, Write;
+        stream act(ActAsk) -> Progress, Run;
         /// Switches to a branch here, or to a remote's through a branch
         /// that follows it; the changes go along, or git refuses.
-        call switch(SwitchAsk) -> (), Write;
+        call switch(SwitchAsk) -> (), Run;
         /// Makes a branch, and switches to it.
-        call branch(BranchAsk) -> (), Write;
+        call branch(BranchAsk) -> (), Run;
         /// Makes the Project's folder a git repository.
-        call init(Nothing) -> (), Write;
+        call init(Nothing) -> (), Run;
         /// The prompt a Harness writes a commit's message from: what the
         /// commit would take, its branch and the repository's last
         /// subjects. The index is left as it is.
