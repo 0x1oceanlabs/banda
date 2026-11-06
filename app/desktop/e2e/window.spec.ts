@@ -4194,9 +4194,9 @@ test("the Banda menu goes into a Project and the sidebar's view, and Tab shows w
   await search.press("Tab")
   await expect(acts).toContainText("Open beside")
   await page.screenshot({ path: "test-results/27-banda-menu-acts.png" })
-  await search.press("ArrowDown")
-  await search.press("ArrowDown")
-  await search.press("Enter")
+  // Snooze… stands before it (ADR 0074): it is picked by its name.
+  await expect(acts).toContainText("Snooze…")
+  await acts.getByRole("option", { name: /Archive thread/ }).click()
   await expect(menu).toBeHidden()
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   await expect(sidebar.getByRole("group", { name: "Archive" })).toBeVisible()
