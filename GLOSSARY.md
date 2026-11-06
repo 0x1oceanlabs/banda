@@ -230,6 +230,11 @@ and there is always one empty workspace at the bottom. A Project has one
 workspace where its Agents' Groups open, in a row (ADR 0065).
 _Avoid_: Desk.
 
+**Flow**:
+How an Agent's windows stand, as the sidebar's header switches it: free,
+where they are; in a row on its Project's workspace; or solo, the Agent
+you are at filling the screen (ADR 0079).
+
 **Strip**:
 How a workspace lays out its Panes: columns side by side that scroll
 sideways, each holding Panes one above another.
