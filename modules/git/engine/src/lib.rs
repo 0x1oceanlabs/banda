@@ -11,6 +11,11 @@
 //! push and pull), `switch`, `branch` and `init` write, one at a time in
 //! each repository. A folder git does not know is no repository: `status`
 //! says so, `init` makes it one, and the rest refuse.
+//!
+//! What the module runs by itself, the reads, the watch and its fetch,
+//! and the checkpoints, is Banda's own git, which runs no program the
+//! repository names, as its hooks or filters (`banda_git_cli`). The
+//! writes asked of it run as the Person's own git does, hooks and all.
 
 pub mod model;
 

@@ -290,7 +290,7 @@ async fn commit(
         // Every change, as T3 Code's button commits: what `.gitignore`
         // leaves out stays out.
         None => {
-            repo.run(["add", "--all"], Opts::writes()).await?;
+            repo.run(["add", "--all"], Opts::asked()).await?;
         }
         // Only these: what else was staged is unstaged first, as T3 Code
         // does, so the commit holds what the Person chose.
@@ -303,8 +303,8 @@ async fn commit(
                     "A merge is going on: commit all of it, or end it first.",
                 ));
             }
-            repo.run(["reset", "--quiet"], Opts::writes()).await?;
-            repo.run_on_paths(&["add", "--all"], files, Opts::writes())
+            repo.run(["reset", "--quiet"], Opts::asked()).await?;
+            repo.run_on_paths(&["add", "--all"], files, Opts::asked())
                 .await?;
         }
     }
@@ -362,7 +362,7 @@ async fn push(repo: &Repo, branch: &str, tell: &Teller) -> Result<Pushed, Refusa
         // another git holds the config's lock (T3 Code).
         for (key, value) in [("remote", remote.as_str()), ("merge", own.as_str())] {
             let key = format!("branch.{branch}.{key}");
-            repo.run(["config", &key, value], Opts::writes()).await?;
+            repo.run(["config", &key, value], Opts::asked()).await?;
         }
     }
     let head = repo.said_head().await?;
@@ -458,7 +458,7 @@ pub async fn switch(repo: &Repo, name: &str) -> Result<String, Refusal> {
     let mut args = vec!["checkout", "--quiet"];
     args.extend(to.iter().map(String::as_str));
     args.push("--");
-    repo.run(args, Opts::writes()).await?;
+    repo.run(args, Opts::asked()).await?;
     let now = repo.branch().await?.unwrap_or_else(|| name.to_owned());
     Ok(match to.first().map(String::as_str) {
         Some("--track") => {
@@ -518,7 +518,7 @@ pub async fn make_branch(repo: &Repo, name: &str, from: Option<&str>) -> Result<
         args.push(from);
     }
     args.push("--");
-    repo.run(args, Opts::writes()).await?;
+    repo.run(args, Opts::asked()).await?;
     let from = from.map(|from| format!(" from {from}")).unwrap_or_default();
     Ok(format!(
         "Made the branch {name}{from} and switched to it{along}."
@@ -532,7 +532,7 @@ pub async fn init(folder: &Path) -> Result<(), Refusal> {
             "This folder is in a git repository already.",
         ));
     }
-    git(folder, ["init", "--quiet"], Opts::writes())
+    git(folder, ["init", "--quiet"], Opts::asked())
         .await?
         .checked()?;
     Ok(())
@@ -567,7 +567,7 @@ async fn traced(
         stdin,
         env: &env,
         lines: Some(lines),
-        ..Opts::writes()
+        ..Opts::asked()
     };
     let ran = git(&repo.top, args, opts);
     tokio::pin!(ran);

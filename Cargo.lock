@@ -304,6 +304,7 @@ dependencies = [
 name = "banda"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "axum",
  "banda-agents",
  "banda-browser",
@@ -388,6 +389,7 @@ name = "banda-files"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "banda-git-cli",
  "banda-kernel",
  "banda-look",
  "base64 0.22.1",
@@ -429,6 +431,7 @@ name = "banda-git"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "banda-git-cli",
  "banda-kernel",
  "futures",
  "rustix",
@@ -438,6 +441,14 @@ dependencies = [
  "tokio",
  "tracing",
  "ts-rs",
+]
+
+[[package]]
+name = "banda-git-cli"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -538,6 +549,7 @@ name = "banda-pulls"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "banda-git-cli",
  "banda-kernel",
  "rusqlite",
  "schemars 1.2.3",

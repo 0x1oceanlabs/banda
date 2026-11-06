@@ -242,21 +242,24 @@ pub async fn last_commit(path: &Path) -> Option<Commit> {
         (Some(at), Some(name)) if !path.is_dir() => (at, name),
         _ => (path, std::ffi::OsStr::new(".")),
     };
-    let git = crate::git_in(at)
-        .args([
-            "-c",
-            "log.showSignature=false",
-            "log",
-            "-1",
-            "--no-color",
-            "--format=%H%x00%an%x00%at%x00%s",
-            "--",
-        ])
-        .arg(name)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .output();
-    let out = tokio::time::timeout(GIT_TIME, git).await.ok()?.ok()?;
+    let git = async {
+        crate::git_in(at)
+            .await?
+            .args([
+                "log",
+                "-1",
+                "--no-color",
+                "--format=%H%x00%an%x00%at%x00%s",
+                "--",
+            ])
+            .arg(name)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .output()
+            .await
+            .ok()
+    };
+    let out = tokio::time::timeout(GIT_TIME, git).await.ok()??;
     if !out.status.success() {
         return None;
     }

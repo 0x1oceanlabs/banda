@@ -227,23 +227,15 @@ pub(crate) fn ms(time: std::time::SystemTime) -> Option<i64> {
     i64::try_from(since.as_millis()).ok()
 }
 
-/// git, to run in `dir` as Files runs it: no locks taken, nothing asked,
-/// in C's words, nothing it inherits naming another repository, and gone
-/// with the caller. Its args, its stdin and its stdout are the caller's.
-pub(crate) fn git_in(dir: &Path) -> tokio::process::Command {
-    let mut git = tokio::process::Command::new("git");
-    git.args(["-c", "core.fsmonitor=false"])
-        .current_dir(dir)
-        .env("GIT_OPTIONAL_LOCKS", "0")
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("LC_ALL", "C")
-        .env_remove("GIT_DIR")
-        .env_remove("GIT_WORK_TREE")
-        .env_remove("GIT_INDEX_FILE")
-        .env_remove("GIT_PREFIX")
-        .stderr(std::process::Stdio::null())
-        .kill_on_drop(true);
-    git
+/// git, to run in `dir` as Files runs it: Banda's own, which takes no
+/// locks, asks nothing and runs no program the repository names
+/// (`banda_git_cli`), its stderr unheard, and gone with the caller; none
+/// when it cannot start. Its args, its stdin and its stdout are the
+/// caller's.
+pub(crate) async fn git_in(dir: &Path) -> Option<tokio::process::Command> {
+    let mut git = banda_git_cli::bookkeeping(dir).await.ok()?;
+    git.stderr(std::process::Stdio::null()).kill_on_drop(true);
+    Some(git)
 }
 
 /// A path as a caller reads it.

@@ -27,7 +27,7 @@ use model::{By, LinkAsk, Listed, Pull, PullRef, ThreadAsk};
 use reader::Live;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 pub struct Pulls {
@@ -232,22 +232,14 @@ async fn pull_of(project: &ModuleProject, text: &str) -> Result<PullRef, Refusal
 /// first.
 async fn remote(project: &ModuleProject) -> Result<(String, String), Refusal> {
     let folder = project.folder();
-    let git = |args: &'static [&'static str]| {
-        tokio::process::Command::new("git")
-            .args(args)
-            .current_dir(&folder)
-            .env("GIT_OPTIONAL_LOCKS", "0")
-            .kill_on_drop(true)
-            .output()
-    };
     let mut url = String::new();
-    if let Ok(out) = git(&["remote", "get-url", "origin"]).await
+    if let Ok(out) = git(&folder, &["remote", "get-url", "origin"]).await
         && out.status.success()
     {
         url = String::from_utf8_lossy(&out.stdout).trim().to_owned();
     }
     if url.is_empty()
-        && let Ok(out) = git(&["remote", "-v"]).await
+        && let Ok(out) = git(&folder, &["remote", "-v"]).await
     {
         let text = String::from_utf8_lossy(&out.stdout).into_owned();
         url = (text.split_whitespace().nth(1).unwrap_or_default()).to_owned();
@@ -257,6 +249,16 @@ async fn remote(project: &ModuleProject) -> Result<(String, String), Refusal> {
             "The Project's repository is not on GitHub: link the pull request by its URL.",
         )
     })
+}
+
+/// Runs `git args` in `folder` as Banda's own, which runs no program the
+/// repository names (`banda_git_cli`), and says what it printed.
+async fn git(folder: &Path, args: &[&str]) -> std::io::Result<std::process::Output> {
+    (banda_git_cli::bookkeeping(folder).await?)
+        .args(args)
+        .kill_on_drop(true)
+        .output()
+        .await
 }
 
 /// `github.com` and `owner/name`, from a remote's URL: HTTPS or SSH.

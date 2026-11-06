@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 async-trait.workspace = true
+banda-git-cli = { path = "../../../platform/git-cli" }
 banda-kernel = { path = "../../../kernel" }
 rusqlite.workspace = true
 schemars.workspace = true

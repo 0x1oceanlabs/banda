@@ -1,12 +1,15 @@
 //! Running the `git` program, as T3 Code does
 //! (`docs/research/2026-11-02-t3-code-git-backend.md`, section 0).
 //!
-//! Every git the module runs goes through [`git`]: in the folder it is
-//! given, with no prompts and no optional locks, so a status read beside
-//! the Person's own git never takes `.git/index.lock`; at most eight at
-//! once; stopped after 30 seconds, or [`LONG`] for one that writes, with
-//! SIGTERM first so it takes its lock files away; its output cut at a cap,
-//! which it says. What git writes on stderr can hold a remote's
+//! Every git the module runs goes through [`git`], in the folder it is
+//! given: Banda's own bookkeeping, which runs no program the repository
+//! names, unless it is an act a Participant asked for ([`Opts::asked`]),
+//! which runs as the Person's own git, hooks and all (`banda_git_cli`).
+//! Either takes no optional lock, so a status read beside the Person's
+//! own git never takes `.git/index.lock`, and asks nothing. At most eight
+//! run at once; each is stopped after 30 seconds, or [`LONG`] for an act,
+//! with SIGTERM first so it takes its lock files away; its output is cut
+//! at a cap, which it says. What git writes on stderr can hold a remote's
 //! credentials, so it goes to the engine's log only, and a caller hears a
 //! [`Reason`]; a line a caller follows has its credentials taken out
 //! ([`redact`]).
@@ -22,7 +25,7 @@ use tokio::sync::{Semaphore, mpsc};
 
 /// How long one git may run.
 const TIME: Duration = Duration::from_secs(30);
-/// How long a git that writes may run: a commit and its hooks, a push, a
+/// How long an act asked for may run: a commit and its hooks, a push, a
 /// pull, a checkout of many files.
 pub const LONG: Duration = Duration::from_secs(10 * 60);
 /// How long a git asked to stop has to end before it is killed.
@@ -39,17 +42,13 @@ const OUTPUT: usize = 16 * 1024 * 1024;
 /// The most of stderr kept for the log.
 const STDERR: usize = 64 * 1024;
 
-/// The environment git would otherwise take from the engine's and that
-/// would point it elsewhere, as when the engine runs inside a git hook.
-const ELSEWHERE: [&str; 4] = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX"];
-
 /// Whether a git waits its turn among the [`RUNNING`] ones.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Pool {
     /// It waits its turn: a read, done in a moment.
     #[default]
     Shared,
-    /// It runs at once, beside them, as T3 Code's long ones do: a write,
+    /// It runs at once, beside them, as T3 Code's long ones do: an act,
     /// whose hook may run for minutes, or a fetch, which keeps no read
     /// waiting either.
     Long,
@@ -72,14 +71,20 @@ pub struct Opts<'a> {
     /// its credentials taken out.
     pub lines: Option<mpsc::UnboundedSender<String>>,
     pub pool: Pool,
+    /// It is an act a Participant asked for, as a commit or a push, which
+    /// runs as the Person's own git; else it is Banda's own bookkeeping.
+    pub asked: bool,
 }
 
 impl Opts<'_> {
-    /// For a git that writes: it may run for [`LONG`], beside the reads.
-    pub fn writes() -> Self {
+    /// For an act a Participant asked for, as a commit, a push or a stage:
+    /// it runs as the Person's own git, hooks and all, for up to [`LONG`],
+    /// beside the reads.
+    pub fn asked() -> Self {
         Opts {
             time: Some(LONG),
             pool: Pool::Long,
+            asked: true,
             ..Opts::default()
         }
     }
@@ -348,13 +353,18 @@ where
         ),
         Pool::Long => None,
     };
-    let mut command = tokio::process::Command::new("git");
+    let did_not_start = |error: std::io::Error| {
+        tracing::warn!(%error, args = %said, "git did not start");
+        Failure(Reason::Other)
+    };
+    let mut command = match opts.asked {
+        true => banda_git_cli::asked(folder),
+        false => banda_git_cli::bookkeeping(folder)
+            .await
+            .map_err(did_not_start)?,
+    };
     command
         .args(&args)
-        .current_dir(folder)
-        .env("GIT_OPTIONAL_LOCKS", "0")
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("LC_ALL", "C")
         .stdin(match opts.stdin {
             Some(_) => Stdio::piped(),
             None => Stdio::null(),
@@ -364,17 +374,11 @@ where
     // A group of its own, so stopping it stops the hooks it runs too.
     #[cfg(unix)]
     command.process_group(0);
-    for name in ELSEWHERE {
-        command.env_remove(name);
-    }
     if let Some(index) = opts.index {
         command.env("GIT_INDEX_FILE", index);
     }
     command.envs(opts.env.iter().copied());
-    let mut child = command.spawn().map_err(|error| {
-        tracing::warn!(%error, args = %said, "git did not start");
-        Failure(Reason::Other)
-    })?;
+    let mut child = command.spawn().map_err(did_not_start)?;
     let time = opts.time.unwrap_or(TIME);
     let cap = opts.cap.unwrap_or(OUTPUT);
     let stdin = child.stdin.take();
@@ -667,7 +671,7 @@ mod tests {
         let began = std::time::Instant::now();
         let opts = Opts {
             time: Some(Duration::from_secs(1)),
-            ..Opts::default()
+            ..Opts::asked()
         };
         let ran = git(folder.path(), COMMIT, opts).await;
         assert_eq!(ran.err(), Some(Failure(Reason::TimedOut)));
@@ -680,10 +684,21 @@ mod tests {
     async fn a_git_ends_as_it_exits_though_its_hook_left_a_child_with_its_stderr() {
         let folder = with_hook("#!/bin/sh\nsleep 30 >&2 &\necho checked >&2\n");
         let began = std::time::Instant::now();
-        let ran = git(folder.path(), COMMIT, Opts::writes()).await.unwrap();
+        let ran = git(folder.path(), COMMIT, Opts::asked()).await.unwrap();
         assert!(ran.success);
         assert!(began.elapsed() < Duration::from_secs(10));
         assert_eq!(ran.last_line().as_deref(), Some("checked"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn an_act_asked_for_runs_the_hooks_and_bandas_own_git_runs_none() {
+        let folder = with_hook("#!/bin/sh\necho checked >&2\nexit 1\n");
+        let asked = git(folder.path(), COMMIT, Opts::asked()).await.unwrap();
+        assert!(!asked.success);
+        assert_eq!(asked.last_line().as_deref(), Some("checked"));
+        let own = git(folder.path(), COMMIT, Opts::default()).await.unwrap();
+        assert!(own.success && own.quiet());
     }
 
     #[test]

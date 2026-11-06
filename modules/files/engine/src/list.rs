@@ -124,6 +124,7 @@ async fn check_ignore(dir: &Path, names: &[&str]) -> Option<std::collections::Ha
         input.push(0);
     }
     let mut git = crate::git_in(dir)
+        .await?
         .args(["check-ignore", "-z", "--stdin"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

@@ -97,7 +97,6 @@ pub async fn commits(repo: &Repo, CommitsAsk { base }: CommitsAsk) -> Result<Vec
                 "log",
                 "-z",
                 "--no-notes",
-                "--no-show-signature",
                 parse::LOG_FORMAT,
                 &most,
                 &range,
