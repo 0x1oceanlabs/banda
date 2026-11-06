@@ -45,7 +45,7 @@ import type { Layout } from "../bar/arrange"
 import { PARTS } from "../bar/placed"
 import { Watches } from "../bar/Watches"
 import { besideOf, isShowing, nextCall, sightOf } from "../calls/sight"
-import { useSidebarOrder } from "../sidebar/order"
+import { sidebarOrder } from "../sidebar/order"
 import { WELL, wentWell } from "../safe/starts"
 import { useProblemNews } from "../problems/news"
 import { lookingInto } from "../problems/look"
@@ -552,16 +552,17 @@ export function Shell({
   )
   // Alt+U: the next call below the Thread in front, as the sidebar lists
   // them (ADR 0079, decision 4).
-  const order = useSidebarOrder(lists, projects)
-  const heard = useRef({ calling, order })
+  const heard = useRef({ calling, snoozes, projects })
   useEffect(() => {
-    heard.current = { calling, order }
-  }, [calling, order])
+    heard.current = { calling, snoozes, projects }
+  }, [calling, snoozes, projects])
   const answer = useCallback(() => {
+    const { calling, snoozes, projects } = heard.current
+    const order = sidebarOrder(listsNow.current, projects, snoozes)
     const entry = focused(seenNow.current.state)
     const thing = entry && showsOf(entry.pane)
     const here = entry && thing ? `${entry.project}:${thing}` : undefined
-    const call = nextCall(heard.current.calling, heard.current.order, here)
+    const call = nextCall(calling, order, here)
     if (call) goToCall(call)
   }, [goToCall])
   useEffect(() => {

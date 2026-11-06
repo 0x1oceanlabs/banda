@@ -82,8 +82,9 @@ export function besideOf(
 /**
  * The call `Alt+U` goes to (ADR 0079, decision 4): the first below the
  * Thread at `here`, in the sidebar's `order` of `project:thing` keys, and
- * from the end back to the top. It sorts nothing of its own: a call the
- * sidebar lists nowhere comes last, the one that called first first.
+ * from the end back to the top. It has no order of its own, the loudest
+ * first or the like: a call the sidebar lists nowhere comes last, the one
+ * that called first first.
  */
 export function nextCall(
   calling: readonly Call[],
