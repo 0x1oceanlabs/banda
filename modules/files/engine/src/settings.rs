@@ -1,7 +1,8 @@
 //! What Files shows (ADR 0073, decision 13): the Person's
 //! `~/.config/banda/files.toml`, over Banda's defaults. The places pinned,
 //! whether hidden files and what git ignores show in a new Files Pane, and
-//! the editor a file opens in. Pinning a folder in Files writes `pinned`
+//! the editor a file opens in, and whether the tree shows small pictures.
+//! Pinning a folder in Files writes `pinned`
 //! into it, as the browser's switch writes its tabs.
 //!
 //! It is this machine's, as the look is: the look resolves it, as
@@ -38,6 +39,10 @@ pub struct FilesSettings {
     /// `md = "files.code"`: what "Open with…" in a file's Pane picks. One
     /// that does not draw the file is passed over.
     pub previewers: Option<BTreeMap<String, String>>,
+    /// Whether a row of the tree shows a picture's small picture in place
+    /// of its icon. Off keeps the tree quiet; the Gallery shows them
+    /// always.
+    pub thumbnails: Option<bool>,
 }
 
 /// What Files shows, every key resolved.
@@ -52,6 +57,7 @@ pub struct Finder {
     pub editor: String,
     /// The previewer's id, by an extension, lower case.
     pub previewers: BTreeMap<String, String>,
+    pub thumbnails: bool,
 }
 
 impl OneFile for FilesSettings {
@@ -66,6 +72,7 @@ impl OneFile for FilesSettings {
             ignored: Some(true),
             editor: Some(String::new()),
             previewers: Some(BTreeMap::new()),
+            thumbnails: Some(false),
         }
     }
 
@@ -76,6 +83,7 @@ impl OneFile for FilesSettings {
             ignored: self.ignored.or(under.ignored),
             editor: self.editor.or(under.editor),
             previewers: self.previewers.or(under.previewers),
+            thumbnails: self.thumbnails.or(under.thumbnails),
         }
     }
 
@@ -86,6 +94,7 @@ impl OneFile for FilesSettings {
             ignored: self.ignored.unwrap_or(true),
             editor: self.editor.unwrap_or_default(),
             previewers: self.previewers.unwrap_or_default(),
+            thumbnails: self.thumbnails.unwrap_or(false),
         }
     }
 
@@ -149,6 +158,7 @@ mod tests {
                 ignored: true,
                 editor: String::new(),
                 previewers: BTreeMap::new(),
+                thumbnails: false,
             }
         );
         assert!(problems.is_empty());
@@ -166,6 +176,13 @@ mod tests {
         ));
         assert_eq!(finder.pinned, ["~/Pictures", "/srv/data"]);
         assert!(finder.hidden && !finder.ignored);
+        assert!(problems.is_empty());
+    }
+
+    #[test]
+    fn the_file_shows_small_pictures_in_the_tree() {
+        let (finder, problems) = resolved(Some("thumbnails = true\n"));
+        assert!(finder.thumbnails);
         assert!(problems.is_empty());
     }
 

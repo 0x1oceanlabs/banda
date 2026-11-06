@@ -15,4 +15,4 @@ editor: string,
 /**
  * The previewer's id, by an extension, lower case.
  */
-previewers: { [key in string]: string }, };
+previewers: { [key in string]: string }, thumbnails: boolean, };

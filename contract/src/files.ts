@@ -6,7 +6,8 @@
  * opened lately, what an archive holds and a workbook's sheet, for the
  * previewers; what an operation did and what undoes it, the pieces of a
  * move or a copy, the system's Trash, and the lines `files.search`
- * finds; and its `files.toml` as the look resolves it (ADR 0073,
+ * finds; a file's small picture, what a path is at length and what a
+ * folder holds, counted; and its `files.toml` as the look resolves it (ADR 0073,
  * decision 13).
  */
 import type { ModuleFile } from "./look"
@@ -39,6 +40,15 @@ export type { Packing } from "./generated/files/Packing"
 export type { Sheet } from "./generated/files/Sheet"
 export type { SheetAsk } from "./generated/files/SheetAsk"
 export type { Clash } from "./generated/files/Clash"
+export type { Commit } from "./generated/files/Commit"
+export type { Counted } from "./generated/files/Counted"
+export type { Exif } from "./generated/files/Exif"
+export type { Info } from "./generated/files/Info"
+export type { InfoAsk } from "./generated/files/InfoAsk"
+export type { Picture } from "./generated/files/Picture"
+export type { SizeAsk } from "./generated/files/SizeAsk"
+export type { Thumb } from "./generated/files/Thumb"
+export type { ThumbAsk } from "./generated/files/ThumbAsk"
 export type { Clashing } from "./generated/files/Clashing"
 export type { Done } from "./generated/files/Done"
 export type { Job } from "./generated/files/Job"
@@ -53,13 +63,15 @@ export type { Trashed } from "./generated/files/Trashed"
 
 /** What Files shows, as `banda look` gives it with no `files.toml`:
  * nothing pinned, dotfiles hidden, what git ignores greyed, the first
- * editor found, and each file in the previewer that matches it best. */
+ * editor found, each file in the previewer that matches it best, and
+ * icons, not small pictures, in the tree. */
 export const DEFAULT_FINDER: Finder = {
   pinned: [],
   hidden: false,
   ignored: true,
   editor: "",
   previewers: {},
+  thumbnails: false,
 }
 
 /** The files module's `files.toml`. */

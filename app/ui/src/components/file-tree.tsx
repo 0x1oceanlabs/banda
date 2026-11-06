@@ -10,7 +10,8 @@
  *   what an Agent's turn changed, the row of the file an Agent works on
  *   now pulsing in its colour, a quiet spinner on a folder being listed;
  *   rows picked with Ctrl or Shift, dragged out, and dropped on a folder;
- *   a row renamed in place, its name before its extension picked;
+ *   a row renamed in place, its name before its extension picked; a
+ *   picture's small picture in place of its icon, when asked;
  * - `ListedTree`, names all known at once, as an archive's, each with a
  *   quiet word at its end, as its size; it only shows.
  *
@@ -35,7 +36,7 @@ import {
   useState,
 } from "react"
 import { useDark } from "../hooks/use-dark"
-import { carries, droppedPaths } from "../lib/file-drag"
+import { bringsFiles, droppedPaths } from "../lib/file-drag"
 import { toast } from "./sonner"
 import { holding, pulseCSS, type RowMark, rowMarkOf } from "../lib/tree-marks"
 import {
@@ -194,6 +195,9 @@ export type FolderTreeProps = {
   ignored: readonly string[]
   /** The folders being listed: a quiet spinner on their rows. */
   loading: ReadonlySet<string>
+  /** Small pictures drawn in place of rows' icons, by their paths, each
+   * an address an image is drawn from (ADR 0073, step F6). */
+  pictures?: ReadonlyMap<string, string>
   /** The row picked; it is shown, its folders opened, once it is there. */
   selected: string | null
   /** A row is picked: clicked, or moved to with the keys. */
@@ -269,6 +273,18 @@ const HOLDS_BOTH: FileTreeRowDecoration = {
 const NO_TURN: ReadonlySet<string> = new Set()
 const NO_PULSES: ReadonlyMap<string, string> = new Map()
 
+/** The rows of `pictures` drawn with their small pictures in place of
+ * their icons, by a sheet of the tree's own. */
+function picturesCSS(pictures: ReadonlyMap<string, string>): string {
+  return [...pictures]
+    .map(([path, picture]) => {
+      const icon = `button[data-type='item'][data-item-path="${path.replace(/["\\]/g, "\\$&")}"] [data-item-section='icon']`
+      const address = picture.replace(/["\\\n]/g, "")
+      return `${icon} > svg { visibility: hidden; } ${icon} { background: center / cover no-repeat url("${address}"); border-radius: 2px; }`
+    })
+    .join("\n")
+}
+
 /** Each mark of a row as Pierre draws it. */
 const DECORATIONS: Record<RowMark, FileTreeRowDecoration> = {
   loading: LOADING,
@@ -315,12 +331,6 @@ function dropCSS(folder: string | null): string {
   if (folder === "")
     return ":host { outline: 1px solid color-mix(in srgb, var(--ring) 70%, transparent); outline-offset: -1px; border-radius: calc(var(--radius) - 2px); }"
   return `button[data-item-path="${globalThis.CSS.escape(folder)}"] { background: color-mix(in srgb, var(--ring) 22%, transparent) !important; }`
-}
-
-/** Whether a drag may bring Banda's files: its own type, or files, which
- * main's drag brings back. */
-function bringsFiles(data: DataTransfer | null): boolean {
-  return data !== null && (carries(data) || data.types.includes("Files"))
 }
 
 /** A sheet of the tree's own, by its name, put in its shadow root once
@@ -408,6 +418,7 @@ export function FolderTree({
   marks,
   turned = NO_TURN,
   pulses = NO_PULSES,
+  pictures = NO_PULSES,
   ignored,
   loading,
   selected,
@@ -538,6 +549,11 @@ export function FolderTree({
 
   // The rows Agents work on pulse, by a sheet of the tree's own.
   useEffect(() => putSheet(model, "pulses", pulseCSS(pulses)), [model, pulses])
+  // Rows with small pictures show them.
+  useEffect(
+    () => putSheet(model, "pictures", picturesCSS(pictures)),
+    [model, pictures]
+  )
 
   // The folder a drag over the tree would drop in, lit.
   const [dropping, setDropping] = useState<string | null>(null)
@@ -585,8 +601,9 @@ export function FolderTree({
       return openNow(foldersOf(selected))
     }
     wanted.current = selected
-    if (model.getSelectedPaths().includes(selected)) return
+    // Its folders open, as when it was picked as the tree was made.
     openNow(foldersOf(selected))
+    if (model.getSelectedPaths().includes(selected)) return
     for (const path of model.getSelectedPaths()) model.getItem(path)?.deselect()
     item.select()
     model.focusPath(selected)

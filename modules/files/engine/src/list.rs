@@ -6,7 +6,6 @@ use std::cmp::Ordering;
 use std::fs::Metadata;
 use std::path::Path;
 use std::process::Stdio;
-use std::time::UNIX_EPOCH;
 use tokio::io::AsyncWriteExt;
 
 /// How many names one `git check-ignore` is asked about.
@@ -51,8 +50,7 @@ pub fn read(dir: &Path) -> std::io::Result<Vec<Entry>> {
 
 /// When it last changed, in ms since the Unix epoch.
 pub fn modified(meta: &Metadata) -> Option<i64> {
-    let since = meta.modified().ok()?.duration_since(UNIX_EPOCH).ok()?;
-    i64::try_from(since.as_millis()).ok()
+    meta.modified().ok().and_then(crate::ms)
 }
 
 /// Folders first, then the rest, each by [`natural`] name.
@@ -125,23 +123,10 @@ async fn check_ignore(dir: &Path, names: &[&str]) -> Option<std::collections::Ha
         input.extend_from_slice(name.as_bytes());
         input.push(0);
     }
-    let mut git = tokio::process::Command::new("git")
-        .args([
-            "-c",
-            "core.fsmonitor=false",
-            "check-ignore",
-            "-z",
-            "--stdin",
-        ])
-        .current_dir(dir)
-        .env("GIT_OPTIONAL_LOCKS", "0")
-        .env_remove("GIT_DIR")
-        .env_remove("GIT_WORK_TREE")
-        .env_remove("GIT_INDEX_FILE")
+    let mut git = crate::git_in(dir)
+        .args(["check-ignore", "-z", "--stdin"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .kill_on_drop(true)
         .spawn()
         .ok()?;
     let mut stdin = git.stdin.take()?;

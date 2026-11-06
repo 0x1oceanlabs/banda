@@ -115,6 +115,54 @@ stay his to change.
      - Every key is an action (ADR 0071, a draft), so `keys.toml` can
        move it.
 
+   *Amended 2026-11-06, with step F6:*
+   - **The keys are a scope's.** A Files Pane's tile is the scope `files`
+     (ADR 0071, decision 1): every key of F1d's and F5's, Quick Look's
+     Space, and F6's are its actions, bound in `[binds.files]`, listed in
+     the key sheet under Files, each with its key in force. The window
+     matches them; the Pane takes one where its view has the focus, and
+     only Ctrl+L and Ctrl+Shift+F in one of its fields, so a field keeps
+     its own Space and Ctrl+Z. A key taken goes no further, so Pierre's
+     tree never reads F2 or ↵ itself. `files.peek` still takes a file, as
+     a reply's path menu asks.
+   - **The views are Ctrl+1, 2 and 3** (⌘ on a Mac), not the mod: a scope
+     narrower than the window never holds Banda's mod (ADR 0071, decision
+     1), and Files' keys are Ctrl's, as F4's save is. The header has the
+     same as a quiet switch of three icons. The view is the Pane's, in its
+     args (`view`), as the info is (`info`).
+   - **One pick, three views.** The pick, the menu, the drag, a drop on a
+     folder, a rename in place, the operations, Quick Look, ↵ and the
+     Agent's marks and pulse are the Pane's and the same in each; a view
+     only draws the folder and moves the pick with its arrows. Each lists
+     and watches the folders it shows: the tree its open ones, Columns
+     those from the top to the pick, a Gallery the pick's folder. The
+     filter's matches show as a tree in every view. The tree is drawn with
+     the pick's folders open, as another view may have picked in a folder
+     it folded.
+   - **Columns** are Miller columns, as a Finder's: each folder from the
+     Pane's to the pick a column, the folder open in the next lit in its
+     own. ↑ ↓ move in a column, → goes into the folder picked, ← back to
+     its folder. A file picked is drawn in a last column by its previewer
+     in quick mode, with its info under it, or its info alone where no
+     previewer draws it so. Columns show the info unless the Pane hid it.
+   - **A Gallery** draws the pick big, as a column draws it, over a
+     filmstrip of what its folder holds, each item with its small picture
+     or its icon. ← → move along it, and it keeps the pick in its middle;
+     only the items in view are drawn and pictured.
+   - **The info** (Ctrl+I) is a quiet panel at the right of the tree or
+     the Gallery, and a section under Columns' preview: the row's small
+     picture or icon, its name, kind and size; then its type, its times
+     (made, where the system keeps it; modified; opened), its permissions
+     as `ls` writes them, its owner and group, where a link leads and
+     whether it leads anywhere; a picture's size and what its camera
+     wrote; and the last commit that changed it, its subject, author and
+     when. A folder's size is counted only when asked, and stops with
+     Stop or another pick. What was shown stays until the next row's
+     comes.
+   - **Small pictures in the tree** only when `files.toml` says
+     `thumbnails = true`: off by default, so the tree stays quiet. The
+     Gallery and the info show them always.
+
 4. **The engine reads the disk, and watches what is shown.**
 
    | Method | Kind | Right | What |
@@ -128,6 +176,8 @@ stay his to change.
    | `files.make`, `files.rename`, `files.move`, `files.copy`, `files.trash`, `files.restore` | command | Write | Decision 10 |
    | `files.trashed`; `files.delete`, `files.empty`, `files.cancel` | call; command | Read; Write | Decision 10, as amended |
    | `files.search { dir, query, regex, case, word, limit }` | stream | Read | Decision 11, as amended |
+   | `files.thumb { path, size }`; `files.info { path }` | call | Read | A small picture, or none; what a path is at length (decision 5, as amended) |
+   | `files.size { path }` | stream | Read | What a folder holds, counted as it goes; letting go stops it |
 
    - **Watching** uses `notify` with its debouncer:
      - one watch per folder shown (FSEvents on macOS is recursive and
@@ -170,6 +220,53 @@ stay his to change.
      page's `fetch` cannot ask without a preflight the host refuses. Where
      `Sec-Fetch-Dest` comes, it must say a frame.
    - A page's pictures by relative paths do not show yet.
+
+   *Amended 2026-11-06, with step F6:*
+   - **Small pictures ride the RPC.** `files.thumb { path, size }` answers
+     a PNG, in base64 with its size, or none, and the window draws the
+     file's icon. A size asked is made at the next of 64, 128, 256 and
+     512 px, its longest side. A picture comes from, in order:
+     1. **Banda's cache**, `~/.cache/banda/thumbnails` (`BANDA_CACHE`
+        moves the cache folder), one file per path, time in ns, size in
+        bytes and size made, hashed. It keeps the latest used 128 MB; a
+        file's time says when it was used, and past the cap the oldest go
+        until a quarter is free.
+     2. **freedesktop's**, `$XDG_CACHE_HOME/thumbnails` on Linux, named by
+        the MD5 of the file's URI as GLib escapes it, and taken only while
+        its `Thumb::URI` names the file, its `Thumb::MTime` is the file's
+        time in seconds, and its `Thumb::Size`, where it says one, the
+        file's size. A bigger one is scaled down and kept; a smaller one
+        serves when no bigger is there. So a video or a PDF the desktop
+        pictured shows its own. `BANDA_THUMBNAILS` moves it, and empty
+        leaves it alone, as a test and a trial's window do.
+     3. **The file**, when its name says a picture `image` reads in Rust
+        (PNG, JPEG, GIF, WebP, BMP, TIFF): never one past 64 MiB, nor one
+        that needs more than 256 MiB to hold; two at a time, off the
+        engine's threads; turned as its EXIF says, and scaled with
+        `fast_image_resize` (Lanczos3). AVIF is not read: its decoder is
+        C (dav1d).
+   - **What is made is kept twice:** in Banda's cache, and in
+     freedesktop's at its sizes (128, 256, 512), as a good neighbour does,
+     with `Thumb::URI`, `Thumb::MTime` and `Thumb::Size`, written whole
+     and this user's only. So a picture is a PNG, not a WebP: freedesktop
+     keeps PNGs, and one encoding serves both.
+   - **Later:** macOS's QuickLook (`QLThumbnailGenerator`) and Windows'
+     shell first, before decoding; a PDF's first page (`pdfium-render`);
+     a video's frame (an LGPL `ffmpeg` beside Banda).
+   - **The window** asks four at a time, keeps the last 400 by path, time,
+     size and size asked, and lets go of an ask whose item left the view
+     before its turn came.
+   - **`files.info { path }`** says the path itself (a link is a link)
+     and, where it leads, its MIME type, size, a folder's count of names,
+     its times, its permission bits and owner and group by name (`nix`),
+     a picture's size from its header and its EXIF (`kamadak-exif`):
+     camera, lens, when taken, exposure, and the place as text, never a
+     map. The last commit is `git log -1` for the path, run as F1's
+     `check-ignore` is: no locks taken, no prompts, nothing it inherits
+     naming another repository, and at most 5 s. Modules do not import
+     one another, so Files runs git itself.
+   - **`files.size { path }`** walks the folder, a link not followed, and
+     says the bytes and files counted every 100 ms, then that it is done.
 
 6. **A file is drawn by a previewer.**
    - A module declares a previewer in `defineModule({ previewers })` with
@@ -564,6 +661,10 @@ stay his to change.
 15. **Not now.**
     - Columns and Gallery views, thumbnails, the Info pane (EXIF, size, a
       line's blame), and tags. These are step F6.
+
+      *Amended 2026-11-06, with step F6:* the views, the small pictures
+      and the info came (decisions 3 and 5, as amended). A line's blame
+      and tags wait, and the Grid view the research names.
     - Remote folders (SFTP, S3) and archives that can be written.
     - Previewers from modules not Banda's own, in a sandboxed frame. They
       come with ADR 0062's tiers.

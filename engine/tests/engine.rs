@@ -66,6 +66,8 @@ impl Places {
             .env("BANDA_DATA", self._dir.path().join("data"))
             .env("BANDA_STATE", &self.state)
             .env("BANDA_CONFIG", &self.config)
+            .env("BANDA_CACHE", self._dir.path().join("cache"))
+            .env("BANDA_THUMBNAILS", "")
             .env("BANDA_LOG", "warn");
         command
     }

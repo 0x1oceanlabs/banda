@@ -112,6 +112,10 @@ export async function startWindow({
     // The engine and the look read only this folder: no Omarchy, no
     // Hyprland.
     BANDA_CONFIG: join(dir, "config"),
+    // Files' small pictures, kept in a throwaway cache, and none from the
+    // Person's freedesktop one.
+    BANDA_CACHE: join(dir, "cache"),
+    BANDA_THUMBNAILS: "",
     BANDA_OMARCHY: "",
     BANDA_FONTCONFIG: "",
     HYPRLAND_INSTANCE_SIGNATURE: "",

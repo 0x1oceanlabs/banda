@@ -1,23 +1,21 @@
-/** The files module's window part (ADR 0073): a folder as a tree in
- * `files.tree`, a file in `files.file` drawn by the previewer that claims
- * it, Quick Look over the desk, the Banda menu's files and quick open,
- * and the actions that open them and do what Files does with files. */
+/** The files module's window part (ADR 0073): a folder as a tree, columns
+ * or a gallery in `files.tree`, a file in `files.file` drawn by the
+ * previewer that claims it, Quick Look over the desk, the Banda menu's
+ * files and quick open, and the actions that open them; and the keys of
+ * a Files Pane, the actions of its scope (ADR 0071), which do what Files
+ * does with files. */
 import type { ProjectId } from "@banda/contract"
 import { FILES_FILE } from "@banda/contract/files"
 import { tomlOf } from "@banda/contract/settings"
 import { fileNow } from "@banda/ui/lib/look"
-import {
-  type Action,
-  defineModule,
-  takes,
-  type WindowApi,
-} from "@banda/ui/module"
+import { actInScope } from "@banda/ui/hooks/use-scope"
+import { defineModule, scoped, takes, type WindowApi } from "@banda/ui/module"
 import { filePane, openFile, peekFile } from "./FilePane"
-import type { Does } from "./keys"
+import { FILES, KEYS } from "./keys"
 import { peeked } from "./peek"
 import { PREVIEWERS } from "./previewers"
 import { filesSource } from "./sources"
-import { askTree, openTree, treePane } from "./TreePane"
+import { openTree, treePane } from "./TreePane"
 
 /** The Thread the focused Pane shows, as the lists name one with its
  * Agent; none for a Pane of no Thread. */
@@ -29,16 +27,6 @@ function threadShown(
   const shown = listed.find((one) => one.id === at.shows)
   return shown?.agent ? shown.id : null
 }
-
-/** A Files Pane's own key as an action of the window, for `keys.toml`:
- * it reaches the focused Files Pane, until ADR 0071's scopes come. */
-const paneAction = (does: Does, id: string, title: string): Action => ({
-  id,
-  title,
-  section: "Files",
-  unlisted: true,
-  run: () => askTree(does),
-})
 
 /** The id of the Banda menu's source of files, which quick open shows. */
 const FIND = filesSource.id
@@ -112,14 +100,16 @@ export const files = defineModule({
     {
       // Quick Look (ADR 0073, decision 7): a file by its path, as a
       // reply's path menu asks, over the desk; with none, the focused
-      // tree's pick, as Space does there, or Quick Look closes.
-      id: "files.peek",
-      title: "Quick Look",
-      section: "Files",
-      unlisted: true,
-      args: takes({
-        file: "the file's whole path, or one from the Project's folder",
-        project: "the Project it is in",
+      // Files Pane's pick, as Space does there, or Quick Look closes.
+      ...scoped(FILES, {
+        id: "files.peek",
+        title: "Quick Look",
+        section: "Files",
+        keys: [{ code: "Space" }],
+        args: takes({
+          file: "the file's whole path, or one from the Project's folder",
+          project: "the Project it is in",
+        }),
       }),
       run: (window, args = {}) => {
         const { file, project } = args
@@ -129,7 +119,7 @@ export const files = defineModule({
             file,
             typeof project === "string" ? (project as ProjectId) : undefined
           )
-        else if (!askTree("peek")) peeked()?.()
+        else if (!actInScope(FILES, "files.peek")) peeked()?.()
       },
     },
     {
@@ -166,29 +156,13 @@ export const files = defineModule({
       keys: [{ code: "KeyP", mod: true }],
       run: (window) => window.run("menu.open", { source: FIND }),
     },
-    paneAction("up", "files.up", "Go to the folder above"),
-    paneAction("path", "files.path", "Type a path"),
-    paneAction("hidden", "files.hidden", "Show hidden files, or hide them"),
-    paneAction("filter", "files.filter", "Filter the files"),
-    paneAction("rename", "files.rename-picked", "Rename the files picked"),
-    paneAction(
-      "trash",
-      "files.trash-picked",
-      "Move the files picked to the Trash"
+    // A Files Pane's own keys, each an action of its scope: F2, Ctrl+⌫,
+    // the views' Ctrl+1, 2 and 3, and the rest (`keys.ts`).
+    ...KEYS.filter(({ does }) => does !== "peek").map(({ id, title, keys }) =>
+      scoped(FILES, { id, title, section: "Files", keys })
     ),
-    paneAction("undo", "files.undo", "Undo what Files did last"),
-    paneAction("copy", "files.copy-picked", "Copy the files picked"),
-    paneAction("cut", "files.cut-picked", "Cut the files picked"),
-    paneAction("paste", "files.paste", "Paste the files copied or cut"),
-    paneAction(
-      "duplicate",
-      "files.duplicate-picked",
-      "Duplicate the files picked"
-    ),
-    paneAction("new-file", "files.new-file", "Make a file"),
-    paneAction("new-folder", "files.new-folder", "Make a folder"),
-    paneAction("search", "files.find-in-files", "Find words in the files"),
   ],
+  scopes: [{ id: FILES, title: "Files" }],
   sources: [filesSource],
 })
 

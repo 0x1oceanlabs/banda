@@ -14,6 +14,10 @@
 # Whether a Files Pane shows what git ignores, greyed. Off hides it.
 # ignored = true
 
+# Whether a row of the tree shows a picture's small picture in place of
+# its icon. The Gallery shows them always.
+# thumbnails = false
+
 # The editor a file opens in, by its id: Files' "Open in", and a path in a
 # reply clicked with Ctrl or ⌘. Empty is the first found of cursor,
 # vscode, vscode-insiders, vscodium, windsurf, zed, sublime, and the

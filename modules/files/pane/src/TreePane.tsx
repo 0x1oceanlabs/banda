@@ -23,6 +23,13 @@
  * each running turn works on pulses in its Agent's colour, and a quiet
  * dot sits on what the turn of its Thread changed. Follow, off at first,
  * moves the pick and the file it opened to the file that Agent works on.
+ *
+ * It shows its folder three ways over one pick (decision 3, step F6): the
+ * tree, Columns, or a Gallery, by Ctrl+1, 2 and 3 or its header; and the
+ * info of the row picked beside it, by Ctrl+I. Its keys are the actions of
+ * its scope, `files`, its whole tile (ADR 0071): the window matches them,
+ * and the Pane runs them where its view, or one of its fields, has the
+ * focus.
  */
 import {
   type ReactNode,
@@ -47,6 +54,8 @@ import {
   rowAt,
 } from "@banda/ui/components/file-tree"
 import { InHeader } from "@banda/ui/components/pane-header"
+import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
+import { type Handler, useScope } from "@banda/ui/hooks/use-scope"
 import { toast } from "@banda/ui/components/sonner"
 import { Spinner } from "@banda/ui/components/spinner"
 import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
@@ -54,19 +63,24 @@ import { useProjects } from "@banda/ui/hooks/use-projects"
 import { useRead } from "@banda/ui/hooks/use-read"
 import { useWiderThan } from "@banda/ui/hooks/use-wider-than"
 import { dragFiles } from "@banda/ui/lib/file-drag"
-import { foldersOf } from "@banda/ui/lib/tree-paths"
-import { FIELDS, keyLabel } from "@banda/ui/lib/keys"
+import { FIELDS } from "@banda/ui/lib/keys"
 import { useFile } from "@banda/ui/lib/look"
+import { holding as holdingFolders } from "@banda/ui/lib/tree-marks"
+import { cn } from "@banda/ui/lib/utils"
 import { shownProjects } from "@banda/ui/lib/projects"
 import type { WindowApi } from "@banda/ui/module"
 import { definePane, type PaneProps, paneOf } from "@banda/ui/pane"
 import {
   ChevronsDownUpIcon,
   ChevronsUpDownIcon,
+  Columns3Icon,
   EyeIcon,
   EyeOffIcon,
   FolderTreeIcon,
   FolderXIcon,
+  GalleryThumbnailsIcon,
+  InfoIcon,
+  ListTreeIcon,
   LocateFixedIcon,
   PanelLeftIcon,
   SearchIcon,
@@ -87,17 +101,13 @@ import { BulkRename } from "./BulkRename"
 import type { Named } from "./bulk"
 import { useClashes } from "./ClashDialog"
 import { keep, kept, pasted } from "./clip"
+import { Columns } from "./Columns"
 import { Card } from "./Facts"
 import { useFolder } from "./folder"
+import { Gallery } from "./Gallery"
 import { HeaderButton } from "./HeaderButton"
-import {
-  ANYWHERE,
-  type Does,
-  keyOf,
-  OUTSIDE_FIELDS,
-  treeKey,
-  typesFilter,
-} from "./keys"
+import { InfoPane } from "./Info"
+import { type Does, FILES, idOf, KEYS, takes, typesFilter } from "./keys"
 import { marksOf } from "./marks"
 import { PathBar } from "./PathBar"
 import { Rail } from "./Rail"
@@ -106,7 +116,18 @@ import { useThreads, useTouched, useTurned } from "./live"
 import { MakeItems, RowMenu } from "./RowMenu"
 import { SearchView } from "./SearchView"
 import { TrashList } from "./TrashList"
+import { Look } from "./Preview"
+import { isPicture, useThumbs } from "./thumbs"
 import { matchesOf, onlyFolder, type Showing, treeOf, untitled } from "./tree"
+import type { RowMarks, ViewEvents } from "./ViewParts"
+import {
+  entryOf,
+  listedFor,
+  parentRow,
+  type View,
+  VIEWS,
+  viewOf,
+} from "./views"
 import { nameOf, parentOf, tilded, untilded, wholeOf, within } from "./where"
 import { holding, moveFile, workedAt, workedIn } from "./work"
 import { peeked } from "./peek"
@@ -132,6 +153,10 @@ export type TreeArgs = {
   follow?: boolean
   /** The Thread it was opened from: whose turns it marks and follows. */
   thread?: string
+  /** How it shows its folder: the tree when left out. */
+  view?: View
+  /** It shows the info of the row picked beside it. */
+  info?: boolean
 }
 
 export const treePane = definePane<TreeArgs>({
@@ -183,14 +208,12 @@ const EXPANDED = 300
 const NO_MARKS: ReadonlyMap<string, Mark> = new Map()
 const NO_WRITES: string[] = []
 
-const asks = new Set<(does: Does) => void>()
+/** How many rows of the tree show their small pictures at most. */
+const PICTURED = 200
 
-/** Has the focused Files Pane do `does`, as its key would: how an action,
- * which `keys.toml` binds, reaches it. Whether one heard. */
-export function askTree(does: Does): boolean {
-  for (const hear of asks) hear(does)
-  return asks.size > 0
-}
+/** Whether a Pane shows the info of its pick: Columns do, under their
+ * preview, unless the Pane said otherwise. */
+const infoIn = (args: TreeArgs) => args.info ?? viewOf(args.view) === "columns"
 
 function TreePane(props: PaneProps<TreeArgs>) {
   const { engine, project, args, update, label } = props
@@ -337,6 +360,7 @@ function TreePane(props: PaneProps<TreeArgs>) {
             home={home}
             projectTop={projectTop}
             showing={{ hidden, ignored: finder.ignored }}
+            thumbnails={finder.thumbnails}
             pinned={pinned}
             onGo={go}
             onGoTyped={goTyped}
@@ -354,6 +378,8 @@ type FolderViewProps = PaneProps<TreeArgs> & {
   home: string | null
   projectTop: string | null
   showing: Showing
+  /** The tree's rows show their small pictures (files.toml). */
+  thumbnails: boolean
   pinned: readonly string[]
   onGo: (dir: string, selected?: string | null) => void
   onGoTyped: (path: string) => Promise<string | null>
@@ -373,6 +399,7 @@ function FolderView({
   home,
   projectTop,
   showing,
+  thumbnails,
   pinned,
   onGo,
   onGoTyped,
@@ -381,6 +408,20 @@ function FolderView({
   onPin,
 }: FolderViewProps) {
   const dir = args.dir
+  const keyLabel = useKeyLabel()
+  // Its args as last changed here: keys pressed before the Pane draws
+  // again each change them on from the one before.
+  const now = useRef(args)
+  useEffect(() => {
+    now.current = args
+  }, [args])
+  const change = useCallback(
+    (more: Partial<TreeArgs>) => {
+      now.current = { ...now.current, ...more }
+      update(now.current)
+    },
+    [update]
+  )
   /** A row's whole path, a folder's with its `/`, as a message names it. */
   const named = useCallback(
     (path: string) => wholeOf(dir, path) + (path.endsWith("/") ? "/" : ""),
@@ -426,7 +467,14 @@ function FolderView({
     },
     [showing]
   )
-  const folder = useFolder(engine, project, dir, open, onListed)
+  // How it shows the folder, and so which folders it lists: the tree's
+  // open ones, or those the columns or the filmstrip show.
+  const view = viewOf(args.view)
+  const listing = useMemo(
+    () => listedFor(view, picked, open),
+    [view, picked, open]
+  )
+  const folder = useFolder(engine, project, dir, listing, onListed)
   const { paths, ignored } = useMemo(
     () => treeOf(folder.listed, showing),
     [folder.listed, showing]
@@ -571,9 +619,24 @@ function FolderView({
     [dir, onGo, onOpenFile]
   )
   const toggleHidden = useCallback(
-    () => update({ ...args, hidden: !showing.hidden }),
-    [args, update, showing.hidden]
+    () => change({ hidden: !(now.current.hidden ?? showing.hidden) }),
+    [change, showing.hidden]
   )
+  // Another view of the same pick, which takes the keys.
+  const info = infoIn(args)
+  const showAs = useCallback(
+    (to: View) => {
+      if (to !== viewOf(now.current.view)) change({ view: to })
+      else tree.current?.focus()
+    },
+    [change]
+  )
+  const shownBefore = useRef(view)
+  useEffect(() => {
+    if (shownBefore.current === view) return
+    shownBefore.current = view
+    requestAnimationFrame(() => tree.current?.focus())
+  }, [view])
   // Quick Look (ADR 0073, decision 7): the row picked, over the desk.
   const peek = useCallback(
     (path: string) =>
@@ -735,11 +798,17 @@ function FolderView({
         case "open":
           if (row) openRow(row)
           return
+        case "list":
+        case "columns":
+        case "gallery":
+          return showAs(what)
+        case "info":
+          return change({ info: !infoIn(now.current) })
         default:
           act(what)
       }
     },
-    [up, toggleHidden, startFilter, picked, openRow, peek, act]
+    [up, toggleHidden, startFilter, picked, openRow, peek, act, showAs, change]
   )
   // As the pick moves, Quick Look shows it, from the tree that has the
   // keys.
@@ -749,14 +818,32 @@ function FolderView({
     peekedAt.current = picked
     if (focused && picked && peeked()) peek(picked)
   }, [picked, focused, peek])
-  // The actions reach the focused Pane.
-  useEffect(() => {
-    if (!focused) return
-    asks.add(does)
-    return () => {
-      asks.delete(does)
-    }
-  }, [focused, does])
+  // Its keys, the actions of its scope: each where the Pane takes it, as
+  // the focus is in its view or its fields (`takes`), and no further, so
+  // the tree's own reading of F2 or ↵ never hears a key taken.
+  const handlers = useMemo(
+    () =>
+      Object.fromEntries(
+        KEYS.map(({ does: what, id }): [string, Handler] => [
+          id,
+          (_, event) => {
+            const from = event?.composedPath()[0]
+            const field =
+              from instanceof Element && from.closest(FIELDS) !== null
+            const inView =
+              !event ||
+              (event.target instanceof Node &&
+                (area.current?.contains(event.target) ?? false))
+            if (!takes(what, { field, view: inView })) return false
+            event?.stopPropagation()
+            does(what)
+            return true
+          },
+        ])
+      ),
+    [does]
+  )
+  const scope = useScope(FILES, handlers, { tile: true })
 
   // Follow: the pick and the file opened go where the turn goes, once the
   // Person is still. Where it went last; it moves only while the turn
@@ -824,25 +911,80 @@ function FolderView({
     requestAnimationFrame(() => tree.current?.focus())
   }, [listed, focused])
 
-  // Ctrl+L and Ctrl+Shift+F anywhere in the Pane; the rest outside its
-  // fields, and the rest of its keys and a letter in the tree. A rename's
+  // A letter typed in the view starts the filter with it; a rename's
   // field in the tree is a field too: its press comes from inside it.
   const onKeyDownCapture = (event: React.KeyboardEvent) => {
-    const what = treeKey(event)
     const from = event.nativeEvent.composedPath()[0]
     const inField = from instanceof Element && from.closest(FIELDS) !== null
-    const inTree = area.current?.contains(event.target as Node) ?? false
-    const mine =
-      what !== undefined &&
-      (ANYWHERE.has(what) ||
-        (!inField && OUTSIDE_FIELDS.has(what)) ||
-        (!inField && inTree))
-    if (mine) does(what)
-    else if (!inField && inTree && typesFilter(event)) startFilter(event.key)
-    else return
+    const inView = area.current?.contains(event.target as Node) ?? false
+    if (inField || !inView || !typesFilter(event)) return
+    startFilter(event.key)
     event.preventDefault()
     event.stopPropagation()
   }
+
+  // What the Columns and the Gallery are told, and tell, as the tree.
+  const rowMarks: RowMarks = useMemo(
+    () => ({
+      marks,
+      holds: holdingFolders(marks.keys()),
+      turned,
+      turnHolds: holdingFolders(turned),
+      pulses,
+    }),
+    [marks, turned, pulses]
+  )
+  const events: ViewEvents = {
+    onSelect: setPicked,
+    onOpen: openRow,
+    onDrag: drag,
+    onDrop: (dropped, into, copy) => void transfer(copy, dropped, into),
+    onRename,
+  }
+  // The info of the row picked, or of the folder with none; its picture
+  // left out under a preview that shows it.
+  const infoOf = (row: string | null, className?: string, picture = true) => (
+    <InfoPane
+      engine={engine}
+      project={project}
+      path={row ? wholeOf(dir, row) : dir}
+      modified={row ? entryOf(folder.listed, row)?.modified : undefined}
+      picture={picture}
+      className={className}
+    />
+  )
+  // The file picked, drawn small, or its info where nothing draws it.
+  const look = (row: string, below?: React.ReactNode) => (
+    <Look
+      engine={engine}
+      project={project}
+      path={wholeOf(dir, row)}
+      run={run}
+      instead={infoOf(row, "flex-1")}
+      after={below}
+    />
+  )
+  // The tree's rows show their small pictures, when files.toml asks.
+  const pictured = useMemo(
+    () =>
+      new Map(
+        thumbnails && view === "list"
+          ? paths
+              .filter(isPicture)
+              .slice(0, PICTURED)
+              .map((row) => {
+                const entry = entryOf(folder.listed, row)
+                const whole = wholeOf(dir, row)
+                return [
+                  row,
+                  { path: whole, modified: entry?.modified, size: entry?.size },
+                ]
+              })
+          : []
+      ),
+    [thumbnails, view, paths, folder.listed, dir]
+  )
+  const pictures = useThumbs(engine, project, pictured, 16)
 
   const body = (() => {
     if (searching && real)
@@ -888,7 +1030,9 @@ function FolderView({
       )
     if (filtering && matches.paths.length === 0)
       return <Quiet>Nothing here fits “{words}”.</Quiet>
-    const empty = !filtering && paths.length === 0
+    // The filter's matches are a tree in every view.
+    const shownAs = filtering ? "list" : view
+    const empty = shownAs === "list" && !filtering && paths.length === 0
     return (
       <ContextMenu
         onOpenChangeComplete={(isOpen) => {
@@ -905,43 +1049,86 @@ function FolderView({
               ref={area}
               tabIndex={empty ? 0 : undefined}
               aria-label={empty ? "This folder is empty" : undefined}
-              className="h-full min-h-0 px-1 pt-1 outline-none"
+              className={cn(
+                "h-full min-h-0 outline-none",
+                shownAs === "list" && "px-1 pt-1"
+              )}
             />
           }
           onContextMenu={(event) => {
-            // The tree has picked the row first.
+            // The view has picked the row first.
             const row = rowAt(event.nativeEvent)
             setMenu({ row, count: row === null ? 0 : rowsFor(row).length })
           }}
         >
           {empty && <Quiet>This folder is empty.</Quiet>}
-          <FolderTree
-            ref={tree}
-            label={`Files of ${nameOf(dir)}`}
-            version={
-              filtering
-                ? `find\0${found?.words}`
-                : `${showing.hidden}\0${showing.ignored}`
-            }
-            paths={filtering ? matches.paths : paths}
-            open={filtering ? matches.open : open}
-            marks={marks}
-            turned={turned}
-            pulses={pulses}
-            ignored={filtering ? [] : ignored}
-            loading={folder.listing}
-            selected={picked}
-            onSelect={setPicked}
-            onOpenChange={(now) => {
-              if (filtering) return
-              if (now.length < open.length) setExpanding(false)
-              setOpen(now)
-            }}
-            onOpen={openRow}
-            onDrag={drag}
-            onRename={onRename}
-            onDrop={(dropped, into, copy) => void transfer(copy, dropped, into)}
-          />
+          {shownAs === "columns" ? (
+            <Columns
+              ref={tree}
+              label={`Files of ${nameOf(dir)}`}
+              top={nameOf(dir)}
+              listed={folder.listed}
+              showing={showing}
+              loading={folder.listing}
+              picked={picked}
+              marks={rowMarks}
+              aside={
+                picked &&
+                look(
+                  picked,
+                  info
+                    ? infoOf(picked, "max-h-[55%] shrink-0 border-t", false)
+                    : null
+                )
+              }
+              {...events}
+            />
+          ) : shownAs === "gallery" ? (
+            <Gallery
+              ref={tree}
+              label={`Files of ${nameOf(dir)}`}
+              engine={engine}
+              project={project}
+              dir={dir}
+              listed={folder.listed}
+              showing={showing}
+              picked={picked}
+              marks={rowMarks}
+              big={picked ? look(picked) : <Quiet>This folder is empty.</Quiet>}
+              {...events}
+            />
+          ) : (
+            <FolderTree
+              ref={tree}
+              label={`Files of ${nameOf(dir)}`}
+              version={
+                filtering
+                  ? `find\0${found?.words}`
+                  : `${showing.hidden}\0${showing.ignored}`
+              }
+              paths={filtering ? matches.paths : paths}
+              open={filtering ? matches.open : open}
+              marks={marks}
+              turned={turned}
+              pulses={pulses}
+              ignored={filtering ? [] : ignored}
+              loading={folder.listing}
+              selected={picked}
+              onSelect={setPicked}
+              onOpenChange={(now) => {
+                if (filtering) return
+                if (now.length < open.length) setExpanding(false)
+                setOpen(now)
+              }}
+              pictures={pictures}
+              onOpen={openRow}
+              onDrag={drag}
+              onRename={onRename}
+              onDrop={(dropped, into, copy) =>
+                void transfer(copy, dropped, into)
+              }
+            />
+          )}
         </ContextMenuTrigger>
         <ContextMenuContent
           aria-label={menu?.row === null ? "Folder" : "Row"}
@@ -980,11 +1167,21 @@ function FolderView({
 
   return (
     <div
+      ref={scope}
       data-files={project}
       className="flex min-h-0 flex-1 flex-col"
       onKeyDownCapture={onKeyDownCapture}
     >
       <InHeader>
+        <ViewSwitch view={view} onShow={showAs} />
+        <HeaderButton
+          label="Info"
+          title={keyLabel(idOf("info"), "Info")}
+          on={info}
+          onClick={() => does("info")}
+        >
+          <InfoIcon />
+        </HeaderButton>
         <HeaderButton
           label="Follow the Agent"
           title={
@@ -999,23 +1196,25 @@ function FolderView({
         </HeaderButton>
         <HeaderButton
           label="Hidden files"
-          title={`Hidden files · ${keyLabel(keyOf("hidden"))}`}
+          title={keyLabel(idOf("hidden"), "Hidden files")}
           on={showing.hidden}
           onClick={toggleHidden}
         >
           {showing.hidden ? <EyeIcon /> : <EyeOffIcon />}
         </HeaderButton>
-        <HeaderButton
-          label={allOpen ? "Collapse all" : "Expand all"}
-          onClick={() => {
-            if (allOpen) {
-              setExpanding(false)
-              tree.current?.collapse()
-            } else setExpanding(true)
-          }}
-        >
-          {allOpen ? <ChevronsDownUpIcon /> : <ChevronsUpDownIcon />}
-        </HeaderButton>
+        {view === "list" && (
+          <HeaderButton
+            label={allOpen ? "Collapse all" : "Expand all"}
+            onClick={() => {
+              if (allOpen) {
+                setExpanding(false)
+                tree.current?.collapse()
+              } else setExpanding(true)
+            }}
+          >
+            {allOpen ? <ChevronsDownUpIcon /> : <ChevronsUpDownIcon />}
+          </HeaderButton>
+        )}
       </InHeader>
       <PathBar
         engine={engine}
@@ -1064,19 +1263,26 @@ function FolderView({
       )}
       {/* A key or a click on the tree keeps Follow waiting; the header's
           buttons do not. */}
-      <div
-        className="min-h-0 flex-1"
-        onKeyDownCapture={() => workedIn(project)}
-        onPointerDownCapture={() => workedIn(project)}
-        onKeyDown={(event) => {
-          // Escape in the tree clears the filter, as in its field.
-          if (event.key === "Escape" && filter !== null) {
-            event.stopPropagation()
-            endFilter()
-          }
-        }}
-      >
-        {body}
+      <div className="flex min-h-0 flex-1">
+        <div
+          className="min-h-0 min-w-0 flex-1"
+          onKeyDownCapture={() => workedIn(project)}
+          onPointerDownCapture={() => workedIn(project)}
+          onKeyDown={(event) => {
+            // Escape in the tree clears the filter, as in its field.
+            if (event.key === "Escape" && filter !== null) {
+              event.stopPropagation()
+              endFilter()
+            }
+          }}
+        >
+          {body}
+        </div>
+        {/* Columns show the info in their last column. */}
+        {info &&
+          (view !== "columns" || filtering) &&
+          !searching &&
+          infoOf(picked, "w-64 max-w-[45%] shrink-0 border-l")}
       </div>
       {follow && (
         <div
@@ -1125,9 +1331,6 @@ function FolderView({
   )
 }
 
-/** The folder a row is in, as the tree names it: `""` its top. */
-const parentRow = (row: string) => foldersOf(row).at(-1) ?? ""
-
 /** The folder a row is, or is in: `""` the top. */
 const folderOfRow = (row: string | null) =>
   !row ? "" : row.endsWith("/") ? row : parentRow(row)
@@ -1158,6 +1361,52 @@ function useGitStatus(
     }
   }, [engine, project, inside])
   return inside ? files : null
+}
+
+/** The views' icons and names, in their keys' order. */
+const SHOWN: Record<View, { icon: ReactNode; name: string }> = {
+  list: { icon: <ListTreeIcon />, name: "List" },
+  columns: { icon: <Columns3Icon />, name: "Columns" },
+  gallery: { icon: <GalleryThumbnailsIcon />, name: "Gallery" },
+}
+
+/** The header's quiet switch between the views, each with its key. */
+function ViewSwitch({
+  view,
+  onShow,
+}: {
+  view: View
+  onShow: (view: View) => void
+}) {
+  const keyLabel = useKeyLabel()
+  return (
+    <div
+      role="radiogroup"
+      aria-label="View"
+      className="flex shrink-0 items-center gap-px rounded-md p-px"
+    >
+      {VIEWS.map((one) => (
+        <Button
+          key={one}
+          variant="ghost"
+          size="icon-xs"
+          role="radio"
+          aria-checked={one === view}
+          aria-label={SHOWN[one].name}
+          title={keyLabel(idOf(one), SHOWN[one].name)}
+          className={cn(
+            "size-5.5 shrink-0",
+            one === view
+              ? "bg-foreground/8 text-foreground hover:bg-foreground/10"
+              : "text-muted-foreground"
+          )}
+          onClick={() => onShow(one)}
+        >
+          {SHOWN[one].icon}
+        </Button>
+      ))}
+    </div>
+  )
 }
 
 function Loading() {
