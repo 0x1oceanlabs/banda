@@ -71,6 +71,8 @@ export type Snoozes = {
   /** Whether a Thread is put away now, asleep or archived: what the bar's
    * counts leave out. */
   away: (listed: Listed) => boolean
+  /** Whether the Person archived a Thread (ADR 0069). */
+  archived: (listed: Listed) => boolean
 }
 
 /**
@@ -97,6 +99,7 @@ export function useSnoozes(lists: Lists): Snoozes {
           ? undefined
           : wokeAt(listed, now),
       away: (listed) => asleep(listed, now) || archived(listed),
+      archived,
     }),
     [now, acked, archived]
   )
