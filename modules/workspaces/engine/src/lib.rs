@@ -11,8 +11,8 @@
 //!
 //! An Agent arranges through its tools alone (ADR 0032): it sees its
 //! Project's Panes, and the other Projects' outlines when its Person lets it;
-//! it opens Panes of its Project that run nothing as the Person, and moves
-//! and closes only those it opened.
+//! it opens Panes of its Project that run, send and start nothing as the
+//! Person (ADR 0083, decision 3), and moves and closes only those it opened.
 
 pub mod model;
 
@@ -95,8 +95,9 @@ banda_kernel::methods! {
         /// you see the other Projects, theirs without. `yours` marks the
         /// ones you opened, which alone you move and close.
         call panes(Nothing) -> Vec<SeenWorkspace>, Read, tool "panes";
-        /// Opens a Pane of your Project for your Person to see: a Thread
-        /// (`agents.thread`, args `{"thread": "<id>"}`), the Diff
+        /// Opens a Pane of your Project for your Person to see: one of its
+        /// Threads (`agents.thread`, args `{"thread": "<id>"}` and no
+        /// other; `send` starts a Thread), the Diff
         /// (`git.diff`, args `{"scope": {"kind": "changes"}}`, or `uncommitted`,
         /// `staged`, or `{"kind": "commit", "sha": "<sha>"}`), or a
         /// browser at a web address (`browser.browser`, args
@@ -111,10 +112,54 @@ banda_kernel::methods! {
     }
 }
 
-/// The kinds of Pane an Agent may open: ones that show, and run nothing as
-/// the Person. A terminal's runs the Person's shell, and the command its
-/// `done` sends goes as the Person (ADR 0032).
-const AGENT_KINDS: &[&str] = &["agents.thread", "git.diff", "files.file", "browser.browser"];
+/// What holds the args an Agent opens a kind of Pane with.
+type ArgsRule = fn(&Value) -> Result<(), Refusal>;
+
+/// The kinds of Pane an Agent may open, each with the rule its args keep:
+/// ones that show, and run, send and start nothing as the Person. A
+/// terminal's runs the Person's shell, and the command its `done` sends
+/// goes as the Person (ADR 0032). Only the Person's gesture acts as the
+/// Person (ADR 0083, decision 3), so the args that make a Pane act are
+/// theirs alone.
+const AGENT_KINDS: &[(&str, ArgsRule)] = &[
+    ("agents.thread", a_thread),
+    ("git.diff", only_shows),
+    ("files.file", only_shows),
+    ("browser.browser", web_address),
+];
+
+/// Holds a Thread's Pane an Agent opens to one Thread, named by its ID
+/// alone. Every other arg is the Person's: `ask`, the words a Thread not
+/// yet started sends first, and the Project and Harness it starts in. An
+/// Agent starts a Thread with `send`, as itself (ADR 0019, decision 4).
+/// The Pane opens in the Agent's Project, which answers for its own
+/// Threads alone.
+fn a_thread(args: &Value) -> Result<(), Refusal> {
+    let args = args.as_object();
+    if let Some(other) = args.and_then(|args| args.keys().find(|key| *key != "thread")) {
+        return Err(Refusal::forbidden(format!(
+            "An Agent opens a Thread's Pane with its Thread's ID alone: `{other}` is \
+             your Person's to give. To start a Thread, call `send` with no `thread`, \
+             as yourself."
+        )));
+    }
+    let thread = args
+        .and_then(|args| args.get("thread"))
+        .and_then(Value::as_str);
+    match thread.map(uuid::Uuid::parse_str) {
+        Some(Ok(_)) => Ok(()),
+        _ => Err(Refusal::invalid(
+            "A Thread's Pane shows one of your Project's Threads: args {\"thread\": \"<id>\"}, \
+             an ID `threads` lists.",
+        )),
+    }
+}
+
+/// The Diff's args and a file's only choose what they show: staging,
+/// reverting and saving wait for the Person's click or keys.
+fn only_shows(_: &Value) -> Result<(), Refusal> {
+    Ok(())
+}
 
 /// Refuses a browser an Agent opens anywhere but at a web address, as
 /// `browser_open` does: never at the Person's files (ADR 0029, decision 3).
@@ -736,15 +781,14 @@ impl Workspaces {
 
     async fn open_pane(&self, call: Call, open: OpenPane) -> Result<Opened, Refusal> {
         let (wall, me) = walled(&call)?;
-        if !AGENT_KINDS.contains(&open.kind.as_str()) {
+        let Some((_, holds)) = AGENT_KINDS.iter().find(|(kind, _)| *kind == open.kind) else {
+            let kinds: Vec<_> = AGENT_KINDS.iter().map(|(kind, _)| *kind).collect();
             return Err(Refusal::invalid(format!(
                 "An Agent opens only {}: they run nothing as your Person.",
-                AGENT_KINDS.join(", ")
+                kinds.join(", ")
             )));
-        }
-        if open.kind == "browser.browser" {
-            web_address(&open.args)?;
-        }
+        };
+        holds(&open.args)?;
         let shows = Shown {
             project: wall.project,
             kind: open.kind,

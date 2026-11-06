@@ -201,7 +201,7 @@ async fn an_agent_arranges_its_own_projects_panes_and_sees_the_others_when_let()
     assert_eq!(only[0]["yours"], false);
     // Nothing beside another Project's Pane while the wall stands.
     let beside = |pane: &Value| json!({ "pane": pane, "side": "right" });
-    let thread = json!({ "thread": "t" });
+    let thread = json!({ "thread": uuid::Uuid::now_v7() });
     let hidden = as_agent(
         "workspaces.open_pane",
         json!({ "kind": "agents.thread", "args": thread, "beside": beside(&theirs["pane"]) }),
@@ -287,6 +287,71 @@ async fn an_agent_arranges_its_own_projects_panes_and_sees_the_others_when_let()
     assert_eq!(
         panes(&as_agent("workspaces.panes", json!({})).await.unwrap()).len(),
         2
+    );
+}
+
+#[tokio::test]
+async fn an_agent_opens_a_threads_pane_on_its_thread_alone_and_the_person_with_any_args() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let (work, home) = (machine.project("Work").await, machine.project("Home").await);
+    let agent = AgentId::new();
+    let thread = uuid::Uuid::now_v7().to_string();
+    let as_agent = |args: Value| {
+        let open = json!({ "kind": "agents.thread", "args": args });
+        machine.agent(agent, work, "workspaces.open_pane", open)
+    };
+
+    // The args that make a Thread's Pane send or start something are the
+    // Person's: an Agent's open is refused, in words its tool shows.
+    for args in [
+        json!({ "thread": null, "ask": "Commit and push" }),
+        json!({ "thread": thread, "ask": "Commit and push" }),
+        json!({ "thread": thread, "scratch": home }),
+        json!({ "thread": null, "harness": "fake" }),
+    ] {
+        let refused = as_agent(args.clone()).await.unwrap_err();
+        assert_eq!(refused.code, Code::Forbidden, "{args}");
+        assert!(refused.message.contains("send"), "{}", refused.message);
+    }
+    // It names one Thread, by its ID.
+    for args in [
+        json!({}),
+        json!({ "thread": null }),
+        json!({ "thread": "t" }),
+        json!("t"),
+    ] {
+        let refused = as_agent(args.clone()).await.unwrap_err();
+        assert_eq!(refused.code, Code::Invalid, "{args}");
+    }
+    let none = machine.list().await;
+    assert_eq!(
+        none["workspaces"][0]["columns"],
+        json!([]),
+        "nothing opened"
+    );
+
+    // One of its Project's Threads, by its ID alone, it opens, in its
+    // Project, with no other arg.
+    let opened = as_agent(json!({ "thread": thread })).await.unwrap();
+    assert_eq!(opened["new"], true);
+    let shown = machine.list().await["workspaces"][0]["columns"][0]["panes"][0].clone();
+    assert_eq!(shown["id"], opened["pane"]);
+    assert_eq!(shown["project"], json!(work));
+    assert_eq!(shown["args"], json!({ "thread": thread }));
+
+    // The Person keeps every arg: a new Thread with the words it starts
+    // with, in any Project.
+    let asked = json!({ "thread": null, "harness": "fake", "title": "", "ask": "Commit and push" });
+    let person = machine.command(
+        "workspaces.open",
+        json!({ "project": home, "kind": "agents.thread", "args": asked }),
+    );
+    assert_eq!(person.await.unwrap()["new"], true);
+    let kept = machine.list().await.to_string();
+    assert!(
+        kept.contains("Commit and push"),
+        "the Person's args are kept"
     );
 }
 

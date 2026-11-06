@@ -123,8 +123,9 @@ bring_back: CommandMethod<Nothing, Done>,
  */
 panes: CallMethod<Nothing, Array<SeenWorkspace>>, 
 /**
- * Opens a Pane of your Project for your Person to see: a Thread
- * (`agents.thread`, args `{"thread": "<id>"}`), the Diff
+ * Opens a Pane of your Project for your Person to see: one of its
+ * Threads (`agents.thread`, args `{"thread": "<id>"}` and no
+ * other; `send` starts a Thread), the Diff
  * (`git.diff`, args `{"scope": {"kind": "changes"}}`, or `uncommitted`,
  * `staged`, or `{"kind": "commit", "sha": "<sha>"}`), or a
  * browser at a web address (`browser.browser`, args
