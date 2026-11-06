@@ -99,6 +99,18 @@ Any folder, as a Finder shows it: its names folders first, with what git ignores
 
 Its methods, `banda call files.<method>`: `list`, `stat`, `read`, `find`, `watch`.
 
+## Pull requests (`pulls`)
+
+The GitHub pull requests linked to a Project's Threads (ADR 0076): Create PR's, an Agent's own `gh pr create`, its tools' and the Person's. It reads them through `gh`, one reader for the Project while something follows it, and works out what each needs and whose turn it is.
+
+Its methods, `banda call pulls.<method>`: `list`, `watch`, `refresh`, `link`, `unlink`, `list_thread`.
+
+What an Agent in a Thread may call as a tool of `banda mcp`:
+
+- `link_pull_request`: Links a pull request to a Thread, by its URL or `#42` in the Project's own repository on GitHub: Banda shows what it needs on the bar. An Agent links one to its own Thread.
+- `unlink_pull_request`: Lets go of a pull request in a Thread; what made it does not link it again.
+- `list_thread_pull_requests`: The pull requests a Thread links, with what each needs: an Agent's own Thread's when it asks. Not to check on CI: Banda watches them.
+
 ## Notifications (`notifications`)
 
 Tells you of what calls, by toasts and the desktop's notifications; the bell on the bar shows the last toasts again.

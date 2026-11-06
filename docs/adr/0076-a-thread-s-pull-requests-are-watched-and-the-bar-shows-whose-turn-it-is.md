@@ -7,8 +7,9 @@ date: 2026-11-06
 
 ADR 0034, decision 6, planned the `pulls` module: GitHub through `gh`, a
 Pane for a pull request, the PRs linked to a Thread, the Agent's tools,
-and a watch that wakes the Thread. None of it is built. Thread details
-has Create PR, and then forgets the PR it made.
+and a watch that wakes the Thread. None of it is built, and the git
+button's Create PR (ADR 0034, decision 4) is not built either: an Agent
+makes its pull requests with `gh pr create`, and Banda forgets them.
 
 Roma, on 2026-11-06, first asked for a widget with the branch and its PR
 (`artifacts/git-branch/v1.html` in the brand workspace). Then: "agents
@@ -35,7 +36,8 @@ change.
    - A link names the PR (host, repository, number, URL), who made it
      (the Person, Create PR, or the Agent), and when.
    - It is made by:
-     - Create PR in Thread details;
+     - Create PR in Thread details, once the git button has it (ADR 0034,
+       decision 4);
      - the Agent's `gh pr create`, read from the end of its shell call, as
        T3 Code reads it;
      - the Agent's tools `link_pull_request` and `unlink_pull_request`;
@@ -209,8 +211,8 @@ change.
 - **The order of work**, each step its own PR, tried in the window:
   1. This ADR and the research.
   2. The `pulls` engine: the links, the reader, `pulls.list` and the
-     stream `pulls.watch` for a Project; Create PR and `gh pr create` link
-     what they made.
+     stream `pulls.watch` for a Project; the Agent's `gh pr create` links
+     what it made.
   3. The widget's `dots` look and the popover, read only, opening a
      Thread.
   4. Auto-fix: the watch, the news to the Thread, the Agent's tools and

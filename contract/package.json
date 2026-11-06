@@ -14,6 +14,7 @@
     "./files": "./src/files.ts",
     "./harnesses": "./src/harnesses.ts",
     "./problems": "./src/problems.ts",
+    "./pulls": "./src/pulls.ts",
     "./sharing": "./src/sharing.ts",
     "./workspaces": "./src/workspaces.ts",
     "./look": "./src/look.ts",
