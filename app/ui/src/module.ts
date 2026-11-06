@@ -13,6 +13,7 @@ import type {
 } from "@banda/contract"
 import type { Details } from "./components/thread-details"
 import type { Key } from "./lib/keys"
+import { ZOOM_KEYS, zoomId } from "./lib/zoom"
 import type { Notify } from "@banda/contract/look"
 import type { Lists, PaneKind, PaneState, Watch } from "./pane"
 import type { SoundSettings } from "./sound/settings"
@@ -214,6 +215,25 @@ export function scoped(
     scope,
     run: (_, args) => void actInScope(scope, action.id, args),
   }
+}
+
+/** A Pane's zoom as actions of its scope (ADR 0037, decision 6; ADR
+ * 0071, decision 1): `prefix.zoom-in`, `-out` and `-reset`, Ctrl or ⌘
+ * with + − 0, titled for `what`, as "the terminal". */
+export function zoomActions(
+  scope: string,
+  prefix: string,
+  what: string,
+  section: string
+): Action[] {
+  return ZOOM_KEYS.map(({ does, title, keys }) =>
+    scoped(scope, {
+      id: zoomId(prefix, does),
+      title: title(what),
+      section,
+      keys,
+    })
+  )
 }
 
 /** What an action takes, as a JSON Schema: each arg by its name. */

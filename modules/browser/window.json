@@ -300,6 +300,17 @@
       "scope": "browser"
     },
     {
+      "id": "browser.devtools",
+      "title": "The page's developer tools",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "F12"
+        }
+      ],
+      "scope": "browser"
+    },
+    {
       "id": "browser.zoom-in",
       "title": "Zoom the page in",
       "section": "Browser",
@@ -336,17 +347,6 @@
         {
           "code": "Digit0",
           "primary": true
-        }
-      ],
-      "scope": "browser"
-    },
-    {
-      "id": "browser.devtools",
-      "title": "The page's developer tools",
-      "section": "Browser",
-      "keys": [
-        {
-          "code": "F12"
         }
       ],
       "scope": "browser"

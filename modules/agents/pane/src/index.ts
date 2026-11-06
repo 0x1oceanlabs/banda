@@ -9,9 +9,10 @@ import {
   type Listing,
   scoped,
   takes,
+  zoomActions,
 } from "@banda/ui/module"
 import type { Key } from "@banda/ui/lib/keys"
-import { COMPOSER } from "./scopes"
+import { COMPOSER, THREAD, VISUAL } from "./scopes"
 import { paneOf } from "@banda/ui/pane"
 import { threadPane } from "./ThreadPane"
 import { visualPane } from "./VisualPane"
@@ -69,18 +70,23 @@ const threads: Listing = {
   unread: markUnread,
 }
 
-/**
- * The composer's keys (ADR 0071, decision 1): actions of its scope, so
- * keys.toml binds them as any. Its element runs them (`Composer`); a key
- * its suggestions or its text take, as Enter in code, stays theirs.
- */
-const composer = (id: string, title: string, key: Key) =>
-  scoped(COMPOSER, {
-    id: `agents.composer.${id}`,
-    title,
-    section: "Composer",
-    keys: [key],
-  })
+/** A key of one of its scopes (ADR 0071, decision 1), `agents.<scope>.<id>`,
+ * which keys.toml binds in that scope's table. */
+const own =
+  (scope: string, section: string) => (id: string, title: string, key: Key) =>
+    scoped(scope, {
+      id: `agents.${scope}.${id}`,
+      title,
+      section,
+      keys: [key],
+    })
+
+/** The composer's keys: its element runs them (`Composer`); a key its
+ * suggestions or its text take, as Enter in code, stays theirs. */
+const composer = own(COMPOSER, "Composer")
+
+/** A Thread's keys: its details card and its find are T3 Code's. */
+const thread = own(THREAD, "Thread")
 
 export const agents = defineModule({
   id: "agents",
@@ -107,8 +113,21 @@ export const agents = defineModule({
       code: "ArrowDown",
     }),
     composer("plan", "Plan mode on or off", { code: "Tab", shift: true }),
+    // Its zoom sizes its words (ADR 0063, decision 5).
+    ...zoomActions(THREAD, "agents.thread", "the Thread", "Thread"),
+    thread("details", "Show or hide the Thread's details", {
+      code: "KeyB",
+      primary: true,
+      shift: true,
+    }),
+    thread("find", "Find in the Thread", { code: "KeyF", primary: true }),
+    ...zoomActions(VISUAL, "agents.visual", "the Visual", "Visual preview"),
   ],
-  scopes: [{ id: COMPOSER, title: "Composer", field: true }],
+  scopes: [
+    { id: COMPOSER, title: "Composer", field: true },
+    { id: THREAD, title: "Thread" },
+    { id: VISUAL, title: "Visual preview" },
+  ],
   sources: [askSource],
   listed: threads,
 })

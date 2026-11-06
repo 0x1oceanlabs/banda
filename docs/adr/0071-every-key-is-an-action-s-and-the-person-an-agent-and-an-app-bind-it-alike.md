@@ -44,17 +44,22 @@ Roma said to finish this one too.
 
 1. **Every key Banda or an App answers is an action's.**
    - An action is the window's, as now, or a **scope's**: a kind of Pane
-     (`browser`, `terminal`, `launcher`) or a field (`composer`). Its key
-     works only while the focus is there.
+     (`browser`, `terminal`, `launcher`, `thread`), a field (`composer`)
+     or a preview over the window (`visual`). Its key works only while
+     the focus is there; a Pane's scope is its whole tile.
    - The composer's keys become `agents.composer.send` (`Enter`: what
      `agents.toml` says Enter does while the Agent works),
      `agents.composer.send-other` (`Ctrl+Enter`, ⌘ on a Mac: the other
      of the two), `agents.composer.newline` (`Shift+Enter`),
      `agents.composer.back` and `agents.composer.forward` (`↑ ↓` at the
      field's edge: the messages sent before), and
-     `agents.composer.plan` (`Shift+Tab`). The browser's keys become `browser.tab-new` and the rest;
-     the launcher's letters, `launcher.open` with the kind as its args;
-     the terminal's, `terminal.zoom-in`, `-out` and `-reset`.
+     `agents.composer.plan` (`Shift+Tab`). The browser's keys become
+     `browser.tab-new` and the rest; the launcher's letters,
+     `launcher.open` with the kind as its args. Each Pane that zooms has
+     its own `zoom-in`, `-out` and `-reset` (`terminal.zoom-in`,
+     `agents.thread.zoom-in`, `agents.visual.zoom-in`, `browser.zoom-in`),
+     Ctrl or ⌘ with `+ − 0` as ADR 0037 has them; a Thread's details card
+     and its find are `agents.thread.details` and `agents.thread.find`.
    - No action holds what is not Banda's to bind: typing; a widget's
      keys as the platform has them (arrows, `Tab`, `Home`, `End`,
      `Escape` and `Enter` in lists, menus, dialogs and a field's
@@ -156,8 +161,8 @@ Roma said to finish this one too.
      its title in `keys.list`, binds it, and says what changed.
 
 7. **The key sheet lists every scope.**
-   - Under the window's actions, a section per scope: Composer, Browser,
-     Launcher, Terminal. Each row shows its keys in force, as ADR 0068,
+   - Under the window's actions, a section per scope: Composer, Thread,
+     Visual preview, Browser, Launcher, Terminal. Each row shows its keys in force, as ADR 0068,
      decision 4, writes them.
    - "Add a key" (Tab on a row) writes the line into that scope's table;
      a row of the Person's with args shows its args after its title.

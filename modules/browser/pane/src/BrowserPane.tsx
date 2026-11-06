@@ -90,6 +90,7 @@ import {
 } from "./tabs"
 import { useKeysIn, useMod } from "@banda/ui/hooks/use-key-of"
 import { useScope } from "@banda/ui/hooks/use-scope"
+import { zoomHandlers } from "@banda/ui/hooks/use-zoom"
 
 export const browserPane = definePane<KeptArgs>({
   kind: "browser.browser",
@@ -353,9 +354,12 @@ function Browser({
   }
   const scope = useScope(
     BROWSER,
-    Object.fromEntries(
-      BROWSER_KEYS.map((key) => [actionOf(key.does), () => does(key.does)])
-    ),
+    {
+      ...Object.fromEntries(
+        BROWSER_KEYS.map((key) => [actionOf(key.does), () => does(key.does)])
+      ),
+      ...zoomHandlers(BROWSER, (step) => page?.zoom(step)),
+    },
     { tile: true }
   )
   const held = tabs.args.tabs.flatMap((each) => pageAt(each.id) ?? [])
@@ -1172,8 +1176,5 @@ const ON_PAGE: Record<PageDoes, (page: Page) => void> = {
   "reload-hard": (page) => page.reload(true),
   back: (page) => page.back(),
   forward: (page) => page.forward(),
-  "zoom-in": (page) => page.zoom(1),
-  "zoom-out": (page) => page.zoom(-1),
-  "zoom-reset": (page) => page.zoom(0),
   devtools: (page) => page.devtools(),
 }

@@ -3,28 +3,57 @@
  * with + − 0, through the same steps from 50 to 200 % (ADR 0037, decision
  * 6). A Visual's preview, a terminal and a Thread zoom so.
  */
-import { type Key, matches, type Pressed } from "./keys"
+import type { Key } from "./keys"
 
 /** The zooms there are. */
 export const ZOOMS = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2]
 
-/** The keys that zoom: `by` steps in or out, 0 back to 100 %. `+` is
- * Shift and `=` on most keyboards. */
-export const ZOOM_KEYS: readonly (Key & { by: number })[] = [
-  { code: "Equal", primary: true, by: 1 },
-  { code: "Equal", primary: true, shift: true, by: 1 },
-  { code: "Minus", primary: true, by: -1 },
-  { code: "Digit0", primary: true, by: 0 },
+/** A step of the zoom: in, out, or back to 100 %. */
+export type ZoomStep = 1 | -1 | 0
+
+/** The zoom's actions, each a Pane's own (ADR 0071, decision 1): what
+ * each does, by its id's last word, its title for what it zooms, as "the
+ * terminal", and its keys. `+` is Shift and `=` on most keyboards. */
+export const ZOOM_KEYS: readonly {
+  does: "zoom-in" | "zoom-out" | "zoom-reset"
+  by: ZoomStep
+  title: (what: string) => string
+  keys: Key[]
+}[] = [
+  {
+    does: "zoom-in",
+    by: 1,
+    title: (what) => `Zoom ${what} in`,
+    keys: [
+      { code: "Equal", primary: true },
+      { code: "Equal", primary: true, shift: true },
+    ],
+  },
+  {
+    does: "zoom-out",
+    by: -1,
+    title: (what) => `Zoom ${what} out`,
+    keys: [{ code: "Minus", primary: true }],
+  },
+  {
+    does: "zoom-reset",
+    by: 0,
+    title: (what) => `${what[0].toUpperCase()}${what.slice(1)} at its own size`,
+    keys: [{ code: "Digit0", primary: true }],
+  },
 ]
 
-/** The zoom after `event`, from `now`, one of {@link ZOOMS}; none for a
- * key that does not zoom. It stays at either end. */
-export function zoomAfter(event: Pressed, now: number): number | null {
-  const bind = ZOOM_KEYS.find((key) => matches(event, key))
-  if (!bind) return null
-  if (bind.by === 0) return 1
+/** The id of a zoom action of the scope whose actions start `prefix`. */
+export function zoomId(prefix: string, does: string): string {
+  return `${prefix}.${does}`
+}
+
+/** The zoom a step `by` from `now`, one of {@link ZOOMS}: it stays at
+ * either end. */
+export function zoomBy(now: number, by: ZoomStep): number {
+  if (by === 0) return 1
   const at = ZOOMS.indexOf(now)
-  return ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, at + bind.by))]
+  return ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, at + by))]
 }
 
 const kept = new Map<string, number>()

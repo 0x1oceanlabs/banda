@@ -101,6 +101,113 @@
         }
       ],
       "scope": "composer"
+    },
+    {
+      "id": "agents.thread.zoom-in",
+      "title": "Zoom the Thread in",
+      "section": "Thread",
+      "keys": [
+        {
+          "code": "Equal",
+          "primary": true
+        },
+        {
+          "code": "Equal",
+          "primary": true,
+          "shift": true
+        }
+      ],
+      "scope": "thread"
+    },
+    {
+      "id": "agents.thread.zoom-out",
+      "title": "Zoom the Thread out",
+      "section": "Thread",
+      "keys": [
+        {
+          "code": "Minus",
+          "primary": true
+        }
+      ],
+      "scope": "thread"
+    },
+    {
+      "id": "agents.thread.zoom-reset",
+      "title": "The Thread at its own size",
+      "section": "Thread",
+      "keys": [
+        {
+          "code": "Digit0",
+          "primary": true
+        }
+      ],
+      "scope": "thread"
+    },
+    {
+      "id": "agents.thread.details",
+      "title": "Show or hide the Thread's details",
+      "section": "Thread",
+      "keys": [
+        {
+          "code": "KeyB",
+          "primary": true,
+          "shift": true
+        }
+      ],
+      "scope": "thread"
+    },
+    {
+      "id": "agents.thread.find",
+      "title": "Find in the Thread",
+      "section": "Thread",
+      "keys": [
+        {
+          "code": "KeyF",
+          "primary": true
+        }
+      ],
+      "scope": "thread"
+    },
+    {
+      "id": "agents.visual.zoom-in",
+      "title": "Zoom the Visual in",
+      "section": "Visual preview",
+      "keys": [
+        {
+          "code": "Equal",
+          "primary": true
+        },
+        {
+          "code": "Equal",
+          "primary": true,
+          "shift": true
+        }
+      ],
+      "scope": "visual"
+    },
+    {
+      "id": "agents.visual.zoom-out",
+      "title": "Zoom the Visual out",
+      "section": "Visual preview",
+      "keys": [
+        {
+          "code": "Minus",
+          "primary": true
+        }
+      ],
+      "scope": "visual"
+    },
+    {
+      "id": "agents.visual.zoom-reset",
+      "title": "The Visual at its own size",
+      "section": "Visual preview",
+      "keys": [
+        {
+          "code": "Digit0",
+          "primary": true
+        }
+      ],
+      "scope": "visual"
     }
   ],
   "scopes": [
@@ -108,6 +215,14 @@
       "id": "composer",
       "title": "Composer",
       "field": true
+    },
+    {
+      "id": "thread",
+      "title": "Thread"
+    },
+    {
+      "id": "visual",
+      "title": "Visual preview"
     }
   ],
   "sources": [

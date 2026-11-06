@@ -14,6 +14,53 @@
           "more": true
         }
       ]
+    },
+    {
+      "id": "terminal.zoom-in",
+      "title": "Zoom the terminal in",
+      "section": "Terminal",
+      "keys": [
+        {
+          "code": "Equal",
+          "primary": true
+        },
+        {
+          "code": "Equal",
+          "primary": true,
+          "shift": true
+        }
+      ],
+      "scope": "terminal"
+    },
+    {
+      "id": "terminal.zoom-out",
+      "title": "Zoom the terminal out",
+      "section": "Terminal",
+      "keys": [
+        {
+          "code": "Minus",
+          "primary": true
+        }
+      ],
+      "scope": "terminal"
+    },
+    {
+      "id": "terminal.zoom-reset",
+      "title": "The terminal at its own size",
+      "section": "Terminal",
+      "keys": [
+        {
+          "code": "Digit0",
+          "primary": true
+        }
+      ],
+      "scope": "terminal"
+    }
+  ],
+  "scopes": [
+    {
+      "id": "terminal",
+      "title": "Terminal"
     }
   ],
   "sources": [],

@@ -2,7 +2,7 @@
  * menu finds of it (ADR 0013, ADR 0022). It has no engine part, so it is
  * always on. */
 import type { ProjectId } from "@banda/contract"
-import { defineModule, scoped, takes } from "@banda/ui/module"
+import { defineModule, scoped, takes, zoomActions } from "@banda/ui/module"
 import { paneOf, type PaneState } from "@banda/ui/pane"
 import { searchNow } from "./address"
 import { browserPane } from "./BrowserPane"
@@ -56,6 +56,7 @@ export const browser = defineModule({
     ...BROWSER_KEYS.map(({ does, ...rest }) =>
       scoped(BROWSER, { ...rest, id: actionOf(does), section: "Browser" })
     ),
+    ...zoomActions(BROWSER, BROWSER, "the page", "Browser"),
   ],
   scopes: [{ id: BROWSER, title: "Browser" }],
   sources: [webSource],

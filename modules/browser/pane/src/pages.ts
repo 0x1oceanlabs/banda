@@ -13,6 +13,7 @@ import type { Dialog } from "@banda/contract/browser"
 import type { ProjectId } from "@banda/contract"
 import { afterMoves } from "@banda/ui/lib/frames"
 import { HELD_BY, paneLayer } from "@banda/ui/pane"
+import type { ZoomStep } from "@banda/ui/lib/zoom"
 import { type BrowserNews, type Driver, PARTITION, type Wait } from "./desktop"
 import { browserHost, hearNews } from "./host"
 
@@ -191,7 +192,7 @@ export class Page {
     else this.view.reload()
   }
 
-  zoom(by: 1 | -1 | 0): void {
+  zoom(by: ZoomStep): void {
     if (!this.ready) return
     this.view.setZoomLevel(by === 0 ? 0 : this.view.getZoomLevel() + by / 2)
   }

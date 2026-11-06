@@ -21,9 +21,6 @@ export type Does =
   | "reload-hard"
   | "back"
   | "forward"
-  | "zoom-in"
-  | "zoom-out"
-  | "zoom-reset"
   | "devtools"
   | TabKey
 
@@ -42,7 +39,8 @@ const ctrl = (code: string, shift = false): Key => ({
 const PLACES = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const
 
 /** The browser's keys, in the key sheet's order: what each does, its
- * title there, and its keys as Chrome has them. */
+ * title there, and its keys as Chrome has them. Its zoom is every Pane's
+ * (`zoomActions`). */
 export const BROWSER_KEYS: readonly {
   does: Does
   title: string
@@ -90,17 +88,6 @@ export const BROWSER_KEYS: readonly {
   },
   { does: "back", title: "Back", keys: [ctrl("BracketLeft")] },
   { does: "forward", title: "Forward", keys: [ctrl("BracketRight")] },
-  {
-    does: "zoom-in",
-    title: "Zoom the page in",
-    keys: [ctrl("Equal"), ctrl("Equal", true)],
-  },
-  { does: "zoom-out", title: "Zoom the page out", keys: [ctrl("Minus")] },
-  {
-    does: "zoom-reset",
-    title: "The page at its own size",
-    keys: [ctrl("Digit0")],
-  },
   {
     does: "devtools",
     title: "The page's developer tools",
