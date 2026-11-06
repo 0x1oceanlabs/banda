@@ -180,6 +180,12 @@ pub struct Overview {
 pub struct Groups {
     /// A handle on its top edge under the pointer, that carries it.
     pub handle: bool,
+    /// How its plate moves while its Agent works.
+    pub working: settings::GroupWorking,
+    /// How its plate calls when its Agent asks.
+    pub asking: settings::GroupAsking,
+    /// How strong the colours on its plate are.
+    pub saturation: settings::GroupSaturation,
 }
 
 /// A picture Banda's glass is made of (ADR 0030).
@@ -754,6 +760,12 @@ pub fn resolve(
             },
             groups: Groups {
                 handle: all.groups.handle.unwrap_or(true),
+                working: all.groups.working.unwrap_or(settings::GroupWorking::Breath),
+                asking: all.groups.asking.unwrap_or(settings::GroupAsking::Twice),
+                saturation: all
+                    .groups
+                    .saturation
+                    .unwrap_or(settings::GroupSaturation::Normal),
             },
             sources,
             problems,

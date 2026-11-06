@@ -389,27 +389,88 @@ html[data-glass] [data-held-by] {
 [data-column][data-pad-right] {
   margin-right: var(--group-pad);
 }
+/* The plate's colour, fill and line are its own, typed, so a change of
+   state crossfades and the motion eases them, rather than snapping. They
+   go on the plate itself: on its parent, they damp what moves on it. */
+@property --group-color {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: transparent;
+}
+@property --group-fill {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+@property --group-line {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+@property --group-focus-fill {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+@property --group-focus-line {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+@property --group-sheen {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+/* `[groups] saturation`: every fill and line, quieter or louder. */
+html[data-group-saturation="soft"] {
+  --group-saturation: 0.7;
+}
+html[data-group-saturation="vivid"] {
+  --group-saturation: 1.35;
+}
 [data-group-plate] {
-  /* No Agent's state: a tint of the text, barely there. */
+  /* No Agent's state, or one at rest: a tint of the text, barely there,
+     the Group's shape and not its colour. */
   --group-color: var(--foreground);
+  --group-fill: 4%;
+  --group-line: 9%;
+  --group-focus-fill: 0%;
+  --group-focus-line: 0%;
+  --group-tint: calc(
+    (var(--group-fill) + var(--group-focus-fill)) * var(--group-saturation, 1)
+  );
+  --group-edge: min(
+    100%,
+    calc(
+      (var(--group-line) + var(--group-focus-line)) * var(--group-saturation, 1)
+    )
+  );
   --group-radius: calc(var(--tile-radius) + var(--group-pad));
-  --group-line: color-mix(in oklab, var(--group-color) 16%, transparent);
-  --group-fill: 6%;
   position: absolute;
   inset-block: calc(-1 * var(--group-pad));
   left: 0;
   right: calc(-1 * var(--gap-inner));
   pointer-events: none;
-  border: 0 solid var(--group-line);
+  border: 0 solid
+    color-mix(in oklab, var(--group-color) var(--group-edge), transparent);
   border-block-width: 1px;
-  background: color-mix(
+  background-color: color-mix(
     in oklab,
-    var(--group-color) var(--group-fill),
+    var(--group-color) var(--group-tint),
     transparent
   );
+  transition:
+    --group-color 0.6s ease,
+    --group-fill 0.6s ease,
+    --group-line 0.6s ease,
+    --group-focus-fill 0.25s ease,
+    --group-focus-line 0.25s ease;
 }
+/* The focused Group: louder in its own colour, whatever its state. */
 [data-group-plate][data-focused] {
-  --group-line: color-mix(in oklab, var(--group-color) 30%, transparent);
+  --group-focus-fill: 2%;
+  --group-focus-line: 18%;
 }
 [data-group-plate][data-first] {
   left: calc(-1 * var(--group-pad));
@@ -426,17 +487,17 @@ html[data-glass] [data-held-by] {
 /* On glass, the tiles' material, a step clearer, catching the light at
    its top edge as the tiles do. */
 html[data-glass] [data-group-plate] {
-  background: color-mix(
+  background-color: color-mix(
     in oklab,
-    var(--group-color) calc(var(--group-fill) + 2%),
+    var(--group-color) calc(var(--group-tint) + 2%),
     rgb(255 255 255 / 0.03)
   );
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07);
 }
 /*
  * The colour is its Agent's state (ADR 0065, decision 6), as the sidebar
- * marks it: at work a slow breath, a call brightens twice and stays, done
- * stays green until the Person opens the Thread. No Agent: the text's.
+ * marks it, on a ladder from quiet to loud: at work, done, failed, and a
+ * call the loudest. No Agent: the text's.
  */
 /* The bar's map (`[data-map]`) takes the same colours, still. */
 [data-map] {
@@ -455,27 +516,112 @@ html[data-glass] [data-group-plate] {
   --group-color: var(--destructive);
 }
 [data-group-plate][data-state="working"] {
-  animation: group-breath 2.4s ease-in-out infinite;
+  --group-fill: 7%;
+  --group-line: 18%;
+}
+[data-group-plate][data-state="done"] {
+  --group-fill: 10%;
+  --group-line: 30%;
+}
+[data-group-plate][data-state="failed"] {
+  --group-fill: 10%;
+  --group-line: 36%;
 }
 [data-group-plate][data-state="asking"] {
-  animation: group-call 0.7s ease-in-out 2;
+  --group-fill: 13%;
+  --group-line: 48%;
 }
-[data-group-plate][data-state] {
-  --group-fill: 9%;
+/*
+ * How each state moves, as `[groups]` says. At work it goes on as long as
+ * the work does, and every Group at work keeps one time (`usePlates`). A
+ * call, done and failed swell as they come, from when the state came: a
+ * plate drawn again, or first drawn in that state, shows it already over.
+ */
+[data-group-plate][data-state="working"] {
+  animation: group-breath 3.2s ease-in-out infinite;
+}
+html[data-group-working="line"] [data-group-plate][data-state="working"] {
+  animation-name: group-breath-line;
+}
+/* One band across the whole Group: each piece draws its share of it, at
+   its place in the Group (`--group-x`) and the Group's width. */
+html[data-group-working="sheen"] [data-group-plate][data-state="working"] {
+  background-image: linear-gradient(
+    100deg,
+    transparent 0 40%,
+    color-mix(
+        in oklab,
+        var(--group-color) calc(22% * var(--group-saturation, 1)),
+        transparent
+      )
+      50%,
+    transparent 60% 100%
+  );
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  background-size: calc(3 * var(--group-span, 100%)) 100%;
+  background-position-x: calc(
+    (4 * var(--group-sheen) - 3) * var(--group-span, 100%) - var(--group-x, 0px)
+  );
+  animation: group-sheen 4.2s ease-in-out infinite;
+}
+html[data-group-working="still"] [data-group-plate][data-state="working"] {
+  animation: none;
+}
+[data-group-plate][data-state="asking"] {
+  animation: group-swell-call 0.9s ease-in-out 2;
+}
+html[data-group-asking="pulse"] [data-group-plate][data-state="asking"] {
+  animation:
+    group-swell-call 0.9s ease-in-out 2,
+    group-pulse 2.4s ease-in-out 1.8s infinite;
+}
+[data-group-plate]:is([data-state="done"], [data-state="failed"]) {
+  animation: group-swell 1.1s ease-in-out;
 }
 @keyframes group-breath {
   50% {
-    opacity: 0.55;
+    --group-fill: 12%;
   }
 }
-@keyframes group-call {
+@keyframes group-breath-line {
   50% {
-    filter: brightness(1.6);
+    --group-line: 42%;
   }
+}
+@keyframes group-sheen {
+  70%,
+  100% {
+    --group-sheen: 1;
+  }
+}
+@keyframes group-swell-call {
+  50% {
+    --group-fill: 24%;
+    --group-line: 85%;
+  }
+}
+@keyframes group-pulse {
+  50% {
+    --group-fill: 18%;
+    --group-line: 70%;
+  }
+}
+@keyframes group-swell {
+  40% {
+    --group-fill: 18%;
+    --group-line: 70%;
+  }
+}
+/* No motion, `[motion] off`: the colours and the ladder stay. */
+html[data-still] [data-group-plate] {
+  animation: none !important;
+  transition: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
   [data-group-plate] {
     animation: none !important;
+    transition: none !important;
   }
 }
 /* Banda's update on the bar (ADR 0072, decision 2): the icon moves with

@@ -3,7 +3,7 @@
 
 use banda_look::hyprland::Windows;
 use banda_look::motion::Move;
-use banda_look::settings::{Material, SidebarStyle};
+use banda_look::settings::{GroupAsking, GroupSaturation, GroupWorking, Material, SidebarStyle};
 use banda_look::theme::{Origin, Places};
 use banda_look::{Look, Shown, follow, resolve};
 use std::collections::BTreeMap;
@@ -429,6 +429,20 @@ fn motion_comes_through_the_layers_slowed_and_checked() {
     let look = machine.look();
     let problem = &look.problems[0];
     assert_eq!((problem.line, problem.column), (Some(2), Some(20)));
+}
+
+#[test]
+fn a_groups_plate_takes_its_keys() {
+    let machine = Machine::new(false);
+    let look = machine.look();
+    assert_eq!(look.groups.working, GroupWorking::Breath);
+    assert_eq!(look.groups.asking, GroupAsking::Twice);
+    assert_eq!(look.groups.saturation, GroupSaturation::Normal);
+
+    machine.look_toml("[groups]\nworking = \"line\"\nsaturation = \"vivid\"\n");
+    let look = machine.look();
+    assert_eq!(look.groups.working, GroupWorking::Line);
+    assert_eq!(look.groups.saturation, GroupSaturation::Vivid);
 }
 
 #[test]

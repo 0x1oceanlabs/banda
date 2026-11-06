@@ -33,6 +33,7 @@ import { Tabs } from "./Tabs"
 import { pixels, scrollsSideways, SWIPE_END, Swipe, type Way } from "./swipe"
 import { THRESHOLD } from "./sizing"
 import { useSizing } from "./useSizing"
+import { usePlates } from "./usePlates"
 import { useHoldsMod } from "@banda/ui/hooks/use-key-of"
 
 /** How far, in pixels, the mod and the middle button go up or down to step
@@ -111,15 +112,13 @@ export function Strip({
   const focusedGroup = workspace.columns[workspace.focus]?.group
   // Each Group's Agent, by the Thread in it: its state and its name.
   const agents = agentsOf(columns, listed)
-  // A Group's pieces breathe as one, however late each came.
-  useLayoutEffect(() => {
-    const plates = scroller.current?.querySelectorAll("[data-group-plate]")
-    for (const plate of plates ?? []) {
-      for (const animation of plate.getAnimations?.() ?? []) {
-        animation.startTime = 0
-      }
-    }
-  })
+  // Each Group's colour, by its Agent's state; its plate moves with it.
+  const states = new Map(
+    columns.flatMap(({ group }) =>
+      group === undefined ? [] : [[group, groupState(agents.get(group)?.mark)]]
+    )
+  )
+  usePlates(scroller, states, groups.working === "sheen")
   // The zoomed Pane, the focused one, covers the workspace; the rest
   // hide under it, their pages too.
   const zooms = live && zoomed !== undefined
@@ -349,8 +348,8 @@ export function Strip({
             {group !== undefined && !zooms && (
               <div
                 aria-hidden
-                data-group-plate=""
-                data-state={groupState(agents.get(group)?.mark)}
+                data-group-plate={group}
+                data-state={states.get(group)}
                 data-first={ends.first ? "" : undefined}
                 data-last={ends.last ? "" : undefined}
                 data-focused={lit ? "" : undefined}

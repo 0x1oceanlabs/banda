@@ -33,6 +33,9 @@ export type { Bar } from "./generated/look/Bar"
 export type { Setting } from "./generated/look/Setting"
 export type { Drawer } from "./generated/look/Drawer"
 export type { Groups } from "./generated/look/Groups"
+export type { GroupAsking } from "./generated/look/GroupAsking"
+export type { GroupSaturation } from "./generated/look/GroupSaturation"
+export type { GroupWorking } from "./generated/look/GroupWorking"
 export type { Overview } from "./generated/look/Overview"
 export type { Workspaces } from "./generated/look/Workspaces"
 export type { Center } from "./generated/look/Center"
@@ -70,7 +73,12 @@ export const DEFAULT_DRAWER: Drawer = { height: 0.6 }
 export const DEFAULT_OVERVIEW: Overview = { zoom: 0.35 }
 
 /** How a Group shows, as `banda look` gives it with no files (ADR 0065). */
-export const DEFAULT_GROUPS: Groups = { handle: true }
+export const DEFAULT_GROUPS: Groups = {
+  handle: true,
+  working: "breath",
+  asking: "twice",
+  saturation: "normal",
+}
 
 /** Banda's own columns, niri's: what `banda look` gives with no files. */
 export const DEFAULT_COLUMNS: Columns = {

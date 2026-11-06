@@ -308,6 +308,49 @@ pub struct Groups {
     /// A handle on its top edge under the pointer, with its name, that
     /// carries the whole Group.
     pub handle: Option<bool>,
+    /// How its plate moves while its Agent works.
+    pub working: Option<GroupWorking>,
+    /// How its plate calls the Person when its Agent asks.
+    pub asking: Option<GroupAsking>,
+    /// How strong every state's colour is on its plate.
+    pub saturation: Option<GroupSaturation>,
+}
+
+/// How a Group's plate moves while its Agent works (ADR 0065, decision 6).
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "look/")]
+pub enum GroupWorking {
+    /// Its fill breathes, slowly; its line stays still.
+    Breath,
+    /// Its line breathes; its fill stays still.
+    Line,
+    /// A soft band of light crosses the whole Group now and then.
+    Sheen,
+    /// It does not move.
+    Still,
+}
+
+/// How a Group's plate calls when its Agent asks (ADR 0065, decision 6).
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "look/")]
+pub enum GroupAsking {
+    /// Two swells as the call comes, then still.
+    Twice,
+    /// Two swells, then a slow pulse until the Person answers.
+    Pulse,
+}
+
+/// How strong the colours on a Group's plate are: every state's fill and
+/// line, quieter or louder (ADR 0065, decision 6).
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "look/")]
+pub enum GroupSaturation {
+    Soft,
+    Normal,
+    Vivid,
 }
 
 /// How the bar shows the workspaces.
@@ -468,6 +511,9 @@ impl Settings {
             },
             groups: Groups {
                 handle: self.groups.handle.or(under.groups.handle),
+                working: self.groups.working.or(under.groups.working),
+                asking: self.groups.asking.or(under.groups.asking),
+                saturation: self.groups.saturation.or(under.groups.saturation),
                 ..Groups::default()
             },
             motion: self.motion.over(under.motion),
@@ -533,6 +579,9 @@ impl Settings {
             overview: Overview { zoom: Some(0.35) },
             groups: Groups {
                 handle: Some(true),
+                working: Some(GroupWorking::Breath),
+                asking: Some(GroupAsking::Twice),
+                saturation: Some(GroupSaturation::Normal),
                 ..Groups::default()
             },
             motion: MotionSettings::defaults(),
@@ -615,5 +664,25 @@ mod tests {
     fn a_groups_old_look_still_loads() {
         let old: Settings = toml::from_str("[groups]\nlook = \"halo\"\nhandle = false\n").unwrap();
         assert_eq!(old.groups.handle, Some(false));
+    }
+
+    #[test]
+    fn a_groups_plate_moves_as_its_keys_say() {
+        let mine: Settings = toml::from_str(
+            "[groups]\nworking = \"sheen\"\nasking = \"pulse\"\nsaturation = \"soft\"\n",
+        )
+        .unwrap();
+        let groups = mine.over(Settings::defaults(Material::Banda)).groups;
+        assert_eq!(groups.working, Some(GroupWorking::Sheen));
+        assert_eq!(groups.asking, Some(GroupAsking::Pulse));
+        assert_eq!(groups.saturation, Some(GroupSaturation::Soft));
+        let none = Settings::default()
+            .over(Settings::defaults(Material::Banda))
+            .groups;
+        assert_eq!(none.working, Some(GroupWorking::Breath));
+        assert_eq!(none.asking, Some(GroupAsking::Twice));
+        assert_eq!(none.saturation, Some(GroupSaturation::Normal));
+        let wrong = toml::from_str::<Settings>("[groups]\nworking = \"blink\"\n").unwrap_err();
+        assert!(wrong.message().contains("blink"), "{wrong}");
     }
 }
