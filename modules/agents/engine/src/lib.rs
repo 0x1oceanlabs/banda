@@ -42,6 +42,7 @@ pub mod sending;
 mod skills;
 mod snoozes;
 mod store;
+mod switching;
 mod titles;
 mod touching;
 mod transcript;
@@ -356,6 +357,11 @@ banda_kernel::methods! {
         /// small model writes in a short run no Thread shows, as `write`
         /// runs. It renames nothing: the window renames the Thread with it.
         command suggest_title(OneThread) -> String, Write;
+        /// Moves a Thread to another account of its Harness, by its entry's
+        /// ID: from its next turn it runs there, in the same session. Only a
+        /// Person moves a Thread, and only to an account that goes on with
+        /// its session (ADR 0078, decision 4).
+        command switch(Switch) -> (), Write;
     }
 }
 
@@ -598,6 +604,15 @@ struct Rename {
     #[serde(default)]
     #[ts(optional)]
     title: Option<String>,
+}
+
+/// What `agents.switch` is asked: a Thread, and the Harness entry, the
+/// account, it runs on from its next turn.
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
+struct Switch {
+    thread: ThreadId,
+    harness: String,
 }
 
 #[derive(Deserialize, TS)]
@@ -998,6 +1013,31 @@ impl Agents {
     async fn rename(&self, call: Call, Rename { thread, title }: Rename) -> Result<(), Refusal> {
         let author = call.participant();
         call.command(move |tx| titles::rename(tx, author, thread, title))
+            .await
+    }
+
+    async fn switch(&self, call: Call, Switch { thread, harness }: Switch) -> Result<(), Refusal> {
+        let author = call.participant();
+        if author.agent().is_some() {
+            return Err(Refusal::forbidden(
+                "Only a Person moves a Thread to another account.",
+            ));
+        }
+        let to = self.harness(&harness)?;
+        let was = (call.project())
+            .read(move |sql| store::thread(sql, thread))
+            .await?
+            .ok_or_else(|| Refusal::not_found("There is no such Thread."))?
+            .harness;
+        let shares = (self.harnesses.find(&was)).is_some_and(|from| from.shares_sessions(&to));
+        if was != harness && !shares {
+            return Err(Refusal::conflict(format!(
+                "{} cannot go on with this Thread's session: it moves only to another \
+                 account of its own Harness, for now.",
+                to.name
+            )));
+        }
+        call.command(move |tx| switching::switch(tx, author, thread, was, harness))
             .await
     }
 

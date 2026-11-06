@@ -41,10 +41,13 @@ impl Evidence {
         self
     }
 
-    /// The session a new process of `harness` may continue.
-    fn continued_by(&self, harness: &str) -> Option<acp::SessionId> {
+    /// The session a new process of `harness` may continue: one of its
+    /// own, or one of an entry `kin` says shares its sessions, another
+    /// account of the same Harness (ADR 0078, decision 4).
+    fn continued_by(&self, harness: &str, kin: &dyn Fn(&str) -> bool) -> Option<acp::SessionId> {
         let lasts = matches!(self.lasts, Lasts::Harness);
-        (lasts && self.harness == harness).then(|| acp::SessionId::new(self.session.as_str()))
+        let ours = self.harness == harness || kin(&self.harness);
+        (lasts && ours).then(|| acp::SessionId::new(self.session.as_str()))
     }
 }
 
@@ -100,7 +103,8 @@ impl Connection {
     /// The Harness's session for `thread`, opened in `folder` on first use,
     /// with `roots` as extra roots its Agent may read (ADR 0026).
     /// A Thread that had a session continues it when the Harness can, by
-    /// resuming it or else by loading it; otherwise a new one opens. A
+    /// resuming it or else by loading it, also one another entry `kin` to
+    /// this one opened; otherwise a new one opens. A
     /// session that opens, either way, gets `banda()`, the `banda mcp` its
     /// Agent reaches Banda through, as a stdio MCP server.
     pub async fn session(
@@ -109,6 +113,7 @@ impl Connection {
         folder: &Path,
         roots: &[PathBuf],
         earlier: Option<&Evidence>,
+        kin: &(dyn Fn(&str) -> bool + Sync),
         banda: impl FnOnce() -> Option<Program>,
     ) -> Result<(Session, Opened), Ending> {
         let mut sessions = self.sessions.lock().await;
@@ -143,7 +148,7 @@ impl Connection {
             let (session, options) = (made.session_id, made.config_options);
             return Ok(self.opened(thread, &mut sessions, session, options, folder, false));
         }
-        if let Some(session) = earlier.and_then(|e| e.continued_by(self.process.harness()))
+        if let Some(session) = earlier.and_then(|e| e.continued_by(self.process.harness(), kin))
             && let Some(options) = self
                 .continue_session(&session, folder, roots, &servers)
                 .await

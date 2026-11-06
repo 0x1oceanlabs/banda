@@ -1209,6 +1209,15 @@ pub fn title_and_agent(
         .optional()?)
 }
 
+/// Moves a Thread to the Harness entry `harness` (ADR 0078).
+pub fn switch(sql: &Connection, thread: ThreadId, harness: &str) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_threads SET harness = ?2 WHERE id = ?1",
+        params![thread, harness],
+    )?;
+    Ok(())
+}
+
 /// Renames a Thread to `title`, keeping `was`, the title it had (ADR
 /// 0077).
 pub fn rename(sql: &Connection, thread: ThreadId, title: &str, was: &str) -> Result<(), Error> {

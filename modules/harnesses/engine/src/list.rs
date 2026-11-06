@@ -109,6 +109,16 @@ impl Harness {
         Program { program, args, env }
     }
 
+    /// Whether `other`'s process goes on with this entry's sessions: the
+    /// same entry, or two Claude Code accounts, whose sessions both live in
+    /// the Project's folder (ADR 0078, decision 3). Codex's accounts share
+    /// none yet.
+    pub fn shares_sessions(&self, other: &Harness) -> bool {
+        use crate::limits::Kind;
+        self.id == other.id
+            || (Kind::of(self) == Some(Kind::Claude) && Kind::of(other) == Some(Kind::Claude))
+    }
+
     /// The entry as its process for `project` starts: it, and every program
     /// it starts, an Agent's server too, carries the Project (ADR 0044,
     /// decision 2). Its process for the machine carries none.
@@ -976,6 +986,32 @@ mod tests {
             problems[0]
         );
         assert!(check(Path::new("h"), &template()).is_empty());
+    }
+
+    #[test]
+    fn claude_accounts_share_their_sessions_and_codex_s_not_yet() {
+        let list = known();
+        let (claude, codex) = (&list[0], &list[1]);
+        let second = "[[harness]]\nid = \"work\"\nname = \"Work\"\ncommand = \"acp\"\n\
+                      cli = { program = \"claude\", variable = \"CLAUDE_CODE_EXECUTABLE\" }\n";
+        let work = listed_in(Path::new("h"), second).unwrap().remove(0);
+        assert!(claude.shares_sessions(&work) && work.shares_sessions(claude));
+        let personal = "[[harness]]\nid = \"personal\"\nof = \"claude\"\n";
+        let personal = listed_in(Path::new("h"), personal).unwrap().remove(0);
+        assert!(
+            claude.shares_sessions(&personal),
+            "an account `of` Claude Code"
+        );
+        assert!(codex.shares_sessions(codex), "an entry its own");
+        assert!(!claude.shares_sessions(codex));
+        let codex_2 = Harness {
+            id: "codex-2".into(),
+            ..codex.clone()
+        };
+        assert!(
+            !codex.shares_sessions(&codex_2),
+            "not before Codex's shadow homes"
+        );
     }
 
     #[test]

@@ -227,6 +227,23 @@ impl<H: Host> Hosts<H> {
         }
     }
 
+    /// The hosts that run for `project` now, by their Harness entry: none
+    /// is started.
+    pub async fn running(&self, project: ProjectId) -> Vec<(String, Arc<H>)> {
+        let entries: Vec<_> = (self.slots.lock().unwrap().iter())
+            .filter(|((of, _), _)| *of == project)
+            .map(|((_, harness), entry)| (harness.clone(), entry.clone()))
+            .collect();
+        let mut running = Vec::new();
+        for (harness, entry) in entries {
+            let slot = entry.slot.lock().await;
+            if let Some(host) = slot.host.as_ref().filter(|host| host.alive()) {
+                running.push((harness, host.clone()));
+            }
+        }
+        running
+    }
+
     /// Forgets every host of `project`, as the Project is removed, and answers
     /// them, so what they run can be stopped.
     pub async fn forget(&self, project: ProjectId) -> Vec<Arc<H>> {

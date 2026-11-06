@@ -39,6 +39,7 @@ export const THREADS_FILTER = {
     "question.closed",
     "thread.snoozed",
     "thread.woke",
+    "thread.switched",
   ] satisfies Fact["kind"][],
 } satisfies EventFilter
 
@@ -157,6 +158,11 @@ export function applyThreads(state: ThreadList, event: Event): ThreadList {
           ? { ...thread, snooze: { ...thread.snooze, woke } }
           : thread
       )
+    }
+    case "thread.switched": {
+      // Another account of its Harness, from its next turn (ADR 0078).
+      const { harness } = fact.payload
+      return change(state, event, (thread) => ({ ...thread, harness }))
     }
     default:
       return state

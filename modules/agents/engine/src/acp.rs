@@ -132,6 +132,16 @@ impl Host for Connection {
 }
 
 impl Connection {
+    /// Lets go of `thread`'s session in this process, if it has one: the
+    /// Thread runs on another account now, and this process does not know
+    /// what was said there (ADR 0078, decision 4).
+    pub async fn forget_thread(self: &Arc<Self>, thread: ThreadId) {
+        let session = self.sessions.lock().await.remove(&thread);
+        if let Some(session) = session {
+            Session::new(self, session).close().await;
+        }
+    }
+
     /// The Harness process.
     pub fn process(&self) -> &Process {
         &self.process

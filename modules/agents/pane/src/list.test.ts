@@ -224,3 +224,29 @@ test("a renamed Thread takes its new title and keeps the one before, where it st
     updated_at: one.threads[0].updated_at,
   })
 })
+
+test("a Thread that moves to another account lists it, and keeps its place", () => {
+  const started = event(
+    "thread.started",
+    { thread: "t1", title: "a", harness: "claude-a" },
+    { subject: "t1" }
+  )
+  const other = event(
+    "thread.started",
+    { thread: "t2", title: "b", harness: "codex" },
+    { subject: "t2" }
+  )
+  const moved = event(
+    "thread.switched",
+    { thread: "t1", harness: "claude-b", was: "claude-a" },
+    { subject: "t1" }
+  )
+  const list = [started, other, moved].reduce(applyThreads, {
+    at: 0,
+    threads: [],
+  })
+  expect(list.threads.map((t) => [t.id, t.harness])).toEqual([
+    ["t2", "codex"],
+    ["t1", "claude-b"],
+  ])
+})

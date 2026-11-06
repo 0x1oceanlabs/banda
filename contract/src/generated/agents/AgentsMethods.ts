@@ -29,6 +29,7 @@ import type { Send } from "./Send";
 import type { Sent } from "./Sent";
 import type { ShowVisual } from "./ShowVisual";
 import type { SnoozeAsk } from "./SnoozeAsk";
+import type { Switch } from "./Switch";
 import type { ThreadList } from "./ThreadList";
 import type { ThreadView } from "./ThreadView";
 import type { Touching } from "./Touching";
@@ -230,4 +231,11 @@ rename: CommandMethod<Rename, null>,
  * small model writes in a short run no Thread shows, as `write`
  * runs. It renames nothing: the window renames the Thread with it.
  */
-suggest_title: CommandMethod<OneThread, string>, };
+suggest_title: CommandMethod<OneThread, string>, 
+/**
+ * Moves a Thread to another account of its Harness, by its entry's
+ * ID: from its next turn it runs there, in the same session. Only a
+ * Person moves a Thread, and only to an account that goes on with
+ * its session (ADR 0078, decision 4).
+ */
+switch: CommandMethod<Switch, null>, };
