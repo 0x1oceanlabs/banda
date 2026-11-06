@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 async-trait.workspace = true
+banda-git-cli = { path = "../../../platform/git-cli" }
 banda-kernel = { path = "../../../kernel" }
 futures.workspace = true
 serde.workspace = true

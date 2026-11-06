@@ -1,0 +1,17 @@
+[package]
+name = "banda-git-cli"
+description = "How Banda starts the git program: its own bookkeeping, which runs no program a repository names, and the acts asked of it."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+tokio.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

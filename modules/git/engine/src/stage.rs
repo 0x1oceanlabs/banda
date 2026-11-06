@@ -9,7 +9,9 @@
 //! whitespace hidden takes its whitespace along, and a hunk of a renamed
 //! file changes its lines alone, never the rename. Nothing is changed
 //! when the file is no longer as the Diff drew it; a revert of files
-//! whole checks them so too, by the objects the Diff drew.
+//! whole checks them so too, by the objects the Diff drew. The changes
+//! run as the Person's own git does, hooks and all; what reads the files
+//! first is Banda's own git, as the Diff's is.
 
 use crate::diff::sides;
 use crate::index::untracked;
@@ -50,7 +52,7 @@ pub async fn change(repo: &Repo, act: Act, ask: ChangeAsk) -> Result<(), Refusal
 
 /// `args` on the files, given as they are.
 async fn on(repo: &Repo, args: &[&str], files: &[&str]) -> Result<(), Refusal> {
-    repo.run_on_paths(args, files, Opts::writes()).await?;
+    repo.run_on_paths(args, files, Opts::asked()).await?;
     Ok(())
 }
 
@@ -229,7 +231,7 @@ async fn lines(repo: &Repo, act: Act, files: &[&str], hunk: HunkAsk) -> Result<(
     }
     let opts = Opts {
         stdin: Some(picked.into_bytes()),
-        ..Opts::writes()
+        ..Opts::asked()
     };
     let applied = git(&repo.top, apply, opts).await?;
     if applied.success {

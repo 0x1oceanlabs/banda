@@ -12,7 +12,6 @@ use crate::repo::Repo;
 use crate::run::{Opts, Pool};
 use crate::{Repositories, Writes, status};
 use banda_kernel::{ModuleProject, Stream};
-use std::ffi::OsStr;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -135,35 +134,26 @@ impl Fetch {
     }
 }
 
-/// What a fetch nobody asked for runs with, as T3 Code's: no prompt for a
-/// password, from git, a credential manager or ssh.
-const UNASKED: [(&str, &str); 4] = [
-    ("GCM_INTERACTIVE", "never"),
-    ("GIT_ASKPASS", ""),
-    ("SSH_ASKPASS", ""),
-    ("SSH_ASKPASS_REQUIRE", "never"),
-];
-
-/// Fetches the remote `branch` follows, and says whether it did.
+/// Fetches the remote `branch` follows, and says whether it did. It is
+/// Banda's own git (`banda_git_cli`): as T3 Code's, it asks for no
+/// password and runs no gc, whose packs a failed one would leave each
+/// time until the disk is full; and it runs git's own upload-pack,
+/// whatever the remote's config names.
 async fn fetch(repo: Repo, branch: String) -> bool {
     let fetched = async {
         let key = format!("branch.{branch}.remote");
         let remote = repo.config(&key).await.ok()??;
-        // No gc: one that fails would leave its packs behind each time,
-        // until the disk is full (T3 Code). No FETCH_HEAD, which only a
-        // merge after the fetch reads.
-        let args = [
-            "fetch",
+        // No FETCH_HEAD, which only a merge after the fetch reads.
+        let mut args = vec!["fetch"];
+        args.extend(banda_git_cli::FETCH);
+        args.extend([
             "--quiet",
             "--no-tags",
-            "--no-auto-gc",
             "--no-write-fetch-head",
             "--",
             &remote,
-        ];
-        let env = UNASKED.map(|(name, value)| (name, OsStr::new(value)));
+        ]);
         let opts = Opts {
-            env: &env,
             pool: Pool::Long,
             ..Opts::default()
         };

@@ -114,14 +114,12 @@ pub async fn untracked(repo: &Repo) -> Result<Vec<String>, Failure> {
 }
 
 /// What every index of the engine's own is written with, as T3 Code's:
-/// whole, and with no file system monitor's help.
-pub const INDEX: [&str; 6] = [
+/// whole.
+pub const INDEX: [&str; 4] = [
     "-c",
     "core.splitIndex=false",
     "-c",
     "splitIndex.sharedIndexExpire=never",
-    "-c",
-    "core.fsmonitor=false",
 ];
 
 /// A copy of the repository's index in a folder of its own, whole, which

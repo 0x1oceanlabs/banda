@@ -1056,6 +1056,7 @@ banda/
     browser/desktop/  Electron main: the browser's pages, extensions, blocker and CDP endpoint (ADR 0028)
     skill/            Rust: the Banda skill, its core and the topics it gathers (ADR 0012)
   look/               Rust: banda look, the look, the sidebar's arrangement and the browser's; skill/ its topics
+  platform/git-cli/   Rust: how Banda starts git: its own bookkeeping, which runs no program a repository names, and the acts asked of it
   engine/             the banda program: serve (the kernel and its modules), call, follow, look, skill, mcp, menu, browser
   app/ui/             shadcn/ui and the Pane contract
   app/ghostty/        T3 Code's Ghostty adapter and its WebAssembly, vendored
