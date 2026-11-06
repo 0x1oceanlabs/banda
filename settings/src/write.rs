@@ -23,10 +23,12 @@ pub fn set(config: &Path, name: &str, key: &str, value: &str) -> Result<(), Vec<
     let value = value
         .parse::<Value>()
         .unwrap_or_else(|_| Value::from(value));
-    // The table the value goes in, and each key of it it sets.
+    // The table the value goes in, and each key of it it sets. A line of
+    // keys.toml keeps its call on one line: `{ action, args }`.
     let mut keys = open.tables.clone();
+    let line = name == "keys.toml" && keys.first().is_some_and(|table| table.get() == "binds");
     let pairs: Vec<(String, Value)> = match value {
-        Value::InlineTable(pairs) => {
+        Value::InlineTable(pairs) if !line => {
             keys.push(Key::new(open.leaf.clone()));
             pairs
                 .into_iter()
@@ -48,6 +50,15 @@ pub fn set(config: &Path, name: &str, key: &str, value: &str) -> Result<(), Vec<
         let table = walk(document, &keys, &open.path)?;
         for (leaf, value) in &pairs {
             put(table, leaf, value.clone());
+        }
+    }
+    if keys.is_empty() {
+        under_comments(&mut open.document, &open.leaf);
+    }
+    if name == "keys.toml" {
+        let wrong = wrong_at(&open.path, &open.document.to_string(), &keys, &open.leaf);
+        if !wrong.is_empty() {
+            return Err(wrong);
         }
     }
     let alone = alone.to_string();
@@ -299,6 +310,58 @@ fn put(table: &mut dyn TableLike, leaf: &str, mut value: Value) {
     }
 }
 
+/// What is wrong at the line of `leaf` in `tables` of keys.toml's `text`,
+/// against every manifest's actions (ADR 0071, decision 4): a line written
+/// is refused for its own fault, not for another line's, as a `none` the
+/// new mod left freeing nothing until the lines move.
+fn wrong_at(path: &Path, text: &str, tables: &[Key], leaf: &str) -> Vec<Problem> {
+    let tables: Vec<&str> = tables.iter().map(Key::get).collect();
+    let at = banda_look::keyed::spans_in(text, &tables)
+        .into_iter()
+        .find(|(name, _)| name == leaf)
+        .map(|(_, span)| text[..span.start].matches('\n').count() as u32 + 1);
+    let Some(line) = at else {
+        return Vec::new();
+    };
+    crate::keys_in_force(path, text)
+        .into_iter()
+        .filter(|problem| problem.line == Some(line))
+        .collect()
+}
+
+/// A key that is the first at the file's root goes under the file's own
+/// comments, which were the first table's, as keys.toml's `mod` under
+/// them: the `#:schema` line stays the file's first.
+fn under_comments(document: &mut DocumentMut, leaf: &str) {
+    let root = document.as_table_mut();
+    if root.iter().filter(|(_, item)| item.is_value()).count() != 1 {
+        return;
+    }
+    let first = root
+        .iter_mut()
+        .filter_map(|(_, item)| {
+            let table = item.as_table_mut()?;
+            Some((table.position()?, table))
+        })
+        .min_by_key(|(at, _)| *at)
+        .map(|(_, table)| table);
+    let Some(table) = first else {
+        return;
+    };
+    let comments = table
+        .decor()
+        .prefix()
+        .and_then(|prefix| prefix.as_str())
+        .map(str::to_owned);
+    let Some(comments) = comments.filter(|comments| !comments.trim().is_empty()) else {
+        return;
+    };
+    table.decor_mut().set_prefix("\n");
+    if let Some(mut key) = root.key_mut(leaf) {
+        key.leaf_decor_mut().set_prefix(comments);
+    }
+}
+
 /// Takes `leaf` out of `table`. The comments above it may be about more
 /// than it, the file's own among them: they stay, above what comes next.
 /// Returns them when nothing does, for the file's end.
@@ -469,6 +532,34 @@ mod tests {
     }
 
     #[test]
+    fn a_key_set_at_the_root_goes_under_the_file_s_own_comments() {
+        let config = tempfile::tempdir().unwrap();
+        let keys = config.path().join("keys.toml");
+        std::fs::write(
+            &keys,
+            "#:schema ./schemas/keys.schema.json\n# The mod.\n# mod = \"Ctrl+Alt\"\n\n[binds]\n\"Alt+M\" = \"column.maximize\"\n",
+        )
+        .unwrap();
+        set(config.path(), "keys.toml", "mod", "Ctrl+Alt").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&keys).unwrap(),
+            "#:schema ./schemas/keys.schema.json\n# The mod.\n# mod = \"Ctrl+Alt\"\n\nmod = \"Ctrl+Alt\"\n\n[binds]\n\"Alt+M\" = \"column.maximize\"\n"
+        );
+    }
+
+    #[test]
+    fn a_line_of_keys_toml_keeps_its_call_on_one_line() {
+        let config = tempfile::tempdir().unwrap();
+        let call = r#"{ action = "browser.open", args = { address = "https://github.com" } }"#;
+        set(config.path(), "keys.toml", "binds.\"Ctrl+Alt+H\"", call).unwrap();
+        assert!(
+            std::fs::read_to_string(config.path().join("keys.toml"))
+                .unwrap()
+                .contains(&format!("\"Ctrl+Alt+H\" = {call}")),
+        );
+    }
+
+    #[test]
     fn a_scope_s_table_has_its_own_lines() {
         let config = tempfile::tempdir().unwrap();
         let keys = config.path().join("keys.toml");
@@ -479,13 +570,21 @@ mod tests {
         set(
             config.path(),
             "keys.toml",
-            "binds.composer.\"Ctrl+J\"",
+            "binds.composer.\"Return\"",
             "none",
         )
         .unwrap();
+        // A line no key of Banda's needs: its key frees nothing.
+        let wrong = set(
+            config.path(),
+            "keys.toml",
+            "binds.composer.\"Ctrl+K\"",
+            "none",
+        );
+        assert!(wrong.unwrap_err()[0].message.contains("frees nothing"));
         assert_eq!(
             std::fs::read_to_string(&keys).unwrap(),
-            "[binds]\n\"Alt+F\" = \"pane.new\"\n\n[binds.composer]\n\"ctrl+j\" = \"none\"\n"
+            "[binds]\n\"Alt+F\" = \"pane.new\"\n\n[binds.composer]\n\"ctrl+j\" = \"agents.composer.send\"\nReturn = \"none\"\n"
         );
     }
 

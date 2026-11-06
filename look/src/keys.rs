@@ -157,6 +157,17 @@ impl Default for Mod {
     }
 }
 
+impl Bind {
+    /// The keys of a mod it holds: Alt, Ctrl and Super, but Shift.
+    pub fn held(&self) -> Mod {
+        Mod {
+            alt: self.alt,
+            ctrl: self.ctrl,
+            sup: self.sup,
+        }
+    }
+}
+
 impl Mod {
     /// The mod with one key more (ADR 0068, decision 2): the first of
     /// Ctrl, Super and Alt it does not hold; none for all three.
@@ -480,6 +491,23 @@ pub struct Action {
     /// What it takes, as a JSON Schema, as the engine's tools give theirs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub args: Option<serde_json::Value>,
+}
+
+impl Action {
+    /// What it takes, from its JSON Schema: each arg by its name, and what
+    /// it is, in the order it declares them.
+    pub fn takes(&self) -> Vec<(String, String)> {
+        let schema = self.args.as_ref();
+        let properties = schema.and_then(|schema| schema["properties"].as_object());
+        properties
+            .into_iter()
+            .flatten()
+            .map(|(name, arg)| {
+                let about = arg["description"].as_str().unwrap_or_default();
+                (name.clone(), about.to_owned())
+            })
+            .collect()
+    }
 }
 
 /// Where a key works besides the whole window (ADR 0071, decision 1): a
@@ -810,6 +838,57 @@ fn bound(manifests: &Manifests, bind: &Bind) -> Result<Option<usize>, String> {
 /// or the window's, `[binds]` (ADR 0071, decision 1).
 pub fn table_of(scope: Option<&str>) -> String {
     scope.map_or("[binds]".to_owned(), |scope| format!("[binds.{scope}]"))
+}
+
+/// The line of keys.toml that binds `key`, as `banda settings` takes it:
+/// `binds."Alt+M"`, or `binds.composer."Return"` in a scope's table.
+pub fn path_of(key: &str, scope: Option<&str>) -> String {
+    let key = toml_edit::Value::from(key).to_string();
+    match scope {
+        Some(scope) => format!("binds.{scope}.{key}"),
+        None => format!("binds.{key}"),
+    }
+}
+
+/// A line of the Person's moved with a new mod (ADR 0068, decision 5): to
+/// its new key, or out, for a `none`, whose key is no longer Banda's.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Move<'a> {
+    pub bind: &'a Bind,
+    pub to: Option<String>,
+}
+
+/// The Person's lines that hold the mod `from`, alone or with one key
+/// more, and where each goes with the mod `to`, at the same level: as the
+/// window's `movesOf` has it.
+pub fn moves(binds: &[Bind], from: Mod, to: Mod) -> Vec<Move<'_>> {
+    if from == to {
+        return Vec::new();
+    }
+    binds
+        .iter()
+        .filter_map(|bind| {
+            let more = if bind.held() == from {
+                false
+            } else if from.with_more() == Some(bind.held()) {
+                true
+            } else {
+                return None;
+            };
+            let to = bind.action.as_ref().map(|_| {
+                Declared {
+                    code: bind.code.clone(),
+                    shift: bind.shift,
+                    held: !more,
+                    more,
+                    ..Declared::default()
+                }
+                .real(to)
+                .text()
+            });
+            Some(Move { bind, to })
+        })
+        .collect()
 }
 
 /// Whether a key types a character into a field: a letter, a digit, a

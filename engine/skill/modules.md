@@ -160,6 +160,20 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 
 Its methods, `banda call files.<method>`: `list`, `stat`, `read`, `write`, `find`, `watch`, `places`, `opened`, `recent`, `archive`, `sheet`, `make`, `rename`, `move`, `copy`, `cancel`, `trash`, `trashed`, `restore`, `delete`, `empty`, `search`.
 
+## Keys (`keys`)
+
+Banda's keys (ADR 0071): every action with its keys in force, and the lines of keys.toml that bind them, written as `banda settings set` writes after the look's checks. `banda keys` is its command; an Agent has its methods as tools.
+
+Its methods, `banda call keys.<method>`: `list`, `bind`, `free`, `reset`, `set_mod`.
+
+What an Agent in a Thread may call as a tool of `banda mcp`:
+
+- `keys_list`: Every action of Banda's window and its modules: its id, title, section, the scope its keys work in (none: everywhere), its keys in force, whose each is (the Person's line in keys.toml, or Banda's own), and what it takes. Find an action by its title here before binding it.
+- `keys_bind`: Binds a key to an action, in keys.toml: `Alt+M` to `column.maximize`, with the args it takes when it takes any, in its scope's table for an action of a scope. Banda's keys hold the mod (Alt, unless keys.toml moved it). It refuses, with why, an action Banda has not, args it does not take, and a key the window's fields would type. Tell your Person what changed, and that `keys_reset` undoes it.
+- `keys_free`: Frees a key, in keys.toml: it goes to the Pane, as Alt+F to a shell, and the action that had it keeps its other keys.
+- `keys_reset`: Takes the Person's line of a key out of keys.toml, so Banda's own key is back.
+- `keys_mod`: Sets the mod, held for every Banda key and the mouse's moves: one or two of Alt, Ctrl and Super, as `Ctrl+Alt` where the desktop holds Alt. It moves the Person's lines with it.
+
 ## Pull requests (`pulls`)
 
 The GitHub pull requests linked to a Project's Threads (ADR 0076): Create PR's, an Agent's own `gh pr create`, its tools' and the Person's. It reads them through `gh`, one reader for the Project while something follows it, and works out what each needs and whose turn it is.

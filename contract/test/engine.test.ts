@@ -111,6 +111,7 @@ test("a window calls, follows and sees refusals by their code", async () => {
       "git",
       "files",
       "pulls",
+      "keys",
       "workspaces",
       "problems",
       "sharing",

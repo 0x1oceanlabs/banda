@@ -127,6 +127,11 @@ pub fn check(places: &Places, paths: &[PathBuf]) -> Vec<Problem> {
 
 fn check_file(path: &Path) -> Vec<Problem> {
     match std::fs::read_to_string(path) {
+        Ok(text) if path.ends_with("keys.toml") => {
+            let mut problems = check_text(path, &text);
+            problems.extend(keys_in_force(path, &text));
+            problems
+        }
         Ok(text) => check_text(path, &text),
         Err(error) => vec![Problem::whole(path, error.to_string())],
     }
@@ -140,6 +145,17 @@ fn check_text(path: &Path, text: &str) -> Vec<Problem> {
         Some(file) => file.check(path, text),
         None => banda_look::check_text(path, text),
     }
+}
+
+/// What is wrong with keys.toml's lines against every manifest's actions
+/// (ADR 0071, decision 4): an id no App runs, args it does not take, a key
+/// a field types, a `none` that frees nothing, two actions on one key.
+pub(crate) fn keys_in_force(path: &Path, text: &str) -> Vec<Problem> {
+    let mut problems = Vec::new();
+    if let Some((_, keys)) = banda_look::keys::read_keys(path, text, &mut Vec::new()) {
+        banda_look::keys::in_force(&manifests(), &keys, &mut problems);
+    }
+    problems
 }
 
 #[cfg(test)]
