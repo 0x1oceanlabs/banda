@@ -66,8 +66,19 @@ function actionOf(action: Action<never>) {
     unlisted,
     scope,
     args,
+    runsAsPerson,
   } = action
-  return { id, title, section, keys, family, unlisted, scope, args }
+  return {
+    id,
+    title,
+    section,
+    keys,
+    family,
+    unlisted,
+    scope,
+    args,
+    runsAsPerson,
+  }
 }
 
 /** What a module's window part offers, as `banda modules` prints it: its

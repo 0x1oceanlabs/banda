@@ -31,7 +31,10 @@
           }
         },
         "additionalProperties": false
-      }
+      },
+      "runsAsPerson": [
+        "ask"
+      ]
     },
     {
       "id": "agents.composer.send",

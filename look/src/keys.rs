@@ -491,9 +491,47 @@ pub struct Action {
     /// What it takes, as a JSON Schema, as the engine's tools give theirs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub args: Option<serde_json::Value>,
+    /// Its key acts as the Person (ADR 0083, decision 3), so only the
+    /// Person binds it.
+    #[serde(
+        default,
+        rename = "runsAsPerson",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub runs_as_person: Option<RunsAsPerson>,
+}
+
+/// When an action's key acts as the Person (ADR 0083, decision 3): it
+/// sends words to an Agent, or runs or opens something outside Banda.
+/// Moving Panes or showing a file in Banda does not; the window shows what
+/// they do.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum RunsAsPerson {
+    /// `true`: whatever it is given, as `file.outside`. `false` is as if
+    /// it were not set.
+    Always(bool),
+    /// Given any of these args, as `thread.new` given `ask`.
+    Given(Vec<String>),
 }
 
 impl Action {
+    /// Whether its key, given `args`, acts as the Person (ADR 0083,
+    /// decision 3): none when it does not; else the args given that make
+    /// it so, none of them when it does whatever it is given.
+    pub fn as_person<'a>(&'a self, args: Option<&'a Args>) -> Option<Vec<&'a str>> {
+        match self.runs_as_person.as_ref()? {
+            RunsAsPerson::Always(always) => always.then(Vec::new),
+            RunsAsPerson::Given(names) => {
+                let given: Vec<&str> = (args.into_iter().flat_map(|args| args.keys()))
+                    .filter(|name| names.contains(name))
+                    .map(String::as_str)
+                    .collect();
+                (!given.is_empty()).then_some(given)
+            }
+        }
+    }
+
     /// What it takes, from its JSON Schema: each arg by its name, and what
     /// it is, in the order it declares them.
     pub fn takes(&self) -> Vec<(String, String)> {
@@ -707,6 +745,15 @@ fn renamed(id: &str) -> &str {
     }
 }
 
+/// The action a line of keys.toml runs by `id`, and where it is among the
+/// manifests' actions: by its id now or one it had before, spaces around
+/// it aside. The look finds a line's action by it alone, so what checks a
+/// line finds the action the line runs.
+pub fn action_named<'a>(manifests: &'a Manifests, id: &str) -> Option<(usize, &'a Action)> {
+    let id = renamed(id.trim());
+    (manifests.actions.iter().enumerate()).find(|(_, action)| action.id == id)
+}
+
 /// Each action's keys in force (ADR 0071, decision 4): Banda's with the
 /// mod, the first to take a key keeping it, and two actions on one named
 /// at the mod's line; then the Person's lines, a key bound leaving the
@@ -818,15 +865,18 @@ fn bound(manifests: &Manifests, bind: &Bind) -> Result<Option<usize>, String> {
             return Err(format!("it would be typed in the {title}"));
         }
     }
-    let Some(id) = bind.action.as_deref().map(renamed) else {
+    let Some(id) = bind.action.as_deref() else {
         return Ok(None);
     };
-    let index = (manifests.actions.iter().position(|action| action.id == id))
-        .ok_or_else(|| format!("Banda has no action {id}; the key sheet lists them"))?;
-    let action = &manifests.actions[index];
+    let Some((index, action)) = action_named(manifests, id) else {
+        let id = renamed(id.trim());
+        return Err(format!(
+            "Banda has no action {id}; the key sheet lists them"
+        ));
+    };
     if action.scope.as_deref() != scope {
         let table = table_of(action.scope.as_deref());
-        return Err(format!("{id} works in {table}: bind it there"));
+        return Err(format!("{} works in {table}: bind it there", action.id));
     }
     match bind.args.as_ref().and_then(|args| wrong_args(action, args)) {
         Some(wrong) => Err(wrong),
@@ -1128,6 +1178,7 @@ mod tests {
             unlisted: false,
             scope: None,
             args: None,
+            runs_as_person: None,
         };
         let mut open = action("browser.open", "Open in a browser", vec![]);
         open.args = Some(serde_json::json!({
@@ -1312,6 +1363,7 @@ mod tests {
             unlisted: false,
             scope: Some("launcher".to_owned()),
             args: None,
+            runs_as_person: None,
         };
         let actions = in_force(&manifests_of(vec![open]), &Keys::default(), &mut Vec::new());
         let key = &actions[0].keys[0];

@@ -34,6 +34,8 @@ const newThread: Action = {
     ask: "what to write to its Agent first",
     harness: "the Harness it starts on",
   }),
+  // Its `ask` goes to the new Thread's Agent at once.
+  runsAsPerson: ["ask"],
   title: "New Thread",
   section: "Threads",
   keys: [{ code: "Enter", mod: true }],

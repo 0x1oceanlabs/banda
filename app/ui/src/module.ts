@@ -185,6 +185,11 @@ export type Action<Context = WindowApi> = {
    * the key sheet and an Agent may give it, as a JSON Schema, as the
    * engine's tools give theirs; `takes` writes one. */
   args?: ArgsSchema
+  /** Its key acts as the Person: it sends words to an Agent, or runs or
+   * opens something outside Banda (ADR 0083, decision 3). Only the Person
+   * binds it so: `true` whatever it is given, or the args that make it
+   * so, as `thread.new`'s `ask`. */
+  runsAsPerson?: true | readonly string[]
   /** Whether its key is its own now. While it is not, the key goes on to
    * the Pane, as `F2` to a terminal's program while no Thread has the
    * focus. Its key is always its own, by default. */

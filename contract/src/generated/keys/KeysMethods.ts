@@ -20,9 +20,11 @@ list: CallMethod<Nothing, Array<Listed>>,
  * `column.maximize`, with the args it takes when it takes any,
  * in its scope's table for an action of a scope. Banda's keys
  * hold the mod (Alt, unless keys.toml moved it). It refuses, with
- * why, an action Banda has not, args it does not take, and a key
- * the window's fields would type. Tell your Person what changed,
- * and that `keys_reset` undoes it.
+ * why, an action Banda has not, args it does not take, a key the
+ * window's fields would type, and a key only your Person binds:
+ * one that sends words to an Agent, or runs or opens something
+ * outside Banda, as `thread.new` with `ask` does. Tell your Person
+ * what changed, and that `keys_reset` undoes it.
  */
 bind: CallMethod<Bind, string>, 
 /**
