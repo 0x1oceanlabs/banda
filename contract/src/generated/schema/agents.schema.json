@@ -16,7 +16,7 @@
       }
     },
     "flow": {
-      "description": "How an Agent's windows stand: `\"free\"`, where they are; `\"row\"`,\non its Project's workspace beside the Project's other Agents;\n`\"solo\"`, as the row, the Agent you are at filling the screen.\n`workspaces` before ADR 0079 (grace).",
+      "description": "The Flow (ADR 0079). `workspaces` before ADR 0079 (grace).",
       "$ref": "#/$defs/Flow"
     }
   },
