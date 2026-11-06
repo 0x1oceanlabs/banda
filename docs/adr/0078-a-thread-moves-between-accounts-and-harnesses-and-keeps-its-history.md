@@ -57,7 +57,7 @@ The points Roma decided are marked _decided_.
 
 3. **The sessions are Banda's** (_decided_).
    - **Claude Code.** The carried adapter gives the Agent SDK a `sessionStore` that the engine keeps, in the Project. Any Claude account continues a Thread's session, on this computer or, later, on another host.
-   - **One adapter process per account.** The account's `CLAUDE_CONFIG_DIR` is set in that process's environment, never inherited from Banda's own (the spike's trap, research part 4).
+   - **One adapter process per account.** The process's environment picks the account: the entry's `CLAUDE_CONFIG_DIR`, else the engine's own, as Limits and Usage read it. It never goes in a session's options, because on a resume the SDK follows the process's environment instead (the spike's trap, research part 4).
    - **Codex.** An account's folder is a shadow of the shared `CODEX_HOME`: every entry is linked except `auth.json`, `auth.lock` and `models_cache.json`, as T3 Code does. A resume that fails with `invalid_encrypted_content` is retried once without the encrypted reasoning.
    - `Evidence` names a session by its store (the Harness), not by the entry. `continued_by` asks whether the store matches.
 
