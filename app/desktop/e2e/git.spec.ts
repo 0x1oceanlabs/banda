@@ -142,6 +142,7 @@ test("the Diff scrolls under the wheel, as its own view, not only its file tree"
   await page.keyboard.press("Alt+KeyN")
   const launcher = page.getByRole("region", { name: "New Pane" })
   await expect(launcher.getByRole("button", { name: /Diff/ })).toBeVisible()
+  await expect(launcher).toHaveAttribute("data-focused", "true")
   await page.keyboard.press("KeyD")
   const diff = page.getByRole("region", { name: "Diff" })
   await expect(diff.locator("header")).toContainText("6 files")
