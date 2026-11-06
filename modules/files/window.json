@@ -33,8 +33,12 @@
       "id": "files.peek",
       "title": "Quick Look",
       "section": "Files",
-      "keys": [],
-      "unlisted": true,
+      "keys": [
+        {
+          "code": "Space"
+        }
+      ],
+      "scope": "files",
       "args": {
         "type": "object",
         "properties": {
@@ -87,102 +91,241 @@
       ]
     },
     {
+      "id": "files.open-picked",
+      "title": "Open the file picked, or go into the folder",
+      "section": "Files",
+      "keys": [
+        {
+          "code": "Enter"
+        }
+      ],
+      "scope": "files"
+    },
+    {
       "id": "files.up",
       "title": "Go to the folder above",
       "section": "Files",
-      "keys": [],
-      "unlisted": true
+      "keys": [
+        {
+          "code": "ArrowUp",
+          "primary": true
+        }
+      ],
+      "scope": "files"
     },
     {
       "id": "files.path",
       "title": "Type a path",
       "section": "Files",
-      "keys": [],
-      "unlisted": true
+      "keys": [
+        {
+          "code": "KeyL",
+          "primary": true
+        }
+      ],
+      "scope": "files"
     },
     {
       "id": "files.hidden",
       "title": "Show hidden files, or hide them",
       "section": "Files",
-      "keys": [],
-      "unlisted": true
+      "keys": [
+        {
+          "code": "Period",
+          "primary": true,
+          "shift": true
+        }
+      ],
+      "scope": "files"
     },
     {
       "id": "files.filter",
       "title": "Filter the files",
       "section": "Files",
-      "keys": [],
-      "unlisted": true
+      "keys": [
+        {
+          "code": "Slash"
+        }
+      ],
+      "scope": "files"
     },
     {
       "id": "files.rename-picked",
       "title": "Rename the files picked",
       "section": "Files",
-      "keys": [],
-      "unlisted": true
+      "keys": [
+        {
+          "code": "F2"
+        }
+      ],
+      "scope": "files"
     },
     {
       "id": "files.trash-picked",
       "title": "Move the files picked to the Trash",
       "section": "Files",
-      "keys": [],
-      "unlisted": true
+      "keys": [
+        {
+          "code": "Backspace",
+          "primary": true
+        },
+        {
+          "code": "Delete"
+        }
+      ],
+      "scope": "files"
     },
     {
       "id": "files.undo",
       "title": "Undo what Files did last",
       "section": "Files",
-      "keys": [],
-      "unlisted": true
+      "keys": [
+        {
+          "code": "KeyZ",
+          "primary": true
+        }
+      ],
+      "scope": "files"
     },
     {
       "id": "files.copy-picked",
       "title": "Copy the files picked",
       "section": "Files",
-      "keys": [],
-      "unlisted": true
+      "keys": [
+        {
+          "code": "KeyC",
+          "primary": true
+        }
+      ],
+      "scope": "files"
     },
     {
       "id": "files.cut-picked",
       "title": "Cut the files picked",
       "section": "Files",
-      "keys": [],
-      "unlisted": true
+      "keys": [
+        {
+          "code": "KeyX",
+          "primary": true
+        }
+      ],
+      "scope": "files"
     },
     {
       "id": "files.paste",
       "title": "Paste the files copied or cut",
       "section": "Files",
-      "keys": [],
-      "unlisted": true
+      "keys": [
+        {
+          "code": "KeyV",
+          "primary": true
+        }
+      ],
+      "scope": "files"
     },
     {
       "id": "files.duplicate-picked",
       "title": "Duplicate the files picked",
       "section": "Files",
-      "keys": [],
-      "unlisted": true
+      "keys": [
+        {
+          "code": "KeyD",
+          "primary": true
+        }
+      ],
+      "scope": "files"
     },
     {
       "id": "files.new-file",
       "title": "Make a file",
       "section": "Files",
-      "keys": [],
-      "unlisted": true
+      "keys": [
+        {
+          "code": "KeyN",
+          "primary": true
+        }
+      ],
+      "scope": "files"
     },
     {
       "id": "files.new-folder",
       "title": "Make a folder",
       "section": "Files",
-      "keys": [],
-      "unlisted": true
+      "keys": [
+        {
+          "code": "KeyN",
+          "primary": true,
+          "shift": true
+        }
+      ],
+      "scope": "files"
     },
     {
       "id": "files.find-in-files",
       "title": "Find words in the files",
       "section": "Files",
-      "keys": [],
-      "unlisted": true
+      "keys": [
+        {
+          "code": "KeyF",
+          "primary": true,
+          "shift": true
+        }
+      ],
+      "scope": "files"
+    },
+    {
+      "id": "files.view-list",
+      "title": "Show the folder as a list",
+      "section": "Files",
+      "keys": [
+        {
+          "code": "Digit1",
+          "primary": true
+        }
+      ],
+      "scope": "files"
+    },
+    {
+      "id": "files.view-columns",
+      "title": "Show the folder as columns",
+      "section": "Files",
+      "keys": [
+        {
+          "code": "Digit2",
+          "primary": true
+        }
+      ],
+      "scope": "files"
+    },
+    {
+      "id": "files.view-gallery",
+      "title": "Show the folder as a gallery",
+      "section": "Files",
+      "keys": [
+        {
+          "code": "Digit3",
+          "primary": true
+        }
+      ],
+      "scope": "files"
+    },
+    {
+      "id": "files.show-info",
+      "title": "Show the info of the file picked, or hide it",
+      "section": "Files",
+      "keys": [
+        {
+          "code": "KeyI",
+          "primary": true
+        }
+      ],
+      "scope": "files"
+    }
+  ],
+  "scopes": [
+    {
+      "id": "files",
+      "title": "Files"
     }
   ],
   "sources": [

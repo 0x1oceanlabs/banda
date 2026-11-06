@@ -47,3 +47,36 @@ export const WHEN = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
   timeStyle: "short",
 })
+
+/** Permissions as `ls -l` writes them, with the bits as `chmod` takes
+ * them: `rw-r--r-- (644)`. */
+export function modeWords(mode: number): string {
+  const letters = [6, 3, 0]
+    .map((shift) => {
+      const bits = (mode >> shift) & 7
+      return `${bits & 4 ? "r" : "-"}${bits & 2 ? "w" : "-"}${bits & 1 ? "x" : "-"}`
+    })
+    .join("")
+  return `${letters} (${(mode & 0o7777).toString(8).padStart(3, "0")})`
+}
+
+/** How long ago a time was, in a word or two: `just now`, `5 minutes
+ * ago`, `3 days ago`, and the day itself past a month. */
+export function agoWords(when: number, now = Date.now()): string {
+  const seconds = Math.max(0, Math.round((now - when) / 1000))
+  const steps: [number, string][] = [
+    [60, "second"],
+    [60, "minute"],
+    [24, "hour"],
+    [30, "day"],
+  ]
+  if (seconds < 10) return "just now"
+  let count = seconds
+  for (const [next, word] of steps) {
+    if (count < next) return `${count} ${word}${count === 1 ? "" : "s"} ago`
+    count = Math.floor(count / next)
+  }
+  return DAY.format(when)
+}
+
+const DAY = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" })

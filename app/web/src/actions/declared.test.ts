@@ -67,16 +67,14 @@ const MATCHERS = new Set([
 const LEFT: { readonly [place: string]: string } = {
   "modules/agents/pane/src/Composer.tsx KeyV":
     "Ctrl+Shift+V pastes as plain text, as the platform's own paste does",
-  "modules/files/pane/src/keys.ts matches":
-    "the Files Pane's keys wait for its scope (ADR 0073), as their comment says",
   "modules/files/pane/src/views/pdf.tsx KeyF":
-    "a PDF's find waits for the Files Pane's scope (ADR 0073)",
+    "a PDF's find waits for a scope of a file's Pane, files.file (ADR 0073)",
   "modules/files/pane/src/views/hex.tsx matches":
-    "the bytes' Go to offset waits for the Files Pane's scope (ADR 0073)",
+    "the bytes' Go to offset waits for a scope of a file's Pane, files.file (ADR 0073)",
   "modules/files/pane/src/views/edit.tsx matches":
-    "the editor's E and Ctrl+S wait for the Files Pane's scope (ADR 0073)",
+    "the editor's E and Ctrl+S wait for a scope of a file's Pane, files.file (ADR 0073)",
   "modules/files/pane/src/views/json.tsx matches":
-    "the JSON's copy of the value picked waits for the Files Pane's scope (ADR 0073)",
+    "the JSON's copy of the value picked waits for a scope of a file's Pane, files.file (ADR 0073)",
 }
 
 /** Whether `node` reads a press's key or code: `event.key`. */

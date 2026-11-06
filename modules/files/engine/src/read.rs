@@ -31,7 +31,7 @@ pub fn stat(path: &Path) -> Option<Stat> {
 
 /// A file's kind of content: by its extension, else by its first bytes,
 /// else text when they read as text.
-fn mime(path: &Path) -> String {
+pub(crate) fn mime(path: &Path) -> String {
     if let Some(guess) = mime_guess::from_path(path).first() {
         return guess.essence_str().to_owned();
     }

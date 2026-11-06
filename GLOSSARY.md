@@ -273,6 +273,14 @@ move the tile, ↵ opens the file as a Pane (ADR 0073, decision 7). One per
 window.
 _Avoid_: preview Pane, peek (that is its code's word).
 
+**Columns, Gallery**:
+Two of the ways a Files Pane shows its folder, beside its tree: Miller
+columns, each folder from the Pane's to the row picked a column, the file
+picked drawn in the last; and a Gallery, the row picked big over a
+filmstrip of its folder's small pictures (Ctrl+1, 2, 3; ADR 0073, as
+amended in step F6). One pick serves the three.
+_Avoid_: column view (a column is the Strip's), grid.
+
 **Previewer**:
 What draws a kind of file wherever a file is shown, a module's: code, a
 PDF, a video. The one that matches a file best draws it, unless the

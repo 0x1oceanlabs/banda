@@ -4,7 +4,8 @@
  * Reveal in the system's file manager; Add to chat; Copy path, whole, from
  * the Project's folder or its name; New file and New folder beside it, or
  * in it; Rename, Duplicate, Copy, Cut and Paste; Move to Trash; and Pin
- * or Unpin for a folder. Each operation says its key, the tree's own.
+ * or Unpin for a folder. Each operation says its key in force, the
+ * Pane's own.
  */
 import {
   DropdownMenuItem,
@@ -15,7 +16,7 @@ import {
   DropdownMenuSubTrigger,
 } from "@banda/ui/components/dropdown-menu"
 import { copyText } from "@banda/ui/lib/clipboard"
-import { keyLabel } from "@banda/ui/lib/keys"
+import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import {
   FILE_MANAGER,
   openInEditor,
@@ -45,7 +46,7 @@ import {
   Trash2Icon,
 } from "lucide-react"
 import type { ReactNode } from "react"
-import { type Does, keyOf } from "./keys"
+import { type Does, idOf } from "./keys"
 import { nameOf, within } from "./where"
 
 /** What a row's menu does to files. */
@@ -80,6 +81,7 @@ const SHOWN: Partial<Record<Does, { icon: ReactNode; words: string }>> = {
 
 /** Those of `listed` that `acts` offers, each with its key. */
 function ActItems({ acts, listed }: { acts: Acts; listed: readonly Does[] }) {
+  const keyLabel = useKeyLabel()
   return listed
     .filter((does) => acts.offers.includes(does))
     .map((does) => {
@@ -96,7 +98,7 @@ function ActItems({ acts, listed }: { acts: Acts; listed: readonly Does[] }) {
         >
           {shown?.icon}
           {words}
-          <DropdownMenuShortcut>{keyLabel(keyOf(does))}</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{keyLabel(idOf(does))}</DropdownMenuShortcut>
         </DropdownMenuItem>
       )
     })
@@ -140,18 +142,19 @@ export function RowMenu({
 }) {
   const relative = top === null ? null : within(top, whole)
   const { editor, others } = useEditors()
+  const keyLabel = useKeyLabel()
   return (
     <>
       <DropdownMenuItem onClick={onOpen}>
         {folder ? <FolderOpenIcon /> : <SquareArrowOutUpRightIcon />}
         Open
-        <DropdownMenuShortcut>{keyLabel(keyOf("open"))}</DropdownMenuShortcut>
+        <DropdownMenuShortcut>{keyLabel(idOf("open"))}</DropdownMenuShortcut>
       </DropdownMenuItem>
       {onPeek && (
         <DropdownMenuItem onClick={onPeek}>
           <EyeIcon />
           Quick Look
-          <DropdownMenuShortcut>{keyLabel(keyOf("peek"))}</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{keyLabel(idOf("peek"))}</DropdownMenuShortcut>
         </DropdownMenuItem>
       )}
       {onShow && (

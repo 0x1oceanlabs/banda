@@ -25,8 +25,12 @@ impl World {
         let root = tempfile::tempdir().unwrap();
         let owner = PersonId::new();
         let config = root.path().join("config");
+        let files = Files::new().config_in(config).thumbs_in(
+            root.path().join(".cache"),
+            Some(root.path().join(".thumbnails")),
+        );
         let kernel = Kernel::builder(root.path(), root.path().join(".data"), owner)
-            .module(Files::new().config_in(config))
+            .module(files)
             .open()
             .await
             .unwrap();
@@ -60,6 +64,16 @@ impl World {
     /// Banda's settings folder, as the engine gives it the module.
     pub fn config(&self) -> PathBuf {
         self.root.path().join("config")
+    }
+
+    /// Banda's cache of files' small pictures.
+    pub fn cache(&self) -> PathBuf {
+        self.root.path().join(".cache")
+    }
+
+    /// freedesktop's cache of them, as the engine is given it.
+    pub fn shared(&self) -> PathBuf {
+        self.root.path().join(".thumbnails")
     }
 
     /// A folder beside the Project's, outside it.

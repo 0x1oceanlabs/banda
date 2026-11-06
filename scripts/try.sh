@@ -161,7 +161,7 @@ cd app/desktop
 # that one as itself (entry.ts, update.ts). T3 Code's makes Electron Node.
 unset APPIMAGE APPDIR ARGV0 OWD ELECTRON_RUN_AS_NODE
 export BANDA_ROOT=$trial/root BANDA_DATA=$trial/data BANDA_STATE=$trial/state \
-  BANDA_CONFIG=$trial/config BANDA_ENGINE=$trial/bin/banda
+  BANDA_CONFIG=$trial/config BANDA_CACHE=$trial/cache BANDA_ENGINE=$trial/bin/banda
 # Chromium writes the port it took in the window's profile, for drive.mjs.
 port=$trial/state/window/DevToolsActivePort
 rm -f "$port"

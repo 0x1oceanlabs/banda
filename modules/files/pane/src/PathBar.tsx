@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
-import { keyLabel } from "@banda/ui/lib/keys"
+import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { cn } from "@banda/ui/lib/utils"
 import {
   ChevronRightIcon,
@@ -21,7 +21,7 @@ import {
   HouseIcon,
   SearchIcon,
 } from "lucide-react"
-import { keyOf } from "./keys"
+import { idOf } from "./keys"
 import {
   candidates,
   completed,
@@ -58,6 +58,7 @@ export function PathBar({
   onGo,
   onFilter,
 }: PathBarProps) {
+  const keyLabel = useKeyLabel()
   return (
     <div className="flex h-8 shrink-0 items-center gap-1 border-b px-1.5">
       {editing ? (
@@ -76,7 +77,7 @@ export function PathBar({
         <button
           type="button"
           aria-label="Filter"
-          title={`Filter · ${keyLabel(keyOf("filter"))}`}
+          title={keyLabel(idOf("filter"), "Filter")}
           onClick={onFilter}
           className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-foreground/7 hover:text-foreground [&_svg]:size-3.5"
         >
@@ -103,12 +104,13 @@ function Crumbs({
 }) {
   const bar = useRef<HTMLElement>(null)
   const room = useWidth(bar)
+  const keyLabel = useKeyLabel()
   const { shown, folded } = foldCrumbs(crumbsOf(dir, home), room - 24)
   return (
     <nav
       ref={bar}
       aria-label="Path"
-      title={`Type a path · ${keyLabel(keyOf("path"))}`}
+      title={keyLabel(idOf("path"), "Type a path")}
       className="flex h-full min-w-0 flex-1 cursor-text items-center overflow-hidden"
       onClick={(event) => {
         if (event.target === event.currentTarget) onEdit()

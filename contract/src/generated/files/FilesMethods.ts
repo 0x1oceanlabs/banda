@@ -6,9 +6,12 @@ import type { StreamMethod } from "../StreamMethod";
 import type { Archive } from "./Archive";
 import type { ArchiveAsk } from "./ArchiveAsk";
 import type { CancelAsk } from "./CancelAsk";
+import type { Counted } from "./Counted";
 import type { Done } from "./Done";
 import type { FindAsk } from "./FindAsk";
 import type { Found } from "./Found";
+import type { Info } from "./Info";
+import type { InfoAsk } from "./InfoAsk";
 import type { ItemsAsk } from "./ItemsAsk";
 import type { Job } from "./Job";
 import type { ListAsk } from "./ListAsk";
@@ -25,9 +28,12 @@ import type { SearchAsk } from "./SearchAsk";
 import type { Searched } from "./Searched";
 import type { Sheet } from "./Sheet";
 import type { SheetAsk } from "./SheetAsk";
+import type { SizeAsk } from "./SizeAsk";
 import type { Stat } from "./Stat";
 import type { StatAsk } from "./StatAsk";
 import type { Text } from "./Text";
+import type { Thumb } from "./Thumb";
+import type { ThumbAsk } from "./ThumbAsk";
 import type { TrashAsk } from "./TrashAsk";
 import type { Trashcan } from "./Trashcan";
 import type { WatchAsk } from "./WatchAsk";
@@ -153,4 +159,21 @@ empty: CommandMethod<Nothing, number>,
  * binary files: each file's lines as they are found, at most 100
  * a file, until the most lines asked; then how many.
  */
-search: StreamMethod<SearchAsk, Searched>, };
+search: StreamMethod<SearchAsk, Searched>, 
+/**
+ * A file's small picture, its longest side the size asked or the
+ * next made: freedesktop's where the desktop made one, else made
+ * from a picture `image` reads; none for anything else.
+ */
+thumb: CallMethod<ThumbAsk, Thumb | null>, 
+/**
+ * What a path is at length: its kind, type, size, times,
+ * permissions and owner, where a link leads, a picture's size and
+ * EXIF, and the last commit that changed it.
+ */
+info: CallMethod<InfoAsk, Info>, 
+/**
+ * What a folder holds, counted: how far it is as it goes, then
+ * that it is done. Letting go of the stream stops it.
+ */
+size: StreamMethod<SizeAsk, Counted>, };

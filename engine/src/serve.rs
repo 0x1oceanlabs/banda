@@ -69,8 +69,13 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         .module(Browser::new())
         .module(Git::new())
         // Banda's settings are the settings Pane's to write (ADR 0073,
-        // decision 8).
-        .module(Files::new().config_in(places.config.clone()))
+        // decision 8); files' small pictures are kept in Banda's cache,
+        // and freedesktop's (step F6).
+        .module(
+            Files::new()
+                .config_in(places.config.clone())
+                .thumbs_in(places.thumbnails(), banda_files::thumb::shared_from_env()),
+        )
         .module(Pulls::new())
         .module(Workspaces::new())
         .module(problems(&places))

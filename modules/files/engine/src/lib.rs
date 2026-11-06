@@ -11,7 +11,8 @@
 //! `copy`, `trash`), each answering what undoes it; it lists the Trash,
 //! puts back from it and deletes there for good (`trashed`, `restore`,
 //! `delete`, `empty`). Nothing in `.git` nor in Banda's settings folder
-//! is changed. Each path goes through the kernel's path guard, [`Reach`]:
+//! is changed. It makes a file's small picture (`thumb`), says what a path
+//! is at length (`info`) and counts what a folder holds (`size`). Each path goes through the kernel's path guard, [`Reach`]:
 //! a relative one starts at the Project's folder, the Person may name any,
 //! and an Agent's call reaches only inside the Project's folder.
 //!
@@ -24,6 +25,7 @@ pub mod settings;
 
 mod archive;
 mod find;
+mod info;
 mod list;
 mod ops;
 mod places;
@@ -31,15 +33,16 @@ mod read;
 mod recent;
 mod search;
 mod sheet;
+pub mod thumb;
 mod trashcan;
 mod write;
 
 use banda_kernel::{Call, Changed, Module, Nothing, Participant, Reach, Refusal, Right, Stream};
 use model::{
-    Archive, ArchiveAsk, CancelAsk, Done, FindAsk, Found, ItemsAsk, Job, ListAsk, Listing, Locked,
-    MakeAsk, Making, MoveAsk, Opened, OpenedAsk, Places, ReadAsk, RecentAsk, RenameAsk, SearchAsk,
-    Searched, Sheet, SheetAsk, Stat, StatAsk, Step, Text, TrashAsk, Trashcan, WatchAsk, Watched,
-    WriteAsk, Written,
+    Archive, ArchiveAsk, CancelAsk, Counted, Done, FindAsk, Found, Info, InfoAsk, ItemsAsk, Job,
+    ListAsk, Listing, Locked, MakeAsk, Making, MoveAsk, Opened, OpenedAsk, Places, ReadAsk,
+    RecentAsk, RenameAsk, SearchAsk, Searched, Sheet, SheetAsk, SizeAsk, Stat, StatAsk, Step, Text,
+    Thumb, ThumbAsk, TrashAsk, Trashcan, WatchAsk, Watched, WriteAsk, Written,
 };
 use serde_json::Value;
 use std::collections::HashMap;
@@ -71,6 +74,9 @@ pub struct Files {
     /// The moves and copies running that a caller named, each with what
     /// stops it.
     jobs: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
+    /// Where files' small pictures are kept, and how many are made at
+    /// once.
+    thumbs: Arc<thumb::Thumbs>,
 }
 
 impl Files {
@@ -83,6 +89,15 @@ impl Files {
     pub fn config_in(self, config: PathBuf) -> Self {
         Self {
             config: Some(config),
+            ..self
+        }
+    }
+
+    /// Files' small pictures are kept in `cache`, Banda's, and read from
+    /// and put in `shared`, freedesktop's, where there is one.
+    pub fn thumbs_in(self, cache: PathBuf, shared: Option<PathBuf>) -> Self {
+        Self {
+            thumbs: Arc::new(thumb::Thumbs::new(Some(cache), shared)),
             ..self
         }
     }
@@ -164,6 +179,17 @@ banda_kernel::methods! {
         /// binary files: each file's lines as they are found, at most 100
         /// a file, until the most lines asked; then how many.
         stream search(SearchAsk) -> Searched, Read;
+        /// A file's small picture, its longest side the size asked or the
+        /// next made: freedesktop's where the desktop made one, else made
+        /// from a picture `image` reads; none for anything else.
+        call thumb(ThumbAsk) -> Option<Thumb>, Read;
+        /// What a path is at length: its kind, type, size, times,
+        /// permissions and owner, where a link leads, a picture's size and
+        /// EXIF, and the last commit that changed it.
+        call info(InfoAsk) -> Info, Read;
+        /// What a folder holds, counted: how far it is as it goes, then
+        /// that it is done. Letting go of the stream stops it.
+        stream size(SizeAsk) -> Counted, Read;
     }
 }
 
@@ -192,10 +218,32 @@ impl Module for Files {
 
 /// Now, in ms since the Unix epoch.
 fn now() -> i64 {
-    let since = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH);
-    since.map_or(0, |since| {
-        i64::try_from(since.as_millis()).unwrap_or(i64::MAX)
-    })
+    ms(std::time::SystemTime::now()).unwrap_or(i64::MAX)
+}
+
+/// A time in ms since the Unix epoch; none before it.
+pub(crate) fn ms(time: std::time::SystemTime) -> Option<i64> {
+    let since = time.duration_since(std::time::UNIX_EPOCH).ok()?;
+    i64::try_from(since.as_millis()).ok()
+}
+
+/// git, to run in `dir` as Files runs it: no locks taken, nothing asked,
+/// in C's words, nothing it inherits naming another repository, and gone
+/// with the caller. Its args, its stdin and its stdout are the caller's.
+pub(crate) fn git_in(dir: &Path) -> tokio::process::Command {
+    let mut git = tokio::process::Command::new("git");
+    git.args(["-c", "core.fsmonitor=false"])
+        .current_dir(dir)
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("LC_ALL", "C")
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .env_remove("GIT_PREFIX")
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true);
+    git
 }
 
 /// A path as a caller reads it.
@@ -743,6 +791,56 @@ impl Files {
         tokio::task::spawn_blocking(move || {
             search::search(&dir, &matcher, limit, &mut |piece: Searched| {
                 serde_json::to_value(piece).is_ok_and(|piece| say.blocking_send(piece).is_ok())
+            });
+        });
+        Ok(heard)
+    }
+}
+
+impl Files {
+    async fn thumb(&self, call: Call, ask: ThumbAsk) -> Result<Option<Thumb>, Refusal> {
+        let path = Reach::of(&call, &ask.path)?.into_path();
+        let size = thumb::made_at(ask.size);
+        let thumbs = self.thumbs.clone();
+        let looked = blocking({
+            let thumbs = thumbs.clone();
+            move || thumbs.look(&path, size)
+        });
+        let file = match looked.await? {
+            thumb::Looked::Done(png) => return Ok(png.map(thumb::Png::answer)),
+            thumb::Looked::Make(file) => file,
+        };
+        let _turn = (thumbs.decoding.acquire().await).map_err(|_| Refusal::internal())?;
+        let made = blocking({
+            let thumbs = thumbs.clone();
+            move || thumbs.make(&file, size)
+        });
+        Ok(made.await?.map(thumb::Png::answer))
+    }
+
+    async fn info(&self, call: Call, ask: InfoAsk) -> Result<Info, Refusal> {
+        let own = entry(&call, &ask.path)?;
+        let real = Reach::of(&call, &ask.path)?.into_path();
+        let facts = blocking({
+            let (own, real) = (own.clone(), real.clone());
+            move || info::facts(&own, &real)
+        });
+        // The disk's facts and git's last commit, side by side.
+        let (facts, commit) = tokio::join!(facts, info::last_commit(&real));
+        let mut info = facts?.map_err(|e| amiss(&ask.path, &e))?;
+        info.commit = commit.filter(|_| !info.dangling);
+        Ok(info)
+    }
+
+    async fn size(&self, call: Call, ask: SizeAsk) -> Result<Stream, Refusal> {
+        let dir = Reach::of(&call, &ask.path)?.into_path();
+        if !dir.is_dir() {
+            return Err(Refusal::invalid(format!("{} is not a folder.", ask.path)));
+        }
+        let (say, heard) = tokio::sync::mpsc::channel(4);
+        tokio::task::spawn_blocking(move || {
+            info::count(&dir, &mut |counted| {
+                serde_json::to_value(counted).is_ok_and(|piece| say.blocking_send(piece).is_ok())
             });
         });
         Ok(heard)

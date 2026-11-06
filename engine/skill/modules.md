@@ -149,16 +149,38 @@ Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `co
 
 ## Files (`files`)
 
-Any folder, as a Finder shows it: a tree with the places beside it and its path above, what git ignores greyed and what git sees changed marked, what is hidden shown or not; what a path is; a file's text; fuzzy paths under a folder, what was opened lately first; and what changed in the folders shown. An Agent reaches only its Project's folder. A file opens in its Pane, drawn by the previewer that claims it (code, markdown, a picture, a PDF, video and sound, a page run in a sandbox, a CSV as a table, JSON as a tree, a notebook's saved outputs, a font's specimen, what an archive or a workbook holds, and any other file's bytes as hex) at a line, and lines picked there take a comment for a Thread; Open with… picks another previewer for an extension. Code and markdown are edited in place and saved as one types, each save only over the text it was read at: when the disk moved meanwhile, as an Agent wrote the file, nothing is written, and the Person compares, takes the disk's text or keeps theirs. A markdown task's box ticks. It makes, renames, duplicates, copies and moves files and folders, never over another unless asked (a name taken asks Replace, Keep both or Skip), and sends them to the system's Trash, which it lists, puts back from and empties where the system lets it (not on macOS, whose Finder keeps it); each is undone by Ctrl+Z or its toast's Undo. Several names are renamed as text, after a diff. Nothing in .git, nor Banda's settings, is written. It finds words or a pattern in the files under a folder, and Alt+P opens one of the Project's files. Space shows a file in Quick Look, over the desk. The file each Agent works on pulses in the tree, which can follow it, and what the turn changed is marked.
+Any folder, as a Finder shows it: a tree with the places beside it and its path above, what git ignores greyed and what git sees changed marked, what is hidden shown or not; what a path is; a file's text; fuzzy paths under a folder, what was opened lately first; and what changed in the folders shown. An Agent reaches only its Project's folder. A file opens in its Pane, drawn by the previewer that claims it (code, markdown, a picture, a PDF, video and sound, a page run in a sandbox, a CSV as a table, JSON as a tree, a notebook's saved outputs, a font's specimen, what an archive or a workbook holds, and any other file's bytes as hex) at a line, and lines picked there take a comment for a Thread; Open with… picks another previewer for an extension. Code and markdown are edited in place and saved as one types, each save only over the text it was read at: when the disk moved meanwhile, as an Agent wrote the file, nothing is written, and the Person compares, takes the disk's text or keeps theirs. A markdown task's box ticks. It makes, renames, duplicates, copies and moves files and folders, never over another unless asked (a name taken asks Replace, Keep both or Skip), and sends them to the system's Trash, which it lists, puts back from and empties where the system lets it (not on macOS, whose Finder keeps it); each is undone by Ctrl+Z or its toast's Undo. Several names are renamed as text, after a diff. Nothing in .git, nor Banda's settings, is written. It finds words or a pattern in the files under a folder, and Alt+P opens one of the Project's files. Space shows a file in Quick Look, over the desk. A folder shows as a tree, as Miller columns whose last one previews the file picked, or as a gallery, a big preview over a filmstrip of small pictures (Ctrl+1, 2, 3); a picture's small one comes from the desktop's thumbnails or is made and kept. Ctrl+I shows what the row picked is at length: its size (a folder's counted as asked), times, permissions and owner, where a link leads, a picture's size and EXIF, and the last commit that changed it. The file each Agent works on pulses in the tree, which can follow it, and what the turn changed is marked.
 
 Its settings: `files.toml`.
 
 Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
 
 - Files (`files.tree`), Alt+E
+- Quick Look (`files.peek`), Space, `[binds.files]`; takes `file` (the file's whole path, or one from the Project's folder), `project` (the Project it is in)
 - Open a file of the Project (`files.quick-open`), Alt+P
+- Open the file picked, or go into the folder (`files.open-picked`), Return, `[binds.files]`
+- Go to the folder above (`files.up`), Ctrl+Up, `[binds.files]`
+- Type a path (`files.path`), Ctrl+L, `[binds.files]`
+- Show hidden files, or hide them (`files.hidden`), Ctrl+Shift+., `[binds.files]`
+- Filter the files (`files.filter`), /, `[binds.files]`
+- Rename the files picked (`files.rename-picked`), F2, `[binds.files]`
+- Move the files picked to the Trash (`files.trash-picked`), Ctrl+Backspace or Delete, `[binds.files]`
+- Undo what Files did last (`files.undo`), Ctrl+Z, `[binds.files]`
+- Copy the files picked (`files.copy-picked`), Ctrl+C, `[binds.files]`
+- Cut the files picked (`files.cut-picked`), Ctrl+X, `[binds.files]`
+- Paste the files copied or cut (`files.paste`), Ctrl+V, `[binds.files]`
+- Duplicate the files picked (`files.duplicate-picked`), Ctrl+D, `[binds.files]`
+- Make a file (`files.new-file`), Ctrl+N, `[binds.files]`
+- Make a folder (`files.new-folder`), Ctrl+Shift+N, `[binds.files]`
+- Find words in the files (`files.find-in-files`), Ctrl+Shift+F, `[binds.files]`
+- Show the folder as a list (`files.view-list`), Ctrl+1, `[binds.files]`
+- Show the folder as columns (`files.view-columns`), Ctrl+2, `[binds.files]`
+- Show the folder as a gallery (`files.view-gallery`), Ctrl+3, `[binds.files]`
+- Show the info of the file picked, or hide it (`files.show-info`), Ctrl+I, `[binds.files]`
 
-Its methods, `banda call files.<method>`: `list`, `stat`, `read`, `write`, `find`, `watch`, `places`, `opened`, `recent`, `archive`, `sheet`, `make`, `rename`, `move`, `copy`, `cancel`, `trash`, `trashed`, `restore`, `delete`, `empty`, `search`.
+Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `files` (the Files).
+
+Its methods, `banda call files.<method>`: `list`, `stat`, `read`, `write`, `find`, `watch`, `places`, `opened`, `recent`, `archive`, `sheet`, `make`, `rename`, `move`, `copy`, `cancel`, `trash`, `trashed`, `restore`, `delete`, `empty`, `search`, `thumb`, `info`, `size`.
 
 ## Pull requests (`pulls`)
 

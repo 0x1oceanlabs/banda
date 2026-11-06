@@ -42,6 +42,12 @@ export function carries(data: DataTransfer): boolean {
   return data.types.includes(PATHS)
 }
 
+/** Whether a drag may bring Banda's files: its own type, or files, which
+ * main's drag brings back. */
+export function bringsFiles(data: DataTransfer | null): boolean {
+  return data !== null && (carries(data) || data.types.includes("Files"))
+}
+
 /** The whole paths of Banda's files dropped: those a drag the page ran
  * carries, or the files main drags out, come back; none for any other. */
 export function droppedPaths(data: DataTransfer): readonly string[] | null {

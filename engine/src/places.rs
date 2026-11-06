@@ -7,11 +7,12 @@
 //! | data | `~/.local/share/banda` | each Project's data, in `projects/<id>/` (ADR 0026) |
 //! | state | `~/.local/state/banda` | the owner's ID, the lock, `engine.json`, this machine's scope (`machine/`), the window's profile (`window/`), the logs (`logs/`), the engine's last panics (`problems/`) |
 //! | config | `~/.config/banda` | `harnesses.toml`, `agents.toml` and the look's files |
+//! | cache | `~/.cache/banda` | what can be made again: Files' small pictures (`thumbnails/`) |
 //!
 //! `banda` is Banda's folder: Banda Dev keeps its things in `banda-dev`, and
 //! a build from a checkout in `banda-local` ([`FOLDER`], ADR 0033). The root is theirs together. `BANDA_ROOT`, `BANDA_DATA`,
-//! `BANDA_STATE` and `BANDA_CONFIG` move each one, so a test or a trial
-//! window runs beside the real engine.
+//! `BANDA_STATE`, `BANDA_CONFIG` and `BANDA_CACHE` move each one, so a
+//! test or a trial window runs beside the real engine.
 
 use crate::Failure;
 use banda_kernel::{PersonId, api};
@@ -27,6 +28,7 @@ pub struct Places {
     pub data: PathBuf,
     pub state: PathBuf,
     pub config: PathBuf,
+    pub cache: PathBuf,
 }
 
 /// What a client needs to reach the running engine. Only this machine's
@@ -95,11 +97,17 @@ impl Places {
             data: place("BANDA_DATA", dirs::data_dir(), FOLDER)?,
             state: place("BANDA_STATE", state, FOLDER)?,
             config: place("BANDA_CONFIG", dirs::config_dir(), FOLDER)?,
+            cache: place("BANDA_CACHE", dirs::cache_dir(), FOLDER)?,
         })
     }
 
     pub fn harnesses(&self) -> PathBuf {
         self.config.join("harnesses.toml")
+    }
+
+    /// Where Files keeps files' small pictures (ADR 0073, step F6).
+    pub fn thumbnails(&self) -> PathBuf {
+        self.cache.join("thumbnails")
     }
 
     /// This machine's scope: the store and log of its modules, as the

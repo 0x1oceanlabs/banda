@@ -29,6 +29,10 @@
       "additionalProperties": {
         "type": "string"
       }
+    },
+    "thumbnails": {
+      "description": "Whether a row of the tree shows a picture's small picture in place\nof its icon. Off keeps the tree quiet; the Gallery shows them\nalways.",
+      "type": "boolean"
     }
   },
   "additionalProperties": false

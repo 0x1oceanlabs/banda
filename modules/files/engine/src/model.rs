@@ -617,3 +617,166 @@ pub struct Matched {
     /// characters (UTF-16), the first and the one after the last.
     pub ranges: Vec<(u32, u32)>,
 }
+
+/// What `files.thumb` asks: a file, and how big its picture is drawn, its
+/// longest side in px.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct ThumbAsk {
+    pub path: String,
+    /// 64, 128, 256 or 512: one between is made the next of them.
+    pub size: u32,
+}
+
+/// A file's small picture, as `files.thumb` answers when it has one.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct Thumb {
+    /// Its kind: `image/png`.
+    pub mime: String,
+    /// Its bytes, in base64.
+    pub data: String,
+    pub width: u32,
+    pub height: u32,
+}
+
+/// What `files.info` asks: a path, as `files.list` reads its `dir`.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct InfoAsk {
+    pub path: String,
+}
+
+/// What a path is, at length, for Files' info (ADR 0073, step F6). A
+/// link's facts are what it leads to, when it leads somewhere.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct Info {
+    /// Absolute: the path itself, a link not followed.
+    pub path: String,
+    /// The path itself: a link is a link.
+    pub kind: Kind,
+    /// Where a link leads, as it is written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub link: Option<String>,
+    /// A link that leads nowhere.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(as = "Option<bool>", optional)]
+    pub dangling: bool,
+    /// Its kind of content, by its extension, else its first bytes; none
+    /// for a folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub mime: Option<String>,
+    /// A file's size in bytes; a folder's is `files.size`'s to count.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub size: Option<u64>,
+    /// How many names a folder holds, its hidden ones too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub items: Option<u32>,
+    /// When it was made, where the system keeps it; in ms since the Unix
+    /// epoch, as the rest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub created: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub modified: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub accessed: Option<i64>,
+    /// Its permissions, as `chmod` writes them: `0o644`; none where the
+    /// system has no such bits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub mode: Option<u32>,
+    /// Its owner and group, by name, or by number where none is known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub owner: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub group: Option<String>,
+    /// A picture's size in px, as it shows, turned as its EXIF says.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub picture: Option<Picture>,
+    /// What a camera wrote in a picture.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub exif: Option<Exif>,
+    /// The last commit that changed it, in a git repository.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub commit: Option<Commit>,
+}
+
+/// A picture's size in px.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct Picture {
+    pub width: u32,
+    pub height: u32,
+}
+
+/// What a camera wrote in a picture's EXIF, as words: each only when it
+/// is there. Its place is text, never a map.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct Exif {
+    /// Its maker and model: `Fujifilm X-T4`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub camera: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub lens: Option<String>,
+    /// When it was taken, as the camera's clock said: `2026-05-04 18:30:12`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub taken: Option<String>,
+    /// How it was exposed: `1/250 s · f/2.8 · ISO 400 · 35 mm`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub exposure: Option<String>,
+    /// Where: `48.85837° N, 2.29448° E`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub place: Option<String>,
+}
+
+/// A commit, as Files' info names the last one that changed a file.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct Commit {
+    pub hash: String,
+    pub author: String,
+    /// When it was written, in ms since the Unix epoch.
+    #[ts(type = "number")]
+    pub when: i64,
+    pub subject: String,
+}
+
+/// What `files.size` asks: a folder whose size is counted.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct SizeAsk {
+    pub path: String,
+}
+
+/// A piece of `files.size`: what it counted so far, and whether it is
+/// done.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct Counted {
+    /// The bytes of the files under it, a link's own, not what it leads
+    /// to.
+    #[ts(type = "number")]
+    pub bytes: u64,
+    #[ts(type = "number")]
+    pub files: u64,
+    pub done: bool,
+}
