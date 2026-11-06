@@ -207,6 +207,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Go to what calls you (`calls.answer`), Alt+U
 - Archive the Thread you look at, or bring it back (`sidebar.archive`), Alt+S
 - Snooze the Thread you look at, or wake it (`thread.snooze`), Alt+Z
+- Wake the snoozed Thread you look at (`thread.wake`)
 - Banda menu (`menu.open`), Alt+Space
 - Every action and its key (`menu.keys`), Alt+K
 - Open the settings (`settings.open`), Alt+,; takes `link` (a section, or a row in it, as keys)
