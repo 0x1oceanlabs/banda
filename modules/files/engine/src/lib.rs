@@ -4,12 +4,16 @@
 //! names (`list`), what some paths are (`stat`), a file's text (`read`),
 //! fuzzy paths under a folder (`find`), and what changed in the folders a
 //! Pane shows (`watch`). For the previewers it lists what an archive
-//! holds (`archive`) and reads a workbook's sheet (`sheet`). It writes a
-//! file's text only over the text it was read at (`write`), never in
-//! `.git` nor in Banda's settings folder. Each path goes through the
-//! kernel's path guard, [`Reach`]: a relative one starts at the Project's
-//! folder, the Person may name any, and an Agent's call reaches only
-//! inside the Project's folder.
+//! holds (`archive`) and reads a workbook's sheet (`sheet`), and finds
+//! words in files (`search`). It writes a file's text only over the text
+//! it was read at (`write`), and makes, renames, moves, copies and sends
+//! to the system's Trash what is at a path (`make`, `rename`, `move`,
+//! `copy`, `trash`), each answering what undoes it; it lists the Trash,
+//! puts back from it and deletes there for good (`trashed`, `restore`,
+//! `delete`, `empty`). Nothing in `.git` nor in Banda's settings folder
+//! is changed. Each path goes through the kernel's path guard, [`Reach`]:
+//! a relative one starts at the Project's folder, the Person may name any,
+//! and an Agent's call reaches only inside the Project's folder.
 //!
 //! It also keeps what the Person opened (`opened`, `recent`), which Files
 //! lists and `find` raises, and answers the Person's places (`places`).
@@ -21,20 +25,26 @@ pub mod settings;
 mod archive;
 mod find;
 mod list;
+mod ops;
 mod places;
 mod read;
 mod recent;
+mod search;
 mod sheet;
+mod trashcan;
 mod write;
 
 use banda_kernel::{Call, Changed, Module, Nothing, Participant, Reach, Refusal, Right, Stream};
 use model::{
-    Archive, ArchiveAsk, FindAsk, Found, ListAsk, Listing, Locked, Opened, OpenedAsk, Places,
-    ReadAsk, RecentAsk, Sheet, SheetAsk, Stat, StatAsk, Text, WatchAsk, Watched, WriteAsk, Written,
+    Archive, ArchiveAsk, CancelAsk, Done, FindAsk, Found, ItemsAsk, Job, ListAsk, Listing, Locked,
+    MakeAsk, Making, MoveAsk, Opened, OpenedAsk, Places, ReadAsk, RecentAsk, RenameAsk, SearchAsk,
+    Searched, Sheet, SheetAsk, Stat, StatAsk, Step, Text, TrashAsk, Trashcan, WatchAsk, Watched,
+    WriteAsk, Written,
 };
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// The module's settings file in `~/.config/banda` (ADR 0016): what Files
@@ -58,6 +68,9 @@ pub struct Files {
     /// Who wrote each file last through `files.write`, and its hash then,
     /// so a write refused can say who moved the file.
     wrote: Arc<Mutex<HashMap<PathBuf, (String, Participant)>>>,
+    /// The moves and copies running that a caller named, each with what
+    /// stops it.
+    jobs: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
 }
 
 impl Files {
@@ -111,6 +124,46 @@ banda_kernel::methods! {
         /// A workbook's sheet as rows of text, at most 10 000, with every
         /// sheet's name.
         call sheet(SheetAsk) -> Sheet, Read;
+        /// Makes an empty file or folder by its name in a folder, never
+        /// over one there; to undo, it goes to the Trash.
+        command make(MakeAsk) -> Done, Write;
+        /// Renames what is at a path, in its folder: never over another,
+        /// but a name that only changes case on a disk that does not tell
+        /// case apart.
+        command rename(RenameAsk) -> Done, Write;
+        /// Moves paths into a folder: within a disk a rename, else a copy
+        /// that then removes the first. Where a name is taken it asks
+        /// first, or replaces (what was there goes to the Trash), keeps
+        /// both (`name 2.ext`) or skips, as asked. It says how far a copy
+        /// is, stops when `files.cancel` or the caller lets go, and ends
+        /// saying what it did and what undoes it.
+        stream r#move(MoveAsk) -> Job, Write;
+        /// Copies paths into a folder, as `move` moves them: a folder with
+        /// all it holds, a link as a link; into its own folder, beside
+        /// itself.
+        stream copy(MoveAsk) -> Job, Write;
+        /// Stops a move or a copy that named its job: what it left half
+        /// done is removed, and it says what it did.
+        command cancel(CancelAsk) -> (), Write;
+        /// Sends paths to the system's Trash, and answers how to put them
+        /// back, where the system lets an app (not on macOS).
+        command trash(TrashAsk) -> Done, Write;
+        /// What the system's Trash holds, the latest first, with where
+        /// each came from; an Agent's call, what came from its Project.
+        /// None on macOS, whose Finder keeps it.
+        call trashed(Nothing) -> Trashcan, Read;
+        /// Puts items of the Trash back where they came from.
+        command restore(ItemsAsk) -> Done, Write;
+        /// Deletes items of the Trash for good: only there.
+        command delete(ItemsAsk) -> u32, Write;
+        /// Deletes all the Trash holds for good; an Agent's call, what came
+        /// from its Project.
+        command empty(Nothing) -> u32, Write;
+        /// Finds words, or a pattern, in the files under a folder, the
+        /// Project's unless asked, leaving out what `.gitignore` does and
+        /// binary files: each file's lines as they are found, at most 100
+        /// a file, until the most lines asked; then how many.
+        stream search(SearchAsk) -> Searched, Read;
     }
 }
 
@@ -162,6 +215,47 @@ fn amiss(asked: &str, error: &std::io::Error) -> Refusal {
     }
 }
 
+/// A refusal for why what is at `asked` was not changed.
+fn unchanged(asked: &str, error: &std::io::Error) -> Refusal {
+    use std::io::ErrorKind::*;
+    match error.kind() {
+        AlreadyExists | DirectoryNotEmpty => {
+            Refusal::conflict(format!("{asked} is already there."))
+        }
+        PermissionDenied | ReadOnlyFilesystem => {
+            Refusal::forbidden(format!("{asked} may not be changed."))
+        }
+        NotFound | NotADirectory | IsADirectory => amiss(asked, error),
+        _ => Refusal::conflict(format!("{asked} could not be changed: {error}.")),
+    }
+}
+
+/// What is at `asked` itself, not where its link leads: its folder goes
+/// through the guard, then its name.
+fn entry(call: &Call, asked: &str) -> Result<PathBuf, Refusal> {
+    let path = Path::new(asked);
+    let (Some(name), Some(folder)) = (path.file_name(), path.parent()) else {
+        return Err(Refusal::invalid(format!(
+            "{asked} names no file nor folder."
+        )));
+    };
+    Ok(Reach::of(call, folder)?.into_path().join(name))
+}
+
+/// Whether a path is one `call` may take from the Trash or put there:
+/// any, or one in the Project's folder for an Agent.
+fn reached(call: &Call) -> impl Fn(&Path) -> bool + Send + 'static {
+    let walled = call.wall().map(|_| {
+        let folder = call.project().folder();
+        folder.canonicalize().unwrap_or(folder)
+    });
+    move |path: &Path| {
+        walled
+            .as_ref()
+            .is_none_or(|folder| path.starts_with(folder))
+    }
+}
+
 /// A refusal for why `asked` was not written.
 fn unwritten(asked: &str, why: write::Unwritten) -> Refusal {
     use write::Unwritten;
@@ -200,6 +294,27 @@ async fn blocking<T: Send + 'static>(
 }
 
 impl Files {
+    /// Refuses `path`, as `asked`, when it is in `.git` or in Banda's
+    /// settings; and, where it would go, when it holds the settings.
+    fn fence(&self, path: &Path, asked: &str, goes: bool) -> Result<(), Refusal> {
+        let config = self.config.as_deref();
+        if let Some(why) = write::fenced(path, config) {
+            return Err(unwritten(asked, write::Unwritten::Locked(why)));
+        }
+        let holds = |config: &Path| {
+            config.starts_with(path)
+                || config
+                    .canonicalize()
+                    .is_ok_and(|real| real.starts_with(path))
+        };
+        if goes && config.is_some_and(holds) {
+            return Err(Refusal::forbidden(format!(
+                "{asked} holds Banda's settings, which stay where they are."
+            )));
+        }
+        Ok(())
+    }
+
     async fn list(&self, call: Call, ask: ListAsk) -> Result<Listing, Refusal> {
         let reach = Reach::of(&call, &ask.dir)?;
         let dir = reach.path().to_path_buf();
@@ -389,8 +504,253 @@ impl Files {
     }
 }
 
+impl Files {
+    async fn make(&self, call: Call, ask: MakeAsk) -> Result<Done, Refusal> {
+        if let Some(why) = ops::misnamed(&ask.name) {
+            return Err(Refusal::invalid(why));
+        }
+        let path = Reach::of(&call, &ask.dir)?.into_path().join(&ask.name);
+        let named = shown(&path);
+        self.fence(&path, &named, false)?;
+        let folder = ask.kind == Making::Folder;
+        let made = blocking({
+            let path = path.clone();
+            move || ops::make(&path, folder)
+        });
+        made.await?.map_err(|e| unchanged(&named, &e))?;
+        Ok(Done {
+            paths: vec![named.clone()],
+            undo: vec![Step::Trash { paths: vec![named] }],
+            ..Done::default()
+        })
+    }
+
+    async fn rename(&self, call: Call, ask: RenameAsk) -> Result<Done, Refusal> {
+        if let Some(why) = ops::misnamed(&ask.name) {
+            return Err(Refusal::invalid(why));
+        }
+        let from = entry(&call, &ask.path)?;
+        let to = from.with_file_name(&ask.name);
+        self.fence(&from, &ask.path, true)?;
+        self.fence(&to, &ask.name, false)?;
+        let was = (from.file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let renamed = blocking({
+            let (from, to) = (from.clone(), to.clone());
+            move || {
+                if !ops::there(&from) {
+                    return Err(std::io::ErrorKind::NotFound.into());
+                }
+                if from == to {
+                    Ok(())
+                } else if ops::same_but_case(&from, &to) {
+                    std::fs::rename(&from, &to)
+                } else {
+                    ops::rename_new(&from, &to)
+                }
+            }
+        });
+        renamed.await?.map_err(|e| match e.kind() {
+            std::io::ErrorKind::AlreadyExists => unchanged(&ask.name, &e),
+            _ => unchanged(&ask.path, &e),
+        })?;
+        let now = shown(&to);
+        let undo = if from == to {
+            Vec::new()
+        } else {
+            vec![Step::Rename {
+                path: now.clone(),
+                name: was,
+            }]
+        };
+        Ok(Done {
+            paths: vec![now],
+            undo,
+            ..Done::default()
+        })
+    }
+
+    async fn r#move(&self, call: Call, ask: MoveAsk) -> Result<Stream, Refusal> {
+        self.job(call, ask, false).await
+    }
+
+    async fn copy(&self, call: Call, ask: MoveAsk) -> Result<Stream, Refusal> {
+        self.job(call, ask, true).await
+    }
+
+    /// A move or a copy: checked and planned before it is heard, then run
+    /// off the engine's threads, saying how far it is.
+    async fn job(&self, call: Call, ask: MoveAsk, copy: bool) -> Result<Stream, Refusal> {
+        let dir = Reach::of(&call, &ask.dir)?.into_path();
+        self.fence(&dir, &ask.dir, false)?;
+        let mut sources = Vec::new();
+        for asked in &ask.paths {
+            let from = entry(&call, asked)?;
+            // What a copy takes is only read.
+            if !copy {
+                self.fence(&from, asked, true)?;
+            }
+            sources.push((asked.clone(), from));
+        }
+        let planned = blocking({
+            let (dir, asked_dir) = (dir.clone(), ask.dir.clone());
+            let (clash, answers) = (ask.clash, ask.answers.clone());
+            move || -> Result<_, Refusal> {
+                if !dir.is_dir() {
+                    return Err(Refusal::not_found(format!(
+                        "{asked_dir} is not a folder there."
+                    )));
+                }
+                for (asked, from) in &sources {
+                    if !ops::there(from) {
+                        return Err(Refusal::not_found(format!("{asked} is not there.")));
+                    }
+                    if !from.is_symlink() && from.is_dir() && dir.starts_with(from) {
+                        return Err(Refusal::invalid(format!("{asked} cannot go into itself.")));
+                    }
+                }
+                Ok(ops::plan(&sources, &dir, copy, clash, &answers))
+            }
+        });
+        let planned = planned.await??;
+        let (say, heard) = tokio::sync::mpsc::channel(16);
+        let plan = match planned {
+            Ok(plan) => plan,
+            Err(clashes) => {
+                let _ = send(&say, &Job::Clashes { clashes }).await;
+                return Ok(heard);
+            }
+        };
+        let stop = Arc::new(AtomicBool::new(false));
+        let jobs = self.jobs.clone();
+        if let Some(job) = &ask.job {
+            (jobs.lock().unwrap()).insert(job.clone(), stop.clone());
+        }
+        let job = ask.job;
+        tokio::task::spawn_blocking(move || {
+            let mut tell = |piece: Job| {
+                if let Ok(piece) = serde_json::to_value(piece) {
+                    let _ = say.blocking_send(piece);
+                }
+            };
+            let stopped = || stop.load(Ordering::Relaxed) || say.is_closed();
+            let mut run = ops::Run {
+                stop: &stopped,
+                tell: &mut tell,
+            };
+            let done = ops::run(plan, copy, &mut run);
+            if let Some(job) = job {
+                jobs.lock().unwrap().remove(&job);
+            }
+            tell(Job::Done(done));
+        });
+        Ok(heard)
+    }
+
+    async fn cancel(&self, _call: Call, ask: CancelAsk) -> Result<(), Refusal> {
+        if let Some(stop) = self.jobs.lock().unwrap().get(&ask.job) {
+            stop.store(true, Ordering::Relaxed);
+        }
+        Ok(())
+    }
+
+    async fn trash(&self, call: Call, ask: TrashAsk) -> Result<Done, Refusal> {
+        let mut paths = Vec::new();
+        for asked in &ask.paths {
+            let path = entry(&call, asked)?;
+            self.fence(&path, asked, true)?;
+            paths.push(path);
+        }
+        let put = blocking(move || {
+            if let Some(gone) = paths.iter().find(|path| !ops::there(path)) {
+                return Err(Refusal::not_found(format!("{} is not there.", shown(gone))));
+            }
+            let since = trashcan::now();
+            let put = trashcan::put(&paths);
+            Ok((trashcan::ids(&paths[..put.went], since), put))
+        });
+        let (ids, put) = put.await??;
+        if put.went == 0
+            && let Some(why) = put.failed
+        {
+            return Err(Refusal::conflict(why));
+        }
+        let undo = if ids.is_empty() {
+            Vec::new()
+        } else {
+            vec![Step::Restore { items: ids }]
+        };
+        Ok(Done {
+            undo,
+            failed: put.failed,
+            ..Done::default()
+        })
+    }
+
+    async fn trashed(&self, call: Call, _: Nothing) -> Result<Trashcan, Refusal> {
+        let reached = reached(&call);
+        let items = blocking(move || trashcan::list(reached)).await?;
+        let items =
+            items.map_err(|why| Refusal::conflict(format!("The Trash cannot be read: {why}")))?;
+        Ok(Trashcan { items })
+    }
+
+    async fn restore(&self, call: Call, ask: ItemsAsk) -> Result<Done, Refusal> {
+        let reached = reached(&call);
+        let back = blocking(move || trashcan::restore(&ask.items, reached)).await?;
+        let back: Vec<String> = back
+            .map_err(Refusal::conflict)?
+            .iter()
+            .map(|path| shown(path))
+            .collect();
+        Ok(Done {
+            undo: vec![Step::Trash {
+                paths: back.clone(),
+            }],
+            paths: back,
+            ..Done::default()
+        })
+    }
+
+    async fn delete(&self, call: Call, ask: ItemsAsk) -> Result<u32, Refusal> {
+        let reached = reached(&call);
+        let gone = blocking(move || trashcan::purge(Some(&ask.items), reached)).await?;
+        Ok(u32::try_from(gone.map_err(Refusal::conflict)?).unwrap_or(u32::MAX))
+    }
+
+    async fn empty(&self, call: Call, _: Nothing) -> Result<u32, Refusal> {
+        let reached = reached(&call);
+        let gone = blocking(move || trashcan::purge(None, reached)).await?;
+        Ok(u32::try_from(gone.map_err(Refusal::conflict)?).unwrap_or(u32::MAX))
+    }
+
+    async fn search(&self, call: Call, ask: SearchAsk) -> Result<Stream, Refusal> {
+        let asked = ask.dir.clone().unwrap_or_default();
+        let dir = Reach::of(&call, &asked)?.into_path();
+        if !dir.is_dir() {
+            return Err(Refusal::not_found(format!(
+                "{asked} is not a folder there."
+            )));
+        }
+        if ask.query.is_empty() {
+            return Err(Refusal::invalid("Search for what?"));
+        }
+        let matcher = search::matcher(&ask)
+            .map_err(|why| Refusal::invalid(format!("The pattern does not read: {why}")))?;
+        let limit = ask.limit.unwrap_or(search::LIMIT).clamp(1, search::MOST) as usize;
+        let (say, heard) = tokio::sync::mpsc::channel(16);
+        tokio::task::spawn_blocking(move || {
+            search::search(&dir, &matcher, limit, &mut |piece: Searched| {
+                serde_json::to_value(piece).is_ok_and(|piece| say.blocking_send(piece).is_ok())
+            });
+        });
+        Ok(heard)
+    }
+}
+
 /// Says `piece`; false once no one hears.
-async fn send(say: &tokio::sync::mpsc::Sender<Value>, piece: &Watched) -> bool {
+async fn send(say: &tokio::sync::mpsc::Sender<Value>, piece: &impl serde::Serialize) -> bool {
     match serde_json::to_value(piece) {
         Ok(piece) => say.send(piece).await.is_ok(),
         Err(_) => false,

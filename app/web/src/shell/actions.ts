@@ -801,8 +801,14 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     overDialogs: true,
     // Over Quick Look its key has the tile fill the desk, or float again,
     // as ⌥Space does in a Finder (ADR 0073, decision 7, as amended): the
-    // menu opens once Quick Look is closed.
-    run: (shell) => {
+    // menu opens once Quick Look is closed. A module opens it on one of
+    // its sources alone, as Files' quick open does.
+    args: takes({
+      source: "a source's id, to show its rows alone, as files.find",
+    }),
+    run: (shell, args) => {
+      if (typeof args?.source === "string")
+        return shell.route(`find.${args.source}`)
       if (!shell.fillPeek()) shell.menu("root")
     },
   },

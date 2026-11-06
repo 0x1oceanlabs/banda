@@ -123,6 +123,9 @@ export async function startWindow({
     BANDA_DESKTOP: "recorded",
     // A terminal runs the Person's shell: here one every machine has.
     SHELL: "/bin/sh",
+    // The system's Trash is a throwaway one, as freedesktop finds it, on
+    // the same disk as the throwaway Projects (ADR 0073, decision 10).
+    XDG_DATA_HOME: join(dir, "xdg-data"),
   }
   const app = await electron.launch({
     chromiumSandbox: SANDBOXED,

@@ -105,6 +105,12 @@ pub fn words(doc: &[&str]) -> String {
     lines.join(" ")
 }
 
+/// A method's name as its line writes it, a keyword's as `r#move`: as
+/// the window calls it, `move`.
+pub fn bare(name: &'static str) -> &'static str {
+    name.strip_prefix("r#").unwrap_or(name)
+}
+
 /// One line of a module's `methods!` table, as `banda modules` prints it
 /// (ADR 0022, decision 1).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -201,10 +207,10 @@ macro_rules! methods {
     ) => {
         impl $ty {
             fn method_right(name: &str) -> Option<$crate::Right> {
-                match name {
-                    $( stringify!($name) => Some($crate::Right::$right), )*
-                    _ => None,
-                }
+                $( if name == $crate::methods::bare(stringify!($name)) {
+                    return Some($crate::Right::$right);
+                } )*
+                None
             }
 
             async fn dispatch(
@@ -213,10 +219,10 @@ macro_rules! methods {
                 name: &str,
                 params: serde_json::Value,
             ) -> Result<serde_json::Value, $crate::Refusal> {
-                match name {
-                    $( stringify!($name) => $crate::methods!(@call $kind self ask params $name $params, $answer), )*
-                    _ => Err($crate::Refusal::invalid(format!("There is no method \"{name}\"."))),
-                }
+                $( if name == $crate::methods::bare(stringify!($name)) {
+                    return $crate::methods!(@call $kind self ask params $name $params, $answer);
+                } )*
+                Err($crate::Refusal::invalid(format!("There is no method \"{name}\".")))
             }
 
             #[allow(dead_code, unused_variables)]
@@ -226,10 +232,10 @@ macro_rules! methods {
                 name: &str,
                 params: serde_json::Value,
             ) -> Result<$crate::Stream, $crate::Refusal> {
-                match name {
-                    $( stringify!($name) => $crate::methods!(@stream $kind self ask params $name $params), )*
-                    _ => Err($crate::Refusal::invalid(format!("There is no stream \"{name}\"."))),
-                }
+                $( if name == $crate::methods::bare(stringify!($name)) {
+                    return $crate::methods!(@stream $kind self ask params $name $params);
+                } )*
+                Err($crate::Refusal::invalid(format!("There is no stream \"{name}\".")))
             }
 
             /// Every line of its `methods!` table (ADR 0022, decision 1).
@@ -237,7 +243,7 @@ macro_rules! methods {
             pub fn method_list() -> Vec<$crate::methods::Method> {
                 vec![$(
                     $crate::methods::Method {
-                        name: stringify!($name),
+                        name: $crate::methods::bare(stringify!($name)),
                         kind: stringify!($kind),
                         right: $crate::Right::$right,
                         tool: $crate::methods!(@tool_name $($tool)?),
@@ -268,14 +274,14 @@ macro_rules! methods {
     (@tool $tools:ident $module:ident $name:ident($p:ty) [$($doc:literal)*] $tool:literal) => {
         $tools.push($crate::methods::Tool::new(
             $tool,
-            format!("{}.{}", $module, stringify!($name)),
+            format!("{}.{}", $module, $crate::methods::bare(stringify!($name))),
             &[$($doc),*],
             $crate::schemars::schema_for!($p),
         ));
     };
 
     (@call stream $self:ident $ask:ident $params:ident $name:ident $p:ty, $a:ty) => {
-        Err($crate::Refusal::invalid(concat!(stringify!($name), " is a stream.")))
+        Err($crate::Refusal::invalid(format!("{} is a stream.", $crate::methods::bare(stringify!($name)))))
     };
 
     (@call $kind:ident $self:ident $ask:ident $params:ident $name:ident $p:ty, $a:ty) => {{
@@ -294,6 +300,6 @@ macro_rules! methods {
         $self.$name($ask, params).await
     }};
     (@stream $kind:ident $self:ident $ask:ident $params:ident $name:ident $p:ty) => {
-        Err($crate::Refusal::invalid(concat!(stringify!($name), " is not a stream.")))
+        Err($crate::Refusal::invalid(format!("{} is not a stream.", $crate::methods::bare(stringify!($name)))))
     };
 }

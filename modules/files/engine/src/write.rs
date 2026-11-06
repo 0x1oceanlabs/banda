@@ -46,11 +46,8 @@ impl From<std::io::Error> for Unwritten {
 /// links followed; none when it would. `config` is Banda's settings
 /// folder.
 pub fn locked(path: &Path, config: Option<&Path>) -> Option<Locked> {
-    if path.components().any(|part| part.as_os_str() == ".git") {
-        return Some(Locked::Git);
-    }
-    if config.is_some_and(|config| inside(path, config)) {
-        return Some(Locked::Settings);
+    if let Some(why) = fenced(path, config) {
+        return Some(why);
     }
     // What is not there yet is no one's to refuse: a new file needs only
     // its folder, and a missing folder is the write's to say.
@@ -59,6 +56,17 @@ pub fn locked(path: &Path, config: Option<&Path>) -> Option<Locked> {
         access.is_err_and(|error| error != rustix::io::Errno::NOENT)
     };
     (denied(path) || path.parent().is_some_and(denied)).then_some(Locked::Denied)
+}
+
+/// Why Files leaves `path` as it is whoever may write it: it is in
+/// `.git`, or in Banda's settings folder `config`, or is one of them.
+pub fn fenced(path: &Path, config: Option<&Path>) -> Option<Locked> {
+    if path.components().any(|part| part.as_os_str() == ".git") {
+        return Some(Locked::Git);
+    }
+    config
+        .is_some_and(|config| inside(path, config))
+        .then_some(Locked::Settings)
 }
 
 /// Whether `path` is in `folder`, as it is named or as the system reads

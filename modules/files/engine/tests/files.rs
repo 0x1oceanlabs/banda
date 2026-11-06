@@ -1,124 +1,18 @@
 //! The files module through the kernel, as a Pane and an Agent use it.
 
-use banda_files::Files;
 use banda_files::model::{
     Archive, Found, Kind, Listing, Locked, Opened, Packing, Places, Sheet, Stat, Text, Watched,
     Written,
 };
-use banda_kernel::{
-    AgentId, Caller, Code, CommandId, Kernel, Participant, PersonId, ProjectId, Refusal,
-};
-use serde::de::DeserializeOwned;
-use serde_json::{Value, json};
+use banda_kernel::{AgentId, Caller, Code, Participant};
+use serde_json::json;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
-use std::sync::Arc;
 use std::time::Duration;
 
-struct World {
-    kernel: Arc<Kernel>,
-    owner: PersonId,
-    project: ProjectId,
-    folder: PathBuf,
-    root: tempfile::TempDir,
-}
-
-impl World {
-    async fn new() -> World {
-        let root = tempfile::tempdir().unwrap();
-        let owner = PersonId::new();
-        let config = root.path().join("config");
-        let kernel = Kernel::builder(root.path(), root.path().join(".data"), owner)
-            .module(Files::new().config_in(config))
-            .open()
-            .await
-            .unwrap();
-        let made = (kernel.call(
-            Participant::Person(owner),
-            "projects.create",
-            None,
-            Some(CommandId::new()),
-            json!({ "name": "Work" }),
-        ))
-        .await
-        .unwrap();
-        let project: ProjectId = serde_json::from_value(made["id"].clone()).unwrap();
-        let folder = kernel.project(project).await.unwrap().folder();
-        let folder = folder.canonicalize().unwrap();
-        World {
-            kernel,
-            owner,
-            project,
-            folder,
-            root,
-        }
-    }
-
-    fn write(&self, path: &str, text: &str) {
-        let path = self.folder.join(path);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, text).unwrap();
-    }
-
-    /// Banda's settings folder, as the engine gives it the module.
-    fn config(&self) -> PathBuf {
-        self.root.path().join("config")
-    }
-
-    /// A folder beside the Project's, outside it.
-    fn outside(&self) -> PathBuf {
-        let outside = self.root.path().canonicalize().unwrap().join("outside");
-        std::fs::create_dir_all(&outside).unwrap();
-        std::fs::write(outside.join("secret.txt"), "secret").unwrap();
-        outside
-    }
-
-    async fn call(&self, method: &str, params: Value) -> Result<Value, Refusal> {
-        let person = Participant::Person(self.owner);
-        (self.kernel)
-            .call(person, method, Some(self.project), None, params)
-            .await
-    }
-
-    /// The call as an Agent's, whose pass walls it in the Project.
-    async fn call_as_agent(&self, method: &str, params: Value) -> Result<Value, Refusal> {
-        let agent = Caller {
-            participant: Participant::Agent(AgentId::new()),
-            only: Some(self.project),
-        };
-        self.kernel.call(agent, method, None, None, params).await
-    }
-
-    async fn ask<T: DeserializeOwned>(&self, method: &str, params: Value) -> T {
-        serde_json::from_value(self.call(method, params).await.unwrap()).unwrap()
-    }
-
-    /// The Agent's command, which its pass walls in the Project.
-    async fn command_as_agent(&self, method: &str, params: Value) -> Result<Value, Refusal> {
-        let agent = Caller {
-            participant: Participant::Agent(AgentId::new()),
-            only: Some(self.project),
-        };
-        (self.kernel)
-            .call(agent, method, None, Some(CommandId::new()), params)
-            .await
-    }
-
-    /// The Person's command, as the window sends it, with an ID of its own.
-    async fn command(&self, method: &str, params: Value) -> Result<Value, Refusal> {
-        let person = Participant::Person(self.owner);
-        (self.kernel)
-            .call(
-                person,
-                method,
-                Some(self.project),
-                Some(CommandId::new()),
-                params,
-            )
-            .await
-    }
-}
+mod world;
+use world::World;
 
 fn git(folder: &Path, args: &[&str]) -> bool {
     Command::new("git")

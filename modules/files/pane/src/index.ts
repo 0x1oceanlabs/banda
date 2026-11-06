@@ -1,7 +1,7 @@
 /** The files module's window part (ADR 0073): a folder as a tree in
  * `files.tree`, a file in `files.file` drawn by the previewer that claims
- * it, Quick Look over the desk, the Banda menu's files, and the actions
- * that open them. */
+ * it, Quick Look over the desk, the Banda menu's files and quick open,
+ * and the actions that open them and do what Files does with files. */
 import type { ProjectId } from "@banda/contract"
 import { FILES_FILE } from "@banda/contract/files"
 import { tomlOf } from "@banda/contract/settings"
@@ -39,6 +39,9 @@ const paneAction = (does: Does, id: string, title: string): Action => ({
   unlisted: true,
   run: () => askTree(does),
 })
+
+/** The id of the Banda menu's source of files, which quick open shows. */
+const FIND = filesSource.id
 
 export const files = defineModule({
   id: "files",
@@ -154,10 +157,37 @@ export const files = defineModule({
         )
       },
     },
+    {
+      // Quick open (ADR 0073, decision 11): the Banda menu with the focused
+      // Project's files alone, what was opened lately first.
+      id: "files.quick-open",
+      title: "Open a file of the Project",
+      section: "Files",
+      keys: [{ code: "KeyP", mod: true }],
+      run: (window) => window.run("menu.open", { source: FIND }),
+    },
     paneAction("up", "files.up", "Go to the folder above"),
     paneAction("path", "files.path", "Type a path"),
     paneAction("hidden", "files.hidden", "Show hidden files, or hide them"),
     paneAction("filter", "files.filter", "Filter the files"),
+    paneAction("rename", "files.rename-picked", "Rename the files picked"),
+    paneAction(
+      "trash",
+      "files.trash-picked",
+      "Move the files picked to the Trash"
+    ),
+    paneAction("undo", "files.undo", "Undo what Files did last"),
+    paneAction("copy", "files.copy-picked", "Copy the files picked"),
+    paneAction("cut", "files.cut-picked", "Cut the files picked"),
+    paneAction("paste", "files.paste", "Paste the files copied or cut"),
+    paneAction(
+      "duplicate",
+      "files.duplicate-picked",
+      "Duplicate the files picked"
+    ),
+    paneAction("new-file", "files.new-file", "Make a file"),
+    paneAction("new-folder", "files.new-folder", "Make a folder"),
+    paneAction("search", "files.find-in-files", "Find words in the files"),
   ],
   sources: [filesSource],
 })

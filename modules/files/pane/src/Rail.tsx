@@ -1,8 +1,8 @@
 /**
  * The places on a Files Pane's left (ADR 0073, decision 1): the Projects
  * with their signs, Home, Desktop and Downloads, what the Person pinned,
- * then Recent. It folds to icons, as it starts on a narrow Pane. The
- * Trash comes with the file operations (step F5).
+ * then Recent and the Trash. It folds to icons, as it starts on a narrow
+ * Pane.
  */
 import type { ReactNode } from "react"
 import type { ProjectSummary } from "@banda/contract"
@@ -22,6 +22,7 @@ import {
   HouseIcon,
   MonitorIcon,
   PinOffIcon,
+  TrashIcon,
 } from "lucide-react"
 import { nameOf, tilded } from "./where"
 
@@ -34,8 +35,11 @@ export type RailProps = {
   /** The folder shown, whole; none while Recent shows. */
   at: string | null
   recent: boolean
+  /** The Trash shows. */
+  trash: boolean
   onGo: (dir: string) => void
   onRecent: () => void
+  onTrash: () => void
   onUnpin: (dir: string) => void
 }
 
@@ -46,8 +50,10 @@ export function Rail({
   pinned,
   at,
   recent,
+  trash,
   onGo,
   onRecent,
+  onTrash,
   onUnpin,
 }: RailProps) {
   const home = places?.home ?? null
@@ -57,7 +63,7 @@ export function Rail({
       icon={icon}
       name={name}
       title={tilded(dir, home)}
-      on={!recent && at === dir}
+      on={at === dir}
       folded={folded}
       onClick={() => onGo(dir)}
     />
@@ -117,6 +123,14 @@ export function Rail({
           on={recent}
           folded={folded}
           onClick={onRecent}
+        />
+        <Place
+          icon={<TrashIcon />}
+          name="Trash"
+          title="The system's Trash"
+          on={trash}
+          folded={folded}
+          onClick={onTrash}
         />
       </Section>
     </nav>

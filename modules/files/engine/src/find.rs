@@ -53,16 +53,20 @@ impl Walks {
     }
 }
 
-/// The files under `dir`, at most `most`: hidden ones too, but not what
-/// a `.gitignore` or `.ignore` leaves out, nor `.git`.
-fn walk(dir: &Path, most: usize) -> Walked {
-    let walker = ignore::WalkBuilder::new(dir)
+/// What is under `dir`: hidden files too, but not what a `.gitignore` or
+/// `.ignore` leaves out, nor `.git`.
+pub fn walker(dir: &Path) -> ignore::Walk {
+    ignore::WalkBuilder::new(dir)
         .hidden(false)
         .require_git(false)
         .filter_entry(|entry| entry.file_name() != ".git")
-        .build();
+        .build()
+}
+
+/// The files under `dir`, at most `most`, as [`walker`] finds them.
+fn walk(dir: &Path, most: usize) -> Walked {
     let mut paths = Vec::new();
-    for entry in walker.flatten() {
+    for entry in walker(dir).flatten() {
         if !entry.file_type().is_some_and(|kind| kind.is_file()) {
             continue;
         }

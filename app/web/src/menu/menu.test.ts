@@ -69,8 +69,9 @@ const row = (id: string, title: string, acts?: MenuAct[]): MenuRow => ({
 /** What the modules' sources find, as they would: files under their
  * heading, then New Thread and the web with none. */
 const foundFor = (words: string, entered?: string): Found[] => [
-  { label: "Files", rows: [] },
+  { id: "files.find", label: "Files", rows: [] },
   {
+    id: "agents.ask",
     label: "",
     rows:
       words || entered
@@ -87,6 +88,7 @@ const foundFor = (words: string, entered?: string): Found[] => [
         : [],
   },
   {
+    id: "browser.web",
     label: "",
     rows: words && !entered ? [row("browser.web", `web: ${words}`)] : [],
   },
@@ -124,6 +126,7 @@ function nameOf(row: Choice): string {
     case "add":
     case "source":
     case "locate":
+    case "finds":
       return branchName(row)
     case "adding":
       return "name" in row.how
@@ -191,11 +194,12 @@ describe("the Banda menu", () => {
     const copy = { title: "Copy path", run: () => {} }
     const found: Found[] = [
       {
+        id: "agents.file",
         label: "Files",
         rows: [row("agents.file.s1.src/new.ts", "new.ts", [open, copy])],
       },
-      { label: "Files", rows: [row("other.file.a", "a")] },
-      { label: "", rows: [row("agents.ask", "ask: new")] },
+      { id: "other.file", label: "Files", rows: [row("other.file.a", "a")] },
+      { id: "agents.ask", label: "", rows: [row("agents.ask", "ask: new")] },
     ]
     expect(labels("new", "root", undefined, { found })).toEqual([
       ["Files", ["new.ts", "a"]],
@@ -493,6 +497,26 @@ describe("banda menu ROUTE", () => {
     const { at, path, words } = openingOf(route, projects)
     return [at, path.map((branch) => branch.id), words]
   }
+  test("find.<source> shows that source alone, as quick open shows the files", () => {
+    const files = { id: "files.find", label: "Files" }
+    const { path } = openingOf("find.files.find", projects, [files])
+    expect(path).toEqual([
+      {
+        kind: "finds",
+        id: "find.files.find",
+        source: "files.find",
+        label: "Files",
+      },
+    ])
+    expect(branchName(path[0])).toBe("Files")
+    const found: Found[] = [
+      { id: "files.find", label: "Files", rows: [row("files.file.a", "a.ts")] },
+      { id: "agents.ask", label: "", rows: [row("agents.ask", "ask: a")] },
+    ]
+    expect(labels("a", "root", path[0], { found })).toEqual([["", ["a.ts"]]])
+    // No source by that id: the words are typed.
+    expect(where("find.other")).toEqual(["root", [], "find.other"])
+  })
   test("opens at the root, the Actions, the sidebar's view or a Project", () => {
     expect(where("")).toEqual(["root", [], ""])
     expect(where("actions")).toEqual(["actions", [], ""])

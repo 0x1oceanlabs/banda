@@ -217,6 +217,13 @@ test("a row goes into a Thread's message by its menu or a drag, opens in an edit
     /^Reveal in /,
     "Add to chat",
     "Copy path",
+    /^New file/,
+    /^New folder/,
+    /^Rename/,
+    /^Duplicate/,
+    /^Copy/,
+    /^Cut/,
+    /^Move to Trash/,
   ])
   await page.screenshot({ path: "test-results/files-row-menu.png" })
   await menu.getByRole("menuitem", { name: "Open in Zed" }).click()

@@ -149,15 +149,16 @@ Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `co
 
 ## Files (`files`)
 
-Any folder, as a Finder shows it: a tree with the places beside it and its path above, what git ignores greyed and what git sees changed marked, what is hidden shown or not; what a path is; a file's text; fuzzy paths under a folder, what was opened lately first; and what changed in the folders shown. An Agent reaches only its Project's folder. A file opens in its Pane, drawn by the previewer that claims it (code, markdown, a picture, a PDF, video and sound, a page run in a sandbox, a CSV as a table, JSON as a tree, a notebook's saved outputs, a font's specimen, what an archive or a workbook holds, and any other file's bytes as hex) at a line, and lines picked there take a comment for a Thread; Open with… picks another previewer for an extension. Code and markdown are edited in place and saved as one types, each save only over the text it was read at: when the disk moved meanwhile, as an Agent wrote the file, nothing is written, and the Person compares, takes the disk's text or keeps theirs. A markdown task's box ticks. Nothing in .git, nor Banda's settings, is written. Space shows a file in Quick Look, over the desk. The file each Agent works on pulses in the tree, which can follow it, and what the turn changed is marked.
+Any folder, as a Finder shows it: a tree with the places beside it and its path above, what git ignores greyed and what git sees changed marked, what is hidden shown or not; what a path is; a file's text; fuzzy paths under a folder, what was opened lately first; and what changed in the folders shown. An Agent reaches only its Project's folder. A file opens in its Pane, drawn by the previewer that claims it (code, markdown, a picture, a PDF, video and sound, a page run in a sandbox, a CSV as a table, JSON as a tree, a notebook's saved outputs, a font's specimen, what an archive or a workbook holds, and any other file's bytes as hex) at a line, and lines picked there take a comment for a Thread; Open with… picks another previewer for an extension. Code and markdown are edited in place and saved as one types, each save only over the text it was read at: when the disk moved meanwhile, as an Agent wrote the file, nothing is written, and the Person compares, takes the disk's text or keeps theirs. A markdown task's box ticks. It makes, renames, duplicates, copies and moves files and folders, never over another unless asked (a name taken asks Replace, Keep both or Skip), and sends them to the system's Trash, which it lists, puts back from and empties where the system lets it (not on macOS, whose Finder keeps it); each is undone by Ctrl+Z or its toast's Undo. Several names are renamed as text, after a diff. Nothing in .git, nor Banda's settings, is written. It finds words or a pattern in the files under a folder, and Alt+P opens one of the Project's files. Space shows a file in Quick Look, over the desk. The file each Agent works on pulses in the tree, which can follow it, and what the turn changed is marked.
 
 Its settings: `files.toml`.
 
 Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
 
 - Files (`files.tree`), Alt+E
+- Open a file of the Project (`files.quick-open`), Alt+P
 
-Its methods, `banda call files.<method>`: `list`, `stat`, `read`, `write`, `find`, `watch`, `places`, `opened`, `recent`, `archive`, `sheet`.
+Its methods, `banda call files.<method>`: `list`, `stat`, `read`, `write`, `find`, `watch`, `places`, `opened`, `recent`, `archive`, `sheet`, `make`, `rename`, `move`, `copy`, `cancel`, `trash`, `trashed`, `restore`, `delete`, `empty`, `search`.
 
 ## Pull requests (`pulls`)
 
@@ -272,7 +273,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Mark the Thread you look at as unread, or as read (`thread.unread`), Alt+Shift+U
 - Snooze the Thread you look at, or wake it (`thread.snooze`), Alt+Z
 - Wake the snoozed Thread you look at (`thread.wake`)
-- Banda menu (`menu.open`), Alt+Space
+- Banda menu (`menu.open`), Alt+Space; takes `source` (a source's id, to show its rows alone, as files.find)
 - Every action and its key (`menu.keys`), Alt+K
 - Open the settings (`settings.open`), Alt+,; takes `link` (a section, or a row in it, as keys)
 - Check for updates (`update.check`)

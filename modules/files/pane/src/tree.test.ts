@@ -7,6 +7,7 @@ import {
   onlyFolder,
   toList,
   treeOf,
+  untitled,
 } from "./tree"
 
 const folder = (name: string, more: Partial<Entry> = {}): Entry => ({
@@ -96,4 +97,14 @@ test("a filter shows the files it found under their folders, all open", () => {
     paths: ["src/", "src/lib/", "src/lib/main.rs", "src/main.rs", "main.md"],
     open: ["src/", "src/lib/"],
   })
+})
+
+test("a new thing is untitled, then untitled 2, as the names are taken", () => {
+  const entry = (name: string) => ({ name, kind: "file" as const })
+  expect(untitled([], false)).toBe("untitled")
+  expect(untitled([entry("untitled")], false)).toBe("untitled 2")
+  expect(untitled([entry("untitled")], true)).toBe("untitled folder")
+  expect(
+    untitled([entry("untitled folder"), entry("untitled folder 2")], true)
+  ).toBe("untitled folder 3")
 })

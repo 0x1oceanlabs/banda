@@ -373,3 +373,247 @@ pub struct Sheet {
     /// Whether it holds more rows or cells than are here.
     pub truncated: bool,
 }
+
+/// What `files.make` asks: a new empty file or folder, by its name in a
+/// folder, as `files.list` reads its `dir`.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct MakeAsk {
+    pub dir: String,
+    pub name: String,
+    pub kind: Making,
+}
+
+/// What `files.make` makes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "files/")]
+pub enum Making {
+    #[default]
+    File,
+    Folder,
+}
+
+/// What `files.rename` asks: a new name for what is at `path`, in the
+/// same folder. A link is renamed, not what it leads to.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct RenameAsk {
+    pub path: String,
+    pub name: String,
+}
+
+/// What `files.move` and `files.copy` ask: these paths into a folder.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct MoveAsk {
+    pub paths: Vec<String>,
+    pub dir: String,
+    /// What to do where a name is taken in the folder: ask unless said.
+    #[serde(default)]
+    pub clash: Clash,
+    /// What to do with each path whose name is taken, by the path as
+    /// asked; the rest as `clash` says.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    #[ts(optional, as = "Option<std::collections::BTreeMap<String, Clash>>")]
+    pub answers: std::collections::BTreeMap<String, Clash>,
+    /// Names the job, so `files.cancel` can stop it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub job: Option<String>,
+}
+
+/// What to do with a path whose name is taken in the folder it goes to.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(export, export_to = "files/")]
+pub enum Clash {
+    /// Do nothing yet, and say which names are taken.
+    #[default]
+    Ask,
+    /// What is there goes to the Trash, and this takes its place.
+    Replace,
+    /// This takes the next free name: `name 2.ext`.
+    KeepBoth,
+    /// This one is left where it is.
+    Skip,
+}
+
+/// One piece of `files.move` or `files.copy`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[ts(export, export_to = "files/")]
+pub enum Job {
+    /// Asked to ask, these names are taken, and nothing was done.
+    Clashes { clashes: Vec<Clashing> },
+    /// How far the bytes are copied: it comes only when there are bytes
+    /// to copy, at most ten times a second.
+    Progress {
+        #[ts(type = "number")]
+        done: u64,
+        #[ts(type = "number")]
+        of: u64,
+        /// The name copied now.
+        name: String,
+    },
+    /// It ended: what was done, also when it stopped or failed on the way.
+    Done(Done),
+}
+
+/// A path whose name is taken in the folder it goes to.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct Clashing {
+    /// As it was asked.
+    pub path: String,
+    pub name: String,
+    /// Whether what is there is a folder.
+    pub folder: bool,
+}
+
+/// What an operation did, and what undoes it.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct Done {
+    /// Where each thing is now: made, renamed, moved, copied or put back.
+    pub paths: Vec<String>,
+    /// What was asked and left where it is, as a clash skipped.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(optional, as = "Option<Vec<String>>")]
+    pub skipped: Vec<String>,
+    /// What undoes it, in order: none where nothing can, as a Trash on
+    /// macOS, whose Finder puts back.
+    pub undo: Vec<Step>,
+    /// It was stopped before its end: `paths` says how far it went.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(as = "Option<bool>", optional)]
+    pub stopped: bool,
+    /// Why it failed on the way, after what `paths` says.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub failed: Option<String>,
+}
+
+/// One step of an undo: a command of Files', with what it is asked.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[ts(export, export_to = "files/")]
+pub enum Step {
+    /// `files.rename`.
+    Rename { path: String, name: String },
+    /// `files.move`, asking where a name is taken.
+    Move { paths: Vec<String>, dir: String },
+    /// `files.trash`.
+    Trash { paths: Vec<String> },
+    /// `files.restore`.
+    Restore { items: Vec<String> },
+}
+
+/// What `files.cancel` asks: the job to stop.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct CancelAsk {
+    pub job: String,
+}
+
+/// What `files.trash` asks: paths, each moved to the system's Trash. A
+/// link goes there, not what it leads to.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct TrashAsk {
+    pub paths: Vec<String>,
+}
+
+/// What `files.restore` and `files.delete` ask: items of the system's
+/// Trash, by their ids, as `files.trashed` lists them.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct ItemsAsk {
+    pub items: Vec<String>,
+}
+
+/// The system's Trash, as `files.trashed` answers.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct Trashcan {
+    /// What it holds, the latest first; none where the system lets no app
+    /// list it, as on macOS, whose Finder keeps it.
+    pub items: Option<Vec<Trashed>>,
+}
+
+/// One item of the system's Trash.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct Trashed {
+    /// The system's own name for it: on Linux, its `.trashinfo` file.
+    pub id: String,
+    pub name: String,
+    /// The folder it came from, whole.
+    pub from: String,
+    /// When it was put there, in ms since the Unix epoch.
+    #[ts(type = "number")]
+    pub when: i64,
+    pub folder: bool,
+    /// Its size in bytes, for a file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub size: Option<u64>,
+}
+
+/// What `files.search` asks: words, or a pattern, in the files under a
+/// folder.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct SearchAsk {
+    /// The folder to look under; the Project's when none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir: Option<String>,
+    pub query: String,
+    /// The query is a regular expression, as ripgrep reads one.
+    #[serde(default)]
+    pub regex: bool,
+    /// Its letters' case counts.
+    #[serde(default)]
+    pub case: bool,
+    /// It matches whole words only.
+    #[serde(default)]
+    pub word: bool,
+    /// The most matches in all: 2 000 unless said, 10 000 at most.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub limit: Option<u32>,
+}
+
+/// One piece of `files.search`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[ts(export, export_to = "files/")]
+pub enum Searched {
+    /// One file's matching lines, at most 100.
+    File {
+        /// From the folder, with `/` between names.
+        path: String,
+        lines: Vec<Matched>,
+        /// It holds more than these.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        #[ts(as = "Option<bool>", optional)]
+        more: bool,
+    },
+    /// It ended: the files and lines found; `cut` once the most were.
+    Done { files: u32, lines: u32, cut: bool },
+}
+
+/// A line that matches.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct Matched {
+    /// From 1.
+    pub line: u32,
+    /// The line, or about 300 characters of a long one around its first
+    /// match, `…` where it is cut.
+    pub text: String,
+    /// Where it matches in `text`, as JavaScript counts a string's
+    /// characters (UTF-16), the first and the one after the last.
+    pub ranges: Vec<(u32, u32)>,
+}

@@ -5,20 +5,31 @@ import type { Nothing } from "../Nothing";
 import type { StreamMethod } from "../StreamMethod";
 import type { Archive } from "./Archive";
 import type { ArchiveAsk } from "./ArchiveAsk";
+import type { CancelAsk } from "./CancelAsk";
+import type { Done } from "./Done";
 import type { FindAsk } from "./FindAsk";
 import type { Found } from "./Found";
+import type { ItemsAsk } from "./ItemsAsk";
+import type { Job } from "./Job";
 import type { ListAsk } from "./ListAsk";
 import type { Listing } from "./Listing";
+import type { MakeAsk } from "./MakeAsk";
+import type { MoveAsk } from "./MoveAsk";
 import type { Opened } from "./Opened";
 import type { OpenedAsk } from "./OpenedAsk";
 import type { Places } from "./Places";
 import type { ReadAsk } from "./ReadAsk";
 import type { RecentAsk } from "./RecentAsk";
+import type { RenameAsk } from "./RenameAsk";
+import type { SearchAsk } from "./SearchAsk";
+import type { Searched } from "./Searched";
 import type { Sheet } from "./Sheet";
 import type { SheetAsk } from "./SheetAsk";
 import type { Stat } from "./Stat";
 import type { StatAsk } from "./StatAsk";
 import type { Text } from "./Text";
+import type { TrashAsk } from "./TrashAsk";
+import type { Trashcan } from "./Trashcan";
 import type { WatchAsk } from "./WatchAsk";
 import type { Watched } from "./Watched";
 import type { WriteAsk } from "./WriteAsk";
@@ -80,4 +91,66 @@ archive: CallMethod<ArchiveAsk, Archive>,
  * A workbook's sheet as rows of text, at most 10 000, with every
  * sheet's name.
  */
-sheet: CallMethod<SheetAsk, Sheet>, };
+sheet: CallMethod<SheetAsk, Sheet>, 
+/**
+ * Makes an empty file or folder by its name in a folder, never
+ * over one there; to undo, it goes to the Trash.
+ */
+make: CommandMethod<MakeAsk, Done>, 
+/**
+ * Renames what is at a path, in its folder: never over another,
+ * but a name that only changes case on a disk that does not tell
+ * case apart.
+ */
+rename: CommandMethod<RenameAsk, Done>, 
+/**
+ * Moves paths into a folder: within a disk a rename, else a copy
+ * that then removes the first. Where a name is taken it asks
+ * first, or replaces (what was there goes to the Trash), keeps
+ * both (`name 2.ext`) or skips, as asked. It says how far a copy
+ * is, stops when `files.cancel` or the caller lets go, and ends
+ * saying what it did and what undoes it.
+ */
+move: StreamMethod<MoveAsk, Job>, 
+/**
+ * Copies paths into a folder, as `move` moves them: a folder with
+ * all it holds, a link as a link; into its own folder, beside
+ * itself.
+ */
+copy: StreamMethod<MoveAsk, Job>, 
+/**
+ * Stops a move or a copy that named its job: what it left half
+ * done is removed, and it says what it did.
+ */
+cancel: CommandMethod<CancelAsk, null>, 
+/**
+ * Sends paths to the system's Trash, and answers how to put them
+ * back, where the system lets an app (not on macOS).
+ */
+trash: CommandMethod<TrashAsk, Done>, 
+/**
+ * What the system's Trash holds, the latest first, with where
+ * each came from; an Agent's call, what came from its Project.
+ * None on macOS, whose Finder keeps it.
+ */
+trashed: CallMethod<Nothing, Trashcan>, 
+/**
+ * Puts items of the Trash back where they came from.
+ */
+restore: CommandMethod<ItemsAsk, Done>, 
+/**
+ * Deletes items of the Trash for good: only there.
+ */
+delete: CommandMethod<ItemsAsk, number>, 
+/**
+ * Deletes all the Trash holds for good; an Agent's call, what came
+ * from its Project.
+ */
+empty: CommandMethod<Nothing, number>, 
+/**
+ * Finds words, or a pattern, in the files under a folder, the
+ * Project's unless asked, leaving out what `.gitignore` does and
+ * binary files: each file's lines as they are found, at most 100
+ * a file, until the most lines asked; then how many.
+ */
+search: StreamMethod<SearchAsk, Searched>, };
