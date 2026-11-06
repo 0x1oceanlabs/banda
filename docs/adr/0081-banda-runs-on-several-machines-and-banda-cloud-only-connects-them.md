@@ -6,8 +6,8 @@ date: 2026-11-06
 # Banda runs on several machines, and Banda Cloud only connects them
 
 _Accepted as v1 by Roma on 2026-11-06, with Better Auth for the sign-in
-(decision 7). Two questions stay open and are marked so: the transport
-(decision 4) and where the control plane runs (decision 9). Nothing here
+(decision 7) and iroh for the transport (decision 4). One question stays
+open and is marked so: where the control plane runs (decision 9). Nothing here
 is built. Research: docs/research/2026-11-06-banda-cloud.md._
 
 ADR 0062 makes Banda a kernel, a platform and Apps, with the host where
@@ -54,14 +54,14 @@ What stands in the way today:
    Connect does). Sessions carry scopes, and a trade can narrow them,
    never widen them.
 
-4. **The transport is a port, and a route list picks one.** _Open._
+4. **The transport is a port, and a route list picks one.**
    - `local` as today; `ssh`, which installs and starts the engine's
      service and forwards a port (as Zed and VS Code Remote do); `direct`,
      TLS over a LAN or a tailnet; `relay`, through Banda Cloud or one's
      own.
    - A client keeps an ordered list of routes for each host and takes the
      first that answers as that host (its key), as T3's do.
-   - The proposal for `direct` and `relay` is **iroh**: Rust, dial by
+   - `direct` and `relay` are **iroh** (Roma, 2026-11-06): Rust, dial by
      public key (the host's key of decision 2 is its address), QUIC with
      TLS end to end, hole punching so most traffic goes direct, and a
      relay anyone can run (`iroh-relay`). Cloudflare Tunnel is not taken
