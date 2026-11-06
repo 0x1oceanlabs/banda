@@ -81,6 +81,18 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   come through `skill` (ADR 0037, decision 7). A refused or malformed call is a
   tool result marked `isError`, with the refusal and that nothing was
   done; only an engine that does not answer is a JSON-RPC error.
+- **An Agent's `banda` acts under its pass.** The shell an Agent runs
+  commands in gets `BANDA_TOKEN` and `BANDA_ENGINE` too. A Harness that
+  takes variables for each session's shell gets the session's own pass,
+  the one its `banda mcp` has: Claude Code's adapter, through
+  `_meta.claudeCode.options.env`. Any other Harness's process carries a
+  pass its Agents share, of an Agent no one Thread names, made once per
+  Project and Harness entry in a run of the engine (it outlives the
+  sessions, and ends with the engine): in its environment, and for Codex
+  in `CODEX_CONFIG` as `shell_environment_policy.set`. The kernel walls
+  each pass in its Project. With both variables set, every CLI command
+  that connects to the engine says hello with that pass at that address;
+  a pass the engine does not know is refused in words that say so.
 - **The CLI prints JSON.** `banda call <method>` prints `{"ok": …}`, as
   `banda project add <path>` does with the Project it added.
   `banda follow` prints events, one per line. When the engine refuses

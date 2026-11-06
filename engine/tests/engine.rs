@@ -1,7 +1,7 @@
 //! The `banda` program as a window and a script use it: `serve` with a
-//! parent, then `call` and `follow` over the API; and `banda mcp` as a
-//! Harness starts it for an Agent. The Harness is the fake agent from
-//! `tools/fake-agent`.
+//! parent, then `call` and `follow` over the API; `banda mcp` as a Harness
+//! starts it for an Agent; and `banda` as an Agent runs it in its shell,
+//! under its pass. The Harness is the fake agent from `tools/fake-agent`.
 
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Write};
@@ -24,13 +24,15 @@ fn fake_agent() -> PathBuf {
 
 /// Temporary places for one engine, with the fake agent as its only
 /// Harness. The fake agent writes the MCP servers of its last new session
-/// in `mcp`.
+/// in `mcp`, and what its Agent's shell would be handed for `banda` in
+/// `shells`.
 struct Places {
     _dir: tempfile::TempDir,
     root: PathBuf,
     state: PathBuf,
     config: PathBuf,
     mcp: PathBuf,
+    shells: PathBuf,
 }
 
 impl Places {
@@ -42,11 +44,12 @@ impl Places {
             dir.path().join("config"),
         );
         std::fs::create_dir_all(&config).unwrap();
-        let mcp = dir.path().join("mcp.json");
+        let (mcp, shells) = (dir.path().join("mcp.json"), dir.path().join("shells.json"));
         let list = format!(
-            "[[harness]]\nid = \"fake\"\nname = \"Fake\"\ncommand = {:?}\nenv = {{ FAKE_AGENT_MCP = {:?} }}\n",
+            "[[harness]]\nid = \"fake\"\nname = \"Fake\"\ncommand = {:?}\nenv = {{ FAKE_AGENT_MCP = {:?}, FAKE_AGENT_SHELLS = {:?} }}\n",
             fake_agent().display().to_string(),
             mcp.display().to_string(),
+            shells.display().to_string(),
         );
         std::fs::write(config.join("harnesses.toml"), list).unwrap();
         Places {
@@ -55,6 +58,7 @@ impl Places {
             state,
             config,
             mcp,
+            shells,
         }
     }
 
@@ -68,8 +72,22 @@ impl Places {
             .env("BANDA_CONFIG", &self.config)
             .env("BANDA_CACHE", self._dir.path().join("cache"))
             .env("BANDA_THUMBNAILS", "")
-            .env("BANDA_LOG", "warn");
+            .env("BANDA_LOG", "warn")
+            // The test's own engine, as its owner, wherever the tests run:
+            // in an Agent's shell too, which hands `banda` a pass.
+            .env_remove("BANDA_TOKEN")
+            .env_remove("BANDA_ENGINE");
         command
+    }
+
+    /// `banda` as an Agent runs it in its shell, with the variables its
+    /// session or its Harness's process hands it.
+    fn as_agent(&self, variables: &Value, args: &[&str]) -> Output {
+        let mut command = self.banda(args);
+        for name in ["BANDA_TOKEN", "BANDA_ENGINE"] {
+            command.env(name, text(&variables[name]));
+        }
+        command.output().unwrap()
     }
 
     /// Starts `banda serve --with-parent` and reads the line that says
@@ -439,6 +457,101 @@ fn an_agent_reaches_banda_through_banda_mcp() {
     let unknown = mcp.ask(10, "resources/list", json!({}));
     assert_eq!(unknown["error"]["code"], -32601);
     mcp.end();
+
+    drop(stdin);
+    assert!(engine.wait().unwrap().success());
+}
+
+#[test]
+fn an_agents_banda_acts_under_its_pass() {
+    let places = Places::new();
+    let (mut engine, stdin, _) = places.serve();
+    let work = places.ok("projects.create", None, json!({ "name": "Work" }));
+    let work = text(&work["id"]).to_owned();
+    let home = places.ok("projects.create", None, json!({ "name": "Home" }));
+    let home = text(&home["id"]).to_owned();
+    let sent = places.ok(
+        "agents.send",
+        Some(&work),
+        json!({ "harness": "fake", "text": "hello" }),
+    );
+    let read = |file: &Path| {
+        let bytes = std::fs::read(file).ok()?;
+        serde_json::from_slice::<Value>(&bytes).ok()
+    };
+    let shells = wait_for(Duration::from_secs(30), || read(&places.shells))
+        .expect("the session told what its shells get");
+    let servers = read(&places.mcp).expect("the session got its MCP servers");
+
+    // A session's shell gets the pass its `banda mcp` has, as Claude Code's
+    // adapter takes it. The fake agent's sessions take none, as Claude
+    // Code's alone do, so its process carries another pass, which its
+    // Agents share, to the same engine.
+    let given: serde_json::Map<String, Value> = (servers[0]["env"].as_array().unwrap().iter())
+        .map(|v| (text(&v["name"]).to_owned(), v["value"].clone()))
+        .collect();
+    let (session, process) = (&shells["session"], &shells["process"]);
+    assert_eq!(session, &Value::Object(given));
+    assert_eq!(process["BANDA_ENGINE"], session["BANDA_ENGINE"]);
+    assert_ne!(process["BANDA_TOKEN"], session["BANDA_TOKEN"]);
+
+    for (whose, variables) in [("session", session), ("process", process)] {
+        // It sees its own Project alone, and a call that names none runs
+        // there.
+        let listed = places.as_agent(variables, &["call", "projects.list"]);
+        assert!(listed.status.success(), "{whose}: {listed:?}");
+        let listed: Value = serde_json::from_slice(&listed.stdout).unwrap();
+        let ids: Vec<_> = listed["ok"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| text(&p["id"]))
+            .collect();
+        assert_eq!(ids, [work.as_str()], "{whose}");
+        let threads = places.as_agent(variables, &["call", "agents.threads"]);
+        assert!(threads.status.success(), "{whose}: {threads:?}");
+        let threads: Value = serde_json::from_slice(&threads.stdout).unwrap();
+        assert_eq!(threads["ok"]["threads"][0]["id"], sent["thread"], "{whose}");
+
+        // Another Project is past its wall, and the Project itself is not
+        // its to change.
+        let elsewhere = ["call", "agents.threads", "--project", &home];
+        assert_eq!(
+            refusal(&places.as_agent(variables, &elsewhere)),
+            "forbidden"
+        );
+        let followed = places.as_agent(variables, &["follow", "--project", &home]);
+        assert_eq!(refusal(&followed), "forbidden", "{whose}");
+        let create = ["call", "projects.create", "--params", r#"{"name":"Mine"}"#];
+        assert_eq!(refusal(&places.as_agent(variables, &create)), "forbidden");
+    }
+
+    // A pass the engine does not know is refused, in words that say so.
+    let engine_url = text(&session["BANDA_ENGINE"]);
+    let stranger = json!({ "BANDA_TOKEN": "0".repeat(64), "BANDA_ENGINE": engine_url });
+    let refused = places.as_agent(&stranger, &["call", "projects.list"]);
+    assert_eq!(refusal(&refused), "forbidden");
+    let said: Value = serde_json::from_slice(&refused.stdout).unwrap();
+    assert!(
+        text(&said["error"]["message"]).contains("does not know the pass in BANDA_TOKEN"),
+        "{said}"
+    );
+    // An engine that does not answer where the pass says is named.
+    let gone =
+        json!({ "BANDA_TOKEN": session["BANDA_TOKEN"], "BANDA_ENGINE": "ws://127.0.0.1:1/ws" });
+    let nowhere = places.as_agent(&gone, &["call", "projects.list"]);
+    assert_eq!(nowhere.status.code(), Some(2), "{nowhere:?}");
+    assert!(String::from_utf8_lossy(&nowhere.stderr).contains("where BANDA_ENGINE says"));
+
+    // A pass with no engine named is no pass: the owner's secret, as before.
+    let owner = places
+        .banda(&["call", "projects.list"])
+        .env("BANDA_TOKEN", text(&session["BANDA_TOKEN"]))
+        .output()
+        .unwrap();
+    assert!(owner.status.success(), "{owner:?}");
+    let listed: Value = serde_json::from_slice(&owner.stdout).unwrap();
+    assert_eq!(listed["ok"].as_array().unwrap().len(), 2);
 
     drop(stdin);
     assert!(engine.wait().unwrap().success());

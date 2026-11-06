@@ -18,7 +18,7 @@
 //! not answer is an error of the protocol.
 
 use crate::Failure;
-use crate::client::Client;
+use crate::client::{Client, ENGINE, Pass, TOKEN};
 use banda_kernel::{Code, CommandId, Picture, Refusal, Tool};
 use banda_skill::Reach;
 use serde_json::{Value, json};
@@ -38,8 +38,7 @@ const INTERNAL: i64 = -32603;
 type Error = (i64, String);
 
 struct Mcp {
-    engine: String,
-    token: String,
+    pass: Pass,
     connected: Option<Connected>,
 }
 
@@ -51,16 +50,13 @@ struct Connected {
 
 /// Answers MCP on stdin and stdout until stdin closes.
 pub async fn serve() -> Result<(), Failure> {
-    let variable = |name: &str| {
-        std::env::var(name).map_err(|_| {
-            Failure::broken(format!(
-                "banda mcp needs {name}: the agents module sets it for a Thread's session."
-            ))
-        })
-    };
+    let pass = Pass::from_env().ok_or_else(|| {
+        Failure::broken(format!(
+            "banda mcp needs {TOKEN} and {ENGINE}: the agents module sets them for a Thread's session."
+        ))
+    })?;
     let mut mcp = Mcp {
-        engine: variable("BANDA_ENGINE")?,
-        token: variable("BANDA_TOKEN")?,
+        pass,
         connected: None,
     };
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
@@ -119,7 +115,7 @@ impl Mcp {
         let connected = match self.connected.take() {
             Some(connected) => connected,
             None => {
-                let mut client = Client::connect_to(&self.engine, self.token.clone()).await?;
+                let mut client = Client::connect_as(&self.pass).await?;
                 let tools = client
                     .ask("projects.tools", None, CommandId::new(), Value::Null)
                     .await?;
