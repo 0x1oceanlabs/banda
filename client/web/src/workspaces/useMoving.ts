@@ -8,14 +8,20 @@ import { cn } from "@banda/ui/lib/utils"
  * workspace's number in the bar it lands on that workspace, and held there
  * a moment goes to it. `Esc` puts it back.
  *
+ * A grouped Pane goes alone, and its whole Group with the mod held, as
+ * its Group's handle carries it (ADR 0065, decisions 3 and 5): the mod
+ * pressed or let go on the way switches between the two, and a note
+ * under the Pane's name says which.
+ *
  * The Strip and the overview each say where it lands among what they
  * draw, and what scrolls at their edges (`Carrying`); the rest is this.
  */
-import { type RefObject, useEffect } from "react"
+import { type RefObject, useEffect, useRef } from "react"
 import type { Place } from "@banda/contract/workspaces"
 import type { Plan } from "./arrange"
 import { room, scrollOf, stripOf } from "./layout"
 import {
+  carriesGroup,
   groupLandingAt,
   type Lane,
   landingAt,
@@ -27,7 +33,8 @@ import {
 } from "./moving"
 import type { Frame } from "./PaneFrame"
 import { THRESHOLD } from "./sizing"
-import { useHoldsMod } from "@banda/ui/hooks/use-key-of"
+import { useHoldsMod, useMod } from "@banda/ui/hooks/use-key-of"
+import { modLabel } from "@banda/ui/lib/keys"
 
 /** Where a carried Pane lands, and the hint that shows it; none where
  * it would stay. At a Group's end, inside the Group or out of it. */
@@ -41,7 +48,7 @@ export type Carrying = {
   /** Goes to workspace `id`, as its number in the bar does. */
   go: (id: string) => void
   /** Where `pane` lands with the pointer at `x`, `y`, over `hit`; or,
-   * carried by its handle, the whole of `group`. */
+   * carried whole, the whole of `group`. */
   land: (
     hit: Element,
     x: number,
@@ -73,7 +80,9 @@ const TAB = "[data-handle] > [data-pane]"
 const GROUP_HANDLE = "[data-group-handle]"
 
 const GHOST_LOOK =
-  "pointer-events-none fixed top-0 left-0 z-50 max-w-60 truncate rounded-md border bg-popover px-2.5 py-1.5 text-sm text-popover-foreground shadow-md"
+  "pointer-events-none fixed top-0 left-0 z-50 flex max-w-60 flex-col rounded-md border bg-popover px-2.5 py-1.5 text-sm text-popover-foreground shadow-md"
+/** The note under the ghost's name: whether the Group goes too. */
+const NOTE_LOOK = "truncate text-xs text-muted-foreground empty:hidden"
 const HINT_LOOK =
   "pointer-events-none fixed top-0 left-0 z-50 hidden rounded-full bg-focus"
 /** The hint on the overview's backdrop, where the focus colour may not show. */
@@ -87,15 +96,23 @@ type Press = {
   lifted: HTMLElement
   x: number
   y: number
-  /** Carried by its handle, the whole Group: its ID, and one of its
-   * columns, which names it to the engine. */
+  /** The Group it is in: its ID, and one of its columns, which names it
+   * to the engine. */
   group?: { id: string; column: string }
+  /** Carried by its Group's handle, which always takes the whole Group. */
+  byHandle?: boolean
 }
 
 /** A Pane carried. */
 type Carry = Press & {
   ghost: HTMLElement
+  /** Under the ghost's name: whether the Group goes too. */
+  note: HTMLElement
   hint: HTMLElement
+  /** The whole Group goes, and what looks lifted for it now; unset
+   * until the first move says. */
+  whole?: boolean
+  looks: HTMLElement[]
   /** Where it lands, if let go now. */
   place?: Place
   grouped?: boolean
@@ -110,6 +127,12 @@ export function useMoving(
   carrying: RefObject<Carrying>
 ) {
   const holdsMod = useHoldsMod()
+  // The mod the note names, read as the keys change.
+  const mod = useMod()
+  const named = useRef(mod)
+  useEffect(() => {
+    named.current = mod
+  }, [mod])
   useEffect(() => {
     const element = root.current
     if (!element) return
@@ -134,19 +157,26 @@ export function useMoving(
       const tab = target.closest<HTMLElement>(TAB)
       const tile = tab ? null : target.closest<HTMLElement>("[data-tile]")
       const handle = target.closest<HTMLElement>(GROUP_HANDLE)
-      const column = handle?.closest<HTMLElement>("[data-column]")
-      const group = handle?.dataset.groupHandle
-      if (handle?.dataset.pane && group && column?.dataset.column) {
+      // A Pane's, with the Group it is in, if any.
+      const byPane = (pane: string, lifted: HTMLElement): Press => ({
+        ...at,
+        pane,
+        lifted,
+        group: groupOf(lifted),
+      })
+      const group = handle && groupOf(handle)
+      if (handle?.dataset.pane && group) {
         // The Group, by a Pane of it, which the press's path names.
         event.preventDefault()
         press = {
           ...at,
           pane: handle.dataset.pane,
           lifted: handle,
-          group: { id: group, column: column.dataset.column },
+          group,
+          byHandle: true,
         }
       } else if (tab?.dataset.pane) {
-        press = { ...at, pane: tab.dataset.pane, lifted: tab }
+        press = byPane(tab.dataset.pane, tab)
       } else if (!tile?.dataset.tile) {
         return
       } else if (held) {
@@ -154,14 +184,14 @@ export function useMoving(
         event.preventDefault()
         event.stopPropagation()
         element.setPointerCapture(event.pointerId)
-        press = { ...at, pane: tile.dataset.tile, lifted: tile }
+        press = byPane(tile.dataset.tile, tile)
       } else {
         // By its handle; a click there stays the handle's until it moves.
         const handle = target.closest("[data-handle]")
         if (!handle || !tile.contains(handle) || target.closest(CONTROLS)) {
           return
         }
-        press = { ...at, pane: tile.dataset.tile, lifted: tile }
+        press = byPane(tile.dataset.tile, tile)
       }
       window.addEventListener("pointermove", onMove, true)
       window.addEventListener("pointerup", onUp, true)
@@ -177,16 +207,54 @@ export function useMoving(
       from.lifted.dataset.lifted = ""
       const ghost = document.createElement("div")
       ghost.className = GHOST_LOOK
-      ghost.textContent = from.group
+      const name = document.createElement("span")
+      name.className = "truncate"
+      name.textContent = from.byHandle
         ? (from.lifted.getAttribute("aria-label") ?? "")
         : (element
             .querySelector(`[data-tile="${from.pane}"]`)
             ?.getAttribute("aria-label") ?? "")
+      const note = document.createElement("span")
+      note.className = NOTE_LOOK
+      ghost.append(name, note)
       const hint = document.createElement("div")
       hint.className = cn(HINT_LOOK, carrying.current.ringed && HINT_RING)
       document.body.append(ghost, hint)
-      carry = { ...from, ghost, hint, frame: requestAnimationFrame(edge) }
+      carry = {
+        ...from,
+        ghost,
+        note,
+        hint,
+        looks: [from.lifted],
+        frame: requestAnimationFrame(edge),
+      }
       window.addEventListener("keydown", onKey, true)
+      window.addEventListener("keyup", onKey, true)
+    }
+
+    /** Whether the whole Group goes, the mod `held` or not: the note says
+     * so, and the Group's columns look lifted, or the Pane alone does.
+     * Whether that changed. */
+    const takeGroup = (held: boolean) => {
+      if (!carry) return false
+      const { group, byHandle, lifted } = carry
+      const mod = modLabel(named.current)
+      const { whole, note } = carriesGroup(
+        { grouped: !!group, byHandle },
+        held,
+        mod
+      )
+      if (whole === carry.whole) return false
+      carry.whole = whole
+      carry.note.textContent = note ?? ""
+      for (const one of carry.looks) delete one.dataset.lifted
+      // The handle stays shown, lifted with its Group.
+      carry.looks =
+        whole && group
+          ? [...columnsOf(lifted, group.id), ...(byHandle ? [lifted] : [])]
+          : [lifted]
+      for (const one of carry.looks) one.dataset.lifted = ""
+      return true
     }
 
     /** Where the Pane lands with the pointer at `x`, `y`, drawn. */
@@ -202,7 +270,13 @@ export function useMoving(
       const { place, hint, grouped }: Landed = workspace
         ? { place: { to: "column", workspace, index: LAST } }
         : hit
-          ? carrying.current.land(hit, x, y, carry.pane, carry.group?.id)
+          ? carrying.current.land(
+              hit,
+              x,
+              y,
+              carry.pane,
+              carry.whole ? carry.group?.id : undefined
+            )
           : {}
       carry.place = place
       carry.grouped = grouped
@@ -246,20 +320,22 @@ export function useMoving(
       window.removeEventListener("pointercancel", onCancel, true)
       if (!carry) return
       dropOn(undefined)
-      const { pane, ghost, hint, place, grouped, frame, lifted, group } = carry
+      const { pane, ghost, hint, place, grouped, frame, looks, group, whole } =
+        carry
       carry = undefined
       cancelAnimationFrame(frame)
       ghost.remove()
       hint.remove()
-      delete lifted.dataset.lifted
+      for (const one of looks) delete one.dataset.lifted
       delete html.dataset.drag
       window.removeEventListener("keydown", onKey, true)
+      window.removeEventListener("keyup", onKey, true)
       // The click the release makes is the carry's, not what it ends on.
       swallowClick()
       if (!keep || !place) return
-      // Carried by its handle, the whole Group, to a column's place.
+      // The whole Group, to a column's place.
       const command: Plan["command"] =
-        group && place.to === "column"
+        group && whole && place.to === "column"
           ? {
               method: "workspaces.move_group",
               params: {
@@ -289,6 +365,7 @@ export function useMoving(
         if (html.dataset.drag) return finish(false)
         lift(press)
       }
+      takeGroup(holdsMod(event))
       aim(x, y)
     }
     const onUp = (event: PointerEvent) => {
@@ -304,7 +381,9 @@ export function useMoving(
       if (press?.pointer === event.pointerId) finish(false)
     }
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return
+      // The mod pressed or let go: the Group goes too, or no longer.
+      if (carry && takeGroup(holdsMod(event))) aim(carry.x, carry.y)
+      if (event.type !== "keydown" || event.key !== "Escape") return
       event.preventDefault()
       event.stopPropagation()
       finish(false)
@@ -318,6 +397,28 @@ export function useMoving(
       element.removeEventListener("lostpointercapture", onCancel)
     }
   }, [root, carrying, holdsMod])
+}
+
+/** The Group a column of which holds `element`: its ID, and that
+ * column's, which names it to the engine. */
+function groupOf(element: Element): Press["group"] {
+  const column = element.closest<HTMLElement>("[data-column]")
+  const id = column?.dataset.group
+  return id && column.dataset.column
+    ? { id, column: column.dataset.column }
+    : undefined
+}
+
+/** The columns of Group `group` beside the one that holds `element`. */
+function columnsOf(element: Element, group: string): HTMLElement[] {
+  const board = element.closest("[data-column]")?.parentElement
+  return board
+    ? [
+        ...board.querySelectorAll<HTMLElement>(
+          `:scope > [data-column][data-group="${CSS.escape(group)}"]`
+        ),
+      ]
+    : []
 }
 
 /** A Strip's `land` and `scroll`, for workspace `id`'s: beside its Panes,

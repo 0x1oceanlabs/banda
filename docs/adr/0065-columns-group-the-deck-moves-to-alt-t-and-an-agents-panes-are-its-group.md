@@ -63,6 +63,17 @@ for any Panes, and an Agent's Panes are simply its Group.
      alone, it first leaves its Group (`Alt+Shift+[` or `]`).
    - Focus crosses a Group's edges as it crosses columns now. A Group
      doesn't trap the arrows.
+   - _Changed 2026-11-06._ The mouse's way to move a Group whole is the
+     mod (ADR 0068, `Alt` by default) held while dragging any of its
+     Panes by its header, or from anywhere on it, as the mod drags a
+     Pane: the Group lands as its handle's drag lands it, along the
+     Strip, on another workspace or in the overview. Without the mod the
+     Pane goes alone, and dropped on another workspace it leaves its
+     Group. The mod pressed or let go during the drag switches between
+     the two. While a grouped Pane is carried, a note under its name says
+     "Hold Alt to move the whole Group", or "Moving the whole Group",
+     and the Group's columns look lifted with it. Roma approved it on
+     2026-11-06.
 
 4. **The keys follow niri's families, one level up** (as ADR 0005,
    decision 10):
@@ -100,6 +111,9 @@ for any Panes, and an Agent's Panes are simply its Group.
      Pane dragged by its header goes alone, and dropped on another
      workspace it leaves its Group. Without the handle, the keys move a
      Group (decision 4).
+   - _Changed again on 2026-11-06._ The mod and a drag of any of its
+     Panes move a Group whole too, with or without the handle (decision
+     3).
 
 6. **A Group reads as one thing, by a plate or a halo, coloured by
    its Agent's state.**

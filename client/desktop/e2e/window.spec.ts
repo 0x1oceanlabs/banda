@@ -3372,6 +3372,103 @@ test("a Group's handle carries it, and a Pane dropped inside its end joins it", 
   await expect(plates).toHaveCount(3)
 })
 
+test("Alt and a grouped Pane's header carry its whole Group, and a note says so", async () => {
+  // A third each, so the three fit in view; no handle, as by default.
+  window = await startWindow({
+    look: '[columns]\nmin = 10\ndefault = "1/3"\n',
+  })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launcher).toHaveCount(1)
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launcher).toHaveCount(2)
+  await expect(launcher.nth(1)).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("KeyT")
+  const terminal = terminalTile(page)
+  await expect(terminal).toHaveAttribute("data-focused", "true")
+  const x = async (tile: Locator) => (await tile.boundingBox())!.x
+  // The Thread and the launcher, a Group; the terminal beside it.
+  await page.keyboard.press("Alt+Home")
+  await page.keyboard.press("Alt+KeyG")
+  await page.keyboard.press("Alt+ArrowRight")
+  await page.keyboard.press("Alt+Shift+BracketLeft")
+  const plates = page.locator("[data-group-plate]")
+  await expect(plates).toHaveCount(2)
+  await expect(page.locator("[data-group-handle]")).toHaveCount(0)
+  await settled(thread, launcher, terminal)
+  const hold = page.getByText("Hold Alt to move the whole Group", {
+    exact: true,
+  })
+  const moving = page.getByText("Moving the whole Group", { exact: true })
+  const lifted = page.locator("[data-column][data-lifted]")
+
+  // Alt held, the launcher's header past the terminal's middle: the whole
+  // Group goes, and looks lifted as it does.
+  const from = await headerOf(launcher)
+  await page.keyboard.down("Alt")
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  const past = await within(terminal, 0.7, 0.5)
+  await page.mouse.move(past.x, past.y, { steps: 10 })
+  await expect(moving).toBeVisible()
+  await expect(lifted).toHaveCount(2)
+  await page.screenshot({ path: "test-results/group-drag.png" })
+  await page.mouse.up()
+  await page.keyboard.up("Alt")
+  await expect
+    .poll(async () => (await x(terminal)) < (await x(thread)))
+    .toBe(true)
+  await expect
+    .poll(async () => (await x(thread)) < (await x(launcher)))
+    .toBe(true)
+  await expect(plates).toHaveCount(2)
+  await settled(thread, launcher, terminal)
+
+  // Without Alt, the note says what it would do; Alt pressed and let go
+  // on the way switches, and let go without it, the launcher goes alone,
+  // out of its Group, to the terminal's left.
+  const again = await headerOf(launcher)
+  await page.mouse.move(again.x, again.y)
+  await page.mouse.down()
+  const edge = await within(terminal, 0.05, 0.5)
+  await page.mouse.move(edge.x, edge.y, { steps: 10 })
+  await expect(hold).toBeVisible()
+  await expect(lifted).toHaveCount(0)
+  await expect(launcher).toHaveAttribute("data-lifted", "")
+  await page.keyboard.down("Alt")
+  await expect(moving).toBeVisible()
+  await expect(lifted).toHaveCount(2)
+  await page.keyboard.up("Alt")
+  await expect(hold).toBeVisible()
+  await expect(lifted).toHaveCount(0)
+  await page.mouse.move(edge.x + 1, edge.y)
+  await page.mouse.up()
+  await expect
+    .poll(async () => (await x(launcher)) < (await x(terminal)))
+    .toBe(true)
+  await expect
+    .poll(async () => (await x(terminal)) < (await x(thread)))
+    .toBe(true)
+  await expect(plates).toHaveCount(1)
+  await expect(hold).toHaveCount(0)
+
+  // An ungrouped Pane carried has no note.
+  await settled(launcher, terminal)
+  const term = await headerOf(terminal)
+  await page.mouse.move(term.x, term.y)
+  await page.mouse.down()
+  const under = await within(launcher, 0.5, 0.8)
+  await page.mouse.move(under.x, under.y, { steps: 8 })
+  await expect(page.locator('html[data-drag="move"]')).toHaveCount(1)
+  await expect(hold).toHaveCount(0)
+  await expect(moving).toHaveCount(0)
+  await page.keyboard.press("Escape")
+  await page.mouse.up()
+})
+
 test("a Thread picked in the sidebar comes to the Strip's left, beside it", async () => {
   // A third each, so four columns are wider than the screen.
   window = await startWindow({

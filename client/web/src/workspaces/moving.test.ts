@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import {
+  carriesGroup,
   edgeSpeed,
   groupLandingAt,
   type Lane,
@@ -164,5 +165,37 @@ describe("pushed", () => {
     expect(at(360)).toBe(3)
     expect(at(2000)).toBe(3)
     expect(groupLandingAt(lanes, 260, "g", 10)?.hint.left).toBe(293)
+  })
+})
+
+describe("carriesGroup", () => {
+  test("a grouped Pane goes alone, and says the mod takes its Group", () => {
+    expect(carriesGroup({ grouped: true }, false, "Alt")).toEqual({
+      whole: false,
+      note: "Hold Alt to move the whole Group",
+    })
+  })
+
+  test("a grouped Pane with the mod held takes its whole Group", () => {
+    expect(carriesGroup({ grouped: true }, true, "Ctrl+Alt")).toEqual({
+      whole: true,
+      note: "Moving the whole Group",
+    })
+  })
+
+  test("the handle takes the whole Group, the mod held or not", () => {
+    for (const held of [false, true]) {
+      expect(
+        carriesGroup({ grouped: true, byHandle: true }, held, "Alt").whole
+      ).toBe(true)
+    }
+  })
+
+  test("an ungrouped Pane goes alone, with no note", () => {
+    for (const held of [false, true]) {
+      expect(carriesGroup({ grouped: false }, held, "Alt")).toEqual({
+        whole: false,
+      })
+    }
   })
 })
