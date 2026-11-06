@@ -1,7 +1,9 @@
 /**
  * The Threads that drive tabs with Banda's tools, as the window lists
  * them (ADR 0029, decision 4): the title a driven page's pill shows, the
- * way to its Thread, and the end of its turn, which ends its drive.
+ * way to its Thread, and the end of its turn, which ends its drive; and
+ * the Threads of a Project the Person may lend a tab to (ADR 0083,
+ * decision 4).
  */
 import type { Engine, ProjectId } from "@banda/contract"
 import type { WindowApi } from "@banda/ui/module"
@@ -11,7 +13,7 @@ import {
   type Watch,
   type WatchProps,
 } from "@banda/ui/pane"
-import { useEffect, useSyncExternalStore } from "react"
+import { useEffect, useMemo, useSyncExternalStore } from "react"
 import type { SiteAnswer, Wait } from "./desktop"
 import { browserHost } from "./host"
 import { asking, drivers, watchPages, watchWaits } from "./pages"
@@ -35,6 +37,35 @@ export function threadOf(
 /** The Thread of `agent` as listed, drawn again as the lists change. */
 export function useThreadOf(agent: string): Listed | null {
   return useSyncExternalStore(watchLists, () => threadOf(agent)?.listed ?? null)
+}
+
+const NONE: readonly Listed[] = []
+
+/** The Threads among `listed`, a Project's rows: each one an Agent works
+ * in, the latest first. */
+export function threadsIn(listed: readonly Listed[]): Listed[] {
+  return listed
+    .filter((each) => each.agent !== undefined)
+    .toSorted((a, b) => b.changed - a.changed)
+}
+
+/** The Threads of `project`, the latest first, drawn again as the lists
+ * change. */
+export function useThreadsOf(project: ProjectId): readonly Listed[] {
+  const listed = useSyncExternalStore(
+    watchLists,
+    () => shell?.lists()[project] ?? NONE
+  )
+  return useMemo(() => threadsIn(listed), [listed])
+}
+
+/** The name of `project`, as the window shows it; none for one it has
+ * not open. */
+export function useProjectName(project: ProjectId): string | undefined {
+  return useSyncExternalStore(
+    watchLists,
+    () => shell?.projects().find((each) => each.id === project)?.name
+  )
 }
 
 /**

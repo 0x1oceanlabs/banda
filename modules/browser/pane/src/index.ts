@@ -6,7 +6,7 @@ import { defineModule, scoped, takes, zoomActions } from "@banda/ui/module"
 import { paneOf, type PaneState } from "@banda/ui/pane"
 import { searchNow } from "./address"
 import { browserPane } from "./BrowserPane"
-import { actionOf, BROWSER, BROWSER_KEYS } from "./keys"
+import { actionOf, BROWSER, BROWSER_KEYS, LEND } from "./keys"
 import { frontHolder, holderOf, openWith } from "./pages"
 import { webSource } from "./sources"
 import { browserAt, type KeptArgs, NEW_BROWSER, readArgs } from "./tabs"
@@ -57,6 +57,15 @@ export const browser = defineModule({
       scoped(BROWSER, { ...rest, id: actionOf(does), section: "Browser" })
     ),
     ...zoomActions(BROWSER, BROWSER, "the page", "Browser"),
+    // A tab of the Person's is lent to a Thread, and taken back, by their
+    // gesture alone (ADR 0083, decision 4): the key opens the Threads to
+    // pick from, so no line of keys.toml names one.
+    scoped(BROWSER, {
+      id: LEND,
+      title: "Lend the tab to a Thread, or take it back",
+      section: "Browser",
+      keys: [{ code: "KeyL", mod: true, shift: true }],
+    }),
   ],
   scopes: [{ id: BROWSER, title: "Browser" }],
   sources: [webSource],

@@ -46,13 +46,14 @@ const tabOf = (request: WindowRequest): number | undefined => {
 }
 
 const handlers: Asked<Tabs | Cdp | Drive> = {
-  /** The tabs in the call's reach; a tab's ID is its page's, for as long
-   * as Banda runs. */
+  /** The tabs in the call's reach, each lent or not; a tab's ID is its
+   * page's, for as long as Banda runs. */
   tabs: (request) =>
     Effect.gen(function* () {
       const cdp = yield* Cdp
+      const tabs = yield* Tabs
       const reach = yield* reachOf(request)
-      return reach.map((page) => seenTab(page, cdp))
+      return reach.map((page) => seenTab(page, cdp, !!tabs.lentTo(page)))
     }),
   /** A tab's tree, for `browser_snapshot`; the engine checked its
    * params. */

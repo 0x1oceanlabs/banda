@@ -115,15 +115,18 @@ const denied = (site: string) =>
     message: `The Person lets no Agent use ${site}. Do not use it: carry on without it, or tell them why you need it.`,
   })
 
-/** A tab as an Agent sees it. */
+/** A tab as an Agent sees it: `lent` when the Person lent it the
+ * Agent's Thread. */
 export const seenTab = (
   page: WebContents,
-  cdp: Pick<Cdp["Service"], "drives">
+  cdp: Pick<Cdp["Service"], "drives">,
+  lent = false
 ): SeenTab => ({
   id: page.id,
   url: page.getURL(),
   title: page.getTitle(),
   driven: cdp.drives(page),
+  lent,
 })
 
 /** What Playwright threw, as the Agent hears it. */
@@ -249,6 +252,9 @@ export class Drive extends Context.Service<
     ): Effect.Effect<boolean, Refused | Broke>
     /** The turn of the Thread of `agent` ended: it drives no tab now. */
     settled(agent: string): Effect.Effect<void>
+    /** The Thread of `agent` reaches the tab no more, as its lend ended:
+     * its hold there ends, and with it its drive and its waits. */
+    letGo(tab: number, agent: string): Effect.Effect<void>
   }
 >()("banda/Drive") {
   static readonly layer = Layer.effect(Drive)(
@@ -866,6 +872,12 @@ export class Drive extends Context.Service<
                 unwait(at, agent)
             }
             return true
+          }),
+        letGo: (tab, agent) =>
+          Effect.suspend(() => {
+            unwait(tab, agent)
+            if (driving.get(tab)?.agent === agent) tell(tab, null)
+            return RcMap.invalidate(held, tab)
           }),
         settled: (agent) =>
           Effect.forEach(

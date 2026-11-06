@@ -121,6 +121,16 @@ export type BrowserNews =
   /** The Threads that wait for the Person on the tab (ADR 0029,
    * decision 6). */
   | { kind: "waits"; from: number; waits: readonly Wait[] }
+  /** The tab is lent to the Thread of `agent` now, or to none (ADR 0083,
+   * decision 4). */
+  | { kind: "lent"; from: number; agent: string | null }
+
+/**
+ * A lend of one of the Person's tabs (ADR 0083, decision 4): the Thread it
+ * is lent to, by its Agent, whose calls alone reach the tab; and that
+ * Thread and its Project, where the Thread's line of it goes.
+ */
+export type Lend = { agent: string; thread: string; project: ProjectId }
 
 /** An extension's button, as Chrome's `action` says it, for every tab and
  * for some tabs alone (electron-chrome-extensions' `getState`). */
@@ -210,6 +220,9 @@ export const BROWSER_BRIDGE = {
   >(),
   /** The turn of the Thread of `agent` ended: it drives no tab now. */
   settled: send<[agent: string]>(),
+  /** Lends the page, a tab of the Person's, to a Thread, by the Person's
+   * gesture; or takes it back, with none. Refused for a tab not theirs. */
+  lend: invoke<[contents: number, to: Lend | null]>(),
   /** Pins an extension's button to the row, or takes it off, in
    * `browser.toml`. */
   pin: invoke<[extension: string, pinned: boolean]>(),

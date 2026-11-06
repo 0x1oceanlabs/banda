@@ -100,8 +100,8 @@ project.locate.<id>` opens "Locate folder" for them.
 
 Banda's `browser_*` tools open and drive tabs in Banda's browser, in
 your Project's own profile, apart from the Person's: you see only the
-tabs your Project's Agents opened. Read `banda skill browser` before you
-use them.
+tabs your Project's Agents opened, and those the Person lent your Thread.
+Read `banda skill browser` before you use them.
 
 ## Showing the Person a Visual
 

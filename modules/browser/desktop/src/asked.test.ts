@@ -25,9 +25,11 @@ const page = (id: number) =>
     getTitle: () => `Tab ${id}`,
   }) as unknown as WebContents
 
-/** A tab the Agents of `work` opened, and one of the Person's. */
+/** A tab the Agents of `work` opened, one of the Person's, and one of
+ * theirs they lent the Agent's Thread. */
 const ours = page(1)
 const mine = page(2)
+const lent = page(3)
 
 /** What the fake hands were asked to do, by name. */
 const done: string[] = []
@@ -43,6 +45,7 @@ const shown = (tab: number, opened: number[] = []): Shown => ({
     url: `https://example.com/${id}`,
     title: `Tab ${id}`,
     driven: false,
+    lent: false,
   })),
   dialog: null,
   download: null,
@@ -90,13 +93,19 @@ const layer = (refused = false) =>
   Layer.mergeAll(
     hands(refused),
     Layer.succeed(Tabs)({
-      all: () => [ours, mine, page(3)],
+      all: () => [ours, mine, lent],
       changes: Stream.never,
       attached: () => {},
       profiled: () => {},
       whose: () => undefined,
-      // The Agents of `work` opened tabs 1 and 3.
-      seen: (project) => (project === work ? [ours, page(3)] : []),
+      seen: (project) => (project === work ? [ours, lent] : []),
+      lend: () => Effect.void,
+      lentTo: (page) =>
+        page === lent
+          ? { agent: agent.id, thread: "t1", project: work }
+          : undefined,
+      ended: () => {},
+      lends: Stream.never,
       create: () => Effect.never,
       created: () => Effect.void,
       tell: () => {},
@@ -123,9 +132,17 @@ it.effect("an Agent lists and drives only the tabs in its reach", () =>
   Effect.gen(function* () {
     done.length = 0
     const listed = yield* asked("tabs", {})
+    // Each says whether the Person lent it.
+    const tab = (id: number, lent: boolean) => ({
+      id,
+      url: `https://example.com/${id}`,
+      title: `Tab ${id}`,
+      driven: false,
+      lent,
+    })
     expect(listed._tag === "Success" && listed.success).toEqual([
-      { id: 1, url: "https://example.com/1", title: "Tab 1", driven: false },
-      { id: 3, url: "https://example.com/3", title: "Tab 3", driven: false },
+      tab(1, false),
+      tab(3, true),
     ])
 
     // A tab outside its reach is refused as one there is not, and nothing
