@@ -350,6 +350,19 @@
         }
       ],
       "scope": "browser"
+    },
+    {
+      "id": "browser.lend",
+      "title": "Lend the tab to a Thread, or take it back",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "KeyL",
+          "mod": true,
+          "shift": true
+        }
+      ],
+      "scope": "browser"
     }
   ],
   "scopes": [

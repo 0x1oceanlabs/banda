@@ -62,14 +62,16 @@ fn harnesses_with(env: &[(&str, &str)]) -> Harnesses {
     }])
 }
 
-/// The git module as the agents module hears it: `say { thread, notice }`
-/// writes its fact `git.acted`, as a step its card asked for is done.
-struct Git;
+/// A module as the agents module hears its notices: `say { thread,
+/// notice }` writes its fact, as git's `git.acted` when a step its card
+/// asked for is done, or the browser's `browser.lent` when the Person lends
+/// a Thread a tab.
+struct Telling(&'static str, &'static str);
 
 #[async_trait::async_trait]
-impl banda_kernel::Module for Git {
+impl banda_kernel::Module for Telling {
     fn name(&self) -> &'static str {
-        "git"
+        self.0
     }
 
     fn migrations(&self) -> &'static [&'static str] {
@@ -84,12 +86,12 @@ impl banda_kernel::Module for Git {
         &self,
         call: banda_kernel::Call,
         _: &str,
-        acted: Value,
+        told: Value,
     ) -> Result<Value, banda_kernel::Refusal> {
-        let by = call.participant();
+        let (by, kind) = (call.participant(), self.1);
         call.command(move |tx| {
-            let thread = acted["thread"].as_str();
-            tx.emit("git.acted", 1, thread, by, &acted)?;
+            let thread = told["thread"].as_str();
+            tx.emit(kind, 1, thread, by, &told)?;
             Ok(())
         })
         .await?;
@@ -117,7 +119,8 @@ impl World {
             .machine(root.join(".machine"))
             .module(HarnessesModule::new(agents.harnesses()))
             .module(agents)
-            .module(Git)
+            .module(Telling("git", "git.acted"))
+            .module(Telling("browser", "browser.lent"))
             .open()
             .await
             .unwrap()
@@ -1015,6 +1018,37 @@ async fn what_git_did_from_the_card_shows_at_once_and_goes_before_the_next_promp
     );
     let (_, view) = world.finish(Some(&thread), "again").await;
     assert_eq!(last_reply(&view), "message: You said: again", "only once");
+}
+
+/// A tab the Person lent the Thread, as the browser says it: the Thread
+/// shows its line at once, and its Agent reads it before its next message
+/// (ADR 0083, decision 4).
+#[tokio::test]
+async fn a_tab_lent_to_the_thread_shows_at_once_and_goes_before_the_next_prompt() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, _) = world.finish(None, "hello").await;
+    let lent = "You lent this Thread a tab · Fix login redirect #598";
+    let told = json!({ "thread": thread, "notice": lent });
+    world
+        .call(world.person(), "browser.say", told)
+        .await
+        .unwrap();
+    let view = world
+        .until(&thread, |v| last_reply(v) == format!("notice: {lent}"))
+        .await;
+    assert_eq!(view.turns.len(), 1, "it starts no turn");
+
+    let (_, view) = world.finish(Some(&thread), "read the review").await;
+    let said = last_reply(&view);
+    assert!(
+        said.starts_with("message: You said: Since your last turn, your Person did this in Banda"),
+        "{said}"
+    );
+    assert!(
+        said.ends_with(&format!("\n- {lent}\n\nread the review")),
+        "{said}"
+    );
 }
 
 #[tokio::test]

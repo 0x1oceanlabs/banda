@@ -1230,10 +1230,12 @@ impl Module for Agents {
                 between::cut_short(tx)
             })
             .await?;
-        // What git did from a Thread's card, its Agent reads next.
+        // What git did from a Thread's card, and the tabs its Person lent
+        // it, its Agent reads next.
         let at = project.at().await?;
-        let heard = project.react(at, notices::heard());
-        tokio::spawn(notices::follow(heard));
+        for filter in notices::heard() {
+            tokio::spawn(notices::follow(project.react(at, filter)));
+        }
         // A snoozed Thread's failed turn goes on as its time comes.
         tokio::spawn(snoozes::resume(project.react(at, snoozes::snoozed())));
         let filter = banda_harnesses::account_changed();

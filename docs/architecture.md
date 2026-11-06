@@ -1090,11 +1090,20 @@ modules/*/desktop  a module's part in Electron main
     main, and each request names the call's Project and its Agent. Main
     answers only about the tabs in that call's reach
     (`modules/browser/desktop/src/asked.ts`, `Tabs.seen`): those its
-    Project's Agents opened, and those the Person lent its Thread (none
-    yet: the lend comes later; ADR 0083, decision 4). A tab outside its
-    reach is refused as one there is not. The workspaces' `panes` tool
-    shows an Agent a browser's args with its Project's Agents' tabs
-    alone.
+    Project's Agents opened, and those the Person lent its Thread (ADR
+    0083, decision 4). A tab outside its reach is refused as one there is
+    not. The workspaces' `panes` tool shows an Agent a browser's args with
+    its Project's Agents' tabs alone.
+  - The Person lends one of their tabs to a Thread of the Pane's Project
+    by a gesture in the tab: the mark at the address's end, or the
+    action `browser.lend` (Alt+Shift+L); the page tells main on the
+    bridge's channel of the same name. `Tabs` keeps each lend, which ends as
+    the Person takes it back, the tab closes, or main loses the engine,
+    whose passes every session held. As one ends, Banda's hands let the
+    Thread go off the tab (`Drive.letGo`). Each lend and each end goes to
+    the engine as `browser.lent`, whose fact the agents module posts in
+    the Thread as a notice its Agent reads before its next message
+    (`modules/browser/desktop/src/lends.ts`).
   - Main's hands are Playwright, over each tab's own CDP socket
     (`modules/browser/desktop/src/cdp.ts`): an Effect HTTP server on
     127.0.0.1 whose sockets each see one tab, at an address with a

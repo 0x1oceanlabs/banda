@@ -1,8 +1,10 @@
 //! Notices for a Thread's Agent of what another module did for its
-//! Person, as git's after a commit from the Thread's card: a quiet line
-//! the Thread shows at once, which the Agent reads before the next
-//! message it gets, so a commit it did not make is no surprise. It starts
-//! no turn. Git says them as its facts `git.acted`, which this hears.
+//! Person, as git's after a commit from the Thread's card, or the
+//! browser's as the Person lends the Thread a tab and the lend ends: a
+//! quiet line the Thread shows at once, which the Agent reads before the
+//! next message it gets, so a commit it did not make, or a tab it may use
+//! now, is no surprise. It starts no turn. Git says them as its facts
+//! `git.acted`, the browser as its `browser.lent`, which this hears.
 
 use crate::model::ThreadId;
 use crate::notes::one_line;
@@ -12,24 +14,26 @@ use banda_kernel::{Error, EventFilter, Heard, Participant, Tx};
 /// How long a notice may be, in characters.
 pub const NOTICE: usize = 500;
 
-/// What the module hears from git: a step its card asked for was done.
-pub fn heard() -> EventFilter {
-    EventFilter {
-        module: Some("git".into()),
+/// What the module hears, each from its module: a step git's card asked
+/// for was done; a tab the Person lent a Thread, or the end of its lend.
+pub fn heard() -> [EventFilter; 2] {
+    let told = |module: &str, kind: &str| EventFilter {
+        module: Some(module.into()),
         subject: None,
-        kinds: Some(vec!["git.acted".into()]),
-    }
+        kinds: Some(vec![kind.into()]),
+    };
+    [told("git", "git.acted"), told("browser", "browser.lent")]
 }
 
-/// Posts each notice git tells of in its Thread, one at a time, until the
-/// Project is gone.
+/// Posts each notice one module tells of in its Thread, one at a time,
+/// until the Project is gone.
 pub async fn follow(mut heard: Heard) {
     loop {
         let event = match heard.next().await {
             Ok(Some(event)) => event,
             Ok(None) => return,
             Err(error) => {
-                tracing::warn!(%error, "the Threads stopped hearing git");
+                tracing::warn!(%error, "the Threads stopped hearing a module's notices");
                 return;
             }
         };

@@ -1,7 +1,7 @@
 //! The browser's tools through the kernel, as an Agent's session calls
 //! them, with a window that answers on the road, or none.
 
-use banda_browser::{Browser, Dialog, ReadTab, SeenTab, Shown};
+use banda_browser::{Browser, Dialog, Lending, ReadTab, SeenTab, Shown};
 use banda_kernel::{
     AgentId, Caller, Code, Kernel, Participant, PersonId, ProjectId, Refusal, Stream,
 };
@@ -116,6 +116,7 @@ async fn an_agent_sees_the_tabs_the_window_lists() {
         url: "https://example.com/".into(),
         title: "Example".into(),
         driven: false,
+        lent: true,
     };
     answer(&kernel, owner, &asked, json!([tab])).await;
     assert_eq!(asking.await.unwrap().unwrap(), json!([tab]));
@@ -275,6 +276,7 @@ async fn an_action_answers_in_a_line_and_says_what_changed() {
             url: "https://example.com/new".into(),
             title: String::new(),
             driven: false,
+            lent: false,
         }],
         dialog: Some(Dialog {
             id: "d1".into(),
@@ -407,4 +409,77 @@ async fn a_screenshot_keeps_its_image_for_the_mcp_image_content_path() {
     let shot = json!({ "tab": 7, "url": "https://example.com/", "title": "Chart", "width": 640, "height": 480, "pictures": [{ "mime": "image/jpeg", "data": "/9j/" }] });
     answer(&kernel, owner, &asked, shot.clone()).await;
     assert_eq!(asking.await.unwrap().unwrap(), shot);
+}
+
+/// The lines a Thread shows of a tab its Person lent it, and of the
+/// lend's end (ADR 0083, decision 4).
+#[test]
+fn a_lend_s_line_names_the_tab_in_one_line_cut_as_an_answer_cuts_it() {
+    let pr = "Fix login redirect #598";
+    assert_eq!(
+        Lending::Lent.line(pr),
+        "You lent this Thread a tab · Fix login redirect #598"
+    );
+    assert_eq!(
+        Lending::Back.line(pr),
+        "You took the tab back · Fix login redirect #598"
+    );
+    assert_eq!(
+        Lending::Closed.line(pr),
+        "The tab you lent closed. This Thread no longer sees it."
+    );
+    assert_eq!(
+        Lending::Session.line(pr),
+        "The session ended. The tab you lent is yours again."
+    );
+    // A page's title is its own: one line, at most 200 bytes.
+    let long = format!("Two\n  lines {}", "é".repeat(300));
+    let line = Lending::Lent.line(&long);
+    assert!(line.starts_with("You lent this Thread a tab · Two lines é"));
+    assert!(!line.contains('\n'));
+    assert!(line.len() <= "You lent this Thread a tab · ".len() + 200);
+    assert_eq!(Lending::Lent.line("  "), "You lent this Thread a tab");
+}
+
+/// The window says a lend in its Thread: the fact carries the Thread and
+/// its line. No Agent says one.
+#[tokio::test]
+async fn the_window_says_a_lend_in_its_thread_and_no_agent_does() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let (kernel, project) = open(root.path(), owner).await;
+    let said = json!({ "thread": "t1", "tab": "Inbox", "lending": "back" });
+    let person = Participant::Person(owner);
+    kernel
+        .call(
+            person,
+            "browser.lent",
+            Some(project),
+            Some(banda_kernel::CommandId::new()),
+            said.clone(),
+        )
+        .await
+        .unwrap();
+    let log = kernel.follow(person, project).await.unwrap();
+    let events = log.events_after(0, Default::default(), 100).await.unwrap();
+    let lent: Vec<_> = events.iter().filter(|e| e.kind == "browser.lent").collect();
+    assert_eq!(lent.len(), 1);
+    assert_eq!(lent[0].subject.as_deref(), Some("t1"));
+    assert_eq!(
+        lent[0].payload,
+        json!({ "thread": "t1", "notice": "You took the tab back · Inbox" })
+    );
+
+    let agent = agent(project);
+    let refused = kernel
+        .call(
+            agent,
+            "browser.lent",
+            None,
+            Some(banda_kernel::CommandId::new()),
+            said,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Forbidden);
 }

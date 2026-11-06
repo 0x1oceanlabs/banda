@@ -736,6 +736,36 @@ function drawnOf(p: Pose): Drawn {
   return { d, transform, eyes, glyph, shown }
 }
 
+/**
+ * The Agent's tile awake, as its outline with small eyes and nothing in
+ * it: a place an Agent may take, as the browser's button that lends a tab
+ * (ADR 0083, decision 4). Drawn in the text's colour.
+ */
+export function EmptyMark({ className }: { className?: string }) {
+  const drawn = drawnOf(STILL.idle)
+  return (
+    <svg
+      viewBox="48 -6 56 56"
+      data-slot="empty-mark"
+      aria-hidden
+      className={cn("size-4 shrink-0 overflow-visible", className)}
+    >
+      <g transform={drawn.transform}>
+        <path
+          d={drawn.d}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="4.6"
+          strokeLinejoin="round"
+        />
+        {drawn.eyes.map(({ cx, cy }, at) => (
+          <circle key={at} cx={cx} cy={cy} r={3.2} fill="currentColor" />
+        ))}
+      </g>
+    </svg>
+  )
+}
+
 /** The colours a still mark is drawn in, as CSS colours. */
 export type MarkColors = {
   body: string

@@ -11,4 +11,9 @@ id: number, url: string, title: string,
 /**
  * Whether an Agent drives it now.
  */
-driven: boolean, };
+driven: boolean, 
+/**
+ * Whether the Person lent it the asking Agent's Thread: a tab of
+ * theirs, signed in to their sites, until they take it back.
+ */
+lent: boolean, };

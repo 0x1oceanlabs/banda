@@ -5,7 +5,7 @@ vi.mock("electron", async () => {
 })
 import { EventEmitter } from "node:events"
 import { expect, it } from "@effect/vitest"
-import { Effect, Layer } from "effect"
+import { Effect, Layer, Stream } from "effect"
 import type { WebContents } from "electron"
 import { Dialogs } from "./dialogs"
 import { Tabs } from "./tabs"
@@ -22,6 +22,10 @@ it.effect(
         profiled: () => {},
         whose: () => null,
         seen: () => [],
+        lend: () => Effect.void,
+        lentTo: () => undefined,
+        ended: () => {},
+        lends: Stream.never,
         create: () => Effect.never,
         created: () => Effect.void,
         tell: (value) => {
@@ -95,6 +99,10 @@ it.effect(
         profiled: () => {},
         whose: () => null,
         seen: () => [],
+        lend: () => Effect.void,
+        lentTo: () => undefined,
+        ended: () => {},
+        lends: Stream.never,
         create: () => Effect.never,
         created: () => Effect.void,
         tell: () => {},

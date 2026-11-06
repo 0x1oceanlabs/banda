@@ -45,6 +45,9 @@ export type PageState = {
   /** The Threads that wait for the Person here (ADR 0029, decision 6). */
   dialog: Dialog | null
   waits: readonly Wait[]
+  /** The Thread the Person lent it, by its Agent; none while it is not
+   * lent (ADR 0083, decision 4). */
+  lent: string | null
 }
 
 /** A page not made yet. */
@@ -59,6 +62,7 @@ export const BLANK: PageState = {
   driver: null,
   waits: [],
   dialog: null,
+  lent: null,
 }
 
 /** The part of Electron's `<webview>` a page uses. */
@@ -306,6 +310,11 @@ export class Page {
   dialoged(dialog: Dialog | null): void {
     if (this.state.dialog?.id !== dialog?.id) this.dialogDraft = undefined
     this.set({ dialog })
+  }
+
+  /** The Thread it is lent to now, or none. */
+  lend(lent: string | null): void {
+    this.set({ lent })
   }
 
   /** The Threads that wait for the Person here now. */
@@ -653,6 +662,7 @@ function hear(news: PageNews): void {
   else if (news.kind === "driven") page.drive(news.driven)
   else if (news.kind === "driver") page.driveBy(news.driver)
   else if (news.kind === "waits") page.waited(news.waits)
+  else if (news.kind === "lent") page.lend(news.agent)
   else if (news.kind === "open") {
     const { url, background, agents } = news
     holder?.open(url, { from: page.id, background, agents })

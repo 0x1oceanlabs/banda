@@ -50,7 +50,7 @@ import { Dialogs } from "./dialogs"
 import { Drive } from "./drive"
 import { BoxArg, Extensions } from "./extensions"
 import { attaching, downloaded, keepCertificates, keepProfile } from "./profile"
-import { Tabs } from "./tabs"
+import { noTab, pageOf, Tabs } from "./tabs"
 
 /** Changes `browser.toml`; refused when the value is not one it takes. */
 type Changes = Effect.Effect<void, Refused | Broke>
@@ -430,6 +430,23 @@ export const browserAnswers: Answers<
       Drive.use((drive) => drive.allowed(page, agent, answer)),
   ],
   settled: [text, ([agent]) => Drive.use((drive) => drive.settled(agent))],
+  lend: [
+    Schema.Tuple([
+      Schema.Number,
+      Schema.NullOr(
+        Schema.Struct({
+          agent: Schema.String,
+          thread: Schema.String,
+          project: Schema.String,
+        })
+      ),
+    ]),
+    ([contents, to]) =>
+      Tabs.use((tabs) => {
+        const page = pageOf(contents)
+        return page ? tabs.lend(page, to) : Effect.fail(noTab(contents))
+      }),
+  ],
   pin: [
     Schema.Tuple([Schema.String, Schema.Boolean]),
     ([id, pinned]) => Browser.use((browser) => browser.pin(id, pinned)),

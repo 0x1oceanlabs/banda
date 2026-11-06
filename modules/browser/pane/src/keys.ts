@@ -29,6 +29,11 @@ export function actionOf(does: Does): string {
   return `${BROWSER}.${does}`
 }
 
+/** The action that lends the shown tab to a Thread, or takes it back
+ * (ADR 0083, decision 4). Chrome has no such key: it is Banda's, with the
+ * mod. */
+export const LEND = `${BROWSER}.lend`
+
 /** A key with Ctrl, or ⌘ on a Mac, as Chrome's are. */
 const ctrl = (code: string, shift = false): Key => ({
   code,

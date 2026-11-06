@@ -11,7 +11,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react"
-import { newId } from "@banda/contract"
+import { newId, type ProjectId } from "@banda/contract"
 import { BROWSER_FILE, type Browser as Settings } from "@banda/contract/browser"
 import { BandaMark } from "@banda/ui/components/banda-mark"
 import { PageDialog } from "./PageDialog"
@@ -33,7 +33,7 @@ import { Spinner } from "@banda/ui/components/spinner"
 import { DrawnIn, TopLayer } from "@banda/ui/components/top-layer"
 import { useFile } from "@banda/ui/lib/look"
 import { cn } from "@banda/ui/lib/utils"
-import { definePane, HOLDS, type PaneProps } from "@banda/ui/pane"
+import { definePane, HOLDS, type Listed, type PaneProps } from "@banda/ui/pane"
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -52,7 +52,15 @@ import { addressOf, siteOf } from "./address"
 import { Extensions, WEB_STORE } from "./Extensions"
 import type { Download, Driver, Point, SiteAnswer, Wait } from "./desktop"
 import { browserHost, downloadsNow, watchDownloads } from "./host"
-import { actionOf, BROWSER, BROWSER_KEYS, type Does, isTabKey } from "./keys"
+import {
+  actionOf,
+  BROWSER,
+  BROWSER_KEYS,
+  type Does,
+  isTabKey,
+  LEND,
+} from "./keys"
+import { colourOf, LendButton, LentChip } from "./Lend"
 import {
   allowSite,
   handBack,
@@ -224,6 +232,7 @@ function BrowserPane({
   }
   return (
     <Browser
+      project={project}
       tab={tab}
       tabs={tabs}
       settings={settings}
@@ -266,6 +275,7 @@ type TabsProps = {
 }
 
 function Browser({
+  project,
   tab,
   tabs,
   settings,
@@ -280,6 +290,8 @@ function Browser({
   onSite,
   close,
 }: {
+  /** The Pane's Project, whose Threads a tab of the Person's is lent to. */
+  project: ProjectId
   tab: Tab
   tabs: TabsProps
   settings: Settings
@@ -345,6 +357,38 @@ function Browser({
     else onOpen(to)
   }
 
+  // A tab of the Person's is lent to a Thread of the Pane's Project by
+  // their gesture, and taken back the same way (ADR 0083, decision 4):
+  // the picker or the chip's card shows meanwhile.
+  // Each is the shown tab's: another tab shown closes it. The picker its
+  // key opens has its first Thread ready for Enter.
+  const [popup, setPopup] = useState<{
+    tab: string
+    is: "pick" | "card"
+    byKey?: boolean
+  }>()
+  const lending = popup?.tab === tab.id ? popup.is : null
+  const setLending = (is: "pick" | "card" | null, byKey = false) =>
+    setPopup(is ? { tab: tab.id, is, byKey } : undefined)
+  const lendable = !tab.agents && contents !== null
+  const lend = (thread: Listed | null) => {
+    setLending(null)
+    if (contents === null) return
+    const to = thread?.agent && {
+      agent: thread.agent,
+      thread: thread.id,
+      project,
+    }
+    // A lend main refuses is left unhandled, as a Problem (ADR 0039).
+    void browserHost()?.lend(contents, to || null)
+  }
+  // Its key lends the shown tab, or takes it back.
+  const lendKey = () => {
+    if (state.lent) lend(null)
+    else if (lendable) setLending("pick", true)
+    return true
+  }
+
   // The browser's keys (ADR 0071, decision 1): its scope is its tile,
   // and each of its tabs' pages, as a key may come from one out of sight.
   const does = (key: Does) => {
@@ -360,6 +404,7 @@ function Browser({
         BROWSER_KEYS.map((key) => [actionOf(key.does), () => does(key.does)])
       ),
       ...zoomHandlers(BROWSER, (step) => page?.zoom(step)),
+      [LEND]: lendKey,
     },
     { tile: true }
   )
@@ -413,14 +458,42 @@ function Browser({
             className={state.loading ? "animate-spin" : undefined}
           />
         </Button>
-        <Address
-          ref={address}
+        <div
           // Beside the tabs it gives way to them; alone it fills the row.
-          className={left ? "min-w-32 flex-1" : "w-56 min-w-24 shrink-[4]"}
-          url={state.url || tab.url}
-          onOpen={open}
-          onLeave={() => page?.focus()}
-        />
+          className={cn(
+            "@container mx-1 flex h-7 items-center gap-1 rounded-md pr-1 hover:bg-muted has-[input:focus]:bg-muted",
+            left ? "min-w-32 flex-1" : "w-56 min-w-24 shrink-[4]"
+          )}
+        >
+          <Address
+            ref={address}
+            url={state.url || tab.url}
+            onOpen={open}
+            onLeave={() => page?.focus()}
+          />
+          {state.lent ? (
+            <LentChip
+              agent={state.lent}
+              open={lending === "card"}
+              onOpen={(open) => setLending(open ? "card" : null)}
+              onBack={() => lend(null)}
+              onThread={() => {
+                setLending(null)
+                onThread(state.lent!)
+              }}
+            />
+          ) : (
+            lendable && (
+              <LendButton
+                project={project}
+                open={lending === "pick"}
+                byKey={popup?.byKey === true}
+                onOpen={(open) => setLending(open ? "pick" : null)}
+                onLend={lend}
+              />
+            )
+          )}
+        </div>
         {browserHost() && (
           <Extensions
             // An Agents' tab is no extension's (ADR 0083, decision 4).
@@ -894,11 +967,27 @@ function TabItem({
   const page = pageAt(tab.id)
   const state = page?.state
   const words = state?.title || titleOf(tab)
+  const lent = useThreadOf(state?.lent ?? "")
+  const lentTo = state?.lent ? (lent?.title ?? "a Thread") : undefined
   const mark = state?.dialog ? (
     <span
       className="size-1.5 shrink-0 rounded-full bg-attention"
       aria-label="Page dialog"
     />
+  ) : lentTo !== undefined ? (
+    <span
+      className="flex shrink-0"
+      style={{ color: colourOf(lent?.mark ?? "rest") }}
+    >
+      <BandaMark
+        state={lent?.mark ?? "rest"}
+        variant="agent"
+        playful={0}
+        news={false}
+        label={`Lent to ${lentTo}`}
+        className="size-3"
+      />
+    </span>
   ) : (
     (state?.driven || state?.driver) && (
       <Driven
@@ -913,7 +1002,7 @@ function TabItem({
       role="tab"
       aria-selected={shown}
       aria-label={words}
-      title={words}
+      title={lentTo === undefined ? words : `${words} · lent to ${lentTo}`}
       tabIndex={shown ? 0 : -1}
       onClick={onShow}
       // The middle button closes a tab, as in every browser.
@@ -1075,13 +1164,11 @@ function downloadState(download: Download): string {
  */
 function Address({
   ref,
-  className,
   url,
   onOpen,
   onLeave,
 }: {
   ref: React.Ref<HTMLInputElement>
-  className: string
   url: string
   onOpen: (typed: string) => void
   onLeave: () => void
@@ -1114,10 +1201,7 @@ function Address({
       onBlur={() => setEditing(null)}
       onChange={(event) => setEditing(event.target.value)}
       onKeyDown={onKey}
-      className={cn(
-        "mx-1 h-7 rounded-md bg-transparent px-2 text-sm text-muted-foreground outline-none group-data-[selected=true]/tile:text-foreground placeholder:text-muted-foreground/70 hover:bg-muted focus:bg-muted focus:text-foreground",
-        className
-      )}
+      className="h-full min-w-0 flex-1 bg-transparent px-2 text-sm text-muted-foreground outline-none group-data-[selected=true]/tile:text-foreground placeholder:text-muted-foreground/70 focus:text-foreground"
     />
   )
 }

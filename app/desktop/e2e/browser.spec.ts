@@ -521,7 +521,13 @@ test("an Agent sees only its Project's Agents' tabs, which load apart from the P
   const id = Number(/^Opened tab (\d+)\./.exec(opened)?.[1])
   expect(opened).toContain('titled "Who: nobody"')
   expect(await tabs()).toEqual([
-    { id, url: `${address}/who`, title: "Who: nobody", driven: false },
+    {
+      id,
+      url: `${address}/who`,
+      title: "Who: nobody",
+      driven: false,
+      lent: false,
+    },
   ])
   // Banda's hands hold it once it is read, and it says so.
   await agentSays(window, "browser_snapshot", { tab: id })
@@ -599,6 +605,115 @@ test("an Agent sees only its Project's Agents' tabs, which load apart from the P
     )
   expect(await loaded(id)).not.toBe("Notes")
   expect(await loaded(persons)).toBe("Notes")
+})
+
+test("the Person lends a tab of theirs to a Thread, which drives it until the lend ends", async () => {
+  const address = await serve({
+    "/sign-in":
+      "<title>Signed in</title><script>document.cookie = 'who=person; path=/'</script>" +
+      "<button onclick=\"document.querySelector('output').value = document.cookie\">Go</button><output></output>",
+  })
+  window = await startWindow()
+  const { app, page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const tabs = () => agentAnswers(window, "browser_tabs", {})
+
+  // The Person's own tab: no Agent sees it.
+  const bar = await openBrowser(page)
+  await bar.fill(`${address}/sign-in`)
+  await bar.press("Enter")
+  await expect(page.getByRole("region", { name: "Signed in" })).toBeVisible()
+  expect(await tabs()).toEqual([])
+
+  // The mark at the address's end lists the Project's Threads, and the
+  // Person lends the tab to one.
+  const lend = page.getByRole("button", { name: "Lend this tab to a Thread" })
+  const picker = page.getByRole("menu")
+  const pick = async () => {
+    await expect(picker).toContainText("Lend this tab to a Thread in Work")
+    await expect(picker).toContainText(
+      "It sees and drives only this tab, until you take it back."
+    )
+    await picker.getByRole("menuitem", { name: /hello/ }).click()
+  }
+  await lend.click()
+  await pick()
+  const chip = page.getByRole("button", { name: "Lent to hello" })
+  await expect(chip).toBeVisible()
+  await expect(lend).toHaveCount(0)
+  // The tab wears the Thread's mark.
+  await expect(page.getByRole("tab", { name: "Signed in" })).toHaveAttribute(
+    "title",
+    "Signed in · lent to hello"
+  )
+
+  // The Thread says so, and its Agent sees and drives the tab, signed in
+  // as the Person.
+  await expect(
+    thread.getByText("You lent this Thread a tab · Signed in")
+  ).toBeVisible()
+  const [lent] = await tabs()
+  expect(lent).toMatchObject({
+    url: `${address}/sign-in`,
+    title: "Signed in",
+    lent: true,
+  })
+  const read = await agentSays(window, "browser_snapshot", { tab: lent.id })
+  const go = /button "Go" \[ref=(e\d+)\]/.exec(read)?.[1]
+  await agentSays(window, "browser_act", {
+    tab: lent.id,
+    action: "click",
+    ref: go,
+  })
+  expect(
+    await agentSays(window, "browser_snapshot", { tab: lent.id })
+  ).toContain("who=person")
+
+  // The chip's card takes it back: the Agent reaches it no more.
+  await chip.click()
+  const card = page
+    .getByRole("dialog")
+    .filter({ hasText: "This Thread sees and drives this tab." })
+  await expect(card).toContainText(
+    "The lend ends when you take it back, close the tab, or its session ends."
+  )
+  await card.getByRole("button", { name: "Take back" }).click()
+  await expect(chip).toHaveCount(0)
+  await expect(
+    thread.getByText("You took the tab back · Signed in")
+  ).toBeVisible()
+  expect(await tabs()).toEqual([])
+  const refused = await agentCalls(window, "browser_snapshot", { tab: lent.id })
+  expect(refused.isError).toBe(true)
+  expect(refused.content[0]!.text).toContain(`There is no tab ${lent.id}`)
+
+  // Alt+Shift+L, from the page, opens the picker with its first Thread
+  // ready for Enter, and takes the tab back.
+  await pressInPage(app, "L", ["alt", "shift"])
+  await expect(picker).toContainText("Lend this tab to a Thread in Work")
+  await expect(picker.getByRole("menuitem", { name: /hello/ })).toBeFocused()
+  await page.keyboard.press("Enter")
+  await expect(chip).toBeVisible()
+  await pressInPage(app, "L", ["alt", "shift"])
+  await expect(chip).toHaveCount(0)
+  await expect(
+    thread.getByText("You took the tab back · Signed in")
+  ).toHaveCount(2)
+
+  // Lent again, the lend ends as its tab closes.
+  await lend.click()
+  await pick()
+  await expect(chip).toBeVisible()
+  await page
+    .getByRole("button", { name: "Close Signed in", description: /^Close tab/ })
+    .click()
+  await expect(
+    thread.getByText("The tab you lent closed. This Thread no longer sees it.")
+  ).toBeVisible()
+  expect(await tabs()).toEqual([])
 })
 
 test("an Agent reads a tab's tree with refs and new errors, until the Person stops it there", async () => {
