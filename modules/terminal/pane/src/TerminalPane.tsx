@@ -124,7 +124,7 @@ function TerminalPane({
   const followed = (target: Target, outside: boolean) => {
     if ("file" in target) {
       const action = outside ? "file.outside" : "file.open"
-      run?.(action, { file: target.file, project })
+      run?.(action, { file: target.file, project, line: target.line ?? null })
     } else if (outside || !run) {
       window.open(target.page, "_blank", "noopener")
     } else run("browser.open", { address: target.page, project })

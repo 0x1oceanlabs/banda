@@ -26,7 +26,7 @@ import {
   type Watch,
 } from "@banda/ui/pane"
 import { LayoutGridIcon } from "lucide-react"
-import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react"
+import { useLayoutEffect, useRef, useSyncExternalStore } from "react"
 import { columnsOf } from "./look"
 import { modules } from "./modules"
 import { keepProblem } from "./problems/keep"
@@ -267,7 +267,9 @@ function Launcher({ engine, open, focused }: PaneProps<Args>) {
   useLayoutEffect(() => {
     now.current = { modules, open }
   })
-  useEffect(() => {
+  // Before the next key comes in: the letter pressed as the launcher takes
+  // the focus is its own, not the Pane's it came from.
+  useLayoutEffect(() => {
     if (!focused) return
     const onKey = (event: KeyboardEvent) => {
       // Alt may still be held from Alt+N; a key an action took is its.

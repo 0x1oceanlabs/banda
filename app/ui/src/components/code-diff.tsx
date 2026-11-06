@@ -28,27 +28,13 @@ import {
 } from "react"
 import { useDark } from "../hooks/use-dark"
 import { cn } from "../lib/utils"
+import { BASE_CSS, HIGHLIGHTER, POOL, THEMES, VIEW_CLASS } from "./code-look"
 
 export type { FileDiffMetadata } from "@pierre/diffs"
 
 /** The view's handle: a hunk's mark is its index in its file. */
 export type CodeDiffHandle = CodeViewHandle<number, undefined>
 
-const THEMES = { dark: "pierre-dark", light: "pierre-light" } as const
-
-/** One pool of highlighting workers for every diff in the window. */
-const POOL = {
-  workerFactory: () =>
-    new Worker(new URL("./diffs-worker.ts", import.meta.url), {
-      type: "module",
-    }),
-  poolSize: Math.max(
-    2,
-    Math.min(6, Math.floor((navigator.hardwareConcurrency || 4) / 2))
-  ),
-  totalASTLRUCacheSize: 240,
-}
-const HIGHLIGHTER = { theme: THEMES, tokenizeMaxLineLength: 1_000 }
 /** T3 Code's sizes: 32 px headers, which a folded file never measures again. */
 const METRICS = {
   diffHeaderHeight: 32,
@@ -301,13 +287,7 @@ export function CodeDiff({
         {...(viewer ? { ref: viewer } : {})}
         containerRef={watch}
         items={items}
-        className={cn(
-          "[--diff-number:35%] [--diff-row:50%] dark:[--diff-number:60%] dark:[--diff-row:70%]",
-          // The view scrolls itself: it reads its own scroll to draw only
-          // the rows in sight, and sets no overflow of its own.
-          "overflow-auto outline-none",
-          className
-        )}
+        className={cn(VIEW_CLASS, className)}
         {...(prefix
           ? {
               renderHeaderPrefix: (item: CodeViewItem<number>) =>
@@ -381,37 +361,7 @@ function HunkPlate({
 /** T3 Code's look for the view, on Banda's tokens: the surface is the
  * tile, rows mix `added` and `removed` into it (stronger in dark, and
  * stronger again on the numbers), headers are sticky and 32 px. */
-const CSS = `
-[data-diffs-header],
-[data-diff],
-[data-file],
-[data-error-wrapper],
-[data-virtualizer-buffer] {
-  --code: var(--background);
-  --ink: var(--foreground);
-  --diffs-header-font-family: var(--font-sans) !important;
-  --diffs-font-family: var(--font-mono) !important;
-  --diffs-bg: var(--code) !important;
-  --diffs-light-bg: var(--code) !important;
-  --diffs-dark-bg: var(--code) !important;
-  --diffs-token-light-bg: transparent;
-  --diffs-token-dark-bg: transparent;
-  --diffs-bg-context-override: color-mix(in srgb, var(--code) 97%, var(--ink));
-  --diffs-bg-hover-override: color-mix(in srgb, var(--code) 94%, var(--ink));
-  --diffs-bg-separator-override: color-mix(in srgb, var(--code) 95%, var(--ink));
-  --diffs-bg-buffer-override: color-mix(in srgb, var(--code) 90%, var(--ink));
-  --diffs-bg-addition-override: color-mix(in srgb, var(--code) var(--diff-row), var(--added));
-  --diffs-bg-addition-number-override: color-mix(in srgb, var(--code) var(--diff-number), var(--added));
-  --diffs-bg-addition-hover-override: color-mix(in srgb, var(--code) 85%, var(--added));
-  --diffs-bg-addition-emphasis-override: color-mix(in srgb, var(--code) 80%, var(--added));
-  --diffs-bg-deletion-override: color-mix(in srgb, var(--code) var(--diff-row), var(--removed));
-  --diffs-bg-deletion-number-override: color-mix(in srgb, var(--code) var(--diff-number), var(--removed));
-  --diffs-bg-deletion-hover-override: color-mix(in srgb, var(--code) 85%, var(--removed));
-  --diffs-bg-deletion-emphasis-override: color-mix(in srgb, var(--code) 80%, var(--removed));
-  background-color: var(--diffs-bg) !important;
-  color: var(--ink) !important;
-}
-
+const CSS = `${BASE_CSS}
 [data-change-icon="new"] { color: var(--added) !important; }
 [data-change-icon="deleted"] { color: var(--removed) !important; }
 /* Modified files stay quiet: a muted blue. */
@@ -487,8 +437,4 @@ const CSS = `
 [data-diff-type="split"][data-overflow="wrap"] {
   --diffs-code-grid: var(--diffs-grid-number-column-width) minmax(0, 1fr);
 }
-
-[data-diff], [data-file] { transition: opacity 200ms ease-out; }
-@starting-style { [data-diff], [data-file] { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { [data-diff], [data-file] { transition: none; } }
 `

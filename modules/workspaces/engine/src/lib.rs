@@ -114,7 +114,7 @@ banda_kernel::methods! {
 /// The kinds of Pane an Agent may open: ones that show, and run nothing as
 /// the Person. A terminal's runs the Person's shell, and the command its
 /// `done` sends goes as the Person (ADR 0032).
-const AGENT_KINDS: &[&str] = &["agents.thread", "git.diff", "browser.browser"];
+const AGENT_KINDS: &[&str] = &["agents.thread", "git.diff", "files.file", "browser.browser"];
 
 /// Refuses a browser an Agent opens anywhere but at a web address, as
 /// `browser_open` does: never at the Person's files (ADR 0029, decision 3).
@@ -170,7 +170,7 @@ pub struct SeenPane {
 #[derive(Deserialize, TS, JsonSchema)]
 #[ts(export_to = "workspaces/")]
 pub struct OpenPane {
-    /// The kind: `agents.thread`, `git.diff` or `browser.browser`.
+    /// The kind: `agents.thread`, `git.diff`, `files.file` or `browser.browser`.
     pub kind: String,
     /// The kind's own, an object, as `panes` shows them.
     #[schemars(with = "serde_json::Map<String, Value>")]

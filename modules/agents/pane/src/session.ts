@@ -207,12 +207,15 @@ export function useThreadSession({
       )
       return kept.path
     })
-  // The files `@` names come from the Project's folder.
+  // The files `@` names come from the Project's folder, as the files
+  // module finds them (ADR 0073, decision 11).
   const findFiles = useCallback(
     (query: string) =>
       unplaced
         ? Promise.resolve([])
-        : engine.call("agents.files", { query }, { project }),
+        : engine
+            .call("files.find", { query }, { project })
+            .then((found) => found.paths),
     [engine, project, unplaced]
   )
 

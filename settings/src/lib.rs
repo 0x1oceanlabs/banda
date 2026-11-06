@@ -74,6 +74,7 @@ const WINDOWS: &[(&str, &str)] = &[
     ),
     ("browser", include_str!("../../modules/browser/window.json")),
     ("git", include_str!("../../modules/git/window.json")),
+    ("files", include_str!("../../modules/files/window.json")),
     (
         "notifications",
         include_str!("../../modules/notifications/window.json"),

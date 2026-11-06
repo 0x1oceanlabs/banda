@@ -61,6 +61,7 @@ class ThreadFiles implements FilesHost {
     this.run?.(outside ? "file.outside" : "file.open", {
       file: at.file,
       project: this.project,
+      line: at.line ?? null,
     })
   }
 

@@ -2396,6 +2396,7 @@ test("niri's keys: a launcher's letters, heights, the Strip's edges, the room le
   await page.keyboard.press("Alt+KeyN")
   await expect(launcher.locator("kbd", { hasText: "T" })).toBeVisible()
   await page.screenshot({ path: "test-results/4a-launcher-letters.png" })
+  await expect(launcher).toHaveAttribute("data-focused", "true")
   await page.keyboard.press("KeyT")
   await expect(terminal).toHaveAttribute("data-focused", "true")
   await expect(launcher).toHaveCount(0)
@@ -3158,6 +3159,8 @@ test("Alt+G starts a Group, Alt+Shift+[ takes a column in, and the Group moves w
   const x = async (tile: Locator) => (await tile.boundingBox())!.x
   await page.keyboard.press("Alt+KeyN")
   await expect(launcher.locator("kbd", { hasText: "T" })).toBeVisible()
+  // Its letters are drawn a moment before it takes the focus.
+  await expect(launcher).toHaveAttribute("data-focused", "true")
   await page.keyboard.press("KeyT")
   await expect(terminal).toHaveAttribute("data-focused", "true")
   await page.keyboard.press("Alt+KeyN")
@@ -3332,6 +3335,7 @@ test("a Thread picked in the sidebar comes to the Strip's left, beside it", asyn
   await expect(launcher).toHaveCount(1)
   await page.keyboard.press("Alt+KeyN")
   await expect(launcher).toHaveCount(2)
+  await expect(launcher.nth(1)).toHaveAttribute("data-focused", "true")
   await page.keyboard.press("KeyT")
   const terminal = terminalTile(page)
   await expect(terminal).toHaveAttribute("data-focused", "true")

@@ -13,7 +13,7 @@ import { paneOf } from "@banda/ui/pane"
 import { threadPane } from "./ThreadPane"
 import { visualPane } from "./VisualPane"
 import { threadsWatch } from "./ThreadsWatch"
-import { askSource, filesSource } from "./sources"
+import { askSource } from "./sources"
 import { NEW_THREAD } from "./session"
 import { markUnread } from "./seen"
 
@@ -72,6 +72,6 @@ export const agents = defineModule({
   panes: [threadPane, visualPane],
   watches: [threadsWatch],
   actions: [newThread],
-  sources: [filesSource, askSource],
+  sources: [askSource],
   listed: threads,
 })

@@ -1,13 +1,14 @@
 /**
  * Where a link the terminal found in what a program printed goes: a page
- * as it is, a file by its full path. A file's line and column, as in
- * `src/main.rs:12:5`, are left off: no page goes to a line. Pure, so plain
+ * as it is, a file by its full path, at its line, as in
+ * `src/main.rs:12:5`; Files opens it there (ADR 0073). Pure, so plain
  * tests cover it.
  */
 import type { Title } from "@banda/contract/terminal"
+import { named } from "@banda/ui/lib/file-links"
 
-/** A web page, or a file by its full path. */
-export type Target = { page: string } | { file: string }
+/** A web page, or a file by its full path and perhaps its line. */
+export type Target = { page: string } | { file: string; line?: number }
 
 /**
  * Where `text` goes. A path that does not start at `/` starts in the
@@ -16,13 +17,17 @@ export type Target = { page: string } | { file: string }
  */
 export function targetOf(text: string, at?: Title): Target | null {
   if (/^https?:\/\//i.test(text)) return { page: text }
-  const path = text.replace(/(:\d+){1,2}$/, "")
-  if (path.startsWith("/")) return { file: tidy(path) }
+  const { path, line } = named(text)
+  const file = (full: string) => ({
+    file: tidy(full),
+    ...(line !== undefined && { line }),
+  })
+  if (path.startsWith("/")) return file(path)
   if (!at || /^[A-Za-z]:[\\/]|^\\\\/.test(path)) return null
   if (path === "~" || path.startsWith("~/")) {
-    return at.home === null ? null : { file: tidy(at.home + path.slice(1)) }
+    return at.home === null ? null : file(at.home + path.slice(1))
   }
-  return { file: tidy(`${at.path}/${path}`) }
+  return file(`${at.path}/${path}`)
 }
 
 /** A full path with no `.`, `..` or empty steps. */

@@ -1,0 +1,29 @@
+{
+  "name": "@banda/files-pane",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "description": "The files module's Panes: a file, drawn as code, markdown or an image, opened at a line.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@banda/contract": "workspace:*",
+    "@banda/ui": "workspace:*",
+    "lucide-react": "^1.65.0",
+    "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "~6.0.2",
+    "vite": "^8",
+    "vitest": "^5"
+  }
+}

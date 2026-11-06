@@ -1,7 +1,7 @@
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test } from "vitest"
 import { entries, open, start } from "../workspaces/model"
-import { closingShown, opening } from "./actions"
+import { closingShown, opening, updating } from "./actions"
 
 const thread = (id: string): PaneState => ({
   kind: "agents.thread",
@@ -36,4 +36,29 @@ test("a Thread opens as a Group, and a Pane of another kind in none", () => {
   expect(params(thread("t1"))).toMatchObject({ grouped: true })
   const diff = { kind: "git.diff", args: { scope: { kind: "changes" } } }
   expect(params(diff)).not.toHaveProperty("grouped")
+})
+
+test("opened to update, a Pane shown as its kind names it takes the new args, and the focus", () => {
+  const diff = (scope: string): PaneState => ({
+    kind: "git.diff",
+    args: { scope: { kind: scope }, file: null },
+  })
+  const state = open(start(), "project-a", diff("changes"), { place: "right" })
+  const [shown] = entries(state)
+
+  // The Project's one Diff, as its kind names it, with another scope.
+  expect(updating(state, "project-a", diff("staged"))).toEqual({
+    command: {
+      method: "workspaces.update",
+      params: { pane: shown!.id, args: diff("staged").args },
+    },
+    want: shown!.id,
+  })
+  // The same args: only the focus.
+  const same = updating(state, "project-a", diff("changes"))
+  expect(entries(same as typeof state)).toEqual(entries(state))
+  // None shown in that Project: it opens.
+  expect(updating(state, "project-b", diff("staged"))).toMatchObject({
+    command: { method: "workspaces.open" },
+  })
 })

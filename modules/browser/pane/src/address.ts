@@ -38,9 +38,6 @@ export function useAddressOf(): (typed: string) => string {
   return useCallback((typed: string) => addressOf(typed, search), [search])
 }
 
-/** The page of the file at the absolute `path`. */
-export { fileUrl as fileAddress } from "@banda/ui/lib/file-links"
-
 /** Whether what the Person typed reads as an address, not words. */
 export function isAddress(typed: string): boolean {
   return pageAddress(typed.trim()) !== undefined

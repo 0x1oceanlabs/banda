@@ -4,7 +4,7 @@
 import type { ProjectId } from "@banda/contract"
 import { defineModule, takes } from "@banda/ui/module"
 import { paneOf, type PaneState } from "@banda/ui/pane"
-import { fileAddress, searchNow } from "./address"
+import { searchNow } from "./address"
 import { browserPane } from "./BrowserPane"
 import { frontHolder, holderOf, openWith } from "./pages"
 import { webSource } from "./sources"
@@ -25,9 +25,8 @@ export const browser = defineModule({
       run: (window) => window.open(paneOf(browserPane, NEW_BROWSER)),
     },
     {
-      // A page, or a file by its absolute path, or `words` to search the
-      // web for: the Banda menu's words as a page, the agents module's
-      // files there, and a Thread's "Search the web".
+      // A page, or `words` to search the web for: the Banda menu's words
+      // as a page, and a Thread's "Search the web". A file opens in Files.
       id: "browser.open",
       args: takes({
         address: "a page's address",
@@ -39,15 +38,13 @@ export const browser = defineModule({
       section: "Panes",
       unlisted: true,
       run: (window, args = {}) => {
-        const { address, file, words, project } = args
+        const { address, words, project } = args
         const url =
-          typeof file === "string"
-            ? fileAddress(file)
-            : typeof words === "string"
-              ? searchNow(words)
-              : typeof address === "string"
-                ? address
-                : ""
+          typeof words === "string"
+            ? searchNow(words)
+            : typeof address === "string"
+              ? address
+              : ""
         window.open(
           paneOf(browserPane, browserAt(url)),
           typeof project === "string" ? (project as ProjectId) : undefined

@@ -19,7 +19,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 
 - New Thread (`thread.new`), Alt+Return; takes `project` (the Project it starts in), `ask` (what to write to its Agent first), `harness` (the Harness it starts on)
 
-Its methods, `banda call agents.<method>`: `threads`, `thread`, `defaults`, `changes`, `write`, `send`, `edit`, `withdraw`, `steer`, `resume`, `configure`, `stop`, `retry`, `fork`, `rewind`, `answer`, `attach`, `image`, `keep`, `files`, `show_visual`, `preview_visual`, `draft_issue`, `answer_issue`, `notify`, `visual`, `snooze`, `wake`, `rename`, `suggest_title`.
+Its methods, `banda call agents.<method>`: `threads`, `thread`, `defaults`, `changes`, `write`, `send`, `edit`, `withdraw`, `steer`, `resume`, `configure`, `stop`, `retry`, `fork`, `rewind`, `answer`, `attach`, `image`, `keep`, `show_visual`, `preview_visual`, `draft_issue`, `answer_issue`, `notify`, `visual`, `snooze`, `wake`, `rename`, `suggest_title`.
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 
@@ -95,7 +95,7 @@ Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `co
 
 ## Files (`files`)
 
-Any folder, as a Finder shows it: its names folders first, with what git ignores and what is hidden marked; what a path is; a file's text; fuzzy paths under a folder; and what changed in the folders shown. An Agent reaches only its Project's folder.
+Any folder, as a Finder shows it: its names folders first, with what git ignores and what is hidden marked; what a path is; a file's text; fuzzy paths under a folder; and what changed in the folders shown. An Agent reaches only its Project's folder. A file opens in its Pane, as code, markdown or an image, at a line.
 
 Its methods, `banda call files.<method>`: `list`, `stat`, `read`, `find`, `watch`.
 

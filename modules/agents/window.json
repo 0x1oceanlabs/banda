@@ -36,10 +36,6 @@
   ],
   "sources": [
     {
-      "id": "agents.files",
-      "label": "Files"
-    },
-    {
       "id": "agents.ask",
       "label": ""
     }

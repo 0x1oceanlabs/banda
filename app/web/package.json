@@ -18,6 +18,7 @@
     "@banda/agents-pane": "workspace:*",
     "@banda/browser-pane": "workspace:*",
     "@banda/contract": "workspace:*",
+    "@banda/files-pane": "workspace:*",
     "@banda/git-pane": "workspace:*",
     "@banda/notifications-pane": "workspace:*",
     "@banda/terminal-pane": "workspace:*",

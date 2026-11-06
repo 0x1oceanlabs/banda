@@ -2,7 +2,6 @@ import { existsSync, writeFileSync } from "node:fs"
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { join } from "node:path"
-import { pathToFileURL } from "node:url"
 import { expect, type Locator, test } from "@playwright/test"
 import { firstThread, newTerminal, startWindow, type Window } from "./window"
 
@@ -79,7 +78,7 @@ test("Thread web links open in Banda, Ctrl+click externally, including a popped 
   expect(popped.url()).toContain("#pane/")
 })
 
-test("a terminal's paths open in Banda's browser, and Ctrl+click opens them in their app", async () => {
+test("a terminal's paths open in Files at their line, and Ctrl+click opens them in their app", async () => {
   window = await startWindow()
   const { app, page, dir } = window
   const project = join(dir, "root", "Work")
@@ -95,7 +94,7 @@ test("a terminal's paths open in Banda's browser, and Ctrl+click opens them in t
   const outside = () =>
     app.evaluate(() => (globalThis as { pathOpens?: string[] }).pathOpens)
   const screen = await newTerminal(page)
-  writeFileSync(notes, "Notes\n")
+  writeFileSync(notes, "Notes\nsecond\nthird\n")
   await screen.click()
   // The path, line and column as a compiler prints them, on the first row.
   await page.keyboard.type("clear; printf './notes.txt:3:1\\n'; : > printed")
@@ -119,16 +118,13 @@ test("a terminal's paths open in Banda's browser, and Ctrl+click opens them in t
   // A click soon after is a double click, which selects a word.
   await page.waitForTimeout(600)
   await page.mouse.click(on.x, on.y)
-  await expect
-    .poll(() =>
-      app.evaluate(({ webContents }) =>
-        webContents
-          .getAllWebContents()
-          .filter((c) => c.getType() === "webview")
-          .map((c) => c.getURL())
-      )
-    )
-    .toEqual([pathToFileURL(notes).href])
+  // In Files, at its line (ADR 0073).
+  const file = page.getByRole("region", { name: "notes.txt" })
+  await expect(file).toBeVisible()
+  await expect(file.locator("[data-lit-line]")).toHaveAttribute(
+    "data-lit-line",
+    "3"
+  )
   expect(await outside()).toEqual([notes])
 })
 

@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
-import type { Engine, ProjectId } from "@banda/contract"
+import { useEffect, useState } from "react"
 import { nameAndFolder } from "@banda/ui/lib/paths"
 import { useMenu } from "./Menu"
 
@@ -49,7 +48,7 @@ export function useFileMenu({
  * asked while it is `undefined`. The files found last stay while the
  * next are asked for, with the word they were found for.
  */
-export function useFoundFiles(
+function useFoundFiles(
   word: string | undefined,
   findFiles: FindFiles | undefined
 ): { word: string; paths: string[] } | undefined {
@@ -69,19 +68,4 @@ export function useFoundFiles(
     }
   }, [word, findFiles])
   return found
-}
-
-/** The files in the Project's folder that fit `word`, as `@` finds them. */
-export function useProjectFiles(
-  engine: Engine,
-  project: ProjectId,
-  word: string | undefined
-): { word: string; paths: string[] } | undefined {
-  return useFoundFiles(
-    word,
-    useCallback(
-      (query: string) => engine.call("agents.files", { query }, { project }),
-      [engine, project]
-    )
-  )
 }
