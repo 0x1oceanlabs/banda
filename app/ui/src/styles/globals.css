@@ -116,6 +116,13 @@
   --attention: #e5590a;
   /* An Agent at work, as its Group's plate shows it (ADR 0065). */
   --working: oklch(0.6 0.15 255);
+  /* A Project's sign, when the Person picks a colour: a quiet palette with
+     none of the colours an Agent's state says (ADR 0070). */
+  --sign-violet: oklch(0.52 0.14 300);
+  --sign-magenta: oklch(0.52 0.14 340);
+  --sign-yellow: oklch(0.55 0.12 95);
+  --sign-teal: oklch(0.52 0.1 195);
+  --sign-sand: oklch(0.55 0.07 65);
   --warning: oklch(0.65 0.16 70);
   --added: oklch(0.527 0.137 150.069);
   --removed: oklch(0.577 0.245 27.325);
@@ -164,6 +171,11 @@
   --destructive: oklch(0.704 0.191 22.216);
   --attention: #ff8a3d;
   --working: oklch(0.72 0.13 255);
+  --sign-violet: oklch(0.72 0.14 300);
+  --sign-magenta: oklch(0.72 0.14 340);
+  --sign-yellow: oklch(0.78 0.12 95);
+  --sign-teal: oklch(0.74 0.1 195);
+  --sign-sand: oklch(0.74 0.07 65);
   --warning: oklch(0.8 0.15 80);
   --added: oklch(0.723 0.192 149.579);
   --removed: oklch(0.704 0.191 22.216);

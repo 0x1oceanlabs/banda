@@ -1,4 +1,5 @@
 import "./renamed"
+import { readSignsFrom } from "@banda/ui/lib/signs"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { Engine } from "@banda/contract"
@@ -35,6 +36,7 @@ const root = createRoot(document.getElementById("root")!, {
 
 if (host && engine) {
   watchProblems(engine)
+  readSignsFrom(engine)
   void moveEnterKey(host).catch(() => undefined)
   // A Pane in a window of its own draws alone (ADR 0025, decision 9).
   const popped = poppedOf(location.hash)

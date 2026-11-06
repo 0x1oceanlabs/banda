@@ -8,7 +8,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
-import { ProjectBadge } from "@banda/ui/components/project-badge"
+import { ProjectSign } from "@banda/ui/components/project-sign"
 import type { WidgetProps, WindowApi } from "@banda/ui/module"
 import { GlobeIcon, SquareIcon } from "lucide-react"
 import type { MouseEvent } from "react"
@@ -141,7 +141,7 @@ function Row({
           {server.program ? `${by} · ${server.program}` : by}
         </span>
       </span>
-      {named && <ProjectBadge project={named} />}
+      {named && <ProjectSign project={named} />}
       <button
         type="button"
         aria-label={`Stop ${address(server.port)}`}

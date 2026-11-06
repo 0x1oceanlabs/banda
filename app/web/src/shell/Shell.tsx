@@ -1194,9 +1194,8 @@ export function Shell({
       calling.find((call) => isShowing(entry, call, showsOf))?.chime,
     [calling]
   )
-  const projectName = useCallback(
-    (id: ProjectId) =>
-      projects.find((project) => project.id === id)?.name || "No Project",
+  const projectOf = useCallback(
+    (id: ProjectId) => projects.find((project) => project.id === id),
     [projects]
   )
 
@@ -1208,7 +1207,7 @@ export function Shell({
         w.project
           ? {
               ...w,
-              owner: projects.find((project) => project.id === w.project),
+              owner: projectOf(w.project),
               calls: (lists[w.project] ?? []).some(
                 (row) => waits(row.mark) && !snoozes.away(row)
               ),
@@ -1324,7 +1323,7 @@ export function Shell({
                   overview={overview}
                   engine={engine}
                   modules={modules}
-                  projectName={projectName}
+                  projectOf={projectOf}
                   called={called}
                   marked={marked}
                   away={away}
@@ -1383,7 +1382,7 @@ export function Shell({
                   engine={engine}
                   modules={modules}
                   listed={listed(drawer)}
-                  projectName={projectName}
+                  projectOf={projectOf}
                   frame={frame}
                   onLift={liftDrawer}
                   onPin={pinDrawer}
@@ -1396,7 +1395,7 @@ export function Shell({
                   open={overviewState === "open"}
                   onExited={leftOverview}
                   workspaces={workspaces}
-                  projectName={projectName}
+                  projectOf={projectOf}
                   listed={listed}
                   called={called}
                   frame={frame}

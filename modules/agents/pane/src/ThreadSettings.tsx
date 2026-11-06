@@ -76,6 +76,8 @@ type Choice = {
   name: string
   about?: string
   icon?: LucideIcon
+  /** What stands before its name instead of an icon, as a Project's sign. */
+  mark?: React.ReactNode
 }
 
 /** `choices` as a menu's radio items, `value` checked. */
@@ -90,9 +92,9 @@ function ChoiceItems({
 }) {
   return (
     <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
-      {choices.map(({ id, name, about, icon: Icon }) => (
+      {choices.map(({ id, name, about, icon: Icon, mark }) => (
         <DropdownMenuRadioItem key={id} value={id} closeOnClick className={ROW}>
-          {Icon && <Icon />}
+          {mark ?? (Icon && <Icon />)}
           <span className="flex flex-col">
             <span className="font-medium">{name}</span>
             {about && (

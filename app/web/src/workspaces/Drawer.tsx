@@ -1,5 +1,5 @@
 import { memo, useMemo } from "react"
-import type { Engine, ProjectId } from "@banda/contract"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import { cn } from "@banda/ui/lib/utils"
 import type { Listed, PaneState } from "@banda/ui/pane"
@@ -21,7 +21,7 @@ export const Drawer = memo(function Drawer({
   engine,
   modules,
   listed,
-  projectName,
+  projectOf,
   frame,
   onLift,
   onPin,
@@ -35,7 +35,7 @@ export const Drawer = memo(function Drawer({
   engine: Engine
   modules: readonly string[]
   listed: Listed | undefined
-  projectName: (id: ProjectId) => string
+  projectOf: (id: ProjectId) => ProjectSummary | undefined
   /** The workspaces' frame: what its Pane opens goes there. */
   frame: Frame
   onLift: () => void
@@ -108,7 +108,7 @@ export const Drawer = memo(function Drawer({
           focused={shown}
           marked={false}
           listed={listed}
-          projectName={projectName(entry.project)}
+          project={projectOf(entry.project)}
           mixed={false}
           frame={own}
           actions={pin}

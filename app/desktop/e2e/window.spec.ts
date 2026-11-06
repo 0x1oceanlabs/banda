@@ -3380,9 +3380,10 @@ test("a Project's Agents open in a row on its workspace, from wherever the Perso
   await page.getByRole("button", { name: "New workspace" }).click()
   await expect(numbers.locator("[aria-current]:not([inert])")).toHaveText("")
   await page.keyboard.press("Alt+Enter")
-  await expect(numbers.locator("[aria-current]:not([inert])")).toHaveText("WO")
+  // Its sign, the Project's letter (ADR 0070).
+  await expect(numbers.locator("[aria-current]:not([inert])")).toHaveText("W")
   await expect(threads).toHaveCount(2)
-  // The bar shows it as the Project's: its badge, and its name on it.
+  // The bar shows it as the Project's: its sign, and its name on it.
   await expect(
     numbers.getByRole("button", { name: "Workspace 1" })
   ).toHaveAttribute("title", "Work: Overview (Alt+O)")

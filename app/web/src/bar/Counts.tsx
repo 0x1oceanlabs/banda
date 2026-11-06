@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
-import { ProjectBadge } from "@banda/ui/components/project-badge"
+import { ProjectSign } from "@banda/ui/components/project-sign"
 import { cn } from "@banda/ui/lib/utils"
 import type { Listed, Lists, PaneState } from "@banda/ui/pane"
 import { useMemo, useState } from "react"
@@ -154,7 +154,7 @@ function List({
         >
           <ThreadMark listed={listed} news={false} />
           <span className="min-w-0 flex-1 truncate">{listed.title}</span>
-          {where && <ProjectBadge project={where} />}
+          {where && <ProjectSign project={where} />}
           <Status listed={listed} />
         </DropdownMenuItem>
       )

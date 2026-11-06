@@ -8,7 +8,7 @@ import {
 } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import type { Bind } from "@banda/contract/look"
-import { ProjectBadge } from "@banda/ui/components/project-badge"
+import { ProjectSign } from "@banda/ui/components/project-sign"
 import { MARK_WORDS, waits } from "@banda/ui/components/banda-mark"
 import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
 import { Kbd, KbdGroup } from "@banda/ui/components/kbd"
@@ -703,7 +703,7 @@ function RowView({
     case "project":
       return (
         <>
-          <ProjectBadge project={row.project} />
+          <ProjectSign project={row.project} />
           <span className="min-w-0 flex-1 truncate">{row.project.name}</span>
           <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
         </>
@@ -711,7 +711,7 @@ function RowView({
     case "locate":
       return (
         <>
-          <ProjectBadge project={row.project} />
+          <ProjectSign project={row.project} />
           <span className="min-w-0 flex-1 truncate">{row.project.name}</span>
           <Detail>Folder missing · {LOCATE}</Detail>
           <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
