@@ -54,6 +54,7 @@ import { carries, droppedPaths } from "@banda/ui/lib/file-drag"
 import { copyAsMarkdown } from "@banda/ui/lib/markdown-copy"
 import { fromFolder } from "@banda/ui/lib/paths"
 import { clock, duration } from "@banda/ui/lib/words"
+import type { Chip } from "@banda/ui/module"
 import { definePane, paneOf, type PaneProps, sleeps } from "@banda/ui/pane"
 import {
   AlarmClockIcon,
@@ -79,6 +80,7 @@ import {
 import { applyThreads, threadsSource } from "./list"
 import { threadPaneOf } from "./rows"
 import { suggested } from "./slash"
+import { type Comment, isComment } from "./comments"
 import { Composer, type ComposerHandle } from "./Composer"
 import type { ImageReader } from "./MessageImages"
 import { AgentMessage, PersonMessage, Writer, type Writers } from "./Messages"
@@ -236,19 +238,30 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
   // Files an App attaches, and Files' rows dropped here, are named in the
   // message as `@` names one: from the Project's folder when inside it
   // (ADR 0073, decision 14).
-  const point = useCallback(
-    async (paths: readonly string[]) => {
+  // A comment on lines waits above the text, its path named the same way
+  // (ADR 0034, decision 9).
+  const take = useCallback(
+    async (chips: readonly Chip[]) => {
       const projects = await engine.call("projects.list", {}).catch(() => [])
       const folder = projects.find((one) => one.id === project)?.folder
-      for (const path of paths)
-        composer.current?.point(fromFolder(path, folder))
+      const commented: Comment[] = []
+      for (const chip of chips) {
+        const path = fromFolder(chip.path, folder)
+        if (!isComment(chip)) composer.current?.point(path)
+        else commented.push({ ...chip, path, id: crypto.randomUUID() })
+      }
+      if (commented.length > 0) composer.current?.comment(commented)
     },
     [engine, project]
   )
+  const point = useCallback(
+    (paths: readonly string[]) => take(paths.map((path) => ({ path }))),
+    [take]
+  )
   useEffect(() => {
-    says?.((chips) => void point(chips.map((chip) => chip.path)))
+    says?.((chips) => void take(chips))
     return () => says?.(null)
-  }, [says, point])
+  }, [says, take])
   const detailsShown = wide ? args.details !== false : popped
   const setDetailsShown = wide
     ? (shown: boolean) =>

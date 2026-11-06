@@ -718,6 +718,22 @@
           "file": {
             "type": "string",
             "description": "the file's absolute path; a folder's ends with /"
+          },
+          "from": {
+            "type": "number",
+            "description": "the first line commented on, from 1"
+          },
+          "to": {
+            "type": "number",
+            "description": "the last line commented on"
+          },
+          "comment": {
+            "type": "string",
+            "description": "what the Person says of those lines"
+          },
+          "text": {
+            "type": "string",
+            "description": "those lines as they read"
           }
         },
         "required": [

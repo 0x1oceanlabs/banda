@@ -40,6 +40,8 @@ export type Chip = {
   lines?: readonly [from: number, to: number]
   /** What the Person says of them. */
   comment?: string
+  /** The lines as they read when picked, which the message quotes. */
+  text?: string
 }
 
 /** A Pane's args, and what an action is run with besides the window: the
@@ -75,8 +77,14 @@ export type WindowApi = {
     project?: ProjectId,
     how?: { focus?: boolean; beside?: string; again?: false; update?: true }
   ) => void
-  /** The focused Pane and its Project; none while no Pane has the focus. */
-  focused: () => { project: ProjectId; pane: PaneState } | null
+  /** The focused Pane and its Project, and the one thing it shows, as its
+   * kind says (`PaneKind.shows`): a Thread's ID for a Thread. None while
+   * no Pane has the focus. */
+  focused: () => {
+    project: ProjectId
+    pane: PaneState
+    shows?: string
+  } | null
   /** Where the thing `agent` works in is, as a Thread its Agent's (ADR
    * 0029, decision 4); none when no module lists one. */
   beside: (agent: string) => Beside | null

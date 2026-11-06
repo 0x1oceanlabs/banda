@@ -25,6 +25,7 @@ use crate::model::{
 };
 use crate::plain;
 use crate::rules::Ending;
+use crate::touching::Place;
 use agent_client_protocol::schema::v1 as acp;
 use agent_client_protocol::{Agent, Builder, Client, ConnectionTo, HandleDispatchFrom};
 use banda_harnesses::Harness;

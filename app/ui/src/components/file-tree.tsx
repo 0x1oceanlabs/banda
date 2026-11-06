@@ -6,9 +6,10 @@
  *   folders open, each file tinted by how it changed (ADR 0034, decision
  *   2);
  * - `FolderTree`, a folder as Files shows it: lazy, one folder listed at a
- *   time as it opens, what git ignores greyed, git's marks, a quiet
- *   spinner on a folder being listed; rows picked with Ctrl or Shift, and
- *   dragged out.
+ *   time as it opens, what git ignores greyed, git's marks, a quiet dot on
+ *   what an Agent's turn changed, the row of the file an Agent works on
+ *   now pulsing in its colour, a quiet spinner on a folder being listed;
+ *   rows picked with Ctrl or Shift, and dragged out.
  *
  * Both fold a folder of one folder into its path (`a/b/c`).
  */
@@ -30,6 +31,7 @@ import {
   useRef,
 } from "react"
 import { useDark } from "../hooks/use-dark"
+import { holding, pulseCSS, type RowMark, rowMarkOf } from "../lib/tree-marks"
 import { foldersOf, outermost, pathUpdates } from "../lib/tree-paths"
 import { cn } from "../lib/utils"
 
@@ -110,6 +112,12 @@ export type FolderTreeProps = {
   /** git's mark on each file it names; a folder that holds one gets a
    * dot. */
   marks: ReadonlyMap<string, Mark>
+  /** The files an Agent's turn changed: a quiet dot on each, and on each
+   * folder that holds one (ADR 0073, decision 3). */
+  turned?: ReadonlySet<string>
+  /** The files Agents work on now, each with its Agent's colour, a CSS
+   * colour: their rows pulse in it (ADR 0073, decision 9). */
+  pulses?: ReadonlyMap<string, string>
   /** What git ignores, greyed, and all a folder of them holds. */
   ignored: readonly string[]
   /** The folders being listed: a quiet spinner on their rows. */
@@ -150,7 +158,7 @@ export type FolderTreeHandle = {
 const ICONS: FileTreeIcons = {
   set: "standard",
   colored: false,
-  spriteSheet: `<svg aria-hidden="true" width="0" height="0" style="position:absolute"><symbol id="banda-tree-loading" viewBox="0 0 16 16"><path d="M8 2a6 6 0 1 0 6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol></svg>`,
+  spriteSheet: `<svg aria-hidden="true" width="0" height="0" style="position:absolute"><symbol id="banda-tree-loading" viewBox="0 0 16 16"><path d="M8 2a6 6 0 1 0 6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol><symbol id="banda-tree-turn" viewBox="0 0 6 6"><circle cx="3" cy="3" r="2.5" fill="currentColor"/></symbol><symbol id="banda-tree-both" viewBox="0 0 14 6"><circle cx="3" cy="3" r="2.5" fill="currentColor"/><circle cx="11" cy="3" r="2.5" style="fill:var(--banda-turn-dot)"/></symbol></svg>`,
 }
 
 const LOADING: FileTreeRowDecoration = {
@@ -160,6 +168,30 @@ const LOADING: FileTreeRowDecoration = {
 const HOLDS: FileTreeRowDecoration = {
   icon: { name: "file-tree-icon-dot", width: 6, height: 6 },
   title: "Holds changes",
+}
+const TURNED: FileTreeRowDecoration = {
+  icon: { name: "banda-tree-turn", width: 5, height: 5 },
+  title: "Changed by the Agent's turn",
+}
+const HOLDS_TURNED: FileTreeRowDecoration = {
+  icon: { name: "banda-tree-turn", width: 5, height: 5 },
+  title: "Holds what the Agent's turn changed",
+}
+const HOLDS_BOTH: FileTreeRowDecoration = {
+  icon: { name: "banda-tree-both", width: 14, height: 6 },
+  title: "Holds changes, some of them the Agent's turn's",
+}
+
+const NO_TURN: ReadonlySet<string> = new Set()
+const NO_PULSES: ReadonlyMap<string, string> = new Map()
+
+/** Each mark of a row as Pierre draws it. */
+const DECORATIONS: Record<RowMark, FileTreeRowDecoration> = {
+  loading: LOADING,
+  holds: HOLDS,
+  turned: TURNED,
+  "holds-turned": HOLDS_TURNED,
+  "holds-both": HOLDS_BOTH,
 }
 
 /** A directory's handle, or none for a file's. */
@@ -176,11 +208,6 @@ export function rowAt(event: Event): string | null {
     if (path && at.dataset.type === "item") return path
   }
   return null
-}
-
-/** The folders of `marks` that hold one: each folder its paths are in. */
-function holding(marks: ReadonlyMap<string, Mark>): Set<string> {
-  return new Set([...marks.keys()].flatMap(foldersOf))
 }
 
 /** What git's marks and ignores tell Pierre. */
@@ -228,6 +255,8 @@ export function FolderTree({
   version,
   open,
   marks,
+  turned = NO_TURN,
+  pulses = NO_PULSES,
   ignored,
   loading,
   selected,
@@ -243,7 +272,11 @@ export function FolderTree({
   const dark = useDark()
   // What the model's handlers read, as they are given once.
   const now = useRef({ onSelect, onOpenChange, onOpen, loading })
-  const holds = useRef(holding(marks))
+  const decorating = useRef({
+    holds: holding(marks.keys()),
+    turned,
+    turnHolds: holding(turned),
+  })
   useEffect(() => {
     now.current = { onSelect, onOpenChange, onOpen, loading }
   })
@@ -261,9 +294,11 @@ export function FolderTree({
     search: false,
     icons: ICONS,
     renderRowDecoration: ({ row }) => {
-      if (row.kind !== "directory") return null
-      if (row.isExpanded && now.current.loading.has(row.path)) return LOADING
-      return holds.current.has(row.path) ? HOLDS : null
+      const mark = rowMarkOf(row.path, row.kind === "directory", {
+        loading: row.isExpanded && now.current.loading.has(row.path),
+        ...decorating.current,
+      })
+      return mark && DECORATIONS[mark]
     },
     onSelectionChange: (picked) => {
       const path = picked.at(-1)
@@ -310,13 +345,39 @@ export function FolderTree({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, version, paths, openNow])
 
-  // git's marks and ignores; the rows draw again with the dots and the
-  // spinners besides.
+  // git's marks and ignores; the rows draw again with the dots, the
+  // turn's and the spinners besides.
   useEffect(() => {
-    holds.current = holding(marks)
+    decorating.current = {
+      holds: holding(marks.keys()),
+      turned,
+      turnHolds: holding(turned),
+    }
     model.setGitStatus(statusOf(marks, ignored))
     model.setComposition(model.getComposition())
-  }, [model, marks, ignored, loading])
+  }, [model, marks, turned, ignored, loading])
+
+  // The rows Agents work on pulse, by a sheet of the tree's own.
+  useEffect(() => {
+    const css = pulseCSS(pulses)
+    let frame = 0
+    const put = () => {
+      const root = model.getFileTreeContainer()?.shadowRoot
+      if (!root) {
+        frame = requestAnimationFrame(put)
+        return
+      }
+      let sheet = root.querySelector<HTMLStyleElement>("style[data-pulses]")
+      if (!sheet) {
+        sheet = document.createElement("style")
+        sheet.dataset.pulses = ""
+        root.append(sheet)
+      }
+      sheet.textContent = css
+    }
+    put()
+    return () => cancelAnimationFrame(frame)
+  }, [model, pulses])
 
   // What opens, as the Person opens it or the paths change.
   useEffect(() => {
@@ -457,7 +518,8 @@ const CSS = `
 
 /** A folder tree's own: git's colours from Banda's palette, what git
  * ignores in the muted text, a folder's dot as a decoration of ours (Pierre
- * counts an ignored file as a change it holds), and the spinner. */
+ * counts an ignored file as a change it holds), the turn's quiet dot, the
+ * spinner, and the pulse an Agent's file wears. */
 const FOLDER_CSS = `
   :host {
     --trees-git-modified-color-override: var(--warning);
@@ -471,6 +533,16 @@ const FOLDER_CSS = `
   [data-item-type='folder'] > [data-item-section='decoration'] { padding-inline-end: 3px; }
   [data-item-type='folder'] > [data-item-section='decoration'] { color: var(--trees-git-modified-color); fill: currentColor; }
   [data-item-type='folder'] [data-icon-name='file-tree-icon-dot'] { opacity: .6; }
+  :host { --banda-turn-dot: color-mix(in srgb, var(--muted-foreground) 85%, transparent); }
+  svg[data-icon-name='banda-tree-turn'] { color: var(--banda-turn-dot); }
+  [data-item-type='folder'] svg[data-icon-name='banda-tree-both'] { opacity: .8; }
+  @keyframes banda-pulse {
+    from { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--banda-pulse) 65%, transparent); }
+    to { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--banda-pulse) 10%, transparent); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    button[data-type='item'] { animation-play-state: paused !important; }
+  }
   [data-item-git-status='ignored'] > [data-item-section='content'] { opacity: .85; }
   svg[data-icon-name='banda-tree-loading'] { opacity: .6; }
   @media (prefers-reduced-motion: no-preference) {

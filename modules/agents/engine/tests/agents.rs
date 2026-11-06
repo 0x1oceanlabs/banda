@@ -4715,3 +4715,55 @@ async fn a_snooze_that_goes_on_tries_its_failed_turn_again_as_its_time_comes() {
         .await;
     assert!(refused.is_err(), "no failed turn to go on with");
 }
+
+/// The next piece `heard` says, in time.
+async fn next_piece(heard: &mut banda_kernel::Stream) -> Value {
+    tokio::time::timeout(Duration::from_secs(30), heard.recv())
+        .await
+        .expect("a piece in time")
+        .expect("the stream goes on")
+}
+
+#[tokio::test]
+async fn the_file_a_turns_tool_calls_name_is_heard_as_each_starts_and_goes_as_the_turn_ends() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let mut heard = (world.kernel)
+        .stream(
+            world.person(),
+            "agents.touching",
+            Some(world.project),
+            json!({}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(next_piece(&mut heard).await, json!({ "touched": [] }));
+
+    // It reads notes.md at its line 2, as ACP names the place.
+    let sent = world.send(None, "walk the files").await;
+    let piece = next_piece(&mut heard).await;
+    let read = &piece["touched"][0];
+    assert_eq!(read["thread"], sent["thread"]);
+    assert!(
+        read["path"].as_str().unwrap().ends_with("/notes.md"),
+        "{read}"
+    );
+    assert_eq!((&read["line"], &read["kind"]), (&json!(2), &json!("read")));
+
+    // Then it writes src/util.ts.
+    world.steer(&sent["thread"], "go on").await;
+    let piece = next_piece(&mut heard).await;
+    let wrote = &piece["touched"][0];
+    assert!(
+        wrote["path"].as_str().unwrap().ends_with("/src/util.ts"),
+        "{wrote}"
+    );
+    assert_eq!(wrote["kind"], json!("write"));
+    assert!(wrote["at"].as_i64().unwrap() >= read["at"].as_i64().unwrap());
+
+    // Its turn ends: it works on nothing.
+    world.steer(&sent["thread"], "done").await;
+    assert_eq!(next_piece(&mut heard).await, json!({ "touched": [] }));
+    let view = world.ended(&sent).await;
+    assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Done));
+}

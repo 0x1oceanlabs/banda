@@ -5,11 +5,22 @@ import type { ProjectId } from "@banda/contract"
 import { FILES_FILE } from "@banda/contract/files"
 import { tomlOf } from "@banda/contract/settings"
 import { fileNow } from "@banda/ui/lib/look"
-import { type Action, defineModule } from "@banda/ui/module"
+import { type Action, defineModule, type WindowApi } from "@banda/ui/module"
 import { filePane, openFile } from "./FilePane"
 import type { Does } from "./keys"
 import { filesSource } from "./sources"
 import { askTree, openTree, treePane } from "./TreePane"
+
+/** The Thread the focused Pane shows, as the lists name one with its
+ * Agent; none for a Pane of no Thread. */
+function threadShown(
+  window: WindowApi,
+  at: NonNullable<ReturnType<WindowApi["focused"]>>
+): string | null {
+  const listed = window.lists()[at.project] ?? []
+  const shown = listed.find((one) => one.id === at.shows)
+  return shown?.agent ? shown.id : null
+}
 
 /** A Files Pane's own key as an action of the window, for `keys.toml`:
  * it reaches the focused Files Pane, until ADR 0071's scopes come. */
@@ -38,7 +49,15 @@ export const files = defineModule({
         const asked = typeof args.project === "string" ? args.project : null
         const project = (asked as ProjectId | null) ?? at?.project
         const dir = typeof args.dir === "string" ? args.dir : ""
-        openTree(window, { dir }, project, dir !== "")
+        // Opened from a Thread, it marks and follows that Thread's turns.
+        const thread =
+          at && at.project === project ? threadShown(window, at) : null
+        openTree(
+          window,
+          { dir, ...(thread && { thread }) },
+          project,
+          dir !== ""
+        )
       },
     },
     {

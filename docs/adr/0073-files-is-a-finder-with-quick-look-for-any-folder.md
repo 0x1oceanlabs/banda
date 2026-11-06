@@ -188,6 +188,15 @@ stay his to change.
    - **Lines.** Picking lines in `files.file` offers "Add a comment…", which
      ADR 0034 decision 9 sends to the Agent.
 
+     *Amended 2026-11-06, with step F2b:* the comment is written under
+     the lines, and goes into the Thread's message as a chip with the
+     path, the lines, the words and the lines as they read. The chip
+     waits in the draft, can be taken out, and is sent after the text as
+     `Comment on src/a.ts:12-14:`, the lines fenced, then the words, as T3
+     Code frames a file comment. The Diff's comments wait: a comment
+     there names lines of two sides, as a patch, which a chip does not
+     carry yet.
+
 7. **Quick Look is a floating tile over the desk** (_decided_: A).
    - Space on a row shows the file in a glass tile over the desk (ADR 0023)
      and leaves the tiling as it is.
@@ -231,6 +240,31 @@ stay his to change.
    - **Follow** (the header's target) moves the selection, and the open
      `files.file`, to that file. While the Person edits, Follow waits.
    - Follow is off by default (_decided_), and kept per Pane.
+
+   *Amended 2026-11-06, with step F2b:*
+   - **Where the file comes from.** The engine kept a tool call's title
+     and diffs, not the files ACP names (its locations). The agents
+     module now keeps, in memory only, the file each running turn works
+     on, by its tool calls as they start, and says it in a stream,
+     `agents.touching`: a Thread, the file, the line, read or write, and
+     when. Edit, delete, move and a diff write; read reads; a search, a
+     command or a fetch touches no file. A turn's file goes as it ends.
+   - **The colour** is the Thread's Harness entry's account colour (ADR
+     0078, decision 10).
+   - **Which Thread.** A Files Pane is with the Thread it was opened from
+     (the focused Pane's, kept in its args), else the Thread at work that
+     began last, else the one whose turn began last. Its turn's marks and
+     Follow are that Thread's; every Thread's file pulses.
+   - **Follow's rule.** It goes to each file written, and to a file read
+     unless a write came less than 4 s before. It moves the pick and the
+     `files.file` the tree opened, else the one shown last in the Project,
+     at the line named. It waits 5 s after a key or a click in a Files
+     Pane, and while text or lines are picked or a comment is written
+     there. It moves only while the turn runs.
+   - **The turn's marks** are `git.diff`'s Turn, with what its tool calls
+     changed outside the folder, or `agents.changes` where git kept no
+     checkpoint, read as the turn starts and again as it ends. While it
+     runs, each file it writes is marked as the write starts.
 
 10. **Files does what a Finder does with files.**
     - New file and New folder, Rename (F2, in place), Duplicate, Move (drag

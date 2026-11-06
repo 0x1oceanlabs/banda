@@ -1,6 +1,6 @@
 import type { ProjectId } from "@banda/contract"
 import { expect, test } from "vitest"
-import { composerFor } from "./attach"
+import { chipOf, composerFor } from "./attach"
 
 const work = "work" as ProjectId
 const home = "home" as ProjectId
@@ -39,4 +39,25 @@ test("a Thread gone since, or in another Project alone, takes nothing: then noth
 
 test("with no Pane focused, nothing takes it", () => {
   expect(composerFor(null, ["thread-a"], composers)).toBeNull()
+})
+
+test("file.attach's args name a file, or some of its lines with what is said of them", () => {
+  expect(chipOf("/w/a.ts", {})).toEqual({ path: "/w/a.ts" })
+  expect(
+    chipOf("/w/a.ts", { from: 14, to: 12, comment: " Why twice? ", text: "x" })
+  ).toEqual({
+    path: "/w/a.ts",
+    lines: [12, 14],
+    comment: "Why twice?",
+    text: "x",
+  })
+  // Words with no lines are no comment on lines; blank words are none.
+  expect(chipOf("/w/a.ts", { from: 3, comment: "hm", text: "x" })).toEqual({
+    path: "/w/a.ts",
+    comment: "hm",
+  })
+  expect(chipOf("/w/a.ts", { from: 3, to: 3, comment: "  " })).toEqual({
+    path: "/w/a.ts",
+    lines: [3, 3],
+  })
 })

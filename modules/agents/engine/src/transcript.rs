@@ -2,21 +2,26 @@
 //! Agent's replies and thoughts, gathered a moment so they are written
 //! together; its tool calls and what their commands print; its Questions,
 //! its plan and its notices; and what it uses and offers, between turns
-//! too. The turn's own state is the writer's (`writer.rs`).
+//! too; and which file its tool calls work on now, which only memory
+//! keeps (`touching.rs`). The turn's own state is the writer's
+//! (`writer.rs`).
 
 mod content;
 mod output;
 
+use crate::acp::ToolPart;
 use crate::acp::{Answer, Running, Said, ToolChange};
 use crate::live::TurnRun;
 use crate::model::{
     Body, Fact, Item, ItemId, Mode, Offer, PlanStep, Settings, ThreadId, ToolKind, ToolStatus,
     TurnId, Usage,
 };
+use crate::touching::{Place, Toucher, Touches, diffed};
 use crate::{emit, plain, questions, store};
 use banda_kernel::{AgentId, Error, ModuleProject, Participant, Tx};
 use output::{Piece, Pieces, Text};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
@@ -150,6 +155,8 @@ pub struct Transcript {
     /// When the account may be used again, if the Harness said it reached
     /// its limit.
     pub(crate) resets: Option<i64>,
+    /// Which file its tool calls work on now; nothing once it is let go.
+    toucher: Toucher,
 }
 
 impl Transcript {
@@ -159,8 +166,10 @@ impl Transcript {
         harness: String,
         settings: Settings,
         running: Running,
+        touches: &Arc<Touches>,
     ) -> Transcript {
         Transcript {
+            toucher: Toucher::new(touches.clone(), project.id(), turn.thread),
             project,
             thread: turn.thread,
             turn: turn.id,
@@ -222,14 +231,17 @@ impl Transcript {
                 tool,
                 status,
                 content,
+                places,
             } => {
                 self.close().await?;
-                self.start_tool(call, title, tool, status, content).await
+                self.start_tool(call, title, tool, status, content, &places)
+                    .await
             }
             Said::ToolChanged {
                 call,
                 mut change,
                 output,
+                places,
             } => {
                 // What the Agent says after a tool call moves on is a new
                 // message; what the command prints is gathered still.
@@ -238,8 +250,29 @@ impl Transcript {
                     let title = change.title.take().unwrap_or_else(|| "A tool".to_owned());
                     let status = change.status.take().unwrap_or(ToolStatus::Running);
                     let content = change.content.take().unwrap_or_default();
-                    self.start_tool(call.clone(), title, ToolKind::Other, status, content)
-                        .await?;
+                    self.start_tool(
+                        call.clone(),
+                        title,
+                        ToolKind::Other,
+                        status,
+                        content,
+                        &places,
+                    )
+                    .await?;
+                } else {
+                    // What it works on now, if it says.
+                    let shown = change
+                        .content
+                        .iter()
+                        .flatten()
+                        .filter_map(|part| match part {
+                            ToolPart::Shown(shown) => Some(shown),
+                            ToolPart::Image { .. } => None,
+                        });
+                    let diff = diffed(shown);
+                    if !places.is_empty() || diff.is_some() {
+                        self.toucher.tool(self.tools[&call].kind, &places, diff);
+                    }
                 }
                 let shown = self.tools.get_mut(&call).expect("started above");
                 if let Some(text) = output {
@@ -381,7 +414,8 @@ impl Transcript {
         title: String,
         tool: ToolKind,
         status: ToolStatus,
-        content: Vec<crate::acp::ToolPart>,
+        content: Vec<ToolPart>,
+        places: &[Place],
     ) -> Result<(), String> {
         let id = ItemId::new();
         let shown = Shown {
@@ -392,6 +426,7 @@ impl Transcript {
         };
         self.tools.insert(call, shown);
         let content = content::keep(&self.project, content).await?;
+        self.toucher.tool(tool, places, diffed(&content));
         let started = Fact::ToolStarted {
             item: id,
             turn: self.turn,

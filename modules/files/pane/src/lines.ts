@@ -3,6 +3,7 @@
  * it opens at, how much of a long file it draws, and how picked lines are
  * named. Pure, so plain tests cover it.
  */
+import { atLines } from "@banda/ui/lib/paths"
 
 /** The most lines drawn: past them the editor's cost is measured in
  * hundreds of MB (ADR 0073, decision 8), and a ranged view comes later. */
@@ -51,7 +52,13 @@ export function rangeText(
   path: string,
   range: { start: number; end: number }
 ): string {
-  const first = Math.min(range.start, range.end)
-  const last = Math.max(range.start, range.end)
-  return first === last ? `${path}:${first}` : `${path}:${first}-${last}`
+  return atLines(path, range.start, range.end)
+}
+
+/** Lines `from` to `to` of `text`, from 1, as they read. */
+export function linesOf(text: string, from: number, to: number): string {
+  return text
+    .split("\n")
+    .slice(from - 1, to)
+    .join("\n")
 }

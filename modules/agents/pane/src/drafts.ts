@@ -1,14 +1,16 @@
 /**
  * What a Person wrote to a Thread and has not sent yet, kept in this
  * window's storage, so it waits for them when they come back, as in T3
- * Code (ADR 0010, decision 7): its text, and the images it carries. Every
+ * Code (ADR 0010, decision 7): its text, the images it carries, and the
+ * comments on files' lines an App put in it (ADR 0034, decision 9). Every
  * Pane on the same Thread holds the same draft. Its text is written once
  * typing stops, and before the window closes (ADR 0015, decisions 4 and
  * 5).
  */
 import { useCallback, useState, useSyncExternalStore } from "react"
 import type { Image } from "@banda/contract/agents"
-import { kept as keptIn } from "@banda/ui/lib/kept"
+import { type Kept, kept as keptIn } from "@banda/ui/lib/kept"
+import type { Comment } from "./comments"
 
 const PREFIX = "banda.agents.draft."
 const heard = new Set<() => void>()
@@ -96,31 +98,56 @@ export function useDraft(
   ]
 }
 
-const NO_IMAGES: Image[] = []
-const images = keptIn("banda.agents.draft-images", (value): value is Image[] =>
-  Array.isArray(value)
-)
-
-/** The images the engine keeps for `thread`'s draft, by the order they
- * were added, and how to change them; a Thread not yet started keeps
- * them only while its Pane is open. Each waits in the engine as long as
- * an image no message took (ADR 0015, decision 5). */
-export function useDraftImages(
-  thread: string | null
-): [Image[], (to: (all: Image[]) => Image[]) => void] {
-  const [unstarted, setUnstarted] = useState(NO_IMAGES)
-  const all = images.use()
-  const change = useCallback(
-    (to: (all: Image[]) => Image[]) =>
-      thread === null
-        ? setUnstarted(to)
-        : images.put(thread, to(images.read()[thread] ?? NO_IMAGES)),
-    [thread]
-  )
-  return [thread === null ? unstarted : (all[thread] ?? NO_IMAGES), change]
+/** A list a draft carries besides its text, kept in this window's
+ * storage under `key`. */
+function draftList<T>(key: string) {
+  return keptIn(key, (value): value is T[] => Array.isArray(value))
 }
 
-/** Whether `thread`'s draft holds a message to send: text, or an image. */
+const NONE: never[] = []
+const images = draftList<Image>("banda.agents.draft-images")
+const comments = draftList<Comment>("banda.agents.draft-comments")
+
+/** What `store` keeps for `thread`'s draft, in the order it was added,
+ * and how to change it; a Thread not yet started keeps it only while its
+ * Pane is open. */
+function useDraftList<T>(
+  store: Kept<T[]>,
+  thread: string | null
+): [T[], (to: (all: T[]) => T[]) => void] {
+  const [unstarted, setUnstarted] = useState<T[]>(NONE)
+  const all = store.use()
+  const change = useCallback(
+    (to: (all: T[]) => T[]) => {
+      if (thread === null) return setUnstarted(to)
+      const next = to(store.read()[thread] ?? NONE)
+      if (next.length > 0) store.put(thread, next)
+      else store.drop(thread)
+    },
+    [store, thread]
+  )
+  return [thread === null ? unstarted : (all[thread] ?? NONE), change]
+}
+
+/** The images the engine keeps for `thread`'s draft, and how to change
+ * them. Each waits in the engine as long as an image no message took
+ * (ADR 0015, decision 5). */
+export function useDraftImages(thread: string | null) {
+  return useDraftList(images, thread)
+}
+
+/** The comments on files' lines `thread`'s draft carries, and how to
+ * change them (ADR 0034, decision 9). */
+export function useDraftComments(thread: string | null) {
+  return useDraftList(comments, thread)
+}
+
+/** Whether `thread`'s draft holds a message to send: text, an image, or
+ * a comment. */
 export function drafted(thread: string): boolean {
-  return read(thread).trim() !== "" || (images.read()[thread]?.length ?? 0) > 0
+  return (
+    read(thread).trim() !== "" ||
+    (images.read()[thread]?.length ?? 0) > 0 ||
+    (comments.read()[thread]?.length ?? 0) > 0
+  )
 }

@@ -10,6 +10,11 @@
  * into a folder. Its rows, one or the several picked, go into a Thread's
  * message by their menu or a drag, and out to other apps as the files
  * (step F2). It only reads: the file operations come later (step F5).
+ *
+ * The Agents' work shows on it (decisions 3 and 9): the row of the file
+ * each running turn works on pulses in its Agent's colour, and a quiet
+ * dot sits on what the turn of its Thread changed. Follow, off at first,
+ * moves the pick and the file it opened to the file that Agent works on.
  */
 import {
   type ReactNode,
@@ -35,6 +40,7 @@ import {
 } from "@banda/ui/components/file-tree"
 import { InHeader } from "@banda/ui/components/pane-header"
 import { Spinner } from "@banda/ui/components/spinner"
+import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { useRead } from "@banda/ui/hooks/use-read"
 import { useWiderThan } from "@banda/ui/hooks/use-wider-than"
@@ -51,10 +57,21 @@ import {
   EyeOffIcon,
   FolderTreeIcon,
   FolderXIcon,
+  LocateFixedIcon,
   PanelLeftIcon,
   SearchIcon,
   XIcon,
 } from "lucide-react"
+import {
+  colourOf,
+  followsAt,
+  nextTarget,
+  pulsesOf,
+  type Target,
+  threadOf,
+  turnedIn,
+  wholeFrom,
+} from "./agent"
 import { Card } from "./Facts"
 import { useFolder } from "./folder"
 import { HeaderButton } from "./HeaderButton"
@@ -63,9 +80,11 @@ import { marksOf } from "./marks"
 import { PathBar } from "./PathBar"
 import { Rail } from "./Rail"
 import { RecentList } from "./RecentList"
+import { useThreads, useTouched, useTurned } from "./live"
 import { RowMenu } from "./RowMenu"
 import { matchesOf, onlyFolder, type Showing, treeOf } from "./tree"
-import { nameOf, parentOf, tilded, untilded, wholeOf } from "./where"
+import { nameOf, parentOf, tilded, untilded, wholeOf, within } from "./where"
+import { holding, moveFile, workedAt, workedIn } from "./work"
 
 export type TreeArgs = {
   /** The folder, whole; `""` is the Project's, which it names once read. */
@@ -81,6 +100,10 @@ export type TreeArgs = {
   rail?: boolean
   /** It shows Recent, not the folder. */
   recent?: boolean
+  /** Its pick and the file it opened follow the Agent's file. */
+  follow?: boolean
+  /** The Thread it was opened from: whose turns it marks and follows. */
+  thread?: string
 }
 
 export const treePane = definePane<TreeArgs>({
@@ -119,6 +142,8 @@ const NARROW = 480
 const KEEP = 400
 /** The most open folders kept with the Pane. */
 const KEPT_OPEN = 200
+/** How often Follow looks again while the Person holds something, in ms. */
+const LOOK_AGAIN = 1_000
 /** How long the filter's words rest before they are looked for, in ms. */
 const WAIT = 80
 /** The most matches the filter shows. */
@@ -127,6 +152,7 @@ const MATCHES = 200
 const EXPANDED = 300
 
 const NO_MARKS: ReadonlyMap<string, Mark> = new Map()
+const NO_WRITES: string[] = []
 
 const asks = new Set<(does: Does) => void>()
 
@@ -320,6 +346,8 @@ function FolderView({
   const tree = useRef<FolderTreeHandle>(null)
   const area = useRef<HTMLDivElement>(null)
   const filterField = useRef<HTMLInputElement>(null)
+  // The file this tree opened last, which Follow moves.
+  const opened = useRef<string | null>(null)
 
   // The folders open and the row picked, as the tree says them; kept
   // with the Pane once they rest.
@@ -371,6 +399,56 @@ function FolderView({
         ? marksOf(status, projectTop, real)
         : NO_MARKS,
     [status, projectTop, real]
+  )
+
+  // The Agents at work: each one's file pulses in its colour; the turn of
+  // the Thread it is with marks what it changed.
+  const threads = useThreads(engine, project)
+  const harnesses = useHarnesses(engine)
+  const touched = useTouched(engine, project)
+  const thread = threadOf(threads, args.thread)
+  const colour = useCallback(
+    (id: string) =>
+      colourOf(harnesses, threads.find((one) => one.id === id)?.harness ?? ""),
+    [harnesses, threads]
+  )
+  const here = real ?? dir
+  const pulses = useMemo(
+    () => pulsesOf(touched, here, projectTop, colour),
+    [touched, here, projectTop, colour]
+  )
+  const mine = thread
+    ? touched.find((one) => one.thread === thread.id)
+    : undefined
+  const turn = thread?.latest?.turn ?? null
+  const turnedPaths = useTurned(
+    engine,
+    project,
+    thread?.id ?? null,
+    turn,
+    projectTop
+  )
+
+  // What it touches: Follow goes there, the file it writes or else the
+  // one it reads; and what it writes is marked at once, until its end
+  // reads git's checkpoints again (ADR 0073, decisions 3 and 9).
+  const [target, setTarget] = useState<Target | null>(null)
+  const [writes, setWrites] = useState({ turn, paths: [] as string[] })
+  const [heard, setHeard] = useState<typeof mine>(undefined)
+  if (mine !== heard) {
+    setHeard(mine)
+    if (mine) setTarget(nextTarget(target, mine, projectTop))
+    const wrote = mine?.kind === "write" && wholeFrom(mine.path, projectTop)
+    if (wrote)
+      setWrites({
+        turn,
+        paths: writes.turn === turn ? [...writes.paths, wrote] : [wrote],
+      })
+  }
+  const written = writes.turn === turn ? writes.paths : NO_WRITES
+  const turned = useMemo(
+    () => turnedIn([...turnedPaths, ...written], here),
+    [turnedPaths, written, here]
   )
 
   // The filter: what `files.find` finds under the folder, with its
@@ -443,8 +521,9 @@ function FolderView({
   }, [dir, onGo])
   const openRow = useCallback(
     (path: string) => {
-      if (path.endsWith("/")) onGo(wholeOf(dir, path))
-      else onOpenFile(wholeOf(dir, path))
+      if (path.endsWith("/")) return onGo(wholeOf(dir, path))
+      opened.current = wholeOf(dir, path)
+      onOpenFile(opened.current)
     },
     [dir, onGo, onOpenFile]
   )
@@ -470,6 +549,45 @@ function FolderView({
       asks.delete(does)
     }
   }, [focused, does])
+
+  // Follow: the pick and the file opened go where the turn goes, once the
+  // Person is still. Where it went last; it moves only while the turn
+  // runs.
+  const follow = args.follow === true
+  const [went, setWent] = useState<Target | null>(null)
+  const moving = follow && mine !== undefined && target !== null
+  const [waiting, setWaiting] = useState(false)
+  const goTo = useCallback(
+    (to: Target) => {
+      setWent(to)
+      setWaiting(false)
+      const path = within(here, to.path)
+      if (path) setPicked(path)
+      opened.current =
+        moveFile(project, opened.current, to.path, to.line) ?? opened.current
+    },
+    [here, project]
+  )
+  const [looked, setLooked] = useState(0)
+  useEffect(() => {
+    if (!moving || !target || target === went) return
+    const now = Date.now()
+    const at = followsAt(now, workedAt(project), holding(project))
+    if (at === now) {
+      const timer = setTimeout(() => goTo(target))
+      return () => clearTimeout(timer)
+    }
+    // It says it waits, and looks again once the Person may be done.
+    const timers = [
+      setTimeout(() => setWaiting(true)),
+      setTimeout(
+        () => setLooked((n) => n + 1),
+        at === null ? LOOK_AGAIN : at - now
+      ),
+    ]
+    return () => timers.forEach(clearTimeout)
+  }, [moving, target, went, project, goTo, looked])
+  const toggleFollow = () => update({ ...args, follow: !follow })
 
   const [menu, setMenu] = useState<string | null>(null)
   const [noLimit, setNoLimit] = useState(false)
@@ -565,6 +683,8 @@ function FolderView({
             paths={filtering ? matches.paths : paths}
             open={filtering ? matches.open : open}
             marks={marks}
+            turned={turned}
+            pulses={pulses}
             ignored={filtering ? [] : ignored}
             loading={folder.listing}
             selected={picked}
@@ -601,10 +721,23 @@ function FolderView({
 
   return (
     <div
+      data-files={project}
       className="flex min-h-0 flex-1 flex-col"
       onKeyDownCapture={onKeyDownCapture}
     >
       <InHeader>
+        <HeaderButton
+          label="Follow the Agent"
+          title={
+            follow
+              ? "Following the Agent: its file is picked and opened"
+              : "Follow the Agent"
+          }
+          on={follow}
+          onClick={toggleFollow}
+        >
+          <LocateFixedIcon />
+        </HeaderButton>
         <HeaderButton
           label="Hidden files"
           title={`Hidden files · ${keyLabel(keyOf("hidden"))}`}
@@ -670,8 +803,12 @@ function FolderView({
           </HeaderButton>
         </div>
       )}
+      {/* A key or a click on the tree keeps Follow waiting; the header's
+          buttons do not. */}
       <div
         className="min-h-0 flex-1"
+        onKeyDownCapture={() => workedIn(project)}
+        onPointerDownCapture={() => workedIn(project)}
         onKeyDown={(event) => {
           // Escape in the tree clears the filter, as in its field.
           if (event.key === "Escape" && filter !== null) {
@@ -682,6 +819,22 @@ function FolderView({
       >
         {body}
       </div>
+      {follow && (
+        <div
+          role="status"
+          aria-label="Follow"
+          className="flex h-6 shrink-0 items-center gap-1.5 border-t px-2.5 text-[10.5px] text-muted-foreground"
+        >
+          <span
+            className="flex items-center gap-1.5"
+            style={thread ? { color: colour(thread.id) } : undefined}
+          >
+            <LocateFixedIcon className="size-3" />
+            Following the Agent
+          </span>
+          {moving && waiting && <span>· waits while you work here</span>}
+        </div>
+      )}
       {folder.limit && !noLimit && (
         <div
           role="status"

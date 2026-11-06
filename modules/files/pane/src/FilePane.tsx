@@ -4,12 +4,18 @@
  * at a line; markdown rendered, its source a toggle away; an image to zoom
  * and pan; anything else its facts. It reads again as the file changes on
  * disk. Its header opens it in an editor at its line, or shows it in the
- * system's file manager (step F2). It only reads: editing comes later
- * (step F4).
+ * system's file manager (step F2). Lines picked in its gutter take a
+ * comment, which goes into a Thread's message with them (decision 6); and
+ * Files' Follow moves it to the file the Agent works on. It only reads:
+ * editing comes later (step F4).
  */
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@banda/ui/components/button"
-import { CodeFile, type LineRange } from "@banda/ui/components/code-file"
+import {
+  CodeFile,
+  type LineRange,
+  linesWords,
+} from "@banda/ui/components/code-file"
 import { CopyButton } from "@banda/ui/components/copy-button"
 import { InHeader } from "@banda/ui/components/pane-header"
 import { Spinner } from "@banda/ui/components/spinner"
@@ -30,6 +36,7 @@ import {
   FileIcon,
   FileWarningIcon,
   FolderDownIcon,
+  MessageSquarePlusIcon,
   SquareCodeIcon,
   WrapTextIcon,
   XIcon,
@@ -37,10 +44,11 @@ import {
 import { Card, Facts, Gone } from "./Facts"
 import { HeaderButton } from "./HeaderButton"
 import { ImageView } from "./ImageView"
-import { lineIn, MOST_LINES, rangeText } from "./lines"
+import { lineIn, linesOf, MOST_LINES, rangeText } from "./lines"
 import { sizeWords } from "./look"
 import { MarkdownView } from "./MarkdownView"
 import { type Shown, useFile } from "./read"
+import { showing, useHolding, workedIn } from "./work"
 
 export type FileArgs = {
   /** The file, whole or from the Project's folder. */
@@ -107,6 +115,22 @@ function FilePane({
     label?.({ title: name, detail: folder ?? null })
   }, [label, file, path])
 
+  // Follow moves it to another file, at a line (ADR 0073, decision 9).
+  const now = useRef({ args, update })
+  useEffect(() => {
+    now.current = { args, update }
+  })
+  useEffect(
+    () =>
+      showing({
+        project,
+        path: () => now.current.args.path,
+        go: (path, line) =>
+          now.current.update({ ...now.current.args, path, line }),
+      }),
+    [project]
+  )
+
   const set = (next: Partial<FileArgs>) => update({ ...args, ...next })
   const wrap = args.wrap ?? false
   const source = args.source ?? false
@@ -115,7 +139,13 @@ function FilePane({
     (file.look === "code" || (file.look === "markdown" && source))
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    // A key or a click here, and text picked here, keep Follow waiting.
+    <div
+      data-files={project}
+      className="flex h-full min-h-0 flex-col"
+      onKeyDownCapture={() => workedIn(project)}
+      onPointerDownCapture={() => workedIn(project)}
+    >
       {/* Wrap first: it comes and goes, and Source stays where it is. */}
       {asCode && (
         <InHeader>
@@ -282,39 +312,57 @@ function Body({
       {note}
       <Code
         key={stat.path}
+        project={project}
         name={name}
         path={path}
+        whole={stat.path}
         text={text.text}
         wrap={wrap}
         line={lineIn(line, text.lines)}
+        run={run}
       />
     </>
   )
 }
 
 /** Code and text, opened at a line; the lines picked in its gutter can be
- * copied as `path:12-20`. */
+ * copied as `path:12-20`, or take a comment that goes into a Thread's
+ * message with them (ADR 0034, decision 9). */
 function Code({
+  project,
   name,
   path,
+  whole,
   text,
   wrap,
   line,
+  run,
 }: {
+  project: ProjectId
   name: string
+  /** The file as the Person reads it, and whole. */
   path: string
+  whole: string
   text: string
   wrap: boolean
   line: number | null
+  run: PaneProps<FileArgs>["run"]
 }) {
   const [picked, setPicked] = useState<LineRange | null>(null)
+  const [commenting, setCommenting] = useState(false)
+  // Lines picked, or a comment being written, keep Follow waiting.
+  useHolding(project, picked !== null)
+  const clear = () => {
+    setPicked(null)
+    setCommenting(false)
+  }
   return (
     <div
       className="relative flex min-h-0 flex-1 flex-col"
       onKeyDown={(event) => {
         if (event.key === "Escape" && picked) {
           event.stopPropagation()
-          setPicked(null)
+          clear()
         }
       }}
     >
@@ -325,21 +373,56 @@ function Code({
         wrap={wrap}
         line={line}
         picked={picked}
-        onPick={setPicked}
+        onPick={(range) => {
+          setPicked(range)
+          setCommenting(false)
+        }}
+        comment={
+          commenting && picked
+            ? {
+                onComment: (comment) => {
+                  const [from, to] = [
+                    Math.min(picked.start, picked.end),
+                    Math.max(picked.start, picked.end),
+                  ]
+                  run?.("file.attach", {
+                    file: whole,
+                    from,
+                    to,
+                    comment,
+                    text: linesOf(text, from, to),
+                  })
+                  clear()
+                },
+                onCancel: () => setCommenting(false),
+              }
+            : null
+        }
       />
-      {picked && (
+      {picked && !commenting && (
         <Picked
           text={rangeText(path, picked)}
-          onClear={() => setPicked(null)}
+          lines={linesWords(picked)}
+          onComment={() => setCommenting(true)}
+          onClear={clear}
         />
       )}
     </div>
   )
 }
 
-/** The lines picked, as an Agent reads them, to copy. Adding a comment on
- * them for the Agent comes next (step F2). */
-function Picked({ text, onClear }: { text: string; onClear: () => void }) {
+/** The lines picked, as an Agent reads them, to copy, or to comment on. */
+function Picked({
+  text,
+  lines,
+  onComment,
+  onClear,
+}: {
+  text: string
+  lines: string
+  onComment: () => void
+  onClear: () => void
+}) {
   return (
     <div
       role="status"
@@ -347,6 +430,16 @@ function Picked({ text, onClear }: { text: string; onClear: () => void }) {
       className="absolute bottom-2.5 left-1/2 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-0.5 rounded-lg bg-popover/80 py-0.5 pr-0.5 pl-2.5 text-xs text-muted-foreground shadow-sm ring-1 ring-foreground/10 backdrop-blur"
     >
       <span className="truncate font-mono">{text}</span>
+      <Button
+        variant="ghost"
+        size="xs"
+        className="text-muted-foreground"
+        title={`Add a comment on lines ${lines} for the Agent`}
+        onClick={onComment}
+      >
+        <MessageSquarePlusIcon />
+        Add a comment…
+      </Button>
       <CopyButton text={text} label={`Copy ${text}`} />
       <Button
         variant="ghost"

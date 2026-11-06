@@ -3,7 +3,7 @@
  * the Panes show them: the machine's module `harnesses` (ADR 0040), which
  * names no Project.
  */
-import { useCallback, useMemo } from "react"
+import { useMemo } from "react"
 import type { Engine } from "@banda/contract"
 import type { Accounted, HarnessView } from "@banda/contract/harnesses"
 import {
@@ -12,18 +12,8 @@ import {
   type Source,
   useMachineLive,
 } from "@banda/ui/hooks/use-live"
-import { useRead } from "@banda/ui/hooks/use-read"
 
-/** The machine's Harnesses, in the order its list names them; none yet
- * while they load. */
-export function useHarnesses(engine: Engine): HarnessView[] {
-  const read = useRead(
-    useCallback(() => engine.call("harnesses.list", {}), [engine])
-  )
-  return read.state === "ready" ? read.value : NONE
-}
-
-const NONE: HarnessView[] = []
+export { useHarnesses } from "@banda/ui/hooks/use-harnesses"
 
 /**
  * Who is signed in to `harness`, which asks it, so starts it if need be.
