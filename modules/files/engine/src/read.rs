@@ -70,6 +70,12 @@ fn text_len(bytes: &[u8], cut: bool) -> Option<usize> {
     }
 }
 
+/// The SHA-256 of `bytes`, in hex: what a file's text is known by, so a
+/// write over it can tell it changed.
+pub fn hash(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+
 /// The text of the file at `path`, its first `upto` bytes at most.
 pub fn read(path: &Path, upto: u64) -> std::io::Result<Text> {
     let mut file = std::fs::File::open(path)?;
@@ -86,7 +92,7 @@ pub fn read(path: &Path, upto: u64) -> std::io::Result<Text> {
     (&mut file).take(upto + 1).read_to_end(&mut bytes)?;
     let read = bytes.len() as u64;
     let truncated = read > upto;
-    let hash = (!truncated).then(|| format!("{:x}", Sha256::digest(&bytes)));
+    let hash = (!truncated).then(|| hash(&bytes));
     bytes.truncate(upto as usize);
     let text = text_len(&bytes, truncated).map(|len| {
         bytes.truncate(len);
@@ -105,6 +111,7 @@ pub fn read(path: &Path, upto: u64) -> std::io::Result<Text> {
             read
         },
         hash,
+        locked: None,
     })
 }
 

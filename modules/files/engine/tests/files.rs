@@ -2,7 +2,8 @@
 
 use banda_files::Files;
 use banda_files::model::{
-    Archive, Found, Kind, Listing, Opened, Packing, Places, Sheet, Stat, Text, Watched,
+    Archive, Found, Kind, Listing, Locked, Opened, Packing, Places, Sheet, Stat, Text, Watched,
+    Written,
 };
 use banda_kernel::{
     AgentId, Caller, Code, CommandId, Kernel, Participant, PersonId, ProjectId, Refusal,
@@ -27,8 +28,9 @@ impl World {
     async fn new() -> World {
         let root = tempfile::tempdir().unwrap();
         let owner = PersonId::new();
+        let config = root.path().join("config");
         let kernel = Kernel::builder(root.path(), root.path().join(".data"), owner)
-            .module(Files::new())
+            .module(Files::new().config_in(config))
             .open()
             .await
             .unwrap();
@@ -59,6 +61,11 @@ impl World {
         std::fs::write(path, text).unwrap();
     }
 
+    /// Banda's settings folder, as the engine gives it the module.
+    fn config(&self) -> PathBuf {
+        self.root.path().join("config")
+    }
+
     /// A folder beside the Project's, outside it.
     fn outside(&self) -> PathBuf {
         let outside = self.root.path().canonicalize().unwrap().join("outside");
@@ -85,6 +92,17 @@ impl World {
 
     async fn ask<T: DeserializeOwned>(&self, method: &str, params: Value) -> T {
         serde_json::from_value(self.call(method, params).await.unwrap()).unwrap()
+    }
+
+    /// The Agent's command, which its pass walls in the Project.
+    async fn command_as_agent(&self, method: &str, params: Value) -> Result<Value, Refusal> {
+        let agent = Caller {
+            participant: Participant::Agent(AgentId::new()),
+            only: Some(self.project),
+        };
+        (self.kernel)
+            .call(agent, method, None, Some(CommandId::new()), params)
+            .await
     }
 
     /// The Person's command, as the window sends it, with an ID of its own.
@@ -651,4 +669,248 @@ async fn a_7z_lists_its_names_from_its_packed_header() {
     let b = archive.entries.iter().find(|e| e.path == "b.txt").unwrap();
     assert_eq!(b.size, Some(16));
     assert_eq!(b.modified, Some(1_793_968_200_000));
+}
+
+/// What `files.write` answers for the Person, or its refusal.
+async fn write(world: &World, path: &str, text: &str, base: Option<&str>) -> Written {
+    let params = json!({ "path": path, "text": text, "base": base });
+    serde_json::from_value(world.command("files.write", params).await.unwrap()).unwrap()
+}
+
+async fn hash_of(world: &World, path: &str) -> String {
+    let text: Text = world.ask("files.read", json!({ "path": path })).await;
+    text.hash.unwrap()
+}
+
+fn on_disk(world: &World, path: &str) -> String {
+    std::fs::read_to_string(world.folder.join(path)).unwrap()
+}
+
+#[tokio::test]
+async fn a_write_saves_over_the_hash_it_was_read_at_and_answers_the_next() {
+    let world = World::new().await;
+    world.write("src/a.ts", "one\n");
+    let base = hash_of(&world, "src/a.ts").await;
+    let Written::Written { hash } = write(&world, "src/a.ts", "one\ntwo\n", Some(&base)).await
+    else {
+        panic!("not written");
+    };
+    assert_eq!(on_disk(&world, "src/a.ts"), "one\ntwo\n");
+    assert_eq!(hash, hash_of(&world, "src/a.ts").await);
+    // Sent again, as a command that lost its answer is: the file holds it
+    // already, which is no conflict.
+    assert_eq!(
+        write(&world, "src/a.ts", "one\ntwo\n", Some(&base)).await,
+        Written::Written { hash: hash.clone() }
+    );
+    // Nothing is left beside it.
+    let names: Vec<_> = std::fs::read_dir(world.folder.join("src"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(names, ["a.ts"]);
+    // A command needs its ID.
+    let refused = (world.call(
+        "files.write",
+        json!({ "path": "src/a.ts", "text": "", "base": hash }),
+    ))
+    .await
+    .unwrap_err();
+    assert_eq!(refused.code, Code::Invalid);
+}
+
+#[tokio::test]
+async fn a_file_that_moved_since_its_base_is_not_written_and_says_who_moved_it() {
+    let world = World::new().await;
+    world.write("notes.md", "mine\n");
+    let base = hash_of(&world, "notes.md").await;
+    // Another app writes it.
+    world.write("notes.md", "theirs\n");
+    let theirs = hash_of(&world, "notes.md").await;
+    assert_eq!(
+        write(&world, "notes.md", "mine, edited\n", Some(&base)).await,
+        Written::Moved {
+            hash: Some(theirs.clone()),
+            by: None
+        }
+    );
+    assert_eq!(on_disk(&world, "notes.md"), "theirs\n");
+
+    // An Agent writes it through Files: a write over the old hash names it.
+    let params = json!({ "path": "notes.md", "text": "the agent's\n", "base": theirs });
+    let wrote = world.command_as_agent("files.write", params).await.unwrap();
+    let Ok(Written::Written { hash: agents }) = serde_json::from_value(wrote) else {
+        panic!("not written");
+    };
+    let Written::Moved { hash, by } = write(&world, "notes.md", "mine\n", Some(&theirs)).await
+    else {
+        panic!("written over the Agent's");
+    };
+    assert_eq!(hash, Some(agents.clone()));
+    assert!(matches!(by, Some(Participant::Agent(_))), "{by:?}");
+
+    // Keep mine: written over what is there now.
+    let Written::Written { .. } = write(&world, "notes.md", "mine\n", Some(&agents)).await else {
+        panic!("not written");
+    };
+    assert_eq!(on_disk(&world, "notes.md"), "mine\n");
+
+    // Gone: its hash is none.
+    std::fs::remove_file(world.folder.join("notes.md")).unwrap();
+    assert_eq!(
+        write(&world, "notes.md", "again\n", Some(&agents)).await,
+        Written::Moved {
+            hash: None,
+            by: None
+        }
+    );
+}
+
+#[tokio::test]
+async fn a_new_file_is_written_only_where_none_is() {
+    let world = World::new().await;
+    std::fs::create_dir_all(world.folder.join("docs")).unwrap();
+    let Written::Written { hash } = write(&world, "docs/new.md", "# New\n", None).await else {
+        panic!("not written");
+    };
+    assert_eq!(on_disk(&world, "docs/new.md"), "# New\n");
+    // One there now is not written over without its hash.
+    assert_eq!(
+        write(&world, "docs/new.md", "# Other\n", None).await,
+        Written::Moved {
+            hash: Some(hash),
+            by: Some(Participant::Person(world.owner))
+        }
+    );
+    assert_eq!(on_disk(&world, "docs/new.md"), "# New\n");
+    // Its folder is not made.
+    let params = json!({ "path": "nowhere/new.md", "text": "", "base": null });
+    let refused = world.command("files.write", params).await.unwrap_err();
+    assert_eq!(refused.code, Code::NotFound);
+    // A folder is no file.
+    let params = json!({ "path": "docs", "text": "", "base": null });
+    let refused = world.command("files.write", params).await.unwrap_err();
+    assert_eq!(refused.code, Code::Invalid);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_write_keeps_the_files_permissions_and_a_new_one_gets_the_usual() {
+    use std::os::unix::fs::PermissionsExt;
+    let world = World::new().await;
+    let mode = |path: &str| {
+        let meta = std::fs::metadata(world.folder.join(path)).unwrap();
+        meta.permissions().mode() & 0o7777
+    };
+    world.write("run.sh", "echo one\n");
+    let script = world.folder.join("run.sh");
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o750)).unwrap();
+    let base = hash_of(&world, "run.sh").await;
+    write(&world, "run.sh", "echo two\n", Some(&base)).await;
+    assert_eq!(on_disk(&world, "run.sh"), "echo two\n");
+    assert_eq!(mode("run.sh"), 0o750);
+
+    // As a file any program makes there, past the temporary file's 0600.
+    world.write("usual.txt", "");
+    write(&world, "new.txt", "new\n", None).await;
+    assert_eq!(mode("new.txt"), mode("usual.txt"));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_link_is_written_at_its_target_and_stays_a_link() {
+    let world = World::new().await;
+    world.write("real.md", "real\n");
+    std::os::unix::fs::symlink(world.folder.join("real.md"), world.folder.join("link.md")).unwrap();
+    let base = hash_of(&world, "link.md").await;
+    write(&world, "link.md", "through the link\n", Some(&base)).await;
+    assert_eq!(on_disk(&world, "real.md"), "through the link\n");
+    let link = std::fs::symlink_metadata(world.folder.join("link.md")).unwrap();
+    assert!(link.is_symlink());
+
+    // A link to nothing is not written through, nor made a file.
+    std::os::unix::fs::symlink(
+        world.folder.join("gone.md"),
+        world.folder.join("dangling.md"),
+    )
+    .unwrap();
+    let params = json!({ "path": "dangling.md", "text": "x", "base": null });
+    let refused = world.command("files.write", params).await.unwrap_err();
+    assert_eq!(refused.code, Code::Forbidden);
+    assert!(!world.folder.join("gone.md").exists());
+
+    // An Agent's link out of the Project is the guard's to refuse.
+    let outside = world.outside();
+    std::os::unix::fs::symlink(outside.join("secret.txt"), world.folder.join("leak.txt")).unwrap();
+    let params = json!({ "path": "leak.txt", "text": "x", "base": null });
+    let refused = world
+        .command_as_agent("files.write", params)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Forbidden);
+    let params = json!({ "path": outside.join("new.txt"), "text": "x", "base": null });
+    let refused = world
+        .command_as_agent("files.write", params)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Forbidden);
+    assert_eq!(
+        std::fs::read_to_string(outside.join("secret.txt")).unwrap(),
+        "secret"
+    );
+}
+
+#[tokio::test]
+async fn nothing_is_written_in_git_nor_in_bandas_settings_and_a_read_says_so() {
+    let world = World::new().await;
+    world.write(".git/config", "[core]\n");
+    std::fs::create_dir_all(world.config()).unwrap();
+    let look = world.config().join("look.toml");
+    std::fs::write(&look, "theme = \"dark\"\n").unwrap();
+    let look = look.to_string_lossy().into_owned();
+    for (path, locked) in [
+        (".git/config", Locked::Git),
+        (look.as_str(), Locked::Settings),
+    ] {
+        let text: Text = world.ask("files.read", json!({ "path": path })).await;
+        assert_eq!(text.locked, Some(locked), "{path}");
+        let params = json!({ "path": path, "text": "x", "base": text.hash });
+        let refused = world.command("files.write", params).await.unwrap_err();
+        assert_eq!(refused.code, Code::Forbidden, "{path}");
+    }
+    assert_eq!(on_disk(&world, ".git/config"), "[core]\n");
+    assert_eq!(
+        std::fs::read_to_string(&look).unwrap(),
+        "theme = \"dark\"\n"
+    );
+    // A file anywhere else may be.
+    world.write("a.txt", "");
+    let text: Text = world.ask("files.read", json!({ "path": "a.txt" })).await;
+    assert_eq!(text.locked, None);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_file_this_user_may_not_write_reads_as_locked() {
+    use std::os::unix::fs::PermissionsExt;
+    let world = World::new().await;
+    world.write("frozen.txt", "cold\n");
+    let frozen = world.folder.join("frozen.txt");
+    std::fs::set_permissions(&frozen, std::fs::Permissions::from_mode(0o444)).unwrap();
+    // Root writes what it likes.
+    if std::fs::OpenOptions::new()
+        .write(true)
+        .open(&frozen)
+        .is_ok()
+    {
+        return;
+    }
+    let text: Text = world
+        .ask("files.read", json!({ "path": "frozen.txt" }))
+        .await;
+    assert_eq!(text.locked, Some(Locked::Denied));
+    let params = json!({ "path": "frozen.txt", "text": "warm\n", "base": text.hash });
+    let refused = world.command("files.write", params).await.unwrap_err();
+    assert_eq!(refused.code, Code::Forbidden);
+    assert_eq!(on_disk(&world, "frozen.txt"), "cold\n");
 }

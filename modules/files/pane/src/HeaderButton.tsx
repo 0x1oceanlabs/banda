@@ -10,6 +10,7 @@ export function HeaderButton({
   label,
   title = label,
   on,
+  disabled = false,
   onClick,
   children,
 }: {
@@ -18,6 +19,8 @@ export function HeaderButton({
   title?: string
   /** Whether it stays on; none for a button that only acts. */
   on?: boolean
+  /** It does nothing now: its tooltip still says why. */
+  disabled?: boolean
   onClick: () => void
   children: ReactNode
 }) {
@@ -28,7 +31,12 @@ export function HeaderButton({
       aria-label={label}
       aria-pressed={on}
       title={title}
-      className={cn("shrink-0", on && "text-foreground")}
+      disabled={disabled}
+      focusableWhenDisabled
+      className={cn(
+        "shrink-0 data-disabled:opacity-40 data-disabled:hover:bg-transparent",
+        on && "text-foreground"
+      )}
       onClick={onClick}
     >
       {children}

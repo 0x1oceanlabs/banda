@@ -17,6 +17,7 @@ import { fileUrls, proseFiles, TEXT_PATH } from "../lib/markdown-paths"
 import { MarkdownCode, MarkdownTextPath, Written } from "./markdown-file"
 import { MarkdownImage } from "./markdown-media"
 import { MarkdownLink } from "./markdown-link"
+import { MarkdownInput } from "./markdown-task"
 
 /** Single-dollar math matches what Agents write; KaTeX leaves code alone. */
 const math = createMathPlugin({ singleDollarTextMath: true })
@@ -36,10 +37,11 @@ function MarkdownBlock(props: ComponentProps<"code"> & ExtraProps) {
 }
 
 // A path in plain text is marked with a tag of Banda's own (ADR 0063,
-// decision 2).
+// decision 2). A task's box ticks where the host lets it (`MarkdownTasks`).
 const components = {
   img: MarkdownImage,
   a: MarkdownLink,
+  input: MarkdownInput,
   code: MarkdownBlock,
   inlineCode: MarkdownCode,
   [TEXT_PATH]: MarkdownTextPath,

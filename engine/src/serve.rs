@@ -68,7 +68,9 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         .module(Terminals::new())
         .module(Browser::new())
         .module(Git::new())
-        .module(Files::new())
+        // Banda's settings are the settings Pane's to write (ADR 0073,
+        // decision 8).
+        .module(Files::new().config_in(places.config.clone()))
         .module(Pulls::new())
         .module(Workspaces::new())
         .module(problems(&places))

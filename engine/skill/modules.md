@@ -95,7 +95,7 @@ Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `co
 
 ## Files (`files`)
 
-Any folder, as a Finder shows it: a tree with the places beside it and its path above, what git ignores greyed and what git sees changed marked, what is hidden shown or not; what a path is; a file's text; fuzzy paths under a folder, what was opened lately first; and what changed in the folders shown. An Agent reaches only its Project's folder. A file opens in its Pane, drawn by the previewer that claims it (code, markdown, a picture, a PDF, video and sound, a page run in a sandbox, a CSV as a table, JSON as a tree, a notebook's saved outputs, a font's specimen, what an archive or a workbook holds, and any other file's bytes as hex) at a line, and lines picked there take a comment for a Thread; Open with… picks another previewer for an extension. Space shows a file in Quick Look, over the desk. The file each Agent works on pulses in the tree, which can follow it, and what the turn changed is marked.
+Any folder, as a Finder shows it: a tree with the places beside it and its path above, what git ignores greyed and what git sees changed marked, what is hidden shown or not; what a path is; a file's text; fuzzy paths under a folder, what was opened lately first; and what changed in the folders shown. An Agent reaches only its Project's folder. A file opens in its Pane, drawn by the previewer that claims it (code, markdown, a picture, a PDF, video and sound, a page run in a sandbox, a CSV as a table, JSON as a tree, a notebook's saved outputs, a font's specimen, what an archive or a workbook holds, and any other file's bytes as hex) at a line, and lines picked there take a comment for a Thread; Open with… picks another previewer for an extension. Code and markdown are edited in place and saved as one types, each save only over the text it was read at: when the disk moved meanwhile, as an Agent wrote the file, nothing is written, and the Person compares, takes the disk's text or keeps theirs. A markdown task's box ticks. Nothing in .git, nor Banda's settings, is written. Space shows a file in Quick Look, over the desk. The file each Agent works on pulses in the tree, which can follow it, and what the turn changed is marked.
 
 Its settings: `files.toml`.
 
@@ -103,7 +103,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 
 - Files (`files.tree`), Alt+E
 
-Its methods, `banda call files.<method>`: `list`, `stat`, `read`, `find`, `watch`, `places`, `opened`, `recent`, `archive`, `sheet`.
+Its methods, `banda call files.<method>`: `list`, `stat`, `read`, `write`, `find`, `watch`, `places`, `opened`, `recent`, `archive`, `sheet`.
 
 ## Pull requests (`pulls`)
 

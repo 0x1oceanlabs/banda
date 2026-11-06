@@ -326,6 +326,36 @@ stay his to change.
    - **In markdown's rendered view, a task's box can be ticked**, which
      writes the line.
 
+   *Amended 2026-11-06, with step F4:*
+   - **The write.** `files.write { path, text, base }` writes only while
+     the file's SHA-256 is `base`; `base: null` asks that no file be
+     there. A file that holds the text already answers its hash, so a
+     command sent again is no conflict. Else it answers `moved`: the hash
+     now, and who wrote it, when that write came through Files. The text
+     goes to a new file beside, with the file's permissions, which is
+     renamed over it.
+   - **Links.** The guard follows them, and holds an Agent in its
+     Project: the target is written, and the link stays a link. A link
+     still there at the end leads nowhere, and is refused.
+   - **Banda's settings** are its config folder (`~/.config/banda`, or
+     `BANDA_CONFIG`), which the engine gives the module, as it gives the
+     agents module: nothing in it is written. `files.read` says why a
+     file will not be (`locked`: `.git`, the settings, or a file this user
+     may not write), so the pencil says so before a write is tried.
+   - **Who.** "The Agent", with its Thread's name, when `agents.touching`
+     showed a turn writing the file then or up to 5 s before; else whom
+     the engine names; else "another app".
+   - **The keys.** E edits and Esc is done, where nothing else takes
+     them. The save is Ctrl+S (⌘S): the Pane's keys are Ctrl's, and Alt+S
+     is Banda's.
+   - **The draft is the module's**, one for each file in the window, held
+     by its Panes; the view gets no `dirty` nor `save`, as only Files'
+     views edit yet. One the disk moved under stays while the window
+     runs, so its file opened again has it. A Pane's label says what is
+     not saved, a dot, or saved a moment ago (`Label.edits`).
+   - **A task's box** is counted in the order the boxes show, and writes
+     only while they are the tasks its text has.
+
 9. **The Agent's work shows on the tree.**
    - The row of the file the running turn reads or writes pulses quietly,
      in the Harness's colour, from the turn's tool calls.

@@ -11,8 +11,12 @@
  * Quick Look is this Pane over the desk (decision 7, `PaneProps.peek`):
  * the tree under it keeps the keys and moves it, and the previewer's view
  * takes the next file of its kind rather than being drawn anew.
+ *
+ * Code and markdown are edited here (decision 8): a dot by the title
+ * says the file has work not saved yet, and "Saved" says it was, for a
+ * moment. Closing the Pane saves what waits to be.
  */
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import type { JsonValue, ProjectId } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -48,6 +52,7 @@ import {
   FolderDownIcon,
   SquareCodeIcon,
 } from "lucide-react"
+import { draftKey, draftOf, hearDrafts } from "./draft"
 import { Card, Facts, Gone, Loading } from "./Facts"
 import { HeaderButton } from "./HeaderButton"
 import { peeking } from "./peek"
@@ -64,7 +69,12 @@ export type FileArgs = {
   wrap?: boolean
   /** Markdown, or a page, shows its source, as code. */
   source?: boolean
+  /** Its text is edited. */
+  edit?: boolean
 }
+
+/** How long "Saved" shows by the title, in ms. */
+const SAVED_FOR = 1_500
 
 export const filePane = definePane<FileArgs>({
   kind: "files.file",
@@ -110,6 +120,7 @@ function FilePane({
   label,
   run,
   close,
+  focused,
   peek = false,
 }: PaneProps<FileArgs>) {
   const shown = useFile(engine, project, args.path)
@@ -128,12 +139,34 @@ function FilePane({
         .catch(() => undefined)
   }, [engine, project, opened])
 
-  // Its header names it as found: its folder from the Project's.
+  // Its header names it as found: its folder from the Project's; and
+  // says whether its work is saved.
+  const edits = useEdits(project, peek ? null : (file?.stat.path ?? null))
   useEffect(() => {
     if (!file) return
     const { name, folder } = nameAndFolder(path)
-    label?.({ title: name, detail: folder ?? null })
-  }, [label, file, path])
+    label?.({ title: name, detail: folder ?? null, ...(edits && { edits }) })
+  }, [label, file, path, edits])
+
+  // The keys are its view's, which takes the focus from the tile, as the
+  // tree does: once the text it draws is there.
+  const root = useRef<HTMLDivElement>(null)
+  const drawn = shown.state
+  useEffect(() => {
+    if (!focused || peek) return
+    const until = performance.now() + 2_000
+    const take = () => {
+      const own = root.current
+      const at = document.activeElement
+      // Only from the tile itself: what has the focus inside keeps it.
+      if (!own || !at || at === document.body || !at.contains(own)) return
+      const view = own.querySelector<HTMLElement>("[data-keys]")
+      if (view) view.focus({ preventScroll: true })
+      else if (performance.now() < until) frame = requestAnimationFrame(take)
+    }
+    let frame = requestAnimationFrame(take)
+    return () => cancelAnimationFrame(frame)
+  }, [focused, peek, drawn])
 
   // Follow moves it to another file, at a line (ADR 0073, decision 9);
   // not Quick Look's, which the tree moves.
@@ -166,6 +199,7 @@ function FilePane({
   return (
     // A key or a click here, and text picked here, keep Follow waiting.
     <div
+      ref={root}
       data-files={project}
       className="flex h-full min-h-0 flex-col"
       onKeyDownCapture={() => workedIn(project)}
@@ -188,6 +222,26 @@ function FilePane({
       />
     </div>
   )
+}
+
+/** Whether the file at `path` has work not saved yet, or was saved a
+ * moment ago, by its draft; none when neither, or no draft is kept. */
+function useEdits(project: ProjectId, path: string | null) {
+  const state = useSyncExternalStore(hearDrafts, () =>
+    path === null ? null : (draftOf(draftKey(project, path))?.state ?? null)
+  )
+  const saved = state?.saved ?? null
+  // "Saved" goes once its moment has passed.
+  const [gone, setGone] = useState<number | null>(null)
+  useEffect(() => {
+    if (saved === null) return
+    const timer = setTimeout(() => setGone(saved), SAVED_FOR)
+    return () => clearTimeout(timer)
+  }, [saved])
+  if (!state) return undefined
+  if (state.mine !== null || state.moved) return "unsaved" as const
+  if (saved !== null && gone !== saved) return "saved" as const
+  return undefined
 }
 
 /** "Open with…": the previewers that draw the file, the one that does now

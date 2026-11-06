@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef, useState } from "react"
 import { type Engine, type ProjectId, Refused } from "@banda/contract"
-import type { Stat } from "@banda/contract/files"
+import type { Locked, Stat } from "@banda/contract/files"
 import { nameAndFolder } from "@banda/ui/lib/paths"
 import { problem } from "@banda/ui/lib/words"
 import { lineCount, startOf } from "./lines"
@@ -25,6 +25,10 @@ export type Drawn = {
   /** The file's whole size in bytes. */
   bytes: number
   binary: boolean
+  /** Its hash, read whole, which a write is made over. */
+  hash?: string
+  /** Why Files may not write it. */
+  locked?: Locked
 }
 
 export type Shown =
@@ -156,13 +160,15 @@ export function useFile(
 }
 
 /** The text of the file at the whole `path`, as it is drawn, read again
- * as `modified` changes; the text read last while the next is read, and
- * none before the first. A refusal is said as its words. */
+ * as `modified` changes, or `again` says to; the text read last while the
+ * next is read, and none before the first. A refusal is said as its
+ * words. */
 export function useText(
   engine: Engine,
   project: ProjectId,
   path: string,
-  modified: number | null
+  modified: number | null,
+  again = 0
 ): { path: string; drawn: Drawn } | { path: string; refused: string } | null {
   const [read, setRead] = useState<
     { path: string; drawn: Drawn } | { path: string; refused: string } | null
@@ -181,6 +187,8 @@ export function useText(
             cut: read.truncated || (start?.cut ?? false),
             bytes: read.bytes,
             binary: read.binary,
+            ...(read.hash !== undefined && { hash: read.hash }),
+            ...(read.locked !== undefined && { locked: read.locked }),
           },
         })
       },
@@ -189,6 +197,6 @@ export function useText(
     return () => {
       current = false
     }
-  }, [engine, project, path, modified])
+  }, [engine, project, path, modified, again])
   return read
 }
