@@ -13,9 +13,11 @@ publish = false
 agent-client-protocol = { version = "3.6.0", features = ["unstable_session_fork"] }
 async-trait = "0.1"
 base64 = "0.22"
+calamine = "0.38"
 axum = { version = "0.8.9", features = ["ws"] }
 clap = { version = "4.6.7", features = ["derive"] }
 dirs = "6"
+flate2 = "1.1.10"
 futures = "0.3"
 getrandom = "0.4.3"
 ignore = "0.4.25"
@@ -30,9 +32,14 @@ rusqlite = { version = "0.41.1", features = ["bundled"] }
 rustix = { version = "1.1.5", features = ["process", "termios"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# An archive is only listed, never unpacked, so neither carries codecs of
+# its own (ADR 0073, decision 6); a 7z's header needs only LZMA, and
+# calamine brings deflate for workbooks.
+sevenz-rust2 = { version = "0.24.2", default-features = false }
 sha2 = "0.10.9"
 sys-locale = "0.3"
 sysinfo = { version = "0.40", default-features = false, features = ["system"] }
+tar = "0.4.46"
 tempfile = "3"
 thiserror = "2"
 toml = "1.1"
@@ -43,6 +50,7 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tokio-tungstenite = "0.29"
 ts-rs = { version = "12.0.1", features = ["uuid-impl", "serde-json-impl"] }
 uuid = { version = "1.29.0", features = ["v4", "v7", "serde"] }
+zip = { version = "9.4.1", default-features = false }
 
 # A released engine's panic names Banda's files and lines by itself: its
 # backtrace reads them from these tables, with no symbols file to upload

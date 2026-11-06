@@ -230,3 +230,92 @@ pub struct Opened {
     /// How many times it was opened.
     pub count: u32,
 }
+
+/// What `files.archive` asks: a zip, a tar, a gzipped tar or a 7z, as
+/// `files.list` reads its `dir`.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct ArchiveAsk {
+    pub path: String,
+}
+
+/// What kind of archive a file is, by its first bytes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "files/")]
+pub enum Packing {
+    Zip,
+    Tar,
+    /// A tar in gzip.
+    TarGz,
+    /// One file in gzip, not a tar.
+    Gz,
+    #[serde(rename = "7z")]
+    SevenZ,
+}
+
+/// What an archive holds, as `files.archive` answers: its names only,
+/// never what they hold, and nothing taken out.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct Archive {
+    /// Absolute, its links followed.
+    pub path: String,
+    pub packing: Packing,
+    /// In the order the archive holds them, at most 10 000.
+    pub entries: Vec<Packed>,
+    /// Whether it holds more than are listed.
+    pub truncated: bool,
+}
+
+/// One name in an archive.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct Packed {
+    /// As the archive writes it, `/` between names: only text, never a
+    /// path on this disk, so `../x` or `/etc/x` is shown as it is.
+    pub path: String,
+    pub folder: bool,
+    /// Its size in bytes, taken out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub size: Option<u64>,
+    /// Its size in bytes, packed, where the archive says it per name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub packed: Option<u64>,
+    /// When it last changed, in ms since the Unix epoch. A zip's own time
+    /// names no zone, and is read as UTC.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub modified: Option<i64>,
+}
+
+/// What `files.sheet` asks: a workbook (xlsx, xlsm, xlsb, xls, ods), and
+/// which of its sheets; the first unless said.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct SheetAsk {
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub sheet: Option<String>,
+}
+
+/// One sheet of a workbook, as `files.sheet` answers: its cells as text,
+/// as the sheet shows them, from its first cell that holds something.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct Sheet {
+    /// Absolute, its links followed.
+    pub path: String,
+    /// Every sheet's name, in the workbook's order.
+    pub sheets: Vec<String>,
+    /// The sheet these rows are of.
+    pub sheet: String,
+    /// At most 10 000 rows of at most 500 cells; a date as
+    /// `2026-11-06 12:30:00`.
+    pub rows: Vec<Vec<String>>,
+    /// Whether it holds more rows or cells than are here.
+    pub truncated: bool,
+}

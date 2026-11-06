@@ -88,7 +88,7 @@ export function TextOf({
         stat={file}
         note={
           drawn.binary
-            ? "This file is binary. No preview for it yet."
+            ? "This file is binary: Open with… Hex shows its bytes."
             : "No preview for this kind yet."
         }
       />

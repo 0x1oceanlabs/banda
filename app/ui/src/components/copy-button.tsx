@@ -5,14 +5,21 @@ import { Button } from "./button"
 /** How long the check stays after a copy. */
 const SHOWN_MS = 1500
 
-/** A button that copies `text`, and shows a check for a moment after. */
+/** A button that copies `text`, and shows a check for a moment after.
+ * `text` may be given as it is pressed, as a large value is written out
+ * only then. */
 function CopyButton({
   text,
   label = "Copy",
+  title = label,
+  icon = <CopyIcon />,
   className,
 }: {
-  text: string
+  text: string | (() => string)
   label?: string
+  /** Its tooltip; its label unless said. */
+  title?: string
+  icon?: React.ReactNode
   className?: string
 }) {
   const [copied, setCopied] = useState(false)
@@ -26,13 +33,14 @@ function CopyButton({
       variant="ghost"
       size="icon-xs"
       aria-label={label}
-      title={label}
+      title={title}
       className={className}
-      onClick={() =>
-        void navigator.clipboard.writeText(text).then(() => setCopied(true))
-      }
+      onClick={() => {
+        const copied = typeof text === "string" ? text : text()
+        void navigator.clipboard.writeText(copied).then(() => setCopied(true))
+      }}
     >
-      {copied ? <CheckIcon /> : <CopyIcon />}
+      {copied ? <CheckIcon /> : icon}
     </Button>
   )
 }

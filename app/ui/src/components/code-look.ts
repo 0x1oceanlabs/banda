@@ -6,6 +6,14 @@
 
 export const THEMES = { dark: "pierre-dark", light: "pierre-light" } as const
 
+/** The colours the themes give a JSON's parts, for what draws them
+ * outside a code view, as Files' JSON tree: a key, a string, and a
+ * number, `true`, `false` or `null`. */
+export const JSON_COLOURS = {
+  light: { key: "#d5512f", string: "#199f43", literal: "#1ca1c7" },
+  dark: { key: "#ff855e", string: "#5ecc71", literal: "#68cdf2" },
+} as const
+
 /** One pool of highlighting workers for every view in the window. */
 export const POOL = {
   workerFactory: () =>

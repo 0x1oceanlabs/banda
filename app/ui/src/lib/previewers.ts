@@ -2,7 +2,8 @@
  * Which previewer draws a file (ADR 0073, decision 6): the one the Person
  * picked for its extension, if it matches; else the one that matches it
  * best, by its extension, then its MIME type, then a family of MIME types,
- * then the bytes it starts with; among equals, the higher priority. Pure,
+ * then the bytes it starts with, then one that draws any file; among
+ * equals, the higher priority. Pure,
  * so plain tests cover it. The window gives every module's previewers to
  * what it draws (`Previewers`).
  */
@@ -40,11 +41,14 @@ function holds(head: Uint8Array, { at = 0, bytes }: Magic): boolean {
   return true
 }
 
+/** How a previewer that draws any file matches one: after its bytes. */
+const ANY = 4
+
 /** How `previewer` matches `file`, the closer the lower: by its extension
- * 0, its MIME type 1, its MIME's family 2, its bytes 3; none when it does
- * not. */
+ * 0, its MIME type 1, its MIME's family 2, its bytes 3, as one that draws
+ * any file 4; none when it does not. */
 export function matchOf(previewer: Previewer, file: Known): number | null {
-  const { extensions = [], mimes = [], magic = [] } = previewer.match
+  const { extensions = [], mimes = [], magic = [], any } = previewer.match
   const extension = extensionOf(file.path)
   if (extension && extensions.includes(extension)) return 0
   const mime = file.mime ?? ""
@@ -52,7 +56,7 @@ export function matchOf(previewer: Previewer, file: Known): number | null {
   if (mime && mimes.includes(`${mime.split("/")[0]}/*`)) return 2
   const { head } = file
   if (head && magic.some((one) => holds(head, one))) return 3
-  return null
+  return any ? ANY : null
 }
 
 /** The previewers that draw `file`, the best first: what "Open with…"
@@ -86,10 +90,12 @@ export function pickPreviewer(
 }
 
 /** Whether the bytes `file` starts with may pick its previewer: none
- * matches its name or MIME type, and one looks at bytes. */
+ * matches its name or MIME type but one that draws any file, and one
+ * looks at bytes. */
 export function wantsHead(all: readonly Previewer[], file: Known): boolean {
+  const known = { ...file, head: undefined }
   return (
-    previewersFor(all, { ...file, head: undefined }).length === 0 &&
+    all.every((one) => (matchOf(one, known) ?? ANY) >= ANY) &&
     all.some((one) => (one.match.magic?.length ?? 0) > 0)
   )
 }

@@ -1,10 +1,11 @@
 /**
  * The kinds of file Files draws (ADR 0073, decision 6), each a previewer
  * whose view is loaded only once a file of its kind is shown: code and
- * text, markdown, pictures, PDFs, video, sound, and pages that run their
- * own scripts in the sandbox host. A previewer of another module's may
- * draw a kind better, by its priority, and the Person picks one for an
- * extension with "Open with…".
+ * text, markdown, pictures, PDFs, video, sound, pages that run their own
+ * scripts in the sandbox host, tables, JSON, notebooks, fonts, archives,
+ * workbooks, and the bytes of any file nothing else draws. A previewer
+ * of another module's may draw a kind better, by its priority, and the
+ * Person picks one for an extension with "Open with…".
  */
 import { definePreviewer } from "@banda/ui/module"
 
@@ -134,4 +135,128 @@ export const page = definePreviewer({
   load: () => import("./views/page"),
 })
 
-export const PREVIEWERS = [code, markdown, image, pdf, video, audio, page]
+/** A CSV or a TSV as a table, its delimiter sniffed. */
+export const table = definePreviewer({
+  id: "files.table",
+  title: "Table",
+  match: {
+    extensions: ["csv", "tsv"],
+    mimes: ["text/csv", "text/tab-separated-values"],
+  },
+  priority: 10,
+  can: { quick: true, edit: false, find: false },
+  load: () => import("./views/table"),
+})
+
+/** JSON, JSONC and JSON Lines as a tree that folds. */
+export const json = definePreviewer({
+  id: "files.json",
+  title: "JSON",
+  match: {
+    extensions: ["json", "jsonc", "jsonl", "ndjson", "geojson"],
+    mimes: ["application/json", "application/x-ndjson"],
+  },
+  priority: 10,
+  can: { quick: true, edit: false, find: false },
+  load: () => import("./views/json"),
+})
+
+/** A Jupyter notebook as it saved its outputs; nothing in it runs. */
+export const notebook = definePreviewer({
+  id: "files.notebook",
+  title: "Notebook",
+  match: { extensions: ["ipynb"], mimes: ["application/x-ipynb+json"] },
+  priority: 10,
+  can: { quick: true, edit: false, find: false },
+  load: () => import("./views/notebook"),
+})
+
+/** A font as a specimen. */
+export const font = definePreviewer({
+  id: "files.font",
+  title: "Font",
+  match: {
+    extensions: ["ttf", "otf", "woff", "woff2", "ttc"],
+    mimes: ["font/*", "application/font-woff", "application/x-font-ttf"],
+    magic: [
+      { bytes: "\x00\x01\x00\x00" },
+      { bytes: "OTTO" },
+      { bytes: "wOFF" },
+      { bytes: "wOF2" },
+      { bytes: "ttcf" },
+    ],
+  },
+  priority: 20,
+  can: { quick: true, edit: false, find: false },
+  load: () => import("./views/font"),
+})
+
+/** A zip, a tar, a gzipped tar or a 7z as the names it holds. */
+export const archive = definePreviewer({
+  id: "files.archive",
+  title: "Archive",
+  match: {
+    extensions: ["zip", "jar", "tar", "tgz", "gz", "7z"],
+    mimes: [
+      "application/zip",
+      "application/x-tar",
+      "application/gzip",
+      "application/x-gzip",
+      "application/x-7z-compressed",
+    ],
+    magic: [
+      { bytes: "PK\x03\x04" },
+      { bytes: "PK\x05\x06" },
+      { bytes: "\x1f\x8b" },
+      { bytes: "7z\xbc\xaf\x27\x1c" },
+      { at: 257, bytes: "ustar" },
+    ],
+  },
+  priority: 20,
+  can: { quick: true, edit: false, find: false },
+  load: () => import("./views/archive"),
+})
+
+/** A workbook's sheets as tables. */
+export const sheet = definePreviewer({
+  id: "files.sheet",
+  title: "Sheet",
+  match: {
+    extensions: ["xlsx", "xlsm", "xlsb", "xls", "ods"],
+    mimes: [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+      "application/vnd.oasis.opendocument.spreadsheet",
+    ],
+  },
+  priority: 20,
+  can: { quick: true, edit: false, find: false },
+  load: () => import("./views/sheet"),
+})
+
+/** Any file's bytes, for one nothing else draws. */
+export const hex = definePreviewer({
+  id: "files.hex",
+  title: "Hex",
+  match: { any: true },
+  priority: 0,
+  can: { quick: true, edit: false, find: false },
+  load: () => import("./views/hex"),
+})
+
+export const PREVIEWERS = [
+  code,
+  markdown,
+  image,
+  pdf,
+  video,
+  audio,
+  page,
+  table,
+  json,
+  notebook,
+  font,
+  archive,
+  sheet,
+  hex,
+]

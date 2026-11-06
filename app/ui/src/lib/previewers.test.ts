@@ -54,6 +54,7 @@ const mp4 = previewer(
   { mimes: ["video/*"], magic: [{ at: 4, bytes: "ftyp" }] },
   30
 )
+const hex = previewer("files.hex", { any: true }, -100)
 const ALL = [code, markdown, page, image, pdf, mp4]
 const ids = (found: readonly Previewer[]) => found.map((one) => one.id)
 const bytes = (text: string) => new TextEncoder().encode(text)
@@ -136,6 +137,30 @@ test("a file's first bytes are read only when its name and MIME type pick nothin
       head: bytes("%PDF-1.4\n"),
     })?.id
   ).toBe("files.pdf")
+})
+
+test("a previewer that draws any file draws one nothing else does, and is offered last", () => {
+  const all = [...ALL, hex]
+  expect(
+    pickPreviewer(all, { path: "/a/archive.zip", mime: "application/zip" })?.id
+  ).toBe("files.hex")
+  expect(
+    ids(previewersFor(all, { path: "/a/notes.md", mime: "text/markdown" }))
+  ).toEqual(["files.markdown", "files.code", "files.hex"])
+  // It picks for no extension, so the bytes are still read.
+  expect(
+    wantsHead(all, { path: "/a/scan.bin", mime: "application/octet-stream" })
+  ).toBe(true)
+  expect(
+    pickPreviewer(all, {
+      path: "/a/scan.bin",
+      mime: "application/octet-stream",
+      head: bytes("%PDF-1.4\n"),
+    })?.id
+  ).toBe("files.pdf")
+  expect(wantsHead(all, { path: "/a/scan.pdf", mime: "application/pdf" })).toBe(
+    false
+  )
 })
 
 test("a file of the same kind goes to the same view, which updates; one of another kind is drawn anew", () => {

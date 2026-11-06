@@ -80,21 +80,6 @@ function Rendered({
   text: string
   run: PreviewProps["run"]
 }) {
-  const mint = useMemo(() => fileMint(project), [project])
-  const resolve = useCallback(
-    (src: string) => {
-      const path = besideFile(file, src)
-      return path && mint ? mint(path) : Promise.resolve(null)
-    },
-    [mint, file]
-  )
-  const open = useCallback(
-    (address: string, outside: boolean) => {
-      if (outside) window.open(address, "_blank", "noopener,noreferrer")
-      else run?.("browser.open", { address, project })
-    },
-    [run, project]
-  )
   const front = useMemo(() => frontMatter(text), [text])
   return (
     <div className="min-h-0 flex-1 overflow-auto select-text">
@@ -108,12 +93,58 @@ function Rendered({
             ))}
           </p>
         )}
-        <MarkdownMedia resolve={resolve}>
-          <MarkdownLinks open={open}>
-            <Markdown>{front?.body ?? text}</Markdown>
-          </MarkdownLinks>
-        </MarkdownMedia>
+        <MarkdownIn
+          project={project}
+          file={file}
+          text={front?.body ?? text}
+          run={run}
+        />
       </div>
     </div>
+  )
+}
+
+/** Markdown of a file, as a reply's is drawn: its pictures from the file
+ * host, a relative one from the file's folder, or from `pictures` by
+ * the name a link gives, as a notebook keeps its own; a web link in
+ * Banda's browser, and with Ctrl or ⌘ outside it. */
+export function MarkdownIn({
+  project,
+  file,
+  text,
+  run,
+  pictures,
+}: {
+  project: string
+  /** Its full path. */
+  file: string
+  text: string
+  run: PreviewProps["run"]
+  /** Pictures by the name a link gives them, as `attachment:dot.png`. */
+  pictures?: Readonly<Record<string, string>>
+}) {
+  const mint = useMemo(() => fileMint(project), [project])
+  const resolve = useCallback(
+    (src: string) => {
+      const own = pictures?.[src]
+      if (own) return Promise.resolve(own)
+      const path = besideFile(file, src)
+      return path && mint ? mint(path) : Promise.resolve(null)
+    },
+    [mint, file, pictures]
+  )
+  const open = useCallback(
+    (address: string, outside: boolean) => {
+      if (outside) window.open(address, "_blank", "noopener,noreferrer")
+      else run?.("browser.open", { address, project })
+    },
+    [run, project]
+  )
+  return (
+    <MarkdownMedia resolve={resolve}>
+      <MarkdownLinks open={open}>
+        <Markdown>{text}</Markdown>
+      </MarkdownLinks>
+    </MarkdownMedia>
   )
 }

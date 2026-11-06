@@ -8,6 +8,7 @@
  */
 import {
   CodeView,
+  File,
   WorkerPoolContextProvider,
   type CodeViewHandle,
   type CodeViewItem,
@@ -16,6 +17,8 @@ import { useEffect, useMemo, useRef } from "react"
 import { useDark } from "../hooks/use-dark"
 import { cn } from "../lib/utils"
 import { BASE_CSS, HIGHLIGHTER, POOL, THEMES, VIEW_CLASS } from "./code-look"
+
+export { JSON_COLOURS } from "./code-look"
 import { LineComment } from "./line-comment"
 
 /** Lines picked in the gutter, first to last as they were dragged. */
@@ -172,6 +175,41 @@ export function CodeFile({
         }
         options={options}
       />
+    </WorkerPoolContextProvider>
+  )
+}
+
+/** A few lines of code, read only and as tall as they are, numbered and
+ * coloured as a file's: a notebook's cell. Not virtualised, so it takes
+ * its place in a page that scrolls. */
+export function CodeLines({
+  name,
+  text,
+  className,
+}: {
+  /** Its name, which says the language it is coloured as. */
+  name: string
+  text: string
+  className?: string
+}) {
+  const dark = useDark()
+  const file = useMemo(() => ({ name, contents: text }), [name, text])
+  const options = useMemo(
+    () => ({
+      theme: THEMES,
+      themeType: dark ? ("dark" as const) : ("light" as const),
+      overflow: "wrap" as const,
+      disableFileHeader: true,
+      unsafeCSS: BASE_CSS,
+    }),
+    [dark]
+  )
+  return (
+    <WorkerPoolContextProvider
+      poolOptions={POOL}
+      highlighterOptions={HIGHLIGHTER}
+    >
+      <File file={file} options={options} className={className} />
     </WorkerPoolContextProvider>
   )
 }

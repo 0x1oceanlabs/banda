@@ -3,7 +3,8 @@
 //! The engine reads the disk and watches what is shown: one folder's
 //! names (`list`), what some paths are (`stat`), a file's text (`read`),
 //! fuzzy paths under a folder (`find`), and what changed in the folders a
-//! Pane shows (`watch`). Each path goes through the kernel's path guard,
+//! Pane shows (`watch`). For the previewers it lists what an archive
+//! holds (`archive`) and reads a workbook's sheet (`sheet`). Each path goes through the kernel's path guard,
 //! [`Reach`]: a relative one starts at the Project's folder, the Person
 //! may name any, and an Agent's call reaches only inside the Project's
 //! folder. These only read; writing comes later (decisions 8 and 10).
@@ -15,16 +16,18 @@
 pub mod model;
 pub mod settings;
 
+mod archive;
 mod find;
 mod list;
 mod places;
 mod read;
 mod recent;
+mod sheet;
 
 use banda_kernel::{Call, Changed, Module, Nothing, Reach, Refusal, Right, Stream};
 use model::{
-    FindAsk, Found, ListAsk, Listing, Opened, OpenedAsk, Places, ReadAsk, RecentAsk, Stat, StatAsk,
-    Text, WatchAsk, Watched,
+    Archive, ArchiveAsk, FindAsk, Found, ListAsk, Listing, Opened, OpenedAsk, Places, ReadAsk,
+    RecentAsk, Sheet, SheetAsk, Stat, StatAsk, Text, WatchAsk, Watched,
 };
 use serde_json::Value;
 use std::collections::HashMap;
@@ -75,6 +78,12 @@ banda_kernel::methods! {
         command opened(OpenedAsk) -> (), Write;
         /// The files opened lately, the latest first, those still there.
         call recent(RecentAsk) -> Vec<Opened>, Read;
+        /// The names a zip, a tar, a gzipped tar or a 7z holds, at most
+        /// 10 000, each only as text: nothing is taken out.
+        call archive(ArchiveAsk) -> Archive, Read;
+        /// A workbook's sheet as rows of text, at most 10 000, with every
+        /// sheet's name.
+        call sheet(SheetAsk) -> Sheet, Read;
     }
 }
 
@@ -222,6 +231,27 @@ impl Files {
                 .collect()
         })
         .await
+    }
+
+    async fn archive(&self, call: Call, ask: ArchiveAsk) -> Result<Archive, Refusal> {
+        let path = Reach::of(&call, &ask.path)?.into_path();
+        match blocking(move || archive::read(&path)).await? {
+            Ok(archive) => Ok(archive),
+            Err(archive::Unread::Io(error)) => Err(amiss(&ask.path, &error)),
+            Err(archive::Unread::Bad(why)) => Err(Refusal::invalid(format!(
+                "{} is no archive Files can list: {why}.",
+                ask.path
+            ))),
+        }
+    }
+
+    async fn sheet(&self, call: Call, ask: SheetAsk) -> Result<Sheet, Refusal> {
+        let path = Reach::of(&call, &ask.path)?.into_path();
+        let named = ask.sheet.clone();
+        let read = blocking(move || sheet::read(&path, named.as_deref())).await?;
+        read.map_err(|why| {
+            Refusal::invalid(format!("{} cannot be read as a workbook: {why}.", ask.path))
+        })
     }
 
     async fn watch(&self, call: Call, ask: WatchAsk) -> Result<Stream, Refusal> {
