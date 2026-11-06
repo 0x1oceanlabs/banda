@@ -189,6 +189,10 @@ describe("plans", () => {
     expect(opened(before, next)?.command.params).toMatchObject({
       instead: three,
     })
+    // A Group from its opening, either way, as a Thread is.
+    expect(
+      opened(before, next, { grouped: true })?.command.params
+    ).toMatchObject({ instead: three, grouped: true })
   })
 
   test("a Pane shown already only changes the view", () => {

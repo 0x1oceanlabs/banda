@@ -283,6 +283,12 @@ pub struct Open {
     #[serde(default)]
     #[ts(optional)]
     pub again: Option<bool>,
+    /// A new Pane's column is in a Group from the start: the one the place
+    /// puts it in, else a Group of its own, as a Thread opens, so what its
+    /// Agent opens joins a Group already there (ADR 0065, decision 7).
+    #[serde(default)]
+    #[ts(optional)]
+    pub grouped: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, TS)]
@@ -525,9 +531,13 @@ impl Workspaces {
                 place,
                 instead,
                 width,
+                grouped,
                 ..
             } = open;
             let pane = model::open(list, shows, place, instead, width, again, None)?;
+            if new && grouped == Some(true) {
+                model::group_pane(list, pane)?;
+            }
             Ok((pane, new))
         })
         .await?;

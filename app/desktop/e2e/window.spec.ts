@@ -2555,6 +2555,9 @@ test("the mouse sizes as niri's: the gaps, Alt and the right button, a double cl
   const { page } = window
   const { thread, composer } = await firstThread(page)
   await expect(composer).toBeFocused()
+  // The Thread out of its Group, so every gap is the inner one.
+  await page.keyboard.press("Alt+Shift+BracketRight")
+  await expect(page.locator("[data-group-plate]")).toHaveCount(0)
   const launcher = page.getByRole("region", { name: "New Pane" })
   await page.keyboard.press("Alt+KeyN")
   await expect(launcher).toHaveAttribute("data-focused", "true")
@@ -3220,10 +3223,41 @@ test("Alt+G starts a Group, Alt+Shift+[ takes a column in, and the Group moves w
   await expect(plates).toHaveCount(1)
 })
 
+test("a Thread is a Group from its opening, and its Agent's Diff joins it", async () => {
+  window = await startWindow()
+  const { page } = window
+  const plates = page.locator("[data-group-plate]")
+  // The first start's New Thread, and a Project's Thread, each a Group.
+  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await expect(plates).toHaveCount(1)
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  await expect(plates).toHaveCount(1)
+  // No handle unless the look asks for one.
+  await expect(page.locator("[data-group-handle]")).toHaveCount(0)
+  await settled(thread)
+  const before = (await thread.boundingBox())!
+
+  // The Diff it opens joins that Group, and the Thread does not move.
+  await composer.fill("edit the notes")
+  await composer.press("Enter")
+  await expect(thread.getByText("I edited notes.md.")).toBeVisible()
+  const changed = thread.getByRole("region", { name: "Changed files" })
+  await changed.getByRole("button", { name: /notes\.md/ }).click()
+  await expect(page.getByRole("region", { name: "Diff" })).toBeVisible()
+  await expect(plates).toHaveCount(2)
+  const groups = await plates.evaluateAll((all) =>
+    all.map((plate) => plate.getAttribute("data-group-plate"))
+  )
+  expect(new Set(groups).size).toBe(1)
+  await settled(thread)
+  expect((await thread.boundingBox())!.x).toBe(before.x)
+})
+
 test("a Group's handle carries it, and a Pane dropped inside its end joins it", async () => {
-  // A third each, so the three fit in view.
+  // A third each, so the three fit in view; the handle, off by default.
   window = await startWindow({
-    look: '[columns]\nmin = 10\ndefault = "1/3"\n',
+    look: '[columns]\nmin = 10\ndefault = "1/3"\n[groups]\nhandle = true\n',
   })
   const { page } = window
   const { thread, composer } = await firstThread(page)
@@ -3273,6 +3307,10 @@ test("a Group's handle carries it, and a Pane dropped inside its end joins it", 
   const from = await headerOf(terminal)
   await page.mouse.move(from.x, from.y)
   await page.mouse.down()
+  // Lifted, the Strip may still shift a little: the Group's end is where
+  // it is once that has settled.
+  await page.mouse.move(from.x + 20, from.y + 40, { steps: 4 })
+  await settled(thread, terminal)
   const edge = (await thread.boundingBox())!
   await page.mouse.move(edge.x - 2, edge.y + edge.height / 2, { steps: 10 })
   await page.mouse.up()

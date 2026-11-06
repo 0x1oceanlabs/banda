@@ -438,9 +438,11 @@ fn a_groups_plate_takes_its_keys() {
     assert_eq!(look.groups.working, GroupWorking::Breath);
     assert_eq!(look.groups.asking, GroupAsking::Twice);
     assert_eq!(look.groups.saturation, GroupSaturation::Normal);
+    assert!(!look.groups.handle);
 
-    machine.look_toml("[groups]\nworking = \"line\"\nsaturation = \"vivid\"\n");
+    machine.look_toml("[groups]\nworking = \"line\"\nsaturation = \"vivid\"\nhandle = true\n");
     let look = machine.look();
+    assert!(look.groups.handle);
     assert_eq!(look.groups.working, GroupWorking::Line);
     assert_eq!(look.groups.saturation, GroupSaturation::Vivid);
 }

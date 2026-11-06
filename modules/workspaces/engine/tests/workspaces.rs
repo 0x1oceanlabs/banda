@@ -360,3 +360,31 @@ async fn the_workspaces_set_aside_stay_and_come_back_after_the_ones_there_are() 
     assert_eq!(kind, "brought_back");
     assert_eq!(said["aside"], Value::Null);
 }
+
+#[tokio::test]
+async fn a_pane_opened_grouped_is_a_group_from_its_opening_only() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let project = ProjectId::new();
+    let open = json!({
+        "project": project,
+        "kind": "agents.thread",
+        "args": { "thread": "t" },
+        "grouped": true,
+    });
+    let column = |list: &Value| list["workspaces"][0]["columns"][0].clone();
+
+    // Opened grouped, its column is a Group of its own at once.
+    machine
+        .command("workspaces.open", open.clone())
+        .await
+        .unwrap();
+    let shown = column(&machine.list().await);
+    assert!(shown["group"].is_string());
+
+    // Taken out, it stays out: opened again, the one shown is only named.
+    let out = json!({ "column": shown["id"], "toward": "right" });
+    machine.command("workspaces.regroup", out).await.unwrap();
+    machine.command("workspaces.open", open).await.unwrap();
+    assert_eq!(column(&machine.list().await)["group"], Value::Null);
+}

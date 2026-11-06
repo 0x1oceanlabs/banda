@@ -134,6 +134,10 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
   /** Whether it opens last on its Project's workspace, as an Agent's Thread
    * does where `agents.toml` says so (ADR 0065, decision 9). */
   home?: () => boolean
+  /** Whether it opens as a Group of its own when no Group takes it in, as
+   * an Agent's Thread does, so the Panes its Agent opens join a Group
+   * already there (ADR 0065, decision 7). */
+  grouped?: true
   /**
    * False when the Pane draws its own header, as the browser's row of tabs
    * and address: the frame then draws none (`PaneHeader` draws one).

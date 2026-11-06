@@ -178,7 +178,8 @@ pub struct Overview {
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
 #[ts(export, export_to = "look/")]
 pub struct Groups {
-    /// A handle on its top edge under the pointer, that carries it.
+    /// A handle on its top edge under the pointer, that carries it; off
+    /// unless set.
     pub handle: bool,
     /// How its plate moves while its Agent works.
     pub working: settings::GroupWorking,
@@ -759,7 +760,7 @@ pub fn resolve(
                 zoom: all.overview.zoom.unwrap_or(0.35),
             },
             groups: Groups {
-                handle: all.groups.handle.unwrap_or(true),
+                handle: all.groups.handle.unwrap_or(false),
                 working: all.groups.working.unwrap_or(settings::GroupWorking::Breath),
                 asking: all.groups.asking.unwrap_or(settings::GroupAsking::Twice),
                 saturation: all

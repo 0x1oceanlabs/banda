@@ -95,6 +95,11 @@ for any Panes, and an Agent's Panes are simply its Group.
      between the columns where it falls.
    - Dragging the Group's handle (decision 6) moves the whole Group:
      along the Strip, to another workspace, or in the overview.
+   - _Changed on 2026-11-06._ The handle is off by default (decision
+     6), and it is the mouse's one way to move a Group whole: a grouped
+     Pane dragged by its header goes alone, and dropped on another
+     workspace it leaves its Group. Without the handle, the keys move a
+     Group (decision 4).
 
 6. **A Group reads as one thing, by a plate or a halo, coloured by
    its Agent's state.**
@@ -152,6 +157,8 @@ for any Panes, and an Agent's Panes are simply its Group.
      what a drag holds (decision 5). `[groups] handle = false` in
      `look.toml` turns it off. Roma isn't sure it will be wanted, so the
      default may change after real use.
+   - _Changed on 2026-11-06._ Roma turned it off by default:
+     `[groups] handle = true` brings it back.
    - The Group that holds the focused Pane is a little brighter. Other
      Groups stay quiet. The focused Pane's own frame is unchanged.
    - The overview and the bar's map draw the Groups in the same colours.
@@ -169,6 +176,16 @@ for any Panes, and an Agent's Panes are simply its Group.
      names it.
    - When the Thread's Pane closes, its other Panes stay together as a
      neutral Group.
+   - _Changed on 2026-11-06._ The Thread is a Group from its opening,
+     not from the first Pane its Agent opens: its plate is there at once,
+     and nothing jumps when the Group's pads come. Opened in the window
+     in any way (a pick, a New Thread, on its Project's workspace or
+     beside the Pane in front), its column starts a Group of its own,
+     unless it opens into a Group, whose member it stays. Only at its
+     opening: a Thread the Person takes out of its Group, or one kept
+     from before in none, stays in none until it opens again. Its kind
+     says so (`PaneKind.grouped`), and the window opens it `grouped`;
+     the engine knows no kind.
 
 8. **A picked Agent comes to the left.**
    - A pick from the Inbox, the bar's widget or `Alt+U` (go to what

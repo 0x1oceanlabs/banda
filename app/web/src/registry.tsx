@@ -124,6 +124,11 @@ export function homeOf(pane: PaneState): "project" | "right" {
   return told(() => kindOf(pane.kind)?.home?.(), false) ? "project" : "right"
 }
 
+/** Whether a Pane opens as a Group of its own (`PaneKind.grouped`). */
+export function groupedOf(pane: PaneState): boolean {
+  return kindOf(pane.kind)?.grouped === true
+}
+
 /** A Pane as what makes it that one Pane (`PaneKind.identity`). */
 export function identityOf(pane: PaneState): PaneState {
   const identity = kindOf(pane.kind)?.identity

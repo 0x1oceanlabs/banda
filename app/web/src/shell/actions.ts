@@ -12,7 +12,14 @@ import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
 import type { At } from "../menu/menu"
 import { modules } from "../modules"
-import { identityOf, launcher, minOf, showsOf, widthOf } from "../registry"
+import {
+  groupedOf,
+  identityOf,
+  launcher,
+  minOf,
+  showsOf,
+  widthOf,
+} from "../registry"
 import { settingsPane } from "../settings/pane"
 import {
   columnMoved,
@@ -206,15 +213,15 @@ export function opening(
   // In a Group: the Group of the Pane it opens from; on a Project's
   // workspace: its Project's (ADR 0065).
   const from = how.from ?? focused(workspaces)?.id
-  const plan = opened(
-    workspaces,
-    next,
-    how.place === "group" && from
-      ? { to: "group", pane: from }
-      : how.place === "project"
-        ? { to: "project", project }
-        : undefined
-  )
+  const plan = opened(workspaces, next, {
+    place:
+      how.place === "group" && from
+        ? { to: "group", pane: from }
+        : how.place === "project"
+          ? { to: "project", project }
+          : undefined,
+    grouped: groupedOf(pane),
+  })
   if (!plan) return next
   return how.focus === false ? { ...plan, focus: false } : plan
 }
@@ -240,7 +247,7 @@ export function bringing(
   const was = new Set(entries(workspaces).map((entry) => entry.id))
   const here = entries(next).find((entry) => !was.has(entry.id))
   if (away && here) return moved(next, away.id, here.id)
-  return opened(workspaces, next) ?? next
+  return opened(workspaces, next, { grouped: groupedOf(pane) }) ?? next
 }
 
 /**
