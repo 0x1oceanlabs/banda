@@ -6,7 +6,7 @@ vi.mock("electron", async () => {
 import { EventEmitter } from "node:events"
 import { beforeEach, expect, test } from "vitest"
 import type { KeyboardInputEvent, WebContents } from "electron"
-import { keepInForce, keys, sendAlone } from "./keys"
+import { isBandas, keepInForce, keys, sendAlone } from "./keys"
 
 /** The codes Electron gives the keys these tests send. */
 const CODES: Record<string, string> = {
@@ -77,28 +77,29 @@ test("the Person's key in force goes to the window, and the mod's is told too", 
 
 test("a press of the hands that is one of Banda's keys is held back from the page and the window", () => {
   const { page, reached, told } = fakePage()
-  const banda = sendAlone(
-    page,
-    { type: "keyDown", keyCode: "l", modifiers: ["control"] },
-    { press: true }
-  )
-  expect(banda).toMatchObject({ code: "KeyL", ctrlKey: true })
+  expect(
+    sendAlone(
+      page,
+      { type: "keyDown", keyCode: "l", modifiers: ["control"] },
+      { refuse: true }
+    )
+  ).toBe(true)
   expect(reached).toEqual([])
   expect(told).toEqual([])
 })
 
 test("the hands' other keys and their text reach the page alone, the mod's too", () => {
   const { page, pressed, reached, told } = fakePage()
-  const send = (input: KeyboardInputEvent, press: boolean) =>
-    sendAlone(page, input, { press })
-  expect(send({ type: "keyDown", keyCode: "Alt" }, true)).toBeUndefined()
-  expect(send({ type: "keyUp", keyCode: "Alt" }, true)).toBeUndefined()
-  expect(send({ type: "keyDown", keyCode: "a" }, true)).toBeUndefined()
+  const send = (input: KeyboardInputEvent, refuse: boolean) =>
+    sendAlone(page, input, { refuse })
+  expect(send({ type: "keyDown", keyCode: "Alt" }, true)).toBe(false)
+  expect(send({ type: "keyUp", keyCode: "Alt" }, true)).toBe(false)
+  expect(send({ type: "keyDown", keyCode: "a" }, true)).toBe(false)
   // Text is typed: a key of it that is Banda's goes to the page as well.
   expect(
     send({ type: "keyDown", keyCode: "w", modifiers: ["alt"] }, false)
-  ).toBeUndefined()
-  expect(send({ type: "char", keyCode: "w" }, false)).toBeUndefined()
+  ).toBe(false)
+  expect(send({ type: "char", keyCode: "w" }, false)).toBe(false)
   expect(told).toEqual([])
   expect(reached).toEqual([
     "keyDown Alt",
@@ -112,6 +113,17 @@ test("the hands' other keys and their text reach the page alone, the mod's too",
   expect(told).toEqual([expect.objectContaining({ code: "KeyW" })])
 })
 
+test("whether a press is one of Banda's keys is learnt with nothing reaching the page or the window", () => {
+  const { page, reached, told } = fakePage()
+  expect(
+    isBandas(page, { type: "keyDown", keyCode: "w", modifiers: ["alt"] })
+  ).toBe(true)
+  expect(isBandas(page, { type: "keyDown", keyCode: "a" })).toBe(false)
+  expect(isBandas(page, { type: "keyDown", keyCode: "Alt" })).toBe(false)
+  expect(reached).toEqual([])
+  expect(told).toEqual([])
+})
+
 test("a page that throws as the hands send leaves the Person's keys Banda's", () => {
   const { page, pressed, told } = fakePage()
   const broken = Object.assign(Object.create(page), {
@@ -120,7 +132,7 @@ test("a page that throws as the hands send leaves the Person's keys Banda's", ()
     },
   }) as WebContents
   expect(() =>
-    sendAlone(broken, { type: "keyDown", keyCode: "a" }, { press: true })
+    sendAlone(broken, { type: "keyDown", keyCode: "a" }, { refuse: true })
   ).toThrow("The page is gone")
   pressed({ type: "keyDown", keyCode: "w", modifiers: ["alt"] })
   expect(told).toEqual([expect.objectContaining({ code: "KeyW" })])

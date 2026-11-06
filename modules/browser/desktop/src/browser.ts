@@ -4,7 +4,8 @@
  * one of the browser's profiles (profile.ts): the Person's, or the
  * profile of a Project's Agents when they opened its tab, apart from the
  * Person's (ADR 0083, decision 4). Banda's keys, held with the mod, and
- * the browser's own go to the window instead of the page (decision 5).
+ * the browser's own go to the window instead of the page (decision 5,
+ * keys.ts).
  * The Pane hears of new tabs, icons and downloads as `BrowserNews`, and
  * the switch writes `browser.toml`. The blocker follows the look's
  * `blocker` (blocker.ts). All of it is the `Browser` service (ADR 0020).

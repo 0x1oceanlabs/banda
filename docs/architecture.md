@@ -1029,8 +1029,13 @@ modules/*/desktop  a module's part in Electron main
     and the Pane hear them as their own. Keys Banda's hands send a page
     reach the page alone: Electron tells `before-input-event` of each
     before `sendInputEvent` returns, so main knows them there, tells the
-    window none, and refuses a press of a key in force
-    (`modules/browser/desktop/src/keys.ts`; ADR 0083, decision 3).
+    window none, and refuses an Agent's press of a key in force before
+    the hands touch the page (`modules/browser/desktop/src/keys.ts`; ADR
+    0083, decision 3). A key of theirs the page leaves unhandled goes on
+    to the window as the Person's does, where only the app menu's keys
+    act: Linux and Windows have no menu, and a Mac's hears a key only with
+    its native event, which a key sent with `sendInputEvent` has not. A
+    key added to the menu is checked against this rule.
   - A page takes the keys as an iframe does, with no focus event of its
     own; its tile takes the focus once the window blurs.
   - A Pane keeps its tabs in its args, and holds their pages while it
