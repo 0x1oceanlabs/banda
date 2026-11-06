@@ -354,7 +354,10 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "browser_navigate",
                 "browser_act",
                 "browser_wait_for",
-                "browser_handoff"
+                "browser_handoff",
+                "link_pull_request",
+                "unlink_pull_request",
+                "list_thread_pull_requests"
             ][..],
             &arranging,
             &["problems", "problem", "skill"]

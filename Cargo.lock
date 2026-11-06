@@ -297,6 +297,7 @@ dependencies = [
  "banda-kernel",
  "banda-look",
  "banda-problems",
+ "banda-pulls",
  "banda-settings",
  "banda-sharing",
  "banda-skill",
@@ -467,6 +468,22 @@ dependencies = [
  "async-trait",
  "banda-kernel",
  "percent-encoding",
+ "rusqlite",
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "ts-rs",
+]
+
+[[package]]
+name = "banda-pulls"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "banda-kernel",
  "rusqlite",
  "schemars 1.2.3",
  "serde",

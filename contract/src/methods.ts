@@ -12,6 +12,7 @@ import type { FilesMethods } from "./generated/files/FilesMethods"
 import type { GitMethods } from "./generated/git/GitMethods"
 import type { HarnessesMethods } from "./generated/harnesses/HarnessesMethods"
 import type { ProblemsMethods } from "./generated/problems/ProblemsMethods"
+import type { PullsMethods } from "./generated/pulls/PullsMethods"
 import type { SharingMethods } from "./generated/sharing/SharingMethods"
 import type { TerminalMethods } from "./generated/terminal/TerminalMethods"
 import type { WorkspacesMethods } from "./generated/workspaces/WorkspacesMethods"
@@ -30,6 +31,7 @@ export type Methods = Prefixed<"projects", ProjectsMethods> &
   Prefixed<"workspaces", WorkspacesMethods> &
   Prefixed<"git", GitMethods> &
   Prefixed<"files", FilesMethods> &
+  Prefixed<"pulls", PullsMethods> &
   Prefixed<"problems", ProblemsMethods> &
   Prefixed<"sharing", SharingMethods>
 

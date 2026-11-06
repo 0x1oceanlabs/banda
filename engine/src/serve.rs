@@ -12,6 +12,7 @@ use banda_harnesses::{Harnesses, HarnessesModule};
 use banda_kernel::api::{self, OwnerSecret};
 use banda_kernel::{Kernel, PROTOCOL};
 use banda_problems::Problems;
+use banda_pulls::Pulls;
 use banda_sharing::{Never, Sharing};
 use banda_terminal::Terminals;
 use banda_workspaces::Workspaces;
@@ -68,6 +69,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         .module(Browser::new())
         .module(Git::new())
         .module(Files::new())
+        .module(Pulls::new())
         .module(Workspaces::new())
         .module(problems(&places))
         .module(sharing(&places))

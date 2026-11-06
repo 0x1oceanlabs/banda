@@ -17,6 +17,7 @@ use banda_harnesses::HarnessesModule;
 use banda_kernel::Method;
 use banda_look::keys::Action;
 use banda_problems::Problems;
+use banda_pulls::Pulls;
 use banda_sharing::Sharing;
 use banda_terminal::Terminals;
 use banda_workspaces::Workspaces;
@@ -68,6 +69,12 @@ const FILES: &[Files] = &[
         folder: "files",
         toml: include_str!("../../modules/files/module.toml"),
         methods: Some(FilesModule::method_list),
+    },
+    Files {
+        folder: "pulls",
+        toml: include_str!("../../modules/pulls/module.toml"),
+        window: None,
+        methods: Some(Pulls::method_list),
     },
     Files {
         folder: "notifications",
@@ -322,6 +329,7 @@ mod tests {
             Browser::new().name(),
             Git::new().name(),
             FilesModule::new().name(),
+            Pulls::new().name(),
             Workspaces::new().name(),
             Problems::new("", "").name(),
             Sharing::new("", "").name(),
