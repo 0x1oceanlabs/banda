@@ -136,6 +136,53 @@ impl Harness {
         }
         harness
     }
+
+    /// Whether each session of its process hands the shell its Agent runs
+    /// commands in variables of its own: Claude Code's adapter starts each
+    /// session's Claude Code with the session's
+    /// `_meta.claudeCode.options.env`. The Agents of another Harness share
+    /// their process's ([`Harness::with_shells`]).
+    pub fn shells_per_session(&self) -> bool {
+        crate::limits::Kind::of(self) == Some(crate::limits::Kind::Claude)
+    }
+
+    /// The entry with `variables` in every shell its process's Agents run
+    /// commands in: in its environment, which a shell inherits, and for
+    /// Codex in `CODEX_CONFIG` too, as `shell_environment_policy.set`, which
+    /// Codex sets in each shell whatever its policy takes from the
+    /// environment. What `CODEX_CONFIG` said before stays.
+    pub fn with_shells(&self, variables: &BTreeMap<String, String>) -> Harness {
+        let mut harness = self.clone();
+        harness.env.extend(variables.clone());
+        if crate::limits::Kind::of(self) == Some(crate::limits::Kind::Codex)
+            && let Some(config) = codex_config(self.env.get(CODEX_CONFIG), variables)
+        {
+            harness.env.insert(CODEX_CONFIG.to_owned(), config);
+        }
+        harness
+    }
+}
+
+/// What Codex's adapter takes as Codex's configuration for each of its
+/// sessions, as JSON, each key a dotted path as Codex's `-c` takes it.
+const CODEX_CONFIG: &str = "CODEX_CONFIG";
+
+/// `CODEX_CONFIG` with `variables` set in Codex's shells, over what it said
+/// before: the entry's, else the engine's own. `None` when that is not a
+/// JSON object, which the adapter then reads as it is.
+fn codex_config(entry: Option<&String>, variables: &BTreeMap<String, String>) -> Option<String> {
+    use serde_json::Value;
+    let before = entry.cloned().or_else(|| std::env::var(CODEX_CONFIG).ok());
+    let mut config = match before.as_deref().map(serde_json::from_str) {
+        None => serde_json::Map::new(),
+        Some(Ok(Value::Object(config))) => config,
+        Some(_) => return None,
+    };
+    for (name, value) in variables {
+        let key = format!("shell_environment_policy.set.{name}");
+        config.insert(key, Value::from(value.as_str()));
+    }
+    Some(Value::Object(config).to_string())
 }
 
 /// The Harnesses this machine can start. Read from a file, they follow
@@ -1065,6 +1112,61 @@ mod tests {
         assert_eq!(
             crate::limits::Kind::of(&own),
             Some(crate::limits::Kind::Codex)
+        );
+    }
+
+    #[test]
+    fn a_process_s_agents_shells_get_its_variables_where_its_sessions_take_none() {
+        let variables = BTreeMap::from([
+            ("BANDA_TOKEN".to_owned(), "f00d".to_owned()),
+            (
+                "BANDA_ENGINE".to_owned(),
+                "ws://127.0.0.1:4000/ws".to_owned(),
+            ),
+        ]);
+        let list = known();
+        let (claude, codex) = (&list[0], &list[1]);
+        assert!(claude.shells_per_session(), "each session's own");
+        assert!(!codex.shells_per_session());
+
+        let config = |harness: &Harness| -> serde_json::Value {
+            serde_json::from_str(&harness.env[CODEX_CONFIG]).unwrap()
+        };
+        let started = codex.with_shells(&variables);
+        assert_eq!(started.env["BANDA_TOKEN"], "f00d");
+        assert_eq!(
+            config(&started),
+            serde_json::json!({
+                "shell_environment_policy.set.BANDA_ENGINE": "ws://127.0.0.1:4000/ws",
+                "shell_environment_policy.set.BANDA_TOKEN": "f00d",
+            }),
+            "set by Codex in each shell, over its policy"
+        );
+
+        let own = "[[harness]]\nid = \"codex\"\nname = \"Codex\"\ncommand = \"codex-acp\"\n\
+                   env = { CODEX_CONFIG = '{\"model\":\"o3\"}' }\n";
+        let own = listed_in(Path::new("h"), own).unwrap().remove(0);
+        let config = config(&own.with_shells(&variables));
+        assert_eq!(config["model"], "o3", "the entry's own stays");
+        assert_eq!(config["shell_environment_policy.set.BANDA_TOKEN"], "f00d");
+
+        let unread = "[[harness]]\nid = \"codex\"\nname = \"Codex\"\ncommand = \"codex-acp\"\n\
+                      env = { CODEX_CONFIG = 'model = \"o3\"' }\n";
+        let unread = listed_in(Path::new("h"), unread).unwrap().remove(0);
+        let started = unread.with_shells(&variables);
+        assert_eq!(started.env[CODEX_CONFIG], "model = \"o3\"", "as it was");
+        assert_eq!(started.env["BANDA_TOKEN"], "f00d");
+
+        let other = "[[harness]]\nid = \"gemini\"\nname = \"Gemini\"\ncommand = \"gemini\"\n";
+        let other = listed_in(Path::new("h"), other).unwrap().remove(0);
+        assert!(!other.shells_per_session());
+        let started = other.with_shells(&variables);
+        assert_eq!(
+            (
+                started.env.get("BANDA_TOKEN"),
+                started.env.get(CODEX_CONFIG)
+            ),
+            (Some(&"f00d".to_owned()), None)
         );
     }
 

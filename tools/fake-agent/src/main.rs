@@ -88,7 +88,12 @@
 //! With `FAKE_AGENT_MCP` naming a file it writes there the MCP servers a
 //! new session was given, as JSON, so a test can start them as a Harness
 //! would. With `FAKE_AGENT_ROOTS` naming a file it writes there the extra
-//! roots (`additionalDirectories`) a new session was given, as JSON.
+//! roots (`additionalDirectories`) a new session was given, as JSON. With
+//! `FAKE_AGENT_SHELLS` naming a file it writes there, as JSON, what a
+//! shell of a new session's Agent would be handed for `banda`: `process`,
+//! `BANDA_TOKEN` and `BANDA_ENGINE` as its own environment has them, and
+//! `session`, the session's `_meta.claudeCode.options.env`, as Claude
+//! Code's adapter takes it.
 //!
 //! With `FAKE_AGENT_REPLAY` naming a recording it plays a real Harness's
 //! conversation instead: see [`replay`].
@@ -1360,6 +1365,16 @@ async fn main() -> Result<(), Error> {
                         let roots =
                             serde_json::to_vec(&request.additional_directories).unwrap_or_default();
                         let _ = std::fs::write(file, roots);
+                    }
+                    if let Some(file) = std::env::var_os("FAKE_AGENT_SHELLS") {
+                        let own = |name| std::env::var(name).ok();
+                        let (token, engine) = (own("BANDA_TOKEN"), own("BANDA_ENGINE"));
+                        let process = json!({ "BANDA_TOKEN": token, "BANDA_ENGINE": engine });
+                        let meta = request.meta.as_ref();
+                        let options = meta.and_then(|m| m.get("claudeCode")?.get("options"));
+                        let session = options.and_then(|options| options.get("env"));
+                        let shells = json!({ "process": process, "session": session });
+                        let _ = std::fs::write(file, shells.to_string());
                     }
                     let id = fake.new_session();
                     fake.at_folder(id.clone(), request.cwd.clone());

@@ -545,7 +545,7 @@ async fn work(
     // The Agent has no name of its own: its Harness's is the one to show.
     let name = harness.name.clone();
     let connection = live
-        .connection(project.id(), project.data(), &harness)
+        .connection(project, &harness)
         .await
         .map_err(|reason| Ending::failed(reason, Some(Failure::HarnessStopped)))?;
     let earlier = project

@@ -137,11 +137,16 @@ const CSP = [
 
 const here = app.getAppPath()
 const pageFolder = resolve(here, "../web/dist")
+// A trial names the engine's program in BANDA_ENGINE (scripts/try.sh). In
+// an Agent's shell it says where that Agent's engine listens (ADR 0019),
+// which is no program: a window started there runs its own.
+const namedEngine = process.env.BANDA_ENGINE
 const engineBinary =
-  process.env.BANDA_ENGINE ??
-  (app.isPackaged
-    ? join(process.resourcesPath, "banda")
-    : resolve(here, "../../target/debug/banda"))
+  namedEngine && !namedEngine.startsWith("ws://")
+    ? namedEngine
+    : app.isPackaged
+      ? join(process.resourcesPath, "banda")
+      : resolve(here, "../../target/debug/banda")
 // The ACP adapters the app carries, which the engine runs on this
 // Electron as Node (ADR 0059): a checkout's are built beside the
 // harnesses module's desktop part (adapters.mjs).
