@@ -6,8 +6,13 @@
  * The window arranges the rows; this says only what each one is. Pure, so
  * plain tests cover it.
  */
-import type { ListedThread } from "@banda/contract/agents"
-import { type Listed, paneOf, type PaneState } from "@banda/ui/pane"
+import type { ListedThread, Snooze } from "@banda/contract/agents"
+import {
+  type Listed,
+  type ListedSnooze,
+  paneOf,
+  type PaneState,
+} from "@banda/ui/pane"
 import { markOf, type Seen } from "./marks"
 import { threadPane } from "./ThreadPane"
 
@@ -44,6 +49,17 @@ export function listedOf(
     ...(thread.harness ? { harness: thread.harness } : {}),
     agent: thread.agent,
     pane: threadPaneOf(thread),
+    ...(thread.snooze ? { snooze: snoozeOf(thread.snooze) } : {}),
+  }
+}
+
+/** A Thread's snooze as the sidebar reads it (ADR 0074). */
+function snoozeOf({ at, until, by, woke }: Snooze): ListedSnooze {
+  return {
+    at,
+    ...(until === undefined ? {} : { until }),
+    ...(by.kind === "agent" ? { byAgent: true } : {}),
+    ...(woke ? { woke } : {}),
   }
 }
 

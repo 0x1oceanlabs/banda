@@ -26,6 +26,19 @@ export function ago(at: number, now = Date.now()): string {
   })
 }
 
+/** How long until `at` (ms since the epoch), rounded up, in a few
+ * letters: "45m", "3h", "2d". */
+export function left(at: number, now = Date.now()): string {
+  const rest = at - now
+  if (rest <= 0) return "now"
+  // Rounded up, a minute short of an hour reads as the hour.
+  const minutes = Math.ceil(rest / MINUTE)
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.ceil(rest / HOUR)
+  if (hours < 24) return `${hours}h`
+  return `${Math.ceil(rest / DAY)}d`
+}
+
 /**
  * When `at` (ms since the epoch) was, as a clock reads it: the hour today,
  * the weekday too within a week, the date before that.

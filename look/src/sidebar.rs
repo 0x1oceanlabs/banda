@@ -26,6 +26,8 @@ pub enum State {
     Active,
     /// Its Agent is at work.
     Working,
+    /// Put away until a time, or until its turn ends (ADR 0074).
+    Snoozed,
     /// Put away by the Person, until something new happens in it
     /// (ADR 0069). Its name was `settled`, which still reads as it.
     /// `settled` before ADR 0069 (grace).
@@ -359,6 +361,17 @@ pub const BUILT_IN: [(&str, &str); 3] = [
 /// preset, and every other key with its default, commented out.
 pub const TEMPLATE: &str = include_str!("../sidebar.toml");
 
+/// `bottom` with the snoozed shelf, when neither it nor `states` names
+/// it: above Archive's, or last. A snooze always puts its Thread away
+/// (ADR 0074), where a state named nowhere would go to the last section.
+fn with_snoozed(mut bottom: Vec<State>, states: &[State]) -> Vec<State> {
+    if !bottom.contains(&State::Snoozed) && !states.contains(&State::Snoozed) {
+        let at = bottom.iter().position(|state| *state == State::Archived);
+        bottom.insert(at.unwrap_or(bottom.len()), State::Snoozed);
+    }
+    bottom
+}
+
 impl SidebarSettings {
     /// `self` laid over `under`: what `self` says wins, key by key.
     pub fn over(self, under: SidebarSettings) -> SidebarSettings {
@@ -405,8 +418,8 @@ impl SidebarSettings {
             group: GroupSettings {
                 by: Some(GroupBy::State),
                 states: Some(vec![State::Active]),
-                bottom: Some(vec![State::Working, State::Archived]),
-                folded: Some(vec!["archived".to_owned()]),
+                bottom: Some(vec![State::Working, State::Snoozed, State::Archived]),
+                folded: Some(vec!["snoozed".to_owned(), "archived".to_owned()]),
                 limit: Some(10),
                 empty: Some(Empty::Hide),
             },
@@ -449,8 +462,11 @@ impl SidebarSettings {
             presets,
             group: Group {
                 by: all.group.by.unwrap_or(GroupBy::State),
+                bottom: with_snoozed(
+                    all.group.bottom.unwrap_or_default(),
+                    all.group.states.as_deref().unwrap_or_default(),
+                ),
                 states: all.group.states.unwrap_or_default(),
-                bottom: all.group.bottom.unwrap_or_default(),
                 // `settled` is the archive's name before ADR 0069 (grace).
                 folded: (all.group.folded.unwrap_or_default().into_iter())
                     .map(|name| {
@@ -678,8 +694,11 @@ mod tests {
         assert!(problems.is_empty(), "{problems:?}");
         assert_eq!(sidebar.preset, "inbox");
         assert_eq!(sidebar.group.states, vec![State::Active]);
-        assert_eq!(sidebar.group.bottom, vec![State::Working, State::Archived]);
-        assert_eq!(sidebar.group.folded, ["archived"]);
+        assert_eq!(
+            sidebar.group.bottom,
+            vec![State::Working, State::Snoozed, State::Archived]
+        );
+        assert_eq!(sidebar.group.folded, ["snoozed", "archived"]);
         assert_eq!(sidebar.row.lines, 3);
         assert_eq!(sidebar.bar.show, BarShow::Closed);
         assert_eq!(
@@ -703,6 +722,28 @@ mod tests {
         assert_eq!(sidebar.preset, "projects");
         assert_eq!(sidebar.group.by, GroupBy::Project, "from the preset");
         assert_eq!(sidebar.row.lines, 2, "the Person's key");
+    }
+
+    #[test]
+    fn a_snooze_has_its_shelf_where_the_persons_keys_name_it_nowhere() {
+        let dir = tempfile::tempdir().unwrap();
+        let write = |group: &str| {
+            std::fs::write(
+                dir.path().join("sidebar.toml"),
+                format!("[group]\n{group}\n"),
+            )
+            .unwrap();
+            resolved(dir.path()).0.group
+        };
+        let older = write("bottom = [\"working\", \"archived\"]");
+        assert_eq!(
+            older.bottom,
+            [State::Working, State::Snoozed, State::Archived]
+        );
+        let none = write("bottom = []");
+        assert_eq!(none.bottom, [State::Snoozed]);
+        let named = write("states = [\"active\", \"snoozed\"]\nbottom = []");
+        assert!(named.bottom.is_empty(), "a section of its own");
     }
 
     #[test]

@@ -3,7 +3,7 @@
 # archived ones folded. Two lines a row.
 
 [group]
-states = ["active", "working", "archived"]
+states = ["active", "working", "snoozed", "archived"]
 bottom = []
 
 [projects]

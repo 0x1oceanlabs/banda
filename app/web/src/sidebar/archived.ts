@@ -38,6 +38,9 @@ export function isArchived(
   before: number
 ): boolean {
   if (!archivable(listed)) return false
+  // A snooze after the archive takes the Thread out of it, whoever snoozed
+  // it and wherever (ADR 0074, decision 4).
+  if ((listed.snooze?.at ?? -Infinity) > (say?.at ?? before)) return false
   if (say && listed.changed <= say.at) return say.archived
   return listed.changed <= before
 }

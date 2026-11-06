@@ -226,6 +226,28 @@ export type Listed = {
   on?: string
   /** What a click on it opens. */
   pane: PaneState
+  /** Its latest snooze (ADR 0074): the sidebar puts it away while it
+   * sleeps. */
+  snooze?: ListedSnooze
+}
+
+/**
+ * A Thread put away until a time, or until its turn ends, as its module
+ * keeps it (ADR 0074). It sleeps until `until`, unless `woke` says what
+ * woke it first.
+ */
+export type ListedSnooze = {
+  /** When it was snoozed, in ms since the epoch. */
+  at: number
+  /** When it wakes; none: when its turn ends. */
+  until?: number
+  /** Its own Agent snoozed it, not its Person. */
+  byAgent?: boolean
+  /** What woke it before its time, and when. */
+  woke?: {
+    at: number
+    by: "question" | "failure" | "message" | "done" | "woken"
+  }
 }
 
 /** What every module lists for each Project, for the sidebar. */

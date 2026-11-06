@@ -24,8 +24,10 @@ import {
 import { Kbd } from "@banda/ui/components/kbd"
 import { ScrollArea } from "@banda/ui/components/scroll-area"
 import { cn } from "@banda/ui/lib/utils"
-import type { Lists, PaneState } from "@banda/ui/pane"
+import { clock } from "@banda/ui/lib/words"
+import type { Listed, Lists, PaneState } from "@banda/ui/pane"
 import {
+  AlarmClockIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   CopyIcon,
@@ -52,6 +54,7 @@ import { Row } from "./Row"
 import { pickPreset, PRESET_WORDS, type Settings } from "./settings"
 import { type Held, held, hold, rowKey } from "./hold"
 import { archivable, useIsArchived } from "./archived"
+import { seeWoke, snoozable, useSnoozes } from "./snoozed"
 import { ThemeMenu } from "./ThemeMenu"
 import { useKeyLabel, useKeyOf } from "@banda/ui/hooks/use-key-of"
 import { keyCaps } from "@banda/ui/lib/keys"
@@ -112,6 +115,11 @@ export function Sidebar({
    * brings it back (ADR 0008, decision 4; ADR 0069).
    */
   onArchive: (project: ProjectId, thing: string, archived: boolean) => void
+  /** Opens the snooze's picker for a row's Thread, by `anchor` if it is
+   * given (ADR 0074). */
+  onSnooze: (project: ProjectId, listed: Listed, anchor?: Element) => void
+  /** Wakes a row's snoozed Thread now. */
+  onWake: (project: ProjectId, thing: string) => void
   /** Opens "Add Project" in the Banda menu (ADR 0026). */
   onAddProject: () => void
   /** Pins the Project, so it comes first, or unpins it (ADR 0026). */
@@ -153,11 +161,18 @@ export function Sidebar({
     setToggled(new Set())
     setMore(new Set())
   }
-  // The Threads the Person archived (ADR 0069).
+  // The Threads the Person archived (ADR 0069), and those that sleep or
+  // woke (ADR 0074).
   const archived = useIsArchived()
+  const { asleep, woke } = useSnoozes(lists)
   const fresh = useMemo(
-    () => arrange(lists, projects, settings, only, toggled, archived),
-    [lists, projects, settings, only, toggled, archived]
+    () =>
+      arrange(lists, projects, settings, only, toggled, {
+        archived,
+        asleep,
+        woke,
+      }),
+    [lists, projects, settings, only, toggled, archived, asleep, woke]
   )
   // Under the pointer, the rows hold still; what would move or come
   // waits as updates, taken in by the pill or as the pointer leaves
@@ -203,6 +218,10 @@ export function Sidebar({
       onArchive={(row) =>
         props.onArchive(row.project.id, row.listed.id, row.state !== "archived")
       }
+      onSnooze={(row, anchor) =>
+        props.onSnooze(row.project.id, row.listed, anchor)
+      }
+      onWake={(row) => props.onWake(row.project.id, row.listed.id)}
       onNoProject={onNoProject}
       onMakeProject={setMaking}
       onNewThread={onNewThread}
@@ -398,6 +417,8 @@ function SectionView({
   onMore,
   onOpen,
   onArchive,
+  onSnooze,
+  onWake,
   onMakeProject,
   onNoProject,
   onNewThread,
@@ -412,12 +433,16 @@ function SectionView({
   onOpen: (project: ProjectId, pane: PaneState) => void
   /** Archives the row, or brings it back. */
   onArchive: (row: Arranged) => void
+  onSnooze: (row: Arranged, anchor?: Element) => void
+  onWake: (row: Arranged) => void
   onMakeProject: (project: ProjectSummary) => void
   onNoProject: () => void
   onNewThread: (project: ProjectId) => void
   withMenu: WithMenu
 }) {
-  const archiveKey = useKeyLabel()("sidebar.archive")
+  const keyOf = useKeyLabel()
+  const archiveKey = keyOf("sidebar.archive")
+  const snoozeKey = keyOf("thread.snooze")
   const { limit } = settings.group
   const rows = limit > 0 && !more ? section.rows.slice(0, limit) : section.rows
   const hidden = section.rows.length - rows.length
@@ -440,6 +465,9 @@ function SectionView({
           {section.label}
         </span>
         <span className="ml-auto flex items-center gap-1 text-muted-foreground tabular-nums">
+          {section.next !== undefined && (
+            <span className="mr-1">next {clock(section.next)}</span>
+          )}
           {section.folded && settings.projects.rollup && (
             <Rollup mark={section.mark} waiting={section.waiting} />
           )}
@@ -475,13 +503,57 @@ function SectionView({
                   settings={settings}
                   inProject={project !== undefined || row.project.scratch}
                   current={isCurrent(row.project.id, row.listed.pane)}
-                  onOpen={() => onOpen(row.project.id, row.listed.pane)}
+                  onOpen={() => {
+                    seeWoke(row.listed)
+                    onOpen(row.project.id, row.listed.pane)
+                  }}
+                  action={
+                    row.state === "snoozed" ? (
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => onWake(row)}
+                      >
+                        <AlarmClockIcon />
+                        Wake
+                      </Button>
+                    ) : snoozable(row.listed) ? (
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label="Snooze"
+                        title={`Snooze ${snoozeKey}`}
+                        onClick={(event) =>
+                          onSnooze(
+                            row,
+                            event.currentTarget.closest("[data-row]") ??
+                              undefined
+                          )
+                        }
+                      >
+                        <AlarmClockIcon />
+                      </Button>
+                    ) : undefined
+                  }
                 />
               </ContextMenuTrigger>
               <ContextMenuContent>
                 {row.project.scratch && (
                   <DropdownMenuItem onClick={() => onMakeProject(row.project)}>
                     Make a Project from it…
+                  </DropdownMenuItem>
+                )}
+                {row.state === "snoozed" ? (
+                  <DropdownMenuItem onClick={() => onWake(row)}>
+                    Wake now
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    disabled={!snoozable(row.listed)}
+                    onClick={() => onSnooze(row)}
+                  >
+                    Snooze…
+                    <DropdownMenuShortcut>{snoozeKey}</DropdownMenuShortcut>
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem

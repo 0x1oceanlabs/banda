@@ -14,13 +14,15 @@ import {
   type Status,
 } from "@banda/contract"
 import { waits, works } from "@banda/ui/components/banda-mark"
-import { Toaster } from "@banda/ui/components/sonner"
+import { Toaster, toast } from "@banda/ui/components/sonner"
+import { clock, problem } from "@banda/ui/lib/words"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openProjects, updateProject } from "@banda/ui/lib/projects"
 import {
   callsOf,
   IN_PROGRAM,
+  type Listed,
   type Lists,
   type PaneState,
   QUIET,
@@ -73,11 +75,9 @@ import {
 import { Edge } from "../sidebar/Edge"
 import { Sidebar } from "../sidebar/Sidebar"
 import { pickPreset } from "../sidebar/settings"
-import {
-  archive as keepArchived,
-  toggled,
-  useIsArchived,
-} from "../sidebar/archived"
+import { SnoozePicker, type Snoozing } from "../sidebar/SnoozePicker"
+import { asleep, seeWoke, useSnoozes } from "../sidebar/snoozed"
+import { archive as keepArchived, toggled } from "../sidebar/archived"
 import { useNarrow } from "./narrow"
 import type { Arranged } from "@banda/contract/workspaces"
 import {
@@ -507,16 +507,63 @@ export function Shell({
   // The Person archives a Thread, from its row's menu, the Banda menu or
   // Alt+S, or brings it back. Archived, it is put away: every Pane that
   // shows it closes, on any workspace (ADR 0008, decision 4; ADR 0069).
-  const archiveThread = useCallback(
-    (project: ProjectId, thing: string, archived: boolean) => {
-      keepArchived(thing, archived)
-      if (!archived) return
+  const closeShown = useCallback(
+    (project: ProjectId, thing: string) => {
       const shown = { project, about: thing }
       for (const entry of entries(seenNow.current.state))
         if (isShowing(entry, shown, showsOf))
           change((w) => closingShown(w, shown))
     },
     [change]
+  )
+  const listedOf = (project: ProjectId, thing: string): Listed | undefined =>
+    listsNow.current[project]?.find((listed) => listed.id === thing)
+  // A snooze is the engine's (ADR 0074). Snoozed, a Thread is put away as
+  // an archived one is, its Panes closed, and it leaves Archive; Undo
+  // wakes it.
+  const [snoozing, setSnoozing] = useState<Snoozing>()
+  const wakeThread = useCallback(
+    (project: ProjectId, thing: string) => {
+      engine
+        .command("agents.wake", { thread: thing }, project)
+        .catch((error: unknown) => toast.error(problem(error)))
+    },
+    [engine]
+  )
+  const snoozeThread = useCallback(
+    (project: ProjectId, listed: Listed, until?: number) => {
+      const thread = listed.id
+      const asked = until === undefined ? { thread } : { thread, until }
+      engine.command("agents.snooze", asked, project).then(
+        () => {
+          closeShown(project, thread)
+          toast(
+            until === undefined
+              ? "Snoozed until it's done"
+              : `Snoozed until ${clock(until)}`,
+            {
+              action: {
+                label: "Undo",
+                onClick: () => wakeThread(project, thread),
+              },
+            }
+          )
+        },
+        (error: unknown) => toast.error(problem(error))
+      )
+    },
+    [engine, closeShown, wakeThread]
+  )
+  const archiveThread = useCallback(
+    (project: ProjectId, thing: string, archived: boolean) => {
+      // Archived, a snoozed Thread's snooze ends.
+      const listed = listedOf(project, thing)
+      if (archived && listed && asleep(listed, Date.now()))
+        wakeThread(project, thing)
+      keepArchived(thing, archived)
+      if (archived) closeShown(project, thing)
+    },
+    [closeShown, wakeThread]
   )
   const toggleArchived = useCallback(
     (project: ProjectId, thing: string) => {
@@ -530,6 +577,23 @@ export function Shell({
     const thing = entry && showsOf(entry.pane)
     if (entry && thing) toggleArchived(entry.project, thing)
   }, [toggleArchived])
+  /** The Thread of the Pane in focus, as its Project lists it. */
+  const threadInFocus = useCallback((): Snoozing | undefined => {
+    const entry = focused(seenNow.current.state)
+    const thing = entry && showsOf(entry.pane)
+    const listed = entry && thing ? listedOf(entry.project, thing) : undefined
+    return entry && listed ? { project: entry.project, listed } : undefined
+  }, [])
+  // A Thread that woke stops saying so once its Person looks at it.
+  useEffect(() => {
+    const looked = threadInFocus()
+    if (looked) seeWoke(looked.listed)
+  }, [threadInFocus, workspaces, lists])
+  // Alt+Z: the picker for the Thread the Person looks at.
+  const snooze = useCallback(
+    () => setSnoozing(threadInFocus()),
+    [threadInFocus]
+  )
   const toggleOverview = useCallback(
     () => setOverview((was) => (was === "open" ? "closing" : "open")),
     []
@@ -759,6 +823,7 @@ export function Shell({
       center: toCenter,
       answer,
       archive,
+      snooze,
       menu: toggleMenu,
       route,
       ownKeys,
@@ -786,6 +851,7 @@ export function Shell({
     toCenter,
     answer,
     archive,
+    snooze,
     toggleMenu,
     route,
     ownKeys,
@@ -1045,7 +1111,7 @@ export function Shell({
 
   // The bar's workspaces: a Project's by its name, with a dot while one of
   // its Threads calls (ADR 0065, decision 9).
-  const archived = useIsArchived()
+  const { away: putAway } = useSnoozes(lists)
   const barWorkspaces = useMemo(
     () =>
       inBar(workspaces).map((w) =>
@@ -1054,12 +1120,12 @@ export function Shell({
               ...w,
               owner: projects.find((project) => project.id === w.project),
               calls: (lists[w.project] ?? []).some(
-                (row) => waits(row.mark) && !archived(row)
+                (row) => waits(row.mark) && !putAway(row)
               ),
             }
           : w
       ),
-    [workspaces, lists, projects, archived]
+    [workspaces, lists, projects, putAway]
   )
 
   return (
@@ -1122,6 +1188,10 @@ export function Shell({
               onNewThread={newThreadIn}
               onNoProject={() => machine && startThread(machine)}
               onArchive={archiveThread}
+              onSnooze={(project, listed, anchor) =>
+                setSnoozing({ project, listed, ...(anchor ? { anchor } : {}) })
+              }
+              onWake={wakeThread}
               onAddProject={() => parts.run("project.add")}
               onPin={(project, pinned) =>
                 updateProject(engine, { project, pinned }).catch(
@@ -1177,6 +1247,14 @@ export function Shell({
               />
             )}
             <Toaster />
+            <SnoozePicker
+              target={snoozing}
+              onClose={() => setSnoozing(undefined)}
+              onSnooze={(target, until) =>
+                snoozeThread(target.project, target.listed, until)
+              }
+              onWake={(target) => wakeThread(target.project, target.listed.id)}
+            />
             <BandaMenu
               opening={menu}
               onClose={closeMenu}

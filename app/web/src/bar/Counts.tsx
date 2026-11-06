@@ -16,7 +16,7 @@ import type { Listed, Lists, PaneState } from "@banda/ui/pane"
 import { useMemo, useState } from "react"
 import { useLookSidebar } from "../look"
 import { Status, ThreadMark, toneOf } from "../sidebar/Row"
-import { useIsArchived } from "../sidebar/archived"
+import { useSnoozes } from "../sidebar/snoozed"
 import { type Counted, inOrder, type Tally, tally } from "./tally"
 
 /** Each count's words, after its number. */
@@ -58,10 +58,10 @@ export function Counts({
   onOpen: Open
 }) {
   const settings = useLookSidebar().bar
-  const archived = useIsArchived()
+  const { away } = useSnoozes(lists)
   const tallies = useMemo(
-    () => tally(lists, settings.counts, archived),
-    [lists, settings.counts, archived]
+    () => tally(lists, settings.counts, away),
+    [lists, settings.counts, away]
   )
   const shows =
     settings.show === "always" || (settings.show === "closed" && !sidebarShown)

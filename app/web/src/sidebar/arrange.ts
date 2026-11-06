@@ -13,8 +13,21 @@ import {
 import type { Listed } from "@banda/ui/pane"
 import type { Settings, State } from "./settings"
 
-/** One row: what a module listed, the Project it is in, where it stands. */
-export type Row = { project: ProjectSummary; listed: Listed; state: State }
+/** One row: what a module listed, the Project it is in, where it stands,
+ * and when it woke from a snooze while its Person has not seen it. */
+export type Row = {
+  project: ProjectSummary
+  listed: Listed
+  state: State
+  woke?: number
+}
+
+/** What the Person's marks say of a row now: archived, asleep, woke. */
+export type Marks = {
+  archived?: (listed: Listed) => boolean
+  asleep?: (listed: Listed) => boolean
+  woke?: (listed: Listed) => number | undefined
+}
 
 export type Section = {
   /** A state, or a Project's id. */
@@ -25,6 +38,8 @@ export type Section = {
   project?: ProjectSummary
   rows: Row[]
   folded: boolean
+  /** When the first of a snoozed shelf's rows wakes. */
+  next?: number
   /** The loudest mark of its rows, and how many need the Person. */
   mark: MarkState
   waiting: number
@@ -49,20 +64,35 @@ export type Arranged = {
 export const STATE_WORDS: Record<State, string> = {
   active: "",
   working: "Working",
+  snoozed: "Snoozed",
   archived: "Archive",
 }
 
-/** Where a row stands: at work, archived as the Person's marks say, or active. */
-function stateOf(listed: Listed, archived: (listed: Listed) => boolean): State {
+/** Where a row stands: asleep, at work, archived as the Person's marks
+ * say, or active. A snooze outranks the rest (ADR 0074). */
+function stateOf(listed: Listed, marks: Marks): State {
+  if (marks.asleep?.(listed)) return "snoozed"
   if (works(listed.mark)) return "working"
-  return archived(listed) ? "archived" : "active"
+  return marks.archived?.(listed) ? "archived" : "active"
 }
 
-/** The attention order: what waits first, then work, the rest, the archived. */
+/** The attention order: what waits or woke first, then work, the rest,
+ * the snoozed, the archived. */
 function rank(row: Row): number {
-  if (row.state === "archived") return 3
+  if (row.state === "archived") return 4
+  if (row.state === "snoozed") return 3
   if (row.state === "working") return 1
-  return waits(row.listed.mark) ? 0 : 2
+  return waits(row.listed.mark) || row.woke !== undefined ? 0 : 2
+}
+
+/** When a row last changed: a Thread that woke changed as it woke. */
+function changedOf(row: Row): number {
+  return Math.max(row.listed.changed, row.woke ?? 0)
+}
+
+/** When a snoozed row wakes; one until done, after every time. */
+function wakesAt(row: Row): number {
+  return row.listed.snooze?.until ?? Infinity
 }
 
 /**
@@ -71,7 +101,7 @@ function rank(row: Row): number {
  * Projects asks
  * @param toggled the sections the Person folded or opened, against what
  * the settings start with
- * @param archived whether the Person's marks have a row archived now
+ * @param marks what the Person's marks say of each row now
  */
 export function arrange(
   lists: Readonly<Record<ProjectId, readonly Listed[]>>,
@@ -79,15 +109,15 @@ export function arrange(
   settings: Settings,
   only?: ProjectId,
   toggled: ReadonlySet<string> = new Set(),
-  archived: (listed: Listed) => boolean = () => false
+  marks: Marks = {}
 ): Arranged {
   const named = projects.filter((project) => !project.scratch)
   const all: Row[] = projects.flatMap((project) =>
-    (lists[project.id] ?? []).map((listed) => ({
-      project,
-      listed,
-      state: stateOf(listed, archived),
-    }))
+    (lists[project.id] ?? []).map((listed) => {
+      const state = stateOf(listed, marks)
+      const woke = marks.woke?.(listed)
+      return { project, listed, state, ...(woke === undefined ? {} : { woke }) }
+    })
   )
   const rows = all
     .filter((row) => only === undefined || row.project.id === only)
@@ -101,14 +131,19 @@ export function arrange(
     held: Row[],
     project?: ProjectSummary,
     name?: string
-  ): Section => ({
-    key,
-    label,
-    ...(project ? { project } : {}),
-    rows: held,
-    folded: folds(key, name),
-    ...rollup(held),
-  })
+  ): Section => {
+    const asleep = held.filter((row) => row.state === "snoozed")
+    const next = Math.min(...asleep.map(wakesAt))
+    return {
+      key,
+      label,
+      ...(project ? { project } : {}),
+      rows: held,
+      folded: folds(key, name),
+      ...(Number.isFinite(next) ? { next } : {}),
+      ...rollup(held),
+    }
+  }
   const kept = (sections: Section[]) =>
     settings.group.empty === "show"
       ? sections
@@ -152,7 +187,13 @@ export function arrange(
       }
     case "state": {
       const { states, bottom } = settings.group
-      const of = (state: State) => rows.filter((row) => row.state === state)
+      // The snoozed by when they wake; the rest as the settings sort.
+      const of = (state: State) => {
+        const held = rows.filter((row) => row.state === state)
+        return state === "snoozed"
+          ? held.sort((a, b) => wakesAt(a) - wakesAt(b))
+          : held
+      }
       const sections = states.map((state) =>
         section(state, STATE_WORDS[state], of(state))
       )
@@ -185,7 +226,7 @@ export function arrange(
 }
 
 function order(by: Settings["sort"]["by"]): (a: Row, b: Row) => number {
-  const latest = (a: Row, b: Row) => b.listed.changed - a.listed.changed
+  const latest = (a: Row, b: Row) => changedOf(b) - changedOf(a)
   switch (by) {
     case "attention":
       return (a, b) => rank(a) - rank(b) || latest(a, b)
@@ -201,7 +242,10 @@ function rollup(rows: readonly Row[]): { mark: MarkState; waiting: number } {
   return {
     mark: loudest(rows.map((row) => row.listed.mark)),
     waiting: rows.filter(
-      (row) => row.state !== "archived" && waits(row.listed.mark)
+      (row) =>
+        row.state !== "archived" &&
+        row.state !== "snoozed" &&
+        waits(row.listed.mark)
     ).length,
   }
 }
