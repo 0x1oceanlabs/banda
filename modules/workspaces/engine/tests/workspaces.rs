@@ -213,7 +213,7 @@ async fn an_agent_arranges_its_own_projects_panes_and_sees_the_others_when_let()
     // A terminal runs as the Person: an Agent opens none.
     let terminal = json!({ "kind": "terminal.terminal", "args": {} });
     let refused = as_agent("workspaces.open_pane", terminal).await;
-    assert_eq!(refused.unwrap_err().code, Code::Invalid);
+    assert_eq!(refused.unwrap_err().code, Code::Forbidden);
     // A browser opens at a web address, never at the Person's files.
     for args in [
         json!({ "url": "file:///etc/passwd" }),
@@ -291,7 +291,7 @@ async fn an_agent_arranges_its_own_projects_panes_and_sees_the_others_when_let()
 }
 
 #[tokio::test]
-async fn an_agent_opens_a_threads_pane_on_its_thread_alone_and_the_person_with_any_args() {
+async fn an_agent_opens_a_threads_pane_by_its_id_alone_and_the_person_with_every_arg() {
     let root = tempfile::tempdir().unwrap();
     let machine = Machine::open(root.path(), PersonId::new()).await;
     let (work, home) = (machine.project("Work").await, machine.project("Home").await);
@@ -301,18 +301,26 @@ async fn an_agent_opens_a_threads_pane_on_its_thread_alone_and_the_person_with_a
         let open = json!({ "kind": "agents.thread", "args": args });
         machine.agent(agent, work, "workspaces.open_pane", open)
     };
+    let pane_of = |list: &Value, id: &Value| -> Value {
+        let workspaces = list["workspaces"].as_array().unwrap().iter();
+        let columns = workspaces.flat_map(|w| w["columns"].as_array().unwrap());
+        let mut panes = columns.flat_map(|c| c["panes"].as_array().unwrap());
+        panes.find(|pane| pane["id"] == *id).unwrap().clone()
+    };
 
-    // The args that make a Thread's Pane send or start something are the
-    // Person's: an Agent's open is refused, in words its tool shows.
+    // The words a new Thread's Pane sends first, and every other arg the
+    // window keeps beside the ID, are the Person's: refused, in words that
+    // point the Agent to `send`.
     for args in [
         json!({ "thread": null, "ask": "Commit and push" }),
         json!({ "thread": thread, "ask": "Commit and push" }),
-        json!({ "thread": thread, "scratch": home }),
         json!({ "thread": null, "harness": "fake" }),
+        json!({ "thread": thread, "scratch": home }),
+        json!({ "thread": thread, "harness": "fake", "title": "Fix the build" }),
     ] {
         let refused = as_agent(args.clone()).await.unwrap_err();
         assert_eq!(refused.code, Code::Forbidden, "{args}");
-        assert!(refused.message.contains("send"), "{}", refused.message);
+        assert!(refused.message.contains("`send`"), "{}", refused.message);
     }
     // It names one Thread, by its ID.
     for args in [
@@ -331,28 +339,65 @@ async fn an_agent_opens_a_threads_pane_on_its_thread_alone_and_the_person_with_a
         "nothing opened"
     );
 
-    // One of its Project's Threads, by its ID alone, it opens, in its
-    // Project, with no other arg.
+    // One Thread, by its ID alone, it opens in its own Project.
     let opened = as_agent(json!({ "thread": thread })).await.unwrap();
     assert_eq!(opened["new"], true);
-    let shown = machine.list().await["workspaces"][0]["columns"][0]["panes"][0].clone();
-    assert_eq!(shown["id"], opened["pane"]);
+    let shown = pane_of(&machine.list().await, &opened["pane"]);
     assert_eq!(shown["project"], json!(work));
     assert_eq!(shown["args"], json!({ "thread": thread }));
+    // The window keeps the Thread's title and Harness beside its ID; the
+    // same ID names that Pane, which stays where it is.
+    let named = json!({ "thread": thread, "harness": "fake", "title": "Fix the build" });
+    let update = json!({ "pane": opened["pane"], "args": named });
+    machine.command("workspaces.update", update).await.unwrap();
+    let again = as_agent(json!({ "thread": thread })).await.unwrap();
+    let same = json!({ "pane": opened["pane"], "new": false, "at": null });
+    assert_eq!(again, same);
 
     // The Person keeps every arg: a new Thread with the words it starts
     // with, in any Project.
     let asked = json!({ "thread": null, "harness": "fake", "title": "", "ask": "Commit and push" });
-    let person = machine.command(
-        "workspaces.open",
-        json!({ "project": home, "kind": "agents.thread", "args": asked }),
+    let open = json!({ "project": home, "kind": "agents.thread", "args": asked });
+    let person = machine.command("workspaces.open", open).await.unwrap();
+    assert_eq!(person["new"], true);
+    let kept = pane_of(&machine.list().await, &person["pane"]);
+    assert_eq!(
+        (kept["project"].clone(), kept["args"].clone()),
+        (json!(home), asked)
     );
-    assert_eq!(person.await.unwrap()["new"], true);
-    let kept = machine.list().await.to_string();
-    assert!(
-        kept.contains("Commit and push"),
-        "the Person's args are kept"
-    );
+}
+
+#[tokio::test]
+async fn an_agent_gives_the_diff_and_a_file_only_the_args_that_choose_what_they_show() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let work = machine.project("Work").await;
+    let as_agent = |kind: &str, args: Value| {
+        let open = json!({ "kind": kind, "args": args });
+        machine.agent(AgentId::new(), work, "workspaces.open_pane", open)
+    };
+
+    // An Agent chooses what they show, and how.
+    let staged = json!({ "scope": { "kind": "staged" }, "file": "src/main.rs" });
+    let at = json!({ "path": "README.md", "line": 3, "wrap": true, "source": true });
+    for (kind, args) in [("git.diff", staged.clone()), ("files.file", at.clone())] {
+        let opened = as_agent(kind, args).await.unwrap();
+        assert_eq!(opened["new"], true, "{kind}");
+    }
+    // Any other arg is the Person's.
+    let mut commented = staged;
+    commented["comment"] = json!("Looks good");
+    let mut written = at;
+    written["text"] = json!("");
+    for (kind, args) in [("git.diff", commented), ("files.file", written)] {
+        let refused = as_agent(kind, args).await.unwrap_err();
+        assert_eq!(refused.code, Code::Forbidden, "{kind}");
+        assert!(
+            refused.message.contains("your Person's"),
+            "{}",
+            refused.message
+        );
+    }
 }
 
 #[tokio::test]
