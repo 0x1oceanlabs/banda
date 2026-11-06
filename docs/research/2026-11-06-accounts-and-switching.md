@@ -946,4 +946,4 @@ Overview article comparing continues vs casr: "Neither tool monitors token budge
 
 - A session lives in Banda's store and any Claude account can continue it. A turn stopped by a limit loses nothing: its message is kept, and another account answers it.
 - The account must be chosen by the process's environment, not per session. One adapter process per account, with that account's `CLAUDE_CONFIG_DIR` in its environment. Banda's hosts are already one per Harness entry.
-- Banda must never start the adapter with a `CLAUDE_CONFIG_DIR` inherited from its own environment. The engine sets it for every account or removes it.
+- The account must not go in a session's options (claude-agent-acp's `_meta.claudeCode.options.env`): on a resume the SDK follows the process's environment, not the session's. Banda already sets an entry's variables on its process, over the engine's own environment.
