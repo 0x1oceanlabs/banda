@@ -9,8 +9,29 @@
       "title": "New Thread",
       "section": "Threads",
       "keys": [
-        "Alt+Return"
-      ]
+        {
+          "code": "Enter",
+          "mod": true
+        }
+      ],
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project it starts in"
+          },
+          "ask": {
+            "type": "string",
+            "description": "what to write to its Agent first"
+          },
+          "harness": {
+            "type": "string",
+            "description": "the Harness it starts on"
+          }
+        },
+        "additionalProperties": false
+      }
     }
   ],
   "sources": [

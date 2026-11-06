@@ -8,7 +8,10 @@
       "title": "Show the Diff, or hide it",
       "section": "Git",
       "keys": [
-        "Alt+D"
+        {
+          "code": "KeyD",
+          "mod": true
+        }
       ]
     },
     {
@@ -16,7 +19,11 @@
       "title": "Switch branch",
       "section": "Git",
       "keys": [
-        "Alt+Shift+G"
+        {
+          "code": "KeyG",
+          "mod": true,
+          "shift": true
+        }
       ]
     }
   ],

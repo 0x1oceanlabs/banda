@@ -2,7 +2,7 @@
  * for the Person, its action and what the Banda menu finds of it (ADR
  * 0022). */
 import type { ProjectId } from "@banda/contract"
-import { type Action, defineModule } from "@banda/ui/module"
+import { type Action, defineModule, takes } from "@banda/ui/module"
 import { paneOf } from "@banda/ui/pane"
 import { threadPane } from "./ThreadPane"
 import { visualPane } from "./VisualPane"
@@ -18,6 +18,11 @@ import { NEW_THREAD } from "./session"
  */
 const newThread: Action = {
   id: "thread.new",
+  args: takes({
+    project: "the Project it starts in",
+    ask: "what to write to its Agent first",
+    harness: "the Harness it starts on",
+  }),
   title: "New Thread",
   section: "Threads",
   keys: [{ code: "Enter", mod: true }],

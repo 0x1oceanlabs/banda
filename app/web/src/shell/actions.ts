@@ -5,7 +5,7 @@
  */
 import type { ProjectId } from "@banda/contract"
 import { toast } from "@banda/ui/components/sonner"
-import type { Action, Args, WindowApi } from "@banda/ui/module"
+import { type Action, type Args, takes, type WindowApi } from "@banda/ui/module"
 import { type PaneState, paneOf, type Place } from "@banda/ui/pane"
 import { RESET_KEY } from "../actions/actions"
 import { showing } from "../calls/sight"
@@ -302,7 +302,9 @@ export function closingShown(
   return entry && closing(entry.id)
 }
 
-/** Every action: the modules' (`modules.ts`), then the window's own. */
+/** What a file action takes. */
+const FILE = "the file's absolute path"
+
 /**
  * Does `then` with the file `args` name, if it is there still; a toast
  * says when it has gone since its link was drawn (ADR 0063, decision 2).
@@ -316,8 +318,9 @@ function present(args: Args | undefined, then: (file: string) => void) {
   })
 }
 
-export const ACTIONS: readonly Action<Shell>[] = [
-  ...modules.flatMap((module) => module.actions),
+/** The window's own actions, the tiling's first (ADR 0071, decision 2):
+ * `app/web/window.json` copies them for the engine. */
+export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
   ...DIRECTIONS.map((direction) => ({
     id: `pane.focus-${direction}`,
     section: "Panes",
@@ -398,6 +401,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
   },
   {
     id: "column.width",
+    args: takes({ width: "a step of the look's, as 1/2" }, ["width"]),
     section: "Columns",
     title: "The column as wide as a step of the look's",
     // A picture in the Pane menu (ADR 0066, decision 3): `{ width: "1/2" }`.
@@ -457,6 +461,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
   },
   {
     id: "pane.height",
+    args: takes({ height: "a step of the look's, as 1/3" }, ["height"]),
     section: "Panes",
     title: "The Pane as high in its column as a step of the look's",
     // A picture in the Pane menu (ADR 0066, decision 3): `{ height: "1/3" }`.
@@ -664,6 +669,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     // A file a Pane's link names, as a terminal's path or a reply's
     // (ADR 0063): in a browser's tab, until Files shows it.
     id: "file.open",
+    args: takes({ file: FILE, project: "the Project it is in" }, ["file"]),
     section: "Banda",
     title: "Open a file in Banda",
     unlisted: true,
@@ -675,6 +681,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
   {
     // A file a Pane's link names, as a terminal's path with Ctrl.
     id: "file.outside",
+    args: takes({ file: FILE }, ["file"]),
     section: "Banda",
     title: "Open a file in its app",
     unlisted: true,
@@ -684,6 +691,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
   {
     // A Thread menu's "Show in folder", for a path in a reply.
     id: "file.folder",
+    args: takes({ file: FILE }, ["file"]),
     section: "Banda",
     title: "Show a file in its folder",
     unlisted: true,
@@ -708,6 +716,13 @@ export const ACTIONS: readonly Action<Shell>[] = [
   {
     // A Thread menu's "Copy image": the image at a point of the page.
     id: "edit.copy-image",
+    args: takes(
+      {
+        x: { number: "where the image is, across the page" },
+        y: { number: "where the image is, down the page" },
+      },
+      ["x", "y"]
+    ),
     section: "Banda",
     title: "Copy image",
     unlisted: true,
@@ -726,6 +741,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
   },
   {
     id: "settings.open",
+    args: takes({ link: "a section, or a row in it, as keys" }),
     section: "Banda",
     title: "Open the settings",
     keys: [{ code: "Comma", mod: true }],
@@ -735,6 +751,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
   },
   {
     id: "problems.look-into",
+    args: takes({ fingerprint: "the Problem's fingerprint" }, ["fingerprint"]),
     section: "Banda",
     title: "Look into a Problem",
     unlisted: true,
@@ -799,6 +816,12 @@ export const ACTIONS: readonly Action<Shell>[] = [
     run: (shell: Shell) =>
       shell.change((w) => moving(w, (w) => send(w, n - 1))),
   })),
+]
+
+/** Every action: the modules' (`modules.ts`), then the window's own. */
+export const ACTIONS: readonly Action<Shell>[] = [
+  ...modules.flatMap((module) => module.actions),
+  ...WINDOW_ACTIONS,
 ]
 
 /** Runs the action `id` as its key would, with `args`. */

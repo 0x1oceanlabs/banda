@@ -153,7 +153,8 @@ enum Command {
     },
     /// Prints what each module offers, one JSON object per line: its
     /// module.toml, its engine part's methods and its window part's
-    /// Panes, actions and sources.
+    /// Panes, actions and sources, each action with its keys by level
+    /// and what it takes; the window's own, the tiling's, as `window`.
     Modules {
         /// Prints its unstable marks instead, the paths a module takes that
         /// are not in the contract yet, and how many against the ceiling.

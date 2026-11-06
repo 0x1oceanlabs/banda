@@ -116,6 +116,17 @@ impl Default for Mod {
 }
 
 impl Mod {
+    /// The mod with one key more (ADR 0068, decision 2): the first of
+    /// Ctrl, Super and Alt it does not hold; none for all three.
+    pub fn with_more(self) -> Option<Mod> {
+        match (self.ctrl, self.sup, self.alt) {
+            (false, _, _) => Some(Mod { ctrl: true, ..self }),
+            (true, false, _) => Some(Mod { sup: true, ..self }),
+            (true, true, false) => Some(Mod { alt: true, ..self }),
+            (true, true, true) => None,
+        }
+    }
+
     /// The mod as `keys.toml` writes it: `Ctrl+Alt+Super`, in that order.
     pub fn text(self) -> String {
         [
@@ -273,17 +284,7 @@ fn chord(text: &str) -> Result<Bind, String> {
             "{text:?} alone would be typed: hold Alt, Ctrl or Super with it"
         ));
     }
-    let text = [
-        ctrl.then_some("Ctrl"),
-        alt.then_some("Alt"),
-        sup.then_some("Super"),
-        shift.then_some("Shift"),
-        Some(name.as_str()),
-    ]
-    .into_iter()
-    .flatten()
-    .collect::<Vec<_>>()
-    .join("+");
+    let text = text_of(Mod { alt, ctrl, sup }, shift, &name);
     Ok(Bind {
         code,
         alt,
@@ -294,6 +295,103 @@ fn chord(text: &str) -> Result<Bind, String> {
         text,
         line: 0,
     })
+}
+
+/// A key as Banda writes it: its mod's keys in the order Ctrl, Alt,
+/// Super, then Shift, then its name.
+fn text_of(held: Mod, shift: bool, name: &str) -> String {
+    let mut parts = vec![held.text()];
+    if shift {
+        parts.push("Shift".to_owned());
+    }
+    parts.push(name.to_owned());
+    parts.retain(|part| !part.is_empty());
+    parts.join("+")
+}
+
+fn is_false(on: &bool) -> bool {
+    !on
+}
+
+/// A key as an action declares it (ADR 0068, decision 2; ADR 0071,
+/// decision 2): held with the mod, with Shift or one key more; or with
+/// plain mods, as an App's own, `primary` for Ctrl or ⌘ on a Mac.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct Declared {
+    pub code: String,
+    // `mod` and `super` are words of Rust's own.
+    #[serde(rename = "mod", skip_serializing_if = "is_false")]
+    pub held: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    pub more: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    pub shift: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    pub alt: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    pub ctrl: bool,
+    #[serde(rename = "super", skip_serializing_if = "is_false")]
+    pub sup: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    pub primary: bool,
+}
+
+impl Declared {
+    /// The key as it is pressed with the mod `held`, as the window's
+    /// `realKey` makes it: held with the mod, it holds the mod's keys, and
+    /// one key more when it says so; else it is as it is written.
+    pub fn real(&self, held: Mod) -> Declared {
+        let mods = if self.more {
+            held.with_more()
+        } else if self.held {
+            Some(held)
+        } else {
+            None
+        };
+        match mods {
+            Some(mods) => Declared {
+                code: self.code.clone(),
+                shift: self.shift,
+                alt: mods.alt,
+                ctrl: mods.ctrl,
+                sup: mods.sup,
+                ..Declared::default()
+            },
+            None => self.clone(),
+        }
+    }
+
+    /// The key as Banda writes it, `Ctrl+Alt+Shift+R`: a key held with the
+    /// mod, once it is made real.
+    pub fn text(&self) -> String {
+        let held = Mod {
+            alt: self.alt,
+            ctrl: self.ctrl || self.primary,
+            sup: self.sup,
+        };
+        let name = code_of(&self.code).map_or_else(|| self.code.clone(), |(_, name)| name);
+        text_of(held, self.shift, &name)
+    }
+}
+
+/// An action as a manifest declares it (ADR 0071, decision 2), the
+/// window's or an App's.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Action {
+    pub id: String,
+    pub title: String,
+    pub section: String,
+    pub keys: Vec<Declared>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub family: Option<String>,
+    /// Run by its id alone: no key sheet or menu lists it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub unlisted: bool,
+    /// What it takes, as a JSON Schema, as the engine's tools give theirs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub args: Option<serde_json::Value>,
 }
 
 /// The mod as written, one or two of Alt, Ctrl and Super; or why it
@@ -513,6 +611,50 @@ mod tests {
         assert_eq!((held, line), (Mod::default(), None));
         assert_eq!(problems.len(), 1);
         assert_eq!(problems[0].line, Some(1));
+    }
+
+    #[test]
+    fn a_declared_key_is_pressed_with_the_mod_at_its_level() {
+        let alt = Mod::default();
+        let ctrl_alt = Mod {
+            alt: true,
+            ctrl: true,
+            sup: false,
+        };
+        let key = |code: &str, held, more, shift| Declared {
+            code: code.to_owned(),
+            held,
+            more,
+            shift,
+            ..Declared::default()
+        };
+        let text = |key: Declared, held| key.real(held).text();
+        assert_eq!(text(key("KeyR", true, false, false), alt), "Alt+R");
+        assert_eq!(
+            text(key("KeyR", true, false, true), ctrl_alt),
+            "Ctrl+Alt+Shift+R"
+        );
+        assert_eq!(
+            text(key("ArrowRight", true, true, false), alt),
+            "Ctrl+Alt+Right"
+        );
+        assert_eq!(
+            text(key("ArrowRight", true, true, false), ctrl_alt),
+            "Ctrl+Alt+Super+Right"
+        );
+        assert_eq!(text(key("Enter", true, false, false), alt), "Alt+Return");
+        let tab = Declared {
+            code: "KeyT".to_owned(),
+            primary: true,
+            ..Declared::default()
+        };
+        assert_eq!(text(tab, ctrl_alt), "Ctrl+T");
+        let all = Mod {
+            alt: true,
+            ctrl: true,
+            sup: true,
+        };
+        assert_eq!(all.with_more(), None);
     }
 
     #[test]
