@@ -57,7 +57,7 @@ preset `spaces`, `by = "space"`, the table `[spaces]`, the part
 name now; write that one.
 A file named as one of Banda's presets wins over it.
 
-## Asked for, and what to write
+## Asked for, and what to set
 
 - "Group my Threads by Project": `[group]` `by = "project"`.
 - "One line per Thread": `[row]` `lines = 1`.
