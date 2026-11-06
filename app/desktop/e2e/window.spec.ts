@@ -364,26 +364,40 @@ test("a sideways swipe moves the Strip and lands on a column; a scroll up and do
   await expect.poll(scrolled).toBe(0)
 
   // Alt and a long swipe down moves one workspace, however long it is.
-  await page.keyboard.press("Alt+Shift+Digit2")
-  await page.keyboard.press("Alt+PageUp")
+  // The Thread goes to the second, which the screen follows once the engine
+  // has answered, and Alt+PageUp comes back to the first.
   const numbers = page.getByRole("navigation", { name: "Workspaces" })
-  await expect(
-    numbers.getByRole("button", { name: "Workspace 1" })
-  ).toHaveAttribute("aria-current", "true")
+  const one = numbers.getByRole("button", { name: "Workspace 1" })
+  const two = numbers.getByRole("button", { name: "Workspace 2" })
+  await page.keyboard.press("Alt+Shift+Digit2")
+  await expect(two).toHaveAttribute("aria-current", "true")
+  await page.keyboard.press("Alt+PageUp")
+  await expect(one).toHaveAttribute("aria-current", "true")
+  // The page tells one swipe from the next by its wheel events' times
+  // (swipe.ts). Each is stamped 60 ms after the last, and sent no sooner:
+  // a page still busy with the moves above, slow to take one, reads one
+  // swipe all the same.
+  const touchpad = await page.context().newCDPSession(page)
   await page.keyboard.down("Alt")
+  const start = Date.now()
   for (let i = 0; i < 8; i++) {
-    await page.mouse.wheel(0, 30)
+    await touchpad.send("Input.dispatchMouseEvent", {
+      type: "mouseWheel",
+      x: box!.x + box!.width / 2,
+      y: box!.y + box!.height / 2,
+      deltaX: 0,
+      deltaY: 30,
+      modifiers: 1, // Alt
+      timestamp: (start + i * 60) / 1000,
+    })
     await page.waitForTimeout(60)
   }
   await page.keyboard.up("Alt")
-  await expect(
-    numbers.getByRole("button", { name: "Workspace 2" })
-  ).toHaveAttribute("aria-current", "true")
+  await touchpad.detach()
+  await expect(two).toHaveAttribute("aria-current", "true")
   // Two and the empty one; a Project's shows its badge, not its number.
   await expect(numbers.getByRole("button")).toHaveCount(3)
-  await expect(
-    numbers.getByRole("button", { name: "Workspace 1" })
-  ).toBeVisible()
+  await expect(one).toBeVisible()
 })
 
 test("the engine dies mid-work, comes back, and the Thread goes on", async () => {
