@@ -27,12 +27,14 @@ import { Spinner } from "@banda/ui/components/spinner"
 import { Switch } from "@banda/ui/components/switch"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useProjects } from "@banda/ui/hooks/use-projects"
-import { removeProject, updateProject } from "@banda/ui/lib/projects"
+import { ProjectSign } from "@banda/ui/components/project-sign"
+import { findSign, removeProject, updateProject } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
 import { FolderSearchIcon, Trash2Icon } from "lucide-react"
 import { LOCATE, locateRoute } from "../menu/menu"
 import { AsideRow } from "../safe/AsidePill"
 import { Field, Group, RowFrame, Rows } from "./SettingRow"
+import { SignField, signAbout } from "./SignField"
 
 /** The Project a removal asks about, and how many Threads go with it, if
  * the agents module said. */
@@ -105,6 +107,7 @@ function Project({ engine, lit }: Props) {
           <SelectContent>
             {projects.map((one) => (
               <SelectItem key={one.id} value={one.id}>
+                <ProjectSign project={one} size={14} />
                 {nameOf(one)}
               </SelectItem>
             ))}
@@ -151,6 +154,15 @@ function Project({ engine, lit }: Props) {
             label="Project name"
             value={project.name}
             onCommit={(name) => change({ name: name.trim() })}
+          />
+        </RowFrame>
+        <RowFrame dataKey="sign" title="Sign" about={signAbout(project)}>
+          <SignField
+            key={project.id}
+            project={project}
+            busy={busy}
+            onPick={(sign) => change({ sign })}
+            onFindAgain={() => void act(() => findSign(engine, project.id))}
           />
         </RowFrame>
         <RowFrame

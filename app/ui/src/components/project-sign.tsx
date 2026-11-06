@@ -4,7 +4,7 @@
  * one, never one that an Agent's state says. No Project's is a dashed
  * empty tile.
  */
-import type { ProjectSummary, Sign } from "@banda/contract"
+import type { ProjectSummary, Sign, SignColor } from "@banda/contract"
 import { DynamicIcon, type IconName } from "lucide-react/dynamic"
 import type { CSSProperties } from "react"
 import { isNoProject, projectLabel } from "@banda/ui/lib/projects"
@@ -119,12 +119,27 @@ function Inside({
   }
 }
 
+/** The quiet palette a sign's letters or icon take (ADR 0070, decision 4),
+ * by name; the look's `--sign-*` say each one's colour. */
+export const SIGN_COLORS = {
+  violet: "Violet",
+  magenta: "Magenta",
+  yellow: "Yellow",
+  teal: "Teal",
+  sand: "Sand",
+} satisfies Record<SignColor, string>
+
+/** A palette colour, as the look says it. */
+export function signColor(color: SignColor): string {
+  return `var(--sign-${color})`
+}
+
 /** A picked colour's text and its thinned tile, for letters and an icon;
  * none keeps the quiet tile. A picture and an emoji keep their own. */
 function tinted(sign: Sign): CSSProperties | undefined {
   if (!sign.color || (sign.kind !== "icon" && sign.kind !== "letters"))
     return undefined
-  const colour = `var(--sign-${sign.color})`
+  const colour = signColor(sign.color)
   return {
     color: colour,
     backgroundColor: `color-mix(in oklab, ${colour} 16%, transparent)`,

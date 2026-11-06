@@ -73,20 +73,7 @@ export async function fitted(file: File): Promise<File> {
   }
 }
 
-/** A file's bytes as a `data:` URL. */
-export function dataUrl(file: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(reader.error ?? new Error("unreadable"))
-    reader.readAsDataURL(file)
-  })
-}
-
-/** The base64 bytes of a `data:` URL. */
-export function base64Of(url: string): string {
-  return url.slice(url.indexOf(",") + 1)
-}
+export { base64Of, dataUrl } from "@banda/ui/lib/files"
 
 /** An image as a `data:` URL, which the window's pages may show. */
 export function urlOf({ mime, data }: ImageData): string {
