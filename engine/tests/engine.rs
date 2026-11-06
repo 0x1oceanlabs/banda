@@ -454,14 +454,19 @@ fn an_agent_reaches_banda_through_banda_mcp() {
         error && said.contains("run nothing as your Person"),
         "{said}"
     );
-    // The words a Thread's Pane sends first are the Person's to give.
+    // The words a Thread's Pane sends first are the Person's to give
+    // (ADR 0083, decision 3): its tool says so, and what to call instead.
     let asking = json!({ "thread": null, "ask": "hi" });
     let (error, said) = mcp.call(
-        15,
+        18,
         "open_pane",
         json!({ "kind": "agents.thread", "args": asking }),
     );
-    assert!(error && said.contains("Refused (forbidden)"), "{said}");
+    assert!(
+        error && said.starts_with("Refused (forbidden): `ask` is your Person's to give"),
+        "{said}"
+    );
+    assert!(said.contains("call `send`"), "{said}");
 
     // It binds a key that stays in the window; only its Person binds one
     // that acts as them, by its action's id written in any way the look

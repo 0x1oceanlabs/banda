@@ -156,8 +156,9 @@ The kernel holds only what every module needs, and it names no module.
   is on), and the module answers with what the wall shows. The
   workspaces' tools show an Agent its Project's Panes, the others' outline
   when let, and let it open, move and close only its Project's Panes of
-  the kinds that run nothing as the Person, moving and closing only the
-  ones it opened (`Pane.by`).
+  the kinds that run nothing as the Person, given only the args that
+  choose what each shows (ADR 0083, decision 3), moving and closing only
+  the ones it opened (`Pane.by`).
 - **Identity.** A port: it says which Participant a connection's token names.
   On one computer, whoever holds the engine's secret is the owner. Later it
   is OIDC, or our accounts.

@@ -8,7 +8,9 @@ export type OpenPane = {
  */
 kind: string, 
 /**
- * The kind's own, an object, as `panes` shows them.
+ * The kind's own, an object, only those that choose what it shows:
+ * a Thread's ID alone for a Thread's Pane, a web address for a
+ * browser.
  */
 args: JsonValue, 
 /**
