@@ -5579,6 +5579,15 @@ flowchart LR
       .first()
       .evaluate((el) => getComputedStyle(el).fontFamily)
   ).toContain("KaTeX_Main")
+  // KaTeX's stylesheet fits the markup it drew: the exponent is smaller.
+  const size = (text: string) =>
+    markdown
+      .locator(".katex-html")
+      .first()
+      .locator("span", { hasText: new RegExp(`^${text}$`) })
+      .last()
+      .evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
+  expect(await size("2")).toBeLessThan(await size("E"))
   await markdown.getByRole("button", { name: "View fullscreen" }).click()
   const full = page.getByRole("dialog", { name: "View fullscreen" })
   await expect(full.getByRole("img", { name: "Mermaid chart" })).toBeVisible()
