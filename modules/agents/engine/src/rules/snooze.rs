@@ -70,6 +70,7 @@ mod tests {
             by: Participant::Person(PersonId::new()),
             until,
             woke: None,
+            resume: None,
         }
     }
 

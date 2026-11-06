@@ -4672,3 +4672,34 @@ async fn a_title_is_suggested_in_a_folder_of_the_engines_not_the_projects() {
     let refused = world.suggest_title(&nowhere).await.unwrap_err();
     assert_eq!(refused.code, Code::NotFound);
 }
+
+#[tokio::test]
+async fn a_snooze_that_goes_on_tries_its_failed_turn_again_as_its_time_comes() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (sent, _) = failing(&world, "flaky please").await;
+    let thread = &sent["thread"];
+    let alone = json!({ "thread": thread, "resume": true });
+    let refused = world.call(world.person(), "agents.snooze", alone).await;
+    assert!(refused.is_err(), "it goes on at a time");
+    let soon = json!({ "thread": thread, "resume": true, "until": banda_kernel::now_ms() + 300 });
+    world
+        .call(world.person(), "agents.snooze", soon)
+        .await
+        .unwrap();
+    let view = world
+        .until(thread, |v| {
+            v.turns.len() == 2 && v.turns[1].state == TurnState::Done
+        })
+        .await;
+    assert_eq!(view.turns[0].state, TurnState::Failed);
+    let snooze = world.snooze_of(thread).await.unwrap();
+    assert_eq!(snooze.resume, None, "it went on once");
+    let (done, _) = world.finish(None, "hello").await;
+    let nothing_failed =
+        json!({ "thread": done, "resume": true, "until": banda_kernel::now_ms() + 60_000 });
+    let refused = world
+        .call(world.person(), "agents.snooze", nothing_failed)
+        .await;
+    assert!(refused.is_err(), "no failed turn to go on with");
+}

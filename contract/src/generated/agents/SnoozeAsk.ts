@@ -13,4 +13,9 @@ thread: ThreadId,
  * When it comes back, in milliseconds since the epoch. Leave it out
  * to snooze a Thread at work until its turn ends.
  */
-until?: number, };
+until?: number, 
+/**
+ * As `until` comes, its latest turn, failed, goes again, as after a
+ * usage limit resets (ADR 0074, decision 8).
+ */
+resume?: boolean, };

@@ -124,15 +124,18 @@ export type Shell = WindowApi & {
 export type SnoozeAsked = {
   thread?: { project: ProjectId; id: string }
   until?: number
+  /** With `until`, its failed turn goes again then (ADR 0074). */
+  resume?: boolean
 }
 
 function snoozeAsked(args: Args | undefined): SnoozeAsked {
-  const { project, thread, until } = args ?? {}
+  const { project, thread, until, resume } = args ?? {}
   return {
     ...(typeof project === "string" && typeof thread === "string"
       ? { thread: { project: project as ProjectId, id: thread } }
       : {}),
     ...(typeof until === "number" ? { until } : {}),
+    ...(resume === true ? { resume } : {}),
   }
 }
 

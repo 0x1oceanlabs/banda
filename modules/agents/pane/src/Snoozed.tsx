@@ -46,7 +46,7 @@ export function SnoozeLine({
     const until =
       snooze.until === undefined
         ? "it's done"
-        : `${clock(snooze.until, now)} · ${left(snooze.until, now)} left`
+        : `${clock(snooze.until, now)} · ${left(snooze.until, now)} left${snooze.resume ? " · goes on by itself" : ""}`
     return (
       <Line
         words={`Snoozed${byAgent} until ${until}`}

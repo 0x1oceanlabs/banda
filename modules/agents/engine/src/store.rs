@@ -296,6 +296,18 @@ pub fn snooze(sql: &Connection, thread: ThreadId) -> Result<Option<Snooze>, Erro
     thread_json(sql, thread, "snooze")
 }
 
+/// The Threads whose failed turn goes again as their snooze's time comes:
+/// each one's ID and snooze (ADR 0074, decision 8).
+pub fn resuming(sql: &Connection) -> Result<Vec<(ThreadId, Snooze)>, Error> {
+    let mut statement = sql.prepare(
+        "SELECT id, snooze FROM agents_threads
+         WHERE json_extract(snooze, '$.resume') IS NOT NULL
+           AND json_extract(snooze, '$.woke') IS NULL",
+    )?;
+    let rows = statement.query_map([], |row| Ok((row.get(0)?, column(row, 1)?)))?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
 pub fn set_snooze(sql: &Connection, thread: ThreadId, snooze: &Snooze) -> Result<(), Error> {
     set_thread_json(sql, thread, "snooze", snooze)
 }
