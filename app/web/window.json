@@ -579,6 +579,17 @@
       ]
     },
     {
+      "id": "thread.snooze",
+      "title": "Snooze the Thread you look at, or wake it",
+      "section": "Threads",
+      "keys": [
+        {
+          "code": "KeyZ",
+          "mod": true
+        }
+      ]
+    },
+    {
       "id": "menu.open",
       "title": "Banda menu",
       "section": "Banda",
