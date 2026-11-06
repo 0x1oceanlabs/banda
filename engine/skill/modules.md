@@ -24,8 +24,16 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - The message sent before, from the first line (`agents.composer.back`), Up, `[binds.composer]`
 - The message sent after, from the last line (`agents.composer.forward`), Down, `[binds.composer]`
 - Plan mode on or off (`agents.composer.plan`), Shift+Tab, `[binds.composer]`
+- Zoom the Thread in (`agents.thread.zoom-in`), Ctrl+= or Ctrl+Shift+=, `[binds.thread]`
+- Zoom the Thread out (`agents.thread.zoom-out`), Ctrl+-, `[binds.thread]`
+- The Thread at its own size (`agents.thread.zoom-reset`), Ctrl+0, `[binds.thread]`
+- Show or hide the Thread's details (`agents.thread.details`), Ctrl+Shift+B, `[binds.thread]`
+- Find in the Thread (`agents.thread.find`), Ctrl+F, `[binds.thread]`
+- Zoom the Visual in (`agents.visual.zoom-in`), Ctrl+= or Ctrl+Shift+=, `[binds.visual]`
+- Zoom the Visual out (`agents.visual.zoom-out`), Ctrl+-, `[binds.visual]`
+- The Visual at its own size (`agents.visual.zoom-reset`), Ctrl+0, `[binds.visual]`
 
-Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `composer` (the Composer, a field).
+Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `composer` (the Composer, a field), `thread` (the Thread), `visual` (the Visual preview).
 
 Its methods, `banda call agents.<method>`: `threads`, `thread`, `defaults`, `changes`, `write`, `touching`, `send`, `edit`, `withdraw`, `steer`, `resume`, `configure`, `stop`, `retry`, `fork`, `rewind`, `answer`, `attach`, `image`, `keep`, `show_visual`, `preview_visual`, `draft_issue`, `answer_issue`, `notify`, `visual`, `snooze`, `wake`, `rename`, `suggest_title`, `switch`.
 
@@ -68,6 +76,11 @@ Its settings: `terminal.toml`.
 Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
 
 - New terminal (`terminal.new`), Ctrl+Alt+Return
+- Zoom the terminal in (`terminal.zoom-in`), Ctrl+= or Ctrl+Shift+=, `[binds.terminal]`
+- Zoom the terminal out (`terminal.zoom-out`), Ctrl+-, `[binds.terminal]`
+- The terminal at its own size (`terminal.zoom-reset`), Ctrl+0, `[binds.terminal]`
+
+Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `terminal` (the Terminal).
 
 Its widgets on the bar, which `[bar]` in look.toml places by id:
 
@@ -103,10 +116,10 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Reload the page, not from the cache (`browser.reload-hard`), Ctrl+Shift+R, `[binds.browser]`
 - Back (`browser.back`), Ctrl+[, `[binds.browser]`
 - Forward (`browser.forward`), Ctrl+], `[binds.browser]`
+- The page's developer tools (`browser.devtools`), F12, `[binds.browser]`
 - Zoom the page in (`browser.zoom-in`), Ctrl+= or Ctrl+Shift+=, `[binds.browser]`
 - Zoom the page out (`browser.zoom-out`), Ctrl+-, `[binds.browser]`
 - The page at its own size (`browser.zoom-reset`), Ctrl+0, `[binds.browser]`
-- The page's developer tools (`browser.devtools`), F12, `[binds.browser]`
 
 Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `browser` (the Browser).
 

@@ -24,7 +24,10 @@ import {
   DialogTitle,
 } from "@banda/ui/components/dialog"
 import { Kbd } from "@banda/ui/components/kbd"
-import { zoomAfter } from "@banda/ui/lib/zoom"
+import { useScope } from "@banda/ui/hooks/use-scope"
+import { zoomHandlers } from "@banda/ui/hooks/use-zoom"
+import { zoomBy, type ZoomStep } from "@banda/ui/lib/zoom"
+import { VISUAL } from "./scopes"
 import { onThemeChange } from "@banda/ui/lib/look"
 import {
   heard,
@@ -195,9 +198,6 @@ export function Visual({
   )
 }
 
-/** Where 100 % is in {@link ZOOMS}. */
-const ACTUAL = ZOOMS.indexOf(1)
-
 /** A Visual over the window, as wide as the window lets it be, zoomed from
  * 50 to 200 %; `Esc` closes it, as T3 Code's full screen. */
 function VisualPreview({
@@ -213,21 +213,15 @@ function VisualPreview({
   onOpenChange: (open: boolean) => void
   onOpen: () => void
 }) {
-  const [step, setStep] = useState(ACTUAL)
-  const zoom = ZOOMS[step]
-  const by = (steps: number) =>
-    setStep((now) => Math.min(ZOOMS.length - 1, Math.max(0, now + steps)))
-  const keys = (event: React.KeyboardEvent) => {
-    const next = zoomAfter(event, zoom)
-    if (next === null) return
-    event.preventDefault()
-    setStep(ZOOMS.indexOf(next))
-  }
+  const [zoom, setZoom] = useState(1)
+  const by = (step: ZoomStep) => setZoom((now) => zoomBy(now, step))
+  // Its zoom's keys (ADR 0071, decision 1).
+  const scope = useScope(VISUAL, zoomHandlers("agents.visual", by))
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        ref={scope}
         showCloseButton={false}
-        onKeyDown={keys}
         className="flex h-[calc(100%-4rem)] w-[calc(100%-4rem)] max-w-none flex-col gap-0 bg-background p-0 sm:max-w-none"
       >
         <div className="flex items-center gap-1 border-b px-3 py-1.5">
@@ -238,7 +232,7 @@ function VisualPreview({
             variant="ghost"
             size="icon-xs"
             aria-label="Zoom out"
-            disabled={step === 0}
+            disabled={zoom === ZOOMS[0]}
             onClick={() => by(-1)}
           >
             <MinusIcon />
@@ -246,7 +240,7 @@ function VisualPreview({
           <button
             type="button"
             title="Actual size"
-            onClick={() => setStep(ACTUAL)}
+            onClick={() => by(0)}
             className="w-12 text-center text-xs text-muted-foreground tabular-nums"
           >
             {Math.round(zoom * 100)} %
@@ -255,7 +249,7 @@ function VisualPreview({
             variant="ghost"
             size="icon-xs"
             aria-label="Zoom in"
-            disabled={step === ZOOMS.length - 1}
+            disabled={zoom === ZOOMS.at(-1)}
             onClick={() => by(1)}
           >
             <PlusIcon />

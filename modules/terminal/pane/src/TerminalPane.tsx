@@ -30,7 +30,9 @@ import { type MenuAt, TerminalMenu } from "./TerminalMenu"
 import { onThemeChange, useFile } from "@banda/ui/lib/look"
 import { cursorOf, fontOf, themeOf } from "./theme"
 import { ZoomBadge } from "@banda/ui/components/zoom-badge"
-import { useZoom } from "@banda/ui/hooks/use-zoom"
+import { useScope } from "@banda/ui/hooks/use-scope"
+import { useZoom, zoomHandlers } from "@banda/ui/hooks/use-zoom"
+import { TERMINAL } from "./scopes"
 import { zoomOf } from "@banda/ui/lib/zoom"
 
 /** How long a size holds before the shell hears it, in ms. */
@@ -202,9 +204,9 @@ function Screen({
   // Types to the program while it runs, as the menu's Clear does.
   const typed = useRef<(data: string) => void>(() => {})
   // Its own zoom, kept till the window starts again; `terminal.toml`
-  // keeps its size. It takes Ctrl+− from the program, as Ghostty's and
-  // kitty's do, which readline would read as undo.
-  const { press, shown } = useZoom(terminal)
+  // keeps its size. Its actions take Ctrl+− from the program, as
+  // Ghostty's and kitty's do, which readline would read as undo.
+  const { zoom, by, shown } = useZoom(terminal)
   // The newest `terminal.toml`, for a surface made, or a snapshot heard,
   // after it came.
   const writing = useFile(TERMINAL_FILE)
@@ -329,15 +331,9 @@ function Screen({
           settling = setTimeout(() => input.resize({ cols, rows }), SETTLE)
         },
         onSelectionChange: () => {},
-        // The window's own keys, such as Alt+Arrows, stay the window's;
-        // Ctrl with + − 0 zooms the terminal.
-        beforeKey: (event) => {
-          if (event.defaultPrevented) return false
-          if (!press(event)) return true
-          event.preventDefault()
-          refont.current()
-          return false
-        },
+        // A key an action took, the window's as Alt+Arrows or the
+        // terminal's own zoom, is not the program's.
+        beforeKey: (event) => !event.defaultPrevented,
         canActivateLink: (text) => linked(text) !== null,
         onLinkActivate: (text, event) => {
           const target = linked(text)
@@ -384,7 +380,7 @@ function Screen({
       drawn?.dispose()
       surface.current = null
     }
-  }, [engine, project, terminal, shell, press])
+  }, [engine, project, terminal, shell])
 
   // A change to `terminal.toml` reaches a screen already drawn: its font,
   // and its cursor, over what a program asked for. A new look with the
@@ -397,8 +393,14 @@ function Screen({
     surface.current?.setCursor(cursorOf(writing))
   }, [writing])
 
+  // Its keys (ADR 0071): the zoom, which draws its font again.
+  const scope = useScope(TERMINAL, zoomHandlers("terminal", by), {
+    tile: true,
+  })
+  useEffect(() => refont.current(), [zoom])
+
   return (
-    <div className="relative flex h-full min-h-0 flex-col">
+    <div ref={scope} className="relative flex h-full min-h-0 flex-col">
       <ContextMenu>
         <ContextMenuTrigger
           onContextMenu={(event) => {

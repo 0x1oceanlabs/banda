@@ -48,8 +48,9 @@ import {
 import { useLive } from "@banda/ui/hooks/use-live"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { ZoomBadge } from "@banda/ui/components/zoom-badge"
-import { useZoom } from "@banda/ui/hooks/use-zoom"
-import { matches } from "@banda/ui/lib/keys"
+import { useZoom, zoomHandlers } from "@banda/ui/hooks/use-zoom"
+import { useScope } from "@banda/ui/hooks/use-scope"
+import { THREAD } from "./scopes"
 import { carries, droppedPaths } from "@banda/ui/lib/file-drag"
 import { copyAsMarkdown } from "@banda/ui/lib/markdown-copy"
 import { fromFolder } from "@banda/ui/lib/paths"
@@ -91,7 +92,7 @@ import { type AnswerKeys, pressOf, Question, QuestionDrawer } from "./Questions"
 import { aboutOf, keyAnswer } from "./asking"
 import { drafted } from "./drafts"
 import { ChangedFiles } from "./ChangedFiles"
-import { DETAILS_KEY, ThreadDetails, useWide } from "./Details"
+import { ThreadDetails, useWide } from "./Details"
 import { Plan } from "./Plan"
 import { PlanReady, ProposedPlan } from "./ProposedPlan"
 import { planTitle } from "./messageText"
@@ -267,10 +268,28 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
     ? (shown: boolean) =>
         update({ ...args, details: shown ? undefined : false })
     : setPopped
+  // Its keys (ADR 0071, decision 1): its zoom, which sizes its words, its
+  // details, and Ctrl+F (⌘F) to find in it, as in T3 Code.
+  const scope = useScope(
+    THREAD,
+    {
+      ...zoomHandlers("agents.thread", zoom.by),
+      "agents.thread.details": () => {
+        setDetailsShown(!detailsShown)
+        return true
+      },
+      "agents.thread.find": () => {
+        setFind((now) => now ?? { query: "", at: 0 })
+        findField.current?.select()
+        return true
+      },
+    },
+    { tile: true }
+  )
+  useEffect(() => scope(root.current), [scope])
 
   return (
-    // Files dropped anywhere on the Pane join the message; Mod+F finds in
-    // it, as in T3 Code.
+    // Files dropped anywhere on the Pane join the message.
     <div
       ref={root}
       className="@container/thread flex h-full min-h-0 flex-col"
@@ -279,15 +298,6 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
         written.current = thread !== null && drafted(thread)
       }}
       onKeyDown={(event) => {
-        if (zoom.press(event)) {
-          event.preventDefault()
-          return
-        }
-        if (matches(event, DETAILS_KEY)) {
-          event.preventDefault()
-          setDetailsShown(!detailsShown)
-          return
-        }
         const press =
           asking && thread !== null
             ? pressOf(event, root.current, dock.current, written.current)
@@ -297,15 +307,7 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
           // Its own: not the workspace drawer's Esc, nor the composer's.
           event.preventDefault()
           event.stopPropagation()
-          return
         }
-        const mod = event.ctrlKey || event.metaKey
-        // By the key's place, as the window's keys, on any layout.
-        if (!mod || event.altKey || event.shiftKey || event.code !== "KeyF")
-          return
-        event.preventDefault()
-        setFind((now) => now ?? { query: "", at: 0 })
-        findField.current?.select()
       }}
       onDragOver={(event) => {
         const data = event.dataTransfer
