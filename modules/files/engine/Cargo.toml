@@ -10,10 +10,14 @@ publish.workspace = true
 [dependencies]
 async-trait.workspace = true
 banda-kernel = { path = "../../../kernel" }
+banda-look = { path = "../../../look" }
+dirs.workspace = true
 ignore.workspace = true
 infer.workspace = true
 mime_guess.workspace = true
 nucleo-matcher.workspace = true
+rusqlite.workspace = true
+schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

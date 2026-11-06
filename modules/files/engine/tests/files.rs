@@ -1,7 +1,7 @@
 //! The files module through the kernel, as a Pane and an Agent use it.
 
 use banda_files::Files;
-use banda_files::model::{Found, Kind, Listing, Stat, Text, Watched};
+use banda_files::model::{Found, Kind, Listing, Opened, Places, Stat, Text, Watched};
 use banda_kernel::{
     AgentId, Caller, Code, CommandId, Kernel, Participant, PersonId, ProjectId, Refusal,
 };
@@ -82,6 +82,20 @@ impl World {
 
     async fn ask<T: DeserializeOwned>(&self, method: &str, params: Value) -> T {
         serde_json::from_value(self.call(method, params).await.unwrap()).unwrap()
+    }
+
+    /// The Person's command, as the window sends it, with an ID of its own.
+    async fn command(&self, method: &str, params: Value) -> Result<Value, Refusal> {
+        let person = Participant::Person(self.owner);
+        (self.kernel)
+            .call(
+                person,
+                method,
+                Some(self.project),
+                Some(CommandId::new()),
+                params,
+            )
+            .await
     }
 }
 
@@ -308,5 +322,66 @@ async fn watch_says_which_folder_changed() {
         Watched::Changed {
             dirs: vec!["src".to_owned()]
         }
+    );
+}
+
+#[tokio::test]
+async fn places_names_home_and_only_the_folders_that_are_there() {
+    let world = World::new().await;
+    let places: Places = world.ask("files.places", json!({})).await;
+    let home = dirs::home_dir().unwrap();
+    assert_eq!(places.home, home.to_string_lossy());
+    for place in [&places.desktop, &places.downloads].into_iter().flatten() {
+        assert!(std::path::Path::new(place).is_dir(), "{place}");
+    }
+}
+
+#[tokio::test]
+async fn what_the_person_opened_comes_back_latest_first_and_gone_files_stay_out() {
+    let world = World::new().await;
+    for path in ["a.md", "src/b.rs", "c.txt"] {
+        world.write(path, "");
+    }
+    for path in ["a.md", "src/b.rs", "a.md", "c.txt"] {
+        world
+            .command("files.opened", json!({ "path": path }))
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    // A command needs its ID, as every command does.
+    let refused = world.call("files.opened", json!({ "path": "a.md" })).await;
+    assert_eq!(refused.unwrap_err().code, Code::Invalid);
+
+    std::fs::remove_file(world.folder.join("src/b.rs")).unwrap();
+    let recent: Vec<Opened> = world.ask("files.recent", json!({})).await;
+    let paths: Vec<&str> = recent.iter().map(|file| file.path.as_str()).collect();
+    let whole = |path: &str| world.folder.join(path).to_string_lossy().into_owned();
+    assert_eq!(paths, [whole("c.txt"), whole("a.md")]);
+    assert_eq!((recent[0].count, recent[1].count), (1, 2));
+    assert!(recent[0].last >= recent[1].last);
+    let one: Vec<Opened> = world.ask("files.recent", json!({ "limit": 1 })).await;
+    assert_eq!(one.len(), 1);
+}
+
+#[tokio::test]
+async fn find_raises_a_file_the_person_opened_among_matches_alike() {
+    let world = World::new().await;
+    for path in ["a/main.rs", "b/main.rs", "main/notes.txt"] {
+        world.write(path, "");
+    }
+    let found: Found = world.ask("files.find", json!({ "query": "main" })).await;
+    assert_eq!(found.paths[..2], ["a/main.rs", "b/main.rs"]);
+    for path in ["b/main.rs", "main/notes.txt", "main/notes.txt"] {
+        world
+            .command("files.opened", json!({ "path": path }))
+            .await
+            .unwrap();
+    }
+    let found: Found = world.ask("files.find", json!({ "query": "main" })).await;
+    assert_eq!(
+        found.paths,
+        ["b/main.rs", "a/main.rs", "main/notes.txt"],
+        "a match in a name stays above one in a folder"
     );
 }

@@ -1,0 +1,15 @@
+#:schema ./schemas/files.schema.json
+# What Files shows (ADR 0073). Every key is optional: what you leave out
+# is Banda's default, written below. Check a change with:
+# banda settings check
+
+# The folders pinned among Files' places, in their order: whole, or from
+# ~. A folder's menu in Files pins and unpins.
+# pinned = ["~/Pictures/Screenshots"]
+
+# Whether a Files Pane shows hidden files, whose names start with a dot.
+# Each Pane can show them or not for itself.
+# hidden = false
+
+# Whether a Files Pane shows what git ignores, greyed. Off hides it.
+# ignored = true

@@ -7,19 +7,38 @@
 //! [`Reach`]: a relative one starts at the Project's folder, the Person
 //! may name any, and an Agent's call reaches only inside the Project's
 //! folder. These only read; writing comes later (decisions 8 and 10).
+//!
+//! It also keeps what the Person opened (`opened`, `recent`), which Files
+//! lists and `find` raises, and answers the Person's places (`places`).
+//! What Files shows, its pinned places too, is `files.toml` (`settings`).
 
 pub mod model;
+pub mod settings;
 
 mod find;
 mod list;
+mod places;
 mod read;
+mod recent;
 
-use banda_kernel::{Call, Changed, Module, Reach, Refusal, Right, Stream};
-use model::{FindAsk, Found, ListAsk, Listing, ReadAsk, Stat, StatAsk, Text, WatchAsk, Watched};
+use banda_kernel::{Call, Changed, Module, Nothing, Reach, Refusal, Right, Stream};
+use model::{
+    FindAsk, Found, ListAsk, Listing, Opened, OpenedAsk, Places, ReadAsk, RecentAsk, Stat, StatAsk,
+    Text, WatchAsk, Watched,
+};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+
+/// The module's settings file in `~/.config/banda` (ADR 0016): what Files
+/// shows, which the look resolves for the window (ADR 0073, decision 13).
+pub const SETTINGS: [banda_look::SettingsFile; 1] =
+    [banda_look::SettingsFile::of::<settings::FilesSettings>()];
+
+/// The files `files.recent` answers unless asked otherwise, and the most.
+const RECENT: u32 = 20;
+const RECENT_MOST: u32 = 100;
 
 #[derive(Default)]
 pub struct Files {
@@ -48,6 +67,14 @@ banda_kernel::methods! {
         /// What changed in some folders, from now on: first that they are
         /// watched, then each folder whose names changed.
         stream watch(WatchAsk) -> Watched, Read;
+        /// The Person's home, and its Desktop and Downloads where the
+        /// system names them and they are there.
+        call places(Nothing) -> Places, Read;
+        /// Says the Person opened a file, so Recent lists it and `find`
+        /// raises it.
+        command opened(OpenedAsk) -> (), Write;
+        /// The files opened lately, the latest first, those still there.
+        call recent(RecentAsk) -> Vec<Opened>, Read;
     }
 }
 
@@ -58,7 +85,7 @@ impl Module for Files {
     }
 
     fn migrations(&self) -> &'static [&'static str] {
-        &[]
+        &[recent::MIGRATION]
     }
 
     fn right(&self, method: &str) -> Option<Right> {
@@ -72,6 +99,14 @@ impl Module for Files {
     async fn stream(&self, call: Call, method: &str, params: Value) -> Result<Stream, Refusal> {
         self.dispatch_stream(call, method, params).await
     }
+}
+
+/// Now, in ms since the Unix epoch.
+fn now() -> i64 {
+    let since = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH);
+    since.map_or(0, |since| {
+        i64::try_from(since.as_millis()).unwrap_or(i64::MAX)
+    })
 }
 
 /// A path as a caller reads it.
@@ -146,15 +181,45 @@ impl Files {
             )));
         }
         let limit = ask.limit.unwrap_or(find::LIMIT).clamp(1, find::MOST) as usize;
+        let opened = (call.project())
+            .read(|sql| recent::latest(sql, None))
+            .await?;
+        let raised = recent::raised(&opened, &dir, now());
         let walks = self.walks.clone();
         let query = ask.query;
         blocking(move || {
             let walked = walks.of(&dir);
             Found {
                 dir: shown(&dir),
-                paths: find::matching(&walked, &query, limit),
+                paths: find::matching(&walked, &query, limit, &raised),
                 cut: walked.cut,
             }
+        })
+        .await
+    }
+
+    async fn places(&self, _call: Call, _: Nothing) -> Result<Places, Refusal> {
+        let places = blocking(places::here).await?;
+        places.ok_or_else(|| Refusal::not_found("This user has no home folder."))
+    }
+
+    async fn opened(&self, call: Call, ask: OpenedAsk) -> Result<(), Refusal> {
+        let path = shown(Reach::of(&call, &ask.path)?.path());
+        call.command(move |tx| recent::open(tx.sql(), &path, tx.now()))
+            .await
+    }
+
+    async fn recent(&self, call: Call, ask: RecentAsk) -> Result<Vec<Opened>, Refusal> {
+        let limit = ask.limit.unwrap_or(RECENT).clamp(1, RECENT_MOST) as usize;
+        let opened = (call.project())
+            .read(|sql| recent::latest(sql, None))
+            .await?;
+        // Those gone since are left out, not forgotten: one may come back.
+        blocking(move || {
+            (opened.into_iter())
+                .filter(|file| Path::new(&file.path).exists())
+                .take(limit)
+                .collect()
         })
         .await
     }

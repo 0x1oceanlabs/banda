@@ -666,9 +666,36 @@ If Chat is removed, Agents still works through its own Thread.
   goes through the kernel's path guard, `Reach`: a relative path starts
   at the Project's folder, the Person reaches any, an Agent only its
   Project's. It only reads; writing comes later.
+- **It keeps what the Person opened**, in `files_recent` (path, last
+  time, count): `files.file` says each file it shows with the command
+  `files.opened`, `files.recent` lists them, and `files.find` raises them
+  a little among matches of their kind. `files.places` answers home,
+  Desktop and Downloads as the system names them (XDG's user dirs on
+  Linux).
 - **`files.find` answers every "which file"**: the composer's `@` and the
   Banda menu's Files, a source of the files module's own. The menu opens
-  `name:42` at line 42.
+  `name:42` at line 42; its Tab offers "Show in Files" too.
+- **`files.tree`** is any folder as a Finder shows it, one Files Pane per
+  Project that the menu's Files (`files.tree`, Alt+E), "Show in Files"
+  and `banda files [path]` find again:
+  - the places on its left (the Projects with their badges, Home,
+    Desktop, Downloads, what `files.toml` pins, Recent), folded to icons
+    on a narrow Pane;
+  - its path as crumbs, a field on a click or Ctrl+L, Tab completing a
+    folder from `files.list`;
+  - the tree, `@pierre/trees` behind `@banda/ui`'s `FolderTree`: one
+    folder listed as it opens, a folder of one folder as one row, what git
+    ignores greyed, dotfiles on Ctrl+Shift+., git's marks from the git
+    module's `git.watch` where the folder is in the Project, the open
+    folders watched with `files.watch`;
+  - typing filters it with `files.find`, the matches under their folders.
+
+  Its keys are its own, with Ctrl (⌘), never the mod; each is also an
+  unlisted action (`files.up`, `files.path`, `files.hidden`,
+  `files.filter`) that `keys.toml` can bind, until ADR 0071's scopes.
+- **`files.toml`** (ADR 0073, decision 13) holds the pinned places and
+  whether hidden and ignored files show; a folder's menu pins it through
+  the settings bridge.
 - **Its Pane** (`modules/files/pane`), `files.file`, shows one file, one
   Pane per file. `files.stat` says what it is, and its extension, then
   its MIME, picks how it is drawn:

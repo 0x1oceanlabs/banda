@@ -1,8 +1,8 @@
 //! `files.find`: fuzzy paths under a folder (ADR 0073, decision 11). It
 //! walks with ripgrep's `ignore`, which leaves out what `.gitignore` does,
 //! and matches with `nucleo`, Helix's and Zed's matcher, a match in a
-//! file's name above one in its folders. What the Person opened lately is
-//! to rank higher too, once Files keeps it.
+//! file's name above one in its folders, and what the Person opened lately
+//! raised a little within its kind of match.
 
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
@@ -79,8 +79,13 @@ fn walk(dir: &Path, most: usize) -> Walked {
 
 /// The paths of `walked` that match `query`, best first, at most `limit`:
 /// those whose name matches before those whose folders do, each by
-/// nucleo's score, then the shorter.
-pub fn matching(walked: &Walked, query: &str, limit: usize) -> Vec<String> {
+/// nucleo's score and what `raised` adds to it, then the shorter.
+pub fn matching(
+    walked: &Walked,
+    query: &str,
+    limit: usize,
+    raised: &HashMap<String, u32>,
+) -> Vec<String> {
     let mut matcher = Matcher::new(Config::DEFAULT.match_paths());
     let pattern = Pattern::parse(query, CaseMatching::Smart, Normalization::Smart);
     let mut buffer = Vec::new();
@@ -91,6 +96,7 @@ pub fn matching(walked: &Walked, query: &str, limit: usize) -> Vec<String> {
         let ranked =
             (score(name).map(|score| (0, score))).or_else(|| score(path).map(|score| (1, score)));
         if let Some((tier, score)) = ranked {
+            let score = score + raised.get(path).copied().unwrap_or(0);
             found.push((tier, std::cmp::Reverse(score), path.len(), path));
         }
     }
@@ -125,7 +131,7 @@ mod tests {
             "docs/x.md",
         ]);
         assert_eq!(
-            matching(&paths, "main", 50),
+            matching(&paths, "main", 50, &HashMap::new()),
             ["src/main.rs", "src/domain.rs", "main/notes.txt"]
         );
     }
@@ -133,8 +139,30 @@ mod tests {
     #[test]
     fn letters_in_order_match_fuzzily_and_the_limit_holds() {
         let paths = walked(&["src/main.rs", "src/model.rs", "README.md"]);
-        assert_eq!(matching(&paths, "mrs", 50)[0], "src/main.rs");
-        assert_eq!(matching(&paths, "", 2).len(), 2);
+        assert_eq!(
+            matching(&paths, "mrs", 50, &HashMap::new())[0],
+            "src/main.rs"
+        );
+        assert_eq!(matching(&paths, "", 2, &HashMap::new()).len(), 2);
+    }
+
+    #[test]
+    fn a_file_opened_lately_rises_among_matches_of_its_kind_only() {
+        let paths = walked(&["a/main.rs", "b/main.rs", "main/notes.txt"]);
+        let none = HashMap::new();
+        assert_eq!(
+            matching(&paths, "main", 50, &none)[..2],
+            ["a/main.rs", "b/main.rs"]
+        );
+        let raised = HashMap::from([
+            ("b/main.rs".to_owned(), 8),
+            ("main/notes.txt".to_owned(), 32),
+        ]);
+        assert_eq!(
+            matching(&paths, "main", 50, &raised),
+            ["b/main.rs", "a/main.rs", "main/notes.txt"],
+            "a match in a folder stays under one in a name"
+        );
     }
 
     #[test]

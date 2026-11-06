@@ -2,7 +2,8 @@
  * What the Banda menu finds of the files module (ADR 0022, decision 4;
  * ADR 0073, decision 11): the focused Project's files that fit the words,
  * as `files.find` matches them. Enter opens one in `files.file`, at the
- * line typed after them, as `main.rs:42`.
+ * line typed after them, as `main.rs:42`; Tab also offers to show it in
+ * Files, in its folder.
  */
 import { useEffect, useLayoutEffect, useMemo, useState } from "react"
 import { copyText } from "@banda/ui/lib/clipboard"
@@ -12,6 +13,7 @@ import { nameAndFolder } from "@banda/ui/lib/paths"
 import type { FindProps, MenuRow, Source } from "@banda/ui/module"
 import { FileIcon } from "lucide-react"
 import { openFile } from "./FilePane"
+import { openTree } from "./TreePane"
 
 const OPEN: Key = { code: "Enter" }
 /** How many files a search shows. */
@@ -55,6 +57,13 @@ function FindFiles({ words: typed, here, found }: FindProps) {
         const { name, folder: inside } = nameAndFolder(path)
         const open: MenuRow["run"] = (window) =>
           openFile(window, full, line, project)
+        const show: MenuRow["run"] = (window) =>
+          openTree(
+            window,
+            { dir: nameAndFolder(full).folder ?? "/", selected: name },
+            project,
+            true
+          )
         return {
           id: `files.file.${project}.${path}`,
           title: line ? `${name}:${line}` : name,
@@ -63,6 +72,7 @@ function FindFiles({ words: typed, here, found }: FindProps) {
           run: open,
           acts: [
             { title: "Open", key: OPEN, run: open },
+            { title: "Show in Files", run: show },
             { title: "Copy path", run: () => copyText(full) },
           ],
         }

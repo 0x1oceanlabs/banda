@@ -2,7 +2,8 @@
 # its methods and its Panes, its code declares; this holds the rest.
 id = "files"
 name = "Files"
-about = "Any folder, as a Finder shows it: its names folders first, with what git ignores and what is hidden marked; what a path is; a file's text; fuzzy paths under a folder; and what changed in the folders shown. An Agent reaches only its Project's folder. A file opens in its Pane, as code, markdown or an image, at a line."
+about = "Any folder, as a Finder shows it: a tree with the places beside it and its path above, what git ignores greyed and what git sees changed marked, what is hidden shown or not; what a path is; a file's text; fuzzy paths under a folder, what was opened lately first; and what changed in the folders shown. An Agent reaches only its Project's folder. A file opens in its Pane, as code, markdown or an image, at a line."
 version = "0.1.0"
 from-banda = true
-settings = []
+# The settings file it owns, in ~/.config/banda.
+settings = ["files.toml"]

@@ -22,6 +22,7 @@ import {
   BotIcon,
   BugIcon,
   FileCogIcon,
+  FolderIcon,
   FoldersIcon,
   GlobeIcon,
   KeyboardIcon,
@@ -176,6 +177,13 @@ export const SECTIONS: Section[] = [
     icon: TerminalIcon,
     files: [{ name: "terminal.toml" }],
     about: aboutOf("terminal.toml"),
+  },
+  {
+    id: "files",
+    title: "Files",
+    icon: FolderIcon,
+    files: [{ name: "files.toml" }],
+    about: aboutOf("files.toml"),
   },
   {
     id: "keys",

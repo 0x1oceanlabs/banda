@@ -1,0 +1,710 @@
+/**
+ * `files.tree`: any folder as a Finder shows it (ADR 0073, decisions 1
+ * and 3), the default view being a tree. The places on its left, its path
+ * above, and the tree under it: lazy, a folder listed as it opens; what
+ * git ignores greyed; dotfiles shown or not, by the Pane; git's marks
+ * where the folder is in the Project's repository; and a filter that
+ * finds as one types. It follows the folders it shows open on disk.
+ *
+ * ↵ or a double click opens a file beside it, in `files.file`, or goes
+ * into a folder. It only reads: the file operations come later (step F5).
+ */
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
+import type { Engine, ProjectId } from "@banda/contract"
+import { FILES_FILE } from "@banda/contract/files"
+import { Button } from "@banda/ui/components/button"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuTrigger,
+} from "@banda/ui/components/context-menu"
+import {
+  FolderTree,
+  type FolderTreeHandle,
+  type Mark,
+  rowAt,
+} from "@banda/ui/components/file-tree"
+import { InHeader } from "@banda/ui/components/pane-header"
+import { Spinner } from "@banda/ui/components/spinner"
+import { useProjects } from "@banda/ui/hooks/use-projects"
+import { useRead } from "@banda/ui/hooks/use-read"
+import { useWiderThan } from "@banda/ui/hooks/use-wider-than"
+import { FIELDS, keyLabel } from "@banda/ui/lib/keys"
+import { useFile } from "@banda/ui/lib/look"
+import { shownProjects } from "@banda/ui/lib/projects"
+import type { WindowApi } from "@banda/ui/module"
+import { definePane, type PaneProps, paneOf } from "@banda/ui/pane"
+import {
+  ChevronsDownUpIcon,
+  ChevronsUpDownIcon,
+  EyeIcon,
+  EyeOffIcon,
+  FolderTreeIcon,
+  FolderXIcon,
+  PanelLeftIcon,
+  SearchIcon,
+  XIcon,
+} from "lucide-react"
+import { Card } from "./Facts"
+import { useFolder } from "./folder"
+import { HeaderButton } from "./HeaderButton"
+import { keyOf, treeKey, typesFilter, type Does } from "./keys"
+import { marksOf } from "./marks"
+import { PathBar } from "./PathBar"
+import { Rail } from "./Rail"
+import { RecentList } from "./RecentList"
+import { RowMenu } from "./RowMenu"
+import { matchesOf, onlyFolder, type Showing, treeOf } from "./tree"
+import { nameOf, parentOf, tilded, untilded, wholeOf } from "./where"
+
+export type TreeArgs = {
+  /** The folder, whole; `""` is the Project's, which it names once read. */
+  dir: string
+  /** The folders open, from it, each ending with `/`. */
+  open?: string[]
+  /** The row picked, from it. */
+  selected?: string | null
+  /** Whether it shows dotfiles; `files.toml`'s choice when left out. */
+  hidden?: boolean
+  /** Whether its places show in full; folded on a narrow Pane when left
+   * out. */
+  rail?: boolean
+  /** It shows Recent, not the folder. */
+  recent?: boolean
+}
+
+export const treePane = definePane<TreeArgs>({
+  kind: "files.tree",
+  title: (args) => (args.recent ? "Recent" : nameOf(args.dir) || "Files"),
+  detail: (args) => (args.recent ? null : args.dir || null),
+  icon: FolderTreeIcon,
+  // The launcher's Files: the Project's folder.
+  start: { dir: "" },
+  letter: "F",
+  narrow: true,
+  // One to go back to in a Project: the Banda menu's Files and "Show in
+  // Files" find it again.
+  identity: () => "files",
+  Pane: TreePane,
+})
+
+/** Opens Files on `args` beside the focused Pane, in `project`; the one
+ * shown already goes there, with `update`, or gets the focus as it is. */
+export function openTree(
+  window: WindowApi,
+  args: TreeArgs,
+  project?: ProjectId,
+  update = false
+): void {
+  window.open(paneOf(treePane, args), project, {
+    again: false,
+    ...(update && { update: true }),
+  })
+}
+
+/** Under this width a Pane folds its places to icons, in px. */
+const NARROW = 480
+/** How long the open folders and the pick rest before they are kept, in
+ * ms. */
+const KEEP = 400
+/** The most open folders kept with the Pane. */
+const KEPT_OPEN = 200
+/** How long the filter's words rest before they are looked for, in ms. */
+const WAIT = 80
+/** The most matches the filter shows. */
+const MATCHES = 200
+/** The most folders Expand all opens. */
+const EXPANDED = 300
+
+const NO_MARKS: ReadonlyMap<string, Mark> = new Map()
+
+const asks = new Set<(does: Does) => void>()
+
+/** Has the focused Files Pane do `does`, as its key would: how an action,
+ * which `keys.toml` binds, reaches it. */
+export function askTree(does: Does): void {
+  for (const hear of asks) hear(does)
+}
+
+function TreePane(props: PaneProps<TreeArgs>) {
+  const { engine, project, args, update, label } = props
+  const places = useRead(
+    useCallback(
+      () => engine.call("files.places", {}, { project }),
+      [engine, project]
+    )
+  )
+  const home = places.state === "ready" ? places.value.home : null
+  // The Project's folder, as the engine finds it.
+  const top = useRead(
+    useCallback(
+      () => engine.call("files.stat", { paths: [""] }, { project }),
+      [engine, project]
+    )
+  )
+  const projectTop = top.state === "ready" ? (top.value[0]?.path ?? null) : null
+  const finder = useFile(FILES_FILE)
+  const { listed: projects } = useProjects(engine)
+
+  // `""` is the Project's folder: named once it is read.
+  useEffect(() => {
+    if (args.dir === "" && projectTop) update({ ...args, dir: projectTop })
+  }, [args, projectTop, update])
+
+  const box = useRef<HTMLDivElement>(null)
+  const wide = useWiderThan(box, NARROW)
+  const railOpen = args.rail ?? wide
+  const hidden = args.hidden ?? finder.hidden
+  const recent = args.recent === true
+  const dir = args.dir
+
+  // Its header names the folder with ~ for home.
+  useEffect(() => {
+    if (recent || !dir) label?.(null)
+    else label?.({ title: nameOf(dir), detail: tilded(dir, home) })
+  }, [label, recent, dir, home])
+
+  // Another folder, its folders folded; out of Recent.
+  const go = useCallback(
+    (to: string, selected: string | null = null) =>
+      update({ ...args, dir: to, open: [], selected, recent: false }),
+    [update, args]
+  )
+  /** Goes to a path typed: a folder, or a file's folder with it picked. */
+  const goTyped = useCallback(
+    async (path: string): Promise<string | null> => {
+      const [stat] = await engine
+        .call("files.stat", { paths: [path] }, { project })
+        .catch(() => [null])
+      if (!stat) return `${tilded(path, home)} is not there.`
+      if (stat.kind === "folder") go(path)
+      else go(parentOf(path) ?? "/", nameOf(path))
+      return null
+    },
+    [engine, project, home, go]
+  )
+  const openFile = useCallback(
+    (whole: string) =>
+      props.run?.("files.open", { file: whole, line: null, project }),
+    [props, project]
+  )
+  const pin = useCallback(
+    (whole: string, on: boolean) =>
+      props.run?.("files.pin", { dir: tilded(whole, home), pin: on }),
+    [props, home]
+  )
+  const pinned = useMemo(
+    () => finder.pinned.map((place) => untilded(place, home, "/")),
+    [finder.pinned, home]
+  )
+
+  const shownList = useMemo(
+    () => (projects.state === "ready" ? shownProjects(projects.value) : []),
+    [projects]
+  )
+
+  return (
+    <div ref={box} className="flex h-full min-h-0">
+      <InHeader>
+        <HeaderButton
+          label="Places"
+          on={railOpen}
+          onClick={() => update({ ...args, rail: !railOpen })}
+        >
+          <PanelLeftIcon />
+        </HeaderButton>
+      </InHeader>
+      <Rail
+        folded={!railOpen}
+        projects={shownList}
+        places={places.state === "ready" ? places.value : null}
+        pinned={pinned}
+        at={recent ? null : dir}
+        recent={recent}
+        onGo={(to) => go(to)}
+        onRecent={() => update({ ...args, recent: true })}
+        onUnpin={(place) => pin(place, false)}
+      />
+      <div className="flex min-w-0 flex-1 flex-col">
+        {recent ? (
+          <>
+            <div className="flex h-8 shrink-0 items-center border-b px-2.5 text-xs">
+              Recent
+            </div>
+            <div className="min-h-0 flex-1">
+              <RecentList
+                engine={engine}
+                project={project}
+                home={home}
+                top={projectTop}
+                onOpen={openFile}
+                onShow={(whole) => go(parentOf(whole) ?? "/", nameOf(whole))}
+              />
+            </div>
+          </>
+        ) : dir === "" ? (
+          <Loading />
+        ) : (
+          <FolderView
+            key={dir}
+            {...props}
+            home={home}
+            projectTop={projectTop}
+            showing={{ hidden, ignored: finder.ignored }}
+            pinned={pinned}
+            onGo={go}
+            onGoTyped={goTyped}
+            onOpenFile={openFile}
+            onPin={pin}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+type FolderViewProps = PaneProps<TreeArgs> & {
+  home: string | null
+  projectTop: string | null
+  showing: Showing
+  pinned: readonly string[]
+  onGo: (dir: string, selected?: string | null) => void
+  onGoTyped: (path: string) => Promise<string | null>
+  onOpenFile: (whole: string) => void
+  onPin: (whole: string, on: boolean) => void
+}
+
+/** One folder: its path, its tree, and what the filter found in it. */
+function FolderView({
+  engine,
+  project,
+  args,
+  update,
+  focused,
+  home,
+  projectTop,
+  showing,
+  pinned,
+  onGo,
+  onGoTyped,
+  onOpenFile,
+  onPin,
+}: FolderViewProps) {
+  const dir = args.dir
+  const tree = useRef<FolderTreeHandle>(null)
+  const area = useRef<HTMLDivElement>(null)
+  const filterField = useRef<HTMLInputElement>(null)
+
+  // The folders open and the row picked, as the tree says them; kept
+  // with the Pane once they rest.
+  const [open, setOpen] = useState<readonly string[]>(args.open ?? [])
+  const [picked, setPicked] = useState<string | null>(args.selected ?? null)
+  // A pick the args bring from elsewhere, as "Show in Files": taken, but
+  // not the Pane's own coming back.
+  const asked = args.selected ?? null
+  const [seen, setSeen] = useState(asked)
+  const [sent, setSent] = useState(asked)
+  if (asked !== seen) {
+    setSeen(asked)
+    if (asked !== sent) setPicked(asked)
+  }
+  useEffect(() => {
+    const kept = open.slice(0, KEPT_OPEN)
+    const same =
+      picked === (args.selected ?? null) &&
+      kept.join("\n") === (args.open ?? []).join("\n")
+    if (same) return
+    const timer = setTimeout(() => {
+      setSent(picked)
+      update({ ...args, open: [...kept], selected: picked })
+    }, KEEP)
+    return () => clearTimeout(timer)
+  }, [open, picked, args, update])
+
+  // A folder of one folder opens with it, as it shows as one row.
+  const onListed = useCallback(
+    (folder: string, entries: Parameters<typeof onlyFolder>[1]) => {
+      const only = onlyFolder(folder, entries, showing)
+      if (only) tree.current?.expand([only])
+    },
+    [showing]
+  )
+  const folder = useFolder(engine, project, dir, open, onListed)
+  const { paths, ignored } = useMemo(
+    () => treeOf(folder.listed, showing),
+    [folder.listed, showing]
+  )
+
+  // git's marks, where the folder is in the Project's repository.
+  const inside = folder.top.state === "listed" && folder.top.inside
+  const real = folder.top.state === "listed" ? folder.top.real : null
+  const status = useGitStatus(engine, project, inside)
+  const marks = useMemo(
+    () =>
+      status && projectTop && real
+        ? marksOf(status, projectTop, real)
+        : NO_MARKS,
+    [status, projectTop, real]
+  )
+
+  // The filter: what `files.find` finds under the folder, with its
+  // folders.
+  const [filter, setFilter] = useState<string | null>(null)
+  const [found, setFound] = useState<{ words: string; paths: string[] }>()
+  const words = filter?.trim() ?? ""
+  useEffect(() => {
+    if (!words || !real) return
+    let gone = false
+    const timer = setTimeout(() => {
+      engine
+        .call(
+          "files.find",
+          { dir: real, query: words, limit: MATCHES },
+          { project }
+        )
+        .then(
+          (answer) => gone || setFound({ words, paths: answer.paths }),
+          () => gone || setFound({ words, paths: [] })
+        )
+    }, WAIT)
+    return () => {
+      gone = true
+      clearTimeout(timer)
+    }
+  }, [engine, project, real, words])
+  const matches = useMemo(
+    () => (found && words ? matchesOf(found.paths) : null),
+    [found, words]
+  )
+  const filtering = matches !== null
+
+  // Expand all opens the folders as they are listed, past those git
+  // ignores, until it has opened enough.
+  const [expanding, setExpanding] = useState(false)
+  const ignoredFolders = useMemo(
+    () => ignored.filter((path) => path.endsWith("/")),
+    [ignored]
+  )
+  const expandable = useMemo(
+    () =>
+      paths.filter(
+        (path) =>
+          path.endsWith("/") &&
+          !ignoredFolders.some((one) => path.startsWith(one))
+      ),
+    [paths, ignoredFolders]
+  )
+  const allOpen =
+    expandable.length > 0 && expandable.every((path) => open.includes(path))
+  useEffect(() => {
+    if (!expanding || filtering || open.length >= EXPANDED) return
+    tree.current?.expand(expandable.filter((path) => !open.includes(path)))
+  }, [expanding, filtering, expandable, open])
+
+  const [editing, setEditing] = useState(false)
+  const startFilter = useCallback((typed: string) => {
+    setFilter((was) => (was ?? "") + typed)
+    requestAnimationFrame(() => filterField.current?.focus())
+  }, [])
+  const endFilter = useCallback(() => {
+    setFilter(null)
+    setFound(undefined)
+    requestAnimationFrame(() => tree.current?.focus())
+  }, [])
+  const up = useCallback(() => {
+    const above = parentOf(dir)
+    if (above) onGo(above, `${nameOf(dir)}/`)
+  }, [dir, onGo])
+  const openRow = useCallback(
+    (path: string) => {
+      if (path.endsWith("/")) onGo(wholeOf(dir, path))
+      else onOpenFile(wholeOf(dir, path))
+    },
+    [dir, onGo, onOpenFile]
+  )
+  const toggleHidden = useCallback(
+    () => update({ ...args, hidden: !showing.hidden }),
+    [args, update, showing.hidden]
+  )
+  const does = useCallback(
+    (what: Does) => {
+      if (what === "up") up()
+      else if (what === "path") setEditing(true)
+      else if (what === "hidden") toggleHidden()
+      else if (what === "filter") startFilter("")
+      else if (picked) openRow(picked)
+    },
+    [up, toggleHidden, startFilter, picked, openRow]
+  )
+  // The actions reach the focused Pane.
+  useEffect(() => {
+    if (!focused) return
+    asks.add(does)
+    return () => {
+      asks.delete(does)
+    }
+  }, [focused, does])
+
+  const [menu, setMenu] = useState<string | null>(null)
+  const [noLimit, setNoLimit] = useState(false)
+
+  // The tree takes the keys once it is drawn, in the Pane that has the
+  // focus: as it opens, and after it went to another folder.
+  const listed = folder.top.state === "listed"
+  const tookKeys = useRef(false)
+  useEffect(() => {
+    if (!listed || !focused || tookKeys.current) return
+    tookKeys.current = true
+    requestAnimationFrame(() => tree.current?.focus())
+  }, [listed, focused])
+
+  // Ctrl+L anywhere in the Pane; the rest outside its fields, and ↵, `/`
+  // and a letter in the tree.
+  const onKeyDownCapture = (event: React.KeyboardEvent) => {
+    const what = treeKey(event)
+    const target = event.target as Element
+    const inField = target.closest(FIELDS) !== null
+    const inTree = area.current?.contains(target) ?? false
+    const mine =
+      what === "path" ||
+      (!inField && (what === "up" || what === "hidden")) ||
+      (!inField && inTree && what !== undefined)
+    if (mine) does(what)
+    else if (!inField && inTree && typesFilter(event)) startFilter(event.key)
+    else return
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
+  const body = (() => {
+    if (folder.top.state === "loading") return <Loading />
+    if (folder.top.state === "refused")
+      return (
+        <Card
+          icon={<FolderXIcon />}
+          title={
+            folder.top.gone
+              ? "This folder is not there"
+              : "This folder cannot be read"
+          }
+          note={folder.top.message}
+        >
+          <div className="flex gap-2">
+            {parentOf(dir) && (
+              <Button size="sm" variant="outline" onClick={up}>
+                The folder above
+              </Button>
+            )}
+            {home && (
+              <Button size="sm" variant="outline" onClick={() => onGo(home)}>
+                Home
+              </Button>
+            )}
+          </div>
+        </Card>
+      )
+    if (filtering && matches.paths.length === 0)
+      return <Quiet>Nothing here fits “{words}”.</Quiet>
+    if (!filtering && paths.length === 0)
+      return <Quiet>This folder is empty.</Quiet>
+    return (
+      <ContextMenu
+        onOpenChangeComplete={(isOpen) => {
+          if (!isOpen) setMenu(null)
+        }}
+      >
+        <ContextMenuTrigger
+          render={<div ref={area} className="h-full min-h-0 px-1 pt-1" />}
+          onContextMenu={(event) => {
+            const path = rowAt(event.nativeEvent)
+            if (path) setMenu(path)
+            else event.preventBaseUIHandler()
+          }}
+        >
+          <FolderTree
+            ref={tree}
+            label={`Files of ${nameOf(dir)}`}
+            version={
+              filtering
+                ? `find\0${found?.words}`
+                : `${showing.hidden}\0${showing.ignored}`
+            }
+            paths={filtering ? matches.paths : paths}
+            open={filtering ? matches.open : open}
+            marks={marks}
+            ignored={filtering ? [] : ignored}
+            loading={folder.listing}
+            selected={picked}
+            onSelect={setPicked}
+            onOpenChange={(now) => {
+              if (filtering) return
+              if (now.length < open.length) setExpanding(false)
+              setOpen(now)
+            }}
+            onOpen={openRow}
+          />
+        </ContextMenuTrigger>
+        <ContextMenuContent aria-label="Row" className="min-w-52">
+          {menu && (
+            <RowMenu
+              whole={wholeOf(dir, menu)}
+              folder={menu.endsWith("/")}
+              top={projectTop}
+              pinned={pinned.includes(wholeOf(dir, menu))}
+              onOpen={() => openRow(menu)}
+              onPin={(on) => onPin(wholeOf(dir, menu), on)}
+            />
+          )}
+        </ContextMenuContent>
+      </ContextMenu>
+    )
+  })()
+
+  return (
+    <div
+      className="flex min-h-0 flex-1 flex-col"
+      onKeyDownCapture={onKeyDownCapture}
+    >
+      <InHeader>
+        <HeaderButton
+          label="Hidden files"
+          title={`Hidden files · ${keyLabel(keyOf("hidden"))}`}
+          on={showing.hidden}
+          onClick={toggleHidden}
+        >
+          {showing.hidden ? <EyeIcon /> : <EyeOffIcon />}
+        </HeaderButton>
+        <HeaderButton
+          label={allOpen ? "Collapse all" : "Expand all"}
+          onClick={() => {
+            if (allOpen) {
+              setExpanding(false)
+              tree.current?.collapse()
+            } else setExpanding(true)
+          }}
+        >
+          {allOpen ? <ChevronsDownUpIcon /> : <ChevronsUpDownIcon />}
+        </HeaderButton>
+      </InHeader>
+      <PathBar
+        engine={engine}
+        project={project}
+        dir={dir}
+        home={home}
+        editing={editing}
+        onEdit={(now) => {
+          setEditing(now)
+          if (!now) requestAnimationFrame(() => tree.current?.focus())
+        }}
+        onGo={onGoTyped}
+        onFilter={() => startFilter("")}
+      />
+      {filter !== null && (
+        <div className="flex h-8 shrink-0 items-center gap-1.5 border-b pr-1 pl-2.5">
+          <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
+          <input
+            ref={filterField}
+            aria-label="Filter"
+            placeholder="Filter"
+            spellCheck={false}
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault()
+                event.stopPropagation()
+                endFilter()
+              } else if (event.key === "ArrowDown" || event.key === "Enter") {
+                event.preventDefault()
+                tree.current?.focus()
+              }
+            }}
+            className="h-6 min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+          />
+          {found && found.paths.length >= MATCHES && (
+            <span className="shrink-0 text-[10.5px] text-muted-foreground">
+              first {MATCHES}
+            </span>
+          )}
+          <HeaderButton label="Clear the filter" onClick={endFilter}>
+            <XIcon />
+          </HeaderButton>
+        </div>
+      )}
+      <div
+        className="min-h-0 flex-1"
+        onKeyDown={(event) => {
+          // Escape in the tree clears the filter, as in its field.
+          if (event.key === "Escape" && filter !== null) {
+            event.stopPropagation()
+            endFilter()
+          }
+        }}
+      >
+        {body}
+      </div>
+      {folder.limit && !noLimit && (
+        <div
+          role="status"
+          className="flex shrink-0 items-start gap-1 border-t px-2.5 py-1.5 text-[11px] text-muted-foreground"
+        >
+          <p className="min-w-0 flex-1">
+            The system watches no more folders, so some changes here go unseen.
+            Raise <code className="font-mono">fs.inotify.max_user_watches</code>{" "}
+            to see them.
+          </p>
+          <HeaderButton label="Close" onClick={() => setNoLimit(true)}>
+            <XIcon />
+          </HeaderButton>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** git's changes in the Project, from the git module's `git.watch`, while
+ * the folder is in the Project's folder; none outside it or with no
+ * repository. */
+function useGitStatus(
+  engine: Engine,
+  project: ProjectId,
+  inside: boolean
+): { path: string; status: string }[] | null {
+  const [files, setFiles] = useState<{ path: string; status: string }[] | null>(
+    null
+  )
+  useEffect(() => {
+    if (!inside) return
+    const stop = engine.stream(
+      project,
+      "git.watch",
+      {},
+      (status) => setFiles(status.repo ? status.files : null),
+      () => {}
+    )
+    return () => {
+      stop()
+      setFiles(null)
+    }
+  }, [engine, project, inside])
+  return inside ? files : null
+}
+
+function Loading() {
+  return (
+    <div className="flex h-full flex-1 items-center justify-center">
+      <Spinner className="text-muted-foreground" />
+    </div>
+  )
+}
+
+function Quiet({ children }: { children: ReactNode }) {
+  return <p className="px-4 py-3 text-xs text-muted-foreground">{children}</p>
+}

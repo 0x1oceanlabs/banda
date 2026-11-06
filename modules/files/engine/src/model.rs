@@ -184,3 +184,49 @@ pub enum Watched {
     /// The system lost track of changes: list every folder again.
     Rescan { dirs: Vec<String> },
 }
+
+/// The Person's own places, as `files.places` answers: the home folder,
+/// and its Desktop and Downloads where the system names them and they are
+/// there (the XDG user dirs on Linux, the standard folders on macOS).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct Places {
+    pub home: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub desktop: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub downloads: Option<String>,
+}
+
+/// What `files.opened` asks: a file the Person opened, as `files.list`
+/// reads its `dir`.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct OpenedAsk {
+    pub path: String,
+}
+
+/// What `files.recent` asks.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct RecentAsk {
+    /// The most files: 20 unless said, 100 at most.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub limit: Option<u32>,
+}
+
+/// A file the Person opened, as `files.recent` answers.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct Opened {
+    /// Absolute, its links followed.
+    pub path: String,
+    /// When it was last opened, in ms since the Unix epoch.
+    #[ts(type = "number")]
+    pub last: i64,
+    /// How many times it was opened.
+    pub count: u32,
+}

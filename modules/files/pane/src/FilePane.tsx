@@ -5,14 +5,13 @@
  * and pan; anything else its facts. It reads again as the file changes on
  * disk. It only reads: editing comes later (step F4).
  */
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@banda/ui/components/button"
 import { CodeFile, type LineRange } from "@banda/ui/components/code-file"
 import { CopyButton } from "@banda/ui/components/copy-button"
 import { InHeader } from "@banda/ui/components/pane-header"
 import { Spinner } from "@banda/ui/components/spinner"
 import { nameAndFolder } from "@banda/ui/lib/paths"
-import { cn } from "@banda/ui/lib/utils"
 import type { ProjectId } from "@banda/contract"
 import type { WindowApi } from "@banda/ui/module"
 import { definePane, type PaneProps, paneOf } from "@banda/ui/pane"
@@ -24,6 +23,7 @@ import {
   XIcon,
 } from "lucide-react"
 import { Card, Facts, Gone } from "./Facts"
+import { HeaderButton } from "./HeaderButton"
 import { ImageView } from "./ImageView"
 import { lineIn, MOST_LINES, rangeText } from "./lines"
 import { sizeWords } from "./look"
@@ -80,6 +80,15 @@ function FilePane({
   // inside, else whole.
   const path = file ? fromRoot(file.stat.path, file.root) : args.path
 
+  // Recent lists it, and `files.find` raises it (ADR 0073, decision 11).
+  const opened = file?.stat.path
+  useEffect(() => {
+    if (opened)
+      void engine
+        .command("files.opened", { path: opened }, project)
+        .catch(() => undefined)
+  }, [engine, project, opened])
+
   // Its header names it as found: its folder from the Project's.
   useEffect(() => {
     if (!file) return
@@ -99,24 +108,24 @@ function FilePane({
       {/* Wrap first: it comes and goes, and Source stays where it is. */}
       {asCode && (
         <InHeader>
-          <Toggle
+          <HeaderButton
             label="Wrap lines"
             on={wrap}
             onClick={() => set({ wrap: !wrap })}
           >
             <WrapTextIcon />
-          </Toggle>
+          </HeaderButton>
         </InHeader>
       )}
       {file?.look === "markdown" && file.text?.text !== undefined && (
         <InHeader>
-          <Toggle
+          <HeaderButton
             label="Source"
             on={source}
             onClick={() => set({ source: !source })}
           >
             <CodeIcon />
-          </Toggle>
+          </HeaderButton>
         </InHeader>
       )}
       <Body
@@ -303,33 +312,5 @@ function Picked({ text, onClear }: { text: string; onClear: () => void }) {
         <XIcon />
       </Button>
     </div>
-  )
-}
-
-/** A quiet button in the header that stays on: brighter while it is,
- * with no plate behind it (ADR 0066). */
-function Toggle({
-  label,
-  on,
-  onClick,
-  children,
-}: {
-  label: string
-  on: boolean
-  onClick: () => void
-  children: ReactNode
-}) {
-  return (
-    <Button
-      variant="ghost"
-      size="icon-xs"
-      aria-label={label}
-      aria-pressed={on}
-      title={label}
-      className={cn("shrink-0", on && "text-foreground")}
-      onClick={onClick}
-    >
-      {children}
-    </Button>
   )
 }

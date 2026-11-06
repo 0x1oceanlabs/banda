@@ -1,12 +1,56 @@
 {
   "panes": [
+    "files.tree",
     "files.file"
   ],
   "actions": [
     {
+      "id": "files.tree",
+      "title": "Files",
+      "section": "Panes",
+      "keys": [
+        "Alt+E"
+      ]
+    },
+    {
       "id": "files.open",
       "title": "Open a file",
       "section": "Panes",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "files.pin",
+      "title": "Pin a folder in Files",
+      "section": "Files",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "files.up",
+      "title": "Go to the folder above",
+      "section": "Files",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "files.path",
+      "title": "Type a path",
+      "section": "Files",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "files.hidden",
+      "title": "Show hidden files, or hide them",
+      "section": "Files",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "files.filter",
+      "title": "Filter the files",
+      "section": "Files",
       "keys": [],
       "unlisted": true
     }
