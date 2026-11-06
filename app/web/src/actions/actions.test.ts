@@ -3,6 +3,7 @@ import { ACTIONS } from "../shell/actions"
 import { keyText, matches } from "@banda/ui/lib/keys"
 import type { Mod } from "@banda/contract/look"
 import { actionFor, movesOf, pressFor, RESET_KEY, withKeys } from "./actions"
+import type { Action } from "@banda/ui/module"
 
 /** Banda's actions with its own keys, Alt the mod, before the look. */
 const BANDA = withKeys(ACTIONS, [])
@@ -119,4 +120,33 @@ test("the keys in force are the look's, each with what it gives its action", () 
   expect(pressed?.args).toEqual({ address: "https://github.com" })
   // What the look leaves out has no key.
   expect(actionFor(actions, press("KeyW", { altKey: true }))).toBeUndefined()
+})
+
+test("a scope's key works with the mod still held, unless the window's takes it", () => {
+  const launcher = (code: string): Action<null> => ({
+    id: `launcher.${code}`,
+    title: code,
+    section: "Launcher",
+    scope: "launcher",
+    keys: [{ code, args: { kind: code } }],
+    run: () => undefined,
+  })
+  const window: Action<null> = {
+    id: "deck",
+    title: "Deck",
+    section: "Columns",
+    keys: [{ code: "KeyT", alt: true }],
+    run: () => undefined,
+  }
+  const actions = [launcher("KeyB"), launcher("KeyT"), window]
+  const alt = { alt: true, ctrl: false, super: false }
+  const held = { mod: alt, scopes: new Set(["launcher"]) }
+  const id = (code: string, scopes: string[], given?: typeof held) =>
+    pressFor(actions, press(code, { altKey: true }), scopes, given)?.action.id
+  expect(id("KeyB", ["launcher"], held)).toBe("launcher.KeyB")
+  // Alt+T is the window's, the launcher focused or not.
+  expect(id("KeyT", ["launcher"], held)).toBe("deck")
+  // Out of the launcher, or with no scope that takes it so, Alt+B is no key.
+  expect(id("KeyB", [], held)).toBeUndefined()
+  expect(id("KeyB", ["launcher"])).toBeUndefined()
 })

@@ -5603,3 +5603,19 @@ test("a tool's images show when opened, enlarge on a click, and remain after a r
     }
   }
 })
+
+test("the launcher's letter picks its Pane with Alt still held from Alt+N", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await page.keyboard.down("Alt")
+  await page.keyboard.press("KeyN")
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  // Alt+B is no key of the window's, so the launcher's B takes it.
+  await page.keyboard.press("KeyB")
+  await page.keyboard.up("Alt")
+  await expect(page.getByRole("textbox", { name: "Address" })).toBeVisible()
+  await expect(launcher).toBeHidden()
+})

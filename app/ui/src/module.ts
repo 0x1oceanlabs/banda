@@ -202,6 +202,10 @@ export type Scope = {
   /** Its name in the key sheet: `Composer`. */
   title: string
   field?: true
+  /** Its keys work with the mod still held too, when no key of the
+   * window's takes the press: the launcher's letters after Alt+N (ADR
+   * 0025, decision 4). */
+  modHeld?: true
 }
 
 /** An action of a scope: its key works while the focus is in the scope,

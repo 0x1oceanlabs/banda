@@ -8,7 +8,7 @@ import { scopesOf } from "@banda/ui/hooks/use-scope"
 import type { Host } from "../host"
 import { useLookKeys } from "../look"
 import { labelOf, previewers } from "../registry"
-import { ACTIONS, closing } from "../shell/actions"
+import { ACTIONS, closing, heldBy } from "../shell/actions"
 import type { Workspace as Kept } from "@banda/contract/workspaces"
 import { send } from "./arrange"
 import { useArranged } from "./useArranged"
@@ -105,11 +105,12 @@ export function Popped({
       "pane.close": close,
       "pane.pop-out": back,
     }
+    const stillHeld = heldBy(keys.mod)
     const onKey = (event: KeyboardEvent) => {
       if (event.isComposing) return
       const target = event.target instanceof Element ? event.target : null
       if (target?.closest("[data-takes-keys]")) return
-      const pressed = pressFor(keyed, event, scopesOf(target))
+      const pressed = pressFor(keyed, event, scopesOf(target), stillHeld)
       if (!pressed || inScope(pressed, event)) return
       const run = own[pressed.action.id]
       if (!run) return
@@ -119,7 +120,7 @@ export function Popped({
     }
     window.addEventListener("keydown", onKey, { capture: true })
     return () => window.removeEventListener("keydown", onKey, { capture: true })
-  }, [keyed, close, back])
+  }, [keyed, keys.mod, close, back])
 
   const project =
     projects.state === "ready"

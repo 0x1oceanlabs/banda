@@ -150,6 +150,7 @@ import {
 import { Workspaces } from "../workspaces/Workspaces"
 import {
   ACTIONS,
+  heldBy,
   answering,
   bringing,
   closing,
@@ -1089,6 +1090,8 @@ export function Shell({
   useEffect(() => {
     // One key more and a key Banda takes hand that key to a program.
     const handing = withMore(mod)
+    // The launcher's letters still work with the mod held from Alt+N.
+    const stillHeld = heldBy(mod)
     const onKey = (event: KeyboardEvent) => {
       // A press the window handed on is the program's, and one an input
       // method is composing with is the field's.
@@ -1096,7 +1099,7 @@ export function Shell({
       const target = event.target instanceof Element ? event.target : null
       // A field that takes a key to bind takes every key.
       if (target?.closest("[data-takes-keys]")) return
-      const pressed = pressFor(keyed, event, scopesOf(target))
+      const pressed = pressFor(keyed, event, scopesOf(target), stillHeld)
       if (!pressed) return handOn(event, target, keyed, mod, handing)
       if (inScope(pressed, event)) return
       const { action } = pressed

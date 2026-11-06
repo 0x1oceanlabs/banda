@@ -1141,6 +1141,120 @@
         }
       ],
       "family": "Move the Pane to a workspace"
+    },
+    {
+      "id": "launcher.open",
+      "title": "Open a Pane in the launcher's place",
+      "section": "Launcher",
+      "keys": [
+        {
+          "code": "KeyH",
+          "args": {
+            "kind": "agents.thread"
+          }
+        },
+        {
+          "code": "KeyT",
+          "args": {
+            "kind": "terminal.terminal"
+          }
+        },
+        {
+          "code": "KeyB",
+          "args": {
+            "kind": "browser.browser"
+          }
+        },
+        {
+          "code": "KeyD",
+          "args": {
+            "kind": "git.diff"
+          }
+        },
+        {
+          "code": "KeyF",
+          "args": {
+            "kind": "files.tree"
+          }
+        }
+      ],
+      "scope": "launcher",
+      "args": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "the kind of Pane, as terminal.terminal"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "launcher.open-beside",
+      "title": "Open a Pane beside the launcher",
+      "section": "Launcher",
+      "keys": [
+        {
+          "code": "KeyH",
+          "shift": true,
+          "args": {
+            "kind": "agents.thread"
+          }
+        },
+        {
+          "code": "KeyT",
+          "shift": true,
+          "args": {
+            "kind": "terminal.terminal"
+          }
+        },
+        {
+          "code": "KeyB",
+          "shift": true,
+          "args": {
+            "kind": "browser.browser"
+          }
+        },
+        {
+          "code": "KeyD",
+          "shift": true,
+          "args": {
+            "kind": "git.diff"
+          }
+        },
+        {
+          "code": "KeyF",
+          "shift": true,
+          "args": {
+            "kind": "files.tree"
+          }
+        }
+      ],
+      "scope": "launcher",
+      "args": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "the kind of Pane, as terminal.terminal"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "scopes": [
+    {
+      "id": "launcher",
+      "title": "Launcher",
+      "modHeld": true
     }
   ]
 }
