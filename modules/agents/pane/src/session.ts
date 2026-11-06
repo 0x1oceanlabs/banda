@@ -48,7 +48,8 @@ import {
  * One Thread: a session with a Harness in a Project (ADR 0006). Without
  * `thread`, the next message starts one on `harness`, or on this computer's
  * first Harness when it names none. `title` keeps the header's words while
- * the Thread loads.
+ * the Thread loads. An Agent opens one by `thread` alone (`AGENT_KINDS` in
+ * the workspaces engine): the rest are the Person's.
  */
 export type ThreadArgs = {
   thread: ThreadId | null

@@ -47,6 +47,10 @@ import { GitAlert } from "./GitAlert"
  * files drawn by `@pierre/diffs` beside a tree of them. It reads again as
  * an Agent's turn ends, as the folder's status changes, as the window
  * comes back, and on its button.
+ *
+ * An Agent opens it with any of these args, as each chooses only what it
+ * shows; one that sends or starts something is the Person's, and
+ * `AGENT_KINDS` in the workspaces engine refuses it to an Agent.
  */
 type DiffArgs = {
   scope: Scope

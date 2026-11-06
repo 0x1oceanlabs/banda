@@ -124,17 +124,18 @@ bring_back: CommandMethod<Nothing, Done>,
 panes: CallMethod<Nothing, Array<SeenWorkspace>>, 
 /**
  * Opens a Pane of your Project for your Person to see: one of its
- * Threads (`agents.thread`, args `{"thread": "<id>"}` alone;
- * `send` starts a Thread), the Diff
- * (`git.diff`, args `{"scope": {"kind": "changes"}}`, or `uncommitted`,
- * `staged`, or `{"kind": "commit", "sha": "<sha>"}`), or a
- * browser at a web address (`browser.browser`, args
- * `{"url": "https://…"}`). Only the args that choose what a Pane
- * shows are yours to give; the rest are your Person's. Beside a
- * Pane `panes` lists, or, left out, beside your Project's Panes.
- * One shown already, a Thread's by its ID, stays where it is, and
- * is named. It takes no focus; the Person sees a mark on it until
- * they look.
+ * Threads (`agents.thread`, args `{"thread": "<id>"}` alone, an ID
+ * `threads` lists; `send` starts a Thread), the Diff (`git.diff`,
+ * args `{"scope": {"kind": "changes"}}`, or `uncommitted`,
+ * `staged`, or `{"kind": "commit", "sha": "<sha>"}`, with
+ * `"file": "<path>"` to show one), a file (`files.file`, args
+ * `{"path": "<path>", "line": <n>}`), or a browser at a web
+ * address (`browser.browser`, args `{"url": "https://…"}` alone).
+ * Only the args that choose what a Pane shows are yours to give;
+ * the rest are your Person's. Beside a Pane `panes` lists, or,
+ * left out, beside your Project's Panes. One shown already, a
+ * Thread's by its ID, stays where it is, and is named. It takes no
+ * focus; the Person sees a mark on it until they look.
  */
 open_pane: CommandMethod<OpenPane, Opened>, 
 /**

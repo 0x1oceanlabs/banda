@@ -11,8 +11,9 @@
 //!
 //! An Agent arranges through its tools alone (ADR 0032): it sees its
 //! Project's Panes, and the other Projects' outlines when its Person lets it;
-//! it opens Panes of its Project that run, send and start nothing as the
-//! Person (ADR 0083, decision 3), and moves and closes only those it opened.
+//! it opens Panes of its Project that run nothing as the Person, given only
+//! the args that choose what each shows (ADR 0083, decision 3), and moves
+//! and closes only those it opened.
 
 pub mod model;
 
@@ -96,17 +97,18 @@ banda_kernel::methods! {
         /// ones you opened, which alone you move and close.
         call panes(Nothing) -> Vec<SeenWorkspace>, Read, tool "panes";
         /// Opens a Pane of your Project for your Person to see: one of its
-        /// Threads (`agents.thread`, args `{"thread": "<id>"}` alone;
-        /// `send` starts a Thread), the Diff
-        /// (`git.diff`, args `{"scope": {"kind": "changes"}}`, or `uncommitted`,
-        /// `staged`, or `{"kind": "commit", "sha": "<sha>"}`), or a
-        /// browser at a web address (`browser.browser`, args
-        /// `{"url": "https://…"}`). Only the args that choose what a Pane
-        /// shows are yours to give; the rest are your Person's. Beside a
-        /// Pane `panes` lists, or, left out, beside your Project's Panes.
-        /// One shown already, a Thread's by its ID, stays where it is, and
-        /// is named. It takes no focus; the Person sees a mark on it until
-        /// they look.
+        /// Threads (`agents.thread`, args `{"thread": "<id>"}` alone, an ID
+        /// `threads` lists; `send` starts a Thread), the Diff (`git.diff`,
+        /// args `{"scope": {"kind": "changes"}}`, or `uncommitted`,
+        /// `staged`, or `{"kind": "commit", "sha": "<sha>"}`, with
+        /// `"file": "<path>"` to show one), a file (`files.file`, args
+        /// `{"path": "<path>", "line": <n>}`), or a browser at a web
+        /// address (`browser.browser`, args `{"url": "https://…"}` alone).
+        /// Only the args that choose what a Pane shows are yours to give;
+        /// the rest are your Person's. Beside a Pane `panes` lists, or,
+        /// left out, beside your Project's Panes. One shown already, a
+        /// Thread's by its ID, stays where it is, and is named. It takes no
+        /// focus; the Person sees a mark on it until they look.
         command open_pane(OpenPane) -> Opened, Write, tool "open_pane";
         /// Moves a Pane you opened beside another that `panes` lists.
         command move_own(MoveOwn) -> Done, Write, tool "move_pane";
@@ -119,15 +121,19 @@ banda_kernel::methods! {
 type ArgsRule = fn(&Value) -> Result<(), Refusal>;
 
 /// The kinds of Pane an Agent may open, each with the rule its args keep.
-/// A kind is here when it shows, and runs, sends and starts nothing as the
-/// Person: a terminal's runs the Person's shell, and the command its
-/// `done` sends goes as the Person (ADR 0032). An arg is an Agent's to give
-/// when it only chooses what its Pane shows; the rest are the Person's, as
-/// only the Person's gesture acts as the Person (ADR 0083, decision 3).
+/// A kind is here when it shows, and runs nothing as the Person: a
+/// terminal's runs the Person's shell, and the command its `done` sends
+/// goes as the Person (ADR 0032). Only the Person's gesture acts as the
+/// Person (ADR 0083, decision 3), so a kind's rule refuses an Agent every
+/// arg that would send or start something. The Diff's args and a file's
+/// choose only what they show: staging, reverting and saving wait for the
+/// Person's click and typing. A browser loads its page in the Person's own
+/// profile until an Agent's tabs have their Project's (ADR 0083,
+/// decision 4).
 const AGENT_KINDS: &[(&str, ArgsRule)] = &[
     ("agents.thread", a_thread),
-    ("git.diff", a_diff),
-    ("files.file", a_file),
+    ("git.diff", |_| Ok(())),
+    ("files.file", |_| Ok(())),
     ("browser.browser", web_address),
 ];
 
@@ -135,44 +141,28 @@ const AGENT_KINDS: &[(&str, ArgsRule)] = &[
 const SEND: &str = "To start a Thread or write to one, call `send`, as yourself.";
 
 /// Refuses a Thread's Pane an Agent opens on anything but one Thread, by
-/// its ID. The rest of its args are the Person's: `ask`, the words a
-/// Thread not yet started sends first, the Project and Harness it starts
-/// in, and the title its header keeps. An Agent starts a Thread, or writes
-/// to one, with `send`, as itself, and the message says so (ADR 0019,
-/// decision 4). The Pane opens in the Agent's Project, which answers for
-/// its own Threads alone.
+/// its ID as `threads` lists it, so one Thread is one Pane. The rest of its
+/// args are the Person's: `ask`, the words a Thread not yet started sends
+/// first, the Project and Harness it starts in, and the title its header
+/// keeps. An Agent starts a Thread, or writes to one, with `send`, as
+/// itself, and the message says so (ADR 0019, decision 4). The Pane opens
+/// in the Agent's Project, which answers for its own Threads alone.
 fn a_thread(args: &Value) -> Result<(), Refusal> {
     shows_only(args, &["thread"]).map_err(|refused| Refusal {
         message: format!("{} {SEND}", refused.message),
         ..refused
     })?;
-    match args
-        .get("thread")
-        .and_then(Value::as_str)
-        .map(uuid::Uuid::parse_str)
-    {
-        Some(Ok(_)) => Ok(()),
-        _ => Err(Refusal::invalid(format!(
-            "A Thread's Pane shows one of your Project's Threads: args \
-             {{\"thread\": \"<id>\"}}, an ID `threads` lists. {SEND}"
-        ))),
+    let id = args.get("thread").and_then(Value::as_str);
+    if id.is_some_and(|id| uuid::Uuid::parse_str(id).is_ok_and(|read| read.to_string() == id)) {
+        return Ok(());
     }
+    Err(Refusal::invalid(format!(
+        "A Thread's Pane shows one of your Project's Threads: args \
+         {{\"thread\": \"<id>\"}}, an ID as `threads` lists it. {SEND}"
+    )))
 }
 
-/// Refuses a Diff an Agent opens with an arg but those that choose what it
-/// compares and how it draws: staging and reverting wait for the Person's
-/// click.
-fn a_diff(args: &Value) -> Result<(), Refusal> {
-    shows_only(args, &["scope", "file", "thread", "view"])
-}
-
-/// Refuses a file's Pane an Agent opens with an arg but those that choose
-/// where it opens and how it draws: it saves only what the Person types.
-fn a_file(args: &Value) -> Result<(), Refusal> {
-    shows_only(args, &["path", "line", "wrap", "source", "edit"])
-}
-
-/// Refuses any arg but `shows`, the ones that choose what a Pane shows.
+/// Refuses any arg but `shows`, the ones an Agent gives a kind of Pane.
 fn shows_only(args: &Value, shows: &[&str]) -> Result<(), Refusal> {
     let mut given = args.as_object().into_iter().flat_map(|args| args.keys());
     match given.find(|arg| !shows.contains(&arg.as_str())) {
@@ -187,26 +177,23 @@ fn shows_only(args: &Value, shows: &[&str]) -> Result<(), Refusal> {
     }
 }
 
-/// Whether a Pane shows what an Agent asks to open: a Thread's Pane is
-/// the one on that Thread, whatever its window keeps beside the ID (its
-/// title and Harness); any other, the one with the same args.
-fn same(pane: &Shown, asked: &Shown) -> bool {
-    pane.project == asked.project
-        && pane.kind == asked.kind
-        && match asked.kind.as_str() {
-            "agents.thread" => pane.args.get("thread") == asked.args.get("thread"),
-            _ => pane.args == asked.args,
-        }
+/// Drops the words a Thread's Pane an Agent opened would send first,
+/// whenever it was kept: they are the Person's alone to give (ADR 0083,
+/// decision 3).
+fn unasked(pane: &mut model::Pane) {
+    if pane.by.is_some()
+        && pane.shows.kind == "agents.thread"
+        && let Some(args) = pane.shows.args.as_object_mut()
+    {
+        args.remove("ask");
+    }
 }
 
 /// Refuses a browser an Agent opens anywhere but at a web address, as
 /// `browser_open` does: never at the Person's files (ADR 0029, decision 3).
 fn web_address(args: &Value) -> Result<(), Refusal> {
-    let url = args
-        .as_object()
-        .filter(|args| args.len() == 1)
-        .and_then(|args| args.get("url"));
-    let scheme = url
+    shows_only(args, &["url"])?;
+    let scheme = (args.get("url"))
         .and_then(Value::as_str)
         .and_then(|url| url.split_once("://"));
     match scheme {
@@ -256,7 +243,7 @@ pub struct OpenPane {
     /// The kind: `agents.thread`, `git.diff`, `files.file` or `browser.browser`.
     pub kind: String,
     /// The kind's own, an object, only those that choose what it shows:
-    /// a Thread's ID alone for a Thread's Pane, a web address for a
+    /// a Thread's ID alone for a Thread's Pane, a web address alone for a
     /// browser.
     #[schemars(with = "serde_json::Map<String, Value>")]
     pub args: Value,
@@ -837,7 +824,7 @@ impl Workspaces {
         let beside = open.beside;
         let ((pane, new), at) = change(&call, "opened", None, Say::Whole, move |list, _| {
             let place = beside.map(|b| b.place(list, wall)).transpose()?;
-            if let Some(shown) = model::panes(list).find(|pane| same(&pane.shows, &shows)) {
+            if let Some(shown) = model::showing_asked(list, &shows) {
                 return Ok((shown.id, false));
             }
             let pane = model::open(list, shows, place, None, None, false, Some(me))?;
@@ -962,7 +949,7 @@ fn load(sql: &rusqlite::Connection) -> Result<Arrangement, Error> {
 }
 
 /// An arrangement as this module keeps it, each Pane's args as its kind
-/// reads them now.
+/// reads them now, and none an Agent may not give.
 fn parsed(text: &str) -> Result<Arrangement, Error> {
     let mut list: Arrangement = serde_json::from_str(text)?;
     for pane in list
@@ -971,6 +958,7 @@ fn parsed(text: &str) -> Result<Arrangement, Error> {
         .flat_map(|c| &mut c.panes)
     {
         pane.shows.upgrade();
+        unasked(pane);
     }
     Ok(list)
 }

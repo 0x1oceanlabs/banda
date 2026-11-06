@@ -143,7 +143,8 @@ pub fn seen(list: &Arrangement, wall: Wall, pane: PaneId) -> Result<&Pane, Refus
         .ok_or_else(|| Refusal::not_found("The workspaces show no such Pane."))
 }
 
-/// What a Pane shows: two Panes are the same when this is.
+/// What a Pane shows: two Panes are the same when this is, but for a
+/// Thread's Pane an Agent asks for (`showing_asked`).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export_to = "workspaces/")]
 pub struct Shown {
@@ -296,6 +297,21 @@ pub fn panes(list: &Arrangement) -> impl Iterator<Item = &Pane> {
 /// The Pane the workspaces show that shows `shown`, if one does.
 pub fn showing<'a>(list: &'a Arrangement, shown: &Shown) -> Option<&'a Pane> {
     panes(list).find(|pane| pane.shows == *shown)
+}
+
+/// The Pane that shows what an Agent asks to open, if one does: as
+/// `showing`, but a Thread's Pane by its Thread alone. An Agent gives a
+/// Thread's ID and nothing else, and the window keeps the Thread's title
+/// and Harness beside it.
+pub fn showing_asked<'a>(list: &'a Arrangement, asked: &Shown) -> Option<&'a Pane> {
+    if asked.kind != "agents.thread" {
+        return showing(list, asked);
+    }
+    panes(list).find(|pane| {
+        pane.shows.project == asked.project
+            && pane.shows.kind == asked.kind
+            && pane.shows.args.get("thread") == asked.args.get("thread")
+    })
 }
 
 /// Shows a Pane at `place`, or `instead` of another, which leaves; and
