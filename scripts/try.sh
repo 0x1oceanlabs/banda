@@ -160,11 +160,8 @@ cd app/desktop
 # carries that AppImage's variables, and the window would list and update
 # that one as itself (entry.ts, update.ts). T3 Code's makes Electron Node.
 unset APPIMAGE APPDIR ARGV0 OWD ELECTRON_RUN_AS_NODE
-# Started from an Agent's shell, it carries the Agent's pass for `banda`;
-# the trial's engine is its own, and its `banda` its owner's.
-unset BANDA_TOKEN
 export BANDA_ROOT=$trial/root BANDA_DATA=$trial/data BANDA_STATE=$trial/state \
-  BANDA_CONFIG=$trial/config BANDA_CACHE=$trial/cache BANDA_ENGINE=$trial/bin/banda
+  BANDA_CONFIG=$trial/config BANDA_CACHE=$trial/cache BANDA_PROGRAM=$trial/bin/banda
 # Chromium writes the port it took in the window's profile, for drive.mjs.
 port=$trial/state/window/DevToolsActivePort
 rm -f "$port"

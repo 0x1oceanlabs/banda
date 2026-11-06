@@ -68,6 +68,11 @@ opens there to be clicked through, and is driven the same way.
 `scripts/drive.mjs --help` has the rest: `--tab` for the browser's tabs,
 `drag`, `fill`, `wait`, `eval`, `size`.
 
+The trial's own `banda` is its `bin/banda`, with `BANDA_STATE` set to its
+`state`. In an Agent's shell, `banda` acts under the Agent's pass for the
+engine the Agent runs in, and refuses a `BANDA_STATE` that names another:
+call the trial's engine under `env -u BANDA_TOKEN -u BANDA_ENGINE`.
+
 ## Effect in the window's main process
 
 Electron main is written in Effect 4: `app/desktop/src` (not the

@@ -135,18 +135,20 @@ const CSP = [
   "frame-ancestors 'none'",
 ].join("; ")
 
+// An Agent's pass for `banda`, which a window started in an Agent's shell
+// carries (ADR 0019), goes no further: the window's engine is its own, and
+// what it starts is its owner's.
+delete process.env.BANDA_TOKEN
+delete process.env.BANDA_ENGINE
+
 const here = app.getAppPath()
 const pageFolder = resolve(here, "../web/dist")
-// A trial names the engine's program in BANDA_ENGINE (scripts/try.sh). In
-// an Agent's shell it says where that Agent's engine listens (ADR 0019),
-// which is no program: a window started there runs its own.
-const namedEngine = process.env.BANDA_ENGINE
+// A trial names the program it runs as its engine (scripts/try.sh).
 const engineBinary =
-  namedEngine && !namedEngine.startsWith("ws://")
-    ? namedEngine
-    : app.isPackaged
-      ? join(process.resourcesPath, "banda")
-      : resolve(here, "../../target/debug/banda")
+  process.env.BANDA_PROGRAM ??
+  (app.isPackaged
+    ? join(process.resourcesPath, "banda")
+    : resolve(here, "../../target/debug/banda"))
 // The ACP adapters the app carries, which the engine runs on this
 // Electron as Node (ADR 0059): a checkout's are built beside the
 // harnesses module's desktop part (adapters.mjs).
