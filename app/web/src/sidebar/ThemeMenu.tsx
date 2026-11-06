@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react"
 import type { Listed, Look } from "@banda/contract/look"
-import { tomlOf } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
 import {
   DropdownMenu,
@@ -17,6 +16,7 @@ import {
 } from "@banda/ui/components/dropdown-menu"
 import { useLook } from "@banda/ui/lib/look"
 import { PaletteIcon } from "lucide-react"
+import { writeSetting } from "./write-setting"
 
 /** Which scheme shows: one, or the system's. */
 type Shown = Look["mode"]
@@ -67,14 +67,8 @@ function nowOf(look: Look | null): Now {
 }
 
 /** Writes `key` of look.toml; the look brings the change back. */
-function write(key: string, value: string) {
-  window.banda?.settings.set("look.toml", key, tomlOf(value)).then(
-    (refused) => {
-      if (refused.length > 0) console.error("banda: look.toml refused", refused)
-    },
-    (error: unknown) => console.error("banda: look.toml was not written", error)
-  )
-}
+const write = (key: string, value: string) =>
+  writeSetting("look.toml", key, value)
 
 /**
  * The theme, from the sidebar's foot (ADR 0007): light or dark, where the

@@ -67,10 +67,7 @@ pub struct AgentsSettings {
     /// `[start.claude]`. The Agents section sets it from the composer's
     /// bar.
     pub start: Option<BTreeMap<String, Start>>,
-    /// How an Agent's windows stand: `"free"`, where they are; `"row"`,
-    /// on its Project's workspace beside the Project's other Agents;
-    /// `"solo"`, as the row, the Agent you are at filling the screen.
-    /// `workspaces` before ADR 0079 (grace).
+    /// The Flow (ADR 0079). `workspaces` before ADR 0079 (grace).
     #[serde(alias = "workspaces")]
     pub flow: Option<Flow>,
 }
@@ -91,6 +88,9 @@ impl OneFile for AgentsSettings {
         Renamed::value("workspaces", "off", "free"),
         Renamed::value("workspaces", "project", "row"),
         Renamed::value("workspaces", "space", "row"),
+        Renamed::value("flow", "off", "free"),
+        Renamed::value("flow", "project", "row"),
+        Renamed::value("flow", "space", "row"),
     ];
     type Resolved = Agents;
 
