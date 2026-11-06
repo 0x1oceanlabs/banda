@@ -1,35 +1,20 @@
-# Banda Dark keeps shadcn/ui's own tokens where its derivation from the
-# palette would differ. --primary and the focus border still follow the
-# accent, so `[colors] accent = "…"` in look.toml recolours them.
+# Banda Dark (ADR 0075, decision 4): only what differs from the tokens
+# its palette gives. The accent marks the focus, the selection and links;
+# the main buttons take the text's colour, as shadcn's do, so
+# `[colors] accent = "…"` in look.toml recolours the focus and the rings,
+# not the buttons.
 [tokens]
-card = "oklch(0.205 0 0)"
-card-foreground = "oklch(0.985 0 0)"
-popover = "oklch(0.205 0 0)"
-popover-foreground = "oklch(0.985 0 0)"
-primary-foreground = "oklch(0.205 0 0)"
-secondary = "oklch(0.269 0 0)"
-secondary-foreground = "oklch(0.985 0 0)"
-muted = "oklch(0.269 0 0)"
-muted-foreground = "oklch(0.708 0 0)"
-accent = "oklch(0.269 0 0)"
-accent-foreground = "oklch(0.985 0 0)"
+desk-solid = "darker_background"
+card = "#1f1f23"
+primary = "foreground"
+secondary = "#27272a"
+muted = "#27272a"
+accent = "#27272a"
 destructive = "oklch(0.704 0.191 22.216)"
-attention = "oklch(0.72 0.19 45)"
+attention = "#ff8a3d"
 added = "oklch(0.723 0.192 149.579)"
 removed = "oklch(0.704 0.191 22.216)"
-border = "oklch(1 0 0 / 10%)"
-input = "oklch(1 0 0 / 15%)"
-ring = "oklch(0.556 0 0)"
-chart-1 = "oklch(0.87 0 0)"
-chart-2 = "oklch(0.556 0 0)"
-chart-3 = "oklch(0.439 0 0)"
-chart-4 = "oklch(0.371 0 0)"
-chart-5 = "oklch(0.269 0 0)"
-sidebar = "oklch(0.205 0 0)"
-sidebar-foreground = "oklch(0.985 0 0)"
-sidebar-primary = "oklch(0.488 0.243 264.376)"
-sidebar-primary-foreground = "oklch(0.985 0 0)"
-sidebar-accent = "oklch(0.269 0 0)"
-sidebar-accent-foreground = "oklch(0.985 0 0)"
-sidebar-border = "oklch(1 0 0 / 10%)"
-sidebar-ring = "oklch(0.556 0 0)"
+border = "oklch(1 0 0 / 8%)"
+input = "oklch(1 0 0 / 12%)"
+sidebar-accent = "#2a2a2e"
+sidebar-border = "border"
