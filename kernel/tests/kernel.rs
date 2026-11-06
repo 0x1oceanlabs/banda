@@ -1538,6 +1538,30 @@ async fn a_project_is_trusted_unless_its_folder_looks_foreign_and_only_the_perso
     assert!(said.trusted, "the Person's word wins");
     let again = added(json!({ "folder": cloned.folder })).await;
     assert!(!again.trusted, "a Project keeps its own");
+    let looked = projects(
+        &kernel,
+        owner,
+        "foreign",
+        json!({ "folder": cloned.folder }),
+    )
+    .await;
+    assert_eq!(
+        looked.unwrap()["project"],
+        json!(cloned.id),
+        "Add Project asks nothing of a folder that already is a Project"
+    );
+
+    // A folder not made yet is looked at as it will be: in the repository
+    // it is made in, by what the folders above it hold.
+    let repository = folder("repository", &[".git", ".claude"]);
+    let inside = repository.join("packages").join("new");
+    let looked = projects(&kernel, owner, "foreign", json!({ "folder": inside })).await;
+    assert_eq!(
+        looked.unwrap(),
+        json!({ "foreign": true, "why": [{ "kind": "holds", "name": ".claude" }] })
+    );
+    let inside = added(json!({ "folder": inside, "create": true })).await;
+    assert!(!inside.trusted, "a folder made in such a repository is not");
 
     // An Agent reads its Project's trust, and never changes it or looks
     // past its wall.
@@ -1597,7 +1621,7 @@ async fn a_project_is_trusted_unless_its_folder_looks_foreign_and_only_the_perso
     assert_eq!(manifest(made.id)["untrusted"], json!(true));
     assert_eq!(manifest(plain.id).get("untrusted"), None);
     drop(kernel);
-    let kernel = reopen(root.path(), owner, &notes, 6).await;
+    let kernel = reopen(root.path(), owner, &notes, 7).await;
     let kept: Vec<_> = (kernel.projects().await.into_iter())
         .map(|project| (project.id, project.trusted))
         .collect();
@@ -1606,6 +1630,7 @@ async fn a_project_is_trusted_unless_its_folder_looks_foreign_and_only_the_perso
         (cloned.id, true),
         (plain.id, true),
         (said.id, false),
+        (inside.id, false),
     ];
     for (id, trusted) in kept_as {
         assert!(kept.contains(&(id, trusted)), "{id}: {kept:?}");

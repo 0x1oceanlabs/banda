@@ -23,8 +23,9 @@ list: CallMethod<Nothing, Array<ProjectSummary>>,
 /**
  * Makes a Project: a new folder under the root, by its name. A
  * scratch one, for a Thread in No Project, takes no name: its folder
- * is new under `scratch/`. A new folder is trusted, unless the
- * Person says a named one is not.
+ * is new under `scratch/`, and it is trusted. A named one is
+ * trusted as `trusted` says, or else unless its folder looks
+ * foreign (`projects.foreign`).
  */
 create: CommandMethod<CreateProject, ProjectSummary>, 
 /**
@@ -41,7 +42,8 @@ add: CommandMethod<AddProject, ProjectSummary>,
 browse: CallMethod<Browse, Browsed>, 
 /**
  * Whether a folder looks foreign, and why, for Add Project to ask
- * whether to trust it (ADR 0084, decision 13).
+ * whether to trust it (ADR 0084, decision 13); one not made yet,
+ * as it will be. It names the Project the folder already is.
  */
 foreign: CallMethod<OneFolder, Foreign>, 
 /**

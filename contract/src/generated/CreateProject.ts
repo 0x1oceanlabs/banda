@@ -11,6 +11,6 @@ name?: string,
 scratch?: boolean, 
 /**
  * Whether it is trusted (`ProjectSummary`); a new folder is, unless
- * said. A scratch Project always is.
+ * said or its folder looks foreign. A scratch Project always is.
  */
 trusted?: boolean, };
