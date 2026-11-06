@@ -73,7 +73,6 @@ const FILES: &[Files] = &[
     Files {
         folder: "pulls",
         toml: include_str!("../../modules/pulls/module.toml"),
-        window: None,
         methods: Some(Pulls::method_list),
     },
     Files {
