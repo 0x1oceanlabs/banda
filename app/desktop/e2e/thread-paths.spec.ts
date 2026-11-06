@@ -69,7 +69,11 @@ test("a reply's paths link to their files, which a click opens and the menu acts
   await chip.click({ modifiers: ["Control"] })
   await expect.poll(outside).toEqual([`open ${notes}`])
   await reply.locator("a[data-file][data-kind=text]").click()
-  await expect(page.getByRole("region", { name: "app.js" })).toBeVisible()
+  // The Files Pane by its name alone: the Thread's, its first message,
+  // names app.js too.
+  await expect(
+    page.getByRole("region", { name: "app.js", exact: true })
+  ).toBeVisible()
 
   // Its menu: open, Quick Look, show, copy either path, name it in the
   // message.

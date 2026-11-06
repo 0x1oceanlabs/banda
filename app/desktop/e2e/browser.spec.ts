@@ -571,7 +571,11 @@ test("an Agent reads a tab's tree with refs and new errors, until the Person sto
   const bar = await openBrowser(page)
   await bar.fill(address.replace("http://", ""))
   await bar.press("Enter")
-  await expect(page.getByRole("region", { name: "Read" })).toBeVisible()
+  // The browser's tile by its page's title alone: "Thread with Fake AI"
+  // has "read" in it too.
+  await expect(
+    page.getByRole("region", { name: "Read", exact: true })
+  ).toBeVisible()
   const [{ id }] = await agentAnswers(window, "browser_tabs", {})
   const snapshot = () => agentSays(window, "browser_snapshot", { tab: id })
 
