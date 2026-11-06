@@ -63,6 +63,26 @@
         "cli": {
           "description": "The Person's own CLI the program runs, when it runs one.",
           "$ref": "#/$defs/Cli"
+        },
+        "of": {
+          "description": "The Harness this entry is an account of, by its ID: `claude`,\n`codex`, or an entry above it. An account takes that Harness's\nprogram, adapter and CLI, and adds its own name and variables, such\nas its `CLAUDE_CONFIG_DIR` or `CODEX_HOME` (ADR 0078, decision 1).",
+          "type": "string"
+        },
+        "kind": {
+          "description": "How the account pays: `subscription`, `api` or `gateway`.",
+          "default": "subscription",
+          "$ref": "#/$defs/AccountKind"
+        },
+        "mark": {
+          "description": "The letters of its mark, one or two: by default the first of its\nname, two when another account of its Harness starts the same.",
+          "type": "string"
+        },
+        "colour": {
+          "description": "Its colour: 1 violet, 2 rose, 3 green, 4 graphite. By default its\nplace in this file, from 1 round to 4 again.",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 1,
+          "maximum": 4
         }
       },
       "required": [
@@ -89,6 +109,26 @@
       "required": [
         "program",
         "variable"
+      ]
+    },
+    "AccountKind": {
+      "description": "How an account pays (ADR 0078, decision 1).",
+      "oneOf": [
+        {
+          "description": "A plan, signed in through the Harness's own sign-in.",
+          "type": "string",
+          "const": "subscription"
+        },
+        {
+          "description": "Billed by the token, signed in through the Harness's own API\nsign-in, such as Anthropic Console or `codex login --with-api-key`.",
+          "type": "string",
+          "const": "api"
+        },
+        {
+          "description": "A gateway's base URL and key, such as OpenRouter's.",
+          "type": "string",
+          "const": "gateway"
+        }
       ]
     },
     "LimitsEntry": {

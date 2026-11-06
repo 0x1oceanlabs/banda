@@ -53,6 +53,10 @@ fn harnesses_with(env: &[(&str, &str)]) -> Harnesses {
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect(),
         cli: None,
+        of: None,
+        kind: Default::default(),
+        mark: None,
+        colour: None,
         carried: None,
         record: None,
     }])
@@ -1260,6 +1264,10 @@ fn with_cli_since(program: &str, minimum: Option<&str>) -> Agents {
             variable: "FAKE_AGENT_CLI".to_owned(),
             minimum: minimum.map(str::to_owned),
         }),
+        of: None,
+        kind: Default::default(),
+        mark: None,
+        colour: None,
         carried: None,
         record: None,
     }]))
@@ -2733,6 +2741,10 @@ async fn the_real_harnesses_say_what_they_run_and_who_is_signed_in() {
         args: Vec::new(),
         env: Default::default(),
         cli: None,
+        of: None,
+        kind: Default::default(),
+        mark: None,
+        colour: None,
         carried: None,
         record: None,
     };

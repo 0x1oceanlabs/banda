@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ts_rs::TS;
 
-/// A Harness this machine can run, as `harnesses.toml` has it.
+/// A Harness this machine can run, as `harnesses.toml` has it: a
+/// Harness, or an account of one (ADR 0078, decision 1).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "harnesses/")]
 pub struct HarnessView {
@@ -22,10 +23,37 @@ pub struct HarnessView {
     /// The names of the variables it starts with. Their values may be
     /// secrets, so they stay in the file.
     pub env: Vec<String>,
+    /// The Harness it is an account of, by its ID: its own ID when it is
+    /// a Harness, `claude` for a second Claude Code account.
+    pub harness: String,
+    /// How the account pays.
+    pub kind: AccountKind,
+    /// The letters of its mark: the first of its name, or two where
+    /// another account of its Harness starts with the same (decision 9).
+    pub mark: String,
+    /// Its colour, 1 to 4 (decision 10).
+    pub colour: u8,
+}
+
+/// How an account pays (ADR 0078, decision 1).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "harnesses/")]
+pub enum AccountKind {
+    /// A plan, signed in through the Harness's own sign-in.
+    #[default]
+    Subscription,
+    /// Billed by the token, signed in through the Harness's own API
+    /// sign-in, such as Anthropic Console or `codex login --with-api-key`.
+    Api,
+    /// A gateway's base URL and key, such as OpenRouter's.
+    Gateway,
 }
 
 impl HarnessView {
-    pub(crate) fn of(harness: &crate::Harness) -> Self {
+    /// `harness` as the window reads it, with the mark and colour the list
+    /// gave it among the others.
+    pub(crate) fn of(harness: &crate::Harness, mark: String, colour: u8) -> Self {
         let start = harness.start();
         Self {
             id: harness.id.clone(),
@@ -34,6 +62,10 @@ impl HarnessView {
             enabled: harness.enabled,
             command: [start.program].into_iter().chain(start.args).collect(),
             env: start.env.into_keys().collect(),
+            harness: harness.harness().to_owned(),
+            kind: harness.kind,
+            mark,
+            colour,
         }
     }
 }

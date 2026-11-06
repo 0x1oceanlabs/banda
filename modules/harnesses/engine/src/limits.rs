@@ -51,15 +51,19 @@ pub(crate) enum Kind {
 }
 
 impl Kind {
-    /// What `harness` runs: the CLI its adapter is told of, by the
-    /// variable or the program's name, else its ID. So a second account,
-    /// an entry of its own with Claude Code's adapter, is Claude Code's.
+    /// What `harness` runs: the Harness it is an account of (ADR 0078),
+    /// else the CLI its adapter is told of, by the variable or the
+    /// program's name, else its ID. So a second account, an entry of its
+    /// own with Claude Code's adapter, is Claude Code's.
     pub(crate) fn of(harness: &Harness) -> Option<Kind> {
         let named = |name: &str| match name {
             "claude" | "CLAUDE_CODE_EXECUTABLE" => Some(Kind::Claude),
             "codex" | "CODEX_PATH" => Some(Kind::Codex),
             _ => None,
         };
+        if let Some(kind) = harness.of.as_deref().and_then(named) {
+            return Some(kind);
+        }
         let Some(cli) = &harness.cli else {
             return named(&harness.id);
         };
