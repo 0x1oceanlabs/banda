@@ -5,7 +5,6 @@
  */
 import type { ProjectId } from "@banda/contract"
 import type { Columns } from "@banda/contract/look"
-import { callOrder } from "@banda/ui/components/banda-mark"
 import type { Sight } from "@banda/ui/module"
 import { type Call, type Lists, listedOf, type PaneState } from "@banda/ui/pane"
 import {
@@ -80,12 +79,22 @@ export function besideOf(
   return { project, from: entry.id, right }
 }
 
-/** The call to answer first, in the order calls are answered. */
-export function first(calling: readonly Call[]): Call | undefined {
-  return [...calling].sort(
-    callOrder(
-      (call) => call.chime,
-      (call) => call.since
-    )
-  )[0]
+/**
+ * The call `Alt+U` goes to (ADR 0079, decision 4): the first below the
+ * Thread at `here`, in the sidebar's `order` of `project:thing` keys, and
+ * from the end back to the top. It sorts nothing of its own: a call the
+ * sidebar lists nowhere comes last, the one that called first first.
+ */
+export function nextCall(
+  calling: readonly Call[],
+  order: readonly string[],
+  here?: string
+): Call | undefined {
+  const place = new Map(order.map((key, i) => [key, i]))
+  const at = (call: Call) => place.get(call.key) ?? order.length
+  const sorted = calling
+    .filter((call) => call.key !== here)
+    .sort((a, b) => at(a) - at(b) || a.since - b.since)
+  const from = (here === undefined ? undefined : place.get(here)) ?? -1
+  return sorted.find((call) => at(call) > from) ?? sorted[0]
 }

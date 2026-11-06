@@ -2,7 +2,7 @@ import type { Call, Listed } from "@banda/ui/pane"
 import type { Chime } from "@banda/ui/sound"
 import { expect, test } from "vitest"
 import { consume, open, start } from "../workspaces/model"
-import { besideOf, first, type Shows, showing, sightOf } from "./sight"
+import { besideOf, nextCall, type Shows, showing, sightOf } from "./sight"
 
 const call = (about: string, chime: Chime, since = 0): Call => ({
   key: `s:${about}`,
@@ -80,16 +80,20 @@ test("what an Agent opens goes beside the Pane of the Thread it works in", () =>
   expect(besideOf(w, lists, "a3", shows)).toBeNull()
 })
 
-test("Alt+U answers the loudest call first, then the one that called first", () => {
-  const heard = call
+test("Alt+U goes to the next call below, in the sidebar's order, and round", () => {
+  const order = ["s:t1", "s:t2", "s:t3", "s:t4"]
   const calling = [
-    heard("t1", "done", 1),
-    heard("t2", "asking", 3),
-    heard("t3", "asking", 2),
+    call("t3", "asking", 5),
+    call("t1", "done", 1),
+    call("t4", "done", 9),
   ]
-  expect(first(calling)?.about).toBe("t3")
-  expect(first([heard("t1", "done", 1), heard("t4", "failed", 9)])?.about).toBe(
-    "t4"
-  )
-  expect(first([])).toBeUndefined()
+  // From nowhere, the first the sidebar lists, however loud the rest.
+  expect(nextCall(calling, order)?.about).toBe("t1")
+  // Below the Thread you are at, and from the end back to the top.
+  expect(nextCall(calling, order, "s:t2")?.about).toBe("t3")
+  expect(nextCall(calling, order, "s:t3")?.about).toBe("t4")
+  expect(nextCall(calling, order, "s:t4")?.about).toBe("t1")
+  // A call the sidebar lists nowhere comes last.
+  expect(nextCall([call("t9", "asking", 0)], order, "s:t4")?.about).toBe("t9")
+  expect(nextCall([], order)).toBeUndefined()
 })
