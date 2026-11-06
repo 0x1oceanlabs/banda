@@ -316,6 +316,22 @@ pub fn git_in(folder: &Path, args: &[&str], stdin: &str) -> String {
     String::from_utf8(out.stdout).unwrap().trim().to_owned()
 }
 
+/// Runs the Person's own git in `folder`, however it ends: a program the
+/// trap names may fail it, as an older git takes a filter that quits.
+pub fn tried(folder: &Path, args: &[&str]) {
+    Command::new("git")
+        .args(args)
+        .current_dir(folder)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_INDEX_FILE")
+        .env_remove("GIT_WORK_TREE")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .unwrap();
+}
+
 /// A commit of a new file in the repository at `folder`.
 pub fn commit_in(folder: &Path, message: &str) {
     write(&folder.join(format!("{message}.txt")), message);

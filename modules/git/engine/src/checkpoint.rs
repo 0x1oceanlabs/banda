@@ -6,10 +6,12 @@
 //! branch are never touched, and kept under refs of Banda's own,
 //! `refs/banda/checkpoints/<thread>/<turn>/{before,after}`.
 
-use crate::index::{INDEX, UNTRACKED, own_index, untracked};
+use crate::index::{INDEX, UNTRACKED, own_index};
 use crate::repo::Repo;
-use crate::run::Opts;
+use crate::run::{Failure, Opts};
 use banda_kernel::{Event, EventFilter, Heard, ModuleProject, Refusal};
+use std::collections::BTreeSet;
+use std::path::Path;
 
 /// Where every checkpoint is kept.
 const ROOT: &str = "refs/banda/checkpoints";
@@ -66,21 +68,26 @@ pub async fn find(repo: &Repo, reference: &str) -> Result<Option<String>, Refusa
 /// more untracked files than a diff takes in, none is kept: the turn shows
 /// what its tool calls changed.
 pub async fn capture(repo: &Repo, reference: &str) -> Result<(), Refusal> {
-    let (untracked, own, head) = futures::join!(untracked(repo), own_index(repo), repo.head());
-    if untracked?.len() > UNTRACKED {
-        tracing::info!(%reference, "too many untracked files for a checkpoint");
-        return Ok(());
-    }
+    let (own, head) = futures::join!(own_index(repo), repo.head());
     let ((_folder, index), head) = (own?, head?);
-    let opts = || Opts {
+    let Some(filtered) = filtered(repo, &index).await? else {
+        tracing::info!(%reference, "too many untracked or changed files for a checkpoint");
+        return Ok(());
+    };
+    let opts = |stdin| Opts {
         index: Some(&index),
+        stdin,
         ..Opts::default()
     };
-    // The files whose `filter` is unspecified or unset.
-    let unfiltered = [":(attr:!filter)", ":(attr:-filter)"];
-    let add = [&INDEX[..], &["add", "--all", "--"], &unfiltered].concat();
-    repo.run(add, opts()).await?;
-    let tree = repo.run(["write-tree"], opts()).await?.text();
+    let add = [
+        "add",
+        "--all",
+        "--pathspec-from-file=-",
+        "--pathspec-file-nul",
+    ];
+    let add = [&INDEX[..], &add].concat();
+    repo.run(add, opts(Some(all_but(&filtered)))).await?;
+    let tree = repo.run(["write-tree"], opts(None)).await?.text();
     let mut commit = vec![
         "-c",
         "user.name=Banda",
@@ -98,6 +105,63 @@ pub async fn capture(repo: &Repo, reference: &str) -> Result<(), Refusal> {
     repo.run(["update-ref", reference, &commit], Opts::default())
         .await?;
     Ok(())
+}
+
+/// The files untracked, changed or gone against `index` whose `filter`
+/// is set or has a value, each read by `check-attr`, as `add` reads an
+/// attribute in a pathspec only from git 2.44 on; none when more are
+/// untracked than [`UNTRACKED`], or they are more than a git's output
+/// holds.
+async fn filtered(repo: &Repo, index: &Path) -> Result<Option<BTreeSet<Vec<u8>>>, Failure> {
+    let opts = |stdin| Opts {
+        index: Some(index),
+        stdin,
+        ..Opts::default()
+    };
+    let untracked = ["ls-files", "--others", "--exclude-standard", "-z", "--"];
+    let changed = ["ls-files", "--modified", "--deleted", "-z", "--"];
+    let (untracked, changed) = futures::join!(
+        repo.run(untracked, opts(None)),
+        repo.run(changed, opts(None))
+    );
+    let (untracked, changed) = (untracked?, changed?);
+    let named = (untracked.stdout.split(|b| *b == 0))
+        .filter(|name| !name.is_empty())
+        .count();
+    if untracked.truncated || changed.truncated || named > UNTRACKED {
+        return Ok(None);
+    }
+    let names = [untracked.stdout, changed.stdout].concat();
+    if names.is_empty() {
+        return Ok(Some(BTreeSet::new()));
+    }
+    let check = ["check-attr", "--stdin", "-z", "filter"];
+    let said = repo.run(check, opts(Some(names))).await?;
+    Ok((!said.truncated).then(|| with_filter(&said.stdout)))
+}
+
+/// The files whose `filter` is set or has a value, as `check-attr -z`
+/// says each: `<path> NUL filter NUL <value> NUL`. A driver named
+/// `unspecified` or `unset` reads as none, as `check-attr` says it so.
+fn with_filter(said: &[u8]) -> BTreeSet<Vec<u8>> {
+    let fields: Vec<&[u8]> = said.split(|b| *b == 0).collect();
+    let (files, _) = fields.as_chunks::<3>();
+    (files.iter())
+        .filter(|[_, _, value]| !matches!(*value, b"unspecified" | b"unset"))
+        .map(|[path, _, _]| path.to_vec())
+        .collect()
+}
+
+/// The pathspecs, as `--pathspec-file-nul` reads them, of every file but
+/// `left`, each named as it is.
+fn all_but(left: &BTreeSet<Vec<u8>>) -> Vec<u8> {
+    let mut pathspecs = b".\0".to_vec();
+    for name in left {
+        pathspecs.extend_from_slice(b":(exclude,literal)");
+        pathspecs.extend_from_slice(name);
+        pathspecs.push(0);
+    }
+    pathspecs
 }
 
 /// Lets go of the checkpoints of `turns` of `thread`.
@@ -191,6 +255,18 @@ async fn on(project: &ModuleProject, event: &Event) -> Result<(), Refusal> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_checkpoint_adds_all_but_each_file_whose_filter_is_set_or_has_a_value() {
+        let said = b"b.lfs\0filter\0lfs\0a.txt\0filter\0unspecified\0\
+            raw\0filter\0unset\0*.lfs\0filter\0set\0b.lfs\0filter\0lfs\0";
+        let left = with_filter(said);
+        assert_eq!(
+            all_but(&left),
+            b".\0:(exclude,literal)*.lfs\0:(exclude,literal)b.lfs\0"
+        );
+        assert_eq!(all_but(&with_filter(b"")), b".\0");
+    }
 
     #[test]
     fn a_checkpoint_is_named_only_by_ids() {

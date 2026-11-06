@@ -16,6 +16,10 @@
 //! config names as it is read just before is blanked too. The rest of the
 //! Person's config holds: their name, the remotes, what they ignore.
 //!
+//! It needs git 2.31 or later: on an older one, none starts. A fetch
+//! needs one that takes `GIT_NO_LAZY_FETCH` too, 2.45 or later or a
+//! release of 2.39 to 2.44 from May 2024 on: on another, no fetch starts.
+//!
 //! What this holds only with its callers, or not at all:
 //! - Filter drivers are blanked by the names the config held as it was
 //!   read, just before git starts. Diff drivers and hooks need no name: a
@@ -24,7 +28,8 @@
 //! - A submodule's own config is not read, so a status or a diff looks
 //!   into no submodule's work tree (`--ignore-submodules=dirty`).
 //! - A blanked filter leaves a file's bytes as they are on disk, so what
-//!   keeps objects leaves filtered files out (`:(attr:!filter)`).
+//!   keeps objects leaves out each file whose `filter` is set or has a
+//!   value (`git check-attr`).
 //! - A fetch takes the Person's own ssh command and credential helpers,
 //!   never the repository's, so one that needs the repository's fails.
 //!
@@ -125,15 +130,16 @@ const EVENTS: [&str; 28] = [
 
 /// What every bookkeeping git is configured with, whatever the
 /// repository says, besides its hook events: no hooks folder, as there is
-/// none at `/dev/null/<name>` on Linux or macOS; no file system monitor;
-/// no signature checked as a log reads; no external diff, which a diff
-/// asked for git's own patch skips and any other fails on; a submodule's
-/// change as its commits, not its diff, which runs in the submodule; no
-/// command that lists an alternate's refs; no submodule fetched, as each
-/// has config of its own; and no gc nor maintenance after it.
+/// none at `/dev/null/<name>` on Linux or macOS; no file system monitor,
+/// by an empty value, as a git before 2.36 runs the program `false` names; no
+/// signature checked as a log reads; no external diff, which a diff asked
+/// for git's own patch skips and any other fails on; a submodule's change
+/// as its commits, not its diff, which runs in the submodule; no command
+/// that lists an alternate's refs; no submodule fetched, as each has
+/// config of its own; and no gc nor maintenance after it.
 const ALWAYS: [(&str, &str); 9] = [
     ("core.hooksPath", "/dev/null"),
-    ("core.fsmonitor", "false"),
+    ("core.fsmonitor", ""),
     ("log.showSignature", "false"),
     ("diff.external", ""),
     ("diff.submodule", "short"),
@@ -154,8 +160,12 @@ const NAMING: &str = r"^filter\.|^diff\..+\.(textconv|command)$|^hook\.|^core\.s
 /// back, one older than 2.31, would take none of them, so none starts.
 const PROBE: &str = "banda.probe";
 
-/// How long the config is read at most.
+/// How long the config is read at most, and how long git is asked
+/// whether it takes `GIT_NO_LAZY_FETCH`.
 const READING: Duration = Duration::from_secs(10);
+
+/// An object no repository holds.
+const LACKED: &str = "0123456789abcdef0123456789abcdef01234567";
 
 /// git in `dir` running `args` for an act the Person asked for, as their
 /// own git runs it. Its stdio and the rest are the caller's.
@@ -172,7 +182,8 @@ where
 /// git in `dir` running `args`, which name its subcommand, for Banda's
 /// own bookkeeping: it runs no program the repository names (the crate's
 /// doc says how far that holds). A fetch is the one that reaches a
-/// remote, over git's own transports with git's own upload-pack. The
+/// remote, over git's own transports with git's own upload-pack, and only
+/// on a git that takes `GIT_NO_LAZY_FETCH` ([`lazy_fetch_off`]). The
 /// repository's config is read first, for the names of its drivers and
 /// hooks and the Person's own network config; when it cannot be read, as
 /// when it is malformed, past [`READING`] or git is too old, no git
@@ -194,6 +205,13 @@ where
     }
     let mut args: Vec<OsString> = args.into_iter().map(|a| a.as_ref().to_owned()).collect();
     if let Some(at) = subcommand(&args).filter(|at| args[*at] == "fetch") {
+        if !lazy_fetch_off().await? {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "git takes no GIT_NO_LAZY_FETCH: Banda's own fetch needs git 2.45 or later, \
+                 or a release of 2.39 to 2.44 from May 2024 on",
+            ));
+        }
         args.insert(at + 1, UPLOAD_PACK.into());
         git.env("GIT_ALLOW_PROTOCOL", TRANSPORTS);
     }
@@ -222,6 +240,53 @@ fn own(dir: &Path) -> Command {
     let mut git = base(dir);
     git.arg("--no-pager").envs(UNASKED);
     git
+}
+
+/// Whether git takes `GIT_NO_LAZY_FETCH`, as it says by starting no other
+/// git as it reads an object it lacks, in a repository of its own whose
+/// objects a remote that no transport reaches lends. A read reaches no
+/// remote to fetch one from, while a fetch does. Once known, it is known
+/// for the engine's life.
+async fn lazy_fetch_off() -> io::Result<bool> {
+    static KNOWN: tokio::sync::OnceCell<bool> = tokio::sync::OnceCell::const_new();
+    let asked = || async {
+        tokio::time::timeout(READING, starts_no_lazy_fetch())
+            .await
+            .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "git took too long"))?
+    };
+    KNOWN.get_or_try_init(asked).await.copied()
+}
+
+/// What [`lazy_fetch_off`] asks git, in a folder of its own, its trace
+/// read for a git it started (`GIT_TRACE2_EVENT`).
+async fn starts_no_lazy_fetch() -> io::Result<bool> {
+    let folder = tempfile::Builder::new()
+        .prefix("banda-git-lazy-")
+        .tempdir()?;
+    let repo = folder.path().join("repo");
+    for made in ["objects", "refs"] {
+        std::fs::create_dir_all(repo.join(made))?;
+    }
+    std::fs::write(repo.join("HEAD"), "ref: refs/heads/main\n")?;
+    std::fs::write(
+        repo.join("config"),
+        "[core]\n\trepositoryformatversion = 1\n\tbare = true\n\
+         [extensions]\n\tpartialclone = none\n\
+         [remote \"none\"]\n\turl = ./none\n",
+    )?;
+    let trace = folder.path().join("trace");
+    own(folder.path())
+        .arg("--git-dir")
+        .arg(&repo)
+        .args(["cat-file", "-e", LACKED])
+        .env("GIT_TRACE2_EVENT", &trace)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await?;
+    let traced = std::fs::read_to_string(&trace)?;
+    Ok(!traced.is_empty() && !traced.contains("\"child_start\""))
 }
 
 /// Where the subcommand is in `args`: the first that is no option, past
@@ -541,6 +606,11 @@ mod tests {
         assert_eq!(args(&read), ["--no-pager", "status"]);
         let allowed = env(&read, "GIT_ALLOW_PROTOCOL");
         assert_eq!(allowed.as_deref(), Some(OsStr::new("")));
+    }
+
+    #[tokio::test]
+    async fn this_git_fetches_no_object_it_lacks_when_told_not_to() {
+        assert!(lazy_fetch_off().await.unwrap());
     }
 
     #[test]
