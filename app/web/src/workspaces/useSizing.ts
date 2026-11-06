@@ -374,7 +374,7 @@ export function useSizing(
       element.removeEventListener("dblclick", onDouble, true)
       element.removeEventListener("contextmenu", onMenu, true)
     }
-  }, [strip, motion, sizing])
+  }, [strip, motion, sizing, holdsMod])
 }
 
 /** Whether `column` shows its Panes one above another, two or more. */

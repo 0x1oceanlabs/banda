@@ -29,12 +29,11 @@ use std::collections::BTreeMap;
 /// fewer fails them until it is lowered, so the count only falls.
 pub const CEILING: usize = 2;
 
-/// One module's folder: its `module.toml`, and its `window.json` and its
-/// engine part's methods when it has them.
+/// One module's folder: its `module.toml`, and its engine part's methods
+/// when it has them; its `window.json` is `banda_settings::window`'s.
 struct Files {
     folder: &'static str,
     toml: &'static str,
-    window: Option<&'static str>,
     methods: Option<fn() -> Vec<Method>>,
 }
 
@@ -43,31 +42,26 @@ const FILES: &[Files] = &[
     Files {
         folder: "agents",
         toml: include_str!("../../modules/agents/module.toml"),
-        window: Some(include_str!("../../modules/agents/window.json")),
         methods: Some(Agents::method_list),
     },
     Files {
         folder: "harnesses",
         toml: include_str!("../../modules/harnesses/module.toml"),
-        window: None,
         methods: Some(HarnessesModule::method_list),
     },
     Files {
         folder: "terminal",
         toml: include_str!("../../modules/terminal/module.toml"),
-        window: Some(include_str!("../../modules/terminal/window.json")),
         methods: Some(Terminals::method_list),
     },
     Files {
         folder: "browser",
         toml: include_str!("../../modules/browser/module.toml"),
-        window: Some(include_str!("../../modules/browser/window.json")),
         methods: Some(Browser::method_list),
     },
     Files {
         folder: "git",
         toml: include_str!("../../modules/git/module.toml"),
-        window: Some(include_str!("../../modules/git/window.json")),
         methods: Some(Git::method_list),
     },
     Files {
@@ -79,25 +73,21 @@ const FILES: &[Files] = &[
     Files {
         folder: "notifications",
         toml: include_str!("../../modules/notifications/module.toml"),
-        window: Some(include_str!("../../modules/notifications/window.json")),
         methods: None,
     },
     Files {
         folder: "workspaces",
         toml: include_str!("../../modules/workspaces/module.toml"),
-        window: None,
         methods: Some(Workspaces::method_list),
     },
     Files {
         folder: "problems",
         toml: include_str!("../../modules/problems/module.toml"),
-        window: None,
         methods: Some(Problems::method_list),
     },
     Files {
         folder: "sharing",
         toml: include_str!("../../modules/sharing/module.toml"),
-        window: None,
         methods: Some(Sharing::method_list),
     },
     // The window's own actions, the tiling's first (ADR 0071, decision 2),
@@ -105,7 +95,6 @@ const FILES: &[Files] = &[
     Files {
         folder: "window",
         toml: include_str!("../../app/web/module.toml"),
-        window: Some(include_str!("../../app/web/window.json")),
         methods: None,
     },
 ];
@@ -176,7 +165,7 @@ pub fn offers() -> Vec<Offer> {
                 manifest: toml::from_str(files.toml)
                     .unwrap_or_else(|error| panic!("modules/{folder}/module.toml: {error}")),
                 engine: files.methods.map(|methods| methods()),
-                window: files.window.map(|window| {
+                window: banda_settings::window(folder).map(|window| {
                     serde_json::from_str(window)
                         .unwrap_or_else(|error| panic!("modules/{folder}/window.json: {error}"))
                 }),

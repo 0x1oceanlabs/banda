@@ -700,6 +700,7 @@ fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
                 &places,
                 Hyprland::from_env(),
                 &banda_settings::also(),
+                &banda_settings::actions(),
                 |look| print(json!(look)),
             );
             ExitCode::SUCCESS
@@ -708,7 +709,13 @@ fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
             let hyprland = Hyprland::from_env();
             let windows = || hyprland.as_ref().and_then(|h| h.windows().ok());
             print(json!(
-                banda_look::resolve(&places, &windows, &banda_settings::also()).look
+                banda_look::resolve(
+                    &places,
+                    &windows,
+                    &banda_settings::also(),
+                    &banda_settings::actions(),
+                )
+                .look
             ));
             ExitCode::SUCCESS
         }

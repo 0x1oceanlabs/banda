@@ -317,7 +317,7 @@ export function useMoving(
       element.removeEventListener("pointerdown", onDown, true)
       element.removeEventListener("lostpointercapture", onCancel)
     }
-  }, [root, carrying])
+  }, [root, carrying, holdsMod])
 }
 
 /** A Strip's `land` and `scroll`, for workspace `id`'s: beside its Panes,

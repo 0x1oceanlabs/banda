@@ -487,6 +487,7 @@ dependencies = [
  "banda-sharing",
  "banda-terminal",
  "schemars 1.2.3",
+ "serde",
  "serde_json",
  "tempfile",
  "toml_edit",
