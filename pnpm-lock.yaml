@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@agentclientprotocol/codex-acp@2.5.0': 952416e092770efa1d8732cf297249bf6909b3789ca702c4f3d91933e2041f52
+
 importers:
 
   .:
@@ -628,7 +631,7 @@ importers:
         version: 0.99.1(@anthropic-ai/sdk@1.5.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.32.2(supports-color@7.2.0)(zod@4.6.7))(@modelcontextprotocol/server@2.4.0)
       '@agentclientprotocol/codex-acp':
         specifier: 2.5.0
-        version: 2.5.0(@modelcontextprotocol/server@2.4.0)
+        version: 2.5.0(patch_hash=952416e092770efa1d8732cf297249bf6909b3789ca702c4f3d91933e2041f52)(@modelcontextprotocol/server@2.4.0)
       '@banda/contract':
         specifier: workspace:*
         version: link:../../../contract
@@ -5500,7 +5503,7 @@ snapshots:
       - '@modelcontextprotocol/sdk'
       - '@modelcontextprotocol/server'
 
-  '@agentclientprotocol/codex-acp@2.5.0(@modelcontextprotocol/server@2.4.0)':
+  '@agentclientprotocol/codex-acp@2.5.0(patch_hash=952416e092770efa1d8732cf297249bf6909b3789ca702c4f3d91933e2041f52)(@modelcontextprotocol/server@2.4.0)':
     dependencies:
       '@agentclientprotocol/sdk': 2.1.0(@modelcontextprotocol/server@2.4.0)(zod@4.6.7)
       '@openai/codex': 0.165.0

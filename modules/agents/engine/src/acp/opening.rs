@@ -75,46 +75,61 @@ enum Lasts {
     Harness,
 }
 
-/// What a session's request gives its Agent to reach Banda (ADR 0019).
-#[derive(Default)]
+/// What a session's request gives its Agent to reach Banda (ADR 0019),
+/// and what its Harness may load of the Project's folder (ADR 0083,
+/// decision 5).
 struct Given {
     /// `banda mcp`, as ACP hands an MCP server to a session, named `banda`.
     servers: Vec<acp::McpServer>,
-    /// The same pass for the `banda` the Agent runs in its shell, in
-    /// `_meta.claudeCode.options.env`: Claude Code's adapter starts the
-    /// session's Claude Code with it over its process's own, and its shell
-    /// inherits it. Another Harness passes it by, and its Agents' shells
-    /// keep their process's (`live.rs`). None without a pass.
+    /// Claude Code's options, which its adapter takes from
+    /// `_meta.claudeCode.options`; another Harness passes them by. None
+    /// when there are none.
+    ///
+    /// - `env`: the same pass for the `banda` the Agent runs in its shell.
+    ///   The adapter starts the session's Claude Code with it over its
+    ///   process's own, and its shell inherits it. Another Harness's
+    ///   Agents' shells keep their process's (`live.rs`).
+    /// - `settingSources`: in a Project the Person has not trusted, the
+    ///   Person's own settings alone, so Claude Code loads none of the
+    ///   folder's settings, hooks, `CLAUDE.md` or `.mcp.json` servers.
+    ///   Codex's process is told by its variable
+    ///   ([`banda_harnesses::UNTRUSTED_VARIABLE`]).
     meta: Option<acp::Meta>,
 }
 
 impl Given {
-    fn of(banda: Option<Program>) -> Given {
-        let Some(Program { program, args, env }) = banda else {
-            return Given::default();
-        };
-        let shell = serde_json::json!({ "claudeCode": { "options": { "env": env } } });
-        let variables = env.into_iter();
-        let server = acp::McpServerStdio::new("banda", program).args(args).env(
-            variables
-                .map(|(name, value)| acp::EnvVariable::new(name, value))
-                .collect(),
-        );
-        Given {
-            servers: vec![acp::McpServer::Stdio(server)],
-            meta: shell.as_object().cloned(),
+    fn of(banda: Option<Program>, trusted: bool) -> Given {
+        let mut options = serde_json::Map::new();
+        if !trusted {
+            options.insert("settingSources".to_owned(), serde_json::json!(["user"]));
         }
+        let mut servers = Vec::new();
+        if let Some(Program { program, args, env }) = banda {
+            options.insert("env".to_owned(), serde_json::json!(env));
+            let variables = env.into_iter();
+            let server = acp::McpServerStdio::new("banda", program).args(args).env(
+                variables
+                    .map(|(name, value)| acp::EnvVariable::new(name, value))
+                    .collect(),
+            );
+            servers.push(acp::McpServer::Stdio(server));
+        }
+        let meta = (!options.is_empty()).then(|| {
+            let claude = serde_json::json!({ "options": options });
+            acp::Meta::from_iter([("claudeCode".to_owned(), claude)])
+        });
+        Given { servers, meta }
     }
 }
 
 impl Connection {
     /// A session of its own in `folder`, in no Thread's place and with no
     /// `banda mcp`, for a short run (`agents.write`); closed after with
-    /// [`Session::close`].
+    /// [`Session::close`]. It loads what the Project's folder names only
+    /// as the Thread's own would.
     pub async fn aside(self: &Arc<Self>, folder: &Path) -> Result<Session, Ending> {
-        let made = self
-            .open(acp::NewSessionRequest::new(folder), "open a session")
-            .await?;
+        let new = acp::NewSessionRequest::new(folder).meta(Given::of(None, self.trusted).meta);
+        let made = self.open(new, "open a session").await?;
         let options = made.config_options.unwrap_or_default();
         opened(&self.learned, &made.session_id, options, folder);
         Ok(Session::new(self, made.session_id))
@@ -126,8 +141,9 @@ impl Connection {
     /// resuming it or else by loading it, also one another entry `kin` to
     /// this one opened; otherwise a new one opens. A
     /// session that opens, either way, gets `banda()`, the `banda mcp` its
-    /// Agent reaches Banda through, as a stdio MCP server, and its pass for
-    /// the Agent's shell ([`Given`]).
+    /// Agent reaches Banda through, as a stdio MCP server, its pass for
+    /// the Agent's shell, and, in a Project not trusted, only the Person's
+    /// own settings ([`Given`]).
     pub async fn session(
         self: &Arc<Self>,
         thread: ThreadId,
@@ -147,7 +163,7 @@ impl Connection {
         {
             return Ok((Session::new(self, session.clone()), Opened::Known));
         }
-        let given = Given::of(banda());
+        let given = Given::of(banda(), self.trusted);
         if let Some((
             earlier,
             ForkAt {
@@ -298,7 +314,7 @@ mod tests {
             args: vec!["mcp".to_owned()],
             env: env.clone(),
         };
-        let given = Given::of(Some(banda));
+        let given = Given::of(Some(banda), true);
         let [acp::McpServer::Stdio(server)] = &given.servers[..] else {
             panic!("one stdio server: {:?}", given.servers);
         };
@@ -315,8 +331,40 @@ mod tests {
         );
         assert_eq!(forked["jetbrains"]["air"]["fork"]["messageId"], "m1");
 
-        let none = Given::of(None);
+        let none = Given::of(None, true);
         assert!(none.servers.is_empty());
         assert_eq!(none.meta, None, "no pass, no _meta");
+    }
+
+    #[test]
+    fn a_session_in_a_project_not_trusted_reads_only_the_persons_own_settings() {
+        let env = BTreeMap::from([("BANDA_TOKEN".to_owned(), "f00d".to_owned())]);
+        let banda = Program {
+            program: "/bin/banda".to_owned(),
+            args: vec!["mcp".to_owned()],
+            env: env.clone(),
+        };
+        let trusted = Given::of(Some(banda.clone()), true).meta.map(Value::Object);
+        let options = &trusted.unwrap()["claudeCode"]["options"];
+        assert_eq!(options.get("settingSources"), None, "Claude Code's own");
+
+        let given = Given::of(Some(banda), false);
+        assert_eq!(given.servers.len(), 1, "it reaches Banda all the same");
+        let meta = Value::Object(given.meta.unwrap());
+        let only = json!({ "env": env, "settingSources": ["user"] });
+        assert_eq!(meta["claudeCode"]["options"], only);
+        // A fork, a resume and a load carry the same `_meta`.
+        let forked = Value::Object(forked_at(meta.as_object().unwrap().clone(), "m1"));
+        assert_eq!(
+            forked["claudeCode"]["options"]["settingSources"],
+            json!(["user"])
+        );
+
+        let aside = Given::of(None, false).meta.map(Value::Object);
+        assert_eq!(
+            aside,
+            Some(json!({ "claudeCode": { "options": { "settingSources": ["user"] } } })),
+            "a short run with no pass"
+        );
     }
 }

@@ -94,7 +94,9 @@
 //! would be handed for `banda`: `process`, `BANDA_TOKEN` and
 //! `BANDA_ENGINE` as its own environment has them, and `session`, the
 //! request's `_meta.claudeCode.options.env`, which Claude Code's adapter
-//! sets over them.
+//! sets over them; and what it would load of the Project's folder:
+//! `untrusted`, `BANDA_UNTRUSTED` as its environment has it, and
+//! `sources`, the request's `_meta.claudeCode.options.settingSources`.
 //!
 //! With `FAKE_AGENT_REPLAY` naming a recording it plays a real Harness's
 //! conversation instead: see [`replay`].
@@ -1230,7 +1232,13 @@ fn tell_shells(meta: Option<&serde_json::Map<String, serde_json::Value>>) {
     let process = json!({ "BANDA_TOKEN": own("BANDA_TOKEN"), "BANDA_ENGINE": own("BANDA_ENGINE") });
     let options = meta.and_then(|meta| meta.get("claudeCode")?.get("options"));
     let session = options.and_then(|options| options.get("env"));
-    let shells = json!({ "process": process, "session": session });
+    let sources = options.and_then(|options| options.get("settingSources"));
+    let shells = json!({
+        "process": process,
+        "session": session,
+        "untrusted": own("BANDA_UNTRUSTED"),
+        "sources": sources,
+    });
     let _ = std::fs::write(file, shells.to_string());
 }
 

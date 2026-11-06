@@ -221,6 +221,11 @@ enum ProjectCommand {
         /// Makes the folder first when it does not exist.
         #[arg(long)]
         create: bool,
+        /// Whether its Harnesses load the settings, hooks and servers the
+        /// folder names: true or false. Not given, a folder that looks
+        /// like another's code is not trusted (`projects.foreign`).
+        #[arg(long)]
+        trusted: Option<bool>,
     },
 }
 
@@ -488,7 +493,13 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             .await
         }
         Command::Project {
-            what: ProjectCommand::Add { path, name, create },
+            what:
+                ProjectCommand::Add {
+                    path,
+                    name,
+                    create,
+                    trusted,
+                },
         } => {
             // `~` stays for the engine to read; a relative path is from here.
             let folder = match path.starts_with("~") {
@@ -499,6 +510,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
                 "folder": folder.display().to_string(),
                 "name": name,
                 "create": create,
+                "trusted": trusted,
             });
             print_call(&places, "projects.add", None, CommandId::new(), params).await
         }

@@ -12,4 +12,10 @@ name?: string,
 /**
  * Makes the folder, and the folders above it, when it does not exist.
  */
-create?: boolean, };
+create?: boolean, 
+/**
+ * Whether its Harnesses load what its folder names (ADR 0083,
+ * decision 5). Not said, a folder that looks foreign is not trusted,
+ * and another is. A folder that already is a Project keeps its own.
+ */
+trusted?: boolean, };

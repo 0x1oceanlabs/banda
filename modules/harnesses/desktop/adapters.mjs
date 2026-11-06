@@ -2,7 +2,9 @@
 // in adapters/, which the app carries and the engine runs on Electron's
 // Node (ADR 0059, decision 1). Their versions are this package's
 // dependencies, and the engine's `known()` names the same; each file is
-// its package's name. app/desktop/build.mjs runs this on import.
+// its package's name. app/desktop/build.mjs runs this on import. What
+// Banda changes in them is in patches/, which pnpm applies as it installs
+// them (`patchedDependencies` in pnpm-workspace.yaml).
 import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"

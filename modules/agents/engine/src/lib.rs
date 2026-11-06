@@ -1260,6 +1260,12 @@ impl Module for Agents {
         self.live.close(project.id()).await;
     }
 
+    /// Its Harness processes go, and the next turn's reads the Project's
+    /// trust as it is now (ADR 0083, decision 5).
+    async fn trust_changed(&self, project: ModuleProject) {
+        self.live.let_go(project.id());
+    }
+
     async fn closing(&self, project: ModuleProject) {
         self.live.close(project.id()).await;
     }

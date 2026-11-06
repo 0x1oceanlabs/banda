@@ -13,7 +13,9 @@
 //! on that Harness in that Project is a session in the one process. A host
 //! with nothing to do is let go, and its Threads resume their sessions
 //! when it starts again. After a sign-in every host of that Harness entry
-//! is let go, so each reads the account again when it starts.
+//! is let go, so each reads the account again when it starts; and every
+//! host of a Project whose trust the Person changed, so its sessions load
+//! what the folder names only while it is trusted (ADR 0083, decision 5).
 //!
 //! The `banda` an Agent runs in its shell acts under a pass walled to its
 //! Project (ADR 0019). Each Harness process carries one, which its Agents'
@@ -144,14 +146,16 @@ impl Live {
     }
 
     /// The process of `harness` for `project`, started if it is not
-    /// running, with the pass its Agents' shells share.
+    /// running, with the pass its Agents' shells share, and the Project's
+    /// trust as it is now: one started under the other is let go.
     pub async fn connection(
         &self,
         project: &ModuleProject,
         harness: &Harness,
     ) -> Result<Arc<Connection>, String> {
         let pass = self.process_pass(project, harness);
-        let started = harness.in_project(project.id(), project.data(), &pass);
+        let (id, data) = (project.id(), project.data());
+        let started = harness.in_project(id, data, &pass, project.trusted());
         let connection = self.hosts.get(project.id(), &started).await?;
         connection.touch();
         Ok(connection)
@@ -186,6 +190,13 @@ impl Live {
                 }
             }
         }
+    }
+
+    /// Lets go of every process of `project`, as the Person's trust in it
+    /// changed: a turn that runs keeps its own until it ends, and the next
+    /// starts one that reads the Project as it is now.
+    pub fn let_go(&self, project: ProjectId) {
+        self.hosts.let_go_project(project);
     }
 
     /// Stops every turn that runs on a Harness of `project`, as the Project is

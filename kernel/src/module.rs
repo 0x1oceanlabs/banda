@@ -82,6 +82,11 @@ pub trait Module: Send + Sync + 'static {
     /// was the old folder; future work reads the Project's new folder.
     async fn moved(&self, _project: ModuleProject) {}
 
+    /// The Person trusted the Project, or took its trust back (ADR 0083,
+    /// decision 5). A module lets go of what started under the other, so
+    /// what starts next reads [`ModuleProject::trusted`] as it is now.
+    async fn trust_changed(&self, _project: ModuleProject) {}
+
     /// One of its methods, already allowed. `method` comes without the
     /// module's prefix.
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal>;

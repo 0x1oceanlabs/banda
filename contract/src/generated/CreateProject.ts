@@ -8,4 +8,9 @@ name?: string,
 /**
  * A Project for one Thread in No Project (ADR 0046).
  */
-scratch?: boolean, };
+scratch?: boolean, 
+/**
+ * Whether its Harnesses load what its folder names (ADR 0083,
+ * decision 5); trusted when not said. A scratch Project is trusted.
+ */
+trusted?: boolean, };

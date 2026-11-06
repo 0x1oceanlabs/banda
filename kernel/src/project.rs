@@ -69,6 +69,18 @@ pub(crate) struct Manifest {
     /// The picture kept beside it as `sign.<ext>`, found or picked.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub picture: Option<Kept>,
+    /// Its Harnesses load the settings, hooks and servers its folder names
+    /// (ADR 0083, decision 5). Only the Person changes it. Written only
+    /// when false: a manifest that does not say is trusted, as every
+    /// Project from before the flag is.
+    #[serde(default = "unsaid_trust", skip_serializing_if = "Clone::clone")]
+    pub trusted: bool,
+}
+
+/// The trust of a Project whose record does not say: every Project from
+/// before the flag is trusted (ADR 0083, decision 5).
+pub(crate) fn unsaid_trust() -> bool {
+    true
 }
 
 impl Manifest {
@@ -87,6 +99,7 @@ impl Manifest {
             scratch: false,
             sign: None,
             picture: None,
+            trusted: true,
         }
     }
 
@@ -102,6 +115,7 @@ impl Manifest {
             scratch: self.scratch,
             missing,
             sign: Sign::of(&self.name, self.sign.as_ref(), self.picture.as_ref()),
+            trusted: self.trusted,
         }
     }
 
@@ -345,6 +359,12 @@ impl Project {
     /// Whether it is one Thread's Project, in No Project (ADR 0046).
     pub fn scratch(&self) -> bool {
         self.manifest.lock().unwrap().scratch
+    }
+
+    /// Whether the Person trusts it: its Harnesses load what its folder
+    /// names for them (ADR 0083, decision 5).
+    pub fn trusted(&self) -> bool {
+        self.manifest.lock().unwrap().trusted
     }
 
     pub fn summary(&self) -> ProjectSummary {
@@ -715,6 +735,14 @@ impl ModuleProject {
 
     pub fn owner(&self) -> PersonId {
         self.project.owner
+    }
+
+    /// Whether the Person trusts the Project now: its Harnesses load the
+    /// settings, hooks and servers its folder names only then (ADR 0083,
+    /// decision 5). [`Module::trust_changed`](crate::Module::trust_changed)
+    /// tells when it changes.
+    pub fn trusted(&self) -> bool {
+        self.project.trusted()
     }
 
     /// A new pass that names `agent` in this Project, and works only in it:
