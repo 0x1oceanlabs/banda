@@ -57,9 +57,9 @@ it.effect(
       const stray = pageIn(4, profile())
       for (const page of [mine, ours, theirs, stray]) tabs.attached(page)
 
-      expect(tabs.agentsOf(mine)).toBeNull()
-      expect(tabs.agentsOf(ours)).toBe(work)
-      expect(tabs.agentsOf(stray)).toBeUndefined()
+      expect(tabs.whose(mine)).toBeNull()
+      expect(tabs.whose(ours)).toBe(work)
+      expect(tabs.whose(stray)).toBeUndefined()
       // The Person's tabs, another Project's Agents' and a page of no
       // profile are out of reach; no tab is lent yet.
       expect(tabs.seen(work, agent)).toEqual([ours])
@@ -88,7 +88,7 @@ it.effect(
       const made = (page: WebContents, agents?: string) =>
         Effect.gen(function* () {
           const asking = yield* Effect.forkChild(
-            tabs.create("https://a.test/", "agent-1", agents)
+            tabs.create({ url: "https://a.test/", agent: "agent-1", agents })
           )
           yield* Effect.yieldNow
           const asked = told.at(-1)!

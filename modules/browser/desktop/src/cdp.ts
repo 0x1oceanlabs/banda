@@ -6,12 +6,13 @@
  * A socket looks like a whole browser whose one target is its tab, so
  * Playwright's `connectOverCDP` takes it. It serves on 127.0.0.1, and its
  * address holds a secret of its own: `tab` hands one out for one tab, it
- * opens once, and it names no other tab. Nothing writes it down. A tab's
- * `webContents.debugger` is attached while any client uses the tab, and
- * each client's session on it is a Chromium session of its own
- * (`Target.attachToTarget`), so two clients on a tab do not hear each
- * other. A client is a scope, and each of its sessions a scope in it: a
- * client that leaves, by closing or by error, detaches from its tab.
+ * opens once, within seconds, and it names no other tab. Nothing writes
+ * it down. A tab's `webContents.debugger` is attached while any client
+ * uses the tab, and each client's session on it is a Chromium session of
+ * its own (`Target.attachToTarget`), so two clients on a tab do not hear
+ * each other. A client is a scope, and each of its sessions a scope in
+ * it: a client that leaves, by closing or by error, detaches from its
+ * tab.
  */
 import { randomBytes } from "node:crypto"
 import { createServer } from "node:http"
@@ -47,6 +48,8 @@ const CONTEXT = "banda"
 const BROWSER = "banda"
 /** Where a tab's socket is, before its secret. */
 const SOCKETS = "/devtools/tab/"
+/** How long an address handed out opens. */
+const HANDED = "10 seconds"
 
 /** What a socket uses of a tab's web contents. */
 type Page = Pick<
@@ -111,10 +114,10 @@ type Client = {
   discover: boolean
   /** Whether it attaches to each tab as it comes. */
   autoAttach: boolean
-  /** Its sessions on tabs, by ID. */
+  /** Its sessions on its tab, by ID. */
   readonly sessions: Set<string>
   /** The one tab its socket sees. */
-  readonly only: Page
+  readonly tab: Page
 }
 
 /** Where a session's messages go: a client's session on a tab, which
@@ -137,8 +140,8 @@ export class Cdp extends Context.Service<
     /** Whether an Agent drives the tab now. */
     readonly drives: (page: Page) => boolean
     /** A socket of a browser whose one target is the tab `page`, for
-     * Banda's own tools: its address opens once. None for a tab there is
-     * not, or while the sockets are not up. */
+     * Banda's own tools: its address opens once, within seconds. None for
+     * a tab there is not, or while the sockets are not up. */
     readonly tab: (page: number) => string | undefined
   }
 >()("banda/Cdp") {
@@ -150,7 +153,7 @@ export class Cdp extends Context.Service<
         const dialogs = yield* Dialogs
         const window = yield* Window
         /** The secrets of the sockets handed out and not opened yet, each
-         * to its tab's page ID. */
+         * to its tab's page ID, for as long as an address opens. */
         const handed = new Map<string, number>()
         /** Every session's route, by its ID. */
         const routes = new Map<string, Route>()
@@ -260,22 +263,18 @@ export class Cdp extends Context.Service<
           page.setBackgroundThrottling(!now)
           tabs.tell({ kind: "driven", from: page.id, driven: now })
         }
-        /** The tab `client` sees, as a target; none while its debugger
-         * refuses. */
-        const targets = (client: Client) =>
-          targetOf(client.only).pipe(
-            Effect.map((targetId) => [{ page: client.only, targetId }]),
-            Effect.orElseSucceed(() => [])
-          )
+        /** The target ID of the tab `client` sees; none while its
+         * debugger refuses. */
+        const target = (client: Client) => Effect.option(targetOf(client.tab))
         /** The target `client` sees, by its ID. */
         const targetById = (targetId: unknown, client: Client) =>
           Effect.gen(function* () {
             if (typeof targetId !== "string")
               return yield* new Refused({ message: "targetId is a string" })
-            if (!byTarget.has(targetId)) yield* targets(client)
+            if (!byTarget.has(targetId)) yield* target(client)
             const page = byTarget.get(targetId)
             if (page?.isDestroyed()) byTarget.delete(targetId)
-            if (!page || page.isDestroyed() || page !== client.only)
+            if (!page || page.isDestroyed() || page !== client.tab)
               return yield* new Refused({
                 message: "No target with given id found",
               })
@@ -435,8 +434,9 @@ export class Cdp extends Context.Service<
               return Effect.gen(function* () {
                 client.discover = params.discover === true
                 if (!client.discover) return {}
-                for (const { page, targetId } of yield* targets(client))
-                  created(client, page, targetId)
+                const targetId = yield* target(client)
+                if (Option.isSome(targetId))
+                  created(client, client.tab, targetId.value)
                 return {}
               })
             case "Target.setAutoAttach":
@@ -444,14 +444,14 @@ export class Cdp extends Context.Service<
                 yield* flat(params)
                 client.autoAttach = params.autoAttach === true
                 if (!client.autoAttach) return {}
-                if (!isUsed(client.only, client))
-                  yield* Effect.ignore(announce(client, client.only))
+                if (!isUsed(client.tab, client))
+                  yield* Effect.ignore(announce(client, client.tab))
                 return {}
               })
             case "Target.getTargets":
-              return Effect.map(targets(client), (found) => ({
-                targetInfos: found.map(({ page, targetId }) =>
-                  infoOf(page, targetId)
+              return Effect.map(target(client), (targetId) => ({
+                targetInfos: Option.toArray(
+                  Option.map(targetId, (id) => infoOf(client.tab, id))
                 ),
               }))
             case "Target.getTargetInfo":
@@ -509,7 +509,7 @@ export class Cdp extends Context.Service<
 
         /** One message from `client`. A command to a session goes to its
          * tab's debugger as it came, so its order holds; one to the browser
-         * runs beside the rest, as a tab it opens takes a while. */
+         * runs beside the rest, as attaching to the tab takes a while. */
         const handle = (client: Client, raw: string) =>
           Effect.suspend(() => {
             const command = Option.getOrUndefined(decode(raw))
@@ -588,7 +588,7 @@ export class Cdp extends Context.Service<
             // Banda's viewport image already has Playwright's masks applied.
             // Electron's native capture keeps the whole visible guest at its
             // current zoom; Chromium's CDP clip mixes CSS and native pixels
-            // when a webview is zoomed. Other clients and full-page captures
+            // when a webview is zoomed. Other formats and full-page captures
             // keep the protocol's normal behavior.
             if (
               method === "Page.captureScreenshot" &&
@@ -625,8 +625,8 @@ export class Cdp extends Context.Service<
             return Effect.void
           })
 
-        /** Serves a client on `socket`, of a browser that sees `only`. */
-        const serve = (socket: Socket.Socket, only: Page) =>
+        /** Serves a client on `socket`, of a browser that sees `page`. */
+        const serve = (socket: Socket.Socket, page: Page) =>
           Effect.gen(function* () {
             const out = yield* Queue.unbounded<string, Cause.Done>()
             const client: Client = {
@@ -637,7 +637,7 @@ export class Cdp extends Context.Service<
               discover: false,
               autoAttach: false,
               sessions: new Set(),
-              only,
+              tab: page,
             }
             // Electron replaces prompt() in the renderer. Its sandboxed shim
             // emits the same protocol events as a native dialog.
@@ -675,7 +675,7 @@ export class Cdp extends Context.Service<
             // A tab's socket hears of its tab alone.
             const changes = Stream.filter(
               tabs.changes,
-              (change) => change.page === only
+              (change) => change.page === page
             )
             yield* Effect.forkScoped(
               Stream.runForEach(changes, (change) => changed(client, change))
@@ -743,9 +743,9 @@ export class Cdp extends Context.Service<
             const id = handed.get(secret)
             // An address opens once: tried, it is spent.
             handed.delete(secret)
-            const only = id === undefined ? undefined : pageWith(id)
-            if (!only) return HttpServerResponse.empty({ status: 404 })
-            yield* serve(yield* request.upgrade, only)
+            const page = id === undefined ? undefined : pageWith(id)
+            if (!page) return HttpServerResponse.empty({ status: 404 })
+            yield* serve(yield* request.upgrade, page)
             return HttpServerResponse.empty()
           }).pipe(
             Effect.catch(() =>
@@ -758,6 +758,12 @@ export class Cdp extends Context.Service<
           if (!pageWith(page)) return undefined
           const secret = randomBytes(24).toString("hex")
           handed.set(secret, page)
+          // One not opened by then is spent too.
+          run(
+            Effect.sleep(HANDED).pipe(
+              Effect.andThen(Effect.sync(() => handed.delete(secret)))
+            )
+          )
           return `ws://${hosts[0]}${SOCKETS}${secret}`
         }
         return { stop, drives, tab }

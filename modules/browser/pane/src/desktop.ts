@@ -48,7 +48,9 @@ export function agentsPartition(project: ProjectId): string {
  * for the Person's. `undefined` for a partition that is no browser
  * profile, where no page loads.
  */
-export function agentsOf(partition: string): ProjectId | null | undefined {
+export function whosePartition(
+  partition: string
+): ProjectId | null | undefined {
   if (partition === PARTITION) return null
   if (!partition.startsWith(AGENTS)) return undefined
   const project = partition.slice(AGENTS.length)
@@ -194,7 +196,7 @@ export const BROWSER_BRIDGE = {
   /** Stops the Agents that drive the page: their sessions on it end. */
   stop: send<[contents: number]>(),
   /** Stops the Thread that drives the page with Banda's tools, which
-   * then waits until `answered`; the Person's own programs on it go on. */
+   * then waits until `answered`. */
   release: send<[contents: number]>(),
   /** The Person answered what the Thread of `agent` waits for on the
    * page: it may use the page again. False when it waited no more, as

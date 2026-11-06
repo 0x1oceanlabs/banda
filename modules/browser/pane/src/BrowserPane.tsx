@@ -423,7 +423,8 @@ function Browser({
         />
         {browserHost() && (
           <Extensions
-            tab={contents}
+            // An Agents' tab is no extension's (ADR 0083, decision 4).
+            tab={tab.agents ? null : contents}
             pinned={settings.pinned}
             onStore={onStore}
           />
@@ -954,7 +955,7 @@ function TabItem({
 }
 
 /** Stops what drives the page of `contents`: a Thread there alone, else
- * every session on it (ADR 0013, decision 7). */
+ * every session on it (ADR 0029, decision 4). */
 function stopIn(contents: number | null | undefined, thread: boolean) {
   if (contents == null) return
   if (thread) browserHost()?.release(contents)
@@ -962,8 +963,8 @@ function stopIn(contents: number | null | undefined, thread: boolean) {
 }
 
 /** The mark of an Agent that drives the tab, a stop under the pointer.
- * A click stops it: a Thread there alone (ADR 0029, decision 4), else
- * every session on the tab ends (ADR 0013, decision 7). */
+ * A click stops it: a Thread there alone, else every session on the tab
+ * ends (ADR 0029, decision 4). */
 function Driven({
   contents,
   words,

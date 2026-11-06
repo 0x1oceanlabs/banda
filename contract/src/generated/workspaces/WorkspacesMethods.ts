@@ -117,7 +117,8 @@ set_aside: CommandMethod<Nothing, Done>,
 bring_back: CommandMethod<Nothing, Done>, 
 /**
  * The Panes on the workspaces, from the top down and from the
- * left: your Project's with their args, and, when your Person lets
+ * left: your Project's with their args, a browser's with the tabs
+ * your Project's Agents opened alone, and, when your Person lets
  * you see the other Projects, theirs without. `yours` marks the
  * ones you opened, which alone you move and close.
  */

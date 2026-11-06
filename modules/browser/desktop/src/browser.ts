@@ -1,27 +1,19 @@
 /**
  * The browser's desktop part (ADR 0013). The page shows browser pages in
- * `<webview>`s; here they are kept apart from Banda (decision 8): only in
- * the browser's profiles, sandboxed, with no Node and no preload but the
- * prompt's. A page loads in the Person's profile, or in the profile of a
- * Project's Agents when they opened its tab, apart from the Person's
- * (ADR 0083, decision 4); each profile is kept alike. A site asks the
- * Person before it uses the camera, the location or another program;
- * downloads go to the Person's Downloads; Banda's keys, held with the mod,
- * and the browser's own go to the window instead of the page (decision
- * 5). The Pane hears of new tabs, icons and downloads as `BrowserNews`,
- * and the switch writes `browser.toml`. The blocker follows the look's
+ * `<webview>`s; here they are kept apart from Banda (decision 8), each in
+ * one of the browser's profiles (profile.ts): the Person's, or the
+ * profile of a Project's Agents when they opened its tab, apart from the
+ * Person's (ADR 0083, decision 4). Banda's keys, held with the mod, and
+ * the browser's own go to the window instead of the page (decision 5).
+ * The Pane hears of new tabs, icons and downloads as `BrowserNews`, and
+ * the switch writes `browser.toml`. The blocker follows the look's
  * `blocker` (blocker.ts). All of it is the `Browser` service (ADR 0020).
  */
-import { randomUUID } from "node:crypto"
-import { existsSync } from "node:fs"
-import { fileURLToPath } from "node:url"
-import { join, parse } from "node:path"
 import type { ProjectId } from "@banda/contract"
 import {
-  agentsOf,
+  agentsPartition,
   BROWSER_BRIDGE,
   type BrowserNews,
-  type Download,
   opens,
   PARTITION,
   type PageKeys,
@@ -33,12 +25,9 @@ import { BROWSER_FILE } from "@banda/contract/browser"
 import { DEFAULT_KEYS, fileOf } from "@banda/contract/look"
 import { Context, Effect, FiberSet, Layer, Schema, Stream } from "effect"
 import {
-  app,
   clipboard,
   Menu,
   type MenuItem,
-  type DownloadItem,
-  type PermissionRequest,
   type Session,
   session,
   shell,
@@ -47,7 +36,6 @@ import {
 import { Blocker } from "./blocker"
 import {
   type Answers,
-  type Ask,
   type Broke,
   confirm,
   Look,
@@ -61,6 +49,7 @@ import { Cdp } from "./cdp"
 import { Dialogs } from "./dialogs"
 import { Drive } from "./drive"
 import { BoxArg, Extensions } from "./extensions"
+import { attaching, downloaded, keepCertificates, keepProfile } from "./profile"
 import { Tabs } from "./tabs"
 
 /** Changes `browser.toml`; refused when the value is not one it takes. */
@@ -95,23 +84,27 @@ export class Browser extends Context.Service<
       const blocker = new Blocker()
       // What a site's question runs stops with the layer.
       const run = yield* FiberSet.makeRuntimePromise()
-      /** The browser's profiles kept so far, by their partitions. */
-      const kept = new Set<string>()
-      /** The profile of `partition`, whose pages are `agents`', kept as
-       * every profile of the browser is: the first time, its sites'
-       * questions, its downloads and its blocker are set up. */
-      const profile = (partition: string, agents: ProjectId | null) => {
-        const made = session.fromPartition(partition)
-        if (kept.has(partition)) return made
-        kept.add(partition)
-        keepProfile(made, window.now, (asked) =>
+      /** The profile of the Agents of `agents`, or the Person's when
+       * `null`, kept as every profile of the browser is: the first time,
+       * it is set up, and its pages are known as theirs. */
+      const profile = (agents: ProjectId | null) => {
+        const made = session.fromPartition(
+          agents === null ? PARTITION : agentsPartition(agents)
+        )
+        if (tabs.whose({ session: made }) !== undefined) return made
+        keepProfile(made, agents, window.now, (asked) =>
           run(confirm(window.now(), asked))
         )
         tabs.profiled(made, agents)
         if (agents !== null) void blocker.add(made)
         return made
       }
-      profile(PARTITION, null)
+      profile(null)
+      // An Agents' page shows a site none of the Person's certificates.
+      yield* Effect.acquireRelease(
+        Effect.sync(() => keepCertificates(tabs.whose)),
+        (stop) => Effect.sync(stop)
+      )
       // The blocker follows browser.toml, a change at a time, in order.
       yield* Effect.forkScoped(
         look.changes.pipe(
@@ -141,7 +134,7 @@ export class Browser extends Context.Service<
           ),
         reveal: (path) =>
           Effect.sync(() => {
-            if (saved.has(path)) shell.showItemInFolder(path)
+            if (downloaded(path)) shell.showItemInFolder(path)
           }),
       }
     })
@@ -150,34 +143,19 @@ export class Browser extends Context.Service<
 
 function host(
   contents: WebContents,
-  profile: (partition: string, agents: ProjectId | null) => Session,
+  profile: (agents: ProjectId | null) => Session,
   tabs: Tabs["Service"],
   extensions: Extensions["Service"],
   dialogs: Dialogs["Service"]
 ): void {
   contents.on("will-attach-webview", (event, prefs, params) => {
-    // Only the browser's profiles, and what a page of each may open.
-    const agents = agentsOf(params.partition)
-    if (agents === undefined || !opens(params.src, agents)) {
-      event.preventDefault()
-      return
-    }
-    profile(params.partition, agents)
-    prefs.preload = fileURLToPath(
-      new URL("./browser-preload.cjs", import.meta.url)
-    )
-    prefs.nodeIntegration = false
-    prefs.nodeIntegrationInSubFrames = false
-    prefs.contextIsolation = true
-    prefs.sandbox = true
-    prefs.webSecurity = true
-    // A page paints its own canvas, as in a browser: white unless it asks
-    // for dark (#194). Transparent, it showed Banda's background under
-    // black text.
-    prefs.transparent = false
+    // Only in the browser's profiles, at what a page of each may open.
+    const agents = attaching(prefs, params)
+    if (agents === undefined) event.preventDefault()
+    else profile(agents)
   })
   contents.on("did-attach-webview", (_event, page) => {
-    const agents = tabs.agentsOf(page)
+    const agents = tabs.whose(page)
     if (agents === undefined) return
     const tell = (news: BrowserNews) =>
       tellPage(contents, BROWSER_BRIDGE.listen, news)
@@ -374,139 +352,6 @@ async function iconOf(page: WebContents, url: string): Promise<string | null> {
   } catch {
     return null
   }
-}
-
-/** What a site asks for, in the words of the question; the rest is no. */
-const ASKED: Partial<Record<string, string>> = {
-  media: "use your camera or microphone",
-  geolocation: "know your location",
-  notifications: "show notifications",
-  "clipboard-read": "read your clipboard",
-  "display-capture": "see your screen",
-  midiSysex: "use your MIDI devices",
-  openExternal: "open another program",
-}
-
-/** What every site may do without asking. */
-const GIVEN = new Set([
-  "fullscreen",
-  "clipboard-sanitized-write",
-  "pointerLock",
-  "keyboardLock",
-])
-
-/**
- * Sets up one of the browser's profiles: what sites may do, and where
- * downloads go. `window` hears of downloads; `confirm` asks the Person.
- * The Person's answers to a site hold in the profile they gave them in.
- */
-function keepProfile(
-  profile: Session,
-  window: Window["Service"]["now"],
-  confirm: (ask: Ask) => Promise<boolean>
-): void {
-  // Sites see Chrome: some, as Google's sign-in, refuse what says Electron.
-  const agent = profile.getUserAgent()
-  const platform = /^Mozilla\/5\.0 \([^)]*\)/.exec(agent)?.[0]
-  const chrome = /Chrome\/\S+/.exec(agent)?.[0]
-  if (platform && chrome) {
-    profile.setUserAgent(
-      `${platform} AppleWebKit/537.36 (KHTML, like Gecko) ${chrome} Safari/537.36`
-    )
-  }
-  // The Person's answers, by site and what it asked, until Banda restarts.
-  const answers = new Map<string, boolean>()
-  profile.setPermissionCheckHandler(
-    (_contents, permission, origin) =>
-      GIVEN.has(permission) || answers.get(`${origin} ${permission}`) === true
-  )
-  profile.setPermissionRequestHandler(
-    (_contents, permission, answer, details) => {
-      if (GIVEN.has(permission)) return answer(true)
-      const what = ASKED[permission]
-      if (!what) return answer(false)
-      const site = originOf(details.requestingUrl)
-      const key = `${site} ${permission}`
-      const known = answers.get(key)
-      if (known !== undefined) return answer(known)
-      void confirm(question(site, what, details)).then((yes) => {
-        answers.set(key, yes)
-        answer(yes)
-      })
-    }
-  )
-  profile.on("will-download", (_event, item) => {
-    const path = free(join(app.getPath("downloads"), item.getFilename()))
-    item.setSavePath(path)
-    saved.add(path)
-    const id = randomUUID()
-    const tell = () =>
-      tellPage(window()?.webContents, BROWSER_BRIDGE.listen, {
-        kind: "download",
-        download: downloadOf(id, path, item),
-      })
-    // Chromium says it on every piece received: the row hears it at most
-    // a few times a second, and always at the end.
-    let told = 0
-    tell()
-    item.on("updated", () => {
-      if (Date.now() - told < TELL_EVERY) return
-      told = Date.now()
-      tell()
-    })
-    item.once("done", tell)
-  })
-}
-
-/** How often a running download is told of, in ms. */
-const TELL_EVERY = 250
-
-/** What Banda saved this run: the only files it shows in their folder. */
-const saved = new Set<string>()
-
-function downloadOf(id: string, path: string, item: DownloadItem): Download {
-  const state = item.getState()
-  return {
-    id,
-    name: parse(path).base,
-    path,
-    received: item.getReceivedBytes(),
-    total: item.getTotalBytes(),
-    state:
-      state === "completed"
-        ? "done"
-        : state === "progressing"
-          ? "running"
-          : "failed",
-  }
-}
-
-/** What a site's request asks the Person. */
-function question(site: string, what: string, details: PermissionRequest): Ask {
-  return {
-    message: `${site} wants to ${what}.`,
-    detail: "externalURL" in details ? String(details.externalURL ?? "") : "",
-    yes: "Allow",
-    no: "Block",
-  }
-}
-
-function originOf(url: string): string {
-  try {
-    return new URL(url).origin
-  } catch {
-    return url
-  }
-}
-
-/** `path`, or `name (2).ext` and on, for a file not there yet. */
-function free(path: string): string {
-  const { dir, name, ext } = parse(path)
-  let candidate = path
-  for (let n = 2; existsSync(candidate); n++) {
-    candidate = join(dir, `${name} (${n})${ext}`)
-  }
-  return candidate
 }
 
 const page = Schema.Tuple([Schema.Number])

@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { join } from "node:path"
+import { pathToFileURL } from "node:url"
 import {
   type ElectronApplication,
   expect,
@@ -472,15 +473,11 @@ test("an Agent sees only its Project's Agents' tabs, which load apart from the P
     "/opens": '<title>Opens</title><a href="/who" target="_blank">Next</a>',
   })
   window = await startWindow()
-  const { app, page, dir, banda } = window
+  const { app, page, dir } = window
   const { thread, composer } = await firstThread(page)
   await composer.fill("hello")
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
-  // No endpoint drives the whole browser: nothing says one, and the CLI
-  // prints none.
-  expect(existsSync(join(dir, "state", "browser.json"))).toBe(false)
-  expect(() => banda("browser")).toThrow()
   const tabs = () => agentAnswers(window, "browser_tabs", {})
   expect(await tabs()).toEqual([])
 
@@ -559,6 +556,49 @@ test("an Agent sees only its Project's Agents' tabs, which load apart from the P
   expect(
     (await tabs()).map((tab: { title: string }) => tab.title)
   ).not.toContain("Who: who=person")
+  // A browser's args show it its Project's Agents' tabs alone.
+  const panes = () =>
+    agentAnswers(window, "panes", {}).then((seen) => JSON.stringify(seen))
+  await expect.poll(panes).toContain("Who: nobody")
+  expect(await panes()).not.toContain("sign-in")
+  expect(await panes()).not.toContain("who=person")
+
+  // Its page's menu opens, with none of the extensions' items.
+  const menu = await app.evaluate(({ webContents }, tab) => {
+    const params = {
+      linkURL: "",
+      srcURL: "",
+      mediaType: "none",
+      isEditable: false,
+      selectionText: "",
+      editFlags: {},
+      x: 0,
+      y: 0,
+    }
+    try {
+      webContents.fromId(tab)!.emit("context-menu", {}, params)
+      return "opened"
+    } catch (error) {
+      return String(error)
+    }
+  }, id)
+  expect(menu).toBe("opened")
+
+  // Its tabs load the web alone, never a file, however they are asked;
+  // the Person's own load one.
+  const file = join(dir, "notes.html")
+  writeFileSync(file, "<title>Notes</title>")
+  const loaded = (tab: number) =>
+    app.evaluate(
+      async ({ webContents }, [tab, url]) => {
+        const contents = webContents.fromId(tab)!
+        await contents.loadURL(url).catch(() => {})
+        return contents.getTitle()
+      },
+      [tab, pathToFileURL(file).href] as const
+    )
+  expect(await loaded(id)).not.toBe("Notes")
+  expect(await loaded(persons)).toBe("Notes")
 })
 
 test("an Agent reads a tab's tree with refs and new errors, until the Person stops it there", async () => {

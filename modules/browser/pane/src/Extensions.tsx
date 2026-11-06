@@ -26,7 +26,8 @@ export function Extensions({
   pinned,
   onStore,
 }: {
-  /** The shown tab's web contents: the tab the extensions speak of. */
+  /** The shown tab's web contents: the tab the extensions speak of. None
+   * while it has no page, or is an Agents', which no extension acts in. */
   tab: number | null
   pinned: readonly string[]
   onStore: () => void

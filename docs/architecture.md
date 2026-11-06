@@ -1015,9 +1015,12 @@ modules/*/desktop  a module's part in Electron main
     context-isolated and without Node. A fixed sandboxed preload
     supplies synchronous `prompt` (ADR 0060); in each profile alike a site
     asks before it uses the camera, the location or another program, and
-    downloads go to the Person's Downloads (the `Browser` service,
-    `modules/browser/desktop/src/browser.ts`). The extensions live in the
-    Person's profile alone (`Extensions`, ADR 0020).
+    downloads go to the Person's Downloads
+    (`modules/browser/desktop/src/profile.ts`). An Agents' profile loads
+    the web alone, no file by any way, and shows a site none of the
+    Person's client certificates. The extensions live in the Person's
+    profile alone (`Extensions`, ADR 0020): an Agents' page is no
+    extension's tab, and its menu has no extension's items.
   - Page dialogs are owned by `Dialogs` in main and drawn at the center of
     their page. Native callbacks, the prompt shim, the Person's bridge and
     Agent actions share a dialog ID; the first answer wins (ADR 0060).
@@ -1038,12 +1041,14 @@ modules/*/desktop  a module's part in Electron main
     (`modules/browser/desktop/src/asked.ts`, `Tabs.seen`): those its
     Project's Agents opened, and those the Person lent its Thread (none
     yet: the lend comes later; ADR 0083, decision 4). A tab outside its
-    reach is refused as one there is not.
+    reach is refused as one there is not. The workspaces' `panes` tool
+    shows an Agent a browser's args with its Project's Agents' tabs
+    alone.
   - Main's hands are Playwright, over each tab's own CDP socket
     (`modules/browser/desktop/src/cdp.ts`): an Effect HTTP server on
     127.0.0.1 whose sockets each see one tab, at an address with a
-    secret of its own that opens once and is never written down. No
-    endpoint drives the whole browser. A tab's `webContents.debugger` is
+    secret of its own that opens once, within seconds, and is never
+    written down. No endpoint drives the whole browser. A tab's `webContents.debugger` is
     attached while a client uses it, and each client's session on it is a
     Chromium session of its own; a client is a scope, so one that leaves
     detaches. A tab with a client's session is told `driven`: it shows the

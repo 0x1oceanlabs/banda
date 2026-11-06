@@ -291,6 +291,57 @@ async fn an_agent_arranges_its_own_projects_panes_and_sees_the_others_when_let()
 }
 
 #[tokio::test]
+async fn an_agent_sees_of_a_browser_only_the_tabs_its_projects_agents_opened() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let (work, home) = (machine.project("Work").await, machine.project("Home").await);
+    let tab = |id: &str, agents: Option<ProjectId>| {
+        let mut tab = json!({ "id": id, "url": format!("https://example.com/{id}"), "title": id });
+        if let Some(project) = agents {
+            tab["agents"] = json!(project);
+        }
+        tab
+    };
+    let browser = |args| json!({ "project": work, "kind": "browser.browser", "args": args });
+    let mixed = json!({
+        "tabs": [tab("person", None), tab("a", Some(work)), tab("home", Some(home)), tab("b", Some(work))],
+        "shown": 3,
+    });
+    machine
+        .command("workspaces.open", browser(mixed.clone()))
+        .await
+        .unwrap();
+    let address = json!({ "url": "https://example.com/opened" });
+    machine
+        .command("workspaces.open", browser(address.clone()))
+        .await
+        .unwrap();
+    let args = |seen: &Value| -> Vec<Value> {
+        let workspaces = seen.as_array().unwrap().iter();
+        let columns = workspaces.flat_map(|w| w["columns"].as_array().unwrap().clone());
+        let panes = columns.flat_map(|c| c["panes"].as_array().unwrap().clone());
+        panes.map(|pane| pane["args"].clone()).collect()
+    };
+
+    // Behind the wall, a browser's tabs are its Project's Agents' alone,
+    // the one shown among them; an address alone is an Agent's own.
+    let seen = machine.agent(AgentId::new(), work, "workspaces.panes", json!({}));
+    let seen = args(&seen.await.unwrap());
+    let theirs = json!({ "tabs": [tab("a", Some(work)), tab("b", Some(work))], "shown": 1 });
+    assert_eq!(seen.len(), 2);
+    assert!(seen.contains(&theirs), "{seen:?}");
+    assert!(seen.contains(&address), "{seen:?}");
+    // The Person sees every tab.
+    let person = args(
+        &machine
+            .command("workspaces.panes", json!({}))
+            .await
+            .unwrap(),
+    );
+    assert!(person.contains(&mixed), "{person:?}");
+}
+
+#[tokio::test]
 async fn the_workspaces_set_aside_stay_and_come_back_after_the_ones_there_are() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();

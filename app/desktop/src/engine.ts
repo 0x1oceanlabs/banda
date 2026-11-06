@@ -55,7 +55,7 @@ export const engineLayer = (
         onSome: (PATH) => ({ ...carried, PATH }),
       })
       const address = yield* SubscriptionRef.make(Option.none<Address>())
-      const door = yield* Deferred.make<{ window: string }>()
+      const door = yield* Deferred.make<string>()
       /** The first line of a run: where it listens, and the door. */
       const started = (line: string) =>
         Schema.decodeUnknownEffect(Running)(line).pipe(
@@ -74,7 +74,7 @@ export const engineLayer = (
                   secret: running.secret,
                 })
               ),
-              Deferred.succeed(door, running)
+              Deferred.succeed(door, running.window)
             )
           )
         )
@@ -109,7 +109,7 @@ export const engineLayer = (
         client: Effect.sync(
           () => (client ??= new Client(() => Effect.runPromise(at)))
         ),
-        door: Effect.map(Deferred.await(door), (running) => running.window),
+        door: Deferred.await(door),
       }
     })
   )
