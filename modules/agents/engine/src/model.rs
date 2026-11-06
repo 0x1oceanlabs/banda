@@ -809,6 +809,11 @@ pub struct Snooze {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub woke: Option<Woke>,
+    /// The failed turn that goes again as its time comes: a usage limit's
+    /// reset (ADR 0074, decision 8). Cleared once it went.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resume: Option<TurnId>,
 }
 
 /// What woke a snoozed Thread before its time, and when.
@@ -951,6 +956,10 @@ pub enum Fact {
         #[ts(optional, type = "number")]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         until: Option<i64>,
+        /// The failed turn that goes again as `until` comes.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        resume: Option<TurnId>,
     },
     /// A snoozed Thread woke before its time. One whose time came says
     /// nothing.

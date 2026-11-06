@@ -1188,8 +1188,11 @@ impl Module for Agents {
             })
             .await?;
         // What git did from a Thread's card, its Agent reads next.
-        let heard = project.react(project.at().await?, notices::heard());
+        let at = project.at().await?;
+        let heard = project.react(at, notices::heard());
         tokio::spawn(notices::follow(heard));
+        // A snoozed Thread's failed turn goes on as its time comes.
+        tokio::spawn(snoozes::resume(project.react(at, snoozes::snoozed())));
         let filter = banda_harnesses::account_changed();
         if let Some(heard) = project.react_to_machine(filter).await? {
             let live = self.live.clone();

@@ -546,9 +546,9 @@ export function Shell({
     [engine]
   )
   const snoozeThread = useCallback(
-    (project: ProjectId, listed: Listed, until?: number) => {
+    (project: ProjectId, listed: Listed, until?: number, resume = false) => {
       const thread = listed.id
-      const asked = until === undefined ? { thread } : { thread, until }
+      const asked = until === undefined ? { thread } : { thread, until, resume }
       engine.command("agents.snooze", asked, project).then(
         () => {
           closeShown(project, thread)
@@ -625,7 +625,7 @@ export function Shell({
     (asked: SnoozeAsked) => {
       const target = threadAsked(asked)
       if (target && asked.until !== undefined)
-        snoozeThread(target.project, target.listed, asked.until)
+        snoozeThread(target.project, target.listed, asked.until, asked.resume)
       else setSnoozing(target)
     },
     [threadAsked, snoozeThread]

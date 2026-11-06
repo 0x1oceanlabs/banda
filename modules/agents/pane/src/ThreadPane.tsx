@@ -17,6 +17,7 @@ import type {
   TurnView,
 } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
+import { Switch } from "@banda/ui/components/switch"
 import {
   Empty,
   EmptyDescription,
@@ -358,7 +359,8 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
                 snooze={writers.own?.snooze}
                 onSnooze={
                   run &&
-                  ((until) => run("thread.snooze", { project, thread, until }))
+                  ((until, resume) =>
+                    run("thread.snooze", { project, thread, until, resume }))
                 }
                 onFork={fork}
                 onRewind={(turn, message) =>
@@ -604,7 +606,7 @@ function Transcript({
     /** Its snooze, and how to snooze it until a time, as a usage limit's
      * reset (ADR 0074). */
     snooze?: Snooze
-    onSnooze?: (until: number) => void
+    onSnooze?: (until: number, resume: boolean) => void
     onFork: (turn: TurnView) => void
     /** Takes the Thread back to before `message`, which `turn` ran first. */
     onRewind: (turn: TurnView, message: Item) => void
@@ -979,8 +981,9 @@ function Ended({
   busy: boolean
   onRetry?: () => void
   snooze?: Snooze
-  /** Snoozes the Thread until a time: a usage limit offers its reset. */
-  onSnooze?: (until: number) => void
+  /** Snoozes the Thread until a time, a usage limit's reset, and with
+   * `resume` tries the turn again then (ADR 0074, decision 8). */
+  onSnooze?: (until: number, resume: boolean) => void
   signIn: (turn: TurnView) => React.ReactNode
 }) {
   const failed = turn.state === "failed"
@@ -992,6 +995,7 @@ function Ended({
   const resets =
     onSnooze && failure?.class === "usage_limit" ? failure.until : undefined
   const now = useNow(60_000, resets !== undefined)
+  const [goOn, setGoOn] = useState(true)
   const until =
     resets !== undefined && resets > now && !sleeps(snooze, now)
       ? resets
@@ -1026,14 +1030,24 @@ function Ended({
             </Button>
           )}
           {until !== undefined && (
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() => onSnooze?.(until)}
-            >
-              <AlarmClockIcon data-icon="inline-start" />
-              Snooze until {clock(until)}
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => onSnooze?.(until, goOn)}
+              >
+                <AlarmClockIcon data-icon="inline-start" />
+                Snooze until {clock(until)}
+              </Button>
+              <label className="flex items-center gap-1.5 text-meta text-muted-foreground">
+                <Switch
+                  label="Go on by itself when it resets"
+                  on={goOn}
+                  onChange={setGoOn}
+                />
+                Go on by itself when it resets
+              </label>
+            </>
           )}
         </div>
       )}
