@@ -1,13 +1,14 @@
 /**
  * Banda's own hands in the browser's tabs, for its tools for Agents (ADR
- * 0029, decision 2): Playwright, loaded on the first call, over the CDP
- * endpoint (cdp.ts). Each tab a Thread acts on has a connection of its
- * own, to a socket that sees that tab alone. A snapshot's refs live in
- * it, so it is held between calls, until the tab goes, the Person stops
- * the Agent there, or no call came for a while: a held tab draws as a
- * driven one does, unthrottled.
+ * 0029, decision 2): Playwright, loaded on the first call. Each tab a
+ * Thread acts on has a connection of its own, to the tab's own socket
+ * (cdp.ts), which sees that tab alone. A snapshot's refs live in it, so
+ * it is held between calls, until the tab goes, the Person stops the
+ * Agent there, or no call came for a while: a held tab draws as a driven
+ * one does, unthrottled. A call reaches it only once its tab is in the
+ * call's reach (asked.ts).
  */
-import type { Participant } from "@banda/contract"
+import type { Participant, ProjectId } from "@banda/contract"
 import type {
   Act,
   Handoff,
@@ -44,7 +45,7 @@ import {
   timedOut,
   waitFor,
 } from "./hands"
-import { pageOf as contentsOf, Tabs } from "./tabs"
+import { pageOf as contentsOf, noTab, Tabs } from "./tabs"
 
 /** How long a tab no call came for stays held. */
 const IDLE = "5 minutes"
@@ -83,12 +84,6 @@ type Held = {
   /** The tree of its last snapshot, which names the step's elements. */
   tree: string
 }
-
-const noTab = (tab: number) =>
-  new Refused({
-    code: "not_found",
-    message: `There is no tab ${tab}: browser_tabs lists them.`,
-  })
 
 /** What a call of the Agent `agent` on `tab` hears while `wait` blocks
  * it there (ADR 0029, decision 6). */
@@ -219,10 +214,12 @@ export class Drive extends Context.Service<
     access(by: Participant, screenshot?: boolean): Effect.Effect<void, Refused>
     screenshot(tab: number, by: Participant): Effect.Effect<Screenshot, Refused>
     /** A new tab, at `url` or blank, once it loaded: beside the Thread
-     * of `by` (`Tabs.create`). */
+     * of `by`, in the profile of the Agents of `project` (`Tabs.create`,
+     * ADR 0083, decision 4). */
     open(
       url: string | undefined,
-      by: Participant
+      by: Participant,
+      project: ProjectId
     ): Effect.Effect<Shown, Refused>
     /** The tab, where `to` says, once it loaded. */
     navigate(to: Navigate, by: Participant): Effect.Effect<Shown, Refused>
@@ -395,7 +392,12 @@ export class Drive extends Context.Service<
                 const socket = cdp.tab(tab)
                 if (!socket) throw noTab(tab)
                 const { chromium } = await import("playwright-core")
-                const connection = await chromium.connectOverCDP(socket)
+                // What went wrong is said without the socket's address.
+                const connection = await chromium
+                  .connectOverCDP(socket)
+                  .catch(() => {
+                    throw new Error(`Tab ${tab} could not be reached.`)
+                  })
                 const page = connection.contexts()[0]?.pages()[0]
                 if (!page) {
                   await connection.close()
@@ -627,8 +629,8 @@ export class Drive extends Context.Service<
               }
             })
           }),
-        open: (url, by) =>
-          Effect.flatMap(tabs.create(url, by.id), (page) =>
+        open: (url, by, project) =>
+          Effect.flatMap(tabs.create(url, by.id, project), (page) =>
             Effect.tryPromise({
               try: async (signal) => {
                 // A load-time dialog blocks Playwright's initialization. Opening

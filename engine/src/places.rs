@@ -144,11 +144,6 @@ impl Places {
         self.state.join("window.sock")
     }
 
-    /// Where the window says its browser's CDP endpoint while it is open.
-    pub fn browser(&self) -> PathBuf {
-        self.state.join("browser.json")
-    }
-
     /// Held by the engine while it runs: one engine per state folder.
     pub fn lock(&self) -> PathBuf {
         self.state.join("engine.lock")

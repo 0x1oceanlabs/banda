@@ -4,7 +4,7 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "description": "The browser's Pane: Chromium pages in the window, for the Person and every Agent (ADR 0013).",
+  "description": "The browser's Pane: Chromium pages in the window, for the Person and their Projects' Agents (ADR 0013, ADR 0083).",
   "exports": {
     ".": "./src/index.ts",
     "./desktop": "./src/desktop.ts"

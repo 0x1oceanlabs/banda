@@ -86,3 +86,37 @@ test("an address alone is a browser at it; the Pane's own args stay as they are"
   })
   expect(readArgs({ url: "" }, "x")).toEqual({ tabs: [], shown: 0 })
 })
+
+test("a browser an Agent opens at an address is its Project's Agents', and a tab keeps whose it is", () => {
+  const project = "0199a3c4-0000-7000-8000-000000000001"
+  // An address alone is an Agent's `open_pane`: its tab is the Agents' of
+  // the Pane's Project.
+  const opened = readArgs({ url: "https://a.test/" }, "x", project)
+  expect(opened.tabs).toEqual([
+    { id: "x", url: "https://a.test/", title: "", agents: project },
+  ])
+  // The Pane's own args name whose each tab is, and stay so.
+  const mixed: BrowserArgs = {
+    tabs: [tab("a"), { ...tab("b"), agents: project }],
+    shown: 0,
+  }
+  expect(readArgs(mixed, "x", project)).toBe(mixed)
+  // A new address, a new title or a tab opened again keeps whose it is;
+  // a new tab of the Person's keys is theirs.
+  const moved = withChanged(mixed, {
+    ...mixed.tabs[1]!,
+    url: "https://c.test/",
+  })
+  expect(moved.tabs[1]).toMatchObject({
+    url: "https://c.test/",
+    agents: project,
+  })
+  keepClosed(moved.tabs[1]!)
+  const again = afterTabKey(moved, "tab-reopen", "r")!
+  expect(again.tabs.at(-1)).toMatchObject({ id: "r", agents: project })
+  expect(afterTabKey(moved, "tab-new", "n")!.tabs.at(-1)).toEqual({
+    id: "n",
+    url: "",
+    title: "",
+  })
+})

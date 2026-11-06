@@ -351,7 +351,7 @@ If Chat is removed, Agents still works through its own Thread.
 | agents | Thread, Harness, Agent, Turn, Question | first |
 | harnesses | Harness, account; the machine's (ADR 0040) | first |
 | terminal | Terminal | first |
-| browser | Tab; the window's, with no engine part; every Agent reaches it over CDP (ADR 0013) | first |
+| browser | Tab; the pages are the window's; an Agent reaches its Project's tabs through its tools (ADR 0013, ADR 0029, ADR 0083) | first |
 | files | any folder, a file in its Pane (ADR 0073) | first |
 | chat | Room, Message, Mention | later |
 | databases | Database, Field, Record, View | later |
@@ -1058,12 +1058,17 @@ modules/*/desktop  a module's part in Electron main
   Electron destroys a `<webview>` that moves in the DOM. The browser Pane
   draws an empty slot, and its page follows the slot on every frame, cut
   to what the workspace shows of it (`modules/browser/pane/src/pages.ts`).
-  - The desktop attaches a page only in the `persist:browser` profile,
-    sandboxed, context-isolated and without Node. A fixed sandboxed preload
-    supplies synchronous `prompt` (ADR 0060); a site asks before it uses the
-    camera, the location or another program (the `Browser` service,
-    `modules/browser/desktop/src/browser.ts`; the extensions are
-    `Extensions`, ADR 0020).
+  - The desktop attaches a page only in one of the browser's profiles:
+    the Person's, `persist:browser`, or a Project's Agents',
+    `persist:agents-<project>`, where the tabs they open load (ADR 0083,
+    decision 4). A tab keeps whose it is in its Pane's args, and a page
+    opens its new tabs in its own profile. Every page is sandboxed,
+    context-isolated and without Node. A fixed sandboxed preload
+    supplies synchronous `prompt` (ADR 0060); in each profile alike a site
+    asks before it uses the camera, the location or another program, and
+    downloads go to the Person's Downloads (the `Browser` service,
+    `modules/browser/desktop/src/browser.ts`). The extensions live in the
+    Person's profile alone (`Extensions`, ADR 0020).
   - Page dialogs are owned by `Dialogs` in main and drawn at the center of
     their page. Native callbacks, the prompt shim, the Person's bridge and
     Agent actions share a dialog ID; the first answer wins (ADR 0060).
@@ -1077,20 +1082,26 @@ modules/*/desktop  a module's part in Electron main
     made a page the first time it shows. A page's new tabs, its icon and
     the downloads come from the desktop as `browser.listen`, by the page's
     web contents ID; Banda's page shows no remote image, so the desktop
-    fetches the icon in the browser's profile.
-  - Agents drive the tabs through the window's CDP endpoint
-    (`modules/browser/desktop/src/cdp.ts`, ADR 0013 decision 7): an Effect HTTP
-    server on 127.0.0.1 with a random token in its path, which answers
-    as a whole Chrome whose targets are the tabs. A tab's
-    `webContents.debugger` is attached while a client uses it, and each
-    client's session on it is a Chromium session of its own; a client is
-    a scope, so one that leaves detaches. The window writes the endpoint
-    to `browser.json` in the state folder, where the engine's first line
-    names it, and `banda browser` prints it. A tab with a client's session
-    is told `driven`: it shows the Agent's mark and keeps drawing while
-    hidden; a click on the mark sends `browser.stop`, which ends every
-    session on it. A tab asked for with no browser Pane opens a new one
-    without the focus, through the browser module's `start`.
+    fetches the icon in the page's profile.
+  - Agents drive tabs with Banda's tools (ADR 0029): the engine part asks
+    main, and each request names the call's Project and its Agent. Main
+    answers only about the tabs in that call's reach
+    (`modules/browser/desktop/src/asked.ts`, `Tabs.seen`): those its
+    Project's Agents opened, and those the Person lent its Thread (none
+    yet: the lend comes later; ADR 0083, decision 4). A tab outside its
+    reach is refused as one there is not.
+  - Main's hands are Playwright, over each tab's own CDP socket
+    (`modules/browser/desktop/src/cdp.ts`): an Effect HTTP server on
+    127.0.0.1 whose sockets each see one tab, at an address with a
+    secret of its own that opens once and is never written down. No
+    endpoint drives the whole browser. A tab's `webContents.debugger` is
+    attached while a client uses it, and each client's session on it is a
+    Chromium session of its own; a client is a scope, so one that leaves
+    detaches. A tab with a client's session is told `driven`: it shows the
+    Agent's mark and keeps drawing while hidden; a click on the mark sends
+    `browser.stop`, which ends every session on it. A tab asked for with
+    no browser Pane opens a new one without the focus, through the
+    browser module's `start`.
 
 ## Repository
 
@@ -1104,11 +1115,11 @@ banda/
     terminal/engine/  Rust: Terminals, their PTYs and what they printed
     terminal/pane/    React: a terminal, drawn by Ghostty
     browser/pane/     React: the browser Pane, its tabs and row (ADR 0013)
-    browser/desktop/  Electron main: the browser's pages, extensions, blocker and CDP endpoint (ADR 0028)
+    browser/desktop/  Electron main: the browser's pages and profiles, extensions, blocker and tab sockets (ADR 0028)
     skill/            Rust: the Banda skill, its core and the topics it gathers (ADR 0012)
   look/               Rust: banda look, the look, the sidebar's arrangement and the browser's; skill/ its topics
   platform/git-cli/   Rust: how Banda starts git: its own bookkeeping, which runs no program a repository names, and the acts the Person asks for
-  engine/             the banda program: serve (the kernel and its modules), call, follow, look, skill, mcp, menu, browser
+  engine/             the banda program: serve (the kernel and its modules), call, follow, look, skill, mcp, menu
   app/ui/             shadcn/ui and the Pane contract
   app/ghostty/        T3 Code's Ghostty adapter and its WebAssembly, vendored
   app/web/            React: the shell (bar, sidebar, workspaces, overview), the actions, the Pane registry

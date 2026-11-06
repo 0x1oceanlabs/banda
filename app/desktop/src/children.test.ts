@@ -78,7 +78,7 @@ it.live(
     Effect.gen(function* () {
       const program = script(
         `echo $$ > "$(dirname "$0")/pid"\n` +
-          `echo '{"protocol":1,"port":4321,"secret":"s3","window":"/run/door","browser":"/run/browser.json"}'\n` +
+          `echo '{"protocol":1,"port":4321,"secret":"s3","window":"/run/door"}'\n` +
           "exec sleep 60"
       )
       const [address, door] = yield* Engine.use((engine) =>
@@ -101,7 +101,7 @@ it.live(
     Effect.gen(function* () {
       const program = script(
         `printenv PATH > "$(dirname "$0")/path"\n` +
-          `echo '{"protocol":1,"port":1,"secret":"s","window":"/w","browser":"/b"}'\n` +
+          `echo '{"protocol":1,"port":1,"secret":"s","window":"/w"}'\n` +
           "exec sleep 60"
       )
       const path = `/Users/p/.local/bin:${process.env.PATH}`

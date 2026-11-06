@@ -1,8 +1,9 @@
 /**
  * What Banda's desktop and the browser Pane say to each other
- * (app/desktop/src/browser.ts): the profile pages live in, the keys the
+ * (app/desktop/src/browser.ts): the profiles pages live in, the keys the
  * desktop takes from them, and the bridge on `window.banda.browser`.
  */
+import type { ProjectId } from "@banda/contract"
 import { type HostOf, invoke, push, send } from "@banda/contract/bridge"
 import type { Dialog, Tabs } from "@banda/contract/browser"
 
@@ -27,8 +28,40 @@ export function siteOf(address: string): string {
   }
 }
 
-/** The profile every page shares (ADR 0013, decision 2). */
+/** The Person's profile, which every tab of theirs shares (ADR 0013,
+ * decision 2). */
 export const PARTITION = "persist:browser"
+
+/** The start of a Project's Agents' profile. */
+const AGENTS = "persist:agents-"
+/** A Project's ID, as the engine writes it. */
+const PROJECT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
+/** The profile of the tabs a Project's Agents open, apart from the
+ * Person's (ADR 0083, decision 4). */
+export function agentsPartition(project: ProjectId): string {
+  return `${AGENTS}${project}`
+}
+
+/**
+ * Whose a browser profile is: the Project whose Agents' it is, or `null`
+ * for the Person's. `undefined` for a partition that is no browser
+ * profile, where no page loads.
+ */
+export function agentsOf(partition: string): ProjectId | null | undefined {
+  if (partition === PARTITION) return null
+  if (!partition.startsWith(AGENTS)) return undefined
+  const project = partition.slice(AGENTS.length)
+  return PROJECT.test(project) ? project : undefined
+}
+
+/** The addresses a page of the profile of `agents` loads: the web and a
+ * blank page; the Person's own also loads their files. */
+export function opens(url: string, agents: ProjectId | null): boolean {
+  if (/^https?:/i.test(url) || url === "about:blank") return true
+  return agents === null && /^(about|file):/i.test(url)
+}
+
 /** The sandboxed prompt shim has no other capability. */
 export const PROMPT_CHANNEL = "banda:browser-prompt"
 
@@ -50,18 +83,34 @@ export type Download = {
  */
 export type BrowserNews =
   | { kind: "dialog"; from: number; dialog: Dialog | null }
-  /** A page opens another in a tab of its own, as a link with Ctrl does. */
-  | { kind: "open"; from: number; url: string; background: boolean }
+  /** A page opens another in a tab of its own, as a link with Ctrl does:
+   * in the page's profile, a Project's Agents' when it names `agents`. */
+  | {
+      kind: "open"
+      from: number
+      url: string
+      background: boolean
+      agents?: ProjectId
+    }
   /** A page's icon, as a data URL: Banda's page shows no other images. */
   | { kind: "icon"; from: number; icon: string }
   | { kind: "download"; download: Download }
-  /** An extension opens a tab, or an Agent, which names itself: a Pane
-   * takes it, and answers `created` with its page's ID. */
-  | { kind: "create"; request: string; url: string; agent?: string }
+  /** An extension opens a tab, in the Person's profile; or an Agent, which
+   * names itself, in its Project's Agents' profile, `agents` (ADR 0083,
+   * decision 4). A Pane takes it, and answers `created` with its page's
+   * ID. */
+  | {
+      kind: "create"
+      request: string
+      url: string
+      agent?: string
+      agents?: ProjectId
+    }
   /** An extension shows a tab, or closes one. */
   | { kind: "select"; from: number }
   | { kind: "close"; from: number }
-  /** An Agent drives the tab over CDP, or no longer does. */
+  /** Banda's hands hold the tab for an Agent, through its own socket, or
+   * no longer do. */
   | { kind: "driven"; from: number; driven: boolean }
   /** A Thread's Agent drives the tab with Banda's tools, by its ID: the
    * step it takes, and where its hands went last; or none does now (ADR
