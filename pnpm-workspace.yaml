@@ -26,3 +26,10 @@ ignoredOptionalDependencies:
 # trusted, it marks none (ADR 0083, decision 5).
 patchedDependencies:
   "@agentclientprotocol/codex-acp@2.5.0": modules/harnesses/desktop/patches/@agentclientprotocol__codex-acp@2.5.0.patch
+
+# One KaTeX for all: what draws the math (rehype-katex, under
+# @streamdown/math, and Mermaid) and the stylesheet `@banda/ui` takes.
+# They still ask for 0.16, which has GHSA-238p-pmpm-9mq7, and 0.18's
+# stylesheet no longer fits 0.16's markup (its classes have a prefix).
+overrides:
+  katex: ^0.18.2
