@@ -7,9 +7,11 @@
  * finds as one types. It follows the folders it shows open on disk.
  *
  * ↵ or a double click opens a file beside it, in `files.file`, or goes
- * into a folder. Its rows, one or the several picked, go into a Thread's
- * message by their menu or a drag, and out to other apps as the files
- * (step F2). It only reads: the file operations come later (step F5).
+ * into a folder. Space shows the row picked in Quick Look, over the desk,
+ * and the arrows move it there while the tree keeps the keys (step F3).
+ * Its rows, one or the several picked, go into a Thread's message by
+ * their menu or a drag, and out to other apps as the files (step F2). It
+ * only reads: the file operations come later (step F5).
  *
  * The Agents' work shows on it (decisions 3 and 9): the row of the file
  * each running turn works on pulses in its Agent's colour, and a quiet
@@ -85,6 +87,7 @@ import { RowMenu } from "./RowMenu"
 import { matchesOf, onlyFolder, type Showing, treeOf } from "./tree"
 import { nameOf, parentOf, tilded, untilded, wholeOf, within } from "./where"
 import { holding, moveFile, workedAt, workedIn } from "./work"
+import { peeked } from "./peek"
 
 export type TreeArgs = {
   /** The folder, whole; `""` is the Project's, which it names once read. */
@@ -157,9 +160,10 @@ const NO_WRITES: string[] = []
 const asks = new Set<(does: Does) => void>()
 
 /** Has the focused Files Pane do `does`, as its key would: how an action,
- * which `keys.toml` binds, reaches it. */
-export function askTree(does: Does): void {
+ * which `keys.toml` binds, reaches it. Whether one heard. */
+export function askTree(does: Does): boolean {
   for (const hear of asks) hear(does)
+  return asks.size > 0
 }
 
 function TreePane(props: PaneProps<TreeArgs>) {
@@ -327,6 +331,7 @@ function FolderView({
   args,
   update,
   focused,
+  run,
   home,
   projectTop,
   showing,
@@ -531,16 +536,37 @@ function FolderView({
     () => update({ ...args, hidden: !showing.hidden }),
     [args, update, showing.hidden]
   )
+  // Quick Look (ADR 0073, decision 7): the row picked, over the desk.
+  const peek = useCallback(
+    (path: string) =>
+      run?.("files.peek", { file: wholeOf(dir, path), project }),
+    [run, dir, project]
+  )
   const does = useCallback(
     (what: Does) => {
+      // The row picked as the tree has it now: a key may be quicker than
+      // the tree's word of it.
+      const row = tree.current?.picked().at(-1) ?? picked
       if (what === "up") up()
       else if (what === "path") setEditing(true)
       else if (what === "hidden") toggleHidden()
       else if (what === "filter") startFilter("")
-      else if (picked) openRow(picked)
+      else if (what === "peek") {
+        const close = peeked()
+        if (close) close()
+        else if (row) peek(row)
+      } else if (row) openRow(row)
     },
-    [up, toggleHidden, startFilter, picked, openRow]
+    [up, toggleHidden, startFilter, picked, openRow, peek]
   )
+  // As the pick moves, Quick Look shows it, from the tree that has the
+  // keys.
+  const peekedAt = useRef(picked)
+  useEffect(() => {
+    if (peekedAt.current === picked) return
+    peekedAt.current = picked
+    if (focused && picked && peeked()) peek(picked)
+  }, [picked, focused, peek])
   // The actions reach the focused Pane.
   useEffect(() => {
     if (!focused) return
@@ -706,6 +732,7 @@ function FolderView({
               top={projectTop}
               pinned={pinned.includes(wholeOf(dir, menu))}
               onOpen={() => openRow(menu)}
+              onPeek={() => peek(menu)}
               onAttach={() => {
                 // The rows picked with it, as a Finder acts on them all.
                 const picked = tree.current?.picked() ?? []

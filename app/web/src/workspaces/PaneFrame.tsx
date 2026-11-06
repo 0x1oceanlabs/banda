@@ -397,7 +397,7 @@ function Rows({
  * A Pane that broke, as on args its kind cannot read, says so in its tile
  * and can be closed: the other Panes and the window go on.
  */
-class Broken extends Component<
+export class Broken extends Component<
   { close: () => void; children: ReactNode },
   { error?: Error }
 > {

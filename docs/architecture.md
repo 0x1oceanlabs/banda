@@ -236,7 +236,7 @@ modules/<name>/
 A module declares itself in its code and a short `module.toml` (ADR 0022).
 Its engine part is the `Module` it gives the kernel, with its `methods!`
 table. Its window part is one
-`defineModule({ id, engine, panes, watches, actions, sources, bar, threadDetails, listed, start })`
+`defineModule({ id, engine, panes, watches, actions, sources, bar, threadDetails, previewers, listed, start })`
 exported from its Pane package; the window lists these in
 `app/web/src/modules.ts`, the one place that names a module, and builds its
 registries from them. `start` runs once with the window API, for a module
@@ -250,6 +250,14 @@ its rows with `askDetails`, as git's Alt+Shift+G its branch picker.
 unread a thing the module lists (ADR 0077): the Thread menu is the
 window's, and it finds the module by the first word of the thing's Pane
 kind.
+`previewers` are how it draws kinds of file (ADR 0073, decision 6): each
+`definePreviewer({ id, title, match, priority, can, load })`, whose view
+`load` imports only once a file of its kind is shown. The window gathers
+every module's and gives them to its Panes as `@banda/ui`'s
+`Previewers`; `pickPreviewer` takes the Person's pick for the extension,
+else the closest match (extension, MIME, MIME family, first bytes), then
+the higher priority. A view is keyed by its previewer, so the next file of
+its kind updates it rather than drawing it anew.
 `module.toml` holds only what no code says.
 `banda modules` prints the three as one JSON per module
 (`engine/src/modules.rs`), and the skill's `modules` topic is written
@@ -693,12 +701,13 @@ If Chat is removed, Agents still works through its own Thread.
   Its keys are its own, with Ctrl (⌘), never the mod; each is also an
   unlisted action (`files.up`, `files.path`, `files.hidden`,
   `files.filter`) that `keys.toml` can bind, until ADR 0071's scopes.
-- **`files.toml`** (ADR 0073, decision 13) holds the pinned places and
-  whether hidden and ignored files show; a folder's menu pins it through
-  the settings bridge.
+- **`files.toml`** (ADR 0073, decision 13) holds the pinned places,
+  whether hidden and ignored files show, and `[previewers]`, the
+  previewer an extension shows in; a folder's menu pins it and "Open
+  with…" picks one through the settings bridge.
 - **Its Pane** (`modules/files/pane`), `files.file`, shows one file, one
-  Pane per file. `files.stat` says what it is, and its extension, then
-  its MIME, picks how it is drawn:
+  Pane per file. `files.stat` says what it is, and the previewer that
+  claims it draws it (`previewers.ts`, each view in `views/`):
   - code and text: `files.read`, drawn by `@banda/ui`'s `CodeFile`, the
     Diff's `@pierre/diffs` view and colours with numbered lines, opened
     at a line centred and lit once; past 1 MiB or 20 000 lines, its start
@@ -706,10 +715,25 @@ If Chat is removed, Agents still works through its own Thread.
   - markdown: the Thread's Streamdown, its source a toggle away, its
     pictures through the file host from the file's folder;
   - an image: an `<img>` from the file host, an SVG too, to zoom and pan;
+  - a PDF: PDF.js in a module worker, its bytes read from the file host
+    in 64 KiB ranges as pages need them, the pages drawn only near the
+    view with their text to pick, find on Ctrl+F (⌘F), the zoom, and the
+    pages' pictures in a wide Pane;
+  - video and sound: Chromium's players on the file host, which seek in
+    ranges; one Chromium cannot play shows its facts and its app;
+  - a page, HTML or an SVG document: a frame of the sandbox host,
+    `app://preview`, its source a toggle away;
   - anything else, and what reads as binary: its facts.
 
   It follows `files.watch` on the file's folder, reads again as it
   changes, and keeps its scroll.
+- **Quick Look** (ADR 0073, decision 7) is `files.file` over the desk:
+  Space in the tree runs `files.peek`, which asks the window to show the
+  Pane in its one floating tile (`WindowApi.peek`, `PaneProps.peek`);
+  the tiling stays, the tree keeps the keys, and as the pick moves the
+  tile is given the next file. Esc or Space closes it, ↵ opens the file
+  as a Pane, and the Banda menu's key has it fill the desk. A reply's
+  path menu and the Banda menu's Files show a file there too.
 - **Every link to a file opens it there**: the window's `file.open` runs
   the files module's `files.open`, which opens the file beside the Pane
   it was opened from, or takes the Pane that shows it to the new line
@@ -1056,7 +1080,20 @@ extension: text as plain text, so an HTML file never runs, and what it
 does not know as bytes, each never sniffed and sandboxed. A Pane the
 Person drives asks for any file through the bridge's `files.url`,
 typed in `@banda/ui/desktop`, and `useFileUrl` keeps its URL fresh. No
-frame shows the host yet.
+frame shows the host. The page reads its ranges with `fetch`, as a PDF
+is read: the `app` scheme allows CORS, the host answers any origin that
+holds a link, and the page's `connect-src` names it.
+
+A page among the Person's files, HTML or an SVG document, is shown by a
+second host, `PreviewHost`, `app://preview` (ADR 0073, decision 5),
+signed by its own secret and asked through `files.preview`. It answers a
+frame's navigation only, never a page's fetch nor a picture (Electron's
+handler hears no `Sec-Fetch-*`, so a navigation is what asks to be
+upgraded and names no origin), and its response sandboxes the page
+whatever the frame says: `sandbox allow-scripts`, never
+`allow-same-origin`, with `default-src 'none'`, pictures inline or from
+the byte host, inline styles and scripts. The page's `frame-src` names it
+beside the modules' hosts.
 
 Mermaid code fences render as SVG through `@streamdown/mermaid`, with
 copy, zoom and fullscreen controls and the look's light or dark scheme.

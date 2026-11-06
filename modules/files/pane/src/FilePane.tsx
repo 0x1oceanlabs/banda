@@ -1,24 +1,29 @@
 /**
- * `files.file`: one file, drawn as what it is (ADR 0073, decisions 2 and
- * 6): code and text numbered and coloured as the Diff draws them, opened
- * at a line; markdown rendered, its source a toggle away; an image to zoom
- * and pan; anything else its facts. It reads again as the file changes on
- * disk. Its header opens it in an editor at its line, or shows it in the
- * system's file manager (step F2). Lines picked in its gutter take a
- * comment, which goes into a Thread's message with them (decision 6); and
- * Files' Follow moves it to the file the Agent works on. It only reads:
- * editing comes later (step F4).
+ * `files.file`: one file, drawn by the previewer that claims it (ADR 0073,
+ * decisions 2 and 6): code numbered and coloured, markdown rendered, a
+ * picture, a PDF, video and sound, a page in the sandbox; anything else
+ * its facts. "Open with…" picks another previewer that draws it, kept for
+ * its extension. It reads again as the file changes on disk. Its header
+ * opens it in an editor at its line, or shows it in the system's file
+ * manager (step F2); Files' Follow moves it to the file the Agent works
+ * on.
+ *
+ * Quick Look is this Pane over the desk (decision 7, `PaneProps.peek`):
+ * the tree under it keeps the keys and moves it, and the previewer's view
+ * takes the next file of its kind rather than being drawn anew.
  */
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef } from "react"
+import type { JsonValue, ProjectId } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import {
-  CodeFile,
-  type LineRange,
-  linesWords,
-} from "@banda/ui/components/code-file"
-import { CopyButton } from "@banda/ui/components/copy-button"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@banda/ui/components/dropdown-menu"
 import { InHeader } from "@banda/ui/components/pane-header"
-import { Spinner } from "@banda/ui/components/spinner"
 import {
   FILE_MANAGER,
   openInEditor,
@@ -27,28 +32,28 @@ import {
   useEditors,
 } from "@banda/ui/lib/outside"
 import { fromFolder, nameAndFolder } from "@banda/ui/lib/paths"
-import type { ProjectId } from "@banda/contract"
-import type { WindowApi } from "@banda/ui/module"
+import {
+  extensionOf,
+  previewersFor,
+  usePreviewers,
+} from "@banda/ui/lib/previewers"
+import type { Previewer, WindowApi } from "@banda/ui/module"
 import { definePane, type PaneProps, paneOf } from "@banda/ui/pane"
+import type { Stat } from "@banda/contract/files"
 import {
   AppWindowIcon,
-  CodeIcon,
+  EyeIcon,
   FileIcon,
   FileWarningIcon,
   FolderDownIcon,
-  MessageSquarePlusIcon,
   SquareCodeIcon,
-  WrapTextIcon,
-  XIcon,
 } from "lucide-react"
-import { Card, Facts, Gone } from "./Facts"
+import { Card, Facts, Gone, Loading } from "./Facts"
 import { HeaderButton } from "./HeaderButton"
-import { ImageView } from "./ImageView"
-import { lineIn, linesOf, MOST_LINES, rangeText } from "./lines"
-import { sizeWords } from "./look"
-import { MarkdownView } from "./MarkdownView"
+import { peeking } from "./peek"
+import { Preview, usePicked } from "./Preview"
 import { type Shown, useFile } from "./read"
-import { showing, useHolding, workedIn } from "./work"
+import { showing, workedIn } from "./work"
 
 export type FileArgs = {
   /** The file, whole or from the Project's folder. */
@@ -57,7 +62,7 @@ export type FileArgs = {
   line?: number | null
   /** Long lines wrap, in code and in markdown's source. */
   wrap?: boolean
-  /** Markdown shows its source, as code. */
+  /** Markdown, or a page, shows its source, as code. */
   source?: boolean
 }
 
@@ -85,6 +90,18 @@ export function openFile(
   })
 }
 
+/** Shows the file at `path` in Quick Look, over the desk (ADR 0073,
+ * decision 7); one shown already moves to it. */
+export function peekFile(
+  window: WindowApi,
+  path: string,
+  project?: ProjectId
+): void {
+  window.peek(paneOf(filePane, { path }), project)
+}
+
+type Kept = { [key: string]: JsonValue }
+
 function FilePane({
   engine,
   project,
@@ -92,6 +109,8 @@ function FilePane({
   update,
   label,
   run,
+  close,
+  peek = false,
 }: PaneProps<FileArgs>) {
   const shown = useFile(engine, project, args.path)
   const file = shown.state === "file" ? shown : null
@@ -99,8 +118,9 @@ function FilePane({
   // inside, else whole.
   const path = file ? fromFolder(file.stat.path, file.root) : args.path
 
-  // Recent lists it, and `files.find` raises it (ADR 0073, decision 11).
-  const opened = file?.stat.path
+  // Recent lists it, and `files.find` raises it (ADR 0073, decision 11);
+  // a glance in Quick Look does not.
+  const opened = peek ? undefined : file?.stat.path
   useEffect(() => {
     if (opened)
       void engine
@@ -115,28 +135,33 @@ function FilePane({
     label?.({ title: name, detail: folder ?? null })
   }, [label, file, path])
 
-  // Follow moves it to another file, at a line (ADR 0073, decision 9).
-  const now = useRef({ args, update })
+  // Follow moves it to another file, at a line (ADR 0073, decision 9);
+  // not Quick Look's, which the tree moves.
+  const now = useRef({ args, update, close })
   useEffect(() => {
-    now.current = { args, update }
+    now.current = { args, update, close }
   })
-  useEffect(
-    () =>
-      showing({
-        project,
-        path: () => now.current.args.path,
-        go: (path, line) =>
-          now.current.update({ ...now.current.args, path, line }),
-      }),
-    [project]
-  )
+  useEffect(() => {
+    if (peek) return
+    return showing({
+      project,
+      path: () => now.current.args.path,
+      go: (path, line) =>
+        now.current.update({ ...now.current.args, path, line }),
+    })
+  }, [project, peek])
+  // In Quick Look, the tree knows it shows, and how to close it.
+  useEffect(() => {
+    if (!peek) return
+    const close = () => now.current.close()
+    peeking(close)
+    return () => peeking(null, close)
+  }, [peek])
 
-  const set = (next: Partial<FileArgs>) => update({ ...args, ...next })
-  const wrap = args.wrap ?? false
-  const source = args.source ?? false
-  const asCode =
-    file?.text?.text !== undefined &&
-    (file.look === "code" || (file.look === "markdown" && source))
+  // What the previewer keeps is the rest of the args.
+  const { path: asked, line, ...kept } = args
+  const keep = (next: Kept) =>
+    update({ path: asked, line, ...next } as FileArgs)
 
   return (
     // A key or a click here, and text picked here, keep Follow waiting.
@@ -146,40 +171,77 @@ function FilePane({
       onKeyDownCapture={() => workedIn(project)}
       onPointerDownCapture={() => workedIn(project)}
     >
-      {/* Wrap first: it comes and goes, and Source stays where it is. */}
-      {asCode && (
-        <InHeader>
-          <HeaderButton
-            label="Wrap lines"
-            on={wrap}
-            onClick={() => set({ wrap: !wrap })}
-          >
-            <WrapTextIcon />
-          </HeaderButton>
-        </InHeader>
-      )}
-      {file?.look === "markdown" && file.text?.text !== undefined && (
-        <InHeader>
-          <HeaderButton
-            label="Source"
-            on={source}
-            onClick={() => set({ source: !source })}
-          >
-            <CodeIcon />
-          </HeaderButton>
-        </InHeader>
+      {file && !peek && file.stat.kind === "file" && (
+        <OpenWith stat={file.stat} run={run} />
       )}
       {file && <Outside path={file.stat.path} line={args.line ?? null} />}
       <Body
         shown={shown}
         path={path}
+        peek={peek}
+        line={args.line ?? null}
+        engine={engine}
         project={project}
-        line={args.line}
-        wrap={wrap}
-        source={source}
         run={run}
+        kept={kept as Kept}
+        keep={keep}
       />
     </div>
+  )
+}
+
+/** "Open with…": the previewers that draw the file, the one that does now
+ * picked; a pick is kept for its extension, in `files.toml`. */
+function OpenWith({
+  stat,
+  run,
+}: {
+  stat: Stat
+  run: PaneProps<FileArgs>["run"]
+}) {
+  const all = usePreviewers()
+  // Only a file that its name or MIME type matches has more than one.
+  const picked = usePicked(stat, null)
+  const extension = extensionOf(stat.path)
+  const others = previewersFor(all, { path: stat.path, mime: stat.mime })
+  if (!picked || !extension || others.length < 2) return null
+  return (
+    <InHeader>
+      <span className="order-last flex items-center">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Open with…"
+                title="Open with…"
+                className="shrink-0"
+              />
+            }
+          >
+            <EyeIcon />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-44">
+            <DropdownMenuRadioGroup
+              value={picked.id}
+              onValueChange={(id: string) =>
+                run?.("files.previewer", { extension, previewer: id })
+              }
+            >
+              <DropdownMenuLabel>
+                Open .{extension} files with
+              </DropdownMenuLabel>
+              {others.map((one: Previewer) => (
+                <DropdownMenuRadioItem key={one.id} value={one.id} closeOnClick>
+                  {one.title}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </span>
+    </InHeader>
   )
 }
 
@@ -191,28 +253,31 @@ function Outside({ path, line }: { path: string; line: number | null }) {
   const at = line ? ` at line ${line}` : ""
   return (
     <InHeader>
-      {editor ? (
+      {/* After what the previewer puts there, which comes once it loads. */}
+      <span className="order-last flex items-center gap-px">
+        {editor ? (
+          <HeaderButton
+            label={`Open in ${editor.name}`}
+            title={`Open in ${editor.name}${at}`}
+            onClick={() => void openInEditor(path, { line })}
+          >
+            <SquareCodeIcon />
+          </HeaderButton>
+        ) : (
+          <HeaderButton
+            label="Open with the system"
+            onClick={() => openWithSystem(path)}
+          >
+            <AppWindowIcon />
+          </HeaderButton>
+        )}
         <HeaderButton
-          label={`Open in ${editor.name}`}
-          title={`Open in ${editor.name}${at}`}
-          onClick={() => void openInEditor(path, { line })}
+          label={`Reveal in ${FILE_MANAGER}`}
+          onClick={() => reveal(path)}
         >
-          <SquareCodeIcon />
+          <FolderDownIcon />
         </HeaderButton>
-      ) : (
-        <HeaderButton
-          label="Open with the system"
-          onClick={() => openWithSystem(path)}
-        >
-          <AppWindowIcon />
-        </HeaderButton>
-      )}
-      <HeaderButton
-        label={`Reveal in ${FILE_MANAGER}`}
-        onClick={() => reveal(path)}
-      >
-        <FolderDownIcon />
-      </HeaderButton>
+      </span>
     </InHeader>
   )
 }
@@ -220,29 +285,24 @@ function Outside({ path, line }: { path: string; line: number | null }) {
 function Body({
   shown,
   path,
-  project,
+  peek,
   line,
-  wrap,
-  source,
+  engine,
+  project,
   run,
+  kept,
+  keep,
 }: {
   shown: Shown
   path: string
-  project: string
-  line: number | null | undefined
-  wrap: boolean
-  source: boolean
-  run: PaneProps<FileArgs>["run"]
-}) {
-  // An image that could not be drawn shows its facts instead.
-  const [broken, setBroken] = useState<string>()
+  peek: boolean
+} & Pick<
+  Parameters<typeof Preview>[0],
+  "line" | "engine" | "project" | "run" | "kept" | "keep"
+>) {
   switch (shown.state) {
     case "loading":
-      return (
-        <div className="flex flex-1 items-center justify-center">
-          <Spinner className="text-muted-foreground" />
-        </div>
-      )
+      return <Loading />
     case "refused":
       return (
         <Card
@@ -254,202 +314,26 @@ function Body({
     case "gone":
       return <Gone path={path} />
   }
-  const { stat, look, text } = shown
-  const { name } = nameAndFolder(stat.path)
-  if (look === "image" && broken !== stat.path)
-    return (
-      <ImageView
-        project={project}
-        path={stat.path}
-        name={name}
-        version={stat.modified}
-        onBroken={() => setBroken(stat.path)}
-      />
-    )
-  if (look === "image")
-    return <Facts stat={stat} note="This image could not be drawn." />
-  if (look === "folder")
+  if (shown.stat.kind === "folder")
     return (
       <Facts
-        stat={stat}
-        note="A folder shows in Files' tree, which comes next."
-      />
-    )
-  if (!text || text.text === undefined)
-    return (
-      <Facts
-        stat={stat}
+        stat={shown.stat}
         note={
-          text?.binary
-            ? "This file is binary. No preview for it yet."
-            : "No preview for this kind yet."
+          peek ? "A folder: ↵ goes into it." : "A folder shows in Files' tree."
         }
       />
     )
-  const note = text.cut && (
-    <p className="shrink-0 border-b px-3 py-1 text-xs text-muted-foreground">
-      Only the start of this {sizeWords(text.bytes)} file is shown: its first{" "}
-      {text.lines >= MOST_LINES
-        ? `${MOST_LINES.toLocaleString("en")} lines`
-        : "1 MB"}
-      .
-    </p>
-  )
-  if (look === "markdown" && !source)
-    return (
-      <>
-        {note}
-        <MarkdownView
-          project={project}
-          file={stat.path}
-          text={text.text}
-          run={run}
-        />
-      </>
-    )
   return (
-    <>
-      {note}
-      <Code
-        key={stat.path}
-        project={project}
-        name={name}
-        path={path}
-        whole={stat.path}
-        text={text.text}
-        wrap={wrap}
-        line={lineIn(line, text.lines)}
-        run={run}
-      />
-    </>
-  )
-}
-
-/** Code and text, opened at a line; the lines picked in its gutter can be
- * copied as `path:12-20`, or take a comment that goes into a Thread's
- * message with them (ADR 0034, decision 9). */
-function Code({
-  project,
-  name,
-  path,
-  whole,
-  text,
-  wrap,
-  line,
-  run,
-}: {
-  project: ProjectId
-  name: string
-  /** The file as the Person reads it, and whole. */
-  path: string
-  whole: string
-  text: string
-  wrap: boolean
-  line: number | null
-  run: PaneProps<FileArgs>["run"]
-}) {
-  const [picked, setPicked] = useState<LineRange | null>(null)
-  const [commenting, setCommenting] = useState(false)
-  // Lines picked, or a comment being written, keep Follow waiting.
-  useHolding(project, picked !== null)
-  const clear = () => {
-    setPicked(null)
-    setCommenting(false)
-  }
-  return (
-    <div
-      className="relative flex min-h-0 flex-1 flex-col"
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && picked) {
-          event.stopPropagation()
-          clear()
-        }
-      }}
-    >
-      <CodeFile
-        className="min-h-0 flex-1"
-        name={name}
-        text={text}
-        wrap={wrap}
-        line={line}
-        picked={picked}
-        onPick={(range) => {
-          setPicked(range)
-          setCommenting(false)
-        }}
-        comment={
-          commenting && picked
-            ? {
-                onComment: (comment) => {
-                  const [from, to] = [
-                    Math.min(picked.start, picked.end),
-                    Math.max(picked.start, picked.end),
-                  ]
-                  run?.("file.attach", {
-                    file: whole,
-                    from,
-                    to,
-                    comment,
-                    text: linesOf(text, from, to),
-                  })
-                  clear()
-                },
-                onCancel: () => setCommenting(false),
-              }
-            : null
-        }
-      />
-      {picked && !commenting && (
-        <Picked
-          text={rangeText(path, picked)}
-          lines={linesWords(picked)}
-          onComment={() => setCommenting(true)}
-          onClear={clear}
-        />
-      )}
-    </div>
-  )
-}
-
-/** The lines picked, as an Agent reads them, to copy, or to comment on. */
-function Picked({
-  text,
-  lines,
-  onComment,
-  onClear,
-}: {
-  text: string
-  lines: string
-  onComment: () => void
-  onClear: () => void
-}) {
-  return (
-    <div
-      role="status"
-      aria-label="Picked lines"
-      className="absolute bottom-2.5 left-1/2 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-0.5 rounded-lg bg-popover/80 py-0.5 pr-0.5 pl-2.5 text-xs text-muted-foreground shadow-sm ring-1 ring-foreground/10 backdrop-blur"
-    >
-      <span className="truncate font-mono">{text}</span>
-      <Button
-        variant="ghost"
-        size="xs"
-        className="text-muted-foreground"
-        title={`Add a comment on lines ${lines} for the Agent`}
-        onClick={onComment}
-      >
-        <MessageSquarePlusIcon />
-        Add a comment…
-      </Button>
-      <CopyButton text={text} label={`Copy ${text}`} />
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        aria-label="Unpick the lines"
-        title="Unpick · Esc"
-        onClick={onClear}
-      >
-        <XIcon />
-      </Button>
-    </div>
+    <Preview
+      stat={shown.stat}
+      shown={path}
+      mode={peek ? "quick" : "pane"}
+      line={line}
+      engine={engine}
+      project={project}
+      run={run}
+      kept={kept}
+      keep={keep}
+    />
   )
 }

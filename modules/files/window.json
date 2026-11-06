@@ -30,6 +30,52 @@
       "unlisted": true
     },
     {
+      "id": "files.peek",
+      "title": "Quick Look",
+      "section": "Files",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "the file's whole path, or one from the Project's folder"
+          },
+          "project": {
+            "type": "string",
+            "description": "the Project it is in"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "files.previewer",
+      "title": "Show files of an extension with a previewer",
+      "section": "Files",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "extension": {
+            "type": "string",
+            "description": "the extension, as md"
+          },
+          "previewer": {
+            "type": "string",
+            "description": "the previewer's id, as files.code"
+          }
+        },
+        "required": [
+          "extension",
+          "previewer"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
       "id": "files.up",
       "title": "Go to the folder above",
       "section": "Files",

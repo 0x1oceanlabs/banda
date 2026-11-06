@@ -152,6 +152,23 @@ stay his to change.
      CSP. The page's `frame-src` allows the two hosts.
    - Text up to 1 MiB and small thumbnails stay on the RPC.
 
+   *Amended 2026-11-06, with step F3a:*
+   - **The page reads the byte host's ranges** with `fetch`, as a PDF is
+     read: the `app` scheme allows CORS, and the page's `connect-src`
+     names `app://files`. Its `frame-src` names `app://preview` beside
+     the modules' hosts, never `app://files`.
+   - **The sandbox host signs its own links**, by a secret of its own, and
+     serves only HTML, XHTML and SVG. Its CSP is `default-src 'none';
+     img-src app://files data:; style-src 'unsafe-inline'; script-src
+     'unsafe-inline'; sandbox allow-scripts`, so a page is sandboxed with
+     no origin of its own even outside a frame that says so.
+   - **It answers a frame's navigation only.** Electron's protocol
+     handler hears no `Sec-Fetch-*`; a navigation there is what asks to be
+     upgraded (`Upgrade-Insecure-Requests`) and names no `Origin`, which a
+     page's `fetch` cannot ask without a preflight the host refuses. Where
+     `Sec-Fetch-Dest` comes, it must say a frame.
+   - A page's pictures by relative paths do not show yet.
+
 6. **A file is drawn by a previewer.**
    - A module declares a previewer in `defineModule({ previewers })` with
      `definePreviewer({ id, match, priority, can, load })`.
@@ -188,6 +205,27 @@ stay his to change.
    - **Lines.** Picking lines in `files.file` offers "Add a comment…", which
      ADR 0034 decision 9 sends to the Agent.
 
+   *Amended 2026-11-06, with step F3a:*
+   - `definePreviewer` takes a `title` too, which "Open with…" shows.
+     `match.magic` is bytes a file starts with, maybe after an offset.
+     Among the matches, an extension is closest, then a MIME type, then a
+     family of them (`video/*`), then the bytes; the higher priority wins
+     among equals. The bytes are read only when nothing else matches.
+   - The view's file carries `url`, the byte host's, which answers ranges
+     itself (a player seeks in it); `read(range)` asks it for bytes. It
+     carries the path as the Person reads it too, and the view gets the
+     engine, the Project and `run`, for what rides the API, as text.
+     What a view keeps with its Pane, as markdown's Source, it keeps with
+     `kept` and `keep`.
+   - The window builds the previewers from the modules and gives them to
+     every Pane in a React context, `@banda/ui`'s `Previewers`; a view is
+     keyed by its previewer, which is how it updates rather than remounts.
+   - "Open with…" is a button in `files.file`'s header; the pick is
+     `files.toml`'s `[previewers]`, written through `files.previewer`.
+   - PDF.js draws with its own canvas and text layer, not its viewer's
+     component: the pages are placed at once and drawn only near the view.
+
+
      *Amended 2026-11-06, with step F2b:* the comment is written under
      the lines, and goes into the Thread's message as a chip with the
      path, the lines, the words and the lines as they read. The chip
@@ -205,6 +243,25 @@ stay his to change.
      beside, and ⌥Space makes the tile fill the desk.
    - The tile takes no focus from the tree. Every previewer that `can`
      quick draws in it.
+
+   *Amended 2026-11-06, with step F3a:*
+   - **The window draws the tile; a module asks for it.**
+     `WindowApi.peek(pane, project)` shows a Pane in the one floating tile
+     over the workspaces, and `null` closes it; the Pane is told it peeks
+     (`PaneProps.peek`). A Pane of the same kind there takes the new args,
+     so its view updates. A Pane opened in a workspace that the tile
+     shows closes it, as ↵ does. The window knows no module: Quick Look is
+     the files module's `files.peek` asking for `files.file`.
+   - **⌥Space is the Banda menu's key** (ADR 0068's mod with Space).
+     While Quick Look shows, that key has the tile fill the desk, or float
+     again, as ⌥Space does in a Finder; the menu opens once it is closed.
+     The tile's header has the same as a button.
+   - Esc closes the tile wherever the focus is, unless a menu, a dialog or
+     a list of suggestions takes it first. Space closes it from the tree.
+   - Space is the tree's key, and `files.peek` its action for
+     `keys.toml`, until ADR 0071's scopes, as F1d's keys are.
+   - A row's menu, a reply's path menu (ADR 0063) and the Banda menu's
+     Files have "Quick Look" too.
 
 8. **Light editing, in Pierre's editor** (_decided_: editing comes;
    _decided_: Pierre). This replaces "Editing files" in ADR 0034

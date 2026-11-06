@@ -32,6 +32,7 @@ import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
 import {
   Engine,
   FileHost,
+  PreviewHost,
   Look,
   none,
   pickFolder,
@@ -94,17 +95,22 @@ const DEV_PAGE = app.isPackaged ? undefined : process.env.BANDA_PAGE
 /** Where the windows load the page from. */
 const PAGE = DEV_PAGE ?? `${ORIGIN}/index.html`
 
-/** The hosts of `app://` beside Banda's own page: the files a Pane shows
- * (ADR 0073, decision 5), and the modules' own. */
+/** The hosts of `app://` beside Banda's own page: the files a Pane shows,
+ * and the pages among them that run scripts, sandboxed (ADR 0073,
+ * decision 5); and the modules' own. */
 const hosts = new Map(
   Object.entries({
     ...modules.served,
     files: (request: Request) => FileHost.use((host) => host.serve(request)),
+    preview: (request: Request) =>
+      PreviewHost.use((host) => host.serve(request)),
   })
 )
-/** Only the modules' hosts show in a frame: the files host serves any
- * file, and no frame shows one yet. */
-const framed = Object.keys(modules.served).map((host) => `app://${host}`)
+/** The hosts a frame shows: the modules' and the sandbox host. The byte
+ * host serves any file, so no frame shows one. */
+const framed = [...Object.keys(modules.served), "preview"].map(
+  (host) => `app://${host}`
+)
 
 const CSP = [
   "default-src 'self'",
@@ -116,11 +122,12 @@ const CSP = [
   "img-src 'self' data: crx: app://files",
   "media-src 'self' app://files",
   "font-src 'self' data:",
-  // The engine; and the page's own files, as Ghostty fetches its WebAssembly.
-  "connect-src 'self' ws://127.0.0.1:*",
+  // The engine; the page's own files, as Ghostty fetches its WebAssembly;
+  // and the byte host's ranges, as a PDF is read (ADR 0073, decision 5).
+  "connect-src 'self' ws://127.0.0.1:* app://files",
   // The modules' pages a Pane shows in a frame, each on an origin of its
-  // own, as a Thread's Visuals (ADR 0037).
-  `frame-src ${framed.join(" ") || "'none'"}`,
+  // own, as a Thread's Visuals (ADR 0037), and a file's page, sandboxed.
+  `frame-src ${framed.join(" ")}`,
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
@@ -156,10 +163,17 @@ startLog(state, banda)
 app.setName(channel.name)
 app.setDesktopName(`${channel.folder}.desktop`)
 
+// The page reads the byte host's ranges across origins, as its CORS
+// allows (`corsEnabled`).
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "app",
-    privileges: { standard: true, secure: true, supportFetchAPI: true },
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+    },
   },
 ])
 
@@ -187,6 +201,7 @@ const runtime = ManagedRuntime.make(
         settingsLayer(engineBinary),
         Window.layer(() => window),
         FileHost.layer,
+        PreviewHost.layer,
         Editors.layer
       )
     ),
@@ -357,6 +372,10 @@ async function ready(): Promise<void> {
       url: [
         Schema.Tuple([Schema.String, Schema.String]),
         ([project, path]) => FileHost.url(project, path),
+      ],
+      preview: [
+        Schema.Tuple([Schema.String, Schema.String]),
+        ([project, path]) => PreviewHost.url(project, path),
       ],
       outside: [text, ([path]) => Effect.sync(() => openFile(path))],
       show: [text, ([path]) => Effect.sync(() => showFile(path))],

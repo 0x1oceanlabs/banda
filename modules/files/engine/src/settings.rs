@@ -10,6 +10,7 @@
 use banda_look::{OneFile, Problem};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::Path;
 use ts_rs::TS;
 
@@ -33,6 +34,10 @@ pub struct FilesSettings {
     /// "Open in", and a path in a reply with Ctrl or ⌘. Empty is the first
     /// one found on this machine.
     pub editor: Option<String>,
+    /// The previewer a file of an extension shows in, by its id, as
+    /// `md = "files.code"`: what "Open with…" in a file's Pane picks. One
+    /// that does not draw the file is passed over.
+    pub previewers: Option<BTreeMap<String, String>>,
 }
 
 /// What Files shows, every key resolved.
@@ -45,6 +50,8 @@ pub struct Finder {
     pub ignored: bool,
     /// The editor's id; empty for the first one found.
     pub editor: String,
+    /// The previewer's id, by an extension, lower case.
+    pub previewers: BTreeMap<String, String>,
 }
 
 impl OneFile for FilesSettings {
@@ -58,6 +65,7 @@ impl OneFile for FilesSettings {
             hidden: Some(false),
             ignored: Some(true),
             editor: Some(String::new()),
+            previewers: Some(BTreeMap::new()),
         }
     }
 
@@ -67,6 +75,7 @@ impl OneFile for FilesSettings {
             hidden: self.hidden.or(under.hidden),
             ignored: self.ignored.or(under.ignored),
             editor: self.editor.or(under.editor),
+            previewers: self.previewers.or(under.previewers),
         }
     }
 
@@ -76,11 +85,21 @@ impl OneFile for FilesSettings {
             hidden: self.hidden.unwrap_or(false),
             ignored: self.ignored.unwrap_or(true),
             editor: self.editor.unwrap_or_default(),
+            previewers: self.previewers.unwrap_or_default(),
         }
     }
 
-    /// Each pinned place is a whole path, or one from `~`.
+    /// Each pinned place is a whole path, or one from `~`; an extension is
+    /// read in lower case, with no dot.
     fn check(&mut self, path: &Path, _text: &str, problems: &mut Vec<Problem>) {
+        if let Some(previewers) = self.previewers.take() {
+            self.previewers = Some(
+                previewers
+                    .into_iter()
+                    .map(|(extension, id)| (extension.trim_start_matches('.').to_lowercase(), id))
+                    .collect(),
+            );
+        }
         let Some(pinned) = self.pinned.as_mut() else {
             return;
         };
@@ -129,6 +148,7 @@ mod tests {
                 hidden: false,
                 ignored: true,
                 editor: String::new(),
+                previewers: BTreeMap::new(),
             }
         );
         assert!(problems.is_empty());
@@ -153,6 +173,21 @@ mod tests {
     fn the_file_names_the_editor_a_file_opens_in() {
         let (finder, problems) = resolved(Some("editor = \"zed\"\n"));
         assert_eq!(finder.editor, "zed");
+        assert!(problems.is_empty());
+    }
+
+    #[test]
+    fn the_file_names_the_previewer_an_extension_shows_in() {
+        let (finder, problems) = resolved(Some(
+            "[previewers]\nmd = \"files.code\"\n\".SVG\" = \"files.page\"\n",
+        ));
+        assert_eq!(
+            finder.previewers,
+            BTreeMap::from([
+                ("md".to_owned(), "files.code".to_owned()),
+                ("svg".to_owned(), "files.page".to_owned()),
+            ])
+        );
         assert!(problems.is_empty());
     }
 

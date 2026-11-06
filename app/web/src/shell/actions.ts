@@ -126,6 +126,9 @@ export type Shell = WindowApi & {
   wake: (asked: SnoozeAsked) => void
   /** Opens the Banda menu, or closes it when it is open (ADR 0017). */
   menu: (at: At) => void
+  /** Has what peeks over the desk fill it, or float again (ADR 0073,
+   * decision 7); false when nothing peeks. */
+  fillPeek: () => boolean
   /** Opens the Banda menu at a route, or the settings at theirs, as
    * `banda menu ROUTE` does (ADR 0017, decision 7). */
   route: (route: string) => void
@@ -796,7 +799,12 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     title: "Banda menu",
     keys: [{ code: "Space", mod: true }],
     overDialogs: true,
-    run: (shell) => shell.menu("root"),
+    // Over Quick Look its key has the tile fill the desk, or float again,
+    // as ⌥Space does in a Finder (ADR 0073, decision 7, as amended): the
+    // menu opens once Quick Look is closed.
+    run: (shell) => {
+      if (!shell.fillPeek()) shell.menu("root")
+    },
   },
   {
     id: "menu.keys",
@@ -821,6 +829,19 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
           project: args?.project ?? null,
           line: args?.line ?? null,
         })
+      ),
+  },
+  {
+    // A reply's path in Quick Look, over the desk (ADR 0073, decision 12):
+    // in Files' `files.file`, as it peeks.
+    id: "file.peek",
+    args: takes({ file: FILE, project: "the Project it is in" }, ["file"]),
+    section: "Banda",
+    title: "Quick Look at a file",
+    unlisted: true,
+    run: (shell, args) =>
+      present(args, (file) =>
+        shell.run("files.peek", { file, project: args?.project ?? null })
       ),
   },
   {

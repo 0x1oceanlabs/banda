@@ -20,3 +20,9 @@
 # JetBrains IDEs (idea, webstorm, pycharm, goland, rustrover, clion,
 # phpstorm, rubymine, rider).
 # editor = ""
+
+# The previewer a file of an extension shows in, by its id: what "Open
+# with…" in a file's Pane picks. One that does not draw the file is
+# passed over.
+# [previewers]
+# md = "files.code"

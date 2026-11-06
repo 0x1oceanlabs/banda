@@ -1,8 +1,11 @@
 /**
- * A file as `files.file` shows it: what `files.stat` says it is, its text
- * when it is drawn as text, and the Project's folder it is named from.
- * It follows `files.watch` on the file's folder and reads again as it
- * changes, keeping what it showed till then.
+ * A file as `files.file` shows it: what `files.stat` says it is, and the
+ * Project's folder it is named from; and, for a view that draws text,
+ * its text from `files.read`. Both follow the disk: the file is looked at
+ * again as `files.watch` hears its folder change, and its text read again
+ * as it changed. What was shown stays until the next is read, so a Pane
+ * that goes to another file, as Quick Look's does under the arrows, keeps
+ * its view.
  */
 import { useEffect, useRef, useState } from "react"
 import { type Engine, type ProjectId, Refused } from "@banda/contract"
@@ -10,7 +13,6 @@ import type { Stat } from "@banda/contract/files"
 import { nameAndFolder } from "@banda/ui/lib/paths"
 import { problem } from "@banda/ui/lib/words"
 import { lineCount, startOf } from "./lines"
-import { type Look, lookOf } from "./look"
 
 /** A file's text as it is drawn: its start, at most 1 MiB and 20 000
  * lines, or none for a binary file. */
@@ -33,9 +35,6 @@ export type Shown =
   | {
       state: "file"
       stat: Stat
-      look: Look
-      /** Its text, for a file drawn as text. */
-      text?: Drawn
       /** The Project's folder, whole; none where it has none. */
       root: string | null
     }
@@ -47,9 +46,9 @@ const SETTLE = 200
 /** How long to wait before reading again after the connection broke. */
 const AGAIN = 500
 
-/** What is at `path` in `project`, read now; `held`, what was read last,
- * when the file has not changed since. */
-async function readNow(
+/** What is at `path` in `project`, looked at now; `held`, what was seen
+ * last, when the file has not changed since. */
+async function statNow(
   engine: Engine,
   project: ProjectId,
   path: string,
@@ -63,19 +62,7 @@ async function readNow(
   )
   if (!stat) return { state: "gone" }
   if (held?.state === "file" && same(held.stat, stat)) return held
-  const look = lookOf(stat)
-  const shown = { state: "file", stat, look, root: root?.path ?? null } as const
-  if (look !== "code" && look !== "markdown") return shown
-  const read = await engine.call("files.read", { path: stat.path }, { project })
-  const start = read.text === undefined ? undefined : startOf(read.text)
-  const text: Drawn = {
-    text: start?.text,
-    lines: start ? lineCount(start.text) : 0,
-    cut: read.truncated || (start?.cut ?? false),
-    bytes: read.bytes,
-    binary: read.binary,
-  }
-  return { ...shown, text }
+  return { state: "file", stat, root: root?.path ?? null }
 }
 
 /** Whether two looks at a file found it as it was. */
@@ -88,7 +75,8 @@ function same(was: Stat, now: Stat): boolean {
   )
 }
 
-/** What is at `path` in `project`, read again as it changes. */
+/** What is at `path` in `project`, looked at again as it changes. While
+ * another path is looked at, the file shown last stays. */
 export function useFile(
   engine: Engine,
   project: ProjectId,
@@ -98,13 +86,13 @@ export function useFile(
   const [round, setRound] = useState(0)
   const [held, setHeld] = useState<{ asked: string; shown: Shown }>()
 
-  // What was read last, to keep while the file has not changed.
+  // What was seen last, to keep while the file has not changed.
   const last = useRef<Shown>(undefined)
   useEffect(() => {
     let current = true
     let timer: ReturnType<typeof setTimeout> | undefined
     const start = () =>
-      readNow(engine, project, path, last.current).then(
+      statNow(engine, project, path, last.current).then(
         (shown) => current && setHeld({ asked, shown }),
         (error: unknown) => {
           if (!current) return
@@ -123,7 +111,8 @@ export function useFile(
     }
   }, [engine, project, path, asked, round])
 
-  const shown = held?.asked === asked ? held.shown : LOADING
+  const shown =
+    held?.asked === asked || held?.shown.state === "file" ? held.shown : LOADING
   useEffect(() => {
     last.current = shown
   })
@@ -164,4 +153,42 @@ export function useFile(
   }, [engine, project, dir])
 
   return shown
+}
+
+/** The text of the file at the whole `path`, as it is drawn, read again
+ * as `modified` changes; the text read last while the next is read, and
+ * none before the first. A refusal is said as its words. */
+export function useText(
+  engine: Engine,
+  project: ProjectId,
+  path: string,
+  modified: number | null
+): { path: string; drawn: Drawn } | { path: string; refused: string } | null {
+  const [read, setRead] = useState<
+    { path: string; drawn: Drawn } | { path: string; refused: string } | null
+  >(null)
+  useEffect(() => {
+    let current = true
+    engine.call("files.read", { path }, { project }).then(
+      (read) => {
+        if (!current) return
+        const start = read.text === undefined ? undefined : startOf(read.text)
+        setRead({
+          path,
+          drawn: {
+            text: start?.text,
+            lines: start ? lineCount(start.text) : 0,
+            cut: read.truncated || (start?.cut ?? false),
+            bytes: read.bytes,
+            binary: read.binary,
+          },
+        })
+      },
+      (error: unknown) => current && setRead({ path, refused: problem(error) })
+    )
+    return () => {
+      current = false
+    }
+  }, [engine, project, path, modified])
+  return read
 }

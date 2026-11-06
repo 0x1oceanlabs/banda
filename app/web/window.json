@@ -687,6 +687,30 @@
       }
     },
     {
+      "id": "file.peek",
+      "title": "Quick Look at a file",
+      "section": "Banda",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "the file's absolute path"
+          },
+          "project": {
+            "type": "string",
+            "description": "the Project it is in"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
       "id": "file.outside",
       "title": "Open a file in its app",
       "section": "Banda",

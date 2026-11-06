@@ -1,5 +1,5 @@
 /**
- * A row's menu in Files (ADR 0073, decision 10): Open; Open in the editor
+ * A row's menu in Files (ADR 0073, decision 10): Open; Quick Look; Open in the editor
  * `files.toml` names, and in the others found; Open with the system;
  * Reveal in the system's file manager; Add to chat; Copy path, whole, from
  * the Project's folder or its name; and Pin or Unpin for a folder. The
@@ -26,6 +26,7 @@ import {
   AppWindowIcon,
   AtSignIcon,
   CopyIcon,
+  EyeIcon,
   FolderDownIcon,
   FolderOpenIcon,
   FolderSearchIcon,
@@ -43,6 +44,7 @@ export function RowMenu({
   top,
   pinned,
   onOpen,
+  onPeek,
   onShow,
   onAttach,
   onPin,
@@ -55,6 +57,8 @@ export function RowMenu({
   /** Whether the folder is pinned among the places. */
   pinned?: boolean
   onOpen: () => void
+  /** Shows it in Quick Look, over the desk. */
+  onPeek?: () => void
   /** Shows it in its folder, from a list that is not its folder's. */
   onShow?: () => void
   /** Names it in a Thread's message, with the other rows picked. */
@@ -70,6 +74,13 @@ export function RowMenu({
         Open
         <DropdownMenuShortcut>{keyLabel(keyOf("open"))}</DropdownMenuShortcut>
       </DropdownMenuItem>
+      {onPeek && (
+        <DropdownMenuItem onClick={onPeek}>
+          <EyeIcon />
+          Quick Look
+          <DropdownMenuShortcut>{keyLabel(keyOf("peek"))}</DropdownMenuShortcut>
+        </DropdownMenuItem>
+      )}
       {onShow && (
         <DropdownMenuItem onClick={onShow}>
           <FolderSearchIcon />

@@ -23,6 +23,7 @@ import {
   AtSignIcon,
   CopyIcon,
   ExternalLinkIcon,
+  EyeIcon,
   FolderOpenIcon,
   GitForkIcon,
   GlobeIcon,
@@ -135,11 +136,12 @@ export type ThreadActs = {
   /** Searches the web in Banda's browser; none where no window does. */
   search?: (words: string) => void
   open: (address: string, outside: boolean) => void
-  /** Opens a file a path names, in Banda, in the app the system has for
-   * it, or in an editor at its line; shows it in its folder; none where no
-   * window looks at files. */
+  /** Opens a file a path names, in Banda, in Quick Look over the desk, in
+   * the app the system has for it, or in an editor at its line; shows it
+   * in its folder; none where no window looks at files. */
   file?: {
     open: (at: FileAt, outside: boolean) => void
+    peek: (at: FileAt) => void
     system: (at: FileAt) => void
     edit: (at: FileAt) => void
     show: (at: FileAt) => void
@@ -218,6 +220,10 @@ function Items({ at, acts }: { at: MenuAt; acts: ThreadActs }) {
               >
                 <PanelRightIcon />
                 Open in Banda
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={item(() => acts.file!.peek(file))}>
+                <EyeIcon />
+                Quick Look
               </DropdownMenuItem>
               <DropdownMenuItem onClick={item(() => acts.file!.system(file))}>
                 <ExternalLinkIcon />

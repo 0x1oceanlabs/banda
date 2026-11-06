@@ -28,12 +28,13 @@ export type { RecentAsk } from "./generated/files/RecentAsk"
 
 /** What Files shows, as `banda look` gives it with no `files.toml`:
  * nothing pinned, dotfiles hidden, what git ignores greyed, the first
- * editor found. */
+ * editor found, and each file in the previewer that matches it best. */
 export const DEFAULT_FINDER: Finder = {
   pinned: [],
   hidden: false,
   ignored: true,
   editor: "",
+  previewers: {},
 }
 
 /** The files module's `files.toml`. */

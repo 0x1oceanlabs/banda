@@ -3,8 +3,8 @@
  * tree's own, as a list's are (ADR 0071, decision 1): ↑ ↓ move, ← folds
  * or goes to the folder above, → opens. These are the Pane's, with Ctrl
  * (⌘ on a Mac), as a Finder's: never the mod, which stays Banda's in
- * every Pane. Space stays free for Quick Look (step F3). Pure, so plain
- * tests cover it.
+ * every Pane. Space is Quick Look, over the desk (step F3). Pure, so
+ * plain tests cover it.
  *
  * Until ADR 0071's scopes come (its step 3), they are the Pane's own, as
  * the browser's are; each also runs from an action, by its id, which
@@ -13,10 +13,11 @@
 import { type Key, matches, type Pressed } from "@banda/ui/lib/keys"
 
 /** What a Files Pane does on one of its keys. */
-export type Does = "open" | "up" | "path" | "hidden" | "filter"
+export type Does = "open" | "peek" | "up" | "path" | "hidden" | "filter"
 
 export const KEYS: readonly (Key & { does: Does })[] = [
   { code: "Enter", does: "open" },
+  { code: "Space", does: "peek" },
   { code: "ArrowUp", primary: true, does: "up" },
   { code: "KeyL", primary: true, does: "path" },
   { code: "Period", primary: true, shift: true, does: "hidden" },
