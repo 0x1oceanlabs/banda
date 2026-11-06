@@ -218,7 +218,9 @@ export function ModCard() {
           )
         })}
         <div className="flex items-center justify-between gap-2">
-          <span className="min-w-0 text-muted-foreground">Move a Pane</span>
+          <span className="min-w-0 text-muted-foreground">
+            Move a Pane, or its whole Group
+          </span>
           <Kbd className="shrink-0">{modLabel(now)} + drag</Kbd>
         </div>
       </div>

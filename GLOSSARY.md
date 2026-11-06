@@ -613,8 +613,8 @@ _Avoid_: tabs, tabbed column (a Tab is a browser page's).
 Columns side by side on one workspace, held together, so they move and
 look as one: a plate behind them, in the colour of their Agent's state
 (ADR 0065). `Alt+G` starts one; an Agent's Thread is a Group from its
-opening, and the Panes its Agent opens join it. It lays out only, and
-gives no access.
+opening, and the Panes its Agent opens join it. The mod and a drag of
+any of its Panes move it whole. It lays out only, and gives no access.
 
 **Zoom**:
 One Pane over the whole window, with no gaps and no sidebar, until the

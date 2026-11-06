@@ -38,11 +38,14 @@ const FLAGS = { alt: "altKey", ctrl: "ctrlKey", super: "metaKey" } as const
 
 /** Whether `event` holds the mod and no other of Alt, Ctrl and Super, as
  * the mouse's moves do (ADR 0068, decision 3): one key more makes the
- * press the Pane's program's. */
+ * press the Pane's program's. A key of the mod let go still says it is
+ * held on its own key up, so that one does not. */
 export function holdsAlone(
-  event: Pick<Pressed, "altKey" | "ctrlKey" | "metaKey">,
+  event: Pick<Pressed, "altKey" | "ctrlKey" | "metaKey"> &
+    Partial<Pick<KeyboardEvent, "type" | "code">>,
   mod: Mod
 ): boolean {
+  if (event.type === "keyup" && isModKey(event.code ?? "", mod)) return false
   return MORE.every((one) => event[FLAGS[one]] === mod[one])
 }
 

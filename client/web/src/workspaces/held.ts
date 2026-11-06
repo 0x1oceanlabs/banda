@@ -8,7 +8,7 @@
  */
 import { useEffect } from "react"
 import { useMod } from "@banda/ui/hooks/use-key-of"
-import { holdsAlone, isModKey } from "@banda/ui/lib/keys"
+import { holdsAlone } from "@banda/ui/lib/keys"
 
 export function useModHeld() {
   const { alt, ctrl, super: sup } = useMod()
@@ -20,12 +20,7 @@ export function useModHeld() {
       if (held) html.dataset.mod = ""
       else delete html.dataset.mod
     }
-    // A key of the mod let go still says it is held on its own key up.
-    const onKey = (event: KeyboardEvent) =>
-      set(
-        holdsAlone(event, mod) &&
-          !(event.type === "keyup" && isModKey(event.code, mod))
-      )
+    const onKey = (event: KeyboardEvent) => set(holdsAlone(event, mod))
     const onPointer = (event: PointerEvent) => {
       if (!holdsAlone(event, mod)) set(false)
     }

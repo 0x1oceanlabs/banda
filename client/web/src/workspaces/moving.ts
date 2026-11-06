@@ -168,6 +168,26 @@ export function groupLandingAt(
   return { index, hint: standing(middle, top, bottom) }
 }
 
+/**
+ * Whether a Pane carried by the mouse takes its whole Group along (ADR
+ * 0065, decision 5), and the note the drag shows under its name, `mod`
+ * as the Person presses it: the handle carries the Group; a grouped Pane
+ * carries it while the mod is held, and goes alone without it. An
+ * ungrouped Pane goes alone, with no note.
+ */
+export function carriesGroup(
+  carried: { grouped: boolean; byHandle?: boolean },
+  held: boolean,
+  mod: string
+): { whole: boolean; note?: string } {
+  if (!carried.grouped) return { whole: false }
+  const whole = !!carried.byHandle || held
+  const note = whole
+    ? "Moving the whole Group"
+    : `Hold ${mod} to move the whole Group`
+  return { whole, note }
+}
+
 /** `found`, or the last of `list` when nothing was. */
 function lastIfNone(found: number, list: readonly unknown[]): number {
   return found < 0 ? list.length - 1 : found
