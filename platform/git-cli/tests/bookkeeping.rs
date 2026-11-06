@@ -10,7 +10,7 @@ mod trap;
 use banda_git_cli::{asked, bookkeeping};
 use std::process::{Output, Stdio};
 use tokio::process::Command;
-use trap::{Trap, executable, git};
+use trap::{Trap, commit_in, executable, git};
 
 /// Runs `git` with the Person's own `ssh` first on the PATH.
 async fn run(trap: &Trap, mut git: Command) -> Output {
@@ -70,6 +70,8 @@ async fn a_fetch_reaches_its_remote_with_no_program_the_repository_names() {
         assert!(trap.persons_ssh_ran(), "the Person's ssh ran");
     }
 
+    // `up` moves on, so the Person's fetch moves a ref, and its hook runs.
+    commit_in(&trap.up(), "fourth");
     for remote in ["up", "far", "ext", "helper"] {
         theirs(&trap, &fetch(remote)).await;
     }

@@ -19,7 +19,7 @@ use banda_pulls::Pulls;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::Duration;
-use trap::{Trap, executable, git, git_in, write};
+use trap::{Trap, executable, git, git_in, tried, write};
 
 /// The agents module as git hears it: `say { kind, thread, turn }` writes
 /// the fact `kind` about `thread`.
@@ -263,10 +263,10 @@ async fn what_the_modules_run_by_themselves_runs_no_program_the_repository_names
     assert_eq!(world.trap.left(), Vec::<String>::new());
 
     // The Person's own git runs them.
-    git(repo, &["status", "--porcelain"]);
+    tried(repo, &["status", "--porcelain"]);
     git(repo, &["update-ref", "refs/banda/x", &world.trap.head]);
-    git(repo, &["log", "-1", "--format=%H"]);
-    git(repo, &["diff", "--no-ext-diff", "HEAD", "--", "sub"]);
+    tried(repo, &["log", "-1", "--format=%H"]);
+    tried(repo, &["diff", "--no-ext-diff", "HEAD", "--", "sub"]);
     world.trap.left_each(&[
         "filter-clean",
         "fsmonitor",

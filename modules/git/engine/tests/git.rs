@@ -1812,6 +1812,29 @@ async fn a_patch_of_a_file_asked_by_name_is_cut_at_a_whole_line() {
 }
 
 #[tokio::test]
+async fn a_turn_keeps_each_file_a_filter_cleans_as_the_index_has_it() {
+    let world = World::committed().await;
+    world.write(".gitattributes", "*.lfs filter=lfs\n*.raw -filter\n");
+    world.write("kept.lfs", "pointer\n");
+    world.commit("lfs");
+    let (thread, turn) = (ProjectId::new().to_string(), ProjectId::new().to_string());
+    world.say("turn.started", &thread, &turn).await;
+    world.checkpoints(1).await;
+    // The turn changes a filtered file, and makes files in a new folder.
+    world.write("kept.lfs", "the file itself\n");
+    for made in ["made.lfs", "made.raw", "made.txt"] {
+        world.write(&format!("new/deep/{made}"), "made\n");
+    }
+    world.say("turn.ended", &thread, &turn).await;
+    world.checkpoints(2).await;
+    let turn = json!({ "scope": { "kind": "turn", "thread": thread, "turn": turn } });
+    assert_eq!(
+        paths(&world.diff(turn).await),
+        ["new/deep/made.raw", "new/deep/made.txt"]
+    );
+}
+
+#[tokio::test]
 async fn a_turn_heard_begun_twice_is_let_go_once() {
     let world = World::committed().await;
     let (thread, turn) = (ProjectId::new().to_string(), ProjectId::new().to_string());
