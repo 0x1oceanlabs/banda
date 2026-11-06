@@ -6,6 +6,7 @@
 //! no git, and nothing the folder names. It reads only regular files, a
 //! bounded start of each, so whatever the folder holds, a look ends.
 
+use crate::ProjectId;
 use serde::Serialize;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -20,6 +21,11 @@ pub struct Foreign {
     /// word of its trust is not trusted.
     pub foreign: bool,
     pub why: Vec<ForeignWhy>,
+    /// The Project the folder already is, as `projects.foreign` says:
+    /// Add Project asks nothing of it, since it keeps its own trust.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub project: Option<ProjectId>,
 }
 
 /// One reason a folder looks like another's code.
@@ -60,7 +66,8 @@ const PATH_LIMIT: u64 = 4096;
 /// How long `gh` may take to say its account.
 const GH_LIMIT: Duration = Duration::from_secs(2);
 
-/// Looks at `folder`, which exists.
+/// Looks at `folder`, resolved. One not made yet holds nothing itself:
+/// what it would load comes from the folders above it in its repository.
 pub(crate) async fn look(folder: &Path) -> Foreign {
     let folder = folder.to_owned();
     let found = tokio::task::spawn_blocking(move || Found::in_folder(&folder, home().as_deref()))
@@ -223,6 +230,7 @@ impl Found {
         Foreign {
             foreign: !why.is_empty(),
             why,
+            project: None,
         }
     }
 }

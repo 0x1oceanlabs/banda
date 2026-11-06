@@ -283,8 +283,9 @@ crate::methods! {
         call list(Nothing) -> Vec<ProjectSummary>, Read;
         /// Makes a Project: a new folder under the root, by its name. A
         /// scratch one, for a Thread in No Project, takes no name: its folder
-        /// is new under `scratch/`. A new folder is trusted, unless the
-        /// Person says a named one is not.
+        /// is new under `scratch/`, and it is trusted. A named one is
+        /// trusted as `trusted` says, or else unless its folder looks
+        /// foreign (`projects.foreign`).
         command create(CreateProject) -> ProjectSummary, Manage;
         /// Adds a folder as a Project. A folder that already is one answers
         /// that Project, back from the archive if it was there. A new one is
@@ -295,7 +296,8 @@ crate::methods! {
         /// that picks a Project's folder. Only the owner browses.
         call browse(Browse) -> Browsed, Manage;
         /// Whether a folder looks foreign, and why, for Add Project to ask
-        /// whether to trust it (ADR 0084, decision 13).
+        /// whether to trust it (ADR 0084, decision 13); one not made yet,
+        /// as it will be. It names the Project the folder already is.
         call foreign(OneFolder) -> Foreign, Manage;
         /// Trusts a Project, or takes its trust back, from its Harnesses'
         /// next turn. Only the Person trusts; a scratch Project always is.
@@ -350,7 +352,7 @@ struct CreateProject {
     #[ts(optional)]
     scratch: Option<bool>,
     /// Whether it is trusted (`ProjectSummary`); a new folder is, unless
-    /// said. A scratch Project always is.
+    /// said or its folder looks foreign. A scratch Project always is.
     #[serde(default)]
     #[ts(optional)]
     trusted: Option<bool>,
@@ -946,8 +948,8 @@ impl Kernel {
     /// Project it already is comes back from the archive instead. A folder
     /// this call made is taken back when the Project is not. A Project is
     /// trusted as `trusted` says. Not said, a Project that already was
-    /// keeps its own; a new one is trusted when this call made its folder,
-    /// and otherwise unless the folder looks foreign.
+    /// keeps its own, and a new one is trusted unless its folder looks
+    /// foreign: one this call made, by the repository it is in.
     async fn add_at(
         &self,
         folder: &Path,
@@ -992,7 +994,6 @@ impl Kernel {
             let name = Project::name_of(name)?;
             let trusted = match trusted {
                 Some(trusted) => trusted,
-                None if made => true,
                 None => !foreign::look(&canonical).await.foreign,
             };
             let mut manifest = Manifest::new(&canonical, name, author, command);
@@ -1087,8 +1088,10 @@ impl Kernel {
         _: Own<'_>,
         OneFolder { folder }: OneFolder,
     ) -> Result<Foreign, Refusal> {
-        let folder = folder_found(&from_home(&folder)?)?;
-        Ok(foreign::look(&folder).await)
+        let folder = folder_to_be(&from_home(&folder)?)?;
+        let mut foreign = foreign::look(&folder).await;
+        foreign.project = self.at(&folder).await.map(|entry| entry.summary().id);
+        Ok(foreign)
     }
 
     /// Changes whether the Person trusts a Project. It waits for a Project
@@ -1372,6 +1375,18 @@ fn folder_found(folder: &Path) -> Result<PathBuf, Refusal> {
         return Err(Refusal::invalid(what));
     }
     Ok(canonical)
+}
+
+/// The folder at `folder`, resolved; or, when it is not made yet, where it
+/// will be: the nearest folder above it, resolved, with the rest as given.
+fn folder_to_be(folder: &Path) -> Result<PathBuf, Refusal> {
+    let Some(there) = (folder.ancestors()).find(|dir| dir.exists()) else {
+        return folder_found(folder);
+    };
+    match folder.strip_prefix(there) {
+        Ok(rest) if !rest.as_os_str().is_empty() => Ok(folder_found(there)?.join(rest)),
+        _ => folder_found(folder),
+    }
 }
 
 /// `~` or `~/…` from the home folder; any other path must be absolute.
