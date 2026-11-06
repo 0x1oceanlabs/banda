@@ -47,7 +47,7 @@ import { LOCATE, locateRoute } from "../menu/menu"
 import { AsideRow } from "../safe/AsidePill"
 import { Field, Group, RowFrame, Rows } from "./SettingRow"
 import { SignField, signAbout } from "./SignField"
-import { Soon, TrustCard, type Trusting } from "../trust/Trust"
+import { Soon, TrustCard, type Trusting } from "../trust/TrustCard"
 import { ISOLATED, trustAbout } from "../trust/trust"
 
 /** The Project a removal asks about, and how many Threads go with it, if
@@ -246,12 +246,7 @@ function Project({ engine, lit }: Props) {
               }
               about={ISOLATED.settingAbout}
             >
-              <Switch
-                label={ISOLATED.setting}
-                on={false}
-                disabled
-                onChange={() => {}}
-              />
+              <Switch label={ISOLATED.setting} on={false} disabled />
             </RowFrame>
           </>
         )}

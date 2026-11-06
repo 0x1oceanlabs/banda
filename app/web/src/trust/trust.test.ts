@@ -15,8 +15,12 @@ test("a clone from another's GitHub says where it came from, and lists what its 
     line: "Cloned from github.com/acme/widget · it has .claude/ and .mcp.json",
     from: true,
     waits: [
-      { name: ".claude/", holds: "Claude Code's settings and hooks" },
-      { name: ".mcp.json", holds: "MCP servers" },
+      {
+        name: ".claude/",
+        holds: "Claude Code's settings and hooks",
+        kind: "folder",
+      },
+      { name: ".mcp.json", holds: "MCP servers", kind: "file" },
     ],
     cloned: true,
   })

@@ -29,9 +29,10 @@ import {
 } from "@banda/ui/components/dropdown-menu"
 import { Kbd } from "@banda/ui/components/kbd"
 import { ScrollArea } from "@banda/ui/components/scroll-area"
+import { toast } from "@banda/ui/components/sonner"
 import { trustProject } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
-import { clock } from "@banda/ui/lib/words"
+import { clock, problem } from "@banda/ui/lib/words"
 import type { Listed, Lists, PaneState } from "@banda/ui/pane"
 import {
   AlarmClockIcon,
@@ -69,7 +70,7 @@ import { useIsArchived } from "./archived"
 import { seeWoke, snoozable, useSnoozes } from "./snoozed"
 import { FlowMenu } from "./FlowMenu"
 import { ThemeMenu } from "./ThemeMenu"
-import { TrustCard, type Trusting } from "../trust/Trust"
+import { TrustCard, type Trusting } from "../trust/TrustCard"
 import { useKeyLabel, useKeyOf } from "@banda/ui/hooks/use-key-of"
 import { keyCaps } from "@banda/ui/lib/keys"
 
@@ -197,12 +198,13 @@ export function Sidebar({
     })
   }
   // The Project whose trust a card by its row asks about (ADR 0083,
-  // decision 5); taking it back needs no card.
+  // decision 5); taking it back needs no card, and says when it failed.
   const [trusting, setTrusting] = useState<Trusting>()
-  const onTrust = (project: ProjectId, trusted: boolean, anchor: Element) => {
-    if (trusted) return setTrusting({ project, anchor })
+  const onTrust = (project: ProjectId, anchor: Element) =>
+    setTrusting({ project, anchor })
+  const onStopTrusting = (project: ProjectId) => {
     trustProject(props.engine, project, false).catch((error: unknown) =>
-      console.error("banda: the Project's trust was not taken back", error)
+      toast.error(problem(error))
     )
   }
   // A Project's row, wherever it shows, has its right-click menu.
@@ -212,6 +214,7 @@ export function Sidebar({
       onNewThread={onNewThread}
       onPin={onPin}
       onTrust={onTrust}
+      onStopTrusting={onStopTrusting}
       onSettings={onProjectSettings}
       onLocate={onLocate}
     >
@@ -725,6 +728,7 @@ function ProjectMenu({
   onNewThread,
   onPin,
   onTrust,
+  onStopTrusting,
   onSettings,
   onLocate,
   children,
@@ -732,9 +736,9 @@ function ProjectMenu({
   project: ProjectSummary
   onNewThread: (project: ProjectId) => void
   onPin: (project: ProjectId, pinned: boolean) => void
-  /** Trusts the Project, asking on a card by `row`, or takes its trust
-   * back. */
-  onTrust: (project: ProjectId, trusted: boolean, row: Element) => void
+  /** Asks on a card by `row` whether to trust the Project. */
+  onTrust: (project: ProjectId, row: Element) => void
+  onStopTrusting: (project: ProjectId) => void
   onSettings: (project: ProjectId) => void
   onLocate: (project: ProjectId) => void
   children: ReactElement
@@ -768,9 +772,8 @@ function ProjectMenu({
         {!project.scratch && (
           <TrustItem
             trusted={project.trusted}
-            onTrust={(trusted) =>
-              row.current && onTrust(project.id, trusted, row.current)
-            }
+            onTrust={() => row.current && onTrust(project.id, row.current)}
+            onStopTrusting={() => onStopTrusting(project.id)}
           />
         )}
         <DropdownMenuItem onClick={() => onSettings(project.id)}>
@@ -787,18 +790,20 @@ function ProjectMenu({
 function TrustItem({
   trusted,
   onTrust,
+  onStopTrusting,
 }: {
   trusted: boolean
-  onTrust: (trusted: boolean) => void
+  onTrust: () => void
+  onStopTrusting: () => void
 }) {
   const later = useAfterMenu()
   return trusted ? (
-    <DropdownMenuItem onClick={() => onTrust(false)}>
+    <DropdownMenuItem onClick={onStopTrusting}>
       <CircleDashedIcon />
       Stop trusting
     </DropdownMenuItem>
   ) : (
-    <DropdownMenuItem onClick={() => later(() => onTrust(true))}>
+    <DropdownMenuItem onClick={() => later(onTrust)}>
       <BadgeCheckIcon />
       Trust Project…
     </DropdownMenuItem>

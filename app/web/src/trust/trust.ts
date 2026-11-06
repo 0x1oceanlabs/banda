@@ -18,8 +18,9 @@ const LOADED: Record<string, string> = {
   ".mcp.json": "MCP servers",
 }
 
-/** What a folder holds that waits for trust: a row of the list. */
-export type Waiting = { name: string; holds: string }
+/** What a folder holds that waits for trust, a row of the list: a folder
+ * of settings, or a file of MCP servers. */
+export type Waiting = { name: string; holds: string; kind: "folder" | "file" }
 
 /** Why a folder looks foreign, as the question shows it. */
 export type Asked = {
@@ -41,9 +42,11 @@ export function askedOf(foreign: Foreign): Asked {
   const from: string[] = []
   const has: string[] = []
   const waits: Waiting[] = []
+  let cloned = false
   for (const why of foreign.why)
     switch (why.kind) {
       case "cloned":
+        cloned = true
         from.push(`Cloned from ${why.from}`)
         break
       case "remote":
@@ -52,19 +55,21 @@ export function askedOf(foreign: Foreign): Asked {
         )
         break
       case "holds": {
-        const name = FOLDERS.includes(why.name) ? `${why.name}/` : why.name
+        const folder = FOLDERS.includes(why.name)
+        const name = folder ? `${why.name}/` : why.name
         has.push(name)
         const holds = LOADED[why.name]
-        if (holds) waits.push({ name, holds })
+        if (holds) waits.push({ name, holds, kind: folder ? "folder" : "file" })
       }
     }
+  const said = from.length > 0
   if (has.length > 0) from.push(`it has ${spoken(has)}`)
   const line = from.join(" · ")
   return {
     ...(line && { line: line[0].toUpperCase() + line.slice(1) }),
-    from: foreign.why.some((why) => why.kind !== "holds"),
+    from: said,
     waits,
-    cloned: foreign.why.some((why) => why.kind === "cloned"),
+    cloned,
   }
 }
 
@@ -82,6 +87,10 @@ export const ASK = "Code you didn't write?"
 export const ASK_ABOUT =
   "Until you trust it, Claude Code and Codex here read only your own settings. These wait:"
 
+/** What the card says when the engine could not look in the folder, so
+ * it lists nothing; why follows. */
+export const UNSEEN = "Banda couldn't look in its folder."
+
 /** What waits in a Project that holds none of it yet. */
 export const NOTHING_YET =
   "Its own .claude/, .codex/ and .mcp.json, once it has them."
@@ -97,6 +106,9 @@ export const ANSWERS = {
     about: "Its settings, hooks and MCP servers load.",
   },
 } as const
+
+/** One of the question's answers. */
+export type Answer = (typeof ANSWERS)[keyof typeof ANSWERS]
 
 /** Running a Project isolated, which is not built yet (ADR 0084). */
 export const ISOLATED = {

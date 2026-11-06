@@ -5,14 +5,14 @@ import type { Action, MenuAct, MenuRow } from "@banda/ui/module"
 import type { Shell } from "../shell/actions"
 import {
   actsOf,
-  answerOf,
   back,
   branchName,
   type Branch,
   type Choice,
   type Found,
   isBranch,
-  looksFirst,
+  isOwn,
+  lookedAt,
   menuOf,
   openingOf,
   ranked,
@@ -138,9 +138,9 @@ function nameOf(row: Choice): string {
         ? `create ${row.how.name}`
         : "locate" in row.how
           ? `locate ${row.how.folder}`
-          : row.how.trusted !== undefined
-            ? `${row.how.trusted ? "trust" : "not yet"} ${row.how.folder}`
-            : `${row.how.create ? "create & add" : "add"} ${row.how.folder}`
+          : `${row.how.create ? "create & add" : "add"} ${row.how.folder}`
+    case "answer":
+      return `${row.answer.title.toLowerCase()} ${row.how.folder}`
     case "folder":
       return row.up ? `.. ${row.path}` : row.path
   }
@@ -465,14 +465,14 @@ describe("Add Project (ADR 0026)", () => {
     ).toBe("add ~/co")
   })
 
-  test("a folder on disk is looked at before it is added; a folder made for it, a name or a locate is not", () => {
-    expect(looksFirst({ folder: "~/code/widget", create: false })).toBe(true)
-    expect(looksFirst({ folder: "~/code/new", create: true })).toBe(false)
-    expect(
-      looksFirst({ folder: "~/code/widget", create: false, trusted: false })
-    ).toBe(false)
-    expect(looksFirst({ name: "Work" })).toBe(false)
-    expect(looksFirst({ locate: "s1" as never, folder: "/x" })).toBe(false)
+  test("a folder on disk, there or to be made, is looked at before it is added; a name or a locate is not", () => {
+    const there = { folder: "~/code/widget", create: false }
+    expect(lookedAt(there)).toBe(there)
+    const made = { folder: "~/code/widget/packages/new", create: true }
+    expect(lookedAt(made)).toBe(made)
+    expect(lookedAt({ ...there, trusted: false })).toBe(undefined)
+    expect(lookedAt({ name: "Work" })).toBe(undefined)
+    expect(lookedAt({ locate: "s1" as never, folder: "/x" })).toBe(undefined)
   })
 
   test("a folder that looks foreign asks in the menu: Not yet first, as Enter takes it, then Trust", () => {
@@ -480,29 +480,47 @@ describe("Add Project (ADR 0026)", () => {
       foreign: true,
       why: [{ kind: "holds" as const, name: ".claude" }],
     }
-    const ask = trustBranch("~/code/widget/", foreign)
+    const ask = trustBranch(
+      { folder: "~/code/widget/", create: false },
+      foreign
+    )
     expect(isBranch(ask)).toBe(true)
     expect(branchName(ask)).toBe("widget")
     expect(labels("", "root", ask)).toEqual([
       ["", ["not yet ~/code/widget/", "trust ~/code/widget/"]],
     ])
     const [notYet, trust] = menuFor("", "root", ask)[0].rows
-    expect(answerOf(notYet)?.title).toBe("Not yet")
-    expect(answerOf(trust)?.title).toBe("Trust")
+    expect(isOwn(notYet) && isOwn(trust)).toBe(true)
     expect(notYet).toMatchObject({
-      kind: "adding",
+      kind: "answer",
+      answer: { title: "Not yet" },
       how: { folder: "~/code/widget/", create: false, trusted: false },
+    })
+    expect(trust).toMatchObject({
+      kind: "answer",
+      answer: { title: "Trust" },
+      how: { trusted: true },
     })
     // Typing finds one answer by its words.
     expect(labels("tru", "root", ask)).toEqual([["", ["trust ~/code/widget/"]]])
-    // Any other row answers nothing.
-    expect(answerOf({ kind: "adding", id: "adding", how: { name: "W" } })).toBe(
-      undefined
+  })
+
+  test("a folder to be made answers as it is made", () => {
+    const ask = trustBranch(
+      { folder: "~/code/widget/new", create: true },
+      { foreign: true, why: [{ kind: "holds", name: ".claude" }] }
     )
+    expect(menuFor("", "root", ask)[0].rows).toMatchObject([
+      { how: { folder: "~/code/widget/new", create: true, trusted: false } },
+      { how: { folder: "~/code/widget/new", create: true, trusted: true } },
+    ])
   })
 
   test("⌫ from the question goes back to the path as it was typed", () => {
-    const ask = trustBranch("~/code/widget", { foreign: true, why: [] })
+    const ask = trustBranch(
+      { folder: "~/code/widget", create: false },
+      { foreign: true, why: [] }
+    )
     const went = back([add, way("folder"), ask])
     expect(went.path).toEqual([add, way("folder")])
     expect(went.words).toBe("~/code/widget")

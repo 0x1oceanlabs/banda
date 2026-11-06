@@ -4588,13 +4588,15 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
   expect(trusted()).toBe(false)
   await expect(page.locator("[data-untrusted]").first()).toBeVisible()
 
-  // The Project's menu trusts it, on a card that says what will load.
+  // A screen reader hears it before the Project's name. The Project's
+  // menu trusts it, on a card that says what will load.
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   await sidebar.getByRole("button", { name: /^View: / }).click()
   await page.getByRole("menuitemradio", { name: /^places/ }).click()
   const row = sidebar
     .getByRole("group", { name: "Projects" })
-    .getByRole("button", { name: /^widget/ })
+    .getByRole("button", { name: /^(Not trusted )?widget$/ })
+  await expect(row).toHaveAccessibleName("Not trusted widget")
   await row.click({ button: "right" })
   await page.getByRole("menuitem", { name: "Trust Project…" }).click()
   const card = page.getByRole("dialog", { name: "Trust widget?" })
@@ -4603,6 +4605,18 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
   await expect(card).toBeHidden()
   await expect.poll(trusted).toBe(true)
   await expect(page.locator("[data-untrusted]")).toHaveCount(0)
+  await expect(row).toHaveAccessibleName("widget")
+
+  // Added again, a folder that already is a Project asks nothing, and
+  // keeps the trust it has.
+  await page.getByRole("button", { name: "Add Project", exact: true }).click()
+  await search.fill("local")
+  await search.press("Enter")
+  await search.fill(`${widget}/`)
+  await expect(menu.getByRole("option").first()).toHaveText(/^Add/)
+  await search.press("Enter")
+  await expect(menu).toBeHidden()
+  expect(trusted()).toBe(true)
 
   // Its settings take the trust back, and offer it again.
   await row.click({ button: "right" })

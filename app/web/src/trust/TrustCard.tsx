@@ -18,7 +18,7 @@ import { useRead } from "@banda/ui/hooks/use-read"
 import { trustProject } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
 import { FolderIcon, PlugIcon } from "lucide-react"
-import { askedOf, NOTHING_YET, type Waiting } from "./trust"
+import { askedOf, NOTHING_YET, UNSEEN, type Waiting } from "./trust"
 
 /** What is not built yet, beside its greyed control (ADR 0084). */
 export function Soon({ className }: { className?: string }) {
@@ -44,8 +44,8 @@ export function Waits({ waits }: { waits: readonly Waiting[] }) {
       aria-label="What waits"
       className="flex flex-col rounded-lg py-1 ring-1 ring-border ring-inset"
     >
-      {waits.map(({ name, holds }) => {
-        const Icon = name === ".mcp.json" ? PlugIcon : FolderIcon
+      {waits.map(({ name, holds, kind }) => {
+        const Icon = kind === "file" ? PlugIcon : FolderIcon
         return (
           <li
             key={name}
@@ -120,15 +120,13 @@ function Card({
   project: ProjectSummary
   onClose: () => void
 }) {
-  // What it names now, as Add Project would find it; a folder that is
-  // gone names nothing.
+  // What it names now, as Add Project would find it.
   const read = useRead(
     useCallback(
       () => engine.call("projects.foreign", { folder: project.folder }),
       [engine, project.folder]
     )
   )
-  const waits = read.state === "ready" ? askedOf(read.value).waits : []
   const { busy, problem, act } = useAct()
   const trust = async () => {
     if (await act(() => trustProject(engine, project.id, true))) onClose()
@@ -144,7 +142,12 @@ function Card({
       <PopoverDescription>
         Claude Code and Codex will load what it names, from their next turn:
       </PopoverDescription>
-      {read.state !== "loading" && <Waits waits={waits} />}
+      {read.state === "ready" && <Waits waits={askedOf(read.value).waits} />}
+      {read.state === "refused" && (
+        <p className="text-xs text-muted-foreground">
+          {UNSEEN} {read.refusal.message}
+        </p>
+      )}
       {problem && (
         <p role="alert" className="text-xs text-destructive">
           {problem}
