@@ -1,0 +1,37 @@
+{
+  "about": "What a snooze's field reads, and what it does not (ADR 0074). The window's snooze-time.ts and the look's snooze.rs both test against it, so neither reads a word the other does not. Each word in `reads` says a time still to come on Thursday 5 November 2026 at 21:40.",
+  "reads": [
+    "1h",
+    "3h",
+    "45m",
+    "2 h",
+    "1.5d",
+    "in 2 hours",
+    "через 3 часа",
+    "20 мин",
+    "2 дн",
+    "18",
+    "18:00",
+    "9.30",
+    "today 23",
+    "tomorrow",
+    "tomorrow 9:00",
+    "завтра в 10:30",
+    "fri",
+    "пт 14",
+    "friday at 9",
+    "mon 9:00",
+    "next week",
+    "неделю"
+  ],
+  "unread": [
+    "",
+    "soon",
+    "25:00",
+    "0h",
+    "fri 99",
+    "9:0",
+    "tomorrow at",
+    "2 weeks"
+  ]
+}

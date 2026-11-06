@@ -5,15 +5,6 @@
  */
 import { DAY, HOUR, MINUTE } from "@banda/ui/lib/words"
 
-/** Banda's presets: T3 Code's defaults, in the field's own words. */
-export const PRESETS: readonly string[] = [
-  "1h",
-  "3h",
-  "18:00",
-  "tomorrow 9:00",
-  "mon 9:00",
-]
-
 /** One preset, as the picker lists it. */
 export type Preset = { label: string; at: number }
 
@@ -42,7 +33,7 @@ const WEEKDAYS: Readonly<Record<string, number>> = {
 
 const TODAY = new Set(["today", "сегодня"])
 const TOMORROW = new Set(["tomorrow", "tmr", "завтра"])
-const WEEK = new Set(["next week", "week", "через неделю", "неделя"])
+const WEEK = new Set(["next week", "week", "через неделю", "неделя", "неделю"])
 
 /** The day `days` after `now`'s, at `hour:minute`. */
 function dayAt(now: number, days: number, hour: number, minute: number) {

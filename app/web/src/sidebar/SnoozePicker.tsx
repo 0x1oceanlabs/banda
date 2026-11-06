@@ -17,8 +17,9 @@ import { clock, left } from "@banda/ui/lib/words"
 import { AlarmClockIcon, ArrowRightIcon, LoaderIcon } from "lucide-react"
 import { type ReactNode, useId, useMemo, useState } from "react"
 import { asleep, type Listed } from "@banda/ui/pane"
+import { useLookSidebar } from "../look"
 import { snoozable } from "./snoozed"
-import { PRESETS, presets, whenOf } from "./snooze-time"
+import { presets, whenOf } from "./snooze-time"
 
 /** A Thread whose snooze is being picked, and what the picker stands by. */
 export type Snoozing = { project: ProjectId; listed: Listed; anchor?: Element }
@@ -99,7 +100,9 @@ function Picking({
   const [now] = useState(Date.now)
   const [text, setText] = useState("")
   const [at, setAt] = useState(0)
-  const listedPresets = useMemo(() => presets(PRESETS, now), [now])
+  // The presets `sidebar.toml` names (ADR 0074, decision 9).
+  const words = useLookSidebar().snooze.presets
+  const listedPresets = useMemo(() => presets(words, now), [words, now])
   const typed = text.trim() ? whenOf(text, now) : undefined
   // What was typed comes first once it reads as a time, then Wake now
   // for a Thread that sleeps, then the presets.

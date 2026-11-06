@@ -4,6 +4,7 @@ import type { Group } from "./Group";
 import type { Preset } from "./Preset";
 import type { Projects } from "./Projects";
 import type { Row } from "./Row";
+import type { Snooze } from "./Snooze";
 import type { Sort } from "./Sort";
 
 /**
@@ -22,4 +23,4 @@ preset: string,
 /**
  * Every preset there is: Banda's, then the Person's.
  */
-presets: Array<Preset>, group: Group, sort: Sort, projects: Projects, row: Row, bar: BarCounts, };
+presets: Array<Preset>, group: Group, sort: Sort, projects: Projects, row: Row, bar: BarCounts, snooze: Snooze, };

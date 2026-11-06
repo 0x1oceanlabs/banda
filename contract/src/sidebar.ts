@@ -52,4 +52,7 @@ export const DEFAULT_SIDEBAR: Sidebar = {
     words: false,
     empty: "mark",
   },
+  snooze: {
+    presets: ["1h", "3h", "18:00", "tomorrow 9:00", "mon 9:00"],
+  },
 }
