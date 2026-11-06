@@ -3,6 +3,7 @@ use crate::methods::{Asks, Nothing, Tool};
 use crate::module::{Call, Module, Scope, Stream, Wall};
 use crate::passes::Passes;
 use crate::project::{self, GONE, Manifest, Project, Shared, UNFINISHED};
+use crate::sign::{self, Kept, Picked, Sign, SignPick};
 use crate::window::Window;
 use crate::{AgentId, CommandId, Error, Participant, PersonId, ProjectId, Refusal};
 use serde::{Deserialize, Serialize};
@@ -50,7 +51,7 @@ pub(crate) enum Entry {
     /// listed, `missing`, but not open, until the Person locates it.
     Missing {
         data: PathBuf,
-        manifest: Manifest,
+        manifest: Box<Manifest>,
     },
 }
 
@@ -75,6 +76,22 @@ impl Entry {
             Entry::Missing { manifest, .. } => manifest.folder.clone(),
         }
     }
+
+    /// Where Banda keeps the Project's data.
+    fn data(&self) -> PathBuf {
+        match self {
+            Entry::Open(project) => project.data().to_owned(),
+            Entry::Missing { data, .. } => data.clone(),
+        }
+    }
+
+    /// The picture its sign keeps, found or picked.
+    fn picture(&self) -> Option<Kept> {
+        match self {
+            Entry::Open(project) => project.picture(),
+            Entry::Missing { manifest, .. } => manifest.picture.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -97,6 +114,8 @@ pub struct ProjectSummary {
     /// Its folder was gone as the engine started: none of its Threads
     /// open until the Person locates it (`projects.locate`).
     pub missing: bool,
+    /// What stands for it beside its name (ADR 0070).
+    pub sign: Sign,
 }
 
 pub struct KernelBuilder {
@@ -227,7 +246,10 @@ impl KernelBuilder {
                     "a Project's folder is gone; it waits to be located"
                 );
                 let id = manifest.id;
-                let missing = Entry::Missing { data, manifest };
+                let missing = Entry::Missing {
+                    data,
+                    manifest: Box::new(manifest),
+                };
                 kernel.projects.write().await.insert(id, missing);
                 continue;
             }
@@ -245,6 +267,7 @@ impl KernelBuilder {
                 }
             }
         }
+        kernel.find_signs();
         Ok(kernel)
     }
 }
@@ -274,6 +297,12 @@ crate::methods! {
         command remove(OneProject) -> (), Manage;
         /// The tools an Agent may call, from the methods of the modules.
         call tools(Nothing) -> Vec<Tool>, Read;
+        /// The picture a Project's sign shows, as a `data:` URL; none when
+        /// it shows none (ADR 0070). A window keeps it by the sign's version
+        /// (`sign.text`) and asks again only when that changes.
+        call sign(OneProject) -> Option<String>, Read;
+        /// Looks in a Project's folder for its sign's picture again.
+        command find_sign(OneProject) -> ProjectSummary, Manage;
     }
 }
 
@@ -374,6 +403,20 @@ struct UpdateProject {
     #[serde(default)]
     #[ts(optional)]
     folder: Option<String>,
+    /// The sign the Person picks; `null` goes back to what Banda finds
+    /// (ADR 0070).
+    #[serde(default, deserialize_with = "present")]
+    #[ts(optional = nullable, as = "Option<SignPick>")]
+    sign: Option<Option<SignPick>>,
+}
+
+/// A key given, `null` too, as `Some`; left out, `None`, by `default`.
+fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
 }
 
 #[derive(Deserialize, TS)]
@@ -403,6 +446,49 @@ fn outside_machine() -> Refusal {
 /// The prefixes of the kernel's own methods, which no module takes:
 /// `projects.*`, and the window's road (ADR 0029, decision 2).
 const OWN: [&str; 2] = ["projects", "window"];
+
+/// What a pick makes of a Project's sign, and the picture it keeps in
+/// `data` when it picks one: checked and kept before the manifest names it.
+fn picked(data: &Path, pick: SignPick) -> Result<(Picked, Option<Kept>), Refusal> {
+    let plain = |text: &str, what: &str, most: usize| -> Result<String, Refusal> {
+        let text = text.trim();
+        match text.chars().count() {
+            0 => Err(Refusal::invalid(format!("A sign's {what} is not empty."))),
+            n if n > most => Err(Refusal::invalid(format!(
+                "A sign's {what} is at most {most} long."
+            ))),
+            _ => Ok(text.to_owned()),
+        }
+    };
+    Ok(match pick {
+        SignPick::Emoji { emoji } => (
+            Picked::Emoji {
+                emoji: plain(&emoji, "emoji", 8)?,
+            },
+            None,
+        ),
+        SignPick::Icon { icon, color } => {
+            let icon = plain(&icon, "icon", 40)?;
+            let lucide = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
+            if !icon.chars().all(lucide) {
+                return Err(Refusal::invalid(
+                    "A sign's icon is a Lucide name, as pen-line.",
+                ));
+            }
+            (Picked::Icon { icon, color }, None)
+        }
+        SignPick::Letters { letters, color } => {
+            let letters = plain(&letters, "letters", 2)?.to_uppercase();
+            (Picked::Letters { letters, color }, None)
+        }
+        SignPick::Picture { picture, kind } => {
+            let bytes = sign::decoded(&picture).map_err(Refusal::invalid)?;
+            sign::fits(kind, &bytes).map_err(Refusal::invalid)?;
+            let kept = sign::keep(data, kind, &bytes, None).map_err(Error::from)?;
+            (Picked::Picture { picture: true }, Some(kept))
+        }
+    })
+}
 
 fn no_method(method: &str) -> Refusal {
     Refusal::invalid(format!("There is no method \"{method}\"."))
@@ -640,7 +726,64 @@ impl Kernel {
     /// Every Project, the missing too.
     pub async fn projects(&self) -> Vec<ProjectSummary> {
         let projects = self.projects.read().await;
-        projects.values().map(Entry::summary).collect()
+        let mut summaries: Vec<_> = projects.values().map(Entry::summary).collect();
+        sign::lettered(&mut summaries);
+        summaries
+    }
+
+    /// `one` as `projects` lists it: its letters told apart from the
+    /// others' (ADR 0070, decision 2).
+    async fn lettered(&self, one: ProjectSummary) -> ProjectSummary {
+        let all = self.projects().await;
+        all.into_iter().find(|p| p.id == one.id).unwrap_or(one)
+    }
+
+    /// Looks for the sign of each open Project, as the engine starts, one
+    /// after another, beside everything else (ADR 0070, decision 2). It
+    /// holds neither the kernel nor a Project but while it looks, so a
+    /// kernel that closes lets go of them at once.
+    fn find_signs(self: &Arc<Self>) {
+        // Nothing else holds the list as the kernel opens.
+        let Ok(projects) = self.projects.try_read() else {
+            return;
+        };
+        let open: Vec<std::sync::Weak<Project>> = (projects.values())
+            .filter_map(|entry| match entry {
+                Entry::Open(project) => Some(Arc::downgrade(project)),
+                Entry::Missing { .. } => None,
+            })
+            .collect();
+        drop(projects);
+        let kernel = Arc::downgrade(self);
+        tokio::spawn(async move {
+            for project in open {
+                if kernel.strong_count() == 0 {
+                    return;
+                }
+                // The Project is held only to read and to write, not while
+                // its folder is read.
+                let Some((folder, name)) = project.upgrade().and_then(|p| p.sign_wanted()) else {
+                    continue;
+                };
+                let found = tokio::task::spawn_blocking(move || sign::find(&folder, &name)).await;
+                let (Ok(found), Some(project)) = (found, project.upgrade()) else {
+                    continue;
+                };
+                if let Err(error) = project.keep_sign(found) {
+                    tracing::warn!(%error, "a Project's sign was not kept");
+                }
+            }
+        });
+    }
+
+    /// Looks for `summary`'s Project's sign now, as one is added or named.
+    async fn find_sign_now(&self, summary: ProjectSummary) -> Result<ProjectSummary, Refusal> {
+        let Ok(project) = self.project(summary.id).await else {
+            return Ok(self.lettered(summary).await);
+        };
+        let found = tokio::task::spawn_blocking(move || project.find_sign()).await;
+        let summary = found.map_err(|_| Refusal::internal())??;
+        Ok(self.lettered(summary).await)
     }
 
     async fn open_project(&self, data: PathBuf, manifest: Manifest) -> Result<Arc<Project>, Error> {
@@ -670,7 +813,11 @@ impl Kernel {
         let (author, command) = (ask.participant, ask.command_id()?);
         match (create.name, create.scratch == Some(true)) {
             (None, true) => self.create_scratch(author, command).await,
-            (Some(name), false) => self.create_project(&name, author, command).await,
+            // A new folder holds no picture to find.
+            (Some(name), false) => {
+                let made = self.create_project(&name, author, command).await?;
+                Ok(self.lettered(made).await)
+            }
             (Some(_), true) => Err(Refusal::invalid(
                 "A scratch Project has no name until it becomes a Project.",
             )),
@@ -739,14 +886,15 @@ impl Kernel {
         let command = ask.command_id()?;
         let folder = from_home(&add.folder)?;
         let create = add.create == Some(true);
-        (self.add_at(
+        let added = (self.add_at(
             &folder,
             add.name.as_deref(),
             create,
             ask.participant,
             command,
         ))
-        .await
+        .await?;
+        self.find_sign_now(added).await
     }
 
     /// Adds `folder` as a Project, made first if `create` says so; the
@@ -833,7 +981,7 @@ impl Kernel {
         let mut found = manifest.clone();
         found.folder = folder.to_owned();
         found.write(&data)?;
-        let project = match self.open_project(data.clone(), found).await {
+        let project = match self.open_project(data.clone(), *found).await {
             Ok(project) => project,
             Err(error) => {
                 let _ = manifest.write(&data);
@@ -949,7 +1097,30 @@ impl Kernel {
                 module.can_move(project.module(module.name())).await?;
             }
         }
+        // A picked picture is kept before the manifest names it.
+        let data = entry.data();
+        let back_to_found = matches!(update.sign, Some(None));
+        let find_again = name.is_some() || back_to_found;
+        let picked = (update.sign.flatten())
+            .map(|pick| picked(&data, pick))
+            .transpose()?;
         let change = |manifest: &mut Manifest| {
+            if let Some((sign, picture)) = picked {
+                manifest.sign = Some(sign);
+                if picture.is_some() {
+                    manifest.picture = picture;
+                }
+            }
+            // A picture picked by hand goes; one Banda found stays.
+            if back_to_found {
+                manifest.sign = None;
+                if (manifest.picture)
+                    .take_if(|kept| kept.found.is_none())
+                    .is_some()
+                {
+                    sign::forget(&data);
+                }
+            }
             if let Some(target) = &target {
                 manifest.folder = target.clone();
             }
@@ -979,6 +1150,7 @@ impl Kernel {
                 .change_in(data, change)
                 .map(|()| manifest.summary(true)),
         };
+        drop(projects);
         if let Some(project) = opened.as_ref()
             && project.folder() != old
         {
@@ -986,7 +1158,31 @@ impl Kernel {
                 module.moved(project.module(module.name())).await;
             }
         }
-        Ok(result?)
+        let summary = result?;
+        if find_again {
+            self.find_sign_now(summary).await
+        } else {
+            Ok(self.lettered(summary).await)
+        }
+    }
+
+    async fn sign(
+        &self,
+        _: Own<'_>,
+        OneProject { project }: OneProject,
+    ) -> Result<Option<String>, Refusal> {
+        let entry = self.projects.read().await.get(&project).cloned();
+        let entry = entry.ok_or_else(no_project)?;
+        Ok((entry.picture()).and_then(|kept| sign::data_url(&entry.data(), &kept)))
+    }
+
+    async fn find_sign(
+        &self,
+        _: Own<'_>,
+        OneProject { project }: OneProject,
+    ) -> Result<ProjectSummary, Refusal> {
+        let summary = self.project(project).await?.summary();
+        self.find_sign_now(summary).await
     }
 
     /// Opens a missing Project at the folder its work is in now, written
@@ -1004,7 +1200,8 @@ impl Kernel {
                 folder.display()
             )));
         }
-        self.open_missing(locate.project, &folder).await
+        let located = self.open_missing(locate.project, &folder).await?;
+        self.find_sign_now(located).await
     }
 
     /// Takes the Project out of the list at once, and its data out of the

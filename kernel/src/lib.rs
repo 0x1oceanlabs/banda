@@ -34,6 +34,7 @@ mod outbox;
 mod passes;
 mod project;
 mod reach;
+mod sign;
 mod store;
 mod watching;
 mod window;
@@ -51,6 +52,7 @@ pub use project::{Committed, Heard, ModuleProject, Project, Tally};
 pub use reach::Reach;
 /// For `methods!` and `id!`, which name it from a module's crate.
 pub use schemars;
+pub use sign::{PictureKind, Sign, SignColor, SignKind, SignPick};
 pub use store::Tx;
 pub use watching::{Changed, Watch};
 pub use window::{WindowAnswer, WindowRequest};

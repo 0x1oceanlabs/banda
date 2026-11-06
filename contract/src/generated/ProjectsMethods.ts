@@ -51,4 +51,14 @@ remove: CommandMethod<OneProject, null>,
 /**
  * The tools an Agent may call, from the methods of the modules.
  */
-tools: CallMethod<Nothing, Array<Tool>>, };
+tools: CallMethod<Nothing, Array<Tool>>, 
+/**
+ * The picture a Project's sign shows, as a `data:` URL; none when
+ * it shows none (ADR 0070). A window keeps it by the sign's version
+ * (`sign.text`) and asks again only when that changes.
+ */
+sign: CallMethod<OneProject, string | null>, 
+/**
+ * Looks in a Project's folder for its sign's picture again.
+ */
+find_sign: CommandMethod<OneProject, ProjectSummary>, };
