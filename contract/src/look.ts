@@ -76,7 +76,7 @@ export const DEFAULT_OVERVIEW: Overview = { zoom: 0.35 }
 
 /** How a Group shows, as `banda look` gives it with no files (ADR 0065). */
 export const DEFAULT_GROUPS: Groups = {
-  handle: true,
+  handle: false,
   working: "breath",
   asking: "twice",
   saturation: "normal",

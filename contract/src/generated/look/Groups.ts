@@ -8,7 +8,8 @@ import type { GroupWorking } from "./GroupWorking";
  */
 export type Groups = { 
 /**
- * A handle on its top edge under the pointer, that carries it.
+ * A handle on its top edge under the pointer, that carries it; off
+ * unless set.
  */
 handle: boolean, 
 /**

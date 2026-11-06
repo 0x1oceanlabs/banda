@@ -344,12 +344,13 @@ function placeIn(spot: Spot): Place {
  * The Pane `next` shows that `before` did not, as a command to open it
  * where `next` has it, or at `place`, as the engine names one the window
  * only foresees: a Group's, a Project's workspace (ADR 0065); none when it
- * was shown already, and only the view changes.
+ * was shown already, and only the view changes. `grouped`, its column is
+ * a Group from its opening: the one it goes into, else its own.
  */
 export function opened(
   before: Workspaces,
   next: Workspaces,
-  place?: Place
+  { place, grouped }: { place?: Place; grouped?: boolean } = {}
 ): Plan | undefined {
   const known = new Set(entries(before).map((entry) => entry.id))
   const entry = entries(next).find((other) => !known.has(other.id))
@@ -359,6 +360,7 @@ export function opened(
     project: entry.project,
     kind: entry.pane.kind,
     args: entry.pane.args,
+    ...(grouped && { grouped }),
   }
   // In the place of a Pane that left: the one that stood there before.
   const was = columnOf(before, spot.column.id)?.column.entries[spot.e]

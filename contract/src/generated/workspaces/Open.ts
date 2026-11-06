@@ -24,6 +24,12 @@ width?: string,
  */
 again?: boolean, 
 /**
+ * A new Pane's column is in a Group from the start: the one the place
+ * puts it in, else a Group of its own, as a Thread opens, so what its
+ * Agent opens joins a Group already there (ADR 0065, decision 7).
+ */
+grouped?: boolean, 
+/**
  * Kept as `space` before ADR 0069 (for good).
  */
 project: ProjectId, 

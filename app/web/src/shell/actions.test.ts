@@ -1,7 +1,7 @@
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test } from "vitest"
 import { entries, open, start } from "../workspaces/model"
-import { closingShown } from "./actions"
+import { closingShown, opening } from "./actions"
 
 const thread = (id: string): PaneState => ({
   kind: "agents.thread",
@@ -26,4 +26,14 @@ test("an archived Thread's Pane closes, and only its own", () => {
   expect(
     closingShown(state, { project: "project-c", about: "t1" })
   ).toBeUndefined()
+})
+
+test("a Thread opens as a Group, and a Pane of another kind in none", () => {
+  const params = (pane: PaneState) => {
+    const plan = opening(start(), "project-a", pane, { place: "right" })
+    return plan && "command" in plan ? plan.command.params : undefined
+  }
+  expect(params(thread("t1"))).toMatchObject({ grouped: true })
+  const diff = { kind: "git.diff", args: { scope: { kind: "changes" } } }
+  expect(params(diff)).not.toHaveProperty("grouped")
 })

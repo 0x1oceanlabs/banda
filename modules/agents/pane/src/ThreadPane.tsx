@@ -127,6 +127,8 @@ export const threadPane = definePane<ThreadArgs>({
   letter: "H",
   // On its Project's workspace, with the Project's other Agents (ADR 0065).
   home: () => fileNow(AGENTS_FILE).workspaces === "project",
+  // A Group from its opening, for what its Agent opens (ADR 0065).
+  grouped: true,
   Pane: ThreadPane,
 })
 

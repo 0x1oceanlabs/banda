@@ -700,6 +700,13 @@ pub fn group(list: &mut Arrangement, column: ColumnId) -> Result<(), Refusal> {
     Ok(())
 }
 
+/// Starts a Group of the column that shows `pane`, as `group` does: as a
+/// Thread opens (ADR 0065, decision 7).
+pub fn group_pane(list: &mut Arrangement, pane: PaneId) -> Result<(), Refusal> {
+    let at = spot(list, pane)?;
+    group(list, list[at.workspace].columns[at.column].id)
+}
+
 /// A column in a Group leaves it `toward` that side, past its Group's
 /// columns there; one in none joins the Group beside it that way, as
 /// `Alt+Shift+[` and `]` (ADR 0065).
@@ -1511,6 +1518,45 @@ mod tests {
         let lone = list[0].columns[2].panes[0].id;
         move_pane(&mut list, lone, &group, None).unwrap();
         assert_eq!(layout(&list)[0], [vec![1], vec![3, 4, 2]]);
+    }
+
+    #[test]
+    fn a_thread_opens_as_a_group_and_one_put_into_a_group_stays_in_it() {
+        let mut list = start();
+        let work = ProjectId::new();
+        let thread = |list: &mut Arrangement, n, place| {
+            let pane = opened(list, shown(work, "agents.thread", n), place);
+            group_pane(list, pane).unwrap();
+            pane
+        };
+        let first = thread(&mut list, 1, Some(Place::Project { project: work }));
+        assert_eq!(grouping(&list)[0], [1]);
+        let group = list[0].columns[0].group;
+        // What its Agent opens joins the Group there, which stays the same.
+        opened(
+            &mut list,
+            shown(work, "git.diff", 2),
+            Some(Place::Group { pane: first }),
+        );
+        assert_eq!(grouping(&list)[0], [1, 1]);
+        assert_eq!(list[0].columns[0].group, group);
+        // A Thread put into a Group stays its, with none of its own.
+        thread(&mut list, 3, beside(first, Side::Right));
+        assert_eq!(grouping(&list)[0], [1, 1, 1]);
+        // One beside a Group's end starts its own.
+        let last = list[0].columns[2].panes[0].id;
+        let fourth = thread(&mut list, 4, beside(last, Side::Right));
+        assert_eq!(grouping(&list)[0], [1, 1, 1, 2]);
+        // Taken out of its Group, it stays out wherever it moves.
+        let column = list[0].columns[1].id;
+        regroup(&mut list, column, Toward::Right).unwrap();
+        let three = list[0].columns[2].panes[0].id;
+        assert_eq!(grouping(&list)[0], [1, 1, 0, 2]);
+        move_pane(&mut list, three, &Place::Project { project: work }, None).unwrap();
+        move_pane(&mut list, three, &Place::Workspace { index: 0 }, None).unwrap();
+        assert_eq!(grouping(&list)[0], [0]);
+        assert_eq!(layout(&list)[1], [vec![1], vec![2], vec![4]]);
+        assert_eq!(list[1].columns[2].panes[0].id, fourth);
     }
 
     #[test]

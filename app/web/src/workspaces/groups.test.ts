@@ -157,7 +157,8 @@ describe("a Group", () => {
       place: "group",
     })
     expect(
-      opened(before, next, { to: "group", pane: "a1" })?.command.params
+      opened(before, next, { place: { to: "group", pane: "a1" } })?.command
+        .params
     ).toMatchObject({
       kind: "git.diff",
       place: { to: "group", pane: "a1" },

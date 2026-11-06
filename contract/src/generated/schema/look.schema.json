@@ -370,7 +370,7 @@
       "type": "object",
       "properties": {
         "handle": {
-          "description": "A handle on its top edge under the pointer, with its name, that\ncarries the whole Group.",
+          "description": "A handle on its top edge under the pointer, with its name, that\ncarries the whole Group: the mouse's one way to move a Group\nwhole. Off unless set (ADR 0065).",
           "type": "boolean"
         },
         "working": {

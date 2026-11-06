@@ -65,6 +65,7 @@ import {
 import { modules as known } from "../modules"
 import {
   closedOf,
+  groupedOf,
   homeOf,
   identityOf,
   minOf,
@@ -290,7 +291,15 @@ export function Shell({
   useEffect(() => {
     if (!machine || modules.length === 0) return
     const first = startable(modules)[0]
-    moveOver(engine, home, first && { pane: first, width: widthOf(first) })
+    moveOver(
+      engine,
+      home,
+      first && {
+        pane: first,
+        width: widthOf(first),
+        grouped: groupedOf(first),
+      }
+    )
       .then((kept) => kept && setView(() => kept))
       .catch(refused)
   }, [engine, machine, modules, home, setView])

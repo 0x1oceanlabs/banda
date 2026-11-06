@@ -306,7 +306,8 @@ pub struct Groups {
     #[schemars(skip)]
     _look: Option<serde::de::IgnoredAny>,
     /// A handle on its top edge under the pointer, with its name, that
-    /// carries the whole Group.
+    /// carries the whole Group: the mouse's one way to move a Group
+    /// whole. Off unless set (ADR 0065).
     pub handle: Option<bool>,
     /// How its plate moves while its Agent works.
     pub working: Option<GroupWorking>,
@@ -578,7 +579,7 @@ impl Settings {
             },
             overview: Overview { zoom: Some(0.35) },
             groups: Groups {
-                handle: Some(true),
+                handle: Some(false),
                 working: Some(GroupWorking::Breath),
                 asking: Some(GroupAsking::Twice),
                 saturation: Some(GroupSaturation::Normal),
