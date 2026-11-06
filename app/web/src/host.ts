@@ -93,6 +93,25 @@ export type PoppedAsk =
   | { run: { action: string; args?: Args } }
 
 /**
+ * Takes a channel's current value, then each new one it tells. A value
+ * told while the first answer was on its way is the newer, so it wins.
+ */
+export function follow<T>(
+  channel: {
+    current: () => Promise<T>
+    listen: (listener: (value: T) => void) => unknown
+  },
+  take: (value: T) => void
+): void {
+  let told = false
+  void channel.current().then((first) => told || take(first))
+  channel.listen((value) => {
+    told = true
+    take(value)
+  })
+}
+
+/**
  * Every channel between the page and the desktop (ADR 0028), by where it
  * sits on `window.banda`; its path is its name. The preload builds
  * `window.banda` from it, and main answers it (app/desktop/src).
@@ -123,6 +142,15 @@ export const BRIDGE = bridge({
   frame: {
     current: invoke<[], number | null>(),
     listen: push<number | null>(),
+  },
+  /**
+   * The accent set in the system's settings, as `#rrggbb` (ADR 0075,
+   * decision 6): macOS's and Windows', and `null` elsewhere. Told again
+   * when the Person changes it.
+   */
+  accent: {
+    current: invoke<[], string | null>(),
+    listen: push<string | null>(),
   },
   /** The browser's pages: their tabs, icons and downloads. */
   browser: BROWSER_BRIDGE,

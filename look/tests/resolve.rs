@@ -903,9 +903,14 @@ fn a_mac_starts_on_the_macos_theme_with_its_shape() {
     assert!(look.vars["--font-family-sans"].starts_with("-apple-system"));
     assert_eq!(look.vars["--bar-height"], "38px");
     assert_eq!(look.vars["--gap-inner"], "8px");
-    assert_eq!(color(&look, false, "--focus"), "#007aff");
-    assert_eq!(color(&look, true, "--primary"), "#0a84ff");
+    // The accent is the system's, which the window sets (ADR 0075,
+    // decision 6); [colors] accent still wins.
+    assert_eq!(color(&look, false, "--focus"), "var(--system-accent)");
+    assert_eq!(color(&look, true, "--primary"), "var(--system-accent)");
     assert_eq!(color(&look, true, "--desk-solid"), "#28282a");
+
+    machine.look_toml("[colors]\naccent = \"#e07a3f\"\n");
+    assert_eq!(color(&machine.look(), false, "--focus"), "#e07a3f");
 
     // Anywhere else it is a theme to pick.
     machine.places.mac = false;

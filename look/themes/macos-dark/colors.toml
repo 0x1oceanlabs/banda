@@ -1,10 +1,11 @@
 # macOS Dark: the Mac's own colours (ADR 0075): its window, label and
 # separator colours, and Apple's system colours for the terminal. The
-# accent is Apple's blue; on a Mac the window takes the one set in
-# System Settings. An Omarchy palette, so it works anywhere.
+# accent is the one set in System Settings, which the window gives the
+# page; Apple's blue elsewhere. Copied as a theme of your own, name a hex
+# accent instead, as Omarchy reads only hex.
 mode = "dark"
 
-accent = "#0a84ff"
+accent = "var(--system-accent)"
 selection = "#3f638b"
 muted = "#636366"
 

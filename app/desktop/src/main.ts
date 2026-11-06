@@ -24,6 +24,7 @@ import {
   protocol,
   session,
   shell,
+  systemPreferences,
   type WebContents,
 } from "electron"
 import { type Look as LookValue, WALLPAPER_URL } from "@banda/contract/look"
@@ -242,6 +243,7 @@ if (process.env.APPIMAGE_EXIT_AFTER_INSTALL === "true") {
 }
 
 async function ready(): Promise<void> {
+  followAccent()
   const listen = (now: LookValue) => {
     // Native parts (scrollbars, menus) and the page's own
     // prefers-color-scheme follow the look's mode.
@@ -315,6 +317,7 @@ async function ready(): Promise<void> {
           ),
       ],
     },
+    accent: { current: [none, () => Effect.sync(accentOf)] },
     sidebar: {
       preset: [
         text,
@@ -598,6 +601,32 @@ function buttonsAt(now: LookValue | null): { x: number; y: number } {
 function insetOf(shown: BrowserWindow | null): number | null {
   if (!OWN_FRAME || !shown || shown !== window) return null
   return shown.isFullScreen() ? 0 : INSET
+}
+
+/** The accent set in the system's settings, as `#rrggbb` (ADR 0075,
+ * decision 6): macOS's and Windows' only. */
+function accentOf(): string | null {
+  if (process.platform !== "darwin" && process.platform !== "win32") return null
+  const rgba = systemPreferences.getAccentColor()
+  return /^[0-9a-f]{6}/i.test(rgba)
+    ? `#${rgba.slice(0, 6).toLowerCase()}`
+    : null
+}
+
+/** Tells every window the accent when the Person changes it. */
+function followAccent(): void {
+  const tell = () => {
+    const accent = accentOf()
+    for (const shown of [window, ...popped.values()])
+      tellPage(shown?.webContents, BRIDGE.accent.listen, accent)
+  }
+  if (process.platform === "darwin")
+    systemPreferences.subscribeNotification(
+      "AppleColorPreferencesChangedNotification",
+      tell
+    )
+  else if (process.platform === "win32")
+    systemPreferences.on("accent-color-changed", tell)
 }
 
 /** The look asks for the system's glass. */
