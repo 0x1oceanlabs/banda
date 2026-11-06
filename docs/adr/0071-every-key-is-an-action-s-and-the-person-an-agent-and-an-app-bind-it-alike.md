@@ -16,7 +16,7 @@ evening, but what stopped the Agent is still there:
 
 - A line of `keys.toml` names an action's id and nothing more, though an
   action already takes args from another module (`WindowApi.run`), as
-  `browser.open` takes `address`, `file`, `words` and `space`.
+  `browser.open` takes `address`, `file`, `words` and `project`.
 - The window's own actions, some 80, are listed nowhere an Agent reads:
   the whole tiling (ADR 0025, ADR 0065) — columns, Panes, workspaces,
   Groups, the Deck — and the sidebar and the menu. `banda modules` has
