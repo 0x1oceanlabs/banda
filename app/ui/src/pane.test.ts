@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { callsOf, type Listed } from "./pane"
+import { callsOf, type Listed, sleeps, wokeOf } from "./pane"
 
 const pane = { kind: "agents.thread", args: {} }
 
@@ -44,4 +44,19 @@ test("a snoozed Thread calls no one while it sleeps, and calls as it wakes", () 
   expect(at({ at: 0, until: 100 }, 100), "its time came").toBe(1)
   expect(at({ at: 0 }, 1e12), "until done, it sleeps on").toBe(0)
   expect(at({ at: 0, woke: { at: 10, by: "done" } }, 50), "woke early").toBe(1)
+})
+
+test("a Thread woke by itself when its time came or a call woke it", () => {
+  expect(wokeOf({ until: 100 }, 50), "asleep").toBeUndefined()
+  expect(wokeOf({ until: 100 }, 150)).toBe(100)
+  expect(wokeOf({ woke: { at: 70, by: "question" } }, 80)).toBe(70)
+  expect(
+    wokeOf({ woke: { at: 70, by: "woken" } }, 80),
+    "by hand"
+  ).toBeUndefined()
+  expect(
+    wokeOf({ woke: { at: 70, by: "message" } }, 80),
+    "it was written to"
+  ).toBeUndefined()
+  expect(sleeps({}, 1e12), "until done").toBe(true)
 })

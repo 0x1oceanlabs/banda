@@ -145,6 +145,7 @@ import {
   runAction,
   settingsAt,
   type Shell as Parts,
+  type SnoozeAsked,
   type Step,
 } from "./actions"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
@@ -611,14 +612,31 @@ export function Shell({
     return listed && snoozeAct(listed, asleep(listed, Date.now()))
   }, [])
   // Alt+Z: the picker for the Thread the Person looks at.
-  const snooze = useCallback(
-    () => setSnoozing(threadInFocus()),
+  /** The Thread `asked` names, else the one in focus. */
+  const threadAsked = useCallback(
+    ({ thread }: SnoozeAsked): Snoozing | undefined => {
+      if (!thread) return threadInFocus()
+      const listed = listedOf(thread.project, thread.id)
+      return listed && { project: thread.project, listed }
+    },
     [threadInFocus]
   )
-  const wake = useCallback(() => {
-    const looked = threadInFocus()
-    if (looked) wakeThread(looked.project, looked.listed.id)
-  }, [threadInFocus, wakeThread])
+  const snooze = useCallback(
+    (asked: SnoozeAsked) => {
+      const target = threadAsked(asked)
+      if (target && asked.until !== undefined)
+        snoozeThread(target.project, target.listed, asked.until)
+      else setSnoozing(target)
+    },
+    [threadAsked, snoozeThread]
+  )
+  const wake = useCallback(
+    (asked: SnoozeAsked) => {
+      const target = threadAsked(asked)
+      if (target) wakeThread(target.project, target.listed.id)
+    },
+    [threadAsked, wakeThread]
+  )
   const toggleOverview = useCallback(
     () => setOverview((was) => (was === "open" ? "closing" : "open")),
     []

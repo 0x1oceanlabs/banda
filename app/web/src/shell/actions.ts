@@ -91,11 +91,13 @@ export type Shell = WindowApi & {
   answer: () => void
   /** Archives what the Person looks at, or brings it back (ADR 0069). */
   archive: () => void
-  /** Opens the snooze's picker for the Thread the Person looks at (ADR
-   * 0074). */
-  snooze: () => void
-  /** Wakes the snoozed Thread the Person looks at. */
-  wake: () => void
+  /** Opens the snooze's picker for a Thread (ADR 0074), or snoozes it
+   * till `until` at once: the one `asked` names, else the one the Person
+   * looks at. */
+  snooze: (asked: SnoozeAsked) => void
+  /** Wakes a snoozed Thread: the one `asked` names, else the one the
+   * Person looks at. */
+  wake: (asked: SnoozeAsked) => void
   /** Opens the Banda menu, or closes it when it is open (ADR 0017). */
   menu: (at: At) => void
   /** Opens the Banda menu at a route, or the settings at theirs, as
@@ -108,6 +110,23 @@ export type Shell = WindowApi & {
   settings: (link?: string) => void
   /** Asks an Agent to look into a Problem, in a new Thread (ADR 0039). */
   lookInto: (fingerprint: string) => void
+}
+
+/** What `thread.snooze` and `thread.wake` are asked: a Thread by its
+ * Project, or none for the one in focus, and a time to snooze it till. */
+export type SnoozeAsked = {
+  thread?: { project: ProjectId; id: string }
+  until?: number
+}
+
+function snoozeAsked(args: Args | undefined): SnoozeAsked {
+  const { project, thread, until } = args ?? {}
+  return {
+    ...(typeof project === "string" && typeof thread === "string"
+      ? { thread: { project: project as ProjectId, id: thread } }
+      : {}),
+    ...(typeof until === "number" ? { until } : {}),
+  }
 }
 
 const ARROWS: Record<Direction, string> = {
@@ -636,13 +655,15 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Threads",
     title: "Snooze the Thread you look at, or wake it",
     keys: [{ code: "KeyZ", mod: true }],
-    run: (shell) => shell.snooze(),
+    // `{ until }` snoozes at once, as a usage limit's reset asks; a Pane
+    // names its own Thread with `{ project, thread }`.
+    run: (shell, args) => shell.snooze(snoozeAsked(args)),
   },
   {
     id: "thread.wake",
     section: "Threads",
     title: "Wake the snoozed Thread you look at",
-    run: (shell) => shell.wake(),
+    run: (shell, args) => shell.wake(snoozeAsked(args)),
   },
   {
     id: "menu.open",

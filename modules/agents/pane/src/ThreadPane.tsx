@@ -13,6 +13,7 @@ import type {
   Failure,
   Item,
   ListedThread,
+  Snooze,
   TurnView,
 } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
@@ -44,13 +45,15 @@ import {
   TraceTitle,
 } from "@banda/ui/components/trace"
 import { useLive } from "@banda/ui/hooks/use-live"
+import { useNow } from "@banda/ui/hooks/use-now"
 import { ZoomBadge } from "@banda/ui/components/zoom-badge"
 import { useZoom } from "@banda/ui/hooks/use-zoom"
 import { matches } from "@banda/ui/lib/keys"
 import { copyAsMarkdown } from "@banda/ui/lib/markdown-copy"
 import { clock, duration } from "@banda/ui/lib/words"
-import { definePane, paneOf, type PaneProps } from "@banda/ui/pane"
+import { definePane, paneOf, type PaneProps, sleeps } from "@banda/ui/pane"
 import {
+  AlarmClockIcon,
   ArrowDownIcon,
   BotIcon,
   BrainIcon,
@@ -102,6 +105,7 @@ import { ModelPicker } from "./ModelPicker"
 import { pickedOf } from "./picker"
 import { ModeMenu } from "./ThreadSettings"
 import { SignIn, Warning } from "./SignIn"
+import { SnoozeLine } from "./Snoozed"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { NewThreadBar } from "./NewThread"
 import {
@@ -351,6 +355,11 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
                 reader={reader}
                 answering={acting}
                 onRetry={retry}
+                snooze={writers.own?.snooze}
+                onSnooze={
+                  run &&
+                  ((until) => run("thread.snooze", { project, thread, until }))
+                }
                 onFork={fork}
                 onRewind={(turn, message) =>
                   void rewind(turn).then((back) => {
@@ -408,6 +417,14 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
           <div className="px-1">
             <Warning>{offer.outdated}</Warning>
           </div>
+        )}
+        {thread && run && (
+          <SnoozeLine
+            thread={thread}
+            snooze={writers.own?.snooze}
+            turns={state?.turns ?? []}
+            onWake={() => run("thread.wake", { project, thread })}
+          />
         )}
         {problem && (
           <p role="alert" className="px-1 text-xs text-destructive">
@@ -558,6 +575,8 @@ function Transcript({
   name,
   reader,
   onRetry,
+  snooze,
+  onSnooze,
   onFork,
   onRewind,
   onOpenDiff,
@@ -582,6 +601,10 @@ function Transcript({
     name: string
     reader: ImageReader
     onRetry: (turn: TurnView) => void
+    /** Its snooze, and how to snooze it until a time, as a usage limit's
+     * reset (ADR 0074). */
+    snooze?: Snooze
+    onSnooze?: (until: number) => void
     onFork: (turn: TurnView) => void
     /** Takes the Thread back to before `message`, which `turn` ran first. */
     onRewind: (turn: TurnView, message: Item) => void
@@ -672,6 +695,8 @@ function Transcript({
             turn={line.turn}
             busy={answers.answering}
             onRetry={line.turn.can.retry ? () => onRetry(line.turn) : undefined}
+            snooze={snooze}
+            onSnooze={line.turn.can.retry ? onSnooze : undefined}
             signIn={signIn}
           />
         )
@@ -946,16 +971,31 @@ function Ended({
   turn,
   busy,
   onRetry,
+  snooze,
+  onSnooze,
   signIn,
 }: {
   turn: TurnView
   busy: boolean
   onRetry?: () => void
+  snooze?: Snooze
+  /** Snoozes the Thread until a time: a usage limit offers its reset. */
+  onSnooze?: (until: number) => void
   signIn: (turn: TurnView) => React.ReactNode
 }) {
   const failed = turn.state === "failed"
   const signsIn = turn.failure?.class === "sign_in" && onRetry !== undefined
   const advice = !signsIn && turn.failure && adviceFor(turn.failure)
+  // A usage limit that says when it resets, still to come, offers a
+  // snooze till then, unless the Thread sleeps already.
+  const failure = turn.failure
+  const resets =
+    onSnooze && failure?.class === "usage_limit" ? failure.until : undefined
+  const now = useNow(60_000, resets !== undefined)
+  const until =
+    resets !== undefined && resets > now && !sleeps(snooze, now)
+      ? resets
+      : undefined
   return (
     <Trace>
       <TraceLine
@@ -983,6 +1023,16 @@ function Ended({
             >
               <RotateCcwIcon data-icon="inline-start" />
               Try again
+            </Button>
+          )}
+          {until !== undefined && (
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => onSnooze?.(until)}
+            >
+              <AlarmClockIcon data-icon="inline-start" />
+              Snooze until {clock(until)}
             </Button>
           )}
         </div>
@@ -1026,12 +1076,18 @@ function useWriters(
   const live = useLive(engine, project, source)
   const threads = live.state === "ready" ? live.view.threads : undefined
   return useMemo(() => {
-    const listing: { threads: Map<string, ListedThread>; self?: string } = {
+    const listing: {
+      threads: Map<string, ListedThread>
+      self?: string
+      own?: ListedThread
+    } = {
       threads: new Map(),
     }
     for (const one of threads ?? []) {
-      if (one.id === thread) listing.self = one.agent
-      else listing.threads.set(one.agent, one)
+      if (one.id === thread) {
+        listing.self = one.agent
+        listing.own = one
+      } else listing.threads.set(one.agent, one)
     }
     return listing
   }, [threads, thread])

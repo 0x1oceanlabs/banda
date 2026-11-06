@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from "react"
 import { kept } from "@banda/ui/lib/kept"
 import type { ProjectId } from "@banda/contract"
 import type { Args } from "@banda/ui/module"
-import { asleep, type Listed, type Lists } from "@banda/ui/pane"
+import { asleep, type Listed, type Lists, wokeOf } from "@banda/ui/pane"
 import { useIsArchived } from "./archived"
 
 /** Whether the Person may snooze `listed`: it does not ask. */
@@ -25,21 +25,9 @@ export function snoozeAct(
   return sleeps ? "wake" : snoozable(listed) ? "snooze" : undefined
 }
 
-/**
- * When `listed` woke from its snooze by itself, at `now`: its time came,
- * or what calls its Person woke it early. Nothing when it sleeps, or when
- * its Person woke it, by hand or by writing to it.
- */
+/** When `listed` woke from its snooze by itself, at `now`, if it did. */
 export function wokeAt(listed: Listed, now: number): number | undefined {
-  const { snooze } = listed
-  if (!snooze) return undefined
-  if (snooze.woke)
-    return snooze.woke.by === "woken" || snooze.woke.by === "message"
-      ? undefined
-      : snooze.woke.at
-  return snooze.until !== undefined && snooze.until <= now
-    ? snooze.until
-    : undefined
+  return wokeOf(listed.snooze, now)
 }
 
 /** Which snooze's waking the Person has seen, by Thread: the moment it

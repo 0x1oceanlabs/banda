@@ -530,6 +530,8 @@ export type Said = Item & { body: Extract<Body, { kind: "message" }> }
 export type Listing = {
   threads: ReadonlyMap<string, ListedThread>
   self?: string
+  /** This Thread, as the list has it: its snooze, for one (ADR 0074). */
+  own?: ListedThread
 }
 
 /**

@@ -199,7 +199,7 @@ function Sleeps({ listed }: { listed: Listed }) {
   return (
     <span
       className="shrink-0 text-xs text-muted-foreground tabular-nums"
-      title={until === undefined ? `${by} until it is done` : by}
+      title={until === undefined ? `${by} until it's done` : by}
     >
       {until === undefined
         ? "when done"
