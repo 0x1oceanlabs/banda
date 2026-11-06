@@ -1,14 +1,14 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-06
 ---
 
 # Banda runs on several machines, and Banda Cloud only connects them
 
-_Draft. Roma liked the proposal on 2026-11-06 and chose Better Auth for
-the sign-in (decision 7). The transport (decision 4) and where the
-control plane runs (decision 9) are still open. Nothing here is built.
-Research: docs/research/2026-11-06-banda-cloud.md._
+_Accepted as v1 by Roma on 2026-11-06, with Better Auth for the sign-in
+(decision 7). Two questions stay open and are marked so: the transport
+(decision 4) and where the control plane runs (decision 9). Nothing here
+is built. Research: docs/research/2026-11-06-banda-cloud.md._
 
 ADR 0062 makes Banda a kernel, a platform and Apps, with the host where
 the work is and clients that only show it (decision 3), one client over
@@ -140,8 +140,7 @@ What stands in the way today:
     `banda --host server …`, as kubectl's contexts. An Agent's `banda`
     goes to its own engine.
 
-14. **Banda Cloud runs on a few plain VMs, with no Kubernetes** (proposed
-    2026-11-06).
+14. **Banda Cloud runs on a few plain VMs, with no Kubernetes.**
 
     | What | Where | How many at first |
     |---|---|---|
@@ -163,6 +162,35 @@ What stands in the way today:
     - n0's public relays serve development only: rate-limited, no SLA.
     - Hetzner's prices rose in 2026 and some of its plans were not on sale
       in the autumn; check before buying.
+
+15. **What Banda Cloud runs, a company can run too** (Roma, 2026-11-06).
+    Banda needs no Kubernetes for itself, but what it writes must run in
+    one, as companies' platform teams expect a Helm chart. The heavy part,
+    the engine and the work, already runs on the company's machines, so a
+    company deploys little: `api`, perhaps a relay (most have a VPN
+    already), perhaps push; its own IdP takes the place of `auth`.
+    From the first day:
+    - **Every service is a container** (relay, `auth`, `api`, push),
+      configured by env and one file, with Postgres its only state. One
+      image runs under Kamal on Banda's VMs, under docker compose for a
+      small team, and from a Helm chart in a bank.
+    - **Where a host is made is a port**: Fly Machines for Banda Cloud,
+      Kubernetes pods or Terraform for a company (as Coder makes its
+      workspaces). Fly is not written in.
+    - **Sign-in is OIDC only**: Better Auth for Banda's own, the company's
+      Okta or Entra ID in its place. The engine sees no difference.
+    - **`api` knows organisations** from the start, not only Persons
+      (Better Auth's organisation and SSO plugins, their maturity to
+      check).
+    - **The region is a setting**: where `api` and the backups live, so a
+      European customer gets a European stack.
+
+    Later, in an ADR of its own: SAML and SCIM, roles and teams (ADR 0001's
+    teams), the audit log out to a SIEM (the append-only log helps),
+    managed policies (which Harnesses, MCP servers and sites, the Agents'
+    ceilings), models through the company's gateway (a Harness's setting),
+    offline updates, SOC 2, keys of the company's own. The ways to sell
+    it: SaaS, a dedicated stack Banda runs, self-hosted, or BYOC.
 
 **Plan.** Each step its own PR; `scripts/check.sh` passes after each.
 
