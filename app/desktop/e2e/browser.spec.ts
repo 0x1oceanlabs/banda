@@ -1197,7 +1197,7 @@ test("an Agent acts in a tab by refs, hears what changed, and leaves the Person'
   // Banda's keys are the Person's alone: an Agent's press of one is
   // refused, and the window hears nothing of it. The mod alone reaches
   // the page.
-  for (const key of ["Alt+w", "Control+l", "Alt+!"]) {
+  for (const key of ["Alt+W", "Control+l", "Alt+!"]) {
     const refused = await agentCalls(window, "browser_act", {
       tab,
       action: "press",
