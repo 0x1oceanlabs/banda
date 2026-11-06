@@ -17,7 +17,10 @@
 //!   Harness entry (`hosts.rs`). ACP's words stop in `acp.rs` and `acp/`.
 //! - **An Agent reaches Banda** through `banda mcp`, which every session
 //!   gets with the Agent's pass ([`Pipe`]). Its tools are the methods
-//!   marked `tool` below (ADR 0019).
+//!   marked `tool` below (ADR 0019). The `banda` it runs in its shell acts
+//!   under a pass walled to its Project too: the session's own, where the
+//!   Harness takes variables for a session's shell, else one its process's
+//!   Agents share (`live.rs`).
 //!
 //! Its methods, each with its right, params and answer, are the
 //! `methods!` table below (ADR 0014).
@@ -75,6 +78,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use snoozes::SnoozeAsk;
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -113,19 +117,36 @@ pub struct Pipe {
 
 impl Pipe {
     /// `banda mcp` as a session of `agent`'s in `project` starts it, with a
-    /// new pass; `None`, said in the log, if there is no pass.
+    /// new pass; `None`, said in the log, if there is no pass. Its
+    /// variables are the session's shell's too: the `banda` its Agent runs
+    /// there acts under the same pass.
     fn program(&self, project: &ModuleProject, agent: AgentId) -> Option<Program> {
-        let pass = project
-            .pass(agent)
-            .inspect_err(|error| tracing::warn!(%error, "a session goes without Banda"))
-            .ok()?;
         Some(Program {
             program: self.program.display().to_string(),
             args: vec!["mcp".to_owned()],
-            env: [("BANDA_TOKEN", pass), ("BANDA_ENGINE", self.engine.clone())]
+            env: self.variables(project, agent)?,
+        })
+    }
+
+    /// What hands `banda` a new pass of `agent`'s in `project`: the pass,
+    /// in `BANDA_TOKEN`, and where the engine listens, in `BANDA_ENGINE`;
+    /// `None`, said in the log, if there is no pass. The kernel walls the
+    /// pass in `project`.
+    fn variables(
+        &self,
+        project: &ModuleProject,
+        agent: AgentId,
+    ) -> Option<BTreeMap<String, String>> {
+        let pass = project
+            .pass(agent)
+            .inspect_err(|error| tracing::warn!(%error, "an Agent goes without Banda"))
+            .ok()?;
+        let variables = [("BANDA_TOKEN", pass), ("BANDA_ENGINE", self.engine.clone())];
+        Some(
+            variables
                 .map(|(name, value)| (name.to_owned(), value))
                 .into(),
-        })
+        )
     }
 }
 
@@ -215,9 +236,7 @@ impl Agents {
     /// Harness entry `id`'s process in `project`, started if need be.
     async fn running(&self, project: &ModuleProject, id: &str) -> Result<Arc<Connection>, Refusal> {
         let harness = self.harness(id)?;
-        let connection = (self.live)
-            .connection(project.id(), project.data(), &harness)
-            .await;
+        let connection = self.live.connection(project, &harness).await;
         connection.map_err(Refusal::conflict)
     }
 }

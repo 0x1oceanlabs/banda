@@ -14,6 +14,15 @@
 //! with nothing to do is let go, and its Threads resume their sessions
 //! when it starts again. After a sign-in every host of that Harness entry
 //! is let go, so each reads the account again when it starts.
+//!
+//! The `banda` an Agent runs in its shell acts under a pass walled to its
+//! Project (ADR 0019). A Harness that takes variables for each session's
+//! shell, as Claude Code's adapter does, gets the session's own pass, the
+//! one its `banda mcp` has. Any other Harness's process carries a pass that
+//! its Agents' shells share, of an Agent no one Thread names: one per
+//! Project and Harness entry in this run of the engine, so a process started
+//! again keeps it. Like every pass it lasts until the engine stops, and so
+//! outlives every process that holds it.
 
 use crate::Pipe;
 use crate::acp::{Answer, Connection, Session};
@@ -23,8 +32,7 @@ use banda_harnesses::Harness;
 use banda_harnesses::hosts::Hosts;
 use banda_harnesses::model::Program;
 use banda_kernel::{AgentId, Heard, ModuleProject, ProjectId};
-use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::{Notify, oneshot};
@@ -39,6 +47,9 @@ pub struct Live {
     quiet: Duration,
     /// How a session's Agent reaches Banda, if it does.
     pipe: Option<Pipe>,
+    /// What the shells of each process share, by Project and Harness entry,
+    /// for a Harness whose sessions take none of their own.
+    shells: Mutex<HashMap<(ProjectId, String), BTreeMap<String, String>>>,
     /// The file each running turn works on now.
     touches: Arc<Touches>,
 }
@@ -90,6 +101,7 @@ impl Live {
             changed: Notify::new(),
             quiet,
             pipe,
+            shells: Mutex::default(),
             touches: Arc::default(),
         }
     }
@@ -105,23 +117,48 @@ impl Live {
         self.pipe.as_ref()?.program(project, agent)
     }
 
+    /// What every shell of `harness`'s process in `project` gets, for a
+    /// Harness whose sessions take none of their own: a pass for its
+    /// Agents, walled in `project`, made the first time it is asked for in
+    /// this run of the engine. `None` for a Harness whose sessions take
+    /// their own, or without a pipe.
+    fn shells(
+        &self,
+        project: &ModuleProject,
+        harness: &Harness,
+    ) -> Option<BTreeMap<String, String>> {
+        let pipe = self
+            .pipe
+            .as_ref()
+            .filter(|_| !harness.shells_per_session())?;
+        let mut shells = self.shells.lock().unwrap();
+        let key = (project.id(), harness.id.clone());
+        if let Some(variables) = shells.get(&key) {
+            return Some(variables.clone());
+        }
+        let variables = pipe.variables(project, AgentId::new())?;
+        shells.insert(key, variables.clone());
+        Some(variables)
+    }
+
     /// How long a turn the Agent went on with by itself waits for more.
     pub fn quiet(&self) -> Duration {
         self.quiet
     }
 
-    /// The process of `harness` for `project`, whose own files are in
-    /// `data`, started if it is not running.
+    /// The process of `harness` for `project`, started if it is not
+    /// running, with what its Agents' shells share when its sessions take
+    /// nothing of their own.
     pub async fn connection(
         &self,
-        project: ProjectId,
-        data: &Path,
+        project: &ModuleProject,
         harness: &Harness,
     ) -> Result<Arc<Connection>, String> {
-        let connection = self
-            .hosts
-            .get(project, &harness.in_project(project, data))
-            .await?;
+        let mut started = harness.in_project(project.id(), project.data());
+        if let Some(variables) = self.shells(project, harness) {
+            started = started.with_shells(&variables);
+        }
+        let connection = self.hosts.get(project.id(), &started).await?;
         connection.touch();
         Ok(connection)
     }
@@ -160,6 +197,7 @@ impl Live {
     /// Stops every turn that runs on a Harness of `project`, as the Project is
     /// removed, and lets go of its Harnesses.
     pub async fn close(&self, project: ProjectId) {
+        (self.shells.lock().unwrap()).retain(|(of, _), _| *of != project);
         let hosts = self.hosts.forget(project).await;
         let turns: Vec<TurnId> = (self.turns.lock().unwrap().running.iter())
             .filter(|(_, session)| hosts.iter().any(|host| session.runs_in(host)))
