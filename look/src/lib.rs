@@ -27,6 +27,7 @@ pub mod notify;
 pub mod palette;
 pub mod settings;
 pub mod sidebar;
+pub mod snooze;
 pub mod sound;
 pub mod theme;
 pub mod tokens;

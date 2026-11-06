@@ -65,3 +65,8 @@ A file named as one of Banda's presets wins over it.
 - "The working Threads in the list, not on a shelf": `[group]`
   `states = ["working", "active"]` and `bottom = ["archived"]`.
 - "Show the archived Threads open": `[group]` `folded = []`.
+- "Snooze offers half an hour and Friday afternoon": `[snooze]`
+  `presets = ["30m", "fri 14"]`. Each is said as the picker's field reads
+  it: a while (`45m`, `2h`), a time (`18:00`), or a day and its time
+  (`tomorrow 9:00`, `mon 9:00`, `next week`). Eight at most; one it cannot
+  read is named as a problem and left out.

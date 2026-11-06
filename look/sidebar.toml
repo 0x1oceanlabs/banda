@@ -25,6 +25,9 @@ preset = "inbox"
 # rollup = true                      # a Project shows its loudest mark and count
 # new-thread = true                  # each Project offers a new Thread in it
 
+# [snooze]
+# presets = ["1h", "3h", "18:00", "tomorrow 9:00", "mon 9:00"]  # the picker's, up to eight
+
 # [row]
 # lines = 3                          # 1, 2 or 3
 # hide = []                          # parts to leave out: "project", "note", …

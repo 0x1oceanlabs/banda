@@ -166,6 +166,18 @@ pub struct SidebarSettings {
     /// The counts in the bar's middle: who waits for you, who works.
     #[serde(default)]
     pub bar: BarSettings,
+    /// The snooze's presets (ADR 0074).
+    #[serde(default)]
+    pub snooze: SnoozeSettings,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct SnoozeSettings {
+    /// The times the snooze's picker offers, in its field's words, up to
+    /// eight: "1h", "18:00", "tomorrow 9:00", "mon 9:00".
+    #[schemars(with = "Option<Vec<String>>")]
+    pub presets: Option<Vec<Spanned<String>>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
@@ -253,6 +265,16 @@ pub struct Sidebar {
     pub projects: Projects,
     pub row: Row,
     pub bar: BarCounts,
+    pub snooze: Snooze,
+}
+
+/// The snooze's picker (ADR 0074, decision 9).
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[ts(export, export_to = "sidebar/")]
+pub struct Snooze {
+    /// The times it offers, in its field's words; the window reads each
+    /// against its clock.
+    pub presets: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
@@ -408,6 +430,9 @@ impl SidebarSettings {
                 words: self.bar.words.or(under.bar.words),
                 empty: self.bar.empty.or(under.bar.empty),
             },
+            snooze: SnoozeSettings {
+                presets: self.snooze.presets.or(under.snooze.presets),
+            },
         }
     }
 
@@ -445,6 +470,13 @@ impl SidebarSettings {
                 color: Some(true),
                 words: Some(false),
                 empty: Some(BarEmpty::Mark),
+            },
+            snooze: SnoozeSettings {
+                presets: Some(
+                    (crate::snooze::PRESETS.iter())
+                        .map(|word| Spanned::new(0..0, (*word).to_owned()))
+                        .collect(),
+                ),
             },
         }
     }
@@ -501,6 +533,11 @@ impl SidebarSettings {
                 words: all.bar.words.unwrap_or(false),
                 empty: all.bar.empty.unwrap_or(BarEmpty::Mark),
             },
+            snooze: Snooze {
+                presets: (all.snooze.presets.unwrap_or_default().into_iter())
+                    .map(Spanned::into_inner)
+                    .collect(),
+            },
         }
     }
 }
@@ -533,6 +570,30 @@ pub fn read_sidebar(
             "row.lines is 1, 2 or 3",
         ));
         settings.row.lines = None;
+    }
+    if let Some(presets) = &mut settings.snooze.presets {
+        let (kept, unread): (Vec<_>, Vec<_>) = std::mem::take(presets)
+            .into_iter()
+            .partition(|word| crate::snooze::reads(word.get_ref()));
+        for word in unread {
+            let says = format!(
+                "snooze.presets: \"{}\" is no time the picker reads, as 1h, 18:00, \
+                 tomorrow 9:00 or mon 9:00",
+                word.get_ref()
+            );
+            problems.push(Problem::at(path, text, Some(word.span()), &says));
+        }
+        *presets = kept;
+        if presets.len() > crate::snooze::MOST {
+            let past = presets[crate::snooze::MOST].span();
+            problems.push(Problem::at(
+                path,
+                text,
+                Some(past),
+                "snooze.presets holds eight at most: the rest are left out",
+            ));
+            presets.truncate(crate::snooze::MOST);
+        }
     }
     Some(settings)
 }
@@ -722,6 +783,25 @@ mod tests {
         assert_eq!(sidebar.preset, "projects");
         assert_eq!(sidebar.group.by, GroupBy::Project, "from the preset");
         assert_eq!(sidebar.row.lines, 2, "the Person's key");
+    }
+
+    #[test]
+    fn the_snoozes_presets_are_t3s_unless_the_person_names_others() {
+        let dir = tempfile::tempdir().unwrap();
+        let (sidebar, _) = resolved(dir.path());
+        assert_eq!(sidebar.snooze.presets, crate::snooze::PRESETS);
+        std::fs::write(
+            dir.path().join("sidebar.toml"),
+            "[snooze]\npresets = [\"30m\", \"someday\", \"fri 14\"]\n",
+        )
+        .unwrap();
+        let (sidebar, problems) = resolved(dir.path());
+        assert_eq!(sidebar.snooze.presets, ["30m", "fri 14"]);
+        let said: Vec<_> = problems.iter().map(|p| p.message.as_str()).collect();
+        assert!(
+            said.iter().any(|m| m.contains("\"someday\"")),
+            "it names the one it cannot read: {said:?}"
+        );
     }
 
     #[test]
