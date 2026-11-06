@@ -149,11 +149,14 @@ fn without_omarchy_banda_shows_its_own_light_and_dark_as_today() {
     let look = machine.look();
     assert_eq!(look.mode, Shown::System);
     assert!(look.problems.is_empty(), "{:?}", look.problems);
-    assert_eq!(look.vars["--radius"], "10px");
-    assert_eq!(look.vars["--tile-radius"], "14px");
-    assert_eq!(look.vars["--tile-border"], "2px");
-    assert_eq!(look.vars["--gap-inner"], "12px");
+    // Banda's shape (ADR 0075, decision 1): tiles 10 round, hairlines,
+    // gaps 8, and the focused tile lifts off the desk.
+    assert_eq!(look.vars["--radius"], "7px");
+    assert_eq!(look.vars["--tile-radius"], "9.8px");
+    assert_eq!(look.vars["--tile-border"], "1px");
+    assert_eq!(look.vars["--gap-inner"], "8px");
     assert_eq!(look.vars["--bar-height"], "36px");
+    assert_eq!(look.vars["--focus-shadow-strength"], "0.25");
     assert_eq!(look.vars["--tile-dim"], "0");
     // shadcn's own tokens, as globals.css has them today.
     assert_eq!(color(&look, false, "--border"), "oklch(0.922 0 0)");
@@ -198,6 +201,8 @@ fn under_hyprland_the_tiles_look_like_its_windows() {
     assert_eq!(look.vars["--gap-outer"], "5px");
     // Hyprland dims windows without the focus: so do the tiles.
     assert_eq!(look.vars["--tile-dim"], "0.4");
+    // Its border is the focus, as its windows show it: no shadow beside it.
+    assert_eq!(look.vars["--focus-shadow-strength"], "0");
     assert!(look.sources.iter().any(|s| s.layer == "hyprland"));
 }
 
@@ -208,13 +213,13 @@ fn under_hyprland_another_theme_keeps_its_own_shape() {
     let machine = Machine::new(true);
     machine.look_toml("theme = \"banda\"\n");
     let look = machine.under_hyprland();
-    assert_eq!(look.vars["--gap-inner"], "12px");
-    assert_eq!(look.vars["--tile-border"], "2px");
+    assert_eq!(look.vars["--gap-inner"], "8px");
+    assert_eq!(look.vars["--tile-border"], "1px");
     assert!(!look.sources.iter().any(|s| s.layer == "hyprland"));
 
     // A pair takes the shape of the theme shown: Banda's in the dark.
     machine.look_toml("theme = { light = \"omarchy\", dark = \"banda-dark\" }\nmode = \"dark\"\n");
-    assert_eq!(machine.under_hyprland().vars["--gap-inner"], "12px");
+    assert_eq!(machine.under_hyprland().vars["--gap-inner"], "8px");
 
     // Asked for, it is taken under any theme.
     machine.look_toml("theme = \"banda\"\nhyprland = true\n");
@@ -246,7 +251,8 @@ fn the_desk_is_banda_glass_made_of_the_wallpaper() {
     assert_eq!(glass.vars["--desk-saturation"], "1.4");
     assert_eq!(glass.vars["--desk-grain"], "0.04");
     assert_eq!(glass.vars["--desk-opacity"], "40%");
-    assert_eq!(glass.vars["--tile-opacity"], "95%");
+    // The tiles stay solid over glass (ADR 0075, decision 3).
+    assert_eq!(glass.vars["--tile-opacity"], "100%");
     // Only the sidebar's panel casts a shadow by default, not the tiles.
     assert_eq!(glass.vars["--tile-shadow-strength"], "0");
     assert_eq!(glass.vars["--sidebar-shadow-strength"], "0.45");
@@ -381,7 +387,7 @@ fn look_toml_wins_key_by_key_and_can_turn_hyprland_off() {
 
     machine.look_toml("hyprland = false\n");
     let look = machine.under_hyprland();
-    assert_eq!(look.vars["--tile-radius"], "14px");
+    assert_eq!(look.vars["--tile-radius"], "9.8px");
     assert!(!look.sources.iter().any(|s| s.layer == "hyprland"));
 }
 
@@ -535,7 +541,7 @@ fn a_broken_file_is_named_by_line_and_the_rest_still_applies() {
     machine.look_toml("[gaps]\ninner = 6\n\n[tile\n");
     let look = machine.look();
     assert_eq!(look.problems[0].key, None);
-    assert_eq!(look.vars["--gap-inner"], "12px");
+    assert_eq!(look.vars["--gap-inner"], "8px");
 }
 
 #[test]

@@ -278,6 +278,13 @@
           "type": "number",
           "format": "double",
           "minimum": 0
+        },
+        "shadow": {
+          "description": "The soft shadow the focused tile casts, glass or not, from 0 (none)\nto 1 (the darkest).",
+          "type": "number",
+          "format": "double",
+          "minimum": 0,
+          "maximum": 1
         }
       },
       "additionalProperties": false

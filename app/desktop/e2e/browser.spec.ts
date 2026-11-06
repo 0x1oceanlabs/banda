@@ -1296,14 +1296,15 @@ test("on glass a terminal and a browser's page are as clear as any tile", async 
     })
   expect(corner).toBe(0)
 
-  // A page is as dense as a tile, over its own tile left clear.
+  // A page is as dense as a tile, over its own tile left clear: solid, as
+  // the tiles are over glass (ADR 0075).
   const bar = await openBrowser(page)
   await bar.fill(address.replace("http://", ""))
   await bar.press("Enter")
   const tile = page.getByRole("region", { name: "Alpha" })
   await expect(tile).toHaveCSS("background-color", "rgba(0, 0, 0, 0)")
   const held = page.locator("[data-held-by]")
-  await expect(held).toHaveCSS("opacity", "0.95")
+  await expect(held).toHaveCSS("opacity", "1")
 
   // On a solid desk the page is solid.
   writeFileSync(join(dir, "config/look.toml"), `${GLASS}glass = false\n`)

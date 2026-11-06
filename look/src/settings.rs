@@ -233,6 +233,10 @@ pub struct Focus {
     /// frame and not two. 0 draws none.
     #[schemars(range(min = 0))]
     pub ring: Option<f64>,
+    /// The soft shadow the focused tile casts, glass or not, from 0 (none)
+    /// to 1 (the darkest).
+    #[schemars(range(min = 0, max = 1))]
+    pub shadow: Option<f64>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
@@ -446,6 +450,7 @@ impl Settings {
                 border: self.focus.border.or(under.focus.border),
                 inactive_border: self.focus.inactive_border.or(under.focus.inactive_border),
                 ring: self.focus.ring.or(under.focus.ring),
+                shadow: self.focus.shadow.or(under.focus.shadow),
             },
             bar: Bar {
                 height: self.bar.height.or(under.bar.height),
@@ -479,13 +484,15 @@ impl Settings {
         Settings {
             theme: None,
             mode: Some(ModeChoice::System),
-            radius: Some(10.0),
+            // The tile is the xl step: 7 makes it about 10 pixels round, as a Mac's
+            // windows are (ADR 0075, decision 1).
+            radius: Some(7.0),
             hyprland: Some(false),
             colors: BTreeMap::new(),
             tokens: BTreeMap::new(),
             gaps: Gaps {
-                inner: Some(12.0),
-                outer: Some(12.0),
+                inner: Some(8.0),
+                outer: Some(8.0),
             },
             desk: Desk {
                 glass: Some(true),
@@ -501,15 +508,16 @@ impl Settings {
             },
             tile: Tile {
                 radius: Some(Corner::Step(Step::Xl)),
-                border: Some(2.0),
+                border: Some(1.0),
                 dim_inactive: Some(0.0),
-                opacity: Some(0.95),
+                opacity: Some(1.0),
                 shadow: Some(0.0),
             },
             focus: Focus {
                 border: Some(Spanned::new(0..0, "accent".to_owned())),
                 inactive_border: Some(Spanned::new(0..0, "border".to_owned())),
                 ring: Some(0.0),
+                shadow: Some(0.25),
             },
             bar: Bar {
                 height: Some(36.0),
@@ -578,13 +586,13 @@ mod tests {
 
     #[test]
     fn a_layer_says_only_what_it_changes() {
-        let mine: Settings = toml::from_str("radius = 6\n[gaps]\ninner = 8\n").unwrap();
+        let mine: Settings = toml::from_str("radius = 6\n[gaps]\ninner = 9\n").unwrap();
         let theirs: Settings = toml::from_str("[gaps]\ninner = 2\nouter = 3\n").unwrap();
         let look = mine.over(theirs.over(Settings::defaults(Material::Banda)));
         assert_eq!(look.radius, Some(6.0));
-        assert_eq!(look.gaps.inner, Some(8.0));
+        assert_eq!(look.gaps.inner, Some(9.0));
         assert_eq!(look.gaps.outer, Some(3.0));
-        assert_eq!(look.tile.border, Some(2.0));
+        assert_eq!(look.tile.border, Some(1.0));
     }
 
     #[test]

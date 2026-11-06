@@ -135,7 +135,7 @@
   --account-3: #1baf7a;
   --account-4: #e87ba4;
   --account-5: #eda100;
-  --radius: 0.625rem;
+  --radius: 0.4375rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -199,12 +199,12 @@
  */
 :root {
   /* Between tiles, and between the tiles and the window's edge. */
-  --gap-inner: 12px;
-  --gap-outer: 12px;
+  --gap-inner: 8px;
+  --gap-outer: 8px;
   /* The tile holds cards (xl), and the outer is never rounder than what
      it holds, so the tile is the top step of shadcn's ladder. */
   --tile-radius: calc(var(--radius) * 1.4);
-  --tile-border: 2px;
+  --tile-border: 1px;
   /* The focused tile's border, and every other tile's. A theme's accent
      takes --focus; without one it is the strongest colour there is. */
   --focus: var(--primary);
@@ -214,13 +214,21 @@
      in its colour: one frame, and no seam where two would meet. None by
      default; the border shows the focus. */
   --focus-ring: 0px;
+  /* [focus] shadow: the focused tile lifts a little off the desk, glass
+     or not; with a hairline border, the outline and this show the focus
+     (ADR 0075, decision 5). */
+  --focus-shadow-strength: 0.25;
+  --focus-shadow:
+    0 6px 16px -4px rgb(0 0 0 / var(--focus-shadow-strength)),
+    0 1px 3px rgb(0 0 0 / calc(var(--focus-shadow-strength) * 0.5));
   /* [tile] dim-inactive: a black veil over the tiles without the focus,
      as Hyprland dims its windows. 0 is none. */
   --tile-dim: 0;
   /* The three surfaces (ADR 0023): the desk, the sidebar's panel over
-     it, and the tiles. Solid; html[data-glass] below makes them glass. */
+     it, and the tiles. Solid; html[data-glass] below makes the desk and
+     the panel glass, and the tiles only below [tile] opacity 1. */
   --desk-opacity: 40%;
-  --tile-opacity: 95%;
+  --tile-opacity: 100%;
   --desk: color-mix(in oklab, var(--muted) 40%, var(--background));
   --panel: var(--sidebar);
   --tile: var(--background);
@@ -229,7 +237,7 @@
   --overview: color-mix(in oklab, var(--desk) 94%, var(--foreground));
   --overview-foreground: var(--foreground);
   /* What floats over all of them: menus, dialogs, toasts, as bg-popover.
-     Solid; on glass it is the panel's glass, in the popover's colour. */
+     Solid, on glass too (ADR 0075, decision 3). */
   --floating: var(--popover);
   /* [tile] shadow and [desk] sidebar-shadow: how dark, from 0 to 1. Only
      glass casts them: a solid desk shows none. */
@@ -318,11 +326,6 @@ html[data-glass] {
     var(--sidebar) var(--panel-opacity),
     transparent
   );
-  --floating: color-mix(
-    in oklab,
-    var(--popover) var(--panel-opacity),
-    transparent
-  );
   --tile: color-mix(
     in oklab,
     var(--background) var(--tile-opacity),
@@ -352,15 +355,11 @@ html[data-glass] {
   --border: color-mix(in oklab, var(--foreground) 10%, transparent) !important;
   --input: color-mix(in oklab, var(--foreground) 12%, transparent) !important;
 }
-/* Whatever floats over the desk frosts what is under it, as the desk
-   frosts the wallpaper: the sidebar's panel, and every bg-popover, so a
-   new menu is glass too. Only the bare classes: bg-popover/90 is not. A
-   popover inside another, as a select's scroll arrows, is frosted by it. */
-html[data-glass] :is(.bg-panel, .bg-popover) {
+/* The sidebar's panel frosts what is under it, as the desk frosts the
+   wallpaper. Menus, dialogs and toasts stay solid over glass (ADR 0075,
+   decision 3), so they need no blur. */
+html[data-glass] .bg-panel {
   backdrop-filter: blur(var(--desk-blur)) saturate(var(--desk-saturation));
-}
-html[data-glass] .bg-popover .bg-popover {
-  backdrop-filter: none;
 }
 /* A Pane that holds a page in the window's layer leaves its tile clear,
    and paints it itself everywhere but under the page: a page over a tile

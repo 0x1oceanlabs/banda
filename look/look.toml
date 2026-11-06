@@ -12,7 +12,7 @@
 # theme = { light = "tokyo-night-light", dark = "forest-dusk" }
 
 # mode = "system"                    # "system", "light" or "dark"
-# radius = 10                        # every corner is a step of it; 0 squares all
+# radius = 7                         # every corner is a step of it; 0 squares all
 # hyprland = false                   # true takes Hyprland's rounding, border and gaps; theme "omarchy" does
 
 # Palette entries over the theme's, by name or hex. For example:
@@ -24,8 +24,8 @@
 # [tokens]
 
 # [gaps]
-# inner = 12                         # between tiles, in pixels
-# outer = 12                         # around the Strip
+# inner = 8                          # between tiles, in pixels
+# outer = 8                          # around the Strip
 
 # The desk the tiles float over. Who makes its glass goes by the platform.
 # On Linux Banda does, the same on every desktop: the wallpaper, blurred and
@@ -46,14 +46,15 @@
 
 # [tile]
 # radius = "xl"                      # a step ("sm" … "4xl") or pixels
-# border = 2
-# opacity = 0.95                     # over a glass desk; 1 is solid
+# border = 1
+# opacity = 1                        # over a glass desk; 1 is solid
 # shadow = 0                         # over a glass desk: 0 none, 1 the darkest
 
 # [focus]
 # border = "accent"                  # the focused tile's border
 # inactive-border = "border"         # every other tile's
 # ring = 0                           # grows the focused frame into the gap
+# shadow = 0.25                      # the focused tile's shadow: 0 none, 1 the darkest
 
 # A column's width is a share of the screen; Alt+R goes round the presets.
 # [columns]

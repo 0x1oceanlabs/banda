@@ -952,6 +952,8 @@ fn vars(all: &Settings) -> BTreeMap<String, String> {
     // How dark the shadows over glass are: a tile's, and the sidebar's.
     put_share("tile-shadow-strength", all.tile.shadow, false);
     put_share("sidebar-shadow-strength", all.desk.sidebar_shadow, false);
+    // The focused tile's, glass or not (ADR 0075, decision 5).
+    put_share("focus-shadow-strength", all.focus.shadow, false);
     put_share("desk-grain", all.desk.grain, false);
     vars
 }

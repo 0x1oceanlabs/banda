@@ -223,9 +223,12 @@ impl Places {
         if name == "omarchy" {
             let folder = self.omarchy_current.clone()?;
             let mut theme = read_folder("omarchy", Origin::Current, &folder, problems)?;
-            // Hyprland's rounding, border and gaps are this theme's shape
-            // (ADR 0075, decision 3); its own banda.toml may say otherwise.
+            // Hyprland's rounding, border and gaps are this theme's shape,
+            // and its border is the focus, as its windows show it, with no
+            // shadow beside it (ADR 0075, decisions 3 and 5). Its own
+            // banda.toml may say otherwise.
             theme.settings.hyprland.get_or_insert(true);
+            theme.settings.focus.shadow.get_or_insert(0.0);
             return Some(theme);
         }
         if let Some((_, colors, banda)) = BUILT_IN.iter().find(|(n, _, _)| *n == name) {
