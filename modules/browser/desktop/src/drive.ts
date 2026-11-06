@@ -214,12 +214,12 @@ export class Drive extends Context.Service<
     access(by: Participant, screenshot?: boolean): Effect.Effect<void, Refused>
     screenshot(tab: number, by: Participant): Effect.Effect<Screenshot, Refused>
     /** A new tab, at `url` or blank, once it loaded: beside the Thread
-     * of `by`, in the profile of the Agents of `project` (`Tabs.create`,
+     * of `by`, in the profile of the Agents of `agents` (`Tabs.create`,
      * ADR 0083, decision 4). */
     open(
       url: string | undefined,
       by: Participant,
-      project: ProjectId
+      agents: ProjectId
     ): Effect.Effect<Shown, Refused>
     /** The tab, where `to` says, once it loaded. */
     navigate(to: Navigate, by: Participant): Effect.Effect<Shown, Refused>
@@ -227,9 +227,9 @@ export class Drive extends Context.Service<
     act(act: Act, by: Participant): Effect.Effect<Shown, Refused>
     /** The tab, once it shows what `wait` says. */
     waitFor(wait: WaitFor, by: Participant): Effect.Effect<Shown, Refused>
-    /** Stops the Thread that drives the tab: its hold on it ends, and
-     * the Person's programs there go on. The Thread waits until the
-     * Person lets it drive again (ADR 0029, decision 6). */
+    /** Stops the Thread that drives the tab: its hold on it ends. The
+     * Thread waits until the Person lets it drive again (ADR 0029,
+     * decision 6). */
     release(tab: number): Effect.Effect<void>
     /** The Thread of `agent` hands the tab to the Person for a step that
      * is theirs, and waits until they hand it back. */
@@ -389,10 +389,11 @@ export class Drive extends Context.Service<
           Effect.acquireRelease(
             Effect.tryPromise({
               try: async () => {
+                const { chromium } = await import("playwright-core")
+                // The address is handed out as it is opened, and what went
+                // wrong is said without it.
                 const socket = cdp.tab(tab)
                 if (!socket) throw noTab(tab)
-                const { chromium } = await import("playwright-core")
-                // What went wrong is said without the socket's address.
                 const connection = await chromium
                   .connectOverCDP(socket)
                   .catch(() => {
@@ -629,8 +630,8 @@ export class Drive extends Context.Service<
               }
             })
           }),
-        open: (url, by, project) =>
-          Effect.flatMap(tabs.create(url, by.id, project), (page) =>
+        open: (url, by, agents) =>
+          Effect.flatMap(tabs.create({ url, agent: by.id, agents }), (page) =>
             Effect.tryPromise({
               try: async (signal) => {
                 // A load-time dialog blocks Playwright's initialization. Opening

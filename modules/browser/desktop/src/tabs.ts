@@ -23,6 +23,11 @@ import { Refused, tellPage, Window } from "@banda/desktop-kit"
 /** How long a Pane has to make a tab it was asked for. */
 const CREATING = "10 seconds"
 
+/** A tab asked for: at `url`, blank when left out; in the Pane in front,
+ * or beside the Thread of the Agent `agent`; in the profile of the Agents
+ * of the Project `agents`, or the Person's when left out. */
+export type Creating = { url?: string; agent?: string; agents?: ProjectId }
+
 /** A tab's page attached, or went. */
 export type Change = { kind: "attached" | "gone"; page: WebContents }
 
@@ -51,21 +56,16 @@ export class Tabs extends Context.Service<
     /** Whose `page` is: the Project whose Agents' profile it loads in, or
      * `null` for the Person's; `undefined` for a page of no profile of
      * the browser's. */
-    agentsOf(page: Profiled): ProjectId | null | undefined
+    whose(page: Profiled): ProjectId | null | undefined
     /**
      * The tabs a call of `by` in `project` may see and drive: those the
      * Agents of `project` opened, and those the Person lent the Thread of
      * `by` (ADR 0083, decision 4). No other tab is in its reach.
      */
     seen(project: ProjectId, by: Participant): WebContents[]
-    /** Asks for a tab at `url`, in the Pane in front, or beside the
-     * Thread of `agent`; in the profile of `agents`' Agents, or the
-     * Person's. Its page, once made in that profile. */
-    create(
-      url?: string,
-      agent?: string,
-      agents?: ProjectId
-    ): Effect.Effect<WebContents, Refused>
+    /** Asks for a tab, as `asked` says. Its page, once made in the
+     * profile asked for. */
+    create(asked?: Creating): Effect.Effect<WebContents, Refused>
     /** A Pane made the page, by its ID, for the tab asked for with
      * `request`; or none, when it could not. */
     created(request: string, page: number | null): Effect.Effect<void>
@@ -90,7 +90,7 @@ export class Tabs extends Context.Service<
       const publish = (change: Change) => PubSub.publishUnsafe(changed, change)
       const tell = (news: BrowserNews) =>
         tellPage(window.now()?.webContents, BROWSER_BRIDGE.listen, news)
-      const agentsOf = (page: Profiled) => profiles.get(page.session)
+      const whose = (page: Profiled) => profiles.get(page.session)
 
       return {
         all: () => [...pages],
@@ -106,14 +106,14 @@ export class Tabs extends Context.Service<
         profiled: (profile, agents) => {
           profiles.set(profile, agents)
         },
-        agentsOf,
+        whose,
         seen: (project, by) =>
           [...pages].filter(
             (page) =>
-              agentsOf(page) === project ||
+              whose(page) === project ||
               (by.kind === "agent" && lent.get(page) === by.id)
           ),
-        create: (url = "about:blank", agent, agents) =>
+        create: ({ url = "about:blank", agent, agents } = {}) =>
           Effect.gen(function* () {
             const request = randomUUID()
             const made = yield* Deferred.make<number | null>()
@@ -131,7 +131,7 @@ export class Tabs extends Context.Service<
             )
             const page = pageOf(Option.getOrNull(id))
             // A tab is made in the profile asked for, or it is none.
-            if (!page || agentsOf(page) !== (agents ?? null))
+            if (!page || whose(page) !== (agents ?? null))
               return yield* new Refused({
                 message: "No browser in Banda could open the tab.",
               })

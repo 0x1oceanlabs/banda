@@ -25,14 +25,15 @@ import { noTab, Tabs } from "./tabs"
 /** Who asks: the Agent of a Thread, as a rule. */
 const byOf = (request: WindowRequest) => request.by
 
-/** The IDs of the tabs in the reach of `request`'s call. */
+/** The tabs' pages in the reach of `request`'s call. */
 const reachOf = (request: WindowRequest) =>
   Tabs.use((tabs) =>
-    Effect.sync(
-      () =>
-        new Set(tabs.seen(request.project, request.by).map((page) => page.id))
-    )
+    Effect.sync(() => tabs.seen(request.project, byOf(request)))
   )
+
+/** Whether the tab of ID `tab` is among `reach`. */
+const within = (reach: readonly { id: number }[], tab: number) =>
+  reach.some((page) => page.id === tab)
 
 /** The tab a request names, if it names one. */
 const tabOf = (request: WindowRequest): number | undefined => {
@@ -49,11 +50,9 @@ const handlers: Asked<Tabs | Cdp | Drive> = {
    * as Banda runs. */
   tabs: (request) =>
     Effect.gen(function* () {
-      const tabs = yield* Tabs
       const cdp = yield* Cdp
-      return tabs
-        .seen(request.project, request.by)
-        .map((page) => seenTab(page, cdp))
+      const reach = yield* reachOf(request)
+      return reach.map((page) => seenTab(page, cdp))
     }),
   /** A tab's tree, for `browser_snapshot`; the engine checked its
    * params. */
@@ -86,7 +85,7 @@ const handlers: Asked<Tabs | Cdp | Drive> = {
       const reach = yield* reachOf(request)
       return {
         ...shown,
-        opened: shown.opened.filter((tab) => reach.has(tab.id)),
+        opened: shown.opened.filter((tab) => within(reach, tab.id)),
       }
     }),
   /** A wait, for `browser_wait_for`; the engine held it to a minute. */
@@ -115,7 +114,7 @@ const inReach = (name: string, request: WindowRequest) =>
         code: "invalid",
         message: "Name the tab, as browser_tabs lists it.",
       })
-    if (!(yield* reachOf(request)).has(tab)) return yield* noTab(tab)
+    if (!within(yield* reachOf(request), tab)) return yield* noTab(tab)
   })
 
 /** Lists stay stable in an MCP session. The setting is enforced on each

@@ -521,9 +521,14 @@ export function frontHolder(project?: ProjectId): Holder | undefined {
   return fronts.findLast(fits) ?? [...holding].findLast(fits)
 }
 
-/** Opens a tab at `url` for an extension, or for `agent`, where it goes,
- * in the profile of `agents` or the Person's; the tab's ID. */
-type Opener = (url: string, agent?: string, agents?: ProjectId) => string
+/** Who a tab is asked for: an Agent, by its ID, `agent`, or an extension
+ * when none; and the profile it loads in, of the Agents of the Project
+ * `agents`, or the Person's when none. */
+export type Asker = { agent?: string; agents?: ProjectId }
+
+/** Opens a tab at `url` for whoever `by` says, where it goes; the tab's
+ * ID. */
+type Opener = (url: string, by: Asker) => string
 
 /** Where a tab an extension or an Agent asks for opens: the module's
  * start sets it, as the window lets it find and open Panes. */
@@ -540,14 +545,9 @@ export function openWith(open: Opener): () => void {
 
 /** Makes the tab an extension or an Agent asked for, in the profile the
  * desktop named, and tells the desktop its page. */
-function create(
-  request: string,
-  url: string,
-  agent?: string,
-  agents?: ProjectId
-): void {
-  const id = opener?.(url, agent, agents)
-  const page = id ? pageOf(id, url, agents) : null
+function create(request: string, url: string, by: Asker): void {
+  const id = opener?.(url, by)
+  const page = id ? pageOf(id, url, by.agents) : null
   if (!page) browserHost()?.created(request, null)
   else page.attached((contents) => browserHost()?.created(request, contents))
 }
@@ -630,8 +630,7 @@ browserHost()?.key(({ up, page, ...pressed }) => {
 // A page's icon, the pages it opens, which its Pane makes tabs of, and
 // the tabs extensions open, show and close.
 hearNews((news) => {
-  if (news.kind === "create")
-    return create(news.request, news.url, news.agent, news.agents)
+  if (news.kind === "create") return create(news.request, news.url, news)
   if (news.kind === "download") return
   hear(news)
 })

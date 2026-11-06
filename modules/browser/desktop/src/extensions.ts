@@ -10,8 +10,9 @@
  * tells an extension of each as it attaches, and the Pane of the one the
  * Person looks at. A tab of a Project's Agents loads in a profile of
  * their own (ADR 0083, decision 4), which no extension is in or hears
- * of. What an extension asks of the tabs goes to the Panes as
- * `BrowserNews`.
+ * of: while one shows, no extension's popup opens, and its menu has no
+ * extension's items. What an extension asks of the tabs goes to the
+ * Panes as `BrowserNews`.
  */
 import { type Box, PARTITION } from "@banda/browser-pane/desktop"
 import { Context, Effect, FiberSet, Layer, Schema } from "effect"
@@ -50,13 +51,14 @@ export class Extensions extends Context.Service<
     shown(page: number): Effect.Effect<void>
     /** The name of the extension `id`; refused when there is none. */
     named(id: string): Effect.Effect<string, Refused>
-    /** What the extensions add to a page's menu. */
+    /** What the extensions add to a page's menu: none in an Agents'. */
     menuItems(page: WebContents, params: ContextMenuParams): MenuItem[]
     /** Removes the extension `id`, once the Person says so; whether it
      * went. */
     remove(id: string): Effect.Effect<boolean, Refused>
     /** Shows the popup `url` of the extension `id` under `under`, or
-     * closes it; a popup is a page of the extension's own. */
+     * closes it; a popup is a page of the extension's own. Refused while
+     * the Person looks at an Agents' tab. */
     popup(id: string, url: string, under: Box): Effect.Effect<void, Refused>
   }
 >()("banda/Extensions") {
@@ -71,11 +73,14 @@ export class Extensions extends Context.Service<
       yield* Effect.addFinalizer(() => Effect.sync(() => popup.close()))
       /** The active tab's web contents. */
       let active = -1
+      /** Whether `page` is in the Person's profile, the extensions' own:
+       * the library refuses any other. */
+      const ours = (page: WebContents) => page.session === profile
 
       /** The tab an extension asked for, in Banda's window. */
       const create = (url?: string) =>
         Effect.gen(function* () {
-          const page = yield* tabs.create(url)
+          const page = yield* tabs.create({ url })
           const opened = window.now()
           if (!opened)
             return yield* new Refused({ message: "Banda's window is closed." })
@@ -136,7 +141,7 @@ export class Extensions extends Context.Service<
       return {
         attached: (page) => {
           const shown = window.now()
-          if (shown && page.session === profile) extensions.addTab(page, shown)
+          if (shown && ours(page)) extensions.addTab(page, shown)
         },
         shown: (id) =>
           Effect.sync(() => {
@@ -144,11 +149,11 @@ export class Extensions extends Context.Service<
             if (!page || page.id === active) return
             active = page.id
             popup.close()
-            if (page.session === profile) extensions.selectTab(page)
+            if (ours(page)) extensions.selectTab(page)
           }),
         named,
         menuItems: (page, params) =>
-          extensions.getContextMenuItems(page, params),
+          ours(page) ? extensions.getContextMenuItems(page, params) : [],
         remove: (id) =>
           Effect.gen(function* () {
             const name = yield* named(id)
@@ -167,6 +172,11 @@ export class Extensions extends Context.Service<
         popup: (id, url, under) =>
           Effect.gen(function* () {
             yield* named(id)
+            const looked = pageOf(active)
+            if (looked && !ours(looked))
+              return yield* new Refused({
+                message: "An extension does not act in an Agents' tab.",
+              })
             if (!url.startsWith(`chrome-extension://${id}/`))
               return yield* new Refused({
                 message: `${url} is not a page of the extension ${id}.`,

@@ -5,6 +5,7 @@ vi.mock("electron", async () => {
 })
 import { expect, it } from "@effect/vitest"
 import { Effect, Layer, Stream } from "effect"
+import { TestClock } from "effect/testing"
 import type { WebContents } from "electron"
 import { Dialogs } from "./dialogs"
 import { Cdp } from "./cdp"
@@ -109,7 +110,7 @@ function socketsOver(pages: WebContents[], told: BrowserNews[] = []) {
     changes: Stream.never,
     attached: () => {},
     profiled: () => {},
-    agentsOf: () => null,
+    whose: () => null,
     seen: () => pages,
     create: () => Effect.never,
     created: () => Effect.void,
@@ -287,6 +288,19 @@ it.live(
     }).pipe(Effect.provide(socketsOver([one.page, two.page])))
   }
 )
+
+it.effect("an address not opened within seconds is spent", () => {
+  const one = fakeTab(1)
+  return Effect.gen(function* () {
+    const cdp = yield* Cdp
+    const late = cdp.tab(1)!
+    yield* TestClock.adjust("9 seconds")
+    const soon = cdp.tab(1)!
+    yield* TestClock.adjust("1 second")
+    expect(yield* opens(late)).toBe(false)
+    expect(yield* opens(soon)).toBe(true)
+  }).pipe(Effect.provide(socketsOver([one.page])))
+})
 
 it.live("no endpoint answers for the whole browser", () => {
   const one = fakeTab(1)

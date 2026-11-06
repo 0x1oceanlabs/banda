@@ -94,7 +94,7 @@ const layer = (refused = false) =>
       changes: Stream.never,
       attached: () => {},
       profiled: () => {},
-      agentsOf: () => undefined,
+      whose: () => undefined,
       // The Agents of `work` opened tabs 1 and 3.
       seen: (project) => (project === work ? [ours, page(3)] : []),
       create: () => Effect.never,
