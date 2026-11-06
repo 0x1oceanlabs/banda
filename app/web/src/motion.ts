@@ -142,10 +142,13 @@ export class Moving {
       move.kind === "spring"
         ? springStep(move, from - target, velocity)
         : easingStep(move.durationMs / 1000, move.bezier, from - target)
-    // Time runs from now, so its first frame has moved already.
+    // Time runs from now, so its first frame has moved already. A frame's
+    // time is when it began, which on a busy page comes before a move
+    // asked late in a long task: that frame has not moved yet. Run back
+    // before its start, a spring grows without bound.
     const start = this.#clock.now()
     const tick = (now: number) => {
-      const { value, velocity, done } = step((now - start) / 1000)
+      const { value, velocity, done } = step(Math.max(0, now - start) / 1000)
       if (done) {
         this.#id = 0
         this.#land(target)

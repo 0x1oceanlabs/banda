@@ -75,6 +75,34 @@ test("a move lands exactly on its target", () => {
   expect(moving.moving).toBe(false)
 })
 
+test("a frame that began before the move was asked does not run it back", () => {
+  // A busy page: the move is asked late in a long task, and the next
+  // frame's time is when that frame began, before it.
+  let next: ((now: number) => void) | undefined
+  const late = {
+    frame: (run: (now: number) => void) => {
+      next = run
+      return 1
+    },
+    cancel: () => {
+      next = undefined
+    },
+    now: () => 200,
+  }
+  let shown = 1
+  const moving = new Moving(
+    (v) => (shown = v),
+    () => shown,
+    late
+  )
+  moving.to(0.5, { kind: "spring", ...niri })
+  next!(50)
+  expect(shown).toBe(1)
+  next!(216)
+  expect(shown).toBeLessThan(1)
+  expect(shown).toBeGreaterThan(0.5)
+})
+
 test("sent elsewhere halfway, it keeps its speed", () => {
   const time = clock()
   let shown = 0
