@@ -2992,11 +2992,12 @@ test("the overview zooms out as far as [overview] zoom says", async () => {
     .getByRole("dialog", { name: "Overview" })
     .getByRole("group", { name: "Workspace 1" })
   await expect(row).toBeVisible()
-  const width = (await row.boundingBox())!.width
   const room = await page.evaluate(() => innerWidth)
-  // A fifth of the screen it copies, which is the window less the sidebar.
-  expect(width / room).toBeGreaterThan(0.1)
-  expect(width / room).toBeLessThan(0.2)
+  // A fifth of the screen it copies, which is the window less the sidebar;
+  // asked again while the overview may still draw it anew.
+  const share = async () => ((await row.boundingBox())?.width ?? 0) / room
+  await expect.poll(share).toBeGreaterThan(0.1)
+  expect(await share()).toBeLessThan(0.2)
 })
 
 test("the overview: the arrows and Enter, the window's keys, the drag", async () => {
