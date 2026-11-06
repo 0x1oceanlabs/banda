@@ -1,14 +1,5 @@
 import { expect, test } from "vitest"
-import { besideFile, fromRoot } from "./paths"
-
-test("a file is named from the Project's folder when it is inside", () => {
-  expect(fromRoot("/home/me/work/src/a.ts", "/home/me/work")).toBe("src/a.ts")
-  expect(fromRoot("/home/me/work/src/a.ts", "/home/me/work/")).toBe("src/a.ts")
-  expect(fromRoot("/home/me/workshop/a.ts", "/home/me/work")).toBe(
-    "/home/me/workshop/a.ts"
-  )
-  expect(fromRoot("/tmp/a.log", null)).toBe("/tmp/a.log")
-})
+import { besideFile } from "./paths"
 
 test("a markdown file's picture is found beside it", () => {
   const notes = "/work/docs/notes.md"

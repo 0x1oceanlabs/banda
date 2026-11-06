@@ -3,7 +3,9 @@
  * 6): code and text numbered and coloured as the Diff draws them, opened
  * at a line; markdown rendered, its source a toggle away; an image to zoom
  * and pan; anything else its facts. It reads again as the file changes on
- * disk. It only reads: editing comes later (step F4).
+ * disk. Its header opens it in an editor at its line, or shows it in the
+ * system's file manager (step F2). It only reads: editing comes later
+ * (step F4).
  */
 import { useEffect, useState } from "react"
 import { Button } from "@banda/ui/components/button"
@@ -11,14 +13,24 @@ import { CodeFile, type LineRange } from "@banda/ui/components/code-file"
 import { CopyButton } from "@banda/ui/components/copy-button"
 import { InHeader } from "@banda/ui/components/pane-header"
 import { Spinner } from "@banda/ui/components/spinner"
-import { nameAndFolder } from "@banda/ui/lib/paths"
+import {
+  FILE_MANAGER,
+  openInEditor,
+  openWithSystem,
+  reveal,
+  useEditors,
+} from "@banda/ui/lib/outside"
+import { fromFolder, nameAndFolder } from "@banda/ui/lib/paths"
 import type { ProjectId } from "@banda/contract"
 import type { WindowApi } from "@banda/ui/module"
 import { definePane, type PaneProps, paneOf } from "@banda/ui/pane"
 import {
+  AppWindowIcon,
   CodeIcon,
   FileIcon,
   FileWarningIcon,
+  FolderDownIcon,
+  SquareCodeIcon,
   WrapTextIcon,
   XIcon,
 } from "lucide-react"
@@ -28,7 +40,6 @@ import { ImageView } from "./ImageView"
 import { lineIn, MOST_LINES, rangeText } from "./lines"
 import { sizeWords } from "./look"
 import { MarkdownView } from "./MarkdownView"
-import { fromRoot } from "./paths"
 import { type Shown, useFile } from "./read"
 
 export type FileArgs = {
@@ -78,7 +89,7 @@ function FilePane({
   const file = shown.state === "file" ? shown : null
   // The path as the Person reads it: from the Project's folder when it is
   // inside, else whole.
-  const path = file ? fromRoot(file.stat.path, file.root) : args.path
+  const path = file ? fromFolder(file.stat.path, file.root) : args.path
 
   // Recent lists it, and `files.find` raises it (ADR 0073, decision 11).
   const opened = file?.stat.path
@@ -128,6 +139,7 @@ function FilePane({
           </HeaderButton>
         </InHeader>
       )}
+      {file && <Outside path={file.stat.path} line={args.line ?? null} />}
       <Body
         shown={shown}
         path={path}
@@ -138,6 +150,40 @@ function FilePane({
         run={run}
       />
     </div>
+  )
+}
+
+/** The header's way out of Banda: the file in the editor `files.toml`
+ * names, at the line it opened at, or in its app when none is found; and
+ * the file in its folder. */
+function Outside({ path, line }: { path: string; line: number | null }) {
+  const { editor } = useEditors()
+  const at = line ? ` at line ${line}` : ""
+  return (
+    <InHeader>
+      {editor ? (
+        <HeaderButton
+          label={`Open in ${editor.name}`}
+          title={`Open in ${editor.name}${at}`}
+          onClick={() => void openInEditor(path, { line })}
+        >
+          <SquareCodeIcon />
+        </HeaderButton>
+      ) : (
+        <HeaderButton
+          label="Open with the system"
+          onClick={() => openWithSystem(path)}
+        >
+          <AppWindowIcon />
+        </HeaderButton>
+      )}
+      <HeaderButton
+        label={`Reveal in ${FILE_MANAGER}`}
+        onClick={() => reveal(path)}
+      >
+        <FolderDownIcon />
+      </HeaderButton>
+    </InHeader>
   )
 }
 

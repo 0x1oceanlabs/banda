@@ -7,7 +7,9 @@
  * finds as one types. It follows the folders it shows open on disk.
  *
  * ↵ or a double click opens a file beside it, in `files.file`, or goes
- * into a folder. It only reads: the file operations come later (step F5).
+ * into a folder. Its rows, one or the several picked, go into a Thread's
+ * message by their menu or a drag, and out to other apps as the files
+ * (step F2). It only reads: the file operations come later (step F5).
  */
 import {
   type ReactNode,
@@ -36,6 +38,7 @@ import { Spinner } from "@banda/ui/components/spinner"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { useRead } from "@banda/ui/hooks/use-read"
 import { useWiderThan } from "@banda/ui/hooks/use-wider-than"
+import { dragFiles } from "@banda/ui/lib/file-drag"
 import { FIELDS, keyLabel } from "@banda/ui/lib/keys"
 import { useFile } from "@banda/ui/lib/look"
 import { shownProjects } from "@banda/ui/lib/projects"
@@ -195,6 +198,13 @@ function TreePane(props: PaneProps<TreeArgs>) {
       props.run?.("files.open", { file: whole, line: null, project }),
     [props, project]
   )
+  // Each named in a Thread's message, a folder with its `/`.
+  const attach = useCallback(
+    (wholes: readonly string[]) => {
+      for (const file of wholes) props.run?.("file.attach", { file })
+    },
+    [props]
+  )
   const pin = useCallback(
     (whole: string, on: boolean) =>
       props.run?.("files.pin", { dir: tilded(whole, home), pin: on }),
@@ -246,6 +256,7 @@ function TreePane(props: PaneProps<TreeArgs>) {
                 top={projectTop}
                 onOpen={openFile}
                 onShow={(whole) => go(parentOf(whole) ?? "/", nameOf(whole))}
+                onAttach={(whole) => attach([whole])}
               />
             </div>
           </>
@@ -262,6 +273,7 @@ function TreePane(props: PaneProps<TreeArgs>) {
             onGo={go}
             onGoTyped={goTyped}
             onOpenFile={openFile}
+            onAttach={attach}
             onPin={pin}
           />
         )}
@@ -278,6 +290,7 @@ type FolderViewProps = PaneProps<TreeArgs> & {
   onGo: (dir: string, selected?: string | null) => void
   onGoTyped: (path: string) => Promise<string | null>
   onOpenFile: (whole: string) => void
+  onAttach: (wholes: readonly string[]) => void
   onPin: (whole: string, on: boolean) => void
 }
 
@@ -295,9 +308,15 @@ function FolderView({
   onGo,
   onGoTyped,
   onOpenFile,
+  onAttach,
   onPin,
 }: FolderViewProps) {
   const dir = args.dir
+  /** A row's whole path, a folder's with its `/`, as a message names it. */
+  const named = useCallback(
+    (path: string) => wholeOf(dir, path) + (path.endsWith("/") ? "/" : ""),
+    [dir]
+  )
   const tree = useRef<FolderTreeHandle>(null)
   const area = useRef<HTMLDivElement>(null)
   const filterField = useRef<HTMLInputElement>(null)
@@ -455,6 +474,13 @@ function FolderView({
   const [menu, setMenu] = useState<string | null>(null)
   const [noLimit, setNoLimit] = useState(false)
 
+  // Rows dragged: into a Thread's composer as `@` chips, and out to other
+  // apps as the files.
+  const drag = useCallback(
+    (paths: string[], event: DragEvent) => dragFiles(event, paths.map(named)),
+    [named]
+  )
+
   // The tree takes the keys once it is drawn, in the Pane that has the
   // focus: as it opens, and after it went to another folder.
   const listed = folder.top.state === "listed"
@@ -549,6 +575,7 @@ function FolderView({
               setOpen(now)
             }}
             onOpen={openRow}
+            onDrag={drag}
           />
         </ContextMenuTrigger>
         <ContextMenuContent aria-label="Row" className="min-w-52">
@@ -559,6 +586,11 @@ function FolderView({
               top={projectTop}
               pinned={pinned.includes(wholeOf(dir, menu))}
               onOpen={() => openRow(menu)}
+              onAttach={() => {
+                // The rows picked with it, as a Finder acts on them all.
+                const picked = tree.current?.picked() ?? []
+                onAttach((picked.includes(menu) ? picked : [menu]).map(named))
+              }}
               onPin={(on) => onPin(wholeOf(dir, menu), on)}
             />
           )}

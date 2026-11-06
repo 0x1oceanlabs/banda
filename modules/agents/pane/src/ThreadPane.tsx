@@ -7,7 +7,7 @@ import {
   ContextMenu,
   ContextMenuTrigger,
 } from "@banda/ui/components/context-menu"
-import { useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
 import type {
   Failure,
@@ -50,7 +50,9 @@ import { useNow } from "@banda/ui/hooks/use-now"
 import { ZoomBadge } from "@banda/ui/components/zoom-badge"
 import { useZoom } from "@banda/ui/hooks/use-zoom"
 import { matches } from "@banda/ui/lib/keys"
+import { carries, droppedPaths } from "@banda/ui/lib/file-drag"
 import { copyAsMarkdown } from "@banda/ui/lib/markdown-copy"
+import { fromFolder } from "@banda/ui/lib/paths"
 import { clock, duration } from "@banda/ui/lib/words"
 import { definePane, paneOf, type PaneProps, sleeps } from "@banda/ui/pane"
 import {
@@ -153,7 +155,16 @@ function linkOpener(run: PaneProps<ThreadArgs>["run"], project: ProjectId) {
 }
 
 function ThreadContent(props: PaneProps<ThreadArgs>) {
-  const { engine, project, args, focused, open, update, run } = props
+  const {
+    engine,
+    project,
+    args,
+    focused,
+    open,
+    update,
+    run,
+    composer: says,
+  } = props
   const machine = useMachine(engine)
   const unplaced = project === machine
   const { thread } = args
@@ -222,6 +233,22 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
   // Ctrl or ⌘ with + − 0 sizes its words, kept till the window starts
   // again (ADR 0063, decision 5).
   const zoom = useZoom(zoomKey(thread))
+  // Files an App attaches, and Files' rows dropped here, are named in the
+  // message as `@` names one: from the Project's folder when inside it
+  // (ADR 0073, decision 14).
+  const point = useCallback(
+    async (paths: readonly string[]) => {
+      const projects = await engine.call("projects.list", {}).catch(() => [])
+      const folder = projects.find((one) => one.id === project)?.folder
+      for (const path of paths)
+        composer.current?.point(fromFolder(path, folder))
+    },
+    [engine, project]
+  )
+  useEffect(() => {
+    says?.((chips) => void point(chips.map((chip) => chip.path)))
+    return () => says?.(null)
+  }, [says, point])
   const detailsShown = wide ? args.details !== false : popped
   const setDetailsShown = wide
     ? (shown: boolean) =>
@@ -268,13 +295,24 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
         findField.current?.select()
       }}
       onDragOver={(event) => {
-        if (!event.dataTransfer.types.includes("Files")) return
+        const data = event.dataTransfer
+        if (!data.types.includes("Files") && !carries(data)) return
         event.preventDefault()
         setDropping(true)
       }}
       onDragLeave={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null))
           setDropping(false)
+      }}
+      // Files' rows are named, before the composer's text takes them as
+      // text; files from another app are kept, as below.
+      onDropCapture={(event) => {
+        const paths = droppedPaths(event.dataTransfer)
+        if (!paths) return
+        event.preventDefault()
+        event.stopPropagation()
+        setDropping(false)
+        void point(paths)
       }}
       onDrop={(event) => {
         if (!event.dataTransfer.types.includes("Files")) return
@@ -408,7 +446,7 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
             open: linkOpener(run, project),
             copyImage: run && ((x, y) => run("edit.copy-image", { x, y })),
             file: files ?? undefined,
-            point: (path) => composer.current?.point(path),
+            attach: (path) => run?.("file.attach", { file: path }),
           }}
         />
       </ContextMenu>

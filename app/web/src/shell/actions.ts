@@ -833,6 +833,18 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
       present(args, (file) => window.banda?.files.outside(file)),
   },
   {
+    // Files' "Add to chat" and a reply's "Add to message": the file named
+    // in a Thread's message, as `@` names it (ADR 0073, decision 14).
+    id: "file.attach",
+    args: takes({ file: "the file's absolute path; a folder's ends with /" }, [
+      "file",
+    ]),
+    section: "Banda",
+    title: "Add a file to a Thread's message",
+    unlisted: true,
+    run: (shell, args) => present(args, (path) => shell.attach({ path })),
+  },
+  {
     // A Thread menu's "Show in folder", for a path in a reply.
     id: "file.folder",
     args: takes({ file: FILE }, ["file"]),

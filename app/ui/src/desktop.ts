@@ -8,6 +8,14 @@
  */
 import { type HostOf, invoke, send, type Table } from "@banda/contract/bridge"
 
+/** A code editor found on this machine (ADR 0073, decision 14). */
+export type Editor = {
+  /** As `files.toml` names it: `zed`, `vscode`, `idea`. */
+  id: string
+  /** As a menu says it: `Zed`, `VS Code`, `IntelliJ IDEA`. */
+  name: string
+}
+
 export const FILES_BRIDGE = {
   /** A URL of `app://files` for the file at `path`, relative to Project
    * `project`'s folder or whole, of any type; it lasts an hour. None for
@@ -21,6 +29,20 @@ export const FILES_BRIDGE = {
   show: send<[path: string]>(),
   /** Whether a file, or a folder, is at the full `path`. */
   exists: invoke<[path: string], boolean>(),
+  /** The code editors on this machine, in the order "Open in" lists them;
+   * looked for once a run. */
+  editors: invoke<[], Editor[]>(),
+  /** Opens the file or folder at the full `path` in the editor `editor`
+   * names, at `line` and `column` when given. Fails, saying why, when it
+   * is gone or the editor would not start. */
+  openIn: invoke<
+    [editor: string, path: string, line: number | null, column: number | null],
+    void
+  >(),
+  /** Drags the files at the full `paths` out of the window, as the files
+   * themselves, for another app to take: called as a drag of rows starts,
+   * in place of the page's own. */
+  drag: send<[paths: readonly string[]]>(),
 }
 
 /** The part of the desktop bridge the window's table takes in under

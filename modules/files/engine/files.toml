@@ -13,3 +13,10 @@
 
 # Whether a Files Pane shows what git ignores, greyed. Off hides it.
 # ignored = true
+
+# The editor a file opens in, by its id: Files' "Open in", and a path in a
+# reply clicked with Ctrl or ⌘. Empty is the first found of cursor,
+# vscode, vscode-insiders, vscodium, windsurf, zed, sublime, and the
+# JetBrains IDEs (idea, webstorm, pycharm, goland, rustrover, clion,
+# phpstorm, rubymine, rider).
+# editor = ""

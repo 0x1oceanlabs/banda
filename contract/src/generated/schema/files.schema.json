@@ -18,6 +18,10 @@
     "ignored": {
       "description": "Whether a Files Pane shows what git ignores, greyed. Off hides it.",
       "type": "boolean"
+    },
+    "editor": {
+      "description": "The editor a file opens in, by its id, as `zed` or `vscode`: Files'\n\"Open in\", and a path in a reply with Ctrl or ⌘. Empty is the first\none found on this machine.",
+      "type": "string"
     }
   },
   "additionalProperties": false

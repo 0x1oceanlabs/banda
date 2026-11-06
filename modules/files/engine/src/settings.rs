@@ -1,8 +1,8 @@
 //! What Files shows (ADR 0073, decision 13): the Person's
 //! `~/.config/banda/files.toml`, over Banda's defaults. The places pinned,
-//! and whether hidden files and what git ignores show in a new Files Pane.
-//! Pinning a folder in Files writes `pinned` into it, as the browser's
-//! switch writes its tabs.
+//! whether hidden files and what git ignores show in a new Files Pane, and
+//! the editor a file opens in. Pinning a folder in Files writes `pinned`
+//! into it, as the browser's switch writes its tabs.
 //!
 //! It is this machine's, as the look is: the look resolves it, as
 //! `files["files.toml"]`, and the window draws what it says.
@@ -29,6 +29,10 @@ pub struct FilesSettings {
     pub hidden: Option<bool>,
     /// Whether a Files Pane shows what git ignores, greyed. Off hides it.
     pub ignored: Option<bool>,
+    /// The editor a file opens in, by its id, as `zed` or `vscode`: Files'
+    /// "Open in", and a path in a reply with Ctrl or ⌘. Empty is the first
+    /// one found on this machine.
+    pub editor: Option<String>,
 }
 
 /// What Files shows, every key resolved.
@@ -39,6 +43,8 @@ pub struct Finder {
     pub pinned: Vec<String>,
     pub hidden: bool,
     pub ignored: bool,
+    /// The editor's id; empty for the first one found.
+    pub editor: String,
 }
 
 impl OneFile for FilesSettings {
@@ -51,6 +57,7 @@ impl OneFile for FilesSettings {
             pinned: Some(Vec::new()),
             hidden: Some(false),
             ignored: Some(true),
+            editor: Some(String::new()),
         }
     }
 
@@ -59,6 +66,7 @@ impl OneFile for FilesSettings {
             pinned: self.pinned.or(under.pinned),
             hidden: self.hidden.or(under.hidden),
             ignored: self.ignored.or(under.ignored),
+            editor: self.editor.or(under.editor),
         }
     }
 
@@ -67,6 +75,7 @@ impl OneFile for FilesSettings {
             pinned: self.pinned.unwrap_or_default(),
             hidden: self.hidden.unwrap_or(false),
             ignored: self.ignored.unwrap_or(true),
+            editor: self.editor.unwrap_or_default(),
         }
     }
 
@@ -119,6 +128,7 @@ mod tests {
                 pinned: Vec::new(),
                 hidden: false,
                 ignored: true,
+                editor: String::new(),
             }
         );
         assert!(problems.is_empty());
@@ -136,6 +146,13 @@ mod tests {
         ));
         assert_eq!(finder.pinned, ["~/Pictures", "/srv/data"]);
         assert!(finder.hidden && !finder.ignored);
+        assert!(problems.is_empty());
+    }
+
+    #[test]
+    fn the_file_names_the_editor_a_file_opens_in() {
+        let (finder, problems) = resolved(Some("editor = \"zed\"\n"));
+        assert_eq!(finder.editor, "zed");
         assert!(problems.is_empty());
     }
 

@@ -1,7 +1,9 @@
 /**
- * A row's menu in Files (ADR 0073, decision 10): Open; Copy path, whole,
- * from the Project's folder or its name; and Pin or Unpin for a folder.
- * Open in an editor, Reveal and Add to chat come with step F2.
+ * A row's menu in Files (ADR 0073, decision 10): Open; Open in the editor
+ * `files.toml` names, and in the others found; Open with the system;
+ * Reveal in the system's file manager; Add to chat; Copy path, whole, from
+ * the Project's folder or its name; and Pin or Unpin for a folder. The
+ * file operations come later (step F5).
  */
 import {
   DropdownMenuItem,
@@ -14,12 +16,23 @@ import {
 import { copyText } from "@banda/ui/lib/clipboard"
 import { keyLabel } from "@banda/ui/lib/keys"
 import {
+  FILE_MANAGER,
+  openInEditor,
+  openWithSystem,
+  reveal,
+  useEditors,
+} from "@banda/ui/lib/outside"
+import {
+  AppWindowIcon,
+  AtSignIcon,
   CopyIcon,
+  FolderDownIcon,
   FolderOpenIcon,
   FolderSearchIcon,
   PinIcon,
   PinOffIcon,
   SquareArrowOutUpRightIcon,
+  SquareCodeIcon,
 } from "lucide-react"
 import { keyOf } from "./keys"
 import { nameOf, within } from "./where"
@@ -31,6 +44,7 @@ export function RowMenu({
   pinned,
   onOpen,
   onShow,
+  onAttach,
   onPin,
 }: {
   /** The row's whole path. */
@@ -43,9 +57,12 @@ export function RowMenu({
   onOpen: () => void
   /** Shows it in its folder, from a list that is not its folder's. */
   onShow?: () => void
+  /** Names it in a Thread's message, with the other rows picked. */
+  onAttach: () => void
   onPin?: (pin: boolean) => void
 }) {
   const relative = top === null ? null : within(top, whole)
+  const { editor, others } = useEditors()
   return (
     <>
       <DropdownMenuItem onClick={onOpen}>
@@ -59,6 +76,45 @@ export function RowMenu({
           Show in Files
         </DropdownMenuItem>
       )}
+      {editor && (
+        <DropdownMenuItem onClick={() => void openInEditor(whole)}>
+          <SquareCodeIcon />
+          Open in {editor.name}
+        </DropdownMenuItem>
+      )}
+      {others.length > 0 && (
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <SquareCodeIcon />
+            Open in
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="min-w-40">
+            {others.map((other) => (
+              <DropdownMenuItem
+                key={other.id}
+                onClick={() => void openInEditor(whole, {}, other.id)}
+              >
+                {other.name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+      )}
+      {!folder && (
+        <DropdownMenuItem onClick={() => openWithSystem(whole)}>
+          <AppWindowIcon />
+          Open with the system
+        </DropdownMenuItem>
+      )}
+      <DropdownMenuItem onClick={() => reveal(whole)}>
+        <FolderDownIcon />
+        Reveal in {FILE_MANAGER}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onClick={onAttach}>
+        <AtSignIcon />
+        Add to chat
+      </DropdownMenuItem>
       <DropdownMenuSub>
         <DropdownMenuSubTrigger>
           <CopyIcon />

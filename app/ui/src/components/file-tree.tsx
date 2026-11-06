@@ -7,7 +7,8 @@
  *   2);
  * - `FolderTree`, a folder as Files shows it: lazy, one folder listed at a
  *   time as it opens, what git ignores greyed, git's marks, a quiet
- *   spinner on a folder being listed.
+ *   spinner on a folder being listed; rows picked with Ctrl or Shift, and
+ *   dragged out.
  *
  * Both fold a folder of one folder into its path (`a/b/c`).
  */
@@ -29,7 +30,7 @@ import {
   useRef,
 } from "react"
 import { useDark } from "../hooks/use-dark"
-import { foldersOf, pathUpdates } from "../lib/tree-paths"
+import { foldersOf, outermost, pathUpdates } from "../lib/tree-paths"
 import { cn } from "../lib/utils"
 
 export type { GitStatus } from "@pierre/trees"
@@ -122,6 +123,10 @@ export type FolderTreeProps = {
   onOpenChange: (open: string[]) => void
   /** A double click on a row; ↵ is its holder's, as its other keys. */
   onOpen: (path: string) => void
+  /** Rows are dragged: the one under the pointer, or every row picked
+   * with it. Its holder says what the drag carries, or runs it itself and
+   * prevents the page's (`preventDefault`). None: rows do not drag. */
+  onDrag?: (paths: string[], event: DragEvent) => void
   /** What a screen reader calls it. */
   label: string
   className?: string
@@ -137,6 +142,8 @@ export type FolderTreeHandle = {
   expand: (folders: readonly string[]) => void
   /** Folds every folder. */
   collapse: () => void
+  /** The rows picked, from the top. */
+  picked: () => string[]
 }
 
 /** Pierre's standard icons, in the text's colours, as the look's are. */
@@ -187,12 +194,24 @@ function statusOf(
   ]
 }
 
+/** The rows shown, from the top. */
+function visibleRows(model: ReturnType<typeof useFileTree>["model"]) {
+  const count = model.getVisibleCount()
+  return count === 0 ? [] : model.getVisibleRows(0, count - 1)
+}
+
+/** The rows picked, from the top, as the tree shows them. */
+function pickedOf(model: ReturnType<typeof useFileTree>["model"]): string[] {
+  const at = new Map(visibleRows(model).map((row, n) => [row.path, n]))
+  return [...model.getSelectedPaths()].sort(
+    (a, b) => (at.get(a) ?? 0) - (at.get(b) ?? 0)
+  )
+}
+
 /** The folders shown open now: each open row's, and the folders a folded
  * chain (`a/b/c`) holds in its one row. */
 function openRows(model: ReturnType<typeof useFileTree>["model"]): string[] {
-  const count = model.getVisibleCount()
-  if (count === 0) return []
-  return model.getVisibleRows(0, count - 1).flatMap((row) => {
+  return visibleRows(model).flatMap((row) => {
     if (row.kind !== "directory" || !row.isExpanded) return []
     const chain = (row.flattenedSegments ?? []).map((one) => one.path)
     return [...chain.filter((path) => path !== row.path), row.path]
@@ -215,6 +234,7 @@ export function FolderTree({
   onSelect,
   onOpenChange,
   onOpen,
+  onDrag,
   label,
   className,
   style,
@@ -227,6 +247,9 @@ export function FolderTree({
   useEffect(() => {
     now.current = { onSelect, onOpenChange, onOpen, loading }
   })
+  // Whether the last press picks rows or lets one go, as Ctrl or Shift
+  // with a click or Shift with an arrow: the keys leave the pick as it is.
+  const adding = useRef(false)
   const { model } = useFileTree({
     paths,
     initialExpandedPaths: open,
@@ -246,6 +269,8 @@ export function FolderTree({
       const path = picked.at(-1)
       if (path) now.current.onSelect(path)
     },
+    // Rows drag out of the tree; nothing drops into it yet (step F5).
+    dragAndDrop: onDrag ? { canDrop: () => false } : false,
     unsafeCSS: CSS + FOLDER_CSS,
   })
 
@@ -314,9 +339,10 @@ export function FolderTree({
       model.subscribe(() => {
         const root = model.getFileTreeContainer()?.shadowRoot
         if (!root?.activeElement) return
+        // A row pressed among those picked keeps them, to drag them all.
         const focused = model.getFocusedPath()
         const picked = model.getSelectedPaths()
-        if (!focused || (picked.length === 1 && picked[0] === focused)) return
+        if (adding.current || !focused || picked.includes(focused)) return
         for (const path of picked) model.getItem(path)?.deselect()
         model.getItem(focused)?.select()
       }),
@@ -361,6 +387,7 @@ export function FolderTree({
         for (const path of drawn.current.paths)
           if (path.endsWith("/")) folderOf(model.getItem(path))?.collapse()
       },
+      picked: () => pickedOf(model),
     }),
     [model, openNow]
   )
@@ -368,6 +395,24 @@ export function FolderTree({
   return (
     <div
       className={cn("h-full min-h-0", className)}
+      onPointerDownCapture={(event) => {
+        adding.current = event.ctrlKey || event.metaKey || event.shiftKey
+      }}
+      onKeyDownCapture={(event) => {
+        adding.current = event.shiftKey
+      }}
+      onDragStart={(event) => {
+        const path = rowAt(event.nativeEvent)
+        if (!path || !onDrag) return
+        const picked = pickedOf(model)
+        onDrag(
+          picked.includes(path) ? outermost(picked) : [path],
+          event.nativeEvent
+        )
+        // A drag its holder runs itself never starts here: the tree's own
+        // ends now, as it would with the page's.
+        if (event.defaultPrevented) window.dispatchEvent(new Event("dragend"))
+      }}
       onDoubleClick={(event) => {
         const path = rowAt(event.nativeEvent)
         if (path) onOpen(path)

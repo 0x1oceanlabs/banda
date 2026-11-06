@@ -279,6 +279,12 @@ stay his to change.
     - `files.file` joins the Panes an Agent may open (ADR 0034,
       decision 8). It shows and runs nothing.
 
+    *Amended 2026-11-06, with step F2a, as the mock and T3 Code have it:*
+    Ctrl or ⌘ with a click opens the file at its line in the editor
+    `files.toml` names, or the first found; in its app only when no editor
+    is found. The path's menu keeps "Open in its app" and gains "Open in
+    ‹editor›". A terminal's path still opens in its app.
+
 13. **`files.toml`** holds the pinned places and whether ignored and
     hidden files show by default. It also holds the editor to open in, the
     size past which a file is read-only, and the extensions mapped to a
@@ -304,6 +310,11 @@ stay his to change.
       place of `workspaces`' `AGENT_KINDS` list.
     - **Composer attach**: `WindowApi.attach(chip)` puts a path, lines or a
       comment into the focused Thread's composer.
+      - From a Pane with no composer, as Files, it goes to the Thread that
+        had the focus last in the same Project, and that Thread gets the
+        focus. With none, a toast says so.
+      - A Pane says it has a composer as it says its label
+        (`PaneProps.composer`), so the window knows no module.
     - **The UI blocks** in `@banda/ui`: `CodeFile`, `Editor`, `FileIcon`
       (Pierre's icons), and a virtual list.
 

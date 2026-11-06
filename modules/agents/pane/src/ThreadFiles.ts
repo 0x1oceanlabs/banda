@@ -6,6 +6,7 @@
 import { useLayoutEffect, useMemo } from "react"
 import type { FoundFile, Item } from "@banda/contract/agents"
 import type { FileAt, FilesHost } from "@banda/ui/components/markdown-file"
+import { openInEditor } from "@banda/ui/lib/outside"
 import type { PaneProps } from "@banda/ui/pane"
 import { type AgentsHost, agentsHost } from "./desktop"
 import type { ThreadArgs } from "./session"
@@ -57,12 +58,27 @@ class ThreadFiles implements FilesHost {
     return this.bridge.paths(this.project, paths, workedOf(this.items))
   }
 
+  /** A click opens it in Files; Ctrl or ⌘ with it, in the editor at its
+   * line (ADR 0073, decision 12, as amended). */
   open(at: FileAt, outside: boolean): void {
-    this.run?.(outside ? "file.outside" : "file.open", {
-      file: at.file,
-      project: this.project,
-      line: at.line ?? null,
-    })
+    if (outside) this.edit(at)
+    else
+      this.run?.("file.open", {
+        file: at.file,
+        project: this.project,
+        line: at.line ?? null,
+      })
+  }
+
+  /** Opens it in the app the system has for it. */
+  system(at: FileAt): void {
+    this.run?.("file.outside", { file: at.file })
+  }
+
+  /** Opens it at its line in the editor `files.toml` names, or the first
+   * found; in its app when none is. */
+  edit(at: FileAt): void {
+    void openInEditor(at.file, at)
   }
 
   /** Shows the file in its folder, in the system's file manager. */

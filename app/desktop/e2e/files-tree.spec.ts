@@ -1,14 +1,48 @@
 import { execFileSync } from "node:child_process"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { expect, test } from "@playwright/test"
-import { firstThread, startWindow, type Window } from "./window"
+import { expect, type Locator, test } from "@playwright/test"
+import {
+  editorsOn,
+  firstThread,
+  openedIn,
+  startWindow,
+  type Window,
+} from "./window"
 
 let window: Window
 
 test.afterEach(async () => {
   await window?.close()
 })
+
+/** Drops on `box` what a drag brings: files by their names, as main's
+ * drag brings them back, or whole paths in Banda's own type, as the
+ * page's drag carries them. */
+async function dropOn(
+  box: Locator,
+  { files = [], paths }: { files?: string[]; paths?: string[] }
+) {
+  await box.evaluate(
+    (element, { files, paths }) => {
+      const data = new DataTransfer()
+      for (const name of files) data.items.add(new File(["x"], name))
+      if (paths) {
+        data.setData("application/x-banda-paths", JSON.stringify(paths))
+        data.setData("text/plain", paths.join("\n"))
+      }
+      for (const type of ["dragenter", "dragover", "drop"])
+        element.dispatchEvent(
+          new DragEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: data,
+          })
+        )
+    },
+    { files, paths }
+  )
+}
 
 /** Writes `text` at `path` under `folder`, its folders first. */
 function put(folder: string, path: string, text = "") {
@@ -120,4 +154,149 @@ test("Files shows a folder as a tree: it opens folders, greys what git ignores, 
     `pinned = [${JSON.stringify(join(project, "src/lib"))}]`
   )
   await page.screenshot({ path: "test-results/files-tree-pinned.png" })
+})
+
+test("a row goes into a Thread's message by its menu or a drag, opens in an editor, and shows in its folder; so does a file's header", async () => {
+  window = await startWindow()
+  const { app, page, dir } = window
+  const { thread, composer } = await firstThread(page)
+  const project = join(dir, "root", "Work")
+  put(project, "src/main.ts", "export const one = 1\nexport const two = 2\n")
+  put(project, "src/util.ts", "export {}\n")
+  put(project, "README.md", "# Work\n")
+  const main = join(project, "src/main.ts")
+  const readme = join(project, "README.md")
+  // The editors this machine has; what the system shows, opens and drags.
+  await editorsOn(app, [
+    { id: "zed", name: "Zed" },
+    { id: "vscode", name: "VS Code" },
+  ])
+  await app.evaluate(({ ipcMain, shell }) => {
+    const done: string[] = []
+    ;(globalThis as { outside?: string[] }).outside = done
+    shell.openPath = async (path) => {
+      done.push(`open ${path}`)
+      return ""
+    }
+    shell.showItemInFolder = (path) => {
+      done.push(`show ${path}`)
+    }
+    ipcMain.removeAllListeners("files.drag")
+    ipcMain.on("files.drag", (_event, paths: string[]) => {
+      done.push(`drag ${paths.join(" ")}`)
+    })
+  })
+  const outside = () =>
+    app.evaluate(() => (globalThis as { outside?: string[] }).outside)
+  const chips = composer.locator("[data-chip=file]")
+
+  // The Thread first, as Files opens beside it.
+  await composer.fill("Hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: Hello")).toBeVisible()
+  await page.keyboard.press("Alt+e")
+  const pane = page
+    .locator("section")
+    .filter({ has: page.getByRole("navigation", { name: "Places" }) })
+  const tree = pane.getByRole("tree")
+  const row = (name: string) =>
+    tree.getByRole("treeitem", { name, exact: true })
+  await row("src").click()
+  await expect(row("main.ts")).toBeVisible()
+
+  // A row's menu: the editor files.toml names, or the first; the others;
+  // the system's app; the system's file manager; the Thread.
+  const menu = page.getByRole("menu", { name: "Row" })
+  await row("README.md").click({ button: "right" })
+  await expect(menu.getByRole("menuitem")).toHaveText([
+    /^Open/,
+    "Open in Zed",
+    "Open in",
+    "Open with the system",
+    /^Reveal in /,
+    "Add to chat",
+    "Copy path",
+  ])
+  await page.screenshot({ path: "test-results/files-row-menu.png" })
+  await menu.getByRole("menuitem", { name: "Open in Zed" }).click()
+  await expect.poll(() => openedIn(app)).toEqual([["zed", readme, null, null]])
+  await row("README.md").click({ button: "right" })
+  await menu.getByRole("menuitem", { name: "Open in", exact: true }).hover()
+  await page.getByRole("menuitem", { name: "VS Code" }).click()
+  await expect
+    .poll(() => openedIn(app))
+    .toEqual([
+      ["zed", readme, null, null],
+      ["vscode", readme, null, null],
+    ])
+  await row("README.md").click({ button: "right" })
+  await menu.getByRole("menuitem", { name: /^Reveal in / }).click()
+  await expect.poll(outside).toEqual([`show ${readme}`])
+
+  // Add to chat names it in the Thread's message, from the Project's
+  // folder, as `@` does; and the Thread gets the focus.
+  await row("README.md").click({ button: "right" })
+  await menu.getByRole("menuitem", { name: "Add to chat" }).click()
+  await expect(chips).toHaveAttribute("data-value", "README.md")
+  await expect(page.locator("section[data-focused=true]")).toContainText(
+    "You said: Hello"
+  )
+
+  // A row dragged out is main's drag, of the file itself; dropped back on
+  // the composer, it is named there, not copied in.
+  await row("main.ts").dragTo(composer)
+  await expect.poll(outside).toContain(`drag ${main}`)
+  await dropOn(composer, { files: ["main.ts"] })
+  await expect(chips).toHaveCount(2)
+  await expect(chips.nth(1)).toHaveAttribute("data-value", "src/main.ts")
+  // A drag the page runs, as outside Banda's window, carries Banda's own
+  // type, which the composer names too.
+  await dropOn(composer, { paths: [join(project, "src/util.ts")] })
+  await expect(chips).toHaveCount(3)
+  await expect(chips.nth(2)).toHaveAttribute("data-value", "src/util.ts")
+  await expect(composer).not.toContainText(project)
+
+  // A file's header: in the editor at the line it opened at, and in its
+  // folder.
+  await composer.press("Control+a")
+  await composer.press("Backspace")
+  await composer.fill("See `src/main.ts:2`")
+  await composer.press("Enter")
+  await thread
+    .locator("[data-quotable] a[data-file][data-kind=code]")
+    .last()
+    .click()
+  const file = page.getByRole("region", { name: "main.ts", exact: true })
+  await expect(file).toBeVisible()
+  const open = file.getByRole("button", { name: "Open in Zed" })
+  await expect(open).toHaveAttribute("title", "Open in Zed at line 2")
+  await open.click()
+  await expect
+    .poll(async () => (await openedIn(app))?.at(-1))
+    .toEqual(["zed", main, 2, null])
+  await file.getByRole("button", { name: /^Reveal in / }).click()
+  await expect.poll(async () => (await outside())?.at(-1)).toBe(`show ${main}`)
+  await page.screenshot({ path: "test-results/files-header.png" })
+})
+
+test("Add to chat with no Thread in the Project says so", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const { composer } = await firstThread(page)
+  put(join(dir, "root", "Work"), "README.md", "# Work\n")
+  // The window has the keys once the new Thread's box has the focus.
+  await expect(composer).toBeFocused()
+  // No Thread: the new one is closed, and Files is all there is.
+  await page.keyboard.press("Alt+e")
+  const pane = page
+    .locator("section")
+    .filter({ has: page.getByRole("navigation", { name: "Places" }) })
+  const row = pane.getByRole("treeitem", { name: "README.md", exact: true })
+  await expect(row).toBeVisible()
+  await page.getByRole("button", { name: "Close New Thread" }).click()
+  await row.click({ button: "right" })
+  await page.getByRole("menuitem", { name: "Add to chat" }).click()
+  await expect(
+    page.getByText("No Thread in this Project to add it to.")
+  ).toBeVisible()
 })

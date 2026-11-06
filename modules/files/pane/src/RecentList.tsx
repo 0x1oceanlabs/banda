@@ -30,6 +30,7 @@ export function RecentList({
   top,
   onOpen,
   onShow,
+  onAttach,
 }: {
   engine: Engine
   project: ProjectId
@@ -39,6 +40,8 @@ export function RecentList({
   onOpen: (path: string) => void
   /** Shows the file in its folder, picked. */
   onShow: (path: string) => void
+  /** Names the file in a Thread's message. */
+  onAttach: (path: string) => void
 }) {
   const recent = useRead(
     useCallback(
@@ -134,6 +137,7 @@ export function RecentList({
             top={top}
             onOpen={() => onOpen(menu)}
             onShow={() => onShow(menu)}
+            onAttach={() => onAttach(menu)}
           />
         )}
       </ContextMenuContent>
