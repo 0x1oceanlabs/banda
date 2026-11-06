@@ -271,6 +271,7 @@ mod tests {
             failure: None,
             started: None,
             ended: None,
+            harness: None,
             plan: false,
             can: Can::default(),
         }

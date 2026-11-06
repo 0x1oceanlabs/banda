@@ -148,12 +148,12 @@ fn write(
         Some(ending) => end(tx, author, turn, ending)?,
         None if (was, step.state) == (TurnState::Queued, TurnState::Running) => {
             store::set_turn(tx.sql(), turn.id, step.state, None, None, tx.now())?;
-            emit(
-                tx,
-                author,
-                turn.thread,
-                &Fact::TurnStarted { turn: turn.id },
-            )?;
+            let harness = store::run_on(tx.sql(), turn.id)?;
+            let started = Fact::TurnStarted {
+                turn: turn.id,
+                harness,
+            };
+            emit(tx, author, turn.thread, &started)?;
         }
         None => {}
     }

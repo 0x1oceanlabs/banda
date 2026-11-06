@@ -264,6 +264,12 @@ pub struct TurnView {
     #[ts(optional, type = "number")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ended: Option<i64>,
+    /// The Harness entry, the account, it ran on (ADR 0078, decision 2):
+    /// its Thread's as it started. A turn that has not run, or ran before
+    /// Banda kept it, has none.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness: Option<String>,
     /// It made a plan before changing anything: its Thread was in plan
     /// mode when it was asked for.
     #[ts(as = "Option<bool>", optional)]
@@ -920,7 +926,14 @@ pub enum Fact {
     /// The turn runs. Its message reads after what the Thread showed
     /// before, unless an earlier turn ran it.
     #[serde(rename = "turn.started")]
-    TurnStarted { turn: TurnId },
+    TurnStarted {
+        turn: TurnId,
+        /// The Harness entry, the account, it runs on (ADR 0078, decision
+        /// 2). Older logs leave it out.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        harness: Option<String>,
+    },
     #[serde(rename = "turn.ended")]
     TurnEnded {
         turn: TurnId,

@@ -28,6 +28,12 @@ started?: number,
  */
 ended?: number, 
 /**
+ * The Harness entry, the account, it ran on (ADR 0078, decision 2):
+ * its Thread's as it started. A turn that has not run, or ran before
+ * Banda kept it, has none.
+ */
+harness?: string, 
+/**
  * It made a plan before changing anything: its Thread was in plan
  * mode when it was asked for.
  */

@@ -395,15 +395,14 @@ async fn a_message_gets_the_agents_reply() {
         ]
     );
     assert!(matches!(view.items[2].author, Participant::Agent(_)));
+    // The turn keeps the account it ran on, its Thread's (ADR 0078).
+    assert_eq!(view.turns[0].harness.as_deref(), Some("fake"));
 
     let project = world.kernel.project(world.project).await.unwrap();
-    let kinds: Vec<String> = project
-        .events_after(0, Default::default(), 100)
-        .await
-        .unwrap()
-        .into_iter()
-        .map(|e| e.kind)
-        .collect();
+    let events = (project.events_after(0, Default::default(), 100).await).unwrap();
+    let started = events.iter().find(|e| e.kind == "turn.started").unwrap();
+    assert_eq!(started.payload["harness"], "fake", "the fact says it too");
+    let kinds: Vec<String> = events.into_iter().map(|e| e.kind).collect();
     assert_eq!(
         kinds,
         [

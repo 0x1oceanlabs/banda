@@ -293,6 +293,10 @@ function project(state: ThreadState, event: Event): ThreadState {
         turns: changeTurn(state, fact.payload.turn, {
           state: "running",
           started: event.at,
+          // The account it runs on, as the engine keeps it (ADR 0078).
+          ...(fact.payload.harness === undefined
+            ? {}
+            : { harness: fact.payload.harness }),
         }),
       }
     }

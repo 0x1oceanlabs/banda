@@ -174,6 +174,11 @@ ALTER TABLE agents_threads ADD COLUMN snooze TEXT;
 -- The Thread's title before its Person last renamed it (ADR 0077).
 ALTER TABLE agents_threads ADD COLUMN was_title TEXT;
 "#,
+    r#"
+-- The Harness entry, the account, each turn ran on, kept as it starts
+-- (ADR 0078, decision 2).
+ALTER TABLE agents_turns ADD COLUMN harness TEXT;
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -791,8 +796,8 @@ pub fn note(sql: &Connection, turn: TurnId) -> Result<Option<String>, Error> {
 
 pub fn turns(sql: &Connection, thread: ThreadId) -> Result<Vec<TurnView>, Error> {
     let mut statement = sql.prepare(
-        "SELECT id, message, state, reason, failure, started_at, ended_at, settings FROM agents_turns
-         WHERE thread = ?1 ORDER BY created_at, id",
+        "SELECT id, message, state, reason, failure, started_at, ended_at, settings, harness
+         FROM agents_turns WHERE thread = ?1 ORDER BY created_at, id",
     )?;
     let rows = statement.query_map(params![thread], |row| {
         let failure: Option<String> = row.get(4)?;
@@ -811,11 +816,23 @@ pub fn turns(sql: &Connection, thread: ThreadId) -> Result<Vec<TurnView>, Error>
                 .transpose()?,
             started: row.get(5)?,
             ended: row.get(6)?,
+            harness: row.get(8)?,
             plan: settings.is_some_and(|settings| settings.plan),
             can: Default::default(),
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// Keeps the Harness entry `turn` runs on, its Thread's now, and says it.
+pub fn run_on(sql: &Connection, turn: TurnId) -> Result<Option<String>, Error> {
+    Ok(sql.query_row(
+        "UPDATE agents_turns SET harness =
+             (SELECT harness FROM agents_threads WHERE id = agents_turns.thread)
+         WHERE id = ?1 RETURNING harness",
+        params![turn],
+        |row| row.get(0),
+    )?)
 }
 
 /// Who opened each of the Thread's turns.
