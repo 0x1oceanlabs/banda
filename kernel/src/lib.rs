@@ -83,6 +83,18 @@ pub fn project_in_env(key: &str, value: &str) -> Option<ProjectId> {
         .flatten()
 }
 
+/// The variable that holds an Agent's pass for `banda`, in its `banda
+/// mcp` and in the shell it runs commands in (ADR 0019, decision 2).
+pub const TOKEN_VARIABLE: &str = "BANDA_TOKEN";
+
+/// The variable that says where the engine that gave the pass listens.
+pub const ENGINE_VARIABLE: &str = "BANDA_ENGINE";
+
+/// The variables that hand `banda` `pass`, from the engine at `engine`.
+pub fn pass_env(pass: String, engine: String) -> [(&'static str, String); 2] {
+    [(TOKEN_VARIABLE, pass), (ENGINE_VARIABLE, engine)]
+}
+
 /// The version of the API's wire protocol. A window that speaks another
 /// version is refused before anything else (ADR 0002, decision 8).
 pub const PROTOCOL: u32 = 1;

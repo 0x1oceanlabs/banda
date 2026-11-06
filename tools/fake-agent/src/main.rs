@@ -89,11 +89,12 @@
 //! new session was given, as JSON, so a test can start them as a Harness
 //! would. With `FAKE_AGENT_ROOTS` naming a file it writes there the extra
 //! roots (`additionalDirectories`) a new session was given, as JSON. With
-//! `FAKE_AGENT_SHELLS` naming a file it writes there, as JSON, what a
-//! shell of a new session's Agent would be handed for `banda`: `process`,
-//! `BANDA_TOKEN` and `BANDA_ENGINE` as its own environment has them, and
-//! `session`, the session's `_meta.claudeCode.options.env`, as Claude
-//! Code's adapter takes it.
+//! `FAKE_AGENT_SHELLS` naming a file it writes there, as JSON, what the
+//! shell of the last session it opened (new, forked, resumed or loaded)
+//! would be handed for `banda`: `process`, `BANDA_TOKEN` and
+//! `BANDA_ENGINE` as its own environment has them, and `session`, the
+//! request's `_meta.claudeCode.options.env`, which Claude Code's adapter
+//! sets over them.
 //!
 //! With `FAKE_AGENT_REPLAY` naming a recording it plays a real Harness's
 //! conversation instead: see [`replay`].
@@ -1219,6 +1220,20 @@ fn forgets() -> bool {
     std::env::var_os("FAKE_AGENT_FORGETS").is_some()
 }
 
+/// Writes in `FAKE_AGENT_SHELLS`, when it names a file, what the shell of
+/// a session opened with `meta` would be handed for `banda`.
+fn tell_shells(meta: Option<&serde_json::Map<String, serde_json::Value>>) {
+    let Some(file) = std::env::var_os("FAKE_AGENT_SHELLS") else {
+        return;
+    };
+    let own = |name| std::env::var(name).ok();
+    let process = json!({ "BANDA_TOKEN": own("BANDA_TOKEN"), "BANDA_ENGINE": own("BANDA_ENGINE") });
+    let options = meta.and_then(|meta| meta.get("claudeCode")?.get("options"));
+    let session = options.and_then(|options| options.get("env"));
+    let shells = json!({ "process": process, "session": session });
+    let _ = std::fs::write(file, shells.to_string());
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     if std::env::args().any(|arg| arg == "--sign-in") {
@@ -1366,16 +1381,7 @@ async fn main() -> Result<(), Error> {
                             serde_json::to_vec(&request.additional_directories).unwrap_or_default();
                         let _ = std::fs::write(file, roots);
                     }
-                    if let Some(file) = std::env::var_os("FAKE_AGENT_SHELLS") {
-                        let own = |name| std::env::var(name).ok();
-                        let (token, engine) = (own("BANDA_TOKEN"), own("BANDA_ENGINE"));
-                        let process = json!({ "BANDA_TOKEN": token, "BANDA_ENGINE": engine });
-                        let meta = request.meta.as_ref();
-                        let options = meta.and_then(|m| m.get("claudeCode")?.get("options"));
-                        let session = options.and_then(|options| options.get("env"));
-                        let shells = json!({ "process": process, "session": session });
-                        let _ = std::fs::write(file, shells.to_string());
-                    }
+                    tell_shells(request.meta.as_ref());
                     let id = fake.new_session();
                     fake.at_folder(id.clone(), request.cwd.clone());
                     let options = fake.options(&id);
@@ -1393,6 +1399,7 @@ async fn main() -> Result<(), Error> {
                 async move |request: ForkSessionRequest,
                             responder: Responder<ForkSessionResponse>,
                             cx: ConnectionTo<Client>| {
+                    tell_shells(request.meta.as_ref());
                     let id = fake.new_session();
                     let at = request
                         .meta
@@ -1429,6 +1436,7 @@ async fn main() -> Result<(), Error> {
                     if forgets() {
                         return responder.respond_with_error(Error::resource_not_found(None));
                     }
+                    tell_shells(request.meta.as_ref());
                     let options = fake.options(&request.session_id);
                     responder.respond(ResumeSessionResponse::new().config_options(options))
                 }
@@ -1444,6 +1452,7 @@ async fn main() -> Result<(), Error> {
                     if forgets() {
                         return responder.respond_with_error(Error::resource_not_found(None));
                     }
+                    tell_shells(request.meta.as_ref());
                     fake.at_folder(request.session_id.clone(), request.cwd.clone());
                     let options = fake.options(&request.session_id);
                     responder.respond(LoadSessionResponse::new().config_options(options))

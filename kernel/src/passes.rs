@@ -1,10 +1,12 @@
-//! A pass is how an Agent's session reaches the engine (ADR 0019,
-//! decision 2). The agents module asks for one when it opens a session,
-//! and hands it to `banda mcp`. Whoever says it in `hello` is that Agent,
-//! and works only in that Project.
+//! A pass is how an Agent reaches the engine (ADR 0019, decision 2). The
+//! agents module asks for one when it opens a session, for its `banda mcp`
+//! and its shell, and one for each Harness process, whose Agents' shells
+//! share it. Whoever says it in `hello` is that Agent, and works only in
+//! that Project.
 //!
-//! Passes are kept in memory. They end with the engine, and each session
-//! opened, again too, gets a new pass.
+//! Passes are kept in memory, and end with the engine. Each session
+//! opened, again too, gets a new pass; a process's is made once in a run
+//! of the engine, and lasts through its restarts.
 
 use crate::{AgentId, Error, ProjectId};
 use std::collections::HashMap;

@@ -717,8 +717,9 @@ impl ModuleProject {
         self.project.owner
     }
 
-    /// The pass that names `agent` in this Project, for its session to reach
-    /// the engine through `banda mcp` (ADR 0019, decision 2).
+    /// A new pass that names `agent` in this Project, and works only in it:
+    /// for a session's `banda mcp` and shell, or for the shells of a Harness
+    /// process's Agents (ADR 0019, decision 2).
     pub fn pass(&self, agent: AgentId) -> Result<String, Error> {
         self.project.passes.issue(agent, self.project.id)
     }

@@ -18,9 +18,7 @@
 //! - **An Agent reaches Banda** through `banda mcp`, which every session
 //!   gets with the Agent's pass ([`Pipe`]). Its tools are the methods
 //!   marked `tool` below (ADR 0019). The `banda` it runs in its shell acts
-//!   under a pass walled to its Project too: the session's own, where the
-//!   Harness takes variables for a session's shell, else one its process's
-//!   Agents share (`live.rs`).
+//!   under a pass too (`live.rs`).
 //!
 //! Its methods, each with its right, params and answer, are the
 //! `methods!` table below (ADR 0014).
@@ -59,7 +57,7 @@ use banda_harnesses::model::Program;
 use banda_harnesses::{Harness, Harnesses};
 use banda_kernel::{
     AgentId, Call, Effect, Error, Module, ModuleProject, Nothing, OnRestart, Outcome, Participant,
-    Picture, Refusal, Right, Settled, Tool, Tx,
+    Picture, Refusal, Right, Settled, Tool, Tx, pass_env,
 };
 use banda_look::OneFile as _;
 use base64::Engine as _;
@@ -117,9 +115,7 @@ pub struct Pipe {
 
 impl Pipe {
     /// `banda mcp` as a session of `agent`'s in `project` starts it, with a
-    /// new pass; `None`, said in the log, if there is no pass. Its
-    /// variables are the session's shell's too: the `banda` its Agent runs
-    /// there acts under the same pass.
+    /// new pass; `None`, said in the log, if there is no pass.
     fn program(&self, project: &ModuleProject, agent: AgentId) -> Option<Program> {
         Some(Program {
             program: self.program.display().to_string(),
@@ -128,10 +124,9 @@ impl Pipe {
         })
     }
 
-    /// What hands `banda` a new pass of `agent`'s in `project`: the pass,
-    /// in `BANDA_TOKEN`, and where the engine listens, in `BANDA_ENGINE`;
-    /// `None`, said in the log, if there is no pass. The kernel walls the
-    /// pass in `project`.
+    /// The variables that hand `banda` a new pass of `agent`'s, which the
+    /// kernel walls in `project`, and where the engine listens; `None`,
+    /// said in the log, if there is no pass.
     fn variables(
         &self,
         project: &ModuleProject,
@@ -141,7 +136,7 @@ impl Pipe {
             .pass(agent)
             .inspect_err(|error| tracing::warn!(%error, "an Agent goes without Banda"))
             .ok()?;
-        let variables = [("BANDA_TOKEN", pass), ("BANDA_ENGINE", self.engine.clone())];
+        let variables = pass_env(pass, self.engine.clone());
         Some(
             variables
                 .map(|(name, value)| (name.to_owned(), value))
