@@ -3,6 +3,7 @@ import {
   Fragment,
   type ReactElement,
   useMemo,
+  useRef,
   useState,
 } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
@@ -13,6 +14,7 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuTrigger,
+  useAfterMenu,
 } from "@banda/ui/components/context-menu"
 import {
   DropdownMenu,
@@ -27,13 +29,16 @@ import {
 } from "@banda/ui/components/dropdown-menu"
 import { Kbd } from "@banda/ui/components/kbd"
 import { ScrollArea } from "@banda/ui/components/scroll-area"
+import { trustProject } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
 import { clock } from "@banda/ui/lib/words"
 import type { Listed, Lists, PaneState } from "@banda/ui/pane"
 import {
   AlarmClockIcon,
+  BadgeCheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  CircleDashedIcon,
   CopyIcon,
   FileCogIcon,
   FolderPlusIcon,
@@ -64,6 +69,7 @@ import { useIsArchived } from "./archived"
 import { seeWoke, snoozable, useSnoozes } from "./snoozed"
 import { FlowMenu } from "./FlowMenu"
 import { ThemeMenu } from "./ThemeMenu"
+import { TrustCard, type Trusting } from "../trust/Trust"
 import { useKeyLabel, useKeyOf } from "@banda/ui/hooks/use-key-of"
 import { keyCaps } from "@banda/ui/lib/keys"
 
@@ -190,12 +196,22 @@ export function Sidebar({
       console.error("banda: sidebar.toml did not open", error)
     })
   }
+  // The Project whose trust a card by its row asks about (ADR 0083,
+  // decision 5); taking it back needs no card.
+  const [trusting, setTrusting] = useState<Trusting>()
+  const onTrust = (project: ProjectId, trusted: boolean, anchor: Element) => {
+    if (trusted) return setTrusting({ project, anchor })
+    trustProject(props.engine, project, false).catch((error: unknown) =>
+      console.error("banda: the Project's trust was not taken back", error)
+    )
+  }
   // A Project's row, wherever it shows, has its right-click menu.
   const withMenu: WithMenu = (project, row) => (
     <ProjectMenu
       project={project}
       onNewThread={onNewThread}
       onPin={onPin}
+      onTrust={onTrust}
       onSettings={onProjectSettings}
       onLocate={onLocate}
     >
@@ -396,6 +412,12 @@ export function Sidebar({
           <FolderPlusIcon />
         </Button>
       </div>
+      <TrustCard
+        engine={props.engine}
+        projects={projects}
+        target={trusting}
+        onClose={() => setTrusting(undefined)}
+      />
     </aside>
   )
 }
@@ -696,11 +718,13 @@ function NewThreadIn({
 /** A Project's row with its right-click menu around it. */
 type WithMenu = (project: ProjectSummary, row: ReactElement) => ReactElement
 
-/** A Project's right-click menu, in T3 Code's words (ADR 0026, decision 5). */
+/** A Project's right-click menu, in T3 Code's words (ADR 0026, decision
+ * 5), with its trust (ADR 0083, decision 5). */
 function ProjectMenu({
   project,
   onNewThread,
   onPin,
+  onTrust,
   onSettings,
   onLocate,
   children,
@@ -708,13 +732,17 @@ function ProjectMenu({
   project: ProjectSummary
   onNewThread: (project: ProjectId) => void
   onPin: (project: ProjectId, pinned: boolean) => void
+  /** Trusts the Project, asking on a card by `row`, or takes its trust
+   * back. */
+  onTrust: (project: ProjectId, trusted: boolean, row: Element) => void
   onSettings: (project: ProjectId) => void
   onLocate: (project: ProjectId) => void
   children: ReactElement
 }) {
+  const row = useRef<HTMLDivElement>(null)
   return (
     <ContextMenu>
-      <ContextMenuTrigger>{children}</ContextMenuTrigger>
+      <ContextMenuTrigger ref={row}>{children}</ContextMenuTrigger>
       <ContextMenuContent>
         {project.missing ? (
           <DropdownMenuItem onClick={() => onLocate(project.id)}>
@@ -737,11 +765,42 @@ function ProjectMenu({
           {project.pinned ? <PinOffIcon /> : <PinIcon />}
           {project.pinned ? "Unpin Project" : "Pin Project"}
         </DropdownMenuItem>
+        {!project.scratch && (
+          <TrustItem
+            trusted={project.trusted}
+            onTrust={(trusted) =>
+              row.current && onTrust(project.id, trusted, row.current)
+            }
+          />
+        )}
         <DropdownMenuItem onClick={() => onSettings(project.id)}>
           <SettingsIcon />
           Project settings
         </DropdownMenuItem>
       </ContextMenuContent>
     </ContextMenu>
+  )
+}
+
+/** Trust Project…, which asks on a card by the row once the menu has
+ * gone, or Stop trusting, at once. */
+function TrustItem({
+  trusted,
+  onTrust,
+}: {
+  trusted: boolean
+  onTrust: (trusted: boolean) => void
+}) {
+  const later = useAfterMenu()
+  return trusted ? (
+    <DropdownMenuItem onClick={() => onTrust(false)}>
+      <CircleDashedIcon />
+      Stop trusting
+    </DropdownMenuItem>
+  ) : (
+    <DropdownMenuItem onClick={() => later(() => onTrust(true))}>
+      <BadgeCheckIcon />
+      Trust Project…
+    </DropdownMenuItem>
   )
 }

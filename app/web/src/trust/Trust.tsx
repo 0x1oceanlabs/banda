@@ -1,0 +1,163 @@
+/**
+ * What the window draws of a Project's trust (ADR 0083, decision 5): the
+ * list of what waits for it, the card that trusts a Project later, from
+ * its menu or its settings, and the "soon" of what is not built yet.
+ */
+import { useCallback } from "react"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import { Button } from "@banda/ui/components/button"
+import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverTitle,
+} from "@banda/ui/components/popover"
+import { ProjectSign } from "@banda/ui/components/project-sign"
+import { useAct } from "@banda/ui/hooks/use-act"
+import { useRead } from "@banda/ui/hooks/use-read"
+import { trustProject } from "@banda/ui/lib/projects"
+import { cn } from "@banda/ui/lib/utils"
+import { FolderIcon, PlugIcon } from "lucide-react"
+import { askedOf, NOTHING_YET, type Waiting } from "./trust"
+
+/** What is not built yet, beside its greyed control (ADR 0084). */
+export function Soon({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-full bg-foreground/8 px-1.5 text-[10px] leading-4 font-normal text-muted-foreground",
+        className
+      )}
+    >
+      soon
+    </span>
+  )
+}
+
+/** What a folder holds that its Harnesses load only once it is trusted,
+ * a row each, quietly; or that nothing does yet. */
+export function Waits({ waits }: { waits: readonly Waiting[] }) {
+  if (waits.length === 0)
+    return <p className="text-xs text-muted-foreground">{NOTHING_YET}</p>
+  return (
+    <ul
+      aria-label="What waits"
+      className="flex flex-col rounded-lg py-1 ring-1 ring-border ring-inset"
+    >
+      {waits.map(({ name, holds }) => {
+        const Icon = name === ".mcp.json" ? PlugIcon : FolderIcon
+        return (
+          <li
+            key={name}
+            className="flex min-w-0 items-center gap-2 px-2.5 py-0.5 text-xs"
+          >
+            <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+            <code className="shrink-0 font-mono">{name}</code>
+            <span className="ml-auto min-w-0 truncate text-muted-foreground">
+              {holds}
+            </span>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+/** A Project to trust, and what the card stands by. */
+export type Trusting = { project: ProjectId; anchor: Element }
+
+/**
+ * The card that trusts a Project after it was added: what its Harnesses
+ * will load, and Trust. Only this click trusts it; Cancel, Esc or a click
+ * elsewhere leaves it as it is.
+ */
+export function TrustCard({
+  engine,
+  projects,
+  target,
+  align = "start",
+  onClose,
+}: {
+  engine: Engine
+  projects: readonly ProjectSummary[]
+  target: Trusting | undefined
+  /** Which of the anchor's edges it lines up with: a row's start, or a
+   * button's end at the right of a Pane. */
+  align?: "start" | "end"
+  onClose: () => void
+}) {
+  const project = projects.find((one) => one.id === target?.project)
+  return (
+    <Popover
+      open={target !== undefined && project !== undefined}
+      onOpenChange={(open) => !open && onClose()}
+    >
+      {target && project && (
+        <PopoverContent
+          anchor={target.anchor}
+          align={align}
+          sideOffset={6}
+          className="w-88 gap-2"
+        >
+          <Card
+            key={project.id}
+            engine={engine}
+            project={project}
+            onClose={onClose}
+          />
+        </PopoverContent>
+      )}
+    </Popover>
+  )
+}
+
+function Card({
+  engine,
+  project,
+  onClose,
+}: {
+  engine: Engine
+  project: ProjectSummary
+  onClose: () => void
+}) {
+  // What it names now, as Add Project would find it; a folder that is
+  // gone names nothing.
+  const read = useRead(
+    useCallback(
+      () => engine.call("projects.foreign", { folder: project.folder }),
+      [engine, project.folder]
+    )
+  )
+  const waits = read.state === "ready" ? askedOf(read.value).waits : []
+  const { busy, problem, act } = useAct()
+  const trust = async () => {
+    if (await act(() => trustProject(engine, project.id, true))) onClose()
+  }
+  return (
+    <>
+      <div className="flex items-center gap-2">
+        <ProjectSign project={project} />
+        <PopoverTitle className="min-w-0 truncate">
+          Trust {project.name}?
+        </PopoverTitle>
+      </div>
+      <PopoverDescription>
+        Claude Code and Codex will load what it names, from their next turn:
+      </PopoverDescription>
+      {read.state !== "loading" && <Waits waits={waits} />}
+      {problem && (
+        <p role="alert" className="text-xs text-destructive">
+          {problem}
+        </p>
+      )}
+      <div className="mt-1 flex justify-end gap-2">
+        <Button size="sm" variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button size="sm" disabled={busy} onClick={() => void trust()}>
+          Trust
+        </Button>
+      </div>
+    </>
+  )
+}

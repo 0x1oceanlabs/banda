@@ -30,3 +30,7 @@ test("pickers omit scratch and archived Projects while keeping pinned Projects f
 test("promotion changes a Project list even if no other field changes", () => {
   expect(sameProjects([{ ...project, scratch: true }], [project])).toBe(false)
 })
+
+test("a change of trust changes a Project list, so its sign's corner follows", () => {
+  expect(sameProjects([{ ...project, trusted: false }], [project])).toBe(false)
+})

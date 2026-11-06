@@ -2,9 +2,12 @@
  * A Project's sign (ADR 0070): its picture, an emoji, a Lucide icon or
  * letters, on a quiet tile (look B): a colour only when the Person picked
  * one, never one that an Agent's state says. No Project's is a dashed
- * empty tile.
+ * empty tile. A Project the Person does not trust wears a small grey
+ * dashed circle at the tile's corner (ADR 0083, decision 5), wherever its
+ * sign shows.
  */
 import type { ProjectSummary, Sign, SignColor } from "@banda/contract"
+import { CircleDashedIcon } from "lucide-react"
 import { DynamicIcon, type IconName } from "lucide-react/dynamic"
 import type { CSSProperties } from "react"
 import { isNoProject, projectLabel } from "@banda/ui/lib/projects"
@@ -43,22 +46,63 @@ export function ProjectSign({
       />
     )
   const tint = tinted(project.sign)
-  return (
+  const corner = project.trusted ? undefined : cornerOf(size)
+  const tile = (
     <span
       aria-hidden
       data-sign={project.sign.kind}
-      style={{ ...side, ...tint }}
+      style={{ ...side, ...tint, ...(corner && { maskImage: corner.cut }) }}
       className={cn(
         "inline-flex shrink-0 items-center justify-center overflow-hidden leading-none font-bold",
         project.sign.kind !== "picture" &&
           !tint &&
           "bg-foreground/10 text-muted-foreground",
-        className
+        !corner && className
       )}
     >
       <Inside project={project} size={size} />
     </span>
   )
+  if (!corner) return tile
+  // The tile gives up its corner to the circle, so it reads on any
+  // surface; the circle stands half out, where the name keeps its room.
+  return (
+    <span
+      aria-hidden
+      data-untrusted=""
+      title={UNTRUSTED}
+      style={{ marginRight: corner.out }}
+      className={cn("relative inline-flex shrink-0", className)}
+    >
+      {tile}
+      <CircleDashedIcon
+        strokeWidth={2.6}
+        className="absolute text-muted-foreground"
+        style={{
+          width: corner.icon,
+          height: corner.icon,
+          right: -corner.out,
+          bottom: -corner.out,
+        }}
+      />
+    </span>
+  )
+}
+
+/** What the corner of a sign not trusted says, as its tooltip. */
+export const UNTRUSTED = "Not trusted: its own settings wait"
+
+/** The corner's circle for a sign of `size`: how wide it is, how far it
+ * stands out of the tile, and the round cut the tile gives up for it. */
+function cornerOf(size: SignSize) {
+  const icon = Math.round(Math.min(size * 0.64, 16))
+  const out = icon / 2
+  const hole = out + 1.5
+  return {
+    icon,
+    out,
+    cut: `radial-gradient(circle at 100% 100%, transparent ${hole}px, #000 ${hole + 0.5}px)`,
+  }
 }
 
 /** A Project's sign and name, as a row's line and a Pane's header show

@@ -5,16 +5,20 @@ import type { Action, MenuAct, MenuRow } from "@banda/ui/module"
 import type { Shell } from "../shell/actions"
 import {
   actsOf,
+  answerOf,
+  back,
   branchName,
   type Branch,
   type Choice,
   type Found,
   isBranch,
+  looksFirst,
   menuOf,
   openingOf,
   ranked,
   settingsLinkOf,
   type Sources,
+  trustBranch,
 } from "./menu"
 
 const thread = (id: string, title: string, more: Partial<Listed> = {}) =>
@@ -127,13 +131,16 @@ function nameOf(row: Choice): string {
     case "source":
     case "locate":
     case "finds":
+    case "trust":
       return branchName(row)
     case "adding":
       return "name" in row.how
         ? `create ${row.how.name}`
         : "locate" in row.how
           ? `locate ${row.how.folder}`
-          : `${row.how.create ? "create & add" : "add"} ${row.how.folder}`
+          : row.how.trusted !== undefined
+            ? `${row.how.trusted ? "trust" : "not yet"} ${row.how.folder}`
+            : `${row.how.create ? "create & add" : "add"} ${row.how.folder}`
     case "folder":
       return row.up ? `.. ${row.path}` : row.path
   }
@@ -456,6 +463,50 @@ describe("Add Project (ADR 0026)", () => {
     expect(
       labels("~/co", "root", way("folder"), { browsed: before })[0][1][0]
     ).toBe("add ~/co")
+  })
+
+  test("a folder on disk is looked at before it is added; a folder made for it, a name or a locate is not", () => {
+    expect(looksFirst({ folder: "~/code/widget", create: false })).toBe(true)
+    expect(looksFirst({ folder: "~/code/new", create: true })).toBe(false)
+    expect(
+      looksFirst({ folder: "~/code/widget", create: false, trusted: false })
+    ).toBe(false)
+    expect(looksFirst({ name: "Work" })).toBe(false)
+    expect(looksFirst({ locate: "s1" as never, folder: "/x" })).toBe(false)
+  })
+
+  test("a folder that looks foreign asks in the menu: Not yet first, as Enter takes it, then Trust", () => {
+    const foreign = {
+      foreign: true,
+      why: [{ kind: "holds" as const, name: ".claude" }],
+    }
+    const ask = trustBranch("~/code/widget/", foreign)
+    expect(isBranch(ask)).toBe(true)
+    expect(branchName(ask)).toBe("widget")
+    expect(labels("", "root", ask)).toEqual([
+      ["", ["not yet ~/code/widget/", "trust ~/code/widget/"]],
+    ])
+    const [notYet, trust] = menuFor("", "root", ask)[0].rows
+    expect(answerOf(notYet)?.title).toBe("Not yet")
+    expect(answerOf(trust)?.title).toBe("Trust")
+    expect(notYet).toMatchObject({
+      kind: "adding",
+      how: { folder: "~/code/widget/", create: false, trusted: false },
+    })
+    // Typing finds one answer by its words.
+    expect(labels("tru", "root", ask)).toEqual([["", ["trust ~/code/widget/"]]])
+    // Any other row answers nothing.
+    expect(answerOf({ kind: "adding", id: "adding", how: { name: "W" } })).toBe(
+      undefined
+    )
+  })
+
+  test("⌫ from the question goes back to the path as it was typed", () => {
+    const ask = trustBranch("~/code/widget", { foreign: true, why: [] })
+    const went = back([add, way("folder"), ask])
+    expect(went.path).toEqual([add, way("folder")])
+    expect(went.words).toBe("~/code/widget")
+    expect(back([add, way("folder")])).toEqual({ path: [add], words: "" })
   })
 })
 
