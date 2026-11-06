@@ -29,12 +29,15 @@ export function keepInForce(keys: PageKeys): void {
 const MAC = process.platform === "darwin"
 
 /**
- * The press Banda's hands send a page now, as they act in it: one of
- * Banda's keys in force is held back from the page and kept here.
- * Electron tells a page's `before-input-event` of a key it is sent before
- * `sendInputEvent` returns.
+ * The key Banda's hands send a page now, as they act in it, and what of
+ * it the page is not sent: one of Banda's keys in force, or, `all`, any
+ * key, sent only to learn whether it is one. `banda` says it was one of
+ * Banda's keys. Electron tells a page's `before-input-event` of a key it
+ * is sent before `sendInputEvent` returns.
  */
-let pressing: { page: number; banda?: Pressed } | undefined
+type Holding = { page: number; all: boolean; banda?: true }
+
+let holding: Holding | undefined
 
 /**
  * Takes Banda's keys from `page` for `window`, as the Person presses
@@ -55,15 +58,11 @@ export function keys(
       shiftKey: input.shift,
       metaKey: input.meta,
     }
+    const banda = input.type === "keyDown" && taken(key, inForce.keys, MAC)
     if (byHands(page.id)) {
-      if (
-        pressing?.page === page.id &&
-        input.type === "keyDown" &&
-        taken(key, inForce.keys, MAC)
-      ) {
-        event.preventDefault()
-        pressing.banda ??= key
-      }
+      if (holding?.page !== page.id) return
+      if (banda) holding.banda = true
+      if (banda || holding.all) event.preventDefault()
       return
     }
     // A key of the mod pressed or let go stays the page's, and the window
@@ -79,26 +78,38 @@ export function keys(
       }
       return
     }
-    if (input.type !== "keyDown") return
-    if (!taken(key, inForce.keys, MAC)) return
+    if (!banda) return
     event.preventDefault()
     tellPage(window, BROWSER_BRIDGE.key, { ...key, page: page.id })
   })
 }
 
-/** Sends `input`, a key of a press of Banda's hands, to `page` as they
- * act in it (`byHands`): one of Banda's keys in force there is held back
- * and returned, for the hands to refuse. */
-export function sendPress(
-  page: WebContents,
-  input: KeyboardInputEvent
-): Pressed | undefined {
-  const now: { page: number; banda?: Pressed } = { page: page.id }
-  pressing = now
+/** Sends `input` to `page` as Banda's hands act in it, holding back what
+ * `all` says; whether it was one of Banda's keys. */
+function held(page: WebContents, input: KeyboardInputEvent, all: boolean) {
+  const now: Holding = { page: page.id, all }
+  holding = now
   try {
     page.sendInputEvent(input)
   } finally {
-    pressing = undefined
+    holding = undefined
   }
-  return now.banda
+  return now.banda === true
+}
+
+/** Sends `input`, a key of a press of Banda's hands, to `page` as they
+ * act in it (`byHands`): one of Banda's keys in force there is held back,
+ * for the hands to refuse. Says whether it was. */
+export function sendPress(
+  page: WebContents,
+  input: KeyboardInputEvent
+): boolean {
+  return held(page, input, false)
+}
+
+/** Whether `down`, a key's press, is one of Banda's keys in force in
+ * `page`, as Electron reads it: `Alt+!` as Alt+Shift+1 too. Sent as
+ * Banda's hands act in `page` (`byHands`), the page hears nothing of it. */
+export function isBandas(page: WebContents, down: KeyboardInputEvent): boolean {
+  return held(page, down, true)
 }

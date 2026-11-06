@@ -216,7 +216,8 @@ pub struct Act {
     #[ts(optional)]
     pub values: Option<Vec<String>>,
     /// What press presses, as Enter, Tab, ArrowDown or Control+A. A
-    /// press of one of Banda's keys, as Alt+W or Control+L, is refused.
+    /// press of one of Banda's keys, as Alt+W or ControlOrMeta+L, is
+    /// refused.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub key: Option<String>,

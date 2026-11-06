@@ -29,7 +29,8 @@ text?: string,
 values?: Array<string>, 
 /**
  * What press presses, as Enter, Tab, ArrowDown or Control+A. A
- * press of one of Banda's keys, as Alt+W or Control+L, is refused.
+ * press of one of Banda's keys, as Alt+W or ControlOrMeta+L, is
+ * refused.
  */
 key?: string, 
 /**
