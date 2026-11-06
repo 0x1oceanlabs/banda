@@ -55,6 +55,7 @@ import { pickPreset, PRESET_WORDS, type Settings } from "./settings"
 import { type Held, held, hold, rowKey } from "./hold"
 import { archivable, useIsArchived } from "./archived"
 import { seeWoke, snoozable, useSnoozes } from "./snoozed"
+import { FlowMenu } from "./FlowMenu"
 import { ThemeMenu } from "./ThemeMenu"
 import { useKeyLabel, useKeyOf } from "@banda/ui/hooks/use-key-of"
 import { keyCaps } from "@banda/ui/lib/keys"
@@ -263,6 +264,7 @@ export function Sidebar({
           <span className="min-w-0 flex-1 truncate text-left">Search</span>
           <MenuKey />
         </button>
+        <FlowMenu />
         <Button
           variant="ghost"
           size="icon-sm"
