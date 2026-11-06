@@ -1,6 +1,5 @@
 import type { Listed } from "@banda/ui/pane"
 import { expect, test } from "vitest"
-import { colourOf } from "./Lend"
 import { threadsIn } from "./threads"
 
 const row = (id: string, changed: number, more: Partial<Listed> = {}) =>
@@ -26,13 +25,4 @@ test("a tab is lent to a Thread of its Project, the latest first", () => {
     "vault redesign",
     "e2e bar test",
   ])
-})
-
-test("a lent tab's chip takes its Agent's state colour, as a Group's plate", () => {
-  expect(colourOf("running")).toBe("var(--working)")
-  expect(colourOf("thinking")).toBe("var(--working)")
-  expect(colourOf("asking")).toBe("var(--attention)")
-  expect(colourOf("done")).toBe("var(--added)")
-  expect(colourOf("failed")).toBe("var(--destructive)")
-  expect(colourOf("rest")).toBe("var(--muted-foreground)")
 })

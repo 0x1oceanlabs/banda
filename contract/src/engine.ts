@@ -24,6 +24,9 @@ export type Status =
       /** The ID this machine's modules are followed by, as a Project's
        * (ADR 0025, decision 1); none when no module is the machine's. */
       machine?: ProjectId
+      /** This boot of the engine: another once it restarted, which ended
+       * every session of the last. */
+      boot: string
     }
   /** The connection broke; the client tries again after `retryIn` ms. */
   | { state: "lost"; retryIn: number }
@@ -340,6 +343,7 @@ export class Engine {
           engine: frame.engine,
           modules: frame.modules,
           ...(frame.machine && { machine: frame.machine }),
+          boot: frame.boot,
         })
         for (const [id, following] of this.#following) {
           this.#subscribe(id, following)

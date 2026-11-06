@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { hidden, ruleAt, siteAt, stepOf } from "./hands"
+import { hidden, onWeb, ruleAt, siteAt, stepOf } from "./hands"
 
 test("secret values are hidden across roles without changing refs, names or metadata", () => {
   const tree = `- textbox "CVV" [ref=e2]: "2"
@@ -79,4 +79,18 @@ test("a rule is the host's, or the nearest domain's above it up to the site", ()
     ruleAt({ "co.uk": "allow" }, siteAt("https://b.co.uk/")!)
   ).toBeUndefined()
   expect(at("http://[fe80::1]/")).toBeUndefined()
+})
+
+test("a page on the web is at an http or https address, or blank", () => {
+  expect(onWeb("https://mail.example.com/inbox")).toBe(true)
+  expect(onWeb("http://localhost:5173/")).toBe(true)
+  expect(onWeb("about:blank")).toBe(true)
+  for (const url of [
+    "file:///home/person/notes.txt",
+    "chrome-extension://abc/popup.html",
+    "devtools://devtools/bundled/inspector.html",
+    "data:text/html,hi",
+    "",
+  ])
+    expect(onWeb(url), url).toBe(false)
 })

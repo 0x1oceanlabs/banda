@@ -10,7 +10,7 @@
  * its Group, so the band is one across the Group's pieces.
  */
 import { type RefObject, useEffect, useLayoutEffect, useRef } from "react"
-import type { GroupState } from "./groups"
+import type { GroupState } from "@banda/ui/components/banda-mark"
 import { arrivals, LONG_AGO, type Seen, spans } from "./plates"
 
 export function usePlates(

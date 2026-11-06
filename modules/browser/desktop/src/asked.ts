@@ -120,14 +120,19 @@ const inReach = (name: string, request: WindowRequest) =>
 
 /** Lists stay stable in an MCP session. The setting is enforced on each
  * request, so switching tools off also stops existing sessions; so is
- * the reach, as tabs come and go. */
+ * the reach, as tabs come and go: before a call, and once it is done, so
+ * a call whose tab left its reach meanwhile, as a lend that ended, says
+ * nothing of it, done or refused. */
 export const browserAsked: Asked<Tabs | Cdp | Drive> = Object.fromEntries(
   Object.entries(handlers).map(([name, answer]) => [
     name,
     (request: WindowRequest) =>
-      Drive.use((drive) => drive.access(byOf(request))).pipe(
-        Effect.andThen(inReach(name, request)),
-        Effect.andThen(answer(request))
-      ),
+      Effect.gen(function* () {
+        yield* Drive.use((drive) => drive.access(byOf(request)))
+        yield* inReach(name, request)
+        const done = yield* Effect.exit(answer(request))
+        yield* inReach(name, request)
+        return yield* done
+      }),
   ])
 )

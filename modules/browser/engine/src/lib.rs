@@ -79,13 +79,13 @@ pub enum Lending {
     Session,
 }
 
-/// What `browser.lent` is told: the Thread, the tab's title, and what
-/// became of its lend.
+/// What `browser.lent` is told: the Thread, the title of the tab's page,
+/// and what became of its lend.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "browser/")]
 pub struct LentAsk {
     pub thread: String,
-    pub tab: String,
+    pub title: String,
     pub lending: Lending,
 }
 
@@ -97,19 +97,26 @@ pub struct LentAsk {
 pub struct Lent {
     pub thread: String,
     /// The line, as its Person reads it: `You lent this Thread a tab ·
-    /// Fix login redirect #598`.
+    /// “Fix login redirect #598”`.
     pub notice: String,
 }
 
 impl Lending {
-    /// The Thread's line for it, of the tab titled `tab`.
-    pub fn line(self, tab: &str) -> String {
-        // A page names its own title: one line, cut, as an answer cuts it.
-        let tab = tab.split_whitespace().collect::<Vec<_>>().join(" ");
-        let tab = cut(&tab);
-        let named = |words: &str| match tab {
+    /// The Thread's line for it, of the tab whose page is titled `title`.
+    pub fn line(self, title: &str) -> String {
+        // The page names its own title, which the line quotes as the
+        // page's words: plain text in one line, cut as an answer cuts it,
+        // with no quote of its own to close the line's.
+        let plain: String = title
+            .chars()
+            .filter(|c| !c.is_control() && !BIDI.contains(c))
+            .map(|c| if matches!(c, '“' | '”') { '"' } else { c })
+            .collect();
+        let plain = plain.split_whitespace().collect::<Vec<_>>().join(" ");
+        let title = cut(&plain);
+        let named = |words: &str| match title {
             "" => words.to_owned(),
-            tab => format!("{words} · {tab}"),
+            title => format!("{words} · “{title}”"),
         };
         match self {
             Lending::Lent => named("You lent this Thread a tab"),
@@ -424,7 +431,7 @@ impl Browser {
     /// agents module posts in it.
     async fn lent(&self, call: Call, ask: LentAsk) -> Result<(), Refusal> {
         let lent = Lent {
-            notice: ask.lending.line(&ask.tab),
+            notice: ask.lending.line(&ask.title),
             thread: ask.thread,
         };
         let by = call.participant();
@@ -565,6 +572,13 @@ fn dialog_said(dialog: &Dialog) -> String {
         cut(&dialog.default_prompt)
     )
 }
+
+/// The characters that turn the direction text runs in, which a page's
+/// title may hold to show other words than it says.
+const BIDI: [char; 12] = [
+    '\u{061C}', '\u{200E}', '\u{200F}', '\u{202A}', '\u{202B}', '\u{202C}', '\u{202D}', '\u{202E}',
+    '\u{2066}', '\u{2067}', '\u{2068}', '\u{2069}',
+];
 
 /// What an answer says of a page's own words, or a handoff's why, at most
 /// `TITLE` long.

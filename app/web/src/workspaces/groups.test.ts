@@ -5,7 +5,6 @@ import { columnMoved, opened } from "./arrange"
 import {
   filling,
   grouping,
-  groupState,
   regrouping,
   shiftingInside,
   soloing,
@@ -194,13 +193,5 @@ describe("a Group", () => {
       kind: "git.diff",
       place: { to: "group", pane: "a1" },
     })
-  })
-
-  test("its colour is its Agent's state", () => {
-    expect(groupState("running")).toBe("working")
-    expect(groupState("asking")).toBe("asking")
-    expect(groupState("done")).toBe("done")
-    expect(groupState("offline")).toBe("failed")
-    expect(groupState("idle")).toBeUndefined()
   })
 })

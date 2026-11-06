@@ -111,6 +111,10 @@ pub enum EngineFrame {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         machine: Option<ProjectId>,
+        /// This boot of the engine: another once it restarted, and every
+        /// session of the last ended with it.
+        #[serde(default)]
+        boot: String,
     },
     Result {
         #[ts(type = "number")]
@@ -321,6 +325,7 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
             .map(str::to_owned)
             .collect(),
         machine: api.kernel.machine(),
+        boot: api.kernel.boot().to_owned(),
     };
     if sink.send(text(&welcome)).await.is_err() {
         return;

@@ -6,7 +6,8 @@
 import type { Columns } from "@banda/contract/look"
 import { cn } from "@banda/ui/lib/utils"
 import type { Listed } from "@banda/ui/pane"
-import { agentsOf, type GroupState, groupState } from "../workspaces/groups"
+import { type GroupState, groupState } from "@banda/ui/components/banda-mark"
+import { agentsOf } from "../workspaces/groups"
 import { type Entry, share, widthIn, type Workspace } from "../workspaces/model"
 
 /** A column of the map: its share of the screen, its Group, if any, and

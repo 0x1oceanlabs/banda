@@ -3,17 +3,18 @@
  * Chrome keeps its bookmark star. On a tab of the Person's, a button with
  * an empty Agent's mark opens the Threads of the Pane's Project, and the
  * one they pick sees and drives the tab. Once lent, a quiet chip takes the
- * button's place: the Thread's mark in its Agent's state colour, and its
- * name, which the address gives up its own room for, keeping the mark
- * alone where it is narrow. The chip's card takes the tab back, or goes to
- * the Thread.
+ * button's place: the Thread's mark in its Agent's state colour, as its
+ * Group's plate has it, and its name, which the address gives up its own
+ * room for, keeping the mark alone where it is narrow. The chip's card
+ * takes the tab back, or goes to the Thread.
  */
 import type { ProjectId } from "@banda/contract"
 import {
   BandaMark,
   EmptyMark,
+  groupState,
   MARK_WORDS,
-  type MarkState,
+  ThreadMark,
   works,
 } from "@banda/ui/components/banda-mark"
 import { Button } from "@banda/ui/components/button"
@@ -36,61 +37,46 @@ import { cn } from "@banda/ui/lib/utils"
 import { ago, MINUTE } from "@banda/ui/lib/words"
 import type { Listed } from "@banda/ui/pane"
 import { ArrowRightIcon, Undo2Icon } from "lucide-react"
-import { type CSSProperties, useEffect, useRef } from "react"
+import { useEffect, useRef } from "react"
 import { LEND } from "./keys"
-import { useProjectName, useThreadOf, useThreadsOf } from "./threads"
+import { useLentTo, useProjectName, useThreadOf, useThreadsOf } from "./threads"
 
-/** The colour of an Agent's state, as its Group's plate takes it (ADR
- * 0065, decision 6); the muted text's at rest. */
-export function colourOf(mark: MarkState): string {
-  if (works(mark)) return "var(--working)"
-  if (mark === "asking") return "var(--attention)"
-  if (mark === "done") return "var(--added)"
-  if (mark === "failed" || mark === "offline") return "var(--destructive)"
-  return "var(--muted-foreground)"
-}
-
-/** What a Thread's state reads, in its colour: at rest, how long ago it
- * changed. */
-function StateWord({ listed, now }: { listed: Listed; now?: number }) {
+/** What a Thread's state reads: at work, "Working"; at rest, how long
+ * ago it changed, or none. */
+function wordOf(listed: Listed, now?: number): string | undefined {
   const { mark } = listed
-  const word = works(mark)
-    ? MARK_WORDS.running
-    : mark === "rest" || mark === "idle"
-      ? undefined
-      : MARK_WORDS[mark]
-  if (!word)
-    return (
-      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-        {now === undefined ? "Idle" : ago(listed.changed, now)}
-      </span>
-    )
-  return (
-    <span
-      className="shrink-0 text-xs"
-      style={{ color: mark === "done" ? undefined : colourOf(mark) }}
-    >
-      {word}
-    </span>
-  )
+  if (works(mark)) return MARK_WORDS.running
+  if (mark !== "rest" && mark !== "idle") return MARK_WORDS[mark]
+  return now === undefined ? undefined : ago(listed.changed, now)
 }
 
-/** A Thread's mark, still, in its Agent's state colour. */
-function ThreadMark({
-  listed,
+/**
+ * The mark of the Thread of `agent`, which a tab is lent to, still, in
+ * its Agent's state colour; at rest while the window does not list it.
+ * The tab and the chip wear it.
+ */
+export function LentMark({
+  agent,
   className,
 }: {
-  listed: Listed
+  agent: string
   className?: string
 }) {
+  const mark = useThreadOf(agent)?.mark ?? "rest"
+  const to = useLentTo(agent)
   return (
-    <span className="flex shrink-0" style={{ color: colourOf(listed.mark) }}>
+    <span
+      data-lent
+      data-state={groupState(mark)}
+      className="flex shrink-0 text-(--group-color)"
+    >
       <BandaMark
         variant="agent"
-        state={listed.mark}
+        state={mark}
         playful={0}
         news={false}
-        className={cn("size-3.5", className)}
+        label={`Lent to ${to}`}
+        className={cn("size-3", className)}
       />
     </span>
   )
@@ -98,9 +84,9 @@ function ThreadMark({
 
 /**
  * The button that lends a tab of the Person's: it opens the Threads of
- * `project`, the latest first, and lends the tab to the one picked. Its
- * key, or a click, opens it; opened `byKey`, its first Thread has the
- * focus, so Enter picks it.
+ * `project`, the latest first, each as the sidebar shows it, and lends
+ * the tab to the one picked. Its key, or a click, opens it; opened
+ * `byKey`, its first Thread has the focus, so Enter picks it.
  */
 export function LendButton({
   project,
@@ -159,9 +145,18 @@ export function LendButton({
               className="gap-2"
               onClick={() => onLend(thread)}
             >
-              <ThreadMark listed={thread} />
+              <ThreadMark listed={thread} className="size-3.5" />
               <span className="min-w-0 flex-1 truncate">{thread.title}</span>
-              <StateWord listed={thread} now={now} />
+              <span
+                className={cn(
+                  "shrink-0 pl-1 text-xs tabular-nums",
+                  thread.mark === "asking"
+                    ? "text-attention"
+                    : "text-muted-foreground"
+                )}
+              >
+                {wordOf(thread, now)}
+              </span>
             </DropdownMenuItem>
           ))}
           {!threads.length && (
@@ -195,9 +190,8 @@ export function LentChip({
 }) {
   const label = useKeyLabel()
   const thread = useThreadOf(agent)
-  const title = thread?.title ?? "A Thread"
+  const title = useLentTo(agent)
   const mark = thread?.mark ?? "rest"
-  const colour = { "--lent": colourOf(mark) } as CSSProperties
   return (
     <Popover open={open} onOpenChange={onOpen}>
       <PopoverTrigger
@@ -206,24 +200,26 @@ export function LentChip({
             type="button"
             aria-label={`Lent to ${title}`}
             title={label(LEND, `Lent to ${title}`)}
-            data-lent={mark}
-            style={colour}
-            className="flex h-5 max-w-38 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-[color-mix(in_oklab,var(--lent)_13%,transparent)] pr-2 pl-1.5 text-[11px] text-foreground shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--lent)_28%,transparent)] transition-[background-color,box-shadow] duration-500 outline-none hover:bg-[color-mix(in_oklab,var(--lent)_22%,transparent)] focus-visible:ring-2 focus-visible:ring-ring data-popup-open:bg-[color-mix(in_oklab,var(--lent)_22%,transparent)] @max-[200px]:pr-1.5"
+            data-lent
+            data-state={groupState(mark)}
+            className="flex h-5 max-w-38 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-[color-mix(in_oklab,var(--group-color)_13%,transparent)] pr-2 pl-1.5 text-[11px] text-foreground shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--group-color)_28%,transparent)] transition-[background-color,--group-color] duration-500 outline-none hover:bg-[color-mix(in_oklab,var(--group-color)_22%,transparent)] focus-visible:ring-2 focus-visible:ring-ring data-popup-open:bg-[color-mix(in_oklab,var(--group-color)_22%,transparent)] @max-[200px]:pr-1.5"
           />
         }
       >
-        {thread ? (
-          <ThreadMark listed={thread} className="size-3" />
-        ) : (
-          <EmptyMark className="size-3" />
-        )}
+        <LentMark agent={agent} />
         <span className="min-w-0 truncate @max-[200px]:hidden">{title}</span>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-68 gap-0 px-3 py-2.5">
         <div className="mb-1.5 flex items-center gap-2">
-          {thread && <ThreadMark listed={thread} />}
+          <LentMark agent={agent} className="size-3.5" />
           <b className="min-w-0 flex-1 truncate font-semibold">{title}</b>
-          {thread && <StateWord listed={thread} />}
+          <span
+            data-lent
+            data-state={groupState(mark)}
+            className="shrink-0 text-xs text-(--group-color)"
+          >
+            {(thread && wordOf(thread)) ?? "Idle"}
+          </span>
         </div>
         <p className="mb-2.5 text-xs leading-normal text-muted-foreground">
           This Thread sees and drives this tab. The lend ends when you take it

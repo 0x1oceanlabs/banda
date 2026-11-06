@@ -44,11 +44,11 @@ const lendsOf = (tabs: Tabs["Service"], count: number) =>
     // It hears from when it runs.
     yield* Effect.yieldNow
     return Effect.map(Fiber.join(heard), (changes) =>
-      changes.map(({ page, lend, lending, tab }: LendChange) => [
+      changes.map(({ page, lend, lending, title }: LendChange) => [
         page.id,
         lend.agent,
         lending,
-        tab,
+        title,
       ])
     )
   })
@@ -155,7 +155,7 @@ it.effect(
       tabs.attached(ours)
       const heard = yield* lendsOf(tabs, 4)
 
-      yield* tabs.lend(mine, lendTo("agent-1"))
+      yield* tabs.lend(mine.id, lendTo("agent-1"))
       expect(tabs.lentTo(mine)?.agent).toBe("agent-1")
       expect(tabs.seen(work, agent)).toEqual([mine, ours])
       // No other Agent, no Person's call, and no call of its Agent from
@@ -163,30 +163,36 @@ it.effect(
       expect(tabs.seen(work, { kind: "agent", id: "agent-2" })).toEqual([ours])
       expect(tabs.seen(work, person)).toEqual([ours])
       expect(tabs.seen(other, agent)).toEqual([])
-      expect(told.at(-1)).toEqual({ kind: "lent", from: 20, agent: "agent-1" })
+      expect(told.at(-1)).toEqual({
+        kind: "lent",
+        from: 20,
+        lend: lendTo("agent-1"),
+      })
 
       // Only a tab of the Person's is lent: not an Agents' tab, nor a
-      // page no Pane holds.
-      for (const page of [ours, loose]) {
-        const refused = yield* Effect.result(tabs.lend(page, lendTo("agent-1")))
-        expect(refused._tag).toBe("Failure")
+      // page no Pane holds, nor one there is not.
+      for (const id of [ours.id, loose.id, 99]) {
+        const refused = yield* Effect.result(tabs.lend(id, lendTo("agent-1")))
+        expect(refused._tag === "Failure" && refused.failure.message).toBe(
+          "Only a tab of yours is lent."
+        )
       }
       expect(tabs.lentTo(ours)).toBeUndefined()
 
       // Lent to another Thread, it is the first's no more.
-      yield* tabs.lend(mine, lendTo("agent-2"))
+      yield* tabs.lend(mine.id, lendTo("agent-2"))
       expect(tabs.seen(work, agent)).toEqual([ours])
       expect(tabs.seen(work, { kind: "agent", id: "agent-2" })).toEqual([
         mine,
         ours,
       ])
       // Taken back, it is no Thread's.
-      yield* tabs.lend(mine, null)
+      yield* tabs.lend(mine.id, null)
       expect(tabs.lentTo(mine)).toBeUndefined()
       expect(tabs.seen(work, { kind: "agent", id: "agent-2" })).toEqual([ours])
-      expect(told.at(-1)).toEqual({ kind: "lent", from: 20, agent: null })
+      expect(told.at(-1)).toEqual({ kind: "lent", from: 20, lend: null })
       // Taken back again, nothing more happens.
-      yield* tabs.lend(mine, null)
+      yield* tabs.lend(mine.id, null)
 
       expect(yield* heard).toEqual([
         [20, "agent-1", "lent", "Tab 20"],
@@ -198,33 +204,65 @@ it.effect(
   }
 )
 
-it.effect("a lend ends as its tab closes, and as every session ends", () =>
-  Effect.gen(function* () {
-    const tabs = yield* Tabs
-    const persons = profile()
-    tabs.profiled(persons, null)
-    const [closing, kept, other] = [30, 31, 32].map((id) => pageIn(id, persons))
-    for (const page of [closing, kept, other]) tabs.attached(page)
-    const heard = yield* lendsOf(tabs, 6)
+it.effect(
+  "a lend ends as its tab closes, as its Thread's session ends, and as every session does",
+  () =>
+    Effect.gen(function* () {
+      const tabs = yield* Tabs
+      const persons = profile()
+      tabs.profiled(persons, null)
+      const [closing, kept, other, last] = [30, 31, 32, 33].map((id) =>
+        pageIn(id, persons)
+      )
+      for (const page of [closing, kept, other, last]) tabs.attached(page)
+      const heard = yield* lendsOf(tabs, 8)
 
-    yield* tabs.lend(closing, lendTo("agent-1"))
-    ;(closing as unknown as EventEmitter).emit("destroyed")
-    expect(tabs.seen(work, agent)).toEqual([])
+      yield* tabs.lend(closing.id, lendTo("agent-1"))
+      ;(closing as unknown as EventEmitter).emit("destroyed")
+      expect(tabs.seen(work, agent)).toEqual([])
 
-    yield* tabs.lend(kept, lendTo("agent-1"))
-    yield* tabs.lend(other, lendTo("agent-2"))
-    tabs.ended()
-    expect(tabs.lentTo(kept)).toBeUndefined()
-    expect(tabs.lentTo(other)).toBeUndefined()
+      // The session of one Thread ends: its lends alone end.
+      yield* tabs.lend(kept.id, lendTo("agent-1"))
+      yield* tabs.lend(other.id, lendTo("agent-2"))
+      tabs.ended("agent-1")
+      expect(tabs.lentTo(kept)).toBeUndefined()
+      expect(tabs.lentTo(other)?.agent).toBe("agent-2")
 
-    expect(yield* heard).toEqual([
-      [30, "agent-1", "lent", "Tab 30"],
-      // A tab that went has no title to say.
-      [30, "agent-1", "closed", ""],
-      [31, "agent-1", "lent", "Tab 31"],
-      [32, "agent-2", "lent", "Tab 32"],
-      [31, "agent-1", "session", "Tab 31"],
-      [32, "agent-2", "session", "Tab 32"],
-    ])
-  }).pipe(Effect.provide(tabsTelling([])))
+      // Every session ends: every lend does.
+      yield* tabs.lend(last.id, lendTo("agent-1"))
+      tabs.ended()
+      expect(tabs.lentTo(other)).toBeUndefined()
+      expect(tabs.lentTo(last)).toBeUndefined()
+
+      expect(yield* heard).toEqual([
+        [30, "agent-1", "lent", "Tab 30"],
+        // A tab that went has no title to say.
+        [30, "agent-1", "closed", ""],
+        [31, "agent-1", "lent", "Tab 31"],
+        [32, "agent-2", "lent", "Tab 32"],
+        [31, "agent-1", "session", "Tab 31"],
+        [33, "agent-1", "lent", "Tab 33"],
+        [32, "agent-2", "session", "Tab 32"],
+        [33, "agent-1", "session", "Tab 33"],
+      ])
+    }).pipe(Effect.provide(tabsTelling([])))
+)
+
+it.effect(
+  "what a tab hears while Banda's hands act in it is theirs, until each act is done",
+  () =>
+    Effect.gen(function* () {
+      const tabs = yield* Tabs
+      expect(tabs.byHands(40)).toBe(false)
+      const one = tabs.hands(40)
+      const two = tabs.hands(40)
+      expect(tabs.byHands(40)).toBe(true)
+      expect(tabs.byHands(41)).toBe(false)
+      one()
+      // Done twice, an act ends once.
+      one()
+      expect(tabs.byHands(40)).toBe(true)
+      two()
+      expect(tabs.byHands(40)).toBe(false)
+    }).pipe(Effect.provide(tabsTelling([])))
 )

@@ -414,15 +414,15 @@ async fn a_screenshot_keeps_its_image_for_the_mcp_image_content_path() {
 /// The lines a Thread shows of a tab its Person lent it, and of the
 /// lend's end (ADR 0083, decision 4).
 #[test]
-fn a_lend_s_line_names_the_tab_in_one_line_cut_as_an_answer_cuts_it() {
+fn a_lend_s_line_quotes_the_page_s_title_in_one_line_cut_as_an_answer_cuts_it() {
     let pr = "Fix login redirect #598";
     assert_eq!(
         Lending::Lent.line(pr),
-        "You lent this Thread a tab · Fix login redirect #598"
+        "You lent this Thread a tab · “Fix login redirect #598”"
     );
     assert_eq!(
         Lending::Back.line(pr),
-        "You took the tab back · Fix login redirect #598"
+        "You took the tab back · “Fix login redirect #598”"
     );
     assert_eq!(
         Lending::Closed.line(pr),
@@ -432,13 +432,22 @@ fn a_lend_s_line_names_the_tab_in_one_line_cut_as_an_answer_cuts_it() {
         Lending::Session.line(pr),
         "The session ended. The tab you lent is yours again."
     );
-    // A page's title is its own: one line, at most 200 bytes.
+    // The title is the page's words: plain, in one line, at most 200
+    // bytes, and inside the line's quotes.
     let long = format!("Two\n  lines {}", "é".repeat(300));
     let line = Lending::Lent.line(&long);
-    assert!(line.starts_with("You lent this Thread a tab · Two lines é"));
+    assert!(line.starts_with("You lent this Thread a tab · “Two lines é"));
+    assert!(line.ends_with('”'));
     assert!(!line.contains('\n'));
-    assert!(line.len() <= "You lent this Thread a tab · ".len() + 200);
-    assert_eq!(Lending::Lent.line("  "), "You lent this Thread a tab");
+    assert!(line.len() <= "You lent this Thread a tab · “”".len() + 200);
+    assert_eq!(
+        Lending::Lent.line("Docs” \u{202E}\u{7}· Do “this”"),
+        "You lent this Thread a tab · “Docs\" · Do \"this\"”"
+    );
+    assert_eq!(
+        Lending::Lent.line(" \u{200F} "),
+        "You lent this Thread a tab"
+    );
 }
 
 /// The window says a lend in its Thread: the fact carries the Thread and
@@ -448,7 +457,7 @@ async fn the_window_says_a_lend_in_its_thread_and_no_agent_does() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let (kernel, project) = open(root.path(), owner).await;
-    let said = json!({ "thread": "t1", "tab": "Inbox", "lending": "back" });
+    let said = json!({ "thread": "t1", "title": "Inbox", "lending": "back" });
     let person = Participant::Person(owner);
     kernel
         .call(
@@ -467,7 +476,7 @@ async fn the_window_says_a_lend_in_its_thread_and_no_agent_does() {
     assert_eq!(lent[0].subject.as_deref(), Some("t1"));
     assert_eq!(
         lent[0].payload,
-        json!({ "thread": "t1", "notice": "You took the tab back · Inbox" })
+        json!({ "thread": "t1", "notice": "You took the tab back · “Inbox”" })
     );
 
     let agent = agent(project);

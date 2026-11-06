@@ -33,6 +33,8 @@ const lent = page(3)
 
 /** What the fake hands were asked to do, by name. */
 const done: string[] = []
+/** Whether the Person's tab is lent the Agent's Thread now. */
+let lending = true
 
 const shown = (tab: number, opened: number[] = []): Shown => ({
   tab,
@@ -57,28 +59,39 @@ type Hands = Drive["Service"]
 /** Hands that do what they are asked, and note it; `refused` refuses
  * every call as tools switched off do. */
 const hands = (refused = false) => {
-  const some: Pick<Hands, "access" | "snapshot" | "act" | "open"> = {
-    access: () =>
-      refused
-        ? Effect.fail(new Refused({ code: "forbidden", message: "Off." }))
-        : Effect.void,
-    snapshot: (tab) =>
-      Effect.sync(() => {
-        done.push(`snapshot ${tab}`)
-        return { url: "", title: "", tree: "", errors: [], dialog: null }
-      }),
-    act: (act) =>
-      Effect.sync(() => {
-        done.push(`act ${act.tab}`)
-        // It opened a tab of its own profile, and the Person one meanwhile.
-        return shown(act.tab, [3, mine.id])
-      }),
-    open: (_url, _by, project) =>
-      Effect.sync(() => {
-        done.push(`open in ${project}`)
-        return shown(3)
-      }),
-  }
+  const some: Pick<Hands, "access" | "snapshot" | "act" | "open" | "waitFor"> =
+    {
+      access: () =>
+        refused
+          ? Effect.fail(new Refused({ code: "forbidden", message: "Off." }))
+          : Effect.void,
+      snapshot: (tab) =>
+        Effect.sync(() => {
+          done.push(`snapshot ${tab}`)
+          return { url: "", title: "", tree: "", errors: [], dialog: null }
+        }),
+      act: (act) =>
+        Effect.sync(() => {
+          done.push(`act ${act.tab}`)
+          // It opened a tab of its own profile, and the Person one meanwhile.
+          return shown(act.tab, [3, mine.id])
+        }),
+      open: (_url, _by, project) =>
+        Effect.sync(() => {
+          done.push(`open in ${project}`)
+          return shown(3)
+        }),
+      // The Person takes the tab back while the wait runs: it ends there,
+      // or it does not.
+      waitFor: (wait) =>
+        Effect.suspend(() => {
+          done.push(`wait ${wait.tab}`)
+          lending = false
+          return wait.text === "Gone"
+            ? Effect.fail(new Refused({ message: "The page closed." }))
+            : Effect.succeed(shown(wait.tab))
+        }),
+    }
   // Any other call is one the test did not expect to reach the hands.
   const other = () => Effect.sync(() => void done.push("other"))
   return Layer.succeed(Drive)(
@@ -98,13 +111,16 @@ const layer = (refused = false) =>
       attached: () => {},
       profiled: () => {},
       whose: () => undefined,
-      seen: (project) => (project === work ? [ours, lent] : []),
+      seen: (project) =>
+        project === work ? [ours, ...(lending ? [lent] : [])] : [],
       lend: () => Effect.void,
       lentTo: (page) =>
-        page === lent
+        page === lent && lending
           ? { agent: agent.id, thread: "t1", project: work }
           : undefined,
       ended: () => {},
+      hands: () => () => {},
+      byHands: () => false,
       lends: Stream.never,
       create: () => Effect.never,
       created: () => Effect.void,
@@ -131,6 +147,7 @@ const asked = (method: string, params: object) =>
 it.effect("an Agent lists and drives only the tabs in its reach", () =>
   Effect.gen(function* () {
     done.length = 0
+    lending = true
     const listed = yield* asked("tabs", {})
     // Each says whether the Person lent it.
     const tab = (id: number, lent: boolean) => ({
@@ -188,4 +205,21 @@ it.effect("tools switched off refuse before the tab is looked for", () =>
     const refused = yield* asked("snapshot", { tab: mine.id })
     expect(refused._tag === "Failure" && refused.failure.message).toBe("Off.")
   }).pipe(Effect.provide(layer(true)))
+)
+
+it.effect(
+  "a call whose tab left its reach while it ran, as a lend that ended, says nothing of it",
+  () =>
+    Effect.gen(function* () {
+      done.length = 0
+      for (const text of ["Hi", "Gone"]) {
+        lending = true
+        const waited = yield* asked("wait_for", { tab: lent.id, text })
+        expect(waited._tag === "Failure" && waited.failure).toMatchObject({
+          code: "not_found",
+          message: `There is no tab ${lent.id}: browser_tabs lists them.`,
+        })
+      }
+      expect(done).toEqual([`wait ${lent.id}`, `wait ${lent.id}`])
+    }).pipe(Effect.provide(layer()))
 )

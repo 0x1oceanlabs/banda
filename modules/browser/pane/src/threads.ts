@@ -2,8 +2,8 @@
  * The Threads that drive tabs with Banda's tools, as the window lists
  * them (ADR 0029, decision 4): the title a driven page's pill shows, the
  * way to its Thread, and the end of its turn, which ends its drive; and
- * the Threads of a Project the Person may lend a tab to (ADR 0083,
- * decision 4).
+ * the Threads of a Project the Person may lend a tab to, and the end of
+ * one a tab is lent to (ADR 0083, decision 4).
  */
 import type { Engine, ProjectId } from "@banda/contract"
 import type { WindowApi } from "@banda/ui/module"
@@ -16,7 +16,7 @@ import {
 import { useEffect, useMemo, useSyncExternalStore } from "react"
 import type { SiteAnswer, Wait } from "./desktop"
 import { browserHost } from "./host"
-import { asking, drivers, watchPages, watchWaits } from "./pages"
+import { asking, drivers, lends, watchPages, watchWaits } from "./pages"
 
 /** The window, while the module runs. */
 let shell: WindowApi | null = null
@@ -68,17 +68,36 @@ export function useProjectName(project: ProjectId): string | undefined {
   )
 }
 
+/** The name a lent tab's Thread, of `agent`, goes by: its title, or "A
+ * Thread" while the window does not list it; none for a tab not lent.
+ * Drawn again as the lists change. */
+export function useLentTo(agent: string | undefined): string | undefined {
+  return useSyncExternalStore(watchLists, () =>
+    agent === undefined
+      ? undefined
+      : (threadOf(agent)?.listed.title ?? "A Thread")
+  )
+}
+
 /**
  * Follows the Threads that drive tabs until the return is called: one
  * whose turn ended, or that began another, drives none now, and main lets
  * its tabs go. A Thread that drives with no turn running, as a test's
- * Agent does, drives until the Person stops it.
+ * Agent does, drives until the Person stops it. A Thread a tab is lent to
+ * that its Project lists no more, once it lists Threads at all, is gone:
+ * its session ended, and main ends the lend.
  */
 export function followThreads(window: WindowApi): () => void {
   shell = window
   /** When the turn began that each driving Thread runs. */
   const turns = new Map<string, number>()
   const check = () => {
+    for (const { agent, project } of lends()) {
+      const listed = window.lists()[project] ?? []
+      if (!threadsIn(listed).length) continue
+      if (!listed.some((each) => each.agent === agent))
+        browserHost()?.ended(agent)
+    }
     const driving = drivers()
     for (const agent of driving) {
       const began = threadOf(agent)?.listed.began

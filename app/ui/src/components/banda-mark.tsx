@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from "react"
 import { cn } from "../lib/utils"
+import type { Listed } from "../pane"
 
 /**
  * Banda's mark: three tiles, the window's tiling, and the top one, tipped
@@ -66,6 +67,30 @@ export function waits(state: MarkState): boolean {
 /** A state of an Agent at work. */
 export function works(state: MarkState): boolean {
   return state === "running" || state === "thinking"
+}
+
+/** A Group's colour, by its Agent's state, as the sidebar marks it:
+ * none for a Group with no Agent, or one at rest (ADR 0065, decision 6).
+ * An element with it as `data-state` takes it as `--group-color`, as a
+ * Group's plate, the bar's map and a lent tab's chip do. */
+export type GroupState = "working" | "asking" | "done" | "failed"
+
+export function groupState(
+  mark: MarkState | undefined
+): GroupState | undefined {
+  if (!mark) return undefined
+  if (works(mark)) return "working"
+  if (mark === "asking" || mark === "done") return mark
+  if (mark === "failed" || mark === "offline") return "failed"
+  return undefined
+}
+
+/** The colour a mark calls in: a question's, a failure's, done's green. */
+export function toneOf(mark: MarkState): string | undefined {
+  if (mark === "asking") return "text-attention"
+  if (mark === "failed" || mark === "offline") return "text-destructive"
+  if (mark === "done") return "text-added"
+  return undefined
 }
 
 /**
@@ -763,6 +788,30 @@ export function EmptyMark({ className }: { className?: string }) {
         ))}
       </g>
     </svg>
+  )
+}
+
+/** A Thread's mark, as the sidebar and the Banda menu show it, in its
+ * colour. */
+export function ThreadMark({
+  listed,
+  news,
+  className,
+}: {
+  listed: Listed
+  /** As `BandaMark`'s. */
+  news?: boolean
+  className?: string
+}) {
+  return (
+    <BandaMark
+      variant="agent"
+      state={listed.mark}
+      playful={0}
+      news={news}
+      label={MARK_WORDS[listed.mark]}
+      className={cn("size-4 shrink-0", toneOf(listed.mark), className)}
+    />
   )
 }
 

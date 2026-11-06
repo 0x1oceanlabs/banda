@@ -3,7 +3,7 @@
  * is CSS's; what CSS cannot know is when each state came, and where each
  * piece of a plate stands in its Group, which these say.
  */
-import type { GroupState } from "./groups"
+import type { GroupState } from "@banda/ui/components/banda-mark"
 
 /** A Group's state, and when it came on the page's clock. */
 export type Seen = { state: GroupState | undefined; at: number }

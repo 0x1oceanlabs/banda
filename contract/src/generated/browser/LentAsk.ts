@@ -2,7 +2,7 @@
 import type { Lending } from "./Lending";
 
 /**
- * What `browser.lent` is told: the Thread, the tab's title, and what
- * became of its lend.
+ * What `browser.lent` is told: the Thread, the title of the tab's page,
+ * and what became of its lend.
  */
-export type LentAsk = { thread: string, tab: string, lending: Lending, };
+export type LentAsk = { thread: string, title: string, lending: Lending, };

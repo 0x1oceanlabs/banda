@@ -706,6 +706,12 @@ impl Kernel {
         self.machine.as_ref().map(|machine| machine.id())
     }
 
+    /// This boot of the engine: another after a restart, which ended every
+    /// session of the last.
+    pub fn boot(&self) -> &str {
+        &self.boot
+    }
+
     /// Where a method of `module` runs. A module of the machine runs in
     /// this machine's scope, and its method names no Project, or the
     /// machine's own ID, as a stream does. Any other runs in the Project it

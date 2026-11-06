@@ -1,7 +1,7 @@
 import {
-  BandaMark,
   MARK_WORDS,
-  type MarkState,
+  ThreadMark,
+  toneOf,
   waits,
 } from "@banda/ui/components/banda-mark"
 import { HarnessLogo } from "@banda/ui/components/harness-logo"
@@ -285,36 +285,4 @@ export function elapsed(ms: number): string {
   ]
   const two = (n: number) => String(n).padStart(2, "0")
   return h > 0 ? `${h}:${two(m)}:${two(s)}` : `${m}:${two(s)}`
-}
-
-/** The colour a mark calls in: a question's, a failure's, done's green. */
-export function toneOf(mark: MarkState): string | undefined {
-  if (mark === "asking") return "text-attention"
-  if (mark === "failed" || mark === "offline") return "text-destructive"
-  if (mark === "done") return "text-added"
-  return undefined
-}
-
-/** A Thread's mark, as the sidebar and the Banda menu show it, in its
- * colour. */
-export function ThreadMark({
-  listed,
-  news,
-  className,
-}: {
-  listed: Listed
-  /** As `BandaMark`'s. */
-  news?: boolean
-  className?: string
-}) {
-  return (
-    <BandaMark
-      variant="agent"
-      state={listed.mark}
-      playful={0}
-      news={news}
-      label={MARK_WORDS[listed.mark]}
-      className={cn("size-4 shrink-0", toneOf(listed.mark), className)}
-    />
-  )
 }

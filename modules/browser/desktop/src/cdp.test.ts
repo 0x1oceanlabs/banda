@@ -115,6 +115,8 @@ function socketsOver(pages: WebContents[], told: BrowserNews[] = []) {
     lend: () => Effect.void,
     lentTo: () => undefined,
     ended: () => {},
+    hands: () => () => {},
+    byHands: () => false,
     lends: Stream.never,
     create: () => Effect.never,
     created: () => Effect.void,

@@ -199,7 +199,9 @@ The kernel holds only what every module needs, and it names no module.
   engine. A `hello` with a pass connects as that Agent, in that Project.
 - **Module registry and API.** The registry routes commands to their
   module, delivers events to subscribers, and serves the API. `welcome`
-  lists the engine's modules, so a window shows only what the engine has.
+  lists the engine's modules, so a window shows only what the engine has,
+  and names the engine's boot, which another start changes: a window
+  that hears a new one knows every session of the last ended.
 - **Streams.** A module can answer a window with live pieces that are not
   facts, such as what a terminal prints: the window asks for a stream
   (`stream`) and hears its pieces (`piece`) until it ends (`ended`) or the
@@ -1096,13 +1098,21 @@ modules/*/desktop  a module's part in Electron main
     its Project's Agents' tabs alone.
   - The Person lends one of their tabs to a Thread of the Pane's Project
     by a gesture in the tab: the mark at the address's end, or the
-    action `browser.lend` (Alt+Shift+L); the page tells main on the
-    bridge's channel of the same name. `Tabs` keeps each lend, which ends as
-    the Person takes it back, the tab closes, or main loses the engine,
-    whose passes every session held. As one ends, Banda's hands let the
-    Thread go off the tab (`Drive.letGo`). Each lend and each end goes to
-    the engine as `browser.lent`, whose fact the agents module posts in
-    the Thread as a notice its Agent reads before its next message
+    action `browser.lend` (Alt+Shift+L), pressed in the Pane or in the
+    page it shows; the page tells main on the bridge's channel of the
+    same name. A key a page hears while Banda's hands act in it
+    (`Tabs.hands`) stays the page's, so no Agent presses one of the
+    window's. `Tabs` keeps each lend, which ends as the Person takes it
+    back, the tab closes, or the Thread's session ends: its Project lists
+    it no more (the bridge's `ended`), or the engine starts again, as the
+    boot its `welcome` says changes. As one ends, `Drive` ends the
+    Thread's hold on the tab at once, a call that runs there too, and a
+    call whose tab left its reach meanwhile answers as for a tab there is
+    not. On a lent tab an Agent goes, reads and acts only at an http or
+    https address, and never at a site the Person denied every Agent.
+    Each lend and each end goes to the engine as `browser.lent`, whose
+    fact the agents module posts in the Thread as a notice its Agent
+    reads before its next message, the page's title quoted
     (`modules/browser/desktop/src/lends.ts`).
   - Main's hands are Playwright, over each tab's own CDP socket
     (`modules/browser/desktop/src/cdp.ts`): an Effect HTTP server on

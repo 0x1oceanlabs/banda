@@ -121,9 +121,8 @@ export type BrowserNews =
   /** The Threads that wait for the Person on the tab (ADR 0029,
    * decision 6). */
   | { kind: "waits"; from: number; waits: readonly Wait[] }
-  /** The tab is lent to the Thread of `agent` now, or to none (ADR 0083,
-   * decision 4). */
-  | { kind: "lent"; from: number; agent: string | null }
+  /** The tab's lend now, or none (ADR 0083, decision 4). */
+  | { kind: "lent"; from: number; lend: Lend | null }
 
 /**
  * A lend of one of the Person's tabs (ADR 0083, decision 4): the Thread it
@@ -220,6 +219,9 @@ export const BROWSER_BRIDGE = {
   >(),
   /** The turn of the Thread of `agent` ended: it drives no tab now. */
   settled: send<[agent: string]>(),
+  /** The Thread of `agent` is gone from the window's lists: its session
+   * ended, and the tabs lent to it are the Person's again. */
+  ended: send<[agent: string]>(),
   /** Lends the page, a tab of the Person's, to a Thread, by the Person's
    * gesture; or takes it back, with none. Refused for a tab not theirs. */
   lend: invoke<[contents: number, to: Lend | null]>(),

@@ -26,7 +26,8 @@ import {
   scrollOf,
   widthAt,
 } from "./layout"
-import { agentsOf, groupState } from "./groups"
+import { groupState } from "@banda/ui/components/banda-mark"
+import { agentsOf } from "./groups"
 import { type Frame, PaneFrame } from "./PaneFrame"
 
 import { Tabs } from "./Tabs"

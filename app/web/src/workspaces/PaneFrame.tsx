@@ -50,7 +50,7 @@ import {
 } from "../registry"
 import { sayComposer } from "../shell/attach"
 import { heightAt } from "./layout"
-import { ThreadMark } from "../sidebar/Row"
+import { ThreadMark } from "@banda/ui/components/banda-mark"
 import type { Plan } from "./arrange"
 import type { Entry } from "./model"
 import { type MenuFrame, PaneMenu, type Stand } from "./PaneMenu"
