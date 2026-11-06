@@ -7,7 +7,12 @@
  * Omarchy's menu does, and `Tab` shows what can be done with a row. Plain
  * data, so the window only draws it. It knows no module.
  */
-import type { Browsed, ProjectId, ProjectSummary } from "@banda/contract"
+import type {
+  Browsed,
+  Foreign,
+  ProjectId,
+  ProjectSummary,
+} from "@banda/contract"
 import { waits } from "@banda/ui/components/banda-mark"
 import { type Key, keyLabel, keyText } from "@banda/ui/lib/keys"
 import type { Listed, Lists } from "@banda/ui/pane"
@@ -15,6 +20,7 @@ import type { Action, MenuRow } from "@banda/ui/module"
 import type { Shell } from "../shell/actions"
 import { archivable } from "../sidebar/archived"
 import { snoozeAct } from "../sidebar/snoozed"
+import { ANSWERS } from "../trust/trust"
 
 /** Where the menu opens: its root, or its Actions, as the key sheet. */
 export type At = "root" | "actions"
@@ -68,6 +74,10 @@ export type Choice =
   | { kind: "source"; id: string; source: Source }
   /** Adds a Project: a new one by its name, or a folder on disk. */
   | { kind: "adding"; id: string; how: Adding }
+  /** A branch: whether to trust a folder on disk that looks foreign, as
+   * it is added (ADR 0083, decision 5; ADR 0084, decision 13). `folder`
+   * is as it was typed or picked. */
+  | { kind: "trust"; id: string; folder: string; foreign: Foreign }
   /** A folder the path field lists, or the one above (`up`): choosing it
    * types `path`, as the Person typed the path, to go on in. */
   | { kind: "folder"; id: string; name: string; path: string; up?: true }
@@ -78,11 +88,12 @@ export type Choice =
   | { kind: "finds"; id: string; source: string; label: string }
 
 /** How a Project is added: a new folder by its name, or a folder on disk,
- * made first when it does not exist; or where a missing Project's folder
- * is now (ADR 0026, decision 6). */
+ * made first when it does not exist, trusted as the Person answered when
+ * it looks foreign; or where a missing Project's folder is now (ADR 0026,
+ * decision 6). */
 export type Adding =
   | { name: string }
-  | { folder: string; create: boolean }
+  | { folder: string; create: boolean; trusted?: boolean }
   | { locate: ProjectId; folder: string }
 
 /** The ways to add a Project, as T3 Code's "Add project" lists them, in
@@ -98,6 +109,7 @@ const BRANCHES = [
   "source",
   "locate",
   "finds",
+  "trust",
 ] as const
 const OWN = ["bind", "free", "adding", "folder"] as const
 
@@ -133,6 +145,8 @@ export function branchName(branch: Branch): string {
       return LOCATE
     case "finds":
       return branch.label
+    case "trust":
+      return folderName(branch.folder)
   }
 }
 
@@ -182,6 +196,58 @@ export function pathAdding(
 ): Adding | undefined {
   if (inside?.kind !== "locate") return { folder, create }
   return create ? undefined : { locate: inside.project.id, folder }
+}
+
+/** Whether adding `how` waits for what the engine says of the folder:
+ * a folder on disk that is there, before the Person said whether to trust
+ * it. A folder made for it is the Person's own, and so is a new
+ * Project's. */
+export function looksFirst(
+  how: Adding
+): how is Extract<Adding, { create: boolean }> {
+  return "create" in how && !how.create && how.trusted === undefined
+}
+
+/** The question a folder that looks foreign asks, as the branch the menu
+ * goes into from its path. */
+export function trustBranch(folder: string, foreign: Foreign): Branch {
+  return { kind: "trust", id: "project.add.trust", folder, foreign }
+}
+
+/** The answers to the question: Not yet first, which Enter takes. */
+function trustRows(folder: string): Choice[] {
+  return [false, true].map((trusted) => ({
+    kind: "adding",
+    id: trusted ? "adding.trust" : "adding.not-yet",
+    how: { folder, create: false, trusted },
+  }))
+}
+
+/** The answer to the question a row gives, if it is one. */
+export function answerOf(row: Choice) {
+  if (row.kind !== "adding" || !("create" in row.how)) return undefined
+  const { trusted } = row.how
+  if (trusted === undefined) return undefined
+  return trusted ? ANSWERS.trust : ANSWERS.notYet
+}
+
+/** Where ⌫ on an empty field goes: the branch above, its field as it is
+ * there; back from the question, the path as it was typed. */
+export function back(path: readonly Branch[]): {
+  path: Branch[]
+  words: string
+} {
+  const left = path.slice(0, -1)
+  const from = path.at(-1)
+  return {
+    path: left,
+    words: from?.kind === "trust" ? from.folder : wordsIn(left),
+  }
+}
+
+/** A folder's own name, the last of its path. */
+function folderName(folder: string): string {
+  return folder.replace(/\/+$/, "").split("/").at(-1) || folder
 }
 
 /** The sidebar's view, as the branch the menu goes into. */
@@ -426,6 +492,15 @@ export function menuOf({
   if (inside?.kind === "source" || inside?.kind === "locate")
     return nonEmpty([
       { label: "", rows: addRows(inside, query, sources.browsed) },
+    ])
+  if (inside?.kind === "trust")
+    return nonEmpty([
+      {
+        label: "",
+        rows: fitting(trustRows(inside.folder), (row) => [
+          answerOf(row)?.title ?? "",
+        ]),
+      },
     ])
 
   if (inside?.kind === "family")

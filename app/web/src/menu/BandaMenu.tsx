@@ -12,6 +12,7 @@ import { ProjectSign } from "@banda/ui/components/project-sign"
 import { MARK_WORDS, waits } from "@banda/ui/components/banda-mark"
 import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
 import { Kbd, KbdGroup } from "@banda/ui/components/kbd"
+import { Switch } from "@banda/ui/components/switch"
 import {
   Suggestion,
   SuggestionList,
@@ -30,14 +31,19 @@ import {
 } from "@banda/ui/lib/keys"
 import type { Action, Here, MenuRow, Source } from "@banda/ui/module"
 import {
+  BadgeCheckIcon,
+  BoxIcon,
   CheckIcon,
   ChevronRightIcon,
+  CircleDashedIcon,
   CornerDownLeftIcon,
   CornerLeftUpIcon,
+  FileIcon,
   FolderIcon,
   FolderOpenIcon,
   FolderPlusIcon,
   FolderSearchIcon,
+  GitBranchIcon,
   ListFilterIcon,
   PlusIcon,
   SearchIcon,
@@ -54,6 +60,8 @@ import {
   type Act,
   actsOf,
   type Adding,
+  answerOf,
+  back,
   type Branch,
   branchName,
   type Choice,
@@ -69,7 +77,9 @@ import {
   wordsIn,
   isPathField,
   LOCATE,
+  looksFirst,
   pathAdding,
+  trustBranch,
 } from "./menu"
 import {
   PATH_PLACEHOLDER,
@@ -78,6 +88,8 @@ import {
   usePickFolder,
 } from "./browse"
 import { opened, useOpened, weightOf } from "./opened"
+import { Soon, Waits } from "../trust/Trust"
+import { ANSWERS, ASK, ASK_ABOUT, askedOf, ISOLATED } from "../trust/trust"
 import { useKeyOf } from "@banda/ui/hooks/use-key-of"
 
 /**
@@ -356,9 +368,9 @@ function Menu({
         ?.scrollIntoView({ block: "nearest" })
   }, [current])
 
-  const restart = (next: Branch[]) => {
+  const restart = (next: Branch[], typed = wordsIn(next)) => {
     setPath(next)
-    setWords(wordsIn(next))
+    setWords(typed)
     setIndex(0)
     setActing(undefined)
   }
@@ -378,13 +390,27 @@ function Menu({
     writing(writeBind({ ...key, scope: action.scope }, to ?? action.id))
   }
   // A Project added here opens its new Thread, as the menu closes; what the
-  // engine refused shows, and the field stays as it was. A Project added
-  // here is trusted, as the Person picked its folder (ADR 0083, decision
-  // 5).
+  // engine refused shows, and the field stays as it was. A folder on disk
+  // that looks foreign asks first, here, whether the Person trusts it (ADR
+  // 0083, decision 5; ADR 0084, decision 13); one that does not is added
+  // with no word of its trust, so the engine trusts it, and a folder that
+  // already is a Project keeps its own.
   const { busy: adding, problem, act } = useAct()
+  const field = useRef<HTMLInputElement>(null)
   const add = async (how: Adding) => {
     if (adding) return
     setNote(undefined)
+    if (looksFirst(how)) {
+      const foreign = await act(() =>
+        engine.call("projects.foreign", { folder: how.folder })
+      )
+      if (!foreign) return
+      if (foreign.foreign) {
+        restart([...path, trustBranch(how.folder, foreign)], "")
+        field.current?.focus()
+        return
+      }
+    }
     const project = await act(() =>
       "name" in how
         ? engine.command("projects.create", { name: how.name })
@@ -393,13 +419,12 @@ function Menu({
               project: how.locate,
               folder: how.folder,
             })
-          : engine.command("projects.add", { ...how, trusted: true })
+          : engine.command("projects.add", how)
     )
     if (project) onAdded(project)
   }
   // The system's folder picker: the folder picked is added at once, as
   // T3 Code does; the field takes the keys back when it is cancelled.
-  const field = useRef<HTMLInputElement>(null)
   const picker = usePickFolder(browsed, (folder) =>
     folder ? void add(pathAdding(inside, folder)!) : field.current?.focus()
   )
@@ -484,7 +509,8 @@ function Menu({
     }
     if (event.key === "Backspace" && words === "" && path.length > 0) {
       event.preventDefault()
-      restart(path.slice(0, -1))
+      const went = back(path)
+      restart(went.path, went.words)
       return
     }
     const asking = ask !== undefined && matches(event, ask)
@@ -509,6 +535,18 @@ function Menu({
     else if (current) choose(current)
   }
 
+  // The question a folder that looks foreign asks, and why.
+  const asked = inside?.kind === "trust" ? askedOf(inside.foreign) : undefined
+  const said =
+    note ??
+    problem ??
+    picker?.problem ??
+    (adding
+      ? "Adding the Project…"
+      : refused.length > 0
+        ? refused.join("; ")
+        : undefined)
+  const From = asked?.from ? GitBranchIcon : FileIcon
   return (
     <div className="relative flex max-h-[min(32rem,70vh)] flex-col">
       <div className="flex items-center gap-2 border-b px-3">
@@ -542,15 +580,24 @@ function Menu({
           className="h-11 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
         />
       </div>
-      {(note || problem || picker?.problem || adding || refused.length > 0) && (
+      {(said || asked?.line) && (
         <div
           role="status"
-          className="border-b px-3 py-1.5 text-xs text-muted-foreground"
+          className="flex items-center gap-2 border-b px-3 py-1.5 text-xs text-muted-foreground"
         >
-          {note ??
-            problem ??
-            picker?.problem ??
-            (adding ? "Adding the Project…" : refused.join("; "))}
+          {said ?? (
+            <>
+              <From className="size-3.5 shrink-0" />
+              <span className="min-w-0 truncate">{asked?.line}</span>
+            </>
+          )}
+        </div>
+      )}
+      {asked && (
+        <div className="flex flex-col gap-1 px-3.5 pt-3">
+          <h3 className="text-[15px] font-semibold">{ASK}</h3>
+          <p className="mb-1 text-xs text-muted-foreground">{ASK_ABOUT}</p>
+          <Waits waits={asked.waits} />
         </div>
       )}
       <SuggestionList
@@ -576,7 +623,7 @@ function Menu({
                 selected={row === current}
                 onMouseMove={() => setIndex(rows.indexOf(row))}
                 onClick={() => choose(row)}
-                className="h-8 gap-2.5"
+                className={answerOf(row) ? "gap-2.5" : "h-8 gap-2.5"}
               >
                 <RowView
                   row={row}
@@ -589,6 +636,7 @@ function Menu({
           </div>
         ))}
       </SuggestionList>
+      {asked && <Isolated cloned={asked.cloned} />}
       {acting !== undefined && (
         <ActList
           acts={acts}
@@ -605,7 +653,7 @@ function Menu({
         </KbdGroup>
         <KbdGroup>
           <Keys keyOf={OPEN} />
-          <span>Open</span>
+          <span>{asked ? "Choose" : "Open"}</span>
         </KbdGroup>
         {at === "root" && !inside && ask && (
           <KbdGroup>
@@ -803,6 +851,22 @@ function RowView({
     }
     case "adding": {
       const { how } = row
+      const answer = answerOf(row)
+      if (answer) {
+        const Icon =
+          answer === ANSWERS.trust ? BadgeCheckIcon : CircleDashedIcon
+        return (
+          <>
+            <Icon className="size-4 shrink-0 text-muted-foreground" />
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate">{answer.title}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {answer.about}
+              </span>
+            </span>
+          </>
+        )
+      }
       const [title, detail] =
         "name" in how
           ? ["Create Project", how.name]
@@ -840,6 +904,25 @@ function RowView({
   }
 }
 
+/** Running the Project isolated, under the question: greyed until it is
+ * built, on for a clone from a URL as it will be (ADR 0084, decision
+ * 13). It is no answer, so the keys pass it by. */
+function Isolated({ cloned }: { cloned: boolean }) {
+  return (
+    <div className="mx-1.5 mb-1.5 flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground">
+      <BoxIcon className="size-4 shrink-0" />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate">{ISOLATED.title}</span>
+        <span className="truncate text-xs">
+          {cloned ? `${ISOLATED.about} ${ISOLATED.cloned}` : ISOLATED.about}
+        </span>
+      </span>
+      <Soon />
+      <Switch label={ISOLATED.title} on={cloned} disabled onChange={() => {}} />
+    </div>
+  )
+}
+
 /** The field's words before it is typed into. */
 function placeholderOf(
   taking: Action<Shell> | undefined,
@@ -850,6 +933,7 @@ function placeholderOf(
   if (inside?.kind === "source" && inside.source === "new")
     return "Project name"
   if (isPathField(inside)) return PATH_PLACEHOLDER
+  if (inside?.kind === "trust") return inside.folder
   if (inside) return "Search…"
   return at === "actions"
     ? "Search actions…"

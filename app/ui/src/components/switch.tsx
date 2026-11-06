@@ -1,14 +1,17 @@
 import { cn } from "../lib/utils"
 
-/** On or off, as a setting is: a click turns it the other way. */
+/** On or off, as a setting is: a click turns it the other way. One that
+ * is `disabled` shows where it stands, greyed, and takes no click. */
 function Switch({
   label,
   on,
   onChange,
+  disabled,
 }: {
   label: string
   on: boolean
   onChange: (on: boolean) => void
+  disabled?: boolean
 }) {
   return (
     <button
@@ -17,9 +20,10 @@ function Switch({
       data-slot="switch"
       aria-checked={on}
       aria-label={label}
+      disabled={disabled}
       onClick={() => onChange(!on)}
       className={cn(
-        "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+        "relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-50",
         on ? "bg-primary" : "bg-input"
       )}
     >

@@ -89,7 +89,9 @@ change them in the settings, which `banda menu settings.projects.<id>`
 opens at that Project, or from the Project's menu in the sidebar.
 So is its trust, `trusted` in `banda call projects.list`: while the Person
 does not trust a Project, your Harness loads none of the settings, hooks or
-MCP servers its folder names, only the Person's own.
+MCP servers its folder names, only the Person's own. Add Project asks them
+about a folder that looks foreign; later they trust it with "Trust
+Project…" in the Project's menu, or in its settings.
 A Project whose folder is gone is listed `missing`, and every call into it
 is refused until the Person locates the folder: `banda menu
 project.locate.<id>` opens "Locate folder" for them.

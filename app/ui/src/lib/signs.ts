@@ -50,8 +50,10 @@ export function useSignPicture(
   version: string | undefined
 ): string | undefined {
   if (version) read(project, version)
-  return useSyncExternalStore(listen, () => {
+  const now = () => {
     const one = kept.get(project)
     return version && one?.version === version ? one.url : undefined
-  })
+  }
+  // Drawn to a string, as a test draws it, a sign shows what is kept too.
+  return useSyncExternalStore(listen, now, now)
 }

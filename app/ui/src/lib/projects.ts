@@ -54,6 +54,7 @@ export function sameProjects(
         one.archived === b[n].archived &&
         one.missing === b[n].missing &&
         one.scratch === b[n].scratch &&
+        one.trusted === b[n].trusted &&
         sameSign(one.sign, b[n].sign)
     )
   )
@@ -96,6 +97,18 @@ export async function updateProject(
   const project = await engine.command("projects.update", how)
   projectsChanged()
   return project
+}
+
+/** Trusts a Project, or takes its trust back (ADR 0083, decision 5): only
+ * the Person's gesture does, and the window's lists follow. */
+export async function trustProject(
+  engine: Engine,
+  project: ProjectId,
+  trusted: boolean
+): Promise<ProjectSummary> {
+  const changed = await engine.command("projects.trust", { project, trusted })
+  projectsChanged()
+  return changed
 }
 
 /** Looks in a Project's folder for its sign's picture again (ADR 0070),

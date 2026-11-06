@@ -4532,6 +4532,90 @@ test("Add Project adds a folder on disk from the Banda menu, and one banda proje
   )
 })
 
+test("Add Project asks in the menu whether to trust a folder that looks foreign, and the Project's menu and settings change it later", async () => {
+  window = await startWindow()
+  const { page, dir, banda } = window
+  await firstThread(page)
+  const widget = join(dir, "work", "widget")
+  mkdirSync(join(widget, ".claude"), { recursive: true })
+  writeFileSync(join(widget, ".mcp.json"), "{}\n")
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const search = menu.getByRole("combobox", { name: "Search" })
+  const trusted = () =>
+    (
+      JSON.parse(banda("call", "projects.list")) as {
+        ok: { name: string; trusted: boolean }[]
+      }
+    ).ok.find((one) => one.name === "widget")?.trusted
+
+  // Add on a folder that holds what a Harness loads asks first, in the
+  // menu: what waits, Not yet then Trust, and isolation greyed for now.
+  await page.getByRole("button", { name: "Add Project", exact: true }).click()
+  await search.fill("local")
+  await search.press("Enter")
+  await search.fill(`${widget}/`)
+  await expect(menu.getByRole("option").first()).toHaveText(/^Add/)
+  await search.press("Enter")
+  await expect(
+    menu.getByRole("heading", { name: "Code you didn't write?" })
+  ).toBeVisible()
+  await expect(menu.getByRole("status")).toHaveText(
+    "It has .claude/ and .mcp.json"
+  )
+  await expect(menu.getByRole("list", { name: "What waits" })).toContainText(
+    ".mcp.json"
+  )
+  await expect(menu.getByRole("option", { selected: true })).toContainText(
+    "Not yet"
+  )
+  await expect(
+    menu.getByRole("switch", { name: "Run it isolated" })
+  ).toBeDisabled()
+  await page.screenshot({ path: "test-results/31-add-project-trust.png" })
+  // ⌫ goes back to the path as it was typed, and Add asks again.
+  await search.press("Backspace")
+  await expect(search).toHaveValue(`${widget}/`)
+  await search.press("Enter")
+  await expect(menu.getByRole("option", { name: /^Trust/ })).toBeVisible()
+
+  // Enter takes Not yet: the Project is added, not trusted, and its sign
+  // wears the corner.
+  await search.press("Enter")
+  await expect(menu).toBeHidden()
+  await expect(
+    page.getByRole("button", { name: "Project: widget" })
+  ).toBeVisible()
+  expect(trusted()).toBe(false)
+  await expect(page.locator("[data-untrusted]").first()).toBeVisible()
+
+  // The Project's menu trusts it, on a card that says what will load.
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await sidebar.getByRole("button", { name: /^View: / }).click()
+  await page.getByRole("menuitemradio", { name: /^places/ }).click()
+  const row = sidebar
+    .getByRole("group", { name: "Projects" })
+    .getByRole("button", { name: /^widget/ })
+  await row.click({ button: "right" })
+  await page.getByRole("menuitem", { name: "Trust Project…" }).click()
+  const card = page.getByRole("dialog", { name: "Trust widget?" })
+  await expect(card).toContainText(".claude/")
+  await card.getByRole("button", { name: "Trust", exact: true }).click()
+  await expect(card).toBeHidden()
+  await expect.poll(trusted).toBe(true)
+  await expect(page.locator("[data-untrusted]")).toHaveCount(0)
+
+  // Its settings take the trust back, and offer it again.
+  await row.click({ button: "right" })
+  await page.getByRole("menuitem", { name: "Project settings" }).click()
+  const settings = page.getByRole("main").filter({ hasText: "Settings" })
+  await expect(
+    settings.getByRole("switch", { name: "Isolated" })
+  ).toBeDisabled()
+  await settings.getByRole("button", { name: "Stop trusting" }).click()
+  await expect(settings.getByRole("button", { name: "Trust…" })).toBeVisible()
+  await expect.poll(trusted).toBe(false)
+})
+
 test("Open in Files adds the folder picked in the system's picker, opened where the path points", async () => {
   window = await startWindow()
   const { page, dir, app } = window

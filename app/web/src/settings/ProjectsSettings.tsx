@@ -1,9 +1,10 @@
 /**
  * The Projects section (ADR 0026, decision 5), in T3 Code's words: a
- * Project's name, whether it comes first, whether it is hidden, and its
- * removal. They are the engine's, not a file's, so the section calls the
- * engine, and tells the window a Project changed. Archived Projects show only
- * here, where they can come back.
+ * Project's name, whether it comes first, whether the Person trusts it
+ * (ADR 0083, decision 5), whether it is hidden, and its removal. They are
+ * the engine's, not a file's, so the section calls the engine, and tells
+ * the window a Project changed. Archived Projects show only here, where
+ * they can come back.
  */
 import { useState } from "react"
 import type { Engine, ProjectSummary, UpdateProject } from "@banda/contract"
@@ -28,13 +29,26 @@ import { Switch } from "@banda/ui/components/switch"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { ProjectSign } from "@banda/ui/components/project-sign"
-import { findSign, removeProject, updateProject } from "@banda/ui/lib/projects"
+import {
+  findSign,
+  removeProject,
+  trustProject,
+  updateProject,
+} from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
-import { FolderSearchIcon, Trash2Icon } from "lucide-react"
+import {
+  BadgeCheckIcon,
+  BoxIcon,
+  CircleDashedIcon,
+  FolderSearchIcon,
+  Trash2Icon,
+} from "lucide-react"
 import { LOCATE, locateRoute } from "../menu/menu"
 import { AsideRow } from "../safe/AsidePill"
 import { Field, Group, RowFrame, Rows } from "./SettingRow"
 import { SignField, signAbout } from "./SignField"
+import { Soon, TrustCard, type Trusting } from "../trust/Trust"
+import { ISOLATED, trustAbout } from "../trust/trust"
 
 /** The Project a removal asks about, and how many Threads go with it, if
  * the agents module said. */
@@ -64,6 +78,8 @@ function Project({ engine, lit }: Props) {
   const picked = pick && pick.lit === lit ? pick.id : lit
   const { busy, problem, act } = useAct()
   const [removing, setRemoving] = useState<Removing>()
+  // The Project whose trust a card by its button asks about.
+  const [trusting, setTrusting] = useState<Trusting>()
 
   if (listed.state === "loading") return <Spinner />
   if (listed.state === "refused")
@@ -176,6 +192,69 @@ function Project({ engine, lit }: Props) {
             onChange={(pinned) => change({ pinned })}
           />
         </RowFrame>
+        {!project.scratch && (
+          <>
+            <RowFrame
+              dataKey="trust"
+              title={
+                <span className="flex items-center gap-1.5">
+                  {project.trusted ? (
+                    <BadgeCheckIcon className="size-3.5 text-muted-foreground" />
+                  ) : (
+                    <CircleDashedIcon className="size-3.5 text-muted-foreground" />
+                  )}
+                  Trust
+                </span>
+              }
+              about={trustAbout(project.trusted)}
+            >
+              {project.trusted ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() =>
+                    void act(() => trustProject(engine, project.id, false))
+                  }
+                >
+                  Stop trusting
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={(event) =>
+                    setTrusting({
+                      project: project.id,
+                      anchor: event.currentTarget,
+                    })
+                  }
+                >
+                  Trust…
+                </Button>
+              )}
+            </RowFrame>
+            <RowFrame
+              dataKey="isolated"
+              title={
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <BoxIcon className="size-3.5" />
+                  {ISOLATED.setting}
+                  <Soon />
+                </span>
+              }
+              about={ISOLATED.settingAbout}
+            >
+              <Switch
+                label={ISOLATED.setting}
+                on={false}
+                disabled
+                onChange={() => {}}
+              />
+            </RowFrame>
+          </>
+        )}
         <RowFrame
           dataKey="archive"
           title="Archive"
@@ -212,6 +291,13 @@ function Project({ engine, lit }: Props) {
           </Button>
         </RowFrame>
       </Group>
+      <TrustCard
+        engine={engine}
+        projects={projects}
+        target={trusting}
+        align="end"
+        onClose={() => setTrusting(undefined)}
+      />
       <Dialog
         open={removing !== undefined}
         onOpenChange={(open) => !open && setRemoving(undefined)}

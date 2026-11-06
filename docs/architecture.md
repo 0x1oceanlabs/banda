@@ -138,8 +138,13 @@ The kernel holds only what every module needs, and it names no module.
   trusted. A new Project is trusted as `projects.add`, `projects.create`
   or `banda project add --trusted` says; when they do not, a folder the
   call made is trusted, and another unless it looks foreign. The window's
-  Add Project says trusted. A folder that already is a Project keeps its
-  own trust, unless the call says.
+  Add Project asks `projects.foreign` of a folder on disk first: one that
+  looks foreign asks the Person, in the Banda menu, "Not yet" (Enter) or
+  "Trust", and the answer is the call's `trusted`; another says nothing of
+  its trust. A folder that already is a Project keeps its own trust,
+  unless the call says. A Project not trusted wears a grey dashed circle
+  at its sign's corner, and the Person trusts it later from its menu in
+  the sidebar or its settings, on a card that lists what will load.
   `projects.foreign { folder }` says whether a folder looks foreign and
   why, for Add Project to ask (ADR 0084, decision 13): its repository was
   cloned from a network, or has a remote on GitHub of another account than
