@@ -43,8 +43,9 @@ Banda is changed through text files, the same way the Person changes it.
    and `mode`, `plan` or any option the composer offers. `banda settings rename <file> <key> <to>` gives a key
    another name where it is, as a line of keys.toml another key:
    `banda settings rename keys.toml 'binds."Alt+J"' Alt+Q`. For more than a key,
-   edit the file: keep the Person's comments and every key you were not
-   asked to change. Every key is optional: write only what changes.
+   run them once for each key, and never edit a settings file by hand: they
+   keep the Person's comments and every key you were not asked to change.
+   Every key is optional: set only what changes.
 3. Check it: `banda settings check` prints `path:line:column: problem`
    for each mistake, and nothing when all is well. `banda settings schema
    <file>` prints every key a file may hold, with what it does.
