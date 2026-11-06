@@ -44,7 +44,8 @@ import { useWidgets } from "../bar/Widgets"
 import type { Layout } from "../bar/arrange"
 import { PARTS } from "../bar/placed"
 import { Watches } from "../bar/Watches"
-import { besideOf, first, isShowing, sightOf } from "../calls/sight"
+import { besideOf, isShowing, nextCall, sightOf } from "../calls/sight"
+import { useSidebarOrder } from "../sidebar/order"
 import { WELL, wentWell } from "../safe/starts"
 import { useProblemNews } from "../problems/news"
 import { lookingInto } from "../problems/look"
@@ -549,12 +550,18 @@ export function Shell({
       picking((w) => answering(w, thing, homeOf(thing.pane))),
     [picking]
   )
-  const heard = useRef(calling)
+  // Alt+U: the next call below the Thread in front, as the sidebar lists
+  // them (ADR 0079, decision 4).
+  const order = useSidebarOrder(lists, projects)
+  const heard = useRef({ calling, order })
   useEffect(() => {
-    heard.current = calling
-  }, [calling])
+    heard.current = { calling, order }
+  }, [calling, order])
   const answer = useCallback(() => {
-    const call = first(heard.current)
+    const entry = focused(seenNow.current.state)
+    const thing = entry && showsOf(entry.pane)
+    const here = entry && thing ? `${entry.project}:${thing}` : undefined
+    const call = nextCall(heard.current.calling, heard.current.order, here)
     if (call) goToCall(call)
   }, [goToCall])
   useEffect(() => {
