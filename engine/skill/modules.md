@@ -95,9 +95,15 @@ Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `co
 
 ## Files (`files`)
 
-Any folder, as a Finder shows it: its names folders first, with what git ignores and what is hidden marked; what a path is; a file's text; fuzzy paths under a folder; and what changed in the folders shown. An Agent reaches only its Project's folder. A file opens in its Pane, as code, markdown or an image, at a line.
+Any folder, as a Finder shows it: a tree with the places beside it and its path above, what git ignores greyed and what git sees changed marked, what is hidden shown or not; what a path is; a file's text; fuzzy paths under a folder, what was opened lately first; and what changed in the folders shown. An Agent reaches only its Project's folder. A file opens in its Pane, as code, markdown or an image, at a line.
 
-Its methods, `banda call files.<method>`: `list`, `stat`, `read`, `find`, `watch`.
+Its settings: `files.toml`.
+
+Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
+
+- Files (`files.tree`), Alt+E
+
+Its methods, `banda call files.<method>`: `list`, `stat`, `read`, `find`, `watch`, `places`, `opened`, `recent`.
 
 ## Pull requests (`pulls`)
 

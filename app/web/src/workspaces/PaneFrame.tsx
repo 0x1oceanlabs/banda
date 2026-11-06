@@ -290,8 +290,10 @@ export function PaneFrame({
                     {title}
                   </h2>
                 )}
+                {/* The detail takes what room the title leaves: a long
+                    one, as a folder's path, gives way first. */}
                 {detail && (
-                  <span className="min-w-0 shrink-[2] truncate text-xs text-muted-foreground">
+                  <span className="max-w-fit min-w-0 flex-[1_1_0] truncate text-xs text-muted-foreground">
                     {detail}
                   </span>
                 )}

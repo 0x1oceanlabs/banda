@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "files.toml",
+  "description": "What Files shows: its pinned places, and whether hidden and ignored\nfiles show. Every key is optional.",
+  "type": "object",
+  "properties": {
+    "pinned": {
+      "description": "The folders pinned among Files' places, in their order: whole, or\nfrom ~, as ~/Pictures. A folder's menu in Files pins and unpins.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "hidden": {
+      "description": "Whether a Files Pane shows hidden files, whose names start with a\ndot. Each Pane can show them or not for itself.",
+      "type": "boolean"
+    },
+    "ignored": {
+      "description": "Whether a Files Pane shows what git ignores, greyed. Off hides it.",
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false
+}

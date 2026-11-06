@@ -3,12 +3,11 @@
  * it is inside, else whole. Pure, so plain tests cover it.
  */
 import { nameAndFolder } from "@banda/ui/lib/paths"
+import { within } from "./where"
 
 /** `path` from `root` when it is inside it, else as it is. */
 export function fromRoot(path: string, root: string | null): string {
-  if (!root) return path
-  const base = root.endsWith("/") ? root : `${root}/`
-  return path.startsWith(base) ? path.slice(base.length) : path
+  return (root && within(root, path)) || path
 }
 
 /** The full path of `src`, a picture a markdown file at `file` names:

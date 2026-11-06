@@ -372,10 +372,14 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "banda-kernel",
+ "banda-look",
+ "dirs",
  "ignore",
  "infer",
  "mime_guess",
  "nucleo-matcher",
+ "rusqlite",
+ "schemars 1.2.3",
  "serde",
  "serde_json",
  "sha2",
@@ -500,6 +504,7 @@ version = "0.1.0"
 dependencies = [
  "banda-agents",
  "banda-browser",
+ "banda-files",
  "banda-harnesses",
  "banda-look",
  "banda-sharing",

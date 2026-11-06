@@ -29,6 +29,7 @@
 //! exits 2.
 
 mod client;
+mod files;
 mod mcp;
 mod modules;
 mod places;
@@ -123,6 +124,17 @@ enum Command {
     Settings {
         #[command(subcommand)]
         what: SettingsCommand,
+    },
+    /// Opens Files in Banda's window on a folder: PATH, or where this
+    /// runs; a file opens its folder with it picked. It shows in the
+    /// Project whose folder holds it, else in the first one.
+    Files {
+        /// The folder or the file: absolute, from ~, or from where this
+        /// runs.
+        path: Option<PathBuf>,
+        /// The Project it shows in.
+        #[arg(long)]
+        project: Option<ProjectId>,
     },
     /// Opens the Banda menu in Banda's window, as Alt+Space does: at its
     /// root, or at ROUTE: `actions` (the key sheet), `views` (the
@@ -446,6 +458,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             });
             print_call(&places, "projects.add", None, CommandId::new(), params).await
         }
+        Command::Files { path, project } => files::open(&places, path, project).await,
         Command::Problems { what: None } => problems::list(&places).await,
         Command::Problems {
             what: Some(ProblemsCommand::Report { fingerprint }),

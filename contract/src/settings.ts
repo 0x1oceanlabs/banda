@@ -5,6 +5,7 @@
  */
 import agents from "./generated/schema/agents.schema.json"
 import browser from "./generated/schema/browser.schema.json"
+import files from "./generated/schema/files.schema.json"
 import harnesses from "./generated/schema/harnesses.schema.json"
 import look from "./generated/schema/look.schema.json"
 import sharing from "./generated/schema/sharing.schema.json"
@@ -42,6 +43,7 @@ export const SCHEMAS: { [file: string]: Schema } = {
   "harnesses.toml": harnesses as Schema,
   "sharing.toml": sharing as Schema,
   "terminal.toml": terminal as Schema,
+  "files.toml": files as Schema,
 }
 
 /** One value a key may take, and what it means. */

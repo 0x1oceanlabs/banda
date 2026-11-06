@@ -9,7 +9,7 @@ import { imports, sources } from "@banda/ui/testing/architecture"
 import { expect, test } from "vitest"
 
 const PANE = [
-  /^@banda\/contract(\/files)?$/,
+  /^@banda\/contract(\/files|\/settings)?$/,
   /^@banda\/ui\//,
   /^react$/,
   /^lucide-react$/,
