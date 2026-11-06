@@ -251,12 +251,10 @@ async fn remote(project: &ModuleProject) -> Result<(String, String), Refusal> {
     })
 }
 
-/// Runs `git args` in `folder` as Banda's own, which runs no program the
-/// repository names (`banda_git_cli`), and says what it printed.
+/// Runs `git args` in `folder` as Banda's own (`banda_git_cli`), and says
+/// what it printed.
 async fn git(folder: &Path, args: &[&str]) -> std::io::Result<std::process::Output> {
-    (banda_git_cli::bookkeeping(folder).await?)
-        .args(args)
-        .kill_on_drop(true)
+    (banda_git_cli::bookkeeping(folder, args).await?)
         .output()
         .await
 }

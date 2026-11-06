@@ -3,16 +3,17 @@
 //!
 //! Every git the module runs goes through [`git`], in the folder it is
 //! given: Banda's own bookkeeping, which runs no program the repository
-//! names, unless it is an act a Participant asked for ([`Opts::asked`]),
-//! which runs as the Person's own git, hooks and all (`banda_git_cli`).
-//! Either takes no optional lock, so a status read beside the Person's
-//! own git never takes `.git/index.lock`, and asks nothing. At most eight
-//! run at once; each is stopped after 30 seconds, or [`LONG`] for an act,
-//! with SIGTERM first so it takes its lock files away; its output is cut
-//! at a cap, which it says. What git writes on stderr can hold a remote's
-//! credentials, so it goes to the engine's log only, and a caller hears a
-//! [`Reason`]; a line a caller follows has its credentials taken out
-//! ([`redact`]).
+//! names, unless it is an act the Person asked for ([`Opts::asked`]),
+//! which runs as their own git, hooks and all (`banda_git_cli` says how
+//! far each holds). Only a Person asks for one: the methods that run an
+//! act need `Right::Run`, which no Agent holds. Either takes no optional
+//! lock, so a status read beside the Person's own git never takes
+//! `.git/index.lock`, and asks nothing. At most eight run at once; each
+//! is stopped after 30 seconds, or [`LONG`] for an act, with SIGTERM first
+//! so it takes its lock files away; its output is cut at a cap, which it
+//! says. What git writes on stderr can hold a remote's credentials, so it
+//! goes to the engine's log only, and a caller hears a [`Reason`]; a line
+//! a caller follows has its credentials taken out ([`redact`]).
 
 use banda_kernel::Refusal;
 use std::ffi::OsStr;
@@ -71,15 +72,15 @@ pub struct Opts<'a> {
     /// its credentials taken out.
     pub lines: Option<mpsc::UnboundedSender<String>>,
     pub pool: Pool,
-    /// It is an act a Participant asked for, as a commit or a push, which
-    /// runs as the Person's own git; else it is Banda's own bookkeeping.
+    /// It is an act the Person asked for, as a commit or a push, which
+    /// runs as their own git; else it is Banda's own bookkeeping.
     pub asked: bool,
 }
 
 impl Opts<'_> {
-    /// For an act a Participant asked for, as a commit, a push or a stage:
-    /// it runs as the Person's own git, hooks and all, for up to [`LONG`],
-    /// beside the reads.
+    /// For an act the Person asked for, as a commit, a push or a stage: it
+    /// runs as their own git, hooks and all, for up to [`LONG`], beside
+    /// the reads.
     pub fn asked() -> Self {
         Opts {
             time: Some(LONG),
@@ -358,13 +359,12 @@ where
         Failure(Reason::Other)
     };
     let mut command = match opts.asked {
-        true => banda_git_cli::asked(folder),
-        false => banda_git_cli::bookkeeping(folder)
+        true => banda_git_cli::asked(folder, &args),
+        false => banda_git_cli::bookkeeping(folder, &args)
             .await
             .map_err(did_not_start)?,
     };
     command
-        .args(&args)
         .stdin(match opts.stdin {
             Some(_) => Stdio::piped(),
             None => Stdio::null(),

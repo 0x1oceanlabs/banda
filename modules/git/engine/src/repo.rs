@@ -195,8 +195,9 @@ impl Repo {
 
     /// The branch, its upstream and what changed, as
     /// `status --porcelain=2 --branch` says them, each untracked file of
-    /// its own, as a diff takes them in. Ahead and behind read only the
-    /// refs git has already fetched.
+    /// its own, as a diff takes them in, and a submodule changed when its
+    /// commit is (`banda_git_cli`). Ahead and behind read only the refs git
+    /// has already fetched.
     pub async fn porcelain(&self) -> Result<Porcelain, Failure> {
         let said = self
             .run(
@@ -205,6 +206,7 @@ impl Repo {
                     "--porcelain=2",
                     "--branch",
                     "--untracked-files=all",
+                    "--ignore-submodules=dirty",
                     "-z",
                 ],
                 Opts::default(),

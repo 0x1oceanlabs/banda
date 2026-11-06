@@ -227,14 +227,16 @@ pub(crate) fn ms(time: std::time::SystemTime) -> Option<i64> {
     i64::try_from(since.as_millis()).ok()
 }
 
-/// git, to run in `dir` as Files runs it: Banda's own, which takes no
-/// locks, asks nothing and runs no program the repository names
-/// (`banda_git_cli`), its stderr unheard, and gone with the caller; none
-/// when it cannot start. Its args, its stdin and its stdout are the
-/// caller's.
-pub(crate) async fn git_in(dir: &Path) -> Option<tokio::process::Command> {
-    let mut git = banda_git_cli::bookkeeping(dir).await.ok()?;
-    git.stderr(std::process::Stdio::null()).kill_on_drop(true);
+/// git running `args` in `dir` as Files runs it: Banda's own
+/// (`banda_git_cli`), its stderr unheard; none when it cannot start. Its
+/// stdin and its stdout are the caller's.
+pub(crate) async fn git_in<I, S>(dir: &Path, args: I) -> Option<tokio::process::Command>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    let mut git = banda_git_cli::bookkeeping(dir, args).await.ok()?;
+    git.stderr(std::process::Stdio::null());
     Some(git)
 }
 

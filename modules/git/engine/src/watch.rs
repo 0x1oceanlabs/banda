@@ -137,22 +137,20 @@ impl Fetch {
 /// Fetches the remote `branch` follows, and says whether it did. It is
 /// Banda's own git (`banda_git_cli`): as T3 Code's, it asks for no
 /// password and runs no gc, whose packs a failed one would leave each
-/// time until the disk is full; and it runs git's own upload-pack,
-/// whatever the remote's config names.
+/// time until the disk is full.
 async fn fetch(repo: Repo, branch: String) -> bool {
     let fetched = async {
         let key = format!("branch.{branch}.remote");
         let remote = repo.config(&key).await.ok()??;
         // No FETCH_HEAD, which only a merge after the fetch reads.
-        let mut args = vec!["fetch"];
-        args.extend(banda_git_cli::FETCH);
-        args.extend([
+        let args = [
+            "fetch",
             "--quiet",
             "--no-tags",
             "--no-write-fetch-head",
             "--",
             &remote,
-        ]);
+        ];
         let opts = Opts {
             pool: Pool::Long,
             ..Opts::default()

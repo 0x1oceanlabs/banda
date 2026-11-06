@@ -60,8 +60,11 @@ pub async fn find(repo: &Repo, reference: &str) -> Result<Option<String>, Refusa
 
 /// Keeps the work tree as it is now under `reference`: every file but
 /// those git ignores, as a commit whose parent is `HEAD`, so a later look
-/// can tell whether `HEAD` moved. With more untracked files than a diff
-/// takes in, none is kept: the turn shows what its tool calls changed.
+/// can tell whether `HEAD` moved. A file a filter driver cleans is kept as
+/// the index has it, or not at all, since Banda's own git runs no filter
+/// and would keep its bytes as they are on disk (`banda_git_cli`). With
+/// more untracked files than a diff takes in, none is kept: the turn shows
+/// what its tool calls changed.
 pub async fn capture(repo: &Repo, reference: &str) -> Result<(), Refusal> {
     let (untracked, own, head) = futures::join!(untracked(repo), own_index(repo), repo.head());
     if untracked?.len() > UNTRACKED {
@@ -73,7 +76,9 @@ pub async fn capture(repo: &Repo, reference: &str) -> Result<(), Refusal> {
         index: Some(&index),
         ..Opts::default()
     };
-    let add = [&INDEX[..], &["add", "--all", "--", "."]].concat();
+    // The files whose `filter` is unspecified or unset.
+    let unfiltered = [":(attr:!filter)", ":(attr:-filter)"];
+    let add = [&INDEX[..], &["add", "--all", "--"], &unfiltered].concat();
     repo.run(add, opts()).await?;
     let tree = repo.run(["write-tree"], opts()).await?.text();
     let mut commit = vec![
