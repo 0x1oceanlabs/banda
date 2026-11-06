@@ -67,7 +67,6 @@ const FILES: &[Files] = &[
     Files {
         folder: "files",
         toml: include_str!("../../modules/files/module.toml"),
-        window: None,
         methods: Some(FilesModule::method_list),
     },
     Files {
