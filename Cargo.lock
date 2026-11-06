@@ -397,6 +397,7 @@ dependencies = [
  "mime_guess",
  "nucleo-matcher",
  "rusqlite",
+ "rustix",
  "schemars 1.2.3",
  "serde",
  "serde_json",

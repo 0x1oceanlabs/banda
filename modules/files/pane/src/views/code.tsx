@@ -2,14 +2,16 @@
  * Files' code and text (ADR 0073, decision 6): a file's text, numbered and
  * coloured as the Diff draws it, opened at a line. Its lines picked in the
  * gutter copy as `path:12-20`, or take a comment that goes into a
- * Thread's message with them; in Quick Look it only shows. Past 1 MiB or
- * 20 000 lines its start is drawn, and a note says so; a file that turns
- * out binary shows its facts.
+ * Thread's message with them; in Quick Look it only shows. Edit has it
+ * edited in place, saved as one types (decision 8). Past 1 MiB or 20 000
+ * lines its start is drawn, and a note says so; a file that turns out
+ * binary shows its facts.
  */
 import { useState } from "react"
 import { Button } from "@banda/ui/components/button"
 import {
   CodeFile,
+  type Editor,
   type LineRange,
   linesWords,
 } from "@banda/ui/components/code-file"
@@ -25,16 +27,18 @@ import {
 import { Card, Facts, Loading } from "../Facts"
 import { HeaderButton } from "../HeaderButton"
 import { lineIn, linesOf, MOST_LINES, rangeText } from "../lines"
-import { type Drawn, useText } from "../read"
+import type { Drawn } from "../read"
 import { useHolding } from "../work"
 import { sizeWords } from "../words"
+import { Edited, EditButton, useEditing } from "./edit"
 
 export default function CodeView(props: PreviewProps) {
-  const { file, engine, project, kept, keep } = props
-  const read = useText(engine, project, file.path, file.modified)
-  const wrap = kept.wrap === true
+  const { kept, keep } = props
+  const edit = useEditing(props)
+  const { read } = edit
   return (
     <>
+      <EditButton edit={edit} />
       {read && "drawn" in read && read.drawn.text !== undefined && (
         <WrapButton kept={kept} keep={keep} />
       )}
@@ -47,7 +51,15 @@ export default function CodeView(props: PreviewProps) {
           note={read.refused}
         />
       ) : (
-        <TextOf {...props} drawn={read.drawn} wrap={wrap} />
+        <Edited edit={edit} props={props}>
+          <TextOf
+            {...props}
+            drawn={read.drawn}
+            text={edit.text}
+            editor={edit.editor}
+            wrap={kept.wrap === true}
+          />
+        </Edited>
       )}
     </>
   )
@@ -72,17 +84,26 @@ export function WrapButton({
   )
 }
 
-/** A file's text, drawn as code: its facts when it has none to draw. */
+/** A file's text, drawn as code: its facts when it has none to draw. It
+ * shows `text`, the Person's, saved or not, where it differs from what
+ * was read; with an `editor`, the editor edits it. */
 export function TextOf({
   file,
   drawn,
+  text = drawn.text,
+  editor,
   wrap,
   mode,
   line,
   project,
   run,
-}: PreviewProps & { drawn: Drawn; wrap: boolean }) {
-  if (drawn.text === undefined)
+}: PreviewProps & {
+  drawn: Drawn
+  text?: string | undefined
+  editor: Editor | null
+  wrap: boolean
+}) {
+  if (text === undefined)
     return (
       <Facts
         stat={file}
@@ -101,10 +122,11 @@ export function TextOf({
         name={file.name}
         path={file.shown}
         whole={file.path}
-        text={drawn.text}
+        text={text}
         wrap={wrap}
         line={lineIn(line, drawn.lines)}
-        pick={mode === "pane"}
+        pick={mode === "pane" && !editor}
+        editor={editor}
         run={run}
       />
     </>
@@ -137,6 +159,7 @@ function Code({
   wrap,
   line,
   pick,
+  editor,
   run,
 }: {
   project: PreviewProps["project"]
@@ -147,8 +170,9 @@ function Code({
   text: string
   wrap: boolean
   line: number | null
-  /** Its lines may be picked: not in Quick Look. */
+  /** Its lines may be picked: not in Quick Look, nor while it is edited. */
   pick: boolean
+  editor: Editor | null
   run: PreviewProps["run"]
 }) {
   const [picked, setPicked] = useState<{
@@ -156,8 +180,8 @@ function Code({
     range: LineRange
   } | null>(null)
   const [commenting, setCommenting] = useState(false)
-  // Lines of another file are not picked here.
-  const range = picked?.whole === whole ? picked.range : null
+  // Lines of another file are not picked here, nor while it is edited.
+  const range = picked?.whole === whole && pick ? picked.range : null
   // Lines picked, or a comment being written, keep Follow waiting.
   useHolding(project, range !== null)
   const clear = () => {
@@ -181,6 +205,7 @@ function Code({
         text={text}
         wrap={wrap}
         line={line}
+        edit={editor}
         picked={range}
         onPick={(range) => {
           if (!pick) return

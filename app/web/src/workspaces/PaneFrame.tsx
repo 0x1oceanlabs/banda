@@ -26,7 +26,13 @@ import {
   TileHeader,
 } from "@banda/ui/components/pane-header"
 import { DetailsRows } from "@banda/ui/components/thread-details"
-import { type Listed, type PaneState, type Place, within } from "@banda/ui/pane"
+import {
+  type Label,
+  type Listed,
+  type PaneState,
+  type Place,
+  within,
+} from "@banda/ui/pane"
 import type { Args } from "@banda/ui/module"
 import {
   LayoutPanelLeftIcon,
@@ -89,6 +95,30 @@ export function AgentMark({ className = "" }: { className?: string }) {
   )
 }
 
+/** By the title: a dot while the Pane's file has work not saved yet, and
+ * a quiet "Saved" a moment after it is (ADR 0073, decision 8). */
+function Edits({ edits }: { edits: Label["edits"] }) {
+  if (edits === "unsaved")
+    return (
+      <span
+        role="img"
+        aria-label="Not saved yet"
+        title="Not saved yet"
+        className="size-1.5 shrink-0 rounded-full bg-foreground/70"
+      />
+    )
+  if (edits === "saved")
+    return (
+      <span
+        role="status"
+        className="shrink-0 animate-in text-xs text-muted-foreground fade-in-0 motion-reduce:animate-none"
+      >
+        Saved
+      </span>
+    )
+  return null
+}
+
 /**
  * One tile: a header with the Pane's icon and title, and its Project when the
  * workspace mixes Projects, unless the Pane draws its own; under it, the Pane
@@ -148,7 +178,10 @@ export function PaneFrame({
   const kind = kindOf(entry.pane.kind)
   const shown = kind && kindRuns(entry.pane.kind, modules) ? kind : undefined
   const element = useRef<HTMLElement>(null)
-  const { title, detail, Icon } = labelOf(entry.pane, useSaid().get(entry.id))
+  const { title, detail, edits, Icon } = labelOf(
+    entry.pane,
+    useSaid().get(entry.id)
+  )
   const close = () => frame.close(entry.id)
   const details = useMemo(() => detailsOf(modules), [modules])
 
@@ -298,6 +331,7 @@ export function PaneFrame({
                     {title}
                   </h2>
                 )}
+                <Edits edits={edits} />
                 {/* The detail takes what room the title leaves: a long
                     one, as a folder's path, gives way first. */}
                 {detail && (

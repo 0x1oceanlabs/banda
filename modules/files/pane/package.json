@@ -4,7 +4,7 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "description": "The files module's Panes: a folder as a tree, and a file drawn by the previewer that claims it: code, markdown, an image, a PDF, video and sound, a page, a table, JSON, a notebook, a font, an archive, a workbook, and any file's bytes.",
+  "description": "The files module's Panes: a folder as a tree, and a file drawn by the previewer that claims it: code, markdown, an image, a PDF, video and sound, a page, a table, JSON, a notebook, a font, an archive, a workbook, and any file's bytes; code and markdown edited in place, saved only over the text they were read at.",
   "exports": {
     ".": "./src/index.ts"
   },

@@ -3,17 +3,20 @@
  * `@pierre/diffs`' file view, numbered and coloured in the window's
  * workers, virtualised. It opens at a line, centred and lit once, and
  * the Person picks lines in its gutter: a click, a drag, or Shift with a
- * click, and may write a comment under them. It reads; editing comes
- * later, behind Banda's own `Editor`.
+ * click, and may write a comment under them. Given an {@link Editor}, its
+ * text is edited in place, in the same look (decision 8).
  */
+import { Editor as PierreEditor, EditStateManager } from "@pierre/diffs/edit"
 import {
   CodeView,
+  EditProvider,
   File,
   WorkerPoolContextProvider,
   type CodeViewHandle,
   type CodeViewItem,
+  type EditorFactory,
 } from "@pierre/diffs/react"
-import { useEffect, useMemo, useRef } from "react"
+import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useDark } from "../hooks/use-dark"
 import { cn } from "../lib/utils"
 import { BASE_CSS, HIGHLIGHTER, POOL, THEMES, VIEW_CLASS } from "./code-look"
@@ -23,6 +26,23 @@ import { LineComment } from "./line-comment"
 
 /** Lines picked in the gutter, first to last as they were dragged. */
 export type LineRange = { start: number; end: number }
+
+/**
+ * Banda's editor (ADR 0073, decision 8): what a Pane gives a view of text
+ * to have it edited, and hears back. Pierre's editor is the first behind
+ * it, in the code view itself; CodeMirror may take a kind of file or a
+ * mode later, and no Pane would know.
+ */
+export type Editor = {
+  /** What the file's undo history is kept by while the window runs: its
+   * path. What was kept is taken up again only while it holds the text
+   * given, so a file changed meanwhile starts afresh. */
+  key: string
+  /** Each change, as the whole text. */
+  onChange: (text: string) => void
+  /** Esc, with nothing picked to let go of first. */
+  onDone: () => void
+}
 
 /** The one item the view holds. */
 const ID = "file"
@@ -44,6 +64,9 @@ let counted = 0
 export type CodeFileProps = {
   /** Its name, which says the language it is coloured as. */
   name: string
+  /** What it shows; while it is edited, what the editor starts from, and
+   * takes in place of what was typed when it changes, as one more step
+   * to undo. */
   text: string
   wrap: boolean
   /** The line shown centred and lit once, as it is given or changes. */
@@ -57,6 +80,8 @@ export type CodeFileProps = {
     onComment: (words: string) => void
     onCancel: () => void
   } | null
+  /** Its text is edited in place. */
+  edit?: Editor | null
   className?: string
 }
 
@@ -74,25 +99,80 @@ export function CodeFile({
   picked,
   onPick,
   comment,
+  edit,
   className,
 }: CodeFileProps) {
   const dark = useDark()
   const viewer = useRef<CodeViewHandle<undefined, undefined>>(null)
   const root = useRef<HTMLDivElement | null>(null)
+  const editing = edit != null
   // The comment's form sits under the last line picked.
   const under = comment && picked ? Math.max(picked.start, picked.end) : null
-  const items = useMemo<CodeViewItem<undefined>[]>(
-    () => [
+  const key = edit?.key
+  const items = useMemo<CodeViewItem<undefined>[]>(() => {
+    if (key !== undefined) forgetUnlike(key, text)
+    return [
       {
         id: ID,
         type: "file",
         file: { name, contents: text },
         ...(under !== null ? { annotations: [{ lineNumber: under }] } : {}),
+        ...(key !== undefined ? { edit: true } : {}),
         version: ++counted,
       },
-    ],
-    [name, text, under]
+    ]
+  }, [name, text, under, key])
+  // What the editor is told, as it is now. The view's options are made
+  // anew when its callbacks change, which drops a pick under way: they
+  // stay the same.
+  const told = useRef(edit)
+  useEffect(() => {
+    told.current = edit
+  })
+  const keyOf = useCallback(() => told.current?.key, [])
+  const changed = useCallback(
+    (event: { file: { contents: string } }) =>
+      told.current?.onChange(event.file.contents),
+    []
   )
+  // Turned on here, the editor takes the focus as it comes, at the first
+  // line in sight. Drawn anew already editing, as a Pane brought back is,
+  // it takes it from what holds it, as its tile, whenever that has it:
+  // never from elsewhere.
+  const began = useRef(editing)
+  useEffect(() => {
+    if (!editing) {
+      began.current = false
+      return
+    }
+    let anyway = !began.current
+    began.current = true
+    const around = (at: EventTarget | null) =>
+      at instanceof Element && at !== document.body && at.contains(root.current)
+    // Until it has the focus: the editor attaches, and draws, a moment
+    // after it is made.
+    const until = performance.now() + DRAWN_WITHIN
+    const first = () => {
+      const editor = viewer.current?.getEditor(ID)
+      const at = document.activeElement
+      if (editor && root.current?.contains(at)) return
+      if (editor && (anyway || around(at))) {
+        take(editor, anyway)
+        anyway = false
+      }
+      if (performance.now() < until) frame = requestAnimationFrame(first)
+    }
+    let frame = requestAnimationFrame(first)
+    const taken = (event: FocusEvent) => {
+      const editor = viewer.current?.getEditor(ID)
+      if (editor && around(event.target)) take(editor, false)
+    }
+    document.addEventListener("focusin", taken)
+    return () => {
+      cancelAnimationFrame(frame)
+      document.removeEventListener("focusin", taken)
+    }
+  }, [editing])
   // What the form does, as it is now: the view keeps the first renderer.
   const commenting = useRef(comment)
   useEffect(() => {
@@ -105,13 +185,14 @@ export function CodeFile({
       themeType: dark ? ("dark" as const) : ("light" as const),
       overflow: wrap ? ("wrap" as const) : ("scroll" as const),
       disableFileHeader: true,
-      // Lines stay as picked while their comment is written.
-      enableLineSelection: under === null,
+      // Lines stay as picked while their comment is written, and the
+      // editor picks text, not lines.
+      enableLineSelection: under === null && !editing,
       unsafeCSS: CSS,
       itemMetrics: METRICS,
       layout: LAYOUT,
     }),
-    [dark, wrap, under]
+    [dark, wrap, under, editing]
   )
   const selected = useMemo(
     () => (picked ? { id: ID, range: picked } : null),
@@ -152,32 +233,93 @@ export function CodeFile({
     return () => cancelAnimationFrame(frame)
   }, [line])
 
+  // Esc lets go of what the editor picked, then is done with it; the
+  // search's own field keeps its Esc.
+  useEffect(() => {
+    const element = root.current
+    if (!editing || !element) return
+    const done = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return
+      if (event.composedPath()[0] instanceof HTMLInputElement) return
+      const state = viewer.current?.getEditor(ID)?.getViewState()
+      const picked = state?.selections ?? []
+      const caret = picked.every(
+        ({ start, end }) =>
+          start.line === end.line && start.character === end.character
+      )
+      if (picked.length > 1 || !caret) return
+      event.stopPropagation()
+      told.current?.onDone()
+    }
+    element.addEventListener("keydown", done, { capture: true })
+    return () => element.removeEventListener("keydown", done, { capture: true })
+  }, [editing])
+
   return (
     <WorkerPoolContextProvider
       poolOptions={POOL}
       highlighterOptions={HIGHLIGHTER}
     >
-      <CodeView<undefined>
-        ref={viewer}
-        containerRef={root}
-        items={items}
-        className={cn(VIEW_CLASS, className)}
-        selectedLines={selected}
-        onSelectedLinesChange={(selection) => onPick(selection?.range ?? null)}
-        renderAnnotation={() =>
-          picked && commenting.current ? (
-            <LineComment
-              lines={linesWords(picked)}
-              onComment={(words) => commenting.current?.onComment(words)}
-              onCancel={() => commenting.current?.onCancel()}
-            />
-          ) : null
-        }
-        options={options}
-      />
+      <EditProvider createEditor={pierreEditor}>
+        <CodeView<undefined>
+          ref={viewer}
+          containerRef={root}
+          items={items}
+          className={cn(VIEW_CLASS, className)}
+          getEditStateKey={keyOf}
+          onItemEditChange={changed}
+          onItemEditComplete={accept}
+          selectedLines={selected}
+          onSelectedLinesChange={(selection) =>
+            onPick(selection?.range ?? null)
+          }
+          renderAnnotation={() =>
+            picked && commenting.current ? (
+              <LineComment
+                lines={linesWords(picked)}
+                onComment={(words) => commenting.current?.onComment(words)}
+                onCancel={() => commenting.current?.onCancel()}
+              />
+            ) : null
+          }
+          options={options}
+        />
+      </EditProvider>
     </WorkerPoolContextProvider>
   )
 }
+
+/** Forgets the draft and history Pierre keeps for `key` unless it holds
+ * `text`: a file changed since starts afresh, as it is on disk. */
+function forgetUnlike(key: string, text: string): void {
+  const kept = EditStateManager.get("file", key)
+  if (kept && kept.document.getText() !== text)
+    EditStateManager.clear("file", key)
+}
+
+/** Gives `editor` the focus where its caret was, or at the first line in
+ * sight when it had none, or `afresh`. */
+function take(
+  editor: Pick<PierreEditor, "focus" | "getViewState">,
+  afresh: boolean
+): void {
+  const placed = !afresh && !!editor.getViewState().selections?.length
+  editor.focus(
+    placed
+      ? { preventScroll: true }
+      : { preventScroll: true, lineNumber: "first-visible" }
+  )
+}
+
+/** What was typed stays shown as the editor goes. */
+const accept = () => "accept" as const
+
+/** Pierre's editor, for the view's text. */
+const pierreEditor: EditorFactory<undefined, undefined> = (
+  type,
+  options,
+  key
+) => new PierreEditor(type, options, key)
 
 /** A few lines of code, read only and as tall as they are, numbered and
  * coloured as a file's: a notebook's cell. Not virtualised, so it takes

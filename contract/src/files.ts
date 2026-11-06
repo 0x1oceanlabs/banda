@@ -1,10 +1,11 @@
 /**
  * The files module's words for TypeScript: one folder's names as
  * `files.list` reads them, what `files.stat` says a path is, a file's text
- * from `files.read`, the paths `files.find` finds, the pieces of
- * `files.watch`, the Person's places, the files opened lately, what an
- * archive holds and a workbook's sheet, for the previewers, and its
- * `files.toml` as the look resolves it (ADR 0073, decision 13).
+ * from `files.read` and what `files.write` answers, the paths `files.find`
+ * finds, the pieces of `files.watch`, the Person's places, the files
+ * opened lately, what an archive holds and a workbook's sheet, for the
+ * previewers, and its `files.toml` as the look resolves it (ADR 0073,
+ * decision 13).
  */
 import type { ModuleFile } from "./look"
 import type { Finder } from "./generated/files/Finder"
@@ -16,6 +17,7 @@ export type { FindAsk } from "./generated/files/FindAsk"
 export type { Found } from "./generated/files/Found"
 export type { Kind } from "./generated/files/Kind"
 export type { ListAsk } from "./generated/files/ListAsk"
+export type { Locked } from "./generated/files/Locked"
 export type { Listing } from "./generated/files/Listing"
 export type { ReadAsk } from "./generated/files/ReadAsk"
 export type { Stat } from "./generated/files/Stat"
@@ -23,6 +25,8 @@ export type { StatAsk } from "./generated/files/StatAsk"
 export type { Text } from "./generated/files/Text"
 export type { WatchAsk } from "./generated/files/WatchAsk"
 export type { Watched } from "./generated/files/Watched"
+export type { WriteAsk } from "./generated/files/WriteAsk"
+export type { Written } from "./generated/files/Written"
 export type { Finder } from "./generated/files/Finder"
 export type { Opened } from "./generated/files/Opened"
 export type { OpenedAsk } from "./generated/files/OpenedAsk"

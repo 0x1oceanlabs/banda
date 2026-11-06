@@ -83,7 +83,13 @@ export type Place = "right" | "below" | "here" | "group" | "project"
  * has its default prevented.
  */
 /** What a Pane says it shows now (`PaneProps.label`). */
-export type Label = { title: string; detail: string | null }
+export type Label = {
+  title: string
+  detail: string | null
+  /** Its file has work not saved yet, a dot by the title; or was saved a
+   * moment ago, a quiet "Saved" (ADR 0073, decision 8). */
+  edits?: "unsaved" | "saved"
+}
 
 export type PaneProps<A> = {
   engine: Engine

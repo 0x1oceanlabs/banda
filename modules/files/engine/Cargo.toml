@@ -1,6 +1,6 @@
 [package]
 name = "banda-files"
-description = "The files module: any folder, listed, read, searched and watched, and what an archive or a workbook holds, in the engine."
+description = "The files module: any folder, listed, read, searched, watched and written, and what an archive or a workbook holds, in the engine."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -19,19 +19,18 @@ infer.workspace = true
 mime_guess.workspace = true
 nucleo-matcher.workspace = true
 rusqlite.workspace = true
+rustix = { workspace = true, features = ["fs"] }
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sevenz-rust2.workspace = true
 sha2.workspace = true
 tar.workspace = true
+tempfile.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 ts-rs.workspace = true
 zip.workspace = true
-
-[dev-dependencies]
-tempfile.workspace = true
 
 [lints]
 workspace = true

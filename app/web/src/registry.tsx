@@ -26,7 +26,7 @@ import {
   paneOf,
   type Watch,
 } from "@banda/ui/pane"
-import { LayoutGridIcon } from "lucide-react"
+import { LayoutGridIcon, type LucideIcon } from "lucide-react"
 import { useLayoutEffect, useRef, useSyncExternalStore } from "react"
 import { columnsOf } from "./look"
 import { modules } from "./modules"
@@ -168,7 +168,9 @@ export function sayLabel(entry: string, label: Label | null): void {
   if (
     label === null
       ? !was
-      : was?.title === label.title && was.detail === label.detail
+      : was?.title === label.title &&
+        was.detail === label.detail &&
+        was.edits === label.edits
   )
     return
   const next = new Map(said)
@@ -193,7 +195,10 @@ export function useSaid(): ReadonlyMap<string, Label> {
 
 /** A Pane's title, quieter detail and icon: what it said it shows `now`,
  * else what its kind gives. */
-export function labelOf(pane: PaneState, now?: Label) {
+export function labelOf(
+  pane: PaneState,
+  now?: Label
+): Label & { Icon: LucideIcon | undefined } {
   const kind = kindOf(pane.kind)
   const Icon = kind?.icon
   if (!kind) return { title: "Unknown Pane", detail: null, Icon }

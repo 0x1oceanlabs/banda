@@ -3,12 +3,15 @@
  * reply: `@banda/ui`'s Streamdown, its front matter a quiet line above
  * it, its source a toggle away. Its pictures come from the file host, a
  * relative one from the file's folder; a web link opens in Banda's
- * browser, and with Ctrl or ⌘ outside it, as in a Thread (ADR 0051).
+ * browser, and with Ctrl or ⌘ outside it, as in a Thread (ADR 0051). A
+ * task's box ticked writes its line, and Edit edits its source (decision
+ * 8).
  */
 import { useCallback, useMemo } from "react"
 import { Markdown } from "@banda/ui/components/markdown"
 import { MarkdownLinks } from "@banda/ui/components/markdown-link"
 import { MarkdownMedia } from "@banda/ui/components/markdown-media"
+import { MarkdownTasks, type Tick } from "@banda/ui/components/markdown-task"
 import { InHeader } from "@banda/ui/components/pane-header"
 import { fileMint } from "@banda/ui/hooks/use-file-url"
 import type { PreviewProps } from "@banda/ui/module"
@@ -17,12 +20,13 @@ import { Card, Loading } from "../Facts"
 import { HeaderButton } from "../HeaderButton"
 import { frontMatter } from "../markdown"
 import { besideFile } from "../paths"
-import { useText } from "../read"
 import { Cut, TextOf, WrapButton } from "./code"
+import { Edited, EditButton, useEditing } from "./edit"
 
 export default function MarkdownView(props: PreviewProps) {
-  const { file, engine, project, kept, keep } = props
-  const read = useText(engine, project, file.path, file.modified)
+  const { file, project, kept, keep } = props
+  const edit = useEditing(props)
+  const { read, text, tick } = edit
   const source = kept.source === true
   if (read === null) return <Loading />
   if ("refused" in read)
@@ -34,10 +38,13 @@ export default function MarkdownView(props: PreviewProps) {
       />
     )
   const { drawn } = read
+  // Edit edits its source.
+  const code = source || edit.on
   return (
     <>
+      <EditButton edit={edit} />
       {/* Wrap first: it comes and goes, and Source stays where it is. */}
-      {source && drawn.text !== undefined && (
+      {code && drawn.text !== undefined && (
         <WrapButton kept={kept} keep={keep} />
       )}
       {drawn.text !== undefined && (
@@ -51,19 +58,28 @@ export default function MarkdownView(props: PreviewProps) {
           </HeaderButton>
         </InHeader>
       )}
-      {source || drawn.text === undefined ? (
-        <TextOf {...props} drawn={drawn} wrap={kept.wrap === true} />
-      ) : (
-        <>
-          <Cut drawn={drawn} />
-          <Rendered
-            project={project}
-            file={file.path}
-            text={drawn.text}
-            run={props.run}
+      <Edited edit={edit} props={props}>
+        {code || text === undefined ? (
+          <TextOf
+            {...props}
+            drawn={drawn}
+            text={text}
+            editor={edit.editor}
+            wrap={kept.wrap === true}
           />
-        </>
-      )}
+        ) : (
+          <>
+            <Cut drawn={drawn} />
+            <Rendered
+              project={project}
+              file={file.path}
+              text={text}
+              run={props.run}
+              tick={tick}
+            />
+          </>
+        )}
+      </Edited>
     </>
   )
 }
@@ -73,14 +89,25 @@ function Rendered({
   file,
   text,
   run,
+  tick,
 }: {
   project: string
   /** Its full path. */
   file: string
   text: string
   run: PreviewProps["run"]
+  /** Ticks a task counted from where the body starts; none where the
+   * file may not be written. */
+  tick: ((nth: number, done: boolean, of: number, from: number) => void) | null
 }) {
   const front = useMemo(() => frontMatter(text), [text])
+  const body = front?.body ?? text
+  // Its tasks are counted in its body, after the front matter.
+  const from = text.length - body.length
+  const ticks = useMemo<Tick | null>(
+    () => tick && ((nth, done, of) => tick(nth, done, of, from)),
+    [tick, from]
+  )
   return (
     <div className="min-h-0 flex-1 overflow-auto select-text">
       <div className="mx-auto max-w-3xl px-6 py-5">
@@ -93,12 +120,9 @@ function Rendered({
             ))}
           </p>
         )}
-        <MarkdownIn
-          project={project}
-          file={file}
-          text={front?.body ?? text}
-          run={run}
-        />
+        <MarkdownTasks tick={ticks}>
+          <MarkdownIn project={project} file={file} text={body} run={run} />
+        </MarkdownTasks>
       </div>
     </div>
   )

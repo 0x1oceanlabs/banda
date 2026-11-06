@@ -4,10 +4,12 @@
 //! names (`list`), what some paths are (`stat`), a file's text (`read`),
 //! fuzzy paths under a folder (`find`), and what changed in the folders a
 //! Pane shows (`watch`). For the previewers it lists what an archive
-//! holds (`archive`) and reads a workbook's sheet (`sheet`). Each path goes through the kernel's path guard,
-//! [`Reach`]: a relative one starts at the Project's folder, the Person
-//! may name any, and an Agent's call reaches only inside the Project's
-//! folder. These only read; writing comes later (decisions 8 and 10).
+//! holds (`archive`) and reads a workbook's sheet (`sheet`). It writes a
+//! file's text only over the text it was read at (`write`), never in
+//! `.git` nor in Banda's settings folder. Each path goes through the
+//! kernel's path guard, [`Reach`]: a relative one starts at the Project's
+//! folder, the Person may name any, and an Agent's call reaches only
+//! inside the Project's folder.
 //!
 //! It also keeps what the Person opened (`opened`, `recent`), which Files
 //! lists and `find` raises, and answers the Person's places (`places`).
@@ -23,16 +25,17 @@ mod places;
 mod read;
 mod recent;
 mod sheet;
+mod write;
 
-use banda_kernel::{Call, Changed, Module, Nothing, Reach, Refusal, Right, Stream};
+use banda_kernel::{Call, Changed, Module, Nothing, Participant, Reach, Refusal, Right, Stream};
 use model::{
-    Archive, ArchiveAsk, FindAsk, Found, ListAsk, Listing, Opened, OpenedAsk, Places, ReadAsk,
-    RecentAsk, Sheet, SheetAsk, Stat, StatAsk, Text, WatchAsk, Watched,
+    Archive, ArchiveAsk, FindAsk, Found, ListAsk, Listing, Locked, Opened, OpenedAsk, Places,
+    ReadAsk, RecentAsk, Sheet, SheetAsk, Stat, StatAsk, Text, WatchAsk, Watched, WriteAsk, Written,
 };
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// The module's settings file in `~/.config/banda` (ADR 0016): what Files
 /// shows, which the look resolves for the window (ADR 0073, decision 13).
@@ -43,14 +46,32 @@ pub const SETTINGS: [banda_look::SettingsFile; 1] =
 const RECENT: u32 = 20;
 const RECENT_MOST: u32 = 100;
 
+/// How many files the engine remembers who wrote last.
+const WROTE: usize = 256;
+
 #[derive(Default)]
 pub struct Files {
     walks: Arc<find::Walks>,
+    /// Banda's settings folder, where Files writes nothing (ADR 0073,
+    /// decision 8).
+    config: Option<PathBuf>,
+    /// Who wrote each file last through `files.write`, and its hash then,
+    /// so a write refused can say who moved the file.
+    wrote: Arc<Mutex<HashMap<PathBuf, (String, Participant)>>>,
 }
 
 impl Files {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Banda's settings live in `config`: Files reads them, and leaves
+    /// writing them to the settings Pane (ADR 0016).
+    pub fn config_in(self, config: PathBuf) -> Self {
+        Self {
+            config: Some(config),
+            ..self
+        }
     }
 }
 
@@ -62,8 +83,14 @@ banda_kernel::methods! {
         /// What each path is, or none for one that is gone.
         call stat(StatAsk) -> Vec<Option<Stat>>, Read;
         /// A file's text, up to 1 MiB unless asked, or that it is binary,
-        /// with its whole size and, read whole, its hash.
+        /// with its whole size, and, read whole, its hash; and why it may
+        /// not be written, if so.
         call read(ReadAsk) -> Text, Read;
+        /// Writes a file's text, only while the file is at `base`, the hash
+        /// `files.read` gave, or, with none, is not there. When it moved,
+        /// nothing is written, and the answer says its hash now. Never in
+        /// `.git`, nor Banda's settings.
+        command write(WriteAsk) -> Written, Write;
         /// Fuzzy paths of the files under a folder, the Project's unless
         /// asked, leaving out what `.gitignore` does.
         call find(FindAsk) -> Found, Read;
@@ -135,6 +162,34 @@ fn amiss(asked: &str, error: &std::io::Error) -> Refusal {
     }
 }
 
+/// A refusal for why `asked` was not written.
+fn unwritten(asked: &str, why: write::Unwritten) -> Refusal {
+    use write::Unwritten;
+    match why {
+        Unwritten::Locked(Locked::Git) => Refusal::forbidden(format!(
+            "{asked} is in .git, which is git's own: Files writes nothing there."
+        )),
+        Unwritten::Locked(Locked::Settings) => Refusal::forbidden(format!(
+            "{asked} is one of Banda's settings, which Settings changes."
+        )),
+        Unwritten::Locked(Locked::Denied) => {
+            Refusal::forbidden(format!("{asked} may not be written."))
+        }
+        Unwritten::Link => Refusal::forbidden(format!(
+            "{asked} is a link that leads nowhere: Files writes no file through it."
+        )),
+        Unwritten::NoFolder => {
+            Refusal::not_found(format!("The folder {asked} goes in is not there."))
+        }
+        Unwritten::Io(error) if error.kind() == std::io::ErrorKind::IsADirectory => {
+            Refusal::invalid(format!("{asked} is a folder."))
+        }
+        Unwritten::Io(error) => {
+            Refusal::conflict(format!("{asked} could not be written: {error}."))
+        }
+    }
+}
+
 /// Runs a read of the disk off the engine's threads.
 async fn blocking<T: Send + 'static>(
     work: impl FnOnce() -> T + Send + 'static,
@@ -172,8 +227,40 @@ impl Files {
     async fn read(&self, call: Call, ask: ReadAsk) -> Result<Text, Refusal> {
         let path = Reach::of(&call, &ask.path)?.into_path();
         let upto = ask.upto.unwrap_or(read::UPTO);
-        let text = blocking(move || read::read(&path, upto)).await?;
-        text.map_err(|e| amiss(&ask.path, &e))
+        let config = self.config.clone();
+        let text = blocking(move || {
+            let mut text = read::read(&path, upto)?;
+            text.locked = write::locked(&path, config.as_deref());
+            Ok(text)
+        });
+        text.await?.map_err(|e| amiss(&ask.path, &e))
+    }
+
+    async fn write(&self, call: Call, ask: WriteAsk) -> Result<Written, Refusal> {
+        let path = Reach::of(&call, &ask.path)?.into_path();
+        let config = self.config.clone();
+        let saved = blocking({
+            let path = path.clone();
+            move || write::write(&path, &ask.text, ask.base.as_deref(), config.as_deref())
+        });
+        let saved = saved.await?.map_err(|why| unwritten(&ask.path, why))?;
+        let mut wrote = self.wrote.lock().unwrap();
+        Ok(match saved {
+            write::Saved::Holds { hash, wrote: true } => {
+                if wrote.len() >= WROTE {
+                    wrote.clear();
+                }
+                wrote.insert(path, (hash.clone(), call.participant()));
+                Written::Written { hash }
+            }
+            write::Saved::Holds { hash, wrote: false } => Written::Written { hash },
+            write::Saved::Moved { hash } => {
+                let by = (wrote.get(&path))
+                    .filter(|(was, _)| hash.as_ref() == Some(was))
+                    .map(|(_, by)| *by);
+                Written::Moved { hash, by }
+            }
+        })
     }
 
     async fn find(&self, call: Call, ask: FindAsk) -> Result<Found, Refusal> {

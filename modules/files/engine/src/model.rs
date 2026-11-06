@@ -1,5 +1,6 @@
 //! The files module's words on the wire.
 
+use banda_kernel::Participant;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -129,6 +130,59 @@ pub struct Text {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub hash: Option<String>,
+    /// Why `files.write` would not write it; none when it would.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub locked: Option<Locked>,
+}
+
+/// Why Files writes no file at a path, though it reads it (ADR 0073,
+/// decision 8).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "files/")]
+pub enum Locked {
+    /// It is inside a `.git` folder, which is git's own.
+    Git,
+    /// It is in Banda's settings folder, `~/.config/banda`, whose files
+    /// the settings Pane changes (ADR 0016).
+    Settings,
+    /// The system lets this user not write it, or not make a file in its
+    /// folder.
+    Denied,
+}
+
+/// What `files.write` asks: a file's new text, saved only over the text
+/// it was made from.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct WriteAsk {
+    /// As `files.list` reads its `dir`.
+    pub path: String,
+    pub text: String,
+    /// The hash `files.read` gave of the text this one was made from;
+    /// none for a file that must not be there yet.
+    pub base: Option<String>,
+}
+
+/// What `files.write` answers.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[ts(export, export_to = "files/")]
+pub enum Written {
+    /// The file holds the text now, written or held already: its hash,
+    /// the next write's base.
+    Written { hash: String },
+    /// The file is not at `base` any more, so nothing was written.
+    Moved {
+        /// Its hash now; none when it is gone.
+        hash: Option<String>,
+        /// Who put it there, when that was a `files.write` the engine
+        /// heard since it started.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        by: Option<Participant>,
+    },
 }
 
 /// What `files.find` asks.

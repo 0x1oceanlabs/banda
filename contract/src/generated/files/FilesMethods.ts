@@ -21,6 +21,8 @@ import type { StatAsk } from "./StatAsk";
 import type { Text } from "./Text";
 import type { WatchAsk } from "./WatchAsk";
 import type { Watched } from "./Watched";
+import type { WriteAsk } from "./WriteAsk";
+import type { Written } from "./Written";
 
 export type FilesMethods = { 
 /**
@@ -34,9 +36,17 @@ list: CallMethod<ListAsk, Listing>,
 stat: CallMethod<StatAsk, Array<Stat | null>>, 
 /**
  * A file's text, up to 1 MiB unless asked, or that it is binary,
- * with its whole size and, read whole, its hash.
+ * with its whole size, and, read whole, its hash; and why it may
+ * not be written, if so.
  */
 read: CallMethod<ReadAsk, Text>, 
+/**
+ * Writes a file's text, only while the file is at `base`, the hash
+ * `files.read` gave, or, with none, is not there. When it moved,
+ * nothing is written, and the answer says its hash now. Never in
+ * `.git`, nor Banda's settings.
+ */
+write: CommandMethod<WriteAsk, Written>, 
 /**
  * Fuzzy paths of the files under a folder, the Project's unless
  * asked, leaving out what `.gitignore` does.
