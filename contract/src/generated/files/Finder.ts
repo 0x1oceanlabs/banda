@@ -7,4 +7,8 @@ export type Finder = {
 /**
  * The folders pinned, as written: whole, or from `~`.
  */
-pinned: Array<string>, hidden: boolean, ignored: boolean, };
+pinned: Array<string>, hidden: boolean, ignored: boolean, 
+/**
+ * The editor's id; empty for the first one found.
+ */
+editor: string, };

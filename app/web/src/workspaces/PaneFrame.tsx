@@ -1,6 +1,7 @@
 import {
   Component,
   type ReactNode,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -41,6 +42,7 @@ import {
   sayLabel,
   useSaid,
 } from "../registry"
+import { sayComposer } from "../shell/attach"
 import { heightAt } from "./layout"
 import { ThreadMark } from "../sidebar/Row"
 import type { Plan } from "./arrange"
@@ -152,6 +154,12 @@ export function PaneFrame({
 
   // What the Pane said it shows goes with it.
   useEffect(() => () => sayLabel(entry.id, null), [entry.id])
+  // Its composer, the same between draws, so the Pane says it once.
+  const composer = useCallback(
+    (take: Parameters<typeof sayComposer>[2]) =>
+      sayComposer(entry.id, entry.project, take),
+    [entry.id, entry.project]
+  )
 
   // As it is drawn focused, not a frame later: a key pressed meanwhile
   // would go to the tile that had the focus.
@@ -349,6 +357,7 @@ export function PaneFrame({
                     close={close}
                     label={(label) => sayLabel(entry.id, label)}
                     run={frame.run}
+                    composer={composer}
                   />
                 </Broken>
               ) : (

@@ -3,7 +3,7 @@
  * ADR 0073, decision 11): the focused Project's files that fit the words,
  * as `files.find` matches them. Enter opens one in `files.file`, at the
  * line typed after them, as `main.rs:42`; Tab also offers to show it in
- * Files, in its folder.
+ * Files, in its folder, and to add it to a Thread's message.
  */
 import { useEffect, useLayoutEffect, useMemo, useState } from "react"
 import { copyText } from "@banda/ui/lib/clipboard"
@@ -73,6 +73,10 @@ function FindFiles({ words: typed, here, found }: FindProps) {
           acts: [
             { title: "Open", key: OPEN, run: open },
             { title: "Show in Files", run: show },
+            {
+              title: "Add to chat",
+              run: (window) => window.attach({ path: full }),
+            },
             { title: "Copy path", run: () => copyText(full) },
           ],
         }

@@ -707,6 +707,26 @@
       }
     },
     {
+      "id": "file.attach",
+      "title": "Add a file to a Thread's message",
+      "section": "Banda",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "the file's absolute path; a folder's ends with /"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
       "id": "file.folder",
       "title": "Show a file in its folder",
       "section": "Banda",

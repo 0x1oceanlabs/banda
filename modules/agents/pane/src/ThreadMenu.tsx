@@ -18,6 +18,7 @@ import {
 import { lineText } from "@banda/ui/lib/file-links"
 import { FIELDS, MOD } from "@banda/ui/lib/keys"
 import { rangeMarkdown } from "@banda/ui/lib/markdown-copy"
+import { useEditors } from "@banda/ui/lib/outside"
 import {
   AtSignIcon,
   CopyIcon,
@@ -27,6 +28,7 @@ import {
   GlobeIcon,
   ImageIcon,
   PanelRightIcon,
+  SquareCodeIcon,
   PencilIcon,
   QuoteIcon,
   SearchIcon,
@@ -133,14 +135,17 @@ export type ThreadActs = {
   /** Searches the web in Banda's browser; none where no window does. */
   search?: (words: string) => void
   open: (address: string, outside: boolean) => void
-  /** Opens a file a path names, in Banda or in its app; shows it in its
-   * folder; none where no window looks at files. */
+  /** Opens a file a path names, in Banda, in the app the system has for
+   * it, or in an editor at its line; shows it in its folder; none where no
+   * window looks at files. */
   file?: {
     open: (at: FileAt, outside: boolean) => void
+    system: (at: FileAt) => void
+    edit: (at: FileAt) => void
     show: (at: FileAt) => void
   }
-  /** Names a file in the message, as `@` does. */
-  point: (path: string) => void
+  /** Names the file at the whole `path` in the message, as `@` does. */
+  attach: (path: string) => void
   /** Copies the image at a point of the page; none where no window does. */
   copyImage?: (x: number, y: number) => void
 }
@@ -164,6 +169,8 @@ function Items({ at, acts }: { at: MenuAt; acts: ThreadActs }) {
   // Each act waits for the menu to go: it gives the focus back as it goes,
   // which would undo a quote's, or clear a selection made.
   const later = useAfterMenu()
+  // Ctrl or ⌘ with a click opens a path in it, when there is one.
+  const { editor } = useEditors()
   const item = (act: () => void) => () => later(act)
   switch (at.kind) {
     case "selection": {
@@ -212,13 +219,20 @@ function Items({ at, acts }: { at: MenuAt; acts: ThreadActs }) {
                 <PanelRightIcon />
                 Open in Banda
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={item(() => acts.file!.open(file, true))}
-              >
+              <DropdownMenuItem onClick={item(() => acts.file!.system(file))}>
                 <ExternalLinkIcon />
                 Open in its app
-                <DropdownMenuShortcut>{MOD}click</DropdownMenuShortcut>
+                {!editor && (
+                  <DropdownMenuShortcut>{MOD}click</DropdownMenuShortcut>
+                )}
               </DropdownMenuItem>
+              {editor && (
+                <DropdownMenuItem onClick={item(() => acts.file!.edit(file))}>
+                  <SquareCodeIcon />
+                  Open in {editor.name}
+                  <DropdownMenuShortcut>{MOD}click</DropdownMenuShortcut>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={item(() => acts.file!.show(file))}>
                 <FolderOpenIcon />
                 Show in folder
@@ -237,11 +251,7 @@ function Items({ at, acts }: { at: MenuAt; acts: ThreadActs }) {
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={item(() =>
-              acts.point(file.inside ? file.relative : file.file)
-            )}
-          >
+          <DropdownMenuItem onClick={item(() => acts.attach(file.file))}>
             <AtSignIcon />
             Add to message
           </DropdownMenuItem>

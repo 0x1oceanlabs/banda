@@ -11,6 +11,7 @@ import type { ComponentType } from "react"
 import type { LucideIcon } from "lucide-react"
 import type { Engine, JsonValue, ProjectId } from "@banda/contract"
 import type { MarkState } from "./components/banda-mark"
+import type { Chip } from "./module"
 import type { Chime } from "./sound/families"
 
 /**
@@ -113,6 +114,12 @@ export type PaneProps<A> = {
    * a Project picker. None where no window runs actions, as in a dialog of
    * the settings. */
   run?: (action: string, args?: { [key: string]: JsonValue }) => void
+  /**
+   * Says the Pane has a composer, and how it takes what an App puts in a
+   * message (`WindowApi.attach`); `null` takes it back. A Thread says so.
+   * None where nothing attaches, as in a dialog of the settings.
+   */
+  composer?: (take: ((chips: readonly Chip[]) => void) | null) => void
 }
 
 export type PaneKind<A extends { [key: string]: JsonValue }> = {

@@ -86,6 +86,7 @@ import {
   wokeTold,
 } from "../sidebar/snoozed"
 import { archive as keepArchived, toggled } from "../sidebar/archived"
+import { attachTo, focusedOn } from "./attach"
 import { useNarrow } from "./narrow"
 import type { Arranged } from "@banda/contract/workspaces"
 import {
@@ -371,6 +372,11 @@ export function Shell({
     for (const drawn of waiting.current)
       if (drawn(drawing)) waiting.current.delete(drawn)
   }, [drawing])
+  // The Panes that had the focus, for where an App's attach goes.
+  const focusedId = focused(drawing.state)?.id
+  useEffect(() => {
+    if (focusedId) focusedOn(focusedId)
+  }, [focusedId])
   // Where the Person looks, which the notifications module asks to tell
   // of what calls (ADR 0056, decision 1), and who hears it change.
   const sightHeard = useRef(new Set<() => void>())
@@ -909,6 +915,19 @@ export function Shell({
       writeSetting: (file, key, value) =>
         window.banda?.settings.set(file, key, value) ??
         Promise.resolve(["Only Banda's app writes the settings."]),
+      attach: (chips) => {
+        const at = focused(seenNow.current.state)
+        const to = attachTo(at ? { id: at.id, project: at.project } : null)
+        if (!to) {
+          // One toast, however many files were added at once.
+          toast.warning("No Thread in this Project to add it to.", {
+            id: "attach",
+          })
+          return
+        }
+        change((w) => focusEntry(w, to.entry))
+        to.take(Array.isArray(chips) ? chips : [chips])
+      },
     }
     return parts
   }, [
@@ -986,6 +1005,7 @@ export function Shell({
       look: () => partsNow.current.look(),
       projects: () => partsNow.current.projects(),
       writeSetting: (...how) => partsNow.current.writeSetting(...how),
+      attach: (chips) => partsNow.current.attach(chips),
     }
     const stops = known
       .filter((module) => running.split(",").includes(module.id))

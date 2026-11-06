@@ -139,6 +139,9 @@ export async function startWindow({
     BrowserWindow.getAllWindows()[0]?.setContentSize(1280, 800)
   )
   await page.setViewportSize({ width: 1280, height: 800 })
+  // No test starts an editor of the machine's: none is found, unless the
+  // test says which (`editorsOn`).
+  await editorsOn(app, [])
   return {
     app,
     page,
@@ -165,6 +168,32 @@ export async function startWindow({
     },
   }
 }
+
+/**
+ * Main as if `editors` were the code editors on this machine. What the
+ * page opens in one is kept, never started: `openedIn` reads it, each as
+ * the editor, the path, the line and the column. The page asks once a
+ * run, so a test says this before anything shows an editor.
+ */
+export async function editorsOn(
+  app: ElectronApplication,
+  editors: { id: string; name: string }[]
+): Promise<void> {
+  await app.evaluate(({ ipcMain }, found) => {
+    const opened: unknown[][] = []
+    ;(globalThis as { openedIn?: unknown[][] }).openedIn = opened
+    ipcMain.removeHandler("files.editors")
+    ipcMain.handle("files.editors", () => found)
+    ipcMain.removeHandler("files.openIn")
+    ipcMain.handle("files.openIn", (_event, ...args: unknown[]) => {
+      opened.push(args)
+    })
+  }, editors)
+}
+
+/** What the page opened in an editor since `editorsOn`. */
+export const openedIn = (app: ElectronApplication) =>
+  app.evaluate(() => (globalThis as { openedIn?: unknown[][] }).openedIn)
 
 /** What a tool of `banda mcp` says, which it did not refuse. */
 export async function agentSays(window: Window, name: string, args: object) {

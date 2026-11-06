@@ -20,6 +20,7 @@ import {
   type Named,
 } from "../lib/file-links"
 import { linkHint, outsideClick } from "../lib/links"
+import { useEditors } from "../lib/outside"
 import { nameAndFolder } from "../lib/paths"
 
 /** A found file, and the line its path points at. */
@@ -29,13 +30,17 @@ export type FileAt = FoundFile & Omit<Named, "path">
 export type FilesHost = {
   /** The file each path names, if one is there, in their order. */
   find: (paths: string[]) => Promise<Array<FoundFile | null>>
-  /** Opens it in Banda, or, with Ctrl or ⌘, in its app. */
+  /** Opens it in Banda, or, with Ctrl or ⌘, in the editor `files.toml`
+   * names (ADR 0073, decision 12, as amended); in its app when there is
+   * none. */
   open: (file: FileAt, outside: boolean) => void
 }
 
 type Files = {
   find: (path: string) => Promise<FoundFile | null>
   open: FilesHost["open"]
+  /** Where Ctrl or ⌘ with a click opens a file, in words. */
+  outside: string
 }
 const Files = createContext<Files | null>(null)
 
@@ -48,13 +53,21 @@ export function MarkdownFiles({
   host: FilesHost | null
   children: ReactNode
 }) {
+  const find = useMemo(
+    () => host && finder((paths) => host.find(paths)),
+    [host]
+  )
+  const { editor } = useEditors()
+  const outside = editor ? `in ${editor.name}` : "in its app"
   const files = useMemo(
     () =>
-      host && {
-        find: finder((paths) => host.find(paths)),
+      host &&
+      find && {
+        find,
         open: (at: FileAt, outside: boolean) => host.open(at, outside),
+        outside,
       },
-    [host]
+    [host, find, outside]
   )
   return <Files value={files}>{children}</Files>
 }
@@ -146,7 +159,7 @@ export function MarkdownFileLink({
 const LINKED = new WeakMap<Element, FileAt>()
 
 /** A link to a found file. A click opens it in Banda, and with Ctrl or ⌘
- * in its app. */
+ * in the editor, or in its app when there is none. */
 function FileLink({
   at,
   found,
@@ -179,7 +192,7 @@ function FileLink({
       className={
         kind === "named" ? "font-medium wrap-anywhere text-primary" : undefined
       }
-      title={linkHint(`${found.file}${lineText(at)}`, "in its app")}
+      title={linkHint(`${found.file}${lineText(at)}`, files.outside)}
       onClick={open}
       onContextMenu={(event) => {
         // macOS emits contextmenu instead of click for Ctrl+click.

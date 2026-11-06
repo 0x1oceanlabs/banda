@@ -27,6 +27,21 @@ export type Sight = "looking" | "on-screen" | "in-window" | "away"
 /** A thing, as a Pane shows it and the lists name it. */
 export type Thing = { project: ProjectId; about: string }
 
+/**
+ * What an App puts into a Thread's message (ADR 0073, decision 14; ADR
+ * 0034, decision 9): a file, as `@` names one; some of its lines; and the
+ * Person's words on them. The composer writes the path from its Project's
+ * folder when it is inside, as `@` does.
+ */
+export type Chip = {
+  /** The file's whole path; a folder's ends with `/`. */
+  path: string
+  /** The lines it is about, the first and the last, from 1. */
+  lines?: readonly [from: number, to: number]
+  /** What the Person says of them. */
+  comment?: string
+}
+
 /** A Pane's args, and what an action is run with besides the window: the
  * Banda menu's words, a Project. Plain data, as `keys.toml` and the CLI will
  * give it. */
@@ -91,6 +106,13 @@ export type WindowApi = {
    * wrong, if refused. The file is the one source: what reads it hears
    * the change as any other. */
   writeSetting: (file: string, key: string, value: string) => Promise<string[]>
+  /**
+   * Puts `chips` into a Thread's message (ADR 0073, decision 14), and goes
+   * to that Thread: the focused Pane's, if it has a composer; else the one
+   * that had the focus last in the focused Pane's Project. With none, a
+   * toast says so.
+   */
+  attach: (chips: Chip | readonly Chip[]) => void
 }
 
 /** What `WindowApi.beside` finds: the thing's Project, and the Panes of

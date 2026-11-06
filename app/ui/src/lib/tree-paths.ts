@@ -45,3 +45,13 @@ export function foldersOf(path: string): string[] {
   const names = path.split("/").filter(Boolean)
   return names.slice(0, -1).map((_, n) => `${names.slice(0, n + 1).join("/")}/`)
 }
+
+/** What a drag of `paths` carries: each one once, and none a folder of
+ * them holds, in their order. */
+export function outermost(paths: readonly string[]): string[] {
+  const folders = paths.filter((path) => path.endsWith("/"))
+  return [...new Set(paths)].filter(
+    (path) =>
+      !folders.some((folder) => folder !== path && path.startsWith(folder))
+  )
+}

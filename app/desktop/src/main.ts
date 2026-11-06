@@ -56,7 +56,8 @@ import { modules } from "./modules"
 import { channel, stateFolder } from "./channel"
 import { listApp } from "./entry"
 import { startLog, watchProblems } from "./problems"
-import { exists, openFile, showFile } from "./outside"
+import { Editors } from "./editors"
+import { dragOut, exists, openFile, showFile } from "./outside"
 import { roadLayer } from "./road"
 import { settingsLayer } from "./settings"
 import { updates } from "./update"
@@ -185,7 +186,8 @@ const runtime = ManagedRuntime.make(
         lookLayer(engineBinary),
         settingsLayer(engineBinary),
         Window.layer(() => window),
-        FileHost.layer
+        FileHost.layer,
+        Editors.layer
       )
     ),
     Layer.provide(NodeServices.layer)
@@ -359,6 +361,27 @@ async function ready(): Promise<void> {
       outside: [text, ([path]) => Effect.sync(() => openFile(path))],
       show: [text, ([path]) => Effect.sync(() => showFile(path))],
       exists: [text, ([path]) => Effect.sync(() => exists(path))],
+      editors: [
+        none,
+        () =>
+          Editors.use((editors) => editors.list).pipe(
+            Effect.map((found) => found.map(({ id, name }) => ({ id, name })))
+          ),
+      ],
+      openIn: [
+        Schema.Tuple([
+          Schema.String,
+          Schema.String,
+          Schema.NullOr(Schema.Number),
+          Schema.NullOr(Schema.Number),
+        ]),
+        ([editor, path, line, column]) =>
+          Editors.use((editors) => editors.open(editor, path, line, column)),
+      ],
+      drag: [
+        Schema.Tuple([Schema.Array(Schema.String)]),
+        ([paths], event) => Effect.promise(() => dragOut(event.sender, paths)),
+      ],
     },
     edit: {
       paste: [none, (_, event) => Effect.sync(() => event.sender.paste())],
