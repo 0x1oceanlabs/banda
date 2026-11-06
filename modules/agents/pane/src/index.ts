@@ -7,8 +7,11 @@ import {
   type Action,
   defineModule,
   type Listing,
+  scoped,
   takes,
 } from "@banda/ui/module"
+import type { Key } from "@banda/ui/lib/keys"
+import { COMPOSER } from "./scopes"
 import { paneOf } from "@banda/ui/pane"
 import { threadPane } from "./ThreadPane"
 import { visualPane } from "./VisualPane"
@@ -66,12 +69,46 @@ const threads: Listing = {
   unread: markUnread,
 }
 
+/**
+ * The composer's keys (ADR 0071, decision 1): actions of its scope, so
+ * keys.toml binds them as any. Its element runs them (`Composer`); a key
+ * its suggestions or its text take, as Enter in code, stays theirs.
+ */
+const composer = (id: string, title: string, key: Key) =>
+  scoped(COMPOSER, {
+    id: `agents.composer.${id}`,
+    title,
+    section: "Composer",
+    keys: [key],
+  })
+
 export const agents = defineModule({
   id: "agents",
   engine: true,
   panes: [threadPane, visualPane],
   watches: [threadsWatch],
-  actions: [newThread],
+  actions: [
+    newThread,
+    composer("send", "Send the message, as agents.toml says Enter does", {
+      code: "Enter",
+    }),
+    composer("send-other", "Send it the other way: queued, or steering", {
+      code: "Enter",
+      primary: true,
+    }),
+    composer("newline", "A new line in the message", {
+      code: "Enter",
+      shift: true,
+    }),
+    composer("back", "The message sent before, from the first line", {
+      code: "ArrowUp",
+    }),
+    composer("forward", "The message sent after, from the last line", {
+      code: "ArrowDown",
+    }),
+    composer("plan", "Plan mode on or off", { code: "Tab", shift: true }),
+  ],
+  scopes: [{ id: COMPOSER, title: "Composer", field: true }],
   sources: [askSource],
   listed: threads,
 })

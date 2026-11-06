@@ -23,18 +23,42 @@ import {
   withMore,
 } from "@banda/ui/lib/keys"
 import type { KeysInForce } from "@banda/ui/hooks/use-key-of"
+import { actInScope } from "@banda/ui/hooks/use-scope"
 import type { Action, Args } from "@banda/ui/module"
 
-/** The action a key press runs, if any, and what its key gives it. */
+/**
+ * The action a key press runs, if any, and what its key gives it: one of
+ * the scopes the focus is in, narrowest first, then the window's (ADR
+ * 0071, decision 1).
+ */
 export function pressFor<Context>(
   actions: readonly Action<Context>[],
-  event: Pressed
+  event: Pressed,
+  scopes: readonly string[] = []
 ): { action: Action<Context>; args?: Args } | undefined {
-  for (const action of actions) {
-    const key = action.keys?.find((key) => matches(event, key))
-    if (key) return { action, args: key.args }
-  }
+  for (const scope of [...scopes, undefined])
+    for (const action of actions) {
+      if (action.scope !== scope) continue
+      const key = action.keys?.find((key) => matches(event, key))
+      if (key) return { action, args: key.args }
+    }
   return undefined
+}
+
+/**
+ * Runs a scope's action in its scope (ADR 0071, decision 1): the key is
+ * taken when the scope took it, else left to its widget, as an arrow
+ * inside a text. Whether the action was a scope's. Taken, it still goes
+ * on through the Pane, as a widget's own key does, so the Pane may read
+ * it: Enter in an empty composer answers the Question that waits.
+ */
+export function inScope<Context>(
+  { action, args }: { action: Action<Context>; args?: Args },
+  event: KeyboardEvent
+): boolean {
+  if (!action.scope) return false
+  if (actInScope(action.scope, action.id, args, event)) event.preventDefault()
+  return true
 }
 
 /** The action a key press runs, if any. */
@@ -117,14 +141,20 @@ export const RESET_KEY: Key = {
 /** The file the Person's keys are in (ADR 0005, decision 11). */
 export const KEYS_FILE = "keys.toml"
 
+/** A key of keys.toml: in `[binds]`, or in its scope's table,
+ * `[binds.composer]` (ADR 0071, decision 1). */
+type Bound = Key & { scope?: string }
+
 /** The line of keys.toml that names `key`, as `banda settings` takes it. */
-export function bindPath(key: Key): string {
-  return `binds.${JSON.stringify(keyText(key))}`
+export function bindPath({ scope, ...key }: Bound): string {
+  return ["binds", scope, JSON.stringify(keyText(key))]
+    .filter(Boolean)
+    .join(".")
 }
 
 /** Writes `key` to keys.toml, running `action`, or `none` to free it; what
  * was wrong, if it was refused. */
-export function writeBind(key: Key, action: string): Promise<string[]> {
+export function writeBind(key: Bound, action: string): Promise<string[]> {
   return (
     window.banda?.settings.set(KEYS_FILE, bindPath(key), tomlOf(action)) ??
     Promise.resolve([`Only the desktop app writes ${KEYS_FILE}`])

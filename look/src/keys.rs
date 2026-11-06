@@ -14,6 +14,7 @@ use crate::theme::Places;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use toml::Spanned;
 use ts_rs::TS;
@@ -53,11 +54,21 @@ pub struct KeysSettings {
     pub binds: Option<BTreeMap<Spanned<String>, Spanned<Bound>>>,
 }
 
-/// What a line of `[binds]` runs (ADR 0071, decision 3): an action's id,
-/// `"none"`, or an action with what it takes.
+/// What a key of `[binds]` holds (ADR 0071, decision 3): what a line
+/// runs, or a scope's own table, `[binds.composer]`, whose keys work while
+/// the focus is in that scope.
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(untagged)]
 pub enum Bound {
+    Line(Line),
+    Scope(BTreeMap<String, Line>),
+}
+
+/// What a line runs: an action's id, `"none"`, or an action with what it
+/// takes.
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(untagged)]
+pub enum Line {
     Id(String),
     Call(Call),
 }
@@ -112,6 +123,11 @@ pub struct Bind {
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub args: Option<Args>,
+    /// The scope whose table holds it, `[binds.composer]`; none for
+    /// `[binds]`, the window's.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
     /// The key as Banda writes it: `Ctrl+Alt+Shift+R`.
     pub text: String,
     /// Its line in the file, for a problem the window finds.
@@ -302,8 +318,6 @@ fn code_of(name: &str) -> Option<(String, String)> {
         .map(|(code, names)| ((*code).to_owned(), names[0].to_owned()))
 }
 
-/// A key as written: its code, its mods and its name as Banda writes it,
-/// bound to nothing yet; or what is wrong with it.
 /// The key `text` names, as Banda writes it: `Alt+K` for `alt+k`; none
 /// when it names no key.
 pub fn canonical(text: &str) -> Option<String> {
@@ -319,6 +333,12 @@ fn parse(text: &str) -> Result<Bind, String> {
         ));
     }
     Ok(bind)
+}
+
+/// Whether a key is held with no mod, so the window's fields would type
+/// it; an F key is typed nowhere.
+fn alone(bind: &Bind) -> bool {
+    !bind.alt && !bind.ctrl && !bind.sup && !bind.code.starts_with('F')
 }
 
 /// Any key, as it is written.
@@ -337,11 +357,6 @@ fn chord(text: &str) -> Result<Bind, String> {
     }
     let (code, name) =
         code_of(name.trim()).ok_or_else(|| format!("{name:?} is not a key Banda knows"))?;
-    if !alt && !ctrl && !sup && !code.starts_with('F') {
-        return Err(format!(
-            "{text:?} alone would be typed: hold Alt, Ctrl or Super with it"
-        ));
-    }
     let text = text_of(Mod { alt, ctrl, sup }, shift, &name);
     Ok(Bind {
         code,
@@ -351,6 +366,7 @@ fn chord(text: &str) -> Result<Bind, String> {
         sup,
         action: None,
         args: None,
+        scope: None,
         text,
         line: 0,
     })
@@ -453,9 +469,32 @@ pub struct Action {
     /// Run by its id alone: no key sheet or menu lists it.
     #[serde(default, skip_serializing_if = "is_false")]
     pub unlisted: bool,
+    /// Where its key works (ADR 0071, decision 1); none for the window's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
     /// What it takes, as a JSON Schema, as the engine's tools give theirs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub args: Option<serde_json::Value>,
+}
+
+/// Where a key works besides the whole window (ADR 0071, decision 1): a
+/// kind of Pane, or a field in one, where a key that types is the field's.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Scope {
+    pub id: String,
+    pub title: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub field: bool,
+}
+
+/// What the manifests declare: every action there is, and the scopes
+/// their keys work in.
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
+pub struct Manifests {
+    pub actions: Vec<Action>,
+    #[serde(default)]
+    pub scopes: Vec<Scope>,
 }
 
 /// The mod as written, one or two of Alt, Ctrl and Super; or why it
@@ -510,55 +549,89 @@ pub fn read_keys(
             Err(message) => problems.push(Problem::at(path, text, Some(written.span()), message)),
         }
     }
-    let mut lines: Vec<_> = settings.binds.iter().flatten().collect();
-    lines.sort_by_key(|(key, _)| key.span().start);
+    let mut tables: Vec<_> = settings.binds.iter().flatten().collect();
+    tables.sort_by_key(|(key, _)| key.span().start);
     let mut binds: Vec<Bind> = Vec::new();
-    for (key, action) in lines {
-        let wrong = |span, message| Problem::at(path, text, Some(span), message);
-        let bind = match parse(key.get_ref()) {
-            Ok(parsed) => parsed,
-            Err(message) => {
-                problems.push(wrong(key.span(), message));
-                continue;
+    for (key, value) in tables {
+        match value.get_ref() {
+            Bound::Line(line) => {
+                let place = (key.get_ref().as_str(), Some(key.span()));
+                bind_line(&mut binds, problems, (path, text), place, line, None);
             }
-        };
-        if let Some(twice) = binds.iter().find(|other| other.text == bind.text) {
-            problems.push(wrong(
-                key.span(),
-                format!("{} is bound on line {} already", bind.text, twice.line),
-            ));
-            continue;
+            // A scope's table: its keys, each on its own line, read again
+            // for where each is, as serde keeps no place in an untagged one.
+            Bound::Scope(table) => {
+                let scope = key.get_ref();
+                for (name, span) in keyed::spans_in(text, &["binds", scope]) {
+                    if let Some(line) = table.get(&name) {
+                        let place = (name.as_str(), Some(span));
+                        bind_line(&mut binds, problems, (path, text), place, line, Some(scope));
+                    }
+                }
+            }
         }
-        let (id, args) = match action.get_ref() {
-            Bound::Id(id) => (id.trim(), None),
-            Bound::Call(call) => (call.action.trim(), Some(call.args.clone())),
-        };
-        if id.is_empty() {
-            problems.push(wrong(
-                action.span(),
-                "an action's id, or \"none\"".to_owned(),
-            ));
-            continue;
-        }
-        if id == NONE && args.is_some() {
-            problems.push(wrong(action.span(), "\"none\" takes no args".to_owned()));
-            continue;
-        }
-        binds.push(Bind {
-            action: (id != NONE).then(|| id.to_owned()),
-            args,
-            line: crate::line_at(text, key.span().start),
-            ..bind
-        });
     }
     keys.binds = binds;
     Some((settings, keys))
 }
 
+/// Takes one line of keys.toml, `key` = `line`, into `binds`, or names
+/// what is wrong with it where the key is.
+fn bind_line(
+    binds: &mut Vec<Bind>,
+    problems: &mut Vec<Problem>,
+    (path, text): (&Path, &str),
+    (key, span): (&str, Option<Range<usize>>),
+    line: &Line,
+    scope: Option<&str>,
+) {
+    let line_no = span
+        .as_ref()
+        .map_or(0, |span| crate::line_at(text, span.start));
+    let wrong = |message: String| Problem::at(path, text, span.clone(), message);
+    let bind = match parse(key) {
+        Ok(parsed) => parsed,
+        Err(message) => return problems.push(wrong(message)),
+    };
+    // A scope's table may bind one, as Return in the composer's.
+    if scope.is_none() && alone(&bind) {
+        return problems.push(wrong(format!(
+            "{:?} alone would be typed: hold Alt, Ctrl or Super with it",
+            key.trim()
+        )));
+    }
+    let twice = binds
+        .iter()
+        .find(|other| other.text == bind.text && other.scope.as_deref() == scope);
+    if let Some(twice) = twice {
+        return problems.push(wrong(format!(
+            "{} is bound on line {} already",
+            bind.text, twice.line
+        )));
+    }
+    let (id, args) = match line {
+        Line::Id(id) => (id.trim(), None),
+        Line::Call(call) => (call.action.trim(), Some(call.args.clone())),
+    };
+    if id.is_empty() {
+        return problems.push(wrong("an action's id, or \"none\"".to_owned()));
+    }
+    if id == NONE && args.is_some() {
+        return problems.push(wrong("\"none\" takes no args".to_owned()));
+    }
+    binds.push(Bind {
+        action: (id != NONE).then(|| id.to_owned()),
+        args,
+        scope: scope.map(str::to_owned),
+        line: line_no,
+        ..bind
+    });
+}
+
 /// The Person's keys on this machine; `keys.toml` is watched.
 pub fn resolve(
     places: &Places,
-    actions: &[Action],
+    manifests: &Manifests,
     problems: &mut Vec<Problem>,
     watched: &mut Vec<PathBuf>,
 ) -> (Keys, Keyed) {
@@ -581,7 +654,7 @@ pub fn resolve(
         file: file.display().to_string(),
         ..keys
     };
-    keys.actions = in_force(actions, &keys, problems);
+    keys.actions = in_force(manifests, &keys, problems);
     (keys, keyed)
 }
 
@@ -601,20 +674,27 @@ fn renamed(id: &str) -> &str {
 /// at the mod's line; then the Person's lines, a key bound leaving the
 /// action that had it. A line is named at its line when it names no
 /// action, gives args its action does not take, or frees no key.
-pub fn in_force(actions: &[Action], keys: &Keys, problems: &mut Vec<Problem>) -> Vec<ActionKeys> {
+pub fn in_force(
+    manifests: &Manifests,
+    keys: &Keys,
+    problems: &mut Vec<Problem>,
+) -> Vec<ActionKeys> {
+    let actions = &manifests.actions;
     let at = |line, message: String| Problem {
         line,
         ..Problem::whole(Path::new(&keys.file), message)
     };
-    // Each key's text, and the action that has it.
-    let mut taken: BTreeMap<String, usize> = BTreeMap::new();
+    // Each key's scope and text, and the action that has it: a key may be
+    // one action's in the window and another's in a scope.
+    let mut taken: BTreeMap<(Option<&str>, String), usize> = BTreeMap::new();
     let mut out: Vec<ActionKeys> = Vec::with_capacity(actions.len());
     for (index, action) in actions.iter().enumerate() {
         let mut own = Vec::new();
         for declared in &action.keys {
             let real = declared.real(keys.held);
             let text = real.text();
-            if let Some(&first) = taken.get(&text) {
+            let place = (action.scope.as_deref(), text.clone());
+            if let Some(&first) = taken.get(&place) {
                 let first = &actions[first].title;
                 problems.push(at(
                     keys.mod_line,
@@ -625,7 +705,7 @@ pub fn in_force(actions: &[Action], keys: &Keys, problems: &mut Vec<Problem>) ->
                 ));
                 continue;
             }
-            taken.insert(text, index);
+            taken.insert(place, index);
             own.push(KeyInForce::from(&real));
         }
         out.push(ActionKeys {
@@ -635,32 +715,21 @@ pub fn in_force(actions: &[Action], keys: &Keys, problems: &mut Vec<Problem>) ->
     }
     for bind in &keys.binds {
         let say = |message: String| at(Some(bind.line), format!("{}: {message}", bind.text));
-        let index = match bind.action.as_deref() {
-            None => None,
-            Some(old) => {
-                let id = renamed(old);
-                let Some(index) = actions.iter().position(|action| action.id == id) else {
-                    problems.push(say(format!(
-                        "Banda has no action {id}; the key sheet lists them"
-                    )));
-                    continue;
-                };
-                if id != old {
-                    problems.push(say(format!("{old} is called {id} now")));
-                }
-                if let Some(wrong) = bind
-                    .args
-                    .as_ref()
-                    .and_then(|args| wrong_args(&actions[index], args))
-                {
-                    problems.push(say(wrong));
-                    continue;
-                }
-                Some(index)
+        let scope = bind.scope.as_deref();
+        if let Some(old) = bind.action.as_deref()
+            && renamed(old) != old
+        {
+            problems.push(say(format!("{old} is called {} now", renamed(old))));
+        }
+        let index = match bound(manifests, bind) {
+            Ok(index) => index,
+            Err(message) => {
+                problems.push(say(message));
+                continue;
             }
         };
-        // A key bound, or freed, leaves the action that had it.
-        match taken.remove(&bind.text) {
+        // A key bound, or freed, leaves the action that had it there.
+        match taken.remove(&(scope, bind.text.clone())) {
             Some(had) => out[had].keys.retain(|key| key.text() != bind.text),
             None if index.is_none() => {
                 problems.push(say(
@@ -672,7 +741,7 @@ pub fn in_force(actions: &[Action], keys: &Keys, problems: &mut Vec<Problem>) ->
         let Some(index) = index else {
             continue;
         };
-        taken.insert(bind.text.clone(), index);
+        taken.insert((scope, bind.text.clone()), index);
         out[index].keys.push(KeyInForce {
             code: bind.code.clone(),
             alt: bind.alt,
@@ -685,6 +754,59 @@ pub fn in_force(actions: &[Action], keys: &Keys, problems: &mut Vec<Problem>) ->
         });
     }
     out
+}
+
+/// The action a line binds its key to, by its index in the manifests,
+/// none for a key freed; or what is wrong with the line: a scope or an
+/// action Banda has not, a key the scope's field would type, an action
+/// of another table, or args it does not take.
+fn bound(manifests: &Manifests, bind: &Bind) -> Result<Option<usize>, String> {
+    let scope = bind.scope.as_deref();
+    if let Some(id) = scope {
+        let declared = manifests.scopes.iter().find(|each| each.id == id);
+        let Some(declared) = declared else {
+            let ids: Vec<&str> = manifests
+                .scopes
+                .iter()
+                .map(|each| each.id.as_str())
+                .collect();
+            return Err(format!(
+                "Banda has no scope {id}; its scopes are {}",
+                ids.join(", ")
+            ));
+        };
+        if declared.field && types(bind) {
+            let title = declared.title.to_lowercase();
+            return Err(format!("it would be typed in the {title}"));
+        }
+    }
+    let Some(id) = bind.action.as_deref().map(renamed) else {
+        return Ok(None);
+    };
+    let index = (manifests.actions.iter().position(|action| action.id == id))
+        .ok_or_else(|| format!("Banda has no action {id}; the key sheet lists them"))?;
+    let action = &manifests.actions[index];
+    if action.scope.as_deref() != scope {
+        let table = table_of(action.scope.as_deref());
+        return Err(format!("{id} works in {table}: bind it there"));
+    }
+    match bind.args.as_ref().and_then(|args| wrong_args(action, args)) {
+        Some(wrong) => Err(wrong),
+        None => Ok(Some(index)),
+    }
+}
+
+/// The table of keys.toml that binds a scope's keys, `[binds.composer]`,
+/// or the window's, `[binds]` (ADR 0071, decision 1).
+pub fn table_of(scope: Option<&str>) -> String {
+    scope.map_or("[binds]".to_owned(), |scope| format!("[binds.{scope}]"))
+}
+
+/// Whether a key types a character into a field: a letter, a digit, a
+/// sign or Space, held with nothing but Shift.
+fn types(bind: &Bind) -> bool {
+    let typed = name_of(&bind.code).chars().count() == 1 || bind.code == "Space";
+    !bind.ctrl && !bind.alt && !bind.sup && typed
 }
 
 /// What is wrong with `args` for `action`, by its JSON Schema: a name it
@@ -784,7 +906,9 @@ mod tests {
         assert_eq!(ok("cmd+alt+ctrl+r"), is("KeyR", "Ctrl+Alt+Super+R"));
         assert!(parse("Hyper+R").is_err());
         assert!(parse("Alt+Banana").unwrap_err().contains("Banana"));
-        assert!(parse("Shift+R").unwrap_err().contains("typed"));
+        assert!(alone(&parse("Shift+R").unwrap()));
+        assert!(!alone(&parse("F5").unwrap()));
+        assert_eq!(ok("Return"), is("Enter", "Return"));
         assert!(
             parse("shift+ctrl+alt+k")
                 .unwrap_err()
@@ -913,6 +1037,7 @@ mod tests {
             keys,
             family: None,
             unlisted: false,
+            scope: None,
             args: None,
         };
         let mut open = action("browser.open", "Open in a browser", vec![]);
@@ -921,12 +1046,33 @@ mod tests {
             "properties": { "address": { "type": "string", "description": "a page" } },
             "additionalProperties": false,
         }));
+        let mut send = action(
+            "agents.composer.send",
+            "Send",
+            vec![Declared {
+                code: "Enter".to_owned(),
+                ..Declared::default()
+            }],
+        );
+        send.scope = Some("composer".to_owned());
         vec![
             action("column.maximize", "Full width", vec![key("KeyF")]),
             action("sidebar.archive", "Archive", vec![key("KeyS")]),
             action("pane.close", "Close", vec![key("KeyW")]),
             open,
+            send,
         ]
+    }
+
+    fn manifests_of(actions: Vec<Action>) -> Manifests {
+        Manifests {
+            actions,
+            scopes: vec![Scope {
+                id: "composer".to_owned(),
+                title: "Composer".to_owned(),
+                field: true,
+            }],
+        }
     }
 
     fn in_force_of(text: &str) -> (Vec<ActionKeys>, Vec<Problem>) {
@@ -936,7 +1082,7 @@ mod tests {
             file: "keys.toml".to_owned(),
             ..keys
         };
-        let actions = in_force(&actions(), &keys, &mut problems);
+        let actions = in_force(&manifests_of(actions()), &keys, &mut problems);
         (actions, problems)
     }
 
@@ -1017,13 +1163,45 @@ mod tests {
             mod_line: Some(1),
             ..Keys::default()
         };
-        let actions = in_force(&two, &keys, &mut problems);
+        let actions = in_force(&manifests_of(two), &keys, &mut problems);
         assert!(texts(&actions, "pane.close").is_empty());
         assert_eq!(problems.len(), 1);
         assert_eq!(problems[0].line, Some(1));
         assert_eq!(
             problems[0].message,
             "Ctrl+Alt+F is “Full width” and “Close” with this mod; “Full width” keeps it"
+        );
+    }
+
+    #[test]
+    fn a_scope_s_table_binds_its_own_actions_with_keys_of_its_own() {
+        let (actions, problems) = in_force_of(
+            "[binds]\n\"Alt+X\" = \"agents.composer.send\"\n[binds.composer]\n\"Ctrl+Return\" = \"agents.composer.send\"\n\"Return\" = \"none\"\n\"Alt+F\" = \"agents.composer.send\"\n\"M\" = \"agents.composer.send\"\n[binds.nope]\n\"Return\" = \"none\"\n",
+        );
+        // In the composer Return is freed; Ctrl+Return and Alt+F send.
+        assert_eq!(
+            texts(&actions, "agents.composer.send"),
+            ["Ctrl+Return", "Alt+F"]
+        );
+        // Alt+F stays the window's everywhere else.
+        assert_eq!(texts(&actions, "column.maximize"), ["Alt+F"]);
+        let said: Vec<(Option<u32>, &str)> = problems
+            .iter()
+            .map(|problem| (problem.line, problem.message.as_str()))
+            .collect();
+        assert_eq!(
+            said,
+            [
+                (
+                    Some(2),
+                    "Alt+X: agents.composer.send works in [binds.composer]: bind it there"
+                ),
+                (Some(7), "M: it would be typed in the composer"),
+                (
+                    Some(9),
+                    "Return: Banda has no scope nope; its scopes are composer"
+                ),
+            ]
         );
     }
 

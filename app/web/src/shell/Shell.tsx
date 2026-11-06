@@ -30,7 +30,13 @@ import {
 } from "@banda/ui/pane"
 import { DEFAULT_KEYS, type Mod } from "@banda/contract/look"
 import type { Action, Args, Thing, WindowApi } from "@banda/ui/module"
-import { actionFor, keysInForce, pressFor, withKeys } from "../actions/actions"
+import {
+  actionFor,
+  inScope,
+  keysInForce,
+  pressFor,
+  withKeys,
+} from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { mapOf } from "../bar/Map"
 import { tomlOf } from "@banda/contract/settings"
@@ -159,6 +165,7 @@ import {
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { holdsAlone, withMore } from "@banda/ui/lib/keys"
 import { ThreadMenus } from "../titles/ThreadMenu"
+import { scopesOf } from "@banda/ui/hooks/use-scope"
 
 type Change = (workspaces: State) => Step
 
@@ -1083,13 +1090,15 @@ export function Shell({
     // One key more and a key Banda takes hand that key to a program.
     const handing = withMore(mod)
     const onKey = (event: KeyboardEvent) => {
-      // A press the window handed on is the program's.
-      if (HANDED.has(event)) return
+      // A press the window handed on is the program's, and one an input
+      // method is composing with is the field's.
+      if (HANDED.has(event) || event.isComposing) return
       const target = event.target instanceof Element ? event.target : null
       // A field that takes a key to bind takes every key.
       if (target?.closest("[data-takes-keys]")) return
-      const pressed = pressFor(keyed, event)
+      const pressed = pressFor(keyed, event, scopesOf(target))
       if (!pressed) return handOn(event, target, keyed, mod, handing)
+      if (inScope(pressed, event)) return
       const { action } = pressed
       // A key that is not its action's now is the Pane's, as F2 a
       // terminal's program's while no Thread has the focus.

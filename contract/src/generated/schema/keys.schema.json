@@ -19,7 +19,21 @@
   "additionalProperties": false,
   "$defs": {
     "Bound": {
-      "description": "What a line of `[binds]` runs (ADR 0071, decision 3): an action's id,\n`\"none\"`, or an action with what it takes.",
+      "description": "What a key of `[binds]` holds (ADR 0071, decision 3): what a line\nruns, or a scope's own table, `[binds.composer]`, whose keys work while\nthe focus is in that scope.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Line"
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Line"
+          }
+        }
+      ]
+    },
+    "Line": {
+      "description": "What a line runs: an action's id, `\"none\"`, or an action with what it\ntakes.",
       "anyOf": [
         {
           "type": "string"

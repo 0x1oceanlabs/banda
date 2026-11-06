@@ -46,12 +46,13 @@ Roma said to finish this one too.
    - An action is the window's, as now, or a **scope's**: a kind of Pane
      (`browser`, `terminal`, `launcher`) or a field (`composer`). Its key
      works only while the focus is there.
-   - The composer's keys become `composer.send` (`Enter`: what
+   - The composer's keys become `agents.composer.send` (`Enter`: what
      `agents.toml` says Enter does while the Agent works),
-     `composer.send-other` (`Ctrl+Enter`, ⌘ on a Mac: the other of the
-     two), `composer.newline` (`Shift+Enter`), `composer.back` and
-     `composer.forward` (`↑ ↓` at the field's edge: the messages sent
-     before). The browser's keys become `browser.tab-new` and the rest;
+     `agents.composer.send-other` (`Ctrl+Enter`, ⌘ on a Mac: the other
+     of the two), `agents.composer.newline` (`Shift+Enter`),
+     `agents.composer.back` and `agents.composer.forward` (`↑ ↓` at the
+     field's edge: the messages sent before), and
+     `agents.composer.plan` (`Shift+Tab`). The browser's keys become `browser.tab-new` and the rest;
      the launcher's letters, `launcher.open` with the kind as its args;
      the terminal's, `terminal.zoom-in`, `-out` and `-reset`.
    - No action holds what is not Banda's to bind: typing; a widget's
@@ -97,8 +98,8 @@ Roma said to finish this one too.
    "Ctrl+Alt+H" = { action = "browser.open", args = { address = "https://github.com" } }
 
    [binds.composer]             # while the composer has the focus
-   "Return" = "composer.newline"
-   "Ctrl+Return" = "composer.send"
+   "Return" = "agents.composer.newline"
+   "Ctrl+Return" = "agents.composer.send"
    ```
 
    - A value is an action's id, `"none"`, or `{ action, args }`.

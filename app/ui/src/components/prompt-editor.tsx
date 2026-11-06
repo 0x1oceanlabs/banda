@@ -50,6 +50,11 @@ export type PromptEditorHandle = {
   /** Whether the caret is on the first line going `up`, or on the last
    * going down, so an arrow would leave the text. */
   atEdge(up: boolean): boolean
+  /** Does what `event`'s key does to the text itself, as Enter in code or
+   * in a list, or picks a suggestion open; whether it did. */
+  textKey(event: KeyboardEvent): boolean
+  /** Breaks the line at the caret, as Shift+Enter does. */
+  newLine(): void
   /** Puts `text`, typed or pasted somewhere else, at the end, as pasted
    * text is read, the caret after it, and takes the focus. */
   add(text: string): void
@@ -131,10 +136,7 @@ function PromptEditor({
         if (!suggesting && textKey(view, event)) return true
         latest.current.onKeyDown?.(event)
         if (event.defaultPrevented) return true
-        if (suggesting && textKey(view, event)) return true
-        if (event.key === "Enter" && event.shiftKey && !event.isComposing)
-          return newLine(view.state, view.dispatch)
-        return false
+        return suggesting && textKey(view, event)
       },
       handleTextInput: wrap,
       // Pasted text is read as a prompt is, even from this box: its HTML
@@ -245,6 +247,13 @@ function PromptEditor({
         const line = state.selection.$head.index(0)
         const last = up ? 0 : state.doc.childCount - 1
         return line === last && view.endOfTextblock(up ? "up" : "down")
+      },
+      textKey: (event) =>
+        placeOf(editor.state) === undefined && textKey(editor.view, event),
+      newLine() {
+        const { view } = editor
+        newLine(view.state, view.dispatch)
+        view.focus()
       },
       add: (text) => put(editor.view, text, "end", latest.current.known),
       point(path, at) {
