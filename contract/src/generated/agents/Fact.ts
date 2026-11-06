@@ -41,7 +41,12 @@ agent?: AgentId, } } | { "kind": "message.posted", "payload": { item: ItemId, tu
  * It answers what this Thread's Agent asked another Thread's
  * (ADR 0019); its author is that Thread's Agent.
  */
-answers?: boolean, } } | { "kind": "message.steered", "payload": { item: ItemId, turn: TurnId, text: string, images: Array<Image>, } } | { "kind": "message.edited", "payload": { item: ItemId, text: string, } } | { "kind": "turn.started", "payload": { turn: TurnId, } } | { "kind": "turn.ended", "payload": { turn: TurnId, state: TurnState, reason?: string, failure?: Failure, 
+answers?: boolean, } } | { "kind": "message.steered", "payload": { item: ItemId, turn: TurnId, text: string, images: Array<Image>, } } | { "kind": "message.edited", "payload": { item: ItemId, text: string, } } | { "kind": "turn.started", "payload": { turn: TurnId, 
+/**
+ * The Harness entry, the account, it runs on (ADR 0078, decision
+ * 2). Older logs leave it out.
+ */
+harness?: string, } } | { "kind": "turn.ended", "payload": { turn: TurnId, state: TurnState, reason?: string, failure?: Failure, 
 /**
  * What its Agent tells its Person, with `notify` (ADR 0057).
  */
