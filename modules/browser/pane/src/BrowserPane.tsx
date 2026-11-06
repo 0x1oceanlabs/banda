@@ -52,7 +52,7 @@ import { addressOf, siteOf } from "./address"
 import { Extensions, WEB_STORE } from "./Extensions"
 import type { Download, Driver, Point, SiteAnswer, Wait } from "./desktop"
 import { browserHost, downloadsNow, watchDownloads } from "./host"
-import { browserKey, type Does, isTabKey } from "./keys"
+import { actionOf, BROWSER, BROWSER_KEYS, type Does, isTabKey } from "./keys"
 import {
   allowSite,
   handBack,
@@ -88,7 +88,8 @@ import {
   withoutTab,
   withTab,
 } from "./tabs"
-import { useMod } from "@banda/ui/hooks/use-key-of"
+import { useKeysIn, useMod } from "@banda/ui/hooks/use-key-of"
+import { useScope } from "@banda/ui/hooks/use-scope"
 
 export const browserPane = definePane<KeptArgs>({
   kind: "browser.browser",
@@ -129,11 +130,12 @@ function BrowserPane({
   update,
   close,
 }: PaneProps<KeptArgs>) {
-  // Main gives the window a page's keys held with the mod in force.
-  const { alt, ctrl, super: sup } = useMod()
+  // Main gives the window a page's keys in force (ADR 0071, decision 4).
+  const mod = useMod()
+  const inForce = useKeysIn(BROWSER)
   useEffect(() => {
-    browserHost()?.mod({ alt, ctrl, super: sup })
-  }, [alt, ctrl, sup])
+    browserHost()?.keys({ mod, keys: inForce })
+  }, [mod, inForce])
   const settings = useFile(BROWSER_FILE)
   // Any page's change draws the tabs again: their titles, icons, loads.
   const version = useSyncExternalStore(watchPages, pagesVersion)
@@ -341,24 +343,29 @@ function Browser({
     else onOpen(to)
   }
 
-  const tabKey = useRef(onTabKey)
+  // The browser's keys (ADR 0071, decision 1): its scope is its tile,
+  // and each of its tabs' pages, as a key may come from one out of sight.
+  const does = (key: Does) => {
+    if (key === "address") address.current?.focus()
+    else if (isTabKey(key)) onTabKey(key)
+    else if (page) ON_PAGE[key](page)
+    return true
+  }
+  const scope = useScope(
+    BROWSER,
+    Object.fromEntries(
+      BROWSER_KEYS.map((key) => [actionOf(key.does), () => does(key.does)])
+    ),
+    { tile: true }
+  )
+  const held = tabs.args.tabs.flatMap((each) => pageAt(each.id) ?? [])
+  const heldIds = held.map((each) => each.id).join(" ")
   useEffect(() => {
-    tabKey.current = onTabKey
-  })
-  useEffect(() => {
-    if (!focused) return
-    const onKey = (event: globalThis.KeyboardEvent) => {
-      if (event.defaultPrevented) return
-      const does = browserKey(event)
-      if (!does) return
-      event.preventDefault()
-      if (does === "address") address.current?.focus()
-      else if (isTabKey(does)) tabKey.current(does)
-      else if (page) ON_PAGE[does](page)
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [focused, page])
+    const elements = [root.current, ...held.map((each) => each.element)]
+    const stops = elements.map((element) => scope(element))
+    return () => stops.forEach((stop) => stop?.())
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the same pages
+  }, [heldIds, scope])
 
   const left = settings.tabs === "left"
   return (

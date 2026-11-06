@@ -112,12 +112,20 @@ export function movesOf(binds: Keys["binds"], from: Mod, to: Mod): Move[] {
   })
 }
 
-/** The keys in force for what names them (ADR 0068, decision 4): the
- * mod, and each action's first key by its id, from `rebind`'s actions. */
+/** The keys in force for what names them (ADR 0068, decision 4), from
+ * the actions with their keys in force: the mod, each action's first key
+ * by its id, and every key by the scope its action works in. */
 export function keysInForce<Context>(
   mod: Mod,
   actions: readonly Action<Context>[]
 ): KeysInForce {
+  const byScope = new Map<string, Key[]>()
+  for (const action of actions) {
+    const scope = action.scope ?? ""
+    const keys = byScope.get(scope) ?? []
+    keys.push(...(action.keys ?? []))
+    byScope.set(scope, keys)
+  }
   return {
     mod,
     byAction: new Map(
@@ -126,6 +134,7 @@ export function keysInForce<Context>(
         return key ? [[action.id, key] as const] : []
       })
     ),
+    byScope,
   }
 }
 

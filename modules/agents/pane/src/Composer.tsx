@@ -307,7 +307,7 @@ export function Composer({
         return true
       },
     },
-    owned
+    { owns: owned }
   )
 
   // The message as it goes: the text, then the comments.

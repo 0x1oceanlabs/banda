@@ -25,9 +25,10 @@ export function scopesOf(target: Element | null): string[] {
 }
 
 /**
- * Runs action `id` of `scope` where the focus is: the scope's element
- * takes it; whether it did. A key's press comes with it, for a handler
- * that leaves it to a widget, as a field's suggestions.
+ * Runs action `id` of `scope` where its key was pressed, or else where
+ * the focus is: the scope's element takes it; whether it did. A key's
+ * press comes with it, for a handler that leaves it to a widget, as a
+ * field's suggestions.
  */
 export function actInScope(
   scope: string,
@@ -35,9 +36,9 @@ export function actInScope(
   args?: Args,
   event?: KeyboardEvent
 ): boolean {
-  const at = document.activeElement?.closest(
-    `[data-scope="${CSS.escape(scope)}"]`
-  )
+  const from =
+    event?.target instanceof Element ? event.target : document.activeElement
+  const at = from?.closest(`[data-scope="${CSS.escape(scope)}"]`)
   if (!at) return false
   const acted = new CustomEvent<Acted>(ACTED, {
     detail: { id, args, event },
@@ -51,15 +52,25 @@ export function actInScope(
  * the key's press when a key ran it, none from the Banda menu. */
 export type Handler = (args?: Args, event?: KeyboardEvent) => boolean
 
+/** How a scope takes its keys. */
+type Taking = {
+  /** A key its widgets take first, as Enter in a field's suggestions:
+   * taken, and no action runs. */
+  owns?: (event: KeyboardEvent) => boolean
+  /** A Pane's scope is its whole tile, which the window marks with
+   * `data-tile`: a key pressed with the tile itself focused, as after a
+   * click on its header, is the Pane's too. */
+  tile?: boolean
+}
+
 /**
  * Makes an element the scope `scope`, with a handler for each of its
- * actions by id: the ref to give it. A key its widgets take first, as
- * Enter in a field's suggestions, `owns` says, and takes: no action runs.
+ * actions by id: the ref to give it.
  */
 export function useScope(
   scope: string,
   handlers: { readonly [id: string]: Handler },
-  owns?: (event: KeyboardEvent) => boolean
+  { owns, tile = false }: Taking = {}
 ): (element: HTMLElement | null) => (() => void) | undefined {
   const latest = useRef({ handlers, owns })
   useEffect(() => {
@@ -68,7 +79,10 @@ export function useScope(
   return useCallback(
     (element: HTMLElement | null) => {
       if (!element) return undefined
-      element.dataset.scope = scope
+      const at = tile
+        ? (element.closest<HTMLElement>("[data-tile]") ?? element)
+        : element
+      at.dataset.scope = scope
       const onActed = (event: Event) => {
         const {
           id,
@@ -81,9 +95,12 @@ export function useScope(
         if ((pressed && owns?.(pressed)) || handler(args, pressed))
           event.preventDefault()
       }
-      element.addEventListener(ACTED, onActed)
-      return () => element.removeEventListener(ACTED, onActed)
+      at.addEventListener(ACTED, onActed)
+      return () => {
+        at.removeEventListener(ACTED, onActed)
+        if (at !== element) delete at.dataset.scope
+      }
     },
-    [scope]
+    [scope, tile]
   )
 }

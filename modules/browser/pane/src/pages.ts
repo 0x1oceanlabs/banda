@@ -160,6 +160,17 @@ export class Page {
     this.view.focus()
   }
 
+  /** What holds the page in the window: the browser's scope is it too,
+   * as its Pane is, so a key pressed in the page runs the browser's. */
+  get element(): HTMLElement {
+    return this.box
+  }
+
+  /** Presses a key main took from the page, on its element (ADR 0071). */
+  press(key: KeyboardEvent): void {
+    this.box.dispatchEvent(key)
+  }
+
   load(url: string): void {
     this.set({ url, failed: undefined, crashed: false })
     void this.view.loadURL(url).catch(() => undefined)
@@ -571,6 +582,20 @@ function changed(): void {
 
 /** The pages by their web contents' IDs, as the desktop names them. */
 const byContents = new Map<number, Page>()
+
+// A key main took from a page is pressed on the page's element, in the
+// browser's scope, so Banda's actions and the browser's hear it as their
+// own; one from an extension's popup, in the window.
+browserHost()?.key(({ up, page, ...pressed }) => {
+  const key = new KeyboardEvent(up ? "keyup" : "keydown", {
+    ...pressed,
+    bubbles: true,
+    cancelable: true,
+  })
+  const held = byContents.get(page)
+  if (held) held.press(key)
+  else window.dispatchEvent(key)
+})
 
 // A page's icon, the pages it opens, which its Pane makes tabs of, and
 // the tabs extensions open, show and close.

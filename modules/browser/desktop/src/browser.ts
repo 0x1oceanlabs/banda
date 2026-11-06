@@ -18,12 +18,13 @@ import {
   type BrowserNews,
   type Download,
   PARTITION,
+  type PageKeys,
   type Pressed,
   isModKey,
   taken,
 } from "@banda/browser-pane/desktop"
 import { BROWSER_FILE } from "@banda/contract/browser"
-import { DEFAULT_KEYS, fileOf, type Mod } from "@banda/contract/look"
+import { DEFAULT_KEYS, fileOf } from "@banda/contract/look"
 import { Context, Effect, FiberSet, Layer, Schema, Stream } from "effect"
 import {
   app,
@@ -166,9 +167,11 @@ export function userAgent(): string {
   return session.fromPartition(PARTITION).getUserAgent()
 }
 
-/** The mod in force, as the window tells it (ADR 0068): a page gives
- * the window the keys held with it. */
-let mod: Mod = DEFAULT_KEYS.mod
+/** The keys in force in a page, as the window tells them (ADR 0071,
+ * decision 4): none taken until it does. */
+let inForce: PageKeys = { mod: DEFAULT_KEYS.mod, keys: [] }
+
+const MAC = process.platform === "darwin"
 
 /** Banda's keys, held with the mod, and the browser's own go to the
  * window, from a page and an extension's popup alike (decision 5). */
@@ -184,19 +187,20 @@ export function keys(page: WebContents, window: WebContents): void {
     // A key of the mod pressed or let go stays the page's, and the window
     // hears it too: with it held, the mouse moves and sizes Panes over a
     // page as well (ADR 0025, decisions 5 and 6).
-    if (isModKey(input.code, mod)) {
+    if (isModKey(input.code, inForce.mod)) {
       if (!input.isAutoRepeat) {
         tellPage(window, BROWSER_BRIDGE.key, {
           ...key,
+          page: page.id,
           ...(input.type === "keyUp" && { up: true as const }),
         })
       }
       return
     }
     if (input.type !== "keyDown") return
-    if (!taken(key, mod)) return
+    if (!taken(key, inForce.keys, MAC)) return
     event.preventDefault()
-    tellPage(window, BROWSER_BRIDGE.key, key)
+    tellPage(window, BROWSER_BRIDGE.key, { ...key, page: page.id })
   })
 }
 
@@ -481,17 +485,29 @@ export const browserAnswers: Answers<
     ([where]) => Browser.use((browser) => browser.tabs(where)),
   ],
   reveal: [text, ([path]) => Browser.use((browser) => browser.reveal(path))],
-  mod: [
+  keys: [
     Schema.Tuple([
       Schema.Struct({
-        alt: Schema.Boolean,
-        ctrl: Schema.Boolean,
-        super: Schema.Boolean,
+        mod: Schema.Struct({
+          alt: Schema.Boolean,
+          ctrl: Schema.Boolean,
+          super: Schema.Boolean,
+        }),
+        keys: Schema.Array(
+          Schema.Struct({
+            code: Schema.String,
+            alt: Schema.optional(Schema.Boolean),
+            shift: Schema.optional(Schema.Boolean),
+            ctrl: Schema.optional(Schema.Boolean),
+            super: Schema.optional(Schema.Boolean),
+            primary: Schema.optional(Schema.Boolean),
+          })
+        ),
       }),
     ]),
-    ([held]) =>
+    ([keys]) =>
       Effect.sync(() => {
-        mod = held
+        inForce = keys
       }),
   ],
   shown: [
