@@ -13,6 +13,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+/// The variable that names the folder of a Project's Claude Code sessions
+/// to the adapter Banda carries (ADR 0078, decision 3).
+pub const SESSIONS_VARIABLE: &str = "BANDA_CLAUDE_SESSIONS";
+
 /// An agent program and how to start it. It speaks ACP on its stdio.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Harness {
@@ -93,9 +97,18 @@ impl Harness {
     /// The entry as its process for `project` starts: it, and every program
     /// it starts, an Agent's server too, carries the Project (ADR 0044,
     /// decision 2). Its process for the machine carries none.
-    pub fn in_project(&self, project: ProjectId) -> Harness {
+    ///
+    /// Claude Code's sessions go in the Project's `data`, one folder for
+    /// every Claude account, so any of them goes on with a Thread's session
+    /// (ADR 0078, decision 3). The adapter Banda carries reads the folder
+    /// from `BANDA_CLAUDE_SESSIONS`; another program ignores it.
+    pub fn in_project(&self, project: ProjectId, data: &Path) -> Harness {
         let mut harness = self.clone();
         (harness.env).extend(project_env(project).map(|(key, id)| (key.to_owned(), id)));
+        if crate::limits::Kind::of(self) == Some(crate::limits::Kind::Claude) {
+            let sessions = data.join("sessions").join("claude");
+            (harness.env).insert(SESSIONS_VARIABLE.to_owned(), sessions.display().to_string());
+        }
         harness
     }
 }
@@ -817,6 +830,31 @@ mod tests {
             problems[0]
         );
         assert!(check(Path::new("h"), &template()).is_empty());
+    }
+
+    #[test]
+    fn claude_s_sessions_go_in_the_project_s_folder() {
+        let project = ProjectId::new();
+        let data = Path::new("/state/projects/p");
+        let list = known();
+        let claude = list[0].in_project(project, data);
+        assert_eq!(
+            claude.env[SESSIONS_VARIABLE],
+            "/state/projects/p/sessions/claude"
+        );
+        let codex = list[1].in_project(project, data);
+        assert!(
+            !codex.env.contains_key(SESSIONS_VARIABLE),
+            "Codex keeps its own"
+        );
+        let second = "[[harness]]\nid = \"work\"\nname = \"Work\"\ncommand = \"acp\"\n\
+                      cli = { program = \"claude\", variable = \"CLAUDE_CODE_EXECUTABLE\" }\n";
+        let second = listed_in(Path::new("h"), second).unwrap().remove(0);
+        assert_eq!(
+            second.in_project(project, data).env[SESSIONS_VARIABLE],
+            claude.env[SESSIONS_VARIABLE],
+            "every Claude account, one folder"
+        );
     }
 
     #[test]

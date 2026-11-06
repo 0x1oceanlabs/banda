@@ -55,7 +55,7 @@ use banda_harnesses::model::Program;
 use banda_harnesses::{Harness, Harnesses};
 use banda_kernel::{
     AgentId, Call, Effect, Error, Module, ModuleProject, Nothing, OnRestart, Outcome, Participant,
-    Picture, ProjectId, Refusal, Right, Settled, Tool, Tx,
+    Picture, Refusal, Right, Settled, Tool, Tx,
 };
 use banda_look::OneFile as _;
 use base64::Engine as _;
@@ -213,9 +213,11 @@ impl Agents {
     }
 
     /// Harness entry `id`'s process in `project`, started if need be.
-    async fn running(&self, project: ProjectId, id: &str) -> Result<Arc<Connection>, Refusal> {
+    async fn running(&self, project: &ModuleProject, id: &str) -> Result<Arc<Connection>, Refusal> {
         let harness = self.harness(id)?;
-        let connection = self.live.connection(project, &harness).await;
+        let connection = (self.live)
+            .connection(project.id(), project.data(), &harness)
+            .await;
         connection.map_err(Refusal::conflict)
     }
 }
@@ -774,7 +776,7 @@ impl Agents {
         if harness.is_empty() {
             return Err(Refusal::conflict("This Thread's Harness is gone."));
         }
-        let connection = self.running(call.project().id(), &harness).await?;
+        let connection = self.running(call.project(), &harness).await?;
         let folder = call.project().folder();
         let (say, heard) = tokio::sync::mpsc::channel(1);
         // Let go, the stream stops the run: its turn and its session.
@@ -1014,7 +1016,7 @@ impl Agents {
         if harness.is_empty() {
             return Err(Refusal::conflict("This Thread's Harness is gone."));
         }
-        let connection = self.running(call.project().id(), &harness).await?;
+        let connection = self.running(call.project(), &harness).await?;
         let name = connection.process().name().to_owned();
         let folder = titles::folder(call.project().data())
             .await
