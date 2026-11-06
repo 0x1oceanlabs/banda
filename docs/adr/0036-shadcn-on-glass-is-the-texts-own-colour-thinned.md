@@ -18,7 +18,7 @@ The quiet grey text reads on some wallpapers and not on others. Roma: the small 
 2. **Quiet text is the text's colour at 62%,** not a fixed grey, so it keeps its contrast on any wallpaper.
 3. **Lines are the text's colour at 10% (`border`) and 12% (`input`).**
 4. **Something current shows by more than its colour:** the fill, the full text colour and a heavier weight, as the current workspace already has.
-5. **One place, with the rest of the glass.** The tokens sit in `html[data-glass]` in `globals.css`, beside the desk's, the panel's and the tiles'. They are `!important`: the page sets the theme's colours on the root element itself, which beats any stylesheet otherwise. Every shadcn component follows, and none needs changing. On a solid desk the theme's colours stay as they are.
+5. **One place, with the rest of the glass.** The tokens sit in `html[data-glass]` in `globals.css`, beside the desk's, the panel's and the tiles'. They are `!important`: the page sets the theme's colours on the root element itself, which beats any stylesheet otherwise. Every shadcn component follows, and none needs changing. On a solid desk the theme's colours stay as they are. _Changed on 2026-11-06, by ADR 0080:_ the resolver derives the glass tokens, with these values as its defaults, and the `!important` rules go.
 
 ## Consequences
 

@@ -23,7 +23,7 @@ Roma, 2026-11-05: "let's think the themes through: macOS's own dark and light, t
 
    Banda's and the Mac's shape are the same, except for the font and the bar. So the three look like one family.
 
-2. **Each platform starts on its own theme.** Unset, `theme` is `"macos"` on macOS, `"omarchy"` where Omarchy is, and `"banda"` everywhere else (Windows, other Linux). Any of the three can be picked anywhere. On a Mac, `macos` reads its colours from the system; elsewhere it shows its defaults.
+2. **Each platform starts on its own theme.** Unset, `theme` is `"macos"` on macOS, `"omarchy"` where Omarchy is, and `"banda"` everywhere else (Windows, other Linux). Any of the three can be picked anywhere. On a Mac, `macos` reads its colours from the system; elsewhere it shows its defaults. _Changed on 2026-11-06, by ADR 0080:_ the device picks a platform base, and `theme` unset is `"platform"`.
 
 3. **The glass changes the background, never the shape.** Gaps, corners and borders are the theme's, glass or not. Hyprland's settings are a layer only under the `omarchy` theme: the `hyprland` key's default is whether the theme is `omarchy`. ADR 0023's reset of the gaps over glass goes. Over glass the tiles and menus stay solid (`[tile] opacity = 1`); the desk, the bar and the sidebar's panel are the glass.
 
@@ -42,9 +42,9 @@ Roma, 2026-11-05: "let's think the themes through: macOS's own dark and light, t
 
 5. **The focused tile is outlined, not framed.** One pixel of the accent and a soft shadow, where the border was 2 px. The `omarchy` theme keeps Hyprland's border as the focus, as its windows show it.
 
-6. **The Mac's accent follows the system.** The window reads the accent (`systemPreferences.getAccentColor()`) and tells the page when it changes. The `macos` theme's accent is the system's, with Apple's blue when there is none. `[colors] accent` in `look.toml` still wins.
+6. **The Mac's accent follows the system.** The window reads the accent (`systemPreferences.getAccentColor()`) and tells the page when it changes. The `macos` theme's accent is the system's, with Apple's blue when there is none. `[colors] accent` in `look.toml` still wins. _Changed on 2026-11-06, by ADR 0080:_ the accent comes into the resolver as an input, not as `var(--system-accent)`.
 
-7. **A theme's shape is its `banda.toml`.** `macos` and `banda` say theirs in their own files in `look/themes/`, as examples for a Person's theme. Keys in `look.toml` still win over every theme.
+7. **A theme's shape is its `banda.toml`.** `macos` and `banda` say theirs in their own files in `look/themes/`, as examples for a Person's theme. Keys in `look.toml` still win over every theme. _Changed on 2026-11-06, by ADR 0080:_ a theme is one `theme.toml`, and it may extend another.
 
 ## Steps
 
