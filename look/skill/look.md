@@ -23,7 +23,7 @@ Every key, with its default:
 - To make one, copy a theme's folder into `~/.config/banda/themes/<name>/`
   and set `theme = "<name>"`.
 
-## Asked for, and what to write
+## Asked for, and what to set
 
 - "Make it dark": `mode = "dark"`.
 - "Square corners": `radius = 0`.

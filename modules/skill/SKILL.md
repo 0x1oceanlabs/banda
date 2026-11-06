@@ -43,10 +43,11 @@ Banda is changed through text files, the same way the Person changes it.
    and `mode`, `plan` or any option the composer offers. `banda settings rename <file> <key> <to>` gives a key
    another name where it is, as a line of keys.toml another key:
    `banda settings rename keys.toml 'binds."Alt+J"' Alt+Q`. For more than a key,
-   run them once for each key, and never edit a settings file by hand: they
-   keep the Person's comments and every key you were not asked to change.
-   Every key is optional: set only what changes.
-3. Check it: `banda settings check` prints `path:line:column: problem`
+   run one for each; never edit a file they take by hand. A new file of
+   the Person's own that they do not take, a sidebar preset or a theme,
+   you write whole. Every key is optional: set only what changes.
+3. Check it: `banda settings check`, or `banda settings check <file>` for
+   a new file, prints `path:line:column: problem`
    for each mistake, and nothing when all is well. `banda settings schema
    <file>` prints every key a file may hold, with what it does.
 4. Tell the Person what you changed, and how to undo it.
@@ -72,11 +73,11 @@ not open.
 
 ## Adding a folder as a Project
 
-When the Person asks for a folder to become a Project, `banda project add
-<path>` adds it and prints the Project as JSON; `--name` names it, and
-`--create` makes the folder first. A folder that already is a Project
-prints that Project. The folder is not changed: Banda keeps the Project's
-data elsewhere.
+A Project is the Person's to add: when they ask for a folder to become
+one, `banda menu project.add.folder` opens "Add Project" at its path
+field for them, and you tell them the path. In their own terminal,
+`banda project add <path>` adds it too. The folder is not changed:
+Banda keeps the Project's data elsewhere.
 
 A Project's name, pin and archive, and its removal, are the Person's: they
 change them in the settings, which `banda menu settings.projects.<id>`
