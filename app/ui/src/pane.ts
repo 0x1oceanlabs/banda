@@ -280,12 +280,21 @@ const CHIMES: Partial<Record<MarkState, Chime>> = {
   failed: "failed",
 }
 
-/** The things in the lists that call their Person now. */
-export function callsOf(lists: Lists): Call[] {
+/** Whether `listed` sleeps at `now`: nothing woke it, and its time has
+ * not come (ADR 0074). */
+export function asleep(listed: Listed, now: number): boolean {
+  const { snooze } = listed
+  if (!snooze || snooze.woke) return false
+  return snooze.until === undefined || snooze.until > now
+}
+
+/** The things in the lists that call their Person now. One snoozed calls
+ * no one while it sleeps (ADR 0074). */
+export function callsOf(lists: Lists, now = Date.now()): Call[] {
   return Object.entries(lists).flatMap(([project, listed]) =>
     (listed ?? []).flatMap((thing): Call[] => {
       const chime = CHIMES[thing.mark]
-      if (!chime) return []
+      if (!chime || asleep(thing, now)) return []
       const detail = thing.calls ?? thing.said
       return [
         {

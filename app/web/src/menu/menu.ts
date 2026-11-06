@@ -14,6 +14,7 @@ import type { Listed, Lists } from "@banda/ui/pane"
 import type { Action, MenuRow } from "@banda/ui/module"
 import type { Shell } from "../shell/actions"
 import { archivable } from "../sidebar/archived"
+import { snoozeAct } from "../sidebar/snoozed"
 
 /** Where the menu opens: its root, or its Actions, as the key sheet. */
 export type At = "root" | "actions"
@@ -53,6 +54,14 @@ export type Choice =
   | { kind: "preset"; id: string; name: string; current: boolean }
   /** Archives a Thread, or brings it back (ADR 0069). */
   | { kind: "archive"; id: string; project: ProjectId; listed: Listed }
+  /** Opens the snooze's picker for a Thread, or wakes one that sleeps
+   * (ADR 0074). */
+  | {
+      kind: "snooze" | "wake"
+      id: string
+      project: ProjectId
+      listed: Listed
+    }
   /** A branch: the ways to add a Project (ADR 0026). */
   | { kind: "add"; id: string }
   /** A branch: one way to add a Project; the field takes its name or path. */
@@ -258,6 +267,8 @@ export type Sources = {
   presets: { names: readonly string[]; current: string }
   /** Whether a Thread is archived now. */
   archived: (listed: Listed) => boolean
+  /** Whether a Thread sleeps now (ADR 0074). */
+  asleep: (listed: Listed) => boolean
   /** What the modules' sources found for the words, in the modules'
    * order, each under its source's heading. */
   found: readonly Found[]
@@ -483,13 +494,24 @@ const BESIDE: Key = { code: "Enter", shift: true }
 
 /** What can be done with `row`, the first as `Enter` does it. */
 export function actsOf(row: Choice, sources: Sources): Act[] {
-  const { archived } = sources
+  const { archived, asleep } = sources
   switch (row.kind) {
     case "thread": {
       const acts: Act[] = [
         { title: "Open", key: OPEN, row },
         { title: "Open beside", key: BESIDE, row: { ...row, beside: true } },
       ]
+      const snooze = snoozeAct(row.listed, asleep(row.listed))
+      if (snooze)
+        acts.push({
+          title: snooze === "wake" ? "Wake now" : "Snooze…",
+          row: {
+            kind: snooze,
+            id: `${snooze}:${row.listed.id}`,
+            project: row.project,
+            listed: row.listed,
+          },
+        })
       const now = archived(row.listed)
       if (now || archivable(row.listed))
         acts.push({

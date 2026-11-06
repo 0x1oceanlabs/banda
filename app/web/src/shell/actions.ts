@@ -94,6 +94,8 @@ export type Shell = WindowApi & {
   /** Opens the snooze's picker for the Thread the Person looks at (ADR
    * 0074). */
   snooze: () => void
+  /** Wakes the snoozed Thread the Person looks at. */
+  wake: () => void
   /** Opens the Banda menu, or closes it when it is open (ADR 0017). */
   menu: (at: At) => void
   /** Opens the Banda menu at a route, or the settings at theirs, as
@@ -635,6 +637,12 @@ export const ACTIONS: readonly Action<Shell>[] = [
     title: "Snooze the Thread you look at, or wake it",
     keys: [{ code: "KeyZ", mod: true }],
     run: (shell) => shell.snooze(),
+  },
+  {
+    id: "thread.wake",
+    section: "Threads",
+    title: "Wake the snoozed Thread you look at",
+    run: (shell) => shell.wake(),
   },
   {
     id: "menu.open",
