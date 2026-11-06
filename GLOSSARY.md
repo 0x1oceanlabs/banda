@@ -210,7 +210,7 @@ _Avoid_: window menu, layout menu.
 **Thread menu**:
 What the Person can do to a Thread: rename it, suggest a title, mark it
 unread, archive it. A click on the title in its Pane's header and a right
-click on its row in the sidebar open it (ADR 0075). The Pane menu is
+click on its row in the sidebar open it (ADR 0077). The Pane menu is
 another: it acts on the Pane, not the Thread.
 
 **Tab**:

@@ -81,7 +81,7 @@ the brand workspace) and chose:
    double click on the gap does (ADR 0025, decision 5); a middle click
    closes the Pane, as a tab's does; a right click opens the Pane menu.
    Dragging it moves the Pane, as before.
-   - _Changed on 2026-11-06, by ADR 0075._ On a Thread's Pane, a click
+   - _Changed on 2026-11-06, by ADR 0077._ On a Thread's Pane, a click
      on the title opens the Thread menu and a double click on it renames
      the Thread. A double click on the rest of the header is as above.
 5. **The pop-out button goes.** "In its own window" is a row of the Pane
