@@ -1,0 +1,28 @@
+[package]
+name = "banda-files"
+description = "The files module: any folder, listed, read, searched and watched, in the engine."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+banda-kernel = { path = "../../../kernel" }
+ignore.workspace = true
+infer.workspace = true
+mime_guess.workspace = true
+nucleo-matcher.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+ts-rs.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

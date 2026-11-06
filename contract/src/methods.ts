@@ -8,6 +8,7 @@ import type { ProjectsMethods } from "./generated/ProjectsMethods"
 import type { WindowMethods } from "./generated/WindowMethods"
 import type { AgentsMethods } from "./generated/agents/AgentsMethods"
 import type { BrowserMethods } from "./generated/browser/BrowserMethods"
+import type { FilesMethods } from "./generated/files/FilesMethods"
 import type { GitMethods } from "./generated/git/GitMethods"
 import type { HarnessesMethods } from "./generated/harnesses/HarnessesMethods"
 import type { ProblemsMethods } from "./generated/problems/ProblemsMethods"
@@ -28,6 +29,7 @@ export type Methods = Prefixed<"projects", ProjectsMethods> &
   Prefixed<"terminal", TerminalMethods> &
   Prefixed<"workspaces", WorkspacesMethods> &
   Prefixed<"git", GitMethods> &
+  Prefixed<"files", FilesMethods> &
   Prefixed<"problems", ProblemsMethods> &
   Prefixed<"sharing", SharingMethods>
 

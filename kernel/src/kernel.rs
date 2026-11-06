@@ -595,7 +595,14 @@ impl Kernel {
             let id = named.or(only);
             access::within(only, id)?;
             let id = id.ok_or_else(|| Refusal::invalid(format!("{method} needs a Project.")))?;
-            return Ok((self.project(id).await?, None));
+            let project = self.project(id).await?;
+            // A pass's call is walled in its Project, as the path guard
+            // reads it.
+            let wall = only.map(|project_id| Wall {
+                project: project_id,
+                sees_others: project.sees_others(),
+            });
+            return Ok((project, wall));
         }
         let machine = (self.machine.as_ref())
             .ok_or_else(|| Refusal::not_found("This engine has no machine's scope."))?;

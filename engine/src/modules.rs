@@ -11,6 +11,7 @@
 
 use banda_agents::Agents;
 use banda_browser::Browser;
+use banda_files::Files as FilesModule;
 use banda_git::Git;
 use banda_harnesses::HarnessesModule;
 use banda_kernel::Method;
@@ -67,6 +68,12 @@ const FILES: &[Files] = &[
         toml: include_str!("../../modules/git/module.toml"),
         window: Some(include_str!("../../modules/git/window.json")),
         methods: Some(Git::method_list),
+    },
+    Files {
+        folder: "files",
+        toml: include_str!("../../modules/files/module.toml"),
+        window: None,
+        methods: Some(FilesModule::method_list),
     },
     Files {
         folder: "notifications",
@@ -305,6 +312,7 @@ mod tests {
             Terminals::new().name(),
             Browser::new().name(),
             Git::new().name(),
+            FilesModule::new().name(),
             Workspaces::new().name(),
             Problems::new("", "").name(),
             Sharing::new("", "").name(),

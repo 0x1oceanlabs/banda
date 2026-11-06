@@ -120,7 +120,8 @@ pub trait Module: Send + Sync + 'static {
 /// The wall a pass keeps an Agent behind (ADR 0019, decision 2): the one
 /// Project it works in, and whether its Person lets that Project's Agents see
 /// the other Projects' Panes (ADR 0032). A module of this machine answers a
-/// walled call with what it may see.
+/// walled call with what it may see; a module of a Project holds its paths
+/// inside the Project's folder ([`Reach`](crate::Reach)).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Wall {
     pub project: ProjectId,

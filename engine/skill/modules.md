@@ -93,6 +93,12 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 
 Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `contents`, `stage`, `unstage`, `revert`, `watch`, `act`, `switch`, `branch`, `init`, `prompt`, `written`.
 
+## Files (`files`)
+
+Any folder, as a Finder shows it: its names folders first, with what git ignores and what is hidden marked; what a path is; a file's text; fuzzy paths under a folder; and what changed in the folders shown. An Agent reaches only its Project's folder.
+
+Its methods, `banda call files.<method>`: `list`, `stat`, `read`, `find`, `watch`.
+
 ## Notifications (`notifications`)
 
 Tells you of what calls, by toasts and the desktop's notifications; the bell on the bar shows the last toasts again.

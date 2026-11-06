@@ -109,6 +109,7 @@ test("a window calls, follows and sees refusals by their code", async () => {
       "terminal",
       "browser",
       "git",
+      "files",
       "workspaces",
       "problems",
       "sharing",

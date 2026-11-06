@@ -175,18 +175,18 @@ mod tests {
     #[test]
     fn a_copy_holds_all_but_the_lock() {
         let (from, to) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-        std::fs::create_dir_all(from.path().join("files/1")).unwrap();
-        std::fs::write(from.path().join("files/1/a.md"), "a").unwrap();
+        std::fs::create_dir_all(from.path().join("kept/1")).unwrap();
+        std::fs::write(from.path().join("kept/1/a.md"), "a").unwrap();
         std::fs::write(from.path().join(LOCK), "").unwrap();
         copy(from.path(), to.path()).unwrap();
-        assert_eq!(std::fs::read(to.path().join("files/1/a.md")).unwrap(), b"a");
+        assert_eq!(std::fs::read(to.path().join("kept/1/a.md")).unwrap(), b"a");
         assert!(!to.path().join(LOCK).exists());
     }
 
     fn old_project(root: &Path, name: &str) -> ProjectId {
         let old = root.join(name).join(OLD);
-        std::fs::create_dir_all(old.join("files/1")).unwrap();
-        std::fs::write(old.join("files/1/notes.md"), "# hi").unwrap();
+        std::fs::create_dir_all(old.join("kept/1")).unwrap();
+        std::fs::write(old.join("kept/1/notes.md"), "# hi").unwrap();
         std::fs::write(old.join("space.sqlite3"), "db").unwrap();
         std::fs::write(old.join(SPACE_LOCK), "").unwrap();
         let id = ProjectId::new();
@@ -217,7 +217,7 @@ mod tests {
             std::fs::canonicalize(root.path().join("Work")).unwrap()
         );
         assert_eq!(
-            std::fs::read(moved.join("files/1/notes.md")).unwrap(),
+            std::fs::read(moved.join("kept/1/notes.md")).unwrap(),
             b"# hi"
         );
         assert_eq!(std::fs::read(moved.join("project.sqlite3")).unwrap(), b"db");
@@ -258,7 +258,7 @@ mod tests {
     fn space(spaces: &Path) -> ProjectId {
         let id = ProjectId::new();
         let folder = spaces.join(id.to_string());
-        std::fs::create_dir_all(folder.join("files")).unwrap();
+        std::fs::create_dir_all(folder.join("kept")).unwrap();
         std::fs::write(folder.join("space.sqlite3"), "db").unwrap();
         std::fs::write(folder.join("space.sqlite3-wal"), "wal").unwrap();
         std::fs::write(folder.join("space.json"), "{}").unwrap();
@@ -267,7 +267,7 @@ mod tests {
     }
 
     #[test]
-    fn the_spaces_are_projects_with_their_files_renamed_and_so_is_the_machine() {
+    fn the_spaces_are_projects_with_their_data_renamed_and_so_is_the_machine() {
         let data = tempfile::tempdir().unwrap();
         let id = space(&data.path().join(SPACES));
         let machine = data.path().join("machine");
@@ -285,7 +285,7 @@ mod tests {
             std::fs::read(moved.join("project.sqlite3-wal")).unwrap(),
             b"wal"
         );
-        assert!(moved.join(MANIFEST).is_file() && moved.join("files").is_dir());
+        assert!(moved.join(MANIFEST).is_file() && moved.join("kept").is_dir());
         assert!(!moved.join("space.json").exists() && !moved.join(SPACE_LOCK).exists());
         assert!(!data.path().join(SPACES).exists());
         assert_eq!(

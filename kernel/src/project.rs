@@ -666,6 +666,13 @@ impl ModuleProject {
         (window.ask(method, self.project.id, by, params, within)).await
     }
 
+    /// Watches `dirs`, each by itself, until the [`Watch`](crate::Watch)
+    /// is dropped: the engine's one watcher, shared by every module (ADR
+    /// 0073, decision 14). Fails only when the system gives no watcher.
+    pub fn watch(&self, dirs: impl IntoIterator<Item = PathBuf>) -> std::io::Result<crate::Watch> {
+        crate::watching::watch(dirs)
+    }
+
     /// Whether a window is open to ask: a module's own work that only a
     /// window does, or that only a window shows, waits for one.
     pub fn window_open(&self) -> bool {
