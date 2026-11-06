@@ -24,9 +24,10 @@ to Thread; `Alt+Shift+L` takes it back too. A tab is lent to one Thread at
 a time, and only the Person's own tabs are lent.
 
 A lend ends as the Person takes it back, as the tab closes, or as the
-Thread's session ends, which today is when Banda's engine stops. Each lend
-and each end is a quiet line in the Thread, which its Agent reads before
-its next message. As a lend ends, the Thread's hold on the tab ends too.
+Thread's session ends: the Thread is deleted, or Banda's engine starts
+again. Each lend and each end is a quiet line in the Thread, which its
+Agent reads before its next message. As a lend ends, the Thread's hold on
+the tab ends too, and what it did there that moment stops.
 
 `~/.config/banda/browser.toml` sets where the tabs are and where words
 typed in the address go. The switch in the row writes `tabs` into it and
@@ -119,10 +120,12 @@ ask them to lend you its tab, or to sign in in your tab with
 `browser_handoff`.
 
 A lent tab is listed with `"lent": true`. It is the Person's, signed in
-to their sites: do there only what the task needs. Their line in your
-Thread says when they lend it and when the lend ends: they took it back,
-the tab closed, or your session ended. Then the tab is gone from your
-list, and a tool given its ID answers as for a tab there is not.
+to their sites: do there only what the task needs. You use it only at an
+http or https address, and never at a site the Person lets no Agent use.
+Their line in your Thread says when they lend it and when the lend ends:
+they took it back, the tab closed, or your session ended. Then the tab is
+gone from your list, and a tool given its ID answers as for a tab there
+is not.
 
 | Tool | Use it for |
 |---|---|

@@ -60,11 +60,12 @@ import {
   isTabKey,
   LEND,
 } from "./keys"
-import { colourOf, LendButton, LentChip } from "./Lend"
+import { LendButton, LentChip, LentMark } from "./Lend"
 import {
   allowSite,
   handBack,
   threadOf,
+  useLentTo,
   useThreadOf,
   useTitleOf,
 } from "./threads"
@@ -359,9 +360,9 @@ function Browser({
 
   // A tab of the Person's is lent to a Thread of the Pane's Project by
   // their gesture, and taken back the same way (ADR 0083, decision 4):
-  // the picker or the chip's card shows meanwhile.
-  // Each is the shown tab's: another tab shown closes it. The picker its
-  // key opens has its first Thread ready for Enter.
+  // the picker or the chip's card shows meanwhile. Each is the shown
+  // tab's: another tab shown closes it. The picker its key opens has its
+  // first Thread ready for Enter.
   const [popup, setPopup] = useState<{
     tab: string
     is: "pick" | "card"
@@ -374,16 +375,19 @@ function Browser({
   const lend = (thread: Listed | null) => {
     setLending(null)
     if (contents === null) return
-    const to = thread?.agent && {
-      agent: thread.agent,
-      thread: thread.id,
-      project,
-    }
+    const to = thread?.agent
+      ? { agent: thread.agent, thread: thread.id, project }
+      : null
     // A lend main refuses is left unhandled, as a Problem (ADR 0039).
-    void browserHost()?.lend(contents, to || null)
+    void browserHost()?.lend(contents, to)
   }
-  // Its key lends the shown tab, or takes it back.
-  const lendKey = () => {
+  // Its key lends the shown tab, or takes it back: pressed in the Pane,
+  // or in the page it shows. One from a page out of sight is no gesture
+  // on the tab that shows.
+  const lendKey = (_?: unknown, pressed?: Event) => {
+    const from = pressed?.target
+    if (held.some((each) => each !== page && each.element === from))
+      return false
     if (state.lent) lend(null)
     else if (lendable) setLending("pick", true)
     return true
@@ -473,13 +477,13 @@ function Browser({
           />
           {state.lent ? (
             <LentChip
-              agent={state.lent}
+              agent={state.lent.agent}
               open={lending === "card"}
               onOpen={(open) => setLending(open ? "card" : null)}
               onBack={() => lend(null)}
               onThread={() => {
                 setLending(null)
-                onThread(state.lent!)
+                onThread(state.lent!.agent)
               }}
             />
           ) : (
@@ -948,7 +952,8 @@ function TabStrip({
 }
 
 /** One tab: its site's icon, its title, and its close button on hover;
- * the Agent's mark while one drives it. */
+ * the Agent's mark while one drives it, or else the mark of the Thread it
+ * is lent to. */
 function TabItem({
   tab,
   shown,
@@ -967,35 +972,23 @@ function TabItem({
   const page = pageAt(tab.id)
   const state = page?.state
   const words = state?.title || titleOf(tab)
-  const lent = useThreadOf(state?.lent ?? "")
-  const lentTo = state?.lent ? (lent?.title ?? "a Thread") : undefined
+  const lent = state?.lent?.agent
+  const lentTo = useLentTo(lent)
+  // A tab driven shows its stop, lent or not (ADR 0029, decision 4); a
+  // lent one the Thread's mark otherwise.
   const mark = state?.dialog ? (
     <span
       className="size-1.5 shrink-0 rounded-full bg-attention"
       aria-label="Page dialog"
     />
-  ) : lentTo !== undefined ? (
-    <span
-      className="flex shrink-0"
-      style={{ color: colourOf(lent?.mark ?? "rest") }}
-    >
-      <BandaMark
-        state={lent?.mark ?? "rest"}
-        variant="agent"
-        playful={0}
-        news={false}
-        label={`Lent to ${lentTo}`}
-        className="size-3"
-      />
-    </span>
+  ) : state?.driven || state?.driver ? (
+    <Driven
+      contents={page?.contents}
+      words={words}
+      thread={state.driver !== null}
+    />
   ) : (
-    (state?.driven || state?.driver) && (
-      <Driven
-        contents={page?.contents}
-        words={words}
-        thread={state.driver !== null}
-      />
-    )
+    lent !== undefined && <LentMark agent={lent} />
   )
   return (
     <div

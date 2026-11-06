@@ -18,6 +18,7 @@ import {
   agentsPartition,
   type BrowserNews,
   type Driver,
+  type Lend,
   PARTITION,
   type Wait,
 } from "./desktop"
@@ -45,9 +46,9 @@ export type PageState = {
   /** The Threads that wait for the Person here (ADR 0029, decision 6). */
   dialog: Dialog | null
   waits: readonly Wait[]
-  /** The Thread the Person lent it, by its Agent; none while it is not
-   * lent (ADR 0083, decision 4). */
-  lent: string | null
+  /** Its lend to a Thread; none while it is not lent (ADR 0083,
+   * decision 4). */
+  lent: Lend | null
 }
 
 /** A page not made yet. */
@@ -312,8 +313,8 @@ export class Page {
     this.set({ dialog })
   }
 
-  /** The Thread it is lent to now, or none. */
-  lend(lent: string | null): void {
+  /** Its lend now, or none. */
+  lend(lent: Lend | null): void {
     this.set({ lent })
   }
 
@@ -590,6 +591,11 @@ export function drivers(): Set<string> {
   )
 }
 
+/** The lends of the pages, each to a Thread (ADR 0083, decision 4). */
+export function lends(): Lend[] {
+  return [...pages.values()].flatMap((page) => page.state.lent ?? [])
+}
+
 /** The Threads that asked the Person on a page, each with that page's
  * web contents' ID and since when. */
 export function asking(): { contents: number; wait: Wait; asked: number }[] {
@@ -662,7 +668,7 @@ function hear(news: PageNews): void {
   else if (news.kind === "driven") page.drive(news.driven)
   else if (news.kind === "driver") page.driveBy(news.driver)
   else if (news.kind === "waits") page.waited(news.waits)
-  else if (news.kind === "lent") page.lend(news.agent)
+  else if (news.kind === "lent") page.lend(news.lend)
   else if (news.kind === "open") {
     const { url, background, agents } = news
     holder?.open(url, { from: page.id, background, agents })

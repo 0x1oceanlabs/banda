@@ -13,4 +13,9 @@ modules: Array<string>,
  * What this machine's modules are followed and streamed by, as a
  * Project is (ADR 0025, decision 1); none while no module is.
  */
-machine?: ProjectId, } | { "type": "result", id: number, ok?: JsonValue, error?: Refusal, } | { "type": "event", subscription: number, event: Event, } | { "type": "resync", subscription: number, } | { "type": "piece", stream: number, data: JsonValue, } | { "type": "ended", stream: number, } | { "type": "goodbye", reason: Refusal, };
+machine?: ProjectId, 
+/**
+ * This boot of the engine: another once it restarted, and every
+ * session of the last ended with it.
+ */
+boot: string, } | { "type": "result", id: number, ok?: JsonValue, error?: Refusal, } | { "type": "event", subscription: number, event: Event, } | { "type": "resync", subscription: number, } | { "type": "piece", stream: number, data: JsonValue, } | { "type": "ended", stream: number, } | { "type": "goodbye", reason: Refusal, };

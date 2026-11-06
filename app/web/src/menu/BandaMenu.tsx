@@ -54,7 +54,7 @@ import type { Listed, Lists } from "@banda/ui/pane"
 import { useLookSidebar } from "../look"
 import { runs, sources as allSources } from "../registry"
 import type { Shell } from "../shell/actions"
-import { ThreadMark } from "../sidebar/Row"
+import { ThreadMark } from "@banda/ui/components/banda-mark"
 import { PRESET_WORDS } from "../sidebar/settings"
 import { useIsArchived } from "../sidebar/archived"
 import {

@@ -1,8 +1,8 @@
 /**
  * The browser module's words for TypeScript: a tab as its tools for
- * Agents see it, name it, read it, open it, move it and act in it (ADR 0029), a tab the Person lent a
- * Thread (ADR 0083), and its `browser.toml` as the look resolves it (ADR
- * 0013, ADR 0016).
+ * Agents see it, name it, read it, open it, move it and act in it (ADR
+ * 0029), a tab the Person lent a Thread (ADR 0083), and its `browser.toml`
+ * as the look resolves it (ADR 0013, ADR 0016).
  */
 import type { Browser } from "./generated/browser/Browser"
 import type { ModuleFile } from "./look"

@@ -8,6 +8,6 @@
 export type Lent = { thread: string, 
 /**
  * The line, as its Person reads it: `You lent this Thread a tab ·
- * Fix login redirect #598`.
+ * “Fix login redirect #598”`.
  */
 notice: string, };

@@ -1009,7 +1009,7 @@ async fn what_git_did_from_the_card_shows_at_once_and_goes_before_the_next_promp
         .await;
     let said = last_reply(&view);
     assert!(
-        said.starts_with("message: You said: Since your last turn, your Person did this in Banda"),
+        said.starts_with("message: You said: Since your last turn, Banda told your Person this"),
         "{said}"
     );
     assert!(
@@ -1028,7 +1028,7 @@ async fn a_tab_lent_to_the_thread_shows_at_once_and_goes_before_the_next_prompt(
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     let (thread, _) = world.finish(None, "hello").await;
-    let lent = "You lent this Thread a tab · Fix login redirect #598";
+    let lent = "You lent this Thread a tab · “Fix login redirect #598”";
     let told = json!({ "thread": thread, "notice": lent });
     world
         .call(world.person(), "browser.say", told)
@@ -1042,7 +1042,7 @@ async fn a_tab_lent_to_the_thread_shows_at_once_and_goes_before_the_next_prompt(
     let (_, view) = world.finish(Some(&thread), "read the review").await;
     let said = last_reply(&view);
     assert!(
-        said.starts_with("message: You said: Since your last turn, your Person did this in Banda"),
+        said.starts_with("message: You said: Since your last turn, Banda told your Person this"),
         "{said}"
     );
     assert!(

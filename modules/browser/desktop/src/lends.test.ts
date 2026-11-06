@@ -6,43 +6,43 @@ import type { Engine as Client, Status } from "@banda/contract"
 import { Engine, Window } from "@banda/desktop-kit"
 import { Effect, Layer } from "effect"
 import type { Session, WebContents } from "electron"
-import { Drive } from "./drive"
 import { lendsLayer } from "./lends"
 import { Tabs } from "./tabs"
 
 const work = "0199a3c4-0000-7000-8000-000000000001"
 const to = { agent: "agent-1", thread: "t1", project: work }
 
-/** What the engine was told, and what the hands let go. */
+/** What the engine was told. */
 const said: unknown[][] = []
-const letGo: string[] = []
 /** Who hears the engine's status. */
 let hear: (status: Status) => void = () => {}
 
-const main = Layer.mergeAll(
-  Layer.succeed(Engine)({
-    address: Effect.die("unused"),
-    client: Effect.succeed({
-      command: async (...args: unknown[]) => void said.push(args),
-      watch: (watcher: (status: Status) => void) => {
-        hear = watcher
-        watcher({ state: "connecting" })
-        return () => {}
-      },
-    } as unknown as Client),
-    door: Effect.die("unused"),
-  }),
-  Layer.succeed(Drive)({
-    letGo: (tab: number, agent: string) =>
-      Effect.sync(() => void letGo.push(`${agent} off ${tab}`)),
-  } as unknown as Drive["Service"])
-)
+const engine = Layer.succeed(Engine)({
+  address: Effect.die("unused"),
+  client: Effect.succeed({
+    command: async (...args: unknown[]) => void said.push(args),
+    watch: (watcher: (status: Status) => void) => {
+      hear = watcher
+      watcher({ state: "connecting" })
+      return () => {}
+    },
+  } as unknown as Client),
+  door: Effect.die("unused"),
+})
 
 const layer = lendsLayer.pipe(
   Layer.provideMerge(Tabs.layer),
-  Layer.provideMerge(main),
+  Layer.provideMerge(engine),
   Layer.provideMerge(Window.layer(() => null))
 )
+
+/** The engine, open in its boot `boot`. */
+const open = (boot: string): Status => ({
+  state: "open",
+  engine: "banda test",
+  modules: ["agents", "browser"],
+  boot,
+})
 
 /** A tab of the Person's. */
 function personsTab(tabs: Tabs["Service"], id: number) {
@@ -63,46 +63,43 @@ const settle = Effect.gen(function* () {
   for (let i = 0; i < 5; i++) yield* Effect.yieldNow
 })
 
+/** What the engine is told of a lend's change `lending`. */
+const line = (lending: string) => [
+  "browser.lent",
+  { thread: "t1", title: "Fix login redirect #598", lending },
+  work,
+]
+
 it.effect(
-  "each lend and its end is said in its Thread, and an end lets the Thread go off the tab",
+  "each lend and its end is said in its Thread, and a new boot of the engine ends every lend",
   () =>
     Effect.gen(function* () {
       said.length = 0
-      letGo.length = 0
       const tabs = yield* Tabs
       yield* settle
       const page = personsTab(tabs, 5)
+      hear(open("boot-1"))
 
-      yield* tabs.lend(page, to)
+      yield* tabs.lend(page.id, to)
       yield* settle
-      expect(said).toEqual([
-        [
-          "browser.lent",
-          { thread: "t1", tab: "Fix login redirect #598", lending: "lent" },
-          work,
-        ],
-      ])
-      expect(letGo).toEqual([])
-
-      yield* tabs.lend(page, null)
+      expect(said).toEqual([line("lent")])
+      yield* tabs.lend(page.id, null)
       yield* settle
-      expect(said.at(-1)).toEqual([
-        "browser.lent",
-        { thread: "t1", tab: "Fix login redirect #598", lending: "back" },
-        work,
-      ])
-      expect(letGo).toEqual(["agent-1 off 5"])
+      expect(said).toEqual([line("lent"), line("back")])
 
-      // The engine that ran every session went: each lend ends.
-      yield* tabs.lend(page, to)
+      // The connection breaks and comes back to the same boot: its
+      // sessions run on, and so does the lend.
+      yield* tabs.lend(page.id, to)
       hear({ state: "lost", retryIn: 250 })
+      hear(open("boot-1"))
+      yield* settle
+      expect(tabs.lentTo(page)?.agent).toBe("agent-1")
+
+      // The engine started again: every session of its last boot ended.
+      hear({ state: "lost", retryIn: 250 })
+      hear(open("boot-2"))
       yield* settle
       expect(tabs.lentTo(page)).toBeUndefined()
-      expect(said.at(-1)).toEqual([
-        "browser.lent",
-        { thread: "t1", tab: "Fix login redirect #598", lending: "session" },
-        work,
-      ])
-      expect(letGo).toEqual(["agent-1 off 5", "agent-1 off 5"])
+      expect(said.slice(2)).toEqual([line("lent"), line("session")])
     }).pipe(Effect.provide(layer))
 )

@@ -464,7 +464,9 @@ test("the git button commits every change with the message the Thread's Harness 
   await composer.fill("what now")
   await composer.press("Enter")
   await expect(
-    thread.getByText(/You said: Since your last turn, your Person did this/)
+    thread.getByText(
+      /You said: Since your last turn, Banda told your Person this/
+    )
   ).toBeVisible()
 })
 

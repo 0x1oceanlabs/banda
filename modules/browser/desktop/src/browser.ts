@@ -50,7 +50,7 @@ import { Dialogs } from "./dialogs"
 import { Drive } from "./drive"
 import { BoxArg, Extensions } from "./extensions"
 import { attaching, downloaded, keepCertificates, keepProfile } from "./profile"
-import { noTab, pageOf, Tabs } from "./tabs"
+import { Tabs } from "./tabs"
 
 /** Changes `browser.toml`; refused when the value is not one it takes. */
 type Changes = Effect.Effect<void, Refused | Broke>
@@ -161,7 +161,7 @@ function host(
       tellPage(contents, BROWSER_BRIDGE.listen, news)
     dialogs.attached(page)
     tabs.attached(page)
-    keys(page, contents)
+    keys(page, contents, tabs.byHands)
     keep(page, agents, tell, extensions)
   })
 }
@@ -178,9 +178,16 @@ let inForce: PageKeys = { mod: DEFAULT_KEYS.mod, keys: [] }
 const MAC = process.platform === "darwin"
 
 /** Banda's keys, held with the mod, and the browser's own go to the
- * window, from a page and an extension's popup alike (decision 5). */
-export function keys(page: WebContents, window: WebContents): void {
+ * window, from a page and an extension's popup alike (decision 5). Those
+ * a page hears while Banda's hands act in it, `byHands`, are theirs, as an
+ * Agent's press: they stay the page's, and the window hears none. */
+export function keys(
+  page: WebContents,
+  window: WebContents,
+  byHands: (page: number) => boolean = () => false
+): void {
   page.on("before-input-event", (event, input) => {
+    if (byHands(page.id)) return
     const key: Pressed = {
       code: input.code,
       altKey: input.alt,
@@ -441,11 +448,11 @@ export const browserAnswers: Answers<
         })
       ),
     ]),
-    ([contents, to]) =>
-      Tabs.use((tabs) => {
-        const page = pageOf(contents)
-        return page ? tabs.lend(page, to) : Effect.fail(noTab(contents))
-      }),
+    ([page, to]) => Tabs.use((tabs) => tabs.lend(page, to)),
+  ],
+  ended: [
+    text,
+    ([agent]) => Tabs.use((tabs) => Effect.sync(() => tabs.ended(agent))),
   ],
   pin: [
     Schema.Tuple([Schema.String, Schema.Boolean]),

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { stillMark } from "./banda-mark"
+import { groupState, stillMark } from "./banda-mark"
 
 const colors = { body: "#111", attention: "#f60", destructive: "#e00" }
 
@@ -22,4 +22,14 @@ test("a still mark is one SVG, in its state's colours and eyes", () => {
   const rest = stillMark("rest", colors)
   expect(rest).not.toContain("<ellipse")
   expect(rest).not.toContain("stroke=")
+})
+
+test("a Group's colour, and a lent tab's, is its Agent's state", () => {
+  expect(groupState("running")).toBe("working")
+  expect(groupState("thinking")).toBe("working")
+  expect(groupState("asking")).toBe("asking")
+  expect(groupState("done")).toBe("done")
+  expect(groupState("offline")).toBe("failed")
+  expect(groupState("idle")).toBeUndefined()
+  expect(groupState("rest")).toBeUndefined()
 })

@@ -650,10 +650,10 @@ test("the Person lends a tab of theirs to a Thread, which drives it until the le
     "Signed in · lent to hello"
   )
 
-  // The Thread says so, and its Agent sees and drives the tab, signed in
-  // as the Person.
+  // The Thread says so, quoting the page's title, and its Agent sees and
+  // drives the tab, signed in as the Person.
   await expect(
-    thread.getByText("You lent this Thread a tab · Signed in")
+    thread.getByText("You lent this Thread a tab · “Signed in”")
   ).toBeVisible()
   const [lent] = await tabs()
   expect(lent).toMatchObject({
@@ -671,8 +671,27 @@ test("the Person lends a tab of theirs to a Thread, which drives it until the le
   expect(
     await agentSays(window, "browser_snapshot", { tab: lent.id })
   ).toContain("who=person")
+  // A key its hands press is the page's: it neither takes the tab back
+  // nor opens the picker.
+  await agentSays(window, "browser_act", {
+    tab: lent.id,
+    action: "press",
+    key: "Alt+Shift+L",
+  })
+  expect(await tabs()).toMatchObject([{ id: lent.id, lent: true }])
+  await expect(chip).toBeVisible()
+  await expect(picker).toHaveCount(0)
 
-  // The chip's card takes it back: the Agent reaches it no more.
+  // The chip's card takes it back: the Agent reaches it no more, and a
+  // wait it began there ends at once.
+  const waiting = agentCalls(window, "browser_wait_for", {
+    tab: lent.id,
+    text: "Never on this page",
+  })
+  await expect(
+    page.getByRole("status", { name: "hello drives this tab" })
+  ).toContainText('· Waiting for "Never on this page"')
+  const began = Date.now()
   await chip.click()
   const card = page
     .getByRole("dialog")
@@ -682,8 +701,12 @@ test("the Person lends a tab of theirs to a Thread, which drives it until the le
   )
   await card.getByRole("button", { name: "Take back" }).click()
   await expect(chip).toHaveCount(0)
+  const waited = await waiting
+  expect(Date.now() - began).toBeLessThan(15_000)
+  expect(waited.isError).toBe(true)
+  expect(waited.content[0]!.text).toContain(`There is no tab ${lent.id}`)
   await expect(
-    thread.getByText("You took the tab back · Signed in")
+    thread.getByText("You took the tab back · “Signed in”")
   ).toBeVisible()
   expect(await tabs()).toEqual([])
   const refused = await agentCalls(window, "browser_snapshot", { tab: lent.id })
@@ -700,7 +723,7 @@ test("the Person lends a tab of theirs to a Thread, which drives it until the le
   await pressInPage(app, "L", ["alt", "shift"])
   await expect(chip).toHaveCount(0)
   await expect(
-    thread.getByText("You took the tab back · Signed in")
+    thread.getByText("You took the tab back · “Signed in”")
   ).toHaveCount(2)
 
   // Lent again, the lend ends as its tab closes.

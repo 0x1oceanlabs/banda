@@ -30,6 +30,18 @@ export function siteAt(url: string): { host: string; site: string } | null {
   return { host, site: getDomain(host, { allowPrivateDomains: true }) ?? host }
 }
 
+/** Whether a page at `url` is on the web, at an http or https address,
+ * or blank. */
+export function onWeb(url: string): boolean {
+  if (url === "about:blank") return true
+  try {
+    const { protocol } = new URL(url)
+    return protocol === "http:" || protocol === "https:"
+  } catch {
+    return false
+  }
+}
+
 /** The rule of `rules` for a page at `at`: its host's, or the nearest
  * domain's above it, up to its site's. */
 export function ruleAt<R>(

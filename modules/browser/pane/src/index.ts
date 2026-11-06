@@ -57,9 +57,8 @@ export const browser = defineModule({
       scoped(BROWSER, { ...rest, id: actionOf(does), section: "Browser" })
     ),
     ...zoomActions(BROWSER, BROWSER, "the page", "Browser"),
-    // A tab of the Person's is lent to a Thread, and taken back, by their
-    // gesture alone (ADR 0083, decision 4): the key opens the Threads to
-    // pick from, so no line of keys.toml names one.
+    // Banda's own key for the lend gesture (ADR 0083, decision 4); Chrome
+    // has none.
     scoped(BROWSER, {
       id: LEND,
       title: "Lend the tab to a Thread, or take it back",

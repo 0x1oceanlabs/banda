@@ -24,7 +24,7 @@ import type { Driver, SiteAnswer, Wait } from "@banda/browser-pane/desktop"
 import { BROWSER_FILE, siteKey } from "@banda/contract/browser"
 import { fileOf } from "@banda/contract/look"
 import { type Broke, Look, Refused, Settings } from "@banda/desktop-kit"
-import { Context, Effect, FiberSet, Layer, RcMap } from "effect"
+import { Context, Effect, FiberSet, Layer, RcMap, Stream } from "effect"
 import type { Event, InputEvent, WebContents } from "electron"
 import { setTimeout as sleep } from "node:timers/promises"
 import type { Browser, Frame, Page } from "playwright-core"
@@ -35,6 +35,7 @@ import {
   act,
   goingTo,
   hidden,
+  onWeb,
   opening,
   type Pointing,
   READING,
@@ -77,10 +78,7 @@ type Held = {
   /** Each Agent that called on it, by its ID, and whether the Person
    * acted on it since its last snapshot, until the Agent hears so. */
   readonly touched: Map<string, boolean>
-  /** Whether Banda's hands act in it now: their input is not the
-   * Person's. */
   dialogRevision: number
-  acting: boolean
   /** The tree of its last snapshot, which names the step's elements. */
   tree: string
 }
@@ -114,6 +112,17 @@ const denied = (site: string) =>
     code: "forbidden",
     message: `The Person lets no Agent use ${site}. Do not use it: carry on without it, or tell them why you need it.`,
   })
+
+/** What an Agent hears of a tab the Person lent it while it shows no web
+ * page. */
+const offWeb = (tab: number) =>
+  new Refused({
+    code: "forbidden",
+    message: `Tab ${tab} is your Person's, and you use it only at an http or https address: it shows none now.`,
+  })
+
+/** Where `browser_navigate` goes in a tab's history, not to an address. */
+const HISTORY = new Set(["back", "forward", "reload"])
 
 /** A tab as an Agent sees it: `lent` when the Person lent it the
  * Agent's Thread. */
@@ -252,9 +261,6 @@ export class Drive extends Context.Service<
     ): Effect.Effect<boolean, Refused | Broke>
     /** The turn of the Thread of `agent` ended: it drives no tab now. */
     settled(agent: string): Effect.Effect<void>
-    /** The Thread of `agent` reaches the tab no more, as its lend ended:
-     * its hold there ends, and with it its drive and its waits. */
-    letGo(tab: number, agent: string): Effect.Effect<void>
   }
 >()("banda/Drive") {
   static readonly layer = Layer.effect(Drive)(
@@ -352,19 +358,43 @@ export class Drive extends Context.Service<
        * which their Always and Deny also go to, and which may have changed
        * since. */
       const answers = new Map<string, SiteRule>()
+      /** The rule of `browser.toml` for the site at `at`, if it has one. */
+      const ruleOf = (at: { host: string; site: string }) =>
+        Effect.map(
+          look.current,
+          (now) => now && ruleAt(fileOf(now.files, BROWSER_FILE).sites, at)
+        )
+      /**
+       * Refuses the Agent `by` a tab the Person lent its Thread while the
+       * tab is at `url`, or would go there: a page off the web, as a file
+       * of theirs, or a site they let no Agent use. Their tab is signed in
+       * as them (ADR 0083, decision 4). Any other tab passes.
+       */
+      const lentGate = (tab: number, by: Participant, url?: string) =>
+        Effect.suspend(() => {
+          const page = contentsOf(tab)
+          if (by.kind !== "agent" || !page || !tabs.lentTo(page))
+            return Effect.void
+          const at = url ?? page.getURL()
+          if (!onWeb(at)) return Effect.fail(offWeb(tab))
+          const where = siteAt(at)
+          if (!where) return Effect.void
+          return Effect.flatMap(ruleOf(where), (rule) =>
+            rule === "deny" ? Effect.fail(denied(where.site)) : Effect.void
+          )
+        })
       /** Refuses a read or an action of the Agent `by` on a site it may
        * not use (ADR 0029, decision 7, B): one the Person denied every
        * Agent; or one they have not let it use yet, which its Thread then
-       * waits on the tab for them to answer. */
+       * waits on the tab for them to answer. A tab the Person lent it is
+       * read and used only on the web (`lentGate`). */
       const gated = (tab: number, by: Participant) =>
-        Effect.suspend(() => {
+        Effect.andThen(lentGate(tab, by), () => {
           const at = siteAt(contentsOf(tab)?.getURL() ?? "")
           if (!at || by.kind !== "agent") return Effect.void
           const { site } = at
-          return Effect.flatMap(look.current, (now) => {
-            const rule =
-              (now && ruleAt(fileOf(now.files, BROWSER_FILE).sites, at)) ??
-              answers.get(`${by.id} ${site}`)
+          return Effect.flatMap(ruleOf(at), (set) => {
+            const rule = set ?? answers.get(`${by.id} ${site}`)
             if (rule === "deny") return Effect.fail(denied(site))
             if (rule === "allow") return Effect.void
             const asking: Wait = {
@@ -420,7 +450,6 @@ export class Drive extends Context.Service<
                   page,
                   dialogs,
                   touched: new Map(),
-                  acting: false,
                   dialogRevision: dialogs.revision(tab),
                   tree: "",
                 }
@@ -429,7 +458,7 @@ export class Drive extends Context.Service<
                 page.on("dialog", () => {})
                 const contents = contentsOf(tab)
                 const noted = (_: Event, input: InputEvent) => {
-                  if (kept.acting || !PERSON.has(input.type)) return
+                  if (tabs.byHands(tab) || !PERSON.has(input.type)) return
                   for (const agent of kept.touched.keys())
                     kept.touched.set(agent, true)
                 }
@@ -447,6 +476,26 @@ export class Drive extends Context.Service<
               })
           ),
       })
+      // A lend that ends takes the tab from its Thread at once (ADR 0083,
+      // decision 4): its hands there stop, a call that runs too, as no
+      // other client is on a tab of the Person's; and its drive and its
+      // waits there end.
+      yield* Effect.forkScoped(
+        tabs.lends.pipe(
+          Stream.filter((change) => change.lending !== "lent"),
+          Stream.runForEach(({ page, lend }) =>
+            Effect.suspend(() => {
+              unwait(page.id, lend.agent)
+              if (driving.get(page.id)?.agent === lend.agent)
+                tell(page.id, null)
+              return Effect.andThen(
+                cdp.stop(page.id),
+                RcMap.invalidate(held, page.id)
+              )
+            })
+          )
+        )
+      )
       /** The tab, connected; again, if its page closed since. */
       const heldOf = (tab: number) =>
         Effect.flatMap(RcMap.get(held, tab), ({ kept }) =>
@@ -694,21 +743,27 @@ export class Drive extends Context.Service<
             })
           ),
         navigate: (to, by) =>
-          inTab(
-            to.tab,
-            by,
-            goingTo(to.to),
-            async (kept) => {
-              const pending = dialogs.current(to.tab)
-              if (pending)
-                throw new Refused({
-                  code: "conflict",
-                  message: `The page waits for dialog ${pending.id}. Answer it first.`,
-                })
-              await go(kept.page, to)
-              return shown(to.tab, kept, by.id)
-            },
-            false
+          // A lent tab goes, and lands, only where the Agent may use it.
+          lentGate(to.tab, by, HISTORY.has(to.to) ? undefined : to.to).pipe(
+            Effect.andThen(
+              inTab(
+                to.tab,
+                by,
+                goingTo(to.to),
+                async (kept) => {
+                  const pending = dialogs.current(to.tab)
+                  if (pending)
+                    throw new Refused({
+                      code: "conflict",
+                      message: `The page waits for dialog ${pending.id}. Answer it first.`,
+                    })
+                  await go(kept.page, to)
+                  return shown(to.tab, kept, by.id)
+                },
+                false
+              )
+            ),
+            Effect.tap(() => lentGate(to.tab, by))
           ),
         act: (what, by) =>
           Effect.suspend(() => {
@@ -776,7 +831,7 @@ export class Drive extends Context.Service<
                 let opens: Shown["dialog"] = null
                 page.on("framenavigated", navigated)
                 session.on("will-download", downloads)
-                kept.acting = true
+                const done = tabs.hands(what.tab)
                 try {
                   // Only a Thread's hands have a cursor.
                   const acting = act(
@@ -793,7 +848,7 @@ export class Drive extends Context.Service<
                   // A stopped page starts nothing more.
                   else await sleep(SETTLING)
                 } finally {
-                  kept.acting = false
+                  done()
                   dialog.stop()
                   page.off("framenavigated", navigated)
                   session.off("will-download", downloads)
@@ -872,12 +927,6 @@ export class Drive extends Context.Service<
                 unwait(at, agent)
             }
             return true
-          }),
-        letGo: (tab, agent) =>
-          Effect.suspend(() => {
-            unwait(tab, agent)
-            if (driving.get(tab)?.agent === agent) tell(tab, null)
-            return RcMap.invalidate(held, tab)
           }),
         settled: (agent) =>
           Effect.forEach(

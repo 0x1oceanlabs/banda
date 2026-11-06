@@ -1,10 +1,10 @@
 /**
  * The browser's tabs, as main sees them: the pages Banda's page attached
- * (ADR 0013), whose each is, and which the Person lent a Thread. A tab is
- * the Person's, or a Project's Agents', as the profile it loads in says
- * (ADR 0083, decision 4). Extensions and Banda's tools for Agents read
- * them here, open one through the Pane in front, and close or show one
- * through its Pane.
+ * (ADR 0013), whose each is, which the Person lent a Thread, and which
+ * Banda's hands act in now. A tab is the Person's, or a Project's
+ * Agents', as the profile it loads in says (ADR 0083, decision 4).
+ * Extensions and Banda's tools for Agents read them here, open one
+ * through the Pane in front, and close or show one through its Pane.
  */
 import { randomUUID } from "node:crypto"
 import type { Participant, ProjectId } from "@banda/contract"
@@ -37,12 +37,13 @@ export type Creating = { url?: string; agent?: string; agents?: ProjectId }
 /** A tab's page attached, or went. */
 export type Change = { kind: "attached" | "gone"; page: WebContents }
 
-/** A lend that began, or ended and how: of `page`, titled `tab` then. */
+/** A lend of `page` that began, or ended and how, as its page was
+ * titled `title` then. */
 export type LendChange = {
   page: WebContents
   lend: Lend
   lending: Lending
-  tab: string
+  title: string
 }
 
 /** The page of a tab, as far as whose it is: its profile's session. */
@@ -78,17 +79,22 @@ export class Tabs extends Context.Service<
      */
     seen(project: ProjectId, by: Participant): WebContents[]
     /**
-     * Lends `page`, a tab of the Person's, to the Thread `to` names, by
-     * the Person's gesture; or takes it back, with none. A tab is lent to
-     * one Thread at a time: lent to another, it is first taken back.
-     * Refused for any other tab.
+     * Lends the tab whose page has the ID `page`, a tab of the Person's,
+     * to the Thread `to` names, by the Person's gesture; or takes it back,
+     * with none. A tab is lent to one Thread at a time: lent to another,
+     * it is first taken back. Refused for any other page.
      */
-    lend(page: WebContents, to: Lend | null): Effect.Effect<void, Refused>
+    lend(page: number, to: Lend | null): Effect.Effect<void, Refused>
     /** The lend of `page`; none while it is not lent. */
     lentTo(page: WebContents): Lend | undefined
-    /** Every Thread's session ended, as the engine they ran in did: each
-     * lend ends. */
-    ended(): void
+    /** The session of the Thread of `agent` ended, or with none, every
+     * Thread's, as the engine they ran in did: their lends end. */
+    ended(agent?: string): void
+    /** Banda's hands act in the tab of `tab` until the return is called:
+     * the input its page hears meanwhile is theirs, not the Person's. */
+    hands(tab: number): () => void
+    /** Whether Banda's hands act in the tab of `tab` now. */
+    byHands(tab: number): boolean
     /** Each lend that begins or ends, from when it runs. A lend ends as
      * the Person takes it back, its tab closes, or its Thread's session
      * ends (ADR 0083, decision 4). */
@@ -113,23 +119,34 @@ export class Tabs extends Context.Service<
       /** The tabs the Person lent a Thread, each with its lend: only
        * their gesture adds one (ADR 0083, decision 4). */
       const lent = new Map<WebContents, Lend>()
-      const lending = yield* PubSub.unbounded<LendChange>()
+      const lendChanges = yield* PubSub.unbounded<LendChange>()
+      /** How many acts of Banda's hands run in each tab now. */
+      const acting = new Map<number, number>()
       /** Tabs asked for, until a Pane made their pages. */
       const creating = new Map<string, Deferred.Deferred<number | null>>()
       const publish = (change: Change) => PubSub.publishUnsafe(changed, change)
       const tell = (news: BrowserNews) =>
         tellPage(window.now()?.webContents, BROWSER_BRIDGE.listen, news)
       const whose = (page: Profiled) => profiles.get(page.session)
-      /** The lend of `page` ends, `how`, and the Pane hears it unless the
-       * page went. */
+      /** Says `lending` of `lend`, the lend of `page`: to its Pane, unless
+       * the page went, and to what follows the lends. */
+      const said = (page: WebContents, lend: Lend, lending: Lending) => {
+        const gone = page.isDestroyed()
+        if (!gone)
+          tell({
+            kind: "lent",
+            from: page.id,
+            lend: lending === "lent" ? lend : null,
+          })
+        const title = gone ? "" : page.getTitle()
+        PubSub.publishUnsafe(lendChanges, { page, lend, lending, title })
+      }
+      /** The lend of `page` ends, `how`. */
       const end = (page: WebContents, how: Exclude<Lending, "lent">) => {
         const lend = lent.get(page)
         if (!lend) return
         lent.delete(page)
-        const gone = page.isDestroyed()
-        if (!gone) tell({ kind: "lent", from: page.id, agent: null })
-        const tab = gone ? "" : page.getTitle()
-        PubSub.publishUnsafe(lending, { page, lend, lending: how, tab })
+        said(page, lend, how)
       }
 
       return {
@@ -158,32 +175,39 @@ export class Tabs extends Context.Service<
               lend.project === project
             )
           }),
-        lend: (page, to) =>
+        lend: (id, to) =>
           Effect.suspend(() => {
-            if (!pages.has(page) || page.isDestroyed() || whose(page) !== null)
+            const page = [...pages].find((each) => each.id === id)
+            if (!page || page.isDestroyed() || whose(page) !== null)
               return Effect.fail(
                 new Refused({ message: "Only a tab of yours is lent." })
               )
-            const was = lent.get(page)
-            if (was?.agent === to?.agent) return Effect.void
+            if (lent.get(page)?.agent === to?.agent) return Effect.void
             end(page, "back")
             if (!to) return Effect.void
             lent.set(page, to)
-            tell({ kind: "lent", from: page.id, agent: to.agent })
-            const began: LendChange = {
-              page,
-              lend: to,
-              lending: "lent",
-              tab: page.getTitle(),
-            }
-            PubSub.publishUnsafe(lending, began)
+            said(page, to, "lent")
             return Effect.void
           }),
         lentTo: (page) => lent.get(page),
-        ended: () => {
-          for (const page of [...lent.keys()]) end(page, "session")
+        ended: (agent) => {
+          for (const [page, lend] of [...lent])
+            if (agent === undefined || lend.agent === agent)
+              end(page, "session")
         },
-        lends: Stream.fromPubSub(lending),
+        hands: (tab) => {
+          acting.set(tab, (acting.get(tab) ?? 0) + 1)
+          let done = false
+          return () => {
+            if (done) return
+            done = true
+            const left = (acting.get(tab) ?? 1) - 1
+            if (left > 0) acting.set(tab, left)
+            else acting.delete(tab)
+          }
+        },
+        byHands: (tab) => acting.has(tab),
+        lends: Stream.fromPubSub(lendChanges),
         create: ({ url = "about:blank", agent, agents } = {}) =>
           Effect.gen(function* () {
             const request = randomUUID()
