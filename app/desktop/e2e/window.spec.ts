@@ -3158,6 +3158,8 @@ test("Alt+G starts a Group, Alt+Shift+[ takes a column in, and the Group moves w
   const x = async (tile: Locator) => (await tile.boundingBox())!.x
   await page.keyboard.press("Alt+KeyN")
   await expect(launcher.locator("kbd", { hasText: "T" })).toBeVisible()
+  // Its letters are drawn a moment before it takes the focus.
+  await expect(launcher).toHaveAttribute("data-focused", "true")
   await page.keyboard.press("KeyT")
   await expect(terminal).toHaveAttribute("data-focused", "true")
   await page.keyboard.press("Alt+KeyN")
