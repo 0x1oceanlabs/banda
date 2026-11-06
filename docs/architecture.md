@@ -6,6 +6,10 @@ This is the shape Banda is built to. The decisions and their reasons are in
 words are in [`GLOSSARY.md`](../GLOSSARY.md). This page changes when the code
 does.
 
+Where it is going, accepted on 2026-11-06: [the architecture
+vision](research/2026-11-06-architecture-vision.md). Its decisions become ADRs
+and then code, step by step; this page follows the code.
+
 ## Three levels
 
 ```
