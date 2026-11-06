@@ -123,64 +123,83 @@ impl Harness {
     /// it starts, an Agent's server too, carries the Project (ADR 0044,
     /// decision 2). Its process for the machine carries none.
     ///
+    /// The shells its Agents run commands in get `shells`, the variables
+    /// that hand their `banda` a pass (ADR 0019): from its environment,
+    /// which a shell inherits, and Codex's from `CODEX_CONFIG` too, as
+    /// `shell_environment_policy.set`, which Codex sets in each shell after
+    /// its policy's excludes.
+    ///
     /// Claude Code's sessions go in the Project's `data`, one folder for
     /// every Claude account, so any of them goes on with a Thread's session
     /// (ADR 0078, decision 3). The adapter Banda carries reads the folder
     /// from `BANDA_CLAUDE_SESSIONS`; another program ignores it.
-    pub fn in_project(&self, project: ProjectId, data: &Path) -> Harness {
+    pub fn in_project(
+        &self,
+        project: ProjectId,
+        data: &Path,
+        shells: &BTreeMap<String, String>,
+    ) -> Harness {
+        use crate::limits::Kind;
         let mut harness = self.clone();
         (harness.env).extend(project_env(project).map(|(key, id)| (key.to_owned(), id)));
-        if crate::limits::Kind::of(self) == Some(crate::limits::Kind::Claude) {
+        (harness.env).extend(shells.clone());
+        if Kind::of(self) == Some(Kind::Codex) && !shells.is_empty() {
+            // The entry's own, else the one the engine runs with.
+            let before =
+                (self.env.get(CODEX_CONFIG).cloned()).or_else(|| std::env::var(CODEX_CONFIG).ok());
+            if let Some(config) = codex_config(before.as_deref(), shells) {
+                (harness.env).insert(CODEX_CONFIG.to_owned(), config);
+            }
+        }
+        if Kind::of(self) == Some(Kind::Claude) {
             let sessions = data.join("sessions").join("claude");
             (harness.env).insert(SESSIONS_VARIABLE.to_owned(), sessions.display().to_string());
-        }
-        harness
-    }
-
-    /// Whether each session of its process hands the shell its Agent runs
-    /// commands in variables of its own: Claude Code's adapter starts each
-    /// session's Claude Code with the session's
-    /// `_meta.claudeCode.options.env`. The Agents of another Harness share
-    /// their process's ([`Harness::with_shells`]).
-    pub fn shells_per_session(&self) -> bool {
-        crate::limits::Kind::of(self) == Some(crate::limits::Kind::Claude)
-    }
-
-    /// The entry with `variables` in every shell its process's Agents run
-    /// commands in: in its environment, which a shell inherits, and for
-    /// Codex in `CODEX_CONFIG` too, as `shell_environment_policy.set`, which
-    /// Codex sets in each shell whatever its policy takes from the
-    /// environment. What `CODEX_CONFIG` said before stays.
-    pub fn with_shells(&self, variables: &BTreeMap<String, String>) -> Harness {
-        let mut harness = self.clone();
-        harness.env.extend(variables.clone());
-        if crate::limits::Kind::of(self) == Some(crate::limits::Kind::Codex)
-            && let Some(config) = codex_config(self.env.get(CODEX_CONFIG), variables)
-        {
-            harness.env.insert(CODEX_CONFIG.to_owned(), config);
         }
         harness
     }
 }
 
 /// What Codex's adapter takes as Codex's configuration for each of its
-/// sessions, as JSON, each key a dotted path as Codex's `-c` takes it.
+/// sessions: a JSON object, whose keys may be dotted paths, as Codex's
+/// `-c` takes them.
 const CODEX_CONFIG: &str = "CODEX_CONFIG";
 
-/// `CODEX_CONFIG` with `variables` set in Codex's shells, over what it said
-/// before: the entry's, else the engine's own. `None` when that is not a
-/// JSON object, which the adapter then reads as it is.
-fn codex_config(entry: Option<&String>, variables: &BTreeMap<String, String>) -> Option<String> {
-    use serde_json::Value;
-    let before = entry.cloned().or_else(|| std::env::var(CODEX_CONFIG).ok());
-    let mut config = match before.as_deref().map(serde_json::from_str) {
-        None => serde_json::Map::new(),
+/// `before`, a `CODEX_CONFIG`, with `variables` set in Codex's shells and
+/// all it said kept. They go inside the `shell_environment_policy`, or its
+/// `set`, that it holds as an object, which Codex could otherwise apply
+/// after them and over them; else as dotted keys. `None` when `before` is
+/// not a JSON object, the adapter's form: it is left as it is.
+fn codex_config(before: Option<&str>, variables: &BTreeMap<String, String>) -> Option<String> {
+    use serde_json::{Map, Value};
+    let mut config = match before.map(serde_json::from_str) {
+        None => Map::new(),
         Some(Ok(Value::Object(config))) => config,
         Some(_) => return None,
     };
-    for (name, value) in variables {
-        let key = format!("shell_environment_policy.set.{name}");
-        config.insert(key, Value::from(value.as_str()));
+    let values = variables
+        .iter()
+        .map(|(name, value)| (name.clone(), Value::from(value.as_str())));
+    let object =
+        |config: &Map<String, Value>, key: &str| config.get(key).is_some_and(Value::is_object);
+    let set = if object(&config, "shell_environment_policy.set") {
+        config.get_mut("shell_environment_policy.set")
+    } else if object(&config, "shell_environment_policy") {
+        let policy = config
+            .get_mut("shell_environment_policy")?
+            .as_object_mut()?;
+        Some(
+            policy
+                .entry("set")
+                .or_insert_with(|| Value::Object(Map::new())),
+        )
+    } else {
+        None
+    };
+    match set.and_then(Value::as_object_mut) {
+        Some(set) => set.extend(values),
+        None => config.extend(
+            values.map(|(name, value)| (format!("shell_environment_policy.set.{name}"), value)),
+        ),
     }
     Some(Value::Object(config).to_string())
 }
@@ -1116,58 +1135,79 @@ mod tests {
     }
 
     #[test]
-    fn a_process_s_agents_shells_get_its_variables_where_its_sessions_take_none() {
-        let variables = BTreeMap::from([
+    fn an_agents_shell_gets_the_variables_its_process_starts_with() {
+        let shells = BTreeMap::from([
             ("BANDA_TOKEN".to_owned(), "f00d".to_owned()),
             (
                 "BANDA_ENGINE".to_owned(),
                 "ws://127.0.0.1:4000/ws".to_owned(),
             ),
         ]);
-        let list = known();
-        let (claude, codex) = (&list[0], &list[1]);
-        assert!(claude.shells_per_session(), "each session's own");
-        assert!(!codex.shells_per_session());
-
+        let (project, data) = (ProjectId::new(), Path::new("/state/projects/p"));
+        let listed = |text: &str| listed_in(Path::new("h"), text).unwrap().remove(0);
         let config = |harness: &Harness| -> serde_json::Value {
             serde_json::from_str(&harness.env[CODEX_CONFIG]).unwrap()
         };
-        let started = codex.with_shells(&variables);
-        assert_eq!(started.env["BANDA_TOKEN"], "f00d");
+        for harness in known() {
+            let started = harness.in_project(project, data, &shells);
+            assert_eq!(started.env["BANDA_TOKEN"], "f00d", "{}", harness.id);
+        }
+
+        let own = listed(
+            "[[harness]]\nid = \"codex\"\nname = \"Codex\"\ncommand = \"codex-acp\"\n\
+             env = { CODEX_CONFIG = '{\"model\":\"o3\"}' }\n",
+        );
+        let config = config(&own.in_project(project, data, &shells));
+        assert_eq!(config["model"], "o3", "the entry's own stays");
         assert_eq!(
-            config(&started),
-            serde_json::json!({
-                "shell_environment_policy.set.BANDA_ENGINE": "ws://127.0.0.1:4000/ws",
-                "shell_environment_policy.set.BANDA_TOKEN": "f00d",
-            }),
+            config["shell_environment_policy.set.BANDA_TOKEN"], "f00d",
             "set by Codex in each shell, over its policy"
         );
 
-        let own = "[[harness]]\nid = \"codex\"\nname = \"Codex\"\ncommand = \"codex-acp\"\n\
-                   env = { CODEX_CONFIG = '{\"model\":\"o3\"}' }\n";
-        let own = listed_in(Path::new("h"), own).unwrap().remove(0);
-        let config = config(&own.with_shells(&variables));
-        assert_eq!(config["model"], "o3", "the entry's own stays");
-        assert_eq!(config["shell_environment_policy.set.BANDA_TOKEN"], "f00d");
+        let other =
+            listed("[[harness]]\nid = \"gemini\"\nname = \"Gemini\"\ncommand = \"gemini\"\n");
+        let started = other.in_project(project, data, &shells);
+        assert_eq!(started.env["BANDA_ENGINE"], "ws://127.0.0.1:4000/ws");
+        assert_eq!(started.env.get(CODEX_CONFIG), None, "Codex's alone");
+        let none = own.in_project(project, data, &BTreeMap::new());
+        assert_eq!(none.env.get("BANDA_TOKEN"), None);
+        assert_eq!(none.env[CODEX_CONFIG], r#"{"model":"o3"}"#, "as it was");
+    }
 
-        let unread = "[[harness]]\nid = \"codex\"\nname = \"Codex\"\ncommand = \"codex-acp\"\n\
-                      env = { CODEX_CONFIG = 'model = \"o3\"' }\n";
-        let unread = listed_in(Path::new("h"), unread).unwrap().remove(0);
-        let started = unread.with_shells(&variables);
-        assert_eq!(started.env[CODEX_CONFIG], "model = \"o3\"", "as it was");
-        assert_eq!(started.env["BANDA_TOKEN"], "f00d");
-
-        let other = "[[harness]]\nid = \"gemini\"\nname = \"Gemini\"\ncommand = \"gemini\"\n";
-        let other = listed_in(Path::new("h"), other).unwrap().remove(0);
-        assert!(!other.shells_per_session());
-        let started = other.with_shells(&variables);
+    #[test]
+    fn codex_s_shells_are_set_in_its_configuration_with_all_it_held() {
+        let shells = BTreeMap::from([("BANDA_TOKEN".to_owned(), "f00d".to_owned())]);
+        let config = |before: Option<&str>| -> serde_json::Value {
+            serde_json::from_str(&codex_config(before, &shells).unwrap()).unwrap()
+        };
         assert_eq!(
-            (
-                started.env.get("BANDA_TOKEN"),
-                started.env.get(CODEX_CONFIG)
-            ),
-            (Some(&"f00d".to_owned()), None)
+            config(None),
+            serde_json::json!({ "shell_environment_policy.set.BANDA_TOKEN": "f00d" })
         );
+        assert_eq!(
+            config(Some(r#"{"model":"o3"}"#)),
+            serde_json::json!({ "model": "o3", "shell_environment_policy.set.BANDA_TOKEN": "f00d" })
+        );
+        assert_eq!(
+            config(Some(
+                r#"{"shell_environment_policy":{"inherit":"core","set":{"A":"1"}}}"#
+            )),
+            serde_json::json!({ "shell_environment_policy": {
+                "inherit": "core", "set": { "A": "1", "BANDA_TOKEN": "f00d" }
+            } }),
+            "inside the policy it holds, which would go over a dotted key"
+        );
+        assert_eq!(
+            config(Some(r#"{"shell_environment_policy":{"inherit":"core"}}"#)),
+            serde_json::json!({ "shell_environment_policy": {
+                "inherit": "core", "set": { "BANDA_TOKEN": "f00d" }
+            } })
+        );
+        assert_eq!(
+            config(Some(r#"{"shell_environment_policy.set":{"A":"1"}}"#)),
+            serde_json::json!({ "shell_environment_policy.set": { "A": "1", "BANDA_TOKEN": "f00d" } })
+        );
+        assert_eq!(codex_config(Some("model = 'o3'"), &shells), None);
     }
 
     #[test]
@@ -1175,12 +1215,12 @@ mod tests {
         let project = ProjectId::new();
         let data = Path::new("/state/projects/p");
         let list = known();
-        let claude = list[0].in_project(project, data);
+        let claude = list[0].in_project(project, data, &BTreeMap::new());
         assert_eq!(
             claude.env[SESSIONS_VARIABLE],
             "/state/projects/p/sessions/claude"
         );
-        let codex = list[1].in_project(project, data);
+        let codex = list[1].in_project(project, data, &BTreeMap::new());
         assert!(
             !codex.env.contains_key(SESSIONS_VARIABLE),
             "Codex keeps its own"
@@ -1189,7 +1229,7 @@ mod tests {
                       cli = { program = \"claude\", variable = \"CLAUDE_CODE_EXECUTABLE\" }\n";
         let second = listed_in(Path::new("h"), second).unwrap().remove(0);
         assert_eq!(
-            second.in_project(project, data).env[SESSIONS_VARIABLE],
+            second.in_project(project, data, &BTreeMap::new()).env[SESSIONS_VARIABLE],
             claude.env[SESSIONS_VARIABLE],
             "every Claude account, one folder"
         );

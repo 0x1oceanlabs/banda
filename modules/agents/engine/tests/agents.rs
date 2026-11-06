@@ -1,11 +1,11 @@
 //! The agents module through the kernel's interface, with the fake agent
 //! from `tools/fake-agent` as the Harness: a real process speaking ACP.
 
-use banda_agents::Agents;
 use banda_agents::model::{
     Body, Choice, Exit, Failure, ItemId, Mode, OptionValue, QuestionState, Settings, StepState,
     ThreadList, ThreadView, ToolContent, ToolStatus, TurnId, TurnState, Wake,
 };
+use banda_agents::{Agents, Pipe};
 use banda_harnesses::{Cli, Harness, Harnesses, HarnessesModule, account_changed};
 use banda_kernel::{
     AgentId, Caller, Code, CommandId, EventFilter, Kernel, Participant, PersonId, ProjectId,
@@ -833,6 +833,61 @@ async fn an_idle_harness_is_let_go_and_its_threads_resume() {
     let (_, (again, other)) = ask_session(&world, Some(&thread)).await;
     assert_ne!(process, other, "the idle process was let go");
     assert_eq!(session, again, "and the Thread resumed its session");
+}
+
+/// The `banda` an Agent runs in its shell acts under a pass walled to its
+/// Project: its process's, the same through the process's restarts, and
+/// a Thread's session's own, new each time it opens, which its request
+/// hands Claude Code's adapter for the session's shell.
+#[tokio::test]
+async fn an_agents_shell_gets_a_pass_walled_to_its_project() {
+    let root = tempfile::tempdir().unwrap();
+    let shells = root.path().join("shells.json");
+    let engine = "ws://127.0.0.1:4000/ws";
+    let pipe = Pipe {
+        program: PathBuf::from("/bin/banda"),
+        engine: engine.to_owned(),
+    };
+    let fake = harnesses_with(&[("FAKE_AGENT_SHELLS", shells.to_str().unwrap())]);
+    let agents = (Agents::new(fake).piped(pipe)).idle_after(Duration::from_millis(100));
+    let world = World::new_with(root.path(), agents).await;
+    let told = || -> Value {
+        let told = serde_json::from_slice(&std::fs::read(&shells).unwrap()).unwrap();
+        std::fs::remove_file(&shells).unwrap();
+        told
+    };
+    let walled = |variables: &Value| {
+        assert_eq!(variables["BANDA_ENGINE"], engine);
+        let pass = variables["BANDA_TOKEN"].as_str().expect("a pass");
+        let (_, project) = world.kernel.holder(pass).expect("the engine knows it");
+        assert_eq!(project, world.project, "its Project's");
+        pass.to_owned()
+    };
+
+    let (thread, (opened_as, _)) = ask_session(&world, None).await;
+    let opened = told();
+    let process = walled(&opened["process"]);
+    let session = walled(&opened["session"]);
+    assert_ne!(session, process, "a Thread's session has its own");
+
+    // A session aside, as for a title, is no Thread's: its shell has the
+    // process's.
+    world.suggest_title(&thread).await.unwrap();
+    let aside = told();
+    assert_eq!(walled(&aside["process"]), process);
+    assert_eq!(aside["session"], Value::Null);
+
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    let (_, (resumed_as, _)) = ask_session(&world, Some(&thread)).await;
+    assert_eq!(resumed_as, opened_as, "the Thread resumed its session");
+    let resumed = told();
+    assert_eq!(
+        walled(&resumed["process"]),
+        process,
+        "kept through a restart"
+    );
+    let again = walled(&resumed["session"]);
+    assert_ne!(again, session, "a session opened again gets a new one");
 }
 
 /// Sends `text` in a new Thread and waits for its turn to fail.

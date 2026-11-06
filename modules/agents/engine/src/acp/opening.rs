@@ -75,23 +75,23 @@ enum Lasts {
     Harness,
 }
 
-/// How a session's Agent reaches Banda (ADR 0019), as its request hands
-/// it over.
+/// What a session's request gives its Agent to reach Banda (ADR 0019).
 #[derive(Default)]
-struct Reach {
+struct Given {
     /// `banda mcp`, as ACP hands an MCP server to a session, named `banda`.
     servers: Vec<acp::McpServer>,
     /// The same pass for the `banda` the Agent runs in its shell, in
     /// `_meta.claudeCode.options.env`: Claude Code's adapter starts the
-    /// session's Claude Code with it, and its shell inherits it. Another
-    /// Harness passes it by.
-    meta: acp::Meta,
+    /// session's Claude Code with it over its process's own, and its shell
+    /// inherits it. Another Harness passes it by, and its Agents' shells
+    /// keep their process's (`live.rs`). None without a pass.
+    meta: Option<acp::Meta>,
 }
 
-impl Reach {
-    fn of(banda: Option<Program>) -> Reach {
+impl Given {
+    fn of(banda: Option<Program>) -> Given {
         let Some(Program { program, args, env }) = banda else {
-            return Reach::default();
+            return Given::default();
         };
         let shell = serde_json::json!({ "claudeCode": { "options": { "env": env } } });
         let variables = env.into_iter();
@@ -100,15 +100,10 @@ impl Reach {
                 .map(|(name, value)| acp::EnvVariable::new(name, value))
                 .collect(),
         );
-        Reach {
+        Given {
             servers: vec![acp::McpServer::Stdio(server)],
-            meta: shell.as_object().cloned().unwrap_or_default(),
+            meta: shell.as_object().cloned(),
         }
-    }
-
-    /// The `_meta` of a request, none when it would be empty.
-    fn meta(&self) -> Option<acp::Meta> {
-        (!self.meta.is_empty()).then(|| self.meta.clone())
     }
 }
 
@@ -132,7 +127,7 @@ impl Connection {
     /// this one opened; otherwise a new one opens. A
     /// session that opens, either way, gets `banda()`, the `banda mcp` its
     /// Agent reaches Banda through, as a stdio MCP server, and its pass for
-    /// the Agent's shell ([`Reach`]).
+    /// the Agent's shell ([`Given`]).
     pub async fn session(
         self: &Arc<Self>,
         thread: ThreadId,
@@ -152,7 +147,7 @@ impl Connection {
         {
             return Ok((Session::new(self, session.clone()), Opened::Known));
         }
-        let reach = Reach::of(banda());
+        let given = Given::of(banda());
         if let Some((
             earlier,
             ForkAt {
@@ -168,14 +163,14 @@ impl Connection {
             }
             let fork = acp::ForkSessionRequest::new(earlier.session.clone(), folder)
                 .additional_directories(roots.to_vec())
-                .mcp_servers(reach.servers)
-                .meta(forked_at(reach.meta, message));
+                .mcp_servers(given.servers)
+                .meta(forked_at(given.meta.unwrap_or_default(), message));
             let made = self.open(fork, "fork this Thread's conversation").await?;
             let (session, options) = (made.session_id, made.config_options);
             return Ok(self.opened(thread, &mut sessions, session, options, folder, false));
         }
         if let Some(session) = earlier.and_then(|e| e.continued_by(self.process.harness(), kin))
-            && let Some(options) = self.continue_session(&session, folder, roots, &reach).await
+            && let Some(options) = self.continue_session(&session, folder, roots, &given).await
         {
             opened(&self.learned, &session, options, folder);
             sessions.insert(thread, session.clone());
@@ -183,8 +178,8 @@ impl Connection {
         }
         let new = acp::NewSessionRequest::new(folder)
             .additional_directories(roots.to_vec())
-            .mcp_servers(reach.servers.clone())
-            .meta(reach.meta());
+            .mcp_servers(given.servers)
+            .meta(given.meta);
         let made = self.open(new, "open a session").await?;
         let (session, options) = (made.session_id, made.config_options);
         Ok(self.opened(
@@ -247,13 +242,13 @@ impl Connection {
         session: &acp::SessionId,
         folder: &Path,
         roots: &[PathBuf],
-        reach: &Reach,
+        given: &Given,
     ) -> Option<Vec<acp::SessionConfigOption>> {
         let answer = if self.agreed.resumes {
             let resume = acp::ResumeSessionRequest::new(session.clone(), folder)
                 .additional_directories(roots.to_vec())
-                .mcp_servers(reach.servers.clone())
-                .meta(reach.meta());
+                .mcp_servers(given.servers.clone())
+                .meta(given.meta.clone());
             let asked = self.process.cx().send_request(resume).block_task();
             timeout(OPENING, asked)
                 .await
@@ -261,8 +256,8 @@ impl Connection {
         } else if self.agreed.loads {
             let load = acp::LoadSessionRequest::new(session.clone(), folder)
                 .additional_directories(roots.to_vec())
-                .mcp_servers(reach.servers.clone())
-                .meta(reach.meta());
+                .mcp_servers(given.servers.clone())
+                .meta(given.meta.clone());
             let asked = self.process.cx().send_request(load).block_task();
             timeout(OPENING, asked)
                 .await
@@ -303,25 +298,25 @@ mod tests {
             args: vec!["mcp".to_owned()],
             env: env.clone(),
         };
-        let reach = Reach::of(Some(banda));
-        let [acp::McpServer::Stdio(server)] = &reach.servers[..] else {
-            panic!("one stdio server: {:?}", reach.servers);
+        let given = Given::of(Some(banda));
+        let [acp::McpServer::Stdio(server)] = &given.servers[..] else {
+            panic!("one stdio server: {:?}", given.servers);
         };
-        let given: BTreeMap<_, _> = (server.env.iter())
+        let served: BTreeMap<_, _> = (server.env.iter())
             .map(|v| (v.name.clone(), v.value.clone()))
             .collect();
-        assert_eq!(given, env);
+        assert_eq!(served, env);
         let shell = json!({ "claudeCode": { "options": { "env": env } } });
-        assert_eq!(reach.meta().map(Value::Object), Some(shell));
-        let forked = Value::Object(forked_at(reach.meta, "m1"));
+        assert_eq!(given.meta.clone().map(Value::Object), Some(shell));
+        let forked = Value::Object(forked_at(given.meta.unwrap(), "m1"));
         assert_eq!(
             forked["claudeCode"]["options"]["env"]["BANDA_TOKEN"],
             "f00d"
         );
         assert_eq!(forked["jetbrains"]["air"]["fork"]["messageId"], "m1");
 
-        let none = Reach::of(None);
+        let none = Given::of(None);
         assert!(none.servers.is_empty());
-        assert_eq!(none.meta(), None, "no pass, no _meta");
+        assert_eq!(none.meta, None, "no pass, no _meta");
     }
 }
