@@ -66,6 +66,9 @@ export function updates(tell: (now: Update) => void): Updates {
   const { have } = known
   let now: Update = { ...known, state: "none" }
   if (!image && brew) return brewUpdates(known, tell)
+  // Not with no APPIMAGE: Banda from the AUR has none, and its
+  // `package-type` (scripts/aur.mjs) would turn electron-updater to
+  // `sudo pacman -U`.
   if (!image) {
     const nothing = () => {}
     return {

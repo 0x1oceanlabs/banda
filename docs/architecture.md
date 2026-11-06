@@ -36,11 +36,12 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
 - Inside the engine there are no services: it is one process, with one
   SQLite writer per Project. Modules are crates in one binary.
 - **One program, `banda`.** `banda serve` runs the engine. It listens
-  on 127.0.0.1 only, and writes its port and a fresh secret to
-  `engine.json` in its state folder, a file only this user can read. A
+  on 127.0.0.1 only, and writes its port, a fresh secret and its build id
+  to `engine.json` in its state folder, a file only this user can read. A
   window starts it with `--with-parent`: the engine then prints the same
   JSON as its first line, and stops when its stdin closes. A second
-  engine with the same state folder refuses to start.
+  engine with the same state folder refuses to start. `banda --version`
+  names the build id too (ADR 0086, decision 2).
 - **The look is the window's machine's** (ADR 0007). `banda look`
   reads Omarchy's theme, Hyprland's windows and `~/.config/banda/look.toml`
   and prints the CSS variables as JSON, with no engine; `--follow` prints
@@ -880,11 +881,29 @@ modules/*/desktop  a module's part in Electron main
 - **The engine is the window's child.** Main starts
   `banda serve --with-parent`, starts it again when it dies (waiting up
   to 10 s between tries), and sends it SIGTERM on quit; if the window
-  dies, the engine sees its stdin close. `banda look --follow` runs the
-  same way. Both are Effect services in main (`Engine`, `Look`; ADR
-  0020), started by one runtime and stopped when it is disposed. The
-  client then reconnects and follows on from the last event it
-  delivered, so a Pane sees no gap.
+  dies, the engine sees its stdin close. `banda look --follow
+  --with-parent` runs the same way. Both are Effect services in main
+  (`Engine`, `Look`; ADR 0020), started by one runtime and stopped when
+  it is disposed. The client then reconnects and follows on from the
+  last event it delivered, so a Pane sees no gap.
+- **A packed Banda runs its own copy of `banda`** (ADR 0086, decision
+  2), never the one inside its AppImage or its app, whose folder may go
+  while the program runs. Main copies it into
+  `<data>/engine/<version>/`, beside what its `--version` said, runs the
+  copy once with `--version`, and renames it into place only when it says
+  the same version and build id (`program.ts`). A copy in place is run
+  again while it is as long as the packed one and says the same, and one
+  that goes while the window runs is made again before the next run. The
+  last two versions are kept. A copy that cannot be made leaves the
+  engine where it was packed, and a Problem says why. A `banda` that a
+  package manager owns, as the AUR's, says so in `package-type` beside it
+  and runs where it was put; a checkout's runs where cargo built it.
+- **What still runs from inside the AppImage** is Electron's, and the
+  ACP adapters on its Node (ADR 0059) until the engine is the machine's
+  (ADR 0086, plan step 3). On Quit nothing of it is left. When main is
+  killed, `chrome_crashpad_handler` and the network service die with
+  SIGBUS as the AppImage's folder goes; `banda` does not. That is
+  Electron's helper, kept apart from the engine (seen on 2026-11-07).
 - **A Pane** is a `PaneKind`: a kind, the module it needs, a title, an
   icon, optional start args, what its module lets go of when it leaves
   every workspace (`closed`), and a component. The component gets the

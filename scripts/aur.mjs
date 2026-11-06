@@ -7,7 +7,12 @@
 // It writes the folder's PKGBUILD and .SRCINFO whole, so the AUR holds
 // no copy to keep in step. The package takes the release's AppImage
 // apart into /opt, where Banda finds no APPIMAGE: it neither updates
-// itself nor lists itself in the launcher, which pacman does for it.
+// itself nor lists itself in the launcher, which pacman does for it. Its
+// `package-type` says pacman owns it, as electron-builder's own packages
+// say theirs, so Banda runs its engine where pacman put it, not from a
+// copy of its own (ADR 0086, decision 2). electron-updater reads that
+// file too, and would update through `sudo pacman -U`: Banda's update
+// (app/desktop/src/update.ts) leaves it alone with no APPIMAGE.
 import { createHash } from "node:crypto"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
@@ -66,6 +71,7 @@ package() {
   install -d "\${pkgdir}/opt/\${_app}" "\${pkgdir}/usr/bin"
   cp -a --no-preserve=ownership . "\${pkgdir}/opt/\${_app}/"
   rm -r "\${pkgdir}/opt/\${_app}"/{AppRun,.DirIcon,usr,"\${_app}.desktop","\${_app}.png"}
+  printf 'pacman\\n' > "\${pkgdir}/opt/\${_app}/resources/package-type"
   chmod -R u+rwX,go+rX,go-w "\${pkgdir}/opt/\${_app}"
   chmod 4755 "\${pkgdir}/opt/\${_app}/chrome-sandbox"
   ln -s "/opt/\${_app}/\${_app}" "\${pkgdir}/usr/bin/\${_app}"

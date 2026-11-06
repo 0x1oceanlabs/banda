@@ -19,4 +19,11 @@ fn main() {
         .filter(|v| !v.is_empty())
         .unwrap_or_else(|| std::env::var("CARGO_PKG_VERSION").unwrap());
     println!("cargo::rustc-env=BANDA_VERSION={version}");
+
+    // Each build is known by its build id (ADR 0086, decision 2). A Mach-O
+    // always has its UUID; an ELF has a build id only when the linker is
+    // asked for one, as most toolchains ask by default, so `banda` asks.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+        println!("cargo::rustc-link-arg-bins=-Wl,--build-id=sha1");
+    }
 }

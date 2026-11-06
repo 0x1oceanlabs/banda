@@ -1,9 +1,10 @@
 /**
  * The engine as the window's child: `banda serve --with-parent` (ADR
- * 0020). It learns the engine's address from the first line it prints,
- * forgets it while the engine is down, and stops the engine with the
- * window (child.ts). It starts with `path` as its PATH, when there is
- * one: on macOS, the login shell's (login.ts), and with `carried`'s
+ * 0020), run on the window's `banda` (program.ts), a packed Banda's own
+ * copy (ADR 0086). It learns the engine's address from the first line it
+ * prints, forgets it while the engine is down, and stops the engine with
+ * the window (child.ts). It starts with `path` as its PATH, when there
+ * is one: on macOS, the login shell's (login.ts), and with `carried`'s
  * variables over the window's environment: where the adapters the app
  * carries are, and the Node to run them on (ADR 0059).
  */
@@ -21,6 +22,7 @@ import {
 } from "effect"
 import type { ChildProcessSpawner } from "effect/process"
 import { command, keepRunning, known, lines } from "./child"
+import { Program } from "./program"
 
 /** The first line `serve --with-parent` prints; `window` is where the
  * window listens for `banda menu`, and `browser` where it says its CDP
@@ -42,7 +44,6 @@ class Unexpected extends Data.TaggedError("Unexpected")<{
 
 /** The engine's layer: see `Engine` (@banda/desktop-kit). */
 export const engineLayer = (
-  binary: string,
   path: Effect.Effect<
     Option.Option<string>,
     never,
@@ -52,6 +53,7 @@ export const engineLayer = (
 ) =>
   Layer.effect(Engine)(
     Effect.gen(function* () {
+      const program = yield* Program
       const env = Option.match(yield* path, {
         onNone: () => carried,
         onSome: (PATH) => ({ ...carried, PATH }),
@@ -83,7 +85,9 @@ export const engineLayer = (
       yield* Effect.forkScoped(
         keepRunning(
           "engine",
-          command(binary, ["serve", "--with-parent"], env),
+          Effect.flatMap(program.path, (binary) =>
+            command(binary, ["serve", "--with-parent"], env)
+          ),
           (child) => {
             let first = true
             // Every line is read, so the pipe never fills; the address

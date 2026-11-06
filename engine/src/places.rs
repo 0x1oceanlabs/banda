@@ -4,7 +4,7 @@
 //! | Place | Default | Holds |
 //! |---|---|---|
 //! | root | `~/Banda` | where a new Project's folder goes |
-//! | data | `~/.local/share/banda` | each Project's data, in `projects/<id>/` (ADR 0026) |
+//! | data | `~/.local/share/banda` | each Project's data, in `projects/<id>/` (ADR 0026); the window's copy of `banda`, in `engine/<version>/` (ADR 0086) |
 //! | state | `~/.local/state/banda` | the owner's ID, the lock, `engine.json`, this machine's scope (`machine/`), the window's profile (`window/`), the logs (`logs/`), the engine's last panics (`problems/`) |
 //! | config | `~/.config/banda` | `harnesses.toml`, `agents.toml` and the look's files |
 //! | cache | `~/.cache/banda` | what can be made again: Files' small pictures (`thumbnails/`) |
@@ -39,6 +39,10 @@ pub struct Running {
     pub port: u16,
     /// Whoever holds it is the owner, until the engine stops.
     pub secret: String,
+    /// The engine's build id, so a client knows whether the engine is its
+    /// own build, even of the same version (ADR 0086, decision 2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build: Option<String>,
 }
 
 impl Running {

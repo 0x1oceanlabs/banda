@@ -9,6 +9,7 @@ import { command, keepRunning } from "./child"
 import { Engine, Look } from "@banda/desktop-kit"
 import { engineLayer } from "./engine"
 import { firstLook, lookLayer } from "./look"
+import { Program } from "./program"
 import { script } from "./testing"
 
 /** A spawner whose programs end as `ends` says for their nth run, and
@@ -36,6 +37,13 @@ function fakeSpawner(ends: (run: number) => Effect.Effect<number>) {
   )
   return { starts, spawner }
 }
+
+/** The look's layer, its program `program`. */
+const lookOf = (program: string) =>
+  lookLayer.pipe(
+    Layer.provide(Program.layer({ program })),
+    Layer.provide(NodeServices.layer)
+  )
 
 /** Runs a program that `fake` spawns for `ms` of the test clock. */
 const runFor = (
@@ -85,7 +93,10 @@ it.live(
         Effect.all([engine.address, engine.door])
       ).pipe(
         Effect.provide(
-          engineLayer(program).pipe(Layer.provide(NodeServices.layer))
+          engineLayer().pipe(
+            Layer.provide(Program.layer({ program })),
+            Layer.provide(NodeServices.layer)
+          )
         )
       )
       expect(address).toEqual({ url: "ws://127.0.0.1:4321/ws", secret: "s3" })
@@ -107,7 +118,8 @@ it.live(
       const path = `/Users/p/.local/bin:${process.env.PATH}`
       yield* Engine.use((engine) => engine.address).pipe(
         Effect.provide(
-          engineLayer(program, Effect.succeed(Option.some(path))).pipe(
+          engineLayer(Effect.succeed(Option.some(path))).pipe(
+            Layer.provide(Program.layer({ program })),
             Layer.provide(NodeServices.layer)
           )
         )
@@ -132,21 +144,29 @@ it.live(
           Stream.take(2),
           Stream.runCollect
         )
-      ).pipe(
-        Effect.provide(
-          lookLayer(program).pipe(Layer.provide(NodeServices.layer))
-        )
-      )
+      ).pipe(Effect.provide(lookOf(program)))
       expect(modes).toEqual(["dark", "light"])
+    })
+)
+
+it.live(
+  "the look is asked to watch the window, so it goes when the window goes",
+  () =>
+    Effect.gen(function* () {
+      const program = script(
+        `echo "$@" > "$(dirname "$0")/args"\necho '{"mode":"dark"}'\nexec sleep 60`
+      )
+      yield* firstLook(5000).pipe(Effect.provide(lookOf(program)))
+      expect(readFileSync(join(dirname(program), "args"), "utf8").trim()).toBe(
+        "look --follow --with-parent"
+      )
     })
 )
 
 it.live("the window opens without its look when none came in time", () =>
   Effect.gen(function* () {
     const program = script("exec sleep 60")
-    const first = yield* firstLook(50).pipe(
-      Effect.provide(lookLayer(program).pipe(Layer.provide(NodeServices.layer)))
-    )
+    const first = yield* firstLook(50).pipe(Effect.provide(lookOf(program)))
     expect(first).toBeNull()
   })
 )

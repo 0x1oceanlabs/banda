@@ -2,8 +2,8 @@
 //! It opens the Projects under the root with their modules and serves the API
 //! on this machine only.
 
-use crate::Failure;
 use crate::places::{HOST, Places, Running, channel, from_checkout};
+use crate::{Failure, build_id, parent};
 use banda_agents::{Agents, Pipe};
 use banda_browser::Browser;
 use banda_files::Files;
@@ -18,7 +18,6 @@ use banda_sharing::{Never, Sharing};
 use banda_terminal::Terminals;
 use banda_workspaces::Workspaces;
 use std::fs::{File, TryLockError};
-use std::io::Read;
 
 /// Runs until a signal, or until stdin closes when `with_parent` is set: a
 /// window that starts the engine holds its stdin, and reads where the
@@ -50,6 +49,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         protocol: PROTOCOL,
         port: listener.local_addr().map_err(Failure::broken)?.port(),
         secret: banda_kernel::secret().map_err(Failure::broken)?,
+        build: build_id::own(),
     };
     // Every Thread's session reaches the engine through this program's
     // `banda mcp` (ADR 0019).
@@ -113,17 +113,12 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
 }
 
 async fn stopped(with_parent: bool) {
-    // A plain thread reads stdin: a blocking read cannot be cancelled, and
-    // the runtime would wait for it on the way out.
     let parent = async move {
         if !with_parent {
             return std::future::pending().await;
         }
         let (gone, parent_gone) = tokio::sync::oneshot::channel::<()>();
-        std::thread::spawn(move || {
-            let mut stdin = std::io::stdin();
-            let mut sink = [0u8; 256];
-            while matches!(stdin.read(&mut sink), Ok(n) if n > 0) {}
+        parent::on_gone(move || {
             let _ = gone.send(());
         });
         let _ = parent_gone.await;
