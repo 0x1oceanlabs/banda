@@ -59,7 +59,7 @@ const MODES: (Choice & { id: Mode; icon: LucideIcon; short?: string })[] = [
   {
     id: "full_access",
     name: "Full access",
-    about: "Never asks.",
+    about: "Never asks, and works with your rights on this computer.",
     icon: ShieldAlertIcon,
   },
 ]
