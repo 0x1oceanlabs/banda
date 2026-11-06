@@ -74,19 +74,12 @@ test("the open overview follows the theme and keeps the desk's glass tinted once
   const desk = await colour(page.locator(".h-svh.bg-desk"), "backgroundColor")
   expect(desk.alpha).toBeGreaterThan(0)
   expect(desk.alpha).toBeLessThan(1)
-  // The controls over a Pane take the popover's surface: frosted glass.
+  // The controls over a Pane take the popover's surface: solid, as menus
+  // are over glass (ADR 0075, decision 3).
   const hint = overview.getByRole("button", { name: /^Close / }).first()
   await expect
     .poll(async () => (await colour(hint, "backgroundColor")).alpha)
-    .toBeGreaterThan(desk.alpha)
-  await expect
-    .poll(async () => (await colour(hint, "backgroundColor")).alpha)
-    .toBeLessThan(1)
-  await expect
-    .poll(() =>
-      hint.evaluate((element) => getComputedStyle(element).backdropFilter)
-    )
-    .toContain("blur(")
+    .toBe(1)
   await page.screenshot({
     path: "test-results/overview-surface-glass.png",
     animations: "disabled",
@@ -246,9 +239,9 @@ for (const ring of [0, 3]) {
       expect(frames.length).toBeGreaterThan(5)
       expect(frames.every((f) => f.outline === "solid")).toBe(true)
       expect(Math.min(...frames.map((f) => f.stroke))).toBeGreaterThan(
-        1.8 + ring
+        0.8 + ring
       )
-      expect(Math.max(...frames.map((f) => f.stroke))).toBeLessThan(2.2 + ring)
+      expect(Math.max(...frames.map((f) => f.stroke))).toBeLessThan(1.2 + ring)
       expect(Math.max(...frames.map((f) => f.dim))).toBe(0)
       expect(frames.every((f) => f.opacity === 1)).toBe(true)
       expect(frames.every((f) => f.visible)).toBe(true)

@@ -3577,8 +3577,9 @@ test("the desk is Banda's own glass, made of the wallpaper", async () => {
     mark.evaluate((under) => getComputedStyle(under).backgroundColor)
   const thinned = /\/ 0\.1\)$/
   await expect.poll(fill).toMatch(thinned)
+  // Menus stay solid over glass, with no blur under them (ADR 0075).
   await page.keyboard.press("Alt+Space")
-  await expect(menu).toHaveCSS("backdrop-filter", /blur/)
+  await expect(menu).toHaveCSS("backdrop-filter", "none")
   await page.keyboard.press("Escape")
   await expect(menu).toBeHidden()
 
@@ -3650,9 +3651,9 @@ test("the window takes its look from look.toml, and again on each save", async (
   // border's colour: one frame, not two.
   writeFileSync(file, '[focus]\nring = 3\nborder = "#3fa0e0"\n')
   await expect(thread).toHaveCSS("border-top-color", "rgb(63, 160, 224)")
-  // One stroke over the 2px border and 3px past it.
-  await expect(thread).toHaveCSS("outline-width", "5px")
-  await expect(thread).toHaveCSS("outline-offset", "-2px")
+  // One stroke over the 1px border and 3px past it.
+  await expect(thread).toHaveCSS("outline-width", "4px")
+  await expect(thread).toHaveCSS("outline-offset", "-1px")
   await expect(thread).toHaveCSS("outline-color", "rgb(63, 160, 224)")
   await page.screenshot({ path: "test-results/21-look-ring.png" })
 
