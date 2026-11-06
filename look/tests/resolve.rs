@@ -85,6 +85,7 @@ impl Machine {
                 // The desk these tests describe is a Linux one, which
                 // Banda glasses itself (ADR 0030, decision 1).
                 material: Material::Banda,
+                mac: false,
             },
             _dir: dir,
         }
@@ -887,4 +888,27 @@ fn a_linux_desktop_gives_its_wallpaper() {
     let mine = picture("mine.webp");
     machine.look_toml(&format!("[desk]\nwallpaper = \"{mine}\"\n"));
     assert_eq!(from(&machine), Some(("look.toml", mine)));
+}
+
+#[test]
+fn a_mac_starts_on_the_macos_theme_with_its_shape() {
+    // Each platform starts on its own theme (ADR 0075, decision 2).
+    let mut machine = Machine::new(false);
+    machine.places.mac = true;
+    let look = machine.look();
+    assert!(look.problems.is_empty(), "{:?}", look.problems);
+    let names: Vec<_> = look.sources.iter().filter_map(|s| s.name.clone()).collect();
+    assert_eq!(names, ["macos-light", "macos-dark"]);
+    // The Mac's shape over Banda's: the system's font at 13, a taller bar.
+    assert!(look.vars["--font-family-sans"].starts_with("-apple-system"));
+    assert_eq!(look.vars["--bar-height"], "38px");
+    assert_eq!(look.vars["--gap-inner"], "8px");
+    assert_eq!(color(&look, false, "--focus"), "#007aff");
+    assert_eq!(color(&look, true, "--primary"), "#0a84ff");
+    assert_eq!(color(&look, true, "--desk-solid"), "#28282a");
+
+    // Anywhere else it is a theme to pick.
+    machine.places.mac = false;
+    machine.look_toml("theme = \"macos\"\n");
+    assert_eq!(machine.look().vars["--bar-height"], "38px");
 }

@@ -18,7 +18,7 @@ use ts_rs::TS;
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Settings {
-    /// `"omarchy"`, `"banda"`, a theme's name, or `{ light, dark }`.
+    /// `"omarchy"`, `"macos"`, `"banda"`, a theme's name, or `{ light, dark }`.
     #[schemars(with = "Option<ThemeChoice>")]
     pub theme: Option<Spanned<ThemeChoice>>,
     pub mode: Option<ModeChoice>,

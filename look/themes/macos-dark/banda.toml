@@ -1,0 +1,17 @@
+# macOS Dark (ADR 0075, decisions 1 and 6): the Mac's shape over
+# Banda's, the system's font at 13 and a bar as tall as a window's title
+# with its toolbar, for the traffic lights. Buttons are the accent, as
+# the Mac's default buttons are.
+[font]
+sans = "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", system-ui, sans-serif"
+size = 13
+
+[bar]
+height = 38
+
+[tokens]
+desk-solid = "#28282a"
+primary-foreground = "#ffffff"
+border = "oklch(1 0 0 / 10%)"
+input = "oklch(1 0 0 / 14%)"
+sidebar-border = "border"

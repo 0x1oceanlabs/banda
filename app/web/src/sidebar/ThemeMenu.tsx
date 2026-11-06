@@ -47,15 +47,18 @@ function nowOf(look: Look | null): Now {
   const said = mine?.theme?.value
   const mode = mine?.mode?.value
   const { light, dark } = look.schemes
-  // Each scheme's theme is a layer: two for a pair, Banda's own included.
+  // Each scheme's theme is a layer: two for a pair, Banda's own included,
+  // which are named <theme>-light and <theme>-dark (banda, macos).
   const layers = look.sources.filter((one) => one.layer === "theme")
+  const own =
+    layers.length > 1 && layers.every((one) => one.origin === "banda")
+      ? layers[0]?.name?.replace(/-(light|dark)$/, "")
+      : undefined
   const theme =
     typeof said === "string"
       ? said
       : said === undefined
-        ? layers.length > 1 && layers.every((one) => one.origin === "banda")
-          ? "banda"
-          : layers[0]?.name
+        ? (own ?? layers[0]?.name)
         : undefined
   return {
     theme,
@@ -141,6 +144,7 @@ export function ThemeMenu() {
               onValueChange={(next: string) => write("theme", next)}
             >
               <Theme name="banda" about="light and dark" />
+              <Theme name="macos" about="the Mac's, light and dark" />
               {current && <Theme name="omarchy" about="follows Omarchy" />}
               <DropdownMenuSeparator />
               {others.map((one) => (
