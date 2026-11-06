@@ -455,6 +455,27 @@ fn an_agent_reaches_banda_through_banda_mcp() {
         "{said}"
     );
 
+    // It binds a key that stays in the window; only its Person binds one
+    // that acts as them, by its action's id written in any way the look
+    // reads it (ADR 0083, decision 3).
+    let keys = || std::fs::read_to_string(places.config.join("keys.toml")).unwrap();
+    let maximize = json!({ "key": "Alt+M", "action": "column.maximize" });
+    let (error, said) = mcp.call(15, "keys_bind", maximize);
+    assert!(!error, "{said}");
+    let ask = json!({ "key": "Ctrl+Alt+H", "action": "thread.new", "args": { "ask": "hello" } });
+    let spaced =
+        json!({ "key": "Ctrl+Alt+H", "action": " thread.new", "args": { "ask": "hello" } });
+    for (id, bind) in [(16, ask.clone()), (17, spaced)] {
+        let (error, said) = mcp.call(id, "keys_bind", bind);
+        assert!(
+            error && said.starts_with("Refused (forbidden): Only your Person binds"),
+            "{said}"
+        );
+    }
+    assert!(!keys().contains("thread.new"), "{}", keys());
+    places.ok("keys.bind", None, ask);
+    assert!(keys().contains(r#"action = "thread.new""#), "{}", keys());
+
     let (error, said) = mcp.call(9, "skill", json!({ "topic": "sidebar" }));
     assert!(!error);
     assert!(said.contains("sidebar.toml"), "{said}");

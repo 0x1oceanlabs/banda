@@ -7,9 +7,10 @@
 //! the file's other lines kept, and refused as it refuses: with every
 //! manifest's actions, a line the look would name is not written, as an
 //! action Banda has not, args it does not take, a key the window's fields
-//! would type, a `none` that frees nothing.
+//! would type, a `none` that frees nothing. Only the Person binds a key
+//! that acts as them (ADR 0083, decision 3).
 
-use banda_kernel::{Call, Module, Nothing, Refusal, Right, Scope, Tool};
+use banda_kernel::{Call, Module, Nothing, Participant, Refusal, Right, Scope, Tool};
 use banda_look::Problem;
 use banda_look::keys::{self as look, Args, Keys, Mod, NONE};
 use schemars::JsonSchema;
@@ -128,13 +129,49 @@ pub fn list(config: &Path) -> (Vec<Listed>, Vec<Problem>) {
 /// Binds `bind.key` to its action, in its scope's table.
 pub fn bind(config: &Path, bind: &Bind) -> Result<String, Vec<Problem>> {
     let key = named(config, &bind.key)?;
+    // The line names the id that was checked, as the look reads it.
+    let action = bind.action.trim();
     let value = match &bind.args {
-        None => quoted(&bind.action),
-        Some(args) => call_of(&bind.action, args),
+        None => quoted(action),
+        Some(args) => call_of(action, args),
     };
     let path = look::path_of(&key, bind.scope.as_deref());
     banda_settings::set(config, FILE, &path, &value)?;
-    Ok(format!("{key} runs “{}” now", title_of(&bind.action)))
+    Ok(format!("{key} runs “{}” now", title_of(action)))
+}
+
+/// Whether `by` may bind `bind`: only the Person binds a key whose action,
+/// with the args it is given, acts as them, as one that sends words to an
+/// Agent or opens a file in its app (ADR 0083, decision 3). The action is
+/// found as the look finds a line's, and any caller but the Person binds
+/// only an action Banda has.
+fn may_bind(by: Participant, bind: &Bind) -> Result<(), Refusal> {
+    if let Participant::Person(_) = by {
+        return Ok(());
+    }
+    let id = bind.action.trim();
+    if id == NONE {
+        return Ok(());
+    }
+    let manifests = banda_settings::manifests();
+    let Some((_, action)) = look::action_named(&manifests, id) else {
+        return Err(Refusal::invalid(format!(
+            "Banda has no action {id}; keys_list lists them"
+        )));
+    };
+    let Some(given) = action.as_person(bind.args.as_ref()) else {
+        return Ok(());
+    };
+    let with = if given.is_empty() {
+        String::new()
+    } else {
+        format!(" with {}", given.join(", "))
+    };
+    Err(Refusal::forbidden(format!(
+        "Only your Person binds a key to {}{with}: it acts as them. Give them \
+         the line, to add to keys.toml themselves.",
+        action.id
+    )))
 }
 
 /// Frees `key` in its scope's table, so it goes to the Pane.
@@ -239,11 +276,9 @@ fn toml_of(value: &Value) -> toml_edit::Value {
 /// An action's title, by its id, for what was done; its id when Banda has
 /// none such.
 fn title_of(id: &str) -> String {
-    banda_settings::manifests()
-        .actions
-        .into_iter()
-        .find(|action| action.id == id)
-        .map_or_else(|| id.to_owned(), |action| action.title)
+    let manifests = banda_settings::manifests();
+    look::action_named(&manifests, id)
+        .map_or_else(|| id.to_owned(), |(_, action)| action.title.clone())
 }
 
 /// The keys module, over the Person's config folder.
@@ -260,7 +295,8 @@ impl KeysModule {
         Ok(list(&self.config).0)
     }
 
-    async fn bind(&self, _: Call, key: Bind) -> Result<String, Refusal> {
+    async fn bind(&self, call: Call, key: Bind) -> Result<String, Refusal> {
+        may_bind(call.participant(), &key)?;
         bind(&self.config, &key).map_err(refused)
     }
 
@@ -295,9 +331,11 @@ banda_kernel::methods! {
         /// `column.maximize`, with the args it takes when it takes any,
         /// in its scope's table for an action of a scope. Banda's keys
         /// hold the mod (Alt, unless keys.toml moved it). It refuses, with
-        /// why, an action Banda has not, args it does not take, and a key
-        /// the window's fields would type. Tell your Person what changed,
-        /// and that `keys_reset` undoes it.
+        /// why, an action Banda has not, args it does not take, a key the
+        /// window's fields would type, and a key only your Person binds:
+        /// one that sends words to an Agent, or runs or opens something
+        /// outside Banda, as `thread.new` with `ask` does. Tell your Person
+        /// what changed, and that `keys_reset` undoes it.
         call bind(Bind) -> String, Write, tool "keys_bind";
         /// Frees a key, in keys.toml: it goes to the Pane, as Alt+F to a
         /// shell, and the action that had it keeps its other keys.
@@ -342,6 +380,9 @@ impl Module for KeysModule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use banda_kernel::{AgentId, Code, PersonId};
+    use banda_look::keys::RunsAsPerson;
+    use serde_json::json;
 
     fn keys_toml(config: &Path) -> String {
         std::fs::read_to_string(config.join(FILE)).unwrap_or_default()
@@ -502,5 +543,116 @@ mod tests {
                 .lines()
                 .any(|line| line.starts_with("mod ="))
         );
+    }
+
+    fn given(bind: Bind, args: Value) -> Bind {
+        Bind {
+            args: args.as_object().cloned(),
+            ..bind
+        }
+    }
+
+    #[test]
+    fn an_agent_binds_a_key_that_stays_in_the_window() {
+        let agent = Participant::Agent(AgentId::new());
+        // An action that acts as the Person only with some args, given
+        // none of them; a page, which opens in Banda; and a key freed.
+        let staying = [
+            bound("Alt+M", "column.maximize"),
+            bound("Ctrl+Alt+N", "thread.new"),
+            given(
+                bound("Ctrl+Alt+N", "thread.new"),
+                json!({ "project": "p", "harness": "fake" }),
+            ),
+            given(
+                bound("Ctrl+Alt+A", "file.attach"),
+                json!({ "file": "/tmp/a.rs" }),
+            ),
+            given(
+                bound("Ctrl+Alt+H", "browser.open"),
+                json!({ "address": "https://github.com" }),
+            ),
+            bound("Alt+F", "none"),
+        ];
+        for bind in staying {
+            assert_eq!(may_bind(agent, &bind), Ok(()), "{bind:?}");
+        }
+    }
+
+    #[test]
+    fn only_the_person_binds_a_key_that_acts_as_them() {
+        let agent = Participant::Agent(AgentId::new());
+        let ask = given(bound("Ctrl+Alt+H", "thread.new"), json!({ "ask": "hello" }));
+        let refused = may_bind(agent, &ask).unwrap_err();
+        assert_eq!(refused.code, Code::Forbidden);
+        assert!(
+            refused
+                .message
+                .starts_with("Only your Person binds a key to thread.new with ask:"),
+            "{}",
+            refused.message
+        );
+        let file = json!({ "file": "/tmp/a.pdf" });
+        let acting = [
+            given(bound("Ctrl+Alt+O", "file.outside"), file.clone()),
+            given(bound("Ctrl+Alt+F", "file.folder"), file),
+            given(
+                bound("Ctrl+Alt+A", "file.attach"),
+                json!({ "file": "/tmp/a.rs", "comment": "this" }),
+            ),
+            given(
+                bound("Ctrl+Alt+A", "file.attach"),
+                json!({ "file": "/tmp/a.rs", "text": "fn a() {}" }),
+            ),
+            given(
+                bound("Ctrl+Alt+L", "problems.look-into"),
+                json!({ "fingerprint": "3124" }),
+            ),
+            // The action as the look finds it, spaces around its id aside.
+            given(
+                bound("Ctrl+Alt+H", " thread.new"),
+                json!({ "ask": "hello" }),
+            ),
+            given(
+                bound("Ctrl+Alt+H", "thread.new\n"),
+                json!({ "ask": "hello" }),
+            ),
+            given(
+                bound("Ctrl+Alt+H", "\u{a0}thread.new"),
+                json!({ "ask": "hello" }),
+            ),
+        ];
+        for bind in acting {
+            let refused = may_bind(agent, &bind).unwrap_err();
+            assert_eq!(refused.code, Code::Forbidden, "{bind:?}");
+        }
+        // An action Banda has not is refused too.
+        let nothing = may_bind(agent, &bound("Alt+J", "no.such")).unwrap_err();
+        assert_eq!(nothing.code, Code::Invalid);
+        assert!(nothing.message.contains("Banda has no action no.such"));
+        // The Person binds it, as with a line of their own in keys.toml.
+        let person = Participant::Person(PersonId::new());
+        assert_eq!(may_bind(person, &ask), Ok(()));
+    }
+
+    #[test]
+    fn a_line_names_the_action_it_was_checked_for() {
+        let config = tempfile::tempdir().unwrap();
+        let config = config.path();
+        bind(config, &bound("Alt+M", " column.maximize\n")).unwrap();
+        assert!(keys_toml(config).contains("\"Alt+M\" = \"column.maximize\""));
+    }
+
+    #[test]
+    fn an_action_marked_by_args_names_args_it_takes() {
+        for action in &banda_settings::manifests().actions {
+            let Some(RunsAsPerson::Given(names)) = &action.runs_as_person else {
+                continue;
+            };
+            let takes: Vec<String> = action.takes().into_iter().map(|(name, _)| name).collect();
+            for name in names {
+                assert!(takes.contains(name), "{} takes no {name}", action.id);
+            }
+        }
     }
 }

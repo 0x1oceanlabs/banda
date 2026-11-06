@@ -856,6 +856,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     // A file a Pane's link names, as a terminal's path with Ctrl.
     id: "file.outside",
     args: takes({ file: FILE }, ["file"]),
+    runsAsPerson: true,
     section: "Banda",
     title: "Open a file in its app",
     unlisted: true,
@@ -877,6 +878,8 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
       },
       ["file"]
     ),
+    // The words go in the message, as the Person's.
+    runsAsPerson: ["comment", "text"],
     section: "Banda",
     title: "Add a file to a Thread's message",
     unlisted: true,
@@ -887,6 +890,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     // A Thread menu's "Show in folder", for a path in a reply.
     id: "file.folder",
     args: takes({ file: FILE }, ["file"]),
+    runsAsPerson: true,
     section: "Banda",
     title: "Show a file in its folder",
     unlisted: true,
@@ -947,6 +951,8 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
   {
     id: "problems.look-into",
     args: takes({ fingerprint: "the Problem's fingerprint" }, ["fingerprint"]),
+    // It starts a Thread with what to ask its Agent.
+    runsAsPerson: true,
     section: "Banda",
     title: "Look into a Problem",
     unlisted: true,

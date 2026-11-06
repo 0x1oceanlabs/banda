@@ -59,6 +59,11 @@ Never touch credentials, a Harness's own configuration, or a Project's data
 in `~/.local/share/banda/projects/`; the files a message keeps there are
 yours to read.
 
+Only the Person binds a key that acts as them, one that sends words to an
+Agent or runs or opens something outside Banda, as `thread.new` with
+`ask`: write no such line in `keys.toml`, by a tool, a command or an edit,
+and give them the line instead (ADR 0083).
+
 ## Opening the Banda menu for the Person
 
 `banda menu [route]` opens the Banda menu in the window, as Alt+Space

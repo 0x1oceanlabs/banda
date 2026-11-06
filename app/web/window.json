@@ -738,7 +738,8 @@
           "file"
         ],
         "additionalProperties": false
-      }
+      },
+      "runsAsPerson": true
     },
     {
       "id": "file.attach",
@@ -774,7 +775,11 @@
           "file"
         ],
         "additionalProperties": false
-      }
+      },
+      "runsAsPerson": [
+        "comment",
+        "text"
+      ]
     },
     {
       "id": "file.folder",
@@ -794,7 +799,8 @@
           "file"
         ],
         "additionalProperties": false
-      }
+      },
+      "runsAsPerson": true
     },
     {
       "id": "edit.paste",
@@ -881,7 +887,8 @@
           "fingerprint"
         ],
         "additionalProperties": false
-      }
+      },
+      "runsAsPerson": true
     },
     {
       "id": "update.check",
