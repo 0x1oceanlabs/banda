@@ -23,15 +23,13 @@ import type { ChildProcessSpawner } from "effect/process"
 import { command, keepRunning, known, lines } from "./child"
 
 /** The first line `serve --with-parent` prints; `window` is where the
- * window listens for `banda menu`, and `browser` where it says its CDP
- * endpoint. */
+ * window listens for `banda menu`. */
 const Running = Schema.fromJsonString(
   Schema.Struct({
     protocol: Schema.Number,
     port: Schema.Number,
     secret: Schema.String,
     window: Schema.String,
-    browser: Schema.String,
   })
 )
 
@@ -57,7 +55,7 @@ export const engineLayer = (
         onSome: (PATH) => ({ ...carried, PATH }),
       })
       const address = yield* SubscriptionRef.make(Option.none<Address>())
-      const door = yield* Deferred.make<{ window: string; browser: string }>()
+      const door = yield* Deferred.make<{ window: string }>()
       /** The first line of a run: where it listens, and the door. */
       const started = (line: string) =>
         Schema.decodeUnknownEffect(Running)(line).pipe(
@@ -112,7 +110,6 @@ export const engineLayer = (
           () => (client ??= new Client(() => Effect.runPromise(at)))
         ),
         door: Effect.map(Deferred.await(door), (running) => running.window),
-        browser: Effect.map(Deferred.await(door), (running) => running.browser),
       }
     })
   )

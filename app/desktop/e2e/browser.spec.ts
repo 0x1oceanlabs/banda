@@ -1,16 +1,9 @@
 import { createHash, generateKeyPairSync } from "node:crypto"
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-} from "node:fs"
+import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { join } from "node:path"
 import {
-  chromium,
   type ElectronApplication,
   expect,
   type Locator,
@@ -444,8 +437,10 @@ test("the blocker drops what its lists name, and browser.toml turns it off", asy
   })
   window = await startWindow()
   const { app, page, dir } = window
-  const { thread: draft } = await firstThread(page)
-  await expect(draft).toBeVisible()
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
   const bar = await openBrowser(page)
   await bar.fill(address.replace("http://", ""))
   await bar.press("Enter")
@@ -454,6 +449,9 @@ test("the blocker drops what its lists name, and browser.toml turns it off", asy
   await expect.poll(() => inPages(app, loaded)).toEqual(["Ads"])
   const shown = "getComputedStyle(document.querySelector('.banda-ad')).display"
   await expect.poll(() => inPages(app, shown)).toEqual(["none"])
+  // An Agent's tab, in its Project's profile, drops the same requests.
+  const opened = await agentSays(window, "browser_open", { url: `${address}/` })
+  expect(opened).toContain('titled "Ads"')
 
   writeFileSync(join(dir, "config/browser.toml"), "blocker = false\n")
   await expect
@@ -461,103 +459,106 @@ test("the blocker drops what its lists name, and browser.toml turns it off", asy
       await inPages(app, "location.reload()")
       return inPages(app, loaded)
     })
-    .toEqual(["Shown"])
-  expect(await inPages(app, shown)).toEqual(["block"])
+    .toEqual(["Shown", "Shown"])
+  expect(await inPages(app, shown)).toEqual(["block", "block"])
 })
 
-test("an Agent drives the browser's tabs over CDP, and Banda stays", async () => {
+test("an Agent sees only its Project's Agents' tabs, which load apart from the Person's", async () => {
   const address = await serve({
-    "/": "<title>Agent</title><button onclick=\"document.title = 'Clicked'\">Go</button>",
-    "/second": "<title>Second</title>",
+    "/sign-in":
+      "<title>Signed in</title><script>document.cookie = 'who=person; path=/'</script>",
+    "/who":
+      "<title>Who</title><script>document.title = 'Who: ' + (document.cookie || 'nobody')</script>",
+    "/opens": '<title>Opens</title><a href="/who" target="_blank">Next</a>',
   })
   window = await startWindow()
   const { app, page, dir, banda } = window
-  const { thread: draft } = await firstThread(page)
-  await expect(draft).toBeVisible()
-
-  // `banda browser` says what the window wrote, the Person's alone.
-  const file = join(dir, "state", "browser.json")
-  await expect.poll(() => existsSync(file)).toBe(true)
-  expect(statSync(file).mode & 0o777).toBe(0o600)
-  const endpoint = banda("browser").trim()
-  expect(endpoint).toBe(JSON.parse(readFileSync(file, "utf8")).endpoint)
-  expect(endpoint).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/[0-9a-f]{48}$/)
-  // Without the token, or from a web page, it answers nothing.
-  const wrong = endpoint.replace(/[0-9a-f]{48}$/, "0".repeat(48))
-  expect((await fetch(`${wrong}/json/version`)).status).toBe(404)
-  const fromPage = await fetch(`${endpoint}/json/version`, {
-    headers: { origin: "https://example.com" },
-  })
-  expect(fromPage.status).toBe(403)
-
-  // Its targets are the tabs: never Banda's own page.
-  const browser = await chromium.connectOverCDP(endpoint)
-  const context = browser.contexts()[0]!
-  expect(context.pages()).toEqual([])
-
-  // With no browser, a tab it opens gets a Pane beside the Person's, who
-  // keeps the focus.
-  const tab = await context.newPage()
-  await tab.goto(`${address}/`)
-  await expect(addressBar(page)).toBeVisible()
-  await expect(draft).toHaveAttribute("data-focused", "true")
-  await tab.getByRole("button", { name: "Go" }).click()
-  await expect.poll(() => inPages(app, "document.title")).toEqual(["Clicked"])
-
-  // A tab it opens is the Pane's, and closes there too.
-  const second = await context.newPage()
-  await second.goto(`${address}/second`)
-  await expect
-    .poll(async () => (await inPages(app, "document.title")).sort())
-    .toEqual(["Clicked", "Second"])
-  await second.close()
-  await expect.poll(() => inPages(app, "document.title")).toEqual(["Clicked"])
-
-  // The tab it drives shows its mark; a click on it stops the Agent
-  // there, and Banda's tab stays.
-  const tabs = page.getByRole("tablist", { name: "Tabs" })
-  const stop = tabs.getByRole("button", { name: "Stop the Agent in Clicked" })
-  await stop.click()
-  await expect.poll(() => tab.isClosed()).toBe(true)
-  await expect(stop).toBeHidden()
-  expect(await inPages(app, "document.title")).toEqual(["Clicked"])
-
-  // It leaves; Banda and its tab stay.
-  await browser.close()
-  await expect(addressBar(page)).toBeVisible()
-  expect(await inPages(app, "document.title")).toEqual(["Clicked"])
-})
-
-test("an Agent sees the browser's tabs, the Person's too, through its own tools", async () => {
-  const address = await serve({ "/": "<title>Seen</title>" })
-  window = await startWindow()
-  const { page, banda } = window
   const { thread, composer } = await firstThread(page)
   await composer.fill("hello")
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
+  // No endpoint drives the whole browser: nothing says one, and the CLI
+  // prints none.
+  expect(existsSync(join(dir, "state", "browser.json"))).toBe(false)
+  expect(() => banda("browser")).toThrow()
   const tabs = () => agentAnswers(window, "browser_tabs", {})
   expect(await tabs()).toEqual([])
 
-  // The Person's tab: the Agent sees it, driven by no one.
+  // The Person signs in, in a tab of theirs: the Agent does not see it.
   const bar = await openBrowser(page)
-  await bar.fill(address.replace("http://", ""))
+  await bar.fill(`${address}/sign-in`)
   await bar.press("Enter")
-  await expect(page.getByRole("region", { name: "Seen" })).toBeVisible()
-  const [seen] = await tabs()
-  expect(seen).toMatchObject({
-    url: `${address}/`,
-    title: "Seen",
-    driven: false,
-  })
-  expect(typeof seen.id).toBe("number")
+  await expect(page.getByRole("region", { name: "Signed in" })).toBeVisible()
+  await page.getByRole("button", { name: "New tab", exact: true }).click()
+  await expect(bar).toBeFocused()
+  await bar.fill(`${address}/who`)
+  await bar.press("Enter")
+  await expect(
+    page.getByRole("region", { name: "Who: who=person" })
+  ).toBeVisible()
+  expect(await tabs()).toEqual([])
+  const [persons] = await app.evaluate(({ webContents }) =>
+    webContents
+      .getAllWebContents()
+      .filter((contents) => contents.getType() === "webview")
+      .map((contents) => contents.id)
+  )
+  // Named, it is refused as a tab there is not.
+  for (const [name, args] of [
+    ["browser_snapshot", { tab: persons }],
+    ["browser_navigate", { tab: persons, to: "reload" }],
+    ["browser_handoff", { tab: persons, why: "Sign in" }],
+  ] as const) {
+    const refused = await agentCalls(window, name, args)
+    expect(refused.isError, name).toBe(true)
+    expect(refused.content[0]!.text).toContain(
+      `There is no tab ${persons}: browser_tabs lists them.`
+    )
+  }
 
-  // Driven over CDP, it says so.
-  const browser = await chromium.connectOverCDP(banda("browser").trim())
-  expect(browser.contexts()[0]!.pages()).toHaveLength(1)
+  // The tab the Agent opens is its Project's, signed out of the Person's
+  // sites, and the Agent sees it.
+  const opened = await agentSays(window, "browser_open", {
+    url: `${address}/who`,
+  })
+  const id = Number(/^Opened tab (\d+)\./.exec(opened)?.[1])
+  expect(opened).toContain('titled "Who: nobody"')
+  expect(await tabs()).toEqual([
+    { id, url: `${address}/who`, title: "Who: nobody", driven: false },
+  ])
+  // Banda's hands hold it once it is read, and it says so.
+  await agentSays(window, "browser_snapshot", { tab: id })
   await expect.poll(async () => (await tabs())[0].driven).toBe(true)
-  await browser.close()
-  await expect.poll(async () => (await tabs())[0].driven).toBe(false)
+
+  // A tab its page opens is in its profile, and the Agent's too.
+  await agentSays(window, "browser_navigate", {
+    tab: id,
+    to: `${address}/opens`,
+  })
+  const tree = await agentSays(window, "browser_snapshot", { tab: id })
+  const next = /link "Next"[^\n]*\[ref=([^\]]+)\]/.exec(tree)![1]
+  const clicked = await agentSays(window, "browser_act", {
+    tab: id,
+    action: "click",
+    ref: next,
+  })
+  const child = Number(/It opened tab (\d+),/.exec(clicked)?.[1])
+  await expect
+    .poll(
+      async () =>
+        (await tabs()).find((tab: { id: number }) => tab.id === child)?.title
+    )
+    .toBe("Who: nobody")
+
+  // So is a browser it opens at an address.
+  await agentAnswers(window, "open_pane", {
+    kind: "browser.browser",
+    args: { url: `${address}/who` },
+  })
+  await expect.poll(async () => (await tabs()).length).toBe(3)
+  expect(
+    (await tabs()).map((tab: { title: string }) => tab.title)
+  ).not.toContain("Who: who=person")
 })
 
 test("an Agent reads a tab's tree with refs and new errors, until the Person stops it there", async () => {
@@ -568,15 +569,14 @@ test("an Agent reads a tab's tree with refs and new errors, until the Person sto
   await composer.fill("hello")
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
-  const bar = await openBrowser(page)
-  await bar.fill(address.replace("http://", ""))
-  await bar.press("Enter")
+  const opened = await agentSays(window, "browser_open", { url: `${address}/` })
   // The browser's tile by its page's title alone: "Thread with Fake AI"
   // has "read" in it too.
   await expect(
     page.getByRole("region", { name: "Read", exact: true })
   ).toBeVisible()
   const [{ id }] = await agentAnswers(window, "browser_tabs", {})
+  expect(opened).toContain(`Opened tab ${id}.`)
   const snapshot = () => agentSays(window, "browser_snapshot", { tab: id })
 
   // The tree comes as text, with the page's address and title, and refs.
@@ -888,6 +888,12 @@ test("an Agent's tab opens beside its Thread, in the browser there, and the Pers
   await expect(tabs.last().getByRole("tab")).toHaveText(["First", "Second"])
   await expect(tabs.first().getByRole("tab")).toHaveText(["Mine"])
   await expect(composer).toBeFocused()
+  // The Agent sees its own two, never the Person's.
+  const seen = await agentAnswers(window, "browser_tabs", {})
+  expect(seen.map((tab: { title: string }) => tab.title)).toEqual([
+    "First",
+    "Second",
+  ])
 })
 
 test("a Thread's tab glows and its pill says the Thread and its step, until the Person stops it or the turn ends", async () => {
@@ -1428,25 +1434,6 @@ test("page dialogs stay in their tab and the Person and Agent answer the same di
     text: "From frame",
   })
   expect(await snapshot()).toContain("From frame")
-
-  // External Playwright and Banda answer the same callback.
-  const browser = await chromium.connectOverCDP(window.banda("browser").trim())
-  try {
-    const remote = browser
-      .contexts()[0]!
-      .pages()
-      .find((entry) => entry.url() === `${address}/`)!
-    remote.once("dialog", (dialog) => {
-      void dialog.accept("From CDP")
-    })
-    const tree = await snapshot()
-    const ref = /button "Prompt"[^\n]*\[ref=(e\d+)\]/.exec(tree)![1]
-    await agentSays(window, "browser_act", { tab, action: "click", ref })
-    await expect(card).toHaveCount(0)
-    expect(await snapshot()).toContain("From CDP")
-  } finally {
-    await browser.close()
-  }
 
   const alert = await click("Alert")
   await expect(

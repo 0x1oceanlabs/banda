@@ -1,22 +1,28 @@
 /**
  * The browser's desktop part (ADR 0013). The page shows browser pages in
- * `<webview>`s; here they are kept apart from Banda (decision 8): only the
- * browser's profile, sandboxed, with no preload and no Node. A site asks
- * the Person before it uses the camera, the location or another program;
- * downloads go to the Person's Downloads; Banda's keys, held with the mod, and the
- * browser's own go to the window instead of the page (decision 5). The
- * Pane hears of new tabs, icons and downloads as `BrowserNews`, and the
- * switch writes `browser.toml`. The blocker follows the look's
+ * `<webview>`s; here they are kept apart from Banda (decision 8): only in
+ * the browser's profiles, sandboxed, with no Node and no preload but the
+ * prompt's. A page loads in the Person's profile, or in the profile of a
+ * Project's Agents when they opened its tab, apart from the Person's
+ * (ADR 0083, decision 4); each profile is kept alike. A site asks the
+ * Person before it uses the camera, the location or another program;
+ * downloads go to the Person's Downloads; Banda's keys, held with the mod,
+ * and the browser's own go to the window instead of the page (decision
+ * 5). The Pane hears of new tabs, icons and downloads as `BrowserNews`,
+ * and the switch writes `browser.toml`. The blocker follows the look's
  * `blocker` (blocker.ts). All of it is the `Browser` service (ADR 0020).
  */
 import { randomUUID } from "node:crypto"
 import { existsSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { join, parse } from "node:path"
+import type { ProjectId } from "@banda/contract"
 import {
+  agentsOf,
   BROWSER_BRIDGE,
   type BrowserNews,
   type Download,
+  opens,
   PARTITION,
   type PageKeys,
   type Pressed,
@@ -33,6 +39,7 @@ import {
   type MenuItem,
   type DownloadItem,
   type PermissionRequest,
+  type Session,
   session,
   shell,
   type WebContents,
@@ -55,9 +62,6 @@ import { Dialogs } from "./dialogs"
 import { Drive } from "./drive"
 import { BoxArg, Extensions } from "./extensions"
 import { Tabs } from "./tabs"
-
-/** What a page may open: the web, a blank page and the Person's files. */
-const OPENS = /^(https?|about|file):/i
 
 /** Changes `browser.toml`; refused when the value is not one it takes. */
 type Changes = Effect.Effect<void, Refused | Broke>
@@ -91,7 +95,23 @@ export class Browser extends Context.Service<
       const blocker = new Blocker()
       // What a site's question runs stops with the layer.
       const run = yield* FiberSet.makeRuntimePromise()
-      keepProfile(window.now, (asked) => run(confirm(window.now(), asked)))
+      /** The browser's profiles kept so far, by their partitions. */
+      const kept = new Set<string>()
+      /** The profile of `partition`, whose pages are `agents`', kept as
+       * every profile of the browser is: the first time, its sites'
+       * questions, its downloads and its blocker are set up. */
+      const profile = (partition: string, agents: ProjectId | null) => {
+        const made = session.fromPartition(partition)
+        if (kept.has(partition)) return made
+        kept.add(partition)
+        keepProfile(made, window.now, (asked) =>
+          run(confirm(window.now(), asked))
+        )
+        tabs.profiled(made, agents)
+        if (agents !== null) void blocker.add(made)
+        return made
+      }
+      profile(PARTITION, null)
       // The blocker follows browser.toml, a change at a time, in order.
       yield* Effect.forkScoped(
         look.changes.pipe(
@@ -111,7 +131,7 @@ export class Browser extends Context.Service<
         }).pipe(Effect.provideService(Look, look))
       return {
         host: (contents) =>
-          Effect.sync(() => host(contents, tabs, extensions, dialogs)),
+          Effect.sync(() => host(contents, profile, tabs, extensions, dialogs)),
         tabs: (where) => write("tabs", where),
         pin: (id, pinned) =>
           Effect.andThen(extensions.named(id), pin(id, pinned)),
@@ -130,15 +150,19 @@ export class Browser extends Context.Service<
 
 function host(
   contents: WebContents,
+  profile: (partition: string, agents: ProjectId | null) => Session,
   tabs: Tabs["Service"],
   extensions: Extensions["Service"],
   dialogs: Dialogs["Service"]
 ): void {
   contents.on("will-attach-webview", (event, prefs, params) => {
-    if (params.partition !== PARTITION || !OPENS.test(params.src)) {
+    // Only the browser's profiles, and what a page of each may open.
+    const agents = agentsOf(params.partition)
+    if (agents === undefined || !opens(params.src, agents)) {
       event.preventDefault()
       return
     }
+    profile(params.partition, agents)
     prefs.preload = fileURLToPath(
       new URL("./browser-preload.cjs", import.meta.url)
     )
@@ -153,12 +177,14 @@ function host(
     prefs.transparent = false
   })
   contents.on("did-attach-webview", (_event, page) => {
+    const agents = tabs.agentsOf(page)
+    if (agents === undefined) return
     const tell = (news: BrowserNews) =>
       tellPage(contents, BROWSER_BRIDGE.listen, news)
     dialogs.attached(page)
     tabs.attached(page)
     keys(page, contents)
-    keep(page, tell, extensions)
+    keep(page, agents, tell, extensions)
   })
 }
 
@@ -204,17 +230,28 @@ export function keys(page: WebContents, window: WebContents): void {
   })
 }
 
+/** Keeps a tab's `page`, whose profile is `agents`': what it opens opens
+ * in that profile too. */
 function keep(
   page: WebContents,
+  agents: ProjectId | null,
   tell: (news: BrowserNews) => void,
   extensions: Extensions["Service"]
 ): void {
   extensions.attached(page)
+  const open = (url: string, background: boolean) =>
+    tell({
+      kind: "open",
+      from: page.id,
+      url,
+      background,
+      ...(agents === null ? {} : { agents }),
+    })
   page.on("context-menu", (_event, params) =>
-    menuOf(page, params, tell, extensions).popup()
+    menuOf(page, params, agents, open, extensions).popup()
   )
   page.setWindowOpenHandler(({ url, disposition }) => {
-    if (!OPENS.test(url)) return { action: "deny" }
+    if (!opens(url, agents)) return { action: "deny" }
     // A popup that needs its opener, as a sign-in, opens as a window of
     // its own; one of those opens nothing more.
     if (disposition === "new-window") {
@@ -224,8 +261,7 @@ function keep(
       }
     }
     // The rest is a tab, which the Pane opens beside the page's.
-    const background = disposition === "background-tab"
-    tell({ kind: "open", from: page.id, url, background })
+    open(url, disposition === "background-tab")
     return { action: "deny" }
   })
   // A page names its icon again on each load: it is sent once.
@@ -252,13 +288,13 @@ function keep(
 function menuOf(
   page: WebContents,
   params: Electron.ContextMenuParams,
-  tell: (news: BrowserNews) => void,
+  agents: ProjectId | null,
+  open: (url: string, background: boolean) => void,
   extensions: Extensions["Service"]
 ): Menu {
   const items: Electron.MenuItemConstructorOptions[][] = []
-  const tab = (url: string) =>
-    tell({ kind: "open", from: page.id, url, background: true })
-  if (params.linkURL && OPENS.test(params.linkURL)) {
+  const tab = (url: string) => open(url, true)
+  if (params.linkURL && opens(params.linkURL, agents)) {
     items.push([
       { label: "Open Link in New Tab", click: () => tab(params.linkURL) },
       {
@@ -267,7 +303,7 @@ function menuOf(
       },
     ])
   }
-  if (params.mediaType === "image" && OPENS.test(params.srcURL)) {
+  if (params.mediaType === "image" && opens(params.srcURL, agents)) {
     items.push([
       { label: "Open Image in New Tab", click: () => tab(params.srcURL) },
       {
@@ -360,14 +396,15 @@ const GIVEN = new Set([
 ])
 
 /**
- * Sets up the browser's profile: what sites may do, and where downloads
- * go. `window` hears of downloads; `confirm` asks the Person.
+ * Sets up one of the browser's profiles: what sites may do, and where
+ * downloads go. `window` hears of downloads; `confirm` asks the Person.
+ * The Person's answers to a site hold in the profile they gave them in.
  */
 function keepProfile(
+  profile: Session,
   window: Window["Service"]["now"],
   confirm: (ask: Ask) => Promise<boolean>
 ): void {
-  const profile = session.fromPartition(PARTITION)
   // Sites see Chrome: some, as Google's sign-in, refuse what says Electron.
   const agent = profile.getUserAgent()
   const platform = /^Mozilla\/5\.0 \([^)]*\)/.exec(agent)?.[0]

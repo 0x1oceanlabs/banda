@@ -64,16 +64,18 @@ export const browser = defineModule({
   // A tab an Agent opens goes beside its Thread (ADR 0029, decision 4):
   // to the browser of the column right of the Thread's Pane, or a new
   // one there; with the Thread not shown, to its Project's browser the
-  // Person was in last, or a new one. An extension's goes to the browser
-  // the Person was in last. The Person's Pane keeps the focus. A Thread
-  // drives its tabs until its turn ends (`followThreads`).
+  // Person was in last, or a new one. It loads in its Project's Agents'
+  // profile, which the desktop names (ADR 0083, decision 4). An
+  // extension's goes to the browser the Person was in last, in theirs.
+  // The Person's Pane keeps the focus. A Thread drives its tabs until its
+  // turn ends (`followThreads`).
   start: (window) => {
     const following = followThreads(window)
-    const opening = openWith((url, agent) => {
+    const opening = openWith((url, agent, agents) => {
       const at = agent ? window.beside(agent) : null
       const holder = at?.right ? browserIn(at.right) : frontHolder(at?.project)
-      if (holder) return holder.open(url)
-      const args = browserAt(url)
+      if (holder) return holder.open(url, { agents })
+      const args = browserAt(url, undefined, agents)
       window.open(paneOf(browserPane, args), at?.project, {
         focus: false,
         ...(agent ? { beside: agent } : {}),

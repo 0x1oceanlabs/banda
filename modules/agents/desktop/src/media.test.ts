@@ -34,7 +34,6 @@ const main = () =>
         call: async () => [{ id: "p", folder: project }],
       } as unknown as Client),
       door: Effect.die("unused"),
-      browser: Effect.die("unused"),
     }),
     Layer.succeed(Look)({
       current: Effect.succeed(null),

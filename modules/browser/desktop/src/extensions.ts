@@ -6,9 +6,12 @@
  * extension that filters requests in the default session breaks the main
  * process's `net.fetch`.
  *
- * The tabs are the Panes' pages: the desktop tells an extension of each
- * page as it attaches, and the Pane of the one the Person looks at. What an
- * extension asks of the tabs goes to the Panes as `BrowserNews`.
+ * The tabs are the Panes' pages of the Person's profile: the desktop
+ * tells an extension of each as it attaches, and the Pane of the one the
+ * Person looks at. A tab of a Project's Agents loads in a profile of
+ * their own (ADR 0083, decision 4), which no extension is in or hears
+ * of. What an extension asks of the tabs goes to the Panes as
+ * `BrowserNews`.
  */
 import { type Box, PARTITION } from "@banda/browser-pane/desktop"
 import { Context, Effect, FiberSet, Layer, Schema } from "effect"
@@ -39,7 +42,8 @@ export const BoxArg = Schema.Struct({
 export class Extensions extends Context.Service<
   Extensions,
   {
-    /** A page of the browser attached: extensions see it as a tab. */
+    /** A page of the browser attached: extensions see it as a tab, when it
+     * is in the Person's profile. */
     attached(page: WebContents): void
     /** The page the Person looks at, by its ID: the extensions' active
      * tab. Another closes the popup, which spoke of the one before. */
@@ -132,7 +136,7 @@ export class Extensions extends Context.Service<
       return {
         attached: (page) => {
           const shown = window.now()
-          if (shown) extensions.addTab(page, shown)
+          if (shown && page.session === profile) extensions.addTab(page, shown)
         },
         shown: (id) =>
           Effect.sync(() => {
@@ -140,7 +144,7 @@ export class Extensions extends Context.Service<
             if (!page || page.id === active) return
             active = page.id
             popup.close()
-            extensions.selectTab(page)
+            if (page.session === profile) extensions.selectTab(page)
           }),
         named,
         menuItems: (page, params) =>

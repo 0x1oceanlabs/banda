@@ -4,7 +4,7 @@
 # tools for Agents ask the window (ADR 0029).
 id = "browser"
 name = "Browser"
-about = "Chromium pages in the window, for the Person and every Agent: tabs, extensions, and a blocker of ads and trackers."
+about = "Chromium pages in the window: the Person's tabs, and each Project's Agents' in a profile of their own; extensions, and a blocker of ads and trackers."
 version = "0.1.0"
 from-banda = true
 # The settings files it owns, in ~/.config/banda.

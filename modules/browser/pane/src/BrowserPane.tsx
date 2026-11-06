@@ -141,7 +141,7 @@ function BrowserPane({
   // Any page's change draws the tabs again: their titles, icons, loads.
   const version = useSyncExternalStore(watchPages, pagesVersion)
   const [first] = useState(newId)
-  const args = readArgs(kept, first)
+  const args = readArgs(kept, first, project)
   const now = useRef({ args, update, close })
   useEffect(() => {
     now.current = { args, update, close }
@@ -153,8 +153,9 @@ function BrowserPane({
   })
 
   // The Pane holds its tabs' pages; a page opened from one is a tab
-  // beside it, loading out of sight when it opened in the background. An
-  // extension opens, shows and closes tabs of the Pane in front.
+  // beside it, in its profile, loading out of sight when it opened in the
+  // background. An extension opens, shows and closes tabs of the Pane in
+  // front.
   const [holder] = useState<Holder>(() => {
     const at = (id: string) =>
       now.current.args.tabs.findIndex((each) => each.id === id)
@@ -162,9 +163,9 @@ function BrowserPane({
       next ? now.current.update(next) : now.current.close()
     return {
       project,
-      open: (url, from, background = false) => {
-        const tab = { ...blankTab(newId()), url }
-        if (background) pageOf(tab.id, url)
+      open: (url, { from, background = false, agents } = {}) => {
+        const tab = { ...blankTab(newId(), agents), url }
+        if (background) pageOf(tab.id, url, tab.agents)
         const after = from === undefined ? undefined : at(from) + 1 || undefined
         change(withTab(now.current.args, tab, after, background))
         return tab.id
@@ -305,7 +306,7 @@ function Browser({
   const slot = useRef<HTMLDivElement>(null)
   const address = useRef<HTMLInputElement>(null)
   // The page is made once its tab shows with an address to open.
-  const page = tab.url ? pageOf(tab.id, tab.url) : null
+  const page = tab.url ? pageOf(tab.id, tab.url, tab.agents) : null
   // The Pane draws again on any page's change (`watchPages`).
   const state = page?.state ?? BLANK
 

@@ -4,7 +4,7 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "description": "The browser's part in the window's main process (ADR 0013, ADR 0028): its pages kept apart, their tabs, extensions and blocker, and the CDP endpoint.",
+  "description": "The browser's part in the window's main process (ADR 0013, ADR 0028): its pages kept apart in their profiles, their tabs, extensions and blocker, and each tab's own CDP socket.",
   "exports": {
     ".": "./src/index.ts"
   },

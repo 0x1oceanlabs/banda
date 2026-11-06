@@ -16,8 +16,6 @@ export class Engine extends Context.Service<
     /** Where the window listens for `banda menu`, as the engine named it
      * the first time it started. */
     readonly door: Effect.Effect<string>
-    /** Where the window says its CDP endpoint, for `banda browser`. */
-    readonly browser: Effect.Effect<string>
   }
 >()("banda/Engine") {
   /** The folder of Project `project`, as the engine has it; none for one
