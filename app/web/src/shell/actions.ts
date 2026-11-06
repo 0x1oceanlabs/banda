@@ -3,10 +3,16 @@
  * 10): the modules' own and the window's (ADR 0022, decision 3). The keys,
  * the Banda menu, its key sheet and `keys.toml` read the same list.
  */
-import type { ProjectId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import { toast } from "@banda/ui/components/sonner"
-import { type Action, type Args, takes, type WindowApi } from "@banda/ui/module"
-import { type PaneState, paneOf, type Place } from "@banda/ui/pane"
+import {
+  type Action,
+  type Args,
+  type Listing,
+  takes,
+  type WindowApi,
+} from "@banda/ui/module"
+import { type Listed, type PaneState, paneOf, type Place } from "@banda/ui/pane"
 import { RESET_KEY } from "../actions/actions"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
@@ -14,6 +20,14 @@ import type { At } from "../menu/menu"
 import { modules } from "../modules"
 import { identityOf, launcher, minOf, showsOf, widthOf } from "../registry"
 import { settingsPane } from "../settings/pane"
+import {
+  askIntoField,
+  listingFor,
+  namingNow,
+  startNaming,
+  suggestTitle,
+  toggleUnread,
+} from "../titles/titles"
 import {
   columnMoved,
   moved,
@@ -110,6 +124,9 @@ export type Shell = WindowApi & {
   settings: (link?: string) => void
   /** Asks an Agent to look into a Problem, in a new Thread (ADR 0039). */
   lookInto: (fingerprint: string) => void
+  /** The engine, for what the window asks of it itself, as a title for a
+   * Thread (ADR 0077). */
+  engine: Engine
 }
 
 /** What `thread.snooze` and `thread.wake` are asked: a Thread by its
@@ -335,6 +352,19 @@ function present(args: Args | undefined, then: (file: string) => void) {
     if (there) then(file)
     else toast.warning(`No such file: ${file}`)
   })
+}
+
+/** The listed thing the focused Pane shows, where its module names it
+ * (`Module.listed`); none else. */
+function lookedAt(
+  shell: Shell
+): { project: ProjectId; listed: Listed; listing: Listing } | undefined {
+  const here = shell.focused()
+  const thing = here && showsOf(here.pane)
+  if (!here || !thing) return undefined
+  const listed = shell.lists()[here.project]?.find((row) => row.id === thing)
+  const listing = listed && listingFor(listed)
+  return listing && { project: here.project, listed, listing }
 }
 
 /** The window's own actions, the tiling's first (ADR 0071, decision 2):
@@ -654,6 +684,43 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     title: "Archive the Thread you look at, or bring it back",
     keys: [{ code: "KeyS", mod: true }],
     run: (shell) => shell.archive(),
+  },
+  // F2 and Shift+F2 are not the mod's (ADR 0077): keys a Thread takes
+  // only while it has the focus, which a terminal's program has else.
+  {
+    id: "thread.rename",
+    section: "Threads",
+    title: "Rename the Thread you look at",
+    keys: [{ code: "F2" }],
+    when: (shell) => lookedAt(shell) !== undefined,
+    run: (shell) => {
+      const at = lookedAt(shell)
+      if (at) startNaming(at.project, at.listed.id, "head")
+    },
+  },
+  {
+    id: "thread.suggest-title",
+    section: "Threads",
+    title: "Suggest a title for the Thread you look at, and rename it",
+    keys: [{ code: "F2", shift: true }],
+    when: (shell) => lookedAt(shell)?.listing.suggest !== undefined,
+    run: (shell) => {
+      const at = lookedAt(shell)
+      if (!at) return
+      // Its field open, the title goes in the field, as its ✨ puts it.
+      if (namingNow(at.project, at.listed.id)) askIntoField()
+      else void suggestTitle(shell.engine, at.project, at.listed)
+    },
+  },
+  {
+    id: "thread.unread",
+    section: "Threads",
+    title: "Mark the Thread you look at as unread, or as read",
+    keys: [{ code: "KeyU", mod: true, shift: true }],
+    run: (shell) => {
+      const at = lookedAt(shell)
+      if (at) toggleUnread(at.listed)
+    },
   },
   {
     id: "thread.snooze",

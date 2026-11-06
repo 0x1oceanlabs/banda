@@ -224,6 +224,13 @@ export type Listed = {
    * and the window tells its Person of it as of any (ADR 0029, decision
    * 6). */
   on?: string
+  /** Its title before the Person last renamed it, which "Previous title"
+   * brings back (ADR 0077); none before a rename. */
+  was?: string
+  /** Whether the Person has seen what it last finished: false while that
+   * calls them, true once seen, which "Mark as unread" takes back (ADR
+   * 0077, decision 6). None while it has nothing finished to see. */
+  seen?: boolean
   /** What a click on it opens. */
   pane: PaneState
   /** Its latest snooze (ADR 0074): the sidebar puts it away while it

@@ -129,6 +129,10 @@ export type Action<Context = WindowApi> = {
    * the key sheet and an Agent may give it, as a JSON Schema, as the
    * engine's tools give theirs; `takes` writes one. */
   args?: ArgsSchema
+  /** Whether its key is its own now. While it is not, the key goes on to
+   * the Pane, as `F2` to a terminal's program while no Thread has the
+   * focus. Its key is always its own, by default. */
+  when?: (context: Context) => boolean
   run: (context: Context, args?: Args) => void
 }
 
@@ -161,6 +165,28 @@ export function takes(
     ...(required && { required }),
     additionalProperties: false,
   }
+}
+
+/**
+ * How the window acts on a thing a module lists (ADR 0077, decision 5):
+ * the Thread menu, at its title and at its row, is the window's, and the
+ * thing is the module's. The window finds the module by the first word of
+ * the thing's Pane kind (ADR 0022, decision 5).
+ */
+export type Listing = {
+  /** Names the thing `title`; with none, gives back the title it had by
+   * itself, as a Thread's first message's. Refused, it says why. */
+  rename: (
+    engine: Engine,
+    project: ProjectId,
+    id: string,
+    title: string | null
+  ) => Promise<void>
+  /** A title for it, from what it says lately; renames nothing. */
+  suggest?: (engine: Engine, project: ProjectId, id: string) => Promise<string>
+  /** Takes back the Person's "seen" of what it last finished, or with
+   * `false` gives it again (`Listed.seen`). */
+  unread?: (id: string, unread: boolean) => void
 }
 
 /** One thing `Tab` lists for a row of the Banda menu. Its `key` there,
@@ -268,6 +294,9 @@ export type Module = {
   bar: readonly Widget[]
   /** Its rows in a Thread's details card (ADR 0034, decision 4). */
   threadDetails: readonly Details[]
+  /** How the window renames, suggests a title for and marks unread a
+   * thing it lists; none where it lists nothing so. */
+  listed?: Listing
   /**
    * Runs once the window is up, with what a module may ask of it; what
    * it returns runs when the window goes. How a module that hears the
@@ -287,6 +316,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
   sources?: readonly Source[]
   bar?: readonly Widget[]
   threadDetails?: readonly Details[]
+  listed?: Listing
   start?: (window: WindowApi) => () => void
 }): Module {
   return {
@@ -300,6 +330,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
     sources: module.sources ?? [],
     bar: module.bar ?? [],
     threadDetails: module.threadDetails ?? [],
+    listed: module.listed,
     start: module.start,
   }
 }

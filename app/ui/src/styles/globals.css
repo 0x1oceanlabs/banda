@@ -1209,3 +1209,31 @@ a[data-file][data-kind="text"] {
   rx: 6px;
   ry: 6px;
 }
+/* Words a model writes now, as "Thinking of a title…" (ADR 0077,
+   decision 3): a light runs over them. */
+[data-shimmer] {
+  --shimmer-dim: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+  background: linear-gradient(
+      90deg,
+      var(--shimmer-dim) 0%,
+      var(--foreground) 40%,
+      var(--shimmer-dim) 80%
+    )
+    0 0 / 200% 100%;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 1.2s linear infinite;
+}
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-shimmer] {
+    animation: none;
+  }
+}

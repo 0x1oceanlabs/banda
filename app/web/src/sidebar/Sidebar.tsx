@@ -1,5 +1,10 @@
-import { MakeProject } from "./MakeProject"
-import { Fragment, type ReactElement, useMemo, useState } from "react"
+import {
+  type ComponentProps,
+  Fragment,
+  type ReactElement,
+  useMemo,
+  useState,
+} from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { ProjectBadge } from "@banda/ui/components/project-badge"
 import { BandaMark, MARK_WORDS } from "@banda/ui/components/banda-mark"
@@ -18,7 +23,6 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
 import { Kbd } from "@banda/ui/components/kbd"
@@ -51,9 +55,12 @@ import {
 } from "./arrange"
 import { useLookSidebar } from "../look"
 import { Row } from "./Row"
+import { ThreadRows } from "../titles/ThreadMenu"
+import { TitleField } from "../titles/Title"
+import { useNaming } from "../titles/titles"
 import { pickPreset, PRESET_WORDS, type Settings } from "./settings"
 import { type Held, held, hold, rowKey } from "./hold"
-import { archivable, useIsArchived } from "./archived"
+import { useIsArchived } from "./archived"
 import { seeWoke, snoozable, useSnoozes } from "./snoozed"
 import { ThemeMenu } from "./ThemeMenu"
 import { useKeyLabel, useKeyOf } from "@banda/ui/hooks/use-key-of"
@@ -110,11 +117,6 @@ export function Sidebar({
   onOpen: (project: ProjectId, pane: PaneState) => void
   onNewThread: (project: ProjectId) => void
   onNoProject: () => void
-  /**
-   * Archives a row's Thread, which closes the Panes that show it, or
-   * brings it back (ADR 0008, decision 4; ADR 0069).
-   */
-  onArchive: (project: ProjectId, thing: string, archived: boolean) => void
   /** Opens the snooze's picker for a row's Thread, by `anchor` if it is
    * given (ADR 0074). */
   onSnooze: (project: ProjectId, listed: Listed, anchor?: Element) => void
@@ -131,7 +133,6 @@ export function Sidebar({
 }) {
   const keyFor = useKeyLabel()
   const { projects, lists, home, isCurrent, onPin } = props
-  const [making, setMaking] = useState<ProjectSummary>()
   const done =
     <A extends unknown[]>(act: (...args: A) => void) =>
     (...args: A) => {
@@ -215,15 +216,12 @@ export function Sidebar({
       onToggle={() => setToggled((set) => flip(set, section.key))}
       onMore={() => setMore((set) => flip(set, section.key))}
       onOpen={onOpen}
-      onArchive={(row) =>
-        props.onArchive(row.project.id, row.listed.id, row.state !== "archived")
-      }
       onSnooze={(row, anchor) =>
         props.onSnooze(row.project.id, row.listed, anchor)
       }
       onWake={(row) => props.onWake(row.project.id, row.listed.id)}
       onNoProject={onNoProject}
-      onMakeProject={setMaking}
+      engine={props.engine}
       onNewThread={onNewThread}
       withMenu={withMenu}
     />
@@ -396,13 +394,6 @@ export function Sidebar({
           <FolderPlusIcon />
         </Button>
       </div>
-      {making && (
-        <MakeProject
-          engine={props.engine}
-          project={making}
-          onClose={() => setMaking(undefined)}
-        />
-      )}
     </aside>
   )
 }
@@ -416,10 +407,9 @@ function SectionView({
   onToggle,
   onMore,
   onOpen,
-  onArchive,
   onSnooze,
   onWake,
-  onMakeProject,
+  engine,
   onNoProject,
   onNewThread,
   withMenu,
@@ -431,18 +421,14 @@ function SectionView({
   onToggle: () => void
   onMore: () => void
   onOpen: (project: ProjectId, pane: PaneState) => void
-  /** Archives the row, or brings it back. */
-  onArchive: (row: Arranged) => void
   onSnooze: (row: Arranged, anchor?: Element) => void
   onWake: (row: Arranged) => void
-  onMakeProject: (project: ProjectSummary) => void
+  engine: Engine
   onNoProject: () => void
   onNewThread: (project: ProjectId) => void
   withMenu: WithMenu
 }) {
-  const keyOf = useKeyLabel()
-  const archiveKey = keyOf("sidebar.archive")
-  const snoozeKey = keyOf("thread.snooze")
+  const snoozeKey = useKeyLabel()("thread.snooze")
   const { limit } = settings.group
   const rows = limit > 0 && !more ? section.rows.slice(0, limit) : section.rows
   const hidden = section.rows.length - rows.length
@@ -496,77 +482,41 @@ function SectionView({
       {!section.folded && (
         <div className="flex flex-col gap-px">
           {rows.map((row) => (
-            <ContextMenu key={rowKey(row)}>
-              <ContextMenuTrigger>
-                <Row
-                  row={row}
-                  settings={settings}
-                  inProject={project !== undefined || row.project.scratch}
-                  current={isCurrent(row.project.id, row.listed.pane)}
-                  onOpen={() => {
-                    seeWoke(row.listed)
-                    onOpen(row.project.id, row.listed.pane)
-                  }}
-                  action={
-                    row.state === "snoozed" ? (
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => onWake(row)}
-                      >
-                        <AlarmClockIcon />
-                        Wake
-                      </Button>
-                    ) : snoozable(row.listed) ? (
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        aria-label="Snooze"
-                        title={`Snooze ${snoozeKey}`}
-                        onClick={(event) =>
-                          onSnooze(
-                            row,
-                            event.currentTarget.closest("[data-row]") ??
-                              undefined
-                          )
-                        }
-                      >
-                        <AlarmClockIcon />
-                      </Button>
-                    ) : undefined
-                  }
-                />
-              </ContextMenuTrigger>
-              <ContextMenuContent>
-                {row.project.scratch && (
-                  <DropdownMenuItem onClick={() => onMakeProject(row.project)}>
-                    Make a Project from it…
-                  </DropdownMenuItem>
-                )}
-                {row.state === "snoozed" ? (
-                  <DropdownMenuItem onClick={() => onWake(row)}>
-                    Wake now
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem
-                    disabled={!snoozable(row.listed)}
-                    onClick={() => onSnooze(row)}
+            <ThreadRow
+              key={rowKey(row)}
+              engine={engine}
+              row={row}
+              settings={settings}
+              inProject={project !== undefined || row.project.scratch}
+              current={isCurrent(row.project.id, row.listed.pane)}
+              onOpen={() => {
+                seeWoke(row.listed)
+                onOpen(row.project.id, row.listed.pane)
+              }}
+              action={
+                row.state === "snoozed" ? (
+                  <Button variant="ghost" size="xs" onClick={() => onWake(row)}>
+                    <AlarmClockIcon />
+                    Wake
+                  </Button>
+                ) : snoozable(row.listed) ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="Snooze"
+                    title={`Snooze ${snoozeKey}`}
+                    onClick={(event) =>
+                      onSnooze(
+                        row,
+                        event.currentTarget.closest("[data-row]") ?? undefined
+                      )
+                    }
                   >
-                    Snooze…
-                    <DropdownMenuShortcut>{snoozeKey}</DropdownMenuShortcut>
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem
-                  disabled={row.state !== "archived" && !archivable(row.listed)}
-                  onClick={() => onArchive(row)}
-                >
-                  {row.state === "archived"
-                    ? "Unarchive thread"
-                    : "Archive thread"}
-                  <DropdownMenuShortcut>{archiveKey}</DropdownMenuShortcut>
-                </DropdownMenuItem>
-              </ContextMenuContent>
-            </ContextMenu>
+                    <AlarmClockIcon />
+                  </Button>
+                ) : undefined
+              }
+            />
           ))}
           {(hidden > 0 || more) && (
             <button
@@ -580,6 +530,50 @@ function SectionView({
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * A Thread's row, with the Thread menu a right click opens (ADR 0077,
+ * decision 5); its Rename… opens the field in the row itself.
+ */
+function ThreadRow({
+  engine,
+  row,
+  ...props
+}: Omit<ComponentProps<typeof Row>, "field"> & { engine: Engine }) {
+  const project = row.project.id
+  const naming = useNaming(project, row.listed.id, "row")
+  if (naming)
+    return (
+      <Row
+        row={row}
+        {...props}
+        field={
+          <TitleField
+            engine={engine}
+            project={project}
+            listed={row.listed}
+            naming={naming}
+            className="-my-0.5 -ml-1.5 h-6 text-sm"
+          />
+        }
+      />
+    )
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger>
+        <Row row={row} {...props} />
+      </ContextMenuTrigger>
+      <ContextMenuContent aria-label="Thread menu" className="min-w-60">
+        <ThreadRows
+          engine={engine}
+          project={project}
+          listed={row.listed}
+          where="row"
+        />
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 

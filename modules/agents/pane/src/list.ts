@@ -22,8 +22,8 @@ export async function readThreads(
 }
 
 /**
- * The facts the list follows: which Threads there are, in what order, and
- * where each one's work stands. A streaming reply never reaches it.
+ * The facts the list follows: which Threads there are, in what order, what
+ * each is called, and where each one's work stands. A streaming reply never reaches it.
  */
 export const THREADS_FILTER = {
   module: "agents",
@@ -33,6 +33,7 @@ export const THREADS_FILTER = {
     "turn.started",
     "turn.ended",
     "thread.rewound",
+    "thread.renamed",
     "question.asked",
     "question.answered",
     "question.closed",
@@ -115,6 +116,11 @@ export function applyThreads(state: ThreadList, event: Event): ThreadList {
         }),
         true
       )
+    }
+    case "thread.renamed": {
+      // A new title moves nothing: nothing happened in the Thread.
+      const { title, was } = fact.payload
+      return change(state, event, (thread) => ({ ...thread, title, was }))
     }
     case "question.asked": {
       const { item, title } = fact.payload

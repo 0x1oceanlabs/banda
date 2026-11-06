@@ -195,3 +195,32 @@ test("a Thread keeps its latest snooze, and what woke it", () => {
     by: agent,
   })
 })
+
+test("a renamed Thread takes its new title and keeps the one before, where it stands", () => {
+  const two: ThreadList = {
+    at: 2,
+    threads: [
+      {
+        id: "t2",
+        agent: "a2",
+        harness: "",
+        title: "Two",
+        updated_at: 2,
+        asking: [],
+      },
+      ...one.threads,
+    ],
+  }
+  const renamed = event(
+    "thread.renamed",
+    { thread: "t1", title: "Fix the list", was: "One" },
+    { author: person, subject: "t1" }
+  )
+  const state = applyThreads(two, renamed)
+  expect(state.threads.map((t) => t.id)).toEqual(["t2", "t1"])
+  expect(state.threads[1]).toMatchObject({
+    title: "Fix the list",
+    was: "One",
+    updated_at: one.threads[0].updated_at,
+  })
+})

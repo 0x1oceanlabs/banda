@@ -1,8 +1,8 @@
 /**
- * Each Thread as the sidebar lists it (ADR 0008): its title, its mark, what
- * calls its Person (a Question, why it failed, or what its Agent told it
- * of its turn, ADR 0057), what it was last asked, its Agent, and the Pane a
- * click opens.
+ * Each Thread as the sidebar lists it (ADR 0008): its title and the one
+ * before it, its mark, what calls its Person (a Question, why it failed,
+ * or what its Agent told it of its turn, ADR 0057), whether they saw how
+ * it ended, what it was last asked, its Agent, and the Pane a click opens.
  * The window arranges the rows; this says only what each one is. Pure, so
  * plain tests cover it.
  */
@@ -37,6 +37,13 @@ export function listedOf(
   // A Thread is titled by its first message: that says nothing new.
   const line = thread.message?.split("\n", 1)[0].trim()
   const said = line && line !== thread.title ? line : undefined
+  // A finished turn that calls when unseen: "Mark as unread" makes it call
+  // again (ADR 0077, decision 6).
+  const unseen = markOf({ ...thread, asking: [] }, {})
+  const seenNow =
+    latest && (unseen === "done" || unseen === "failed")
+      ? seen[thread.id] === latest.turn
+      : undefined
   return {
     id: thread.id,
     title: thread.title || "New Thread",
@@ -48,6 +55,8 @@ export function listedOf(
     ...(harness ? { by: harness } : {}),
     ...(thread.harness ? { harness: thread.harness } : {}),
     agent: thread.agent,
+    ...(thread.was !== undefined ? { was: thread.was } : {}),
+    ...(seenNow !== undefined ? { seen: seenNow } : {}),
     pane: threadPaneOf(thread),
     ...(thread.snooze ? { snooze: snoozeOf(thread.snooze) } : {}),
   }

@@ -46,6 +46,7 @@ import type { Plan } from "./arrange"
 import type { Entry } from "./model"
 import { type MenuFrame, PaneMenu, type Stand } from "./PaneMenu"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
+import { Title } from "../titles/Title"
 
 /** What a framed Pane asks of the workspaces. */
 export type Frame = {
@@ -271,9 +272,19 @@ export function PaneFrame({
                     </span>
                   </>
                 )}
-                <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[selected=true]/tile:text-foreground">
-                  {title}
-                </h2>
+                {listed ? (
+                  <Title
+                    engine={engine}
+                    project={entry.project}
+                    listed={listed}
+                    title={title}
+                    focused={focused}
+                  />
+                ) : (
+                  <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[selected=true]/tile:text-foreground">
+                    {title}
+                  </h2>
+                )}
                 {detail && (
                   <span className="min-w-0 shrink-[2] truncate text-xs text-muted-foreground">
                     {detail}
