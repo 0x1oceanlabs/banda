@@ -1,7 +1,7 @@
 import { cn } from "@banda/ui/lib/utils"
 import { GripHorizontalIcon } from "lucide-react"
 import { Component, useEffect, useLayoutEffect, useRef } from "react"
-import type { Engine, ProjectId } from "@banda/contract"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import type { Center } from "@banda/contract/look"
 import type { Listed, PaneState } from "@banda/ui/pane"
 import { columnsOf, moveOf, useLookColumns, useLookGroups } from "../look"
@@ -61,7 +61,7 @@ export function Strip({
   selected,
   engine,
   modules,
-  projectName,
+  projectOf,
   called,
   marked,
   away,
@@ -82,7 +82,7 @@ export function Strip({
   selected: boolean
   engine: Engine
   modules: readonly string[]
-  projectName: (project: ProjectId) => string
+  projectOf: (project: ProjectId) => ProjectSummary | undefined
   /** How the Thread a Pane shows calls the Person, if it does. */
   called: (entry: Entry) => Chime | undefined
   /** An Agent opened it, and the Person has not looked at it yet. */
@@ -388,7 +388,7 @@ export function Strip({
                 zoomed={entry.id === zoomed}
                 height={column.decked ? undefined : column.heights[e]}
                 listed={listed(entry)}
-                projectName={projectName(entry.project)}
+                project={projectOf(entry.project)}
                 mixed={mixed}
                 frame={frame}
                 hidden={

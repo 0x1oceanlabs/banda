@@ -115,10 +115,10 @@ export function Popped({
     return () => window.removeEventListener("keydown", onKey, { capture: true })
   }, [keyed, close, back])
 
-  const projectName =
-    (projects.state === "ready" &&
-      projects.value.find((project) => project.id === entry?.project)?.name) ||
-    "Project"
+  const project =
+    projects.state === "ready"
+      ? projects.value.find((project) => project.id === entry?.project)
+      : undefined
   return (
     <KeysInForce.Provider value={inForce}>
       <div className="flex h-svh bg-desk text-foreground">
@@ -130,7 +130,7 @@ export function Popped({
             focused
             marked={false}
             listed={undefined}
-            projectName={projectName}
+            project={project}
             mixed={false}
             frame={frame}
             alone

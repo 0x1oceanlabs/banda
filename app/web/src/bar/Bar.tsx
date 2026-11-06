@@ -23,7 +23,7 @@ import type { Problem, Workspaces } from "@banda/contract/look"
 import { useLookBar, useLookProblems } from "../look"
 import type { InBar } from "../workspaces/model"
 import type { ProjectSummary } from "@banda/contract"
-import { ProjectBadge } from "@banda/ui/components/project-badge"
+import { ProjectSign } from "@banda/ui/components/project-sign"
 
 /** A workspace as the bar shows it: a Project's by its badge, with a dot
  * while one of that Project's Threads calls (ADR 0065, decision 9). */
@@ -447,7 +447,7 @@ function WorkspaceList({
               >
                 {/* A Project's workspace shows its Project, with a dot while
                     one of its Threads calls (ADR 0065, decision 9). */}
-                {w.owner ? <ProjectBadge project={w.owner} /> : number}
+                {w.owner ? <ProjectSign project={w.owner} /> : number}
                 {w.calls && (
                   <span
                     aria-hidden

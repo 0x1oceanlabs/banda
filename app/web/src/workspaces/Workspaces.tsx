@@ -1,6 +1,6 @@
 import { cn } from "@banda/ui/lib/utils"
 import { useEffect, useLayoutEffect, useRef } from "react"
-import type { Engine, ProjectId } from "@banda/contract"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import {
   holderOf,
   type Listed,
@@ -34,7 +34,7 @@ export function Workspaces({
   overview,
   engine,
   modules,
-  projectName,
+  projectOf,
   called,
   marked,
   away,
@@ -54,7 +54,7 @@ export function Workspaces({
   overview: boolean
   engine: Engine
   modules: readonly string[]
-  projectName: (project: ProjectId) => string
+  projectOf: (project: ProjectId) => ProjectSummary | undefined
   /** How the Thread a Pane shows calls the Person, if it does. */
   called: (entry: Entry) => Chime | undefined
   /** An Agent opened it, and the Person has not looked at it yet. */
@@ -217,7 +217,7 @@ export function Workspaces({
               selected={current && (overview || live)}
               engine={engine}
               modules={modules}
-              projectName={projectName}
+              projectOf={projectOf}
               called={called}
               marked={marked}
               away={away}

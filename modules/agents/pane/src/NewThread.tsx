@@ -1,11 +1,13 @@
 /** Where a new Thread starts: its Project (ADR 0006). Its Harness is chosen
  * with its model, in the model picker (ADR 0031, decision 6). */
+import { NO_PROJECT } from "@banda/ui/lib/projects"
+import { ProjectSign } from "@banda/ui/components/project-sign"
 import { useMemo } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { openProjects, shownProjects } from "@banda/ui/lib/projects"
-import { FolderIcon, FolderPlusIcon } from "lucide-react"
+import { FolderPlusIcon } from "lucide-react"
 import { Pick } from "./ThreadSettings"
 
 /**
@@ -28,24 +30,27 @@ export function NewThreadBar({
 }) {
   const projects = useShownProjects(engine)
   const machine = useMachine(engine)
+  const picked = projects.find((one) => one.id === project)
   return (
     // In meta words, its icon in line with the composer's text above it.
     <div className="flex min-w-0 items-center gap-0.5 px-2.5 text-muted-foreground">
       {machine && (
         <Pick
           what="Project"
-          icon={<FolderIcon data-icon="inline-start" />}
-          value={projects.some((s) => s.id === project) ? project : machine}
+          icon={<ProjectSign project={picked} size={14} />}
+          value={picked ? project : machine}
           choices={[
             {
               id: machine,
-              name: "No Project",
+              name: NO_PROJECT,
               about: "A new Thread with its own folder",
+              mark: <ProjectSign project={undefined} />,
             },
             ...projects.map((project) => ({
               id: project.id,
               name: project.name,
               about: project.folder,
+              mark: <ProjectSign project={project} />,
             })),
           ]}
           disabled={disabled}

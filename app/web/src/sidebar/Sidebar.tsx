@@ -6,7 +6,7 @@ import {
   useState,
 } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
-import { ProjectBadge } from "@banda/ui/components/project-badge"
+import { ProjectSign } from "@banda/ui/components/project-sign"
 import { BandaMark, MARK_WORDS } from "@banda/ui/components/banda-mark"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -448,7 +448,8 @@ function SectionView({
         onClick={onToggle}
       >
         <Chevron className="size-3 shrink-0 text-muted-foreground" />
-        {project && <ProjectBadge project={project} />}
+        {/* Grouped by Project, No Project's section has its dashed tile. */}
+        {settings.group.by === "project" && <ProjectSign project={project} />}
         <span className="min-w-0 truncate" title={project?.folder}>
           {section.label}
         </span>
@@ -627,7 +628,7 @@ function ProjectsList({
                   project.missing ? onLocate(project.id) : onPick(project.id)
                 }
               >
-                <ProjectBadge project={project} />
+                <ProjectSign project={project} />
                 <span className="min-w-0 flex-1 truncate">{project.name}</span>
                 {project.missing && (
                   <span className="shrink-0 text-xs text-attention">

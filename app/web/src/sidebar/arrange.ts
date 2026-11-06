@@ -3,6 +3,7 @@
  * the settings in; the sections and their rows out. The sidebar only draws
  * what it returns. Pure, so plain tests cover every preset and key.
  */
+import { NO_PROJECT } from "@banda/ui/lib/projects"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import {
   loudest,
@@ -171,7 +172,7 @@ export function arrange(
             ? [
                 section(
                   "no-project",
-                  "No Project",
+                  NO_PROJECT,
                   rows.filter((row) => row.project.scratch)
                 ),
               ]

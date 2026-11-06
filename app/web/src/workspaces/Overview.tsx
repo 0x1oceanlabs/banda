@@ -1,4 +1,5 @@
 import { cn } from "@banda/ui/lib/utils"
+import { projectLabel } from "@banda/ui/lib/projects"
 import {
   type CSSProperties,
   type HTMLAttributes,
@@ -11,7 +12,7 @@ import {
 } from "react"
 import { GripHorizontalIcon, PlusIcon, XIcon } from "lucide-react"
 import { Button } from "@banda/ui/components/button"
-import type { ProjectId } from "@banda/contract"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { DEFAULT_OVERVIEW } from "@banda/contract/look"
 import type { Listed } from "@banda/ui/pane"
 import type { Chime } from "@banda/ui/sound"
@@ -123,7 +124,7 @@ export function Overview({
   open,
   onExited,
   workspaces,
-  projectName,
+  projectOf,
   listed,
   called,
   frame,
@@ -136,7 +137,7 @@ export function Overview({
   open: boolean
   onExited: () => void
   workspaces: Workspaces
-  projectName: (project: ProjectId) => string
+  projectOf: (project: ProjectId) => ProjectSummary | undefined
   /** The Thread a Pane shows, as its module lists it, if it shows one. */
   listed: (entry: Entry) => Listed | undefined
   /** How the Thread a Pane shows calls the Person, if it does. */
@@ -625,7 +626,7 @@ export function Overview({
                       width={shown}
                       zoom={zoom}
                       screen={screen}
-                      projectName={projectName}
+                      projectOf={projectOf}
                       listed={listed}
                       called={called}
                       onClosePane={frame.close}
@@ -681,7 +682,7 @@ function Row({
   width,
   zoom,
   screen,
-  projectName,
+  projectOf,
   listed,
   called,
   onPick,
@@ -699,7 +700,7 @@ function Row({
   /** The zoom of an empty one. */
   zoom: number
   screen: Screen
-  projectName: (project: ProjectId) => string
+  projectOf: (project: ProjectId) => ProjectSummary | undefined
   listed: (entry: Entry) => Listed | undefined
   called: (entry: Entry) => Chime | undefined
   onPick: (entry: string) => void
@@ -749,7 +750,7 @@ function Row({
           >
             {column.entries.map((entry, e) => {
               const { title } = labelOf(entry.pane, said.get(entry.id))
-              const project = projectName(entry.project)
+              const project = projectLabel(projectOf(entry.project))
               const active = column.active === e
               const thread = listed(entry)
               const call = called(entry)

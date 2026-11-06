@@ -25,6 +25,19 @@ export function openProjects(
   return projects.filter((project) => !project.missing)
 }
 
+/** What the Threads without a Project are in (ADR 0069). */
+export const NO_PROJECT = "No Project"
+
+/** Whether `project` stands for No Project: none, or one Thread's own. */
+export function isNoProject(project: ProjectSummary | undefined): boolean {
+  return !project || project.scratch
+}
+
+/** What a Project is called where it shows. */
+export function projectLabel(project: ProjectSummary | undefined): string {
+  return isNoProject(project) || !project?.name ? NO_PROJECT : project.name
+}
+
 /** Whether two lists say the same Projects, as a picker shows them. */
 export function sameProjects(
   a: readonly ProjectSummary[],

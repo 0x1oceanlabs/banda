@@ -5,7 +5,7 @@ import {
   waits,
 } from "@banda/ui/components/banda-mark"
 import { HarnessLogo } from "@banda/ui/components/harness-logo"
-import { ProjectBadge } from "@banda/ui/components/project-badge"
+import { ProjectName, ProjectSign } from "@banda/ui/components/project-sign"
 import { AlarmClockIcon } from "lucide-react"
 import { Fragment, type ReactNode } from "react"
 import { ago, clock, left } from "@banda/ui/lib/words"
@@ -130,14 +130,15 @@ function Piece({
     case "title":
       return <Title row={row} quiet={quiet} />
     case "project":
-      // The mark stands where the Project's badge was: a row with room names
-      // the Project; a row of one line shows its badge.
+      // A row with room shows the Project's sign and name; a row of one
+      // line, its sign (ADR 0070, decision 5).
       return wide ? (
-        <span className="min-w-0 truncate text-xs text-muted-foreground">
-          {project.name}
-        </span>
+        <ProjectName
+          project={project}
+          className="text-xs text-muted-foreground"
+        />
       ) : (
-        <ProjectBadge project={project} />
+        <ProjectSign project={project} size={14} />
       )
     case "harness": {
       // Claude's or Codex's logo, as T3 Code shows them; another Harness

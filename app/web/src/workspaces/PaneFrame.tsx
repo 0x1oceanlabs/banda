@@ -6,7 +6,8 @@ import {
   useMemo,
   useRef,
 } from "react"
-import type { Engine, ProjectId } from "@banda/contract"
+import { ProjectName } from "@banda/ui/components/project-sign"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import {
   DropdownMenu,
@@ -103,7 +104,7 @@ export function PaneFrame({
   zoomed = false,
   height,
   listed,
-  projectName,
+  project,
   mixed,
   frame,
   actions,
@@ -126,7 +127,8 @@ export function PaneFrame({
   height?: number
   /** The listed thing it shows, if it shows one. */
   listed: Listed | undefined
-  projectName: string
+  /** The Project it is in; none while the list is read, which names none. */
+  project: ProjectSummary | undefined
   /** The workspace mixes Projects, so each header names its Project. */
   mixed: boolean
   frame: Frame
@@ -267,9 +269,12 @@ export function PaneFrame({
                         listed.mark === "rest" ? "opacity-40" : undefined
                       }
                     />
-                    <span className="shrink-0 text-muted-foreground">
-                      {projectName}
-                    </span>
+                    {project && (
+                      <ProjectName
+                        project={project}
+                        className="shrink-0 text-muted-foreground"
+                      />
+                    )}
                   </>
                 )}
                 {listed ? (
@@ -290,10 +295,11 @@ export function PaneFrame({
                     {detail}
                   </span>
                 )}
-                {mixed && !listed && (
-                  <span className="shrink-0 truncate rounded-sm bg-muted px-1.5 text-xs text-muted-foreground">
-                    {projectName}
-                  </span>
+                {mixed && !listed && project && (
+                  <ProjectName
+                    project={project}
+                    className="shrink-0 gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground"
+                  />
                 )}
                 {zoomed && (
                   <button
