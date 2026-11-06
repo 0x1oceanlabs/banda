@@ -92,8 +92,7 @@ struct Given {
     /// - `settingSources`: in a Project the Person has not trusted, the
     ///   Person's own settings alone, so Claude Code loads none of the
     ///   folder's settings, hooks, `CLAUDE.md` or `.mcp.json` servers.
-    ///   Codex's process is told by its variable
-    ///   ([`banda_harnesses::UNTRUSTED_VARIABLE`]).
+    ///   Codex's process is told by its variable, `BANDA_UNTRUSTED`.
     meta: Option<acp::Meta>,
 }
 

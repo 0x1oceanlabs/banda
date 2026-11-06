@@ -87,9 +87,9 @@ Banda keeps the Project's data elsewhere.
 A Project's name, pin and archive, and its removal, are the Person's: they
 change them in the settings, which `banda menu settings.projects.<id>`
 opens at that Project, or from the Project's menu in the sidebar.
-So is its trust, `trusted` in `banda call projects.list`: until the Person
-trusts a Project, your Harness loads none of the settings, hooks or MCP
-servers its folder names, only the Person's own.
+So is its trust, `trusted` in `banda call projects.list`: while the Person
+does not trust a Project, your Harness loads none of the settings, hooks or
+MCP servers its folder names, only the Person's own.
 A Project whose folder is gone is listed `missing`, and every call into it
 is refused until the Person locates the folder: `banda menu
 project.locate.<id>` opens "Locate folder" for them.

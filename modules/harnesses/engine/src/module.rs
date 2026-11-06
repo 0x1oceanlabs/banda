@@ -300,7 +300,7 @@ impl HarnessesModule {
     /// the Harness's process has heard it. The receipt keeps the answer,
     /// and the kernel answers the same command, sent again, from it.
     async fn changed(&self, call: &Call, harness: &str) -> Result<(), Refusal> {
-        self.hosts.let_go(call.project().id(), harness);
+        self.hosts.let_go(call.project().id(), Some(harness));
         let (author, subject) = (call.participant(), harness.to_owned());
         call.command(move |tx| {
             tx.emit(

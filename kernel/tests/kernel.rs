@@ -1506,7 +1506,8 @@ async fn a_project_is_trusted_unless_its_folder_looks_foreign_and_only_the_perso
     let made = create(&kernel, owner, "Work").await;
     assert!(made.trusted, "a new folder is the Person's");
     let scratch = create_scratch(&kernel, owner, CommandId::new()).await;
-    assert!(scratch.unwrap().trusted, "No Project's is Banda's");
+    let scratch = scratch.unwrap();
+    assert!(scratch.trusted, "No Project's is Banda's");
     let untrusted_scratch = projects(
         &kernel,
         owner,
@@ -1535,7 +1536,7 @@ async fn a_project_is_trusted_unless_its_folder_looks_foreign_and_only_the_perso
     let said = folder("said", &[".codex"]);
     let said = added(json!({ "folder": said, "trusted": true })).await;
     assert!(said.trusted, "the Person's word wins");
-    let again = added(json!({ "folder": cloned.folder, "trusted": true })).await;
+    let again = added(json!({ "folder": cloned.folder })).await;
     assert!(!again.trusted, "a Project keeps its own");
 
     // An Agent reads its Project's trust, and never changes it or looks
@@ -1564,14 +1565,27 @@ async fn a_project_is_trusted_unless_its_folder_looks_foreign_and_only_the_perso
     projects(&kernel, owner, "trust", trust).await.unwrap();
     let untrust = json!({ "project": made.id, "trusted": false });
     projects(&kernel, owner, "trust", untrust).await.unwrap();
+    let said = json!({ "folder": said.folder, "trusted": false });
+    let said = added(said).await;
+    assert!(
+        !said.trusted,
+        "an add that says changes it, as `trust` does"
+    );
     assert_eq!(
         *notes.trusts.lock().unwrap(),
-        [(cloned.id, true), (made.id, false)],
+        [(cloned.id, true), (made.id, false), (said.id, false)],
         "its modules hear each change, as it is now, once"
     );
     let nowhere = json!({ "project": ProjectId::new(), "trusted": true });
     let nowhere = projects(&kernel, owner, "trust", nowhere).await;
     assert_eq!(nowhere.unwrap_err().code, Code::NotFound);
+    let scratch = json!({ "project": scratch.id, "trusted": false });
+    let scratch = projects(&kernel, owner, "trust", scratch).await;
+    assert_eq!(
+        scratch.unwrap_err().code,
+        Code::Invalid,
+        "No Project's stays"
+    );
 
     // A manifest says it only of a Project that is not trusted, so one
     // from before the flag reads as trusted.
@@ -1580,16 +1594,54 @@ async fn a_project_is_trusted_unless_its_folder_looks_foreign_and_only_the_perso
         let text = std::fs::read(data.join(id.to_string()).join("project.json")).unwrap();
         serde_json::from_slice(&text).unwrap()
     };
-    assert_eq!(manifest(made.id)["trusted"], json!(false));
-    assert_eq!(manifest(plain.id).get("trusted"), None);
+    assert_eq!(manifest(made.id)["untrusted"], json!(true));
+    assert_eq!(manifest(plain.id).get("untrusted"), None);
     drop(kernel);
     let kernel = reopen(root.path(), owner, &notes, 6).await;
     let kept: Vec<_> = (kernel.projects().await.into_iter())
         .map(|project| (project.id, project.trusted))
         .collect();
-    for (id, trusted) in [(made.id, false), (cloned.id, true), (plain.id, true)] {
+    let kept_as = [
+        (made.id, false),
+        (cloned.id, true),
+        (plain.id, true),
+        (said.id, false),
+    ];
+    for (id, trusted) in kept_as {
         assert!(kept.contains(&(id, trusted)), "{id}: {kept:?}");
     }
+}
+
+#[tokio::test]
+async fn a_missing_project_keeps_the_trust_the_person_gave_it_once_located() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, notes) = (PersonId::new(), Notes::default());
+    let kernel = open(root.path(), owner, &notes).await;
+    let project = create(&kernel, owner, "Work").await;
+    let_go(kernel, &root.path().join(".data"), &[]).await;
+    std::fs::rename(root.path().join("Work"), root.path().join("Moved")).unwrap();
+    let kernel = reopen(root.path(), owner, &notes, 1).await;
+
+    let untrust = json!({ "project": project.id, "trusted": false });
+    let untrusted = projects(&kernel, owner, "trust", untrust).await.unwrap();
+    assert_eq!(
+        (&untrusted["trusted"], &untrusted["missing"]),
+        (&json!(false), &json!(true))
+    );
+    assert!(
+        notes.trusts.lock().unwrap().is_empty(),
+        "nothing of it runs"
+    );
+    let folder = root.path().join("Moved");
+    let locate = json!({ "project": project.id, "folder": folder });
+    let located = projects(&kernel, owner, "locate", locate).await.unwrap();
+    assert_eq!(
+        (&located["trusted"], &located["missing"]),
+        (&json!(false), &json!(false))
+    );
+    drop(kernel);
+    let kernel = reopen(root.path(), owner, &notes, 1).await;
+    assert!(!kernel.projects().await[0].trusted);
 }
 
 /// Makes a scratch Project, for a Thread in No Project, under `command`.

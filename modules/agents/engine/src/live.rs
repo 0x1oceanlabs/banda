@@ -180,7 +180,7 @@ impl Live {
                 Ok(Some(event)) => {
                     // It starts again on its next turn.
                     if let Some(harness) = &event.subject {
-                        self.hosts.let_go(project, harness);
+                        self.hosts.let_go(project, Some(harness));
                     }
                 }
                 Ok(None) => return,
@@ -196,7 +196,7 @@ impl Live {
     /// changed: a turn that runs keeps its own until it ends, and the next
     /// starts one that reads the Project as it is now.
     pub fn let_go(&self, project: ProjectId) {
-        self.hosts.let_go_project(project);
+        self.hosts.let_go(project, None);
     }
 
     /// Stops every turn that runs on a Harness of `project`, as the Project is

@@ -4,13 +4,19 @@
 // BANDA_CLAUDE_SESSIONS, the Project's, each call that takes a
 // `sessionStore` gets Banda's (src/sessions.ts), so any Claude account
 // goes on with a Thread's session (ADR 0078, decision 3). Without it, the
-// SDK is as it was.
+// SDK is as it was. In a Project the Person has not trusted, the adapter's
+// own reads of the settings take the Person's alone (src/trust.ts).
 import { homedir } from "node:os"
 import { join } from "node:path"
 import * as sdk from "banda:claude-agent-sdk"
 import { copySession, folderStore, onDisk } from "./src/sessions.ts"
+import { resolving, untrusted } from "./src/trust.ts"
 
 export * from "banda:claude-agent-sdk"
+
+const notTrusted = untrusted(process.env)
+export const resolveSettings = (options) =>
+  sdk.resolveSettings(resolving(options, notTrusted))
 
 const folder = process.env.BANDA_CLAUDE_SESSIONS || undefined
 // A session from before Banda kept them, or a fork the SDK made on disk,

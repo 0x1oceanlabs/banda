@@ -433,8 +433,15 @@ The Person gives a Thread one of their tabs to drive, until they take it
 back, the tab closes or the session ends (ADR 0083).
 
 **Trusted**:
-A Project flag only the Person sets. Until it is set, Harnesses load
-nothing the folder names (ADR 0083).
+A Project flag only the Person changes. While a Project is not trusted,
+its Harnesses load only the Person's own settings, not the settings, hooks
+and MCP servers its folder names. Unsaid, a Project is trusted; one added
+from a folder that looks foreign is not (ADR 0083, ADR 0084).
+
+**Foreign**:
+A folder that looks like code the Person did not write: cloned from a URL,
+a remote whose owner is not the Person, or `.claude/`, `.codex/`,
+`.mcp.json` or a devcontainer in it. Add Project asks about it (ADR 0084).
 
 **Bookkeeping**:
 Banda's own reads of a Project: git status, diffs, checkpoints, Files.

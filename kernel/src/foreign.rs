@@ -1,12 +1,13 @@
 //! Whether a folder looks like code the Person did not write (ADR 0083,
 //! decision 5; ADR 0084, decision 13): what Add Project asks by, and what
 //! decides a new Project's trust when nobody said. A look is a few `stat`s,
-//! two small reads of the repository's own files, and at most one `gh`
-//! that says which GitHub account it is signed in to on this computer. It
-//! runs no git, and nothing the folder names.
+//! small reads of the repository's own files, and at most one `gh` that
+//! says which GitHub account it is signed in to on this computer. It runs
+//! no git, and nothing the folder names. It reads only regular files, a
+//! bounded start of each, so whatever the folder holds, a look ends.
 
 use serde::Serialize;
-use std::io::{BufRead, BufReader, Read};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use ts_rs::TS;
@@ -32,8 +33,9 @@ pub enum ForeignWhy {
     /// Its remote `remote` is `at`, on GitHub under another account than
     /// the one `gh` is signed in to.
     Remote { remote: String, at: String },
-    /// It holds `name`, which a Harness loads (`.claude/`, `.codex/`,
-    /// `.mcp.json`) or a container is made from (`.devcontainer/`).
+    /// It, or a folder above it in its repository, holds `name`, which a
+    /// Harness loads (`.claude/`, `.codex/`, `.mcp.json`) or a container is
+    /// made from (`.devcontainer/`, `.devcontainer.json`).
     Holds { name: String },
 }
 
@@ -46,8 +48,14 @@ const HELD: [&str; 5] = [
     ".devcontainer.json",
 ];
 
-/// The most of a repository's config read: a larger one is not looked at.
+/// The most of a repository's config read; the rest is not looked at.
 const CONFIG_LIMIT: u64 = 1 << 20;
+
+/// The most of HEAD's log read, for its first line.
+const LOG_LIMIT: u64 = 64 * 1024;
+
+/// The most of a `.git` file or a `commondir` read: one path.
+const PATH_LIMIT: u64 = 4096;
 
 /// How long `gh` may take to say its account.
 const GH_LIMIT: Duration = Duration::from_secs(2);
@@ -152,13 +160,21 @@ struct Found {
 
 impl Found {
     /// Reads `folder` and the repository it is in, found in it or above
-    /// it short of `home`.
+    /// it short of `home`. What a Harness loads, it finds in the folder or
+    /// above it up to the repository's top.
     fn in_folder(folder: &Path, home: Option<&Path>) -> Found {
+        let repository = repository(folder, home);
+        let top = repository.as_ref().map_or(folder, |(top, _)| top.as_path());
+        let looked: Vec<&Path> = (folder.ancestors())
+            .take_while(|dir| dir.starts_with(top))
+            .collect();
         let holds = (HELD.iter())
-            .filter(|name| std::fs::symlink_metadata(folder.join(name)).is_ok())
+            .filter(|name| {
+                (looked.iter()).any(|dir| std::fs::symlink_metadata(dir.join(name)).is_ok())
+            })
             .map(|name| (*name).to_owned())
             .collect();
-        let Some(common) = repository(folder, home) else {
+        let Some((_, common)) = repository else {
             return Found {
                 holds,
                 ..Found::default()
@@ -211,50 +227,61 @@ impl Found {
     }
 }
 
-/// The common folder of the repository `folder` is in, as git finds it:
-/// its `.git`, or a worktree's or a submodule's through its `.git` file.
-/// None short of `home`, so a repository of the home folder is no other
-/// folder's.
-fn repository(folder: &Path, home: Option<&Path>) -> Option<PathBuf> {
-    let dir = folder
+/// The repository `folder` is in, as git finds it: the folder that holds
+/// its `.git`, and its common folder, that `.git` or, for a worktree or a
+/// submodule, the one its `.git` file leads to. None short of `home`, so a
+/// repository of the home folder is no other folder's.
+fn repository(folder: &Path, home: Option<&Path>) -> Option<(PathBuf, PathBuf)> {
+    let top = folder
         .ancestors()
         .take_while(|dir| *dir == folder || Some(*dir) != home)
         .find(|dir| std::fs::symlink_metadata(dir.join(".git")).is_ok())?;
-    let dot_git = dir.join(".git");
+    let dot_git = top.join(".git");
     let repo_dir = match dot_git.is_file() {
         false => dot_git,
         true => {
-            let file = std::fs::read_to_string(&dot_git).ok()?;
-            dir.join(file.strip_prefix("gitdir:")?.trim())
+            let file = start_of(&dot_git, PATH_LIMIT)?;
+            top.join(file.strip_prefix("gitdir:")?.trim())
         }
     };
-    match std::fs::read_to_string(repo_dir.join("commondir")) {
-        Ok(common) => Some(repo_dir.join(common.trim())),
-        Err(_) => Some(repo_dir),
+    let common = match start_of(&repo_dir.join("commondir"), PATH_LIMIT) {
+        Some(common) => repo_dir.join(common.trim()),
+        None => repo_dir,
+    };
+    Some((top.to_owned(), common))
+}
+
+/// The start of the regular file at `path`, at most `limit` bytes. None
+/// for anything else: a pipe or a device is never opened to wait on, and
+/// what is opened is checked again, as it is, before it is read.
+fn start_of(path: &Path, limit: u64) -> Option<String> {
+    use rustix::fs::{Mode, OFlags};
+    if !std::fs::metadata(path).ok()?.is_file() {
+        return None;
     }
+    let flags = OFlags::RDONLY | OFlags::NONBLOCK | OFlags::NOCTTY | OFlags::CLOEXEC;
+    let file = std::fs::File::from(rustix::fs::open(path, flags, Mode::empty()).ok()?);
+    if !file.metadata().ok()?.is_file() {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    file.take(limit).read_to_end(&mut bytes).ok()?;
+    Some(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 /// The URL the repository was cloned from, as the first line of HEAD's
 /// log says: `clone: from <url>`.
 fn cloned_from(common: &Path) -> Option<String> {
-    let file = std::fs::File::open(common.join("logs").join("HEAD")).ok()?;
-    let mut first = String::new();
-    BufReader::new(file.take(64 * 1024))
-        .read_line(&mut first)
-        .ok()?;
-    let (_, said) = first.split_once('\t')?;
+    let log = start_of(&common.join("logs").join("HEAD"), LOG_LIMIT)?;
+    let (_, said) = log.lines().next()?.split_once('\t')?;
     Some(said.trim().strip_prefix("clone: from ")?.trim().to_owned())
 }
 
 /// The remotes the repository's config names, with their URLs.
 fn remotes(common: &Path) -> Vec<(String, String)> {
-    let Ok(file) = std::fs::File::open(common.join("config")) else {
+    let Some(config) = start_of(&common.join("config"), CONFIG_LIMIT) else {
         return Vec::new();
     };
-    let mut config = String::new();
-    if file.take(CONFIG_LIMIT).read_to_string(&mut config).is_err() {
-        return Vec::new();
-    }
     let mut found = Vec::new();
     let mut remote: Option<String> = None;
     for line in config.lines().map(str::trim) {
@@ -421,5 +448,45 @@ mod tests {
         std::fs::write(worktree.join(".git"), gitdir).unwrap();
         let found = Found::in_folder(&worktree, Some(home.path()));
         assert_eq!(found.cloned, At::of(theirs));
+    }
+
+    #[test]
+    fn what_a_harness_loads_counts_up_to_the_repository_s_top_and_no_further() {
+        let home = tempfile::tempdir().unwrap();
+        let above = home.path().join("code");
+        let top = above.join("app");
+        let below = top.join("modules/one");
+        std::fs::create_dir_all(&below).unwrap();
+        repo(&top, None, &[]);
+        std::fs::create_dir(top.join(".codex")).unwrap();
+        std::fs::write(above.join(".mcp.json"), "{}").unwrap();
+        let found = Found::in_folder(&below, Some(home.path()));
+        assert_eq!(found.holds, [".codex"]);
+
+        let alone = above.join("alone");
+        std::fs::create_dir(&alone).unwrap();
+        let found = Found::in_folder(&alone, Some(home.path()));
+        assert!(found.holds.is_empty(), "a folder in no repository: its own");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_repository_s_file_that_is_no_regular_file_is_passed_over() {
+        let dir = tempfile::tempdir().unwrap();
+        let theirs = "https://github.com/someone/tool";
+        repo(dir.path(), Some(theirs), &[("origin", theirs)]);
+        let git = dir.path().join(".git");
+        for file in ["config", "logs/HEAD"] {
+            std::fs::remove_file(git.join(file)).unwrap();
+            let made = std::process::Command::new("mkfifo")
+                .arg(git.join(file))
+                .status()
+                .unwrap();
+            assert!(made.success());
+        }
+        std::os::unix::fs::symlink("/dev/zero", git.join("commondir")).unwrap();
+        let found = Found::in_folder(dir.path(), None);
+        assert_eq!((found.cloned, found.remotes), (None, Vec::new()));
+        assert_eq!(start_of(&git.join("commondir"), 16), None);
     }
 }
