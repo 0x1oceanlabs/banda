@@ -1,7 +1,7 @@
 import type { ProjectSummary } from "@banda/contract"
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "vitest"
-import { ProjectSign, UNTRUSTED } from "./project-sign"
+import { NOT_TRUSTED, ProjectSign, UNTRUSTED } from "./project-sign"
 
 const project: ProjectSummary = {
   id: "one",
@@ -28,8 +28,10 @@ test("a trusted Project's sign is its tile alone", () => {
 
 test("a Project not trusted wears a grey dashed circle at its sign's corner, never a state's colour", () => {
   const html = drawn({ ...project, trusted: false })
-  expect(html).toMatch(/^<span[^>]*data-untrusted=""/)
+  expect(html).toMatch(/^<span data-untrusted=""/)
   expect(html).toContain(`title="${UNTRUSTED}"`)
+  // A screen reader hears it, as the circle is only drawn.
+  expect(html).toContain(`<span class="sr-only">${NOT_TRUSTED}</span>`)
   expect(html).toContain("lucide-circle-dashed")
   expect(html).toContain("text-muted-foreground")
   expect(html).not.toMatch(/text-(attention|destructive|primary)/)

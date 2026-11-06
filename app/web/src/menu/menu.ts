@@ -20,7 +20,7 @@ import type { Action, MenuRow } from "@banda/ui/module"
 import type { Shell } from "../shell/actions"
 import { archivable } from "../sidebar/archived"
 import { snoozeAct } from "../sidebar/snoozed"
-import { ANSWERS } from "../trust/trust"
+import { type Answer, ANSWERS } from "../trust/trust"
 
 /** Where the menu opens: its root, or its Actions, as the key sheet. */
 export type At = "root" | "actions"
@@ -75,9 +75,11 @@ export type Choice =
   /** Adds a Project: a new one by its name, or a folder on disk. */
   | { kind: "adding"; id: string; how: Adding }
   /** A branch: whether to trust a folder on disk that looks foreign, as
-   * it is added (ADR 0083, decision 5; ADR 0084, decision 13). `folder`
+   * it is added (ADR 0083, decision 5; ADR 0084, decision 13). Its folder
    * is as it was typed or picked. */
-  | { kind: "trust"; id: string; folder: string; foreign: Foreign }
+  | { kind: "trust"; id: string; how: FolderAdding; foreign: Foreign }
+  /** An answer to that: adds the folder, trusted as `how` says. */
+  | { kind: "answer"; id: string; how: FolderAdding; answer: Answer }
   /** A folder the path field lists, or the one above (`up`): choosing it
    * types `path`, as the Person typed the path, to go on in. */
   | { kind: "folder"; id: string; name: string; path: string; up?: true }
@@ -92,9 +94,14 @@ export type Choice =
  * it looks foreign; or where a missing Project's folder is now (ADR 0026,
  * decision 6). */
 export type Adding =
-  | { name: string }
-  | { folder: string; create: boolean; trusted?: boolean }
-  | { locate: ProjectId; folder: string }
+  { name: string } | FolderAdding | { locate: ProjectId; folder: string }
+
+/** A folder on disk to add, made first when `create` says so. */
+export type FolderAdding = {
+  folder: string
+  create: boolean
+  trusted?: boolean
+}
 
 /** The ways to add a Project, as T3 Code's "Add project" lists them, in
  * their order. */
@@ -111,7 +118,7 @@ const BRANCHES = [
   "finds",
   "trust",
 ] as const
-const OWN = ["bind", "free", "adding", "folder"] as const
+const OWN = ["bind", "free", "adding", "answer", "folder"] as const
 
 /** A row the menu goes into rather than runs. */
 export type Branch = Extract<Choice, { kind: (typeof BRANCHES)[number] }>
@@ -146,7 +153,7 @@ export function branchName(branch: Branch): string {
     case "finds":
       return branch.label
     case "trust":
-      return folderName(branch.folder)
+      return folderName(branch.how.folder)
   }
 }
 
@@ -198,37 +205,31 @@ export function pathAdding(
   return create ? undefined : { locate: inside.project.id, folder }
 }
 
-/** Whether adding `how` waits for what the engine says of the folder:
- * a folder on disk that is there, before the Person said whether to trust
- * it. A folder made for it is the Person's own, and so is a new
- * Project's. */
-export function looksFirst(
-  how: Adding
-): how is Extract<Adding, { create: boolean }> {
-  return "create" in how && !how.create && how.trusted === undefined
+/** The folder on disk adding `how` looks at first, there or to be made,
+ * as the Person has not said whether to trust it yet. A new Project from
+ * a name, under Banda's root, asks nothing, and a located one keeps its
+ * trust. */
+export function lookedAt(how: Adding): FolderAdding | undefined {
+  return "create" in how && how.trusted === undefined ? how : undefined
 }
 
 /** The question a folder that looks foreign asks, as the branch the menu
  * goes into from its path. */
-export function trustBranch(folder: string, foreign: Foreign): Branch {
-  return { kind: "trust", id: "project.add.trust", folder, foreign }
+export function trustBranch(how: FolderAdding, foreign: Foreign): Branch {
+  return { kind: "trust", id: "project.add.trust", how, foreign }
 }
+
+type AnswerRow = Extract<Choice, { kind: "answer" }>
 
 /** The answers to the question: Not yet first, which Enter takes. */
-function trustRows(folder: string): Choice[] {
-  return [false, true].map((trusted) => ({
-    kind: "adding",
-    id: trusted ? "adding.trust" : "adding.not-yet",
-    how: { folder, create: false, trusted },
-  }))
-}
-
-/** The answer to the question a row gives, if it is one. */
-export function answerOf(row: Choice) {
-  if (row.kind !== "adding" || !("create" in row.how)) return undefined
-  const { trusted } = row.how
-  if (trusted === undefined) return undefined
-  return trusted ? ANSWERS.trust : ANSWERS.notYet
+function trustRows(how: FolderAdding): AnswerRow[] {
+  const row = (answer: Answer, trusted: boolean): AnswerRow => ({
+    kind: "answer",
+    id: trusted ? "answer.trust" : "answer.not-yet",
+    how: { ...how, trusted },
+    answer,
+  })
+  return [row(ANSWERS.notYet, false), row(ANSWERS.trust, true)]
 }
 
 /** Where ⌫ on an empty field goes: the branch above, its field as it is
@@ -241,7 +242,7 @@ export function back(path: readonly Branch[]): {
   const from = path.at(-1)
   return {
     path: left,
-    words: from?.kind === "trust" ? from.folder : wordsIn(left),
+    words: from?.kind === "trust" ? from.how.folder : wordsIn(left),
   }
 }
 
@@ -497,9 +498,7 @@ export function menuOf({
     return nonEmpty([
       {
         label: "",
-        rows: fitting(trustRows(inside.folder), (row) => [
-          answerOf(row)?.title ?? "",
-        ]),
+        rows: fitting(trustRows(inside.how), (row) => [row.answer.title]),
       },
     ])
 

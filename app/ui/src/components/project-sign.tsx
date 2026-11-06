@@ -66,16 +66,18 @@ export function ProjectSign({
   if (!corner) return tile
   // The tile gives up its corner to the circle, so it reads on any
   // surface; the circle stands half out, where the name keeps its room.
+  // A screen reader hears it said, before the Project's name.
   return (
     <span
-      aria-hidden
       data-untrusted=""
       title={UNTRUSTED}
       style={{ marginRight: corner.out }}
       className={cn("relative inline-flex shrink-0", className)}
     >
       {tile}
+      <span className="sr-only">{NOT_TRUSTED}</span>
       <CircleDashedIcon
+        aria-hidden
         strokeWidth={2.6}
         className="absolute text-muted-foreground"
         style={{
@@ -91,6 +93,9 @@ export function ProjectSign({
 
 /** What the corner of a sign not trusted says, as its tooltip. */
 export const UNTRUSTED = "Not trusted: its own settings wait"
+
+/** What a screen reader hears of the corner. */
+export const NOT_TRUSTED = "Not trusted"
 
 /** The corner's circle for a sign of `size`: how wide it is, how far it
  * stands out of the tile, and the round cut the tile gives up for it. */

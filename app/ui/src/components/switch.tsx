@@ -10,9 +10,10 @@ function Switch({
 }: {
   label: string
   on: boolean
-  onChange: (on: boolean) => void
-  disabled?: boolean
-}) {
+} & (
+  | { onChange: (on: boolean) => void; disabled?: false }
+  | { onChange?: never; disabled: true }
+)) {
   return (
     <button
       type="button"
@@ -21,7 +22,7 @@ function Switch({
       aria-checked={on}
       aria-label={label}
       disabled={disabled}
-      onClick={() => onChange(!on)}
+      onClick={() => onChange?.(!on)}
       className={cn(
         "relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-50",
         on ? "bg-primary" : "bg-input"
