@@ -14,10 +14,10 @@ import {
   SuggestionList,
 } from "@banda/ui/components/suggestions"
 import { clock, left } from "@banda/ui/lib/words"
-import type { Listed } from "@banda/ui/pane"
 import { AlarmClockIcon, ArrowRightIcon, LoaderIcon } from "lucide-react"
 import { type ReactNode, useId, useMemo, useState } from "react"
-import { asleep, snoozable } from "./snoozed"
+import { asleep, type Listed } from "@banda/ui/pane"
+import { snoozable } from "./snoozed"
 import { PRESETS, presets, whenOf } from "./snooze-time"
 
 /** A Thread whose snooze is being picked, and what the picker stands by. */

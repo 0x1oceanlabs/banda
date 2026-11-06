@@ -6,7 +6,9 @@
  */
 import { useEffect, useMemo, useState } from "react"
 import { kept } from "@banda/ui/lib/kept"
-import type { Listed, Lists } from "@banda/ui/pane"
+import type { ProjectId } from "@banda/contract"
+import type { Args } from "@banda/ui/module"
+import { asleep, type Listed, type Lists } from "@banda/ui/pane"
 import { useIsArchived } from "./archived"
 
 /** Whether the Person may snooze `listed`: it does not ask. */
@@ -14,12 +16,13 @@ export function snoozable(listed: Listed): boolean {
   return listed.mark !== "asking"
 }
 
-/** Whether `listed` sleeps at `now`: nothing woke it, and its time has
- * not come. */
-export function asleep(listed: Listed, now: number): boolean {
-  const { snooze } = listed
-  if (!snooze || snooze.woke) return false
-  return snooze.until === undefined || snooze.until > now
+/** What a menu offers for `listed`: waking it while it sleeps, snoozing
+ * it when it may be, or nothing. */
+export function snoozeAct(
+  listed: Listed,
+  sleeps: boolean
+): "snooze" | "wake" | undefined {
+  return sleeps ? "wake" : snoozable(listed) ? "snooze" : undefined
 }
 
 /**
@@ -71,6 +74,8 @@ const LONGEST = 2 ** 31 - 1
 
 /** What the sidebar knows of snoozes now, kept current. */
 export type Snoozes = {
+  /** The clock they are read by: it moves as the next one wakes. */
+  now: number
   /** Whether a Thread sleeps. */
   asleep: (listed: Listed) => boolean
   /** When a Thread woke by itself, while its Person has not seen it. */
@@ -97,6 +102,7 @@ export function useSnoozes(lists: Lists): Snoozes {
   const archived = useIsArchived()
   return useMemo(
     () => ({
+      now,
       asleep: (listed) => asleep(listed, now),
       woke: (listed) =>
         acked[listed.id] === listed.snooze?.at
@@ -106,4 +112,28 @@ export function useSnoozes(lists: Lists): Snoozes {
     }),
     [now, acked, archived]
   )
+}
+
+/** What the notifications module tells of a Thread that woke by itself
+ * with nothing that calls (ADR 0074, decision 7): one that calls is told
+ * of by its call. Its button opens it. */
+export function wokeTold(project: ProjectId, listed: Listed): Args {
+  const { id: about, title, pane } = listed
+  return {
+    key: `woke:${project}:${about}`,
+    kind: "done",
+    title,
+    body: "Woke from its snooze",
+    in: project,
+    about,
+    buttons: [
+      {
+        label: "Open",
+        // The notifications module's GO_TO: the window names a module's
+        // action by its id, not its package.
+        action: "notifications.go-to",
+        args: { project, about, pane },
+      },
+    ],
+  }
 }

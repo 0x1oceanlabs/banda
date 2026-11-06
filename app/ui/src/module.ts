@@ -65,7 +65,8 @@ export type WindowApi = {
   beside: (agent: string) => Beside | null
   /** What every module lists now, as the sidebar shows it (ADR 0008). */
   lists: () => Lists
-  /** Calls `listener` on each change of `lists`; returns how to stop. */
+  /** Calls `listener` on each change of `lists`, and as a snoozed Thread
+   * wakes, which changes what calls (ADR 0074); returns how to stop. */
   watchLists: (listener: () => void) => () => void
   /** Runs an action by its id, a module's or the window's, as its key
    * would: how one module asks another for what it does. */

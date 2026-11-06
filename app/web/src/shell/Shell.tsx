@@ -20,6 +20,7 @@ import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openProjects, updateProject } from "@banda/ui/lib/projects"
 import {
+  asleep,
   callsOf,
   IN_PROGRAM,
   type Listed,
@@ -76,7 +77,13 @@ import { Edge } from "../sidebar/Edge"
 import { Sidebar } from "../sidebar/Sidebar"
 import { pickPreset } from "../sidebar/settings"
 import { SnoozePicker, type Snoozing } from "../sidebar/SnoozePicker"
-import { asleep, seeWoke, useSnoozes } from "../sidebar/snoozed"
+import {
+  seeWoke,
+  snoozeAct,
+  useSnoozes,
+  wokeAt,
+  wokeTold,
+} from "../sidebar/snoozed"
 import { archive as keepArchived, toggled } from "../sidebar/archived"
 import { useNarrow } from "./narrow"
 import type { Arranged } from "@banda/contract/workspaces"
@@ -463,7 +470,13 @@ export function Shell({
   )
   // What calls the Person, for the Marks, the rings and Alt+U; the
   // notifications module tells of it (ADR 0056, decision 1).
-  const calling = useMemo(() => callsOf(lists), [lists])
+  // Snoozes, read by a clock that moves as the next one wakes (ADR 0074):
+  // a Thread that sleeps calls no one, and calls again as it wakes.
+  const snoozes = useSnoozes(lists)
+  const calling = useMemo(
+    () => callsOf(lists, snoozes.now),
+    [lists, snoozes.now]
+  )
   // Alt+C's column to the middle, and a Thread picked, from the Inbox,
   // the bar or a call, to the left (ADR 0065, decision 8): once each.
   const [reveal, setReveal] = useState<Reveal>()
@@ -474,10 +487,11 @@ export function Shell({
   const listsNow = useRef(lists)
   // Who hears the lists change: a module, as the browser for its tabs.
   const listsHeard = useRef(new Set<() => void>())
+  // They hear it as a snooze ends too: what calls has changed.
   useEffect(() => {
     listsNow.current = lists
     for (const listener of listsHeard.current) listener()
-  }, [lists])
+  }, [lists, snoozes.now])
   // A Thread picked comes to the left, once its Pane is drawn.
   const picking = useCallback(
     (how: Change) => void changing(how).then(picked),
@@ -589,11 +603,22 @@ export function Shell({
     const looked = threadInFocus()
     if (looked) seeWoke(looked.listed)
   }, [threadInFocus, workspaces, lists])
+  /** What the Pane menu offers for the Thread a Pane shows: to snooze it,
+   * to wake it, or nothing. */
+  const snoozeIn = useCallback((entry: Entry | undefined) => {
+    const thing = entry && showsOf(entry.pane)
+    const listed = entry && thing ? listedOf(entry.project, thing) : undefined
+    return listed && snoozeAct(listed, asleep(listed, Date.now()))
+  }, [])
   // Alt+Z: the picker for the Thread the Person looks at.
   const snooze = useCallback(
     () => setSnoozing(threadInFocus()),
     [threadInFocus]
   )
+  const wake = useCallback(() => {
+    const looked = threadInFocus()
+    if (looked) wakeThread(looked.project, looked.listed.id)
+  }, [threadInFocus, wakeThread])
   const toggleOverview = useCallback(
     () => setOverview((was) => (was === "open" ? "closing" : "open")),
     []
@@ -824,6 +849,7 @@ export function Shell({
       answer,
       archive,
       snooze,
+      wake,
       menu: toggleMenu,
       route,
       ownKeys,
@@ -852,6 +878,7 @@ export function Shell({
     answer,
     archive,
     snooze,
+    wake,
     toggleMenu,
     route,
     ownKeys,
@@ -864,6 +891,27 @@ export function Shell({
   useEffect(() => {
     partsNow.current = parts
   }, [parts])
+  // A Thread that woke by itself is told of once (ADR 0074, decision 7):
+  // one that calls, by its call; one that does not, here.
+  const sleeping = useRef(new Set<string>())
+  useEffect(() => {
+    const was = sleeping.current
+    const calls = new Set(calling.map((call) => call.key))
+    sleeping.current = new Set()
+    for (const [project, listed] of Object.entries(lists))
+      for (const one of listed) {
+        if (!one.snooze) continue
+        const key = `${project}:${one.id}`
+        const slept = `${key}@${one.snooze.at}`
+        if (asleep(one, snoozes.now)) sleeping.current.add(slept)
+        else if (
+          was.has(slept) &&
+          !calls.has(key) &&
+          wokeAt(one, snoozes.now) !== undefined
+        )
+          parts.run("notifications.tell", wokeTold(project as ProjectId, one))
+      }
+  }, [lists, calling, snoozes.now, parts])
   // A new Problem of Banda's own tells too, silently (ADR 0039).
   const run = useCallback(
     (action: string, args: Args) => partsNow.current.run(action, args),
@@ -1031,13 +1079,17 @@ export function Shell({
           return newThreadIn(row.project ?? here, row.words || undefined)
         case "archive":
           return toggleArchived(row.project, row.listed.id)
+        case "snooze":
+          return setSnoozing({ project: row.project, listed: row.listed })
+        case "wake":
+          return wakeThread(row.project, row.listed.id)
         case "preset":
           return pickPreset(row.name)
         case "found":
           return row.row.run(parts)
       }
     },
-    [change, openPane, newThreadIn, parts, here, toggleArchived]
+    [change, openPane, newThreadIn, parts, here, toggleArchived, wakeThread]
   )
 
   const frame: Frame = useMemo(
@@ -1080,10 +1132,11 @@ export function Shell({
           presets: look.presets,
           heights: look.heights,
           floor: floorOf(workspace.id, minOf(column, look.min)),
+          snooze: snoozeIn(column.entries[spot.entry]),
         }
       },
     }),
-    [change, update, parts, popOut]
+    [change, update, parts, popOut, snoozeIn]
   )
   // What a Pane in its own window asks, the window does, as for its own.
   useEffect(
@@ -1111,7 +1164,6 @@ export function Shell({
 
   // The bar's workspaces: a Project's by its name, with a dot while one of
   // its Threads calls (ADR 0065, decision 9).
-  const { away: putAway } = useSnoozes(lists)
   const barWorkspaces = useMemo(
     () =>
       inBar(workspaces).map((w) =>
@@ -1120,12 +1172,12 @@ export function Shell({
               ...w,
               owner: projects.find((project) => project.id === w.project),
               calls: (lists[w.project] ?? []).some(
-                (row) => waits(row.mark) && !putAway(row)
+                (row) => waits(row.mark) && !snoozes.away(row)
               ),
             }
           : w
       ),
-    [workspaces, lists, projects, putAway]
+    [workspaces, lists, projects, snoozes]
   )
 
   return (
@@ -1268,6 +1320,7 @@ export function Shell({
               modules={modules}
               project={here}
               lists={lists}
+              asleep={snoozes.asleep}
               projects={projects.filter((project) => !project.scratch)}
               actions={keyed.actions}
               binds={inForce.binds}

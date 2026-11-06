@@ -54,6 +54,7 @@ const sources: Sources = {
   actions,
   presets: { names: ["inbox", "projects", "places"], current: "inbox" },
   archived: (listed) => listed.id === "t3",
+  asleep: () => false,
   found: [],
   weight: () => 0,
 }
@@ -109,6 +110,9 @@ function nameOf(row: Choice): string {
       return row.current ? `${row.name} ✓` : row.name
     case "archive":
       return `archive ${row.listed.id}`
+    case "snooze":
+    case "wake":
+      return `${row.kind} ${row.listed.id}`
     case "found":
       return row.row.title
     case "family":
@@ -337,14 +341,20 @@ describe("its branches and acts", () => {
     ])
   })
 
-  test("Tab on a Thread opens it, beside, or archives it", () => {
+  test("Tab on a Thread opens it, beside, snoozes or archives it", () => {
     const [t3, t2] = menuOf({ words: "", at: "root", sources })[0].rows
     expect(actsOf(t2, sources).map((act) => act.title)).toEqual([
       "Open",
       "Open beside",
+      "Snooze…",
       "Archive thread",
     ])
     expect(actsOf(t3, sources).at(-1)?.title).toBe("Unarchive thread")
+    const asleep = {
+      ...sources,
+      asleep: (listed: Listed) => listed.id === "t2",
+    }
+    expect(actsOf(t2, asleep)[2].title, "one that sleeps").toBe("Wake now")
   })
 
   test("Tab on New Thread lists what its source says: each Harness", () => {

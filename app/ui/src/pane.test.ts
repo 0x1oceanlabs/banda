@@ -28,3 +28,20 @@ test("what asks, failed or finished unseen calls, with what it said", () => {
   ])
   expect(calls[0]).toMatchObject({ key: "s:t2", project: "s", since: 1 })
 })
+
+test("a snoozed Thread calls no one while it sleeps, and calls as it wakes", () => {
+  const done = (snooze: Listed["snooze"]): Listed => ({
+    id: "t",
+    title: "t",
+    mark: "done",
+    changed: 1,
+    pane,
+    snooze,
+  })
+  const at = (snooze: Listed["snooze"], now: number) =>
+    callsOf({ s: [done(snooze)] }, now).length
+  expect(at({ at: 0, until: 100 }, 50), "asleep").toBe(0)
+  expect(at({ at: 0, until: 100 }, 100), "its time came").toBe(1)
+  expect(at({ at: 0 }, 1e12), "until done, it sleeps on").toBe(0)
+  expect(at({ at: 0, woke: { at: 10, by: "done" } }, 50), "woke early").toBe(1)
+})

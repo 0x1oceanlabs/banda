@@ -43,7 +43,7 @@ import {
   SearchIcon,
 } from "lucide-react"
 import { KEYS_FILE, writeBind } from "../actions/actions"
-import type { Lists } from "@banda/ui/pane"
+import type { Listed, Lists } from "@banda/ui/pane"
 import { useLookSidebar } from "../look"
 import { runs, sources as allSources } from "../registry"
 import type { Shell } from "../shell/actions"
@@ -95,6 +95,7 @@ export function BandaMenu({
   modules,
   project,
   lists,
+  asleep,
   projects,
   actions,
   binds,
@@ -112,6 +113,8 @@ export function BandaMenu({
   /** The focused Project, where the sources look. */
   project: ProjectId
   lists: Lists
+  /** Whether a Thread sleeps now (ADR 0074), by the window's clock. */
+  asleep: (listed: Listed) => boolean
   projects: readonly ProjectSummary[]
   actions: readonly Action<Shell>[]
   /** The Person's keys in force, from keys.toml. */
@@ -187,6 +190,7 @@ export function BandaMenu({
               engine={engine}
               opening={opening}
               lists={lists}
+              asleep={asleep}
               projects={projects}
               actions={actions}
               binds={binds}
@@ -241,6 +245,7 @@ function Menu({
   engine,
   opening,
   lists,
+  asleep,
   projects,
   actions,
   binds,
@@ -253,6 +258,7 @@ function Menu({
   engine: Engine
   opening: Opening
   lists: Lists
+  asleep: (listed: Listed) => boolean
   projects: readonly ProjectSummary[]
   actions: readonly Action<Shell>[]
   /** The Person's keys in force, from keys.toml. */
@@ -300,6 +306,7 @@ function Menu({
       actions,
       presets: { names: presets.map((one) => one.name), current: preset },
       archived,
+      asleep,
       found,
       weight: (id) => weightOf(uses[id], now),
       browsed,
@@ -311,6 +318,7 @@ function Menu({
       presets,
       preset,
       archived,
+      asleep,
       found,
       uses,
       now,
@@ -813,6 +821,8 @@ function RowView({
     }
     case "ask":
     case "archive":
+    case "snooze":
+    case "wake":
     case "bind":
     case "free":
       return null
