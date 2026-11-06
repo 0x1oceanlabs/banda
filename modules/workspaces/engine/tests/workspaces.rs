@@ -75,6 +75,15 @@ impl Machine {
     }
 }
 
+/// Every Pane of `workspaces`, as `list` and `panes` say them, from the top
+/// down and from the left.
+fn panes(workspaces: &Value) -> Vec<Value> {
+    let workspaces = workspaces.as_array().unwrap().iter();
+    let columns = workspaces.flat_map(|w| w["columns"].as_array().unwrap());
+    let panes = columns.flat_map(|c| c["panes"].as_array().unwrap());
+    panes.cloned().collect()
+}
+
 #[tokio::test]
 async fn the_arrangement_is_kept_said_in_events_and_survives_a_restart() {
     let root = tempfile::tempdir().unwrap();
@@ -188,13 +197,6 @@ async fn an_agent_arranges_its_own_projects_panes_and_sees_the_others_when_let()
 
     // Behind the wall, it sees its own Project's Panes only, with their args.
     let seen = as_agent("workspaces.panes", json!({})).await.unwrap();
-    let panes = |seen: &Value| -> Vec<Value> {
-        let workspaces = seen.as_array().unwrap().iter();
-        let columns = workspaces.flat_map(|w| w["columns"].as_array().unwrap().clone());
-        columns
-            .flat_map(|c| c["panes"].as_array().unwrap().clone())
-            .collect()
-    };
     let only = panes(&seen);
     assert_eq!(only.len(), 1);
     assert_eq!(only[0]["args"]["url"], "mine");
@@ -214,14 +216,20 @@ async fn an_agent_arranges_its_own_projects_panes_and_sees_the_others_when_let()
     let terminal = json!({ "kind": "terminal.terminal", "args": {} });
     let refused = as_agent("workspaces.open_pane", terminal).await;
     assert_eq!(refused.unwrap_err().code, Code::Forbidden);
-    // A browser opens at a web address, never at the Person's files.
-    for args in [
-        json!({ "url": "file:///etc/passwd" }),
-        json!({ "tabs": [], "shown": 0 }),
+    // A browser opens at a web address, never at the Person's files, and
+    // its tabs are the Person's to give.
+    for (args, code) in [
+        (json!({ "url": "file:///etc/passwd" }), Code::Invalid),
+        (json!({}), Code::Invalid),
+        (json!({ "tabs": [], "shown": 0 }), Code::Forbidden),
+        (
+            json!({ "url": "https://a.test", "tabs": [] }),
+            Code::Forbidden,
+        ),
     ] {
         let browser = json!({ "kind": "browser.browser", "args": args });
         let refused = as_agent("workspaces.open_pane", browser).await;
-        assert_eq!(refused.unwrap_err().code, Code::Invalid);
+        assert_eq!(refused.unwrap_err().code, code);
     }
     // A Person arranges with their own methods.
     let by_person = machine.command(
@@ -297,15 +305,14 @@ async fn an_agent_opens_a_threads_pane_by_its_id_alone_and_the_person_with_every
     let (work, home) = (machine.project("Work").await, machine.project("Home").await);
     let agent = AgentId::new();
     let thread = uuid::Uuid::now_v7().to_string();
-    let as_agent = |args: Value| {
+    let as_agent = |method: &'static str, params| machine.agent(agent, work, method, params);
+    let open = |args: Value| {
         let open = json!({ "kind": "agents.thread", "args": args });
-        machine.agent(agent, work, "workspaces.open_pane", open)
+        as_agent("workspaces.open_pane", open)
     };
-    let pane_of = |list: &Value, id: &Value| -> Value {
-        let workspaces = list["workspaces"].as_array().unwrap().iter();
-        let columns = workspaces.flat_map(|w| w["columns"].as_array().unwrap());
-        let mut panes = columns.flat_map(|c| c["panes"].as_array().unwrap());
-        panes.find(|pane| pane["id"] == *id).unwrap().clone()
+    let pane_of = |workspaces: &Value, id: &Value| -> Value {
+        let mut all = panes(workspaces).into_iter();
+        all.find(|pane| pane["id"] == *id).unwrap()
     };
 
     // The words a new Thread's Pane sends first, and every other arg the
@@ -318,18 +325,22 @@ async fn an_agent_opens_a_threads_pane_by_its_id_alone_and_the_person_with_every
         json!({ "thread": thread, "scratch": home }),
         json!({ "thread": thread, "harness": "fake", "title": "Fix the build" }),
     ] {
-        let refused = as_agent(args.clone()).await.unwrap_err();
+        let refused = open(args.clone()).await.unwrap_err();
         assert_eq!(refused.code, Code::Forbidden, "{args}");
         assert!(refused.message.contains("`send`"), "{}", refused.message);
     }
-    // It names one Thread, by its ID.
+    // It names one Thread, by its ID as `threads` lists it, so one Thread
+    // is one Pane.
     for args in [
         json!({}),
         json!({ "thread": null }),
         json!({ "thread": "t" }),
+        json!({ "thread": thread.to_uppercase() }),
+        json!({ "thread": thread.replace('-', "") }),
+        json!({ "thread": format!("urn:uuid:{thread}") }),
         json!("t"),
     ] {
-        let refused = as_agent(args.clone()).await.unwrap_err();
+        let refused = open(args.clone()).await.unwrap_err();
         assert_eq!(refused.code, Code::Invalid, "{args}");
     }
     let none = machine.list().await;
@@ -340,9 +351,9 @@ async fn an_agent_opens_a_threads_pane_by_its_id_alone_and_the_person_with_every
     );
 
     // One Thread, by its ID alone, it opens in its own Project.
-    let opened = as_agent(json!({ "thread": thread })).await.unwrap();
+    let opened = open(json!({ "thread": thread })).await.unwrap();
     assert_eq!(opened["new"], true);
-    let shown = pane_of(&machine.list().await, &opened["pane"]);
+    let shown = pane_of(&machine.list().await["workspaces"], &opened["pane"]);
     assert_eq!(shown["project"], json!(work));
     assert_eq!(shown["args"], json!({ "thread": thread }));
     // The window keeps the Thread's title and Harness beside its ID; the
@@ -350,17 +361,32 @@ async fn an_agent_opens_a_threads_pane_by_its_id_alone_and_the_person_with_every
     let named = json!({ "thread": thread, "harness": "fake", "title": "Fix the build" });
     let update = json!({ "pane": opened["pane"], "args": named });
     machine.command("workspaces.update", update).await.unwrap();
-    let again = as_agent(json!({ "thread": thread })).await.unwrap();
+    let again = open(json!({ "thread": thread })).await.unwrap();
     let same = json!({ "pane": opened["pane"], "new": false, "at": null });
     assert_eq!(again, same);
+
+    // The Person's Pane on a Thread is the one its ID names, and stays the
+    // Person's to move and close.
+    let other = uuid::Uuid::now_v7().to_string();
+    let theirs =
+        json!({ "thread": other, "harness": "fake", "title": "Release", "details": false });
+    let shows = json!({ "project": work, "kind": "agents.thread", "args": theirs });
+    let person = machine.command("workspaces.open", shows).await.unwrap();
+    let named = open(json!({ "thread": other })).await.unwrap();
+    let same = json!({ "pane": person["pane"], "new": false, "at": null });
+    assert_eq!(named, same);
+    let seen = as_agent("workspaces.panes", json!({})).await.unwrap();
+    assert_eq!(pane_of(&seen, &person["pane"])["yours"], false);
+    let close = as_agent("workspaces.close_own", json!({ "pane": person["pane"] }));
+    assert_eq!(close.await.unwrap_err().code, Code::Forbidden);
 
     // The Person keeps every arg: a new Thread with the words it starts
     // with, in any Project.
     let asked = json!({ "thread": null, "harness": "fake", "title": "", "ask": "Commit and push" });
-    let open = json!({ "project": home, "kind": "agents.thread", "args": asked });
-    let person = machine.command("workspaces.open", open).await.unwrap();
+    let shows = json!({ "project": home, "kind": "agents.thread", "args": asked });
+    let person = machine.command("workspaces.open", shows).await.unwrap();
     assert_eq!(person["new"], true);
-    let kept = pane_of(&machine.list().await, &person["pane"]);
+    let kept = pane_of(&machine.list().await["workspaces"], &person["pane"]);
     assert_eq!(
         (kept["project"].clone(), kept["args"].clone()),
         (json!(home), asked)
@@ -368,7 +394,37 @@ async fn an_agent_opens_a_threads_pane_by_its_id_alone_and_the_person_with_every
 }
 
 #[tokio::test]
-async fn an_agent_gives_the_diff_and_a_file_only_the_args_that_choose_what_they_show() {
+async fn a_threads_pane_an_agent_opened_keeps_no_words_to_send() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let project = ProjectId::new();
+    let thread = |by: Option<AgentId>, title: &str| {
+        let args =
+            json!({ "thread": null, "harness": "fake", "title": title, "ask": "Commit and push" });
+        json!({ "id": PaneId::new(), "project": project, "kind": "agents.thread", "args": args, "by": by })
+    };
+    let kept = json!({ "workspaces": [{ "id": WorkspaceId::new(), "columns": [{
+        "id": ColumnId::new(),
+        "panes": [thread(Some(AgentId::new()), "Its"), thread(None, "Mine")],
+    }] }] });
+    machine.command("workspaces.take", kept).await.unwrap();
+    let asks = |list: &Value| -> Vec<(Value, Value)> {
+        let all = panes(&list["workspaces"]).into_iter();
+        all.map(|pane| (pane["args"]["title"].clone(), pane["args"]["ask"].clone()))
+            .collect()
+    };
+
+    // Its words are the Person's alone to give, whenever the Pane was
+    // kept; the Person's own stay.
+    let only = [
+        (json!("Its"), Value::Null),
+        (json!("Mine"), json!("Commit and push")),
+    ];
+    assert_eq!(asks(&machine.list().await), only);
+}
+
+#[tokio::test]
+async fn an_agent_opens_the_diff_and_a_file_with_the_args_that_choose_what_they_show() {
     let root = tempfile::tempdir().unwrap();
     let machine = Machine::open(root.path(), PersonId::new()).await;
     let work = machine.project("Work").await;
@@ -377,26 +433,12 @@ async fn an_agent_gives_the_diff_and_a_file_only_the_args_that_choose_what_they_
         machine.agent(AgentId::new(), work, "workspaces.open_pane", open)
     };
 
-    // An Agent chooses what they show, and how.
-    let staged = json!({ "scope": { "kind": "staged" }, "file": "src/main.rs" });
-    let at = json!({ "path": "README.md", "line": 3, "wrap": true, "source": true });
-    for (kind, args) in [("git.diff", staged.clone()), ("files.file", at.clone())] {
+    // Staging, reverting and saving wait for the Person's click and typing.
+    let staged = json!({ "scope": { "kind": "staged" }, "file": "src/main.rs", "view": {} });
+    let at = json!({ "path": "README.md", "line": 3, "wrap": true, "source": true, "edit": true });
+    for (kind, args) in [("git.diff", staged), ("files.file", at)] {
         let opened = as_agent(kind, args).await.unwrap();
         assert_eq!(opened["new"], true, "{kind}");
-    }
-    // Any other arg is the Person's.
-    let mut commented = staged;
-    commented["comment"] = json!("Looks good");
-    let mut written = at;
-    written["text"] = json!("");
-    for (kind, args) in [("git.diff", commented), ("files.file", written)] {
-        let refused = as_agent(kind, args).await.unwrap_err();
-        assert_eq!(refused.code, Code::Forbidden, "{kind}");
-        assert!(
-            refused.message.contains("your Person's"),
-            "{}",
-            refused.message
-        );
     }
 }
 

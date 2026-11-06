@@ -60,6 +60,9 @@ import { Preview, usePicked } from "./Preview"
 import { type Shown, useFile } from "./read"
 import { showing, workedIn } from "./work"
 
+/** An Agent opens a file with any of these args, as each chooses only what
+ * it shows; one that sends or starts something is the Person's, and
+ * `AGENT_KINDS` in the workspaces engine refuses it to an Agent. */
 export type FileArgs = {
   /** The file, whole or from the Project's folder. */
   path: string
