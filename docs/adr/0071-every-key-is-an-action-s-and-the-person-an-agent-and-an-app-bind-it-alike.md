@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-05
 ---
 
@@ -35,7 +35,10 @@ evening, but what stopped the Agent is still there:
 Roma, on 2026-11-05: this is bad for a system that calls itself
 hackable. Fix it so it works with the Apps' manifests and with our
 tiling, the window's own keys, and so the Person can ask an Agent to
-change the keys.
+change the keys. ADR 0068 came first and is built: keys are named as
+they are pressed, the mod is the Person's, Banda's keys are written by
+level and match exactly, and Settings picks the main key. On 2026-11-06
+Roma said to finish this one too.
 
 ## Decision
 
@@ -78,7 +81,12 @@ change the keys.
      copies them for the engine. An action, the window's or an App's,
      adds `scope`, and `args`: a JSON Schema of what it takes, which the
      key sheet, the checks and an Agent read. Keys are written by level
-     (ADR 0068, decision 2).
+     (ADR 0068, decision 2), in `window.json` too:
+     `{ "code": "KeyR", "mod": true }`, not as they read with Alt, so
+     the engine makes them real with the mod.
+   - A scope is declared with the actions that use it: its id, its name
+     for the key sheet, and whether it is a field, where a key that
+     types is refused (decision 3).
 
 3. **A line of `keys.toml` can carry args, and each scope has its own
    table.**
@@ -105,7 +113,8 @@ change the keys.
    read the same.**
    - With every manifest's actions, the look reads `keys.toml`: Banda's
      keys with the mod (ADR 0068), then the Person's lines over them,
-     scope by scope. It gives each action its keys in force.
+     scope by scope. It gives each action its keys in force, and Banda's
+     own besides, which the reset chord brings back.
    - It names, at their lines, as Problems: an id no App runs (the line
      is kept, as `[bar]` keeps the ids of modules not run, ADR 0064);
      args the action does not take; a key that would be typed; two
@@ -126,7 +135,8 @@ change the keys.
      refuses with their Problem.
    - `banda keys mod <keys>` sets the mod (ADR 0068) and moves the
      Person's lines with it, as Settings does.
-   - The same are engine methods marked `tool`: `keys.list`,
+   - They are a module of their own, `keys`. Its methods are marked
+     `tool`: `keys.list`,
      `keys.bind`, `keys.free`, `keys.reset`, `keys.mod`. An Agent in a
      Thread has them through `banda mcp`, whatever its PATH.
    - The agents module puts the folder that holds `banda` first on each
@@ -165,23 +175,25 @@ change the keys.
 - `Ctrl+Alt+Return` stays `terminal.new`'s, so the hand-on (ADR 0005,
   decision 10) does not give a shell `Alt+Return` there. Moving
   `terminal.new` in `keys.toml` gives it back.
-- Built with ADR 0068, one PR each:
-  1. One name for a key, `⌃⌥⇧⌘` on a Mac; the eleven strings by action
-     id; the test against `Alt+` in the window's strings.
-  2. Manifests: `scope` and `args`; `app/web/window.json`; the engine
-     reads them all.
-  3. The look: `mod`, levels, `[binds]` and its scope tables, args; the
-     keys in force and their Problems; `banda settings check`.
-  4. The window: the keys in force, narrowest scope first; exact
-     modifiers; the mod for the mouse, the pages and the hand-on; main
-     gives a page's keys in force only.
-  5. The scopes' actions: the composer, the browser, the launcher and
-     the terminal move their keys to actions with handlers; the test
-     against keys no action declares.
-  6. `banda keys`, the `keys.*` tools, `banda` on an Agent's PATH, the
-     skill's Keys topic. End-to-end tests: the fake Agent in a Thread
-     binds `Alt+M` to `column.maximize`, and the key widens the column;
-     it binds `Ctrl+Alt+H` to `browser.open` with an address, and the
-     key opens it.
-  7. Settings › Keys: the mod, the keys as they read, the scopes, the
-     lines moved (ADR 0068, decision 5).
+- ADR 0068's five steps came first and are built: keys named as they
+  are pressed, the mod, Banda's keys by level and matched exactly, the
+  mouse and the pages with the mod, Settings' main key. What is left, one
+  PR each:
+  1. Manifests: keys by level, `scope` and `args`; `app/web/window.json`
+     for the window's own actions; the engine reads them all, and the
+     skill's modules topic lists every action.
+  2. The look: Banda's keys with the mod, `[binds]` and its scope
+     tables, args; the keys in force, Banda's own, and their Problems;
+     `banda settings check`. The window takes the keys in force from the
+     look, not from its own `rebind`.
+  3. The scopes' actions: the composer, the browser, the launcher and
+     the terminal move their keys to actions with handlers, narrowest
+     scope first; the test against keys no action declares; main gives a
+     page's keys in force only.
+  4. The `keys` module: `banda keys`, the `keys.*` tools, `banda` on an
+     Agent's PATH, the Banda skill's Keys topic. End-to-end tests: the
+     fake Agent in a Thread binds `Alt+M` to `column.maximize`, and the
+     key widens the column; it binds `Ctrl+Alt+H` to `browser.open` with
+     an address, and the key opens it.
+  5. The key sheet lists every scope, and Add a key writes into the
+     scope's table.
