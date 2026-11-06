@@ -671,13 +671,17 @@ test("the Person lends a tab of theirs to a Thread, which drives it until the le
   expect(
     await agentSays(window, "browser_snapshot", { tab: lent.id })
   ).toContain("who=person")
-  // A key its hands press is the page's: it neither takes the tab back
-  // nor opens the picker.
-  await agentSays(window, "browser_act", {
+  // Its press of the lend key, one of Banda's, is refused: it neither
+  // takes the tab back nor opens the picker.
+  const lendKey = await agentCalls(window, "browser_act", {
     tab: lent.id,
     action: "press",
     key: "Alt+Shift+L",
   })
+  expect(lendKey.isError).toBe(true)
+  expect(lendKey.content[0]!.text).toContain(
+    "Alt+Shift+L is one of Banda's keys, which only the Person presses."
+  )
   expect(await tabs()).toMatchObject([{ id: lent.id, lent: true }])
   await expect(chip).toBeVisible()
   await expect(picker).toHaveCount(0)
@@ -1189,6 +1193,30 @@ test("an Agent acts in a tab by refs, hears what changed, and leaves the Person'
   )
   expect(await snapshot()).toContain("Sent a b")
   await expect(composer).toHaveText("")
+
+  // Banda's keys are the Person's alone: an Agent's press of one is
+  // refused, and the window hears nothing of it. The mod alone reaches
+  // the page.
+  for (const key of ["Alt+w", "Control+l", "Alt+!"]) {
+    const refused = await agentCalls(window, "browser_act", {
+      tab,
+      action: "press",
+      ref: query,
+      key,
+    })
+    expect(refused.content[0]!.text).toBe(
+      `Refused (forbidden): ${key} is one of Banda's keys, which only the Person presses. To open a tab, or take one to an address, back, forward or reload, use browser_open or browser_navigate. Nothing was done.`
+    )
+  }
+  expect(await act({ action: "press", ref: query, key: "Alt" })).toBe(
+    `Pressed Alt in ${query}.`
+  )
+  // The Person's own press comes after them, and works.
+  await expect(addressBar(page)).not.toBeFocused()
+  await pressInPage(app, "L", ["control"])
+  await expect(addressBar(page)).toBeFocused()
+  await expect(page.getByRole("region", { name: "Form" })).toBeVisible()
+  await addressBar(page).press("Escape")
 
   // A password or a card is the Person's to fill, and a snapshot hides
   // what the Person put there.

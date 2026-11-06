@@ -1098,7 +1098,13 @@ modules/*/desktop  a module's part in Electron main
     Agent actions share a dialog ID; the first answer wins (ADR 0060).
   - Banda's Alt keys and the browser's Ctrl keys are taken from the page in
     `before-input-event` and pressed again in the window, so the actions
-    and the Pane hear them as their own.
+    and the Pane hear them as their own. A key a page hears while
+    Banda's hands act in it (`Tabs.hands`) stays the page's, and the
+    window hears none. Their press of one of Banda's keys in force there
+    is held back and refused: Electron tells `before-input-event` of a key
+    sent with `sendInputEvent` before that returns, so main reads it there
+    as Electron makes it (`modules/browser/desktop/src/keys.ts`; ADR 0083,
+    decision 3).
   - A page takes the keys as an iframe does, with no focus event of its
     own; its tile takes the focus once the window blurs.
   - A Pane keeps its tabs in its args, and holds their pages while it
@@ -1119,9 +1125,8 @@ modules/*/desktop  a module's part in Electron main
     by a gesture in the tab: the mark at the address's end, or the
     action `browser.lend` (Alt+Shift+L), pressed in the Pane or in the
     page it shows; the page tells main on the bridge's channel of the
-    same name. A key a page hears while Banda's hands act in it
-    (`Tabs.hands`) stays the page's, so no Agent presses one of the
-    window's. `Tabs` keeps each lend, which ends as the Person takes it
+    same name. An Agent's press of it is refused, as of each of Banda's
+    keys (above). `Tabs` keeps each lend, which ends as the Person takes it
     back, the tab closes, or the Thread's session ends: its Project lists
     it no more (the bridge's `ended`), or the engine starts again, as the
     boot its `welcome` says changes. As one ends, `Drive` ends the

@@ -8,7 +8,7 @@
  */
 import { type BrowserWindow, type Session, WebContentsView } from "electron"
 import type { Box } from "@banda/browser-pane/desktop"
-import { keys } from "./browser"
+import { keys } from "./keys"
 
 /** Chrome's bounds on a popup's size. */
 const SMALLEST = 25
