@@ -11,6 +11,7 @@ import type { BrowserMethods } from "./generated/browser/BrowserMethods"
 import type { FilesMethods } from "./generated/files/FilesMethods"
 import type { GitMethods } from "./generated/git/GitMethods"
 import type { HarnessesMethods } from "./generated/harnesses/HarnessesMethods"
+import type { KeysMethods } from "./generated/keys/KeysMethods"
 import type { ProblemsMethods } from "./generated/problems/ProblemsMethods"
 import type { PullsMethods } from "./generated/pulls/PullsMethods"
 import type { SharingMethods } from "./generated/sharing/SharingMethods"
@@ -32,6 +33,7 @@ export type Methods = Prefixed<"projects", ProjectsMethods> &
   Prefixed<"git", GitMethods> &
   Prefixed<"files", FilesMethods> &
   Prefixed<"pulls", PullsMethods> &
+  Prefixed<"keys", KeysMethods> &
   Prefixed<"problems", ProblemsMethods> &
   Prefixed<"sharing", SharingMethods>
 

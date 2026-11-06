@@ -1,0 +1,8 @@
+# The keys module, as it declares itself (ADR 0022). What its code says,
+# its methods, its code declares; this holds the rest.
+id = "keys"
+name = "Keys"
+about = "Banda's keys (ADR 0071): every action with its keys in force, and the lines of keys.toml that bind them, written as `banda settings set` writes after the look's checks. `banda keys` is its command; an Agent has its methods as tools."
+version = "0.1.0"
+from-banda = true
+settings = []

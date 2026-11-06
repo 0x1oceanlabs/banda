@@ -11,6 +11,7 @@ use banda_git::Git;
 use banda_harnesses::{Harnesses, HarnessesModule};
 use banda_kernel::api::{self, OwnerSecret};
 use banda_kernel::{Kernel, PROTOCOL};
+use banda_keys::KeysModule;
 use banda_problems::Problems;
 use banda_pulls::Pulls;
 use banda_sharing::{Never, Sharing};
@@ -72,6 +73,8 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         // decision 8).
         .module(Files::new().config_in(places.config.clone()))
         .module(Pulls::new())
+        // Banda's keys, which an Agent binds for its Person (ADR 0071).
+        .module(KeysModule::new(places.config.clone()))
         .module(Workspaces::new())
         .module(problems(&places))
         .module(sharing(&places))

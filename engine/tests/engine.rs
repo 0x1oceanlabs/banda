@@ -357,7 +357,12 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "browser_handoff",
                 "link_pull_request",
                 "unlink_pull_request",
-                "list_thread_pull_requests"
+                "list_thread_pull_requests",
+                "keys_list",
+                "keys_bind",
+                "keys_free",
+                "keys_reset",
+                "keys_mod"
             ][..],
             &arranging,
             &["problems", "problem", "skill"]

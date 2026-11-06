@@ -15,6 +15,7 @@ use banda_files::Files as FilesModule;
 use banda_git::Git;
 use banda_harnesses::HarnessesModule;
 use banda_kernel::Method;
+use banda_keys::KeysModule;
 use banda_look::keys::{Action, Scope};
 use banda_problems::Problems;
 use banda_pulls::Pulls;
@@ -69,6 +70,11 @@ const FILES: &[Files] = &[
         folder: "files",
         toml: include_str!("../../modules/files/module.toml"),
         methods: Some(FilesModule::method_list),
+    },
+    Files {
+        folder: "keys",
+        toml: include_str!("../../modules/keys/module.toml"),
+        methods: Some(KeysModule::method_list),
     },
     Files {
         folder: "pulls",
@@ -325,14 +331,11 @@ fn line_of(action: &Action) -> String {
     if let Some(scope) = &action.scope {
         line.push_str(&format!(", `{}`", banda_look::keys::table_of(Some(scope))));
     }
-    let properties = action
-        .args
-        .as_ref()
-        .and_then(|args| args["properties"].as_object());
-    if let Some(properties) = properties {
-        let args: Vec<String> = properties
+    let takes = action.takes();
+    if !takes.is_empty() {
+        let args: Vec<String> = takes
             .iter()
-            .map(|(name, arg)| format!("`{name}` ({})", arg["description"].as_str().unwrap_or("")))
+            .map(|(name, about)| format!("`{name}` ({about})"))
             .collect();
         line.push_str(&format!("; takes {}", args.join(", ")));
     }
@@ -371,6 +374,7 @@ mod tests {
             Browser::new().name(),
             Git::new().name(),
             FilesModule::new().name(),
+            KeysModule::new(Default::default()).name(),
             Pulls::new().name(),
             Workspaces::new().name(),
             Problems::new("", "").name(),

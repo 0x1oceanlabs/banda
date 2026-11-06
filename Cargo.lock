@@ -311,6 +311,7 @@ dependencies = [
  "banda-git",
  "banda-harnesses",
  "banda-kernel",
+ "banda-keys",
  "banda-look",
  "banda-problems",
  "banda-pulls",
@@ -475,6 +476,22 @@ dependencies = [
  "tracing",
  "ts-rs",
  "uuid",
+]
+
+[[package]]
+name = "banda-keys"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "banda-kernel",
+ "banda-look",
+ "banda-settings",
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml_edit",
+ "ts-rs",
 ]
 
 [[package]]

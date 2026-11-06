@@ -125,6 +125,16 @@ enum Command {
         #[command(subcommand)]
         what: SettingsCommand,
     },
+    /// Banda's keys (ADR 0071): every action with its keys in force, and
+    /// keys.toml's lines bound, freed and reset after the look's checks.
+    /// With no command, the list.
+    Keys {
+        #[command(subcommand)]
+        what: Option<KeysCommand>,
+        /// The list as JSON, one action per line.
+        #[arg(long)]
+        json: bool,
+    },
     /// Opens Files in Banda's window on a folder: PATH, or where this
     /// runs; a file opens its folder with it picked. It shows in the
     /// Project whose folder holds it, else in the first one.
@@ -222,6 +232,38 @@ enum LookCommand {
     Check { files: Vec<PathBuf> },
     /// Lists the themes there are, one JSON object per line.
     Themes,
+}
+
+#[derive(Subcommand)]
+enum KeysCommand {
+    /// Binds KEY to ACTION, as `Alt+M column.maximize`. Refuses, saying
+    /// why, an action Banda has not, args it does not take, and a key
+    /// the window's fields would type.
+    Bind {
+        key: String,
+        action: String,
+        /// What the action takes, as JSON: `{"address":"https://…"}`.
+        #[arg(long, value_parser = |json: &str| serde_json::from_str::<banda_look::keys::Args>(json))]
+        args: Option<banda_look::keys::Args>,
+        /// The scope's table for an action of a scope, as `composer`.
+        #[arg(long)]
+        scope: Option<String>,
+    },
+    /// Frees KEY: it goes to the Pane.
+    Free {
+        key: String,
+        #[arg(long)]
+        scope: Option<String>,
+    },
+    /// Takes the Person's line of KEY out, so Banda's own is back.
+    Reset {
+        key: String,
+        #[arg(long)]
+        scope: Option<String>,
+    },
+    /// Sets the mod, one or two of Alt, Ctrl and Super, as `Ctrl+Alt`, and
+    /// moves the Person's lines with it.
+    Mod { keys: String },
 }
 
 #[derive(Subcommand)]
@@ -326,6 +368,7 @@ fn main() -> ExitCode {
         Command::Look { what, follow } => return look(what, follow),
         Command::Skill { topic, export } => return skill(topic, export),
         Command::Settings { what } => return settings(what),
+        Command::Keys { what, json } => return keys(what, json),
         Command::Menu { route } => return menu(route.unwrap_or_default()),
         Command::Modules { unstable } => return print_modules(unstable),
         Command::Browser { web_socket } => return browser(web_socket),
@@ -466,6 +509,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
         Command::Look { .. } => unreachable!("the look runs without the engine"),
         Command::Skill { .. } => unreachable!("the skill runs without the engine"),
         Command::Settings { .. } => unreachable!("the settings run without the engine"),
+        Command::Keys { .. } => unreachable!("the keys run without the engine"),
         Command::Menu { .. } => unreachable!("the menu is the window's, not the engine's"),
         Command::Modules { .. } => {
             unreachable!("the modules say what they offer without the engine")
@@ -668,6 +712,69 @@ fn settings(what: SettingsCommand) -> ExitCode {
             ExitCode::SUCCESS
         }
     }
+}
+
+/// `banda keys`: no engine, only the files, as `banda settings`.
+fn keys(what: Option<KeysCommand>, json: bool) -> ExitCode {
+    use banda_keys::{Bind, Key, SetMod};
+    let places = match look_places() {
+        Ok(places) => places,
+        Err(failure) => return failure.exit(),
+    };
+    let config = &places.config;
+    let Some(what) = what else {
+        let (listed, problems) = banda_keys::list(config);
+        let mut out = std::io::stdout().lock();
+        for action in &listed {
+            // A reader that went away is not an error.
+            let _ = if json {
+                writeln!(out, "{}", json!(action))
+            } else {
+                writeln!(out, "{}", line_of(action))
+            };
+        }
+        return report(problems);
+    };
+    let done = match what {
+        KeysCommand::Bind {
+            key,
+            action,
+            args,
+            scope,
+        } => banda_keys::bind(
+            config,
+            &Bind {
+                key,
+                action,
+                args,
+                scope,
+            },
+        ),
+        KeysCommand::Free { key, scope } => banda_keys::free(config, &Key { key, scope }),
+        KeysCommand::Reset { key, scope } => banda_keys::reset(config, &Key { key, scope }),
+        KeysCommand::Mod { keys } => banda_keys::set_mod(config, &SetMod { keys }),
+    };
+    report_done(done.map(|said| println!("{said}")))
+}
+
+/// An action as `banda keys` prints it: its id, its keys, mine marked
+/// `*`, its scope and its title.
+fn line_of(action: &banda_keys::Listed) -> String {
+    let keys: Vec<String> = action
+        .keys
+        .iter()
+        .map(|key| format!("{}{}", key.key, if key.mine { "*" } else { "" }))
+        .collect();
+    let scope = action
+        .scope
+        .as_deref()
+        .map_or_else(String::new, |scope| format!(" [{scope}]"));
+    format!(
+        "{}\t{}{scope}\t{}",
+        action.id,
+        keys.join(", "),
+        action.title
+    )
 }
 
 /// A change's refusal, said as a check's problems are.
