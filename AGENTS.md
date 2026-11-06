@@ -13,6 +13,8 @@ UNIX composition + deep modules + explicit contracts.
 
 - The words: [`GLOSSARY.md`](GLOSSARY.md). Use its terms exactly.
 - The shape: [`docs/architecture.md`](docs/architecture.md).
+- Where it is going: [the architecture vision](docs/research/2026-11-06-architecture-vision.md),
+  accepted on 2026-11-06, with its roadmap and PR plan.
 - The decisions: [`docs/adr/`](docs/adr/). A change that contradicts an ADR
   needs a new ADR first.
 
