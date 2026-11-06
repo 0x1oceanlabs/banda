@@ -28,7 +28,6 @@ mod between;
 mod changes;
 mod drive;
 mod effects;
-mod files;
 mod images;
 mod issues;
 mod kept;
@@ -95,7 +94,6 @@ pub struct Agents {
     live: Arc<Live>,
     idle: Duration,
     quiet: Duration,
-    listings: Arc<files::Listings>,
     pipe: Option<Pipe>,
 }
 
@@ -136,7 +134,6 @@ impl Agents {
             live: Arc::new(Live::new(IDLE, between::QUIET, None)),
             idle: IDLE,
             quiet: between::QUIET,
-            listings: Arc::default(),
             pipe: None,
         }
     }
@@ -285,8 +282,6 @@ banda_kernel::methods! {
         /// A file a message points at, kept in the Project: one dropped on
         /// the Thread, or a long text pasted.
         command keep(Keep) -> Kept, Write;
-        /// The files in the Project's folder, for `@` in the composer.
-        call files(FileQuery) -> Vec<String>, Read;
         /// Shows your Person a finished HTML page in your Thread, above
         /// your reply: a mockup, a chart, a diagram, how a feature works,
         /// an animation, a sound. Don't announce or describe it after;
@@ -465,14 +460,6 @@ struct Keep {
 #[ts(export, export_to = "agents/")]
 pub struct Kept {
     pub path: String,
-}
-
-/// What `agents.files` asks: the files in the Project's folder that hold
-/// these words.
-#[derive(Deserialize, TS)]
-#[ts(export_to = "agents/")]
-struct FileQuery {
-    query: String,
 }
 
 /// A page to show in your Thread.
@@ -1123,18 +1110,6 @@ impl Agents {
             .await
             .map_err(|_| Refusal::not_found("There is no such Visual."))?;
         Ok(VisualPage { html })
-    }
-
-    async fn files(
-        &self,
-        call: Call,
-        FileQuery { query }: FileQuery,
-    ) -> Result<Vec<String>, Refusal> {
-        let folder = call.project().folder().to_path_buf();
-        let listings = self.listings.clone();
-        tokio::task::spawn_blocking(move || files::matching(&listings.of(&folder), &query))
-            .await
-            .map_err(|_| Refusal::invalid("The files could not be listed."))
     }
 }
 

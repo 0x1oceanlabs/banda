@@ -292,7 +292,7 @@ If Chat is removed, Agents still works through its own Thread.
 | harnesses | Harness, account; the machine's (ADR 0040) | first |
 | terminal | Terminal | first |
 | browser | Tab; the window's, with no engine part; every Agent reaches it over CDP (ADR 0013) | first |
-| files | the Project's files | soon |
+| files | any folder, a file in its Pane (ADR 0073) | first |
 | chat | Room, Message, Mention | later |
 | databases | Database, Field, Record, View | later |
 
@@ -656,6 +656,38 @@ If Chat is removed, Agents still works through its own Thread.
     runs calls side by side.
   - Closing the Pane closes its terminal. Moving it to another column or
     workspace draws it again and does not.
+
+### files
+
+- **The engine reads the disk, and watches what is shown** (ADR 0073,
+  decision 4): `files.list`, `files.stat`, `files.read` (text up to
+  1 MiB, or that it is binary), `files.find` (fuzzy, gitignore-aware)
+  and the stream `files.watch`, on the kernel's watch service. Each path
+  goes through the kernel's path guard, `Reach`: a relative path starts
+  at the Project's folder, the Person reaches any, an Agent only its
+  Project's. It only reads; writing comes later.
+- **`files.find` answers every "which file"**: the composer's `@` and the
+  Banda menu's Files, a source of the files module's own. The menu opens
+  `name:42` at line 42.
+- **Its Pane** (`modules/files/pane`), `files.file`, shows one file, one
+  Pane per file. `files.stat` says what it is, and its extension, then
+  its MIME, picks how it is drawn:
+  - code and text: `files.read`, drawn by `@banda/ui`'s `CodeFile`, the
+    Diff's `@pierre/diffs` view and colours with numbered lines, opened
+    at a line centred and lit once; past 1 MiB or 20 000 lines, its start
+    with a note. Lines picked in the gutter copy as `path:12-20`;
+  - markdown: the Thread's Streamdown, its source a toggle away, its
+    pictures through the file host from the file's folder;
+  - an image: an `<img>` from the file host, an SVG too, to zoom and pan;
+  - anything else, and what reads as binary: its facts.
+
+  It follows `files.watch` on the file's folder, reads again as it
+  changes, and keeps its scroll.
+- **Every link to a file opens it there**: the window's `file.open` runs
+  the files module's `files.open`, which opens the file beside the Pane
+  it was opened from, or takes the Pane that shows it to the new line
+  (`WindowApi.open` with `update`). A reply's paths and a terminal's
+  carry their line.
 
 ## Inside a module
 

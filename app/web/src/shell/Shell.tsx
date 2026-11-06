@@ -145,6 +145,7 @@ import {
   opening,
   runAction,
   settingsAt,
+  updating,
   type Shell as Parts,
   type SnoozeAsked,
   type Step,
@@ -814,12 +815,14 @@ export function Shell({
     const parts: Parts = {
       change,
       home,
-      open: (pane, project, { beside, again = true, ...how } = {}) =>
+      open: (pane, project, { beside, again = true, update, ...how } = {}) =>
         change((w) => {
           const at = beside
             ? besideOf(w, listsNow.current, beside, showsOf)
             : null
-          return opening(
+          // Not again: the one shown, as its kind names it, keeps what it
+          // shows, or takes these args when asked to update it.
+          return (again || !update ? opening : updating)(
             w,
             project ?? at?.project ?? focused(w)?.project ?? home,
             pane,
@@ -829,8 +832,6 @@ export function Shell({
               // What an Agent opens goes into its Thread's Group; an
               // Agent's Thread, to its Project's workspace.
               place: at?.from ? "group" : homeOf(pane),
-              // Not again: the one shown, as its kind names it, keeps
-              // what it shows.
               ...(again ? { again } : { keep: true }),
             }
           )

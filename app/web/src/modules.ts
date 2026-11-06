@@ -6,6 +6,7 @@
 import { agents } from "@banda/agents-pane"
 import { browser } from "@banda/browser-pane"
 import { harnesses } from "@banda/harnesses-pane"
+import { files } from "@banda/files-pane"
 import { git } from "@banda/git-pane"
 import { terminal } from "@banda/terminal-pane"
 import { notifications } from "@banda/notifications-pane"
@@ -17,5 +18,6 @@ export const modules: readonly Module[] = [
   terminal,
   browser,
   git,
+  files,
   notifications,
 ]

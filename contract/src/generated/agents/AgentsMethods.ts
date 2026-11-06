@@ -11,7 +11,6 @@ import type { Configure } from "./Configure";
 import type { Defaults } from "./Defaults";
 import type { DraftIssue } from "./DraftIssue";
 import type { Edit } from "./Edit";
-import type { FileQuery } from "./FileQuery";
 import type { Forked } from "./Forked";
 import type { Image } from "./Image";
 import type { ImageData } from "./ImageData";
@@ -137,10 +136,6 @@ image: CallMethod<OneImage, ImageData>,
  * the Thread, or a long text pasted.
  */
 keep: CommandMethod<Keep, Kept>, 
-/**
- * The files in the Project's folder, for `@` in the composer.
- */
-files: CallMethod<FileQuery, Array<string>>, 
 /**
  * Shows your Person a finished HTML page in your Thread, above
  * your reply: a mockup, a chart, a diagram, how a feature works,

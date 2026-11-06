@@ -1,0 +1,22 @@
+{
+  "panes": [
+    "files.file"
+  ],
+  "actions": [
+    {
+      "id": "files.open",
+      "title": "Open a file",
+      "section": "Panes",
+      "keys": [],
+      "unlisted": true
+    }
+  ],
+  "sources": [
+    {
+      "id": "files.find",
+      "label": "Files"
+    }
+  ],
+  "watches": 0,
+  "bar": []
+}

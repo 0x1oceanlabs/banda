@@ -1,0 +1,335 @@
+/**
+ * `files.file`: one file, drawn as what it is (ADR 0073, decisions 2 and
+ * 6): code and text numbered and coloured as the Diff draws them, opened
+ * at a line; markdown rendered, its source a toggle away; an image to zoom
+ * and pan; anything else its facts. It reads again as the file changes on
+ * disk. It only reads: editing comes later (step F4).
+ */
+import { useEffect, useState, type ReactNode } from "react"
+import { Button } from "@banda/ui/components/button"
+import { CodeFile, type LineRange } from "@banda/ui/components/code-file"
+import { CopyButton } from "@banda/ui/components/copy-button"
+import { InHeader } from "@banda/ui/components/pane-header"
+import { Spinner } from "@banda/ui/components/spinner"
+import { nameAndFolder } from "@banda/ui/lib/paths"
+import { cn } from "@banda/ui/lib/utils"
+import type { ProjectId } from "@banda/contract"
+import type { WindowApi } from "@banda/ui/module"
+import { definePane, type PaneProps, paneOf } from "@banda/ui/pane"
+import {
+  CodeIcon,
+  FileIcon,
+  FileWarningIcon,
+  WrapTextIcon,
+  XIcon,
+} from "lucide-react"
+import { Card, Facts, Gone } from "./Facts"
+import { ImageView } from "./ImageView"
+import { lineIn, MOST_LINES, rangeText } from "./lines"
+import { sizeWords } from "./look"
+import { MarkdownView } from "./MarkdownView"
+import { fromRoot } from "./paths"
+import { type Shown, useFile } from "./read"
+
+export type FileArgs = {
+  /** The file, whole or from the Project's folder. */
+  path: string
+  /** The line it opens at, centred and lit once. */
+  line?: number | null
+  /** Long lines wrap, in code and in markdown's source. */
+  wrap?: boolean
+  /** Markdown shows its source, as code. */
+  source?: boolean
+}
+
+export const filePane = definePane<FileArgs>({
+  kind: "files.file",
+  title: (args) => nameAndFolder(args.path).name,
+  detail: (args) => nameAndFolder(args.path).folder ?? null,
+  icon: FileIcon,
+  // One Pane per file: opened again, it goes to the line asked for.
+  identity: (args) => args.path,
+  Pane: FilePane,
+})
+
+/** Opens the file at `path` beside the focused Pane, at `line`; a Pane
+ * that shows it already gets the focus, and goes to that line. */
+export function openFile(
+  window: WindowApi,
+  path: string,
+  line: number | null,
+  project?: ProjectId
+): void {
+  window.open(paneOf(filePane, { path, line }), project, {
+    again: false,
+    update: true,
+  })
+}
+
+function FilePane({
+  engine,
+  project,
+  args,
+  update,
+  label,
+  run,
+}: PaneProps<FileArgs>) {
+  const shown = useFile(engine, project, args.path)
+  const file = shown.state === "file" ? shown : null
+  // The path as the Person reads it: from the Project's folder when it is
+  // inside, else whole.
+  const path = file ? fromRoot(file.stat.path, file.root) : args.path
+
+  // Its header names it as found: its folder from the Project's.
+  useEffect(() => {
+    if (!file) return
+    const { name, folder } = nameAndFolder(path)
+    label?.({ title: name, detail: folder ?? null })
+  }, [label, file, path])
+
+  const set = (next: Partial<FileArgs>) => update({ ...args, ...next })
+  const wrap = args.wrap ?? false
+  const source = args.source ?? false
+  const asCode =
+    file?.text?.text !== undefined &&
+    (file.look === "code" || (file.look === "markdown" && source))
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Wrap first: it comes and goes, and Source stays where it is. */}
+      {asCode && (
+        <InHeader>
+          <Toggle
+            label="Wrap lines"
+            on={wrap}
+            onClick={() => set({ wrap: !wrap })}
+          >
+            <WrapTextIcon />
+          </Toggle>
+        </InHeader>
+      )}
+      {file?.look === "markdown" && file.text?.text !== undefined && (
+        <InHeader>
+          <Toggle
+            label="Source"
+            on={source}
+            onClick={() => set({ source: !source })}
+          >
+            <CodeIcon />
+          </Toggle>
+        </InHeader>
+      )}
+      <Body
+        shown={shown}
+        path={path}
+        project={project}
+        line={args.line}
+        wrap={wrap}
+        source={source}
+        run={run}
+      />
+    </div>
+  )
+}
+
+function Body({
+  shown,
+  path,
+  project,
+  line,
+  wrap,
+  source,
+  run,
+}: {
+  shown: Shown
+  path: string
+  project: string
+  line: number | null | undefined
+  wrap: boolean
+  source: boolean
+  run: PaneProps<FileArgs>["run"]
+}) {
+  // An image that could not be drawn shows its facts instead.
+  const [broken, setBroken] = useState<string>()
+  switch (shown.state) {
+    case "loading":
+      return (
+        <div className="flex flex-1 items-center justify-center">
+          <Spinner className="text-muted-foreground" />
+        </div>
+      )
+    case "refused":
+      return (
+        <Card
+          icon={<FileWarningIcon />}
+          title="This file cannot be read"
+          note={shown.message}
+        />
+      )
+    case "gone":
+      return <Gone path={path} />
+  }
+  const { stat, look, text } = shown
+  const { name } = nameAndFolder(stat.path)
+  if (look === "image" && broken !== stat.path)
+    return (
+      <ImageView
+        project={project}
+        path={stat.path}
+        name={name}
+        version={stat.modified}
+        onBroken={() => setBroken(stat.path)}
+      />
+    )
+  if (look === "image")
+    return <Facts stat={stat} note="This image could not be drawn." />
+  if (look === "folder")
+    return (
+      <Facts
+        stat={stat}
+        note="A folder shows in Files' tree, which comes next."
+      />
+    )
+  if (!text || text.text === undefined)
+    return (
+      <Facts
+        stat={stat}
+        note={
+          text?.binary
+            ? "This file is binary. No preview for it yet."
+            : "No preview for this kind yet."
+        }
+      />
+    )
+  const note = text.cut && (
+    <p className="shrink-0 border-b px-3 py-1 text-xs text-muted-foreground">
+      Only the start of this {sizeWords(text.bytes)} file is shown: its first{" "}
+      {text.lines >= MOST_LINES
+        ? `${MOST_LINES.toLocaleString("en")} lines`
+        : "1 MB"}
+      .
+    </p>
+  )
+  if (look === "markdown" && !source)
+    return (
+      <>
+        {note}
+        <MarkdownView
+          project={project}
+          file={stat.path}
+          text={text.text}
+          run={run}
+        />
+      </>
+    )
+  return (
+    <>
+      {note}
+      <Code
+        key={stat.path}
+        name={name}
+        path={path}
+        text={text.text}
+        wrap={wrap}
+        line={lineIn(line, text.lines)}
+      />
+    </>
+  )
+}
+
+/** Code and text, opened at a line; the lines picked in its gutter can be
+ * copied as `path:12-20`. */
+function Code({
+  name,
+  path,
+  text,
+  wrap,
+  line,
+}: {
+  name: string
+  path: string
+  text: string
+  wrap: boolean
+  line: number | null
+}) {
+  const [picked, setPicked] = useState<LineRange | null>(null)
+  return (
+    <div
+      className="relative flex min-h-0 flex-1 flex-col"
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && picked) {
+          event.stopPropagation()
+          setPicked(null)
+        }
+      }}
+    >
+      <CodeFile
+        className="min-h-0 flex-1"
+        name={name}
+        text={text}
+        wrap={wrap}
+        line={line}
+        picked={picked}
+        onPick={setPicked}
+      />
+      {picked && (
+        <Picked
+          text={rangeText(path, picked)}
+          onClear={() => setPicked(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+/** The lines picked, as an Agent reads them, to copy. Adding a comment on
+ * them for the Agent comes next (step F2). */
+function Picked({ text, onClear }: { text: string; onClear: () => void }) {
+  return (
+    <div
+      role="status"
+      aria-label="Picked lines"
+      className="absolute bottom-2.5 left-1/2 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-0.5 rounded-lg bg-popover/80 py-0.5 pr-0.5 pl-2.5 text-xs text-muted-foreground shadow-sm ring-1 ring-foreground/10 backdrop-blur"
+    >
+      <span className="truncate font-mono">{text}</span>
+      <CopyButton text={text} label={`Copy ${text}`} />
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label="Unpick the lines"
+        title="Unpick · Esc"
+        onClick={onClear}
+      >
+        <XIcon />
+      </Button>
+    </div>
+  )
+}
+
+/** A quiet button in the header that stays on: brighter while it is,
+ * with no plate behind it (ADR 0066). */
+function Toggle({
+  label,
+  on,
+  onClick,
+  children,
+}: {
+  label: string
+  on: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      aria-label={label}
+      aria-pressed={on}
+      title={label}
+      className={cn("shrink-0", on && "text-foreground")}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  )
+}

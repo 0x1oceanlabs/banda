@@ -265,6 +265,31 @@ export function opening(
   return how.focus === false ? { ...plan, focus: false } : plan
 }
 
+/** Shows a Pane as `opening` does; one already shown, as its kind names
+ * it, takes these args and the focus, as a file's Pane the line a link
+ * names. */
+export function updating(
+  workspaces: Workspaces,
+  project: ProjectId,
+  pane: PaneState,
+  how: Omit<Opening, "width"> = {}
+): Step {
+  const wanted = { project, pane }
+  const shown = entries(workspaces).find((entry) =>
+    samePane(entry, wanted, identityOf)
+  )
+  // None shown, or one with these args: as `opening` does.
+  if (!shown || samePane(shown, wanted))
+    return opening(workspaces, project, pane, how)
+  return {
+    command: {
+      method: "workspaces.update",
+      params: { pane: shown.id, args: pane.args },
+    },
+    want: shown.id,
+  }
+}
+
 /** Shows a Pane here, right of the focused one, with its width; one
  * another workspace shows moves here. */
 export function bringing(
@@ -765,7 +790,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
   },
   {
     // A file a Pane's link names, as a terminal's path or a reply's
-    // (ADR 0063): in a browser's tab, until Files shows it.
+    // (ADR 0063), at its line: in Files' `files.file` (ADR 0073).
     id: "file.open",
     args: takes({ file: FILE, project: "the Project it is in" }, ["file"]),
     section: "Banda",
@@ -773,7 +798,11 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     unlisted: true,
     run: (shell, args) =>
       present(args, (file) =>
-        shell.run("browser.open", { file, project: args?.project ?? null })
+        shell.run("files.open", {
+          file,
+          project: args?.project ?? null,
+          line: args?.line ?? null,
+        })
       ),
   },
   {

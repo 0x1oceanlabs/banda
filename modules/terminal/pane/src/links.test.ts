@@ -17,13 +17,16 @@ test("a page goes as it is", () => {
   })
 })
 
-test("a path starts in the folder of what runs in front, its line left off", () => {
+test("a path starts in the folder of what runs in front, and keeps its line", () => {
   expect(targetOf("src/input.ts:42:7", at)).toEqual({
     file: "/home/roma/code/banda/src/input.ts",
+    line: 42,
   })
   expect(targetOf("./a/../b.rs:3", at)).toEqual({
     file: "/home/roma/code/banda/b.rs",
+    line: 3,
   })
+  expect(targetOf("/a/b.rs:3:3", at)).toEqual({ file: "/a/b.rs", line: 3 })
   expect(targetOf("../other/x.md", at)).toEqual({
     file: "/home/roma/code/other/x.md",
   })

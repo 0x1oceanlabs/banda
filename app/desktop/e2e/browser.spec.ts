@@ -388,7 +388,7 @@ test("tabs open, show and close as Chrome's, on top or on the left", async () =>
   await expect(tab("Alpha")).toHaveAttribute("aria-selected", "true")
 })
 
-test("the Banda menu opens an address, and a file of the focused Project, in a browser", async () => {
+test("the Banda menu opens an address in a browser, and a file of the focused Project in Files", async () => {
   const address = await serve({ "/": "<title>Alpha</title>" })
   window = await startWindow()
   const { app, page, dir } = window
@@ -423,14 +423,15 @@ test("the Banda menu opens an address, and a file of the focused Project, in a b
     menu.getByRole("option", { name: "Search the web: “two words”" })
   ).toBeVisible()
 
-  // The focused Project's files, as @ finds them; Enter opens one.
+  // The focused Project's files, as @ finds them; Enter opens one in
+  // Files, as its source, not as a page (ADR 0073, decision 11).
   await search.fill("plan.ht")
   const files = menu.getByRole("group", { name: "Files" })
   await expect(files.getByRole("option")).toHaveText(/plan\.html\s*notes/)
   await page.screenshot({ path: "test-results/28-banda-menu-files.png" })
   await search.press("Enter")
   await expect(menu).toBeHidden()
-  await expect(page.getByRole("region", { name: "The plan" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "plan.html" })).toBeVisible()
 })
 
 test("the blocker drops what its lists name, and browser.toml turns it off", async () => {

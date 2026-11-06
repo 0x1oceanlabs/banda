@@ -31,13 +31,6 @@ test("a reply's paths link to their files, which a click opens and the menu acts
   const outside = () =>
     app.evaluate(() => (globalThis as { outside?: string[] }).outside)
   const clipboard = () => app.evaluate(({ clipboard }) => clipboard.readText())
-  const webviews = () =>
-    app.evaluate(({ webContents }) =>
-      webContents
-        .getAllWebContents()
-        .filter((one) => one.getType() === "webview")
-        .map((one) => one.getURL())
-    )
 
   const { thread, composer } = await firstThread(page)
   // In the Project it made.
@@ -72,11 +65,11 @@ test("a reply's paths link to their files, which a click opens and the menu acts
   ])
   await page.screenshot({ path: "test-results/thread-paths.png" })
 
-  // Ctrl+click: in its app; a click: in Banda's browser.
+  // Ctrl+click: in its app; a click: in Files (ADR 0073, decision 12).
   await chip.click({ modifiers: ["Control"] })
   await expect.poll(outside).toEqual([`open ${notes}`])
   await reply.locator("a[data-file][data-kind=text]").click()
-  await expect.poll(webviews).toEqual([pathToFileURL(code).href])
+  await expect(page.getByRole("region", { name: "app.js" })).toBeVisible()
 
   // Its menu: open, show, copy either path, name it in the message.
   const menu = page.getByRole("menu", { name: "Thread" })

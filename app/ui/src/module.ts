@@ -50,13 +50,15 @@ export type WindowApi = {
    * right of the Pane of the thing that Agent works in, where a
    * workspace shows one (`beside`). With `again: false` a Pane already
    * shown gets the focus instead, as a Pane's own `open`: one its kind
-   * names the same (`PaneKind.identity`), as the Project's one Diff. One
-   * whose kind says `home` opens on its Project's workspace (ADR 0065).
+   * names the same (`PaneKind.identity`), as the Project's one Diff; with
+   * `update` too, it shows these args, as a file's Pane the line a link
+   * names. One whose kind says `home` opens on its Project's workspace
+   * (ADR 0065).
    */
   open: (
     pane: PaneState,
     project?: ProjectId,
-    how?: { focus?: boolean; beside?: string; again?: false }
+    how?: { focus?: boolean; beside?: string; again?: false; update?: true }
   ) => void
   /** The focused Pane and its Project; none while no Pane has the focus. */
   focused: () => { project: ProjectId; pane: PaneState } | null
@@ -239,7 +241,7 @@ export type FindProps = {
  * the keys, the groups' order and the ranking.
  */
 export type Source = {
-  /** Dotted, its module's id first: `agents.files`. */
+  /** Dotted, its module's id first: `files.find`. */
   id: string
   /** The heading its rows go under; none for the rows after every group,
    * as New Thread with the words. */

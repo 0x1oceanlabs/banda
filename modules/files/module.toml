@@ -1,8 +1,8 @@
 # The files module, as it declares itself (ADR 0022). What its code says,
-# its methods, its code declares; this holds the rest.
+# its methods and its Panes, its code declares; this holds the rest.
 id = "files"
 name = "Files"
-about = "Any folder, as a Finder shows it: its names folders first, with what git ignores and what is hidden marked; what a path is; a file's text; fuzzy paths under a folder; and what changed in the folders shown. An Agent reaches only its Project's folder."
+about = "Any folder, as a Finder shows it: its names folders first, with what git ignores and what is hidden marked; what a path is; a file's text; fuzzy paths under a folder; and what changed in the folders shown. An Agent reaches only its Project's folder. A file opens in its Pane, as code, markdown or an image, at a line."
 version = "0.1.0"
 from-banda = true
 settings = []
