@@ -107,6 +107,7 @@ import {
   entries,
   find,
   focused,
+  focusedColumn,
   across,
   focusEntry,
   go,
@@ -119,6 +120,9 @@ import {
   widthIn,
   type Workspaces as State,
 } from "../workspaces/model"
+import { soloing, unsoloing } from "../workspaces/groups"
+import { AGENTS_FILE } from "@banda/contract/agents"
+import { useFile } from "@banda/ui/lib/look"
 import { Drawer } from "../workspaces/Drawer"
 import { Overview } from "../workspaces/Overview"
 import type { Frame } from "../workspaces/PaneFrame"
@@ -240,6 +244,14 @@ function handOn(
 
 /** The presses the window made to hand a key on, which it leaves alone. */
 const HANDED = new WeakSet<Event>()
+
+/** What a Pane shows, as its module lists it in `lists`. */
+function listedIn(lists: Lists, entry: Entry): Listed | undefined {
+  const thing = showsOf(entry.pane)
+  return thing
+    ? lists[entry.project]?.find((row) => row.id === thing)
+    : undefined
+}
 
 export function Shell({
   engine,
@@ -1052,15 +1064,29 @@ export function Shell({
   const here = focused(workspaces)?.project ?? home
   // The bar's widgets, the window's own and the modules', where the
   // look's `[bar]` puts them (ADR 0024).
-  const listed = useCallback(
-    (entry: Entry) => {
-      const thing = showsOf(entry.pane)
-      return thing
-        ? lists[entry.project]?.find((row) => row.id === thing)
-        : undefined
-    },
-    [lists]
-  )
+  const listed = useCallback((entry: Entry) => listedIn(lists, entry), [lists])
+  // Solo (ADR 0079, decision 2): when the focus comes to another Agent,
+  // its Group fills the screen. Only a move of the focus asks, so Alt+M
+  // still gives the room back by hand. From solo to the row, the room
+  // comes back on the workspace in view.
+  const flow = useFile(AGENTS_FILE).flow
+  const at = focusedColumn(workspaces)
+  const soloAt =
+    flow === "solo" && at.column
+      ? `${at.workspace.id} ${at.column.group ?? at.column.id}`
+      : undefined
+  useEffect(() => {
+    if (!soloAt) return
+    const lists = listsNow.current
+    change((w) =>
+      soloing(w, (entry) => listedIn(lists, entry)?.agent !== undefined)
+    )
+  }, [soloAt, change])
+  const flowWas = useRef(flow)
+  useEffect(() => {
+    if (flowWas.current === "solo" && flow !== "solo") change(unsoloing)
+    flowWas.current = flow
+  }, [flow, change])
   // The Agent's Thread in front, which the bar names with the sidebar
   // hidden (ADR 0065, decision 9).
   const ahead = focused(workspaces)

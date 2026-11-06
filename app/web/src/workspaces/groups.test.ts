@@ -8,6 +8,8 @@ import {
   groupState,
   regrouping,
   shiftingInside,
+  soloing,
+  unsoloing,
 } from "./groups"
 import {
   type Column,
@@ -135,6 +137,35 @@ describe("a Group", () => {
       column: "a",
       fill: false,
     })
+  })
+
+  test("solo fills the Agent the focus is at, on a Project's workspace", () => {
+    const agent = (entry: { id: string }) => entry.id !== "c1"
+    const project = (state: Workspaces) => {
+      state.list[0].project = "s" as ProjectId
+      return state
+    }
+    // Not on a Project's workspace: as it is.
+    expect(soloing(strip("ab", "gg", 0), agent)).toBeUndefined()
+    // A Group fills; a column in none stays.
+    expect(soloing(project(strip("ab", "gg", 1)), agent)?.command).toEqual({
+      method: "workspaces.fill",
+      params: { column: "b", fill: true },
+    })
+    expect(soloing(project(strip("ab", "..", 0)), agent)).toBeUndefined()
+    // One that fills already, or with no Agent in it, stays.
+    const filled = project(strip("ab", "gg", 0))
+    filled.list[0].filled = "g"
+    expect(soloing(filled, agent)).toBeUndefined()
+    expect(
+      soloing(project(strip("abc", "ggh", 0)), (e) => e.id === "c1")
+    ).toBeUndefined()
+    // Back to the row, the room comes back.
+    expect(unsoloing(filled)?.command.params).toEqual({
+      column: "a",
+      fill: false,
+    })
+    expect(unsoloing(strip("ab", "gg", 0))).toBeUndefined()
   })
 
   test("filling the screen, its columns keep their shares", () => {
