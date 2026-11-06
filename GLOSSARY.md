@@ -340,3 +340,15 @@ A short card at the window's top right that tells of a Call whose Thread is
 not on screen, of a new Problem, or of how a commit, push or pull from a
 Thread's card ended out of its sight; Sonner's, stacked (ADR 0048). It goes
 away by itself; the Mark remembers, and the bell shows the last ones again.
+
+**Pull request**:
+A GitHub pull request linked to a Thread: by Create PR, by the Agent's
+`gh pr create` or its tool, or by the Person. Banda never guesses it from a
+branch. The `pulls` module reads a Project's linked PRs, works out what each
+needs and whose turn it is, and the bar's `pulls.status` shows them (ADR
+0076).
+
+**Auto-fix**:
+Banda watching a Thread's pull request and telling the Thread that works on
+it what is new: checks failed or passed, a review, a conflict, a merge. On
+for a PR made in a Thread; the Agent never polls GitHub itself (ADR 0076).
