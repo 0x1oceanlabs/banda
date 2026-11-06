@@ -98,6 +98,17 @@ export async function updateProject(
   return project
 }
 
+/** Looks in a Project's folder for its sign's picture again (ADR 0070),
+ * and the window's lists follow. */
+export async function findSign(
+  engine: Engine,
+  project: ProjectId
+): Promise<ProjectSummary> {
+  const found = await engine.command("projects.find_sign", { project })
+  projectsChanged()
+  return found
+}
+
 /** Removes a Project from the engine, and from the window's lists. */
 export async function removeProject(
   engine: Engine,
