@@ -175,9 +175,9 @@ Element actions are `click`, `double_click`, `type`, `fill`, `select`,
 `select` needs `values` (option values or labels); `press` needs `key`;
 `drag` needs the destination ref in `to`. A `press` without a ref uses
 the page's focus. A `press` of one of Banda's keys, as `Alt+W` or
-`Control+L`, is refused: only the Person presses them. A `scroll` with a
-ref brings that element into view; without one it scrolls the page a
-screen, `direction: "down"` or `"up"`.
+`ControlOrMeta+L`, is refused: only the Person presses them. A `scroll`
+with a ref brings that element into view; without one it scrolls the
+page a screen, `direction: "down"` or `"up"`.
 
 ### Page dialogs and images
 

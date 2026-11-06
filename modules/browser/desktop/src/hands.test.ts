@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { hidden, onWeb, ruleAt, siteAt, stepOf } from "./hands"
+import { hidden, onWeb, pressOf, ruleAt, siteAt, stepOf } from "./hands"
 
 test("secret values are hidden across roles without changing refs, names or metadata", () => {
   const tree = `- textbox "CVV" [ref=e2]: "2"
@@ -93,4 +93,19 @@ test("a page on the web is at an http or https address, or blank", () => {
     "",
   ])
     expect(onWeb(url), url).toBe(false)
+})
+
+test("a press is Electron's key for Playwright's names, and a modifier it has not is refused", () => {
+  expect(pressOf("Shift++")).toEqual({
+    down: { type: "keyDown", keyCode: "+", modifiers: ["shift"] },
+    char: true,
+  })
+  expect(pressOf("+").down.modifiers).toEqual([])
+  expect(pressOf("Control+ArrowDown")).toEqual({
+    down: { type: "keyDown", keyCode: "Down", modifiers: ["control"] },
+    char: false,
+  })
+  expect(pressOf("Enter").char).toBe(true)
+  for (const combo of ["Ctrl+W", "Cmd+L", "a+"])
+    expect(() => pressOf(combo)).toThrow("is not a modifier")
 })

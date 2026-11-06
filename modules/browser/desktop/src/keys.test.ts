@@ -6,7 +6,7 @@ vi.mock("electron", async () => {
 import { EventEmitter } from "node:events"
 import { beforeEach, expect, test } from "vitest"
 import type { KeyboardInputEvent, WebContents } from "electron"
-import { keepInForce, keys, sendPress } from "./keys"
+import { isBandas, keepInForce, keys, sendPress } from "./keys"
 
 /** The codes Electron gives the keys these tests send. */
 const CODES: Record<string, string> = {
@@ -94,7 +94,7 @@ test("a press of the hands that is one of Banda's keys is held back from the pag
   hands(() =>
     expect(
       sendPress(page, { type: "keyDown", keyCode: "l", modifiers: ["control"] })
-    ).toMatchObject({ code: "KeyL", ctrlKey: true })
+    ).toBe(true)
   )
   expect(reached).toEqual([])
   expect(told).toEqual([])
@@ -103,9 +103,9 @@ test("a press of the hands that is one of Banda's keys is held back from the pag
 test("the keys a page hears as the hands act in it are the page's alone, the mod's too", () => {
   const { page, pressed, hands, reached, told } = fakePage()
   hands(() => {
-    expect(sendPress(page, { type: "keyDown", keyCode: "Alt" })).toBeUndefined()
-    expect(sendPress(page, { type: "keyUp", keyCode: "Alt" })).toBeUndefined()
-    expect(sendPress(page, { type: "keyDown", keyCode: "a" })).toBeUndefined()
+    expect(sendPress(page, { type: "keyDown", keyCode: "Alt" })).toBe(false)
+    expect(sendPress(page, { type: "keyUp", keyCode: "Alt" })).toBe(false)
+    expect(sendPress(page, { type: "keyDown", keyCode: "a" })).toBe(false)
     // Text is typed: a key of it that is Banda's goes to the page as well.
     page.sendInputEvent({ type: "keyDown", keyCode: "w", modifiers: ["alt"] })
     page.sendInputEvent({ type: "char", keyCode: "w" })
@@ -121,6 +121,19 @@ test("the keys a page hears as the hands act in it are the page's alone, the mod
   // Once they are done, the Person's keys are Banda's again.
   pressed({ type: "keyDown", keyCode: "w", modifiers: ["alt"] })
   expect(told).toEqual([expect.objectContaining({ code: "KeyW" })])
+})
+
+test("whether a press is one of Banda's keys is learnt with nothing reaching the page or the window", () => {
+  const { page, hands, reached, told } = fakePage()
+  hands(() => {
+    expect(
+      isBandas(page, { type: "keyDown", keyCode: "w", modifiers: ["alt"] })
+    ).toBe(true)
+    expect(isBandas(page, { type: "keyDown", keyCode: "a" })).toBe(false)
+    expect(isBandas(page, { type: "keyDown", keyCode: "Alt" })).toBe(false)
+  })
+  expect(reached).toEqual([])
+  expect(told).toEqual([])
 })
 
 test("a page that throws as the hands press holds back no key of theirs after", () => {

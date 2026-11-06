@@ -8,10 +8,10 @@
 import { siteOf } from "@banda/browser-pane/desktop"
 import type { Act, Navigate, WaitFor } from "@banda/contract/browser"
 import { Refused } from "@banda/desktop-kit"
-import type { WebContents } from "electron"
+import type { KeyboardInputEvent, WebContents } from "electron"
 import type { Locator, Page } from "playwright-core"
 import { getDomain } from "tldts-experimental"
-import { sendPress } from "./keys"
+import { isBandas, sendPress } from "./keys"
 
 /** The site of a web page at `url`, which an Agent may use once the
  * Person says so (ADR 0029, decision 7, B): its domain, as a browser
@@ -277,11 +277,42 @@ const MODIFIERS: Record<string, "control" | "shift" | "alt" | "meta"> = {
   Meta: "meta",
 }
 
+/** What Electron is sent for `combo`, as Playwright names it: its key's
+ * press, and whether the key makes text. A modifier Playwright has not is
+ * refused, never left out. */
+export function pressOf(combo: string) {
+  const parts = combo.split("+")
+  let key = parts.pop()
+  if (!key) {
+    // The key "+" leaves an empty part before it too.
+    if (parts.at(-1) === "") parts.pop()
+    key = "+"
+  }
+  const modifiers = parts.map((part) => {
+    const modifier = MODIFIERS[part]
+    if (modifier) return modifier
+    throw new Refused({
+      code: "invalid",
+      message: `"${part}" is not a modifier: press knows Control, Shift, Alt, Meta and ControlOrMeta.`,
+    })
+  })
+  const down: KeyboardInputEvent = {
+    type: "keyDown",
+    keyCode: KEYS[key] ?? key,
+    modifiers,
+  }
+  // A key that makes text, or Enter, which sends a form, says it too.
+  const char =
+    key === "Enter" ||
+    ([...key].length === 1 && !modifiers.some((m) => m !== "shift"))
+  return { down, char }
+}
+
 /** The refusal of `combo`, a press that is one of Banda's keys. */
 const bandas = (combo: string) =>
   new Refused({
     code: "forbidden",
-    message: `${combo} is one of Banda's keys, which only the Person presses. To open a tab, or take one to an address, back, forward or reload, use browser_open or browser_navigate.`,
+    message: `${combo} is one of Banda's keys, which only the Person presses.`,
   })
 
 /**
@@ -289,36 +320,42 @@ const bandas = (combo: string) =>
  * whatever has the focus in Banda's window, as the Person's Thread: a tab
  * is a webview in it. Electron sends these to the tab alone, and the
  * Person keeps the focus. Sent as the hands act in the tab, they reach
- * the page alone, never the window, and a press of one of Banda's keys
- * is refused (ADR 0083, decision 3; keys.ts).
+ * the page alone, never the window, and the Agent's press of one of
+ * Banda's keys is refused (ADR 0083, decision 3; keys.ts).
  */
-const keyboard = (tab: WebContents) => ({
-  type: (text: string) => {
-    for (const char of text) {
-      // Only a plain key has a code: the rest is text alone.
-      const plain = /^[ -~]$/.test(char)
-      const keyCode = KEYS[char] ?? char
-      if (plain) tab.sendInputEvent({ type: "keyDown", keyCode })
-      tab.sendInputEvent({ type: "char", keyCode: char })
-      if (plain) tab.sendInputEvent({ type: "keyUp", keyCode })
-    }
-  },
-  press: (combo: string) => {
-    const parts = combo.split("+")
-    const key = parts.pop() || "+"
-    const modifiers = parts.flatMap((part) => MODIFIERS[part] ?? [])
-    const keyCode = KEYS[key] ?? key
-    if (sendPress(tab, { type: "keyDown", keyCode, modifiers }))
-      throw bandas(combo)
-    // A key that makes text, or Enter, which sends a form, says it too.
-    if (
-      key === "Enter" ||
-      ([...key].length === 1 && !modifiers.some((m) => m !== "shift"))
-    )
-      tab.sendInputEvent({ type: "char", keyCode, modifiers })
-    tab.sendInputEvent({ type: "keyUp", keyCode, modifiers })
-  },
-})
+const keyboard = (tab: WebContents) => {
+  /** Presses `combo`; one of Banda's keys in force is refused when
+   * `refuse`. */
+  const press = (combo: string, refuse: boolean) => {
+    const { down, char } = pressOf(combo)
+    if (!refuse) tab.sendInputEvent(down)
+    else if (sendPress(tab, down)) throw bandas(combo)
+    if (char) tab.sendInputEvent({ ...down, type: "char" })
+    tab.sendInputEvent({ ...down, type: "keyUp" })
+  }
+  return {
+    /** Refuses `combo` when it is one of Banda's keys in force, before
+     * the hands do anything for it: the page hears nothing of it. */
+    refuseBandas: (combo: string) => {
+      if (isBandas(tab, pressOf(combo).down)) throw bandas(combo)
+    },
+    /** The Agent's press of `combo`: one of Banda's keys is refused. */
+    press: (combo: string) => press(combo, true),
+    /** Deletes what is chosen, with the hands' own key. */
+    erase: () => press("Delete", false),
+    /** Types `text`, every key of it, Banda's too. */
+    type: (text: string) => {
+      for (const char of text) {
+        // Only a plain key has a code: the rest is text alone.
+        const plain = /^[ -~]$/.test(char)
+        const keyCode = KEYS[char] ?? char
+        if (plain) tab.sendInputEvent({ type: "keyDown", keyCode })
+        tab.sendInputEvent({ type: "char", keyCode: char })
+        if (plain) tab.sendInputEvent({ type: "keyUp", keyCode })
+      }
+    },
+  }
+}
 
 /** Where the Thread's hands go in a page, in its CSS pixels from the
  * viewport's top left corner, before they act there: the Thread's cursor
@@ -365,7 +402,7 @@ export async function act(
         else {
           // What it had goes: typed over once chosen, or deleted.
           await field.selectText(ready)
-          if (!text) return keys.press("Delete")
+          if (!text) return keys.erase()
         }
         return keys.type(text)
       }
@@ -376,6 +413,9 @@ export async function act(
       }
       case "press": {
         const key = act.key ?? ""
+        // Banda's keys are the Person's: refused before the hands touch
+        // the page.
+        keys.refuseBandas(key)
         // A key or shortcut may edit a field (Shift+A, paste, Delete,
         // numeric steppers). Secret fields belong to the Person.
         if (act.ref) await (await element(true)).focus(ready)

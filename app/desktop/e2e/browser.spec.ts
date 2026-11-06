@@ -1195,21 +1195,38 @@ test("an Agent acts in a tab by refs, hears what changed, and leaves the Person'
   await expect(composer).toHaveText("")
 
   // Banda's keys are the Person's alone: an Agent's press of one is
-  // refused, and the window hears nothing of it. The mod alone reaches
-  // the page.
-  for (const key of ["Alt+W", "Control+l", "Alt+!"]) {
+  // refused before the hands touch the page, and no Banda action runs:
+  // the Pane stays, its address bar takes no focus, and the page's
+  // fields keep their text and their focus. The mod's own press is the
+  // page's.
+  tree = await snapshot()
+  expect(tree).toMatch(
+    new RegExp(`textbox "Query" \\[active\\] \\[ref=${query}\\]: a b\\n`)
+  )
+  for (const key of ["Alt+W", "ControlOrMeta+L", "Alt+!"]) {
     const refused = await agentCalls(window, "browser_act", {
       tab,
       action: "press",
-      ref: query,
+      ref: name,
       key,
     })
     expect(refused.content[0]!.text).toBe(
-      `Refused (forbidden): ${key} is one of Banda's keys, which only the Person presses. To open a tab, or take one to an address, back, forward or reload, use browser_open or browser_navigate. Nothing was done.`
+      `Refused (forbidden): ${key} is one of Banda's keys, which only the Person presses. Nothing was done.`
     )
   }
+  expect(await snapshot()).toBe(tree)
   expect(await act({ action: "press", ref: query, key: "Alt" })).toBe(
     `Pressed Alt in ${query}.`
+  )
+  // A modifier Playwright has not is refused, never left out.
+  const ctrl = await agentCalls(window, "browser_act", {
+    tab,
+    action: "press",
+    ref: query,
+    key: "Ctrl+W",
+  })
+  expect(ctrl.content[0]!.text).toBe(
+    `Refused (invalid): "Ctrl" is not a modifier: press knows Control, Shift, Alt, Meta and ControlOrMeta. Nothing was done.`
   )
   // The Person's own press comes after them, and works.
   await expect(addressBar(page)).not.toBeFocused()
