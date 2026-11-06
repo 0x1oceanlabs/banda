@@ -5831,3 +5831,75 @@ test("the launcher's letter picks its Pane with Alt still held from Alt+N", asyn
   await expect(page.getByRole("textbox", { name: "Address" })).toBeVisible()
   await expect(launcher).toBeHidden()
 })
+
+test("an Agent binds Banda's keys for its Person: Alt+M fills the column, Ctrl+Alt+H opens an address (ADR 0071)", async () => {
+  window = await startWindow({ look: '[columns]\nalone = "1/2"\n' })
+  const { page, dir } = window
+  const file = join(dir, "config/keys.toml")
+  const { thread, composer } = await firstThread(page)
+  // A session of the Thread's opens, whose Agent has Banda's tools.
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+
+  // It finds the action by its title, and binds it; and one with what it
+  // takes, an address.
+  const listed = await agentAnswers(window, "keys_list", {})
+  const fill = listed.find(
+    (action: { title: string }) =>
+      action.title === "The column the whole screen wide, or back"
+  )
+  expect(fill.id).toBe("column.maximize")
+  expect(
+    await agentSays(window, "keys_bind", { key: "Alt+M", action: fill.id })
+  ).toContain("Alt+M runs")
+  await agentSays(window, "keys_bind", {
+    key: "Ctrl+Alt+H",
+    action: "browser.open",
+    args: { address: "https://example.com/banda" },
+  })
+  const written = readFileSync(file, "utf8")
+  expect(written).toContain('"Alt+M" = "column.maximize"')
+  expect(written).toContain('args = { address = "https://example.com/banda" }')
+  // A line the look would name is refused, and the file kept.
+  const refused = await agentCalls(window, "keys_bind", {
+    key: "Alt+J",
+    action: "no.such",
+  })
+  expect(refused.isError).toBe(true)
+  expect(refused.content[0].text).toContain("Banda has no action no.such")
+  expect(readFileSync(file, "utf8")).toBe(written)
+  // A key that acts as the Person is theirs alone to bind (ADR 0083).
+  const asPerson = await agentCalls(window, "keys_bind", {
+    key: "Ctrl+Alt+J",
+    action: "thread.new",
+    args: { ask: "hello" },
+  })
+  expect(asPerson.isError).toBe(true)
+  expect(asPerson.content[0].text).toContain("Only your Person binds")
+  expect(readFileSync(file, "utf8")).toBe(written)
+
+  // The key sheet shows Alt+M in force beside Banda's own: the window has
+  // the new keys.
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const search = menu.getByRole("combobox", { name: "Search" })
+  await page.keyboard.press("Alt+KeyK")
+  await search.fill("column the whole screen")
+  await expect(
+    menu.getByRole("option").first().locator("[data-slot=kbd-group]")
+  ).toHaveCount(2)
+  await search.press("Escape")
+  await expect(menu).toBeHidden()
+  // As other tests do after the menu, the focus is the composer's again.
+  await composer.click()
+
+  // Each key works: the column fills the Strip, and the address opens.
+  await expect.poll(() => sharesOf(page)).toEqual([50])
+  await page.keyboard.press("Alt+KeyM")
+  await expect.poll(() => sharesOf(page)).toEqual([100])
+  await page.keyboard.press("Control+Alt+KeyH")
+  // The address shows its site.
+  await expect(page.getByRole("textbox", { name: "Address" })).toHaveValue(
+    "example.com"
+  )
+})

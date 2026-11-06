@@ -146,8 +146,9 @@ impl Live {
     }
 
     /// The process of `harness` for `project`, started if it is not
-    /// running, with the pass its Agents' shells share, and the Project's
-    /// trust as it is now: one started under the other is let go.
+    /// running, with the pass its Agents' shells share, this `banda` first
+    /// on its PATH, and the Project's trust as it is now: one started
+    /// under the other is let go.
     pub async fn connection(
         &self,
         project: &ModuleProject,
@@ -155,7 +156,10 @@ impl Live {
     ) -> Result<Arc<Connection>, String> {
         let pass = self.process_pass(project, harness);
         let (id, data) = (project.id(), project.data());
-        let started = harness.in_project(id, data, &pass, project.trusted());
+        let mut started = harness.in_project(id, data, &pass, project.trusted());
+        if let Some(pipe) = &self.pipe {
+            pipe.first_on_path(&mut started.env);
+        }
         let connection = self.hosts.get(project.id(), &started).await?;
         connection.touch();
         Ok(connection)

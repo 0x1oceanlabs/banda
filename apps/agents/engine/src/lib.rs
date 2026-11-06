@@ -143,6 +143,27 @@ impl Pipe {
                 .into(),
         )
     }
+
+    /// `env`'s PATH, or the engine's, with the folder of this `banda`
+    /// first: a session's `banda keys` and `banda settings` are this
+    /// Banda's (ADR 0071, decision 5).
+    fn first_on_path(&self, env: &mut std::collections::BTreeMap<String, String>) {
+        let Some(folder) = self.program.parent() else {
+            return;
+        };
+        let rest = env
+            .get("PATH")
+            .map(std::ffi::OsString::from)
+            .or_else(|| std::env::var_os("PATH"))
+            .unwrap_or_default();
+        let paths = std::iter::once(folder.to_owned()).chain(std::env::split_paths(&rest));
+        if let Some(path) = std::env::join_paths(paths)
+            .ok()
+            .and_then(|p| p.into_string().ok())
+        {
+            env.insert("PATH".to_owned(), path);
+        }
+    }
 }
 
 impl Agents {
@@ -1724,4 +1745,21 @@ fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Option<Se
         turn: again,
         item: found.message,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Pipe;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn this_banda_comes_first_on_a_session_s_path() {
+        let pipe = Pipe {
+            program: "/opt/banda/bin/banda".into(),
+            engine: String::new(),
+        };
+        let mut env = BTreeMap::from([("PATH".to_owned(), "/usr/bin:/bin".to_owned())]);
+        pipe.first_on_path(&mut env);
+        assert_eq!(env["PATH"], "/opt/banda/bin:/usr/bin:/bin");
+    }
 }
