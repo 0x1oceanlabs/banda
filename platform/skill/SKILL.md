@@ -1,6 +1,6 @@
 ---
 name: banda
-description: Banda is the workspace this Agent works in, a tiling window of Projects, Threads and Panes. Read it to know where things are and to change Banda for the Person, such as its look or its sidebar.
+description: Banda is the workspace this Agent works in, a tiling window of Projects, Threads and Panes. Read it to know where things are and to change Banda for the Person, such as its look, its sidebar, or its keys, shortcuts and keybindings.
 ---
 
 # Banda
@@ -148,6 +148,6 @@ in `~/.config/banda-local/`, as their data and state too:
 | `sidebars/<name>.toml` | the Person's own sidebar presets |
 | `browser.toml` | where the browser's tabs are, and its search |
 | `agents.toml` | what Enter does with a message written while the Agent works |
-| `keys.toml` | the Person's keys, `[binds]`: `"Alt+M" = "column.maximize"`, or `"none"` to free a key; `mod`, the keys held for every Banda key, `"Ctrl+Alt"` where the desktop holds Alt; Ctrl+Alt+Shift+K brings Banda's own back. Every action's id: `banda modules`, the window's own (the tiling's) as the module `window` |
+| `keys.toml` | the Person's keys, `[binds]`: `"Alt+M" = "column.maximize"`, or `"none"` to free a key; `mod`, the keys held for every Banda key, `"Ctrl+Alt"` where the desktop holds Alt; Ctrl+Alt+Shift+K brings Banda's own back. Bind with `banda keys` or the `keys_*` tools: the topic `keys` |
 | `harnesses.toml` | the Harnesses Threads start with |
 | `schemas/` | each file's JSON Schema, written by Banda for editors |
