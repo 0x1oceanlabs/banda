@@ -17,6 +17,12 @@ use std::time::Duration;
 /// to the adapter Banda carries (ADR 0078, decision 3).
 pub const SESSIONS_VARIABLE: &str = "BANDA_CLAUDE_SESSIONS";
 
+/// The variable set on every Harness process of a Project the Person has
+/// not trusted (ADR 0083, decision 5). The Codex adapter Banda carries then
+/// marks no session's folder trusted, so Codex loads none of the folder's
+/// own config (`modules/harnesses/desktop/patches/`).
+pub const UNTRUSTED_VARIABLE: &str = "BANDA_UNTRUSTED";
+
 /// An agent program and how to start it. It speaks ACP on its stdio.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Harness {
@@ -109,6 +115,13 @@ impl Harness {
         Program { program, args, env }
     }
 
+    /// Whether its process reads the settings, hooks and servers the
+    /// Project's folder names: not once [`Harness::in_project`] started it
+    /// for a Project the Person has not trusted, or its entry says so.
+    pub fn trusted(&self) -> bool {
+        !self.env.contains_key(UNTRUSTED_VARIABLE)
+    }
+
     /// Whether `other`'s process goes on with this entry's sessions: the
     /// same entry, or two Claude Code accounts, whose sessions both live in
     /// the Project's folder (ADR 0078, decision 3). Codex's accounts share
@@ -133,16 +146,24 @@ impl Harness {
     /// every Claude account, so any of them goes on with a Thread's session
     /// (ADR 0078, decision 3). The adapter Banda carries reads the folder
     /// from `BANDA_CLAUDE_SESSIONS`; another program ignores it.
+    ///
+    /// A Project that is not `trusted` sets [`UNTRUSTED_VARIABLE`], so its
+    /// sessions read only the Person's own settings ([`Harness::trusted`]),
+    /// and a process started under the other trust is not this entry.
     pub fn in_project(
         &self,
         project: ProjectId,
         data: &Path,
         shells: &BTreeMap<String, String>,
+        trusted: bool,
     ) -> Harness {
         use crate::limits::Kind;
         let mut harness = self.clone();
         (harness.env).extend(project_env(project).map(|(key, id)| (key.to_owned(), id)));
         (harness.env).extend(shells.clone());
+        if !trusted {
+            (harness.env).insert(UNTRUSTED_VARIABLE.to_owned(), "1".to_owned());
+        }
         if Kind::of(self) == Some(Kind::Codex) && !shells.is_empty() {
             // The entry's own, else the one the engine runs with.
             let before =
@@ -1149,7 +1170,7 @@ mod tests {
             serde_json::from_str(&harness.env[CODEX_CONFIG]).unwrap()
         };
         for harness in known() {
-            let started = harness.in_project(project, data, &shells);
+            let started = harness.in_project(project, data, &shells, true);
             assert_eq!(started.env["BANDA_TOKEN"], "f00d", "{}", harness.id);
         }
 
@@ -1157,7 +1178,7 @@ mod tests {
             "[[harness]]\nid = \"codex\"\nname = \"Codex\"\ncommand = \"codex-acp\"\n\
              env = { CODEX_CONFIG = '{\"model\":\"o3\"}' }\n",
         );
-        let config = config(&own.in_project(project, data, &shells));
+        let config = config(&own.in_project(project, data, &shells, true));
         assert_eq!(config["model"], "o3", "the entry's own stays");
         assert_eq!(
             config["shell_environment_policy.set.BANDA_TOKEN"], "f00d",
@@ -1166,10 +1187,10 @@ mod tests {
 
         let other =
             listed("[[harness]]\nid = \"gemini\"\nname = \"Gemini\"\ncommand = \"gemini\"\n");
-        let started = other.in_project(project, data, &shells);
+        let started = other.in_project(project, data, &shells, true);
         assert_eq!(started.env["BANDA_ENGINE"], "ws://127.0.0.1:4000/ws");
         assert_eq!(started.env.get(CODEX_CONFIG), None, "Codex's alone");
-        let none = own.in_project(project, data, &BTreeMap::new());
+        let none = own.in_project(project, data, &BTreeMap::new(), true);
         assert_eq!(none.env.get("BANDA_TOKEN"), None);
         assert_eq!(none.env[CODEX_CONFIG], r#"{"model":"o3"}"#, "as it was");
     }
@@ -1211,16 +1232,30 @@ mod tests {
     }
 
     #[test]
+    fn every_process_of_a_project_not_trusted_says_so() {
+        let (project, data) = (ProjectId::new(), Path::new("/state/projects/p"));
+        for harness in known() {
+            let trusted = harness.in_project(project, data, &BTreeMap::new(), true);
+            assert!(trusted.trusted(), "{}", harness.id);
+            assert_eq!(trusted.start().env.get(UNTRUSTED_VARIABLE), None);
+            let not = harness.in_project(project, data, &BTreeMap::new(), false);
+            assert!(!not.trusted(), "{}", harness.id);
+            assert_eq!(not.start().env[UNTRUSTED_VARIABLE], "1", "{}", harness.id);
+            assert_ne!(not, trusted, "a process of the other trust is another");
+        }
+    }
+
+    #[test]
     fn claude_s_sessions_go_in_the_project_s_folder() {
         let project = ProjectId::new();
         let data = Path::new("/state/projects/p");
         let list = known();
-        let claude = list[0].in_project(project, data, &BTreeMap::new());
+        let claude = list[0].in_project(project, data, &BTreeMap::new(), true);
         assert_eq!(
             claude.env[SESSIONS_VARIABLE],
             "/state/projects/p/sessions/claude"
         );
-        let codex = list[1].in_project(project, data, &BTreeMap::new());
+        let codex = list[1].in_project(project, data, &BTreeMap::new(), true);
         assert!(
             !codex.env.contains_key(SESSIONS_VARIABLE),
             "Codex keeps its own"
@@ -1229,7 +1264,7 @@ mod tests {
                       cli = { program = \"claude\", variable = \"CLAUDE_CODE_EXECUTABLE\" }\n";
         let second = listed_in(Path::new("h"), second).unwrap().remove(0);
         assert_eq!(
-            second.in_project(project, data, &BTreeMap::new()).env[SESSIONS_VARIABLE],
+            second.in_project(project, data, &BTreeMap::new(), true).env[SESSIONS_VARIABLE],
             claude.env[SESSIONS_VARIABLE],
             "every Claude account, one folder"
         );

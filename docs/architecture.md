@@ -127,6 +127,19 @@ The kernel holds only what every module needs, and it names no module.
   (ADR 0046): `projects.create { scratch: true }` makes it, with no name, in
   a new folder `~/Banda/scratch/<date>-<id8>/`, and `projects.update
   { scratch: false, name }` makes a Project of it.
+- **Trust** (ADR 0083, decision 5). A Project is trusted or not, `trusted`
+  in its `project.json` and its summary; one that does not say is trusted.
+  Only the Person changes it, `projects.trust { project, trusted }`, which
+  tells its modules (`Module::trust_changed`). A new Project is trusted as
+  `projects.add`, `projects.create` or `banda project add --trusted` says;
+  when they do not, a folder the call made is trusted, and another unless
+  it looks foreign.
+  `projects.foreign { folder }` says whether it does and why, for Add
+  Project to ask: its repository was cloned from a network, or has a remote
+  on GitHub of another account than the one `gh` is signed in to, or it
+  holds `.claude/`, `.codex/`, `.mcp.json` or `.devcontainer/`. The look
+  reads the repository's config and HEAD's log itself, runs no git, and
+  asks `gh` only its account, offline. No Project's own is trusted.
 - **Event log.** Append-only, with typed events, one per Project. Windows and
   the CLI subscribe to it. A subscription sends only what its view needs.
   The database itself refuses to change or delete an event.
@@ -403,6 +416,16 @@ If Chat is removed, Agents still works through its own Thread.
   start at a time; starts it again after a growing pause if it keeps dying;
   and lets it go after 30 minutes with nothing to do. It runs in its own
   process group and dies with the engine.
+- **A Project not trusted loads only the Person's own settings** (ADR 0083,
+  decision 5). Its Harness processes carry `BANDA_UNTRUSTED`, and each
+  session opens with `_meta.claudeCode.options.settingSources: ["user"]`,
+  so Claude Code reads none of the folder's `.claude/` settings, hooks,
+  `CLAUDE.md` or `.mcp.json` servers. The Codex adapter Banda carries is
+  patched (`modules/harnesses/desktop/patches/`) to mark no session's
+  folder trusted under that variable, where it marks every one trusted
+  otherwise, so Codex loads no `.codex/` config of the folder. A change of
+  trust lets every process of the Project go; a turn that runs keeps its
+  own, and the next starts one that reads the trust as it is.
 - **A session belongs to its Thread.** The Thread keeps the Harness's
   session ID as evidence. A Thread whose process went resumes its session,
   or loads it; when the Harness can do neither, the Thread starts a new one

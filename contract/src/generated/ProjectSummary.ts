@@ -33,4 +33,10 @@ missing: boolean,
 /**
  * What stands for it beside its name (ADR 0070).
  */
-sign: Sign, };
+sign: Sign, 
+/**
+ * Its Harnesses load the settings, hooks and servers its folder names
+ * for them (ADR 0083, decision 5). Only the Person changes it
+ * (`projects.trust`). An engine from before it trusts every Project.
+ */
+trusted: boolean, };

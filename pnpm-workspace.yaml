@@ -18,3 +18,11 @@ ignoredOptionalDependencies:
   - "@openai/codex-*"
   # PDF.js's canvas for Node: the window draws a PDF in Chromium's own.
   - "@napi-rs/canvas"
+
+# Changes to the adapters Banda carries (ADR 0059), where they take no
+# option for what Banda needs; each goes once its adapter takes one (ADR
+# 0062, decision 16). codex-acp marks every session's folder trusted: with
+# BANDA_UNTRUSTED set, as Banda sets it for a Project its Person has not
+# trusted, it marks none (ADR 0083, decision 5).
+patchedDependencies:
+  "@agentclientprotocol/codex-acp@2.5.0": modules/harnesses/desktop/patches/@agentclientprotocol__codex-acp@2.5.0.patch

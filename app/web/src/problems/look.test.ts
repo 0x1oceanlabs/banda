@@ -14,6 +14,7 @@ const project = (
   archived: false,
   sees_others: false,
   sign: { kind: "letters", text: "W", picked: false },
+  trusted: true,
   scratch: false,
   missing,
 })

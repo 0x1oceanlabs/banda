@@ -7,8 +7,10 @@
 //! - A host that keeps dying starts again after a growing pause.
 //! - A host with nothing to do for `idle` is let go.
 //! - A host is let go when its account changes ([`Hosts::let_go`]), and
-//!   one that was starting then is let go the next time it is asked for,
-//!   so letting go never waits on a start (ADR 0040, decision 4).
+//!   every host of a Project when the Person's trust in it changes
+//!   ([`Hosts::let_go_project`]). One that was starting then is let go
+//!   the next time it is asked for, so letting go never waits on a start
+//!   (ADR 0040, decision 4).
 //! - A host's process runs in its own process group, which is killed when
 //!   the host is dropped; an engine that dies closes the host's stdin.
 
@@ -219,6 +221,17 @@ impl<H: Host> Hosts<H> {
         }
     }
 
+    /// Lets go of every host of `project`, as whether the Person trusts it
+    /// changed (ADR 0083, decision 5), the way [`Hosts::let_go`] does.
+    pub fn let_go_project(&self, project: ProjectId) {
+        let slots = self.slots.lock().unwrap();
+        for ((of, _), entry) in slots.iter() {
+            if *of == project {
+                Self::stale(entry);
+            }
+        }
+    }
+
     fn stale(entry: &Arc<Entry<H>>) {
         entry.stale.store(true, Ordering::SeqCst);
         if let Ok(mut slot) = entry.slot.try_lock() {
@@ -348,6 +361,59 @@ mod tests {
             2,
             "then it stays"
         );
+    }
+
+    /// A host that counts its starts, as many as asked, and lives on.
+    struct Kept(usize);
+
+    static KEPT: AtomicUsize = AtomicUsize::new(0);
+
+    impl Host for Kept {
+        async fn start(_: &Harness) -> Result<Arc<Self>, String> {
+            Ok(Arc::new(Kept(KEPT.fetch_add(1, Ordering::SeqCst) + 1)))
+        }
+
+        fn alive(&self) -> bool {
+            true
+        }
+
+        fn idle_since(&self) -> Option<Instant> {
+            None
+        }
+    }
+
+    #[tokio::test]
+    async fn a_project_whose_trust_changed_lets_go_of_every_host_and_only_its_own() {
+        let hosts = Hosts::<Kept>::new(Duration::from_secs(60));
+        let known = crate::Harnesses::known();
+        let entries: Vec<_> = (known.views().iter())
+            .map(|view| known.find(&view.id).unwrap())
+            .collect();
+        let (project, other) = (ProjectId::new(), ProjectId::new());
+        let mut first = Vec::new();
+        for harness in &entries {
+            first.push(hosts.get(project, harness).await.unwrap().0);
+        }
+        let theirs = hosts.get(other, &entries[0]).await.unwrap().0;
+
+        hosts.let_go_project(project);
+        assert!(hosts.running(project).await.is_empty(), "let go at once");
+        for (harness, before) in entries.iter().zip(first) {
+            let again = hosts.get(project, harness).await.unwrap().0;
+            assert!(again > before, "{} starts again", harness.id);
+        }
+        let kept = hosts.get(other, &entries[0]).await.unwrap().0;
+        assert_eq!(kept, theirs, "another Project's host stays");
+
+        // Started for the other trust, a host is another entry, which a
+        // Project's next turn starts afresh even unheard.
+        let data = std::path::Path::new("/state/projects/p");
+        let shells = Default::default();
+        let trusted = entries[0].in_project(project, data, &shells, true);
+        let not = entries[0].in_project(project, data, &shells, false);
+        let before = hosts.get(project, &trusted).await.unwrap().0;
+        let after = hosts.get(project, &not).await.unwrap().0;
+        assert!(after > before);
     }
 
     #[test]

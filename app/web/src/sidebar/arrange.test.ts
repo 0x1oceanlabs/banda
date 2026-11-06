@@ -14,6 +14,7 @@ const project = (id: string, name: string, folder: string): ProjectSummary => ({
   archived: false,
   sees_others: false,
   sign: { kind: "letters", text: "W", picked: false },
+  trusted: true,
   scratch: false,
   missing: false,
 })

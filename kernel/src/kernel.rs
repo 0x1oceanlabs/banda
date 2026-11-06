@@ -1,4 +1,5 @@
 use crate::access::{self, Caller, Right};
+use crate::foreign::{self, Foreign};
 use crate::methods::{Asks, Nothing, Tool};
 use crate::module::{Call, Module, Scope, Stream, Wall};
 use crate::passes::Passes;
@@ -116,6 +117,11 @@ pub struct ProjectSummary {
     pub missing: bool,
     /// What stands for it beside its name (ADR 0070).
     pub sign: Sign,
+    /// Its Harnesses load the settings, hooks and servers its folder names
+    /// for them (ADR 0083, decision 5). Only the Person changes it
+    /// (`projects.trust`). An engine from before it trusts every Project.
+    #[serde(default = "project::unsaid_trust")]
+    pub trusted: bool,
 }
 
 pub struct KernelBuilder {
@@ -278,14 +284,27 @@ crate::methods! {
         call list(Nothing) -> Vec<ProjectSummary>, Read;
         /// Makes a Project: a new folder under the root, by its name. A
         /// scratch one, for a Thread in No Project, takes no name: its folder
-        /// is new under `scratch/`.
+        /// is new under `scratch/`. A new folder is trusted, unless the
+        /// Person says a named one is not.
         command create(CreateProject) -> ProjectSummary, Manage;
         /// Adds a folder as a Project. A folder that already is one answers
-        /// that Project, back from the archive if it was there.
+        /// that Project, back from the archive if it was there. A new one is
+        /// trusted as `trusted` says, or else unless its folder looks
+        /// foreign (`projects.foreign`).
         command add(AddProject) -> ProjectSummary, Manage;
         /// The folders that match a path as it is typed, for the field
         /// that picks a Project's folder. Only the owner browses.
         call browse(Browse) -> Browsed, Manage;
+        /// Whether a folder looks like code the Person did not write, and
+        /// why, for Add Project to ask whether to trust it (ADR 0083,
+        /// decision 5): cloned from a network, a remote another GitHub
+        /// account owns, or what a Harness loads or a container is made
+        /// from in it.
+        call foreign(OneFolder) -> Foreign, Manage;
+        /// Trusts a Project, or takes its trust back: its Harnesses load the
+        /// settings, hooks and servers its folder names only while it is
+        /// trusted, from their next turn. Only the Person trusts.
+        command trust(TrustProject) -> ProjectSummary, Manage;
         /// Renames, pins or archives a Project, lets its Agents see the
         /// other Projects' Panes, or makes a Project of a scratch one, named.
         command update(UpdateProject) -> ProjectSummary, Manage;
@@ -335,6 +354,11 @@ struct CreateProject {
     #[serde(default)]
     #[ts(optional)]
     scratch: Option<bool>,
+    /// Whether its Harnesses load what its folder names (ADR 0083,
+    /// decision 5); trusted when not said. A scratch Project is trusted.
+    #[serde(default)]
+    #[ts(optional)]
+    trusted: Option<bool>,
 }
 
 #[derive(Deserialize, TS)]
@@ -349,6 +373,12 @@ struct AddProject {
     #[serde(default)]
     #[ts(optional)]
     create: Option<bool>,
+    /// Whether its Harnesses load what its folder names (ADR 0083,
+    /// decision 5). Not said, a folder that looks foreign is not trusted,
+    /// and another is. A folder that already is a Project keeps its own.
+    #[serde(default)]
+    #[ts(optional)]
+    trusted: Option<bool>,
 }
 
 #[derive(Deserialize, TS)]
@@ -429,6 +459,18 @@ struct LocateProject {
 #[derive(Deserialize, TS)]
 struct OneProject {
     project: ProjectId,
+}
+
+#[derive(Deserialize, TS)]
+struct OneFolder {
+    /// Absolute, or from the home folder.
+    folder: String,
+}
+
+#[derive(Deserialize, TS)]
+struct TrustProject {
+    project: ProjectId,
+    trusted: bool,
 }
 
 /// The most folders `projects.browse` answers.
@@ -812,11 +854,15 @@ impl Kernel {
     async fn create(&self, ask: Own<'_>, create: CreateProject) -> Result<ProjectSummary, Refusal> {
         let (author, command) = (ask.participant, ask.command_id()?);
         match (create.name, create.scratch == Some(true)) {
+            (None, true) if create.trusted == Some(false) => Err(Refusal::invalid(
+                "A Thread in No Project is trusted: its folder is Banda's own.",
+            )),
             (None, true) => self.create_scratch(author, command).await,
             // A new folder holds no picture to find.
             (Some(name), false) => {
-                let made = self.create_project(&name, author, command).await?;
-                Ok(self.lettered(made).await)
+                let trusted = create.trusted;
+                let made = self.create_project(&name, trusted, author, command);
+                Ok(self.lettered(made.await?).await)
             }
             (Some(_), true) => Err(Refusal::invalid(
                 "A scratch Project has no name until it becomes a Project.",
@@ -865,6 +911,7 @@ impl Kernel {
     async fn create_project(
         &self,
         name: &str,
+        trusted: Option<bool>,
         author: Participant,
         command: CommandId,
     ) -> Result<ProjectSummary, Refusal> {
@@ -878,8 +925,7 @@ impl Kernel {
                 ))),
             };
         }
-        self.add_at(&folder, Some(name), true, author, command)
-            .await
+        (self.add_at(&folder, Some(name), true, trusted, author, command)).await
     }
 
     async fn add(&self, ask: Own<'_>, add: AddProject) -> Result<ProjectSummary, Refusal> {
@@ -890,6 +936,7 @@ impl Kernel {
             &folder,
             add.name.as_deref(),
             create,
+            add.trusted,
             ask.participant,
             command,
         ))
@@ -899,12 +946,15 @@ impl Kernel {
 
     /// Adds `folder` as a Project, made first if `create` says so; the
     /// Project it already is comes back from the archive instead. A folder
-    /// this call made is taken back when the Project is not.
+    /// this call made is taken back when the Project is not. A new Project
+    /// is trusted as `trusted` says; not said, a folder this call made is,
+    /// and another unless it looks foreign.
     async fn add_at(
         &self,
         folder: &Path,
         name: Option<&str>,
         create: bool,
+        trusted: Option<bool>,
         author: Participant,
         command: CommandId,
     ) -> Result<ProjectSummary, Refusal> {
@@ -935,7 +985,14 @@ impl Kernel {
                 (None, None) => "/",
             };
             let name = Project::name_of(name)?;
-            (self.place_project(Manifest::new(&canonical, name, author, command))).await
+            let trusted = match trusted {
+                Some(trusted) => trusted,
+                None if made => true,
+                None => !foreign::look(&canonical).await.foreign,
+            };
+            let mut manifest = Manifest::new(&canonical, name, author, command);
+            manifest.trusted = trusted;
+            self.place_project(manifest).await
         }
         .await;
         if made && added.is_err() {
@@ -1018,6 +1075,42 @@ impl Kernel {
             exists,
             entries,
         })
+    }
+
+    async fn foreign(
+        &self,
+        _: Own<'_>,
+        OneFolder { folder }: OneFolder,
+    ) -> Result<Foreign, Refusal> {
+        let folder = folder_found(&from_home(&folder)?)?;
+        Ok(foreign::look(&folder).await)
+    }
+
+    /// Changes whether the Person trusts a Project, missing or open, and
+    /// tells its modules when it changed, so what runs under the old trust
+    /// goes.
+    async fn trust(&self, _: Own<'_>, trust: TrustProject) -> Result<ProjectSummary, Refusal> {
+        let TrustProject { project, trusted } = trust;
+        let mut projects = self.projects.write().await;
+        let entry = projects.get_mut(&project).ok_or_else(no_project)?;
+        let (summary, changed) = match entry {
+            Entry::Open(open) => {
+                let changed = open.trusted() != trusted;
+                let summary = open.change(|manifest| manifest.trusted = trusted)?;
+                (summary, changed.then(|| open.clone()))
+            }
+            Entry::Missing { data, manifest } => {
+                manifest.change_in(data, |manifest| manifest.trusted = trusted)?;
+                (manifest.summary(true), None)
+            }
+        };
+        drop(projects);
+        if let Some(project) = changed {
+            for module in project.modules() {
+                module.trust_changed(project.module(module.name())).await;
+            }
+        }
+        Ok(self.lettered(summary).await)
     }
 
     async fn update(&self, _: Own<'_>, update: UpdateProject) -> Result<ProjectSummary, Refusal> {

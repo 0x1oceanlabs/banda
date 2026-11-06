@@ -28,6 +28,8 @@ struct Notes {
     panics: Arc<AtomicBool>,
     /// The Projects it was told were removed.
     closed: Arc<Mutex<Vec<ProjectId>>>,
+    /// Each Project it was told changed its trust, as it read it then.
+    trusts: Arc<Mutex<Vec<(ProjectId, bool)>>>,
 }
 
 #[derive(Deserialize)]
@@ -47,6 +49,10 @@ impl Module for Notes {
 
     async fn closing(&self, project: ModuleProject) {
         self.closed.lock().unwrap().push(project.id());
+    }
+
+    async fn trust_changed(&self, project: ModuleProject) {
+        (self.trusts.lock().unwrap()).push((project.id(), project.trusted()));
     }
 
     fn right(&self, method: &str) -> Option<Right> {
@@ -1479,6 +1485,111 @@ async fn a_project_is_renamed_pinned_and_archived_and_added_back() {
         (project.id, false),
         "adding it again brings it back"
     );
+}
+
+#[tokio::test]
+async fn a_project_is_trusted_unless_its_folder_looks_foreign_and_only_the_person_changes_it() {
+    let root = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let (owner, notes) = (PersonId::new(), Notes::default());
+    let kernel = open(root.path(), owner, &notes).await;
+    let folder = |name: &str, holds: &[&str]| {
+        let folder = elsewhere.path().join(name);
+        std::fs::create_dir(&folder).unwrap();
+        for held in holds {
+            std::fs::create_dir(folder.join(held)).unwrap();
+        }
+        folder
+    };
+    let added = |params: Value| async { add_folder(&kernel, owner, params).await.unwrap() };
+
+    let made = create(&kernel, owner, "Work").await;
+    assert!(made.trusted, "a new folder is the Person's");
+    let scratch = create_scratch(&kernel, owner, CommandId::new()).await;
+    assert!(scratch.unwrap().trusted, "No Project's is Banda's");
+    let untrusted_scratch = projects(
+        &kernel,
+        owner,
+        "create",
+        json!({ "scratch": true, "trusted": false }),
+    )
+    .await;
+    assert_eq!(untrusted_scratch.unwrap_err().code, Code::Invalid);
+    let plain = added(json!({ "folder": folder("plain", &[]) })).await;
+    assert!(plain.trusted);
+    let new = elsewhere.path().join("new");
+    let new = added(json!({ "folder": new, "create": true })).await;
+    assert!(new.trusted, "a folder the add made holds nothing");
+
+    let cloned = folder("cloned", &[".claude", ".devcontainer"]);
+    let looked = projects(&kernel, owner, "foreign", json!({ "folder": cloned })).await;
+    assert_eq!(
+        looked.unwrap(),
+        json!({ "foreign": true, "why": [
+            { "kind": "holds", "name": ".claude" },
+            { "kind": "holds", "name": ".devcontainer" },
+        ] })
+    );
+    let cloned = added(json!({ "folder": cloned })).await;
+    assert!(!cloned.trusted, "Banda decides when nobody said");
+    let said = folder("said", &[".codex"]);
+    let said = added(json!({ "folder": said, "trusted": true })).await;
+    assert!(said.trusted, "the Person's word wins");
+    let again = added(json!({ "folder": cloned.folder, "trusted": true })).await;
+    assert!(!again.trusted, "a Project keeps its own");
+
+    // An Agent reads its Project's trust, and never changes it or looks
+    // past its wall.
+    let agent = Caller {
+        participant: Participant::Agent(AgentId::new()),
+        only: Some(cloned.id),
+    };
+    let listed = (kernel.call(agent, "projects.list", None, None, Value::Null)).await;
+    assert_eq!(listed.unwrap()[0]["trusted"], json!(false));
+    let trust = json!({ "project": cloned.id, "trusted": true });
+    let command = Some(CommandId::new());
+    let refused = (kernel.call(agent, "projects.trust", None, command, trust.clone())).await;
+    assert_eq!(refused.unwrap_err().code, Code::Forbidden);
+    let look = json!({ "folder": elsewhere.path() });
+    let refused = kernel
+        .call(agent, "projects.foreign", None, None, look)
+        .await;
+    assert_eq!(refused.unwrap_err().code, Code::Forbidden);
+    assert!(notes.trusts.lock().unwrap().is_empty());
+
+    let trusted = projects(&kernel, owner, "trust", trust.clone())
+        .await
+        .unwrap();
+    assert_eq!(trusted["trusted"], json!(true));
+    projects(&kernel, owner, "trust", trust).await.unwrap();
+    let untrust = json!({ "project": made.id, "trusted": false });
+    projects(&kernel, owner, "trust", untrust).await.unwrap();
+    assert_eq!(
+        *notes.trusts.lock().unwrap(),
+        [(cloned.id, true), (made.id, false)],
+        "its modules hear each change, as it is now, once"
+    );
+    let nowhere = json!({ "project": ProjectId::new(), "trusted": true });
+    let nowhere = projects(&kernel, owner, "trust", nowhere).await;
+    assert_eq!(nowhere.unwrap_err().code, Code::NotFound);
+
+    // A manifest says it only of a Project that is not trusted, so one
+    // from before the flag reads as trusted.
+    let data = root.path().join(".data/projects");
+    let manifest = |id: ProjectId| -> Value {
+        let text = std::fs::read(data.join(id.to_string()).join("project.json")).unwrap();
+        serde_json::from_slice(&text).unwrap()
+    };
+    assert_eq!(manifest(made.id)["trusted"], json!(false));
+    assert_eq!(manifest(plain.id).get("trusted"), None);
+    drop(kernel);
+    let kernel = reopen(root.path(), owner, &notes, 6).await;
+    let kept: Vec<_> = (kernel.projects().await.into_iter())
+        .map(|project| (project.id, project.trusted))
+        .collect();
+    for (id, trusted) in [(made.id, false), (cloned.id, true), (plain.id, true)] {
+        assert!(kept.contains(&(id, trusted)), "{id}: {kept:?}");
+    }
 }
 
 /// Makes a scratch Project, for a Thread in No Project, under `command`.

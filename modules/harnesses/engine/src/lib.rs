@@ -14,7 +14,7 @@ pub mod model;
 mod module;
 mod record;
 
-pub use list::{Cli, FILE, Harness, Harnesses, LimitsSettings};
+pub use list::{Cli, FILE, Harness, Harnesses, LimitsSettings, UNTRUSTED_VARIABLE};
 pub use module::{HarnessesModule, LimitsNow, SETTINGS, account_changed};
 
 pub mod usage;

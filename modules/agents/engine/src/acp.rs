@@ -94,6 +94,9 @@ pub struct Connection {
     activity: Activity,
     /// The Harness's session for each Thread, in this process.
     sessions: tokio::sync::Mutex<HashMap<ThreadId, acp::SessionId>>,
+    /// Whether its sessions load what the Project's folder names, as the
+    /// Project's trust was when it started (ADR 0083, decision 5).
+    trusted: bool,
 }
 
 impl Host for Connection {
@@ -115,6 +118,7 @@ impl Host for Connection {
             learned,
             activity: Activity::default(),
             sessions: Default::default(),
+            trusted: harness.trusted(),
         }))
     }
 

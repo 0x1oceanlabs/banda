@@ -5,11 +5,14 @@ import type { Browsed } from "./Browsed";
 import type { CallMethod } from "./CallMethod";
 import type { CommandMethod } from "./CommandMethod";
 import type { CreateProject } from "./CreateProject";
+import type { Foreign } from "./Foreign";
 import type { LocateProject } from "./LocateProject";
 import type { Nothing } from "./Nothing";
+import type { OneFolder } from "./OneFolder";
 import type { OneProject } from "./OneProject";
 import type { ProjectSummary } from "./ProjectSummary";
 import type { Tool } from "./Tool";
+import type { TrustProject } from "./TrustProject";
 import type { UpdateProject } from "./UpdateProject";
 
 export type ProjectsMethods = { 
@@ -20,12 +23,15 @@ list: CallMethod<Nothing, Array<ProjectSummary>>,
 /**
  * Makes a Project: a new folder under the root, by its name. A
  * scratch one, for a Thread in No Project, takes no name: its folder
- * is new under `scratch/`.
+ * is new under `scratch/`. A new folder is trusted, unless the
+ * Person says a named one is not.
  */
 create: CommandMethod<CreateProject, ProjectSummary>, 
 /**
  * Adds a folder as a Project. A folder that already is one answers
- * that Project, back from the archive if it was there.
+ * that Project, back from the archive if it was there. A new one is
+ * trusted as `trusted` says, or else unless its folder looks
+ * foreign (`projects.foreign`).
  */
 add: CommandMethod<AddProject, ProjectSummary>, 
 /**
@@ -33,6 +39,20 @@ add: CommandMethod<AddProject, ProjectSummary>,
  * that picks a Project's folder. Only the owner browses.
  */
 browse: CallMethod<Browse, Browsed>, 
+/**
+ * Whether a folder looks like code the Person did not write, and
+ * why, for Add Project to ask whether to trust it (ADR 0083,
+ * decision 5): cloned from a network, a remote another GitHub
+ * account owns, or what a Harness loads or a container is made
+ * from in it.
+ */
+foreign: CallMethod<OneFolder, Foreign>, 
+/**
+ * Trusts a Project, or takes its trust back: its Harnesses load the
+ * settings, hooks and servers its folder names only while it is
+ * trusted, from their next turn. Only the Person trusts.
+ */
+trust: CommandMethod<TrustProject, ProjectSummary>, 
 /**
  * Renames, pins or archives a Project, lets its Agents see the
  * other Projects' Panes, or makes a Project of a scratch one, named.

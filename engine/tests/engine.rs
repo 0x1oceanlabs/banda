@@ -635,6 +635,79 @@ fn an_agents_banda_acts_under_its_pass() {
     assert!(engine.wait().unwrap().success());
 }
 
+#[test]
+fn a_project_the_person_does_not_trust_loads_only_their_own_settings() {
+    let places = Places::new();
+    let (mut engine, stdin, _) = places.serve();
+    let work = places.ok("projects.create", None, json!({ "name": "Work" }));
+    assert_eq!(work["trusted"], json!(true));
+    let work = text(&work["id"]).to_owned();
+    let sent = places.ok(
+        "agents.send",
+        Some(&work),
+        json!({ "harness": "fake", "text": "hello" }),
+    );
+    let read = |file: &Path| {
+        let bytes = std::fs::read(file).ok()?;
+        serde_json::from_slice::<Value>(&bytes).ok()
+    };
+    let shells = wait_for(Duration::from_secs(30), || read(&places.shells))
+        .expect("the session told what it loads");
+    assert_eq!(
+        (&shells["untrusted"], &shells["sources"]),
+        (&json!(null), &json!(null))
+    );
+
+    // Its Agent reads whether its Project is trusted, and never changes it.
+    let session = &shells["session"];
+    let listed = places.as_agent(session, &["call", "projects.list"]);
+    let listed: Value = serde_json::from_slice(&listed.stdout).unwrap();
+    assert_eq!(listed["ok"][0]["trusted"], json!(true));
+    let untrust = json!({ "project": work, "trusted": false }).to_string();
+    let untrust = ["call", "projects.trust", "--params", &untrust];
+    assert_eq!(refusal(&places.as_agent(session, &untrust)), "forbidden");
+
+    // The Person takes it back: the Thread's next turn runs in a process,
+    // and a session, that read only the Person's own settings.
+    std::fs::remove_file(&places.shells).unwrap();
+    let untrusted = places.ok(
+        "projects.trust",
+        None,
+        json!({ "project": work, "trusted": false }),
+    );
+    assert_eq!(untrusted["trusted"], json!(false));
+    places.ok(
+        "agents.send",
+        Some(&work),
+        json!({ "thread": sent["thread"], "text": "again" }),
+    );
+    let shells =
+        wait_for(Duration::from_secs(30), || read(&places.shells)).expect("a session opened again");
+    assert_eq!(shells["untrusted"], json!("1"));
+    assert_eq!(shells["sources"], json!(["user"]));
+
+    // A folder added with no word of its trust is trusted unless it looks
+    // like another's code; the Person's word wins.
+    let holding = |name: &str| {
+        let folder = places.root.join(name);
+        std::fs::create_dir_all(folder.join(".claude")).unwrap();
+        folder.display().to_string()
+    };
+    let added = |args: &[&str]| {
+        let output = places.banda(args).output().unwrap();
+        assert!(output.status.success(), "{output:?}");
+        serde_json::from_slice::<Value>(&output.stdout).unwrap()["ok"]["trusted"].clone()
+    };
+    let theirs = holding("theirs");
+    assert_eq!(added(&["project", "add", &theirs]), json!(false));
+    let mine = holding("mine");
+    let mine = ["project", "add", &mine, "--trusted", "true"];
+    assert_eq!(added(&mine), json!(true));
+
+    drop(stdin);
+    assert!(engine.wait().unwrap().success());
+}
+
 /// What `found` finds, asked every ten milliseconds until `within` passes.
 fn wait_for<T>(within: Duration, mut found: impl FnMut() -> Option<T>) -> Option<T> {
     let until = std::time::Instant::now() + within;
