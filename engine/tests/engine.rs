@@ -82,12 +82,16 @@ impl Places {
 
     /// `banda` as an Agent runs it in its shell, with the variables its
     /// session or its Harness's process hands it.
-    fn as_agent(&self, variables: &Value, args: &[&str]) -> Output {
+    fn agent(&self, variables: &Value, args: &[&str]) -> Command {
         let mut command = self.banda(args);
         for name in ["BANDA_TOKEN", "BANDA_ENGINE"] {
             command.env(name, text(&variables[name]));
         }
-        command.output().unwrap()
+        command
+    }
+
+    fn as_agent(&self, variables: &Value, args: &[&str]) -> Output {
+        self.agent(variables, args).output().unwrap()
     }
 
     /// Starts `banda serve --with-parent` and reads the line that says
@@ -483,10 +487,10 @@ fn an_agents_banda_acts_under_its_pass() {
         .expect("the session told what its shells get");
     let servers = read(&places.mcp).expect("the session got its MCP servers");
 
-    // A session's shell gets the pass its `banda mcp` has, as Claude Code's
-    // adapter takes it. The fake agent's sessions take none, as Claude
-    // Code's alone do, so its process carries another pass, which its
-    // Agents share, to the same engine.
+    // A session's shell gets the pass its `banda mcp` has, as Claude
+    // Code's adapter takes it from the session's request, over the pass of
+    // its process, which every Harness's carries: another pass, to the
+    // same engine.
     let given: serde_json::Map<String, Value> = (servers[0]["env"].as_array().unwrap().iter())
         .map(|v| (text(&v["name"]).to_owned(), v["value"].clone()))
         .collect();
@@ -494,6 +498,11 @@ fn an_agents_banda_acts_under_its_pass() {
     assert_eq!(session, &Value::Object(given));
     assert_eq!(process["BANDA_ENGINE"], session["BANDA_ENGINE"]);
     assert_ne!(process["BANDA_TOKEN"], session["BANDA_TOKEN"]);
+    let problem = json!({ "source": "page", "kind": "TypeError", "message": "reading 'x'" });
+    let problem = places.ok("problems.record", None, problem);
+    let report = ["problems", "report", text(&problem["fingerprint"])];
+    let whole = places.banda(&report).output().unwrap();
+    assert!(String::from_utf8_lossy(&whole.stdout).contains("## The workspaces of"));
 
     for (whose, variables) in [("session", session), ("process", process)] {
         // It sees its own Project alone, and a call that names none runs
@@ -513,17 +522,27 @@ fn an_agents_banda_acts_under_its_pass() {
         let threads: Value = serde_json::from_slice(&threads.stdout).unwrap();
         assert_eq!(threads["ok"]["threads"][0]["id"], sent["thread"], "{whose}");
 
-        // Another Project is past its wall, and the Project itself is not
-        // its to change.
+        // Another Project is past its wall, and the Projects are not its
+        // to make or add.
         let elsewhere = ["call", "agents.threads", "--project", &home];
-        assert_eq!(
-            refusal(&places.as_agent(variables, &elsewhere)),
-            "forbidden"
-        );
+        let elsewhere = places.as_agent(variables, &elsewhere);
+        assert_eq!(refusal(&elsewhere), "forbidden", "{whose}");
         let followed = places.as_agent(variables, &["follow", "--project", &home]);
         assert_eq!(refusal(&followed), "forbidden", "{whose}");
         let create = ["call", "projects.create", "--params", r#"{"name":"Mine"}"#];
-        assert_eq!(refusal(&places.as_agent(variables, &create)), "forbidden");
+        let create = places.as_agent(variables, &create);
+        assert_eq!(refusal(&create), "forbidden", "{whose}");
+        let folder = places.root.display().to_string();
+        let add = places.as_agent(variables, &["project", "add", &folder]);
+        assert_eq!(refusal(&add), "forbidden", "{whose}");
+
+        // A Problem's report is the module's alone: the workspaces are
+        // the machine's, which it sees only through its tools.
+        let reported = places.as_agent(variables, &report);
+        assert!(reported.status.success(), "{whose}: {reported:?}");
+        let reported = String::from_utf8_lossy(&reported.stdout);
+        assert!(reported.starts_with("# Problem "), "{whose}: {reported}");
+        assert!(!reported.contains("## The workspaces of"), "{whose}");
     }
 
     // A pass the engine does not know is refused, in words that say so.
@@ -536,10 +555,35 @@ fn an_agents_banda_acts_under_its_pass() {
         text(&said["error"]["message"]).contains("does not know the pass in BANDA_TOKEN"),
         "{said}"
     );
+    // An engine named with no pass for it does nothing, as the owner too.
+    let bare = places
+        .banda(&["call", "projects.list"])
+        .env("BANDA_ENGINE", engine_url)
+        .output()
+        .unwrap();
+    assert_eq!(refusal(&bare), "forbidden");
+    let said: Value = serde_json::from_slice(&bare.stdout).unwrap();
+    assert!(
+        text(&said["error"]["message"]).contains("BANDA_TOKEN holds no pass"),
+        "{said}"
+    );
+    // A call meant for another engine, where BANDA_STATE says, never goes
+    // to the pass's.
+    let other = places.root.join("other");
+    let meant = places
+        .agent(session, &["call", "projects.list"])
+        .env("BANDA_STATE", &other)
+        .output()
+        .unwrap();
+    assert_eq!(refusal(&meant), "invalid");
     // An engine that does not answer where the pass says is named.
     let gone =
         json!({ "BANDA_TOKEN": session["BANDA_TOKEN"], "BANDA_ENGINE": "ws://127.0.0.1:1/ws" });
-    let nowhere = places.as_agent(&gone, &["call", "projects.list"]);
+    let nowhere = places
+        .agent(&gone, &["call", "projects.list"])
+        .env_remove("BANDA_STATE")
+        .output()
+        .unwrap();
     assert_eq!(nowhere.status.code(), Some(2), "{nowhere:?}");
     assert!(String::from_utf8_lossy(&nowhere.stderr).contains("where BANDA_ENGINE says"));
 

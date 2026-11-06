@@ -18,8 +18,8 @@
 //! not answer is an error of the protocol.
 
 use crate::Failure;
-use crate::client::{Client, ENGINE, Pass, TOKEN};
-use banda_kernel::{Code, CommandId, Picture, Refusal, Tool};
+use crate::client::{Client, Pass};
+use banda_kernel::{Code, CommandId, ENGINE_VARIABLE, Picture, Refusal, TOKEN_VARIABLE, Tool};
 use banda_skill::Reach;
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -50,9 +50,9 @@ struct Connected {
 
 /// Answers MCP on stdin and stdout until stdin closes.
 pub async fn serve() -> Result<(), Failure> {
-    let pass = Pass::from_env().ok_or_else(|| {
+    let pass = Pass::from_env().ok().flatten().ok_or_else(|| {
         Failure::broken(format!(
-            "banda mcp needs {TOKEN} and {ENGINE}: the agents module sets them for a Thread's session."
+            "banda mcp needs {TOKEN_VARIABLE} and {ENGINE_VARIABLE}: the agents module sets them for a Thread's session."
         ))
     })?;
     let mut mcp = Mcp {

@@ -78,6 +78,16 @@ struct Owner {
     person: PersonId,
 }
 
+/// The variable that moves the state's place, where `engine.json` says
+/// where the engine listens.
+const STATE: &str = "BANDA_STATE";
+
+/// Whether `BANDA_STATE` names the state's place, as a test or a trial
+/// names its own engine's.
+pub fn state_named() -> bool {
+    std::env::var_os(STATE).is_some_and(|set| !set.is_empty())
+}
+
 fn place(variable: &str, default: Option<PathBuf>, under: &str) -> Result<PathBuf, Failure> {
     if let Some(set) = std::env::var_os(variable).filter(|v| !v.is_empty()) {
         return Ok(PathBuf::from(set));
@@ -95,7 +105,7 @@ impl Places {
         Ok(Places {
             root: place("BANDA_ROOT", dirs::home_dir(), "Banda")?,
             data: place("BANDA_DATA", dirs::data_dir(), FOLDER)?,
-            state: place("BANDA_STATE", state, FOLDER)?,
+            state: place(STATE, state, FOLDER)?,
             config: place("BANDA_CONFIG", dirs::config_dir(), FOLDER)?,
             cache: place("BANDA_CACHE", dirs::cache_dir(), FOLDER)?,
         })
