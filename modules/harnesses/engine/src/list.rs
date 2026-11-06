@@ -17,10 +17,12 @@ use std::time::Duration;
 /// to the adapter Banda carries (ADR 0078, decision 3).
 pub const SESSIONS_VARIABLE: &str = "BANDA_CLAUDE_SESSIONS";
 
-/// The variable set on every Harness process of a Project the Person has
-/// not trusted (ADR 0083, decision 5). The Codex adapter Banda carries then
-/// marks no session's folder trusted, so Codex loads none of the folder's
-/// own config (`modules/harnesses/desktop/patches/`).
+/// Whether a Project's Harness process may load what the Project's folder
+/// names (ADR 0083, decision 5): `1` when the Person has not trusted it,
+/// else empty. Every process of a Project is told, whatever the engine's
+/// own environment says. The adapters Banda carries read it: Codex's marks
+/// no session's folder trusted (`modules/harnesses/desktop/patches/`), and
+/// Claude Code's resolves only the Person's own settings (`claude-sdk.mjs`).
 pub const UNTRUSTED_VARIABLE: &str = "BANDA_UNTRUSTED";
 
 /// An agent program and how to start it. It speaks ACP on its stdio.
@@ -115,11 +117,13 @@ impl Harness {
         Program { program, args, env }
     }
 
-    /// Whether its process reads the settings, hooks and servers the
-    /// Project's folder names: not once [`Harness::in_project`] started it
-    /// for a Project the Person has not trusted, or its entry says so.
+    /// Whether its process may load what the Project's folder names: not
+    /// when [`Harness::in_project`] started it for a Project the Person has
+    /// not trusted.
     pub fn trusted(&self) -> bool {
-        !self.env.contains_key(UNTRUSTED_VARIABLE)
+        self.env
+            .get(UNTRUSTED_VARIABLE)
+            .is_none_or(String::is_empty)
     }
 
     /// Whether `other`'s process goes on with this entry's sessions: the
@@ -147,9 +151,8 @@ impl Harness {
     /// (ADR 0078, decision 3). The adapter Banda carries reads the folder
     /// from `BANDA_CLAUDE_SESSIONS`; another program ignores it.
     ///
-    /// A Project that is not `trusted` sets [`UNTRUSTED_VARIABLE`], so its
-    /// sessions read only the Person's own settings ([`Harness::trusted`]),
-    /// and a process started under the other trust is not this entry.
+    /// [`UNTRUSTED_VARIABLE`] says whether the Project is `trusted`, so a
+    /// process started under the other trust is not this entry.
     pub fn in_project(
         &self,
         project: ProjectId,
@@ -161,9 +164,8 @@ impl Harness {
         let mut harness = self.clone();
         (harness.env).extend(project_env(project).map(|(key, id)| (key.to_owned(), id)));
         (harness.env).extend(shells.clone());
-        if !trusted {
-            (harness.env).insert(UNTRUSTED_VARIABLE.to_owned(), "1".to_owned());
-        }
+        let untrusted = if trusted { "" } else { "1" };
+        (harness.env).insert(UNTRUSTED_VARIABLE.to_owned(), untrusted.to_owned());
         if Kind::of(self) == Some(Kind::Codex) && !shells.is_empty() {
             // The entry's own, else the one the engine runs with.
             let before =
@@ -1232,12 +1234,19 @@ mod tests {
     }
 
     #[test]
-    fn every_process_of_a_project_not_trusted_says_so() {
+    fn every_process_of_a_project_says_whether_it_is_trusted() {
         let (project, data) = (ProjectId::new(), Path::new("/state/projects/p"));
         for harness in known() {
             let trusted = harness.in_project(project, data, &BTreeMap::new(), true);
             assert!(trusted.trusted(), "{}", harness.id);
-            assert_eq!(trusted.start().env.get(UNTRUSTED_VARIABLE), None);
+            // Said even when trusted, over what the engine's own
+            // environment says.
+            assert_eq!(
+                trusted.start().env[UNTRUSTED_VARIABLE],
+                "",
+                "{}",
+                harness.id
+            );
             let not = harness.in_project(project, data, &BTreeMap::new(), false);
             assert!(!not.trusted(), "{}", harness.id);
             assert_eq!(not.start().env[UNTRUSTED_VARIABLE], "1", "{}", harness.id);

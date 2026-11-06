@@ -10,7 +10,7 @@ name?: string,
  */
 scratch?: boolean, 
 /**
- * Whether its Harnesses load what its folder names (ADR 0083,
- * decision 5); trusted when not said. A scratch Project is trusted.
+ * Whether it is trusted (`ProjectSummary`); a new folder is, unless
+ * said. A scratch Project always is.
  */
 trusted?: boolean, };

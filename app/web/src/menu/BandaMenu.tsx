@@ -378,7 +378,9 @@ function Menu({
     writing(writeBind({ ...key, scope: action.scope }, to ?? action.id))
   }
   // A Project added here opens its new Thread, as the menu closes; what the
-  // engine refused shows, and the field stays as it was.
+  // engine refused shows, and the field stays as it was. A Project added
+  // here is trusted, as the Person picked its folder (ADR 0083, decision
+  // 5).
   const { busy: adding, problem, act } = useAct()
   const add = async (how: Adding) => {
     if (adding) return
@@ -391,7 +393,7 @@ function Menu({
               project: how.locate,
               folder: how.folder,
             })
-          : engine.command("projects.add", how)
+          : engine.command("projects.add", { ...how, trusted: true })
     )
     if (project) onAdded(project)
   }

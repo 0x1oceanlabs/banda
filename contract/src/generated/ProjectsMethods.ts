@@ -40,17 +40,13 @@ add: CommandMethod<AddProject, ProjectSummary>,
  */
 browse: CallMethod<Browse, Browsed>, 
 /**
- * Whether a folder looks like code the Person did not write, and
- * why, for Add Project to ask whether to trust it (ADR 0083,
- * decision 5): cloned from a network, a remote another GitHub
- * account owns, or what a Harness loads or a container is made
- * from in it.
+ * Whether a folder looks foreign, and why, for Add Project to ask
+ * whether to trust it (ADR 0084, decision 13).
  */
 foreign: CallMethod<OneFolder, Foreign>, 
 /**
- * Trusts a Project, or takes its trust back: its Harnesses load the
- * settings, hooks and servers its folder names only while it is
- * trusted, from their next turn. Only the Person trusts.
+ * Trusts a Project, or takes its trust back, from its Harnesses'
+ * next turn. Only the Person trusts; a scratch Project always is.
  */
 trust: CommandMethod<TrustProject, ProjectSummary>, 
 /**

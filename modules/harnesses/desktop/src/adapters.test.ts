@@ -1,18 +1,20 @@
 /**
  * The adapters as Banda carries them, with its patches
- * (`pnpm-workspace.yaml`'s `patchedDependencies`, ADR 0062 decision 16).
+ * (`pnpm-workspace.yaml`'s `patchedDependencies`, ADR 0062 decision 16)
+ * and its shim of Claude Code's SDK (`claude-sdk.mjs`).
  */
 import { readFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
 import { runInNewContext } from "node:vm"
 import { expect, test } from "vitest"
+import { resolving, untrusted } from "./trust"
 
 const require = createRequire(import.meta.url)
 
-/** The variable the engine sets on a Project's Harness processes when the
- * Person has not trusted it (`UNTRUSTED_VARIABLE` in the engine). */
-const untrusted = (() => {
+/** The variable that tells each of a Project's Harness processes whether
+ * the Person has not trusted it (`UNTRUSTED_VARIABLE` in the engine). */
+const variable = (() => {
   const list = join(import.meta.dirname, "../../engine/src/list.rs")
   const said = /UNTRUSTED_VARIABLE: &str = "([A-Z_]+)"/.exec(
     readFileSync(list, "utf8")
@@ -31,5 +33,23 @@ test("Codex's adapter marks a session's folder trusted only in a trusted Project
   const level = (env: Record<string, string>) =>
     runInNewContext(levels[0][1], { process: { env } })
   expect(level({})).toBe("trusted")
-  expect(level({ [untrusted]: "1" })).toBe("untrusted")
+  expect(level({ [variable]: "" })).toBe("trusted")
+  expect(level({ [variable]: "1" })).toBe("untrusted")
+})
+
+test("Claude Code's adapter resolves only the Person's own settings in a Project not trusted", () => {
+  expect(untrusted({ [variable]: "1" })).toBe(true)
+  expect(untrusted({ [variable]: "" })).toBe(false)
+  expect(untrusted({})).toBe(false)
+
+  expect(resolving({ cwd: "/p" }, false)).toEqual({ cwd: "/p" })
+  expect(resolving({ cwd: "/p" }, true)).toEqual({
+    cwd: "/p",
+    settingSources: ["user"],
+  })
+  expect(resolving(undefined, true)).toEqual({ settingSources: ["user"] })
+  // The adapter's read of the managed policy names its sources: none.
+  expect(resolving({ settingSources: [] }, true)).toEqual({
+    settingSources: [],
+  })
 })

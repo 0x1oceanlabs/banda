@@ -6,11 +6,10 @@
 //! - A host starts when it is first asked for, one start at a time.
 //! - A host that keeps dying starts again after a growing pause.
 //! - A host with nothing to do for `idle` is let go.
-//! - A host is let go when its account changes ([`Hosts::let_go`]), and
-//!   every host of a Project when the Person's trust in it changes
-//!   ([`Hosts::let_go_project`]). One that was starting then is let go
-//!   the next time it is asked for, so letting go never waits on a start
-//!   (ADR 0040, decision 4).
+//! - A host is let go when its account changes, and every host of a
+//!   Project when the Person's trust in it changes ([`Hosts::let_go`]).
+//!   One that was starting then is let go the next time it is asked for,
+//!   so letting go never waits on a start (ADR 0040, decision 4).
 //! - A host's process runs in its own process group, which is killed when
 //!   the host is dropped; an engine that dies closes the host's stdin.
 
@@ -211,22 +210,14 @@ impl<H: Host> Hosts<H> {
     }
 
     /// Lets go of the host of the Harness entry `harness` in `project`, as
-    /// its account changed. It waits for none: a host that is starting is
-    /// let go the next time it is asked for. Who holds a host keeps it
-    /// until they drop it.
-    pub fn let_go(&self, project: ProjectId, harness: &str) {
+    /// its account changed; with no entry, of every host of `project`, as
+    /// whether the Person trusts it changed (ADR 0083, decision 5). It
+    /// waits for none: a host that is starting is let go the next time it
+    /// is asked for. Who holds a host keeps it until they drop it.
+    pub fn let_go(&self, project: ProjectId, harness: Option<&str>) {
         let slots = self.slots.lock().unwrap();
-        if let Some(entry) = slots.get(&(project, harness.to_owned())) {
-            Self::stale(entry);
-        }
-    }
-
-    /// Lets go of every host of `project`, as whether the Person trusts it
-    /// changed (ADR 0083, decision 5), the way [`Hosts::let_go`] does.
-    pub fn let_go_project(&self, project: ProjectId) {
-        let slots = self.slots.lock().unwrap();
-        for ((of, _), entry) in slots.iter() {
-            if *of == project {
+        for ((of, id), entry) in slots.iter() {
+            if *of == project && harness.is_none_or(|harness| harness == id) {
                 Self::stale(entry);
             }
         }
@@ -350,7 +341,7 @@ mod tests {
         while hosts.slots.lock().unwrap().is_empty() {
             tokio::task::yield_now().await;
         }
-        hosts.let_go(project, &harness.id);
+        hosts.let_go(project, Some(&harness.id));
         GO.add_permits(1);
         assert_eq!(starting.await.unwrap(), 1);
         GO.add_permits(1);
@@ -396,7 +387,7 @@ mod tests {
         }
         let theirs = hosts.get(other, &entries[0]).await.unwrap().0;
 
-        hosts.let_go_project(project);
+        hosts.let_go(project, None);
         assert!(hosts.running(project).await.is_empty(), "let go at once");
         for (harness, before) in entries.iter().zip(first) {
             let again = hosts.get(project, harness).await.unwrap().0;

@@ -221,9 +221,9 @@ enum ProjectCommand {
         /// Makes the folder first when it does not exist.
         #[arg(long)]
         create: bool,
-        /// Whether its Harnesses load the settings, hooks and servers the
-        /// folder names: true or false. Not given, a folder that looks
-        /// like another's code is not trusted (`projects.foreign`).
+        /// Whether the Project is trusted, `trusted` in `projects.list`:
+        /// true or false. Not given, a folder that looks foreign is not
+        /// (`projects.foreign`).
         #[arg(long)]
         trusted: Option<bool>,
     },

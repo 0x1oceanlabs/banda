@@ -101,6 +101,7 @@ mod tests {
             "scratch": false,
             "missing": false,
             "sign": { "kind": "letters", "text": name[..1].to_uppercase(), "picked": false },
+            "trusted": true,
         }))
         .unwrap()
     }

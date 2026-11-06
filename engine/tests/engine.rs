@@ -97,8 +97,14 @@ impl Places {
     /// Starts `banda serve --with-parent` and reads the line that says
     /// where it listens.
     fn serve(&self) -> (Child, ChildStdin, Value) {
+        self.serve_with(&[])
+    }
+
+    /// [`Places::serve`], with `variables` in the engine's own environment.
+    fn serve_with(&self, variables: &[(&str, &str)]) -> (Child, ChildStdin, Value) {
         let mut engine = self
             .banda(&["serve", "--with-parent"])
+            .envs(variables.iter().copied())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
@@ -638,7 +644,9 @@ fn an_agents_banda_acts_under_its_pass() {
 #[test]
 fn a_project_the_person_does_not_trust_loads_only_their_own_settings() {
     let places = Places::new();
-    let (mut engine, stdin, _) = places.serve();
+    // Each Harness process is told its own Project's trust, whatever the
+    // engine's own environment says.
+    let (mut engine, stdin, _) = places.serve_with(&[("BANDA_UNTRUSTED", "1")]);
     let work = places.ok("projects.create", None, json!({ "name": "Work" }));
     assert_eq!(work["trusted"], json!(true));
     let work = text(&work["id"]).to_owned();
@@ -655,7 +663,7 @@ fn a_project_the_person_does_not_trust_loads_only_their_own_settings() {
         .expect("the session told what it loads");
     assert_eq!(
         (&shells["untrusted"], &shells["sources"]),
-        (&json!(null), &json!(null))
+        (&json!(""), &json!(null))
     );
 
     // Its Agent reads whether its Project is trusted, and never changes it.
