@@ -14,7 +14,13 @@ import type { ProjectId } from "@banda/contract"
 import { afterMoves } from "@banda/ui/lib/frames"
 import { HELD_BY, paneLayer } from "@banda/ui/pane"
 import type { ZoomStep } from "@banda/ui/lib/zoom"
-import { type BrowserNews, type Driver, PARTITION, type Wait } from "./desktop"
+import {
+  agentsPartition,
+  type BrowserNews,
+  type Driver,
+  PARTITION,
+  type Wait,
+} from "./desktop"
 import { browserHost, hearNews } from "./host"
 
 /** What the row shows of a page. */
@@ -30,7 +36,7 @@ export type PageState = {
   crashed: boolean
   /** The site's icon, as a data URL. */
   icon?: string
-  /** An Agent drives it over CDP: the tab shows its mark. */
+  /** Banda's hands hold it for an Agent: the tab shows its mark. */
   driven: boolean
   /** The Thread that drives it with Banda's tools, by its Agent, and the
    * step it takes: the page glows, and a pill says so (ADR 0029,
@@ -114,7 +120,9 @@ export class Page {
   /** The ID its tab keeps it under. */
   readonly id: string
 
-  constructor(id: string, url: string, layer: HTMLElement) {
+  /** It loads in the profile of `agents`, a Project's Agents', or the
+   * Person's (ADR 0083, decision 4); the desktop attaches it in no other. */
+  constructor(id: string, url: string, layer: HTMLElement, agents?: ProjectId) {
     this.id = id
     this.state = { ...BLANK, url, loading: true }
     this.box = document.createElement("div")
@@ -122,7 +130,10 @@ export class Page {
       "position:absolute;top:0;left:0;background:var(--background);transform-origin:0 0"
     this.box.setAttribute(HELD_BY, id)
     this.view = document.createElement("webview") as View
-    this.view.setAttribute("partition", PARTITION)
+    this.view.setAttribute(
+      "partition",
+      agents ? agentsPartition(agents) : PARTITION
+    )
     // A page may open others; the desktop decides where (desktop/browser.ts).
     this.view.setAttribute("allowpopups", "true")
     this.view.style.cssText = "display:flex;width:100%;height:100%"
@@ -427,15 +438,20 @@ function follow(): void {
 }
 
 /**
- * The page of `id`, made at `url` the first time; none outside Banda's
- * desktop window, which alone can show one.
+ * The page of `id`, made at `url` the first time, in the profile of
+ * `agents` or the Person's; none outside Banda's desktop window, which
+ * alone can show one.
  */
-export function pageOf(id: string, url: string): Page | null {
+export function pageOf(
+  id: string,
+  url: string,
+  agents?: ProjectId
+): Page | null {
   const found = pages.get(id)
   if (found) return found
   const layer = paneLayer()
   if (!layer || !("banda" in window)) return null
-  const page = new Page(id, url, layer)
+  const page = new Page(id, url, layer, agents)
   pages.set(id, page)
   changed()
   return page
@@ -446,14 +462,22 @@ export function pageAt(id: string): Page | undefined {
   return pages.get(id)
 }
 
+/** Where a Pane opens a tab: beside the tab `from` when a page of its
+ * tabs opened it, behind it when in the `background`, and in the profile
+ * of `agents` when a Project's Agents' (ADR 0083, decision 4). */
+export type Opening = {
+  from?: string
+  background?: boolean
+  agents?: ProjectId
+}
+
 /** What a browser Pane does with its tabs when a page, an extension or
  * an Agent asks. */
 export type Holder = {
   /** The Project of its Pane. */
   project: ProjectId
-  /** Opens a tab at `url`, beside the tab `from` when a page of its tabs
-   * opened it, and behind it when in the `background`; the tab's ID. */
-  open: (url: string, from?: string, background?: boolean) => string
+  /** Opens a tab at `url`, as `how` says; the tab's ID. */
+  open: (url: string, how?: Opening) => string
   show: (id: string) => void
   close: (id: string) => void
 }
@@ -497,9 +521,9 @@ export function frontHolder(project?: ProjectId): Holder | undefined {
   return fronts.findLast(fits) ?? [...holding].findLast(fits)
 }
 
-/** Opens a tab at `url` for an extension, or for `agent`, where it goes;
- * the tab's ID. */
-type Opener = (url: string, agent?: string) => string
+/** Opens a tab at `url` for an extension, or for `agent`, where it goes,
+ * in the profile of `agents` or the Person's; the tab's ID. */
+type Opener = (url: string, agent?: string, agents?: ProjectId) => string
 
 /** Where a tab an extension or an Agent asks for opens: the module's
  * start sets it, as the window lets it find and open Panes. */
@@ -514,11 +538,16 @@ export function openWith(open: Opener): () => void {
   }
 }
 
-/** Makes the tab an extension or an Agent asked for, and tells the
- * desktop its page. */
-function create(request: string, url: string, agent?: string): void {
-  const id = opener?.(url, agent)
-  const page = id ? pageOf(id, url) : null
+/** Makes the tab an extension or an Agent asked for, in the profile the
+ * desktop named, and tells the desktop its page. */
+function create(
+  request: string,
+  url: string,
+  agent?: string,
+  agents?: ProjectId
+): void {
+  const id = opener?.(url, agent, agents)
+  const page = id ? pageOf(id, url, agents) : null
   if (!page) browserHost()?.created(request, null)
   else page.attached((contents) => browserHost()?.created(request, contents))
 }
@@ -601,7 +630,8 @@ browserHost()?.key(({ up, page, ...pressed }) => {
 // A page's icon, the pages it opens, which its Pane makes tabs of, and
 // the tabs extensions open, show and close.
 hearNews((news) => {
-  if (news.kind === "create") return create(news.request, news.url, news.agent)
+  if (news.kind === "create")
+    return create(news.request, news.url, news.agent, news.agents)
   if (news.kind === "download") return
   hear(news)
 })
@@ -625,7 +655,8 @@ function hear(news: PageNews): void {
   else if (news.kind === "driver") page.driveBy(news.driver)
   else if (news.kind === "waits") page.waited(news.waits)
   else if (news.kind === "open") {
-    holder?.open(news.url, page.id, news.background)
+    const { url, background, agents } = news
+    holder?.open(url, { from: page.id, background, agents })
   } else if (news.kind === "select") holder?.show(page.id)
   else holder?.close(page.id)
 }

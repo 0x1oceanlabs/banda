@@ -1,12 +1,18 @@
 /**
  * A browser Pane's tabs (ADR 0013, decision 3), kept in its args so the
- * Pane comes back as it was: each tab's address and title, and which one
- * shows. Every change here is a new args; the pages follow them.
+ * Pane comes back as it was: each tab's address and title, whose profile
+ * it loads in, and which one shows. Every change here is a new args; the
+ * pages follow them.
  */
-import { newId } from "@banda/contract"
+import { newId, type ProjectId } from "@banda/contract"
 
-/** One page of the browser, by the ID its page is kept under. */
-export type Tab = { id: string; url: string; title: string }
+/**
+ * One page of the browser, by the ID its page is kept under. A tab of a
+ * Project's Agents names that Project, `agents`, and loads in their
+ * profile, apart from the Person's; it keeps it for as long as it lives,
+ * a restart too (ADR 0083, decision 4). The Person's names none.
+ */
+export type Tab = { id: string; url: string; title: string; agents?: ProjectId }
 
 /** A browser Pane's tabs, and which one it shows. */
 export type BrowserArgs = { tabs: Tab[]; shown: number }
@@ -14,9 +20,9 @@ export type BrowserArgs = { tabs: Tab[]; shown: number }
 /** A browser with no tab yet: it opens one, and the Address waits. */
 export const NEW_BROWSER: BrowserArgs = { tabs: [], shown: 0 }
 
-/** A tab with nothing in it yet. */
-export function blankTab(id: string): Tab {
-  return { id, url: "", title: "" }
+/** A tab with nothing in it yet: the Person's, or one of `agents`'. */
+export function blankTab(id: string, agents?: ProjectId): Tab {
+  return { id, url: "", title: "", ...(agents ? { agents } : {}) }
 }
 
 /**
@@ -137,15 +143,26 @@ export type KeptArgs = BrowserArgs | { url: string }
 
 /**
  * `kept` as the Pane's own args: an address alone is a browser at it,
- * whose one tab is `id`; args with no tabs, a browser with none yet.
+ * whose one tab is `id`; args with no tabs, a browser with none yet. An
+ * address alone is how an Agent opens a browser, so its tab is the
+ * Agents' of the Pane's Project, `project` (ADR 0083, decision 4).
  */
-export function readArgs(kept: KeptArgs, id: string): BrowserArgs {
+export function readArgs(
+  kept: KeptArgs,
+  id: string,
+  project?: ProjectId
+): BrowserArgs {
   if ("tabs" in kept && Array.isArray(kept.tabs)) return kept
   const url = "url" in kept && typeof kept.url === "string" ? kept.url : ""
-  return url ? browserAt(url, id) : NEW_BROWSER
+  return url ? browserAt(url, id, project) : NEW_BROWSER
 }
 
-/** A browser that opens `url` in its one tab, `id`. */
-export function browserAt(url: string, id = newId()): BrowserArgs {
-  return { tabs: [{ ...blankTab(id), url }], shown: 0 }
+/** A browser that opens `url` in its one tab, `id`: the Person's, or one
+ * of `agents`'. */
+export function browserAt(
+  url: string,
+  id = newId(),
+  agents?: ProjectId
+): BrowserArgs {
+  return { tabs: [{ ...blankTab(id, agents), url }], shown: 0 }
 }

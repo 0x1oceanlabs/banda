@@ -93,10 +93,10 @@ project.locate.<id>` opens "Locate folder" for them.
 
 ## Driving the browser's tabs
 
-`banda browser` prints the CDP endpoint of the browser in Banda's
-window, for Playwright, Playwright MCP or Chrome DevTools MCP; its
-targets are the Person's tabs. Read `banda skill browser` before you use
-it. It exits 2 when the window is not open.
+Banda's `browser_*` tools open and drive tabs in Banda's browser, in
+your Project's own profile, apart from the Person's: you see only the
+tabs your Project's Agents opened. Read `banda skill browser` before you
+use them.
 
 ## Showing the Person a Visual
 

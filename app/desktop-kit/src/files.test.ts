@@ -30,7 +30,6 @@ const engine = () =>
       call: async () => [{ id: "p", folder: dir }],
     } as unknown as Client),
     door: Effect.die("unused"),
-    browser: Effect.die("unused"),
   })
 
 /** What `links` serves at `url`, with `range` if given. */

@@ -1,18 +1,12 @@
 /**
  * The browser's part in the window's main process (ADR 0013, ADR 0028):
- * its services as one layer, which needs main's window, look, settings
- * and engine (@banda/desktop-kit); its answers to the bridge's
- * `browser` channels and to what its engine part asks (ADR 0029); and
- * what it does as Banda's window opens.
+ * its services as one layer, which needs main's window, look and settings
+ * (@banda/desktop-kit); its answers to the bridge's `browser` channels
+ * and to what its engine part asks (ADR 0029); and what it does as
+ * Banda's window opens.
  */
 import type { BROWSER_BRIDGE } from "@banda/browser-pane/desktop"
-import type {
-  DesktopModule,
-  Engine,
-  Look,
-  Settings,
-  Window,
-} from "@banda/desktop-kit"
+import type { DesktopModule, Look, Settings, Window } from "@banda/desktop-kit"
 import { Layer } from "effect"
 import type { WebContents } from "electron"
 import { browserAsked } from "./asked"
@@ -26,7 +20,7 @@ import { Tabs } from "./tabs"
 export const browserDesktop: DesktopModule<
   typeof BROWSER_BRIDGE,
   Browser | Cdp | Drive | Dialogs | Extensions | Tabs,
-  Window | Look | Settings | Engine
+  Window | Look | Settings
 > = {
   layer: Drive.layer.pipe(
     Layer.provideMerge(Layer.mergeAll(Browser.layer, Cdp.layer(userAgent))),
