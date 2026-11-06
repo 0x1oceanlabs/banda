@@ -3227,7 +3227,18 @@ async fn threads_one_thread_send_show_visual_and_preview_visual_are_an_agents_to
     // The machine's module `harnesses` comes first, with its own.
     let limits = tools.as_array_mut().unwrap().remove(0);
     assert_eq!(limits["method"], "harnesses.limits");
-    // The last: a line the Agent tells its Person when its turn ends.
+    // The last: its own Thread snoozed while it waits (ADR 0074), with
+    // only what an Agent sets.
+    let snooze = tools.as_array_mut().unwrap().pop().unwrap();
+    assert_eq!(
+        (&snooze["name"], &snooze["method"]),
+        (&json!("snooze"), &json!("agents.snooze"))
+    );
+    let fields = snooze["schema"]["properties"].as_object().unwrap();
+    let mut names: Vec<_> = fields.keys().map(String::as_str).collect();
+    names.sort();
+    assert_eq!(names, ["after", "thread", "until"]);
+    // Then a line the Agent tells its Person when its turn ends.
     let notify = tools.as_array_mut().unwrap().pop().unwrap();
     assert_eq!(
         (&notify["name"], &notify["method"]),
@@ -4949,4 +4960,34 @@ impl World {
         let events = project.events_after(0, filter, usize::MAX).await.unwrap();
         events.into_iter().map(|event| event.payload).collect()
     }
+}
+
+#[tokio::test]
+async fn an_agent_snoozes_its_own_thread_for_a_while() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (mine, view) = world.finish(None, "hello").await;
+    let agent = agent_of(&view);
+    let before = banda_kernel::now_ms();
+    world
+        .call(agent, "agents.snooze", json!({ "after": "30m" }))
+        .await
+        .unwrap();
+    let snooze = world.snooze_of(&mine).await.unwrap();
+    let until = snooze.until.unwrap();
+    assert!(
+        (before + 1_800_000..before + 1_810_000).contains(&until),
+        "{until}"
+    );
+    assert_eq!(snooze.by, agent);
+    let snooze = |who, params| world.call(who, "agents.snooze", params);
+    let refused = snooze(world.person(), json!({ "after": "30m" })).await;
+    assert!(refused.is_err(), "a Person names the Thread");
+    let refused = snooze(agent, json!({ "after": "soon" })).await;
+    assert!(refused.is_err(), "no while it reads");
+    let both = json!({ "after": "2h", "until": until });
+    assert!(
+        snooze(agent, both).await.is_err(),
+        "after or until, not both"
+    );
 }

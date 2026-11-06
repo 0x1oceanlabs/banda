@@ -6,6 +6,7 @@
 
 use crate::model::{Fact, Snooze, ThreadId, TurnState, Wake, Woke};
 use crate::rules::snooze::{asleep, may_snooze, wake_of, wakes};
+use crate::rules::to_thread::own_thread;
 use crate::{emit, store};
 use banda_kernel::{Error, EventFilter, Heard, Participant, Refusal, Tx, now_ms};
 use schemars::JsonSchema;
@@ -17,10 +18,16 @@ use ts_rs::TS;
 #[derive(Deserialize, TS, JsonSchema)]
 #[ts(export_to = "agents/")]
 pub struct SnoozeAsk {
-    /// The Thread's ID, as `threads` lists it.
-    pub thread: ThreadId,
-    /// When it comes back, in milliseconds since the epoch. Leave it out
-    /// to snooze a Thread at work until its turn ends.
+    /// The Thread's ID, as `threads` lists it; an Agent's own by default.
+    #[serde(default)]
+    #[ts(optional)]
+    pub thread: Option<ThreadId>,
+    /// How long it sleeps: `30m`, `2h`, `1d`.
+    #[serde(default)]
+    #[ts(optional)]
+    pub after: Option<String>,
+    /// Or when it comes back, in milliseconds since the epoch. With
+    /// neither, a Thread at work sleeps until its turn ends.
     #[serde(default)]
     #[ts(optional, type = "number")]
     pub until: Option<i64>,
@@ -28,6 +35,7 @@ pub struct SnoozeAsk {
     /// usage limit resets (ADR 0074, decision 8).
     #[serde(default)]
     #[ts(as = "Option<bool>", optional)]
+    #[schemars(skip)]
     pub resume: bool,
 }
 
@@ -36,10 +44,17 @@ pub struct SnoozeAsk {
 pub fn snooze(tx: &mut Tx<'_>, author: Participant, ask: SnoozeAsk) -> Result<(), Error> {
     let SnoozeAsk {
         thread,
+        after,
         until,
         resume,
     } = ask;
+    let thread = thread_of(tx, author, thread)?;
     may_touch(tx, author, thread)?;
+    if after.is_some() && until.is_some() {
+        return Err(Refusal::invalid("Give `after` or `until`, not both.").into());
+    }
+    let after = after.as_deref().map(while_of).transpose()?;
+    let until = after.map(|after| tx.now() + after).or(until);
     if resume && until.is_none() {
         return Err(Refusal::invalid("A turn goes on by itself at a time: give `until`.").into());
     }
@@ -71,6 +86,31 @@ pub fn snooze(tx: &mut Tx<'_>, author: Participant, ask: SnoozeAsk) -> Result<()
         resume,
     };
     emit(tx, author, thread, &snoozed)
+}
+
+/// The Thread a snooze names, or for an Agent that names none, its own.
+fn thread_of(
+    tx: &Tx<'_>,
+    author: Participant,
+    thread: Option<ThreadId>,
+) -> Result<ThreadId, Error> {
+    match (thread, author) {
+        (Some(thread), _) => Ok(thread),
+        (None, Participant::Agent(agent)) => Ok(own_thread(store::thread_of(tx.sql(), agent)?)?),
+        (None, Participant::Person(_)) => {
+            Err(Refusal::invalid("Name the Thread to snooze.").into())
+        }
+    }
+}
+
+/// `30m`, `2h`, `1d`, `90 minutes`: how long, in milliseconds, as the
+/// snooze's field reads it (`banda_look::snooze`).
+fn while_of(text: &str) -> Result<i64, Refusal> {
+    banda_look::snooze::while_of(text).ok_or_else(|| {
+        Refusal::invalid(format!(
+            "`after` is how long, as 30m, 2h or 1d, not \"{text}\"."
+        ))
+    })
 }
 
 /// Wakes `thread` now, if it sleeps; one awake stays so, and nothing is

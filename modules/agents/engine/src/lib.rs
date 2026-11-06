@@ -355,12 +355,15 @@ banda_kernel::methods! {
         command notify(Notify) -> String, Write, tool "notify";
         /// A Visual's page, as the window serves it.
         call visual(OneVisual) -> VisualPage, Read;
-        /// Puts a Thread away until a time, or a Thread at work until its
-        /// turn ends: it leaves its Person's list until then (ADR 0074).
-        /// It comes back early when it asks, fails or hears from its
-        /// Person. A Thread that asks cannot be snoozed, and an Agent
-        /// snoozes only its own.
-        command snooze(SnoozeAsk) -> (), Write;
+        /// Snoozes your own Thread: it leaves your Person's list for
+        /// `after` (`30m`, `2h`, `1d`), or until `until`, in milliseconds
+        /// since the epoch. Anything that needs your Person wakes it
+        /// early, and so does their message. It does not wake you or
+        /// start a turn. Use it when you wait on something slow and have
+        /// nothing for your Person meanwhile; a Thread that asks cannot be
+        /// snoozed. A Person snoozes any Thread,
+        /// a Thread at work until its turn ends too (ADR 0074).
+        command snooze(SnoozeAsk) -> (), Write, tool "snooze";
         /// Brings a snoozed Thread back now. One awake stays so.
         command wake(OneThread) -> (), Write;
         /// Renames a Thread: one line of up to 120 characters. Without a
