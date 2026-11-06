@@ -23,6 +23,7 @@ use banda_harnesses::hosts::Hosts;
 use banda_harnesses::model::Program;
 use banda_kernel::{AgentId, Heard, ModuleProject, ProjectId};
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::{Notify, oneshot};
@@ -100,15 +101,17 @@ impl Live {
         self.quiet
     }
 
-    /// The process of `harness` for `project`, started if it is not running.
+    /// The process of `harness` for `project`, whose own files are in
+    /// `data`, started if it is not running.
     pub async fn connection(
         &self,
         project: ProjectId,
+        data: &Path,
         harness: &Harness,
     ) -> Result<Arc<Connection>, String> {
         let connection = self
             .hosts
-            .get(project, &harness.in_project(project))
+            .get(project, &harness.in_project(project, data))
             .await?;
         connection.touch();
         Ok(connection)

@@ -8,8 +8,27 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { build } from "esbuild"
 
-const out = join(dirname(fileURLToPath(import.meta.url)), "adapters")
+const here = dirname(fileURLToPath(import.meta.url))
+const out = join(here, "adapters")
 const require = createRequire(import.meta.url)
+
+// Claude Code's adapter takes the Agent SDK through Banda's shim, which
+// keeps its sessions in the Project's folder (claude-sdk.mjs, ADR 0078);
+// the shim itself reaches the SDK as `banda:claude-agent-sdk`.
+const shim = (manifest) => ({
+  name: "banda-claude-sessions",
+  setup(build) {
+    const sdk = createRequire(manifest).resolve(
+      "@anthropic-ai/claude-agent-sdk"
+    )
+    build.onResolve({ filter: /^@anthropic-ai\/claude-agent-sdk$/ }, () => ({
+      path: join(here, "claude-sdk.mjs"),
+    }))
+    build.onResolve({ filter: /^banda:claude-agent-sdk$/ }, () => ({
+      path: sdk,
+    }))
+  },
+})
 
 await Promise.all(
   [
@@ -32,6 +51,7 @@ await Promise.all(
       banner: {
         js: 'import { createRequire as bandaRequire } from "node:module"; const require = bandaRequire(import.meta.url);',
       },
+      plugins: name.endsWith("/claude-agent-acp") ? [shim(manifest)] : [],
     })
   })
 )
