@@ -8,9 +8,10 @@
 import { siteOf } from "@banda/browser-pane/desktop"
 import type { Act, Navigate, WaitFor } from "@banda/contract/browser"
 import { Refused } from "@banda/desktop-kit"
-import type { WebContents } from "electron"
+import type { KeyboardInputEvent, WebContents } from "electron"
 import type { Locator, Page } from "playwright-core"
 import { getDomain } from "tldts-experimental"
+import { sendAlone } from "./keys"
 
 /** The site of a web page at `url`, which an Agent may use once the
  * Person says so (ADR 0029, decision 7, B): its domain, as a browser
@@ -264,21 +265,31 @@ const MODIFIERS: Record<string, "control" | "shift" | "alt" | "meta"> = {
   Meta: "meta",
 }
 
+/** The refusal of `combo`, a press that is one of Banda's keys. */
+const bandas = (combo: string) =>
+  new Refused({
+    code: "forbidden",
+    message: `${combo} is one of Banda's keys, which only the Person presses. To open a tab, or take one to an address, back, forward or reload, use browser_open or browser_navigate.`,
+  })
+
 /**
  * The keyboard of the tab's own page. Playwright's keys go through CDP to
  * whatever has the focus in Banda's window, as the Person's Thread: a tab
  * is a webview in it. Electron sends these to the tab alone, and the
- * Person keeps the focus.
+ * Person keeps the focus. They reach the page alone, never the window:
+ * a press of one of Banda's keys is refused (ADR 0083, decision 3).
  */
 const keyboard = (tab: WebContents) => ({
   type: (text: string) => {
+    const send = (input: KeyboardInputEvent) =>
+      sendAlone(tab, input, { press: false })
     for (const char of text) {
       // Only a plain key has a code: the rest is text alone.
       const plain = /^[ -~]$/.test(char)
       const keyCode = KEYS[char] ?? char
-      if (plain) tab.sendInputEvent({ type: "keyDown", keyCode })
-      tab.sendInputEvent({ type: "char", keyCode: char })
-      if (plain) tab.sendInputEvent({ type: "keyUp", keyCode })
+      if (plain) send({ type: "keyDown", keyCode })
+      send({ type: "char", keyCode: char })
+      if (plain) send({ type: "keyUp", keyCode })
     }
   },
   press: (combo: string) => {
@@ -286,14 +297,16 @@ const keyboard = (tab: WebContents) => ({
     const key = parts.pop() || "+"
     const modifiers = parts.flatMap((part) => MODIFIERS[part] ?? [])
     const keyCode = KEYS[key] ?? key
-    tab.sendInputEvent({ type: "keyDown", keyCode, modifiers })
+    const send = (type: KeyboardInputEvent["type"]) =>
+      sendAlone(tab, { type, keyCode, modifiers }, { press: true })
+    if (send("keyDown")) throw bandas(combo)
     // A key that makes text, or Enter, which sends a form, says it too.
     if (
       key === "Enter" ||
       ([...key].length === 1 && !modifiers.some((m) => m !== "shift"))
     )
-      tab.sendInputEvent({ type: "char", keyCode, modifiers })
-    tab.sendInputEvent({ type: "keyUp", keyCode, modifiers })
+      send("char")
+    send("keyUp")
   },
 })
 

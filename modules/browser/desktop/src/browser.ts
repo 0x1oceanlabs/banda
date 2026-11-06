@@ -16,13 +16,9 @@ import {
   type BrowserNews,
   opens,
   PARTITION,
-  type PageKeys,
-  type Pressed,
-  isModKey,
-  taken,
 } from "@banda/browser-pane/desktop"
 import { BROWSER_FILE } from "@banda/contract/browser"
-import { DEFAULT_KEYS, fileOf } from "@banda/contract/look"
+import { fileOf } from "@banda/contract/look"
 import { Context, Effect, FiberSet, Layer, Schema, Stream } from "effect"
 import {
   clipboard,
@@ -49,6 +45,7 @@ import { Cdp } from "./cdp"
 import { Dialogs } from "./dialogs"
 import { Drive } from "./drive"
 import { BoxArg, Extensions } from "./extensions"
+import { keepInForce, keys } from "./keys"
 import { attaching, downloaded, keepCertificates, keepProfile } from "./profile"
 import { Tabs } from "./tabs"
 
@@ -169,43 +166,6 @@ function host(
 /** The user agent the browser's pages send: Chrome's (`keepProfile`). */
 export function userAgent(): string {
   return session.fromPartition(PARTITION).getUserAgent()
-}
-
-/** The keys in force in a page, as the window tells them (ADR 0071,
- * decision 4): none taken until it does. */
-let inForce: PageKeys = { mod: DEFAULT_KEYS.mod, keys: [] }
-
-const MAC = process.platform === "darwin"
-
-/** Banda's keys, held with the mod, and the browser's own go to the
- * window, from a page and an extension's popup alike (decision 5). */
-export function keys(page: WebContents, window: WebContents): void {
-  page.on("before-input-event", (event, input) => {
-    const key: Pressed = {
-      code: input.code,
-      altKey: input.alt,
-      ctrlKey: input.control,
-      shiftKey: input.shift,
-      metaKey: input.meta,
-    }
-    // A key of the mod pressed or let go stays the page's, and the window
-    // hears it too: with it held, the mouse moves and sizes Panes over a
-    // page as well (ADR 0025, decisions 5 and 6).
-    if (isModKey(input.code, inForce.mod)) {
-      if (!input.isAutoRepeat) {
-        tellPage(window, BROWSER_BRIDGE.key, {
-          ...key,
-          page: page.id,
-          ...(input.type === "keyUp" && { up: true as const }),
-        })
-      }
-      return
-    }
-    if (input.type !== "keyDown") return
-    if (!taken(key, inForce.keys, MAC)) return
-    event.preventDefault()
-    tellPage(window, BROWSER_BRIDGE.key, { ...key, page: page.id })
-  })
 }
 
 /** Keeps a tab's `page`, whose profile is `agents`': what it opens opens
@@ -387,10 +347,7 @@ export const browserAnswers: Answers<
         ),
       }),
     ]),
-    ([keys]) =>
-      Effect.sync(() => {
-        inForce = keys
-      }),
+    ([keys]) => Effect.sync(() => keepInForce(keys)),
   ],
   shown: [
     page,
