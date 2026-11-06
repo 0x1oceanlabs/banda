@@ -26,11 +26,12 @@ _Avoid_: badge, icon (a Pane's is its App's).
 
 **Participant**:
 Anyone who acts in a Project: a Person or an Agent. Every record names its
-author, who is always one of the two.
+author: one of the two, or an App that acts as itself (ADR 0082).
 
 **Person**:
-A human Participant. On one computer, the Person is that computer's user, who
-owns every Project there.
+A human Participant: one Person across all their hosts, known by the
+Person key (ADR 0081, ADR 0083). On one computer, the Person is that
+computer's user, who owns every Project there.
 _Avoid_: user (outside code that talks to the operating system).
 
 **Agent**:
@@ -46,7 +47,8 @@ do from the Harness's declared capabilities.
 One sign-in of a Harness: a subscription, an API key or a gateway. In
 `harnesses.toml` it is an entry `of` its Harness, with its own name, folder
 and mark: a dot in its colour and the first letter of its name (ADR 0078).
-A Harness's own entry is its first account.
+A Harness's own entry is its first account. An environment sign-in is one
+too, made for boxes (ADR 0084).
 _Avoid_: profile, instance.
 
 **Limit**:
@@ -72,7 +74,8 @@ _Avoid_: login, auth.
 A program the engine runs on a PTY for a Person, such as their shell or a
 Harness's sign-in. Every window that opens it shows the same screen; it ends
 when it is closed or the engine stops. An Agent runs programs through its
-Harness, never in a terminal.
+Harness, never in a terminal. In an isolated Project it runs in the box
+(ADR 0084).
 _Avoid_: console, shell (that is one program a terminal runs).
 
 **Thread**:
@@ -93,7 +96,7 @@ _Avoid_: todos.
 What a Harness runs when a message starts with `/` and its name, such as
 `/compact`. Each Harness has its own; the window adds `/plan` and `/default`,
 which switch plan mode.
-_Avoid_: command (that is a request to a module).
+_Avoid_: command (that is a request to an App).
 
 **Visual**:
 One finished HTML page an Agent shows its Person in its Thread: a mockup,
@@ -131,51 +134,169 @@ _Avoid_: prompt, approval request.
 ## Shape
 
 **Engine**:
-The one process on a machine that owns Projects, Threads and every module's
-data. Windows and the CLI are clients of its API.
+The one process on a host, `banda serve`, that owns the host's Projects,
+their Threads and every App's data there. It is the machine's service and
+outlives the window (ADR 0086). Clients reach it through its API.
 _Avoid_: server (that is a machine), backend.
 
+**Host**:
+A machine where `banda serve` keeps Projects and runs their work: this
+computer, a server, a devbox, or a machine in Banda Cloud. Clients only
+show the work (ADR 0062, ADR 0081).
+_Avoid_: server, node; "host" for the Harness process pool (`Hosts<H>`),
+which is the process pool.
+
+**Home host**:
+The host that keeps the Person's documents: the always-on host when the
+Person has one, else the laptop (ADR 0082).
+
+**Client**:
+What shows the hosts' work and asks for changes: the desktop window, a
+browser tab, a phone, the CLI. One client works with several hosts, and
+only a client joins them (ADR 0062, ADR 0082).
+_Avoid_: frontend.
+
+**Device**:
+The machine a client runs on, and what only it has: notifications, sound,
+the clipboard, a file picker, opening outside Banda, its webviews. It tells
+its hosts whether the Person is in front of it (ADR 0082).
+
 **Kernel**:
-The small part of the engine that every module needs: Projects, the event log,
-the access decision, identity, the module registry and the API. It names no
-module.
+The small part of the engine that every App needs: scopes and their
+stores, the event log, receipts, the outbox, cursors, access, identity and
+passes, the registry, devices and the API (ADR 0062, ADR 0082). It names
+no App.
+
+**Platform**:
+Banda's shared services on a host, between the kernel and the Apps:
+projects, the tiling, settings, keys, the look, calls, harnesses, the
+gateway, bytes, environments. It may hold rights no App gets, and it names
+no App (ADR 0062).
 
 **Module**:
-A bounded context with its own words, data and contract: the commands it
-accepts, the events it publishes, its own tables, its MCP tools and its
-Panes. A module can be removed without breaking the others.
-_Avoid_: plugin (that is a module written by someone else, later), feature.
+A unit in the code: a bounded context with its own words, data and
+contract, such as the commands it accepts, the events it publishes, its
+own tables, its MCP tools and its Panes. A module can be removed without
+breaking the others. What a Person installs is an App.
+_Avoid_: plugin (an App from elsewhere is an App), feature.
+
+**App**:
+What a Person installs, opens and arranges, built on the Banda App SDK:
+Threads, Browser, Git, Files, Terminal, Usage, and Apps from elsewhere. A
+host installs it, a Project turns it on, and the Project keeps its data
+(ADR 0062, ADR 0085).
+_Avoid_: plugin; module (a unit in the code); extension (that is a Chrome
+one).
+
+**Host part**:
+An App's code on its host: its handlers, its views, and for an App from
+elsewhere, its worker (ADR 0062).
+
+**Capability**:
+What an App declares it needs from Banda (`files`, `run`, `net`,
+`sessions`, `device`…). The kernel checks it on every call, Banda's own
+Apps included (ADR 0062).
+_Avoid_: permission (that is a Harness's mode).
 
 **Manifest**:
-What a module offers, as it declares it (ADR 0022): its engine part's
-`methods!` table, its window part's `defineModule`, and its short
-`module.toml` for what no code says. `banda modules` prints all three.
+What an App offers and needs, as it declares it (ADR 0022): its engine
+part's `methods!` table, its window part's `defineModule`, and its short
+`app.toml` (`module.toml` until the rename, ADR 0062) for what no code
+says, such as what it hears, calls and asks of a device (ADR 0082).
+`banda modules` prints all three.
 
 **Source**:
 Where the Banda menu finds a module's rows: Files, or New Thread with the
 words typed (ADR 0022, decision 4).
 
 **Unstable mark**:
-A path a module of Banda's takes that a module from elsewhere would lack,
-named in its `module.toml` with why. Their count only falls.
+A path one of Banda's Apps takes that an App from elsewhere would lack,
+named in its `app.toml` with why. Their count only falls (ADR 0062).
+
+**Intent**:
+A verb with a version and typed args, such as `show.diff@1`, asked for
+without naming who handles it. In v1 one App handles each (ADR 0082).
+
+**Slot**:
+A place in one App's thing that other Apps fill with typed rows, such as a
+Thread's details or the Pane header (ADR 0082).
+
+**Web App**:
+A site as an App, in a webview of its own with its own sign-in. Its
+manifest is the Person's (ADR 0062).
+
+**MCP App**:
+An MCP server whose tools bring `ui://` pages, shown in a Frame in a
+Thread or as a Pane (ADR 0062).
+
+**Catalogue**:
+The fixed set of components in Banda's client release that every App is
+drawn with: shadcn's, Banda's own, and the live components (ADR 0062).
+
+**Live component**:
+A catalogue component that needs every frame or a fast stream: a Thread
+with its message box, a terminal, a browser's page, a file's view (ADR
+0062).
+
+**Tree**:
+What an App's view answers: catalogue components and their props, as
+data, drawn by each client (ADR 0062).
+
+**Frame**:
+A sandboxed iframe on an origin of its own, for HTML a spec walls in, such
+as an MCP App's page. It acts as itself, never as the Person (ADR 0062,
+ADR 0083).
+
+**Site**:
+Where a Web App runs: a webview on the device, in a partition of its own
+(ADR 0062).
+
+**Level 1, Level 2**:
+Level 1 is an App drawn by the client from a Tree. Level 2, later, is an
+App's own page in a Frame (ADR 0062).
+
+**View**:
+An App's read method that answers a Tree (`view today(…) -> Tree`), read
+again on the App's events (ADR 0062). The client's view is another thing:
+what only that client keeps of where the Person looks, such as the focus,
+the scroll, the zoom and the workspace on screen (ADR 0025). Say "an App's
+view" or "the client's view".
+
+**Worker**:
+A process on the host that runs an App from elsewhere, with its App's
+pass. In v1 it runs only Apps the Person made or trusts (ADR 0062).
+
+**Tracer App**:
+The first App on the worker road: a small one an Agent builds for the
+Person, installs, changes and tests (ADR 0062).
+
+**Gateway**:
+The one MCP server every Harness session gets, on its host: Banda's tools
+and the listed servers' tools in one place (ADR 0062).
+_Avoid_: MCP module.
 
 **Command**:
-A request to a module to change something. It passes the access decision and
-returns a result or a refusal.
+A request to an App or the platform to change something. It passes the
+access rule and is answered by a receipt with its place in the log, or by
+a refusal. A resend runs nothing twice (ADR 0082).
 
 **Event**:
-A fact a module publishes after a change, in its published language and with
-a version. Other modules and windows subscribe to events. They never read
-another module's tables.
+A fact an App writes with a change, with a version. It is its App's own
+unless the App publishes it. Clients follow events; other Apps hear only
+published facts, and never read another App's tables (ADR 0082).
 
 **Stream**:
-What a module says to a window for one call while it lasts, such as what a
-terminal prints. Unlike an event it is not logged: a window that connects
-again hears it again from the start.
+What an App says to a client for one call while it lasts, such as what a
+terminal prints. It sends only as many pieces as the client has room for,
+and `cancel` ends it. Unlike an event it is not logged: a client that
+connects again hears it again from the start (ADR 0082).
 
-**Access decision**:
-The one place where the kernel decides whether a Participant may perform an
-action on a target. On one computer, the owner may do everything.
+**Access rule**:
+The one rule the kernel checks at every hop: the actor's rights, cut down
+to the App's capabilities, the session's scopes and the Project's wall.
+Only a gesture acts as the Person, who may still do everything on their
+host (ADR 0082, ADR 0083).
+_Avoid_: access decision (its name before ADR 0082).
 
 **Problem**:
 Something that broke in Banda itself, not in the Person's work: an error in
@@ -190,15 +311,221 @@ usage counts, or both. Nothing else in Banda sends anything anywhere
 (ADR 0039).
 _Avoid_: telemetry, analytics.
 
+## Scopes and messages
+
+**Scope**:
+The one writer of a record. A Project's moves between hosts; the Host's
+(its programs, accounts, installed code and settings) never moves; the
+Person's is a few documents on the home host (ADR 0082). A session's
+scopes, an Agent's tools, are another thing.
+_Avoid_: machine scope (it split into Host and Person).
+
+**Person document**:
+One of the Person's few versioned files on the home host: the
+arrangement, keys, the sidebar, themes, `[notify]`, seen marks, Web Apps'
+manifests. Each is read whole, and clients cache it; no other host keeps
+one (ADR 0082).
+_Avoid_: sync, replica.
+
+**Query**:
+A read, answered with how fresh it is ("as of"), and safe to repeat (ADR
+0082).
+_Avoid_: call (its old name).
+
+**Published fact**:
+An event other Apps may hear, named `app.noun.past-verb@major` and
+declared by its App. Every other event is its App's own (ADR 0082).
+
+**Receipt**:
+The kernel's record of a command under its CommandId, with its place in
+the log, so a resend gets the same answer and runs nothing twice (ADR
+0082).
+
+**Outbox**:
+Work outside the store (a push, a post, starting a turn), written with the
+change and run after it commits (ADR 0002, ADR 0082).
+
+**Projection**:
+A table worked out from published facts, such as the Inbox. It can be
+rebuilt, and it writes nothing back (ADR 0082).
+
+**Gate**:
+A short wait a publisher declares, so a listener can act first, as git
+takes its checkpoint before a turn runs (ADR 0082).
+
+**Device request**:
+A command an App sends to a device through its host, such as a
+notification or a link to open. It runs at most once, with a deadline (ADR
+0082).
+
+**Workflow**:
+Steps across Apps, such as a commit then a push, run on the host as its
+App's runs (ADR 0082, ADR 0085).
+_Avoid_: task.
+
+**Task**:
+Reserved, as `task@1`. Until it exists, the turn is the unit of work (ADR
+0085).
+_Avoid_: job.
+
+**Address**:
+How a thing is named anywhere: its scope (a Project, the Person or a
+Host), its App and its id. It never names a Project's host (ADR 0082).
+
+**Directory**:
+The client's map from each Project to the host that has it now (ADR
+0082).
+
+**Epoch**:
+A count that goes up each time a Project moves. The higher wins, so the
+host that gave a Project away cannot keep writing it (ADR 0082, ADR
+0085).
+
+**Stale**:
+A host that stopped answering. Its rows dim and say "as of", reads come
+from the client's copy, and commands fail at once (ADR 0082).
+
+**Visible queue**:
+Commands the Person chose to "send when back", shown with when they will
+be dropped: 10 minutes by default, 7 days at most (ADR 0082). A Thread's
+Queue is another thing.
+
+**Route**:
+One way a client reaches a host: `local`, `ssh` and `direct` in v1; iroh
+later (ADR 0081, ADR 0082).
+
+## Trust
+
+**Fence**:
+Operating-system walls around every Harness Banda starts. They hide
+Banda's state, keys and owner access from an Agent's shell, and make
+Banda's config read-only there (ADR 0083).
+_Avoid_: sandbox (that is an environment).
+
+**Pass**:
+What an Agent's or an App's session shows Banda: who it is (its Agent,
+Thread and Project, or its App), its tools, its audience and its expiry
+(ADR 0083).
+_Avoid_: token (ADR 0019's word).
+
+**Audience**:
+Where a pass is taken: `ws` (the API), `gateway` or `door` (ADR 0083).
+
+**Owner socket**:
+How the Person's own window and CLI reach the engine on their computer,
+checked by which user runs the program at the other end (ADR 0083).
+
+**Gesture**:
+A click, a key or an answer the Person gives on one of their devices.
+Only a gesture acts as the Person (ADR 0083).
+
+**`via`, `on_behalf`**:
+Whose code acts, and the Person it acts for. `on_behalf` is recorded and
+gives no rights (ADR 0082, ADR 0083).
+
+**Proposal**:
+A change an Agent asks to make to the Person's data or to the host's list
+of MCP servers. It reaches the Person as a Call, and changes nothing until
+they accept (ADR 0083).
+
+**Lend**:
+The Person gives a Thread one of their tabs to drive, until they take it
+back, the tab closes or the session ends (ADR 0083).
+
+**Trusted**:
+A Project flag only the Person sets. Until it is set, Harnesses load
+nothing the folder names (ADR 0083).
+
+**Bookkeeping**:
+Banda's own reads of a Project: git status, diffs, checkpoints, Files.
+They never run the Project's hooks or helpers (ADR 0083).
+
+**Person key**:
+The Person's root of trust, made on their first device. It signs which
+devices and hosts are theirs, and which host is home (ADR 0083).
+
+**Recovery code**:
+Shown once. It brings the Person key back when every device is lost (ADR
+0083).
+
+**Wall**:
+A Project's bound: what acts for a Project reaches only that Project (ADR
+0019, ADR 0032). Only a box walls a Project's files from the others (ADR
+0083, ADR 0084).
+
+**Full access**:
+The mode where an Agent has the Person's files, programs and network,
+never Banda's state or keys. It is the default only where the fence
+holds; elsewhere the default is Supervised (ADR 0083).
+
+## Isolation
+
+**Environment**:
+Where a Project's programs run: `local`, `sandbox` or `container` (ADR
+0084).
+
+**Box**:
+An isolated Project's running sandbox or container (ADR 0084).
+_Avoid_: VM.
+
+**Isolated**:
+The one switch per Project that runs its Agents, terminals and scripts in
+a box (ADR 0084).
+
+**Door**:
+A box's one way back into Banda: Banda's tools, opening a link,
+credentials, secrets (ADR 0084).
+
+**Door pass**:
+A pass for the door only. It ends with the box (ADR 0084).
+
+**Environment sign-in**:
+An account of a Harness made for boxes: the same subscription with its own
+token, revoked alone (ADR 0084).
+
+**Project profile**:
+A device browser profile of one Project. It is on by default when the
+Project is isolated (ADR 0084).
+
+**Definition**:
+What a box is made from (devcontainer.json or Banda's default image), with
+its approved hash. It moves with the Project (ADR 0084).
+
+**Network mode**:
+How a box reaches the network: `shared`, the host's (v1), `private` or
+`allowlist` (ADR 0084).
+
+## Data
+
+**Unavailable**:
+An App refused in a Project because its code is missing or its data is
+newer. The Project still opens (ADR 0085).
+
+**Uninstall**:
+Stopping an App on a host or in a Project. Its data stays, read-only (ADR
+0085).
+
+**Purge**:
+Dropping an App's tables and files in a Project, after exporting them to
+the Project's trash. Its events stay (ADR 0085).
+
+**Export**:
+One App's events and tables, written out. It is not a backup (ADR 0085).
+
+**Backup**:
+A Project as one artefact: its store, a git bundle and its data folders. A
+move ships the same (ADR 0085).
+
 ## Window
 
 **Window**:
-A client of the engine that shows Projects as tiled Panes. The first window is
-the Electron app.
+The desktop client: the Electron app, which shows Projects as tiled Panes
+(ADR 0062).
 
 **Pane**:
-One tile in the window that shows a module's view, such as a Thread or a
-browser page. A Pane reaches the engine only through the API.
+One tile in a client that shows an App's view, such as a Thread or a
+browser page. It names its Project, never a host, and reaches the host only
+through the API (ADR 0062).
 
 **Mod**:
 The keys held for every Banda key and the mouse's moves: Alt, unless the
@@ -220,15 +547,33 @@ unread, archive it. A click on the title in its Pane's header and a right
 click on its row in the sidebar open it (ADR 0077). The Pane menu is
 another: it acts on the Pane, not the Thread.
 
+**Message box**:
+Where the Person writes to an Agent, at a Thread's foot (ADR 0062).
+_Avoid_: composer (that is the tiling).
+
 **Tab**:
 One page of a browser Pane, with its own address and history. A Pane
 keeps its tabs on top of its row or on the left beside the page, as
 `browser.toml` says.
 
 **Extension**:
-A Chrome extension in the browser's one profile, added from the Chrome
-Web Store. Its button sits in every browser Pane's row when it is pinned,
+A Chrome extension in the Person's browser profile, added from the Chrome
+Web Store (ADR 0084). Its button sits in every browser Pane's row when it is pinned,
 and behind the Extensions button when it is not.
+
+**Tiling**:
+How Banda lays out Panes: one Rust model, with its authority on the home
+host and a copy in each client that draws a key at once (ADR 0062). Its
+other name is the composer.
+_Avoid_: composer for anything else.
+
+**Arrangement**:
+The workspaces, columns, Groups and widths, kept by the tiling on the home
+host. The client's view is not part of it (ADR 0062, ADR 0082).
+
+**Overlay**:
+The changes to the arrangement a client keeps, marked "not yet saved",
+while the home host is away: an hour and 200 changes at most (ADR 0062).
 
 **Workspace**:
 One screen of Panes. It can hold Panes of any Projects; it only lays out the
@@ -366,9 +711,14 @@ that starts calling.
 
 **Call**:
 Something that calls for the Person now: a Thread finished while they were
-away, asks them, or failed. The window tells them where they look: nothing
-while they look at it, its sound, a toast in the window, or a system
+away, asks them, or failed. Its host works it out, so it calls with no
+window open (ADR 0081). A client tells them where they look: nothing while
+they look at it, its sound, a toast in the window, or a system
 notification when the window is behind. `Alt+U` goes to it.
+
+**Inbox**:
+Every Call of every host, merged by the client. Each row keeps its host,
+so an answer goes back there (ADR 0081, ADR 0082).
 
 **Toast**:
 A short card at the window's top right that tells of a Call whose Thread is

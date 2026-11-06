@@ -150,6 +150,6 @@ turns out not to be enough.
   versions: updating an adapter is a Banda change, tested in CI.
 - `ELECTRON_RUN_AS_NODE` must stay allowed: no Electron fuse may turn it
   off while the engine depends on it. If the engine later lives apart from
-  the window (ADR 0049, proposed), it is still given the Electron binary's
+  the window (ADR 0086), it is still given the Electron binary's
   path.
 - ADR 0033's step 7 is this ADR.
