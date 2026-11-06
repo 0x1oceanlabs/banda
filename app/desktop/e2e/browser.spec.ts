@@ -336,8 +336,11 @@ test("tabs open, show and close as Chrome's, on top or on the left", async () =>
   await pressInPage(app, "W", ["control"])
   await expect(tab("Beta")).toHaveAttribute("aria-selected", "true")
   // The closed tab's page is gone; the one in the background is kept.
+  // While it goes, reading it fails: the poll waits on.
   await expect
-    .poll(async () => (await inPages(app, "document.title")).sort())
+    .poll(async () =>
+      (await inPages(app, "document.title").catch(() => ["(going)"])).sort()
+    )
     .toEqual(["Alpha", "Beta"])
   await pressInPage(app, "T", ["control", "shift"])
   await expect(tab("Gamma")).toHaveAttribute("aria-selected", "true")

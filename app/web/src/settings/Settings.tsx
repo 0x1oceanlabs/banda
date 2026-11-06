@@ -17,6 +17,7 @@ import { PaneHeader } from "@banda/ui/components/pane-header"
 import { ScrollArea } from "@banda/ui/components/scroll-area"
 import { cn } from "@banda/ui/lib/utils"
 import type { PaneProps } from "@banda/ui/pane"
+import { useScope } from "@banda/ui/hooks/use-scope"
 import { ExternalLinkIcon, SearchIcon } from "lucide-react"
 import { problemWords } from "../bar/Bar"
 import { useLookProblems, useLookSettings } from "../look"
@@ -36,7 +37,6 @@ const NONE: Problem[] = []
 export function Settings({
   engine,
   args,
-  focused,
   update,
   close,
   run,
@@ -55,26 +55,19 @@ export function Settings({
       .querySelector(`[data-key="${CSS.escape(at.key)}"]`)
       ?.scrollIntoView({ block: "center" })
   }, [at])
-  // While the Pane has the focus, / searches and Esc clears the search.
-  useEffect(() => {
-    if (!focused) return
-    const onKey = (event: KeyboardEvent) => {
-      // A dialog over the window takes its own keys, Esc first.
-      if (
-        event.target instanceof Element &&
-        event.target.closest("[role=dialog]")
-      )
-        return
-      const typing = event.target instanceof HTMLInputElement
-      if (event.key === "Escape" && event.target === field.current) setWords("")
-      else if (event.key === "/" && !typing) {
-        event.preventDefault()
+  // While the Pane has the focus, / searches (`settings.search`, ADR
+  // 0071), but in a field; Esc in the search clears it.
+  const scope = useScope(
+    "settings",
+    {
+      "settings.search": (_, event) => {
+        if (event?.target instanceof HTMLInputElement) return false
         field.current?.focus()
-      }
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [focused])
+        return true
+      },
+    },
+    { tile: true }
+  )
 
   // What is wrong in each settings file, and at which of its lines.
   const wrong = useMemo(() => {
@@ -129,7 +122,7 @@ export function Settings({
   // A Pane as wide as a column: in a narrow one, the sections are a row
   // of icons over the page; in a wide one, a list beside it.
   return (
-    <div className="@container h-full text-foreground">
+    <div ref={scope} className="@container h-full text-foreground">
       <div className="flex h-full flex-col @3xl:flex-row">
         <nav
           aria-label="Settings sections"
@@ -143,6 +136,9 @@ export function Settings({
               ref={field}
               value={words}
               onChange={(event) => setWords(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setWords("")
+              }}
               placeholder="Search settings"
               aria-label="Search settings"
             />

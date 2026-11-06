@@ -55,6 +55,11 @@ export function holderOf(element: Element | null): Element | null {
     : document.querySelector(`[${HOLDS}="${CSS.escape(id)}"]`)
 }
 
+/** The focused Pane's tile, which the window marks `data-focused`. */
+export function focusedTile(): HTMLElement | null {
+  return document.querySelector<HTMLElement>("[data-tile][data-focused=true]")
+}
+
 /** Whether `element` is in `tile`, or in the layer and held by it. */
 export function within(tile: Element, element: Element | null): boolean {
   return (

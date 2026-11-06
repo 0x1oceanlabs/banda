@@ -8,7 +8,7 @@ import { toast } from "@banda/ui/components/sonner"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { cn } from "@banda/ui/lib/utils"
 import { problem } from "@banda/ui/lib/words"
-import type { Listed } from "@banda/ui/pane"
+import { focusedTile, type Listed } from "@banda/ui/pane"
 import { ChevronDownIcon, SparklesIcon } from "lucide-react"
 import { ThreadRows } from "./ThreadMenu"
 import {
@@ -308,7 +308,7 @@ function focusBack(element: Element | null) {
     const to =
       element instanceof HTMLElement && element.isConnected
         ? element
-        : document.querySelector<HTMLElement>("[data-tile][data-focused=true]")
+        : focusedTile()
     to?.focus({ preventScroll: true })
   })
 }

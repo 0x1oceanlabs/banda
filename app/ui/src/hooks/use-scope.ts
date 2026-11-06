@@ -7,16 +7,23 @@
  */
 import { useCallback, useEffect, useRef } from "react"
 import type { Args } from "../module"
+import { focusedTile } from "../pane"
 
 /** What the window sends a scope's element for one of its actions. */
 const ACTED = "banda:act"
 
 type Acted = { id: string; args?: Args; event?: KeyboardEvent }
 
+/** Where a press's scopes are found: its target, or with nothing
+ * focused, as after a button that went away, the focused Pane's tile. */
+function originOf(target: Element | null): Element | null {
+  return target && target !== document.body ? target : focusedTile()
+}
+
 /** The scopes `target` is in, narrowest first. */
 export function scopesOf(target: Element | null): string[] {
   const scopes: string[] = []
-  let at = target?.closest<HTMLElement>("[data-scope]")
+  let at = originOf(target)?.closest<HTMLElement>("[data-scope]")
   while (at) {
     if (at.dataset.scope) scopes.push(at.dataset.scope)
     at = at.parentElement?.closest<HTMLElement>("[data-scope]")
@@ -36,8 +43,9 @@ export function actInScope(
   args?: Args,
   event?: KeyboardEvent
 ): boolean {
-  const from =
+  const from = originOf(
     event?.target instanceof Element ? event.target : document.activeElement
+  )
   const at = from?.closest(`[data-scope="${CSS.escape(scope)}"]`)
   if (!at) return false
   const acted = new CustomEvent<Acted>(ACTED, {
