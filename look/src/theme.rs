@@ -43,6 +43,10 @@ pub struct Places {
     /// it from here rather than from the build lets a test, and a Linux
     /// runner, ask for either (ADR 0030, decision 1).
     pub material: Material,
+    /// This is a Mac, where Banda starts on the `macos` theme (ADR 0075,
+    /// decision 2). From here rather than from the build, so a test asks
+    /// for either.
+    pub mac: bool,
 }
 
 impl Places {
@@ -60,6 +64,7 @@ impl Places {
             config_home: None,
             gsettings: None,
             material: Material::Banda,
+            mac: false,
         }
     }
 
@@ -119,6 +124,7 @@ impl Places {
             },
             config_home: Some(config_home),
             material: Material::PLATFORM,
+            mac: cfg!(target_os = "macos"),
         }
     }
 
@@ -176,7 +182,7 @@ pub struct Theme {
 }
 
 /// Banda's own themes: files in this crate, so they are examples too.
-const BUILT_IN: [(&str, &str, &str); 2] = [
+const BUILT_IN: [(&str, &str, &str); 4] = [
     (
         "banda-light",
         include_str!("../themes/banda-light/colors.toml"),
@@ -187,7 +193,24 @@ const BUILT_IN: [(&str, &str, &str); 2] = [
         include_str!("../themes/banda-dark/colors.toml"),
         include_str!("../themes/banda-dark/banda.toml"),
     ),
+    (
+        "macos-light",
+        include_str!("../themes/macos-light/colors.toml"),
+        include_str!("../themes/macos-light/banda.toml"),
+    ),
+    (
+        "macos-dark",
+        include_str!("../themes/macos-dark/colors.toml"),
+        include_str!("../themes/macos-dark/banda.toml"),
+    ),
 ];
+
+/// Whether `name` is a pair of Banda's own, shipped as `<name>-light` and
+/// `<name>-dark`, which `theme = "<name>"` takes both of (ADR 0075).
+pub fn is_pair(name: &str) -> bool {
+    let light = format!("{name}-light");
+    BUILT_IN.iter().any(|(n, _, _)| *n == light)
+}
 
 /// A theme as `themes` lists it.
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]

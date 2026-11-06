@@ -5,7 +5,7 @@
   "type": "object",
   "properties": {
     "theme": {
-      "description": "`\"omarchy\"`, `\"banda\"`, a theme's name, or `{ light, dark }`.",
+      "description": "`\"omarchy\"`, `\"macos\"`, `\"banda\"`, a theme's name, or `{ light, dark }`.",
       "$ref": "#/$defs/ThemeChoice"
     },
     "mode": {

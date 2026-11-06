@@ -522,8 +522,11 @@ pub fn resolve(
     let mine_read = mine.is_some();
     let mine = mine.unwrap_or_default();
 
+    // Each platform starts on its own theme (ADR 0075, decision 2).
     let default_theme = if places.omarchy_current.is_some() {
         "omarchy"
+    } else if places.mac {
+        "macos"
     } else {
         "banda"
     };
@@ -559,18 +562,19 @@ pub fn resolve(
         };
         problems.push(Problem::whole(&look_file, words));
     };
-    let banda = |problems: &mut Vec<Problem>| {
+    // A pair of Banda's own, `<name>-light` and `<name>-dark`: banda, macos.
+    let pair = |name: &str, problems: &mut Vec<Problem>| {
         (
-            places.theme("banda-light", problems),
-            places.theme("banda-dark", problems),
+            places.theme(&format!("{name}-light"), problems),
+            places.theme(&format!("{name}-dark"), problems),
         )
     };
 
     // The themes of each scheme, and which scheme shows.
     let wanted = mine.mode.unwrap_or(ModeChoice::System);
     let (light, dark, shown) = match choice {
-        ThemeChoice::One(name) if name == "banda" => {
-            let (light, dark) = banda(&mut problems);
+        ThemeChoice::One(name) if theme::is_pair(&name) => {
+            let (light, dark) = pair(&name, &mut problems);
             (light, dark, shown_of(wanted))
         }
         ThemeChoice::One(name) => match load(&name, &mut problems, &mut watched) {
@@ -580,7 +584,7 @@ pub fn resolve(
             },
             None => {
                 missing(&name, &mut problems);
-                let (light, dark) = banda(&mut problems);
+                let (light, dark) = pair("banda", &mut problems);
                 (light, dark, shown_of(wanted))
             }
         },
@@ -593,7 +597,7 @@ pub fn resolve(
             if found_dark.is_none() {
                 missing(&dark, &mut problems);
             }
-            let (banda_light, banda_dark) = banda(&mut problems);
+            let (banda_light, banda_dark) = pair("banda", &mut problems);
             (
                 found_light.or(banda_light),
                 found_dark.or(banda_dark),
