@@ -73,6 +73,9 @@ export type Choice =
   | { kind: "folder"; id: string; name: string; path: string; up?: true }
   /** A branch: the path field that finds a missing Project's folder. */
   | { kind: "locate"; id: string; project: ProjectSummary }
+  /** A branch: one module's source alone, its rows with no words too,
+   * as quick open shows the Project's files (ADR 0073, decision 11). */
+  | { kind: "finds"; id: string; source: string; label: string }
 
 /** How a Project is added: a new folder by its name, or a folder on disk,
  * made first when it does not exist; or where a missing Project's folder
@@ -94,6 +97,7 @@ const BRANCHES = [
   "add",
   "source",
   "locate",
+  "finds",
 ] as const
 const OWN = ["bind", "free", "adding", "folder"] as const
 
@@ -127,6 +131,8 @@ export function branchName(branch: Branch): string {
       return SOURCES[branch.source].title
     case "locate":
       return LOCATE
+    case "finds":
+      return branch.label
   }
 }
 
@@ -223,18 +229,30 @@ export function settingsLinkOf(route: string): string | undefined {
  * sidebar's view, `project.add` in "Add Project" (`project.add.new`,
  * `project.add.folder` at one of its ways, ADR 0026), `project.locate.<id>`
  * at "Locate folder" for a missing Project, `project.<name>` (or its ID) in
- * a Project. Any other words open it with them typed in. A
+ * a Project, `find.<source>` in a module's source alone, as `find.files.find`
+ * in the Project's files. Any other words open it with them typed in. A
  * settings route opens the settings Pane instead (`settingsLinkOf`).
  * Before ADR 0069 the routes said `space.`, which is read as `project.`
  * for one stable release (grace).
  */
 export function openingOf(
   route: string,
-  projects: readonly ProjectSummary[]
+  projects: readonly ProjectSummary[],
+  sources: readonly { id: string; label: string }[] = []
 ): Opening {
   const words = route.trim().replace(/^space\./, "project.")
   if (words === "actions") return openingAt("actions")
   if (words === "views") return openingAt("root", [VIEWS_BRANCH])
+  const finds = sources.find((one) => words === `find.${one.id}`)
+  if (finds)
+    return openingAt("root", [
+      {
+        kind: "finds",
+        id: `find.${finds.id}`,
+        source: finds.id,
+        label: finds.label,
+      },
+    ])
   const adding = /^project\.add(?:\.(new|folder))?$/.exec(words)
   if (adding) {
     const way = adding[1] as Source | undefined
@@ -284,7 +302,7 @@ export type Sources = {
 export type Browsing = Browsed & { partial: string }
 
 /** The rows one source found, under its heading. */
-export type Found = { label: string; rows: readonly MenuRow[] }
+export type Found = { id: string; label: string; rows: readonly MenuRow[] }
 
 /** The Actions an empty menu offers, as T3 Code's palette offers its own. */
 export const ROOT_ACTIONS = [
@@ -358,6 +376,15 @@ export function menuOf({
     texts: (row: Row) => string[]
   ): Row[] => (query ? ranked(rows, query, texts, byWeight) : [...rows])
 
+  if (inside?.kind === "finds")
+    return nonEmpty([
+      {
+        label: "",
+        rows: found
+          .filter((one) => one.id === inside.source)
+          .flatMap((one) => one.rows.map(foundRow)),
+      },
+    ])
   if (inside?.kind === "views")
     return nonEmpty([
       {

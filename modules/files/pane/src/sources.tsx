@@ -4,7 +4,8 @@
  * as `files.find` matches them. Enter opens one in `files.file`, at the
  * line typed after them, as `main.rs:42`; Tab also offers Quick Look over
  * the desk, to show it in Files, in its folder, and to add it to a
- * Thread's message.
+ * Thread's message. Quick open (Alt+P, the mod with P) shows them alone,
+ * what was opened lately first before a word is typed.
  */
 import { useEffect, useLayoutEffect, useMemo, useState } from "react"
 import { copyText } from "@banda/ui/lib/clipboard"
@@ -17,8 +18,9 @@ import { openFile, peekFile } from "./FilePane"
 import { openTree } from "./TreePane"
 
 const OPEN: Key = { code: "Enter" }
-/** How many files a search shows. */
+/** How many files a search shows; alone, as quick open shows them. */
 const SHOWN = 6
+const ALONE = 20
 /** How long the typing rests before the files are asked for, in ms. */
 const WAIT = 80
 
@@ -33,7 +35,8 @@ function FindFiles({ words: typed, here, found }: FindProps) {
   const { engine, project, folder, entered } = here
   // `main.rs:42` finds `main.rs`, and opens it at line 42.
   const { path: words, line = null } = named(typed)
-  const look = !entered && words !== "" && folder !== undefined
+  const alone = here.only === filesSource.id
+  const look = !entered && (words !== "" || alone) && folder !== undefined
   // The paths found last stay while the next are asked for.
   const [paths, setPaths] = useState<string[]>()
   useEffect(() => {
@@ -53,7 +56,7 @@ function FindFiles({ words: typed, here, found }: FindProps) {
   const shown = look ? paths : undefined
   const rows = useMemo(
     (): MenuRow[] =>
-      (shown ?? []).slice(0, SHOWN).map((path) => {
+      (shown ?? []).slice(0, alone ? ALONE : SHOWN).map((path) => {
         const full = `${(folder ?? "").replace(/\/$/, "")}/${path}`
         const { name, folder: inside } = nameAndFolder(path)
         const open: MenuRow["run"] = (window) =>
@@ -86,7 +89,7 @@ function FindFiles({ words: typed, here, found }: FindProps) {
           ],
         }
       }),
-    [shown, folder, project, line]
+    [shown, folder, project, line, alone]
   )
   useLayoutEffect(() => found(rows), [found, rows])
   return null

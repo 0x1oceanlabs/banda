@@ -10,8 +10,14 @@
  * into a folder. Space shows the row picked in Quick Look, over the desk,
  * and the arrows move it there while the tree keeps the keys (step F3).
  * Its rows, one or the several picked, go into a Thread's message by
- * their menu or a drag, and out to other apps as the files (step F2). It
- * only reads: the file operations come later (step F5).
+ * their menu or a drag, and out to other apps as the files (step F2).
+ *
+ * It does what a Finder does with them (decision 10, step F5): makes a
+ * file or a folder, renames in place (F2), duplicates, copies, cuts and
+ * pastes, moves a row dragged onto a folder, and moves to the Trash, each
+ * said in a toast with Undo, and undone by Ctrl+Z too. Several rows are
+ * renamed as text. Ctrl+Shift+F finds words in its files, and its Trash
+ * place lists the system's Trash.
  *
  * The Agents' work shows on it (decisions 3 and 9): the row of the file
  * each running turn works on pulses in its Agent's colour, and a quiet
@@ -27,7 +33,7 @@ import {
   useState,
 } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
-import { FILES_FILE } from "@banda/contract/files"
+import { FILES_FILE, type Making } from "@banda/contract/files"
 import { Button } from "@banda/ui/components/button"
 import {
   ContextMenu,
@@ -41,12 +47,14 @@ import {
   rowAt,
 } from "@banda/ui/components/file-tree"
 import { InHeader } from "@banda/ui/components/pane-header"
+import { toast } from "@banda/ui/components/sonner"
 import { Spinner } from "@banda/ui/components/spinner"
 import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { useRead } from "@banda/ui/hooks/use-read"
 import { useWiderThan } from "@banda/ui/hooks/use-wider-than"
 import { dragFiles } from "@banda/ui/lib/file-drag"
+import { foldersOf } from "@banda/ui/lib/tree-paths"
 import { FIELDS, keyLabel } from "@banda/ui/lib/keys"
 import { useFile } from "@banda/ui/lib/look"
 import { shownProjects } from "@banda/ui/lib/projects"
@@ -74,20 +82,35 @@ import {
   turnedIn,
   wholeFrom,
 } from "./agent"
+import * as acts from "./acts"
+import { BulkRename } from "./BulkRename"
+import type { Named } from "./bulk"
+import { useClashes } from "./ClashDialog"
+import { keep, kept, pasted } from "./clip"
 import { Card } from "./Facts"
 import { useFolder } from "./folder"
 import { HeaderButton } from "./HeaderButton"
-import { keyOf, treeKey, typesFilter, type Does } from "./keys"
+import {
+  ANYWHERE,
+  type Does,
+  keyOf,
+  OUTSIDE_FIELDS,
+  treeKey,
+  typesFilter,
+} from "./keys"
 import { marksOf } from "./marks"
 import { PathBar } from "./PathBar"
 import { Rail } from "./Rail"
 import { RecentList } from "./RecentList"
 import { useThreads, useTouched, useTurned } from "./live"
-import { RowMenu } from "./RowMenu"
-import { matchesOf, onlyFolder, type Showing, treeOf } from "./tree"
+import { MakeItems, RowMenu } from "./RowMenu"
+import { SearchView } from "./SearchView"
+import { TrashList } from "./TrashList"
+import { matchesOf, onlyFolder, type Showing, treeOf, untitled } from "./tree"
 import { nameOf, parentOf, tilded, untilded, wholeOf, within } from "./where"
 import { holding, moveFile, workedAt, workedIn } from "./work"
 import { peeked } from "./peek"
+import type { Undoable } from "./undo"
 
 export type TreeArgs = {
   /** The folder, whole; `""` is the Project's, which it names once read. */
@@ -103,6 +126,8 @@ export type TreeArgs = {
   rail?: boolean
   /** It shows Recent, not the folder. */
   recent?: boolean
+  /** It shows the system's Trash, not the folder. */
+  trash?: boolean
   /** Its pick and the file it opened follow the Agent's file. */
   follow?: boolean
   /** The Thread it was opened from: whose turns it marks and follows. */
@@ -111,8 +136,9 @@ export type TreeArgs = {
 
 export const treePane = definePane<TreeArgs>({
   kind: "files.tree",
-  title: (args) => (args.recent ? "Recent" : nameOf(args.dir) || "Files"),
-  detail: (args) => (args.recent ? null : args.dir || null),
+  title: (args) =>
+    args.recent ? "Recent" : args.trash ? "Trash" : nameOf(args.dir) || "Files",
+  detail: (args) => (args.recent || args.trash ? null : args.dir || null),
   icon: FolderTreeIcon,
   // The launcher's Files: the Project's folder.
   start: { dir: "" },
@@ -196,18 +222,26 @@ function TreePane(props: PaneProps<TreeArgs>) {
   const railOpen = args.rail ?? wide
   const hidden = args.hidden ?? finder.hidden
   const recent = args.recent === true
+  const trash = args.trash === true && !recent
   const dir = args.dir
 
   // Its header names the folder with ~ for home.
   useEffect(() => {
-    if (recent || !dir) label?.(null)
+    if (recent || trash || !dir) label?.(null)
     else label?.({ title: nameOf(dir), detail: tilded(dir, home) })
-  }, [label, recent, dir, home])
+  }, [label, recent, trash, dir, home])
 
-  // Another folder, its folders folded; out of Recent.
+  // Another folder, its folders folded; out of Recent and the Trash.
   const go = useCallback(
     (to: string, selected: string | null = null) =>
-      update({ ...args, dir: to, open: [], selected, recent: false }),
+      update({
+        ...args,
+        dir: to,
+        open: [],
+        selected,
+        recent: false,
+        trash: false,
+      }),
     [update, args]
   )
   /** Goes to a path typed: a folder, or a file's folder with it picked. */
@@ -266,14 +300,18 @@ function TreePane(props: PaneProps<TreeArgs>) {
         projects={shownList}
         places={places.state === "ready" ? places.value : null}
         pinned={pinned}
-        at={recent ? null : dir}
+        at={recent || trash ? null : dir}
         recent={recent}
+        trash={trash}
         onGo={(to) => go(to)}
-        onRecent={() => update({ ...args, recent: true })}
+        onRecent={() => update({ ...args, recent: true, trash: false })}
+        onTrash={() => update({ ...args, trash: true, recent: false })}
         onUnpin={(place) => pin(place, false)}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        {recent ? (
+        {trash ? (
+          <TrashList engine={engine} project={project} home={home} />
+        ) : recent ? (
           <>
             <div className="flex h-8 shrink-0 items-center border-b px-2.5 text-xs">
               Recent
@@ -542,22 +580,166 @@ function FolderView({
       run?.("files.peek", { file: wholeOf(dir, path), project }),
     [run, dir, project]
   )
+
+  // What Files does with its rows (decision 10): each said in a toast with
+  // Undo; a name taken where they go is asked about.
+  const at = useMemo(() => ({ engine, project }), [engine, project])
+  const { ask, dialog: clashes } = useClashes()
+  const [searching, setSearching] = useState(false)
+  const [renaming, setRenaming] = useState<Named[] | null>(null)
+  // What was made just now, said made once it is named in place.
+  const made = useRef<{ path: string; done: Undoable } | null>(null)
+  /** The rows an act takes: those picked, when `row` is among them, or
+   * `row` alone; with none, those picked. */
+  const rowsFor = useCallback(
+    (row?: string | null): string[] => {
+      const all = tree.current?.picked() ?? []
+      if (row == null) return all.length > 0 ? all : picked ? [picked] : []
+      return all.includes(row) ? all : [row]
+    },
+    [picked]
+  )
+  // What a copy or a move made is picked, as a Finder picks it.
+  const transfer = useCallback(
+    async (
+      copy: boolean,
+      paths: readonly string[],
+      into: string,
+      beside = false
+    ) => {
+      const done = await acts.transfer(at, {
+        copy,
+        paths,
+        dir: wholeOf(dir, into),
+        ask,
+        beside,
+      })
+      const first = done?.paths[0]
+      const row = first === undefined ? null : within(here, first)
+      if (row) setPicked(row)
+      return done
+    },
+    [at, dir, ask, here]
+  )
+  // A new thing is made untitled, then named in place.
+  const newItem = useCallback(
+    async (kind: Making, row: string | null) => {
+      const into = folderOfRow(row)
+      const name = untitled(folder.listed.get(into) ?? [], kind === "folder")
+      const done = await acts.make(at, wholeOf(dir, into), name, kind)
+      if (!done) return
+      const path = `${into}${name}${kind === "folder" ? "/" : ""}`
+      if (into) tree.current?.expand([into])
+      tree.current?.add(path)
+      made.current = { path, done }
+      setPicked(path)
+      requestAnimationFrame(() => tree.current?.rename(path, true))
+    },
+    [at, dir, folder.listed]
+  )
+  const onRename = useCallback(
+    async (from: string, to: string) => {
+      const was = made.current?.path === from ? made.current.done : undefined
+      made.current = null
+      const name = nameOf(wholeOf(dir, to))
+      const done = await acts.rename(at, wholeOf(dir, from), name, was)
+      if (done) setPicked(to)
+      return done
+    },
+    [at, dir]
+  )
+  const act = useCallback(
+    (what: Does, row: string | null = null) => {
+      const rows = rowsFor(row)
+      const wholes = rows.map((one) => wholeOf(dir, one))
+      switch (what) {
+        case "rename":
+          if (rows.length > 1) setRenaming(wholes.map((path) => ({ path })))
+          else if (rows[0]) tree.current?.rename(rows[0])
+          return
+        case "trash":
+          if (rows.length > 0) void acts.trash(at, wholes)
+          return
+        case "duplicate": {
+          // Each beside itself, a folder's at once.
+          const byFolder = new Map<string, string[]>()
+          for (const one of rows) {
+            const into = parentRow(one)
+            byFolder.set(into, [...(byFolder.get(into) ?? []), one])
+          }
+          for (const [into, some] of byFolder)
+            void transfer(
+              true,
+              some.map((one) => wholeOf(dir, one)),
+              into,
+              true
+            )
+          return
+        }
+        case "copy":
+        case "cut":
+          if (rows.length > 0) keep(wholes, what === "cut")
+          return
+        case "paste": {
+          const clip = kept()
+          if (!clip) return
+          void transfer(!clip.cut, clip.paths, folderOfRow(row ?? picked)).then(
+            (done) => done && !done.stopped && pasted(clip)
+          )
+          return
+        }
+        case "new-file":
+        case "new-folder":
+          void newItem(what === "new-file" ? "file" : "folder", row ?? picked)
+          return
+        case "undo":
+          if (!acts.undoLatest(at)) toast("Nothing to undo here.")
+          return
+        case "search":
+          setSearching(true)
+          return
+      }
+    },
+    [rowsFor, dir, at, transfer, picked, newItem, setRenaming, setSearching]
+  )
+  /** What a row's menu offers, or the folder's, under the rows. */
+  const offersOf = (row: string | null): Does[] => [
+    "new-file",
+    "new-folder",
+    ...(kept() ? (["paste"] as const) : []),
+    ...(row === null
+      ? []
+      : (["rename", "duplicate", "copy", "cut", "trash"] as const)),
+  ]
+
   const does = useCallback(
     (what: Does) => {
       // The row picked as the tree has it now: a key may be quicker than
       // the tree's word of it.
       const row = tree.current?.picked().at(-1) ?? picked
-      if (what === "up") up()
-      else if (what === "path") setEditing(true)
-      else if (what === "hidden") toggleHidden()
-      else if (what === "filter") startFilter("")
-      else if (what === "peek") {
-        const close = peeked()
-        if (close) close()
-        else if (row) peek(row)
-      } else if (row) openRow(row)
+      switch (what) {
+        case "up":
+          return up()
+        case "path":
+          return setEditing(true)
+        case "hidden":
+          return toggleHidden()
+        case "filter":
+          return startFilter("")
+        case "peek": {
+          const close = peeked()
+          if (close) close()
+          else if (row) peek(row)
+          return
+        }
+        case "open":
+          if (row) openRow(row)
+          return
+        default:
+          act(what)
+      }
     },
-    [up, toggleHidden, startFilter, picked, openRow, peek]
+    [up, toggleHidden, startFilter, picked, openRow, peek, act]
   )
   // As the pick moves, Quick Look shows it, from the tree that has the
   // keys.
@@ -615,7 +797,14 @@ function FolderView({
   }, [moving, target, went, project, goTo, looked])
   const toggleFollow = () => update({ ...args, follow: !follow })
 
-  const [menu, setMenu] = useState<string | null>(null)
+  // The row whose menu is open, none for the space under the rows, and
+  // how many rows it acts on. What it chose runs once it has closed and
+  // given the keys back, so a rename it starts keeps them.
+  const [menu, setMenu] = useState<{ row: string | null; count: number }>()
+  const chosen = useRef<(() => void) | null>(null)
+  const later = (what: Does, row: string | null) => {
+    chosen.current = () => act(what, row)
+  }
   const [noLimit, setNoLimit] = useState(false)
 
   // Rows dragged: into a Thread's composer as `@` chips, and out to other
@@ -635,17 +824,19 @@ function FolderView({
     requestAnimationFrame(() => tree.current?.focus())
   }, [listed, focused])
 
-  // Ctrl+L anywhere in the Pane; the rest outside its fields, and ↵, `/`
-  // and a letter in the tree.
+  // Ctrl+L and Ctrl+Shift+F anywhere in the Pane; the rest outside its
+  // fields, and the rest of its keys and a letter in the tree. A rename's
+  // field in the tree is a field too: its press comes from inside it.
   const onKeyDownCapture = (event: React.KeyboardEvent) => {
     const what = treeKey(event)
-    const target = event.target as Element
-    const inField = target.closest(FIELDS) !== null
-    const inTree = area.current?.contains(target) ?? false
+    const from = event.nativeEvent.composedPath()[0]
+    const inField = from instanceof Element && from.closest(FIELDS) !== null
+    const inTree = area.current?.contains(event.target as Node) ?? false
     const mine =
-      what === "path" ||
-      (!inField && (what === "up" || what === "hidden")) ||
-      (!inField && inTree && what !== undefined)
+      what !== undefined &&
+      (ANYWHERE.has(what) ||
+        (!inField && OUTSIDE_FIELDS.has(what)) ||
+        (!inField && inTree))
     if (mine) does(what)
     else if (!inField && inTree && typesFilter(event)) startFilter(event.key)
     else return
@@ -654,6 +845,21 @@ function FolderView({
   }
 
   const body = (() => {
+    if (searching && real)
+      return (
+        <SearchView
+          engine={engine}
+          project={project}
+          dir={real}
+          onOpen={(path, line) =>
+            run?.("files.open", { file: wholeOf(real, path), line, project })
+          }
+          onClose={() => {
+            setSearching(false)
+            requestAnimationFrame(() => tree.current?.focus())
+          }}
+        />
+      )
     if (folder.top.state === "loading") return <Loading />
     if (folder.top.state === "refused")
       return (
@@ -682,22 +888,33 @@ function FolderView({
       )
     if (filtering && matches.paths.length === 0)
       return <Quiet>Nothing here fits “{words}”.</Quiet>
-    if (!filtering && paths.length === 0)
-      return <Quiet>This folder is empty.</Quiet>
+    const empty = !filtering && paths.length === 0
     return (
       <ContextMenu
         onOpenChangeComplete={(isOpen) => {
-          if (!isOpen) setMenu(null)
+          if (isOpen) return
+          setMenu(undefined)
+          const run = chosen.current
+          chosen.current = null
+          if (run) requestAnimationFrame(run)
         }}
       >
         <ContextMenuTrigger
-          render={<div ref={area} className="h-full min-h-0 px-1 pt-1" />}
+          render={
+            <div
+              ref={area}
+              tabIndex={empty ? 0 : undefined}
+              aria-label={empty ? "This folder is empty" : undefined}
+              className="h-full min-h-0 px-1 pt-1 outline-none"
+            />
+          }
           onContextMenu={(event) => {
-            const path = rowAt(event.nativeEvent)
-            if (path) setMenu(path)
-            else event.preventBaseUIHandler()
+            // The tree has picked the row first.
+            const row = rowAt(event.nativeEvent)
+            setMenu({ row, count: row === null ? 0 : rowsFor(row).length })
           }}
         >
+          {empty && <Quiet>This folder is empty.</Quiet>}
           <FolderTree
             ref={tree}
             label={`Files of ${nameOf(dir)}`}
@@ -722,23 +939,38 @@ function FolderView({
             }}
             onOpen={openRow}
             onDrag={drag}
+            onRename={onRename}
+            onDrop={(dropped, into, copy) => void transfer(copy, dropped, into)}
           />
         </ContextMenuTrigger>
-        <ContextMenuContent aria-label="Row" className="min-w-52">
-          {menu && (
-            <RowMenu
-              whole={wholeOf(dir, menu)}
-              folder={menu.endsWith("/")}
-              top={projectTop}
-              pinned={pinned.includes(wholeOf(dir, menu))}
-              onOpen={() => openRow(menu)}
-              onPeek={() => peek(menu)}
-              onAttach={() => {
-                // The rows picked with it, as a Finder acts on them all.
-                const picked = tree.current?.picked() ?? []
-                onAttach((picked.includes(menu) ? picked : [menu]).map(named))
+        <ContextMenuContent
+          aria-label={menu?.row === null ? "Folder" : "Row"}
+          className="min-w-52"
+        >
+          {menu?.row === null && (
+            <MakeItems
+              acts={{
+                offers: offersOf(null),
+                run: (what) => later(what, null),
+                count: 0,
               }}
-              onPin={(on) => onPin(wholeOf(dir, menu), on)}
+            />
+          )}
+          {menu?.row != null && (
+            <RowMenu
+              whole={wholeOf(dir, menu.row)}
+              folder={menu.row.endsWith("/")}
+              top={projectTop}
+              pinned={pinned.includes(wholeOf(dir, menu.row))}
+              onOpen={() => openRow(menu.row ?? "")}
+              onPeek={() => peek(menu.row ?? "")}
+              onAttach={() => onAttach(rowsFor(menu.row).map(named))}
+              onPin={(on) => onPin(wholeOf(dir, menu.row ?? ""), on)}
+              acts={{
+                offers: offersOf(menu.row),
+                run: (what) => later(what, menu.row),
+                count: menu.count,
+              }}
             />
           )}
         </ContextMenuContent>
@@ -862,6 +1094,18 @@ function FolderView({
           {moving && waiting && <span>· waits while you work here</span>}
         </div>
       )}
+      {clashes}
+      <BulkRename
+        at={at}
+        rows={renaming}
+        taken={(whole) => {
+          const inside = within(dir, whole)
+          const listed =
+            inside === null ? [] : folder.listed.get(inside ? `${inside}/` : "")
+          return new Set((listed ?? []).map((entry) => entry.name))
+        }}
+        onClose={() => setRenaming(null)}
+      />
       {folder.limit && !noLimit && (
         <div
           role="status"
@@ -880,6 +1124,13 @@ function FolderView({
     </div>
   )
 }
+
+/** The folder a row is in, as the tree names it: `""` its top. */
+const parentRow = (row: string) => foldersOf(row).at(-1) ?? ""
+
+/** The folder a row is, or is in: `""` the top. */
+const folderOfRow = (row: string | null) =>
+  !row ? "" : row.endsWith("/") ? row : parentRow(row)
 
 /** git's changes in the Project, from the git module's `git.watch`, while
  * the folder is in the Project's folder; none outside it or with no

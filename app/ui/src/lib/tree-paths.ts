@@ -40,6 +40,23 @@ export function pathUpdates(
   return updates
 }
 
+/** `paths` with `from`, and all a folder holds, at `to` instead: as a
+ * tree moves a row it renames. */
+export function movedPaths(
+  paths: readonly string[],
+  from: string,
+  to: string
+): string[] {
+  const folder = from.endsWith("/")
+  return paths.map((path) =>
+    path === from
+      ? to
+      : folder && path.startsWith(from)
+        ? to + path.slice(from.length)
+        : path
+  )
+}
+
 /** The folders `path` is in, from the top: `a/`, then `a/b/`. */
 export function foldersOf(path: string): string[] {
   const names = path.split("/").filter(Boolean)

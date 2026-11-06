@@ -134,6 +134,7 @@ export function BandaMenu({
   const found: Found[] = useMemo(
     () =>
       running.map(({ source }) => ({
+        id: source.id,
         label: source.label,
         rows: rows[source.id] ?? NO_ROWS,
       })),
@@ -146,8 +147,9 @@ export function BandaMenu({
       project: at,
       folder: projects.find((one) => one.id === at)?.folder,
       entered: looking.entered !== undefined,
+      ...(looking.only && { only: looking.only }),
     }
-  }, [engine, project, projects, looking.entered])
+  }, [engine, project, projects, looking.entered, looking.only])
   const hear = useCallback((id: string, heard?: readonly MenuRow[]) => {
     setRows((rows) => {
       if (rows[id] === heard) return rows
@@ -235,8 +237,8 @@ function Finder({
 }
 
 /** What the menu looks for: the words typed at its root, or the Project it
- * went into. */
-type Looking = { words: string; entered?: ProjectId }
+ * went into, or in one source alone. */
+type Looking = { words: string; entered?: ProjectId; only?: string }
 
 const NOWHERE: Looking = { words: "" }
 
@@ -285,16 +287,19 @@ function Menu({
   const entered = inside?.kind === "project" ? inside.project.id : undefined
   const atRoot = at === "root" && path.length === 0
   // Before the paint, so no row is drawn for the words before.
+  const only = inside?.kind === "finds" ? inside.source : undefined
   useLayoutEffect(
     () =>
       onLooking(
         entered
           ? { words: query, entered }
-          : atRoot
-            ? { words: query }
-            : NOWHERE
+          : only
+            ? { words: query, only }
+            : atRoot
+              ? { words: query }
+              : NOWHERE
       ),
-    [onLooking, entered, atRoot, query]
+    [onLooking, entered, only, atRoot, query]
   )
   useEffect(() => () => onLooking(NOWHERE), [onLooking])
   // The path field's folders, from the engine, as the path is typed.

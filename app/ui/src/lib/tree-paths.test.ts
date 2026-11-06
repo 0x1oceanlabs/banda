@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { foldersOf, outermost, pathUpdates } from "./tree-paths"
+import { foldersOf, movedPaths, outermost, pathUpdates } from "./tree-paths"
 
 test("a folder gone takes what it holds, and a new folder comes before what it holds", () => {
   const was = ["src/", "src/a.ts", "src/lib/", "src/lib/b.ts", "README.md"]
@@ -28,4 +28,16 @@ test("a drag carries a folder picked, not what it holds as well", () => {
     "docs/b.md",
   ])
   expect(outermost(["a.ts", "a.ts", "b.ts"])).toEqual(["a.ts", "b.ts"])
+})
+
+test("a row renamed moves, and all a folder holds with it", () => {
+  expect(movedPaths(["a.txt", "b.txt"], "a.txt", "c.txt")).toEqual([
+    "c.txt",
+    "b.txt",
+  ])
+  expect(movedPaths(["src/", "src/main.rs", "srcs/"], "src/", "lib/")).toEqual([
+    "lib/",
+    "lib/main.rs",
+    "srcs/",
+  ])
 })

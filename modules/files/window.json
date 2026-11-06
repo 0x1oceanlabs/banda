@@ -76,6 +76,17 @@
       }
     },
     {
+      "id": "files.quick-open",
+      "title": "Open a file of the Project",
+      "section": "Files",
+      "keys": [
+        {
+          "code": "KeyP",
+          "mod": true
+        }
+      ]
+    },
+    {
       "id": "files.up",
       "title": "Go to the folder above",
       "section": "Files",
@@ -99,6 +110,76 @@
     {
       "id": "files.filter",
       "title": "Filter the files",
+      "section": "Files",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "files.rename-picked",
+      "title": "Rename the files picked",
+      "section": "Files",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "files.trash-picked",
+      "title": "Move the files picked to the Trash",
+      "section": "Files",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "files.undo",
+      "title": "Undo what Files did last",
+      "section": "Files",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "files.copy-picked",
+      "title": "Copy the files picked",
+      "section": "Files",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "files.cut-picked",
+      "title": "Cut the files picked",
+      "section": "Files",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "files.paste",
+      "title": "Paste the files copied or cut",
+      "section": "Files",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "files.duplicate-picked",
+      "title": "Duplicate the files picked",
+      "section": "Files",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "files.new-file",
+      "title": "Make a file",
+      "section": "Files",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "files.new-folder",
+      "title": "Make a folder",
+      "section": "Files",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "files.find-in-files",
+      "title": "Find words in the files",
       "section": "Files",
       "keys": [],
       "unlisted": true

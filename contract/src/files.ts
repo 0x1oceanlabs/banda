@@ -4,7 +4,9 @@
  * from `files.read` and what `files.write` answers, the paths `files.find`
  * finds, the pieces of `files.watch`, the Person's places, the files
  * opened lately, what an archive holds and a workbook's sheet, for the
- * previewers, and its `files.toml` as the look resolves it (ADR 0073,
+ * previewers; what an operation did and what undoes it, the pieces of a
+ * move or a copy, the system's Trash, and the lines `files.search`
+ * finds; and its `files.toml` as the look resolves it (ADR 0073,
  * decision 13).
  */
 import type { ModuleFile } from "./look"
@@ -36,6 +38,18 @@ export type { Packed } from "./generated/files/Packed"
 export type { Packing } from "./generated/files/Packing"
 export type { Sheet } from "./generated/files/Sheet"
 export type { SheetAsk } from "./generated/files/SheetAsk"
+export type { Clash } from "./generated/files/Clash"
+export type { Clashing } from "./generated/files/Clashing"
+export type { Done } from "./generated/files/Done"
+export type { Job } from "./generated/files/Job"
+export type { Making } from "./generated/files/Making"
+export type { Matched } from "./generated/files/Matched"
+export type { MoveAsk } from "./generated/files/MoveAsk"
+export type { SearchAsk } from "./generated/files/SearchAsk"
+export type { Searched } from "./generated/files/Searched"
+export type { Step } from "./generated/files/Step"
+export type { Trashcan } from "./generated/files/Trashcan"
+export type { Trashed } from "./generated/files/Trashed"
 
 /** What Files shows, as `banda look` gives it with no `files.toml`:
  * nothing pinned, dotfiles hidden, what git ignores greyed, the first

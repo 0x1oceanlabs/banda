@@ -9,7 +9,8 @@
  *   time as it opens, what git ignores greyed, git's marks, a quiet dot on
  *   what an Agent's turn changed, the row of the file an Agent works on
  *   now pulsing in its colour, a quiet spinner on a folder being listed;
- *   rows picked with Ctrl or Shift, and dragged out;
+ *   rows picked with Ctrl or Shift, dragged out, and dropped on a folder;
+ *   a row renamed in place, its name before its extension picked;
  * - `ListedTree`, names all known at once, as an archive's, each with a
  *   quiet word at its end, as its size; it only shows.
  *
@@ -31,10 +32,18 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
+  useState,
 } from "react"
 import { useDark } from "../hooks/use-dark"
+import { carries, droppedPaths } from "../lib/file-drag"
+import { toast } from "./sonner"
 import { holding, pulseCSS, type RowMark, rowMarkOf } from "../lib/tree-marks"
-import { foldersOf, outermost, pathUpdates } from "../lib/tree-paths"
+import {
+  foldersOf,
+  movedPaths,
+  outermost,
+  pathUpdates,
+} from "../lib/tree-paths"
 import { cn } from "../lib/utils"
 
 export type { GitStatus } from "@pierre/trees"
@@ -198,6 +207,13 @@ export type FolderTreeProps = {
    * with it. Its holder says what the drag carries, or runs it itself and
    * prevents the page's (`preventDefault`). None: rows do not drag. */
   onDrag?: (paths: string[], event: DragEvent) => void
+  /** A row renamed in place, from its path to its new one: whether its
+   * holder renamed it; else it goes back. None: no row is renamed. */
+  onRename?: (from: string, to: string) => Promise<boolean>
+  /** Banda's files dropped on a folder of the tree, `""` its top, their
+   * whole paths: copied when Alt (⌥) or Ctrl is held as they drop, else
+   * moved. None: nothing drops on it. */
+  onDrop?: (paths: readonly string[], dir: string, copy: boolean) => void
   /** What a screen reader calls it. */
   label: string
   className?: string
@@ -215,6 +231,11 @@ export type FolderTreeHandle = {
   collapse: () => void
   /** The rows picked, from the top. */
   picked: () => string[]
+  /** Renames the row in place: its name before its extension is picked,
+   * or all of it with `whole`. Whether it could. */
+  rename: (path: string, whole?: boolean) => boolean
+  /** Shows a row at once, before its folder is listed again. */
+  add: (path: string) => void
 }
 
 /** Pierre's standard icons, in the text's colours, as the look's are. */
@@ -273,6 +294,73 @@ export function rowAt(event: Event): string | null {
   return null
 }
 
+/** The folder a drop at `event` goes in: the folder row under it, or the
+ * folder of the file under it; `""`, the top, elsewhere. */
+function dropFolderAt(event: Event): string {
+  for (const at of event.composedPath()) {
+    if (!(at instanceof HTMLElement)) continue
+    const chain = at.dataset.itemFlattenedSubitem
+    if (chain?.endsWith("/")) return chain
+    if (at.dataset.type !== "item") continue
+    if (at.dataset.itemType === "folder") return at.dataset.itemPath ?? ""
+    const parent = at.dataset.itemParentPath ?? ""
+    return parent && !parent.endsWith("/") ? `${parent}/` : parent
+  }
+  return ""
+}
+
+/** How a folder a drop would go in is lit, by a sheet of the tree's own. */
+function dropCSS(folder: string | null): string {
+  if (folder === null) return ""
+  if (folder === "")
+    return ":host { outline: 1px solid color-mix(in srgb, var(--ring) 70%, transparent); outline-offset: -1px; border-radius: calc(var(--radius) - 2px); }"
+  return `button[data-item-path="${globalThis.CSS.escape(folder)}"] { background: color-mix(in srgb, var(--ring) 22%, transparent) !important; }`
+}
+
+/** Whether a drag may bring Banda's files: its own type, or files, which
+ * main's drag brings back. */
+function bringsFiles(data: DataTransfer | null): boolean {
+  return data !== null && (carries(data) || data.types.includes("Files"))
+}
+
+/** A sheet of the tree's own, by its name, put in its shadow root once
+ * the tree has one. Returns how to stop waiting for it. */
+function putSheet(
+  model: ReturnType<typeof useFileTree>["model"],
+  name: string,
+  css: string
+): () => void {
+  let frame = 0
+  const put = () => {
+    const root = model.getFileTreeContainer()?.shadowRoot
+    if (!root) {
+      frame = requestAnimationFrame(put)
+      return
+    }
+    let sheet = root.querySelector<HTMLStyleElement>(`style[data-${name}]`)
+    if (!sheet) {
+      sheet = document.createElement("style")
+      sheet.setAttribute(`data-${name}`, "")
+      root.append(sheet)
+    }
+    sheet.textContent = css
+  }
+  put()
+  return () => cancelAnimationFrame(frame)
+}
+
+/** Notes in `drawn` a row the model moved itself, from `from` to `to`. */
+function movedIn(
+  drawn: { current: { version: string; paths: readonly string[] } },
+  from: string,
+  to: string
+): void {
+  drawn.current = {
+    ...drawn.current,
+    paths: movedPaths(drawn.current.paths, from, to),
+  }
+}
+
 /** What git's marks and ignores tell Pierre. */
 function statusOf(
   marks: ReadonlyMap<string, Mark>,
@@ -327,6 +415,8 @@ export function FolderTree({
   onOpenChange,
   onOpen,
   onDrag,
+  onRename,
+  onDrop,
   label,
   className,
   style,
@@ -334,18 +424,20 @@ export function FolderTree({
 }: FolderTreeProps) {
   const dark = useDark()
   // What the model's handlers read, as they are given once.
-  const now = useRef({ onSelect, onOpenChange, onOpen, loading })
+  const now = useRef({ onSelect, onOpenChange, onOpen, onRename, loading })
   const decorating = useRef({
     holds: holding(marks.keys()),
     turned,
     turnHolds: holding(turned),
   })
   useEffect(() => {
-    now.current = { onSelect, onOpenChange, onOpen, loading }
+    now.current = { onSelect, onOpenChange, onOpen, onRename, loading }
   })
   // Whether the last press picks rows or lets one go, as Ctrl or Shift
   // with a click or Shift with an arrow: the keys leave the pick as it is.
   const adding = useRef(false)
+  // The paths the model holds, as it was given them or moved them itself.
+  const drawn = useRef({ version, paths })
   const { model } = useFileTree({
     paths,
     initialExpandedPaths: open,
@@ -367,8 +459,31 @@ export function FolderTree({
       const path = picked.at(-1)
       if (path) now.current.onSelect(path)
     },
-    // Rows drag out of the tree; nothing drops into it yet (step F5).
+    // Rows drag out of the tree, and back onto it as files: its holder
+    // runs the drag, and the drop, never Pierre's model.
     dragAndDrop: onDrag ? { canDrop: () => false } : false,
+    // Pierre moves the row as it is renamed; its holder renames the file,
+    // or it goes back.
+    renaming: {
+      canRename: () => now.current.onRename !== undefined,
+      // What Pierre refuses before it asks: a name taken, or none.
+      onError: (error) =>
+        toast.warning(
+          /already exists/.test(error)
+            ? "That name is already there."
+            : error.replace(/^Name/, "A name")
+        ),
+      onRename: ({ sourcePath, destinationPath, isFolder }) => {
+        const slash = isFolder ? "/" : ""
+        const [from, to] = [sourcePath + slash, destinationPath + slash]
+        movedIn(drawn, from, to)
+        void now.current.onRename?.(from, to).then((done) => {
+          if (done || !model.getItem(to) || model.getItem(from)) return
+          model.move(to, from)
+          movedIn(drawn, to, from)
+        })
+      },
+    },
     unsafeCSS: CSS + FOLDER_CSS,
   })
 
@@ -389,8 +504,9 @@ export function FolderTree({
     [model]
   )
 
-  // The paths it is given: a new version anew, else bit by bit.
-  const drawn = useRef({ version, paths })
+  // The paths it is given: a new version anew, else bit by bit, from the
+  // paths the model holds, which a rename in place and a row shown early
+  // change too.
   useEffect(() => {
     const was = drawn.current
     if (was.version !== version) {
@@ -421,26 +537,11 @@ export function FolderTree({
   }, [model, marks, turned, ignored, loading])
 
   // The rows Agents work on pulse, by a sheet of the tree's own.
-  useEffect(() => {
-    const css = pulseCSS(pulses)
-    let frame = 0
-    const put = () => {
-      const root = model.getFileTreeContainer()?.shadowRoot
-      if (!root) {
-        frame = requestAnimationFrame(put)
-        return
-      }
-      let sheet = root.querySelector<HTMLStyleElement>("style[data-pulses]")
-      if (!sheet) {
-        sheet = document.createElement("style")
-        sheet.dataset.pulses = ""
-        root.append(sheet)
-      }
-      sheet.textContent = css
-    }
-    put()
-    return () => cancelAnimationFrame(frame)
-  }, [model, pulses])
+  useEffect(() => putSheet(model, "pulses", pulseCSS(pulses)), [model, pulses])
+
+  // The folder a drag over the tree would drop in, lit.
+  const [dropping, setDropping] = useState<string | null>(null)
+  useEffect(() => putSheet(model, "drop", dropCSS(dropping)), [model, dropping])
 
   // What opens, as the Person opens it or the paths change.
   useEffect(() => {
@@ -512,6 +613,33 @@ export function FolderTree({
           if (path.endsWith("/")) folderOf(model.getItem(path))?.collapse()
       },
       picked: () => pickedOf(model),
+      rename: (path, whole = false) => {
+        if (!model.startRenaming(path)) return false
+        // Pierre picks the whole name as its field takes the keys; then a
+        // file's extension is left out of it, as a Finder does.
+        const name = path.replace(/\/$/, "").split("/").at(-1) ?? ""
+        const dot = path.endsWith("/") || whole ? -1 : name.lastIndexOf(".")
+        let frames = 30
+        const pick = () => {
+          const root = model.getFileTreeContainer()?.shadowRoot
+          const field = root?.querySelector<HTMLInputElement>(
+            "[data-item-rename-input]"
+          )
+          if (field && root?.activeElement === field)
+            field.setSelectionRange(0, dot)
+          else if (--frames > 0) requestAnimationFrame(pick)
+        }
+        if (dot > 0) requestAnimationFrame(pick)
+        return true
+      },
+      add: (path) => {
+        if (model.getItem(path)) return
+        model.add(path)
+        drawn.current = {
+          ...drawn.current,
+          paths: [...drawn.current.paths, path],
+        }
+      },
     }),
     [model, openNow]
   )
@@ -540,6 +668,30 @@ export function FolderTree({
       onDoubleClick={(event) => {
         const path = rowAt(event.nativeEvent)
         if (path) onOpen(path)
+      }}
+      onDragOver={(event) => {
+        if (!onDrop || !bringsFiles(event.dataTransfer)) return
+        event.preventDefault()
+        const copy = event.altKey || event.ctrlKey
+        event.dataTransfer.dropEffect = copy ? "copy" : "move"
+        setDropping(dropFolderAt(event.nativeEvent))
+      }}
+      onDragLeave={(event) => {
+        const into = event.relatedTarget
+        if (!(into instanceof Node) || !event.currentTarget.contains(into))
+          setDropping(null)
+      }}
+      onDrop={(event) => {
+        setDropping(null)
+        if (!onDrop) return
+        const paths = droppedPaths(event.dataTransfer)
+        if (!paths) return
+        event.preventDefault()
+        onDrop(
+          paths,
+          dropFolderAt(event.nativeEvent),
+          event.altKey || event.ctrlKey
+        )
       }}
       onContextMenu={(event) => {
         const path = rowAt(event.nativeEvent)

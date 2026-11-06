@@ -77,6 +77,7 @@ import {
   minOf,
   runs,
   showsOf,
+  sources,
   startable,
   widthOf,
 } from "../registry"
@@ -254,6 +255,9 @@ function handOn(
   HANDED.add(handed)
   target.dispatchEvent(handed)
 }
+
+/** The modules' sources, as a route names one for the menu to show alone. */
+const menuSources = sources.map(({ source }) => source)
 
 /** The presses the window made to hand a key on, which it leaves alone. */
 const HANDED = new WeakSet<Event>()
@@ -856,7 +860,8 @@ export function Shell({
   const route = useCallback(
     (route: string) => {
       const link = settingsLinkOf(route)
-      if (link === undefined) setMenu(openingOf(route, projectsNow.current))
+      if (link === undefined)
+        setMenu(openingOf(route, projectsNow.current, menuSources))
       else settings(link)
     },
     [settings]

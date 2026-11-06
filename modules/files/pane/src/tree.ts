@@ -111,3 +111,14 @@ export function matchesOf(found: readonly string[]): {
     open: [...folders],
   }
 }
+
+/** A new thing's first name in a folder that holds `entries`: `untitled`,
+ * or `untitled folder`, then `… 2`, `… 3` as they are taken. */
+export function untitled(entries: readonly Entry[], folder: boolean): string {
+  const base = folder ? "untitled folder" : "untitled"
+  const names = new Set(entries.map((entry) => entry.name))
+  if (!names.has(base)) return base
+  let n = 2
+  while (names.has(`${base} ${n}`)) n += 1
+  return `${base} ${n}`
+}

@@ -321,6 +321,9 @@ export type Here = {
   /** The Project's folder, where it has one. */
   folder?: string
   entered: boolean
+  /** The source the menu shows alone, by its id, as quick open shows the
+   * Project's files: it may show rows before any word is typed. */
+  only?: string
 }
 
 export type FindProps = {

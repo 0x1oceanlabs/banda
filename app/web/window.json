@@ -649,7 +649,17 @@
           "code": "Space",
           "mod": true
         }
-      ]
+      ],
+      "args": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "a source's id, to show its rows alone, as files.find"
+          }
+        },
+        "additionalProperties": false
+      }
     },
     {
       "id": "menu.keys",

@@ -20,6 +20,9 @@ dirs = "6"
 flate2 = "1.1.10"
 futures = "0.3"
 getrandom = "0.4.3"
+grep-matcher = "0.1.9"
+grep-regex = "0.1.14"
+grep-searcher = "0.1.17"
 ignore = "0.4.25"
 infer = "0.19"
 mime_guess = "2.0.5"
@@ -44,6 +47,9 @@ tempfile = "3"
 thiserror = "2"
 toml = "1.1"
 toml_edit = "0.25.17"
+# The system's Trash: moved to, listed and put back where the system
+# lets it (ADR 0073, decision 10). Its chrono reads when on Linux.
+trash = "5.3.0"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "signal", "process", "io-util", "io-std"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

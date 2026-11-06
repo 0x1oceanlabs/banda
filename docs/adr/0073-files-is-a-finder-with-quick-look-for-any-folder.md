@@ -126,6 +126,8 @@ stay his to change.
    | `files.watch { dirs }` | stream | Read | What changed in the folders shown |
    | `files.write { path, text, base }` | command | Write | Saves when the file is still at `base` (decision 8) |
    | `files.make`, `files.rename`, `files.move`, `files.copy`, `files.trash`, `files.restore` | command | Write | Decision 10 |
+   | `files.trashed`; `files.delete`, `files.empty`, `files.cancel` | call; command | Read; Write | Decision 10, as amended |
+   | `files.search { dir, query, regex, case, word, limit }` | stream | Read | Decision 11, as amended |
 
    - **Watching** uses `notify` with its debouncer:
      - one watch per folder shown (FSEvents on macOS is recursive and
@@ -413,6 +415,70 @@ stay his to change.
     - Bulk rename, as text with a diff before it applies, comes later (step
       F5).
 
+    *Amended 2026-11-06, with step F5:*
+    - **The operations.** `files.make { dir, name, kind }`, `files.rename
+      { path, name }` and `files.trash { paths }` are commands;
+      `files.move` and `files.copy { paths, dir, clash, answers, job }` are
+      streams with the Write right, heard once, as `git.act` is. Each acts
+      on what is at a path, a link as a link, never through it; each path
+      goes through the guard, and none is in `.git` or Banda's settings,
+      nor holds the settings when it would go.
+    - **A job.** A move within a disk is a rename; across disks it is a
+      copy, then the first is removed. A copy goes a piece at a time and
+      says how far its bytes are, at most ten times a second.
+      `files.cancel { job }` stops it, as letting go of the stream does:
+      what it left half done is removed, and its end says what it did. The
+      window shows a job's progress in its toast once it has run 400 ms,
+      with Stop.
+    - **A clash.** Asked (`clash: ask`), a job does nothing and answers the
+      names taken; the window asks Replace, Keep both or Skip, one after
+      another or "for all", and sends the answers by path. Replace sends
+      what is there to the Trash first. Keep both takes `name 2.ext`, then
+      3, the extension kept (`.tar.gz` whole), a folder's whole name
+      counted. A copy into its own folder is a duplicate and asks nothing;
+      a move there stays.
+    - **Undo.** Each answers the steps that undo it, Files' commands again:
+      rename back, move back (asking, so nothing is written over), the
+      Trash for what was made or copied (as a Finder undoes a duplicate),
+      and putting back from the Trash. The window keeps the last 20, its
+      own; Ctrl+Z (⌘Z) in the tree takes the latest of its Project, and a
+      toast's Undo its own.
+    - **The Trash.** `files.trash` uses the `trash` crate. The system says
+      no id as it trashes, so Files finds each again by where it came from
+      and when, and answers those ids. `files.trashed` lists the Trash,
+      `files.restore { items }` puts back, `files.delete { items }` deletes
+      items of the Trash for good and `files.empty` all of it; an Agent's
+      call sees and acts only on what came from its Project. macOS lets no
+      app list its Trash nor put back (`~/.Trash` needs Full Disk Access,
+      and Finder renames what it holds): there a Trash has no Undo, its
+      toast says Finder puts it back, and the Trash place says Finder keeps
+      it and opens it there.
+    - **The window's clipboard.** Ctrl+C and Ctrl+X keep the rows' whole
+      paths in the window, and put them on the system's clipboard as text,
+      a line each; Ctrl+V copies or moves them into the folder picked, or
+      the picked file's.
+    - **A drag** of rows onto a folder of the tree moves them, as main's
+      drag brings them back or the page's carries them; Alt (⌥) or Ctrl
+      held as they drop copies. Alt is Banda's mod as a drag starts, so it
+      is pressed on the way.
+    - **New file and New folder** make `untitled` and `untitled folder`
+      (then 2, 3) at once, as a Finder does, and the row is named in place;
+      Escape keeps the name. F2 renames in place with the name before its
+      extension picked.
+    - **Bulk rename.** Several rows picked, Rename opens their names, one a
+      line, in Banda's editor in a dialog; Review changes shows old against
+      new in the shared diff view. A name empty, holding a `/`, given twice
+      in a folder or taken there is refused; the renames go where each
+      name is free, a ring through a name aside, what a folder holds before
+      the folder, and they undo as one.
+    - **The keys** are the tree's own, as F1d's are, each with an action
+      by id for `keys.toml`: F2, Ctrl+⌫ (⌘⌫) or Delete, Ctrl+Z, Ctrl+C, X
+      and V, Ctrl+D, Ctrl+N, Ctrl+Shift+N and Ctrl+Shift+F. The key sheet
+      lists them once the tree is a scope (ADR 0071).
+    - **`move` is a keyword** in Rust: the kernel's `methods!` takes a
+      method's name as a raw identifier (`r#move`), and the window calls it
+      `move`.
+
 11. **Finding a file is one engine call.**
     - `files.find` walks with `ignore` (gitignore-aware) and matches with
       `nucleo`, fuzzy, with a file's name above its folder and what the
@@ -424,6 +490,27 @@ stay his to change.
       browser.
     - Searching inside files (`files.search`, ripgrep's `grep` crates,
       streamed) comes later (step F5).
+
+    *Amended 2026-11-06, with step F5:*
+    - **`files.search { dir, query, regex, case, word, limit }`** is a
+      stream (Read). It walks with `ignore`, leaving out what `.gitignore`
+      does and `.git`, and reads each file with `grep-searcher` and
+      `grep-regex`'s matcher, a binary file skipped. Each file's lines come
+      as they are found, at most 100 a file, until the most asked (2 000
+      unless said, 10 000 at most); then the files and lines, and whether
+      it stopped there. A line says its matches as JavaScript counts a
+      string; a long one is cut to about 300 characters around its first
+      match. Letting go of the stream stops it.
+    - **In `files.tree`**, Ctrl+Shift+F turns the tree into the lines
+      found, grouped by file, searched again 150 ms after typing stops,
+      with Match case, Whole words and a regular expression as toggles. ↵
+      or a double click opens `files.file` at the line, lit; Esc gives the
+      tree back.
+    - **Quick open** is Alt+P (the mod with P, which nothing held): the
+      Banda menu with the Project's files alone, what was opened lately
+      first before a word is typed. The menu's `menu.open` takes a
+      `source`, and `banda menu find.<source>` opens it so, with no module
+      named in the window.
 
 12. **Links in replies open `files.file`.**
     - ADR 0063 decision 2 already finds paths, checks that the files exist,
