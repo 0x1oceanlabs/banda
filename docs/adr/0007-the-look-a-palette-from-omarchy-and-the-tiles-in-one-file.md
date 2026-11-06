@@ -39,6 +39,7 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
    - The Person's file always wins, so switching the theme never undoes their gaps or motion.
    - There is no separate `theme.toml` (ADR 0005, decision 11, named one): picking a theme is two lines of `look.toml`, and the colours live in the theme's folder. `keys.toml` stays its own file.
    - Omarchy splits the same way: a theme switches whole, and the Person's Hyprland settings stay theirs.
+   - _Changed on 2026-11-06, by ADR 0080._ The layers become a chain of themes, each extending another, with `look.toml` last.
 
 3. **Where a theme comes from.** `theme` in `look.toml` names it:
    - `omarchy` follows Omarchy's current theme, live. The engine watches `theme.generation` and repaints on a change. This is the default when Omarchy is installed (_decided_).
@@ -74,6 +75,8 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
    - **The outer is never rounder than the inner's container** (_decided_): what holds something is at least as round as what it holds. The tile holds cards, so the tile is the top step, `xl` (14 px at the default 10). `[tile] radius` takes a step (`"lg"`, `"xl"`) or pixels.
    - Components take steps, never pixels of their own. A small one caps its step, and one tight inside another takes the outer radius less the padding, as shadcn's do.
    - `full` is a shape, not a corner: a dot, an avatar or a radio stays round when `radius = 0`.
+
+   - _Changed on 2026-11-06, by ADR 0080._ Corners have five levels (window, tile, card, control, small), nested ones concentric; shadcn's ladder maps onto them.
 
 8. **Under Hyprland, Banda follows Hyprland** (_decided_).
    - When Banda runs under Hyprland, it takes the window settings the Person already chose there: `decoration:rounding` becomes the tile's radius, `general:border_size` the tile's border, and `general:gaps_in` both gaps. The tiles inside Banda then look like the windows around it.
