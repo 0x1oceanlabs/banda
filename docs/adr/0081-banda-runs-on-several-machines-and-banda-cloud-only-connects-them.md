@@ -140,6 +140,30 @@ What stands in the way today:
     `banda --host server …`, as kubectl's contexts. An Agent's `banda`
     goes to its own engine.
 
+14. **Banda Cloud runs on a few plain VMs, with no Kubernetes** (proposed
+    2026-11-06).
+
+    | What | Where | How many at first |
+    |---|---|---|
+    | relays (`iroh-relay`, with the SNI edge if chosen) | Hetzner: cheap, traffic included, Germany, Finland, the US and Singapore | two, Europe and the US (iroh's advice: two regions at least) |
+    | `auth` and `api`, the push gateway | a Hetzner VM; Postgres managed (Neon or PlanetScale), so its backups are not ours to run | one |
+    | backups | Cloudflare R2, which charges nothing to read out | a bucket |
+    | hosts in the cloud | Fly.io Machines: made and removed by API, billed by the second, suspended while the Agents are idle | one per Person who buys one |
+
+    - A relay holds up to 60,000 connections and keeps no state; each host
+      and each open device holds one. Two small VMs carry thousands of
+      Persons; most traffic goes direct, but a browser's always crosses
+      the relay. Growth adds a relay in Singapore, a second in each region,
+      a second `api`.
+    - No AWS or GCP for the relays (they charge for traffic out, which is
+      all a relay does), and no Workers (no long-lived UDP server).
+    - Deployed by OpenTofu (the VMs, DNS) and Kamal or systemd (the
+      services), from `infra/` in this repository, so anyone can run their
+      own Banda Cloud the same way.
+    - n0's public relays serve development only: rate-limited, no SLA.
+    - Hetzner's prices rose in 2026 and some of its plans were not on sale
+      in the autumn; check before buying.
+
 **Plan.** Each step its own PR; `scripts/check.sh` passes after each.
 
 1. The engine as the machine's service (ADR 0062 decision 19, PR #460).

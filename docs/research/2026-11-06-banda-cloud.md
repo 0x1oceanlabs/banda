@@ -97,3 +97,25 @@ Sources: https://better-auth.com/docs/plugins/oauth-provider,
 https://clerk.com/articles/clerk-pricing-explained,
 https://workos.com/blog/clerk-pricing,
 https://skycloak.io/blog/open-source-authentication-comparison-2026/
+
+## Hosting
+
+- **Relays:** a public IP, UDP, much traffic out, always on. Hetzner is the
+  cheapest with traffic included (Germany, Finland, Ashburn, Hillsboro,
+  Singapore). Prices rose in 2026, some cost-optimised plans showed no
+  "Create" button in September and October 2026, and sources disagree on
+  how much traffic US and Singapore plans include: check the official page.
+  https://findstack.com/resources/hetzner-price-increase-2026,
+  https://northflank.com/blog/hetzner-cloud-server-price-increases
+- **iroh-relay:** a binary or the `n0computer/iroh-relay` image, a short
+  TOML, TLS by ACME built in; at least two relays in two regions; up to
+  60,000 concurrent connections each; n0's public relays are rate-limited
+  with no SLA; n0 sells dedicated relays (about $199 a month).
+  https://docs.iroh.computer/deployment/dedicated-infrastructure,
+  https://docs.iroh.computer/iroh-services/relays/self-hosted,
+  https://docs.iroh.computer/relays/rate-limiting
+- **Hosts in the cloud:** Fly.io Machines (API, per-second billing,
+  suspend and resume). Hetzner's API is cheaper but cannot suspend.
+- **Backups:** Cloudflare R2, no egress fees.
+- **No Kubernetes:** a handful of stateless VMs, deployed by OpenTofu and
+  Kamal; Fly is the orchestrator of the per-Person hosts.
