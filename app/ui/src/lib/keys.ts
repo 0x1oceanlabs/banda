@@ -4,6 +4,7 @@
  * they work on any layout.
  */
 
+import type { JsonValue } from "@banda/contract"
 import type { Mod } from "@banda/contract/look"
 
 export type { Mod }
@@ -25,6 +26,8 @@ export type Key = {
   /** With the mod, one key more: the first of Ctrl, Super and Alt the
    * mod does not hold. */
   more?: boolean
+  /** What it gives its action: a line of keys.toml's args (ADR 0071). */
+  args?: { readonly [name: string]: JsonValue }
 }
 
 /** The keys a mod may hold, in the order one more is taken. */

@@ -47,10 +47,32 @@ pub struct KeysSettings {
     /// then a letter, a digit, F1 to F24, Left, Right, Up, Down, Return,
     /// Space, Tab, Escape, Backspace, Delete, Insert, Home, End, PageUp,
     /// PageDown or one of [ ] , . / ; ' - = ` \. An action keeps the
-    /// window's own keys besides.
-    #[schemars(with = "Option<BTreeMap<String, String>>")]
-    pub binds: Option<BTreeMap<Spanned<String>, Spanned<String>>>,
+    /// window's own keys besides. A line may give the action what it
+    /// takes: `{ action = "browser.open", args = { address = "…" } }`.
+    #[schemars(with = "Option<BTreeMap<String, Bound>>")]
+    pub binds: Option<BTreeMap<Spanned<String>, Spanned<Bound>>>,
 }
+
+/// What a line of `[binds]` runs (ADR 0071, decision 3): an action's id,
+/// `"none"`, or an action with what it takes.
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(untagged)]
+pub enum Bound {
+    Id(String),
+    Call(Call),
+}
+
+/// An action with what it takes, as the key sheet lists its args.
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Call {
+    pub action: String,
+    #[serde(default)]
+    pub args: Args,
+}
+
+/// What a line gives its action, by name.
+pub type Args = serde_json::Map<String, serde_json::Value>;
 
 impl KeysSettings {
     /// Banda's own: Alt is the mod, and no key is bound.
@@ -86,6 +108,10 @@ pub struct Bind {
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub action: Option<String>,
+    /// What the line gives its action (ADR 0071, decision 3).
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub args: Option<Args>,
     /// The key as Banda writes it: `Ctrl+Alt+Shift+R`.
     pub text: String,
     /// Its line in the file, for a problem the window finds.
@@ -176,6 +202,38 @@ pub struct Keys {
     #[serde(rename = "modLine", skip_serializing_if = "Option::is_none")]
     pub mod_line: Option<u32>,
     pub binds: Vec<Bind>,
+    /// Each action's keys in force (ADR 0071, decision 4): Banda's with
+    /// the mod, then the Person's lines over them.
+    pub actions: Vec<ActionKeys>,
+}
+
+/// An action's keys in force, by its id.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, TS)]
+#[ts(export, export_to = "look/")]
+pub struct ActionKeys {
+    pub id: String,
+    pub keys: Vec<KeyInForce>,
+}
+
+/// A key as it is pressed, and what it gives its action: the args and
+/// the line of a key the Person bound.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, TS)]
+#[ts(export, export_to = "look/")]
+pub struct KeyInForce {
+    pub code: String,
+    pub alt: bool,
+    pub ctrl: bool,
+    #[serde(rename = "super")]
+    pub sup: bool,
+    pub shift: bool,
+    /// Ctrl, or ⌘ on a Mac, as an App's own key says.
+    pub primary: bool,
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub args: Option<Args>,
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line: Option<u32>,
 }
 
 /// Keys by their `KeyboardEvent.code`, and the names they are written
@@ -292,6 +350,7 @@ fn chord(text: &str) -> Result<Bind, String> {
         ctrl,
         sup,
         action: None,
+        args: None,
         text,
         line: 0,
     })
@@ -307,6 +366,12 @@ fn text_of(held: Mod, shift: bool, name: &str) -> String {
     parts.push(name.to_owned());
     parts.retain(|part| !part.is_empty());
     parts.join("+")
+}
+
+/// A key's name as Banda writes it, by its `KeyboardEvent.code`: `R`,
+/// `Left`, `Return`.
+fn name_of(code: &str) -> String {
+    code_of(code).map_or_else(|| code.to_owned(), |(_, name)| name)
 }
 
 fn is_false(on: &bool) -> bool {
@@ -370,8 +435,7 @@ impl Declared {
             ctrl: self.ctrl || self.primary,
             sup: self.sup,
         };
-        let name = code_of(&self.code).map_or_else(|| self.code.clone(), |(_, name)| name);
-        text_of(held, self.shift, &name)
+        text_of(held, self.shift, &name_of(&self.code))
     }
 }
 
@@ -465,7 +529,10 @@ pub fn read_keys(
             ));
             continue;
         }
-        let id = action.get_ref().trim();
+        let (id, args) = match action.get_ref() {
+            Bound::Id(id) => (id.trim(), None),
+            Bound::Call(call) => (call.action.trim(), Some(call.args.clone())),
+        };
         if id.is_empty() {
             problems.push(wrong(
                 action.span(),
@@ -473,8 +540,13 @@ pub fn read_keys(
             ));
             continue;
         }
+        if id == NONE && args.is_some() {
+            problems.push(wrong(action.span(), "\"none\" takes no args".to_owned()));
+            continue;
+        }
         binds.push(Bind {
             action: (id != NONE).then(|| id.to_owned()),
+            args,
             line: crate::line_at(text, key.span().start),
             ..bind
         });
@@ -486,6 +558,7 @@ pub fn read_keys(
 /// The Person's keys on this machine; `keys.toml` is watched.
 pub fn resolve(
     places: &Places,
+    actions: &[Action],
     problems: &mut Vec<Problem>,
     watched: &mut Vec<PathBuf>,
 ) -> (Keys, Keyed) {
@@ -504,11 +577,180 @@ pub fn resolve(
         Layer::new("file", &mine, mine_file.as_ref()),
     ];
     let keyed = keyed::keyed(&mine.over(defaults), &layers);
-    let keys = Keys {
+    let mut keys = Keys {
         file: file.display().to_string(),
         ..keys
     };
+    keys.actions = in_force(actions, &keys, problems);
     (keys, keyed)
+}
+
+/// The id an action has now, for one it had before, which a line may
+/// still name for one stable release (ADR 0069: Settled is the archive,
+/// and a Space is a Project).
+fn renamed(id: &str) -> &str {
+    match id {
+        "sidebar.settle" => "sidebar.archive",
+        "space.add" => "project.add",
+        _ => id,
+    }
+}
+
+/// Each action's keys in force (ADR 0071, decision 4): Banda's with the
+/// mod, the first to take a key keeping it, and two actions on one named
+/// at the mod's line; then the Person's lines, a key bound leaving the
+/// action that had it. A line is named at its line when it names no
+/// action, gives args its action does not take, or frees no key.
+pub fn in_force(actions: &[Action], keys: &Keys, problems: &mut Vec<Problem>) -> Vec<ActionKeys> {
+    let at = |line, message: String| Problem {
+        line,
+        ..Problem::whole(Path::new(&keys.file), message)
+    };
+    // Each key's text, and the action that has it.
+    let mut taken: BTreeMap<String, usize> = BTreeMap::new();
+    let mut out: Vec<ActionKeys> = Vec::with_capacity(actions.len());
+    for (index, action) in actions.iter().enumerate() {
+        let mut own = Vec::new();
+        for declared in &action.keys {
+            let real = declared.real(keys.held);
+            let text = real.text();
+            if let Some(&first) = taken.get(&text) {
+                let first = &actions[first].title;
+                problems.push(at(
+                    keys.mod_line,
+                    format!(
+                        "{text} is “{first}” and “{}” with this mod; “{first}” keeps it",
+                        action.title
+                    ),
+                ));
+                continue;
+            }
+            taken.insert(text, index);
+            own.push(KeyInForce::from(&real));
+        }
+        out.push(ActionKeys {
+            id: action.id.clone(),
+            keys: own,
+        });
+    }
+    for bind in &keys.binds {
+        let say = |message: String| at(Some(bind.line), format!("{}: {message}", bind.text));
+        let index = match bind.action.as_deref() {
+            None => None,
+            Some(old) => {
+                let id = renamed(old);
+                let Some(index) = actions.iter().position(|action| action.id == id) else {
+                    problems.push(say(format!(
+                        "Banda has no action {id}; the key sheet lists them"
+                    )));
+                    continue;
+                };
+                if id != old {
+                    problems.push(say(format!("{old} is called {id} now")));
+                }
+                if let Some(wrong) = bind
+                    .args
+                    .as_ref()
+                    .and_then(|args| wrong_args(&actions[index], args))
+                {
+                    problems.push(say(wrong));
+                    continue;
+                }
+                Some(index)
+            }
+        };
+        // A key bound, or freed, leaves the action that had it.
+        match taken.remove(&bind.text) {
+            Some(had) => out[had].keys.retain(|key| key.text() != bind.text),
+            None if index.is_none() => {
+                problems.push(say(
+                    "no Banda key is here with this mod, so it frees nothing".to_owned(),
+                ));
+            }
+            None => {}
+        }
+        let Some(index) = index else {
+            continue;
+        };
+        taken.insert(bind.text.clone(), index);
+        out[index].keys.push(KeyInForce {
+            code: bind.code.clone(),
+            alt: bind.alt,
+            ctrl: bind.ctrl,
+            sup: bind.sup,
+            shift: bind.shift,
+            primary: false,
+            args: bind.args.clone(),
+            line: Some(bind.line),
+        });
+    }
+    out
+}
+
+/// What is wrong with `args` for `action`, by its JSON Schema: a name it
+/// does not take, one it must have, or a value of another kind.
+fn wrong_args(action: &Action, given: &Args) -> Option<String> {
+    let schema = action.args.as_ref();
+    let properties = schema.and_then(|schema| schema["properties"].as_object());
+    let Some(properties) = properties else {
+        return (!given.is_empty()).then(|| format!("{} takes no args", action.id));
+    };
+    for (name, value) in given {
+        let Some(property) = properties.get(name) else {
+            let names: Vec<&str> = properties.keys().map(String::as_str).collect();
+            return Some(format!(
+                "{} takes {}, not {name}",
+                action.id,
+                names.join(", ")
+            ));
+        };
+        let kind = property["type"].as_str().unwrap_or("string");
+        let fits = match kind {
+            "number" => value.is_number(),
+            _ => value.is_string(),
+        };
+        if !fits {
+            return Some(format!("{name} is a {kind}"));
+        }
+    }
+    let required = schema
+        .and_then(|schema| schema["required"].as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|name| name.as_str());
+    for name in required {
+        if !given.contains_key(name) {
+            return Some(format!("{} needs {name}", action.id));
+        }
+    }
+    None
+}
+
+impl KeyInForce {
+    /// The key as Banda writes it.
+    pub fn text(&self) -> String {
+        let held = Mod {
+            alt: self.alt,
+            ctrl: self.ctrl || self.primary,
+            sup: self.sup,
+        };
+        text_of(held, self.shift, &name_of(&self.code))
+    }
+}
+
+impl From<&Declared> for KeyInForce {
+    fn from(key: &Declared) -> Self {
+        KeyInForce {
+            code: key.code.clone(),
+            alt: key.alt,
+            ctrl: key.ctrl,
+            sup: key.sup,
+            shift: key.shift,
+            primary: key.primary,
+            args: None,
+            line: None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -655,6 +897,134 @@ mod tests {
             sup: true,
         };
         assert_eq!(all.with_more(), None);
+    }
+
+    /// Two actions with keys, as manifests declare them.
+    fn actions() -> Vec<Action> {
+        let key = |code: &str| Declared {
+            code: code.to_owned(),
+            held: true,
+            ..Declared::default()
+        };
+        let action = |id: &str, title: &str, keys| Action {
+            id: id.to_owned(),
+            title: title.to_owned(),
+            section: "Columns".to_owned(),
+            keys,
+            family: None,
+            unlisted: false,
+            args: None,
+        };
+        let mut open = action("browser.open", "Open in a browser", vec![]);
+        open.args = Some(serde_json::json!({
+            "type": "object",
+            "properties": { "address": { "type": "string", "description": "a page" } },
+            "additionalProperties": false,
+        }));
+        vec![
+            action("column.maximize", "Full width", vec![key("KeyF")]),
+            action("sidebar.archive", "Archive", vec![key("KeyS")]),
+            action("pane.close", "Close", vec![key("KeyW")]),
+            open,
+        ]
+    }
+
+    fn in_force_of(text: &str) -> (Vec<ActionKeys>, Vec<Problem>) {
+        let mut problems = Vec::new();
+        let (_, keys) = read_keys(Path::new("keys.toml"), text, &mut problems).unwrap();
+        let keys = Keys {
+            file: "keys.toml".to_owned(),
+            ..keys
+        };
+        let actions = in_force(&actions(), &keys, &mut problems);
+        (actions, problems)
+    }
+
+    fn texts(actions: &[ActionKeys], id: &str) -> Vec<String> {
+        let action = actions.iter().find(|action| action.id == id).unwrap();
+        action.keys.iter().map(KeyInForce::text).collect()
+    }
+
+    #[test]
+    fn the_keys_in_force_are_banda_s_with_the_mod_then_the_person_s() {
+        let (actions, problems) = in_force_of(
+            "mod = \"Ctrl+Alt\"\n[binds]\n\"Ctrl+Alt+W\" = \"column.maximize\"\n\"Alt+H\" = { action = \"browser.open\", args = { address = \"https://github.com\" } }\n",
+        );
+        assert!(problems.is_empty(), "{problems:?}");
+        // A key bound leaves the action that had it.
+        assert_eq!(
+            texts(&actions, "column.maximize"),
+            ["Ctrl+Alt+F", "Ctrl+Alt+W"]
+        );
+        assert!(texts(&actions, "pane.close").is_empty());
+        let open = actions.iter().find(|a| a.id == "browser.open").unwrap();
+        let address = serde_json::json!({ "address": "https://github.com" });
+        assert_eq!(open.keys[0].args.as_ref(), address.as_object());
+        assert_eq!(open.keys[0].line, Some(4));
+    }
+
+    #[test]
+    fn a_line_is_named_when_it_names_no_action_gives_wrong_args_or_frees_nothing() {
+        let (actions, problems) = in_force_of(
+            "[binds]\n\"Alt+J\" = \"column.nothing\"\n\"Alt+Y\" = \"sidebar.settle\"\n\"Alt+K\" = { action = \"browser.open\", args = { url = \"x\" } }\n\"Ctrl+Alt+F\" = \"none\"\n",
+        );
+        let said: Vec<(Option<u32>, &str)> = problems
+            .iter()
+            .map(|problem| (problem.line, problem.message.as_str()))
+            .collect();
+        assert_eq!(
+            said,
+            [
+                (
+                    Some(2),
+                    "Alt+J: Banda has no action column.nothing; the key sheet lists them"
+                ),
+                (
+                    Some(3),
+                    "Alt+Y: sidebar.settle is called sidebar.archive now"
+                ),
+                (Some(4), "Alt+K: browser.open takes address, not url"),
+                (
+                    Some(5),
+                    "Ctrl+Alt+F: no Banda key is here with this mod, so it frees nothing"
+                ),
+            ]
+        );
+        // An old id still runs its action.
+        assert_eq!(texts(&actions, "sidebar.archive"), ["Alt+S", "Alt+Y"]);
+        // A line named wrong leaves Banda's key where it was.
+        let (actions, _) = in_force_of("[binds]\n\"Alt+F\" = \"column.nothing\"\n");
+        assert_eq!(texts(&actions, "column.maximize"), ["Alt+F"]);
+    }
+
+    #[test]
+    fn two_actions_on_one_key_with_the_mod_are_named_at_its_line() {
+        let mut problems = Vec::new();
+        let mut two = actions();
+        two[2].keys = vec![Declared {
+            code: "KeyF".to_owned(),
+            ctrl: true,
+            alt: true,
+            ..Declared::default()
+        }];
+        let keys = Keys {
+            file: "keys.toml".to_owned(),
+            held: Mod {
+                alt: true,
+                ctrl: true,
+                sup: false,
+            },
+            mod_line: Some(1),
+            ..Keys::default()
+        };
+        let actions = in_force(&two, &keys, &mut problems);
+        assert!(texts(&actions, "pane.close").is_empty());
+        assert_eq!(problems.len(), 1);
+        assert_eq!(problems[0].line, Some(1));
+        assert_eq!(
+            problems[0].message,
+            "Ctrl+Alt+F is “Full width” and “Close” with this mod; “Full width” keeps it"
+        );
     }
 
     #[test]

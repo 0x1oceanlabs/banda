@@ -43,6 +43,8 @@ export type { Display } from "./generated/look/Display"
 export type { Bind } from "./generated/look/Bind"
 export type { Keys } from "./generated/look/Keys"
 export type { Mod } from "./generated/look/Mod"
+export type { ActionKeys } from "./generated/look/ActionKeys"
+export type { KeyInForce } from "./generated/look/KeyInForce"
 export type { Move } from "./generated/look/Move"
 export type { Spring } from "./generated/look/Spring"
 export type { Easing } from "./generated/look/Easing"
@@ -138,6 +140,7 @@ export const DEFAULT_KEYS: Keys = {
   file: "",
   mod: { alt: true, ctrl: false, super: false },
   binds: [],
+  actions: [],
 }
 
 /**

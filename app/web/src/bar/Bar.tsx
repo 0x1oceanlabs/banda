@@ -343,7 +343,7 @@ function useArranging(
       bar.removeEventListener("click", click, { capture: true })
       window.removeEventListener("keydown", key, { capture: true })
     }
-  }, [header, base, drag, write])
+  }, [header, base, drag, write, holdsMod])
   return {
     layout,
     dragging: drag?.id,

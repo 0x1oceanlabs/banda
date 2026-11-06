@@ -3,7 +3,7 @@ import type { Engine } from "@banda/contract"
 import { useModules } from "@banda/ui/hooks/use-status"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import type { PaneState } from "@banda/ui/pane"
-import { actionFor, keysInForce, rebind } from "../actions/actions"
+import { actionFor, keysInForce, withKeys } from "../actions/actions"
 import type { Host } from "../host"
 import { useLookKeys } from "../look"
 import { labelOf } from "../registry"
@@ -95,8 +95,8 @@ export function Popped({
 
   // Of the window's keys, this window takes the two that are its Pane's.
   const keys = useLookKeys()
-  const keyed = useMemo(() => rebind(ACTIONS, keys), [keys])
-  const inForce = useMemo(() => keysInForce(keys, keyed.actions), [keys, keyed])
+  const keyed = useMemo(() => withKeys(ACTIONS, keys.actions), [keys])
+  const inForce = useMemo(() => keysInForce(keys.mod, keyed), [keys, keyed])
   useEffect(() => {
     const own: Record<string, () => void> = {
       "pane.close": close,
@@ -105,7 +105,7 @@ export function Popped({
     const onKey = (event: KeyboardEvent) => {
       const target = event.target instanceof Element ? event.target : null
       if (target?.closest("[data-takes-keys]")) return
-      const run = own[actionFor(keyed.actions, event)?.id ?? ""]
+      const run = own[actionFor(keyed, event)?.id ?? ""]
       if (!run) return
       event.preventDefault()
       event.stopPropagation()

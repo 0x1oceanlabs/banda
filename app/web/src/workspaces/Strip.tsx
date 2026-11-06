@@ -219,7 +219,7 @@ export function Strip({
       strip.removeEventListener("wheel", onWheel)
       clearTimeout(ending)
     }
-  }, [])
+  }, [holdsMod])
 
   useEffect(() => {
     const strip = scroller.current
@@ -281,7 +281,7 @@ export function Strip({
       strip.removeEventListener("pointerup", onUp)
       strip.removeEventListener("lostpointercapture", onUp)
     }
-  }, [])
+  }, [holdsMod])
 
   // A Group's handle shows while the pointer is over any of its columns.
   const hovered = useRef<string | undefined>(undefined)

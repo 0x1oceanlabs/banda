@@ -171,7 +171,7 @@ export function Workspaces({
     }
     element.addEventListener("wheel", onWheel, { passive: false })
     return () => element.removeEventListener("wheel", onWheel)
-  }, [])
+  }, [holdsMod])
   return (
     // Clipped, not hidden: the stack moves by transforms only, and nothing
     // scrolled into view in a Pane may slide the next workspace in. Its own

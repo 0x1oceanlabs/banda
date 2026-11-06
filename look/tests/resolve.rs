@@ -95,7 +95,7 @@ impl Machine {
     }
 
     fn look(&self) -> Look {
-        resolve(&self.places, &|| None, &[]).look
+        resolve(&self.places, &|| None, &[], &[]).look
     }
 
     fn under_hyprland(&self) -> Look {
@@ -106,7 +106,7 @@ impl Machine {
             dim: Some(0.4),
             animations: true,
         };
-        resolve(&self.places, &|| Some(windows), &[]).look
+        resolve(&self.places, &|| Some(windows), &[], &[]).look
     }
 
     /// Omarchy's current background, beside its current theme, as a link
@@ -578,7 +578,11 @@ fn following_prints_each_change_and_keeps_the_last_good_look() {
     machine.look_toml("[gaps]\ninner = 6\n");
     let (seen, looks) = mpsc::channel();
     let places = machine.places.clone();
-    std::thread::spawn(move || follow(&places, None, &[], |look| seen.send(look.clone()).is_ok()));
+    std::thread::spawn(move || {
+        follow(&places, None, &[], &[], |look| {
+            seen.send(look.clone()).is_ok()
+        })
+    });
     let next = || looks.recv_timeout(Duration::from_secs(5)).expect("a look");
 
     assert_eq!(next().vars["--gap-inner"], "6px");
@@ -794,7 +798,7 @@ fn a_linux_desktop_gives_its_wallpaper() {
     gnome(&[("picture-uri", &sea_uri), ("picture-uri-dark", &sea_uri)]);
     assert_eq!(dark(&machine), None);
     // Its setting changes, and dconf's file with it: the look asks again.
-    let resolved = resolve(&machine.places, &|| None, &[]);
+    let resolved = resolve(&machine.places, &|| None, &[], &[]);
     assert!(resolved.followed.contains(&config_home.join("dconf/user")));
 
     // A slideshow gives its first still picture.

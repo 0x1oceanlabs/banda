@@ -30,7 +30,7 @@ import {
 } from "@banda/ui/pane"
 import { DEFAULT_KEYS, type Mod } from "@banda/contract/look"
 import type { Action, Args, Thing, WindowApi } from "@banda/ui/module"
-import { actionFor, keysInForce, rebind } from "../actions/actions"
+import { actionFor, keysInForce, pressFor, withKeys } from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { mapOf } from "../bar/Map"
 import { tomlOf } from "@banda/contract/settings"
@@ -763,13 +763,13 @@ export function Shell({
   const lookKeys = useLookKeys()
   const said = JSON.stringify([lookKeys.mod, lookKeys.binds])
   const [shipped, setShipped] = useState<string>()
+  // After the reset chord, Banda's own: Alt, and no line of the Person's.
   const inForce = shipped === said ? DEFAULT_KEYS : lookKeys
-  const keyed = useMemo(() => rebind(ACTIONS, inForce), [inForce])
+  const { mod } = inForce
+  // The keys in force, as the look makes them (ADR 0071, decision 4).
+  const keyed = useMemo(() => withKeys(ACTIONS, inForce.actions), [inForce])
   // The keys in force, for what names them (ADR 0068, decision 4).
-  const keys = useMemo(
-    () => keysInForce(inForce, keyed.actions),
-    [inForce, keyed]
-  )
+  const keys = useMemo(() => keysInForce(mod, keyed), [mod, keyed])
   const saidNow = useRef(said)
   useEffect(() => {
     saidNow.current = said
@@ -967,7 +967,6 @@ export function Shell({
   // its keys, as the Banda menu its New Thread key, but for the menu's own.
   useEffect(() => {
     // One key more and a key Banda takes hand that key to a program.
-    const { mod } = inForce
     const handing = withMore(mod)
     const onKey = (event: KeyboardEvent) => {
       // A press the window handed on is the program's.
@@ -975,8 +974,9 @@ export function Shell({
       const target = event.target instanceof Element ? event.target : null
       // A field that takes a key to bind takes every key.
       if (target?.closest("[data-takes-keys]")) return
-      const action = actionFor(keyed.actions, event)
-      if (!action) return handOn(event, target, keyed.actions, mod, handing)
+      const pressed = pressFor(keyed, event)
+      if (!pressed) return handOn(event, target, keyed, mod, handing)
+      const { action } = pressed
       // A dialog that takes the window's keys, as the overview, has only
       // the plain ones of its own.
       const inDialog =
@@ -989,13 +989,13 @@ export function Shell({
       // at an edge.
       const held = event.repeat ? action.whenHeld : undefined
       const running = held
-        ? (keyed.actions.find((one) => one.id === held) ?? action)
+        ? (keyed.find((one) => one.id === held) ?? action)
         : action
-      running.run(parts)
+      running.run(parts, pressed.args)
     }
     window.addEventListener("keydown", onKey, { capture: true })
     return () => window.removeEventListener("keydown", onKey, { capture: true })
-  }, [parts, keyed, inForce])
+  }, [parts, keyed, mod])
   // A row of the sidebar or the menu opens its Pane, where a workspace
   // shows it or in a new column; a Project gets a new Thread.
   const openPane = useCallback(
@@ -1216,7 +1216,7 @@ export function Shell({
           current={workspaces.current}
           sidebar={narrow ? over : sidebar}
           onSidebar={toggleSidebar}
-          problems={[...keyed.problems, ...bar.problems]}
+          problems={bar.problems}
           widgets={bar.parts}
           listed={bar.listed}
           onArrange={arrangeBar}
@@ -1340,7 +1340,7 @@ export function Shell({
               lists={lists}
               asleep={snoozes.asleep}
               projects={projects.filter((project) => !project.scratch)}
-              actions={keyed.actions}
+              actions={keyed}
               binds={inForce.binds}
             />
             {drawer && dropped && (

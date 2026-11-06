@@ -6,8 +6,10 @@
 //! an editor completes and checks the file with. A new key appears in all
 //! of them, with no list kept by hand.
 
+use banda_look::keys::Action;
 use banda_look::theme::Places;
 use banda_look::{Problem, SettingsFile};
+use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
 mod write;
@@ -60,6 +62,51 @@ pub fn also() -> Vec<SettingsFile> {
     modules_files().copied().collect()
 }
 
+/// Each module's window part, as app/web's tests write it, by the
+/// module's id, in the window's order; the window's own last (ADR 0071,
+/// decision 2). The engine's `banda modules` and the look's keys in force
+/// read the same files.
+const WINDOWS: &[(&str, &str)] = &[
+    ("agents", include_str!("../../modules/agents/window.json")),
+    (
+        "terminal",
+        include_str!("../../modules/terminal/window.json"),
+    ),
+    ("browser", include_str!("../../modules/browser/window.json")),
+    ("git", include_str!("../../modules/git/window.json")),
+    (
+        "notifications",
+        include_str!("../../modules/notifications/window.json"),
+    ),
+    ("window", include_str!("../../app/web/window.json")),
+];
+
+/// The window part of the module `id`, as its window.json has it; none
+/// when the window draws it itself.
+pub fn window(id: &str) -> Option<&'static str> {
+    WINDOWS
+        .iter()
+        .find(|(each, _)| *each == id)
+        .map(|(_, json)| *json)
+}
+
+/// Every action there is (ADR 0071, decision 2): the modules', in the
+/// window's order, then the window's own.
+pub fn actions() -> Vec<Action> {
+    #[derive(Deserialize)]
+    struct Manifest {
+        actions: Vec<Action>,
+    }
+    WINDOWS
+        .iter()
+        .flat_map(|(id, json)| {
+            let manifest: Manifest = serde_json::from_str(json)
+                .unwrap_or_else(|error| panic!("{id}'s window.json: {error}"));
+            manifest.actions
+        })
+        .collect()
+}
+
 /// Checks `paths`, or with none every file Banda reads, [`files`]. Says
 /// nothing when all is well.
 pub fn check(places: &Places, paths: &[PathBuf]) -> Vec<Problem> {
@@ -69,7 +116,7 @@ pub fn check(places: &Places, paths: &[PathBuf]) -> Vec<Problem> {
             fontconfig: None,
             ..places.clone()
         };
-        return banda_look::resolve(&places, &|| None, &also())
+        return banda_look::resolve(&places, &|| None, &also(), &actions())
             .look
             .problems;
     }
@@ -164,7 +211,7 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let places = Places::at(folder.path());
         std::fs::write(folder.path().join("agents.toml"), "enter = \"queue\"\n").unwrap();
-        let resolved = banda_look::resolve(&places, &|| None, &also());
+        let resolved = banda_look::resolve(&places, &|| None, &also(), &actions());
         let look = resolved.look;
         assert_eq!(
             look.files["agents.toml"],
@@ -187,7 +234,7 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let places = Places::at(folder.path());
         let path = folder.path().join("harnesses.toml");
-        let resolved = banda_look::resolve(&places, &|| None, &also());
+        let resolved = banda_look::resolve(&places, &|| None, &also(), &actions());
         assert!(resolved.look.problems.is_empty());
         assert!(
             resolved.watched.contains(&path),
@@ -199,7 +246,7 @@ mod tests {
             "[[harness]]\nid = \"claude\"\n\n[[harness]]\nid = \"x\"\n",
         )
         .unwrap();
-        let problems = banda_look::resolve(&places, &|| None, &also())
+        let problems = banda_look::resolve(&places, &|| None, &also(), &actions())
             .look
             .problems;
         assert_eq!(problems.len(), 1, "{problems:?}");
@@ -219,6 +266,64 @@ mod tests {
             files.iter().any(|f| f.ends_with("harnesses.toml")),
             "{files:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod keys_in_force {
+    use super::*;
+    use banda_look::keys::{Keys, Mod, in_force};
+
+    /// Banda's keys with `held` the mod, by action id, as Banda writes
+    /// them; and what was named.
+    fn keys_with(held: Mod) -> (Vec<(String, Vec<String>)>, Vec<Problem>) {
+        let mut problems = Vec::new();
+        let keys = Keys {
+            held,
+            ..Keys::default()
+        };
+        let force = in_force(&actions(), &keys, &mut problems)
+            .into_iter()
+            .map(|action| {
+                (
+                    action.id,
+                    action.keys.iter().map(|key| key.text()).collect(),
+                )
+            })
+            .collect();
+        (force, problems)
+    }
+
+    fn mods(alt: bool, ctrl: bool, sup: bool) -> Mod {
+        Mod { alt, ctrl, sup }
+    }
+
+    #[test]
+    fn banda_s_keys_move_with_every_mod_and_none_clash() {
+        for held in [
+            mods(true, false, false),
+            mods(true, true, false),
+            mods(true, false, true),
+            mods(false, false, true),
+            mods(false, true, true),
+        ] {
+            let (_, problems) = keys_with(held);
+            assert!(problems.is_empty(), "{held:?}: {problems:?}");
+        }
+        let (force, _) = keys_with(mods(true, true, false));
+        let keys_of = |id: &str| {
+            force
+                .iter()
+                .find(|(each, _)| each == id)
+                .map(|(_, keys)| keys.clone())
+                .unwrap_or_default()
+        };
+        assert_eq!(keys_of("column.next-width"), ["Ctrl+Alt+R"]);
+        assert_eq!(keys_of("pane.send-2"), ["Ctrl+Alt+Shift+2"]);
+        assert_eq!(keys_of("column.wider"), ["Ctrl+Alt+Super+Right"]);
+        assert_eq!(keys_of("terminal.new"), ["Ctrl+Alt+Super+Return"]);
+        // The reset is no mod's.
+        assert_eq!(keys_of("keys.reset"), ["Ctrl+Alt+Shift+K"]);
     }
 }
 
@@ -292,7 +397,8 @@ mod every_key {
     fn every_key_of_a_schema_has_a_value_and_where_it_comes_from() {
         let folder = tempfile::tempdir().unwrap();
         let also = also();
-        let look = banda_look::resolve(&Places::at(folder.path()), &|| None, &also).look;
+        let look =
+            banda_look::resolve(&Places::at(folder.path()), &|| None, &also, &actions()).look;
         let mut named = Vec::new();
         // The look's files and the modules' it resolves; one it only
         // checks, as the Harness list, has no keys in it.
