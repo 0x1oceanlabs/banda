@@ -1,8 +1,10 @@
 import type { Engine } from "@banda/contract"
 import { Spinner } from "@banda/ui/components/spinner"
 import { useProjects } from "@banda/ui/hooks/use-projects"
+import { Previewers } from "@banda/ui/lib/previewers"
 import { useMachine, useModules, useStatus } from "@banda/ui/hooks/use-status"
 import { shownProjects } from "@banda/ui/lib/projects"
+import { previewers } from "./registry"
 import { Shell } from "./shell/Shell"
 import { AskToShare } from "./sharing/AskToShare"
 
@@ -39,8 +41,9 @@ export function App({ engine }: { engine: Engine }) {
   // one whose folder is missing opens nothing.
   const home = projects.find((project) => !project.missing && !project.scratch)
   if (!machine) return <Spinner />
+  // Every Pane draws a file with the modules' previewers (ADR 0073).
   return (
-    <>
+    <Previewers value={previewers}>
       <Shell
         engine={engine}
         status={status}
@@ -50,6 +53,6 @@ export function App({ engine }: { engine: Engine }) {
         onCreated={put}
       />
       {projects.length > 0 && <AskToShare />}
-    </>
+    </Previewers>
   )
 }

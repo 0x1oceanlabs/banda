@@ -11,9 +11,10 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@banda/ui/components/empty"
+import { Spinner } from "@banda/ui/components/spinner"
 import { nameAndFolder } from "@banda/ui/lib/paths"
 import { FileIcon, FileXIcon, FolderIcon } from "lucide-react"
-import { kindWords, sizeWords } from "./look"
+import { kindWords, sizeWords } from "./words"
 
 /** When it last changed, as a clock and a calendar read it. */
 const WHEN = new Intl.DateTimeFormat(undefined, {
@@ -21,22 +22,38 @@ const WHEN = new Intl.DateTimeFormat(undefined, {
   timeStyle: "short",
 })
 
-export function Facts({ stat, note }: { stat: Stat; note: string }) {
-  const facts: [string, string | undefined][] = [
-    ["Kind", kindWords(stat)],
+/** What the facts are of: a file as `files.stat` says it, or as a
+ * previewer is given it. */
+type Of = Pick<Stat, "path"> & {
+  kind?: Stat["kind"]
+  mime?: string | null
+  size?: number | null
+  modified?: number | null
+}
+
+export function Facts({
+  stat,
+  note,
+  children,
+}: {
+  stat: Of
+  note: string
+  /** What it offers after them, as "Open in its app". */
+  children?: ReactNode
+}) {
+  const { size, modified } = stat
+  const facts: [string, string | null | undefined][] = [
+    ["Kind", kindWords({ ...stat, kind: stat.kind ?? "file" })],
     ["Type", stat.mime],
-    ["Size", stat.size === undefined ? undefined : sizeWords(stat.size)],
-    [
-      "Modified",
-      stat.modified === undefined ? undefined : WHEN.format(stat.modified),
-    ],
+    ["Size", size == null ? null : sizeWords(size)],
+    ["Modified", modified == null ? null : WHEN.format(modified)],
   ]
   const Icon = stat.kind === "folder" ? FolderIcon : FileIcon
   return (
     <Card icon={<Icon />} title={nameAndFolder(stat.path).name} note={note}>
       <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-left text-xs">
         {facts.map(([term, value]) =>
-          value === undefined ? null : (
+          value == null ? null : (
             <div key={term} className="contents">
               <dt className="text-muted-foreground">{term}</dt>
               <dd className="truncate">{value}</dd>
@@ -44,6 +61,7 @@ export function Facts({ stat, note }: { stat: Stat; note: string }) {
           )
         )}
       </dl>
+      {children}
     </Card>
   )
 }
@@ -85,5 +103,14 @@ export function Card({
         )}
       </EmptyHeader>
     </Empty>
+  )
+}
+
+/** What `files.file` shows while what it draws is read. */
+export function Loading() {
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center">
+      <Spinner className="text-muted-foreground" />
+    </div>
   )
 }

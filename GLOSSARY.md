@@ -266,6 +266,20 @@ knows it; the arrangement stays as it was.
 **Overview**:
 Every workspace zoomed out at once, to pick a Pane or a workspace.
 
+**Quick Look**:
+A file shown in a tile that floats over the desk, as Space shows the row
+picked in Files: the tiling stays, the tree keeps the keys and its arrows
+move the tile, ↵ opens the file as a Pane (ADR 0073, decision 7). One per
+window.
+_Avoid_: preview Pane, peek (that is its code's word).
+
+**Previewer**:
+What draws a kind of file wherever a file is shown, a module's: code, a
+PDF, a video. The one that matches a file best draws it, unless the
+Person picked another for its extension with "Open with…" (ADR 0073,
+decision 6).
+_Avoid_: viewer, renderer.
+
 **Drawer**:
 A quick Thread that drops from the top over the workspace (`` Alt+` ``)
 and is lifted again as it was. It is in no workspace until its pin makes

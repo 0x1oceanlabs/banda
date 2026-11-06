@@ -16,12 +16,15 @@ const PANE = [
   /^@banda\/ui\//,
   /^react$/,
   /^lucide-react$/,
+  // PDF.js draws a PDF, loaded only as one is shown (ADR 0073, decision
+  // 6), as Ghostty draws a terminal.
+  /^pdfjs-dist(\/|$)/,
   /^\.\.?\//,
 ]
 /** A test may also read files and use its runner. */
 const TEST = [...PANE, /^node:/, /^vitest$/]
 
-test("the files Panes import only the API, app/ui and React", () => {
+test("the files Panes import only the API, app/ui, React and PDF.js", () => {
   const folder = import.meta.dirname
   // This file names imports as examples; it is not a Pane.
   const panes = sources(folder).filter((file) => file !== import.meta.filename)

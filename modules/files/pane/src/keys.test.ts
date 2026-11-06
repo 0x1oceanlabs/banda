@@ -18,10 +18,12 @@ test("the Pane's keys are its own, with Ctrl, never the mod", () => {
     "hidden"
   )
   expect(treeKey(press("Slash"))).toBe("filter")
-  // The arrows alone are the tree's, Space is Quick Look's, and the mod's
-  // keys are Banda's.
+  // Space is Quick Look's (ADR 0073, decision 7).
+  expect(treeKey(press("Space"))).toBe("peek")
+  // The arrows alone are the tree's, and the mod's keys are Banda's: Alt
+  // and Space is the Banda menu's.
   expect(treeKey(press("ArrowUp"))).toBeUndefined()
-  expect(treeKey(press("Space"))).toBeUndefined()
+  expect(treeKey(press("Space", { altKey: true }))).toBeUndefined()
   expect(treeKey(press("ArrowUp", { altKey: true }))).toBeUndefined()
   expect(treeKey(press("KeyL", { altKey: true }))).toBeUndefined()
 })

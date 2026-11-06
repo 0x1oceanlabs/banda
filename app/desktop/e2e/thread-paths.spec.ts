@@ -71,17 +71,27 @@ test("a reply's paths link to their files, which a click opens and the menu acts
   await reply.locator("a[data-file][data-kind=text]").click()
   await expect(page.getByRole("region", { name: "app.js" })).toBeVisible()
 
-  // Its menu: open, show, copy either path, name it in the message.
+  // Its menu: open, Quick Look, show, copy either path, name it in the
+  // message.
   const menu = page.getByRole("menu", { name: "Thread" })
   await chip.click({ button: "right" })
   await expect(menu.getByRole("menuitem")).toHaveText([
     "Open in Banda",
+    "Quick Look",
     /^Open in its app/,
     "Show in folder",
     "Copy full path",
     "Copy relative path",
     "Add to message",
   ])
+  // Quick Look shows it over the desk, and Esc closes it (ADR 0073,
+  // decision 12).
+  await menu.getByRole("menuitem", { name: "Quick Look" }).click()
+  const peek = page.locator("[data-peek]")
+  await expect(peek).toHaveAttribute("aria-label", "Quick Look: notes.md")
+  await page.keyboard.press("Escape")
+  await expect(peek).toBeHidden()
+  await chip.click({ button: "right" })
   await menu.getByRole("menuitem", { name: "Copy relative path" }).click()
   await expect.poll(clipboard).toBe("docs/notes.md:3")
   await expect(menu).toBeHidden()

@@ -17,6 +17,17 @@ import type { Notify } from "@banda/contract/look"
 import type { Lists, PaneKind, PaneState, Watch } from "./pane"
 import type { SoundSettings } from "./sound/settings"
 
+export {
+  type Bytes,
+  definePreviewer,
+  type Magic,
+  type Match,
+  type PreviewFile,
+  type Previewer,
+  type PreviewProps,
+} from "./previewer"
+import type { Previewer } from "./previewer"
+
 /**
  * Where the Person's eyes are, for a thing that calls (ADR 0011): on its
  * Pane, with the window in front; on the window, its Pane on screen or
@@ -121,6 +132,14 @@ export type WindowApi = {
    * toast says so.
    */
   attach: (chips: Chip | readonly Chip[]) => void
+  /**
+   * Shows `pane` of `project` in a tile that floats over the desk and
+   * leaves the tiling as it is (ADR 0073, decision 7): Quick Look, one per
+   * window. A Pane of the same kind there already takes these args and is
+   * not drawn again; the Pane is told it peeks (`PaneProps.peek`). Its tile
+   * opens it in the workspace, and Esc closes it; `null` closes it too.
+   */
+  peek: (pane: PaneState | null, project?: ProjectId) => void
 }
 
 /** What `WindowApi.beside` finds: the thing's Project, and the Panes of
@@ -326,6 +345,9 @@ export type Module = {
   bar: readonly Widget[]
   /** Its rows in a Thread's details card (ADR 0034, decision 4). */
   threadDetails: readonly Details[]
+  /** How it draws kinds of file, wherever a file is shown (ADR 0073,
+   * decision 6). */
+  previewers: readonly Previewer[]
   /** How the window renames, suggests a title for and marks unread a
    * thing it lists; none where it lists nothing so. */
   listed?: Listing
@@ -348,6 +370,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
   sources?: readonly Source[]
   bar?: readonly Widget[]
   threadDetails?: readonly Details[]
+  previewers?: readonly Previewer[]
   listed?: Listing
   start?: (window: WindowApi) => () => void
 }): Module {
@@ -362,6 +385,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
     sources: module.sources ?? [],
     bar: module.bar ?? [],
     threadDetails: module.threadDetails ?? [],
+    previewers: module.previewers ?? [],
     listed: module.listed,
     start: module.start,
   }

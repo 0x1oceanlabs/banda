@@ -4,7 +4,7 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "description": "The files module's Panes: a file, drawn as code, markdown or an image, opened at a line.",
+  "description": "The files module's Panes: a folder as a tree, and a file drawn by the previewer that claims it: code, markdown, an image, a PDF, video and sound, a page.",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -16,6 +16,7 @@
     "@banda/contract": "workspace:*",
     "@banda/ui": "workspace:*",
     "lucide-react": "^1.65.0",
+    "pdfjs-dist": "6.4.299",
     "react": "^19.3.1"
   },
   "devDependencies": {

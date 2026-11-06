@@ -78,6 +78,7 @@ function PaneHeader({
   title,
   icon: Icon,
   onClose,
+  closeTitle,
   className,
   children,
 }: {
@@ -86,6 +87,9 @@ function PaneHeader({
   /** The Pane's kind's icon, drawn first. */
   icon?: LucideIcon | undefined
   onClose: () => void
+  /** The close button's tooltip, where another key closes it than a
+   * Pane's. */
+  closeTitle?: string
   className?: string
   children: ReactNode
 }) {
@@ -132,7 +136,7 @@ function PaneHeader({
           variant="ghost"
           size="icon-xs"
           aria-label={`Close ${title}`}
-          title={keyFor("pane.close", "Close")}
+          title={closeTitle ?? keyFor("pane.close", "Close")}
           className="shrink-0"
           onClick={onClose}
         >

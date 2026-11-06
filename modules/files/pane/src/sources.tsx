@@ -2,8 +2,9 @@
  * What the Banda menu finds of the files module (ADR 0022, decision 4;
  * ADR 0073, decision 11): the focused Project's files that fit the words,
  * as `files.find` matches them. Enter opens one in `files.file`, at the
- * line typed after them, as `main.rs:42`; Tab also offers to show it in
- * Files, in its folder, and to add it to a Thread's message.
+ * line typed after them, as `main.rs:42`; Tab also offers Quick Look over
+ * the desk, to show it in Files, in its folder, and to add it to a
+ * Thread's message.
  */
 import { useEffect, useLayoutEffect, useMemo, useState } from "react"
 import { copyText } from "@banda/ui/lib/clipboard"
@@ -12,7 +13,7 @@ import type { Key } from "@banda/ui/lib/keys"
 import { nameAndFolder } from "@banda/ui/lib/paths"
 import type { FindProps, MenuRow, Source } from "@banda/ui/module"
 import { FileIcon } from "lucide-react"
-import { openFile } from "./FilePane"
+import { openFile, peekFile } from "./FilePane"
 import { openTree } from "./TreePane"
 
 const OPEN: Key = { code: "Enter" }
@@ -72,6 +73,10 @@ function FindFiles({ words: typed, here, found }: FindProps) {
           run: open,
           acts: [
             { title: "Open", key: OPEN, run: open },
+            {
+              title: "Quick Look",
+              run: (window) => peekFile(window, full, project),
+            },
             { title: "Show in Files", run: show },
             {
               title: "Add to chat",

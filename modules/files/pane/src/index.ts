@@ -1,13 +1,21 @@
 /** The files module's window part (ADR 0073): a folder as a tree in
- * `files.tree`, a file in `files.file`, the Banda menu's files, and the
- * actions that open them. */
+ * `files.tree`, a file in `files.file` drawn by the previewer that claims
+ * it, Quick Look over the desk, the Banda menu's files, and the actions
+ * that open them. */
 import type { ProjectId } from "@banda/contract"
 import { FILES_FILE } from "@banda/contract/files"
 import { tomlOf } from "@banda/contract/settings"
 import { fileNow } from "@banda/ui/lib/look"
-import { type Action, defineModule, type WindowApi } from "@banda/ui/module"
-import { filePane, openFile } from "./FilePane"
+import {
+  type Action,
+  defineModule,
+  takes,
+  type WindowApi,
+} from "@banda/ui/module"
+import { filePane, openFile, peekFile } from "./FilePane"
 import type { Does } from "./keys"
+import { peeked } from "./peek"
+import { PREVIEWERS } from "./previewers"
 import { filesSource } from "./sources"
 import { askTree, openTree, treePane } from "./TreePane"
 
@@ -36,6 +44,7 @@ export const files = defineModule({
   id: "files",
   engine: true,
   panes: [treePane, filePane],
+  previewers: PREVIEWERS,
   actions: [
     {
       // The focused Project's folder as a tree; the Files Pane shown
@@ -97,6 +106,54 @@ export const files = defineModule({
         void window.writeSetting("files.toml", "pinned", tomlOf(next))
       },
     },
+    {
+      // Quick Look (ADR 0073, decision 7): a file by its path, as a
+      // reply's path menu asks, over the desk; with none, the focused
+      // tree's pick, as Space does there, or Quick Look closes.
+      id: "files.peek",
+      title: "Quick Look",
+      section: "Files",
+      unlisted: true,
+      args: takes({
+        file: "the file's whole path, or one from the Project's folder",
+        project: "the Project it is in",
+      }),
+      run: (window, args = {}) => {
+        const { file, project } = args
+        if (typeof file === "string")
+          peekFile(
+            window,
+            file,
+            typeof project === "string" ? (project as ProjectId) : undefined
+          )
+        else if (!askTree("peek")) peeked()?.()
+      },
+    },
+    {
+      // "Open with…": the previewer files of an extension show in, kept
+      // in files.toml (ADR 0073, decisions 6 and 13).
+      id: "files.previewer",
+      title: "Show files of an extension with a previewer",
+      section: "Files",
+      unlisted: true,
+      args: takes(
+        {
+          extension: "the extension, as md",
+          previewer: "the previewer's id, as files.code",
+        },
+        ["extension", "previewer"]
+      ),
+      run: (window, args = {}) => {
+        const { extension, previewer } = args
+        if (typeof extension !== "string" || typeof previewer !== "string")
+          return
+        void window.writeSetting(
+          "files.toml",
+          `previewers.${tomlKey(extension.toLowerCase())}`,
+          tomlOf(previewer)
+        )
+      },
+    },
     paneAction("up", "files.up", "Go to the folder above"),
     paneAction("path", "files.path", "Type a path"),
     paneAction("hidden", "files.hidden", "Show hidden files, or hide them"),
@@ -104,3 +161,10 @@ export const files = defineModule({
   ],
   sources: [filesSource],
 })
+
+/** An extension as a key of TOML: bare when it can be. */
+function tomlKey(extension: string): string {
+  return /^[A-Za-z0-9_-]+$/.test(extension)
+    ? extension
+    : JSON.stringify(extension)
+}

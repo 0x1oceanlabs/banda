@@ -561,6 +561,9 @@ importers:
       lucide-react:
         specifier: ^1.65.0
         version: 1.65.0(@types/react@19.3.0)(react@19.3.1)
+      pdfjs-dist:
+        specifier: 6.4.299
+        version: 6.4.299
       react:
         specifier: ^19.3.1
         version: 19.3.1
@@ -4393,6 +4396,10 @@ packages:
     resolution: {integrity: sha512-J0ajxARhZfpUEebxYs1vhMGMuLSXtBe1e+fFPDrf2uA2hgo+UshKfNUWOz92HJNz6/NFEXseQPddnHkTreWRqg==}
     hasBin: true
 
+  pdfjs-dist@6.4.299:
+    resolution: {integrity: sha512-AVl138zALtfaAPvADulE0PZThbYzCBS79nL4pOSL/6Sm/4AH5A21BD9VHt97OlCuzJuCpmeZtAtkinisF4Vb1g==}
+    engines: {node: '>=22.13.0 || >=24'}
+
   pe-library@0.4.1:
     resolution: {integrity: sha512-eRWB5LBz7PpDu4PUlwT0PhnQfTQJlDDdPa35urV4Osrm0t0AqQFGn+UIkU3klZvwJ8KPO3VbBFsXquA6p6kqZw==}
     engines: {node: '>=12', npm: '>=6'}
@@ -5477,6 +5484,7 @@ packages:
 
 ignoredOptionalDependencies:
   - '@anthropic-ai/claude-agent-sdk-*'
+  - '@napi-rs/canvas'
   - '@openai/codex-*'
 
 snapshots:
@@ -9476,6 +9484,8 @@ snapshots:
   pbf@4.0.2:
     dependencies:
       resolve-protobuf-schema: 2.1.0
+
+  pdfjs-dist@6.4.299: {}
 
   pe-library@0.4.1: {}
 

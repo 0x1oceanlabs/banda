@@ -1,8 +1,8 @@
 /**
- * The kinds of Pane this window knows and the Watches on what calls for
- * the Person, built from the modules (ADR 0022): theirs, and the window's
- * own, the launcher. A Pane or a Watch runs only while the engine runs
- * its module.
+ * The kinds of Pane this window knows, the Watches on what calls for the
+ * Person and the previewers that draw files, built from the modules (ADR
+ * 0022): theirs, and the window's own, the launcher. A Pane or a Watch
+ * runs only while the engine runs its module.
  */
 import type { Engine, JsonValue } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
@@ -14,6 +14,7 @@ import {
   defineModule,
   type Listing,
   type Module,
+  type Previewer,
   type Source,
   type Widget,
 } from "@banda/ui/module"
@@ -72,6 +73,12 @@ export const watches: readonly { watch: Watch; module: Module }[] = all.flatMap(
 /** Where the Banda menu finds the modules' rows, each with its module. */
 export const sources: readonly { source: Source; module: Module }[] =
   all.flatMap((module) => module.sources.map((source) => ({ source, module })))
+
+/** How the modules draw kinds of file (ADR 0073, decision 6), in their
+ * order: a Pane that shows a file picks among them. */
+export const previewers: readonly Previewer[] = all.flatMap(
+  (module) => module.previewers
+)
 
 /** What the modules show on the bar, each with its module, by its id. */
 export const widgets: ReadonlyMap<string, { widget: Widget; module: Module }> =

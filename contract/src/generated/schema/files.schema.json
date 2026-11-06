@@ -22,6 +22,13 @@
     "editor": {
       "description": "The editor a file opens in, by its id, as `zed` or `vscode`: Files'\n\"Open in\", and a path in a reply with Ctrl or ⌘. Empty is the first\none found on this machine.",
       "type": "string"
+    },
+    "previewers": {
+      "description": "The previewer a file of an extension shows in, by its id, as\n`md = \"files.code\"`: what \"Open with…\" in a file's Pane picks. One\nthat does not draw the file is passed over.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
     }
   },
   "additionalProperties": false

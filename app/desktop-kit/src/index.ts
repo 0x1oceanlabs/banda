@@ -3,7 +3,8 @@
  * (ADR 0028, decision 4): Banda's window, the look, the settings and the
  * engine as services, which main gives as layers; the dialogs over the
  * window; the errors main's effects fail with; the bridge's answers and
- * `tellPage`; and the byte host, `app://files` (ADR 0073, decision 5).
+ * `tellPage`; the byte host, `app://files`, and the sandbox host,
+ * `app://preview` (ADR 0073, decision 5).
  * Written in Effect, as main is (ADR 0020).
  */
 export { confirm, pickFolder, type Ask } from "./dialog"
@@ -11,6 +12,7 @@ export { Engine } from "./engine"
 export type { Asked, DesktopModule, Served } from "./module"
 export { Broke, NotFromPage, Refused } from "./errors"
 export { FileHost } from "./files"
+export { PreviewHost } from "./preview"
 export { type Answer, type Answers, none, serve, tellPage, text } from "./ipc"
 export { Look } from "./look"
 export { Settings } from "./settings"

@@ -21,6 +21,11 @@ export const FILES_BRIDGE = {
    * `project`'s folder or whole, of any type; it lasts an hour. None for
    * a file it cannot serve. `useFileUrl` keeps one fresh. */
   url: invoke<[project: string, path: string], string | null>(),
+  /** A URL of `app://preview` for the page at `path`, an HTML file or an
+   * SVG document, for a frame with `sandbox="allow-scripts"` alone: its
+   * scripts run there, on no origin, with nothing from the network (ADR
+   * 0073, decision 5). It lasts an hour; none for any other file. */
+  preview: invoke<[project: string, path: string], string | null>(),
   /** Opens the file at the full `path` in the app the system has for
    * it; a program it only shows in its folder, so it never runs. */
   outside: send<[path: string]>(),

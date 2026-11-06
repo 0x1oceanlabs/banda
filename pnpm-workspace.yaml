@@ -16,3 +16,5 @@ allowBuilds:
 ignoredOptionalDependencies:
   - "@anthropic-ai/claude-agent-sdk-*"
   - "@openai/codex-*"
+  # PDF.js's canvas for Node: the window draws a PDF in Chromium's own.
+  - "@napi-rs/canvas"

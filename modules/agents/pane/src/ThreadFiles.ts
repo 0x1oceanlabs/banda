@@ -70,6 +70,11 @@ class ThreadFiles implements FilesHost {
       })
   }
 
+  /** Shows it in Quick Look, over the desk (ADR 0073, decision 12). */
+  peek(at: FileAt): void {
+    this.run?.("file.peek", { file: at.file, project: this.project })
+  }
+
   /** Opens it in the app the system has for it. */
   system(at: FileAt): void {
     this.run?.("file.outside", { file: at.file })

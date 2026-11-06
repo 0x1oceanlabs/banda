@@ -120,6 +120,13 @@ export type PaneProps<A> = {
    * None where nothing attaches, as in a dialog of the settings.
    */
   composer?: (take: ((chips: readonly Chip[]) => void) | null) => void
+  /**
+   * It is drawn in the tile that floats over the desk (`WindowApi.peek`),
+   * in no workspace: the focus stays where it was, and the tile opens it
+   * as a Pane of its own. Quick Look is `files.file` drawn so (ADR 0073,
+   * decision 7).
+   */
+  peek?: boolean
 }
 
 export type PaneKind<A extends { [key: string]: JsonValue }> = {

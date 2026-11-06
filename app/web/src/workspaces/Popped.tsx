@@ -6,7 +6,7 @@ import type { PaneState } from "@banda/ui/pane"
 import { actionFor, keysInForce, withKeys } from "../actions/actions"
 import type { Host } from "../host"
 import { useLookKeys } from "../look"
-import { labelOf } from "../registry"
+import { labelOf, previewers } from "../registry"
 import { ACTIONS, closing } from "../shell/actions"
 import type { Workspace as Kept } from "@banda/contract/workspaces"
 import { send } from "./arrange"
@@ -14,6 +14,7 @@ import { useArranged } from "./useArranged"
 import { type Entry, samePane } from "./model"
 import { type Frame, PaneFrame } from "./PaneFrame"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
+import { Previewers } from "@banda/ui/lib/previewers"
 
 /**
  * A Pane in a window of its own (ADR 0025, decision 9). The window keeps
@@ -123,18 +124,21 @@ export function Popped({
     <KeysInForce.Provider value={inForce}>
       <div className="flex h-svh bg-desk text-foreground">
         {entry ? (
-          <PaneFrame
-            entry={entry}
-            engine={engine}
-            modules={modules}
-            focused
-            marked={false}
-            listed={undefined}
-            project={project}
-            mixed={false}
-            frame={frame}
-            alone
-          />
+          // Its Pane draws a file with the modules' previewers.
+          <Previewers value={previewers}>
+            <PaneFrame
+              entry={entry}
+              engine={engine}
+              modules={modules}
+              focused
+              marked={false}
+              listed={undefined}
+              project={project}
+              mixed={false}
+              frame={frame}
+              alone
+            />
+          </Previewers>
         ) : (
           <p className="m-auto text-sm text-muted-foreground">
             {live.state === "ready"

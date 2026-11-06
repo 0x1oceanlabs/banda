@@ -11,4 +11,8 @@ pinned: Array<string>, hidden: boolean, ignored: boolean,
 /**
  * The editor's id; empty for the first one found.
  */
-editor: string, };
+editor: string, 
+/**
+ * The previewer's id, by an extension, lower case.
+ */
+previewers: { [key in string]: string }, };

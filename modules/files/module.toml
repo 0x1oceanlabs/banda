@@ -2,7 +2,7 @@
 # its methods and its Panes, its code declares; this holds the rest.
 id = "files"
 name = "Files"
-about = "Any folder, as a Finder shows it: a tree with the places beside it and its path above, what git ignores greyed and what git sees changed marked, what is hidden shown or not; what a path is; a file's text; fuzzy paths under a folder, what was opened lately first; and what changed in the folders shown. An Agent reaches only its Project's folder. A file opens in its Pane, as code, markdown or an image, at a line, and lines picked there take a comment for a Thread. The file each Agent works on pulses in the tree, which can follow it, and what the turn changed is marked."
+about = "Any folder, as a Finder shows it: a tree with the places beside it and its path above, what git ignores greyed and what git sees changed marked, what is hidden shown or not; what a path is; a file's text; fuzzy paths under a folder, what was opened lately first; and what changed in the folders shown. An Agent reaches only its Project's folder. A file opens in its Pane, drawn by the previewer that claims it (code, markdown, a picture, a PDF, video and sound, a page run in a sandbox) at a line, and lines picked there take a comment for a Thread; Open with… picks another previewer for an extension. Space shows a file in Quick Look, over the desk. The file each Agent works on pulses in the tree, which can follow it, and what the turn changed is marked."
 version = "0.1.0"
 from-banda = true
 # The settings file it owns, in ~/.config/banda.

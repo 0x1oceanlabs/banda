@@ -210,6 +210,7 @@ test("a row goes into a Thread's message by its menu or a drag, opens in an edit
   await row("README.md").click({ button: "right" })
   await expect(menu.getByRole("menuitem")).toHaveText([
     /^Open/,
+    /^Quick Look/,
     "Open in Zed",
     "Open in",
     "Open with the system",

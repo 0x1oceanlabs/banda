@@ -125,6 +125,7 @@ import { soloing, unsoloing } from "../workspaces/groups"
 import { AGENTS_FILE } from "@banda/contract/agents"
 import { useFile } from "@banda/ui/lib/look"
 import { Drawer } from "../workspaces/Drawer"
+import { Peek, type Peeked } from "../workspaces/Peek"
 import { Overview } from "../workspaces/Overview"
 import type { Frame } from "../workspaces/PaneFrame"
 import {
@@ -185,6 +186,10 @@ const NOTHING_SEEN: Seen = {
 
 /** How long a change waits for its event before the next goes anyway. */
 const DRAWN_WITHIN = 2000
+
+/** What takes an Esc before Quick Look's tile: a menu, a dialog or a
+ * list of suggestions over it. */
+const OVER_PEEK = "[role=menu], [role=dialog], [role=listbox]"
 
 /** The workspaces `view` draws of what `seen` keeps; the view then keeps
  * where each ID it holds stands now. */
@@ -719,6 +724,32 @@ export function Shell({
     (pane: PaneState) => setDrawer((was) => was && { ...was, pane }),
     []
   )
+  // Quick Look's tile over the desk (ADR 0073, decision 7): one Pane, in
+  // no workspace, and whether it fills the desk. Esc closes it, unless a
+  // menu or a dialog over it takes the Esc first.
+  const [peek, setPeek] = useState<Peeked | null>(null)
+  const peekNow = useRef(peek)
+  useEffect(() => {
+    peekNow.current = peek
+  }, [peek])
+  const closePeek = useCallback(() => setPeek(null), [])
+  const fillPeek = useCallback(() => {
+    if (!peekNow.current) return false
+    setPeek((was) => was && { ...was, fill: !was.fill })
+    return true
+  }, [])
+  const peeking = peek !== null
+  useEffect(() => {
+    if (!peeking) return
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target instanceof Element ? event.target : null
+      if (event.key !== "Escape" || target?.closest(OVER_PEEK)) return
+      event.preventDefault()
+      setPeek(null)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [peeking])
   // The Pane zoomed over the whole window, while it keeps the focus: the
   // focus elsewhere, or the overview, brings it back (ADR 0025, decision 4).
   const [zoom, setZoom] = useState<string>()
@@ -833,7 +864,18 @@ export function Shell({
     const parts: Parts = {
       change,
       home,
-      open: (pane, project, { beside, again = true, update, ...how } = {}) =>
+      open: (pane, project, { beside, again = true, update, ...how } = {}) => {
+        // The Pane that peeks, opened in the workspace, peeks no more.
+        const peeked = peekNow.current
+        if (
+          peeked &&
+          samePane(
+            { project: project ?? peeked.project, pane },
+            peeked,
+            identityOf
+          )
+        )
+          setPeek(null)
         change((w) => {
           const at = beside
             ? besideOf(w, listsNow.current, beside, showsOf)
@@ -853,7 +895,8 @@ export function Shell({
               ...(again ? { again } : { keep: true }),
             }
           )
-        }),
+        })
+      },
       focused: () => {
         const entry = focused(seenNow.current.state)
         if (!entry) return null
@@ -909,6 +952,20 @@ export function Shell({
       snooze,
       wake,
       menu: toggleMenu,
+      fillPeek,
+      peek: (pane, project) =>
+        setPeek((was) =>
+          pane
+            ? {
+                pane,
+                project:
+                  project ??
+                  focused(seenNow.current.state)?.project ??
+                  partsNow.current.home,
+                fill: was?.fill ?? false,
+              }
+            : null
+        ),
       route,
       ownKeys,
       settings,
@@ -952,6 +1009,7 @@ export function Shell({
     snooze,
     wake,
     toggleMenu,
+    fillPeek,
     route,
     ownKeys,
     settings,
@@ -1012,6 +1070,7 @@ export function Shell({
       projects: () => partsNow.current.projects(),
       writeSetting: (...how) => partsNow.current.writeSetting(...how),
       attach: (chips) => partsNow.current.attach(chips),
+      peek: (pane, project) => partsNow.current.peek(pane, project),
     }
     const stops = known
       .filter((module) => running.split(",").includes(module.id))
@@ -1395,6 +1454,26 @@ export function Shell({
                       })
                     )
                   }
+                />
+              )}
+              {peek && (
+                <Peek
+                  peek={peek}
+                  engine={engine}
+                  modules={modules}
+                  run={parts.run}
+                  open={(project, pane, place) =>
+                    change((w) => opening(w, project, pane, { place }))
+                  }
+                  onUpdate={(pane) => setPeek((was) => was && { ...was, pane })}
+                  onOpen={() =>
+                    parts.open(peek.pane, peek.project, {
+                      again: false,
+                      update: true,
+                    })
+                  }
+                  onFill={fillPeek}
+                  onClose={closePeek}
                 />
               )}
               <Toaster />
