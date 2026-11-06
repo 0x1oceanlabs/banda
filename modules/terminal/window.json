@@ -8,7 +8,11 @@
       "title": "New terminal",
       "section": "Panes",
       "keys": [
-        "Ctrl+Alt+Return"
+        {
+          "code": "Enter",
+          "mod": true,
+          "more": true
+        }
       ]
     }
   ],

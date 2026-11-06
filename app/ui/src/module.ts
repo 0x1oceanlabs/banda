@@ -124,7 +124,42 @@ export type Action<Context = WindowApi> = {
   /** Run by its id alone, with the args another module gives: the Banda
    * menu and its key sheet leave it out. */
   unlisted?: true
+  /** What it takes (ADR 0071, decision 2): what a line of keys.toml,
+   * the key sheet and an Agent may give it, as a JSON Schema, as the
+   * engine's tools give theirs; `takes` writes one. */
+  args?: ArgsSchema
   run: (context: Context, args?: Args) => void
+}
+
+/** What an action takes, as a JSON Schema: each arg by its name. */
+export type ArgsSchema = {
+  type: "object"
+  properties: {
+    [name: string]: { type: "string" | "number"; description: string }
+  }
+  required?: readonly string[]
+  additionalProperties: false
+}
+
+/** An action's args (ADR 0071, decision 2): each by its name and what it
+ * is, a string unless it says it is a number; `required` it must have. */
+export function takes(
+  properties: { [name: string]: string | { number: string } },
+  required?: readonly string[]
+): ArgsSchema {
+  return {
+    type: "object",
+    properties: Object.fromEntries(
+      Object.entries(properties).map(([name, about]) => [
+        name,
+        typeof about === "string"
+          ? { type: "string", description: about }
+          : { type: "number", description: about.number },
+      ])
+    ),
+    ...(required && { required }),
+    additionalProperties: false,
+  }
 }
 
 /** One thing `Tab` lists for a row of the Banda menu. Its `key` there,

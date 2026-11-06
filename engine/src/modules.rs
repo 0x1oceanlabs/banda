@@ -14,6 +14,7 @@ use banda_browser::Browser;
 use banda_git::Git;
 use banda_harnesses::HarnessesModule;
 use banda_kernel::Method;
+use banda_look::keys::Action;
 use banda_problems::Problems;
 use banda_sharing::Sharing;
 use banda_terminal::Terminals;
@@ -92,6 +93,14 @@ const FILES: &[Files] = &[
         window: None,
         methods: Some(Sharing::method_list),
     },
+    // The window's own actions, the tiling's first (ADR 0071, decision 2),
+    // after the modules', as the window lists them.
+    Files {
+        folder: "window",
+        toml: include_str!("../../app/web/module.toml"),
+        window: Some(include_str!("../../app/web/window.json")),
+        methods: None,
+    },
 ];
 
 /// What `module.toml` holds: only what no code says.
@@ -130,11 +139,15 @@ pub struct Offer {
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Window {
+    #[serde(default)]
     panes: Vec<String>,
     actions: Vec<Action>,
+    #[serde(default)]
     sources: Vec<Value>,
+    #[serde(default)]
     watches: usize,
     /// Its widgets on the bar, which the look's `[bar]` places by id.
+    #[serde(default)]
     bar: Vec<Widget>,
 }
 
@@ -143,20 +156,6 @@ struct Window {
 struct Widget {
     id: String,
     about: String,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Action {
-    id: String,
-    title: String,
-    section: String,
-    keys: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    family: Option<String>,
-    /// Run by its id alone: no key sheet or menu lists it.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    unlisted: bool,
 }
 
 /// Every module, in the window's order. The files are Banda's own, so a
@@ -237,12 +236,7 @@ fn topic(offers: &[Offer]) -> String {
                  under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:\n\n",
             );
             for action in actions {
-                let keys = if action.keys.is_empty() {
-                    String::new()
-                } else {
-                    format!(", {}", action.keys.join(" or "))
-                };
-                writeln!(text, "- {} (`{}`){keys}", action.title, action.id).unwrap();
+                writeln!(text, "{}", line_of(action)).unwrap();
             }
         }
         let widgets: Vec<&Widget> = offer.window.iter().flat_map(|w| &w.bar).collect();
@@ -272,6 +266,33 @@ fn topic(offers: &[Offer]) -> String {
         }
     }
     text
+}
+
+/// An action's line in the skill's topic: its title, its id, the keys
+/// it takes with Alt the mod, and what it takes.
+#[cfg(test)]
+fn line_of(action: &Action) -> String {
+    let mut line = format!("- {} (`{}`)", action.title, action.id);
+    if !action.keys.is_empty() {
+        let keys: Vec<String> = action
+            .keys
+            .iter()
+            .map(|key| key.real(banda_look::keys::Mod::default()).text())
+            .collect();
+        line.push_str(&format!(", {}", keys.join(" or ")));
+    }
+    let properties = action
+        .args
+        .as_ref()
+        .and_then(|args| args["properties"].as_object());
+    if let Some(properties) = properties {
+        let args: Vec<String> = properties
+            .iter()
+            .map(|(name, arg)| format!("`{name}` ({})", arg["description"].as_str().unwrap_or("")))
+            .collect();
+        line.push_str(&format!("; takes {}", args.join(", ")));
+    }
+    line
 }
 
 #[cfg(test)]

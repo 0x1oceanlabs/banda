@@ -17,7 +17,7 @@ Its settings: `agents.toml`.
 
 Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
 
-- New Thread (`thread.new`), Alt+Return
+- New Thread (`thread.new`), Alt+Return; takes `project` (the Project it starts in), `ask` (what to write to its Agent first), `harness` (the Harness it starts on)
 
 Its methods, `banda call agents.<method>`: `threads`, `thread`, `defaults`, `changes`, `write`, `send`, `edit`, `withdraw`, `steer`, `resume`, `configure`, `stop`, `retry`, `fork`, `rewind`, `answer`, `attach`, `image`, `keep`, `files`, `show_visual`, `preview_visual`, `draft_issue`, `answer_issue`, `notify`, `visual`, `snooze`, `wake`.
 
@@ -132,3 +132,83 @@ The one part of Banda that sends anything anywhere (ADR 0039, decision 4): probl
 Its settings: `sharing.toml`.
 
 Its methods, `banda call sharing.<method>`: `state`, `new_id`.
+
+## Window (`window`)
+
+The window's own actions: the tiling of columns, Panes and workspaces, the sidebar, the Banda menu and the settings.
+
+Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
+
+- Focus the Pane left (`pane.focus-left`), Alt+Left
+- Focus the Pane right (`pane.focus-right`), Alt+Right
+- Focus the Pane up (`pane.focus-up`)
+- Focus the Pane down (`pane.focus-down`)
+- Move the Pane left (`pane.move-left`), Alt+Shift+Left
+- Move the Pane right (`pane.move-right`), Alt+Shift+Right
+- Move the Pane up (`pane.move-up`)
+- Move the Pane down (`pane.move-down`)
+- Focus the Pane up, or the workspace above (`pane.focus-up-or-workspace`), Alt+Up
+- Focus the Pane down, or the workspace below (`pane.focus-down-or-workspace`), Alt+Down
+- Move the Pane up, or to the workspace above (`pane.move-up-or-to-workspace`), Alt+Shift+Up
+- Move the Pane down, or to the workspace below (`pane.move-down-or-to-workspace`), Alt+Shift+Down
+- Make the column wider (`column.wider`), Ctrl+Alt+Right
+- Make the column narrower (`column.narrower`), Ctrl+Alt+Left
+- The column's next width, round (`column.next-width`), Alt+R
+- The column's previous width, round (`column.previous-width`)
+- The column as wide as the room the others leave (`column.fill`), Ctrl+Alt+F
+- The column in the middle of the screen (`column.center`), Alt+C
+- Focus the first column (`column.first`), Alt+Home
+- Move the column to the first place (`column.move-first`), Alt+Shift+Home
+- Focus the last column (`column.last`), Alt+End
+- Move the column to the last place (`column.move-last`), Alt+Shift+End
+- The Pane's next height in its column, round (`pane.next-height`), Alt+Shift+R
+- Make the Pane taller (`pane.taller`), Ctrl+Alt+Down
+- Make the Pane shorter (`pane.shorter`), Ctrl+Alt+Up
+- Every Pane of the column as high as the others (`column.even`), Ctrl+Alt+R
+- The Pane over the whole window, or back (`pane.zoom`), Alt+Shift+F
+- The column as a Deck, one Pane at a time, or one above another (`column.tabs`), Alt+T
+- A Group of the column, for others to join (`group.new`), Alt+G
+- The column into the Group on the left, or out of its own that way (`group.join-left`), Alt+Shift+[
+- Move the column left inside its Group (`group.column-left`), Ctrl+Alt+Shift+Left
+- The column into the Group on the right, or out of its own that way (`group.join-right`), Alt+Shift+]
+- Move the column right inside its Group (`group.column-right`), Ctrl+Alt+Shift+Right
+- The Group the whole screen wide, or back (`group.maximize`), Alt+M
+- Take the Pane into the column on the left, or out of its own (`pane.consume-left`), Alt+[
+- Take the Pane into the column on the right, or out of its own (`pane.consume-right`), Alt+]
+- The column the whole screen wide, or back (`column.maximize`), Alt+F
+- New Pane (`pane.new`), Alt+N
+- Close the Pane (`pane.close`), Alt+W
+- The Pane in a window of its own, and back (`pane.pop-out`)
+- The drawer: a quick Thread over the workspace (`drawer.toggle`), Alt+`
+- Overview of every window (`overview.toggle`), Alt+O
+- The workspace above (`workspace.up`), Alt+PageUp
+- Move the workspace up (`workspace.move-up`), Alt+Shift+PageUp
+- The workspace below (`workspace.down`), Alt+PageDown
+- Move the workspace down (`workspace.move-down`), Alt+Shift+PageDown
+- A new workspace: the empty one at the bottom (`workspace.new`)
+- Go to what calls you (`calls.answer`), Alt+U
+- Archive the Thread you look at, or bring it back (`sidebar.archive`), Alt+S
+- Banda menu (`menu.open`), Alt+Space
+- Every action and its key (`menu.keys`), Alt+K
+- Open the settings (`settings.open`), Alt+,; takes `link` (a section, or a row in it, as keys)
+- Check for updates (`update.check`)
+- Banda's own keys, until keys.toml changes (`keys.reset`), Ctrl+Alt+Shift+K
+- Show or hide the sidebar (`sidebar.toggle`), Alt+A
+- Go to workspace 1 (`workspace.go-1`), Alt+1
+- Go to workspace 2 (`workspace.go-2`), Alt+2
+- Go to workspace 3 (`workspace.go-3`), Alt+3
+- Go to workspace 4 (`workspace.go-4`), Alt+4
+- Go to workspace 5 (`workspace.go-5`), Alt+5
+- Go to workspace 6 (`workspace.go-6`), Alt+6
+- Go to workspace 7 (`workspace.go-7`), Alt+7
+- Go to workspace 8 (`workspace.go-8`), Alt+8
+- Go to workspace 9 (`workspace.go-9`), Alt+9
+- Move the Pane to workspace 1 (`pane.send-1`), Alt+Shift+1
+- Move the Pane to workspace 2 (`pane.send-2`), Alt+Shift+2
+- Move the Pane to workspace 3 (`pane.send-3`), Alt+Shift+3
+- Move the Pane to workspace 4 (`pane.send-4`), Alt+Shift+4
+- Move the Pane to workspace 5 (`pane.send-5`), Alt+Shift+5
+- Move the Pane to workspace 6 (`pane.send-6`), Alt+Shift+6
+- Move the Pane to workspace 7 (`pane.send-7`), Alt+Shift+7
+- Move the Pane to workspace 8 (`pane.send-8`), Alt+Shift+8
+- Move the Pane to workspace 9 (`pane.send-9`), Alt+Shift+9

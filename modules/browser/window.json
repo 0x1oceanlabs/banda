@@ -8,7 +8,11 @@
       "title": "New browser",
       "section": "Panes",
       "keys": [
-        "Alt+Shift+Return"
+        {
+          "code": "Enter",
+          "mod": true,
+          "shift": true
+        }
       ]
     },
     {
@@ -16,7 +20,29 @@
       "title": "Open in a browser",
       "section": "Panes",
       "keys": [],
-      "unlisted": true
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "a page's address"
+          },
+          "file": {
+            "type": "string",
+            "description": "a file's absolute path, to show"
+          },
+          "words": {
+            "type": "string",
+            "description": "words to search the web for"
+          },
+          "project": {
+            "type": "string",
+            "description": "the Project to open it in"
+          }
+        },
+        "additionalProperties": false
+      }
     }
   ],
   "sources": [

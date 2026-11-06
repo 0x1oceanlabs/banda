@@ -116,6 +116,6 @@ in `~/.config/banda-local/`, as their data and state too:
 | `sidebars/<name>.toml` | the Person's own sidebar presets |
 | `browser.toml` | where the browser's tabs are, and its search |
 | `agents.toml` | what Enter does with a message written while the Agent works |
-| `keys.toml` | the Person's keys, `[binds]`: `"Alt+M" = "column.maximize"`, or `"none"` to free a key; `mod`, the keys held for every Banda key, `"Ctrl+Alt"` where the desktop holds Alt; Ctrl+Alt+Shift+K brings Banda's own back |
+| `keys.toml` | the Person's keys, `[binds]`: `"Alt+M" = "column.maximize"`, or `"none"` to free a key; `mod`, the keys held for every Banda key, `"Ctrl+Alt"` where the desktop holds Alt; Ctrl+Alt+Shift+K brings Banda's own back. Every action's id: `banda modules`, the window's own (the tiling's) as the module `window` |
 | `harnesses.toml` | the Harnesses Threads start with |
 | `schemas/` | each file's JSON Schema, written by Banda for editors |

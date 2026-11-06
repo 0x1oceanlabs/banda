@@ -1,10 +1,9 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import type { Module } from "@banda/ui/module"
+import type { Action, Module } from "@banda/ui/module"
 import { expect, test } from "vitest"
-import { DEFAULT_KEYS } from "@banda/contract/look"
-import { keyText, realKey } from "@banda/ui/lib/keys"
 import { modules } from "./modules"
+import { WINDOW_ACTIONS } from "./shell/actions"
 import {
   kindRuns,
   kinds,
@@ -49,38 +48,48 @@ test("a module's new action's id starts with its module's id", () => {
   )
 })
 
+/** An action as the engine reads it (ADR 0071, decision 2): its keys by
+ * level, as its code writes them, for the engine to make real with the
+ * mod; where they work, and what it takes. */
+function actionOf(action: Action<never>) {
+  // JSON leaves out what is not there.
+  const { id, title, section, keys = [], family, unlisted, args } = action
+  return { id, title, section, keys, family, unlisted, args }
+}
+
 /** What a module's window part offers, as `banda modules` prints it: its
  * code says it; this is a copy for the engine, which has no window. */
 function windowOf(module: Module) {
   return {
     panes: module.panes.map((pane) => pane.kind),
-    actions: module.actions.map((action) => ({
-      id: action.id,
-      title: action.title,
-      section: action.section,
-      // As they are with Banda's own mod, Alt.
-      keys: (action.keys ?? []).map((key) =>
-        keyText(realKey(key, DEFAULT_KEYS.mod))
-      ),
-      ...(action.family && { family: action.family }),
-      ...(action.unlisted && { unlisted: true }),
-    })),
+    actions: module.actions.map(actionOf),
     sources: module.sources.map(({ id, label }) => ({ id, label })),
     watches: module.watches.length,
     bar: module.bar.map(({ id, about }) => ({ id, about })),
   }
 }
 
+/** Writes `value` to `file` as JSON when it differs; whether it did. */
+function written(file: string, value: unknown): boolean {
+  const text = `${JSON.stringify(value, null, 2)}\n`
+  if (existsSync(file) && readFileSync(file, "utf8") === text) return false
+  writeFileSync(file, text)
+  return true
+}
+
+test("the window's own actions, the tiling's, are written for the engine as a module's are (ADR 0071, decision 2)", () => {
+  const file = join(import.meta.dirname, "../window.json")
+  // Written now: review it and run again, as cargo test does the types.
+  expect(written(file, { actions: WINDOW_ACTIONS.map(actionOf) })).toBe(false)
+})
+
 test("each module's window part is written beside its module.toml, for banda modules (ADR 0022, decision 1)", () => {
   const stale: string[] = []
   for (const module of modules) {
     const folder = join(import.meta.dirname, "../../../modules", module.id)
     expect(existsSync(join(folder, "module.toml")), module.id).toBe(true)
-    const file = join(folder, "window.json")
-    const text = `${JSON.stringify(windowOf(module), null, 2)}\n`
-    if (existsSync(file) && readFileSync(file, "utf8") === text) continue
-    writeFileSync(file, text)
-    stale.push(module.id)
+    if (written(join(folder, "window.json"), windowOf(module)))
+      stale.push(module.id)
   }
   // Written now: review it and run again, as cargo test does the types.
   expect(stale).toEqual([])

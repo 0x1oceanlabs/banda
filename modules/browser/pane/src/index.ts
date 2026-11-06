@@ -2,7 +2,7 @@
  * menu finds of it (ADR 0013, ADR 0022). It has no engine part, so it is
  * always on. */
 import type { ProjectId } from "@banda/contract"
-import { defineModule } from "@banda/ui/module"
+import { defineModule, takes } from "@banda/ui/module"
 import { paneOf, type PaneState } from "@banda/ui/pane"
 import { fileAddress, searchNow } from "./address"
 import { browserPane } from "./BrowserPane"
@@ -29,6 +29,12 @@ export const browser = defineModule({
       // web for: the Banda menu's words as a page, the agents module's
       // files there, and a Thread's "Search the web".
       id: "browser.open",
+      args: takes({
+        address: "a page's address",
+        file: "a file's absolute path, to show",
+        words: "words to search the web for",
+        project: "the Project to open it in",
+      }),
       title: "Open in a browser",
       section: "Panes",
       unlisted: true,
