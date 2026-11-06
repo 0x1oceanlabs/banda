@@ -142,6 +142,9 @@
   --account-3: #1baf7a;
   --account-4: #e87ba4;
   --account-5: #eda100;
+  /* The system's accent, which the window sets on a Mac or Windows (ADR
+     0075, decision 6); Apple's blue elsewhere. The macos theme's accent. */
+  --system-accent: #007aff;
   --radius: 0.4375rem;
   --sidebar: #fafafa;
   --sidebar-foreground: #18181b;
@@ -192,6 +195,7 @@
   --account-3: #1baf7a;
   --account-4: #d55181;
   --account-5: #c98500;
+  --system-accent: #0a84ff;
   --sidebar: #202024;
   --sidebar-foreground: #ededef;
   --sidebar-primary: #4ea3ff;
