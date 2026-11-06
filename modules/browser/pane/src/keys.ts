@@ -1,23 +1,18 @@
 /**
  * The keys of a page (ADR 0013, decision 5). Banda's keys, held with the
  * mod, work in a page as in a terminal, and the browser's own keys are
- * Chrome's, with Ctrl. Electron's main process takes these from the page before it hears
- * them and hands them to the window, where Banda's actions and the browser
- * Pane run them; every other key stays the page's.
+ * Chrome's, with Ctrl: actions of the scope `browser` (ADR 0071, decision
+ * 1), which work while the focus is in a browser Pane or its page.
+ * Electron's main process takes the keys in force from the page before it
+ * hears them and hands them to the window, where Banda's actions and the
+ * browser Pane run them; every other key stays the page's.
  */
 
-import {
-  holdsAlone,
-  isModKey,
-  type Key,
-  matches,
-  type Mod,
-  type Pressed,
-  withMore,
-} from "@banda/ui/lib/keys"
+import { type Key, matches, type Pressed } from "@banda/ui/lib/keys"
 import type { TabKey } from "./tabs"
 
-export { isModKey, type Mod, type Pressed }
+/** The scope of the browser's keys: its Pane, and the page in it. */
+export const BROWSER = "browser"
 
 /** What the browser Pane does on one of its keys. */
 export type Does =
@@ -32,55 +27,98 @@ export type Does =
   | "devtools"
   | TabKey
 
-const PLACES = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const
-
-const BINDS: readonly (Key & { does: Does })[] = [
-  { code: "KeyT", primary: true, does: "tab-new" },
-  { code: "KeyW", primary: true, does: "tab-close" },
-  { code: "F4", primary: true, does: "tab-close" },
-  { code: "KeyT", primary: true, shift: true, does: "tab-reopen" },
-  { code: "Tab", primary: true, does: "tab-next" },
-  { code: "PageDown", primary: true, does: "tab-next" },
-  { code: "Tab", primary: true, shift: true, does: "tab-previous" },
-  { code: "PageUp", primary: true, does: "tab-previous" },
-  ...PLACES.map((n) => ({
-    code: `Digit${n}`,
-    primary: true,
-    does: `tab-${n}` as const,
-  })),
-  { code: "KeyL", primary: true, does: "address" },
-  { code: "KeyR", primary: true, does: "reload" },
-  { code: "F5", does: "reload" },
-  { code: "KeyR", primary: true, shift: true, does: "reload-hard" },
-  { code: "BracketLeft", primary: true, does: "back" },
-  { code: "BracketRight", primary: true, does: "forward" },
-  { code: "Equal", primary: true, does: "zoom-in" },
-  { code: "Equal", primary: true, shift: true, does: "zoom-in" },
-  { code: "Minus", primary: true, does: "zoom-out" },
-  { code: "Digit0", primary: true, does: "zoom-reset" },
-  { code: "F12", does: "devtools" },
-]
-
-/** What a key does in the browser; none for a key that is the page's. */
-export function browserKey(key: Pressed): Does | undefined {
-  return BINDS.find((bind) => matches(key, bind))?.does
+/** The id of the browser's action that does `does`. */
+export function actionOf(does: Does): string {
+  return `${BROWSER}.${does}`
 }
 
-const MODIFIER = /^(Alt|Control|Shift|Meta|OS)(Left|Right)$/
+/** A key with Ctrl, or ⌘ on a Mac, as Chrome's are. */
+const ctrl = (code: string, shift = false): Key => ({
+  code,
+  primary: true,
+  ...(shift && { shift }),
+})
+
+const PLACES = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const
+
+/** The browser's keys, in the key sheet's order: what each does, its
+ * title there, and its keys as Chrome has them. */
+export const BROWSER_KEYS: readonly {
+  does: Does
+  title: string
+  family?: string
+  keys: Key[]
+}[] = [
+  { does: "tab-new", title: "New tab", keys: [ctrl("KeyT")] },
+  {
+    does: "tab-close",
+    title: "Close the tab",
+    keys: [ctrl("KeyW"), ctrl("F4")],
+  },
+  {
+    does: "tab-reopen",
+    title: "Open the tab closed last",
+    keys: [ctrl("KeyT", true)],
+  },
+  {
+    does: "tab-next",
+    title: "Next tab",
+    keys: [ctrl("Tab"), ctrl("PageDown")],
+  },
+  {
+    does: "tab-previous",
+    title: "Previous tab",
+    keys: [ctrl("Tab", true), ctrl("PageUp")],
+  },
+  ...PLACES.map((n) => ({
+    does: `tab-${n}` as const,
+    // Chrome's Ctrl+9 is always the last.
+    title: n === 9 ? "Go to the last tab" : `Go to tab ${n}`,
+    family: "Go to a tab",
+    keys: [ctrl(`Digit${n}`)],
+  })),
+  { does: "address", title: "Go to the address", keys: [ctrl("KeyL")] },
+  {
+    does: "reload",
+    title: "Reload the page",
+    keys: [ctrl("KeyR"), { code: "F5" }],
+  },
+  {
+    does: "reload-hard",
+    title: "Reload the page, not from the cache",
+    keys: [ctrl("KeyR", true)],
+  },
+  { does: "back", title: "Back", keys: [ctrl("BracketLeft")] },
+  { does: "forward", title: "Forward", keys: [ctrl("BracketRight")] },
+  {
+    does: "zoom-in",
+    title: "Zoom the page in",
+    keys: [ctrl("Equal"), ctrl("Equal", true)],
+  },
+  { does: "zoom-out", title: "Zoom the page out", keys: [ctrl("Minus")] },
+  {
+    does: "zoom-reset",
+    title: "The page at its own size",
+    keys: [ctrl("Digit0")],
+  },
+  {
+    does: "devtools",
+    title: "The page's developer tools",
+    keys: [{ code: "F12" }],
+  },
+]
 
 /**
- * Whether the window takes a key from the page: one held with the mod,
- * or with the mod and one key more, which are Banda's (ADR 0068); or one
- * of the browser's. The mod's keys alone stay the page's.
+ * Whether the window takes a key from the page: one of the keys in force
+ * there, the window's and the browser's (ADR 0071, decision 4). A key
+ * `keys.toml` frees, and the mod's keys alone, stay the page's.
  */
-export function taken(key: Pressed, mod: Mod): boolean {
-  if (MODIFIER.test(key.code)) return false
-  const more = withMore(mod)
-  return (
-    holdsAlone(key, mod) ||
-    (more !== undefined && holdsAlone(key, more)) ||
-    browserKey(key) !== undefined
-  )
+export function taken(
+  key: Pressed,
+  inForce: readonly Key[],
+  mac?: boolean
+): boolean {
+  return inForce.some((one) => matches(key, one, mac))
 }
 
 /** Whether `does` is a key of the tabs, not of the page. */

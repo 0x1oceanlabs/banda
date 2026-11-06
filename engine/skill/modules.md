@@ -84,6 +84,31 @@ Its settings: `browser.toml`.
 Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
 
 - New browser (`browser.new`), Alt+Shift+Return
+- New tab (`browser.tab-new`), Ctrl+T, `[binds.browser]`
+- Close the tab (`browser.tab-close`), Ctrl+W or Ctrl+F4, `[binds.browser]`
+- Open the tab closed last (`browser.tab-reopen`), Ctrl+Shift+T, `[binds.browser]`
+- Next tab (`browser.tab-next`), Ctrl+Tab or Ctrl+PageDown, `[binds.browser]`
+- Previous tab (`browser.tab-previous`), Ctrl+Shift+Tab or Ctrl+PageUp, `[binds.browser]`
+- Go to tab 1 (`browser.tab-1`), Ctrl+1, `[binds.browser]`
+- Go to tab 2 (`browser.tab-2`), Ctrl+2, `[binds.browser]`
+- Go to tab 3 (`browser.tab-3`), Ctrl+3, `[binds.browser]`
+- Go to tab 4 (`browser.tab-4`), Ctrl+4, `[binds.browser]`
+- Go to tab 5 (`browser.tab-5`), Ctrl+5, `[binds.browser]`
+- Go to tab 6 (`browser.tab-6`), Ctrl+6, `[binds.browser]`
+- Go to tab 7 (`browser.tab-7`), Ctrl+7, `[binds.browser]`
+- Go to tab 8 (`browser.tab-8`), Ctrl+8, `[binds.browser]`
+- Go to the last tab (`browser.tab-9`), Ctrl+9, `[binds.browser]`
+- Go to the address (`browser.address`), Ctrl+L, `[binds.browser]`
+- Reload the page (`browser.reload`), Ctrl+R or F5, `[binds.browser]`
+- Reload the page, not from the cache (`browser.reload-hard`), Ctrl+Shift+R, `[binds.browser]`
+- Back (`browser.back`), Ctrl+[, `[binds.browser]`
+- Forward (`browser.forward`), Ctrl+], `[binds.browser]`
+- Zoom the page in (`browser.zoom-in`), Ctrl+= or Ctrl+Shift+=, `[binds.browser]`
+- Zoom the page out (`browser.zoom-out`), Ctrl+-, `[binds.browser]`
+- The page at its own size (`browser.zoom-reset`), Ctrl+0, `[binds.browser]`
+- The page's developer tools (`browser.devtools`), F12, `[binds.browser]`
+
+Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `browser` (the Browser).
 
 Its methods, `banda call browser.<method>`: `tabs`, `snapshot`, `screenshot`, `open`, `navigate`, `act`, `wait_for`, `handoff`.
 

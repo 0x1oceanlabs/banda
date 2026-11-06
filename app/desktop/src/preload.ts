@@ -32,20 +32,7 @@ function call({ dir, name }: Leaf) {
 }
 
 const banda = mapTable(BRIDGE, call) as HostOf<typeof BRIDGE>
-const { key, ...browser } = banda.browser
-
-// A key the desktop took from a browser page is pressed in the window, so
-// Banda's actions and the browser Pane hear it as their own
-// (@banda/browser-desktop).
-key(({ up, ...pressed }) => {
-  window.dispatchEvent(
-    new KeyboardEvent(up ? "keyup" : "keydown", {
-      ...pressed,
-      bubbles: true,
-      cancelable: true,
-    })
-  )
-})
+const { browser } = banda
 
 const host: Host = {
   ...banda,

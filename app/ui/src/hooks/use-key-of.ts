@@ -4,24 +4,38 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
 } from "react"
 import { holdsAlone, type Key, keyLabel, type Pressed } from "../lib/keys"
 
 /**
  * The keys in force (ADR 0068): the mod, and by the id of the action each
- * runs, its key, Banda's or the one `keys.toml` gives it. A window gives
- * them; outside one, Alt and no key.
+ * runs, its key, Banda's or the one `keys.toml` gives it; and every key
+ * by the scope its action works in, "" for the window's (ADR 0071). A
+ * window gives them; outside one, Alt and no key.
  */
 export type KeysInForce = {
   mod: Mod
   byAction: ReadonlyMap<string, Key>
+  byScope: ReadonlyMap<string, readonly Key[]>
 }
 
 export const KeysInForce = createContext<KeysInForce>({
   mod: DEFAULT_KEYS.mod,
   byAction: new Map(),
+  byScope: new Map(),
 })
+
+/** The keys in force while the focus is in `scope`: its own, then the
+ * window's. */
+export function useKeysIn(scope: string): readonly Key[] {
+  const { byScope } = useContext(KeysInForce)
+  return useMemo(
+    () => [...(byScope.get(scope) ?? []), ...(byScope.get("") ?? [])],
+    [byScope, scope]
+  )
+}
 
 /** The mod in force: what the mouse holds to move and size Panes. */
 export function useMod(): Mod {

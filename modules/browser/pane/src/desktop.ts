@@ -6,9 +6,10 @@
 import { type HostOf, invoke, push, send } from "@banda/contract/bridge"
 import type { Dialog, Tabs } from "@banda/contract/browser"
 
-import type { Mod, Pressed } from "./keys"
+import type { Key, Mod, Pressed } from "@banda/ui/lib/keys"
 
-export { isModKey, type Pressed, taken } from "./keys"
+export { isModKey, type Pressed } from "@banda/ui/lib/keys"
+export { taken } from "./keys"
 
 /** What the row shows of a page's address: its site, without `www.`. */
 export function siteOf(address: string): string {
@@ -168,17 +169,23 @@ export const BROWSER_BRIDGE = {
      * in the window; or closes it when it shows. */
     popup: send<[extension: string, url: string, under: Box]>(),
   },
-  /** The mod in force, as the window holds it (ADR 0068): main gives
-   * the window a page's keys held with it. */
-  mod: send<[mod: Mod]>(),
-  /** A key main took from a browser page: the preload presses it in the
-   * window, so Banda's actions and the Pane hear it as their own; a key
-   * of the mod let go is `up`. */
-  key: push<Pressed & { up?: true }>(),
+  /** The keys in force in a page, as the window holds them (ADR 0071,
+   * decision 4): main gives the window these, and leaves the mod's keys
+   * alone to the page, for the mouse's moves. */
+  keys: send<[keys: PageKeys]>(),
+  /** A key main took from a browser page, by its web contents' ID: the
+   * window presses it on the page's element (`pages.ts`), so Banda's
+   * actions and the browser's hear it as their own; a key of the mod let
+   * go is `up`. */
+  key: push<Pressed & { up?: true; page: number }>(),
 }
 
+/** The keys in force in a page: the mod, and every key of the window's
+ * actions and the browser's. */
+export type PageKeys = { mod: Mod; keys: readonly Key[] }
+
 /** The desktop's side of the browser, on `window.banda.browser`. */
-export type BrowserHost = Omit<HostOf<typeof BROWSER_BRIDGE>, "key"> & {
+export type BrowserHost = HostOf<typeof BROWSER_BRIDGE> & {
   /** The extensions' buttons, which electron-chrome-extensions answers
    * itself (app/desktop/src/preload.ts). */
   actions: {

@@ -43,6 +43,319 @@
         },
         "additionalProperties": false
       }
+    },
+    {
+      "id": "browser.tab-new",
+      "title": "New tab",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "KeyT",
+          "primary": true
+        }
+      ],
+      "scope": "browser"
+    },
+    {
+      "id": "browser.tab-close",
+      "title": "Close the tab",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "KeyW",
+          "primary": true
+        },
+        {
+          "code": "F4",
+          "primary": true
+        }
+      ],
+      "scope": "browser"
+    },
+    {
+      "id": "browser.tab-reopen",
+      "title": "Open the tab closed last",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "KeyT",
+          "primary": true,
+          "shift": true
+        }
+      ],
+      "scope": "browser"
+    },
+    {
+      "id": "browser.tab-next",
+      "title": "Next tab",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "Tab",
+          "primary": true
+        },
+        {
+          "code": "PageDown",
+          "primary": true
+        }
+      ],
+      "scope": "browser"
+    },
+    {
+      "id": "browser.tab-previous",
+      "title": "Previous tab",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "Tab",
+          "primary": true,
+          "shift": true
+        },
+        {
+          "code": "PageUp",
+          "primary": true
+        }
+      ],
+      "scope": "browser"
+    },
+    {
+      "id": "browser.tab-1",
+      "title": "Go to tab 1",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "Digit1",
+          "primary": true
+        }
+      ],
+      "family": "Go to a tab",
+      "scope": "browser"
+    },
+    {
+      "id": "browser.tab-2",
+      "title": "Go to tab 2",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "Digit2",
+          "primary": true
+        }
+      ],
+      "family": "Go to a tab",
+      "scope": "browser"
+    },
+    {
+      "id": "browser.tab-3",
+      "title": "Go to tab 3",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "Digit3",
+          "primary": true
+        }
+      ],
+      "family": "Go to a tab",
+      "scope": "browser"
+    },
+    {
+      "id": "browser.tab-4",
+      "title": "Go to tab 4",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "Digit4",
+          "primary": true
+        }
+      ],
+      "family": "Go to a tab",
+      "scope": "browser"
+    },
+    {
+      "id": "browser.tab-5",
+      "title": "Go to tab 5",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "Digit5",
+          "primary": true
+        }
+      ],
+      "family": "Go to a tab",
+      "scope": "browser"
+    },
+    {
+      "id": "browser.tab-6",
+      "title": "Go to tab 6",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "Digit6",
+          "primary": true
+        }
+      ],
+      "family": "Go to a tab",
+      "scope": "browser"
+    },
+    {
+      "id": "browser.tab-7",
+      "title": "Go to tab 7",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "Digit7",
+          "primary": true
+        }
+      ],
+      "family": "Go to a tab",
+      "scope": "browser"
+    },
+    {
+      "id": "browser.tab-8",
+      "title": "Go to tab 8",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "Digit8",
+          "primary": true
+        }
+      ],
+      "family": "Go to a tab",
+      "scope": "browser"
+    },
+    {
+      "id": "browser.tab-9",
+      "title": "Go to the last tab",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "Digit9",
+          "primary": true
+        }
+      ],
+      "family": "Go to a tab",
+      "scope": "browser"
+    },
+    {
+      "id": "browser.address",
+      "title": "Go to the address",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "KeyL",
+          "primary": true
+        }
+      ],
+      "scope": "browser"
+    },
+    {
+      "id": "browser.reload",
+      "title": "Reload the page",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "KeyR",
+          "primary": true
+        },
+        {
+          "code": "F5"
+        }
+      ],
+      "scope": "browser"
+    },
+    {
+      "id": "browser.reload-hard",
+      "title": "Reload the page, not from the cache",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "KeyR",
+          "primary": true,
+          "shift": true
+        }
+      ],
+      "scope": "browser"
+    },
+    {
+      "id": "browser.back",
+      "title": "Back",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "BracketLeft",
+          "primary": true
+        }
+      ],
+      "scope": "browser"
+    },
+    {
+      "id": "browser.forward",
+      "title": "Forward",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "BracketRight",
+          "primary": true
+        }
+      ],
+      "scope": "browser"
+    },
+    {
+      "id": "browser.zoom-in",
+      "title": "Zoom the page in",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "Equal",
+          "primary": true
+        },
+        {
+          "code": "Equal",
+          "primary": true,
+          "shift": true
+        }
+      ],
+      "scope": "browser"
+    },
+    {
+      "id": "browser.zoom-out",
+      "title": "Zoom the page out",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "Minus",
+          "primary": true
+        }
+      ],
+      "scope": "browser"
+    },
+    {
+      "id": "browser.zoom-reset",
+      "title": "The page at its own size",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "Digit0",
+          "primary": true
+        }
+      ],
+      "scope": "browser"
+    },
+    {
+      "id": "browser.devtools",
+      "title": "The page's developer tools",
+      "section": "Browser",
+      "keys": [
+        {
+          "code": "F12"
+        }
+      ],
+      "scope": "browser"
+    }
+  ],
+  "scopes": [
+    {
+      "id": "browser",
+      "title": "Browser"
     }
   ],
   "sources": [

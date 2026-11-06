@@ -2,10 +2,11 @@
  * menu finds of it (ADR 0013, ADR 0022). It has no engine part, so it is
  * always on. */
 import type { ProjectId } from "@banda/contract"
-import { defineModule, takes } from "@banda/ui/module"
+import { defineModule, scoped, takes } from "@banda/ui/module"
 import { paneOf, type PaneState } from "@banda/ui/pane"
 import { searchNow } from "./address"
 import { browserPane } from "./BrowserPane"
+import { actionOf, BROWSER, BROWSER_KEYS } from "./keys"
 import { frontHolder, holderOf, openWith } from "./pages"
 import { webSource } from "./sources"
 import { browserAt, type KeptArgs, NEW_BROWSER, readArgs } from "./tabs"
@@ -51,7 +52,12 @@ export const browser = defineModule({
         )
       },
     },
+    // The browser's own keys, Chrome's (ADR 0071, decision 1).
+    ...BROWSER_KEYS.map(({ does, ...rest }) =>
+      scoped(BROWSER, { ...rest, id: actionOf(does), section: "Browser" })
+    ),
   ],
+  scopes: [{ id: BROWSER, title: "Browser" }],
   sources: [webSource],
   watches: [waitsWatch],
   // A tab an Agent opens goes beside its Thread (ADR 0029, decision 4):

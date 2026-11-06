@@ -95,7 +95,12 @@ export class Extensions extends Context.Service<
           const [, opened] = await run(create(first))
           return opened
         },
-        selectTab: (page) => tabs.tell({ kind: "select", from: page.id }),
+        // The tab the window said it shows is no news to it: telling it
+        // back would show that tab again over what the Person did since,
+        // as a tab Ctrl+T opened meanwhile.
+        selectTab: (page) => {
+          if (page.id !== active) tabs.tell({ kind: "select", from: page.id })
+        },
         removeTab: (page) => tabs.tell({ kind: "close", from: page.id }),
       })
       // `chrome.action.openPopup()` opens the library's popup, a window of
