@@ -27,6 +27,7 @@ import {
   widthOf,
 } from "../registry"
 import { settingsPane } from "../settings/pane"
+import { toggleSolo } from "../flow"
 import {
   askIntoField,
   listingFor,
@@ -591,6 +592,14 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     title: "The Group the whole screen wide, or back",
     keys: [{ code: "KeyM", mod: true }],
     run: (shell) => shell.change(filling),
+  },
+  {
+    id: "flow.solo",
+    section: "Workspaces",
+    title:
+      "Solo, the Agent you are at the whole screen wide, or back to the row",
+    keys: [{ code: "KeyM", mod: true, shift: true }],
+    run: () => toggleSolo(),
   },
   {
     id: "pane.consume-left",

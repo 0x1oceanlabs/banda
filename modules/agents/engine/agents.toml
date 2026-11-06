@@ -10,10 +10,12 @@
 # mode = "auto"
 # model = "opus"
 
-# Where an Agent's Thread opens: "project", on its Project's workspace, in a
-# row with the Project's other Agents (ADR 0065), or "off", beside the Pane
-# in front.
-# workspaces = "project"
+# How an Agent's windows stand, its Flow (ADR 0079): "free", where they
+# are, a Thread opening beside the Pane in front; "row", on its Project's
+# workspace in a row with the Project's other Agents (ADR 0065); or "solo",
+# as the row, the Agent you are at filling the screen. The icon in the
+# sidebar's header switches it, and Alt+Shift+M goes from row to solo.
+# flow = "row"
 
 # What Enter does with a message written while the Agent works: "steer",
 # into the turn, so the Agent reads it as it works, or "queue", so it

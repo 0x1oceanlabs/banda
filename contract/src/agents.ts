@@ -10,6 +10,7 @@ import { VERSION } from "./generated/agents/VERSION"
 
 export type { Agents } from "./generated/agents/Agents"
 export type { Enter } from "./generated/agents/Enter"
+export type { Flow } from "./generated/agents/Flow"
 export type { Body } from "./generated/agents/Body"
 export type { ChangesAsk } from "./generated/agents/ChangesAsk"
 export type { ChangedTurn } from "./generated/agents/ChangedTurn"
@@ -127,7 +128,7 @@ export function decodeFact(event: Event): Fact | null {
 
 /** How messages are sent with no `agents.toml`, as `banda look` gives it:
  * for before the first look. */
-export const DEFAULT_AGENTS: Agents = { enter: "steer", workspaces: "project" }
+export const DEFAULT_AGENTS: Agents = { enter: "steer", flow: "row" }
 
 /** The agents module's `agents.toml`. */
 export const AGENTS_FILE: ModuleFile<Agents> = {

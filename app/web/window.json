@@ -422,6 +422,18 @@
       ]
     },
     {
+      "id": "flow.solo",
+      "title": "Solo, the Agent you are at the whole screen wide, or back to the row",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "KeyM",
+          "mod": true,
+          "shift": true
+        }
+      ]
+    },
+    {
       "id": "pane.consume-left",
       "title": "Take the Pane into the column on the left, or out of its own",
       "section": "Panes",

@@ -32,18 +32,25 @@ pub enum Enter {
     Queue,
 }
 
-/// Where an Agent's Thread opens (ADR 0065, decision 9).
+/// How an Agent's windows stand, its Flow (ADR 0079): where its Thread
+/// opens, and what a pick of it shows.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "agents/")]
-pub enum Workspaces {
-    /// On its Project's workspace, in a row with the Project's other Agents.
+pub enum Flow {
+    /// Where the window has it: beside the Pane in front, and a pick goes
+    /// to wherever its Pane is. `off` before ADR 0079 (grace).
+    #[serde(alias = "off")]
+    Free,
+    /// On its Project's workspace, in a row with the Project's other
+    /// Agents, a pick at the left (ADR 0065). `project` before ADR 0079,
     /// `space` before ADR 0069 (grace).
     #[default]
+    #[serde(alias = "project")]
     #[serde(alias = "space")]
-    Project,
-    /// Where the window has it: beside the Pane in front.
-    Off,
+    Row,
+    /// As the row, and the Agent the focus is at fills the screen.
+    Solo,
 }
 
 /// The file as Banda writes it first, every default named.
@@ -60,9 +67,12 @@ pub struct AgentsSettings {
     /// `[start.claude]`. The Agents section sets it from the composer's
     /// bar.
     pub start: Option<BTreeMap<String, Start>>,
-    /// Where an Agent's Thread opens: `"project"`, on its Project's workspace,
-    /// with the Project's other Agents; `"off"`, beside the Pane in front.
-    pub workspaces: Option<Workspaces>,
+    /// How an Agent's windows stand: `"free"`, where they are; `"row"`,
+    /// on its Project's workspace beside the Project's other Agents;
+    /// `"solo"`, as the row, the Agent you are at filling the screen.
+    /// `workspaces` before ADR 0079 (grace).
+    #[serde(alias = "workspaces")]
+    pub flow: Option<Flow>,
 }
 
 /// How messages to an Agent are sent, every key resolved.
@@ -70,20 +80,25 @@ pub struct AgentsSettings {
 #[ts(export, export_to = "agents/")]
 pub struct Agents {
     pub enter: Enter,
-    pub workspaces: Workspaces,
+    pub flow: Flow,
 }
 
 impl OneFile for AgentsSettings {
     const NAME: &'static str = "agents.toml";
     const TEMPLATE: &'static str = TEMPLATE;
-    const RENAMED: &'static [Renamed] = &[Renamed::value("workspaces", "space", "project")];
+    const RENAMED: &'static [Renamed] = &[
+        Renamed::key("", "workspaces", "flow"),
+        Renamed::value("workspaces", "off", "free"),
+        Renamed::value("workspaces", "project", "row"),
+        Renamed::value("workspaces", "space", "row"),
+    ];
     type Resolved = Agents;
 
     fn defaults() -> Self {
         AgentsSettings {
             enter: Some(Enter::default()),
             start: None,
-            workspaces: Some(Workspaces::default()),
+            flow: Some(Flow::default()),
         }
     }
 
@@ -91,14 +106,14 @@ impl OneFile for AgentsSettings {
         AgentsSettings {
             enter: self.enter.or(under.enter),
             start: self.start.or(under.start),
-            workspaces: self.workspaces.or(under.workspaces),
+            flow: self.flow.or(under.flow),
         }
     }
 
     fn resolved(self) -> Agents {
         Agents {
             enter: self.enter.unwrap_or_default(),
-            workspaces: self.workspaces.unwrap_or_default(),
+            flow: self.flow.unwrap_or_default(),
         }
     }
 }
