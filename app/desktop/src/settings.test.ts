@@ -4,6 +4,7 @@ import { NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
 import { Settings } from "@banda/desktop-kit"
+import { Program } from "./program"
 import { settingsLayer } from "./settings"
 import { script } from "./testing"
 
@@ -29,7 +30,10 @@ exit 0`)
 }
 
 const settingsOf = (program: string) =>
-  settingsLayer(program).pipe(Layer.provide(NodeServices.layer))
+  settingsLayer.pipe(
+    Layer.provide(Program.layer({ program })),
+    Layer.provide(NodeServices.layer)
+  )
 
 it.live(
   "a set that is done says nothing; a refused one says each problem",

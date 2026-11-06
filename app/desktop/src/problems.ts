@@ -109,12 +109,12 @@ function written(log: Rolling, level: string, text: string): void {
  * Keeps main's Problems with `send` from now on: what is thrown and not
  * caught, a page of Banda's whose process ended badly, and a helper
  * process that crashed. `banda` tells Banda's own pages from the
- * browser's.
+ * browser's. Returns how main keeps one it finds itself.
  */
 export function watchProblems(
   send: (record: Record) => Promise<unknown>,
   banda: (contents: WebContents) => boolean
-): void {
+): (record: Record) => void {
   const keep = keeper(send)
   const thrown = (error: unknown) => {
     console.error("banda: main:", error)
@@ -141,6 +141,7 @@ export function watchProblems(
       )
     )
   })
+  return keep
 }
 
 const crash = (reason: string, message: string): Record => ({

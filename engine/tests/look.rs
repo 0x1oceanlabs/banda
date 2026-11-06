@@ -3,7 +3,10 @@
 
 mod common;
 
-use common::banda;
+use common::{banda, wait_for};
+use std::io::{BufRead, BufReader};
+use std::process::Stdio;
+use std::time::Duration;
 
 #[test]
 fn look_prints_the_resolved_look_as_json() {
@@ -49,4 +52,28 @@ fn look_themes_lists_bandas_own_one_per_line() {
         .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap()["name"].to_string())
         .collect();
     assert!(names.starts_with(&["\"banda-light\"".into(), "\"banda-dark\"".into()]));
+}
+
+#[test]
+fn look_follow_with_a_parent_stops_once_its_stdin_closes() {
+    let config = tempfile::tempdir().unwrap();
+    let mut look = common::on(config.path())
+        .args(["look", "--follow", "--with-parent"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut said = BufReader::new(look.stdout.take().unwrap());
+    let mut first = String::new();
+    said.read_line(&mut first).unwrap();
+    assert!(first.starts_with('{'), "{first}");
+
+    // The window goes: the look goes with it, though nothing changed and
+    // it has nothing to print.
+    drop(look.stdin.take());
+    let Some(status) = wait_for(Duration::from_secs(5), || look.try_wait().unwrap()) else {
+        look.kill().unwrap();
+        panic!("the look did not stop within five seconds of its parent");
+    };
+    assert!(status.success(), "{status:?}");
 }

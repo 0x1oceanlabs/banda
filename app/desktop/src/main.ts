@@ -55,7 +55,7 @@ import { engineLayer } from "./engine"
 import { loginPath } from "./login"
 import { firstFrame, firstLook, lookLayer } from "./look"
 import { modules } from "./modules"
-import { channel, stateFolder } from "./channel"
+import { channel, dataFolder, stateFolder } from "./channel"
 import { listApp } from "./entry"
 import { startLog, watchProblems } from "./problems"
 import { Editors } from "./editors"
@@ -64,6 +64,7 @@ import { roadLayer } from "./road"
 import { settingsLayer } from "./settings"
 import { updates } from "./update"
 import { ensure } from "./sidebar"
+import { Program, whereOf } from "./program"
 
 /** What a Pane in its own window asks of the window (`PoppedAsk`). */
 const PoppedAsk = Schema.Union([
@@ -143,12 +144,13 @@ delete process.env.BANDA_ENGINE
 
 const here = app.getAppPath()
 const pageFolder = resolve(here, "../web/dist")
-// A trial names the program it runs as its engine (scripts/try.sh).
-const engineBinary =
-  process.env.BANDA_PROGRAM ??
-  (app.isPackaged
-    ? join(process.resourcesPath, "banda")
-    : resolve(here, "../../target/debug/banda"))
+// The window's `banda` (program.ts).
+const where = whereOf({
+  named: process.env.BANDA_PROGRAM,
+  checkout: resolve(here, "../../target/debug/banda"),
+  resources: app.isPackaged ? process.resourcesPath : undefined,
+  data: dataFolder(app.getPath("appData")),
+})
 // The ACP adapters the app carries, which the engine runs on this
 // Electron as Node (ADR 0059): a checkout's are built beside the
 // harnesses module's desktop part (adapters.mjs).
@@ -186,17 +188,17 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 /** Main's services (ADR 0020): the engine and the look as children, the
- * settings, the byte host, over them the modules' own, the browser's and
- * the notifications' (modules.ts), and the road that answers what the
- * modules' engine parts ask (road.ts). They start with the first effect
- * run, and stop when it is disposed. */
+ * settings, all three on the window's `banda` (program.ts), the byte
+ * host, over them the modules' own, the browser's and the notifications'
+ * (modules.ts), and the road that answers what the modules' engine parts
+ * ask (road.ts). They start with the first effect run, and stop when it
+ * is disposed. */
 const runtime = ManagedRuntime.make(
   roadLayer(modules.asked).pipe(
     Layer.provideMerge(modules.layer),
     Layer.provideMerge(
       Layer.mergeAll(
         engineLayer(
-          engineBinary,
           loginPath({
             platform: process.platform,
             shell: process.env.SHELL ?? userInfo().shell ?? undefined,
@@ -205,19 +207,30 @@ const runtime = ManagedRuntime.make(
           }),
           carried
         ),
-        lookLayer(engineBinary),
-        settingsLayer(engineBinary),
+        lookLayer,
+        settingsLayer,
         Window.layer(() => window),
         FileHost.layer,
         PreviewHost.layer,
         Editors.layer
       )
     ),
+    // A packed Banda that cannot run a copy of its own says why.
+    Layer.provide(
+      Program.layer(where, (why) =>
+        keepProblem({
+          source: "main",
+          kind: "Uncopied",
+          message: `The engine runs from inside the app, not a copy of its own: ${why}`,
+          frames: [],
+        })
+      )
+    ),
     Layer.provide(NodeServices.layer)
   )
 )
 // What breaks in main, or crashes, is kept as the page's is (ADR 0039).
-watchProblems(
+const keepProblem = watchProblems(
   (record) =>
     runtime
       .runPromise(Engine.use((engine) => engine.client))

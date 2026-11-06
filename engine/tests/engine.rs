@@ -3,6 +3,9 @@
 //! starts it for an Agent; and `banda` as an Agent runs it in its shell,
 //! under its pass. The Harness is the fake agent from `tools/fake-agent`.
 
+mod common;
+
+use common::wait_for;
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -145,6 +148,33 @@ fn a_script_drives_an_agent_through_the_engine_a_window_started() {
     let (mut engine, stdin, running) = places.serve();
     assert!(running["port"].as_u64().unwrap() > 0);
     assert_eq!(running["secret"].as_str().unwrap().len(), 64);
+    // It names its build, as `banda --version` does after a version that
+    // can name a folder: the window checks its copy of `banda` by that
+    // line (ADR 0086, decision 2). An ELF's SHA-1 build id, or a Mach-O's
+    // UUID.
+    let build = text(&running["build"]);
+    assert_eq!(
+        build.len(),
+        if cfg!(target_os = "macos") { 32 } else { 40 },
+        "{build}"
+    );
+    assert!(
+        build.bytes().all(|byte| byte.is_ascii_hexdigit()),
+        "{build}"
+    );
+    let version = env!("BANDA_VERSION");
+    assert!(
+        version.starts_with(|first: char| first.is_ascii_alphanumeric())
+            && version
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || ".+_-".contains(c)),
+        "{version}"
+    );
+    let said = places.banda(&["--version"]).output().unwrap();
+    assert_eq!(
+        String::from_utf8(said.stdout).unwrap(),
+        format!("banda {version} (build {build})\n")
+    );
 
     let second = places.banda(&["serve"]).output().unwrap();
     assert_eq!(second.status.code(), Some(2), "{second:?}");
@@ -714,16 +744,4 @@ fn a_project_the_person_does_not_trust_loads_only_their_own_settings() {
 
     drop(stdin);
     assert!(engine.wait().unwrap().success());
-}
-
-/// What `found` finds, asked every ten milliseconds until `within` passes.
-fn wait_for<T>(within: Duration, mut found: impl FnMut() -> Option<T>) -> Option<T> {
-    let until = std::time::Instant::now() + within;
-    while std::time::Instant::now() < until {
-        if let Some(found) = found() {
-            return Some(found);
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    None
 }

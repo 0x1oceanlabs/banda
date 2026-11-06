@@ -11,6 +11,8 @@
 //!   arrangement from `sidebar.toml` and the browser's from
 //!   `browser.toml`; `--follow` prints it again on each change. It needs
 //!   no engine: the look is this machine's.
+//! - `banda --version` prints the version and the build id, by which the
+//!   window checks its own copy of this program (ADR 0086, decision 2).
 //! - `banda skill` prints the Banda skill, what an Agent needs to know to
 //!   work in Banda and change it; `banda skill <topic>` prints a topic.
 //! - `banda menu [route]` opens the Banda menu in the window, at a route
@@ -28,10 +30,12 @@
 //! answers, or the program cannot do its part, it says so on stderr and
 //! exits 2.
 
+mod build_id;
 mod client;
 mod files;
 mod mcp;
 mod modules;
+mod parent;
 mod places;
 mod problems;
 mod serve;
@@ -117,6 +121,9 @@ enum Command {
         /// reads changes or Hyprland reloads.
         #[arg(long)]
         follow: bool,
+        /// For a window that follows the look: stops when stdin closes.
+        #[arg(long, requires = "follow")]
+        with_parent: bool,
     },
     /// Banda's settings files in ~/.config/banda: look.toml, sidebar.toml
     /// and harnesses.toml. Agents and people edit them; this checks them
@@ -359,9 +366,13 @@ impl Failure {
 
 fn main() -> ExitCode {
     banda_kernel::set_version(env!("BANDA_VERSION"));
-    let cli = Cli::parse();
+    let cli = parse();
     match cli.command {
-        Command::Look { what, follow } => return look(what, follow),
+        Command::Look {
+            what,
+            follow,
+            with_parent,
+        } => return look(what, follow, with_parent),
         Command::Skill { topic, export } => return skill(topic, export),
         Command::Settings { what } => return settings(what),
         Command::Keys { what, json } => return keys(what, json),
@@ -388,6 +399,22 @@ fn main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(failure) => failure.exit(),
     }
+}
+
+/// The command line, with `--version` saying the build id after the
+/// version, as `banda 0.3.0 (build 16da2821…)`: the window runs its copy of
+/// this program once with it, and runs the copy only when it says what
+/// the program it copied says (ADR 0086, decision 2).
+fn parse() -> Cli {
+    use clap::{CommandFactory, FromArgMatches};
+    let version = match build_id::own() {
+        Some(build) => format!("{} (build {build})", env!("BANDA_VERSION")),
+        None => env!("BANDA_VERSION").to_owned(),
+    };
+    // clap takes a version that lives as long as the program.
+    let version: &'static str = Box::leak(version.into_boxed_str());
+    let matches = Cli::command().version(version).get_matches();
+    Cli::from_arg_matches(&matches).unwrap_or_else(|error| error.exit())
 }
 
 /// The log, on stderr, and for the engine in `file` too, which starts
@@ -764,7 +791,7 @@ fn report(problems: Vec<banda_look::Problem>) -> ExitCode {
 }
 
 /// `banda look`: no engine, no runtime, only files and Hyprland's socket.
-fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
+fn look(what: Option<LookCommand>, follow: bool, with_parent: bool) -> ExitCode {
     use banda_look::hyprland::Hyprland;
     let places = match look_places() {
         Ok(places) => places,
@@ -776,6 +803,11 @@ fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
         |value: serde_json::Value| writeln!(out, "{value}").and_then(|()| out.flush()).is_ok();
     match what {
         None if follow => {
+            // The window's child goes with it, not at the next look it
+            // would print to no one (ADR 0086, decision 2).
+            if with_parent {
+                parent::on_gone(|| std::process::exit(0));
+            }
             // The window runs this as it starts: each settings file's
             // schema goes where the files' `#:schema` lines point.
             let schemas = places.config.join("schemas");

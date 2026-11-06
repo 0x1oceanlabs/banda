@@ -1,6 +1,7 @@
 /**
  * The look as main keeps it (ADR 0007, ADR 0020): the last one, and each
- * new one. Main runs `banda look --follow` for it (app/desktop/src/look.ts).
+ * new one. Main runs `banda look --follow --with-parent` for it
+ * (app/desktop/src/look.ts).
  */
 import type { Look as LookValue } from "@banda/contract/look"
 import { Context, Effect, type Stream } from "effect"

@@ -4,6 +4,7 @@
 
 use std::path::Path;
 use std::process::{Command, Output};
+use std::time::{Duration, Instant};
 
 /// Runs `banda` on `config` alone: no Omarchy, no system fonts, no
 /// Hyprland, so a test never reads the Person's own settings.
@@ -21,7 +22,8 @@ pub fn banda_in(config: &Path, state: &Path, args: &[&str]) -> Output {
         .expect("banda runs")
 }
 
-fn on(config: &Path) -> Command {
+/// `banda` on `config` alone, to run as the test likes.
+pub fn on(config: &Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_banda"));
     command
         .env("BANDA_CONFIG", config)
@@ -30,4 +32,16 @@ fn on(config: &Path) -> Command {
         .env("BANDA_FONTCONFIG", "")
         .env_remove("HYPRLAND_INSTANCE_SIGNATURE");
     command
+}
+
+/// What `found` finds, asked every ten milliseconds until `within` passes.
+pub fn wait_for<T>(within: Duration, mut found: impl FnMut() -> Option<T>) -> Option<T> {
+    let until = Instant::now() + within;
+    while Instant::now() < until {
+        if let Some(found) = found() {
+            return Some(found);
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    None
 }

@@ -6,7 +6,16 @@
  * lasted half a minute. When its scope closes, the program gets SIGTERM,
  * and SIGKILL if it has not gone five seconds later.
  */
-import { Clock, Console, Effect, Option, Stream, SubscriptionRef } from "effect"
+import {
+  Clock,
+  Console,
+  Effect,
+  Option,
+  type PlatformError,
+  type Scope,
+  Stream,
+  SubscriptionRef,
+} from "effect"
 import { ChildProcess, type ChildProcessSpawner } from "effect/process"
 
 const FIRST_WAIT = 500
@@ -34,11 +43,21 @@ export function command(
   })
 }
 
-/** Runs `command` for good, `name` in what it says when it dies; `use`
- * reads each run, and a run whose `use` fails is stopped. */
+/** What starts one run: a `command`, or an effect that makes one as the
+ * run starts. */
+type Start = Effect.Effect<
+  ChildProcessSpawner.ChildProcessHandle,
+  PlatformError.PlatformError,
+  ChildProcessSpawner.ChildProcessSpawner | Scope.Scope
+>
+
+/** Runs what `start` starts for good, `name` in what it says when it
+ * dies; `use` reads each run, and a run whose `use` fails is stopped.
+ * `start` is asked anew for each run, so a run starts the program where
+ * it is then. */
 export const keepRunning = <E extends { message: string }, R>(
   name: string,
-  command: ChildProcess.Command,
+  start: Start,
   use: (
     child: ChildProcessSpawner.ChildProcessHandle
   ) => Effect.Effect<void, E, R>
@@ -47,7 +66,7 @@ export const keepRunning = <E extends { message: string }, R>(
     let wait = FIRST_WAIT
     while (true) {
       const started = yield* Clock.currentTimeMillis
-      const ended = yield* Effect.scoped(once(command, use))
+      const ended = yield* Effect.scoped(once(start, use))
       if ((yield* Clock.currentTimeMillis) - started > HEALTHY)
         wait = FIRST_WAIT
       yield* Console.error(
@@ -60,13 +79,13 @@ export const keepRunning = <E extends { message: string }, R>(
 
 /** One run: how it ended, in words. */
 const once = <E extends { message: string }, R>(
-  command: ChildProcess.Command,
+  start: Start,
   use: (
     child: ChildProcessSpawner.ChildProcessHandle
   ) => Effect.Effect<void, E, R>
 ) =>
   Effect.gen(function* () {
-    const child = yield* command
+    const child = yield* start
     const exited = child.exitCode.pipe(Effect.map((code) => `code ${code}`))
     return yield* use(child).pipe(
       Effect.andThen(Effect.never),

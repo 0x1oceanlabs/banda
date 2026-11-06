@@ -119,7 +119,7 @@ export function follow<T>(
 export const BRIDGE = bridge({
   /** Where the engine listens now; it waits while the engine starts. */
   engine: invoke<[], Address>(),
-  /** `banda look --follow`, as the desktop hears it. */
+  /** `banda look --follow --with-parent`, as the desktop hears it. */
   look: {
     /** The last look; none before the first. */
     current: invoke<[], Look | null>(),

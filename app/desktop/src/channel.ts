@@ -45,13 +45,34 @@ export const channel =
  * `appData` is Electron's, which `dirs` takes on macOS.
  */
 export function stateFolder(appData: string): string {
-  if (process.env.BANDA_STATE) return process.env.BANDA_STATE
-  const xdg = process.env.XDG_STATE_HOME
+  return folder("BANDA_STATE", "XDG_STATE_HOME", "state", appData)
+}
+
+/**
+ * The engine's data folder, where the window keeps its copy of `banda`
+ * too (`engine/`, program.ts): `BANDA_DATA`, or the system's data folder
+ * as the engine finds it, with this Banda's folder in it.
+ */
+export function dataFolder(appData: string): string {
+  return folder("BANDA_DATA", "XDG_DATA_HOME", "share", appData)
+}
+
+/** The folder `named` names, or this Banda's in the system's: on macOS in
+ * `appData`, elsewhere in `xdg`'s, or `~/.local/<local>`. */
+function folder(
+  named: string,
+  xdg: string,
+  local: string,
+  appData: string
+): string {
+  const set = process.env[named]
+  if (set) return set
+  const system = process.env[xdg]
   const base =
     process.platform === "darwin"
       ? appData
-      : xdg && isAbsolute(xdg)
-        ? xdg
-        : join(homedir(), ".local", "state")
+      : system && isAbsolute(system)
+        ? system
+        : join(homedir(), ".local", local)
   return join(base, channel.folder)
 }
