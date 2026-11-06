@@ -15,7 +15,7 @@ use banda_files::Files as FilesModule;
 use banda_git::Git;
 use banda_harnesses::HarnessesModule;
 use banda_kernel::Method;
-use banda_look::keys::Action;
+use banda_look::keys::{Action, Scope};
 use banda_problems::Problems;
 use banda_pulls::Pulls;
 use banda_sharing::Sharing;
@@ -143,6 +143,9 @@ struct Window {
     #[serde(default)]
     panes: Vec<String>,
     actions: Vec<Action>,
+    /// The scopes its actions' keys work in (ADR 0071, decision 1).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    scopes: Vec<Scope>,
     #[serde(default)]
     sources: Vec<Value>,
     #[serde(default)]
@@ -240,6 +243,21 @@ fn topic(offers: &[Offer]) -> String {
                 writeln!(text, "{}", line_of(action)).unwrap();
             }
         }
+        let scopes: Vec<String> = (offer.window.iter().flat_map(|w| &w.scopes))
+            .map(|scope| {
+                let field = if scope.field { ", a field" } else { "" };
+                format!("`{}` (the {}{field})", scope.id, scope.title)
+            })
+            .collect();
+        if !scopes.is_empty() {
+            write!(
+                text,
+                "\nIts scopes, whose actions' keys work while the focus is in \
+                 them and are bound in their own table of `keys.toml`: {}.\n",
+                scopes.join(", ")
+            )
+            .unwrap();
+        }
         let widgets: Vec<&Widget> = offer.window.iter().flat_map(|w| &w.bar).collect();
         if !widgets.is_empty() {
             text.push_str("\nIts widgets on the bar, which `[bar]` in look.toml places by id:\n\n");
@@ -281,6 +299,9 @@ fn line_of(action: &Action) -> String {
             .map(|key| key.real(banda_look::keys::Mod::default()).text())
             .collect();
         line.push_str(&format!(", {}", keys.join(" or ")));
+    }
+    if let Some(scope) = &action.scope {
+        line.push_str(&format!(", `{}`", banda_look::keys::table_of(Some(scope))));
     }
     let properties = action
         .args

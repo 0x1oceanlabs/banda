@@ -367,10 +367,10 @@ function Menu({
       setNote(done.current)
     },
   })
-  const write = (key: Key, action: string, did: string) => {
+  const write = (key: Key, action: Action<Shell>, did: string, to?: string) => {
     done.current = did
     setNote(undefined)
-    writing(writeBind(key, action))
+    writing(writeBind({ ...key, scope: action.scope }, to ?? action.id))
   }
   // A Project added here opens its new Thread, as the menu closes; what the
   // engine refused shows, and the field stays as it was.
@@ -406,8 +406,9 @@ function Menu({
       case "free":
         return write(
           row.key,
-          "none",
-          `${keyLabel(row.key)} goes to the Pane now`
+          row.action,
+          `${keyLabel(row.key)} goes to the Pane now`,
+          "none"
         )
       case "folder":
         setWords(row.path)
@@ -435,11 +436,14 @@ function Menu({
     const key = keyToBind(event)
     if (!key) return
     const had = actions.find(
-      (one) => one !== action && one.keys?.some((mine) => sameKey(mine, key))
+      (one) =>
+        one !== action &&
+        one.scope === action.scope &&
+        one.keys?.some((mine) => sameKey(mine, key))
     )
     write(
       key,
-      action.id,
+      action,
       `${keyLabel(key)} runs “${action.title}” now` +
         (had ? `, not “${had.title}”` : "")
     )

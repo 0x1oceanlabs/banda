@@ -499,13 +499,13 @@ fn checked<T>(read: impl FnOnce(&mut Vec<Problem>) -> T) -> Vec<Problem> {
 /// window settings, and is asked only when `look.toml` lets it. The
 /// files in `also`, the modules', are watched and resolved too, into
 /// [`Look::files`], or their problems named when the look only checks
-/// them. With every manifest's `actions`, it makes the keys in force
+/// them. With every manifest's actions and scopes, it makes the keys in force
 /// (ADR 0071, decision 4).
 pub fn resolve(
     places: &Places,
     windows: &dyn Fn() -> Option<Windows>,
     also: &[SettingsFile],
-    actions: &[keys::Action],
+    manifests: &keys::Manifests,
 ) -> Resolved {
     let mut problems = Vec::new();
     let mut watched = Vec::new();
@@ -695,7 +695,7 @@ pub fn resolve(
     }
 
     let (sidebar, sidebar_keys) = sidebar::resolve(places, &mut problems, &mut watched);
-    let (keys, keys_keys) = keys::resolve(places, actions, &mut problems, &mut watched);
+    let (keys, keys_keys) = keys::resolve(places, manifests, &mut problems, &mut watched);
     let mut settings = BTreeMap::from([
         ("look.toml".to_owned(), keyed::keyed(&all, &keyed_layers)),
         ("sidebar.toml".to_owned(), sidebar_keys),
@@ -986,7 +986,7 @@ pub fn follow(
     places: &Places,
     hyprland: Option<hyprland::Hyprland>,
     also: &[SettingsFile],
-    actions: &[keys::Action],
+    manifests: &keys::Manifests,
     mut emit: impl FnMut(&Look) -> bool,
 ) {
     let (tell, changes) = std::sync::mpsc::channel::<()>();
@@ -1006,7 +1006,7 @@ pub fn follow(
         // The files as they were before they are read, so a save while they
         // are read, or before the look is out, is still a change to come.
         let before = state(&watched, &followed);
-        let resolved = resolve(places, &windows, also, actions);
+        let resolved = resolve(places, &windows, also, manifests);
         let seen = if resolved.watched == watched && resolved.followed == followed {
             before
         } else {

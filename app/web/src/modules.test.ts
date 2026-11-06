@@ -53,8 +53,17 @@ test("a module's new action's id starts with its module's id", () => {
  * mod; where they work, and what it takes. */
 function actionOf(action: Action<never>) {
   // JSON leaves out what is not there.
-  const { id, title, section, keys = [], family, unlisted, args } = action
-  return { id, title, section, keys, family, unlisted, args }
+  const {
+    id,
+    title,
+    section,
+    keys = [],
+    family,
+    unlisted,
+    scope,
+    args,
+  } = action
+  return { id, title, section, keys, family, unlisted, scope, args }
 }
 
 /** What a module's window part offers, as `banda modules` prints it: its
@@ -63,6 +72,7 @@ function windowOf(module: Module) {
   return {
     panes: module.panes.map((pane) => pane.kind),
     actions: module.actions.map(actionOf),
+    ...(module.scopes.length > 0 && { scopes: module.scopes }),
     sources: module.sources.map(({ id, label }) => ({ id, label })),
     watches: module.watches.length,
     bar: module.bar.map(({ id, about }) => ({ id, about })),

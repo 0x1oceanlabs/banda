@@ -53,6 +53,8 @@ import { ownCommand, type Suggested } from "./slash"
 import { type FindFiles, useFileMenu } from "./FileMenu"
 import { useSkillMenu, useSlashMenu } from "./SlashMenu"
 import { stray, typed } from "./stray"
+import { useScope } from "@banda/ui/hooks/use-scope"
+import { COMPOSER } from "./scopes"
 
 /**
  * Where a Person writes to the Agent: the text, with the slash commands
@@ -265,6 +267,48 @@ export function Composer({
 
   // At most one is open, for the word being typed.
   const menus = [slash, fileMenu, skillMenu]
+  // The composer's keys (ADR 0071, decision 1). A key its suggestions or
+  // its text take, as Enter in code, stays theirs.
+  const owned = (event: KeyboardEvent) =>
+    menus.some((menu) => menu.onKeyDown(event)) ||
+    (field.current?.textKey(event) ?? false)
+  const recalled = (up: boolean) => {
+    // Within a message of more lines, the caret moves first.
+    if (!(field.current?.atEdge(up) ?? true)) return false
+    const step = recall(history(), back, text, up, onEditLast !== undefined)
+    if (!step) return false
+    if (step === "edit") onEditLast?.()
+    else {
+      setText(step.text)
+      setBack(step.back)
+    }
+    return true
+  }
+  const scope = useScope(
+    COMPOSER,
+    {
+      "agents.composer.send": () => {
+        void send(steers(enter, false))
+        return true
+      },
+      "agents.composer.send-other": () => {
+        void send(steers(enter, true))
+        return true
+      },
+      "agents.composer.newline": () => {
+        field.current?.newLine()
+        return true
+      },
+      "agents.composer.back": () => recalled(true),
+      "agents.composer.forward": () => recalled(false),
+      "agents.composer.plan": () => {
+        if (plan === undefined) return false
+        onPlanMode(!plan)
+        return true
+      },
+    },
+    owned
+  )
 
   // The message as it goes: the text, then the comments.
   const message = withComments(text, comments)
@@ -351,59 +395,32 @@ export function Composer({
         )}
         <ContextMenu>
           <ContextMenuTrigger render={<div className="contents" />}>
-            <PromptEditor
-              ref={field}
-              value={text}
-              placeholder={
-                placeholder ?? says(name, steering, skills.length > 0)
-              }
-              skills={skillNames}
-              attributes={{
-                "aria-label": `Message to ${name}`,
-                ...Object.assign({}, ...menus.map((menu) => menu.field)),
-              }}
-              className="max-h-48 px-3.5 pt-3 pb-1.5"
-              onTyping={setTyping}
-              onChange={(value) => {
-                setText(value)
-                setBack(0)
-              }}
-              onPaste={(event) => takePaste(event, "caret")}
-              onKeyDown={(event) => {
-                if (menus.some((menu) => menu.onKeyDown(event))) return
-                if (
-                  event.key === "Tab" &&
-                  event.shiftKey &&
-                  plan !== undefined
-                ) {
-                  event.preventDefault()
-                  onPlanMode(!plan)
-                  return
+            <div ref={scope} className="contents">
+              <PromptEditor
+                ref={field}
+                value={text}
+                placeholder={
+                  placeholder ?? says(name, steering, skills.length > 0)
                 }
-                const up = event.key === "ArrowUp"
-                if (plain(event) && (up || event.key === "ArrowDown")) {
-                  // Within a message of more lines, the caret moves first.
-                  if (!(field.current?.atEdge(up) ?? true)) return
-                  const waits = onEditLast !== undefined
-                  const step = recall(history(), back, text, up, waits)
-                  if (!step) return
-                  event.preventDefault()
-                  if (step === "edit") return onEditLast?.()
-                  setText(step.text)
-                  setBack(step.back)
-                  return
-                }
-                if (
-                  event.key === "Enter" &&
-                  !event.shiftKey &&
-                  !event.isComposing
-                ) {
-                  event.preventDefault()
-                  // Ctrl (⌘ on a Mac) does the other thing.
-                  void send(steers(enter, event.ctrlKey || event.metaKey))
-                }
-              }}
-            />
+                skills={skillNames}
+                attributes={{
+                  "aria-label": `Message to ${name}`,
+                  ...Object.assign({}, ...menus.map((menu) => menu.field)),
+                }}
+                className="max-h-48 px-3.5 pt-3 pb-1.5"
+                onTyping={setTyping}
+                onChange={(value) => {
+                  setText(value)
+                  setBack(0)
+                }}
+                onPaste={(event) => takePaste(event, "caret")}
+                // Its suggestions' own keys; the rest are the composer's
+                // actions, which its scope runs (`keys`).
+                onKeyDown={(event) => {
+                  menus.some((menu) => menu.onKeyDown(event))
+                }}
+              />
+            </div>
           </ContextMenuTrigger>
           <ComposerMenu
             field={field}
@@ -597,11 +614,6 @@ const PRIMARY: Record<
     title: (name, enter) =>
       `Queue it: it goes once ${name} is done. ${keyFor(enter, "steer")} or Ctrl+click sends it now.`,
   },
-}
-
-/** Whether a key comes with no modifier held. */
-function plain(event: KeyboardEvent): boolean {
-  return !event.altKey && !event.shiftKey && !event.ctrlKey && !event.metaKey
 }
 
 /** From this share of its context used, how full it is shows. */

@@ -16,7 +16,6 @@ banda-look = { path = "../look" }
 banda-sharing = { path = "../modules/sharing/engine" }
 banda-terminal = { path = "../modules/terminal/engine" }
 schemars.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 toml_edit.workspace = true
 

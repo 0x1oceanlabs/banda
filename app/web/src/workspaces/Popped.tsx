@@ -3,7 +3,8 @@ import type { Engine } from "@banda/contract"
 import { useModules } from "@banda/ui/hooks/use-status"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import type { PaneState } from "@banda/ui/pane"
-import { actionFor, keysInForce, withKeys } from "../actions/actions"
+import { inScope, keysInForce, pressFor, withKeys } from "../actions/actions"
+import { scopesOf } from "@banda/ui/hooks/use-scope"
 import type { Host } from "../host"
 import { useLookKeys } from "../look"
 import { labelOf, previewers } from "../registry"
@@ -94,7 +95,8 @@ export function Popped({
     [engine, host, pane, close, back]
   )
 
-  // Of the window's keys, this window takes the two that are its Pane's.
+  // Of the window's keys, this window takes the two that are its Pane's,
+  // and its scopes' (ADR 0071), as the Composer's Enter.
   const keys = useLookKeys()
   const keyed = useMemo(() => withKeys(ACTIONS, keys.actions), [keys])
   const inForce = useMemo(() => keysInForce(keys.mod, keyed), [keys, keyed])
@@ -104,9 +106,12 @@ export function Popped({
       "pane.pop-out": back,
     }
     const onKey = (event: KeyboardEvent) => {
+      if (event.isComposing) return
       const target = event.target instanceof Element ? event.target : null
       if (target?.closest("[data-takes-keys]")) return
-      const run = own[actionFor(keyed, event)?.id ?? ""]
+      const pressed = pressFor(keyed, event, scopesOf(target))
+      if (!pressed || inScope(pressed, event)) return
+      const run = own[pressed.action.id]
       if (!run) return
       event.preventDefault()
       event.stopPropagation()

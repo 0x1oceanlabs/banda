@@ -8,7 +8,7 @@ use serde_json::{Map, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
 use std::path::PathBuf;
-use toml_edit::TableLike;
+use toml_edit::{Item, TableLike};
 use ts_rs::TS;
 
 /// Where a key's value comes from.
@@ -118,6 +118,31 @@ fn flatten(prefix: String, value: Value, keys: &mut Vec<(String, Value)>) {
         }
         value => keys.push((prefix, value)),
     }
+}
+
+/// The keys of the table at `path` in `text`, `["binds", "composer"]`,
+/// each with where it is, in the file's order; none when the text has no
+/// such table.
+pub fn spans_in(text: &str, path: &[&str]) -> Vec<(String, Range<usize>)> {
+    let Ok(document) = toml_edit::Document::parse(text) else {
+        return Vec::new();
+    };
+    let mut table: &dyn TableLike = document.as_table();
+    for name in path {
+        let Some(inner) = table.get(name).and_then(Item::as_table_like) else {
+            return Vec::new();
+        };
+        table = inner;
+    }
+    let mut spans: Vec<_> = table
+        .iter()
+        .filter_map(|(name, _)| {
+            let (key, item) = table.get_key_value(name)?;
+            Some((name.to_owned(), key.span().or_else(|| item.span())?))
+        })
+        .collect();
+    spans.sort_by_key(|(_, span)| span.start);
+    spans
 }
 
 /// The line `key` is on in `text`, through tables and inline tables.

@@ -10,6 +10,11 @@
 # besides the ones bound here; "none" frees a key, so it goes to the Pane,
 # as Alt+F to a shell. Ctrl+Alt+Shift+K is no file's: it brings the
 # window's own keys back until this file changes.
+#
+# A scope's actions, as the composer's, work while the focus is in it,
+# before the window's, and are bound in its own table, [binds.composer]:
+# a key there may be held with no mod, as Return, but not one its field
+# would type.
 
 # The mod is held for every Banda key and the mouse's moves: Alt, or one
 # or two of Alt, Ctrl and Super (⌘ on a Mac), as Ctrl+Alt where your
@@ -20,3 +25,6 @@
 [binds]
 # "Alt+M" = "column.maximize"
 # "Alt+F" = "none"
+
+# [binds.composer]
+# "Ctrl+Return" = "agents.composer.send"

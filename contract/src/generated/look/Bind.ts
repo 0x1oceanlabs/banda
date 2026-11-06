@@ -15,6 +15,11 @@ action?: string,
  */
 args?: { [key in string]: JsonValue }, 
 /**
+ * The scope whose table holds it, `[binds.composer]`; none for
+ * `[binds]`, the window's.
+ */
+scope?: string, 
+/**
  * The key as Banda writes it: `Ctrl+Alt+Shift+R`.
  */
 text: string, 

@@ -18,6 +18,14 @@ Its settings: `agents.toml`.
 Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
 
 - New Thread (`thread.new`), Alt+Return; takes `project` (the Project it starts in), `ask` (what to write to its Agent first), `harness` (the Harness it starts on)
+- Send the message, as agents.toml says Enter does (`agents.composer.send`), Return, `[binds.composer]`
+- Send it the other way: queued, or steering (`agents.composer.send-other`), Ctrl+Return, `[binds.composer]`
+- A new line in the message (`agents.composer.newline`), Shift+Return, `[binds.composer]`
+- The message sent before, from the first line (`agents.composer.back`), Up, `[binds.composer]`
+- The message sent after, from the last line (`agents.composer.forward`), Down, `[binds.composer]`
+- Plan mode on or off (`agents.composer.plan`), Shift+Tab, `[binds.composer]`
+
+Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `composer` (the Composer, a field).
 
 Its methods, `banda call agents.<method>`: `threads`, `thread`, `defaults`, `changes`, `write`, `touching`, `send`, `edit`, `withdraw`, `steer`, `resume`, `configure`, `stop`, `retry`, `fork`, `rewind`, `answer`, `attach`, `image`, `keep`, `show_visual`, `preview_visual`, `draft_issue`, `answer_issue`, `notify`, `visual`, `snooze`, `wake`, `rename`, `suggest_title`, `switch`.
 
@@ -36,6 +44,14 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 The agent programs this computer can start, who is signed in to each, how much of its usage limits is spent, and the tokens and estimated API cost in its local journals.
 
 Its settings: `harnesses.toml`.
+
+Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
+
+- Usage (`harnesses.usage`)
+
+Its widgets on the bar, which `[bar]` in look.toml places by id:
+
+- `harnesses.limits`: The room left of each Harness's best account; click for each account's limits.
 
 Its methods, `banda call harnesses.<method>`: `list`, `account`, `sign_in`, `sign_out`, `limits`, `usage`.
 

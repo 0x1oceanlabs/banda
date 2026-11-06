@@ -32,6 +32,82 @@
         },
         "additionalProperties": false
       }
+    },
+    {
+      "id": "agents.composer.send",
+      "title": "Send the message, as agents.toml says Enter does",
+      "section": "Composer",
+      "keys": [
+        {
+          "code": "Enter"
+        }
+      ],
+      "scope": "composer"
+    },
+    {
+      "id": "agents.composer.send-other",
+      "title": "Send it the other way: queued, or steering",
+      "section": "Composer",
+      "keys": [
+        {
+          "code": "Enter",
+          "primary": true
+        }
+      ],
+      "scope": "composer"
+    },
+    {
+      "id": "agents.composer.newline",
+      "title": "A new line in the message",
+      "section": "Composer",
+      "keys": [
+        {
+          "code": "Enter",
+          "shift": true
+        }
+      ],
+      "scope": "composer"
+    },
+    {
+      "id": "agents.composer.back",
+      "title": "The message sent before, from the first line",
+      "section": "Composer",
+      "keys": [
+        {
+          "code": "ArrowUp"
+        }
+      ],
+      "scope": "composer"
+    },
+    {
+      "id": "agents.composer.forward",
+      "title": "The message sent after, from the last line",
+      "section": "Composer",
+      "keys": [
+        {
+          "code": "ArrowDown"
+        }
+      ],
+      "scope": "composer"
+    },
+    {
+      "id": "agents.composer.plan",
+      "title": "Plan mode on or off",
+      "section": "Composer",
+      "keys": [
+        {
+          "code": "Tab",
+          "shift": true
+        }
+      ],
+      "scope": "composer"
+    }
+  ],
+  "scopes": [
+    {
+      "id": "composer",
+      "title": "Composer",
+      "field": true
     }
   ],
   "sources": [

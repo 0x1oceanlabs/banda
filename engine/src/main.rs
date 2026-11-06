@@ -713,7 +713,7 @@ fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
                 &places,
                 Hyprland::from_env(),
                 &banda_settings::also(),
-                &banda_settings::actions(),
+                &banda_settings::manifests(),
                 |look| print(json!(look)),
             );
             ExitCode::SUCCESS
@@ -726,7 +726,7 @@ fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
                     &places,
                     &windows,
                     &banda_settings::also(),
-                    &banda_settings::actions(),
+                    &banda_settings::manifests(),
                 )
                 .look
             ));

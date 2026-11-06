@@ -214,10 +214,14 @@ impl Open {
 /// it names, so `Alt+K` changes the line written `alt+k`, as one file has
 /// one line for a key.
 fn written_as(document: &DocumentMut, name: &str, tables: &[Key], leaf: &str) -> String {
-    let binds = match tables {
-        [table] if name == "keys.toml" && table.get() == "binds" => document.get("binds"),
-        _ => None,
-    };
+    // The table the key is in, as `[binds.composer]`.
+    let binds = (name == "keys.toml")
+        .then(|| {
+            tables.iter().try_fold(document.as_item(), |table, name| {
+                table.as_table_like()?.get(name.get())
+            })
+        })
+        .flatten();
     let names = banda_look::keys::canonical(leaf);
     binds
         .and_then(Item::as_table_like)
@@ -461,6 +465,27 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(&keys).unwrap(),
             "[binds]\n\"alt+k\" = \"none\" # mine\n\"Alt+M\" = \"pane.new\"\n"
+        );
+    }
+
+    #[test]
+    fn a_scope_s_table_has_its_own_lines() {
+        let config = tempfile::tempdir().unwrap();
+        let keys = config.path().join("keys.toml");
+        std::fs::write(&keys, "[binds]\n\"Alt+F\" = \"pane.new\"\n").unwrap();
+        let composer = "binds.composer.\"Ctrl+Return\"";
+        set(config.path(), "keys.toml", composer, "agents.composer.send").unwrap();
+        rename(config.path(), "keys.toml", composer, "ctrl+j").unwrap();
+        set(
+            config.path(),
+            "keys.toml",
+            "binds.composer.\"Ctrl+J\"",
+            "none",
+        )
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&keys).unwrap(),
+            "[binds]\n\"Alt+F\" = \"pane.new\"\n\n[binds.composer]\n\"ctrl+j\" = \"none\"\n"
         );
     }
 

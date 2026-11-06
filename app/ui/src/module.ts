@@ -16,6 +16,7 @@ import type { Key } from "./lib/keys"
 import type { Notify } from "@banda/contract/look"
 import type { Lists, PaneKind, PaneState, Watch } from "./pane"
 import type { SoundSettings } from "./sound/settings"
+import { actInScope } from "./hooks/use-scope"
 
 export {
   type Bytes,
@@ -176,6 +177,9 @@ export type Action<Context = WindowApi> = {
   /** Run by its id alone, with the args another module gives: the Banda
    * menu and its key sheet leave it out. */
   unlisted?: true
+  /** Where its key works (ADR 0071, decision 1): a scope's id, as the
+   * composer's; none for the window's, everywhere. `scoped` makes one. */
+  scope?: string
   /** What it takes (ADR 0071, decision 2): what a line of keys.toml,
    * the key sheet and an Agent may give it, as a JSON Schema, as the
    * engine's tools give theirs; `takes` writes one. */
@@ -185,6 +189,31 @@ export type Action<Context = WindowApi> = {
    * focus. Its key is always its own, by default. */
   when?: (context: Context) => boolean
   run: (context: Context, args?: Args) => void
+}
+
+/**
+ * Where a key works besides the whole window (ADR 0071, decision 1): a
+ * kind of Pane, or a field in one, where a key that types is the field's.
+ * Its element is `useScope`'s.
+ */
+export type Scope = {
+  id: string
+  /** Its name in the key sheet: `Composer`. */
+  title: string
+  field?: true
+}
+
+/** An action of a scope: its key works while the focus is in the scope,
+ * whose element runs it (`useScope`); the Banda menu runs it there too. */
+export function scoped(
+  scope: string,
+  action: Omit<Action, "scope" | "run">
+): Action {
+  return {
+    ...action,
+    scope,
+    run: (_, args) => void actInScope(scope, action.id, args),
+  }
 }
 
 /** What an action takes, as a JSON Schema: each arg by its name. */
@@ -339,6 +368,8 @@ export type Module = {
   watches: readonly Watch[]
   /** What the Person can do with it, by a key or the Banda menu. */
   actions: readonly Action[]
+  /** The scopes its actions' keys work in (ADR 0071, decision 1). */
+  scopes: readonly Scope[]
   /** What it gives the Banda menu to find. */
   sources: readonly Source[]
   /** What it shows on the bar, where the look's `[bar]` puts it. */
@@ -367,6 +398,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
   panes?: { readonly [K in keyof P]: PaneKind<P[K]> }
   watches?: readonly Watch[]
   actions?: readonly Action[]
+  scopes?: readonly Scope[]
   sources?: readonly Source[]
   bar?: readonly Widget[]
   threadDetails?: readonly Details[]
@@ -382,6 +414,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
     panes: (module.panes ?? []) as unknown as readonly AnyPaneKind[],
     watches: module.watches ?? [],
     actions: module.actions ?? [],
+    scopes: module.scopes ?? [],
     sources: module.sources ?? [],
     bar: module.bar ?? [],
     threadDetails: module.threadDetails ?? [],
