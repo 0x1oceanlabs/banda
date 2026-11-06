@@ -21,7 +21,10 @@ import {
   widthOf,
 } from "../registry"
 import { settingsPane } from "../settings/pane"
-import { toggleSolo } from "../flow"
+import { AGENTS_FILE } from "@banda/contract/agents"
+import { tomlOf } from "@banda/contract/settings"
+import { fileNow } from "@banda/ui/lib/look"
+import { nextFlow } from "../sidebar/FlowMenu"
 import {
   columnMoved,
   moved,
@@ -566,7 +569,12 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     title:
       "Solo, the Agent you are at the whole screen wide, or back to the row",
     keys: [{ code: "KeyM", mod: true, shift: true }],
-    run: () => toggleSolo(),
+    run: (shell) =>
+      void shell.writeSetting(
+        AGENTS_FILE.name,
+        "flow",
+        tomlOf(nextFlow(fileNow(AGENTS_FILE).flow))
+      ),
   },
   {
     id: "pane.consume-left",

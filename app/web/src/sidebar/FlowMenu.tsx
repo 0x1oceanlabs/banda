@@ -18,33 +18,32 @@ import {
   type LucideIcon,
   RectangleHorizontalIcon,
 } from "lucide-react"
-import { writeFlow } from "../flow"
+import { writeSetting } from "./write-setting"
 
-const FLOWS: readonly {
-  value: Flow
-  title: string
-  about: string
-  icon: LucideIcon
-}[] = [
+const FLOWS: Record<Flow, { title: string; about: string; icon: LucideIcon }> =
   {
-    value: "free",
-    title: "Free",
-    about: "Windows stay where you put them",
-    icon: LayoutDashboardIcon,
-  },
-  {
-    value: "row",
-    title: "Row",
-    about: "A Project's Agents side by side",
-    icon: Columns3Icon,
-  },
-  {
-    value: "solo",
-    title: "Solo",
-    about: "The Agent you are at, the whole screen wide",
-    icon: RectangleHorizontalIcon,
-  },
-]
+    free: {
+      title: "Free",
+      about: "Windows stay where you put them",
+      icon: LayoutDashboardIcon,
+    },
+    row: {
+      title: "Row",
+      about: "A Project's Agents side by side",
+      icon: Columns3Icon,
+    },
+    solo: {
+      title: "Solo",
+      about: "The Agent you are at, the whole screen wide",
+      icon: RectangleHorizontalIcon,
+    },
+  }
+
+/** `Alt+Shift+M` (ADR 0079): from the row to solo and back; from free to
+ * solo. */
+export function nextFlow(flow: Flow): Flow {
+  return flow === "solo" ? "row" : "solo"
+}
 
 /**
  * The Flow, from the sidebar's header (ADR 0079): its icon draws the one
@@ -52,11 +51,9 @@ const FLOWS: readonly {
  */
 export function FlowMenu() {
   const flow = useFile(AGENTS_FILE).flow
-  const keyFor = useKeyLabel()
-  const key = keyFor("flow.solo")
-  const now = FLOWS.find((one) => one.value === flow) ?? FLOWS[1]
-  const Icon = now.icon
-  const title = `Flow: ${now.title}`
+  const key = useKeyLabel()("flow.solo")
+  const Icon = FLOWS[flow].icon
+  const title = `Flow: ${FLOWS[flow].title}`
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -65,7 +62,7 @@ export function FlowMenu() {
             variant="ghost"
             size="icon-sm"
             aria-label={title}
-            title={keyFor("flow.solo", title)}
+            title={key ? `${title} (${key})` : title}
             className="text-muted-foreground"
           >
             <Icon />
@@ -77,20 +74,27 @@ export function FlowMenu() {
           <DropdownMenuLabel>How the Agents' windows stand</DropdownMenuLabel>
           <DropdownMenuRadioGroup
             value={flow}
-            onValueChange={(value) => writeFlow(value as Flow)}
+            onValueChange={(value) =>
+              writeSetting(AGENTS_FILE.name, "flow", value as Flow)
+            }
           >
-            {FLOWS.map(({ value, title, about, icon: Each }) => (
-              <DropdownMenuRadioItem key={value} value={value}>
-                <Each />
-                <span className="flex flex-col">
-                  <span>{title}</span>
-                  <span className="text-xs text-muted-foreground">{about}</span>
-                </span>
-                {key && value !== "free" && (
-                  <DropdownMenuShortcut>{key}</DropdownMenuShortcut>
-                )}
-              </DropdownMenuRadioItem>
-            ))}
+            {(Object.keys(FLOWS) as Flow[]).map((value) => {
+              const { title, about, icon: Each } = FLOWS[value]
+              return (
+                <DropdownMenuRadioItem key={value} value={value}>
+                  <Each />
+                  <span className="flex flex-col">
+                    <span>{title}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {about}
+                    </span>
+                  </span>
+                  {key && value !== "free" && (
+                    <DropdownMenuShortcut>{key}</DropdownMenuShortcut>
+                  )}
+                </DropdownMenuRadioItem>
+              )
+            })}
           </DropdownMenuRadioGroup>
         </DropdownMenuGroup>
       </DropdownMenuContent>
