@@ -24,21 +24,26 @@ Where a Thread stands, as the sidebar sees it:
   or the Person has it in hand; its mark says which. Its section has no
   heading.
 - `working`: its Agent is at work.
+- `snoozed`: put away until a time, or until its turn ends, from its row's
+  clock, its menu or with Alt+Z (ADR 0074). It comes back then, or as soon
+  as it asks, fails or hears from its Person. A Thread that asks cannot be
+  snoozed.
 - `archived`: put away. Only the Person archives a Thread, from its row's
   menu (a right click) or with Alt+S, and the Panes that show it close.
   Anything new in it brings it back, as a reply brings a letter back in
   Gmail. Its old name, `settled`, still reads as it.
 
 A state named in neither `states` nor `bottom` goes to the last section,
-so no Thread is ever hidden.
+so no Thread is ever hidden. `snoozed` alone gets a shelf of its own above
+Archive, so a snooze always puts its Thread away.
 
 ## Presets
 
 Banda's own:
 
 - `inbox`: as T3 Code's sidebar, one list, what waits for the Person
-  first; below, the shelves "Working" and "Archive", folded; three lines
-  a row. It is the defaults.
+  first; below, the shelves "Working", then "Snoozed" and "Archive",
+  folded; three lines a row. It is the defaults.
 - `projects`: each Project a section, one line a row.
 - `places`: a list of Projects above, a click shows one's Threads; below,
   every Thread by need, the archived ones folded; two lines a row.

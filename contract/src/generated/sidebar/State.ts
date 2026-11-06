@@ -3,4 +3,4 @@
 /**
  * A Thread's mark as the sidebar sees it.
  */
-export type State = "active" | "working" | "archived";
+export type State = "active" | "working" | "snoozed" | "archived";

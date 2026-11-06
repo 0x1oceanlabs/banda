@@ -105,6 +105,11 @@
           "const": "working"
         },
         {
+          "description": "Put away until a time, or until its turn ends (ADR 0074).",
+          "type": "string",
+          "const": "snoozed"
+        },
+        {
           "description": "Put away by the Person, until something new happens in it\n(ADR 0069). Its name was `settled`, which still reads as it.\n`settled` before ADR 0069 (grace).",
           "type": "string",
           "const": "archived"

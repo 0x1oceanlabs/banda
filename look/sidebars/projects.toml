@@ -3,7 +3,7 @@
 
 [group]
 by = "project"
-states = ["active", "working", "archived"]
+states = ["active", "working", "snoozed", "archived"]
 bottom = []
 
 [row]

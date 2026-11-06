@@ -6,7 +6,9 @@ import {
 } from "@banda/ui/components/banda-mark"
 import { HarnessLogo } from "@banda/ui/components/harness-logo"
 import { ProjectBadge } from "@banda/ui/components/project-badge"
-import { ago } from "@banda/ui/lib/words"
+import { AlarmClockIcon } from "lucide-react"
+import type { ReactNode } from "react"
+import { ago, clock, left } from "@banda/ui/lib/words"
 import { cn } from "@banda/ui/lib/utils"
 import { useNow } from "@banda/ui/hooks/use-now"
 import type { Listed } from "@banda/ui/pane"
@@ -34,6 +36,7 @@ export function Row({
   inProject,
   current,
   onOpen,
+  action,
 }: {
   row: Arranged
   settings: Settings
@@ -41,6 +44,9 @@ export function Row({
   inProject: boolean
   current: boolean
   onOpen: () => void
+  /** A button that shows while the pointer is over the row: its snooze's
+   * clock, or Wake (ADR 0074). */
+  action?: ReactNode
 }) {
   const { lines, hide, layout } = settings.row
   const parts = (layout ?? LAYOUTS[lines] ?? LAYOUTS[3]).map((line) =>
@@ -49,7 +55,7 @@ export function Row({
     )
   )
   const one = parts.length === 1
-  return (
+  const button = (
     <button
       type="button"
       aria-current={current ? "true" : undefined}
@@ -73,6 +79,15 @@ export function Row({
       )}
     </button>
   )
+  if (!action) return button
+  return (
+    <div data-row className="group/row relative">
+      {button}
+      <span className="absolute top-1 right-1 hidden items-center rounded-md bg-popover shadow-xs ring-1 ring-foreground/10 group-focus-within/row:flex group-hover/row:flex pointer-coarse:flex">
+        {action}
+      </span>
+    </div>
+  )
 }
 
 function Piece({
@@ -87,7 +102,9 @@ function Piece({
   const { listed, project } = row
   // Nothing waits in it and nothing works: it steps back.
   const quiet =
-    row.state === "archived" || (row.state === "active" && !waits(listed.mark))
+    row.state === "archived" ||
+    row.state === "snoozed" ||
+    (row.state === "active" && !waits(listed.mark) && row.woke === undefined)
   switch (part) {
     case "~":
       return <span className="ml-auto" />
@@ -123,7 +140,9 @@ function Piece({
       return name ? <HarnessLogo id={listed.harness} name={name} /> : null
     }
     case "status":
-      return <Status listed={row.listed} />
+      if (row.state === "snoozed") return <Sleeps listed={listed} />
+      if (row.woke !== undefined) return <Woke listed={listed} at={row.woke} />
+      return <Status listed={listed} />
     case "note": {
       const text = listed.calls ?? listed.said
       if (!text) return <span className="min-w-0 flex-1" />
@@ -169,6 +188,42 @@ export function Status({ listed }: { listed: Listed }) {
         </span>
       )
   }
+}
+
+/** When a snoozed Thread wakes, and how long is left: "22:40 · 1h",
+ * "Fri 09:00 · 12h", or "when done" (ADR 0074, decision 6). */
+function Sleeps({ listed }: { listed: Listed }) {
+  const now = useNow(15_000)
+  const until = listed.snooze?.until
+  const by = listed.snooze?.byAgent ? "Snoozed by its Agent" : "Snoozed"
+  return (
+    <span
+      className="shrink-0 text-xs text-muted-foreground tabular-nums"
+      title={until === undefined ? `${by} until it is done` : by}
+    >
+      {until === undefined
+        ? "when done"
+        : `${clock(until, now)} · ${left(until, now)}`}
+    </span>
+  )
+}
+
+/** A Thread that woke while its Person was away: a clock before what calls,
+ * or before the time it woke. */
+function Woke({ listed, at }: { listed: Listed; at: number }) {
+  const calls = waits(listed.mark) && listed.mark !== "offline"
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center gap-1 text-xs font-medium tabular-nums",
+        toneOf(listed.mark) ?? "text-foreground"
+      )}
+      title="Woke from its snooze"
+    >
+      <AlarmClockIcon className="size-3" aria-label="Woke" />
+      {calls ? MARK_WORDS[listed.mark] : clock(at)}
+    </span>
+  )
 }
 
 function Word({

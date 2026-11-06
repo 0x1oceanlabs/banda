@@ -78,9 +78,9 @@ const of = (
   toggled?: Set<string>,
   archived: readonly string[] = []
 ) =>
-  arrange(lists, projects, resolve(preset, keys), only, toggled, (listed) =>
-    archived.includes(listed.id)
-  )
+  arrange(lists, projects, resolve(preset, keys), only, toggled, {
+    archived: (listed) => archived.includes(listed.id),
+  })
 
 test("inbox: one list, what waits first; the working and the archived on shelves", () => {
   const inbox = of("inbox")
@@ -166,7 +166,11 @@ test("empty sections hide unless the settings show them", () => {
     resolve("inbox", { group: { empty: "show" } })
   )
   expect(shown.sections.map((s) => s.key)).toEqual(["active"])
-  expect(shown.shelves.map((s) => s.key)).toEqual(["working", "archived"])
+  expect(shown.shelves.map((s) => s.key)).toEqual([
+    "working",
+    "snoozed",
+    "archived",
+  ])
 })
 
 test("folded comes from the settings, and the Person's toggle turns it over", () => {
@@ -205,7 +209,7 @@ test("scratch Threads follow grouping, sorting, shelves and filtering like other
       settings,
       undefined,
       new Set(),
-      (row) => row.id === "old"
+      { archived: (row) => row.id === "old" }
     )
     expect(result.projects?.some((line) => line.project.scratch)).toBe(false)
     if (by === "project") {
@@ -239,4 +243,72 @@ test("scratch Threads follow grouping, sorting, shelves and filtering like other
         .every((r) => r.project.id === landing.id)
     ).toBe(true)
   }
+})
+
+test("a snoozed Thread waits on its shelf above Archive, by when it wakes", () => {
+  const sleeping = (listed: Listed) =>
+    ["logo", "headers", "letters"].includes(listed.id)
+  const wakes: Record<string, number | undefined> = {
+    logo: 900,
+    headers: undefined,
+    letters: 300,
+  }
+  const asleep = {
+    ...lists,
+    s1: lists.s1.map((one) =>
+      sleeping(one)
+        ? {
+            ...one,
+            snooze: {
+              at: 0,
+              ...(wakes[one.id] ? { until: wakes[one.id] } : {}),
+            },
+          }
+        : one
+    ),
+    s2: lists.s2.map((one) =>
+      sleeping(one) ? { ...one, snooze: { at: 0, until: wakes[one.id] } } : one
+    ),
+  }
+  const shown = arrange(
+    asleep,
+    projects,
+    resolve("inbox"),
+    undefined,
+    new Set(),
+    {
+      asleep: sleeping,
+      // Archived too, it is snoozed: a snooze outranks the archive.
+      archived: (listed) => listed.id === "logo",
+    }
+  )
+  expect(ids(shown)).toEqual([["active", ["migration", "form"]]])
+  expect(ids(shown, "shelves")).toEqual([
+    ["working", ["release"]],
+    ["snoozed", ["letters", "logo", "headers"]],
+  ])
+  const shelf = shown.shelves[1]
+  expect([shelf.label, shelf.folded, shelf.next, shelf.waiting]).toEqual([
+    "Snoozed",
+    true,
+    300,
+    0,
+  ])
+})
+
+test("a Thread that woke stands with what calls, as of when it woke", () => {
+  const woke = arrange(
+    lists,
+    projects,
+    resolve("inbox"),
+    undefined,
+    new Set(),
+    {
+      woke: (listed) => (listed.id === "logo" ? 10 : undefined),
+    }
+  )
+  expect(ids(woke)).toEqual([
+    ["active", ["logo", "letters", "migration", "form"]],
+  ])
+  expect(woke.sections[0].rows[0].woke).toBe(10)
 })
