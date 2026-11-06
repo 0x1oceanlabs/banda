@@ -75,6 +75,19 @@ export function apply(
   root.toggleAttribute("data-glass", look.desk.glass)
   root.dataset.material = look.desk.material
   root.dataset.sidebar = look.desk.sidebar
+  // How a Group's plate moves and how loud its colours are (ADR 0065,
+  // decision 6); globals.css draws Banda's own without them.
+  const { working, asking, saturation } = look.groups
+  Object.assign(root.dataset, {
+    groupWorking: working,
+    groupAsking: asking,
+    groupSaturation: saturation,
+  })
+  // `[motion] off`, or every move off: what CSS moves stays still too.
+  root.toggleAttribute(
+    "data-still",
+    Object.values(look.motion).every((move) => move.kind === "off")
+  )
   return new Set(Object.keys(next))
 }
 

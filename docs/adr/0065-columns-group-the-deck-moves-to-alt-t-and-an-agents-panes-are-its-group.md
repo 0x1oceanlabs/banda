@@ -129,6 +129,20 @@ for any Panes, and an Agent's Panes are simply its Group.
        mark.
      - idle, or a Group with no Agent: neutral, barely there.
      The motion follows the look's motion and reduced-motion choices.
+   - _Changed on 2026-11-06._ The states stand on a ladder, quiet to
+     loud, fill and line: none 4% and 9%, working 7% and 18%, done 10%
+     and 30%, failed 10% and 36%, asking 13% and 48%. The focused Group
+     adds 2% and 18% in its own colour. A change of state crossfades
+     over 0.6s. Done, failed and a call swell as they come, and only
+     then: not for a plate first drawn in its state. `[groups]` in
+     `look.toml` chooses the motion: `working = "breath"` (the default:
+     the fill breathes), `"line"`, `"sheen"` (a band of light across
+     the whole Group) or `"still"`; `asking = "twice"` (the default:
+     two swells, then still) or `"pulse"` (then a slow pulse until
+     answered); `saturation = "soft" | "normal" | "vivid"`, every fill
+     and line quieter or louder (`"normal"` the default). Roma chose
+     them on 2026-11-06 (mockup `plate-states.html`). `[motion] off`
+     and reduced motion still it all; the colours stay.
    - **No label above the Group.** The Thread is always the Group's
      first column, and its header already names the Agent. The state is
      a chip on the right of the Thread's header, in the system zone of

@@ -365,9 +365,70 @@
         "handle": {
           "description": "A handle on its top edge under the pointer, with its name, that\ncarries the whole Group.",
           "type": "boolean"
+        },
+        "working": {
+          "description": "How its plate moves while its Agent works.",
+          "$ref": "#/$defs/GroupWorking"
+        },
+        "asking": {
+          "description": "How its plate calls the Person when its Agent asks.",
+          "$ref": "#/$defs/GroupAsking"
+        },
+        "saturation": {
+          "description": "How strong every state's colour is on its plate.",
+          "$ref": "#/$defs/GroupSaturation"
         }
       },
       "additionalProperties": false
+    },
+    "GroupWorking": {
+      "description": "How a Group's plate moves while its Agent works (ADR 0065, decision 6).",
+      "oneOf": [
+        {
+          "description": "Its fill breathes, slowly; its line stays still.",
+          "type": "string",
+          "const": "breath"
+        },
+        {
+          "description": "Its line breathes; its fill stays still.",
+          "type": "string",
+          "const": "line"
+        },
+        {
+          "description": "A soft band of light crosses the whole Group now and then.",
+          "type": "string",
+          "const": "sheen"
+        },
+        {
+          "description": "It does not move.",
+          "type": "string",
+          "const": "still"
+        }
+      ]
+    },
+    "GroupAsking": {
+      "description": "How a Group's plate calls when its Agent asks (ADR 0065, decision 6).",
+      "oneOf": [
+        {
+          "description": "Two swells as the call comes, then still.",
+          "type": "string",
+          "const": "twice"
+        },
+        {
+          "description": "Two swells, then a slow pulse until the Person answers.",
+          "type": "string",
+          "const": "pulse"
+        }
+      ]
+    },
+    "GroupSaturation": {
+      "description": "How strong the colours on a Group's plate are: every state's fill and\nline, quieter or louder (ADR 0065, decision 6).",
+      "type": "string",
+      "enum": [
+        "soft",
+        "normal",
+        "vivid"
+      ]
     },
     "MotionSettings": {
       "description": "`[motion]` in a `look.toml` or a theme's `banda.toml`.",

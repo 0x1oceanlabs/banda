@@ -85,6 +85,9 @@
 # Columns held together on a plate, on Alt+G.
 # [groups]
 # handle = true                      # a handle on the top edge under the pointer, that carries them
+# working = "breath"                 # at work: "breath" of the fill, "line" breathes, "sheen" of light across, or "still"
+# asking = "twice"                   # a call: "twice", two swells then still, or "pulse" until answered
+# saturation = "normal"              # every state's colour: "soft", "normal" or "vivid"
 
 # [motion]
 # off = false                        # true stills everything
