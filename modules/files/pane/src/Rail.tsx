@@ -13,7 +13,7 @@ import {
   ContextMenuTrigger,
 } from "@banda/ui/components/context-menu"
 import { DropdownMenuItem } from "@banda/ui/components/dropdown-menu"
-import { ProjectBadge } from "@banda/ui/components/project-badge"
+import { ProjectSign } from "@banda/ui/components/project-sign"
 import { cn } from "@banda/ui/lib/utils"
 import {
   ClockIcon,
@@ -75,7 +75,7 @@ export function Rail({
           {projects.map((project) =>
             place(
               project.folder,
-              <ProjectBadge project={project} />,
+              <ProjectSign project={project} />,
               project.name
             )
           )}
