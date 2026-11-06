@@ -6,7 +6,7 @@
 use crate::Failure;
 use crate::client::Client;
 use crate::places::{FOLDER, Places};
-use banda_kernel::CommandId;
+use banda_kernel::{Code, CommandId};
 use banda_problems::Listed;
 use banda_problems::model::Report;
 use banda_workspaces::model::Arrangement;
@@ -32,10 +32,17 @@ pub async fn report(places: &Places, start: &str) -> Result<(), Failure> {
         json!({ "fingerprint": start }),
     );
     let report: Report = report.await?;
-    let mut arranged: Value = ask(&mut client, "workspaces.list", json!({})).await?;
-    let workspaces: Arrangement =
-        serde_json::from_value(arranged["workspaces"].take()).map_err(Failure::broken)?;
-    print!("{}", text(&report, &workspaces));
+    // An Agent's pass sees the workspaces only through its tools: its
+    // report is the module's alone, as the `problem` tool's is.
+    let workspaces = match ask::<Value>(&mut client, "workspaces.list", json!({})).await {
+        Ok(mut arranged) => Some(
+            serde_json::from_value::<Arrangement>(arranged["workspaces"].take())
+                .map_err(Failure::broken)?,
+        ),
+        Err(Failure::Refused(refusal)) if refusal.code == Code::Forbidden => None,
+        Err(failure) => return Err(failure),
+    };
+    print!("{}", text(&report, workspaces.as_ref()));
     Ok(())
 }
 
@@ -49,10 +56,13 @@ async fn ask<T: DeserializeOwned>(
 }
 
 /// The module's report, and after it the workspaces by their Panes'
-/// kinds, which are not the module's. A Pane's args are left out: they
-/// hold the Person's work.
-fn text(report: &Report, workspaces: &Arrangement) -> String {
+/// kinds, which are not the module's, when they were seen. A Pane's args
+/// are left out: they hold the Person's work.
+fn text(report: &Report, workspaces: Option<&Arrangement>) -> String {
     let mut out = report.text.clone();
+    let Some(workspaces) = workspaces else {
+        return out;
+    };
     out.push_str(&format!(
         "\n## The workspaces of {FOLDER}, by their Panes' kinds\n\n"
     ));
@@ -103,7 +113,8 @@ mod tests {
             { "id": "01a19ccd-ce5f-76e0-9d59-a96c5cb41bc5", "columns": [] },
         ]))
         .unwrap();
-        let report = text(&report, &workspaces);
+        assert_eq!(text(&report, None), report.text, "the module's alone");
+        let report = text(&report, Some(&workspaces));
         assert!(report.starts_with("# Problem 7f3a91c0de12\n"));
         assert!(report.contains("1. agents.thread | browser.browser\n2. empty"));
         assert!(!report.contains("secret"), "no Pane's args: {report}");

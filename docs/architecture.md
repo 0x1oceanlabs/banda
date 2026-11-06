@@ -81,18 +81,22 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   come through `skill` (ADR 0037, decision 7). A refused or malformed call is a
   tool result marked `isError`, with the refusal and that nothing was
   done; only an engine that does not answer is a JSON-RPC error.
-- **An Agent's `banda` acts under its pass.** The shell an Agent runs
-  commands in gets `BANDA_TOKEN` and `BANDA_ENGINE` too. A Harness that
-  takes variables for each session's shell gets the session's own pass,
-  the one its `banda mcp` has: Claude Code's adapter, through
-  `_meta.claudeCode.options.env`. Any other Harness's process carries a
-  pass its Agents share, of an Agent no one Thread names, made once per
-  Project and Harness entry in a run of the engine (it outlives the
-  sessions, and ends with the engine): in its environment, and for Codex
-  in `CODEX_CONFIG` as `shell_environment_policy.set`. The kernel walls
-  each pass in its Project. With both variables set, every CLI command
-  that connects to the engine says hello with that pass at that address;
-  a pass the engine does not know is refused in words that say so.
+- **An Agent's `banda` acts under its pass.** The shells an Agent runs
+  commands in get `BANDA_TOKEN` and `BANDA_ENGINE` too. Each Harness
+  process carries a pass its Agents share, of an Agent no one Thread
+  names, made once per Project and Harness entry in a run of the engine
+  (it outlives the processes, and ends with the engine): in its
+  environment, and for Codex in `CODEX_CONFIG` as
+  `shell_environment_policy.set`. A Harness that takes variables for each
+  session's shell gives a Thread's session its own pass over it, the one
+  its `banda mcp` has: Claude Code's adapter, through
+  `_meta.claudeCode.options.env`. The kernel walls each pass in its
+  Project. With `BANDA_ENGINE` set, every CLI command that connects to the
+  engine says hello there with the pass in `BANDA_TOKEN`; it does nothing
+  without one, nor when `BANDA_STATE` names another engine, and a pass the
+  engine does not know is refused in words that say so. The pass says who
+  calls, and is no wall: what runs in the shell runs as the Person (ADR
+  0019, decision 2), as the mode menu says of Full access.
 - **The CLI prints JSON.** `banda call <method>` prints `{"ok": …}`, as
   `banda project add <path>` does with the Project it added.
   `banda follow` prints events, one per line. When the engine refuses
