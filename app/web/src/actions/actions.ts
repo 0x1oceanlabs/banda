@@ -26,23 +26,45 @@ import type { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { actInScope } from "@banda/ui/hooks/use-scope"
 import type { Action, Args } from "@banda/ui/module"
 
+/** The scopes whose keys work with the mod still held too, and the mod. */
+export type Held = { mod: Mod; scopes: ReadonlySet<string> }
+
 /**
  * The action a key press runs, if any, and what its key gives it: one of
  * the scopes the focus is in, narrowest first, then the window's (ADR
- * 0071, decision 1).
+ * 0071, decision 1). A press no key takes may be a `held` scope's plain
+ * key with the mod still held, as the launcher's T after Alt+N.
  */
 export function pressFor<Context>(
   actions: readonly Action<Context>[],
   event: Pressed,
-  scopes: readonly string[] = []
+  scopes: readonly string[] = [],
+  held?: Held
 ): { action: Action<Context>; args?: Args } | undefined {
-  for (const scope of [...scopes, undefined])
-    for (const action of actions) {
-      if (action.scope !== scope) continue
-      const key = action.keys?.find((key) => matches(event, key))
-      if (key) return { action, args: key.args }
-    }
-  return undefined
+  const find = (
+    among: readonly (string | undefined)[],
+    takes: (key: Key) => boolean
+  ) => {
+    for (const scope of among)
+      for (const action of actions) {
+        if (action.scope !== scope) continue
+        const key = action.keys?.find(takes)
+        if (key) return { action, args: key.args }
+      }
+    return undefined
+  }
+  const exact = find([...scopes, undefined], (key) => matches(event, key))
+  if (exact || !held) return exact
+  const plain = (key: Key) =>
+    !key.alt && !key.ctrl && !key.super && !key.primary
+  return find(
+    scopes.filter((scope) => held.scopes.has(scope)),
+    (key) =>
+      !key.mod &&
+      !key.more &&
+      plain(key) &&
+      matches(event, realKey({ ...key, mod: true }, held.mod))
+  )
 }
 
 /**

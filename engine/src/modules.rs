@@ -246,7 +246,12 @@ fn topic(offers: &[Offer]) -> String {
         let scopes: Vec<String> = (offer.window.iter().flat_map(|w| &w.scopes))
             .map(|scope| {
                 let field = if scope.field { ", a field" } else { "" };
-                format!("`{}` (the {}{field})", scope.id, scope.title)
+                let held = if scope.mod_held {
+                    ", whose keys work with the mod still held too"
+                } else {
+                    ""
+                };
+                format!("`{}` (the {}{field}{held})", scope.id, scope.title)
             })
             .collect();
         if !scopes.is_empty() {
@@ -296,7 +301,24 @@ fn line_of(action: &Action) -> String {
         let keys: Vec<String> = action
             .keys
             .iter()
-            .map(|key| key.real(banda_look::keys::Mod::default()).text())
+            .map(|key| {
+                let text = key.real(banda_look::keys::Mod::default()).text();
+                // What the key gives its action, as the launcher's T its kind.
+                match &key.args {
+                    Some(args) => {
+                        let given: Vec<String> = args
+                            .values()
+                            .map(|value| {
+                                value
+                                    .as_str()
+                                    .map_or_else(|| value.to_string(), str::to_owned)
+                            })
+                            .collect();
+                        format!("{text} for {}", given.join(", "))
+                    }
+                    None => text,
+                }
+            })
             .collect();
         line.push_str(&format!(", {}", keys.join(" or ")));
     }

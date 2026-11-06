@@ -11,11 +11,15 @@ import type { Details } from "@banda/ui/components/thread-details"
 import { useModules } from "@banda/ui/hooks/use-status"
 import {
   type AnyPaneKind,
+  type Args as ActionArgs,
   defineModule,
   type Listing,
   type Module,
   type Previewer,
+  type Scope,
+  scoped,
   type Source,
+  takes,
   type Widget,
 } from "@banda/ui/module"
 import {
@@ -24,10 +28,12 @@ import {
   type PaneProps,
   type PaneState,
   paneOf,
+  type Place,
   type Watch,
 } from "@banda/ui/pane"
+import { useScope } from "@banda/ui/hooks/use-scope"
 import { LayoutGridIcon, type LucideIcon } from "lucide-react"
-import { useLayoutEffect, useRef, useSyncExternalStore } from "react"
+import { useSyncExternalStore } from "react"
 import { columnsOf } from "./look"
 import { modules } from "./modules"
 import { keepProblem } from "./problems/keep"
@@ -44,12 +50,40 @@ export const launcher: AnyPaneKind = definePane<Args>({
   Pane: Launcher,
 })
 
-/** The window's own things, as a module of their own: the launcher and
- * the settings (ADR 0016). */
-const windowModule = defineModule({
+/** The launcher's scope (ADR 0071, decision 1): while it has the focus a
+ * letter picks a Pane, the mod still held or not, as after Alt+N (ADR
+ * 0025, decision 4). */
+const LAUNCHER: Scope = { id: "launcher", title: "Launcher", modHeld: true }
+
+/** The launcher's letters, each kind's that has one: in its place, and
+ * with Shift beside it, the launcher staying. */
+const opening = (id: string, title: string, shift: boolean) =>
+  scoped(LAUNCHER.id, {
+    id,
+    title,
+    section: "Launcher",
+    args: takes({ kind: "the kind of Pane, as terminal.terminal" }, ["kind"]),
+    keys: modules
+      .flatMap((module) => module.panes)
+      .filter((kind) => kind.letter && kind.start)
+      .map((kind) => ({
+        code: `Key${kind.letter}`,
+        ...(shift && { shift }),
+        args: { kind: kind.kind },
+      })),
+  })
+
+/** The window's own things, as a module of their own: the launcher, its
+ * letters, and the settings (ADR 0016). */
+export const windowModule = defineModule({
   id: "window",
   engine: false,
   panes: [launcher, settingsPane],
+  actions: [
+    opening("launcher.open", "Open a Pane in the launcher's place", false),
+    opening("launcher.open-beside", "Open a Pane beside the launcher", true),
+  ],
+  scopes: [LAUNCHER],
 })
 
 const all: readonly Module[] = [windowModule, ...modules]
@@ -268,37 +302,31 @@ export function startable(engineModules: readonly string[]): PaneState[] {
 }
 
 /**
- * The launcher: a button for each Pane, which it becomes. While it has the
- * focus a letter picks one, as each button shows, Alt held or not; with
- * Shift the Pane opens beside it, and the launcher stays (ADR 0025,
- * decision 4).
+ * The launcher: a button for each Pane, which it becomes. Its letters are
+ * its actions, which its scope runs: with Shift the Pane opens beside it,
+ * and the launcher stays (ADR 0025, decision 4).
  */
-function Launcher({ engine, open, focused }: PaneProps<Args>) {
+function Launcher({ engine, open }: PaneProps<Args>) {
   const modules = useModules(engine)
-  const now = useRef({ modules, open })
-  useLayoutEffect(() => {
-    now.current = { modules, open }
-  })
-  // Before the next key comes in: the letter pressed as the launcher takes
-  // the focus is its own, not the Pane's it came from.
-  useLayoutEffect(() => {
-    if (!focused) return
-    const onKey = (event: KeyboardEvent) => {
-      // Alt may still be held from Alt+N; a key an action took is its.
-      if (event.ctrlKey || event.metaKey || event.repeat) return
-      if (event.defaultPrevented) return
-      const pane = startable(now.current.modules).find(
-        (pane) => event.code === `Key${kindOf(pane.kind)?.letter}`
-      )
-      if (!pane) return
-      event.preventDefault()
-      now.current.open(pane, event.shiftKey ? "right" : "here")
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [focused])
+  const pick = (args: ActionArgs | undefined, place: Place) => {
+    const pane = startable(modules).find((one) => one.kind === args?.kind)
+    if (!pane) return false
+    open(pane, place)
+    return true
+  }
+  const scope = useScope(
+    "launcher",
+    {
+      "launcher.open": (args) => pick(args, "here"),
+      "launcher.open-beside": (args) => pick(args, "right"),
+    },
+    { tile: true }
+  )
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 p-6">
+    <div
+      ref={scope}
+      className="flex h-full flex-col items-center justify-center gap-3 p-6"
+    >
       <p className="text-sm text-muted-foreground">
         What should this tile show?
       </p>

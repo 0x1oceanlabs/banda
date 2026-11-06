@@ -416,6 +416,10 @@ pub struct Declared {
     pub sup: bool,
     #[serde(skip_serializing_if = "is_false")]
     pub primary: bool,
+    /// What it gives its action, as a line of keys.toml's args: the
+    /// launcher's `T` opens a terminal (ADR 0071, decision 1).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub args: Option<Args>,
 }
 
 impl Declared {
@@ -437,6 +441,7 @@ impl Declared {
                 alt: mods.alt,
                 ctrl: mods.ctrl,
                 sup: mods.sup,
+                args: self.args.clone(),
                 ..Declared::default()
             },
             None => self.clone(),
@@ -486,6 +491,11 @@ pub struct Scope {
     pub title: String,
     #[serde(default, skip_serializing_if = "is_false")]
     pub field: bool,
+    /// Its keys work with the mod still held too, when no key of the
+    /// window's takes the press: the launcher's letters after Alt+N (ADR
+    /// 0025, decision 4).
+    #[serde(default, rename = "modHeld", skip_serializing_if = "is_false")]
+    pub mod_held: bool,
 }
 
 /// What the manifests declare: every action there is, and the scopes
@@ -869,7 +879,7 @@ impl From<&Declared> for KeyInForce {
             sup: key.sup,
             shift: key.shift,
             primary: key.primary,
-            args: None,
+            args: key.args.clone(),
             line: None,
         }
     }
@@ -1071,6 +1081,7 @@ mod tests {
                 id: "composer".to_owned(),
                 title: "Composer".to_owned(),
                 field: true,
+                mod_held: false,
             }],
         }
     }
@@ -1202,6 +1213,33 @@ mod tests {
                     "Return: Banda has no scope nope; its scopes are composer"
                 ),
             ]
+        );
+    }
+
+    #[test]
+    fn a_declared_key_gives_its_action_what_it_says() {
+        let open = Action {
+            id: "launcher.open".to_owned(),
+            title: "Open a Pane".to_owned(),
+            section: "Launcher".to_owned(),
+            keys: vec![Declared {
+                code: "KeyT".to_owned(),
+                args: serde_json::json!({ "kind": "terminal.terminal" })
+                    .as_object()
+                    .cloned(),
+                ..Declared::default()
+            }],
+            family: None,
+            unlisted: false,
+            scope: Some("launcher".to_owned()),
+            args: None,
+        };
+        let actions = in_force(&manifests_of(vec![open]), &Keys::default(), &mut Vec::new());
+        let key = &actions[0].keys[0];
+        assert_eq!(key.text(), "T");
+        assert_eq!(
+            key.args.as_ref().and_then(|args| args["kind"].as_str()),
+            Some("terminal.terminal")
         );
     }
 

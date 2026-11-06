@@ -13,7 +13,8 @@ import {
   type WindowApi,
 } from "@banda/ui/module"
 import { type Listed, type PaneState, paneOf, type Place } from "@banda/ui/pane"
-import { RESET_KEY } from "../actions/actions"
+import { type Held, RESET_KEY } from "../actions/actions"
+import type { Mod } from "@banda/contract/look"
 import { chipOf } from "./attach"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
@@ -26,6 +27,7 @@ import {
   minOf,
   showsOf,
   widthOf,
+  windowModule,
 } from "../registry"
 import { settingsPane } from "../settings/pane"
 import { AGENTS_FILE } from "@banda/contract/agents"
@@ -1009,7 +1011,22 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     run: (shell: Shell) =>
       shell.change((w) => moving(w, (w) => send(w, n - 1))),
   })),
+  // The launcher's letters (ADR 0025, decision 4).
+  ...windowModule.actions,
 ]
+
+/** The scopes whose keys work with the mod still held too, as the
+ * launcher's letters after Alt+N, with the mod in force (`pressFor`). */
+const HELD_SCOPES: ReadonlySet<string> = new Set(
+  [...modules, windowModule]
+    .flatMap((module) => module.scopes)
+    .filter((scope) => scope.modHeld)
+    .map((scope) => scope.id)
+)
+
+export function heldBy(mod: Mod): Held {
+  return { mod, scopes: HELD_SCOPES }
+}
 
 /** Every action: the modules' (`modules.ts`), then the window's own. */
 export const ACTIONS: readonly Action<Shell>[] = [

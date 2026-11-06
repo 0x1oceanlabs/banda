@@ -4,6 +4,7 @@ import type { Action, Module } from "@banda/ui/module"
 import { expect, test } from "vitest"
 import { modules } from "./modules"
 import { WINDOW_ACTIONS } from "./shell/actions"
+import { windowModule } from "./registry"
 import {
   kindRuns,
   kinds,
@@ -90,7 +91,12 @@ function written(file: string, value: unknown): boolean {
 test("the window's own actions, the tiling's, are written for the engine as a module's are (ADR 0071, decision 2)", () => {
   const file = join(import.meta.dirname, "../window.json")
   // Written now: review it and run again, as cargo test does the types.
-  expect(written(file, { actions: WINDOW_ACTIONS.map(actionOf) })).toBe(false)
+  expect(
+    written(file, {
+      actions: WINDOW_ACTIONS.map(actionOf),
+      scopes: windowModule.scopes,
+    })
+  ).toBe(false)
 })
 
 test("each module's window part is written beside its module.toml, for banda modules (ADR 0022, decision 1)", () => {

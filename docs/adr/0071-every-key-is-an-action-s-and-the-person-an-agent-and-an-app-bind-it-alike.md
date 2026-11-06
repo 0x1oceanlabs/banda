@@ -65,7 +65,10 @@ Roma said to finish this one too.
      `Escape` and `Enter` in lists, menus, dialogs and a field's
      suggestions); a terminal program's keys; a browser page's own.
    - A narrower scope comes first: the field, then its Pane, then the
-     window. Banda's and the Apps' own keys never put a mod key (ADR
+     window. A scope may say its keys work with the mod still held too,
+     when no key of the window's takes the press: the launcher's letters
+     after `Alt+N`, as ADR 0025, decision 4, has them (`modHeld`). A key
+     an action declares may give it args, as each letter its kind. Banda's and the Apps' own keys never put a mod key (ADR
      0068) in a scope narrower than the window, so Banda's keys work in
      every Pane, as ADR 0005, decision 10, says; a test holds it. The
      Person may.
