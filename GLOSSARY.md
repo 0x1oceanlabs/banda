@@ -42,6 +42,13 @@ The agent program a Thread runs on, for example Claude Code or Codex. The
 engine reaches it through an adapter, ACP first. It reads what a Harness can
 do from the Harness's declared capabilities.
 
+**Account**:
+One sign-in of a Harness: a subscription, an API key or a gateway. In
+`harnesses.toml` it is an entry `of` its Harness, with its own name, folder
+and mark: a dot in its colour and the first letter of its name (ADR 0078).
+A Harness's own entry is its first account.
+_Avoid_: profile, instance.
+
 **Limit**:
 How much of a Harness's subscription a window of time allows, such as
 Claude Code's week. Banda shows the share spent of each, and when it resets

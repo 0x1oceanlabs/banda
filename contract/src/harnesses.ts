@@ -6,6 +6,7 @@
  * answers.
  */
 export type { Account } from "./generated/harnesses/Account"
+export type { AccountKind } from "./generated/harnesses/AccountKind"
 export type { Accounted } from "./generated/harnesses/Accounted"
 export type { Adapter } from "./generated/harnesses/Adapter"
 export type { CliView } from "./generated/harnesses/CliView"

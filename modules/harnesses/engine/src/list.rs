@@ -3,7 +3,7 @@
 //! how. What a Thread on one starts with is the agents module's own, in
 //! `agents.toml` (ADR 0040, decision 6).
 
-use crate::model::{HarnessView, LimitsLook, Program};
+use crate::model::{AccountKind, HarnessView, LimitsLook, Program};
 use banda_kernel::{ProjectId, project_env};
 use banda_look::Problem;
 use schemars::JsonSchema;
@@ -36,6 +36,15 @@ pub struct Harness {
     pub env: BTreeMap<String, String>,
     /// The Person's own CLI the program runs, when it runs one.
     pub cli: Option<Cli>,
+    /// The Harness it is an account of, by its ID, when it is one: a
+    /// second Claude Code account says `claude` (ADR 0078, decision 1).
+    pub of: Option<String>,
+    /// How the account pays.
+    pub kind: AccountKind,
+    /// The letters of its mark, when its entry names them (decision 9).
+    pub mark: Option<String>,
+    /// Its colour, 1 to 4, when its entry names one (decision 10).
+    pub colour: Option<u8>,
     /// The file of the adapter Banda carries, which starts in place of
     /// `command` and `args` when the window said where its adapters are
     /// (ADR 0059): only Banda's own entries have one.
@@ -63,6 +72,12 @@ pub struct Cli {
 }
 
 impl Harness {
+    /// The Harness it is, or is an account of: `claude` for Claude Code
+    /// and for each of its accounts.
+    pub fn harness(&self) -> &str {
+        self.of.as_deref().unwrap_or(&self.id)
+    }
+
     /// The entry's own program with `args` after its arguments and `env`
     /// over its environment, as a Harness's sign-in in a terminal runs.
     pub fn program(&self, args: &[String], env: &HashMap<String, String>) -> Program {
@@ -278,21 +293,50 @@ struct HarnessEntry {
     env: Option<BTreeMap<String, String>>,
     /// The Person's own CLI the program runs, when it runs one.
     cli: Option<Cli>,
+    /// The Harness this entry is an account of, by its ID: `claude`,
+    /// `codex`, or an entry above it. An account takes that Harness's
+    /// program, adapter and CLI, and adds its own name and variables, such
+    /// as its `CLAUDE_CONFIG_DIR` or `CODEX_HOME` (ADR 0078, decision 1).
+    of: Option<String>,
+    /// How the account pays: `subscription`, `api` or `gateway`.
+    #[schemars(extend("default" = "subscription"))]
+    kind: Option<AccountKind>,
+    /// The letters of its mark, one or two: by default the first of its
+    /// name, two when another account of its Harness starts the same.
+    mark: Option<String>,
+    /// Its colour: 1 violet, 2 rose, 3 green, 4 graphite. By default its
+    /// place in this file, from 1 round to 4 again.
+    #[schemars(range(min = 1, max = 4))]
+    colour: Option<u8>,
 }
 
+/// How many colours the accounts take in turn (ADR 0078, decision 10).
+pub const COLOURS: usize = 4;
+
 impl HarnessEntry {
-    /// The entry over Banda's own Harness of its ID, if Banda has one.
-    /// Banda's arguments and CLI go with Banda's command: an entry that
-    /// names another command says its own.
-    fn harness(mut self) -> Result<Harness, String> {
+    /// The entry over its Harness: Banda's own of its ID, or for an
+    /// account the Harness it names, from Banda or from `earlier` in the
+    /// file. Banda's arguments and CLI go with Banda's command: an entry
+    /// that names another command says its own.
+    fn harness(mut self, earlier: &[Harness]) -> Result<Harness, String> {
         let (command, args) = (self.command.as_deref(), self.args.as_deref());
+        // An entry from before accounts, Banda's adapter started from npm
+        // under an ID of its own, is an account of that adapter's Harness.
+        if self.of.is_none() && ADAPTERS.iter().all(|a| a.id != self.id) {
+            let adapter = ADAPTERS.iter().find(|a| a.was(command, args));
+            self.of = adapter.map(|a| a.id.to_owned());
+        }
+        let harness = self.of.clone().unwrap_or_else(|| self.id.clone());
         if ADAPTERS
             .iter()
-            .any(|a| a.id == self.id && a.was(command, args))
+            .any(|a| a.id == harness && a.was(command, args))
         {
             (self.command, self.args) = (None, None);
         }
-        let mut base = known().into_iter().find(|known| known.id == self.id);
+        let mut base = match &self.of {
+            None => known().into_iter().find(|known| known.id == self.id),
+            Some(of) => Some(account_of(of, &self.id, earlier)?),
+        };
         if let (Some(base), Some(command)) = (&mut base, &self.command)
             && *command != base.command
         {
@@ -307,12 +351,17 @@ impl HarnessEntry {
         {
             base.carried = None;
         }
-        // Banda's short name goes with Banda's name.
+        let account = self.of.is_some();
+        // Banda's short name goes with Banda's name; an account keeps its
+        // Harness's, as a sentence calls it Claude still.
         let short = match &self.name {
-            None => self.short.or_else(|| base.as_ref()?.short.clone()),
-            Some(_) => self.short,
+            Some(_) if !account => self.short,
+            _ => self.short.or_else(|| base.as_ref()?.short.clone()),
         };
-        let name = self.name.or_else(|| base.as_ref().map(|b| b.name.clone()));
+        let name = match account {
+            true => self.name.or_else(|| Some(self.id.clone())),
+            false => self.name.or_else(|| base.as_ref().map(|b| b.name.clone())),
+        };
         let command = self
             .command
             .or_else(|| base.as_ref().map(|b| b.command.clone()));
@@ -322,8 +371,24 @@ impl HarnessEntry {
                 self.id
             ));
         };
+        if let Some(mark) = &self.mark
+            && !(1..=2).contains(&mark.chars().count())
+        {
+            return Err(format!("`mark` is one or two letters, not {mark:?}"));
+        }
+        if let Some(colour) = self.colour
+            && !(1..=COLOURS as u8).contains(&colour)
+        {
+            return Err(format!("`colour` is 1 to {COLOURS}, not {colour}"));
+        }
         let base = base.map(|b| (b.args, b.env, b.cli, b.carried));
-        let (args, env, cli, carried) = base.unwrap_or_default();
+        let (args, base_env, cli, carried) = base.unwrap_or_default();
+        // An account's variables go over its Harness's; an entry of a
+        // Harness says all of its own.
+        let env = match (self.env, account) {
+            (Some(own), true) => base_env.into_iter().chain(own).collect(),
+            (own, _) => own.unwrap_or(base_env),
+        };
         Ok(Harness {
             id: self.id,
             name,
@@ -331,12 +396,83 @@ impl HarnessEntry {
             command,
             enabled: self.enabled.unwrap_or(true),
             args: self.args.unwrap_or(args),
-            env: self.env.unwrap_or(env),
+            env,
             cli: self.cli.or(cli),
+            of: self.of,
+            kind: self.kind.unwrap_or_default(),
+            mark: self.mark,
+            colour: self.colour,
             carried,
             record: None,
         })
     }
+}
+
+/// The Harness `of` that the entry `id` is an account of: one above it in
+/// the file, else Banda's own. It must be a Harness, not an account.
+fn account_of(of: &str, id: &str, earlier: &[Harness]) -> Result<Harness, String> {
+    if of == id {
+        return Err(format!("{id:?} cannot be an account of itself"));
+    }
+    let found = (earlier.iter().find(|h| h.id == of).cloned())
+        .or_else(|| known().into_iter().find(|known| known.id == of));
+    match found {
+        Some(harness) if harness.of.is_some() => Err(format!(
+            "`of` names {of:?}, an account: an account is of a Harness"
+        )),
+        Some(harness) => Ok(harness),
+        None => Err(format!(
+            "`of` names {of:?}: no Harness Banda knows, nor one above in this file"
+        )),
+    }
+}
+
+/// Each entry's mark and colour among the others (ADR 0078, decisions 9
+/// and 10). The mark is the first letter of its name; where another
+/// account of the same Harness starts with that letter too, the first
+/// two; where those match as well, the letter and its count. The colour
+/// is its place in the file, round the four. What an entry names wins.
+fn looks(list: &[Harness]) -> Vec<(String, u8)> {
+    let letters = |name: &str, n: usize| -> String {
+        let mut chars = name.chars().filter(|c| c.is_alphanumeric());
+        let first: String = chars
+            .next()
+            .into_iter()
+            .flat_map(char::to_uppercase)
+            .collect();
+        let rest: String = chars.take(n - 1).flat_map(char::to_lowercase).collect();
+        first + &rest
+    };
+    // Each entry's mark with one letter, and with two: what it names, else
+    // its name's.
+    let marks = |n| -> Vec<String> {
+        (list.iter())
+            .map(|h| h.mark.clone().unwrap_or_else(|| letters(&h.name, n)))
+            .collect()
+    };
+    let (ones, twos) = (marks(1), marks(2));
+    // Whether another account of the same Harness has the mark `place` has.
+    let shared = |marks: &[String], place: usize| {
+        (list.iter().enumerate()).any(|(at, other)| {
+            at != place && other.harness() == list[place].harness() && marks[at] == marks[place]
+        })
+    };
+    (list.iter().enumerate())
+        .map(|(place, harness)| {
+            let colour = harness.colour.unwrap_or((place % COLOURS) as u8 + 1);
+            let mark = if harness.mark.is_some() || !shared(&ones, place) {
+                ones[place].clone()
+            } else if !shared(&twos, place) {
+                twos[place].clone()
+            } else {
+                let before = (0..place).filter(|&at| {
+                    list[at].harness() == harness.harness() && twos[at] == twos[place]
+                });
+                format!("{}{}", ones[place], before.count() + 1)
+            };
+            (mark, colour)
+        })
+        .collect()
 }
 
 impl Harnesses {
@@ -436,7 +572,11 @@ impl Harnesses {
     }
 
     pub fn views(&self) -> Vec<HarnessView> {
-        self.now().iter().map(HarnessView::of).collect()
+        let list = self.now();
+        let looks = looks(&list);
+        (list.iter().zip(looks))
+            .map(|(harness, (mark, colour))| HarnessView::of(harness, mark, colour))
+            .collect()
     }
 }
 
@@ -515,6 +655,10 @@ fn known() -> Vec<Harness> {
                     variable: variable.to_owned(),
                     minimum: Some(minimum.to_owned()),
                 }),
+                of: None,
+                kind: AccountKind::default(),
+                mark: None,
+                colour: None,
                 carried: Some(adapter.file()),
                 record: None,
             }
@@ -556,13 +700,13 @@ struct Read {
 
 fn parse(path: &Path, text: &str) -> Result<Read, Problem> {
     let file = toml::from_str::<HarnessFile>(text).map_err(|e| Problem::toml(path, text, &e))?;
-    let harnesses = (file.harness.into_iter())
-        .map(|entry| {
-            let span = entry.span();
-            let wrong = |message| Problem::at(path, text, Some(span), message);
-            entry.into_inner().harness().map_err(wrong)
-        })
-        .collect::<Result<_, _>>()?;
+    let mut harnesses = Vec::new();
+    for entry in file.harness {
+        let span = entry.span();
+        let wrong = |message| Problem::at(path, text, Some(span), message);
+        let harness = entry.into_inner().harness(&harnesses).map_err(wrong)?;
+        harnesses.push(harness);
+    }
     let limits = file.limits.limits(path, text)?;
     Ok(Read {
         harnesses,
@@ -637,7 +781,9 @@ fn template() -> String {
          # The Harnesses Banda can start, in this order. Without\n\
          # this file, the ones below. An entry with the ID of one Banda knows\n\
          # takes each key it leaves out from Banda, the adapter's version too;\n\
-         # any other ID needs a name and a command. Check a change with:\n\
+         # any other ID needs a name and a command. A second account of one\n\
+         # is an entry with `of = \"claude\"`, its own name and its own\n\
+         # CLAUDE_CONFIG_DIR (or CODEX_HOME). Check a change with:\n\
          # banda settings check\n\n[usage]\nread = true\n{ids}"
     )
 }
@@ -833,6 +979,60 @@ mod tests {
     }
 
     #[test]
+    fn an_account_takes_its_harness_s_start_and_adds_its_own() {
+        let text = "[[harness]]\nid = \"claude\"\n\n\
+                    [[harness]]\nid = \"claude-personal\"\nof = \"claude\"\nname = \"Personal\"\n\
+                    env = { CLAUDE_CONFIG_DIR = \"/home/a/.claude_second\" }\n";
+        let list = listed_in(Path::new("h"), text).unwrap();
+        let (claude, personal) = (&list[0], &list[1]);
+        assert_eq!(personal.harness(), "claude");
+        assert_eq!(claude.harness(), "claude", "a Harness is its own");
+        assert_eq!(
+            (
+                &personal.command,
+                &personal.args,
+                &personal.cli,
+                &personal.carried
+            ),
+            (&claude.command, &claude.args, &claude.cli, &claude.carried),
+            "it starts as its Harness does, the carried adapter too"
+        );
+        assert_eq!(personal.env["CLAUDE_CONFIG_DIR"], "/home/a/.claude_second");
+        assert_eq!(
+            personal.env["npm_config_omit"], "optional",
+            "over its Harness's"
+        );
+        assert_eq!(personal.name, "Personal");
+        assert_eq!(
+            personal.short.as_deref(),
+            Some("Claude"),
+            "a sentence says Claude"
+        );
+        assert_eq!(personal.kind, AccountKind::Subscription);
+        assert_eq!(
+            crate::limits::Kind::of(personal),
+            Some(crate::limits::Kind::Claude)
+        );
+
+        // An account of Banda's Harness needs no entry for the Harness.
+        let alone = "[[harness]]\nid = \"api\"\nof = \"claude\"\nkind = \"api\"\n";
+        let alone = listed_in(Path::new("h"), alone).unwrap().remove(0);
+        assert_eq!((alone.name.as_str(), alone.kind), ("api", AccountKind::Api));
+        assert_eq!(alone.carried, claude.carried);
+        // One with a command of its own is still its Harness's.
+        let own = "[[harness]]\nid = \"x\"\nof = \"codex\"\ncommand = \"my-acp\"\n";
+        let own = listed_in(Path::new("h"), own).unwrap().remove(0);
+        assert_eq!(
+            (own.command.as_str(), own.carried.as_deref()),
+            ("my-acp", None)
+        );
+        assert_eq!(
+            crate::limits::Kind::of(&own),
+            Some(crate::limits::Kind::Codex)
+        );
+    }
+
+    #[test]
     fn claude_s_sessions_go_in_the_project_s_folder() {
         let project = ProjectId::new();
         let data = Path::new("/state/projects/p");
@@ -855,6 +1055,95 @@ mod tests {
             claude.env[SESSIONS_VARIABLE],
             "every Claude account, one folder"
         );
+    }
+
+    #[test]
+    fn a_second_entry_from_before_is_an_account() {
+        let text = "[[harness]]\nid = \"claude-2\"\nname = \"Claude 2\"\ncommand = \"npx\"\n\
+                    args = [\"-y\", \"@agentclientprotocol/claude-agent-acp@0.31.0\"]\n\
+                    env = { CLAUDE_CONFIG_DIR = \"/home/a/.claude_second\" }\n";
+        let second = listed_in(Path::new("h"), text).unwrap().remove(0);
+        let claude = known().remove(0);
+        assert_eq!(second.of.as_deref(), Some("claude"));
+        assert_eq!(
+            second.carried, claude.carried,
+            "it moves to the carried adapter"
+        );
+        assert_eq!(second.cli, claude.cli);
+        assert_eq!(second.name, "Claude 2");
+        let fork = "[[harness]]\nid = \"mine\"\nname = \"Mine\"\ncommand = \"npx\"\nargs = [\"-y\", \"my-fork@1\"]\n";
+        assert_eq!(
+            listed_in(Path::new("h"), fork).unwrap()[0].of,
+            None,
+            "a fork is its own"
+        );
+    }
+
+    #[test]
+    fn of_names_a_harness_above_or_banda_s() {
+        let wrong = |text: &str| listed_in(Path::new("h"), text).unwrap_err().message;
+        assert!(wrong("[[harness]]\nid = \"a\"\nof = \"gemini\"\n").contains("no Harness"));
+        assert!(wrong("[[harness]]\nid = \"claude\"\nof = \"claude\"\n").contains("itself"));
+        let chained =
+            "[[harness]]\nid = \"a\"\nof = \"claude\"\n[[harness]]\nid = \"b\"\nof = \"a\"\n";
+        assert!(wrong(chained).contains("an account is of a Harness"));
+        let mine = "[[harness]]\nid = \"gemini\"\nname = \"Gemini\"\ncommand = \"gemini-acp\"\n\
+                    [[harness]]\nid = \"g2\"\nof = \"gemini\"\nname = \"Work\"\n";
+        let mine = listed_in(Path::new("h"), mine).unwrap();
+        assert_eq!(
+            (mine[1].command.as_str(), mine[1].harness()),
+            ("gemini-acp", "gemini")
+        );
+        assert!(
+            wrong("[[harness]]\nid = \"a\"\nof = \"claude\"\nmark = \"ABC\"\n").contains("`mark`")
+        );
+        assert!(
+            wrong("[[harness]]\nid = \"a\"\nof = \"claude\"\ncolour = 5\n").contains("`colour`")
+        );
+        assert!(
+            wrong("[[harness]]\nid = \"a\"\nof = \"claude\"\nkind = \"free\"\n")
+                .contains("`subscription`")
+        );
+    }
+
+    #[test]
+    fn marks_are_first_letters_and_colours_go_round_four() {
+        let entry = |id: &str, of: &str, name: &str| {
+            format!("[[harness]]\nid = {id:?}\nof = {of:?}\nname = {name:?}\n")
+        };
+        let text = [
+            "[[harness]]\nid = \"claude\"\n".to_owned(),
+            entry("work", "claude", "Work"),
+            entry("wild", "claude", "wild one"),
+            "[[harness]]\nid = \"codex\"\n".to_owned(),
+            entry("api", "claude", "API"),
+            entry("work-2", "codex", "Work"),
+            entry("again", "claude", "Wild"),
+            "[[harness]]\nid = \"own\"\nof = \"claude\"\nname = \"Ж\"\nmark = \"Я\"\ncolour = 2\n"
+                .to_owned(),
+        ]
+        .concat();
+        let list = Harnesses::new(listed_in(Path::new("h"), &text).unwrap());
+        let looks: Vec<_> = (list.views().into_iter())
+            .map(|view| (view.mark, view.colour))
+            .collect();
+        assert_eq!(
+            looks,
+            [
+                ("C".into(), 1),  // Claude Code: no other C among Claude's
+                ("Wo".into(), 2), // Work and wild one share W
+                ("W1".into(), 3), // wild one and Wild share Wi too
+                ("C".into(), 4),  // Codex, another Harness
+                ("A".into(), 1),  // the fifth takes the first colour again
+                ("W".into(), 2),  // Codex's Work: alone among Codex's
+                ("W2".into(), 3),
+                ("Я".into(), 2), // what its entry names
+            ]
+        );
+        let views = list.views();
+        assert_eq!(views[1].harness, "claude");
+        assert_eq!(views[0].harness, "claude");
+        assert_eq!(views[5].harness, "codex");
     }
 
     #[test]
