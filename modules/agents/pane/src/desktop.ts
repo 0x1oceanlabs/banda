@@ -1,10 +1,12 @@
 /** The agents module's channels into the window (ADR 0037). */
 import { type HostOf, invoke } from "@banda/contract/bridge"
 import type { FoundFile } from "@banda/contract/agents"
+import { hostOf } from "@banda/ui/desktop"
 
 export const AGENTS_BRIDGE = {
   /** A local media path, relative to its Project or absolute, as a signed
-   * URL valid for one hour; null if it cannot be shown. */
+   * URL valid for one hour; null if it cannot be shown. Images, video and
+   * sound alone: a reply's paths are an Agent's to write. */
   media: invoke<[project: string, path: string], string | null>(),
   /** The file each path in a reply names, or none (ADR 0063, decision 2):
    * from the Project's folder, then from the folders `worked` names, the
@@ -17,6 +19,4 @@ export const AGENTS_BRIDGE = {
 export type AgentsHost = HostOf<typeof AGENTS_BRIDGE>
 
 /** The agents module's channels, where a window runs it; none in a test. */
-export function agentsHost(): AgentsHost | undefined {
-  return (window as unknown as { banda?: { agents: AgentsHost } }).banda?.agents
-}
+export const agentsHost = () => hostOf<typeof AGENTS_BRIDGE>("agents")

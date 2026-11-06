@@ -31,6 +31,7 @@ import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
 import {
   Engine,
+  FileHost,
   Look,
   none,
   pickFolder,
@@ -92,9 +93,17 @@ const DEV_PAGE = app.isPackaged ? undefined : process.env.BANDA_PAGE
 /** Where the windows load the page from. */
 const PAGE = DEV_PAGE ?? `${ORIGIN}/index.html`
 
-/** The hosts of `app://` the modules serve, beside Banda's own page. */
-const hosts = new Map(Object.entries(modules.served))
-const framed = [...hosts.keys()].map((host) => `app://${host}`)
+/** The hosts of `app://` beside Banda's own page: the files a Pane shows
+ * (ADR 0073, decision 5), and the modules' own. */
+const hosts = new Map(
+  Object.entries({
+    ...modules.served,
+    files: (request: Request) => FileHost.use((host) => host.serve(request)),
+  })
+)
+/** Only the modules' hosts show in a frame: the files host serves any
+ * file, and no frame shows one yet. */
+const framed = Object.keys(modules.served).map((host) => `app://${host}`)
 
 const CSP = [
   "default-src 'self'",
@@ -154,11 +163,10 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 /** Main's services (ADR 0020): the engine and the look as children, the
- * settings, over them the modules' own, the browser's and the
- * notifications'
- * (modules.ts), and the road that answers what the modules' engine parts
- * ask (road.ts). They start with the first effect run, and stop when it
- * is disposed. */
+ * settings, the byte host, over them the modules' own, the browser's and
+ * the notifications' (modules.ts), and the road that answers what the
+ * modules' engine parts ask (road.ts). They start with the first effect
+ * run, and stop when it is disposed. */
 const runtime = ManagedRuntime.make(
   roadLayer(modules.asked).pipe(
     Layer.provideMerge(modules.layer),
@@ -176,7 +184,8 @@ const runtime = ManagedRuntime.make(
         ),
         lookLayer(engineBinary),
         settingsLayer(engineBinary),
-        Window.layer(() => window)
+        Window.layer(() => window),
+        FileHost.layer
       )
     ),
     Layer.provide(NodeServices.layer)
@@ -343,6 +352,10 @@ async function ready(): Promise<void> {
       themes: [none, () => Settings.use((settings) => settings.themes)],
     },
     files: {
+      url: [
+        Schema.Tuple([Schema.String, Schema.String]),
+        ([project, path]) => FileHost.url(project, path),
+      ],
       outside: [text, ([path]) => Effect.sync(() => openFile(path))],
       show: [text, ([path]) => Effect.sync(() => showFile(path))],
       exists: [text, ([path]) => Effect.sync(() => exists(path))],

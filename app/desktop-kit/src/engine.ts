@@ -3,7 +3,7 @@
  * it listens, and the doors it named.
  */
 import type { Address, Engine as Client } from "@banda/contract"
-import { Context, type Effect } from "effect"
+import { Context, Effect } from "effect"
 
 export class Engine extends Context.Service<
   Engine,
@@ -19,4 +19,15 @@ export class Engine extends Context.Service<
     /** Where the window says its CDP endpoint, for `banda browser`. */
     readonly browser: Effect.Effect<string>
   }
->()("banda/Engine") {}
+>()("banda/Engine") {
+  /** The folder of Project `project`, as the engine has it; none for one
+   * it does not know. */
+  static readonly folderOf = (project: string) =>
+    Effect.gen(function* () {
+      const client = yield* Engine.use((engine) => engine.client)
+      const projects = yield* Effect.promise(() =>
+        client.call("projects.list", {})
+      )
+      return projects.find((one) => one.id === project)?.folder ?? null
+    })
+}
