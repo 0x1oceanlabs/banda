@@ -168,7 +168,7 @@ export function runOf(
 }
 
 /** Whether the column at `c` is in the Group that fills the screen. */
-function filledAt(workspace: Workspace, c: number): boolean {
+export function filledAt(workspace: Workspace, c: number): boolean {
   const group = workspace.columns[c]?.group
   return group !== undefined && workspace.filled === group
 }

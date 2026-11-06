@@ -52,9 +52,12 @@ sidebar's to keep, not a second order of the window's.
      pick in the sidebar, the bar, a toast, `Alt+U`, or by the arrow
      keys past a Group's edge. The Strip slides to it, so where it went
      shows by the way it moved.
-   - A Thread with no Panes of its own fills it alone. The engine's
-     `fill` makes a Group of a column that is in none, so one rule holds
-     for both.
+   - A Thread with no Panes of its own fills it alone: since ADR 0065's
+     change of 2026-11-06, an Agent's Thread opens as a Group of its own.
+     A Thread the Person took out of its Group stays as it is.
+     _Changed_ in step 2: the engine's `fill` was first to make a Group
+     of a column in none, which would have put back a Thread the Person
+     took out.
    - `Alt+M` still gives the room back by hand. The next Agent the focus
      comes to fills the screen again.
    - Going from solo to the row gives the room back on the workspace you
@@ -97,8 +100,6 @@ Roma set these aside on 2026-11-06, to remember and not build yet:
 - ADR 0065, decision 9: `[agents] workspaces` becomes `flow`, with a
   third value.
 - ADR 0011, decision 5: `Alt+U` follows the sidebar's order.
-- The engine's `workspaces.fill` groups a column that is in no Group
-  before it fills.
 - GLOSSARY gains **Flow**.
 - The work comes in PRs, in order:
   1. `flow` in `agents.toml`, the icon and its menu, `Alt+Shift+M`.

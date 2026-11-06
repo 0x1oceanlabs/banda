@@ -9,7 +9,9 @@ import { type Plan, columnTo } from "./arrange"
 import type { Listed } from "@banda/ui/pane"
 import {
   type Column,
+  current,
   type Entry,
+  filledAt,
   focusedColumn,
   runOf,
   type Workspaces,
@@ -59,17 +61,44 @@ export function shiftingInside(
   return columnTo(column.id, workspace.id, to)
 }
 
+/** A Group filling the screen, or giving the room back. */
+function fillPlan(column: string, fill: boolean): Plan {
+  return { command: { method: "workspaces.fill", params: { column, fill } } }
+}
+
 /** `Alt+M`: the focused column's Group the whole screen wide, its columns
  * keeping their shares, and back. */
 export function filling(state: Workspaces): Plan | undefined {
   const { workspace, column } = focusedColumn(state)
   if (column?.group === undefined) return undefined
-  return {
-    command: {
-      method: "workspaces.fill",
-      params: { column: column.id, fill: workspace.filled !== column.group },
-    },
+  return fillPlan(column.id, workspace.filled !== column.group)
+}
+
+/** Solo (ADR 0079, decision 2): the Agent the focus is at, on a
+ * Project's workspace, fills the screen with its Group. A column in no
+ * Group, or a Group with no Agent in it, stays as it is. */
+export function soloing(
+  state: Workspaces,
+  isAgent: (entry: Entry) => boolean
+): Plan | undefined {
+  const { workspace, c, column } = focusedColumn(state)
+  if (column?.group === undefined || workspace.project === undefined) {
+    return undefined
   }
+  if (filledAt(workspace, c)) return undefined
+  const { start, end } = runOf(workspace.columns, c)
+  const agent = workspace.columns
+    .slice(start, end)
+    .some((one) => one.entries.some(isAgent))
+  return agent ? fillPlan(column.id, true) : undefined
+}
+
+/** Back from solo to the row: the Group that fills the workspace in view
+ * gives the room back. */
+export function unsoloing(state: Workspaces): Plan | undefined {
+  const workspace = current(state)
+  const column = workspace.columns.find((_, c) => filledAt(workspace, c))
+  return column && fillPlan(column.id, false)
 }
 
 /** A Group's colour, by its Agent's state, as the sidebar marks it:
