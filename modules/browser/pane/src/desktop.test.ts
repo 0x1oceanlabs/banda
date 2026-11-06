@@ -1,12 +1,12 @@
 import { expect, test } from "vitest"
-import { agentsOf, agentsPartition, opens, PARTITION } from "./desktop"
+import { agentsPartition, opens, PARTITION, whosePartition } from "./desktop"
 
 const project = "0199a3c4-0000-7000-8000-000000000001"
 
 test("a page loads in the Person's profile or in a Project's Agents', and no other", () => {
-  expect(agentsOf(PARTITION)).toBeNull()
+  expect(whosePartition(PARTITION)).toBeNull()
   expect(agentsPartition(project)).toBe(`persist:agents-${project}`)
-  expect(agentsOf(agentsPartition(project))).toBe(project)
+  expect(whosePartition(agentsPartition(project))).toBe(project)
   for (const other of [
     "",
     "persist:other",
@@ -17,7 +17,7 @@ test("a page loads in the Person's profile or in a Project's Agents', and no oth
     `persist:agents-${project.toUpperCase()}`,
     `agents-${project}`,
   ])
-    expect(agentsOf(other), other).toBeUndefined()
+    expect(whosePartition(other), other).toBeUndefined()
 })
 
 test("an Agents' page loads the web alone; the Person's also loads their files", () => {

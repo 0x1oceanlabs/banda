@@ -92,7 +92,8 @@ banda_kernel::methods! {
         /// now.
         command bring_back(Nothing) -> Done, Write;
         /// The Panes on the workspaces, from the top down and from the
-        /// left: your Project's with their args, and, when your Person lets
+        /// left: your Project's with their args, a browser's with the tabs
+        /// your Project's Agents opened alone, and, when your Person lets
         /// you see the other Projects, theirs without. `yours` marks the
         /// ones you opened, which alone you move and close.
         call panes(Nothing) -> Vec<SeenWorkspace>, Read, tool "panes";
@@ -229,7 +230,8 @@ pub struct SeenPane {
     pub id: PaneId,
     pub project: banda_kernel::ProjectId,
     pub kind: String,
-    /// Its args, for a Pane of your Project; none for another Project's.
+    /// Its args, for a Pane of your Project, a browser's with the tabs your
+    /// Project's Agents opened alone; none for another Project's.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub args: Option<Value>,
@@ -784,7 +786,7 @@ impl Workspaces {
                 id: pane.id,
                 project: pane.shows.project,
                 kind: pane.shows.kind.clone(),
-                args: (sight == Sight::Whole).then(|| pane.shows.args.clone()),
+                args: (sight == Sight::Whole).then(|| args_seen(wall, &pane.shows)),
                 yours: me.is_some() && pane.by == me,
             })
         };
@@ -854,6 +856,32 @@ impl Workspaces {
         })
         .await
     }
+}
+
+/// The args of a Pane a caller behind `wall` sees whole. A browser's tabs
+/// are only those its Project's Agents opened, each naming that Project as
+/// `agents`, and an address alone is one an Agent opened (`open_pane`):
+/// the Person's own tabs are no Agent's to see (ADR 0083, decision 4).
+fn args_seen(wall: Option<Wall>, shows: &Shown) -> Value {
+    let Some(wall) = wall.filter(|_| shows.kind == "browser.browser") else {
+        return shows.args.clone();
+    };
+    let Some(tabs) = shows.args.get("tabs").and_then(Value::as_array) else {
+        return shows.args.clone();
+    };
+    let project = wall.project.to_string();
+    let shown = shows.args.get("shown").and_then(Value::as_u64);
+    let (mut kept, mut now) = (Vec::new(), 0);
+    for (at, tab) in tabs.iter().enumerate() {
+        if tab.get("agents").and_then(Value::as_str) != Some(project.as_str()) {
+            continue;
+        }
+        if shown == Some(at as u64) {
+            now = kept.len();
+        }
+        kept.push(tab.clone());
+    }
+    serde_json::json!({ "tabs": kept, "shown": now })
 }
 
 /// The wall and the Agent of a call to an Agent's tool.

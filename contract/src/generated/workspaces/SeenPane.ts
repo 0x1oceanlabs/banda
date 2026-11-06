@@ -5,7 +5,8 @@ import type { PaneId } from "./PaneId";
 
 export type SeenPane = { id: PaneId, project: ProjectId, kind: string, 
 /**
- * Its args, for a Pane of your Project; none for another Project's.
+ * Its args, for a Pane of your Project, a browser's with the tabs your
+ * Project's Agents opened alone; none for another Project's.
  */
 args?: JsonValue, 
 /**

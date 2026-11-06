@@ -71,7 +71,7 @@ export const browser = defineModule({
   // turn ends (`followThreads`).
   start: (window) => {
     const following = followThreads(window)
-    const opening = openWith((url, agent, agents) => {
+    const opening = openWith((url, { agent, agents }) => {
       const at = agent ? window.beside(agent) : null
       const holder = at?.right ? browserIn(at.right) : frontHolder(at?.project)
       if (holder) return holder.open(url, { agents })

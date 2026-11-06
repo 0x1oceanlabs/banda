@@ -20,9 +20,8 @@ tabs = "top"
 # EasyPrivacy and uBlock Origin's lists.
 # blocker = true
 
-# Banda's browser tools for Agents. The CDP endpoint for your own
-# programs is separate. Screenshots include visible page content, with
-# password and card fields masked.
+# Banda's browser tools for Agents. Screenshots include visible page
+# content, with password and card fields masked.
 # [agents]
 # enabled = true
 # screenshots = false
