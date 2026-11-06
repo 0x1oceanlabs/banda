@@ -6,12 +6,16 @@ import type { ThreadId } from "./ThreadId";
  */
 export type SnoozeAsk = { 
 /**
- * The Thread's ID, as `threads` lists it.
+ * The Thread's ID, as `threads` lists it; an Agent's own by default.
  */
-thread: ThreadId, 
+thread?: ThreadId, 
 /**
- * When it comes back, in milliseconds since the epoch. Leave it out
- * to snooze a Thread at work until its turn ends.
+ * How long it sleeps: `30m`, `2h`, `1d`.
+ */
+after?: string, 
+/**
+ * Or when it comes back, in milliseconds since the epoch. With
+ * neither, a Thread at work sleeps until its turn ends.
  */
 until?: number, 
 /**

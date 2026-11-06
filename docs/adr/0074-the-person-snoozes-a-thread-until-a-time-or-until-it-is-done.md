@@ -172,6 +172,12 @@ defaults and stay his to change.
     - An Agent's snooze is a snooze like the Person's, and anything that
       calls the Person wakes it. It does not wake the Agent. It does not
       send a message or start a turn.
+    - _Changed on 2026-11-06, as it was built._ The tool and the CLI say
+      how long with `after` (`30m`, `2h`, `1d`) and a moment with
+      `until`, in milliseconds since the epoch; with neither, a Thread at
+      work sleeps until its turn ends. Words for a day (`fri 14`) stay the
+      window's: the engine knows no Person's timezone, and an Agent can
+      work the moment out itself.
 
 11. **Later: waking on an event** (_decided_). A snooze "until the PR is
     merged" or "until CI passes" is "until done" with other events. It

@@ -406,6 +406,7 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "preview_visual",
                 "draft_issue",
                 "notify",
+                "snooze",
                 "limits",
                 "browser_tabs",
                 "browser_snapshot",

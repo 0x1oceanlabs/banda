@@ -94,6 +94,12 @@ enum Command {
         #[command(subcommand)]
         what: ProjectCommand,
     },
+    /// Snoozes a Thread, or wakes it (ADR 0074): snoozed, it leaves its
+    /// Person's list until then.
+    Thread {
+        #[command(subcommand)]
+        what: ThreadCommand,
+    },
     /// Prints a Project's events, one JSON object per line.
     Follow {
         // `--space` before ADR 0069 (grace).
@@ -223,6 +229,33 @@ enum ProjectCommand {
         /// (`projects.foreign`).
         #[arg(long)]
         trusted: Option<bool>,
+    },
+}
+
+#[derive(Subcommand)]
+enum ThreadCommand {
+    /// Snoozes a Thread for a while, or until a moment; with neither, a
+    /// Thread at work until its turn ends. Anything that needs its Person
+    /// wakes it early. In a Thread, an Agent's own is the default.
+    Snooze {
+        /// The Thread's ID; an Agent's own Thread when left out.
+        thread: Option<String>,
+        /// Its Project; `$BANDA_PROJECT` when left out, as in a Thread.
+        #[arg(long)]
+        project: Option<ProjectId>,
+        /// How long: 30m, 2h, 1d.
+        #[arg(long, conflicts_with = "until")]
+        after: Option<String>,
+        /// When it comes back, in milliseconds since the epoch.
+        #[arg(long)]
+        until: Option<i64>,
+    },
+    /// Wakes a snoozed Thread now; one awake stays so.
+    Wake {
+        thread: String,
+        /// Its Project; `$BANDA_PROJECT` when left out, as in a Thread.
+        #[arg(long)]
+        project: Option<ProjectId>,
     },
 }
 
@@ -531,6 +564,27 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             print_call(&places, "projects.add", None, CommandId::new(), params).await
         }
         Command::Files { path, project } => files::open(&places, path, project).await,
+        Command::Thread { what } => {
+            let (method, project, params) = match what {
+                ThreadCommand::Snooze {
+                    thread,
+                    project,
+                    after,
+                    until,
+                } => {
+                    let params = json!({ "thread": thread, "after": after, "until": until });
+                    ("agents.snooze", project, params)
+                }
+                ThreadCommand::Wake { thread, project } => {
+                    ("agents.wake", project, json!({ "thread": thread }))
+                }
+            };
+            // In a Thread, the Agent's Project, by either of its names.
+            let project = project.or_else(|| {
+                std::env::vars().find_map(|(key, value)| banda_kernel::project_in_env(&key, &value))
+            });
+            print_call(&places, method, project, CommandId::new(), params).await
+        }
         Command::Problems { what: None } => problems::list(&places).await,
         Command::Problems {
             what: Some(ProblemsCommand::Report { fingerprint }),

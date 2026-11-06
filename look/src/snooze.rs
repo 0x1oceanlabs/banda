@@ -1,13 +1,17 @@
 //! The words a snooze's time is said in (ADR 0074, decisions 5 and 9), as
 //! `sidebar.toml`'s `[snooze] presets` write them. The window reads them
-//! against its clock (`app/web/src/sidebar/snooze-time.ts`); this only
-//! checks that it can, so `banda look check` names a preset it cannot.
+//! against its clock (`app/web/src/sidebar/snooze-time.ts`); this checks
+//! that it can, so `banda look check` names a preset it cannot, and says
+//! how long a while lasts, for an Agent's snooze and the CLI's.
 
 /// Banda's presets: T3 Code's defaults, in the field's own words.
 pub const PRESETS: [&str; 5] = ["1h", "3h", "18:00", "tomorrow 9:00", "mon 9:00"];
 
 /// How many presets the picker lists at most.
 pub const MOST: usize = 8;
+
+/// A minute, an hour and a day, in milliseconds: `UNITS`' order.
+const UNIT_MS: [i64; 3] = [60_000, 3_600_000, 86_400_000];
 
 const UNITS: [&[&str]; 3] = [
     &[
@@ -85,37 +89,44 @@ const WEEK: [&str; 5] = ["next week", "week", "через неделю", "нед
 pub fn reads(text: &str) -> bool {
     let lower = text.trim().to_lowercase();
     let all: Vec<&str> = lower.split_whitespace().collect();
-    let words = match &all[..] {
-        ["in" | "через" | "в" | "до", rest @ ..] if !rest.is_empty() => rest,
-        all => all,
-    };
-    if WEEK.contains(&words.join(" ").as_str()) {
+    let words = said(&all);
+    if WEEK.contains(&words.join(" ").as_str()) || while_of(text).is_some() {
         return true;
     }
     match words {
-        [one] => run_together(one) || time_of(one) || DAYS.contains(one),
-        [a, b] => (number_of(a) && unit_of(b)) || (DAYS.contains(a) && time_of(b)),
+        [one] => time_of(one) || DAYS.contains(one),
+        [day, time] => DAYS.contains(day) && time_of(time),
         [day, "at" | "в", time] => DAYS.contains(day) && time_of(time),
         _ => false,
     }
 }
 
-/// `45m`, `2h`, `1.5d`: a while, its number and unit run together.
-fn run_together(word: &str) -> bool {
-    word.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == ','))
-        .is_some_and(|at| {
-            let (number, unit) = word.split_at(at);
-            number_of(number) && unit_of(unit)
-        })
+/// How long a while in the field's words lasts, in milliseconds: `45m`,
+/// `2 h`, `1.5d`, `in 2 hours`, `через 3 часа`. Nothing for what is no
+/// while, as `fri` or `18:00`, whose moment needs the Person's clock.
+pub fn while_of(text: &str) -> Option<i64> {
+    let lower = text.trim().to_lowercase();
+    let all: Vec<&str> = lower.split_whitespace().collect();
+    let (number, word) = match said(&all) {
+        [one] => one.split_at(one.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == ','))?),
+        [number, word] => (*number, *word),
+        _ => return None,
+    };
+    let n = number
+        .replace(',', ".")
+        .parse::<f64>()
+        .ok()
+        .filter(|n| *n > 0.0)?;
+    let unit = UNITS.iter().position(|unit| unit.contains(&word))?;
+    Some((n * UNIT_MS[unit] as f64).round() as i64)
 }
 
-/// A number above none: `2`, `1.5`, `1,5`.
-fn number_of(text: &str) -> bool {
-    text.replace(',', ".").parse::<f64>().is_ok_and(|n| n > 0.0)
-}
-
-fn unit_of(word: &str) -> bool {
-    UNITS.iter().any(|unit| unit.contains(&word))
+/// The words without the one that leads into a time: `in`, `через`.
+fn said<'a>(all: &'a [&'a str]) -> &'a [&'a str] {
+    match all {
+        ["in" | "через" | "в" | "до", rest @ ..] if !rest.is_empty() => rest,
+        all => all,
+    }
 }
 
 /// `9`, `9:30`, `18.30`: an hour of the day, and its minute in two digits.
@@ -151,6 +162,17 @@ mod tests {
         }
         for preset in PRESETS {
             assert!(reads(preset), "{preset}");
+        }
+    }
+
+    #[test]
+    fn a_while_is_how_long_and_a_day_is_none() {
+        assert_eq!(while_of("45m"), Some(45 * 60_000));
+        assert_eq!(while_of("in 2 hours"), Some(7_200_000));
+        assert_eq!(while_of("1.5d"), Some(129_600_000));
+        assert_eq!(while_of("через 3 часа"), Some(10_800_000));
+        for text in ["fri", "18:00", "soon", "0h", "2 weeks"] {
+            assert_eq!(while_of(text), None, "{text}");
         }
     }
 }
