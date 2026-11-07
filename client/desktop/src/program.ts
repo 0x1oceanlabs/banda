@@ -7,7 +7,9 @@
  *
  * The copy is `<data>/engine/<version>/banda`, beside `version`, which
  * holds what the program's `--version` says: its version and its build
- * id. It is written into a folder of its own, run once with `--version`,
+ * id, and beside the ACP adapters the app carries (`adapters/`), which the
+ * engine finds beside its program and runs (ADR 0059), so they never run
+ * from inside the AppImage either. It is written into a folder of its own, run once with `--version`,
  * and renamed into place only when it says the same, so a half-written
  * copy, or one that does not start, is never run. A copy in place is run
  * again while it is of the window's build, as long as the program, and
@@ -61,6 +63,9 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process"
 
 /** The file beside a copy that says what its `--version` said. */
 const VERSION = "version"
+/** The folder of the adapters the app carries, beside its `banda` and its
+ * copy's: where the engine looks for them (the harnesses' `ADAPTERS`). */
+export const ADAPTERS = "adapters"
 /** A version that names a folder: no slash, no leading dot. */
 const PLAIN = /^[0-9A-Za-z][0-9A-Za-z.+_-]*$/
 /** How long `banda --version` may take before it counts as broken. */
@@ -135,7 +140,8 @@ export class Program extends Context.Service<
         return {
           path: one.withPermits(1)(
             Effect.suspend(() =>
-              whole(path, where.program)
+              whole(path, where.program) &&
+              carries(dirname(path), where.program)
                 ? Effect.succeed(path)
                 : Effect.tap(copied, (made) =>
                     Effect.sync(() => {
@@ -162,7 +168,11 @@ export const ownCopy = (program: string, folder: string) =>
       })
     const kept = join(folder, version)
     const copy = join(kept, "banda")
-    if (textOf(join(kept, VERSION)) === said && whole(copy, program)) {
+    if (
+      textOf(join(kept, VERSION)) === said &&
+      whole(copy, program) &&
+      carries(kept, program)
+    ) {
       const again = yield* Effect.option(versionOf(copy))
       if (Option.contains(again, said)) return copy
     }
@@ -227,9 +237,9 @@ const versionOf = (program: string) =>
   )
 
 /** Writes `program` into `fresh`, with its line tables when they lie
- * beside it (`banda.dSYM`, on macOS), and `said` as its version. Its
- * bytes are written, not the file copied, so what the system marks a
- * download with stays on the app. */
+ * beside it (`banda.dSYM`, on macOS) and the adapters the app carries,
+ * and `said` as its version. Its bytes are written, not the file copied,
+ * so what the system marks a download with stays on the app. */
 async function copyInto(program: string, fresh: string, said: string) {
   await writeFile(join(fresh, "banda"), await readFile(program), {
     mode: 0o755,
@@ -238,6 +248,9 @@ async function copyInto(program: string, fresh: string, said: string) {
   const tables = `${program}.dSYM`
   if (existsSync(tables))
     await cp(tables, join(fresh, "banda.dSYM"), { recursive: true })
+  const adapters = join(dirname(program), ADAPTERS)
+  if (existsSync(adapters))
+    await cp(adapters, join(fresh, ADAPTERS), { recursive: true })
   await writeFile(join(fresh, VERSION), `${said}\n`, { flush: true })
 }
 
@@ -324,6 +337,17 @@ export function programsOf(listed: string): string[] {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
+}
+
+/** Whether `kept`, a copy's folder, holds each of the adapters that lie
+ * beside `program`, as long as it: a copy made before it carried them
+ * does not. */
+function carries(kept: string, program: string): boolean {
+  const adapters = join(dirname(program), ADAPTERS)
+  if (!existsSync(adapters)) return true
+  return readdirSync(adapters).every((name) =>
+    whole(join(kept, ADAPTERS, name), join(adapters, name))
+  )
 }
 
 /** Whether `copy` is there, as long as `program`. */

@@ -2,12 +2,13 @@
 //! It opens the Projects under the root with their modules and serves the API
 //! on this machine only.
 
-use crate::places::{HOST, Places, Running, channel, from_checkout};
+use crate::places::{FOLDER, HOST, Places, Running, channel, from_checkout};
 use crate::{Failure, build_id, parent};
 use banda_agents::{Agents, Pipe};
 use banda_browser::Browser;
 use banda_files::Files;
 use banda_git::Git;
+use banda_harnesses::carried::{Carried, Here};
 use banda_harnesses::{Harnesses, HarnessesModule};
 use banda_kernel::api::{self, OwnerSecret};
 use banda_kernel::{Kernel, PROTOCOL};
@@ -18,6 +19,7 @@ use banda_sharing::{Never, Sharing};
 use banda_terminal::Terminals;
 use banda_workspaces::Workspaces;
 use std::fs::{File, TryLockError};
+use std::path::Path;
 
 /// Runs until a signal, or until stdin closes when `with_parent` is set: a
 /// window that starts the engine holds its stdin, and reads where the
@@ -40,7 +42,9 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         Err(TryLockError::Error(error)) => return Err(Failure::broken(error)),
     }
     let owner = places.owner().map_err(Failure::broken)?;
+    let program = std::env::current_exe().map_err(Failure::broken)?;
     let harnesses = Harnesses::load(&places.harnesses()).map_err(Failure::broken)?;
+    let harnesses = harnesses.carrying(carried(&program));
     let listener = tokio::net::TcpListener::bind((HOST, port))
         .await
         .map_err(Failure::broken)?;
@@ -54,7 +58,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
     // Every Thread's session reaches the engine through this program's
     // `banda mcp` (ADR 0019).
     let pipe = Pipe {
-        program: std::env::current_exe().map_err(Failure::broken)?,
+        program,
         engine: running.url(),
     };
     let kernel = Kernel::builder(&places.root, &places.data, owner)
@@ -139,6 +143,30 @@ async fn stopped(with_parent: bool) {
         () = parent => {}
     }
     tracing::info!("the engine stops");
+}
+
+/// The adapters Banda carries and the Node to run them on, as this host
+/// has them beside the engine's `program`, in its checkout or on its PATH
+/// (ADR 0059; ADR 0062, step S1): an engine started in a shell, with no
+/// window, runs Banda's own Harness entries through them too.
+fn carried(program: &Path) -> Option<Carried> {
+    let here = Here {
+        program,
+        app: FOLDER,
+        checkout: from_checkout(),
+    };
+    let carried = Carried::find(&here);
+    match &carried {
+        Some(Carried { adapters, node }) => tracing::info!(
+            adapters = %adapters.display(),
+            node = %node.program.display(),
+            "Banda's own Harnesses start through the adapters it carries"
+        ),
+        None => tracing::warn!(
+            "this host has no Node or no adapters Banda carries: its own Harnesses start through npx"
+        ),
+    }
+    carried
 }
 
 /// What broke in Banda (ADR 0039), and, from a checkout's build, the

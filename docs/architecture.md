@@ -438,8 +438,23 @@ If Chat is removed, Agents still works through its own Thread.
     still share it.
 - **The Harness list is a text file** of the machine. It says how to start
   each Harness. Without one, the engine knows Claude Code and Codex through
-  their ACP adapters on npm, at exact versions. Reading the ACP Registry
-  comes next.
+  their ACP adapters, at exact versions. Reading the ACP Registry comes
+  next.
+- **Banda carries the adapters, and the host runs them** (ADR 0059; ADR
+  0062, step S1). The harnesses' host package,
+  `platform/harnesses/adapters`, bundles both adapters into one file each,
+  Claude Code's with Banda's shim of the Agent SDK, which keeps a Thread's
+  sessions in its Project (ADR 0078), and Codex's with Banda's patch.
+  `banda serve` finds them and a Node itself, as it starts
+  (`platform/harnesses/engine/src/carried.rs`): the adapters in
+  `BANDA_ADAPTERS`, else beside its program (a packed app's
+  `resources/adapters`, and the engine's own copy's), else what a
+  checkout's package built; the Node in `BANDA_NODE`, which the window sets
+  to its own Electron, else the packed app's Electron beside the engine's
+  resources, else the first `node` on PATH. An Electron runs them with
+  `ELECTRON_RUN_AS_NODE`; a `node` needs nothing. So an engine started in
+  a shell, with no window, runs Banda's own entries through them too.
+  With no adapters or no Node, those entries start through `npx`.
   - The engine follows the file: each look at the list reads it again once
     it changed, so a changed entry starts its next process as the file now
     says, and a file that no longer reads leaves the list before it in
@@ -511,7 +526,7 @@ If Chat is removed, Agents still works through its own Thread.
     models, effort and modes, from the Person's alone too (its shim of the
     SDK, `claude-sdk.mjs`).
   - The Codex adapter Banda carries is patched
-    (`platform/harnesses/desktop/patches/`) to mark no session's folder
+    (`platform/harnesses/adapters/patches/`) to mark no session's folder
     trusted, where it marks every one trusted otherwise, so Codex loads no
     `.codex/` config of the folder. Codex still reads `AGENTS.md`.
   - Another Harness, or a Codex the Person runs from a command of their
@@ -961,18 +976,21 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
 - **A packed Banda runs its own copy of `banda`** (ADR 0086, decision
   2), never the one inside its AppImage or its app, whose folder may go
   while the program runs. Main copies it into
-  `<data>/engine/<version>/`, beside what its `--version` said, runs the
+  `<data>/engine/<version>/`, beside what its `--version` said and the
+  ACP adapters the app carries, runs the
   copy once with `--version`, and renames it into place only when it says
   the same version and build id (`program.ts`). A copy in place is run
-  again while it is as long as the packed one and says the same, and one
+  again while it and its adapters are as long as the packed ones and it
+  says the same, and one
   that goes while the window runs is made again before the next run. The
   last two versions are kept. A copy that cannot be made leaves the
   engine where it was packed, and a Problem says why. A `banda` that a
   package manager owns, as the AUR's, says so in `package-type` beside it
   and runs where it was put; a checkout's runs where cargo built it.
 - **What still runs from inside the AppImage** is Electron's, and the
-  ACP adapters on its Node (ADR 0059) until the engine is the machine's
-  (ADR 0086, plan step 3). On Quit nothing of it is left. When main is
+  Node the ACP adapters run on, the window's Electron, until the engine is
+  the machine's (ADR 0086, plan step 3). The adapters themselves run from
+  the engine's own copy, which carries them. On Quit nothing of it is left. When main is
   killed, `chrome_crashpad_handler` and the network service die with
   SIGBUS as the AppImage's folder goes; `banda` does not. That is
   Electron's helper, kept apart from the engine (seen on 2026-11-07).
@@ -1246,6 +1264,7 @@ banda/
     look/             Rust: banda look, the look, the sidebar's arrangement and the browser's; skill/ its topics
     settings/         Rust: Banda's settings files, each described once, and the one writer that changes them (ADR 0016)
     git-cli/          Rust: how Banda starts git: its own bookkeeping, which runs no program a repository names, and the acts the Person asks for
+    harnesses/adapters/  Node, on the host: the ACP adapters Banda carries and its shim of Claude's Agent SDK (ADR 0059, ADR 0078)
   client/             the window
     ui/               shadcn/ui and the Pane contract
     ghostty/          T3 Code's Ghostty adapter and its WebAssembly, vendored

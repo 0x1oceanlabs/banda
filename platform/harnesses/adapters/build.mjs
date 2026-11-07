@@ -1,9 +1,11 @@
 // Bundles the ACP adapters for Claude Code and Codex into one file each,
-// in adapters/, which the app carries and the engine runs on Electron's
-// Node (ADR 0059, decision 1). Their versions are this package's
-// dependencies, and the engine's `known()` names the same; each file is
-// its package's name. client/desktop/build.mjs runs this on import. Codex's
-// adapter is patched in patches/ (pnpm's `patchedDependencies`, in
+// in dist/, which the engine runs on the Node its host provides (ADR 0059,
+// decision 1; ADR 0062, S1): a packed app carries them as
+// resources/adapters, and a checkout's engine finds them here. Their
+// versions are this package's dependencies, and the engine's `known()`
+// names the same; each file is its package's name. `pnpm build` runs
+// this, and client/desktop/build.mjs on import. Codex's adapter is
+// patched in patches/ (pnpm's `patchedDependencies`, in
 // pnpm-workspace.yaml); Claude Code's takes the SDK through Banda's shim
 // below.
 import { createRequire } from "node:module"
@@ -12,7 +14,7 @@ import { fileURLToPath } from "node:url"
 import { build } from "esbuild"
 
 const here = dirname(fileURLToPath(import.meta.url))
-const out = join(here, "adapters")
+const out = join(here, "dist")
 const require = createRequire(import.meta.url)
 
 // Claude Code's adapter takes the Agent SDK through Banda's shim, which
