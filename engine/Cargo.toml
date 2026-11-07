@@ -28,8 +28,10 @@ banda-skill = { path = "../platform/skill" }
 clap.workspace = true
 dirs.workspace = true
 futures.workspace = true
+rustix.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 tokio.workspace = true
 toml.workspace = true
 tokio-tungstenite.workspace = true

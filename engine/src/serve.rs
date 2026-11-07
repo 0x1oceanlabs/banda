@@ -1,8 +1,19 @@
 //! `banda serve`: the one engine of this machine (ADR 0001, decision 1).
 //! It opens the Projects under the root with their modules and serves the API
 //! on this machine only.
+//!
+//! It knows how the run before left (`run.rs`), and keeps a crash as a
+//! Problem before it opens anything. It is whole before it listens: it
+//! opens every Project, with its modules' migrations and the outbox's
+//! recovery, and only then says where it listens, in `engine.json`. It
+//! listens on the port the run before did when that is free, so the
+//! address its Agents' passes name stays across a restart (ADR 0086,
+//! decision 1; ADR 0083, decision 2). As it stops, it keeps its sessions'
+//! passes for the next run, and says that it stopped.
 
 use crate::places::{FOLDER, HOST, Places, Running, channel, from_checkout};
+use crate::run::{self, Before, Left};
+use crate::service::UNIT_VARIABLE;
 use crate::{Failure, build_id, parent};
 use banda_agents::{Agents, Pipe};
 use banda_browser::Browser;
@@ -42,19 +53,34 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         }
         Err(TryLockError::Error(error)) => return Err(Failure::broken(error)),
     }
+    let (before, last_port) = run::before(&places);
+    match before {
+        Before::Crashed => {
+            tracing::warn!(
+                "the engine's last run ended without stopping: it crashed, or was killed"
+            );
+            run::keep_crash(&places);
+        }
+        Before::Left(left) => tracing::info!(?left, "the engine's last run left"),
+        Before::None => {}
+    }
     let owner = places.owner().map_err(Failure::broken)?;
     let program = std::env::current_exe().map_err(Failure::broken)?;
     let harnesses = Harnesses::load(&places.harnesses()).map_err(Failure::broken)?;
     harnesses.carry(carried(&program));
-    let listener = tokio::net::TcpListener::bind((HOST, port))
-        .await
-        .map_err(Failure::broken)?;
+    let listener = listen(port, last_port).await?;
     // A secret for this run of the engine: whoever has it is the owner.
     let running = Running {
         protocol: PROTOCOL,
         port: listener.local_addr().map_err(Failure::broken)?.port(),
         secret: banda_kernel::secret().map_err(Failure::broken)?,
         build: build_id::own(),
+        version: Some(env!("BANDA_VERSION").to_owned()),
+        since: Some(banda_kernel::now_ms()),
+        pid: Some(std::process::id()),
+        unit: std::env::var(UNIT_VARIABLE)
+            .ok()
+            .filter(|unit| !unit.is_empty()),
     };
     // Every Thread's session reaches the engine through this program's
     // `banda mcp` (ADR 0019).
@@ -67,6 +93,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         // Every Project's programs run on this host, as the Person's own
         // do (ADR 0084).
         .environment(Local)
+        .passes(places.passes())
         .module(
             Agents::new(harnesses.clone())
                 .config_in(places.config.clone())
@@ -99,14 +126,19 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         owner,
     };
     let engine = format!("banda {}", env!("BANDA_VERSION"));
-    let app = api::router(kernel, identity, engine);
+    let app = api::router(kernel.clone(), identity, engine);
     // Heard from here on: a TERM that comes as soon as the first line is
     // out stops the engine as any other does, not by the signal's default.
     #[cfg(unix)]
     let term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).ok();
     #[cfg(not(unix))]
     let term = None::<()>;
+    // Whole now: clients may find it.
     places.announce(&running).map_err(Failure::broken)?;
+    let since = running.since.unwrap_or_default();
+    if let Err(error) = run::began(&places, since, running.port) {
+        tracing::error!(%error, "the engine could not say that it runs");
+    }
     if with_parent {
         // And where the window listens for `banda menu`, so the CLI and
         // the window find it the same way.
@@ -119,7 +151,11 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
     let served = axum::serve(listener, app)
         .with_graceful_shutdown(stopped(with_parent, term))
         .await;
+    kernel.stopping();
     places.withdraw();
+    if let Err(error) = run::left(&places, since, running.port, Left::Stopped) {
+        tracing::error!(%error, "the engine could not say that it stopped");
+    }
     drop(lock);
     served.map_err(Failure::broken)
 }
@@ -128,6 +164,22 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
 type Term = Option<tokio::signal::unix::Signal>;
 #[cfg(not(unix))]
 type Term = Option<()>;
+
+/// Listens on `port`, or when it is 0, on the port the run before did when
+/// it is free, else on any.
+async fn listen(port: u16, last: Option<u16>) -> Result<tokio::net::TcpListener, Failure> {
+    if port == 0
+        && let Some(last) = last
+    {
+        match tokio::net::TcpListener::bind((HOST, last)).await {
+            Ok(listener) => return Ok(listener),
+            Err(error) => tracing::info!(last, %error, "the engine listens on another port"),
+        }
+    }
+    tokio::net::TcpListener::bind((HOST, port))
+        .await
+        .map_err(Failure::broken)
+}
 
 async fn stopped(with_parent: bool, term: Term) {
     let parent = async move {

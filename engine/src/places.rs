@@ -5,7 +5,7 @@
 //! |---|---|---|
 //! | root | `~/Banda` | where a new Project's folder goes |
 //! | data | `~/.local/share/banda` | each Project's data, in `projects/<id>/` (ADR 0026); the window's copy of `banda`, in `engine/<version>/` (ADR 0086) |
-//! | state | `~/.local/state/banda` | the owner's ID, the lock, `engine.json`, this machine's scope (`machine/`), the window's profile (`window/`), the logs (`logs/`), the engine's last panics (`problems/`) |
+//! | state | `~/.local/state/banda` | the owner's ID, the lock, `engine.json`, how the last run went (`run.json`), the passes (`passes.sqlite3`), this machine's scope (`machine/`), the window's profile (`window/`), the logs (`logs/`), the engine's last panics (`problems/`) |
 //! | config | `~/.config/banda` | `harnesses.toml`, `agents.toml` and the look's files |
 //! | cache | `~/.cache/banda` | what can be made again: Files' small pictures (`thumbnails/`) |
 //!
@@ -31,8 +31,9 @@ pub struct Places {
     pub cache: PathBuf,
 }
 
-/// What a client needs to reach the running engine. Only this machine's
-/// user can read the file that holds it.
+/// What a client needs to reach the running engine, and what `banda
+/// status` says of it. Only this machine's user can read the file that
+/// holds it.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Running {
     pub protocol: u32,
@@ -43,6 +44,20 @@ pub struct Running {
     /// own build, even of the same version (ADR 0086, decision 2).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub build: Option<String>,
+    /// Its version, as `banda --version` says it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    /// When it began to serve, in ms since the epoch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub since: Option<i64>,
+    /// Its process.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid: Option<u32>,
+    /// The systemd user unit it runs in, when it runs as the session's
+    /// service (ADR 0086, decision 1); none as a window's child or a
+    /// `banda serve` in a shell.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit: Option<String>,
 }
 
 impl Running {
@@ -86,6 +101,16 @@ struct Owner {
 /// where the engine listens.
 const STATE: &str = "BANDA_STATE";
 
+/// The variables that move each place, as [`Places::variables`] names
+/// them.
+pub const VARIABLES: [&str; 5] = [
+    "BANDA_ROOT",
+    "BANDA_DATA",
+    STATE,
+    "BANDA_CONFIG",
+    "BANDA_CACHE",
+];
+
 /// Whether `BANDA_STATE` names the state's place, as a test or a trial
 /// names its own engine's.
 pub fn state_named() -> bool {
@@ -113,6 +138,20 @@ impl Places {
             config: place("BANDA_CONFIG", dirs::config_dir(), FOLDER)?,
             cache: place("BANDA_CACHE", dirs::cache_dir(), FOLDER)?,
         })
+    }
+
+    /// Each place by the variable that moves it, so an engine started
+    /// apart, as the session's service, keeps its things where its
+    /// starter finds them.
+    pub fn variables(&self) -> [(&'static str, &Path); 5] {
+        let [root, data, state, config, cache] = VARIABLES;
+        [
+            (root, &self.root),
+            (data, &self.data),
+            (state, &self.state),
+            (config, &self.config),
+            (cache, &self.cache),
+        ]
     }
 
     pub fn harnesses(&self) -> PathBuf {
@@ -151,6 +190,17 @@ impl Places {
     /// Held by the engine while it runs: one engine per state folder.
     pub fn lock(&self) -> PathBuf {
         self.state.join("engine.lock")
+    }
+
+    /// How the engine's last run went: since when, where it listened, and
+    /// how it left (`run.rs`).
+    pub fn run(&self) -> PathBuf {
+        self.state.join("run.json")
+    }
+
+    /// This host's passes, hashed (ADR 0083, decision 2).
+    pub fn passes(&self) -> PathBuf {
+        self.state.join("passes.sqlite3")
     }
 
     /// The Person who owns this machine's Projects, made on first use.
@@ -194,7 +244,7 @@ impl Places {
 }
 
 /// Writes a file only this user can read, whole or not at all.
-fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+pub fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     if let Some(folder) = path.parent() {
         std::fs::create_dir_all(folder)?;
     }

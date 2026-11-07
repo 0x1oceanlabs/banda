@@ -36,12 +36,39 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
 - Inside the engine there are no services: it is one process, with one
   SQLite writer per Project. Modules are crates in one binary.
 - **One program, `banda`.** `banda serve` runs the engine. It listens
-  on 127.0.0.1 only, and writes its port, a fresh secret and its build id
-  to `engine.json` in its state folder, a file only this user can read. A
-  window starts it with `--with-parent`: the engine then prints the same
-  JSON as its first line, and stops when its stdin closes. A second
-  engine with the same state folder refuses to start. `banda --version`
-  names the build id too (ADR 0086, decision 2).
+  on 127.0.0.1 only, on the port it listened on last when that is free,
+  and writes its port, a fresh secret, its build id, version, process and
+  since when it runs to `engine.json` in its state folder, a file only
+  this user can read. A second engine with the same state folder refuses
+  to start. `banda --version` names the build id too (ADR 0086, decision
+  2).
+- **The engine is the machine's, and outlives the window** (ADR 0086,
+  decisions 1 and 3). On Linux it is a systemd user unit of the Person's
+  session, `<folder>-engine` (`banda-engine`, `banda-dev-engine`; a state
+  folder a test names adds a short hash of it). Any client starts it when
+  no engine answers: the window, and every command that reaches the
+  engine; it is started with `systemd-run --user`, then waited for while
+  its unit runs. It gets the user manager's environment, never its
+  starter's, but for Banda's own `BANDA_*` variables (never an Agent's
+  pass or Project) and every place its starter resolved, and PATH from
+  the login shell before the manager's. The unit has `OOMPolicy=continue`
+  and `KillMode=mixed`: SIGTERM goes to the engine, which stops its
+  Harnesses and Terminals, and what is left is killed after 15 s
+  (`engine/src/service.rs`). Where no systemd user manager answers
+  (macOS until its launchd agent, plan step 7; a container; CI) the
+  engine is the window's child, as before, and the log says so; so is a
+  checkout's, Banda Local, unless `BANDA_ENGINE_AS=service`. `banda
+  status` says whether it runs, since when and its build; `banda stop` is
+  Quit Banda, and asks first while Agents work (`--force` does not), and
+  refuses an Agent's pass.
+- **It knows how the last run left, and is whole before it listens**
+  (`engine/src/run.rs`). `run.json` in its state says since when the
+  engine runs and on which port, and, once it left cleanly, how:
+  `stopped`, or `handed over` (an update, plan step 6). An engine that
+  finds no such word keeps a crash as a Problem before it opens anything.
+  It opens every Project, with its modules' migrations and the outbox's
+  recovery, and only then writes `engine.json`, so no client finds it
+  half started.
 - **The look is the window's machine's** (ADR 0007). `banda look`
   reads Omarchy's theme, Hyprland's windows and `~/.config/banda/look.toml`
   and prints the CSS variables as JSON, with no engine; `--follow` prints
@@ -97,7 +124,7 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   commands in get `BANDA_TOKEN` and `BANDA_ENGINE` too. Each Harness
   process carries a pass its Agents share, of an Agent no one Thread
   names, made once per Project and Harness entry in a run of the engine
-  (it outlives the processes, and ends with the engine): in its
+  (it outlives the processes, until the Project closes): in its
   environment, and for Codex in `CODEX_CONFIG` as
   `shell_environment_policy.set`. A Harness that takes variables for each
   session's shell gives a Thread's session its own pass over it, the one
@@ -106,7 +133,9 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   Project. With `BANDA_ENGINE` set, every CLI command that connects to the
   engine says hello there with the pass in `BANDA_TOKEN`; it does nothing
   without one, nor when `BANDA_STATE` names another engine, and a pass the
-  engine does not know is refused in words that say so. The pass says who
+  engine does not know is refused in words that say so. A pass outlives
+  an engine restart (below), and the engine listens where it did, so the
+  address in `BANDA_ENGINE` stays. The pass says who
   calls, and is no wall: what runs in the shell runs as the Person (ADR
   0019, decision 2), as the mode menu says of Full access.
 - **The CLI prints JSON.** `banda call <method>` prints `{"ok": …}`, as
@@ -223,10 +252,22 @@ The kernel holds only what every module needs, and it names no module.
   executes nothing of a Project's. The machine's scope has the same
   environment, for the Harness process its `harnesses` module asks and
   Codex's app-server that reads its limits.
-- **Passes.** A module asks its `ModuleProject` for a new pass of an Agent
-  (`pass(agent)`), 32 random bytes in hex; the agents module asks as a
-  session opens. The kernel keeps passes in memory, so they end with the
-  engine. A `hello` with a pass connects as that Agent, in that Project.
+- **Passes** (ADR 0083, decision 2). A module asks its `ModuleProject` for
+  a new pass of an Agent (`pass(agent)`), 32 random bytes in hex; the
+  agents module asks as a session opens. The kernel keeps passes in the
+  host's own store, `passes.sqlite3` in the engine's state, until the
+  Host scope has its store: hashed, so the store holds no pass, each with
+  its Agent, its Project, its audience (`ws`, the API, today) and when it
+  expires. What a module gets is a `Pass` its session holds: dropped, as
+  the session ends, it is revoked. The agents module's process holds a
+  session's pass while the session is open in it, and the module holds
+  each process's pass while its Project is open. A pass a session holds
+  is renewed an hour ahead every quarter of an hour; one no session of
+  this run holds, as one of the run before, lasts an hour from its last
+  use. As the engine stops it revokes none, and gives every pass its
+  sessions hold a whole hour, so a restart keeps the passes of the
+  sessions that go on. A Project removed takes its passes with it. A
+  `hello` with a pass connects as that Agent, in that Project.
 - **Module registry and API.** The registry routes commands to their
   module, delivers events to subscribers, and serves the API. `welcome`
   lists the engine's modules, so a window shows only what the engine has,
@@ -346,7 +387,7 @@ command (with its ID)
 | Text files | the Harnesses, in the config folder; the look (`look.toml`, themes) and the sidebar (`sidebar.toml`, presets), the browser (`browser.toml`) and how Threads start and messages to an Agent are sent (`agents.toml`) in `~/.config/banda/`. Layouts and keys join them later |
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
 | The OS keychain | secrets you give Banda. Its database never holds them |
-| The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
+| The engine's state folder | the owner's ID; how its last run went (`run.json`); the passes, hashed (`passes.sqlite3`); while the engine runs, its port and per-run secret |
 | The window's storage | the view of the workspaces: the one on screen, each one's focused column and each column's shown Pane; whether the sidebar shows; which finished turn of each Thread the Person has seen; which Panes an Agent opened the Person has looked at |
 | `machine/` SQLite, in the engine's state | this machine's, in no Project: the workspaces, their columns, each Pane with its Project and the widths (ADR 0025) |
 | `projects/<id>/` SQLite, in the engine's data | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
@@ -994,14 +1035,22 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   strict Content Security Policy. It cannot navigate, open windows or get
   permissions, and links open in the browser. It may run WebAssembly
   shipped with it, which Ghostty draws terminals with.
-- **The engine is the window's child.** Main starts
-  `banda serve --with-parent`, starts it again when it dies (waiting up
-  to 10 s between tries), and sends it SIGTERM on quit; if the window
-  dies, the engine sees its stdin close. `banda look --follow
-  --with-parent` runs the same way. Both are Effect services in main
-  (`Engine`, `Look`; ADR 0020), started by one runtime and stopped when
-  it is disposed. The client then reconnects and follows on from the
-  last event it delivered, so a Pane sees no gap.
+- **The window reaches the engine; it does not own it** (ADR 0086,
+  decisions 1 and 3). Main runs `banda start --with-parent`, which starts
+  the engine when it does not run, prints where it listens, and follows
+  it while the window is open; where the engine is the window's child,
+  it is the engine, `serve --with-parent`, and its stdin closing stops
+  it. When the engine stops as asked, by Quit Banda or `banda stop`, the
+  program ends with code 0 and the window quits; when it crashed, main
+  starts it again (waiting up to 10 s between tries). Closing the last
+  window only closes it: the engine and its Agents go on. Quit Banda
+  (`banda.quit`, Ctrl+Q, ⌘Q on macOS) asks first while Agents work
+  ("2 Agents are working. Stop them and quit?"), then main runs `banda
+  stop --force`. `banda look --follow --with-parent` stays the window's
+  child. Both are Effect services in main (`Engine`, `Look`; ADR 0020),
+  started by one runtime and stopped when it is disposed. The client then
+  reconnects and follows on from the last event it delivered, so a Pane
+  sees no gap.
 - **A packed Banda runs its own copy of `banda`** (ADR 0086, decision
   2), never the one inside its AppImage or its app, whose folder may go
   while the program runs. Main copies it into `<data>/engine/<version>/`,
@@ -1015,9 +1064,11 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   Problem says why. A `banda` that a package manager owns, as the AUR's,
   says so in `package-type` beside it and runs where it was put; a
   checkout's runs where cargo built it.
-- **What still runs from inside the AppImage** is Electron's, and the
-  Node the ACP adapters run on, the window's Electron, until the engine
-  is the machine's (ADR 0086, plan step 3). The adapters' files run from
+- **What still runs from inside the AppImage** is Electron's, and, for an
+  engine that is the window's child, the Node the ACP adapters run on,
+  the window's Electron. An engine started as the session's service from
+  an AppImage is not told that Electron, which goes as the AppImage
+  stops. The adapters' files run from
   the engine's own copy, which carries them. A macOS app's copy also has
   `electron` beside it, which names the app's Electron, so an engine
   started with no window runs the adapters on it; an AppImage's copy

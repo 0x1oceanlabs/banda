@@ -15,7 +15,14 @@ const MAKES: [&str; 3] = ["Command::new(", "Command::from(", "AcpAgent"];
 
 /// Where the engine makes a process on the host for no Project's
 /// program: the file, how many places in it make one, and why.
-const ON_THE_HOST: [(&str, usize, &str); 9] = [
+const ON_THE_HOST: [(&str, usize, &str); 10] = [
+    (
+        "engine/src/service.rs",
+        2,
+        "starts and stops the engine itself as the session's systemd user unit, and asks the \
+         login shell its PATH for it, as a client does before any engine runs (ADR 0086, \
+         decision 1)",
+    ),
     (
         "platform/git-cli/src/lib.rs",
         1,

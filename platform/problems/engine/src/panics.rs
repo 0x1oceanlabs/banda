@@ -55,6 +55,13 @@ fn add(folder: &Path, record: &Record) -> std::io::Result<()> {
     writeln!(file, "{}", serde_json::to_string(record)?)
 }
 
+/// Keeps what broke in the engine before its store opened, as a crash of
+/// the run before (ADR 0086, decision 1): the module takes it in as it
+/// opens, as it takes the panics of the run before.
+pub fn keep(folder: &Path, record: &Record) -> std::io::Result<()> {
+    add(folder, record)
+}
+
 /// Opens `path` to add to, made first, with its folder, for this user
 /// alone: a log or a panic may name the Person's files.
 pub fn append_private(path: &Path) -> std::io::Result<std::fs::File> {
