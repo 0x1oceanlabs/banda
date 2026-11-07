@@ -492,11 +492,15 @@ a Widget with how many are left.
 ```toml
 # apps/habits/app.toml
 id = "habits"
+kind = "app"
 name = "Habits"
 about = "A Project's daily habits, ticked off once a day."
 version = "0.1.0"
-capabilities = []                  # no files, run, net, sessions or device
+api = 1                            # the major of the App API it is written to
 settings = []
+
+[needs]                            # what it hears, calls and may do (ADR 0082)
+capabilities = []                  # no files, run, net, sessions or device
 
 [[panes]]
 kind = "habits.today"
