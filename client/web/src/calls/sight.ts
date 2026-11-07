@@ -7,6 +7,7 @@ import type { ProjectId } from "@banda/contract"
 import type { Columns } from "@banda/contract/look"
 import type { Sight } from "@banda/ui/module"
 import { type Call, type Lists, listedOf, type PaneState } from "@banda/ui/pane"
+import { placeIn } from "../sidebar/order"
 import {
   current,
   entries,
@@ -91,11 +92,10 @@ export function nextCall(
   order: readonly string[],
   here?: string
 ): Call | undefined {
-  const place = new Map(order.map((key, i) => [key, i]))
-  const at = (call: Call) => place.get(call.key) ?? order.length
+  const at = placeIn(order)
   const sorted = calling
     .filter((call) => call.key !== here)
-    .sort((a, b) => at(a) - at(b) || a.since - b.since)
-  const from = (here === undefined ? undefined : place.get(here)) ?? -1
-  return sorted.find((call) => at(call) > from) ?? sorted[0]
+    .sort((a, b) => at(a.key) - at(b.key) || a.since - b.since)
+  const from = here === undefined ? -1 : at(here)
+  return sorted.find((call) => at(call.key) > from) ?? sorted[0]
 }

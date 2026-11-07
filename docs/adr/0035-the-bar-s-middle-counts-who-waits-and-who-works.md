@@ -41,6 +41,8 @@ decided.
    Space, the status). The loudest comes first, then the one that waited
    longest, as Alt+U goes (ADR 0011, decision 5). A row opens its Thread
    as the sidebar's row does; seeing it makes "done" seen.
+   _Changed by ADR 0087, decision 8: inside each group the rows follow
+   the sidebar's order, the one Alt+U walks, not the loudest first._
 4. **A number rolls when it changes**, up as it grows, down as it falls,
    and not at all for a Person who asked for less motion. The done
    count's mark flips as a Thread finishes; a row of the list does not

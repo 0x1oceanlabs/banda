@@ -93,19 +93,6 @@ export function toneOf(mark: MarkState): string | undefined {
   return undefined
 }
 
-/**
- * The order things that call are answered in: the loudest, then the one
- * that called first, as Hyprland's `focusurgentorlast` goes (ADR 0011,
- * decision 5).
- */
-export function callOrder<T>(
-  mark: (thing: T) => MarkState,
-  since: (thing: T) => number
-): (a: T, b: T) => number {
-  return (a, b) =>
-    MARK_ORDER[mark(b)] - MARK_ORDER[mark(a)] || since(a) - since(b)
-}
-
 /** Plain words for each state, for a title or a screen reader. */
 export const MARK_WORDS: Record<MarkState, string> = {
   rest: "Nothing runs",

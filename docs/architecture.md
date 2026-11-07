@@ -1295,12 +1295,14 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   nothing of Threads.
 - **Calls** (ADR 0011, ADR 0056). A row whose Mark is done, asking or
   failed calls the Person (`callsOf` in `client/ui/src/pane.ts`). The window
-  knows what calls, for the Marks, the rings and `Alt+U`, which goes to
-  the loudest first; and where the Person looks (`client/web/src/calls`). It
-  knows nothing of Threads: a Pane kind's `shows` names the thing it
-  shows, so the window knows when the Person looks at it (its Pane has
-  the focus and the window is in front), sees it on screen, or is
-  elsewhere.
+  knows what calls, for the Marks, the rings and `Alt+U`; and where the
+  Person looks (`client/web/src/calls`). What calls has one order, the
+  sidebar's as the Person arranged it (`client/web/src/sidebar/order.ts`):
+  `Alt+U` walks it, and the bar's counts list follows it (ADR 0079, ADR
+  0087). The window knows nothing of Threads: a Pane kind's `shows` names
+  the thing it shows, so the window knows when the Person looks at it (its
+  Pane has the focus and the window is in front), sees it on screen, or
+  is elsewhere.
   - The `notifications` module tells of it (`platform/notifications/pane`),
     from its `start`, asking the window only what it knows (`WindowApi`:
     `lists`, `sight`, `goTo`, `look`). It compares each list with the one
