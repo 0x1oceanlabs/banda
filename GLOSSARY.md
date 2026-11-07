@@ -80,11 +80,24 @@ _Avoid_: console, shell (that is one program a terminal runs).
 
 **Thread**:
 One session with a Harness in a Project: starting one is all it takes. Its
-Harness is chosen when it starts and stays with it. It shows items: messages,
-the Agent's thoughts, tool calls, its plans, Visuals, notices and Questions.
+Harness is chosen when it starts and stays with it. It shows entries:
+messages, the Agent's thoughts, tool calls, its plans, Visuals, notices,
+Issues and Questions.
 A Harness keeps a session of its own for it, which a Thread holds as
 evidence.
 _Avoid_: chat.
+
+**Entry**:
+One thing a Thread shows, one for each kind of its body: a message, a
+thought, a call, a plan, a Question, a notice, an Issue, a Visual. Each
+kind is drawn by a file of its own (ADR 0091).
+_Avoid_: item (that is `item@1`), event.
+
+**Line**:
+What a Thread's timeline adds between its entries: the work line, a fold,
+the live line, a turn that ended, a turn's changes, a proposed plan (ADR
+0091).
+_Avoid_: row (that is how the sidebar list draws an Item).
 
 **Plan**:
 The steps an Agent means to take in a turn, each to do, doing now or done.
