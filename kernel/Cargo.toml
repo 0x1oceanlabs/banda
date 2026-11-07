@@ -28,10 +28,6 @@ tracing.workspace = true
 ts-rs.workspace = true
 uuid.workspace = true
 
-[target.'cfg(unix)'.dependencies]
-# A terminal is a PTY on Unix; Windows' ConPTY comes later (ADR 0090, step 7).
-pty-process.workspace = true
-
 [dev-dependencies]
 tempfile.workspace = true
 tokio-tungstenite.workspace = true

@@ -101,6 +101,44 @@ async fn a_closed_terminal_stops_its_program_and_every_watch() {
     assert_eq!(gone.code, Code::NotFound);
 }
 
+/// A close asks the program to stop, and kills it a moment later if it
+/// goes on: here a shell that hears neither the hangup nor the request.
+/// Read in `/proc`, Linux's.
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn a_closed_terminal_kills_a_program_that_will_not_stop() {
+    let runs = |pid: u32| {
+        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat"));
+        stat.is_ok_and(|stat| {
+            !stat
+                .rsplit_once(") ")
+                .is_some_and(|(_, s)| s.starts_with('Z'))
+        })
+    };
+    let world = World::new().await;
+    let terminal = world
+        .run("trap '' HUP TERM; echo \"pid $$.\"; sleep 100")
+        .await;
+    let mut watching = world.watch(terminal).await;
+    let pid = |screen: &str| {
+        let (_, after) = screen.split_once("pid ")?;
+        after.split_once('.')?.0.parse::<u32>().ok()
+    };
+    let (screen, _) = until(&mut watching, |s| pid(s).is_some()).await;
+    let pid = pid(&screen).unwrap();
+    let close = json!({ "terminal": terminal });
+    world.call("terminal.close", close).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    assert!(runs(pid), "asked, it goes on");
+    let killed = async {
+        while runs(pid) {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    };
+    let waited = tokio::time::timeout(std::time::Duration::from_secs(5), killed).await;
+    waited.expect("it was killed after the grace");
+}
+
 #[tokio::test]
 async fn only_a_person_runs_a_terminal() {
     let world = World::new().await;

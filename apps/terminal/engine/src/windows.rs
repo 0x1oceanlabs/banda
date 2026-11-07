@@ -39,7 +39,7 @@ impl Terminal {
         match self.none {}
     }
 
-    pub fn close(self: &Arc<Self>) {
+    pub fn close(&self) {
         match self.none {}
     }
 

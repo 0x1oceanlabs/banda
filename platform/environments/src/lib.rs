@@ -15,6 +15,7 @@
 //! architecture test names each place a program is made, and whose it is.
 
 mod local;
+mod pty;
 mod recorded;
 
 pub use local::Local;

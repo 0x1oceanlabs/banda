@@ -1,27 +1,25 @@
 //! One terminal: a program on a PTY, what it printed, and who watches it.
 //!
-//! The program starts in its Project's environment (ADR 0084), and leads
-//! a session and a process group of its own there. A close while it runs
-//! reaches its group: a hangup and a request to stop, then a kill a
-//! second later; a shell passes the hangup on to its jobs. Once the
-//! program ended, its number may name another process, so a close sends
-//! nothing: the kernel hung up the terminal when its session's leader
-//! ended. When the engine stops, the PTY closes and the program hears the
-//! hangup.
+//! The program starts in its Project's environment (ADR 0084), which hands
+//! back the terminal and the handle that stops the program and what it
+//! started: on Unix the session and the process group it leads. A close
+//! while it runs asks it to stop, a hangup and a request on Unix, then
+//! kills it a second later; a shell passes the hangup on to its jobs. Once
+//! the program ended, a close sends nothing: the kernel hung up the
+//! terminal when its session's leader ended. When the engine stops, the
+//! PTY closes and the program hears the hangup.
 
 use crate::front::Front;
 use crate::history::{Decoder, History, Since};
 use crate::model::{Ended, Open, Piece, Size, Title};
 use crate::servers::TERMINAL_VARIABLE;
-use banda_kernel::{ModuleProject, ProcessGroup, Program, ProjectId, Stream, project_env};
-use pty_process::{OwnedReadPty, OwnedWritePty};
-use rustix::process::Signal;
+use banda_kernel::{ModuleProject, Program, ProjectId, PtyControl, Started, Stream, project_env};
 use std::collections::BTreeMap;
 use std::os::unix::process::ExitStatusExt;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::{mpsc, watch};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::sync::{Notify, mpsc, watch};
 use tokio::task::JoinHandle;
 
 /// How long a closed program has to stop before it is killed.
@@ -38,8 +36,10 @@ const LOOKS: [Duration; 2] = [Duration::from_millis(250), Duration::from_secs(1)
 
 pub struct Terminal {
     pub project: ProjectId,
-    group: Option<ProcessGroup>,
-    input: tokio::sync::Mutex<OwnedWritePty>,
+    input: tokio::sync::Mutex<Box<dyn AsyncWrite + Send + Unpin>>,
+    control: Arc<dyn PtyControl>,
+    /// Asks the program to stop: what waits for it stops it.
+    closing: Notify,
     now: Mutex<Now>,
     /// Ticks at every change, so watchers look again.
     changed: watch::Sender<()>,
@@ -58,8 +58,6 @@ impl Terminal {
     /// Starts `open.program`, or the Person's shell, in `project`'s
     /// folder and environment.
     pub fn start(project: &ModuleProject, open: Open) -> Result<Arc<Terminal>, String> {
-        let (pty, pts) = pty_process::open().map_err(plain)?;
-        pty.resize(open.size.pty()).map_err(plain)?;
         let mut env = BTreeMap::from([
             ("TERM".to_owned(), "xterm-256color".to_owned()),
             ("COLORTERM".to_owned(), "truecolor".to_owned()),
@@ -79,36 +77,31 @@ impl Terminal {
             .filter(|key| key.starts_with("ELECTRON_"))
             .collect();
         program.cwd = Some(project.folder());
-        let child = (project.environment().pty(&program, pts))
+        let (started, pty) = (project.environment().pty(&program, open.size.pty()))
             .map_err(|e| format!("{} could not start: {e}.", program.program))?;
-        let group = ProcessGroup::of(&child);
-        // A shell's header says what runs in it; another program's keeps
-        // the title it was opened with.
-        let front = match open.program {
-            None => Some(rustix::io::dup(&pty).map_err(plain)?),
-            Some(_) => None,
-        };
-        let (output, input) = pty.into_split();
         let terminal = Arc::new(Terminal {
             project: project.id(),
-            group,
-            input: tokio::sync::Mutex::new(input),
+            input: tokio::sync::Mutex::new(pty.input),
+            control: pty.control,
+            closing: Notify::new(),
             now: Mutex::new(Now {
                 size: open.size,
                 ..Now::default()
             }),
             changed: watch::Sender::new(()),
         });
-        let reading = tokio::spawn(terminal.clone().read(output));
-        if let Some(front) = front {
-            let shell = group.map(ProcessGroup::leader);
-            tokio::spawn(terminal.clone().title(Front::new(front, shell)));
+        let reading = tokio::spawn(terminal.clone().read(pty.output));
+        // A shell's header says what runs in it; another program's keeps
+        // the title it was opened with.
+        if open.program.is_none() {
+            let front = Front::new(terminal.control.clone(), started.id());
+            tokio::spawn(terminal.clone().title(front));
         }
-        tokio::spawn(terminal.clone().wait(child, reading));
+        tokio::spawn(terminal.clone().wait(started, reading));
         Ok(terminal)
     }
 
-    async fn read(self: Arc<Self>, mut output: OwnedReadPty) {
+    async fn read(self: Arc<Self>, mut output: Box<dyn AsyncRead + Send + Unpin>) {
         let mut decoder = Decoder::default();
         let mut buffer = vec![0; 16 * 1024];
         // A PTY whose program ended reads as an error.
@@ -145,8 +138,14 @@ impl Terminal {
         }
     }
 
-    async fn wait(self: Arc<Self>, mut child: tokio::process::Child, reading: JoinHandle<()>) {
-        let ended = match child.wait().await {
+    /// Waits for the program to end, and stops it once the terminal is
+    /// closed: asked first, killed if it has not ended a moment after.
+    async fn wait(self: Arc<Self>, mut started: Started, reading: JoinHandle<()>) {
+        let status = tokio::select! {
+            status = started.wait() => status,
+            () = self.closing.notified() => started.stop(GRACE).await,
+        };
+        let ended = match status {
             Ok(status) => Ended {
                 code: status.code(),
                 signal: status.signal(),
@@ -176,31 +175,17 @@ impl Terminal {
     }
 
     pub async fn resize(&self, size: Size) -> Result<(), String> {
-        self.input.lock().await.resize(size.pty()).map_err(plain)?;
+        self.control.resize(size.pty()).map_err(plain)?;
         self.now.lock().unwrap().size = size;
         self.changed.send_replace(());
         Ok(())
     }
 
     /// Stops the program and everything it started, and ends every watch.
-    pub fn close(self: &Arc<Self>) {
+    pub fn close(&self) {
         self.now.lock().unwrap().closed = true;
         self.changed.send_replace(());
-        let Some(group) = self.group else {
-            return;
-        };
-        if self.now.lock().unwrap().ended.is_some() {
-            return;
-        }
-        group.signal(Signal::HUP);
-        group.signal(Signal::TERM);
-        let terminal = self.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(GRACE).await;
-            if terminal.now.lock().unwrap().ended.is_none() {
-                group.signal(Signal::KILL);
-            }
-        });
+        self.closing.notify_one();
     }
 
     /// What the terminal shows, then what it prints and whether it ended,

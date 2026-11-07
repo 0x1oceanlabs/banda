@@ -24,7 +24,9 @@
 //!   folders (ADR 0073, decision 14).
 //! - [`https`] is the one client for the requests the engine makes itself.
 //! - [`Environment`] is the port every program a Project runs starts
-//!   through ([`ModuleProject::environment`], ADR 0084).
+//!   through ([`ModuleProject::environment`], ADR 0084). It hands back
+//!   the handle that stops what it started ([`Started`]), and a
+//!   terminal's own handle ([`Pty`]).
 //! - [`api`] serves all of it over WebSocket.
 
 pub mod access;
@@ -42,16 +44,16 @@ mod old;
 mod outbox;
 mod passes;
 mod project;
+mod pty;
 mod reach;
 mod sign;
+mod started;
 mod store;
 mod tables;
 mod watching;
 mod window;
 
 pub use access::{Caller, Right};
-#[cfg(unix)]
-pub use environment::ProcessGroup;
 pub use environment::{Environment, Holes, Input, Program, Whose};
 pub use error::{Code, Error, Refusal};
 pub use events::{Event, EventFilter};
@@ -63,10 +65,12 @@ pub use module::{Call, Module, Scope, Stream, Wall};
 pub use outbox::{Claim, Effect, LONGEST_LEASE, Lease, OnRestart, Outcome, Retry, Settled};
 pub use passes::{Pass, secret};
 pub use project::{Committed, Heard, ModuleProject, Project, Tally};
+pub use pty::{Pty, PtyControl, PtySize};
 pub use reach::Reach;
 /// For `methods!` and `id!`, which name it from a module's crate.
 pub use schemars;
 pub use sign::{PictureKind, Sign, SignColor, SignKind, SignPick};
+pub use started::Started;
 pub use store::{Answer, Tx};
 pub use watching::{Changed, Watch};
 pub use window::{WindowAnswer, WindowRequest};

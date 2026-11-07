@@ -4,8 +4,9 @@
 //! arguments and `proc_pidinfo` on macOS, which `sysinfo` reads.
 
 use crate::model::Title;
-use std::os::fd::OwnedFd;
+use banda_kernel::PtyControl;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 /// Programs that run a script: the script names what runs.
 const RUNNERS: [&str; 7] = ["node", "bun", "deno", "python", "python3", "ruby", "perl"];
@@ -14,20 +15,20 @@ const LONGEST: usize = 80;
 
 /// A shell's terminal, looked at again and again.
 pub struct Front {
-    /// The PTY's own end.
-    pty: OwnedFd,
+    /// The terminal, which says what is in front on it.
+    terminal: Arc<dyn PtyControl>,
     /// The shell's process group: in front, it may have moved to another
     /// folder since.
-    shell: Option<i32>,
+    shell: Option<u32>,
     home: Option<PathBuf>,
-    seen: Option<(i32, Title)>,
+    seen: Option<(u32, Title)>,
     reader: Reader,
 }
 
 impl Front {
-    pub fn new(pty: OwnedFd, shell: Option<i32>) -> Front {
+    pub fn new(terminal: Arc<dyn PtyControl>, shell: Option<u32>) -> Front {
         Front {
-            pty,
+            terminal,
             shell,
             home: dirs::home_dir(),
             seen: None,
@@ -39,7 +40,7 @@ impl Front {
     /// shell keeps its words and folder while it runs, so the system is
     /// asked only when another one comes to the front.
     pub fn look(&mut self) -> Option<Title> {
-        let group = rustix::termios::tcgetpgrp(&self.pty).ok()?.as_raw_pid();
+        let group = self.terminal.front()?;
         if let Some((seen, title)) = &self.seen
             && *seen == group
             && Some(group) != self.shell
@@ -52,7 +53,7 @@ impl Front {
     }
 
     /// What `process` runs and where.
-    fn read(&mut self, process: i32) -> Option<Title> {
+    fn read(&mut self, process: u32) -> Option<Title> {
         let (words, folder) = self.reader.read(process)?;
         Some(Title {
             program: program_of(&words)?,
@@ -73,7 +74,7 @@ impl Reader {
         Reader
     }
 
-    fn read(&mut self, process: i32) -> Option<(Vec<String>, PathBuf)> {
+    fn read(&mut self, process: u32) -> Option<(Vec<String>, PathBuf)> {
         let words = words_of(process)?;
         let folder = std::fs::read_link(format!("/proc/{process}/cwd")).ok()?;
         Some((words, folder))
@@ -111,10 +112,10 @@ impl Reader {
         }
     }
 
-    fn read(&mut self, process: i32) -> Option<(Vec<String>, PathBuf)> {
+    fn read(&mut self, process: u32) -> Option<(Vec<String>, PathBuf)> {
         use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, UpdateKind};
         let system = self.system.as_mut()?;
-        let pid = Pid::from_u32(u32::try_from(process).ok()?);
+        let pid = Pid::from_u32(process);
         let asked = match self.last.replace(pid) {
             Some(last) if last != pid => vec![pid, last],
             _ => vec![pid],
