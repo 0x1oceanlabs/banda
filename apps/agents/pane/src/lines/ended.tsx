@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { Failure, Snooze, TurnView } from "@banda/contract/agents"
+import type { Failure } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
 import { Switch } from "@banda/ui/components/switch"
 import {
@@ -11,7 +11,8 @@ import {
 import { useNow } from "@banda/ui/hooks/use-now"
 import { clock } from "@banda/ui/lib/words"
 import { sleeps } from "@banda/ui/pane"
-import { useThreadAround } from "./context"
+import { useThreadAround } from "../thread/context"
+import type { LineProps } from "./types"
 import {
   AlarmClockIcon,
   CircleAlertIcon,
@@ -23,16 +24,9 @@ import {
  * when its message can be sent again. One that failed says so in plain
  * words beside a red icon (ADR 0058, decision 1). One that failed because
  * its Person must sign in offers the ways to, while it can go again. */
-export function Ended({
-  turn,
-  busy,
-  snooze,
-}: {
-  turn: TurnView
-  busy: boolean
-  /** The Thread's snooze, if it sleeps. */
-  snooze?: Snooze
-}) {
+export function EndedLine({ line, facts }: LineProps<"ended">) {
+  const { turn } = line
+  const { answering: busy, snooze } = facts
   const { acts } = useThreadAround()
   const again = turn.can.retry
   const onRetry = again ? () => acts.retry(turn) : undefined

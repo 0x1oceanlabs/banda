@@ -1,7 +1,7 @@
 /** A Thread's transcript: its entries and lines, in the scroller that
  * follows the live edge (ADR 0058, ADR 0091). */
 import { useMemo, useRef } from "react"
-import type { Item } from "@banda/contract/agents"
+import type { Item, TurnView } from "@banda/contract/agents"
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -29,16 +29,12 @@ import {
   writerOf,
 } from "../thread"
 import { Writer } from "../Messages"
-import { ChangedFiles } from "../ChangedFiles"
-import { ProposedPlan } from "../ProposedPlan"
-import { awaiting, type Line, thoughtTimes, timeline } from "../timeline"
-import { Fold, key, WorkLine, Working } from "../Work"
+import { awaiting, thoughtTimes, timeline } from "../timeline"
+import { key, LineOf } from "../lines"
+import type { LineFacts } from "../lines/types"
 import { Queue, type QueueActions } from "../Queue"
 import { ScrollPlace } from "../ScrollPlace"
-import { holds } from "../findIn"
 import { Minimap } from "../Minimap"
-import { Ended } from "./Ended"
-import { Entry } from "../entries"
 import { useThreadAround } from "./context"
 
 type Answering = {
@@ -80,69 +76,29 @@ export function Transcript({
     () => new Map(state.turns.map((one) => [one.id, one])),
     [state.turns]
   )
-  // A reply forks its Thread at the end of its turn, once it may.
-  const forkAt = (item: Item) => {
-    const its = item.turn === undefined ? undefined : turns.get(item.turn)
-    return its && (its.can.fork ? its : null)
-  }
-  // A Person's message is edited from the turn that ran it first.
-  const editAt = (item: Item) => {
-    if (item.author.kind !== "person") return undefined
-    const its = firstTurnOf(state.turns, item.id)
-    return its && (its.can.rewind ? its : null)
+  // What the Thread knows that its lines show (ADR 0091, decision 3).
+  const turnState = (id: string | undefined) =>
+    id === undefined ? undefined : turns.get(id)?.state
+  const facts: LineFacts = {
+    of: (item) => ({
+      turn: turnState(item.turn),
+      asks: asks.has(item.id),
+      took: thoughts.get(item.id),
+      live: turn?.state === "running" && item === last,
+      writer: writerOf(writers, item),
+      forks: forkAt(turns, item),
+      edits: editAt(state.turns, item),
+    }),
+    turnState,
+    finding,
+    name,
+    answering,
+    snooze,
   }
   const forkedFrom = useMemo(
     () => state.forkedFrom && threadOf(writers, state.forkedFrom),
     [writers, state.forkedFrom]
   )
-  const render = (line: Line): React.ReactNode => {
-    switch (line.kind) {
-      case "item":
-        return (
-          <Entry
-            item={line.item}
-            forks={forkAt(line.item)}
-            edits={editAt(line.item)}
-            turn={line.item.turn ? turns.get(line.item.turn)?.state : undefined}
-            asks={asks.has(line.item.id)}
-            took={thoughts.get(line.item.id)}
-            live={turn?.state === "running" && line.item === last}
-            writer={writerOf(writers, line.item)}
-          />
-        )
-      case "plan":
-        return <ProposedPlan text={line.item.body.text} />
-      case "changes":
-        return (
-          <ChangedFiles
-            files={line.files}
-            onOpen={(path) => acts.openDiff(line.turn.id, path)}
-          />
-        )
-      case "work":
-        return (
-          <WorkLine
-            items={line.items}
-            turn={line.turn ? turns.get(line.turn)?.state : undefined}
-            found={holds(line, finding)}
-            render={render}
-          />
-        )
-      case "fold":
-        return (
-          <Fold
-            turn={line.turn}
-            lines={line.lines}
-            found={holds(line, finding)}
-            render={render}
-          />
-        )
-      case "working":
-        return <Working turn={line.turn} name={name} doing={line.doing} />
-      case "ended":
-        return <Ended turn={line.turn} busy={answering} snooze={snooze} />
-    }
-  }
   const viewport = useRef<HTMLDivElement>(null)
   const messages = lines.flatMap((line) =>
     line.kind === "item" &&
@@ -189,7 +145,7 @@ export function Transcript({
                     : undefined
                 }
               >
-                {render(line)}
+                <LineOf line={line} facts={facts} />
               </MessageScrollerItem>
             ))}
             {turn?.state === "queued" && (
@@ -254,4 +210,18 @@ function ScrollToEnd({ queued, forYou }: { queued: number; forYou: boolean }) {
       )}
     </MessageScrollerButton>
   )
+}
+
+/** A reply's turn, to fork the Thread at its end; null while it may not. */
+function forkAt(turns: Map<string, TurnView>, item: Item) {
+  const its = item.turn === undefined ? undefined : turns.get(item.turn)
+  return its && (its.can.fork ? its : null)
+}
+
+/** The turn that ran a Person's message first, to edit it from; null while
+ * it may not. */
+function editAt(turns: TurnView[], item: Item) {
+  if (item.author.kind !== "person") return undefined
+  const its = firstTurnOf(turns, item.id)
+  return its && (its.can.rewind ? its : null)
 }
