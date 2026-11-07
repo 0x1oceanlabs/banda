@@ -55,7 +55,7 @@ use acp::Connection;
 use banda_harnesses::hosts::IDLE;
 use banda_harnesses::{Harness, Harnesses};
 use banda_kernel::{
-    AgentId, Call, Effect, Error, Kind, Module, ModuleProject, Nothing, OnRestart, Outcome,
+    AgentId, Call, Effect, Error, Holes, Kind, Module, ModuleProject, Nothing, OnRestart, Outcome,
     Participant, Pass, Picture, Program, Refusal, Right, Settled, Tool, Tx, pass_env,
 };
 use banda_look::OneFile as _;
@@ -115,15 +115,13 @@ pub struct Pipe {
 impl Pipe {
     /// `banda mcp` as a session of `agent`'s in `project` starts it, with a
     /// new pass, which the session holds; `None`, said in the log, if there
-    /// is no pass.
+    /// is no pass. The Harness's process starts it, behind that process's
+    /// fence, so it has no holes in it of its own (ADR 0083, decision 1).
     fn program(&self, project: &ModuleProject, agent: AgentId) -> Option<(Program, Pass)> {
         let (env, pass) = self.variables(project, agent)?;
-        let program = Program {
-            program: self.program.display().to_string(),
-            args: vec!["mcp".to_owned()],
-            env,
-            ..Program::default()
-        };
+        let banda = self.program.display().to_string();
+        let mut program = Program::harness(banda, vec!["mcp".to_owned()], Holes::default());
+        program.env = env;
         Some((program, pass))
     }
 

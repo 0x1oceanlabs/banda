@@ -108,12 +108,8 @@ async fn version_of(
     path: &str,
     harness: &Harness,
 ) -> Option<String> {
-    let asking = Program {
-        program: path.to_owned(),
-        args: vec!["--version".to_owned()],
-        env: harness.env.clone(),
-        ..Program::default()
-    };
+    let mut asking = Program::harness_probe(path, vec!["--version".to_owned()]);
+    asking.env = harness.env.clone();
     let asked = environment.spawn(&asking, Input::Null).ok()?;
     let said = timeout(ASKING, asked.wait_with_output()).await.ok()?.ok()?;
     version_in(&String::from_utf8_lossy(&said.stdout))

@@ -411,8 +411,9 @@ mod tests {
         // Project's next turn starts afresh even unheard.
         let data = std::path::Path::new("/state/projects/p");
         let shells = Default::default();
-        let trusted = entries[0].in_project(project, data, &shells, true);
-        let not = entries[0].in_project(project, data, &shells, false);
+        let (work, holes) = (std::path::Path::new("/work"), banda_kernel::Holes::default);
+        let trusted = entries[0].in_project(project, data, work, holes(), &shells, true);
+        let not = entries[0].in_project(project, data, work, holes(), &shells, false);
         let before = hosts.get(project, here(), &trusted).await.unwrap().0;
         let after = hosts.get(project, here(), &not).await.unwrap().0;
         assert!(after > before);

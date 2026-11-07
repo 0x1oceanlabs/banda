@@ -9,7 +9,7 @@ use banda_git::model::{
 };
 use banda_kernel::{
     AgentId, Call, Code, CommandId, EventFilter, Kernel, Kind, Module, Participant, PersonId,
-    ProjectId, Refusal, Right,
+    ProjectId, Refusal, Right, Whose,
 };
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -1281,6 +1281,8 @@ async fn an_act_runs_in_the_projects_environment_and_a_read_on_the_host() {
     for asked in &asked {
         assert_eq!(asked.how, How::Spawn);
         assert_eq!(asked.program.program, "git");
+        let whose = (asked.program.whose(), asked.program.holes());
+        assert_eq!(whose, (Whose::Act, None), "the Person's, outside the fence");
         let cwd = asked
             .program
             .cwd

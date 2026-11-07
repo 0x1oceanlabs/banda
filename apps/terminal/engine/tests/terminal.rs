@@ -4,14 +4,15 @@
 mod common;
 
 use banda_environments::How;
-use banda_kernel::{AgentId, Code, Participant};
+use banda_kernel::{AgentId, Code, Participant, Whose};
 use banda_terminal::model::{Piece, TerminalId};
 use common::{World, next, piece, until};
 use serde_json::json;
 
 /// A terminal's program starts in its Project's environment, never by the
 /// module itself (ADR 0084, decision 4): on a PTY, in the Project's
-/// folder, carrying what tells its servers whose they are.
+/// folder, carrying what tells its servers whose they are. It is the
+/// Person's, outside the fence (ADR 0083, decision 1).
 #[tokio::test]
 async fn a_terminal_starts_its_program_in_its_projects_environment() {
     let world = World::new().await;
@@ -26,6 +27,7 @@ async fn a_terminal_starts_its_program_in_its_projects_environment() {
     };
     assert_eq!(asked.how, How::Pty);
     let program = &asked.program;
+    assert_eq!((program.whose(), program.holes()), (Whose::Terminal, None));
     assert_eq!(program.program, "sh");
     assert_eq!(program.args, ["-c", "echo started"]);
     assert_eq!(program.cwd, Some(world.folder().await));

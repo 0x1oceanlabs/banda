@@ -291,7 +291,18 @@ The kernel holds only what every module needs, and it names no module.
   watch through `banda-git-cli`, Files' reads) runs on the host and
   executes nothing of a Project's. The machine's scope has the same
   environment, for the Harness process its `harnesses` module asks and
-  Codex's app-server that reads its limits.
+  Codex's app-server that reads its limits. A `Program` says whose it is
+  (`Whose`, ADR 0083, decision 1), and only the constructor of whose it is
+  makes one, so it has holes in the fence (`Holes`) exactly when it is one
+  to start behind it. A Harness's process (`harness`) and its CLI asked
+  about itself (`harness_probe`) are ones to start behind the fence: a
+  Project's Harness process with the holes its Project has, such as its
+  Claude Code sessions and the files it keeps for messages, and in its
+  folder once the Person trusts it; the machine's and a probe with none. A
+  terminal the Person opened (`terminal`) and a git act they asked for
+  (`act`) are the Person's own, outside it. `local` reads whose a program is
+  to start it where it belongs: a terminal's only on a terminal, and one to
+  fence never on one.
 - **Passes** (ADR 0083, decision 2). A module asks its `ModuleProject` for
   a new pass of an Agent (`pass(agent)`), 32 random bytes in hex; the
   agents module asks as a session opens. The kernel keeps passes in the
@@ -1489,7 +1500,9 @@ images. Sweeps retain images still referenced by a fork after a rewind.
   makes a process but `banda-environments`, and the places named in its
   test, each with how many and why, that ask the host about itself or keep
   Banda's books and run nothing of a Project's (ADR 0084, decision 4); no
-  code uses ACP's agent that starts its own.
+  code uses ACP's agent that starts its own. Each place that makes a
+  `Program` is named there too, with whose it makes and why (ADR 0083,
+  decision 1).
 - **Module tests** run through the module's interface: commands go in and
   events come out. Nothing past the interface is mocked.
 - **Checkpoints** (ADR 0014, decision 3). With `BANDA_CHECKPOINTS` set,

@@ -5,7 +5,7 @@
 
 use crate::carried::Carried;
 use crate::model::{AccountKind, HarnessView, LimitsLook};
-use banda_kernel::{Program, ProjectId, project_env};
+use banda_kernel::{Holes, Program, ProjectId, project_env};
 use banda_look::Problem;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -64,6 +64,12 @@ pub struct Harness {
     /// replay. Only a test sets it, never a Harness list: a recording holds
     /// everything said, a secret typed into a form too.
     pub record: Option<PathBuf>,
+    /// The folder its process starts in: a trusted Project's, as
+    /// [`Harness::in_project`] says; else the engine's own.
+    pub cwd: Option<PathBuf>,
+    /// The holes its process has in the fence (ADR 0083, decision 1): its
+    /// Project's, as [`Harness::in_project`] says; none for the machine's.
+    pub holes: Holes,
 }
 
 /// A CLI the Person installed, which an adapter runs in place of a copy
@@ -89,25 +95,23 @@ impl Harness {
     }
 
     /// The entry's own program with `args` after its arguments and `env`
-    /// over its environment, as a Harness's sign-in in a terminal runs.
+    /// over its environment, as a Harness's sign-in in a terminal runs: the
+    /// Person runs it, outside the fence.
     pub fn program(&self, args: &[String], env: &HashMap<String, String>) -> Program {
-        let start = self.start();
-        Program {
-            program: start.program,
-            args: start.args.into_iter().chain(args.iter().cloned()).collect(),
-            env: start.env.into_iter().chain(env.clone()).collect(),
-            ..Program::default()
-        }
+        let args = self.args.iter().chain(args).cloned().collect();
+        let mut program = Program::terminal(&self.command, args);
+        program.env = self.env.clone().into_iter().chain(env.clone()).collect();
+        program
     }
 
-    /// How its process starts: its `command` and `args`, with its `env`.
+    /// How its process starts: its `command` and `args`, with its `env`,
+    /// in its `cwd`: a Harness's, to start behind the fence with its
+    /// `holes` in it.
     pub fn start(&self) -> Program {
-        Program {
-            program: self.command.clone(),
-            args: self.args.clone(),
-            env: self.env.clone(),
-            ..Program::default()
-        }
+        let mut program = Program::harness(&self.command, self.args.clone(), self.holes.clone());
+        program.env = self.env.clone();
+        program.cwd = self.cwd.clone();
+        program
     }
 
     /// The entry as it starts on this host: through the adapter Banda
@@ -165,10 +169,18 @@ impl Harness {
     ///
     /// [`UNTRUSTED_VARIABLE`] says whether the Project is `trusted`, so a
     /// process started under the other trust is not this entry.
+    ///
+    /// It has the `holes` its Project has in the fence, and Claude Code's
+    /// its sessions' folder too, which it writes (ADR 0083, decision 1). It
+    /// starts in the Project's `folder` once the Person trusts it; until
+    /// then where the engine runs, as nothing of a folder not trusted is
+    /// for a process to read as it starts (decision 5).
     pub fn in_project(
         &self,
         project: ProjectId,
         data: &Path,
+        folder: &Path,
+        mut holes: Holes,
         shells: &BTreeMap<String, String>,
         trusted: bool,
     ) -> Harness {
@@ -189,7 +201,10 @@ impl Harness {
         if Kind::of(self) == Some(Kind::Claude) {
             let sessions = data.join("sessions").join("claude");
             (harness.env).insert(SESSIONS_VARIABLE.to_owned(), sessions.display().to_string());
+            holes.writes.push(sessions);
         }
+        harness.cwd = trusted.then(|| folder.to_owned());
+        harness.holes = holes;
         harness
     }
 }
@@ -532,6 +547,8 @@ impl HarnessEntry {
             colour: self.colour,
             carried,
             record: None,
+            cwd: None,
+            holes: Holes::default(),
         })
     }
 }
@@ -780,6 +797,8 @@ fn known() -> Vec<Harness> {
                 colour: None,
                 carried: Some(adapter.file()),
                 record: None,
+                cwd: None,
+                holes: Holes::default(),
             }
         })
         .collect()
@@ -910,6 +929,11 @@ fn template() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The folder of a test's Project.
+    fn work() -> &'static Path {
+        Path::new("/work")
+    }
 
     fn listed_in(path: &Path, text: &str) -> Result<Vec<Harness>, Problem> {
         parse(path, text).map(|read| read.harnesses)
@@ -1254,7 +1278,8 @@ mod tests {
             serde_json::from_str(&harness.env[CODEX_CONFIG]).unwrap()
         };
         for harness in known() {
-            let started = harness.in_project(project, data, &shells, true);
+            let started =
+                harness.in_project(project, data, work(), Holes::default(), &shells, true);
             assert_eq!(started.env["BANDA_TOKEN"], "f00d", "{}", harness.id);
         }
 
@@ -1262,7 +1287,8 @@ mod tests {
             "[[harness]]\nid = \"codex\"\nname = \"Codex\"\ncommand = \"codex-acp\"\n\
              env = { CODEX_CONFIG = '{\"model\":\"o3\"}' }\n",
         );
-        let config = config(&own.in_project(project, data, &shells, true));
+        let config =
+            config(&own.in_project(project, data, work(), Holes::default(), &shells, true));
         assert_eq!(config["model"], "o3", "the entry's own stays");
         assert_eq!(
             config["shell_environment_policy.set.BANDA_TOKEN"], "f00d",
@@ -1271,10 +1297,17 @@ mod tests {
 
         let other =
             listed("[[harness]]\nid = \"gemini\"\nname = \"Gemini\"\ncommand = \"gemini\"\n");
-        let started = other.in_project(project, data, &shells, true);
+        let started = other.in_project(project, data, work(), Holes::default(), &shells, true);
         assert_eq!(started.env["BANDA_ENGINE"], "ws://127.0.0.1:4000/ws");
         assert_eq!(started.env.get(CODEX_CONFIG), None, "Codex's alone");
-        let none = own.in_project(project, data, &BTreeMap::new(), true);
+        let none = own.in_project(
+            project,
+            data,
+            work(),
+            Holes::default(),
+            &BTreeMap::new(),
+            true,
+        );
         assert_eq!(none.env.get("BANDA_TOKEN"), None);
         assert_eq!(none.env[CODEX_CONFIG], r#"{"model":"o3"}"#, "as it was");
     }
@@ -1319,7 +1352,14 @@ mod tests {
     fn every_process_of_a_project_says_whether_it_is_trusted() {
         let (project, data) = (ProjectId::new(), Path::new("/state/projects/p"));
         for harness in known() {
-            let trusted = harness.in_project(project, data, &BTreeMap::new(), true);
+            let trusted = harness.in_project(
+                project,
+                data,
+                work(),
+                Holes::default(),
+                &BTreeMap::new(),
+                true,
+            );
             assert!(trusted.trusted(), "{}", harness.id);
             // Said even when trusted, over what the engine's own
             // environment says.
@@ -1329,10 +1369,32 @@ mod tests {
                 "{}",
                 harness.id
             );
-            let not = harness.in_project(project, data, &BTreeMap::new(), false);
+            let not = harness.in_project(
+                project,
+                data,
+                work(),
+                Holes::default(),
+                &BTreeMap::new(),
+                false,
+            );
             assert!(!not.trusted(), "{}", harness.id);
             assert_eq!(not.start().env[UNTRUSTED_VARIABLE], "1", "{}", harness.id);
             assert_ne!(not, trusted, "a process of the other trust is another");
+            // It starts in the folder only once the Person trusts it, and
+            // has the same holes in the fence either way.
+            assert_eq!(
+                trusted.start().cwd.as_deref(),
+                Some(work()),
+                "{}",
+                harness.id
+            );
+            assert_eq!(not.start().cwd, None, "{}", harness.id);
+            assert_eq!(
+                not.start().holes(),
+                trusted.start().holes(),
+                "{}",
+                harness.id
+            );
         }
     }
 
@@ -1341,21 +1403,48 @@ mod tests {
         let project = ProjectId::new();
         let data = Path::new("/state/projects/p");
         let list = known();
-        let claude = list[0].in_project(project, data, &BTreeMap::new(), true);
+        let kept = Holes {
+            reads: vec![data.join("files")],
+            ..Holes::default()
+        };
+        let in_project = |harness: &Harness| {
+            harness.in_project(project, data, work(), kept.clone(), &BTreeMap::new(), true)
+        };
+        let claude = in_project(&list[0]);
         assert_eq!(
             claude.env[SESSIONS_VARIABLE],
             "/state/projects/p/sessions/claude"
         );
-        let codex = list[1].in_project(project, data, &BTreeMap::new(), true);
+        // Its process writes them behind the fence, and reads what it was
+        // given to.
+        let sessions = PathBuf::from("/state/projects/p/sessions/claude");
+        let started = claude.start();
+        let holes = started.holes().unwrap();
+        assert_eq!(
+            (&holes.writes, &holes.reads),
+            (&vec![sessions], &kept.reads)
+        );
+        assert_eq!(started.cwd.as_deref(), Some(work()));
+        let codex = in_project(&list[1]);
         assert!(
             !codex.env.contains_key(SESSIONS_VARIABLE),
             "Codex keeps its own"
         );
+        assert_eq!(codex.start().holes(), Some(&kept), "nor writes Claude's");
         let second = "[[harness]]\nid = \"work\"\nname = \"Work\"\ncommand = \"acp\"\n\
                       cli = { program = \"claude\", variable = \"CLAUDE_CODE_EXECUTABLE\" }\n";
         let second = listed_in(Path::new("h"), second).unwrap().remove(0);
         assert_eq!(
-            second.in_project(project, data, &BTreeMap::new(), true).env[SESSIONS_VARIABLE],
+            second
+                .in_project(
+                    project,
+                    data,
+                    work(),
+                    Holes::default(),
+                    &BTreeMap::new(),
+                    true
+                )
+                .env[SESSIONS_VARIABLE],
             claude.env[SESSIONS_VARIABLE],
             "every Claude account, one folder"
         );
