@@ -1,8 +1,15 @@
 # The keys module, as it declares itself (ADR 0022). What its code says,
 # its methods, its code declares; this holds the rest.
 id = "keys"
+kind = "platform"
 name = "Keys"
 about = "Banda's keys (ADR 0071): every action with its keys in force, and the lines of keys.toml that bind them, written as `banda settings set` writes after the look's checks. `banda keys` is its command; an Agent has its methods as tools."
 version = "0.1.0"
+# The major of the App API it is written to (ADR 0062, ADR 0082).
+api = 1
 from-banda = true
 settings = []
+
+# What it needs of Banda (ADR 0082, decision 2): nothing it could
+# declare here is built yet.
+[needs]

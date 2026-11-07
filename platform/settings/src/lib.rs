@@ -64,9 +64,10 @@ pub fn also() -> Vec<SettingsFile> {
 
 /// Each module's window part, as client/web's tests write it, by the
 /// module's id, in the window's order; the window's own last (ADR 0071,
-/// decision 2). The engine's `banda modules` and the look's keys in force
-/// read the same files.
-const WINDOWS: &[(&str, &str)] = &[
+/// decision 2). The look's keys in force read them. The engine's tests
+/// hold it to the list of Apps both ways, which it takes its files from in
+/// B2.
+pub const WINDOWS: &[(&str, &str)] = &[
     ("agents", include_str!("../../../apps/agents/window.json")),
     (
         "terminal",
@@ -85,15 +86,6 @@ const WINDOWS: &[(&str, &str)] = &[
     ),
     ("window", include_str!("../../../client/web/window.json")),
 ];
-
-/// The window part of the module `id`, as its window.json has it; none
-/// when the window draws it itself.
-pub fn window(id: &str) -> Option<&'static str> {
-    WINDOWS
-        .iter()
-        .find(|(each, _)| *each == id)
-        .map(|(_, json)| *json)
-}
 
 /// What the manifests declare (ADR 0071, decision 2): every action there
 /// is, the modules' in the window's order, then the window's own; and the
@@ -291,22 +283,6 @@ mod tests {
 #[cfg(test)]
 mod keys_in_force {
     use super::*;
-
-    #[test]
-    fn every_module_s_window_part_is_read() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        for bucket in ["apps", "platform"] {
-            for module in std::fs::read_dir(root.join(bucket)).unwrap().flatten() {
-                let id = module.file_name().to_string_lossy().into_owned();
-                if module.path().join("window.json").exists() {
-                    assert!(
-                        window(&id).is_some(),
-                        "{bucket}/{id}/window.json is not in WINDOWS: the look would not know its actions"
-                    );
-                }
-            }
-        }
-    }
     use banda_look::keys::{Keys, Mod, in_force};
 
     /// Banda's keys with `held` the mod, by action id, as Banda writes

@@ -13,25 +13,17 @@
 //! says so at once; as it stops, it keeps its sessions' passes for the
 //! next run, and says that it stopped.
 
-use crate::places::{FOLDER, HOST, Places, Running, channel, from_checkout};
+use crate::apps::{self, HostContext};
+use crate::places::{FOLDER, HOST, Places, Running, from_checkout};
 use crate::run::{self, Before, Left, Run};
 use crate::service;
 use crate::{Failure, build_id, parent};
-use banda_agents::{Agents, Pipe};
-use banda_browser::Browser;
+use banda_agents::Pipe;
 use banda_environments::Local;
-use banda_files::Files;
-use banda_git::Git;
+use banda_harnesses::Harnesses;
 use banda_harnesses::carried::{Carried, Here};
-use banda_harnesses::{Harnesses, HarnessesModule};
 use banda_kernel::api::{self, OwnerSecret};
 use banda_kernel::{Kernel, PROTOCOL};
-use banda_keys::KeysModule;
-use banda_problems::Problems;
-use banda_pulls::Pulls;
-use banda_sharing::{Never, Sharing};
-use banda_terminal::Terminals;
-use banda_workspaces::Workspaces;
 use std::fs::{File, TryLockError};
 use std::path::Path;
 
@@ -101,37 +93,19 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         program,
         engine: running.url(),
     };
-    let opening = Kernel::builder(&places.root, &places.data, owner)
+    let builder = Kernel::builder(&places.root, &places.data, owner)
         .machine(places.machine())
         // Every Project's programs run on this host, as the Person's own
         // do (ADR 0084).
         .environment(Local)
-        .passes(places.passes())
-        .module(
-            Agents::new(harnesses.clone())
-                .config_in(places.config.clone())
-                .piped(pipe),
-        )
-        // One list, which both read again as its file changes.
-        .module(HarnessesModule::new(harnesses))
-        .module(Terminals::new())
-        .module(Browser::new())
-        .module(Git::new())
-        // Banda's settings are the settings Pane's to write (ADR 0073,
-        // decision 8); files' small pictures are kept in Banda's cache,
-        // and freedesktop's (step F6).
-        .module(
-            Files::new()
-                .config_in(places.config.clone())
-                .thumbs_in(places.thumbnails(), banda_files::thumb::shared_from_env()),
-        )
-        .module(Pulls::new())
-        // Banda's keys, which an Agent binds for its Person (ADR 0071).
-        .module(KeysModule::new(places.config.clone()))
-        .module(Workspaces::new())
-        .module(problems(&places))
-        .module(sharing(&places))
-        .open();
+        .passes(places.passes());
+    // Every engine part in the list of Apps (ADR 0062, decision 11).
+    let host = HostContext {
+        places: &places,
+        harnesses: &harnesses,
+        pipe: &pipe,
+    };
+    let opening = apps::serve(builder, &host).open();
     let kernel = tokio::select! {
         opened = opening => opened.map_err(Failure::broken)?,
         () = terminated(&mut term) => {
@@ -283,29 +257,4 @@ fn carried(program: &Path) -> Option<Carried> {
         ),
     }
     carried
-}
-
-/// What broke in Banda (ADR 0039), and, from a checkout's build, the
-/// checkout an Agent fixes it in.
-fn problems(places: &Places) -> Problems {
-    let problems = Problems::new(places.problems(), places.logs());
-    if from_checkout() {
-        problems.from_checkout()
-    } else {
-        problems
-    }
-}
-
-/// The one part of Banda that sends anything (ADR 0039, decision 4): never
-/// from a checkout's build, as in CI and the tests, nor with
-/// `BANDA_SHARING=0`.
-fn sharing(places: &Places) -> Sharing {
-    let sharing = Sharing::new(&places.config, &places.state).channel(channel());
-    if from_checkout() {
-        sharing.never(Never::Checkout)
-    } else if std::env::var_os("BANDA_SHARING").is_some_and(|off| off == "0") {
-        sharing.never(Never::Run)
-    } else {
-        sharing
-    }
 }

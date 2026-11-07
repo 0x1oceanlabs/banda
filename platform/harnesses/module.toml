@@ -2,9 +2,16 @@
 # code declares; it is the machine's (ADR 0040), and the settings Pane
 # draws its file in the Agents section.
 id = "harnesses"
+kind = "platform"
 name = "Harnesses"
 about = "The agent programs this computer can start, who is signed in to each, how much of its usage limits is spent, and the tokens and estimated API cost in its local journals."
 version = "0.1.0"
+# The major of the App API it is written to (ADR 0062, ADR 0082).
+api = 1
 from-banda = true
 # The settings files it owns, in ~/.config/banda.
 settings = ["harnesses.toml"]
+
+# What it needs of Banda (ADR 0082, decision 2): nothing it could
+# declare here is built yet.
+[needs]

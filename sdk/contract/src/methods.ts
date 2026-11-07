@@ -2,40 +2,13 @@
  * Every method of the engine, as its module declares it in Rust (ADR 0014,
  * decision 1): its params, its answer, and whether it is a call, a command
  * or a stream. `Engine.call`, `.command` and `.stream` take only these.
+ * The engine's tests write `Methods` from the list of Apps (ADR 0062,
+ * decision 11).
  */
 import type { CommandId } from "./generated/CommandId"
-import type { ProjectsMethods } from "./generated/ProjectsMethods"
-import type { WindowMethods } from "./generated/WindowMethods"
-import type { AgentsMethods } from "./generated/agents/AgentsMethods"
-import type { BrowserMethods } from "./generated/browser/BrowserMethods"
-import type { FilesMethods } from "./generated/files/FilesMethods"
-import type { GitMethods } from "./generated/git/GitMethods"
-import type { HarnessesMethods } from "./generated/harnesses/HarnessesMethods"
-import type { KeysMethods } from "./generated/keys/KeysMethods"
-import type { ProblemsMethods } from "./generated/problems/ProblemsMethods"
-import type { PullsMethods } from "./generated/pulls/PullsMethods"
-import type { SharingMethods } from "./generated/sharing/SharingMethods"
-import type { TerminalMethods } from "./generated/terminal/TerminalMethods"
-import type { WorkspacesMethods } from "./generated/workspaces/WorkspacesMethods"
+import type { Methods } from "./generated/Methods"
 
-/** A module's methods under its prefix: `send` becomes `agents.send`. */
-type Prefixed<P extends string, M> = {
-  [K in keyof M & string as `${P}.${K}`]: M[K]
-}
-
-export type Methods = Prefixed<"projects", ProjectsMethods> &
-  Prefixed<"window", WindowMethods> &
-  Prefixed<"agents", AgentsMethods> &
-  Prefixed<"harnesses", HarnessesMethods> &
-  Prefixed<"browser", BrowserMethods> &
-  Prefixed<"terminal", TerminalMethods> &
-  Prefixed<"workspaces", WorkspacesMethods> &
-  Prefixed<"git", GitMethods> &
-  Prefixed<"files", FilesMethods> &
-  Prefixed<"pulls", PullsMethods> &
-  Prefixed<"keys", KeysMethods> &
-  Prefixed<"problems", ProblemsMethods> &
-  Prefixed<"sharing", SharingMethods>
+export type { Methods }
 
 type Kind = Methods[keyof Methods]["kind"]
 

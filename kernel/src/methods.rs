@@ -156,6 +156,20 @@ pub struct Method {
     pub about: String,
 }
 
+/// A type with a `methods!` table, which implements this for it: the
+/// list of Apps reads each engine part's lines through it, by the type its
+/// builder makes (ADR 0062, decision 11).
+pub trait MethodTable {
+    /// The TypeScript type its table writes, after `as`.
+    const TS: &'static str;
+    /// The folder of the contract's `generated/` it writes it in, after
+    /// `in`.
+    const DIR: &'static str;
+
+    /// Every line of its table (ADR 0022, decision 1).
+    fn method_list() -> Vec<Method>;
+}
+
 /// How the window types one kind of method: its params, its answer, and
 /// the kind it is.
 macro_rules! kind {
@@ -219,8 +233,8 @@ pub fn answer(answer: impl serde::Serialize) -> Result<serde_json::Value, Refusa
 /// - `fn method_tools(module) -> Vec<Tool>`, the lines marked `tool`, for
 ///   [`Module::tools`](crate::Module::tools); a tool's params implement
 ///   `schemars::JsonSchema`;
-/// - `pub fn method_list() -> Vec<Method>`, every line, for `banda
-///   modules`;
+/// - [`MethodTable`], every line, and the TypeScript type's name and
+///   folder, for `banda modules` and the list of Apps;
 ///
 /// and the TypeScript type named after `as`, written in the folder after
 /// `in` when the crate's tests run. A stream's piece is typed for the
@@ -276,9 +290,19 @@ macro_rules! methods {
                 Err($crate::Refusal::invalid(format!("There is no stream \"{name}\".")))
             }
 
-            /// Every line of its `methods!` table (ADR 0022, decision 1).
-            #[allow(dead_code)]
-            pub fn method_list() -> Vec<$crate::methods::Method> {
+            #[allow(dead_code, unused_mut, unused_variables)]
+            fn method_tools(module: &str) -> Vec<$crate::methods::Tool> {
+                let mut tools = Vec::new();
+                $( $crate::methods!(@tool tools module $kind $name($params) [$($doc)*] $($tool)?); )*
+                tools
+            }
+        }
+
+        impl $crate::methods::MethodTable for $ty {
+            const TS: &'static str = $ts;
+            const DIR: &'static str = $dir;
+
+            fn method_list() -> Vec<$crate::methods::Method> {
                 vec![$(
                     $crate::methods::Method {
                         name: $crate::methods::bare(stringify!($name)),
@@ -288,13 +312,6 @@ macro_rules! methods {
                         about: $crate::methods::words(&[$($doc),*]),
                     },
                 )*]
-            }
-
-            #[allow(dead_code, unused_mut, unused_variables)]
-            fn method_tools(module: &str) -> Vec<$crate::methods::Tool> {
-                let mut tools = Vec::new();
-                $( $crate::methods!(@tool tools module $kind $name($params) [$($doc)*] $($tool)?); )*
-                tools
             }
         }
 

@@ -2,7 +2,7 @@
  * The client against the real engine (`target/debug/banda`), with the
  * fake agent as the Harness. Run `cargo build` first; `scripts/check.sh` does.
  */
-import { type ChildProcess, spawn } from "node:child_process"
+import { type ChildProcess, execFileSync, spawn } from "node:child_process"
 import {
   mkdirSync,
   mkdtempSync,
@@ -76,6 +76,17 @@ function stop(): Promise<void> {
   })
 }
 
+/** The engine parts in the list of Apps, in its order, as `banda modules`
+ * prints them: the ones with methods. */
+function engineParts(): string[] {
+  return execFileSync(binary("banda"), ["modules"], { encoding: "utf8" })
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .map((line) => JSON.parse(line) as { id: string; engine: unknown })
+    .filter((offer) => offer.engine != null)
+    .map((offer) => offer.id)
+}
+
 /** Reads where the engine listens, as the window's host does. */
 async function address(): Promise<Address> {
   const running = JSON.parse(
@@ -102,21 +113,11 @@ test("a window calls, follows and sees refusals by their code", async () => {
   await serve()
   client = new Engine(address)
   await until(client, "open")
-  expect(client.status).toMatchObject({
-    modules: [
-      "agents",
-      "harnesses",
-      "terminal",
-      "browser",
-      "git",
-      "files",
-      "pulls",
-      "keys",
-      "workspaces",
-      "problems",
-      "sharing",
-    ],
-  })
+  // The engine serves the list of Apps' engine parts, and no other
+  // (ADR 0062, decision 11): the Apps', then the platform's.
+  const parts = engineParts()
+  expect(parts).toContain("agents")
+  expect(client.status).toMatchObject({ modules: parts })
 
   const project = await client.command("projects.create", {
     name: "Work",

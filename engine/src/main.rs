@@ -34,6 +34,7 @@
 //! answers, or the program cannot do its part, it says so on stderr and
 //! exits 2.
 
+mod apps;
 mod build_id;
 mod client;
 mod control;

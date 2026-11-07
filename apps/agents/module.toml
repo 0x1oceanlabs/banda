@@ -3,12 +3,19 @@
 # part in the window's main process, `desktop` (ADR 0028), serves the
 # Visuals its Agents show (ADR 0037).
 id = "agents"
+kind = "app"
 name = "Agents"
 about = "Threads with Agents on their Harnesses: what each says and does, and what it asks the Person; and a short run of a Thread's Harness apart from it, as for a commit's message."
 version = "0.1.0"
+# The major of the App API it is written to (ADR 0062, ADR 0082).
+api = 1
 from-banda = true
 # The settings files it owns, in ~/.config/banda.
 settings = ["agents.toml"]
+
+# What it needs of Banda (ADR 0082, decision 2): nothing it could
+# declare here is built yet.
+[needs]
 
 # Paths it takes that a module from elsewhere would lack (ADR 0022,
 # decision 6), each with why. One that gets its place in the contract goes.
