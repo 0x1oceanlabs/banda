@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-07
 ---
 
@@ -10,7 +10,8 @@ an obvious place to go: "расложить все по компонентам �
 появятся новые элементы … было удобно вписывать в структуру которая у нас
 уже есть". He asked for it to agree with the new architecture (ADR 0062,
 ADR 0087 to ADR 0089) and with the Thread's look (ADR 0058, ADR 0080).
-Code is cited as `path:line` from main at `a55312e7`.
+Code is cited as `path:line` from main at `a55312e7`. Roma accepted it
+on 2026-11-07 ("да").
 
 **Where it stands.** The Thread Pane is one file of 1,181 lines,
 `apps/agents/pane/src/ThreadPane.tsx`, beside 91 other files in one flat
