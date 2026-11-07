@@ -12,7 +12,13 @@ import {
   takes,
   type WindowApi,
 } from "@banda/ui/module"
-import { type Listed, type PaneState, paneOf, type Place } from "@banda/ui/pane"
+import {
+  IN_PROGRAM,
+  type Listed,
+  type PaneState,
+  paneOf,
+  type Place,
+} from "@banda/ui/pane"
 import { type Held, RESET_KEY } from "../actions/actions"
 import type { Mod } from "@banda/contract/look"
 import { chipOf } from "./attach"
@@ -984,8 +990,10 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     section: "Banda",
     title: "Quit Banda",
     // It stops the engine and its Agents; closing the window does not
-    // (ADR 0086, decision 3).
+    // (ADR 0086, decision 3). Where a program reads the keys, as in a
+    // terminal, the key is the program's: Emacs' quoted insert.
     keys: [{ code: "KeyQ", primary: true }],
+    when: () => !document.activeElement?.closest(IN_PROGRAM),
     run: (shell) => shell.quit(),
   },
   {

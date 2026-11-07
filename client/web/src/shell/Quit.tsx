@@ -13,8 +13,9 @@ import {
   DialogTitle,
 } from "@banda/ui/components/dialog"
 
-/** The question, as the engine's `banda stop` words it. */
-export function quitQuestion(working: number): string {
+/** The question, as the engine's `banda stop` words it
+ * (`control::question`). */
+function quitQuestion(working: number): string {
   return working === 1
     ? "An Agent is working. Stop it and quit?"
     : `${working} Agents are working. Stop them and quit?`

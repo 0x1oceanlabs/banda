@@ -12,7 +12,8 @@
  * The window learns the engine's address from the first line, and forgets
  * it while the engine is down. An engine that stops as asked, as Quit
  * Banda or `banda stop` stops it, ends the program with code 0: the window
- * quits then (`stopped`). One that crashed is started again. It starts
+ * quits then (`stopped`). One that crashed is started again. Quit Banda
+ * here runs `banda stop --force` (`Stop`). It starts
  * with `path` as its PATH, when there is one: on macOS, the login
  * shell's (login.ts), and with `env` over the window's environment: the
  * Node the app provides for the adapters it carries (ADR 0059).
@@ -20,6 +21,7 @@
 import { type Address, Engine as Client } from "@banda/contract"
 import { Engine } from "@banda/desktop-kit"
 import {
+  Context,
   Data,
   Deferred,
   Effect,
@@ -29,7 +31,7 @@ import {
   Stream,
   SubscriptionRef,
 } from "effect"
-import type { ChildProcessSpawner } from "effect/process"
+import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { command, keepRunning, known, lines } from "./child"
 import { Program } from "./program"
 
@@ -130,3 +132,43 @@ export const engineLayer = (
       }
     })
   )
+
+/**
+ * Quit Banda's stop of the engine (ADR 0086, decision 3): `banda stop
+ * --force` on the window's `banda`, which stops the engine, its Agents,
+ * Harnesses and Terminals, and returns once it has gone, or after half a
+ * minute. The page asked first while Agents work; an update restarts the
+ * engine with it, once no Thread works or the Person said so.
+ */
+export class Stop extends Context.Service<
+  Stop,
+  { readonly engine: Effect.Effect<void> }
+>()("banda/Stop") {
+  static readonly layer = Layer.effect(Stop)(
+    Effect.gen(function* () {
+      const program = yield* Program
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
+      const stop = (binary: string) =>
+        ChildProcess.make(binary, ["stop", "--force"], {
+          extendEnv: true,
+          stdin: "ignore",
+          stdout: "ignore",
+          stderr: "inherit",
+        })
+      return {
+        engine: program.path.pipe(
+          Effect.flatMap((binary) =>
+            Effect.scoped(
+              Effect.flatMap(
+                spawner.spawn(stop(binary)),
+                (child) => child.exitCode
+              )
+            )
+          ),
+          Effect.timeout("30 seconds"),
+          Effect.ignore
+        ),
+      }
+    })
+  )
+}

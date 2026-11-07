@@ -33,7 +33,6 @@ import {
 import { type Look as LookValue, WALLPAPER_URL } from "@banda/contract/look"
 import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
-import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import {
   Engine,
   FileHost,
@@ -55,7 +54,7 @@ import {
   poppedRoute,
 } from "@banda/web/host"
 import { openDoor } from "./door"
-import { engineLayer } from "./engine"
+import { engineLayer, Stop } from "./engine"
 import { loginPath } from "./login"
 import { firstFrame, firstLook, lookLayer } from "./look"
 import { modules } from "./modules"
@@ -191,6 +190,10 @@ protocol.registerSchemesAsPrivileged([
   },
 ])
 
+/** Set as an update restarts Banda: the engine it stops leaves the quit
+ * to the update. */
+let updating = false
+
 /** Main's services (ADR 0020): the engine and the look as children, the
  * settings, all three on the window's `banda` (program.ts), the byte
  * host, over them the modules' own, the browser's and the notifications'
@@ -211,9 +214,12 @@ const runtime = ManagedRuntime.make(
           }),
           node,
           // The engine stopped as asked, by Quit Banda here or `banda
-          // stop`: the window goes with it.
-          () => app.quit()
+          // stop`: the window goes with it, unless an update restarts it.
+          () => {
+            if (!updating) app.quit()
+          }
         ),
+        Stop.layer,
         lookLayer,
         settingsLayer,
         Window.layer(() => window),
@@ -222,9 +228,8 @@ const runtime = ManagedRuntime.make(
         Editors.layer
       )
     ),
-    // A packed Banda that cannot run a copy of its own says why. Quit
-    // Banda runs it too.
-    Layer.provideMerge(
+    // A packed Banda that cannot run a copy of its own says why.
+    Layer.provide(
       Program.layer(where, (why) =>
         keepProblem({
           source: "main",
@@ -234,7 +239,7 @@ const runtime = ManagedRuntime.make(
         })
       )
     ),
-    Layer.provideMerge(NodeServices.layer)
+    Layer.provide(NodeServices.layer)
   )
 )
 // What breaks in main, or crashes, is kept as the page's is (ADR 0039).
@@ -318,8 +323,15 @@ async function ready(): Promise<void> {
   const write = (file: string, key: string, value: unknown) =>
     Settings.use((settings) => settings.write(file, key, value))
 
-  const update = updates((now) =>
-    tellPage(window?.webContents, BRIDGE.update.listen, now)
+  const update = updates(
+    (now) => tellPage(window?.webContents, BRIDGE.update.listen, now),
+    // The engine restarts with the window, from the new version's copy,
+    // until the engine updates by itself (ADR 0086, plan step 6): the
+    // restart comes once no Thread works, or as the Person says.
+    () => {
+      updating = true
+      return runtime.runPromise(Stop.use((stop) => stop.engine))
+    }
   )
   serve(runtime, fromPage, BRIDGE, {
     engine: [none, () => Engine.use((engine) => engine.address)],
@@ -520,31 +532,13 @@ async function ready(): Promise<void> {
 let shutDoor: (() => void) | null = null
 
 /**
- * Quit Banda (ADR 0086, decision 3): `banda stop --force` stops the
- * engine, which stops its Agents, Harnesses and Terminals, and the window
- * quits once it has gone. Its follower hears the engine stop as asked and
- * quits the window too (engine.ts); one that cannot be stopped in time
- * still leaves the window to quit.
+ * Quit Banda (ADR 0086, decision 3): the engine stops (engine.ts), which
+ * stops its Agents, Harnesses and Terminals, and the window quits once it
+ * has gone. Its follower hears the engine stop as asked and quits the
+ * window too; one that cannot be stopped in time still leaves the window
+ * to quit.
  */
-const quitBanda = Effect.gen(function* () {
-  const program = yield* Program.use((program) => program.path)
-  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
-  yield* Effect.scoped(
-    Effect.flatMap(
-      spawner.spawn(
-        ChildProcess.make(program, ["stop", "--force"], {
-          extendEnv: true,
-          stdin: "ignore",
-          stdout: "ignore",
-          stderr: "inherit",
-        })
-      ),
-      (child) => child.exitCode
-    )
-  )
-}).pipe(
-  Effect.timeout("30 seconds"),
-  Effect.ignore,
+const quitBanda = Stop.use((stop) => stop.engine).pipe(
   Effect.ensuring(Effect.sync(() => app.quit()))
 )
 
