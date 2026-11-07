@@ -138,6 +138,10 @@ async fn an_agent_follows_no_link_out_of_the_folder() {
 }
 
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "Windows refuses a folder read as a file by another error: ADR 0090's step 3"
+)]
 async fn a_text_is_read_and_cut_on_a_character() {
     let world = World::new().await;
     world.write("a.txt", "héllo");
@@ -661,6 +665,10 @@ async fn a_file_that_moved_since_its_base_is_not_written_and_says_who_moved_it()
 }
 
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "Windows refuses a folder written as a file by another error: ADR 0090's step 3"
+)]
 async fn a_new_file_is_written_only_where_none_is() {
     let world = World::new().await;
     std::fs::create_dir_all(world.folder.join("docs")).unwrap();

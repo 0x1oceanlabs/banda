@@ -6,7 +6,9 @@
 //!
 //! The program leads a process group of its own. That group is killed as
 //! the program ends, so a launcher such as `npx` leaves nothing behind,
-//! and as the connection is dropped, so what it started stops too.
+//! and as the connection is dropped, so what it started stops too. Windows
+//! has no process groups: there the program alone is killed as it is
+//! dropped, until it is born in a Job Object (ADR 0090, step 3).
 //!
 //! It keeps the transport of ACP's own `AcpAgent` as of
 //! agent-client-protocol 3.6: its grace periods, its "Process exited
@@ -15,7 +17,10 @@
 
 use agent_client_protocol::util::internal_error;
 use agent_client_protocol::{Agent, Client, ConnectTo, Lines};
-use banda_kernel::{Environment, Input, ProcessGroup, Program};
+#[cfg(unix)]
+use banda_kernel::ProcessGroup;
+use banda_kernel::{Environment, Input, Program};
+#[cfg(unix)]
 use rustix::process::Signal;
 use std::collections::VecDeque;
 use std::io;
@@ -66,7 +71,7 @@ impl ConnectTo<Client> for Pipes {
             hears,
         } = self;
         let mut child = (environment.spawn(&program, Input::Piped)).map_err(internal_error)?;
-        let mut group = Killed(ProcessGroup::of(&child));
+        let mut group = Killed::of(&child);
         let (Some(stdin), Some(stdout), Some(stderr)) =
             (child.stdin.take(), child.stdout.take(), child.stderr.take())
         else {
@@ -135,15 +140,34 @@ async fn ended(
 }
 
 /// The process group the program leads, killed when dropped.
+#[cfg(unix)]
 struct Killed(Option<ProcessGroup>);
 
+/// None on Windows, where the program is killed alone (ADR 0090, step 3).
+#[cfg(not(unix))]
+struct Killed;
+
 impl Killed {
+    #[cfg(unix)]
+    fn of(child: &tokio::process::Child) -> Killed {
+        Killed(ProcessGroup::of(child))
+    }
+
+    #[cfg(not(unix))]
+    fn of(_: &tokio::process::Child) -> Killed {
+        Killed
+    }
+
     /// Kills it; a group already gone stays so.
+    #[cfg(unix)]
     fn kill(&mut self) {
         if let Some(group) = self.0 {
             group.signal(Signal::KILL);
         }
     }
+
+    #[cfg(not(unix))]
+    fn kill(&mut self) {}
 }
 
 impl Drop for Killed {
@@ -308,6 +332,8 @@ impl Tail {
     }
 }
 
+// They run `sh` and look for processes by number, as Unix has them.
+#[cfg(unix)]
 #[cfg(test)]
 mod tests {
     use super::*;

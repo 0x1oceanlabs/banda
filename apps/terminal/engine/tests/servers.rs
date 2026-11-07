@@ -1,6 +1,8 @@
 //! The servers started in Banda, through the kernel, as the bar's widget
 //! hears them (ADR 0044): a terminal's and an Agent's show in their Project
 //! only, a Harness's own and the engine's do not, and a server stops.
+// Windows finds no servers yet (ADR 0090, step 8): tests/windows.rs.
+#![cfg(unix)]
 
 mod common;
 

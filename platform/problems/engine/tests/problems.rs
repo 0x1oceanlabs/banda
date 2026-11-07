@@ -130,6 +130,8 @@ async fn a_problem_is_named_by_its_fingerprint_s_start_with_the_logs_last_lines(
     assert!(ask("no-such").await.is_err());
 }
 
+// Its `gh` is a `sh` script.
+#[cfg(unix)]
 #[tokio::test]
 async fn only_the_person_sends_an_issue_about_a_problem_that_is_kept() {
     use banda_kernel::{AgentId, Code};

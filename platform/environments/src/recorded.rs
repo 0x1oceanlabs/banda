@@ -75,6 +75,7 @@ impl<E: Environment> Environment for Recorded<E> {
         self.starts.spawn(program, input)
     }
 
+    #[cfg(unix)]
     fn pty(&self, program: &Program, pts: pty_process::Pts) -> io::Result<Child> {
         self.write(How::Pty, program);
         self.starts.pty(program, pts)

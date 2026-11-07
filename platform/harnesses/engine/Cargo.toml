@@ -15,7 +15,6 @@ futures.workspace = true
 banda-kernel = { path = "../../../kernel" }
 banda-look = { path = "../../../platform/look" }
 icu_normalizer.workspace = true
-nix.workspace = true
 reqwest.workspace = true
 rusqlite.workspace = true
 rustix.workspace = true
@@ -28,6 +27,10 @@ toml.workspace = true
 tracing.workspace = true
 ts-rs.workspace = true
 uuid.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+# Only the macOS Keychain asks the user's name (src/limits/claude.rs).
+nix.workspace = true
 
 [dev-dependencies]
 banda-environments = { path = "../../environments" }

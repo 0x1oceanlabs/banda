@@ -12,7 +12,6 @@ async-trait.workspace = true
 banda-kernel = { path = "../../../kernel" }
 banda-look = { path = "../../../platform/look" }
 dirs.workspace = true
-pty-process.workspace = true
 rusqlite.workspace = true
 rustix.workspace = true
 schemars.workspace = true
@@ -24,6 +23,10 @@ uuid.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 sysinfo.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+# A terminal is a PTY on Unix; Windows' ConPTY comes later (ADR 0090, step 7).
+pty-process.workspace = true
 
 [dev-dependencies]
 banda-environments = { path = "../../../platform/environments" }

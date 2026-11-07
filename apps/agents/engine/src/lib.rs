@@ -1759,8 +1759,14 @@ mod tests {
             program: "/opt/banda/bin/banda".into(),
             engine: String::new(),
         };
-        let mut env = BTreeMap::from([("PATH".to_owned(), "/usr/bin:/bin".to_owned())]);
+        // PATH's folders are apart by `;` on Windows.
+        let apart = if cfg!(windows) { ';' } else { ':' };
+        let path = format!("/usr/bin{apart}/bin");
+        let mut env = BTreeMap::from([("PATH".to_owned(), path)]);
         pipe.first_on_path(&mut env);
-        assert_eq!(env["PATH"], "/opt/banda/bin:/usr/bin:/bin");
+        assert_eq!(
+            env["PATH"],
+            format!("/opt/banda/bin{apart}/usr/bin{apart}/bin")
+        );
     }
 }

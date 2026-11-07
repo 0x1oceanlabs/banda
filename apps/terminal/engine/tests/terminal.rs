@@ -1,5 +1,7 @@
 //! The terminal module through the kernel, as a window uses it: a program
 //! starts on a PTY, prints, reads what is typed, and ends.
+// Windows has no terminals yet (ADR 0090, step 7): tests/windows.rs.
+#![cfg(unix)]
 
 mod common;
 

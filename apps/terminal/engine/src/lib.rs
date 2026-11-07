@@ -6,25 +6,42 @@
 //! goes to the event log, which keeps the work, and a restart ends every
 //! terminal. Only a Person runs a terminal (the `Run` right): an Agent runs
 //! programs through its Harness, under its Thread's mode.
+//!
+//! Windows has neither terminals nor servers yet (ADR 0090): a ConPTY comes
+//! with its step 7, and Windows' own tables of sockets and processes with
+//! its step 8. Until then `open`, `ports` and `stop_server` refuse there
+//! and say so.
 
 pub mod model;
 pub mod settings;
 
+#[cfg(unix)]
 mod front;
+#[cfg(unix)]
 mod history;
+#[cfg(unix)]
 mod servers;
+#[cfg(unix)]
 mod terminal;
+#[cfg(not(unix))]
+mod windows;
+#[cfg(not(unix))]
+pub use windows::{NO_SERVERS, NO_TERMINALS};
 
 use banda_kernel::{Call, Kind, Module, ModuleProject, Nothing, ProjectId, Refusal, Right, Stream};
 use model::{Open, Piece, Servers, Size, TerminalId};
 use serde::Deserialize;
 use serde_json::Value;
+#[cfg(unix)]
 use servers::Scanner;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::{Arc, Mutex};
+#[cfg(unix)]
 use terminal::Terminal;
 use ts_rs::TS;
+#[cfg(not(unix))]
+use windows::Terminal;
 
 /// The module's settings file in `~/.config/banda` (ADR 0016): how the
 /// terminal writes, which the look resolves for the window (ADR 0047).
@@ -38,6 +55,7 @@ const AT_ONCE: usize = 64 * 1024;
 pub struct Terminals {
     open: Mutex<HashMap<TerminalId, Arc<Terminal>>>,
     /// The servers started in Banda, a terminal's or an Agent's (ADR 0044).
+    #[cfg(unix)]
     servers: Arc<Scanner>,
 }
 
@@ -97,6 +115,8 @@ struct Write {
 
 #[derive(Deserialize, TS)]
 #[ts(export_to = "terminal/")]
+// Windows refuses it unread (ADR 0090, step 8).
+#[cfg_attr(not(unix), allow(dead_code))]
 struct StopServer {
     port: u16,
     process: u32,
@@ -226,10 +246,17 @@ impl Terminals {
         Ok(self.find(call.project().id(), terminal)?.watch())
     }
 
+    #[cfg(unix)]
     async fn ports(&self, call: Call, _: Nothing) -> Result<Stream, Refusal> {
         Ok(self.servers.stream(call.project().id()))
     }
 
+    #[cfg(not(unix))]
+    async fn ports(&self, _: Call, _: Nothing) -> Result<Stream, Refusal> {
+        Err(Refusal::invalid(windows::NO_SERVERS))
+    }
+
+    #[cfg(unix)]
     async fn stop_server(
         &self,
         call: Call,
@@ -245,5 +272,10 @@ impl Terminals {
         }
         servers::stop(process).await;
         Ok(())
+    }
+
+    #[cfg(not(unix))]
+    async fn stop_server(&self, _: Call, _: StopServer) -> Result<(), Refusal> {
+        Err(Refusal::invalid(windows::NO_SERVERS))
     }
 }

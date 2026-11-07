@@ -180,6 +180,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "Windows names a source file with backslashes: ADR 0090's step 3"
+    )]
     fn a_file_under_the_working_folder_is_named_from_the_repository_root() {
         // Tests run in the crate's folder.
         assert_eq!(

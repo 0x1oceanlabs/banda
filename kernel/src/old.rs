@@ -202,6 +202,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "no Banda on Windows ever kept a Project's data in its folder"
+    )]
     fn an_old_projects_data_moves_out_and_names_its_folder() {
         let (root, data) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         let id = old_project(root.path(), "Work");

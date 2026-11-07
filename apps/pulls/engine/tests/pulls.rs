@@ -2,15 +2,17 @@
 //! answers as GitHub would: links made by the Person, by an Agent's tool
 //! and by its own `gh pr create`, read and judged, and let go of.
 
+#[cfg(unix)]
+use banda_kernel::AgentId;
 use banda_kernel::{
-    AgentId, Call, CommandId, Kernel, Kind, Module, Participant, PersonId, ProjectId, Refusal,
-    Right,
+    Call, CommandId, Kernel, Kind, Module, Participant, PersonId, ProjectId, Refusal, Right,
 };
 use banda_pulls::Pulls;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
+#[cfg(unix)]
 use std::time::Duration;
 
 /// The agents module as pulls hears it: `say { kind, thread, … }` writes
@@ -55,6 +57,7 @@ struct World {
 }
 
 /// GitHub's answer for one pull request, `r0.p0`: its checks failed.
+#[cfg(unix)]
 fn answer(number: u32) -> Value {
     let check = |name: &str, conclusion: &str| {
         json!({"__typename": "CheckRun", "name": name, "status": "COMPLETED",
@@ -161,6 +164,7 @@ impl World {
     }
 
     /// The list once `until` holds of it, within five seconds.
+    #[cfg(unix)]
     async fn list_until(&self, until: impl Fn(&Value) -> bool) -> Value {
         for _ in 0..100 {
             let listed = self.list().await;
@@ -173,6 +177,7 @@ impl World {
     }
 }
 
+#[cfg(unix)]
 fn runs(root: &Path) -> usize {
     std::fs::read_to_string(root.join("runs"))
         .map(|text| text.lines().count())

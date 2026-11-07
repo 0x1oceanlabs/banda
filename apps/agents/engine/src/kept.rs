@@ -43,7 +43,7 @@ mod tests {
             .await
             .unwrap();
         assert!(Path::new(&path).starts_with(folder(data.path())));
-        assert!(path.ends_with("/notes.md"));
+        assert!(Path::new(&path).ends_with("notes.md"));
         let folder = PathBuf::from(&path);
         assert_eq!(std::fs::read(&folder).unwrap(), b"# hi");
         let parent = folder.parent().unwrap();

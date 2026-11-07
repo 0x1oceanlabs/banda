@@ -759,9 +759,14 @@ fn tell_window(socket: &std::path::Path, message: &Value) -> Result<(), Failure>
     }
 }
 
+/// The window's socket is a named pipe on Windows, which comes with the
+/// window there (ADR 0090, step 4).
 #[cfg(not(unix))]
 fn tell_window(_: &std::path::Path, _: &Value) -> Result<(), Failure> {
-    Err(Failure::Broken("banda menu needs a Unix socket.".into()))
+    Err(Failure::Broken(
+        "banda menu is not on Windows yet (ADR 0090, step 4): open the menu in Banda's window."
+            .into(),
+    ))
 }
 
 /// The look's places, in this Banda's config folder.

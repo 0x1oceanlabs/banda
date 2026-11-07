@@ -284,6 +284,10 @@ fn through_program(code: &str) -> Vec<&str> {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "it reads the sources by their Unix paths, the same on every platform: Linux checks them"
+)]
 fn only_an_environment_starts_a_projects_program() {
     let root = repository();
     let files = sources();

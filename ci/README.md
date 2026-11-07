@@ -6,6 +6,38 @@
 `devbox`. One status, `ci`, sums them up. A PR that changes only Markdown
 or `docs/` passes it without running them.
 
+## Windows
+
+`ci`'s `windows` part, `scripts/check.sh windows`, lints the workspace for
+Windows and builds its tests (ADR 0090, decision 9). It runs on GitHub's
+`windows-2025` runner, free for a public repository, whose Visual Studio
+has Microsoft's CRT and SDK, with `Swatinem/rust-cache` keeping the
+dependencies main's runs built. It runs when a PR changes Rust or what
+builds it, and on every push to main; `ci` waits for it.
+
+- It gates merges once it has passed on main: main's green run leaves an
+  artifact, `windows-passed-on-main`, kept 90 days, and from then on a
+  failure fails the part, and so `ci`. Until then a failure only warns
+  and the part stays green, so neither a PR nor main's Dev build
+  (`release.yml`) is held up by what main has not passed yet. Each green
+  run on main leaves a new one.
+- With no cache, as on a PR before main has saved one, `check.sh windows`
+  took 4 to 5.5 minutes on `windows-2025`, and the whole job 4.5 to 6
+  (2026-11-07). `ci` waits for the slower of it and devbox's parts. Only
+  main's runs save the cache, so a warm run's time shows after main's
+  first.
+- `ci/Dockerfile` has cargo-xwin and clang, so the part can move to devbox
+  once its image is rebuilt (below): `runs-on: devbox` and `ci/target.sh`,
+  as `check` has them. cargo-xwin fetches Microsoft's CRT and SDK into the
+  volume on its first run, 1.2 GB. From Linux on a laptop's 20 threads it
+  took 3 minutes with an empty `target/`, 65 s after a change to the
+  kernel and 26 s with nothing changed (2026-11-07).
+- `.github/workflows/windows.yml` runs the tests on `windows-2025`, on each
+  push to main, on PRs that touch Windows code, and by hand
+  (`gh workflow run windows --ref <branch>`). It is not a merge gate, and
+  each run keeps the `banda.exe` it built. With no cache its tests took
+  6.5 minutes (2026-11-07).
+
 ## A fork's PR
 
 A PR whose branch is in a fork is not checked at all (ADR 0038, decision 4):

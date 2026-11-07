@@ -207,6 +207,9 @@ fn major(version: &str) -> Option<u32> {
     digits.split('.').next()?.parse().ok()
 }
 
+// Their programs are `sh` scripts that run by their exec bit; Windows
+// finds `node.exe` and the `.cmd`s from ADR 0090's step 3.
+#[cfg(unix)]
 #[cfg(test)]
 mod tests {
     use super::*;

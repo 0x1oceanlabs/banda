@@ -263,18 +263,43 @@ fn repository(folder: &Path, home: Option<&Path>) -> Option<(PathBuf, PathBuf)> 
 /// for anything else: a pipe or a device is never opened to wait on, and
 /// what is opened is checked again, as it is, before it is read.
 fn start_of(path: &Path, limit: u64) -> Option<String> {
-    use rustix::fs::{Mode, OFlags};
+    #[cfg(not(unix))]
+    if !on_a_drive(path) {
+        return None;
+    }
     if !std::fs::metadata(path).ok()?.is_file() {
         return None;
     }
-    let flags = OFlags::RDONLY | OFlags::NONBLOCK | OFlags::NOCTTY | OFlags::CLOEXEC;
-    let file = std::fs::File::from(rustix::fs::open(path, flags, Mode::empty()).ok()?);
+    #[cfg(unix)]
+    let file = {
+        use rustix::fs::{Mode, OFlags};
+        let flags = OFlags::RDONLY | OFlags::NONBLOCK | OFlags::NOCTTY | OFlags::CLOEXEC;
+        std::fs::File::from(rustix::fs::open(path, flags, Mode::empty()).ok()?)
+    };
+    // A pipe or a device on Windows has a path of its own, never on a
+    // drive, so what is on one opens without waiting.
+    #[cfg(not(unix))]
+    let file = std::fs::File::open(path).ok()?;
     if !file.metadata().ok()?.is_file() {
         return None;
     }
     let mut bytes = Vec::new();
     file.take(limit).read_to_end(&mut bytes).ok()?;
     Some(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// Whether `path` is on one of this computer's drives, as `C:\x` or
+/// `\\?\C:\x`: not a share, which a look would send the Person's
+/// sign-in to, nor a pipe or a device, as `\\.\pipe\x`.
+#[cfg(not(unix))]
+fn on_a_drive(path: &Path) -> bool {
+    use std::path::{Component, Prefix};
+    match path.components().next() {
+        Some(Component::Prefix(prefix)) => {
+            matches!(prefix.kind(), Prefix::Disk(_) | Prefix::VerbatimDisk(_))
+        }
+        _ => false,
+    }
 }
 
 /// The URL the repository was cloned from, as the first line of HEAD's

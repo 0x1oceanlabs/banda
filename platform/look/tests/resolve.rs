@@ -3,7 +3,9 @@
 
 use banda_look::hyprland::Windows;
 use banda_look::motion::Move;
-use banda_look::settings::{GroupAsking, GroupSaturation, GroupWorking, Material, SidebarStyle};
+#[cfg(unix)]
+use banda_look::settings::SidebarStyle;
+use banda_look::settings::{GroupAsking, GroupSaturation, GroupWorking, Material};
 use banda_look::theme::{Origin, Places};
 use banda_look::{Look, Shown, follow, resolve};
 use std::collections::BTreeMap;
@@ -112,6 +114,8 @@ impl Machine {
 
     /// Omarchy's current background, beside its current theme, as a link
     /// to the picture: returns the picture.
+    // Omarchy's background is a link, which Windows makes only in Developer Mode.
+    #[cfg(unix)]
     fn background(&self, name: &str) -> PathBuf {
         let link = self.places.omarchy_background.as_ref().unwrap();
         let picture = link.with_file_name("theme/backgrounds").join(name);
@@ -123,6 +127,7 @@ impl Machine {
 }
 
 /// The path of the picture the desk is made of, if any.
+#[cfg(unix)]
 fn picture_of(look: &Look) -> Option<String> {
     look.desk
         .wallpaper
@@ -231,6 +236,8 @@ fn under_hyprland_another_theme_keeps_its_own_shape() {
     assert_eq!(machine.under_hyprland().vars["--gap-inner"], "5px");
 }
 
+// Omarchy's background is a link, which Windows makes only in Developer Mode.
+#[cfg(unix)]
 #[test]
 fn the_desk_is_banda_glass_made_of_the_wallpaper() {
     let machine = Machine::new(true);
@@ -351,6 +358,8 @@ fn the_desk_is_banda_glass_made_of_the_wallpaper() {
 /// glass with no picture to make it of, and tinted lightly over a material
 /// that is tinted already. `[desk] material` still wins, either way
 /// (ADR 0030, decision 1).
+// Omarchy's background is a link, which Windows makes only in Developer Mode.
+#[cfg(unix)]
 #[test]
 fn the_platform_says_who_makes_the_glass_and_the_person_overrules_it() {
     let mut machine = Machine::new(true);
@@ -733,6 +742,8 @@ fn each_key_says_where_its_value_comes_from() {
     assert!(look.settings["sidebar.toml"].contains_key("group.by"));
 }
 
+// Its `gsettings` is a `sh` script.
+#[cfg(unix)]
 #[test]
 fn a_linux_desktop_gives_its_wallpaper() {
     let mut machine = Machine::new(false);

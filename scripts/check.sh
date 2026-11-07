@@ -5,6 +5,8 @@
 #   scripts/check.sh               every part: rust, ts, window
 #   scripts/check.sh --no-window   all but the desktop window's end-to-end tests
 #   scripts/check.sh PART...       only these parts, in this order
+#   scripts/check.sh windows       the Rust for Windows: only by its name, as on
+#                                  Linux it builds every crate a second time
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -12,8 +14,8 @@ parts=()
 for arg in "$@"; do
   case "$arg" in
     --no-window) parts+=(rust ts) ;;
-    rust | ts | window) parts+=("$arg") ;;
-    *) echo "check.sh: unknown argument $arg (rust, ts, window, --no-window)" >&2; exit 2 ;;
+    rust | ts | window | windows) parts+=("$arg") ;;
+    *) echo "check.sh: unknown argument $arg (rust, ts, window, windows, --no-window)" >&2; exit 2 ;;
   esac
 done
 ((${#parts[@]})) || parts=(rust ts window)
@@ -101,6 +103,22 @@ window() {
   # BANDA_E2E_SHARD (1/4, …) runs one part of the tests: CI splits them
   # over runners, as one at a time they took 19 minutes.
   pnpm --filter @banda/desktop --silent e2e ${BANDA_E2E_SHARD:+--shard="$BANDA_E2E_SHARD"}
+}
+
+# The workspace for Windows, with its lints as errors as rust has them, and
+# its tests built; windows.yml runs them on Windows (ADR 0090, decision 9).
+# From Linux it is cargo-xwin's, which brings Microsoft's CRT and Windows
+# SDK under Microsoft's license (`cargo install cargo-xwin`, and clang);
+# on Windows, Visual Studio's build tools bring them.
+windows() {
+  step "Rust for Windows: lints, the tests build"
+  local cargo=(cargo) target=()
+  if [[ ${OS:-} != Windows_NT ]]; then
+    cargo=(cargo xwin) target=(--target x86_64-pc-windows-msvc)
+    quiet rustup target add x86_64-pc-windows-msvc
+  fi
+  "${cargo[@]}" clippy --workspace --all-targets "${target[@]}" --quiet -- -D warnings
+  "${cargo[@]}" test --workspace --no-run "${target[@]}" --quiet
 }
 
 for part in "${parts[@]}"; do "$part"; done

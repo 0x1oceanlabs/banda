@@ -248,9 +248,16 @@ fn account(user: Option<String>, system: impl FnOnce() -> Option<String>) -> Str
 }
 
 /// This user's name in the system's user database.
+#[cfg(unix)]
 fn system_user() -> Option<String> {
     let user = nix::unistd::User::from_uid(nix::unistd::getuid()).ok()??;
     Some(user.name)
+}
+
+/// None off Unix: only the macOS Keychain asks it.
+#[cfg(not(unix))]
+fn system_user() -> Option<String> {
+    None
 }
 
 /// A macOS Keychain item's secret, by `security`, under the account

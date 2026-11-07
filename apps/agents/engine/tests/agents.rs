@@ -6,7 +6,9 @@ use banda_agents::model::{
     ThreadList, ThreadView, ToolContent, ToolStatus, TurnId, TurnState, Wake,
 };
 use banda_agents::{Agents, Pipe};
-use banda_environments::{Asks, How, Local, Recorded};
+#[cfg(unix)]
+use banda_environments::How;
+use banda_environments::{Asks, Local, Recorded};
 use banda_harnesses::{Cli, Harness, Harnesses, HarnessesModule, account_changed};
 use banda_kernel::{
     AgentId, Caller, Code, CommandId, EventFilter, Holes, Kernel, Participant, PersonId, ProjectId,
@@ -866,6 +868,10 @@ async fn an_idle_harness_is_let_go_and_its_threads_resume() {
 /// a Thread's session's own, new each time it opens, which its request
 /// hands Claude Code's adapter for the session's shell.
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "on Windows the engine did not know a shell's pass once in four runs: ADR 0090's step 3 has the Harness tests on Windows"
+)]
 async fn an_agents_shell_gets_a_pass_walled_to_its_project() {
     let root = tempfile::tempdir().unwrap();
     let shells = root.path().join("shells.json");
@@ -1387,6 +1393,8 @@ fn with_cli_since(program: &str, minimum: Option<&str>) -> Agents {
     }]))
 }
 
+// Its CLI is a `sh` script that runs by its exec bit.
+#[cfg(unix)]
 #[tokio::test]
 async fn a_harness_runs_the_persons_own_cli_and_says_its_version() {
     let (root, bin) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
@@ -1413,6 +1421,8 @@ async fn a_harness_runs_the_persons_own_cli_and_says_its_version() {
 /// start behind the fence: the Project's with its holes in it, in its
 /// folder once the Person trusts it; the machine's and the CLI asked with
 /// none (ADR 0083, decision 1).
+// Its CLI is a `sh` script that runs by its exec bit.
+#[cfg(unix)]
 #[tokio::test]
 async fn every_harness_process_starts_in_its_projects_environment() {
     let (root, bin) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
@@ -1503,6 +1513,7 @@ async fn every_harness_process_starts_in_its_projects_environment() {
 }
 
 /// A CLI in `folder` that says it is 9.9.9.
+#[cfg(unix)]
 fn fake_cli(folder: &Path) -> PathBuf {
     let cli = folder.join("fake-cli");
     std::fs::write(&cli, "#!/bin/sh\necho '9.9.9 (Fake CLI)'\n").unwrap();
@@ -1511,6 +1522,8 @@ fn fake_cli(folder: &Path) -> PathBuf {
     cli
 }
 
+// Its CLI is a `sh` script that runs by its exec bit.
+#[cfg(unix)]
 #[tokio::test]
 async fn a_cli_older_than_its_harness_supports_runs_and_its_threads_warn() {
     let (root, bin) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
@@ -1580,7 +1593,16 @@ async fn a_sign_in_whose_harness_did_not_start_runs_when_sent_again() {
     assert!(refused.message.contains("Harness"), "{}", refused.message);
 
     // Its program is there now, as after an install that was still going.
+    #[cfg(unix)]
     std::os::unix::fs::symlink(fake_agent(), &program).unwrap();
+    // A copy, as a link on Windows needs Developer Mode; Windows starts
+    // `fake-agent` as `fake-agent.exe`.
+    #[cfg(windows)]
+    std::fs::copy(
+        fake_agent().with_extension("exe"),
+        program.with_extension("exe"),
+    )
+    .unwrap();
     assert_eq!(sign_in().await.unwrap(), Value::Null, "it ran this time");
     let account = world.account().await;
     assert_eq!(account["signed_in_as"]["signed_in"], true, "{account}");
@@ -2328,7 +2350,7 @@ async fn a_file_is_kept_in_the_project_for_a_message_to_point_at() {
         .unwrap();
     let path = kept["path"].as_str().unwrap();
     assert!(Path::new(path).starts_with(project_data(root.path()).join("files")));
-    assert!(path.ends_with("/pasted-text.txt"));
+    assert!(Path::new(path).ends_with("pasted-text.txt"));
     let file = PathBuf::from(path);
     assert_eq!(std::fs::read_to_string(file).unwrap(), "a long text");
     // A file with no name is refused.
@@ -3268,6 +3290,10 @@ impl World {
 }
 
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the fake agent names files with /: Windows' paths come with ADR 0090's step 3"
+)]
 async fn claude_code_asks_before_it_edits_and_shows_the_change() {
     let root = tempfile::tempdir().unwrap();
     let (_world, view, folder) = World::replay_edit(root.path(), "claude").await;
@@ -3312,6 +3338,10 @@ async fn claude_code_asks_before_it_edits_and_shows_the_change() {
 }
 
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the fake agent names files with /: Windows' paths come with ADR 0090's step 3"
+)]
 async fn codex_asks_before_it_runs_a_command_and_shows_what_its_commands_print() {
     let root = tempfile::tempdir().unwrap();
     let (_world, view, folder) = World::replay_edit(root.path(), "codex").await;
@@ -3574,6 +3604,10 @@ impl World {
 }
 
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "a page names its local images by Unix paths: Windows' come with ADR 0090's step 3"
+)]
 async fn an_agent_shows_its_person_a_visual_in_its_own_turn() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
@@ -3899,6 +3933,10 @@ async fn an_agent_writes_neither_over_a_persons_question_nor_into_another_projec
 }
 
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "on Windows the data stayed past 5 s once in three runs: stopping by the Job Object and removing with a few tries come with ADR 0090's step 3"
+)]
 async fn a_removed_project_stops_its_turns_before_its_data_goes() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
@@ -5034,7 +5072,7 @@ async fn the_file_a_turns_tool_calls_name_is_heard_as_each_starts_and_goes_as_th
     let read = &piece["touched"][0];
     assert_eq!(read["thread"], sent["thread"]);
     assert!(
-        read["path"].as_str().unwrap().ends_with("/notes.md"),
+        Path::new(read["path"].as_str().unwrap()).ends_with("notes.md"),
         "{read}"
     );
     assert_eq!((&read["line"], &read["kind"]), (&json!(2), &json!("read")));
@@ -5044,7 +5082,7 @@ async fn the_file_a_turns_tool_calls_name_is_heard_as_each_starts_and_goes_as_th
     let piece = next_piece(&mut heard).await;
     let wrote = &piece["touched"][0];
     assert!(
-        wrote["path"].as_str().unwrap().ends_with("/src/util.ts"),
+        Path::new(wrote["path"].as_str().unwrap()).ends_with("src/util.ts"),
         "{wrote}"
     );
     assert_eq!(wrote["kind"], json!("write"));
@@ -5059,6 +5097,7 @@ async fn the_file_a_turns_tool_calls_name_is_heard_as_each_starts_and_goes_as_th
 
 /// The fake agent as two accounts of Claude Code, `claude-a` and
 /// `claude-b`, which share their sessions, and one of another Harness.
+#[cfg(unix)]
 fn two_claude_accounts(cli: &Path) -> Agents {
     let entry = |id: &str, cli: Option<Cli>| Harness {
         id: id.into(),
@@ -5092,6 +5131,8 @@ fn two_claude_accounts(cli: &Path) -> Agents {
     ]))
 }
 
+// Its CLI is a `sh` script that runs by its exec bit.
+#[cfg(unix)]
 #[tokio::test]
 async fn a_thread_moves_to_another_account_and_keeps_its_session() {
     let (root, bin) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
@@ -5144,6 +5185,8 @@ async fn a_thread_moves_to_another_account_and_keeps_its_session() {
 /// Thread's process is the carried adapter on that Node, told where the
 /// Project keeps Claude Code's sessions, which the shim in it reads (ADR
 /// 0078, decision 3).
+// Its Node is a `sh` script.
+#[cfg(unix)]
 #[tokio::test]
 async fn a_threads_process_runs_the_carried_adapter_on_the_node_found_with_the_projects_sessions() {
     use banda_harnesses::carried::{Carried, Node};
@@ -5203,6 +5246,7 @@ async fn a_threads_process_runs_the_carried_adapter_on_the_node_found_with_the_p
 
 impl World {
     /// The payloads of `thread`'s facts of `kind`, the first first.
+    #[cfg(unix)]
     async fn events_of(&self, thread: &Value, kind: &str) -> Vec<Value> {
         let filter = EventFilter {
             module: Some("agents".to_owned()),

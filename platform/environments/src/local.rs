@@ -40,11 +40,15 @@ impl Environment for Local {
             })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .process_group(0)
             .kill_on_drop(true);
+        // Windows has no process groups: a Job Object takes their place
+        // (ADR 0090, step 3).
+        #[cfg(unix)]
+        command.process_group(0);
         command.spawn()
     }
 
+    #[cfg(unix)]
     fn pty(&self, program: &Program, pts: pty_process::Pts) -> io::Result<Child> {
         if program.whose().fenced() {
             let why = "on a terminal: a Harness's program starts only behind the fence";

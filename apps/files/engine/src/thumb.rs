@@ -510,9 +510,11 @@ mod tests {
         let one = key(path, time, 10, 128);
         assert_eq!(one, key(path, time, 10, 128));
         assert_eq!(one.len(), 64);
+        // Windows' clock counts in 100 ns.
+        let tick = std::time::Duration::from_nanos(if cfg!(windows) { 100 } else { 1 });
         for other in [
             key(Path::new("/home/a/c.png"), time, 10, 128),
-            key(path, time + std::time::Duration::from_nanos(1), 10, 128),
+            key(path, time + tick, 10, 128),
             key(path, time, 11, 128),
             key(path, time, 10, 256),
         ] {
