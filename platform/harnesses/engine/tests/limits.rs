@@ -1,15 +1,16 @@
-//! The limits through the kernel, as a window reads them (ADR 0043):
-//! Claude Code's through the window's main, which answers what Anthropic
-//! said; Codex's from its app-server, here a stand-in that answers as
-//! Codex 0.166.0 did. A read is kept in the machine's store, and a failed
-//! one keeps the read before it.
+//! The limits through the kernel, as a client reads them (ADR 0043), with
+//! no window open: Claude Code's read on the host with its sign-in in its
+//! folder, from a stand-in of Anthropic's; Codex's from its app-server,
+//! here a stand-in that answers as Codex 0.166.0 did. A read is kept in
+//! the machine's store, and a failed one keeps the read before it.
 
 use banda_harnesses::{Harnesses, HarnessesModule};
-use banda_kernel::{Kernel, Participant, PersonId, Stream};
+use banda_kernel::{Kernel, Participant, PersonId};
 use serde_json::{Value, json};
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// A `codex` that answers `initialize`, `account/rateLimits/read` and
 /// `account/read`.
@@ -30,26 +31,87 @@ lines.on("line", (line) => {
 })
 "#;
 
+/// Claude Code's sign-in, as it keeps it in its folder, and the address
+/// it is signed in with.
+fn signed_in(folder: &Path) {
+    std::fs::create_dir_all(folder).unwrap();
+    let login = json!({ "claudeAiOauth": {
+        "accessToken": "sk-ant-oat01-secret", "expiresAt": 4_102_444_800_000_i64,
+        "subscriptionType": "max", "rateLimitTier": "default_claude_max_20x",
+    }});
+    std::fs::write(folder.join(".credentials.json"), login.to_string()).unwrap();
+    let account = json!({ "oauthAccount": { "emailAddress": "p@example.com" } });
+    std::fs::write(folder.join(".claude.json"), account.to_string()).unwrap();
+}
+
 fn list(root: &Path) -> Harnesses {
     let codex = root.join("codex");
     std::fs::write(&codex, CODEX).unwrap();
     std::fs::set_permissions(&codex, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let claude = root.join("claude");
+    signed_in(&claude);
     let path = root.join("harnesses.toml");
     let text = format!(
-        "[usage]\nread = false\n\n[[harness]]\nid = \"claude\"\ncommand = \"acp\"\nenv = {{ CLAUDE_CONFIG_DIR = \"/work/claude\" }}\n\n\
+        "[usage]\nread = false\n\n[[harness]]\nid = \"claude\"\ncommand = \"acp\"\nenv = {{ CLAUDE_CONFIG_DIR = {:?} }}\n\n\
          [[harness]]\nid = \"codex\"\ncommand = \"acp\"\n\
          cli = {{ program = {:?}, variable = \"CODEX_PATH\" }}\n\n\
          [[harness]]\nid = \"fake\"\nname = \"Fake\"\ncommand = \"acp\"\n",
+        claude.display().to_string(),
         codex.display().to_string()
     );
     std::fs::write(&path, text).unwrap();
     Harnesses::load(&path).unwrap()
 }
 
-async fn open(root: &Path, owner: PersonId) -> Arc<Kernel> {
+/// A stand-in for Anthropic: it answers each request with what `next`
+/// holds then, and keeps each request's head, in lower case.
+struct Anthropic {
+    url: String,
+    next: Arc<Mutex<(u16, String)>>,
+    heads: Arc<Mutex<Vec<String>>>,
+}
+
+impl Anthropic {
+    async fn start() -> Anthropic {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/api/oauth/usage", listener.local_addr().unwrap());
+        let next = Arc::new(Mutex::new((500, String::new())));
+        let heads: Arc<Mutex<Vec<String>>> = Arc::default();
+        let (answering, hearing) = (next.clone(), Arc::clone(&heads));
+        tokio::spawn(async move {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                let mut head = Vec::new();
+                let mut byte = [0; 1];
+                while !head.ends_with(b"\r\n\r\n") && socket.read(&mut byte).await.unwrap() == 1 {
+                    head.push(byte[0]);
+                }
+                let head = String::from_utf8_lossy(&head).to_lowercase();
+                hearing.lock().unwrap().push(head);
+                let (status, body) = answering.lock().unwrap().clone();
+                let answer = format!(
+                    "HTTP/1.1 {status} Said\r\ncontent-type: application/json\r\n\
+                     content-length: {}\r\nconnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                socket.write_all(answer.as_bytes()).await.unwrap();
+            }
+        });
+        Anthropic { url, next, heads }
+    }
+
+    fn answers(&self, status: u16, body: Value) {
+        *self.next.lock().unwrap() = (status, body.to_string());
+    }
+
+    fn asked(&self) -> Vec<String> {
+        self.heads.lock().unwrap().clone()
+    }
+}
+
+async fn open(root: &Path, owner: PersonId, anthropic: &Anthropic) -> Arc<Kernel> {
     Kernel::builder(root.join("projects"), root.join("data"), owner)
         .machine(root.join("machine"))
-        .module(HarnessesModule::new(list(root)))
+        .module(HarnessesModule::new(list(root)).anthropic_at(&anthropic.url))
         .open()
         .await
         .unwrap()
@@ -84,26 +146,12 @@ async fn read_since(kernel: &Kernel, owner: PersonId, since: i64) -> Value {
     panic!("the limits were not read");
 }
 
-/// Answers the window's next request, which must ask for Claude Code's
-/// usage, with `ok`.
-async fn answer(kernel: &Kernel, owner: PersonId, window: &mut Stream, ok: Value) {
-    let asked = window.recv().await.unwrap();
-    assert_eq!(asked["method"], "harnesses.claude_usage");
-    assert_eq!(asked["params"], json!({ "config": "/work/claude" }));
-    let answer = json!({ "request": asked["id"], "ok": ok });
-    let person = Participant::Person(owner);
-    (kernel
-        .call(person, "window.answer", None, None, answer)
-        .await)
-        .unwrap();
-}
-
 #[tokio::test]
-async fn a_window_reads_each_harnesss_limits_and_a_failed_read_keeps_the_last() {
+async fn each_harnesss_limits_read_on_the_host_with_no_window_and_a_failed_read_keeps_the_last() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
-    let kernel = open(root.path(), owner).await;
-    let person = Participant::Person(owner);
+    let anthropic = Anthropic::start().await;
+    let kernel = open(root.path(), owner, &anthropic).await;
 
     // Before any read: each Harness Banda can read, none other.
     let before = limits(&kernel, owner, false).await;
@@ -116,20 +164,17 @@ async fn a_window_reads_each_harnesss_limits_and_a_failed_read_keeps_the_last() 
     assert_eq!(before["limits"][0]["name"], "Claude Code");
     assert!(before["limits"][0]["read_at"].is_null());
 
-    let mut window = (kernel.stream(person, "window.requests", None, Value::Null))
-        .await
-        .unwrap();
-    let started = banda_kernel::now_ms() - 1;
-    limits(&kernel, owner, true).await;
-    let usage = json!({
-        "signed_in": true, "subscription": "max", "tier": "default_claude_max_20x",
-        "email": "p@example.com", "status": 200,
-        "body": {
+    // No window holds the road: the engine reads Claude Code's sign-in in
+    // the entry's folder and asks Anthropic itself.
+    anthropic.answers(
+        200,
+        json!({
             "five_hour": { "utilization": 12.5, "resets_at": "2099-01-01T00:00:00Z" },
             "seven_day": { "utilization": 74, "resets_at": "2000-01-01T00:00:00Z" },
-        },
-    });
-    answer(&kernel, owner, &mut window, usage).await;
+        }),
+    );
+    let started = banda_kernel::now_ms() - 1;
+    limits(&kernel, owner, true).await;
     let read = read_since(&kernel, owner, started).await;
     let (claude, codex) = (&read["limits"][0], &read["limits"][1]);
     assert_eq!(claude["plan"], "Max 20x");
@@ -148,29 +193,35 @@ async fn a_window_reads_each_harnesss_limits_and_a_failed_read_keeps_the_last() 
     assert_eq!(codex["windows"][0]["label"], "Weekly");
     assert_eq!(codex["windows"][0]["used"], 5.0);
     assert_eq!(codex["windows"][0]["resets_at"], 4_102_444_800_000_i64);
+    let asked = anthropic.asked();
+    assert_eq!(asked.len(), 1);
+    assert!(
+        asked[0].contains("authorization: bearer sk-ant-oat01-secret\r\n"),
+        "{}",
+        asked[0]
+    );
+    assert!(
+        !read.to_string().contains("secret"),
+        "the token is in nothing kept"
+    );
 
     // Asked again within a minute, nothing is read again.
     limits(&kernel, owner, true).await;
-    let again = tokio::time::timeout(Duration::from_millis(300), window.recv()).await;
-    assert!(again.is_err(), "read again: {again:?}");
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(anthropic.asked().len(), 1, "read again");
 
     // The next run reads anew; Anthropic asks it to wait, and the last
     // read stays, with why.
-    drop(window);
     drop(kernel);
-    let kernel = open(root.path(), owner).await;
+    let kernel = open(root.path(), owner, &anthropic).await;
     let kept = limits(&kernel, owner, false).await;
     assert_eq!(
         kept["limits"][0]["windows"][0]["used"], 12.5,
         "kept on the machine"
     );
-    let mut window = (kernel.stream(person, "window.requests", None, Value::Null))
-        .await
-        .unwrap();
+    anthropic.answers(429, json!({}));
     let started = banda_kernel::now_ms() - 1;
     limits(&kernel, owner, true).await;
-    let wait = json!({ "signed_in": true, "status": 429 });
-    answer(&kernel, owner, &mut window, wait).await;
     let failed = read_since(&kernel, owner, started).await;
     let claude = &failed["limits"][0];
     assert_eq!(claude["windows"][0]["used"], 12.5);

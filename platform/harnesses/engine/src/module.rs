@@ -73,6 +73,15 @@ impl HarnessesModule {
             hosts: Hosts::new(IDLE),
         }
     }
+
+    /// Asks for Claude Code's limits at `url`, a stand-in of Anthropic's,
+    /// which gets the token: only a test does.
+    pub fn anthropic_at(self, url: &str) -> Self {
+        Self {
+            limits: self.limits.anthropic_at(url),
+            ..self
+        }
+    }
 }
 
 banda_kernel::methods! {

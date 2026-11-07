@@ -1,12 +1,12 @@
 //! How much of each Harness account's usage limits is spent (ADR 0043,
 //! decisions 1 to 4). Claude Code's come from Anthropic with its own
-//! sign-in, which the window's main reads and asks with, so the token
-//! never reaches the engine ([`claude`]); Codex's from its app-server,
-//! which reads its own ([`codex`]).
+//! sign-in, which the engine reads on its host for that one request
+//! ([`claude`]); Codex's from its app-server, which reads its own
+//! ([`codex`]). Neither needs a window.
 //!
-//! The engine reads them while a window is open: as it starts, every
-//! `[limits] every`, after an account changed, and when a window asks, at
-//! most once a minute for each Harness. The last read is kept in the
+//! The engine reads them every `[limits] every` while a window is open,
+//! and, window or not, after an account changed and when a client or an
+//! Agent asks, at most once a minute for each Harness. The last read is kept in the
 //! machine's store, with when; one that failed keeps the read before it,
 //! and says why. Each kept read says `limits_changed`, whose subject is
 //! the Harness's ID.
@@ -133,6 +133,8 @@ struct Tried {
 #[derive(Clone)]
 pub(crate) struct Reader {
     harnesses: Harnesses,
+    /// Where Claude Code's are asked for.
+    anthropic: claude::Anthropic,
     tried: Arc<Mutex<HashMap<String, Tried>>>,
 }
 
@@ -140,7 +142,17 @@ impl Reader {
     pub fn new(harnesses: Harnesses) -> Self {
         Self {
             harnesses,
+            anthropic: claude::Anthropic::at(claude::USAGE),
             tried: Arc::default(),
+        }
+    }
+
+    /// Asks for Claude Code's limits at `url`, a stand-in of Anthropic's:
+    /// only a test does.
+    pub fn anthropic_at(self, url: &str) -> Self {
+        Self {
+            anthropic: claude::Anthropic::at(url),
+            ..self
         }
     }
 
@@ -219,15 +231,11 @@ impl Reader {
     }
 
     /// Reads `harness` on its own, unless it was within `since`, it is
-    /// being read, or it asked Banda to wait; Claude Code's only with a
-    /// window open, as the window's main asks for them.
+    /// being read, or it asked Banda to wait.
     fn read(&self, project: &ModuleProject, harness: Harness, since: Duration) {
         let Some(kind) = Kind::of(&harness) else {
             return;
         };
-        if kind == Kind::Claude && !project.window_open() {
-            return;
-        }
         {
             let mut tried = self.tried.lock().unwrap();
             let tried = tried.entry(harness.id.clone()).or_default();
@@ -241,7 +249,7 @@ impl Reader {
         let (reader, project) = (self.clone(), project.clone());
         tokio::spawn(async move {
             let read = match kind {
-                Kind::Claude => claude::read(&project, &harness).await,
+                Kind::Claude => claude::read(&harness, &reader.anthropic).await,
                 Kind::Codex => codex::read(&harness).await,
             };
             let wait = read.as_ref().err().and_then(|failure| failure.wait);
