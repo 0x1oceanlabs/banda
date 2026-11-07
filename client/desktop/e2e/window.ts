@@ -538,3 +538,69 @@ export function read(path: string): string | undefined {
     return undefined
   }
 }
+
+/** The id of the Project named `name`, as the Person's `banda call` lists
+ * it. */
+export function projectId(window: Window, name: string): string {
+  const { ok } = JSON.parse(window.banda("call", "projects.list")) as {
+    ok: { id: string; name: string }[]
+  }
+  return ok.find((project) => project.name === name)!.id
+}
+
+/** The workspace on screen. */
+export const ON_SCREEN = '[role="group"]:not([aria-hidden="true"])'
+
+/** The workspace on screen: each column's Tiles, top down, by ID. */
+export function layoutOf(page: Page) {
+  return page.evaluate(
+    (onScreen) =>
+      [...document.querySelectorAll(`${onScreen} [data-column]`)].map(
+        (column) =>
+          [...column.querySelectorAll<HTMLElement>(":scope > [data-tile]")].map(
+            (tile) => tile.dataset.tile
+          )
+      ),
+    ON_SCREEN
+  )
+}
+
+/**
+ * Each column's share of the Strip's room, in hundredths, as the Strip
+ * draws it: of each column `found` finds, or the column of each Tile it
+ * finds, in their order. One that fills the screen has 100.
+ */
+export async function sharesOf(...found: Locator[]): Promise<number[]> {
+  const shares = await Promise.all(
+    found.map((each) =>
+      each.evaluateAll((elements) =>
+        elements.map((element) => {
+          const column = element.closest<HTMLElement>("[data-column]")!
+          const strip = column.parentElement!
+          const style = getComputedStyle(strip)
+          const gap = parseFloat(style.columnGap) || 0
+          const room =
+            strip.clientWidth -
+            parseFloat(style.paddingLeft) -
+            parseFloat(style.paddingRight) +
+            gap
+          return Math.round(((column.offsetWidth + gap) / room) * 100)
+        })
+      )
+    )
+  )
+  return shares.flat()
+}
+
+/** How far `tile` stands from the left of the Strip on screen, in pixels:
+ * none for a picked Agent (ADR 0065, decision 8). */
+export async function fromLeft(page: Page, tile: Locator): Promise<number> {
+  const left = await page
+    .locator(`${ON_SCREEN} [data-strip]`)
+    .evaluate(
+      (strip) =>
+        strip.getBoundingClientRect().left +
+        parseFloat(getComputedStyle(strip).paddingLeft)
+    )
+  return Math.abs((await tile.boundingBox())!.x - left)
+}

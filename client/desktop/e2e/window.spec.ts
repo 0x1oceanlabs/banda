@@ -19,9 +19,12 @@ import {
   countNotes,
   desktopOf,
   firstThread,
-  newProject,
+  fromLeft,
   GLASS,
+  layoutOf,
+  newProject,
   sendAndLeave,
+  sharesOf,
   setInFront,
   setQuiet,
   startWindow,
@@ -2539,23 +2542,6 @@ test("niri's keys: a launcher's letters, heights, the Strip's edges, the room le
   await expect(fresh).not.toHaveAttribute("data-zoomed")
 })
 
-/** Each column's share of the room, in hundredths, as the Strip draws it. */
-function sharesOf(page: Page) {
-  return page.locator("[data-column]").evaluateAll((columns) =>
-    columns.map((e) => {
-      const strip = e.parentElement!
-      const style = getComputedStyle(strip)
-      const gap = parseFloat(style.columnGap) || 0
-      const room =
-        strip.clientWidth -
-        parseFloat(style.paddingLeft) -
-        parseFloat(style.paddingRight) +
-        gap
-      return Math.round((((e as HTMLElement).offsetWidth + gap) / room) * 100)
-    })
-  )
-}
-
 /** Where the right edge of the first column is drawn at `at` of the room,
  * the middle of the gap after it, and the room's scale, in pixels. */
 async function edgeAt(page: Page, at: number) {
@@ -2617,7 +2603,8 @@ test("the mouse sizes as niri's: the gaps, Alt and the right button, a double cl
   await page.keyboard.press("KeyT")
   const terminal = terminalTile(page)
   await expect(terminal).toHaveAttribute("data-focused", "true")
-  await expect.poll(() => sharesOf(page)).toEqual([50, 50])
+  const columns = page.locator("[data-column]")
+  await expect.poll(() => sharesOf(columns)).toEqual([50, 50])
   const { y } = await within(thread, 0.5, 0.5)
 
   // The gap right of the Thread, dragged near a third, holds there; the
@@ -2627,10 +2614,10 @@ test("the mouse sizes as niri's: the gaps, Alt and the right button, a double cl
   await page.mouse.move(half.x, y)
   await page.mouse.down()
   await page.mouse.move(third.x + 4, y, { steps: 6 })
-  await expect.poll(() => sharesOf(page)).toEqual([33, 50])
+  await expect.poll(() => sharesOf(columns)).toEqual([33, 50])
   await page.screenshot({ path: "test-results/5a-gap-drag.png" })
   await page.mouse.up()
-  await expect.poll(() => sharesOf(page)).toEqual([33, 50])
+  await expect.poll(() => sharesOf(columns)).toEqual([33, 50])
   await expect(terminal).toHaveAttribute("data-focused", "true")
 
   // Between the steps, it is as dragged; Esc puts it back.
@@ -2638,25 +2625,25 @@ test("the mouse sizes as niri's: the gaps, Alt and the right button, a double cl
   await page.mouse.down()
   await page.mouse.move((await edgeAt(page, 0.42)).x, y, { steps: 6 })
   await page.mouse.up()
-  await expect.poll(() => sharesOf(page)).toEqual([42, 50])
+  await expect.poll(() => sharesOf(columns)).toEqual([42, 50])
   const at42 = await edgeAt(page, 0.42)
   await page.mouse.move(at42.x, y)
   await page.mouse.down()
   await page.mouse.move(at42.x + 120, y, { steps: 6 })
-  await expect.poll(() => sharesOf(page)).not.toEqual([42, 50])
+  await expect.poll(() => sharesOf(columns)).not.toEqual([42, 50])
   await page.keyboard.press("Escape")
   await page.mouse.up()
-  await expect.poll(() => sharesOf(page)).toEqual([42, 50])
+  await expect.poll(() => sharesOf(columns)).toEqual([42, 50])
 
   // A double click on the gap: the column the whole screen wide, and back.
   await page.mouse.dblclick(at42.x, y)
-  await expect.poll(() => sharesOf(page)).toEqual([100, 50])
+  await expect.poll(() => sharesOf(columns)).toEqual([100, 50])
   await expect(thread).toHaveAttribute("data-focused", "true")
-  await settled(page.locator("[data-column]").first())
+  await settled(columns.first())
   const whole = await edgeAt(page, 1)
   await page.mouse.dblclick(whole.x, y)
-  await expect.poll(() => sharesOf(page)).toEqual([42, 50])
-  await settled(page.locator("[data-column]").first())
+  await expect.poll(() => sharesOf(columns)).toEqual([42, 50])
+  await settled(columns.first())
 
   // Alt and the right button, anywhere on the Thread: sideways its width,
   // held at a half; the Thread takes the focus.
@@ -2669,7 +2656,7 @@ test("the mouse sizes as niri's: the gaps, Alt and the right button, a double cl
   })
   await page.mouse.up({ button: "right" })
   await page.keyboard.up("Alt")
-  await expect.poll(() => sharesOf(page)).toEqual([50, 50])
+  await expect.poll(() => sharesOf(columns)).toEqual([50, 50])
   await expect(thread).toHaveAttribute("data-focused", "true")
 
   // A column of two: the gap between them sizes their heights.
@@ -2713,27 +2700,12 @@ test("the mouse sizes as niri's: the gaps, Alt and the right button, a double cl
   await expect.poll(() => heightOf(upper)).toBe(50)
 })
 
-/** The workspace on screen: each column's tiles, top down, by ID. */
 /** Expects the top bar to mark workspace `n` as the one on screen. */
 function onWorkspace(page: Page, n: string) {
   const numbers = page.getByRole("navigation", { name: "Workspaces" })
   return expect(
     numbers.getByRole("button", { name: `Workspace ${n}` })
   ).toHaveAttribute("aria-current", "true")
-}
-
-function layoutOf(page: Page) {
-  return page.evaluate(() =>
-    [
-      ...document.querySelectorAll(
-        '[role="group"]:not([aria-hidden="true"]) [data-column]'
-      ),
-    ].map((column) =>
-      [...column.querySelectorAll<HTMLElement>(":scope > [data-tile]")].map(
-        (tile) => tile.dataset.tile
-      )
-    )
-  )
 }
 
 /** Where to take `tile` by its header: left of its middle, past its
@@ -3497,23 +3469,13 @@ test("a Thread picked in the sidebar comes to the Strip's left, beside it", asyn
   await page.keyboard.press("Alt+Home")
   await expect(launcher.first()).toHaveAttribute("data-focused", "true")
   await settled(thread, terminal)
-  const strip = page.locator("[data-strip]").first()
-  const left = () =>
-    strip.evaluate(
-      (e) =>
-        e.getBoundingClientRect().left +
-        parseFloat(getComputedStyle(e).paddingLeft)
-    )
-  const x = async () => (await thread.boundingBox())!.x
-  expect((await x()) - (await left())).toBeGreaterThan(50)
+  expect(await fromLeft(page, thread)).toBeGreaterThan(50)
 
   // Picked, it comes to the left, though it was in view already.
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   await sidebar.getByRole("button", { name: /hello/ }).click()
   await expect(thread).toHaveAttribute("data-focused", "true")
-  await expect
-    .poll(async () => Math.abs((await x()) - (await left())))
-    .toBeLessThan(3)
+  await expect.poll(() => fromLeft(page, thread)).toBeLessThan(3)
 })
 
 test("a Project's Agents open in a row on its workspace, from wherever the Person is", async () => {
@@ -5386,7 +5348,8 @@ test("the Pane menu sizes a column, and the header's right, double and middle cl
   await page.keyboard.press("Alt+KeyN")
   const launcher = page.getByRole("region", { name: "New Pane" })
   await expect(launcher).toHaveAttribute("data-focused", "true")
-  await expect.poll(() => sharesOf(page)).toEqual([50, 50])
+  const columns = page.locator("[data-column]")
+  await expect.poll(() => sharesOf(columns)).toEqual([50, 50])
 
   // Its button at the header's end opens it; each row shows its key.
   await tile.getByRole("button", { name: "Pane menu" }).click()
@@ -5397,23 +5360,23 @@ test("the Pane menu sizes a column, and the header's right, double and middle cl
   await page.screenshot({ path: "test-results/pane-menu.png" })
   await menu.getByRole("menuitem", { name: "Width 1/3" }).click()
   await expect(menu).toBeHidden()
-  await expect.poll(() => sharesOf(page)).toEqual([33, 50])
+  await expect.poll(() => sharesOf(columns)).toEqual([33, 50])
   await expect(tile).toHaveAttribute("data-focused", "true")
 
   // A right click on the header opens it where the pointer is.
   const at = await headerOf(tile)
   await page.mouse.click(at.x, at.y, { button: "right" })
   await menu.getByRole("menuitem", { name: "Width 2/3" }).click()
-  await expect.poll(() => sharesOf(page)).toEqual([67, 50])
+  await expect.poll(() => sharesOf(columns)).toEqual([67, 50])
 
   // A double click past the title, whose own renames it (ADR 0077): the
   // whole screen wide, and back.
   const title = (await tile.locator("header h2").boundingBox())!
   const past = { x: title.x + title.width + 24, y: at.y }
   await page.mouse.dblclick(past.x, past.y)
-  await expect.poll(() => sharesOf(page)).toEqual([100, 50])
+  await expect.poll(() => sharesOf(columns)).toEqual([100, 50])
   await page.mouse.dblclick(past.x, past.y)
-  await expect.poll(() => sharesOf(page)).toEqual([67, 50])
+  await expect.poll(() => sharesOf(columns)).toEqual([67, 50])
 
   // A middle click closes the Pane.
   const there = await headerOf(launcher)
@@ -6038,9 +6001,10 @@ test("an Agent binds Banda's keys for its Person: Alt+M fills the column, Ctrl+A
   await composer.click()
 
   // Each key works: the column fills the Strip, and the address opens.
-  await expect.poll(() => sharesOf(page)).toEqual([50])
+  const columns = page.locator("[data-column]")
+  await expect.poll(() => sharesOf(columns)).toEqual([50])
   await page.keyboard.press("Alt+KeyM")
-  await expect.poll(() => sharesOf(page)).toEqual([100])
+  await expect.poll(() => sharesOf(columns)).toEqual([100])
   await page.keyboard.press("Control+Alt+KeyH")
   // The address shows its site.
   await expect(page.getByRole("textbox", { name: "Address" })).toHaveValue(

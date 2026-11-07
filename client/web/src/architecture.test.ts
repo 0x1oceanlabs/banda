@@ -73,6 +73,31 @@ test("a file that no longer reaches a module leaves the list", () => {
   )
 })
 
+/**
+ * What the Tiling still imports of the Window, its Bar, the sidebar list,
+ * a Thread's titles and the menu, by file: the Window may import the
+ * Tiling, never the other way (ADR 0087, decision 5). None joins the list,
+ * and an import that goes leaves it.
+ */
+const TILING_STILL: Record<string, string[]> = {
+  "web/src/workspaces/PaneFrame.tsx": ["../shell/attach", "../titles/Title"],
+  "web/src/workspaces/Popped.tsx": ["../shell/actions"],
+  "web/src/workspaces/store.ts": ["../sidebar/width"],
+}
+
+test("the Tiling imports no more of the Window than the list holds", () => {
+  const outside = /^\.\.\/(shell|bar|sidebar|titles|menu)(\/|$)/
+  const imported = Object.fromEntries(
+    sources(join(app, "web/src/workspaces")).flatMap((file) => {
+      const names = imports(readFileSync(file, "utf8")).filter((name) =>
+        outside.test(name)
+      )
+      return names.length > 0 ? [[relative(app, file), names]] : []
+    })
+  )
+  expect(imported).toEqual(TILING_STILL)
+})
+
 /** The `[unstable]` marks a module's `module.toml` names. */
 function marksOf(module: string): string[] {
   const folder = folders.get(module)

@@ -4,7 +4,13 @@ import { join } from "node:path"
 import { crc32 } from "node:zlib"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import { pdfOf } from "./pdf"
-import { firstThread, startWindow, textOf, type Window } from "./window"
+import {
+  firstThread,
+  projectId,
+  startWindow,
+  textOf,
+  type Window,
+} from "./window"
 
 let window: Window
 
@@ -264,15 +270,12 @@ test("a video plays from the file host with its controls, and seeks in ranges", 
 
 test("an HTML file runs in the sandbox host, where its script reaches neither Banda nor the file host, and its source is a toggle away", async () => {
   window = await startWindow()
-  const { page, dir, banda } = window
+  const { page, dir } = window
   await firstThread(page)
   const project = join(dir, "root", "Work")
   put(project, "secret.txt", "the secret\n")
   // A real link to a file, as only Banda's page gets one.
-  const listed = JSON.parse(banda("call", "projects.list")) as {
-    ok: { id: string; name: string }[]
-  }
-  const work = listed.ok.find((one) => one.name === "Work")!.id
+  const work = projectId(window, "Work")
   const link = await page.evaluate(
     ([project, path]) =>
       (
