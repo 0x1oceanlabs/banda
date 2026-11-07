@@ -21,11 +21,12 @@
 //! Project (ADR 0019). Each Harness process carries one, which its Agents'
 //! shells share: of an Agent no one Thread names, made once per Project and
 //! Harness entry in this run of the engine, so a process started again
-//! keeps it. A Harness that takes variables for each session's shell, as
-//! Claude Code's adapter does, gives a Thread's session its own over it,
-//! the one its `banda mcp` has (`acp/opening.rs`). Like every pass, these
-//! last until the engine stops, and so outlive the processes that hold
-//! them.
+//! keeps it, until the Project closes. A Harness that takes variables for
+//! each session's shell, as Claude Code's adapter does, gives a Thread's
+//! session its own over it, the one its `banda mcp` has
+//! (`acp/opening.rs`), which the process holds while the session is open
+//! in it. The kernel keeps every pass past an engine restart, until what
+//! holds it lets it go or it expires (ADR 0083, decision 2).
 
 use crate::Pipe;
 use crate::acp::{Answer, Connection, Session};
@@ -33,7 +34,7 @@ use crate::model::{ItemId, ThreadId, TurnId, Values};
 use crate::touching::Touches;
 use banda_harnesses::hosts::Hosts;
 use banda_harnesses::{Failed, Harness};
-use banda_kernel::{AgentId, Heard, ModuleProject, Program, ProjectId};
+use banda_kernel::{AgentId, Heard, ModuleProject, Pass, Program, ProjectId};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -50,11 +51,16 @@ pub struct Live {
     /// How a session's Agent reaches Banda, if it does.
     pipe: Option<Pipe>,
     /// The pass each Harness process's Agents share, as the variables that
-    /// hand it to `banda`, by Project and Harness entry.
-    passes: Mutex<HashMap<(ProjectId, String), BTreeMap<String, String>>>,
+    /// hand it to `banda`, by Project and Harness entry, held while the
+    /// Project is open.
+    passes: Mutex<HashMap<(ProjectId, String), ProcessPass>>,
     /// The file each running turn works on now.
     touches: Arc<Touches>,
 }
+
+/// The variables that hand a Harness process's Agents' shells their pass,
+/// and the pass, held while its Project is open.
+type ProcessPass = (BTreeMap<String, String>, Pass);
 
 #[derive(Default)]
 struct Turns {
@@ -114,8 +120,9 @@ impl Live {
     }
 
     /// `banda mcp` as a session of `agent`'s in `project` starts it, with a
-    /// new pass (ADR 0019).
-    pub fn banda(&self, project: &ModuleProject, agent: AgentId) -> Option<Program> {
+    /// new pass (ADR 0019), which the session's process holds while the
+    /// session is open in it.
+    pub fn banda(&self, project: &ModuleProject, agent: AgentId) -> Option<(Program, Pass)> {
         self.pipe.as_ref()?.program(project, agent)
     }
 
@@ -129,13 +136,13 @@ impl Live {
         };
         let mut passes = self.passes.lock().unwrap();
         let key = (project.id(), harness.id.clone());
-        if let Some(variables) = passes.get(&key) {
+        if let Some((variables, _)) = passes.get(&key) {
             return variables.clone();
         }
-        let Some(variables) = pipe.variables(project, AgentId::new()) else {
+        let Some((variables, pass)) = pipe.variables(project, AgentId::new()) else {
             return BTreeMap::new();
         };
-        passes.insert(key, variables.clone());
+        passes.insert(key, (variables.clone(), pass));
         variables
     }
 

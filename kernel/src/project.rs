@@ -8,7 +8,7 @@ use crate::events::{self, Event, EventFilter};
 use crate::kernel::Entry;
 use crate::module::Module;
 use crate::outbox::{self, Boot, Claim, Lease, Outcome};
-use crate::passes::Passes;
+use crate::passes::{Pass, Passes};
 use crate::sign::{self, Kept, Picked, Sign};
 use crate::store::{Receipt, Store};
 use crate::window::Window;
@@ -759,8 +759,9 @@ impl ModuleProject {
 
     /// A new pass that names `agent` in this Project, and works only in it:
     /// for a session's `banda mcp` and shell, or for the shells of a Harness
-    /// process's Agents (ADR 0019, decision 2).
-    pub fn pass(&self, agent: AgentId) -> Result<String, Error> {
+    /// process's Agents (ADR 0019, decision 2). Its session holds it, and
+    /// lets it go as it ends: dropped, it is revoked.
+    pub fn pass(&self, agent: AgentId) -> Result<Pass, Error> {
         self.project.passes.issue(agent, self.project.id)
     }
 
