@@ -27,14 +27,14 @@ import {
   type Waiting,
   working,
   writerOf,
-} from "../thread"
-import { Writer } from "../Messages"
-import { awaiting, thoughtTimes, timeline } from "../timeline"
+} from "./state"
+import { Writer } from "../entries/parts/Messages"
+import { awaiting, thoughtTimes, timeline } from "./timeline"
 import { key, LineOf } from "../lines"
 import type { LineFacts } from "../lines/types"
-import { Queue, type QueueActions } from "../Queue"
-import { ScrollPlace } from "../ScrollPlace"
-import { Minimap } from "../Minimap"
+import { Queue, type QueueActions } from "./Queue"
+import { ScrollPlace } from "./ScrollPlace"
+import { Minimap } from "./Minimap"
 import { useThreadAround } from "./context"
 
 type Answering = {

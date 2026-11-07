@@ -1452,6 +1452,7 @@ banda/
   apps/               each App's module (ADR 0062, decision 11)
     agents/engine/    Rust: Threads, turns, Questions, the ACP adapter
     agents/pane/      React: the Thread, the settings' Agents, each Thread as the sidebar lists it
+                      thread/, entries/ and lines/ with their tables, composer/, asking/, visual/ (ADR 0091; its README)
     agents/desktop/   Electron main: serves the Visuals Agents show (ADR 0037)
     terminal/engine/  Rust: Terminals, their PTYs and what they printed
     terminal/pane/    React: a terminal, drawn by Ghostty

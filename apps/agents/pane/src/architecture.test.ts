@@ -4,7 +4,7 @@
  * hold the shape").
  */
 import { readFileSync } from "node:fs"
-import { relative } from "node:path"
+import { join, relative } from "node:path"
 import { imports, sources } from "@banda/ui/testing/architecture"
 import { expect, test } from "vitest"
 
@@ -32,4 +32,26 @@ test("the agents Panes import only the API, client/ui and React", () => {
       .map((name) => `${relative(folder, file)}: ${name}`)
   })
   expect(outside).toEqual([])
+})
+
+test("entries/ and lines/ import no Pane API, ThreadPane or thread/Thread, and read no window.banda (ADR 0091, decision 7)", () => {
+  const folder = import.meta.dirname
+  const parts = ["entries", "lines"].flatMap((under) =>
+    sources(join(folder, under), { tests: false })
+  )
+  const crossing = parts.flatMap((file) => {
+    const source = readFileSync(file, "utf8")
+    const named = imports(source)
+      .filter(
+        (name) =>
+          name === "@banda/ui/pane" ||
+          /\/ThreadPane$/.test(name) ||
+          /\/thread\/Thread$/.test(name)
+      )
+      .map((name) => `${relative(folder, file)}: ${name}`)
+    return /\bwindow\.banda\b/.test(source)
+      ? [...named, `${relative(folder, file)}: window.banda`]
+      : named
+  })
+  expect(crossing).toEqual([])
 })

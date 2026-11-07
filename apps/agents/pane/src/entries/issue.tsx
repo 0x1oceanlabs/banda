@@ -1,5 +1,5 @@
 /** An Issue the Agent drafted for its Person (ADR 0039). */
-import { Issue } from "../Issue"
+import { Issue } from "./parts/Issue"
 import { useThreadAround } from "../thread/context"
 import type { EntryProps } from "./types"
 

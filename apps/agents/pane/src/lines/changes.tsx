@@ -1,5 +1,5 @@
 /** A turn's changes, as a card with Review (ADR 0058, decision 7). */
-import { ChangedFiles } from "../ChangedFiles"
+import { ChangedFiles } from "./parts/ChangedFiles"
 import { useThreadAround } from "../thread/context"
 import type { LineProps } from "./types"
 

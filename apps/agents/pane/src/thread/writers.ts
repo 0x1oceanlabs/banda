@@ -2,8 +2,8 @@ import { useMemo } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
 import type { ListedThread } from "@banda/contract/agents"
 import { useLive } from "@banda/ui/hooks/use-live"
-import { type Listing } from "../thread"
-import { applyThreads, threadsSource } from "../list"
+import { type Listing } from "./state"
+import { applyThreads, threadsSource } from "../list/list"
 
 /** The Project's other Threads by their Agents' IDs, as the sidebar follows
  * them, so a message from one names it as it is now; and this Thread's own

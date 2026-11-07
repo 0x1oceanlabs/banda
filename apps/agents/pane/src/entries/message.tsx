@@ -1,5 +1,5 @@
 /** A message: the Person's, or the Agent's reply (ADR 0010, ADR 0058). */
-import { AgentMessage, PersonMessage, Writer } from "../Messages"
+import { AgentMessage, PersonMessage, Writer } from "./parts/Messages"
 import { useThreadAround } from "../thread/context"
 import type { EntryProps } from "./types"
 

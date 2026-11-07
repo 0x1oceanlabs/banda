@@ -13,6 +13,7 @@ import type { Engine, JsonValue, ProjectId } from "@banda/contract"
 import type { MarkState } from "./components/banda-mark"
 import type { Chip } from "./module"
 import type { Chime } from "./sound/families"
+import { sleeps } from "./lib/snooze"
 
 /**
  * Marks where a program reads the keys, as in a terminal. Banda's Alt keys
@@ -329,16 +330,6 @@ const CHIMES: Partial<Record<MarkState, Chime>> = {
   done: "done",
   asking: "asking",
   failed: "failed",
-}
-
-/** Whether a Thread under `snooze` sleeps at `now`: nothing woke it, and
- * its time has not come (ADR 0074). */
-export function sleeps(
-  snooze: Pick<ListedSnooze, "until" | "woke"> | undefined,
-  now: number
-): boolean {
-  if (!snooze || snooze.woke) return false
-  return snooze.until === undefined || snooze.until > now
 }
 
 /**

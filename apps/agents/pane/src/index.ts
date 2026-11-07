@@ -17,12 +17,12 @@ import type { Key } from "@banda/ui/lib/keys"
 import { COMPOSER, THREAD, VISUAL } from "./scopes"
 import { paneOf } from "@banda/ui/pane"
 import { threadPane } from "./ThreadPane"
-import { visualPane } from "./VisualPane"
-import { threadsWatch } from "./ThreadsWatch"
-import { askSource } from "./sources"
-import { NEW_THREAD } from "./session"
-import { markUnread } from "./seen"
-import { ANSWER, RETRY, SHOW } from "./rows"
+import { visualPane } from "./visual/VisualPane"
+import { threadsWatch } from "./list/ThreadsWatch"
+import { askSource } from "./list/sources"
+import { NEW_THREAD } from "./thread/session"
+import { markUnread } from "./list/seen"
+import { ANSWER, RETRY, SHOW } from "./list/rows"
 
 /** An arg that is a text, or none. */
 const textOf = (args: Args | undefined, key: string) => {

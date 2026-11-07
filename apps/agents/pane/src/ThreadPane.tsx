@@ -4,13 +4,13 @@
  */
 import { AGENTS_FILE } from "@banda/contract/agents"
 import { fileNow } from "@banda/ui/lib/look"
-import { ThreadMedia } from "./ThreadMedia"
+import { ThreadMedia } from "./thread/ThreadMedia"
 import { MarkdownShell } from "@banda/ui/components/markdown-code"
 import { MarkdownLinks } from "@banda/ui/components/markdown-link"
 import { useMemo } from "react"
 import { definePane, type PaneProps } from "@banda/ui/pane"
 import { MessageSquareIcon } from "lucide-react"
-import { NEW_THREAD, type ThreadArgs } from "./session"
+import { NEW_THREAD, type ThreadArgs } from "./thread/session"
 import { linkOpener, Thread } from "./thread/Thread"
 
 export const threadPane = definePane<ThreadArgs>({

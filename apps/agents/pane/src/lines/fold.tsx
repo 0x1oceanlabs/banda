@@ -1,6 +1,6 @@
 import { CircleCheckIcon, CircleSlashIcon } from "lucide-react"
-import { holds } from "../findIn"
-import { did, foldTitle, workOf } from "../timeline"
+import { holds } from "../thread/findIn"
+import { did, foldTitle, workOf } from "../thread/timeline"
 import { Folded, Kinds } from "./folded"
 import type { LineProps } from "./types"
 

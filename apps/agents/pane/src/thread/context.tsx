@@ -14,8 +14,8 @@ import {
 } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
 import type { Item, ListedThread, TurnView } from "@banda/contract/agents"
-import type { ImageReader } from "../MessageImages"
-import type { VisualArgs } from "../Visual"
+import type { ImageReader } from "../entries/parts/MessageImages"
+import type { VisualArgs } from "../visual/Frame"
 
 /** What a part of the Thread may ask, named for what it asks, not for who
  * does it: the Pane answers today, `pane.pick` and intents later (ADR

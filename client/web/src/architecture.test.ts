@@ -128,7 +128,7 @@ test("each file on the list names an unstable mark its module holds, and each ma
  * the list only falls.
  */
 const LAYOUT_MOTION = [
-  "apps/agents/pane/src/Minimap.tsx: transition-all",
+  "apps/agents/pane/src/thread/Minimap.tsx: transition-all",
   "apps/files/pane/src/acts.tsx: transition-[width]",
   "client/ui/src/components/button.tsx: transition-all",
   "client/ui/src/components/level-slider.tsx: transition-[inset-inline-start,scale,box-shadow]",

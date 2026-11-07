@@ -11,7 +11,7 @@ import { ProposedPlanLine } from "./proposed-plan"
 import type { LineFacts, LineView } from "./types"
 import { WorkingLine } from "./working"
 import { WorkLine } from "./work"
-import type { Line } from "../timeline"
+import type { Line } from "../thread/timeline"
 
 const VIEWS: { [K in Line["kind"]]: LineView<K> } = {
   item: EntryLine,

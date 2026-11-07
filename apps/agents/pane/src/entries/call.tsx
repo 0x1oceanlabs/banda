@@ -1,5 +1,5 @@
 /** A tool call, and its changes when it made any. */
-import { ToolCall } from "../ToolCall"
+import { ToolCall } from "./parts/ToolCall"
 import { useThreadAround } from "../thread/context"
 import type { EntryProps } from "./types"
 
