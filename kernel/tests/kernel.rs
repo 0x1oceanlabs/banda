@@ -2119,7 +2119,7 @@ async fn a_pass_outlives_a_restart_until_its_session_ends_or_it_expires() {
     let dir = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let person = Participant::Person(owner);
-    let term = Duration::from_millis(400);
+    let term = Duration::from_secs(2);
     let open = |notes: &Notes| {
         Kernel::builder(dir.path().join("root"), dir.path().join("data"), owner)
             .module(notes.clone())
@@ -2160,8 +2160,8 @@ async fn a_pass_outlives_a_restart_until_its_session_ends_or_it_expires() {
     );
     assert_eq!(connect(address, hello(&ended)).await.1["type"], "goodbye");
 
-    // No session of this engine holds it: a term after its last use, it
-    // expires.
+    // No session of this engine holds it, and a use does not renew it: a
+    // term after the engine that held it stopped, it expires.
     tokio::time::sleep(term * 3 / 2).await;
     assert_eq!(kernel.holder(&going_on), None);
     assert_eq!(

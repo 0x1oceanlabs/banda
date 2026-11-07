@@ -161,7 +161,7 @@ impl Connection {
         let fork = earlier.and_then(|earlier| Some((earlier, earlier.fork.as_ref()?)));
         let earlier = earlier.filter(|_| fork.is_none());
         if fork.is_none()
-            && let Some(session) = sessions.get(&thread)
+            && let Some((session, _)) = sessions.get(&thread)
         {
             return Ok((Session::new(self, session.clone()), Opened::Known));
         }
@@ -185,16 +185,14 @@ impl Connection {
                 .mcp_servers(given.servers)
                 .meta(forked_at(given.meta.unwrap_or_default(), message));
             let made = self.open(fork, "fork this Thread's conversation").await?;
-            let (session, options) = (made.session_id, made.config_options);
-            self.hold(thread, pass);
+            let (session, options) = ((made.session_id, pass), made.config_options);
             return Ok(self.opened(thread, &mut sessions, session, options, folder, false));
         }
         if let Some(session) = earlier.and_then(|e| e.continued_by(self.process.harness(), kin))
             && let Some(options) = self.continue_session(&session, folder, roots, &given).await
         {
             opened(&self.learned, &session, options, folder);
-            sessions.insert(thread, session.clone());
-            self.hold(thread, pass);
+            sessions.insert(thread, (session.clone(), pass));
             return Ok((Session::new(self, session), Opened::Continued));
         }
         let new = acp::NewSessionRequest::new(folder)
@@ -202,8 +200,7 @@ impl Connection {
             .mcp_servers(given.servers)
             .meta(given.meta);
         let made = self.open(new, "open a session").await?;
-        let (session, options) = (made.session_id, made.config_options);
-        self.hold(thread, pass);
+        let (session, options) = ((made.session_id, pass), made.config_options);
         Ok(self.opened(
             thread,
             &mut sessions,
@@ -231,18 +228,19 @@ impl Connection {
         }
     }
 
-    /// A session the Harness opened anew for `thread`, and its evidence.
+    /// A session the Harness opened anew for `thread`, kept with its pass,
+    /// and its evidence.
     pub(super) fn opened(
         self: &Arc<Self>,
         thread: ThreadId,
-        sessions: &mut HashMap<ThreadId, acp::SessionId>,
-        session: acp::SessionId,
+        sessions: &mut HashMap<ThreadId, Open>,
+        (session, pass): Open,
         options: Option<Vec<acp::SessionConfigOption>>,
         folder: &Path,
         lost: bool,
     ) -> (Session, Opened) {
         opened(&self.learned, &session, options.unwrap_or_default(), folder);
-        sessions.insert(thread, session.clone());
+        sessions.insert(thread, (session.clone(), pass));
         let evidence = Evidence {
             harness: self.process.harness().to_owned(),
             session: session.0.to_string(),

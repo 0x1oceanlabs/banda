@@ -128,9 +128,9 @@ impl Pipe {
     }
 
     /// The variables that hand `banda` a new pass of `agent`'s, which the
-    /// kernel walls in `project`, and where the engine listens, with the
-    /// pass, for what it is given to to hold; `None`, said in the log, if
-    /// there is no pass.
+    /// kernel walls in `project`, and where the engine listens, and the
+    /// pass, which the session it goes to holds; `None`, said in the log,
+    /// if there is no pass.
     fn variables(
         &self,
         project: &ModuleProject,
