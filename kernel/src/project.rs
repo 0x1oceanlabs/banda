@@ -6,7 +6,7 @@
 use crate::events::{self, Event, EventFilter};
 use crate::kernel::Entry;
 use crate::module::Module;
-use crate::outbox;
+use crate::outbox::{self, Boot, Claim, Lease, Outcome};
 use crate::passes::Passes;
 use crate::sign::{self, Kept, Picked, Sign};
 use crate::store::{Receipt, Store};
@@ -235,6 +235,9 @@ pub struct Project {
     projects: Option<std::sync::Weak<RwLock<BTreeMap<ProjectId, Entry>>>>,
     /// Dropped with the Project: what hears the machine for it ends then.
     open: watch::Sender<()>,
+    /// The engine's run that opened it: it owns the effects the engine runs,
+    /// and its clock times the workers' leases.
+    boot: Boot,
     /// Held while the Project is open, so one engine at a time writes it.
     _lock: File,
 }
@@ -265,7 +268,7 @@ impl Project {
         manifest: Manifest,
         modules: Arc<[Arc<dyn Module>]>,
         engine: Shared,
-        boot: &str,
+        boot: &Boot,
     ) -> Result<Arc<Project>, Error> {
         let Shared {
             owner,
@@ -303,6 +306,7 @@ impl Project {
             machine,
             projects,
             open: watch::Sender::new(()),
+            boot: boot.clone(),
             _lock: lock,
         });
         outbox::recover(&project, boot).await?;
@@ -311,7 +315,7 @@ impl Project {
         for module in project.modules.iter() {
             module.opened(project.module(module.name())).await?;
         }
-        tokio::spawn(outbox::work(Arc::downgrade(&project), boot.to_owned()));
+        tokio::spawn(outbox::work(Arc::downgrade(&project), boot.clone()));
         Ok(project)
     }
 
@@ -769,6 +773,43 @@ impl ModuleProject {
     /// window does, or that only a window shows, waits for one.
     pub fn window_open(&self) -> bool {
         self.project.window.open()
+    }
+
+    /// Takes for `worker`, a worker outside the engine, the first ready
+    /// effect of this module's `kinds` queued for one
+    /// ([`Tx::enqueue_for_worker`]): due, and the first of its key, with
+    /// nothing of its key running. Its lease lasts `term`, at most
+    /// [`LONGEST_LEASE`](crate::LONGEST_LEASE): the worker renews it before
+    /// it runs out, and settles the effect under its claim. One that runs
+    /// out is cut short, as a restart cuts the engine's own runs
+    /// ([`Module::on_restart`](crate::Module::on_restart)). None when
+    /// nothing is ready (ADR 0082, A6).
+    pub async fn lease(
+        &self,
+        worker: &str,
+        kinds: &[&str],
+        term: Duration,
+    ) -> Result<Option<Lease>, Error> {
+        let project = &self.project;
+        outbox::lease(project, &project.boot, self.module, worker, kinds, term).await
+    }
+
+    /// Renews the lease of `claim` for `term` from now. Refused as
+    /// `conflict` once its lease ran out and the effect was taken again, or
+    /// it was settled: its worker stops, and writes nothing.
+    pub async fn renew(&self, claim: Claim, term: Duration) -> Result<(), Refusal> {
+        let project = &self.project;
+        outbox::renew(project, &project.boot, self.module, claim, term).await
+    }
+
+    /// Settles a run a worker held under `claim`, as a run in the engine
+    /// ends: done, with what this module writes of it; to retry, as its
+    /// kind's [`Retry`](crate::Retry) says; or failed. Refused as
+    /// `conflict`, writing nothing, once its lease ran out and the effect
+    /// was taken again, or it was settled. A write that fails leaves the
+    /// lease as it was, for the worker to finish again.
+    pub async fn finish(&self, claim: Claim, outcome: Outcome) -> Result<(), Refusal> {
+        outbox::settle_leased(&self.project, self.module, claim, outcome).await
     }
 
     /// One change in one transaction, outside any command: what a module

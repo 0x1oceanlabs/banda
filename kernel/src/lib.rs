@@ -8,8 +8,9 @@
 //! - A [`Module`] owns its words, its tables and its events. It reaches its
 //!   Project only through a [`ModuleProject`], which can emit only that module's
 //!   events.
-//! - The outbox runs side effects after commit, in order per target, and
-//!   settles what a restart cut short.
+//! - The outbox runs side effects after commit, in order per target: the
+//!   engine's own, and workers' outside it under leases. It settles what a
+//!   restart or a lease that ran out cut short, and lets old rows go.
 //! - [`access::decide`] is the one place that says whether a Participant may
 //!   do something, and [`access::within`] keeps an Agent in its Project.
 //! - A pass names an Agent's session in its Project, for `banda mcp`
@@ -48,7 +49,9 @@ pub use ids::{AgentId, CommandId, EventId, Participant, PersonId, ProjectId};
 pub use kernel::{Kernel, KernelBuilder, ProjectSummary, decode};
 pub use methods::{Method, Nothing, Picture, Tool};
 pub use module::{Call, Module, Scope, Stream, Wall};
-pub use outbox::{Effect, OnRestart, Outcome, Settled};
+pub use outbox::{
+    ATTEMPTS, Claim, Effect, KEPT, LONGEST_LEASE, Lease, OnRestart, Outcome, Retry, Settled,
+};
 pub use passes::secret;
 pub use project::{Committed, Heard, ModuleProject, Project, Tally};
 pub use reach::Reach;

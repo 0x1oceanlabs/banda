@@ -68,7 +68,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tokio-tungstenite = "0.29"
 ts-rs = { version = "12.0.1", features = ["uuid-impl", "serde-json-impl"] }
-uuid = { version = "1.29.0", features = ["v4", "v7", "serde"] }
+uuid = { version = "1.29.0", features = ["v4", "v5", "v7", "serde"] }
 zip = { version = "9.4.1", default-features = false }
 
 # A released engine's panic names Banda's files and lines by itself: its

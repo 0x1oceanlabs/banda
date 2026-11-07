@@ -6,6 +6,7 @@
 //! own connection: SQLite's WAL lets them read while the writer writes.
 
 use crate::events::{self, Event};
+use crate::outbox::Claim;
 use crate::{CommandId, Error, EventId, Participant, Refusal, now_ms};
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde::Serialize;
@@ -22,7 +23,8 @@ pub(crate) const KERNEL: &str = "kernel";
 const SUBSCRIBER_LAG: usize = 4096;
 
 /// The kernel's own steps. Each module keeps its own ledger next to them.
-const KERNEL_MIGRATIONS: &[&str] = &[r#"
+const KERNEL_MIGRATIONS: &[&str] = &[
+    r#"
 CREATE TABLE kernel_events (
     seq INTEGER PRIMARY KEY AUTOINCREMENT,
     id TEXT NOT NULL UNIQUE,
@@ -67,7 +69,22 @@ CREATE TABLE kernel_outbox (
     settled_at INTEGER
 );
 CREATE INDEX kernel_outbox_by_key ON kernel_outbox (module, key, state, id);
-"#];
+"#,
+    // Who runs an effect: the engine, or a worker outside it under a lease,
+    // `lease_until` on the clock of the boot that gave it. `claim` counts the
+    // times an effect was taken, its fencing token. The indexes let the rows
+    // a resend no longer needs go (ADR 0082, A6).
+    r#"
+ALTER TABLE kernel_outbox ADD COLUMN runner TEXT NOT NULL DEFAULT 'engine'
+    CHECK (runner IN ('engine', 'worker'));
+ALTER TABLE kernel_outbox ADD COLUMN claim INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE kernel_outbox ADD COLUMN worker TEXT;
+ALTER TABLE kernel_outbox ADD COLUMN lease_ms INTEGER;
+ALTER TABLE kernel_outbox ADD COLUMN lease_until INTEGER;
+CREATE INDEX kernel_outbox_by_settled ON kernel_outbox (settled_at) WHERE settled_at IS NOT NULL;
+CREATE INDEX kernel_receipts_by_at ON kernel_receipts (at);
+"#,
+];
 
 type Job = Box<dyn FnOnce(&mut Connection) + Send>;
 
@@ -126,21 +143,57 @@ impl Tx<'_> {
     }
 
     /// Queues a side effect to run after commit, after every earlier effect
-    /// of this module with the same `key` (ADR 0002, decision 3).
+    /// of this module with the same `key` (ADR 0002, decision 3). The
+    /// engine runs it, through [`Module::run`](crate::Module::run).
     pub fn enqueue(
         &mut self,
         kind: &str,
         key: &str,
         payload: &impl Serialize,
     ) -> Result<(), Error> {
+        self.queue("engine", kind, key, payload)
+    }
+
+    /// Queues a side effect as [`Tx::enqueue`] does, for a worker outside
+    /// the engine to run: it takes it under a lease
+    /// ([`ModuleProject::lease`](crate::ModuleProject::lease)), and the
+    /// engine never runs it. Its order among its key's effects is the same.
+    pub fn enqueue_for_worker(
+        &mut self,
+        kind: &str,
+        key: &str,
+        payload: &impl Serialize,
+    ) -> Result<(), Error> {
+        self.queue("worker", kind, key, payload)
+    }
+
+    fn queue(
+        &mut self,
+        runner: &str,
+        kind: &str,
+        key: &str,
+        payload: &impl Serialize,
+    ) -> Result<(), Error> {
         let payload = serde_json::to_string(payload)?;
         self.tx.execute(
-            "INSERT INTO kernel_outbox (module, kind, key, payload, state, next_at, created_at)
-             VALUES (?1, ?2, ?3, ?4, 'pending', ?5, ?5)",
-            params![self.module, kind, key, payload, self.now],
+            "INSERT INTO kernel_outbox (module, kind, key, payload, state, next_at, created_at, runner)
+             VALUES (?1, ?2, ?3, ?4, 'pending', ?5, ?5, ?6)",
+            params![self.module, kind, key, payload, self.now, runner],
         )?;
         self.enqueued = true;
         Ok(())
+    }
+
+    /// Refuses as `conflict` unless `claim` still holds its effect, which
+    /// is this module's. A module checks it in each write it makes for a
+    /// worker under a lease, so a worker whose lease ran out, and whose
+    /// effect was taken again, writes nothing (ADR 0082, A6).
+    pub fn holds(&self, claim: Claim) -> Result<(), Error> {
+        if crate::outbox::holds(&self.tx, self.module, claim)? {
+            Ok(())
+        } else {
+            Err(crate::outbox::lost_lease().into())
+        }
     }
 
     pub(crate) fn module(&self) -> &'static str {
@@ -259,6 +312,33 @@ impl Store {
             Ok(())
         })
         .await
+    }
+
+    /// Lets go of the receipts, and of the rows of effects that settled,
+    /// from before `before` in ms since the epoch, a batch at a time, so the
+    /// writer is never held long. An effect pending or running stays,
+    /// however old. Answers how many rows went.
+    pub(crate) async fn collect(&self, before: i64) -> Result<usize, Error> {
+        const BATCH: i64 = 1000;
+        let mut gone = 0;
+        for delete in [
+            "DELETE FROM kernel_receipts WHERE rowid IN
+               (SELECT rowid FROM kernel_receipts WHERE at < ?1 LIMIT ?2)",
+            "DELETE FROM kernel_outbox WHERE id IN
+               (SELECT id FROM kernel_outbox
+                WHERE settled_at < ?1 AND state IN ('done', 'abandoned', 'failed') LIMIT ?2)",
+        ] {
+            loop {
+                let went = self
+                    .on_writer(move |sql| Ok(sql.execute(delete, params![before, BATCH])?))
+                    .await?;
+                gone += went;
+                if i64::try_from(went).unwrap_or(i64::MAX) < BATCH {
+                    break;
+                }
+            }
+        }
+        Ok(gone)
     }
 
     /// Reads on the reader connection, off the async threads.

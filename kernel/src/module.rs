@@ -1,6 +1,6 @@
 use crate::access::Right;
 use crate::methods::Tool;
-use crate::outbox::{Effect, OnRestart, Outcome, Settled};
+use crate::outbox::{Effect, OnRestart, Outcome, Retry, Settled};
 use crate::project::ModuleProject;
 use crate::{CommandId, Error, Participant, ProjectId, Refusal, Tx};
 use serde::Serialize;
@@ -100,8 +100,9 @@ pub trait Module: Send + Sync + 'static {
         )))
     }
 
-    /// Runs one of its side effects from the outbox. A run holds its key
-    /// until it ends, so a module bounds how long its own runs take.
+    /// Runs one of its side effects from the outbox, of those the engine
+    /// runs ([`Tx::enqueue`]). A run holds its key until it ends, so a
+    /// module bounds how long its own runs take.
     async fn run(&self, _project: ModuleProject, effect: Effect) -> Outcome {
         Outcome::Fail(format!(
             "{} runs no effect of kind {}",
@@ -110,9 +111,17 @@ pub trait Module: Send + Sync + 'static {
         ))
     }
 
-    /// What one of its effects that a restart cut short becomes.
+    /// What one of its effects that a restart cut short becomes, or one
+    /// whose worker's lease ran out.
     fn on_restart(&self, _kind: &str) -> OnRestart {
         OnRestart::Abandon
+    }
+
+    /// How one of its effects that asks to retry tries again: a few tries,
+    /// for work on this host, or until a deadline, for work over the
+    /// network (ADR 0082, A6).
+    fn retry(&self, _kind: &str) -> Retry {
+        Retry::default()
     }
 
     /// Writes, in the same transaction, what it means that an effect will
