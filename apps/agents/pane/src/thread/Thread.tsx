@@ -490,7 +490,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
             onProject={(other) =>
               open(
                 paneOf(threadPane, { ...args, scratch: undefined, harness }),
-                "here",
+                "instead",
                 other
               )
             }

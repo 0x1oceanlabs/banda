@@ -378,11 +378,12 @@ export type Opening = {
 /**
  * Shows a Pane of a Project and focuses it.
  *
- * - An entry already showing the same Pane gets the focus instead, on
- *   whichever workspace it is, unless it opens `again` or `here`; one
+ * - An entry already showing the same Pane only gets the focus, on
+ *   whichever workspace it is, unless it opens `again` or `instead`; one
  *   the same by its `identity` shows these args first, unless `keep`.
- * - `here` replaces the opener's Pane; `below` adds it under the opener,
- *   in the same column; `right` adds a column right of the opener's.
+ * - `instead` replaces the opener's Pane; `below` adds it under the
+ *   opener, in the same column; `right` adds a column right of the
+ *   opener's.
  * - Left out, the Pane takes the place of the one of its kind that the
  *   opener's workspace shows, or adds a column on the right.
  * - With `focus: false` the focus goes back where it was.
@@ -408,7 +409,7 @@ function placed(
   const wanted = { project, pane }
   const showing =
     !opening.again &&
-    place !== "here" &&
+    place !== "instead" &&
     entries(state).find((entry) => samePane(entry, wanted, opening.identity))
   if (showing) {
     const next =
@@ -423,7 +424,7 @@ function placed(
   const workspace = state.list[w]
   const entry: Entry = { id: newId(), project, pane }
 
-  if (from && place === "here") {
+  if (from && place === "instead") {
     return showIn(state, from, entry)
   }
   if (from && place === "below") {

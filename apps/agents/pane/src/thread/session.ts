@@ -276,7 +276,7 @@ export function useThreadSession({
       keepZoom(zoomKey(null), 1)
       const next = { thread: sent.thread, harness, title: args.title }
       if (target !== project || args.scratch)
-        open({ kind: "agents.thread", args: next }, "here", target)
+        open({ kind: "agents.thread", args: next }, "instead", target)
       else update(next)
     }
     return sent !== undefined

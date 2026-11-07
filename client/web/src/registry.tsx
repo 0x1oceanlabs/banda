@@ -326,7 +326,7 @@ function Launcher({ engine, open }: PaneProps<Args>) {
   const scope = useScope(
     "launcher",
     {
-      "launcher.open": (args) => pick(args, "here"),
+      "launcher.open": (args) => pick(args, "instead"),
       "launcher.open-beside": (args) => pick(args, "right"),
     },
     { tile: true }
@@ -342,7 +342,7 @@ function Launcher({ engine, open }: PaneProps<Args>) {
       <Choices
         modules={modules}
         letters
-        onPick={(pane) => open(pane, "here")}
+        onPick={(pane) => open(pane, "instead")}
       />
     </div>
   )

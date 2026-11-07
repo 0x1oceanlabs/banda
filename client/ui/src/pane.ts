@@ -74,13 +74,14 @@ export type PaneState = { kind: string; args: { [key: string]: JsonValue } }
 
 /**
  * Where a Pane opens, from the Pane that opens it: in a new column to its
- * right, below it in its column, in its own place, or in its Group, in
- * the Deck right of it, as what a Thread opens goes; or last on its
- * Project's workspace, as an Agent's Thread does (ADR 0065). Left out, the
- * window shows the Pane where its workspace shows one of its kind, or to
- * the right.
+ * right, below it in its column, instead of it in its place, or in its
+ * Group, in the Deck right of it, as what a Thread opens goes; or last on
+ * its Project's workspace, as an Agent's Thread does (ADR 0065). Left out,
+ * the window shows the Pane where its workspace shows one of its kind, or
+ * to the right. `instead` is the word the engine's `workspaces.open` has
+ * (ADR 0087, decision 14).
  */
-export type Place = "right" | "below" | "here" | "group" | "project"
+export type Place = "right" | "below" | "instead" | "group" | "project"
 
 /**
  * What a Pane draws. A part of it that keeps its own Esc, as a list of
@@ -107,7 +108,8 @@ export type PaneProps<A> = {
   selected?: boolean
   /**
    * Opens a Pane of this Pane's Project, or of `project` when it is given; a
-   * Pane already shown gets the focus instead, unless it opens `here`.
+   * Pane already shown only gets the focus, unless it opens `instead` of
+   * the opener.
    */
   open: (pane: PaneState, place?: Place, project?: ProjectId) => void
   /** Keeps new args for this Pane. */

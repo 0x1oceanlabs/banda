@@ -90,7 +90,7 @@ const PoppedAsk = Schema.Union([
         args: Schema.Record(Schema.String, Schema.MutableJson),
       }),
       from: Schema.String,
-      place: Schema.optional(Schema.Literals(["right", "below", "here"])),
+      place: Schema.optional(Schema.Literals(["right", "below", "instead"])),
     }),
   }),
   Schema.Struct({
