@@ -4,6 +4,7 @@ import { NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
 import { Settings } from "@banda/desktop-kit"
+import { Editors } from "./editors"
 import { Program } from "./program"
 import { settingsLayer } from "./settings"
 import { script } from "./testing"
@@ -32,6 +33,7 @@ exit 0`)
 const settingsOf = (program: string) =>
   settingsLayer.pipe(
     Layer.provide(Program.layer({ program })),
+    Layer.provide(Editors.layer),
     Layer.provide(NodeServices.layer)
   )
 

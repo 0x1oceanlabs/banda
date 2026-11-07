@@ -114,8 +114,13 @@ export const engineLayer = (
               Effect.ensuring(SubscriptionRef.set(address, Option.none()))
             )
           },
-          // It stopped as asked: Banda quits.
-          (code) => code === 0
+          {
+            // It stopped as asked: Banda quits.
+            last: (code) => code === 0,
+            // As long as `banda stop --force` gives it elsewhere (`Stop`):
+            // on Windows Quit Banda stops it by its stdin.
+            grace: "30 seconds",
+          }
         ).pipe(Effect.andThen(Effect.sync(stopped)))
       )
       const at = known(address).pipe(
@@ -151,7 +156,10 @@ const WORKING: Code = "conflict"
  * engine with it, once no Thread works or the Person said so.
  * `unlessWorking` is `banda stop` with no terminal to ask in, as macOS's
  * Quit runs it (closing.ts): it stops the engine where no Agent works,
- * and refuses where some do, for the window to ask.
+ * and refuses where some do, for the window to ask. On Windows, which has
+ * no `banda stop` yet (ADR 0090, step 10), the engine is the window's
+ * child, and stops as the window goes: its stdin closes, and it has half
+ * a minute (child.ts).
  */
 export class Stop extends Context.Service<
   Stop,
@@ -191,7 +199,10 @@ export class Stop extends Context.Service<
           })
         ).pipe(Effect.timeout("30 seconds"))
       return {
-        engine: Effect.ignore(stop("--force")),
+        engine:
+          process.platform === "win32"
+            ? Effect.void
+            : Effect.ignore(stop("--force")),
         unlessWorking: stop().pipe(
           Effect.map(
             ([code, said]) =>

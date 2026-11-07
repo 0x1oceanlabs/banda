@@ -12,6 +12,7 @@ import { Broke, Refused, Settings } from "@banda/desktop-kit"
 import { Duration, Effect, Exit, Layer, Schema, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { shell } from "electron"
+import { Editors } from "./editors"
 import { Program } from "./program"
 
 /** A line of `banda look themes`: JSON, taken as the theme it lists. */
@@ -22,6 +23,7 @@ export const settingsLayer = Layer.effect(Settings)(
   Effect.gen(function* () {
     const program = yield* Program
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
+    const editors = yield* Editors
 
     /** What `banda settings` said when it refused, a problem a line;
      * nothing when done. 1 is a refusal, said as `check` says it;
@@ -88,8 +90,12 @@ export const settingsLayer = Layer.effect(Settings)(
           if (file && !/^[a-z-]+\.toml$/.test(file))
             return yield* new Refused({ message: `${file} is not one.` })
           const path = join(config, file)
+          // A file opens where the Person edits text; its folder, or the
+          // config folder, in the system's file manager.
+          const there = existsSync(path)
+          if (file && there) return yield* editors.edit(path)
           const failed = yield* Effect.promise(() =>
-            shell.openPath(existsSync(path) ? path : dirname(path))
+            shell.openPath(there ? path : dirname(path))
           )
           if (failed) return yield* new Refused({ message: failed })
         }),

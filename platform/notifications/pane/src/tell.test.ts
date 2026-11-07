@@ -1,8 +1,8 @@
 import type { Call } from "@banda/ui/pane"
-import type { Chime } from "@banda/ui/sound"
+import { type Chime, DEFAULT_SOUND } from "@banda/ui/sound"
 import type { Notify } from "@banda/contract/look"
 import { expect, test } from "vitest"
-import { lookedAt, newsOf, tell } from "./tell"
+import { lookedAt, newsOf, silentWith, tell } from "./tell"
 
 const NOTIFY: Notify = {
   system: "away",
@@ -82,6 +82,32 @@ test("the desktop's quiet leaves only the Marks, unless told never", () => {
   })
   const never = { ...NOTIFY, quiet: "never" as const }
   expect(tell("asking", "away", never, true).system).toBe(true)
+})
+
+test("a desktop notice that sounds by itself, as Windows' does, carries the call's sound; a toast keeps Banda's", () => {
+  expect(tell("done", "away", NOTIFY, false, true)).toEqual({
+    sound: false,
+    toast: false,
+    system: true,
+  })
+  expect(tell("done", "in-window", NOTIFY, false, true)).toEqual({
+    sound: true,
+    toast: true,
+    system: false,
+  })
+  // With no notice of its kind, Banda's sound tells of it alone.
+  expect(tell("done", "away", { ...NOTIFY, done: false }, false, true)).toEqual(
+    { sound: true, toast: false, system: false }
+  )
+})
+
+test("a notice is silent where [sound] gives its call none, or what told it asked for none", () => {
+  expect(silentWith(DEFAULT_SOUND, "done")).toBe(false)
+  expect(silentWith(DEFAULT_SOUND, "done", true)).toBe(true)
+  expect(silentWith({ ...DEFAULT_SOUND, volume: 0 }, "asking")).toBe(true)
+  expect(silentWith({ ...DEFAULT_SOUND, family: "off" }, "failed")).toBe(true)
+  expect(silentWith({ ...DEFAULT_SOUND, done: false }, "done")).toBe(true)
+  expect(silentWith({ ...DEFAULT_SOUND, done: false }, "asking")).toBe(false)
 })
 
 test("every variant of [notify] says where", () => {

@@ -1379,7 +1379,10 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
     Thread, and says when they click it; the window comes to the front and
     goes there. More than two at once make one. While Omarchy's Do Not
     Disturb is on (`omarchy-shell notifications isDnd`), only the Marks
-    change. The end-to-end tests run with a recorded desktop
+    change. On Windows, whose Do Not Disturb Banda cannot read, the
+    notification carries Windows' own sound instead of Banda's, unless
+    `[sound]` or what told it gives it none, so Do Not Disturb silences
+    and holds it (ADR 0090, decision 7). The end-to-end tests run with a recorded desktop
     (`BANDA_DESKTOP=recorded`), so nothing reaches the screen.
   - Every step of this is the Person's to choose: `[notify]` in
     `look.toml` (`platform/look/src/notify.rs`) turns the system notifications to

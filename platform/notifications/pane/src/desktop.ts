@@ -19,6 +19,10 @@ export type Notice = {
   answer: string
   /** It stays until taken back, as one that waits for the Person does. */
   lasts: boolean
+  /** It makes no sound where the desktop's notices make their own
+   * (`sounds`): what told it asked for none, or `[sound]` gives its call
+   * none (`silentWith`). */
+  silent?: boolean
 }
 
 /** The desktop's notifications and its quiet. */
@@ -34,6 +38,13 @@ export const NOTIFY_BRIDGE = {
   listen: push<string>(),
   /** Whether the desktop is quiet now: its Do Not Disturb is on. */
   quiet: invoke<[], boolean>(),
+  /**
+   * Whether a notice the desktop shows makes the desktop's own sound, as
+   * Windows' do: Banda plays none of its own with one then, and Windows'
+   * Do Not Disturb, which Banda cannot read, silences it (ADR 0090,
+   * decision 7).
+   */
+  sounds: invoke<[], boolean>(),
 }
 
 export type Desktop = HostOf<typeof NOTIFY_BRIDGE>

@@ -154,6 +154,11 @@ async function drawn(svg: string): Promise<string | undefined> {
   }
 }
 
+/** Whether the desktop's notices make its own sound (`Desktop.sounds`). */
+export async function soundsOf(desktop: Desktop | undefined): Promise<boolean> {
+  return desktop ? await desktop.sounds().catch(() => false) : false
+}
+
 /** Whether the desktop is quiet now, when `[notify]` keeps its quiet. */
 export async function quietNow(
   notify: Notify,

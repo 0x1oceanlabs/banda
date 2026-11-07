@@ -19,13 +19,14 @@ import {
   MANY,
   noticeOf,
   quietNow,
+  soundsOf,
   SUMMARY,
   JOINED,
   joinedOf,
   summaryOf,
   toldOfCall,
 } from "./system"
-import { lookedAt, newsOf, placeOf, tell } from "./tell"
+import { lookedAt, newsOf, placeOf, silentWith, tell } from "./tell"
 import { clickToasts, toastTold } from "./toast"
 import { type Button, clicked, type Told } from "./told"
 
@@ -55,6 +56,9 @@ export function startTelling(
   const toasted = new Set<string>()
   const noticed = new Set<string>()
   const summarized = new Set<string>()
+  // Whether the desktop's notices make its own sound, as Windows' do,
+  // which no run of the window changes.
+  const desktopSounds = soundsOf(desktop)
 
   const withdraw = (keys: Iterable<string>) => {
     const had = summarized.size
@@ -86,7 +90,9 @@ export function startTelling(
     if (!place) return
     const named = of && !said.project ? projectNameOf(of) : undefined
     const told = named ? { ...said, project: named } : said
-    if (!told.silent) sounds(told.kind)
+    // A notice of the desktop's that sounds by itself carries the sound.
+    const noticeSounds = place.system && (await desktopSounds)
+    if (!told.silent && !noticeSounds) sounds(told.kind)
     // Kept, wherever it is told, so the bell shows it again (ADR 0056,
     // decision 2).
     keep(told)
@@ -99,6 +105,7 @@ export function startTelling(
       ...((told.notice ?? told.body) ? { body: told.notice ?? told.body } : {}),
       answer: clicked(told)?.label ?? "Open",
       lasts: told.kind === "asking",
+      silent: silentWith(window.look().sound, told.kind, told.silent),
     })
   }
   // The Project a thing is of, by name, when the window has more than one.
@@ -135,12 +142,13 @@ export function startTelling(
     timer = undefined
     const news = new Map(gathered.map((call) => [call.key, call]))
     gathered = []
-    const { notify } = window.look()
+    const { notify, sound } = window.look()
     const quiet = await quietNow(notify, desktop)
+    const own = await desktopSounds
     const chimes: Chime[] = []
     const notices: Call[] = []
     for (const call of news.values()) {
-      const telling = tell(call.chime, window.sight(call), notify, quiet)
+      const telling = tell(call.chime, window.sight(call), notify, quiet, own)
       if (telling.sound) chimes.push(call.chime)
       const told = toldOfCall(call, notify.detail, projectNameOf(call.project))
       if (telling.toast || telling.system) keep(told)
@@ -157,7 +165,11 @@ export function startTelling(
     if (notices.length > MANY) {
       for (const call of notices) summarized.add(call.key)
       const icon = await iconOf(loudestOf(notices))
-      desktop.show({ ...summaryOf(notices), ...(icon ? { icon } : {}) })
+      desktop.show({
+        ...summaryOf(notices),
+        silent: notices.every((call) => silentWith(sound, call.chime)),
+        ...(icon ? { icon } : {}),
+      })
       return
     }
     for (const call of notices) {
@@ -165,6 +177,7 @@ export function startTelling(
       const icon = await iconOf(call.chime)
       desktop.show({
         ...noticeOf(call, notify.detail, projectNameOf(call.project)),
+        silent: silentWith(sound, call.chime),
         ...(icon ? { icon } : {}),
       })
     }

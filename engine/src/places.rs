@@ -247,9 +247,11 @@ impl Places {
         self.state.join("problems")
     }
 
-    /// Where the window listens for `banda menu` while it is open.
+    /// Where the window listens for `banda menu` while it is open: a
+    /// socket in the state folder, or on Windows a pipe named for it
+    /// (window.rs).
     pub fn window(&self) -> PathBuf {
-        self.state.join("window.sock")
+        crate::window::place(&self.state)
     }
 
     /// Held by the engine while it runs: one engine per state folder.

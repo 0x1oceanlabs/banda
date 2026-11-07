@@ -6,7 +6,7 @@ import type { ProjectId } from "@banda/contract"
 import type { Notify } from "@banda/contract/look"
 import type { Sight } from "@banda/ui/module"
 import type { Call } from "@banda/ui/pane"
-import type { Chime } from "@banda/ui/sound"
+import { type Chime, type SoundSettings, voicing } from "@banda/ui/sound"
 
 /**
  * The calls that are news in `now`, after `before`: a thing that starts
@@ -78,20 +78,34 @@ export function placeOf(
 
 /**
  * How to tell of a call: where, if `[notify]` tells of its kind; the
- * sound is `[sound]`'s to choose.
+ * sound is `[sound]`'s to choose, unless the desktop's notice of it makes
+ * the desktop's own, as Windows' does (`desktopSounds`).
  */
 export function tell(
   chime: Chime,
   sight: Sight,
   settings: Notify,
-  desktopQuiet: boolean
+  desktopQuiet: boolean,
+  desktopSounds = false
 ): Telling {
   const place = placeOf(sight, settings, desktopQuiet)
   if (!place) return NOTHING
   const notifies = settings[chime]
+  const system = notifies && place.system
   return {
-    sound: true,
+    sound: !(system && desktopSounds),
     toast: notifies && place.toast,
-    system: notifies && place.system,
+    system,
   }
+}
+
+/** Whether a notice of `chime` is silent: `[sound]`, as `sound`, gives
+ * its call no sound, or what told it asked for none. Where the desktop's
+ * notices make their own sound, as Windows' do, it shows it silent. */
+export function silentWith(
+  sound: SoundSettings,
+  chime: Chime,
+  asked = false
+): boolean {
+  return asked || !voicing(chime, sound)
 }

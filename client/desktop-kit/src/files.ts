@@ -7,10 +7,11 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto"
 import { constants } from "node:fs"
 import { open, realpath, stat } from "node:fs/promises"
-import { extname, isAbsolute, resolve } from "node:path"
+import { extname, resolve } from "node:path"
 import { Readable } from "node:stream"
 import { Clock, Context, Effect, Layer } from "effect"
 import { Engine } from "./engine"
+import { onThisMachine } from "./machine"
 
 /** Text of any kind is served as plain text, so nothing in it runs: an
  * HTML file shows as its source. */
@@ -99,8 +100,6 @@ export const BYTES_HOST: Rules = {
 }
 
 const HOUR = 60 * 60 * 1000
-const local = (path: string) =>
-  isAbsolute(path) && !/^[/\\]{2}/.test(path) && !path.includes("\0")
 type Claim = { path: string; dev: string; ino: string; until: number }
 
 /** Inclusive byte bounds; null for an invalid or unsatisfiable range. */
@@ -137,7 +136,7 @@ export class FileLinks {
   }
 
   async issue(path: string, now: number, only?: Only): Promise<string | null> {
-    if (!local(path)) return null
+    if (!onThisMachine(path)) return null
     const type = this.rules.typeOf(path)
     const media = only === "media"
     if (type === null || (media && !MEDIA.test(type))) return null
@@ -146,7 +145,11 @@ export class FileLinks {
       // A link may not make a picture of a file of another kind, nor
       // serve one its host does not.
       const real = this.rules.typeOf(canonical)
-      if (!local(canonical) || real === null || (media && real !== type))
+      if (
+        !onThisMachine(canonical) ||
+        real === null ||
+        (media && real !== type)
+      )
         return null
       const file = await stat(canonical, { bigint: true })
       if (!file.isFile()) return null
@@ -183,7 +186,7 @@ export class FileLinks {
       return missing()
     }
     if (
-      !local(claim.path) ||
+      !onThisMachine(claim.path) ||
       !Number.isFinite(claim.until) ||
       now >= claim.until
     )
@@ -270,10 +273,10 @@ export function linkHost(links: FileLinks): LinkHost {
 /** The whole path of `path` in Project `project`: relative to its folder,
  * or whole. None for a Project the engine does not know, or a path from
  * home, on the network or with a scheme, which it refuses before it
- * resolves. */
+ * resolves: a scheme has two letters or more, as one is a Windows drive. */
 export const wholeIn = (project: string, path: string) =>
   Effect.gen(function* () {
-    if (!path || /^(?:~|[a-z][a-z0-9+.-]*:|[/\\]{2})/i.test(path)) return null
+    if (!path || /^(?:~|[a-z][a-z0-9+.-]+:|[/\\]{2})/i.test(path)) return null
     const folder = yield* Engine.folderOf(project)
     return folder ? resolve(folder, path) : null
   })
