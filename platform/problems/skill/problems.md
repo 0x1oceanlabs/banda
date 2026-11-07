@@ -23,9 +23,10 @@ here sends anything anywhere.
    Markdown. `checkout` is the folder of Banda's source the engine runs
    from, or null for a released Banda.
 2. Say whether it is Banda's. It is when its frames are in Banda's code
-   (`app/`, `modules/`, `contract/`, `engine/`, `kernel/`). A disk that is
-   full, a program that is missing, or a network that is down is the
-   Person's to fix: say what to do, and stop there.
+   (`client/`, `apps/`, `platform/`, `sdk/`, `engine/`, `kernel/`; in a
+   Problem kept before these folders, `app/`, `modules/`, `contract/`). A
+   disk that is full, a program that is missing, or a network that is down
+   is the Person's to fix: say what to do, and stop there.
 3. Then, one of the two below.
 
 A released Banda's page frames name its bundles, `assets/App.js`, not
