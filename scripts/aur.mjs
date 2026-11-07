@@ -1,6 +1,8 @@
 // Writes the AUR package of a Linux release (ADR 0033, decision 5; the
-// research note docs/research/2026-11-02-linux-distribution.md), for the
-// release workflow to push to the AUR as `banda-bin`:
+// research note docs/research/2026-11-02-linux-distribution.md), to push
+// to the AUR as `banda-bin`. Nothing runs it until Banda is promoted from
+// a Dev once a day (ADR 0092, step 6): the release workflow ran it for a
+// Stable built from a tag, and builds none since its step 2.
 //
 //   node scripts/aur.mjs <stable|dev> <version> <AppImage> <folder>
 //
