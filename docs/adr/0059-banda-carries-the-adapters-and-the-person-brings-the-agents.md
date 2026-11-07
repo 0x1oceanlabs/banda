@@ -40,7 +40,12 @@ defaults and stay his to change.
      `ELECTRON_RUN_AS_NODE=1`, as Emdash does. The window tells the engine
      where that binary and the adapters are when it starts it. A checkout
      builds the adapters with the rest and uses Electron from its
-     `node_modules`.
+     `node_modules`. _Amended at ADR 0062's step S1, 2026-11-07: the
+     adapters are the harnesses' host package,
+     `platform/harnesses/adapters`, and `banda serve` finds them and a
+     Node itself: the adapters beside its program or in its checkout; the
+     Electron the window names, else the packed app's own, else a `node`
+     on PATH. So an engine started with no window runs them too._
    - An adapter's version moves with Banda's, with the CLI minimum beside
      it, so a Banda and its adapters are tested together.
    - No Node on the machine, no `npx`, and no network at the first Thread.
