@@ -53,11 +53,10 @@ mod writer;
 
 use acp::Connection;
 use banda_harnesses::hosts::IDLE;
-use banda_harnesses::model::Program;
 use banda_harnesses::{Harness, Harnesses};
 use banda_kernel::{
     AgentId, Call, Effect, Error, Kind, Module, ModuleProject, Nothing, OnRestart, Outcome,
-    Participant, Picture, Refusal, Right, Settled, Tool, Tx, pass_env,
+    Participant, Picture, Program, Refusal, Right, Settled, Tool, Tx, pass_env,
 };
 use banda_look::OneFile as _;
 use base64::Engine as _;
@@ -121,6 +120,7 @@ impl Pipe {
             program: self.program.display().to_string(),
             args: vec!["mcp".to_owned()],
             env: self.variables(project, agent)?,
+            ..Program::default()
         })
     }
 

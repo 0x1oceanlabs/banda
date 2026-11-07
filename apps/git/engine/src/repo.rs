@@ -5,10 +5,11 @@
 use crate::model::Commit;
 use crate::parse::{self, Porcelain};
 use crate::run::{Failure, Opts, Ran, Reason, git};
-use banda_kernel::Refusal;
+use banda_kernel::{Environment, ModuleProject, Refusal};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 
 /// The branches tried, after `origin/HEAD`'s, as the default.
 const DEFAULTS: [&str; 2] = ["main", "master"];
@@ -23,6 +24,9 @@ pub struct Repo {
     pub top: PathBuf,
     /// Its objects are named by SHA-1, as all but a few are.
     sha1: bool,
+    /// Where the acts the Person asks for run: its Project's environment
+    /// (ADR 0084, decision 8).
+    environment: Arc<dyn Environment>,
 }
 
 /// A ref found, as a base the branch is compared with: its name and its
@@ -41,12 +45,12 @@ pub struct DefaultBranch {
 }
 
 impl Repo {
-    /// The repository `folder` is in, or none when git knows no
+    /// The repository `project`'s folder is in, or none when git knows no
     /// repository there.
-    pub async fn find(folder: &Path) -> Result<Option<Repo>, Failure> {
+    pub async fn find(project: &ModuleProject) -> Result<Option<Repo>, Failure> {
         // Its objects' format first: the top is the rest, whatever its name.
         let ran = git(
-            folder,
+            &project.folder(),
             ["rev-parse", "--show-object-format", "--show-toplevel"],
             Opts::default(),
         )
@@ -57,6 +61,7 @@ impl Repo {
             return Ok(Some(Repo {
                 top: PathBuf::from(top),
                 sha1: format == "sha1",
+                environment: project.environment(),
             }));
         }
         match ran.reason() {
@@ -65,12 +70,17 @@ impl Repo {
         }
     }
 
-    /// The repository `folder` is in, or the refusal of every method but
-    /// `status`.
-    pub async fn open(folder: &Path) -> Result<Repo, Refusal> {
-        Repo::find(folder)
+    /// The repository `project`'s folder is in, or the refusal of every
+    /// method but `status`.
+    pub async fn open(project: &ModuleProject) -> Result<Repo, Refusal> {
+        Repo::find(project)
             .await?
             .ok_or_else(|| Failure(Reason::NotRepository).into())
+    }
+
+    /// Where the acts the Person asks for run ([`Opts::asked`]).
+    pub fn environment(&self) -> &dyn Environment {
+        &*self.environment
     }
 
     /// Runs git at the top, and fails when git does.

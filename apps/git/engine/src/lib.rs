@@ -212,7 +212,7 @@ impl Git {
         // Read before git is: an event after it may change what git reads,
         // and a Pane following it reads again.
         let at = call.project().at().await?;
-        let found = Repo::find(&call.project().folder()).await;
+        let found = Repo::find(call.project()).await;
         Ok(status::read(found, at, &self.writing).await?)
     }
 
@@ -220,20 +220,20 @@ impl Git {
         // Read before git is: an event after it may change what git reads,
         // and a Pane following it reads again.
         let at = call.project().at().await?;
-        let repo = Repo::open(&call.project().folder()).await?;
+        let repo = Repo::open(call.project()).await?;
         diff::diff(&repo, ask, at).await
     }
 
     async fn refs(&self, call: Call, ask: RefsAsk) -> Result<Vec<Ref>, Refusal> {
-        refs::refs(&Repo::open(&call.project().folder()).await?, ask).await
+        refs::refs(&Repo::open(call.project()).await?, ask).await
     }
 
     async fn commits(&self, call: Call, ask: CommitsAsk) -> Result<Vec<Commit>, Refusal> {
-        refs::commits(&Repo::open(&call.project().folder()).await?, ask).await
+        refs::commits(&Repo::open(call.project()).await?, ask).await
     }
 
     async fn contents(&self, call: Call, ask: ContentsAsk) -> Result<Contents, Refusal> {
-        diff::contents(&Repo::open(&call.project().folder()).await?, ask).await
+        diff::contents(&Repo::open(call.project()).await?, ask).await
     }
 
     async fn stage(&self, call: Call, ask: ChangeAsk) -> Result<(), Refusal> {
@@ -249,7 +249,7 @@ impl Git {
     }
 
     async fn change(&self, call: Call, act: stage::Act, ask: ChangeAsk) -> Result<(), Refusal> {
-        let repo = Repo::open(&call.project().folder()).await?;
+        let repo = Repo::open(call.project()).await?;
         let _writing = self.writing.of(&repo.top).hold().await;
         stage::change(&repo, act, ask).await
     }
@@ -259,7 +259,7 @@ impl Git {
     }
 
     async fn act(&self, call: Call, ask: ActAsk) -> Result<Stream, Refusal> {
-        let repo = Repo::open(&call.project().folder()).await?;
+        let repo = Repo::open(call.project()).await?;
         let writing = self.writing.of(&repo.top);
         let (say, heard) = tokio::sync::mpsc::channel(64);
         let card = act::Card::of(call.project(), call.participant(), ask.thread.clone());
@@ -275,7 +275,7 @@ impl Git {
     }
 
     async fn switch(&self, call: Call, ask: SwitchAsk) -> Result<(), Refusal> {
-        let repo = Repo::open(&call.project().folder()).await?;
+        let repo = Repo::open(call.project()).await?;
         let _writing = self.writing.of(&repo.top).hold().await;
         let switched = act::switch(&repo, &ask.name).await?;
         if let Some(card) = act::Card::of(call.project(), call.participant(), ask.thread) {
@@ -285,7 +285,7 @@ impl Git {
     }
 
     async fn branch(&self, call: Call, ask: BranchAsk) -> Result<(), Refusal> {
-        let repo = Repo::open(&call.project().folder()).await?;
+        let repo = Repo::open(call.project()).await?;
         let _writing = self.writing.of(&repo.top).hold().await;
         let made = act::make_branch(&repo, &ask.name, ask.from.as_deref()).await?;
         if let Some(card) = act::Card::of(call.project(), call.participant(), ask.thread) {
@@ -295,16 +295,16 @@ impl Git {
     }
 
     async fn prompt(&self, call: Call, ask: PromptAsk) -> Result<Prompted, Refusal> {
-        message::prompt(&Repo::open(&call.project().folder()).await?, ask).await
+        message::prompt(&Repo::open(call.project()).await?, ask).await
     }
 
     async fn written(&self, call: Call, ask: WrittenAsk) -> Result<Message, Refusal> {
-        message::written(&Repo::open(&call.project().folder()).await?, ask).await
+        message::written(&Repo::open(call.project()).await?, ask).await
     }
 
     async fn init(&self, call: Call, _: Nothing) -> Result<(), Refusal> {
         let folder = call.project().folder();
         let _writing = self.writing.of_folder(&folder).hold().await;
-        act::init(&folder).await
+        act::init(call.project()).await
     }
 }

@@ -101,7 +101,7 @@ impl Process {
     /// `harness` finds it now: updated since the start, its Threads stop
     /// warning that it is old.
     pub async fn account(&self, harness: &Harness) -> Result<Account, Failed> {
-        let (_, cli) = crate::cli::find(harness).await?;
+        let (_, cli) = crate::cli::find(&*self.environment, harness).await?;
         let mut account = self.account.clone();
         if self.about.reports_account {
             let _ = timeout(FIRST_REPORT, account.wait_for(Option::is_some)).await;

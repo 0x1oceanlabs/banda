@@ -22,7 +22,8 @@ use crate::{FILE, Failed, Harness, Harnesses};
 use agent_client_protocol::Client;
 use agent_client_protocol::schema::v1 as acp;
 use banda_kernel::{
-    Call, Error, EventFilter, Kind, Module, ModuleProject, Nothing, Refusal, Right, Scope, Tool,
+    Call, Environment, Error, EventFilter, Kind, Module, ModuleProject, Nothing, Refusal, Right,
+    Scope, Tool,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -299,7 +300,10 @@ impl HarnessesModule {
     /// as [`Failed`] says: `conflict` only when it lasts.
     async fn asker(&self, call: &Call, id: &str) -> Result<(Harness, Arc<Asker>, Held), Refusal> {
         let harness = self.harnesses.get(id).map_err(Refusal::invalid)?;
-        let asker = self.hosts.get(call.project().id(), &harness).await?;
+        let project = call.project();
+        let asker = (self.hosts)
+            .get(project.id(), project.environment(), &harness)
+            .await?;
         let held = asker.activity.hold();
         Ok((harness, asker, held))
     }
@@ -337,9 +341,13 @@ struct Asker {
 }
 
 impl Host for Asker {
-    async fn start(harness: &Harness) -> Result<Arc<Self>, Failed> {
+    async fn start(
+        environment: Arc<dyn Environment>,
+        harness: &Harness,
+    ) -> Result<Arc<Self>, Failed> {
         let shows = acp::ClientCapabilities::new();
-        let (process, _) = Process::start(harness, Client.builder(), shows, || {}).await?;
+        let (process, _) =
+            Process::start(environment, harness, Client.builder(), shows, || {}).await?;
         let activity = Activity::default();
         Ok(Arc::new(Asker { process, activity }))
     }

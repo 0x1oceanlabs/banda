@@ -1,0 +1,20 @@
+[package]
+name = "banda-environments"
+description = "Where a Project's programs run: the adapters of the kernel's environment port, local first (ADR 0084)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+banda-kernel = { path = "../../kernel" }
+pty-process.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+rustix.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

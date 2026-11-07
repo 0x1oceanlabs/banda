@@ -3,10 +3,41 @@
 
 mod common;
 
+use banda_environments::How;
 use banda_kernel::{AgentId, Code, Participant};
 use banda_terminal::model::{Piece, TerminalId};
 use common::{World, next, piece, until};
 use serde_json::json;
+
+/// A terminal's program starts in its Project's environment, never by the
+/// module itself (ADR 0084, decision 4): on a PTY, in the Project's
+/// folder, carrying what tells its servers whose they are.
+#[tokio::test]
+async fn a_terminal_starts_its_program_in_its_projects_environment() {
+    let world = World::new().await;
+    let terminal = world.run("echo started").await;
+    let mut watching = world.watch(terminal).await;
+    let (screen, _) = until(&mut watching, |s| s.contains("started")).await;
+    assert!(screen.contains("started"), "{screen:?}");
+
+    let asked = world.asks.all();
+    let [asked] = &asked[..] else {
+        panic!("one program: {asked:?}");
+    };
+    assert_eq!(asked.how, How::Pty);
+    let program = &asked.program;
+    assert_eq!(program.program, "sh");
+    assert_eq!(program.args, ["-c", "echo started"]);
+    assert_eq!(program.cwd, Some(world.folder().await));
+    assert_eq!(program.env["BANDA_PROJECT"], world.project.to_string());
+    assert_eq!(program.env["BANDA_TERMINAL"], terminal.to_string());
+    assert_eq!(program.env["TERM"], "xterm-256color");
+    let unset = program.unset.iter();
+    assert!(
+        unset.clone().all(|name| name.starts_with("ELECTRON_")),
+        "{unset:?}"
+    );
+}
 
 #[tokio::test]
 async fn a_program_prints_reads_what_is_typed_and_ends() {

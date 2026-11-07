@@ -26,6 +26,7 @@ ts-rs.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+banda-environments = { path = "../../../platform/environments" }
 tempfile.workspace = true
 
 [lints]

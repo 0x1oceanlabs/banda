@@ -1,6 +1,7 @@
 //! How Banda starts the `git` program in a folder: for its own
-//! bookkeeping ([`bookkeeping`]), or for an act the Person asked for
-//! ([`asked`]).
+//! bookkeeping ([`bookkeeping`]), on the host, or for an act the Person
+//! asked for ([`asked`]), which its Project's environment starts (ADR
+//! 0084, decision 8).
 //!
 //! Bookkeeping is what Banda runs by itself: a status, a diff, a
 //! checkpoint under Banda's own refs, a watch and the fetch it runs, a
@@ -42,6 +43,7 @@
 //! that points it at another repository, as when the engine runs inside
 //! a git hook.
 
+use banda_kernel::Program;
 use std::collections::BTreeSet;
 use std::ffi::{OsStr, OsString};
 use std::io;
@@ -70,6 +72,14 @@ const ELSEWHERE: [&str; 16] = [
     "GIT_SHALLOW_FILE",
     "GIT_COMMON_DIR",
     "GIT_EXTERNAL_DIFF",
+];
+
+/// What every git runs with: in C's words, asking nothing on a terminal
+/// and taking no optional lock.
+const EVERY: [(&str, &str); 3] = [
+    ("GIT_OPTIONAL_LOCKS", "0"),
+    ("GIT_TERMINAL_PROMPT", "0"),
+    ("LC_ALL", "C"),
 ];
 
 /// What every bookkeeping git runs with besides, whatever the repository
@@ -168,15 +178,26 @@ const READING: Duration = Duration::from_secs(10);
 const LACKED: &str = "0123456789abcdef0123456789abcdef01234567";
 
 /// git in `dir` running `args` for an act the Person asked for, as their
-/// own git runs it. Its stdio and the rest are the caller's.
-pub fn asked<I, S>(dir: &Path, args: I) -> Command
+/// own git runs it: the program for the Project's environment to start,
+/// as every git starts but for its bookkeeping. Its stdio and the rest
+/// are the caller's.
+pub fn asked<I, S>(dir: &Path, args: I) -> Program
 where
     I: IntoIterator<Item = S>,
-    S: AsRef<OsStr>,
+    S: AsRef<str>,
 {
-    let mut git = base(dir);
-    git.args(args);
-    git
+    Program {
+        program: "git".to_owned(),
+        args: args
+            .into_iter()
+            .map(|arg| arg.as_ref().to_owned())
+            .collect(),
+        env: (EVERY.iter())
+            .map(|&(name, value)| (name.to_owned(), value.to_owned()))
+            .collect(),
+        unset: ELSEWHERE.map(str::to_owned).to_vec(),
+        cwd: Some(dir.to_owned()),
+    }
 }
 
 /// git in `dir` running `args`, which name its subcommand, for Banda's
@@ -219,16 +240,11 @@ where
     Ok(git)
 }
 
-/// git in `dir` as every git starts: in C's words, asking nothing on a
-/// terminal, taking no optional lock and nothing [`ELSEWHERE`], and
-/// stopped once its caller lets go of it.
+/// git in `dir` as every git starts: as [`EVERY`] says, taking nothing
+/// [`ELSEWHERE`], and stopped once its caller lets go of it.
 fn base(dir: &Path) -> Command {
     let mut git = Command::new("git");
-    git.current_dir(dir)
-        .env("GIT_OPTIONAL_LOCKS", "0")
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("LC_ALL", "C")
-        .kill_on_drop(true);
+    git.current_dir(dir).envs(EVERY).kill_on_drop(true);
     for name in ELSEWHERE {
         git.env_remove(name);
     }
@@ -615,10 +631,18 @@ mod tests {
 
     #[test]
     fn every_git_takes_nothing_from_the_engine_that_points_it_elsewhere() {
-        let git = asked(Path::new("."), ["status"]);
+        let own = base(Path::new("."));
+        let asked = asked(Path::new("."), ["status"]);
         for name in ELSEWHERE {
-            let named = git.as_std().get_envs().find(|(key, _)| *key == name);
+            let named = own.as_std().get_envs().find(|(key, _)| *key == name);
             assert_eq!(named, Some((OsStr::new(name), None)), "{name}");
+            assert!(asked.unset.iter().any(|unset| unset == name), "{name}");
+            assert!(!asked.env.contains_key(name), "{name}");
+        }
+        for (name, value) in EVERY {
+            let named = own.as_std().get_envs().find(|(key, _)| *key == name);
+            assert_eq!(named, Some((OsStr::new(name), Some(OsStr::new(value)))));
+            assert_eq!(asked.env.get(name).map(String::as_str), Some(value));
         }
     }
 }

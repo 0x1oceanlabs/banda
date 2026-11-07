@@ -22,5 +22,8 @@ ts-rs.workspace = true
 [target.'cfg(unix)'.dependencies]
 rustix.workspace = true
 
+[dev-dependencies]
+banda-environments = { path = "../../../platform/environments" }
+
 [lints]
 workspace = true

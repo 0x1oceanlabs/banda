@@ -37,7 +37,7 @@ pub fn watch(project: ModuleProject, repositories: Repositories) -> Stream {
             // Read before git is: an event after it may change what git
             // reads.
             let at = project.at().await.ok();
-            let found = Repo::find(&folder).await;
+            let found = Repo::find(&project).await;
             let repo = match &found {
                 Ok(Some(repo)) => Some(repo.clone()),
                 _ => None,

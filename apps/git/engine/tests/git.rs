@@ -2,6 +2,7 @@
 //! the `git` program makes: each test's own, configured in the repository
 //! alone, never in the Person's global config.
 
+use banda_environments::{Asks, How, Local, Recorded};
 use banda_git::Git;
 use banda_git::model::{
     Change, Changed, Commit, Contents, Diff, Done, Progress, Ref, Status, Step,
@@ -56,6 +57,8 @@ struct World {
     owner: PersonId,
     project: ProjectId,
     folder: PathBuf,
+    /// What the Projects' environment was asked to start, on the host.
+    asks: Asks,
     _root: tempfile::TempDir,
 }
 
@@ -64,7 +67,10 @@ impl World {
     async fn bare() -> World {
         let root = tempfile::tempdir().unwrap();
         let owner = PersonId::new();
+        let environment = Recorded::new(Local);
+        let asks = environment.asks();
         let kernel = Kernel::builder(root.path(), root.path().join(".data"), owner)
+            .environment(environment)
             .module(Git::new())
             .module(Agents)
             .open()
@@ -92,6 +98,7 @@ impl World {
             owner,
             project,
             folder,
+            asks,
             _root: root,
         }
     }
@@ -1252,6 +1259,44 @@ async fn the_button_commits_every_change_and_pushes_it() {
     assert_eq!((status.ahead, status.behind), (Some(0), Some(0)));
 }
 
+/// An act the Person asks for runs in the Project's environment, hooks
+/// and all, while what Banda reads by itself runs on the host and asks it
+/// nothing (ADR 0084, decisions 4 and 8).
+#[tokio::test]
+async fn an_act_runs_in_the_projects_environment_and_a_read_on_the_host() {
+    let world = World::committed().await;
+    world.write("a.txt", "changed\n");
+    world.status().await;
+    world
+        .diff(json!({ "scope": { "kind": "uncommitted" } }))
+        .await;
+    assert_eq!(world.asks.all(), [], "bookkeeping starts nothing there");
+
+    world
+        .act(json!({ "action": "commit", "message": "Change a" }))
+        .await;
+    let asked = world.asks.all();
+    assert!(!asked.is_empty());
+    let folder = std::fs::canonicalize(&world.folder).unwrap();
+    for asked in &asked {
+        assert_eq!(asked.how, How::Spawn);
+        assert_eq!(asked.program.program, "git");
+        let cwd = asked
+            .program
+            .cwd
+            .as_ref()
+            .map(|cwd| std::fs::canonicalize(cwd).unwrap());
+        assert_eq!(cwd, Some(folder.clone()));
+        assert_eq!(asked.program.env["LC_ALL"], "C");
+        assert!(asked.program.unset.iter().any(|name| name == "GIT_DIR"));
+    }
+    let commit = asked
+        .iter()
+        .find(|a| a.program.args.first().is_some_and(|a| a == "commit"));
+    assert!(commit.is_some(), "{asked:?}");
+    assert_eq!(world.git(&["log", "-1", "--format=%s"]), "Change a");
+}
+
 #[tokio::test]
 async fn a_new_branch_is_pushed_under_its_own_name_and_followed() {
     let world = World::committed().await;
@@ -1491,6 +1536,10 @@ async fn a_folder_becomes_a_repository_once() {
     assert!(world.status().await.repo);
     let refused = world.call("git.init", json!({})).await.unwrap_err();
     assert_eq!(refused.code, Code::Conflict);
+    // It ran in the Project's environment, once.
+    let inits = world.asks.of("git");
+    let args: Vec<_> = inits.iter().map(|asked| &asked.program.args[..]).collect();
+    assert_eq!(args, [["init", "--quiet"]]);
 }
 
 #[tokio::test]

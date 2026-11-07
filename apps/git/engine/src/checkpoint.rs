@@ -211,7 +211,7 @@ async fn on(project: &ModuleProject, event: &Event) -> Result<(), Refusal> {
     let (Some(thread), Some(turn)) = (&event.subject, event.payload["turn"].as_str()) else {
         return Ok(());
     };
-    let Some(repo) = Repo::find(&project.folder()).await? else {
+    let Some(repo) = Repo::find(project).await? else {
         return Ok(());
     };
     match event.kind.as_str() {

@@ -3,6 +3,7 @@
 // Each test file uses some of these.
 #![allow(dead_code)]
 
+use banda_environments::{Asks, Local, Recorded};
 use banda_kernel::{CommandId, Kernel, Participant, PersonId, ProjectId, Stream};
 use banda_terminal::Terminals;
 use banda_terminal::model::{Piece, TerminalId};
@@ -14,6 +15,8 @@ pub struct World {
     pub kernel: Arc<Kernel>,
     pub owner: PersonId,
     pub project: ProjectId,
+    /// What the Projects' environment was asked to start, on the host.
+    pub asks: Asks,
     _root: tempfile::TempDir,
 }
 
@@ -21,7 +24,10 @@ impl World {
     pub async fn new() -> World {
         let root = tempfile::tempdir().unwrap();
         let owner = PersonId::new();
+        let environment = Recorded::new(Local);
+        let asks = environment.asks();
         let kernel = Kernel::builder(root.path(), root.path().join(".data"), owner)
+            .environment(environment)
             .module(Terminals::new())
             .open()
             .await
@@ -41,6 +47,7 @@ impl World {
             kernel,
             owner,
             project,
+            asks,
             _root: root,
         }
     }
@@ -59,6 +66,18 @@ impl World {
         self.kernel
             .call(person, method, Some(project), None, params)
             .await
+    }
+
+    /// The Project's folder.
+    pub async fn folder(&self) -> std::path::PathBuf {
+        let person = Participant::Person(self.owner);
+        let listed = (self.kernel)
+            .call(person, "projects.list", None, None, json!({}))
+            .await
+            .unwrap();
+        let listed = listed.as_array().unwrap().iter();
+        let ours = listed.clone().find(|p| p["id"] == json!(self.project));
+        ours.unwrap()["folder"].as_str().unwrap().into()
     }
 
     pub async fn another_project(&self) -> ProjectId {

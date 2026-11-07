@@ -3,7 +3,8 @@
 //! Project ID. What a host is, and when it has nothing to do, its client
 //! says ([`Host`]).
 //!
-//! - A host starts when it is first asked for, one start at a time.
+//! - A host starts when it is first asked for, one start at a time, in
+//!   the environment of the Project it is asked for (ADR 0084).
 //! - A host that keeps dying starts again after a growing pause.
 //! - A host with nothing to do for `idle` is let go.
 //! - A host is let go when its account changes, and every host of a
@@ -14,7 +15,7 @@
 //!   the host is dropped; an engine that dies closes the host's stdin.
 
 use crate::{Failed, Harness};
-use banda_kernel::ProjectId;
+use banda_kernel::{Environment, ProjectId};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Weak};
@@ -83,8 +84,11 @@ impl Default for Activity {
 
 /// A Harness process as its client holds it.
 pub trait Host: Send + Sync + Sized + 'static {
-    /// Starts `harness`.
-    fn start(harness: &Harness) -> impl Future<Output = Result<Arc<Self>, Failed>> + Send;
+    /// Starts `harness` in `environment`.
+    fn start(
+        environment: Arc<dyn Environment>,
+        harness: &Harness,
+    ) -> impl Future<Output = Result<Arc<Self>, Failed>> + Send;
     /// Whether the process still answers.
     fn alive(&self) -> bool;
     /// Since when it has had nothing to do, or `None` while it has.
@@ -158,10 +162,12 @@ impl<H: Host> Hosts<H> {
         })
     }
 
-    /// The host for `harness` in `project`, started if it is not running.
+    /// The host for `harness` in `project`, started in `environment`, the
+    /// Project's, if it is not running.
     pub async fn get(
         self: &Arc<Self>,
         project: ProjectId,
+        environment: Arc<dyn Environment>,
         harness: &Harness,
     ) -> Result<Arc<H>, Failed> {
         self.sweeping.call_once(|| {
@@ -194,7 +200,7 @@ impl<H: Host> Hosts<H> {
         if let Some(pause) = pause(slot.deaths) {
             tokio::time::sleep(pause).await;
         }
-        match H::start(harness).await {
+        match H::start(environment, harness).await {
             Ok(host) => {
                 slot.host = Some(host.clone());
                 slot.harness = Some(harness.clone());
@@ -307,6 +313,11 @@ mod tests {
         assert_eq!(pause(40), Some(LONGEST_PAUSE));
     }
 
+    /// The environment these hosts are handed: they start nothing in it.
+    fn here() -> Arc<dyn Environment> {
+        Arc::new(banda_environments::Local)
+    }
+
     /// A host that counts its starts, each held until `GO` lets it on.
     struct Counted(usize);
 
@@ -314,7 +325,7 @@ mod tests {
     static GO: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(0);
 
     impl Host for Counted {
-        async fn start(_: &Harness) -> Result<Arc<Self>, Failed> {
+        async fn start(_: Arc<dyn Environment>, _: &Harness) -> Result<Arc<Self>, Failed> {
             GO.acquire().await.unwrap().forget();
             Ok(Arc::new(Counted(STARTS.fetch_add(1, Ordering::SeqCst) + 1)))
         }
@@ -335,7 +346,7 @@ mod tests {
         let (project, harness) = (ProjectId::new(), known.find(&known.views()[0].id).unwrap());
         let starting = tokio::spawn({
             let (hosts, harness) = (hosts.clone(), harness.clone());
-            async move { hosts.get(project, &harness).await.unwrap().0 }
+            async move { hosts.get(project, here(), &harness).await.unwrap().0 }
         });
         // Its start holds the slot: letting go does not wait for it.
         while hosts.slots.lock().unwrap().is_empty() {
@@ -345,10 +356,10 @@ mod tests {
         GO.add_permits(1);
         assert_eq!(starting.await.unwrap(), 1);
         GO.add_permits(1);
-        let again = hosts.get(project, &harness).await.unwrap();
+        let again = hosts.get(project, here(), &harness).await.unwrap();
         assert_eq!(again.0, 2, "it read the account before it changed");
         assert_eq!(
-            hosts.get(project, &harness).await.unwrap().0,
+            hosts.get(project, here(), &harness).await.unwrap().0,
             2,
             "then it stays"
         );
@@ -360,7 +371,7 @@ mod tests {
     static KEPT: AtomicUsize = AtomicUsize::new(0);
 
     impl Host for Kept {
-        async fn start(_: &Harness) -> Result<Arc<Self>, Failed> {
+        async fn start(_: Arc<dyn Environment>, _: &Harness) -> Result<Arc<Self>, Failed> {
             Ok(Arc::new(Kept(KEPT.fetch_add(1, Ordering::SeqCst) + 1)))
         }
 
@@ -383,17 +394,17 @@ mod tests {
         let (project, other) = (ProjectId::new(), ProjectId::new());
         let mut first = Vec::new();
         for harness in &entries {
-            first.push(hosts.get(project, harness).await.unwrap().0);
+            first.push(hosts.get(project, here(), harness).await.unwrap().0);
         }
-        let theirs = hosts.get(other, &entries[0]).await.unwrap().0;
+        let theirs = hosts.get(other, here(), &entries[0]).await.unwrap().0;
 
         hosts.let_go(project, None);
         assert!(hosts.running(project).await.is_empty(), "let go at once");
         for (harness, before) in entries.iter().zip(first) {
-            let again = hosts.get(project, harness).await.unwrap().0;
+            let again = hosts.get(project, here(), harness).await.unwrap().0;
             assert!(again > before, "{} starts again", harness.id);
         }
-        let kept = hosts.get(other, &entries[0]).await.unwrap().0;
+        let kept = hosts.get(other, here(), &entries[0]).await.unwrap().0;
         assert_eq!(kept, theirs, "another Project's host stays");
 
         // Started for the other trust, a host is another entry, which a
@@ -402,8 +413,8 @@ mod tests {
         let shells = Default::default();
         let trusted = entries[0].in_project(project, data, &shells, true);
         let not = entries[0].in_project(project, data, &shells, false);
-        let before = hosts.get(project, &trusted).await.unwrap().0;
-        let after = hosts.get(project, &not).await.unwrap().0;
+        let before = hosts.get(project, here(), &trusted).await.unwrap().0;
+        let after = hosts.get(project, here(), &not).await.unwrap().0;
         assert!(after > before);
     }
 

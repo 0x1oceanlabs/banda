@@ -1,12 +1,14 @@
 //! The Person's own CLI that a Harness's adapter runs instead of a copy of
 //! its own (ADR 0003, decision 3): Claude Code's `claude`, Codex's `codex`.
 //! Each time the Harness starts, the engine finds the CLI and asks its
-//! version; a CLI that is not there stops the start, so Banda never runs
-//! a bundled one in its place. A CLI older than the entry's `minimum` runs,
+//! version, in the environment the Harness starts in (ADR 0084, decision
+//! 5); a CLI that is not there stops the start, so Banda never runs a
+//! bundled one in its place. A CLI older than the entry's `minimum` runs,
 //! with a warning (ADR 0003, decision 3).
 
 use crate::model::CliView;
 use crate::{Failed, Harness};
+use banda_kernel::{Environment, Input, Program};
 use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -55,10 +57,14 @@ fn warning(name: &str, path: &str, version: &str, minimum: &str) -> Option<Strin
     })
 }
 
-/// Finds the CLI `harness` names, and the version it says. The entry it
-/// returns sets the adapter's variable to the CLI's path. A CLI that is not
-/// installed stays so until the Person installs it.
-pub async fn find(harness: &Harness) -> Result<(Harness, Option<CliView>), Failed> {
+/// Finds the CLI `harness` names, and the version it says in
+/// `environment`. The entry it returns sets the adapter's variable to the
+/// CLI's path. A CLI that is not installed stays so until the Person
+/// installs it.
+pub async fn find(
+    environment: &dyn Environment,
+    harness: &Harness,
+) -> Result<(Harness, Option<CliView>), Failed> {
     let Some(cli) = &harness.cli else {
         return Ok((harness.clone(), None));
     };
@@ -69,7 +75,7 @@ pub async fn find(harness: &Harness) -> Result<(Harness, Option<CliView>), Faile
         ))
     })?;
     let path = path.display().to_string();
-    let version = version_of(&path, harness).await;
+    let version = version_of(environment, &path, harness).await;
     SAID.lock().unwrap().insert(path.clone(), version.clone());
     let outdated = Located::new(path.clone(), harness).outdated(&harness.name);
     let mut started = harness.clone();
@@ -97,14 +103,19 @@ pub(crate) fn runnable(path: &Path) -> bool {
     std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
 }
 
-async fn version_of(path: &str, harness: &Harness) -> Option<String> {
-    let asked = tokio::process::Command::new(path)
-        .arg("--version")
-        .envs(&harness.env)
-        .stdin(std::process::Stdio::null())
-        .kill_on_drop(true)
-        .output();
-    let said = timeout(ASKING, asked).await.ok()?.ok()?;
+async fn version_of(
+    environment: &dyn Environment,
+    path: &str,
+    harness: &Harness,
+) -> Option<String> {
+    let asking = Program {
+        program: path.to_owned(),
+        args: vec!["--version".to_owned()],
+        env: harness.env.clone(),
+        ..Program::default()
+    };
+    let asked = environment.spawn(&asking, Input::Null).ok()?;
+    let said = timeout(ASKING, asked.wait_with_output()).await.ok()?.ok()?;
     version_in(&String::from_utf8_lossy(&said.stdout))
 }
 

@@ -103,7 +103,10 @@ impl Given {
             options.insert("settingSources".to_owned(), serde_json::json!(["user"]));
         }
         let mut servers = Vec::new();
-        if let Some(Program { program, args, env }) = banda {
+        if let Some(Program {
+            program, args, env, ..
+        }) = banda
+        {
             options.insert("env".to_owned(), serde_json::json!(env));
             let variables = env.into_iter();
             let server = acp::McpServerStdio::new("banda", program).args(args).env(
@@ -312,6 +315,7 @@ mod tests {
             program: "/bin/banda".to_owned(),
             args: vec!["mcp".to_owned()],
             env: env.clone(),
+            ..Program::default()
         };
         let given = Given::of(Some(banda), true);
         let [acp::McpServer::Stdio(server)] = &given.servers[..] else {
@@ -342,6 +346,7 @@ mod tests {
             program: "/bin/banda".to_owned(),
             args: vec!["mcp".to_owned()],
             env: env.clone(),
+            ..Program::default()
         };
         let trusted = Given::of(Some(banda.clone()), true).meta.map(Value::Object);
         let options = &trusted.unwrap()["claudeCode"]["options"];

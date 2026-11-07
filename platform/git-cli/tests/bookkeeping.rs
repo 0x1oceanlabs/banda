@@ -7,16 +7,22 @@
 
 mod trap;
 
+use banda_environments::Local;
 use banda_git_cli::{asked, bookkeeping};
+use banda_kernel::{Environment, Input};
 use std::process::{Output, Stdio};
 use tokio::process::Command;
 use trap::{Trap, commit_in, executable, git};
 
+/// The PATH with the Person's own `ssh` first.
+fn path(trap: &Trap) -> String {
+    let path = std::env::var("PATH").unwrap_or_default();
+    format!("{}:{path}", trap.bin().display())
+}
+
 /// Runs `git` with the Person's own `ssh` first on the PATH.
 async fn run(trap: &Trap, mut git: Command) -> Output {
-    let path = std::env::var("PATH").unwrap_or_default();
-    let path = format!("{}:{path}", trap.bin().display());
-    git.env("PATH", path)
+    git.env("PATH", path(trap))
         .env_remove("GIT_SSH_COMMAND")
         .stdin(Stdio::null())
         .output()
@@ -29,9 +35,13 @@ async fn own(trap: &Trap, args: &[&str]) -> Output {
     run(trap, bookkeeping(&trap.repo, args).await.unwrap()).await
 }
 
-/// Runs `args` as the Person's own git does.
+/// Runs `args` as the Person's own git does, in the `local` environment.
 async fn theirs(trap: &Trap, args: &[&str]) -> Output {
-    run(trap, asked(&trap.repo, args)).await
+    let mut git = asked(&trap.repo, args);
+    git.env.insert("PATH".to_owned(), path(trap));
+    git.unset.push("GIT_SSH_COMMAND".to_owned());
+    let started = Local.spawn(&git, Input::Null).unwrap();
+    started.wait_with_output().await.unwrap()
 }
 
 #[tokio::test]

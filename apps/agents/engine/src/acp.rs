@@ -30,8 +30,8 @@ use agent_client_protocol::schema::v1 as acp;
 use agent_client_protocol::{Agent, Builder, Client, ConnectionTo, HandleDispatchFrom};
 use banda_harnesses::acp::Process;
 use banda_harnesses::hosts::{Activity, Held, Host};
-use banda_harnesses::model::Program;
 use banda_harnesses::{Failed, Harness};
+use banda_kernel::{Environment, Program};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
@@ -100,11 +100,16 @@ pub struct Connection {
 }
 
 impl Host for Connection {
-    /// Starts `harness`, with the handlers its sessions need.
-    async fn start(harness: &Harness) -> Result<Arc<Connection>, Failed> {
+    /// Starts `harness` in `environment`, with the handlers its sessions
+    /// need.
+    async fn start(
+        environment: Arc<dyn Environment>,
+        harness: &Harness,
+    ) -> Result<Arc<Connection>, Failed> {
         let (routes, learned) = (Routes::default(), Learned::default());
         let ended = routes.clone();
         let (process, answer) = Process::start(
+            environment,
             harness,
             handlers(routes.clone(), learned.clone()),
             shows(),

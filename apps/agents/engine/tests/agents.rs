@@ -6,6 +6,7 @@ use banda_agents::model::{
     ThreadList, ThreadView, ToolContent, ToolStatus, TurnId, TurnState, Wake,
 };
 use banda_agents::{Agents, Pipe};
+use banda_environments::{Asks, How, Local, Recorded};
 use banda_harnesses::{Cli, Harness, Harnesses, HarnessesModule, account_changed};
 use banda_kernel::{
     AgentId, Caller, Code, CommandId, EventFilter, Kernel, Participant, PersonId, ProjectId,
@@ -124,15 +125,25 @@ impl World {
     /// A kernel with the machine, its module `harnesses` on the same list
     /// as `agents`, `agents`, and git as it tells of its card.
     async fn open_with(root: &Path, owner: PersonId, agents: Agents) -> Arc<Kernel> {
-        Kernel::builder(root, root.join(".data"), owner)
+        World::open_asked(root, owner, agents).await.0
+    }
+
+    /// As [`World::open_with`], and what its environment, the host's, is
+    /// asked to start.
+    async fn open_asked(root: &Path, owner: PersonId, agents: Agents) -> (Arc<Kernel>, Asks) {
+        let environment = Recorded::new(Local);
+        let asks = environment.asks();
+        let kernel = Kernel::builder(root, root.join(".data"), owner)
             .machine(root.join(".machine"))
+            .environment(environment)
             .module(HarnessesModule::new(agents.harnesses()))
             .module(agents)
             .module(Telling("git", "git.acted"))
             .module(Telling("browser", "browser.lent"))
             .open()
             .await
-            .unwrap()
+            .unwrap();
+        (kernel, asks)
     }
 
     async fn new(root: &Path) -> World {
@@ -1387,6 +1398,53 @@ async fn a_harness_runs_the_persons_own_cli_and_says_its_version() {
     assert!(account["cli"].get("outdated").is_none(), "{account}");
     let (_, view) = world.finish(None, "hello").await;
     assert_eq!(view.offer.outdated, None);
+}
+
+/// Every Harness process starts in the environment of the Project it is
+/// for, and the machine's own in the engine's, never by the module itself
+/// (ADR 0084, decisions 4 and 5): the Harness's program, and the CLI it
+/// runs as it is asked its version. A short run apart from the Thread
+/// runs in the process the Thread has.
+#[tokio::test]
+async fn every_harness_process_starts_in_its_projects_environment() {
+    let (root, bin) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let cli = fake_cli(bin.path());
+    let agents = with_cli_since(&cli.display().to_string(), None);
+    let owner = PersonId::new();
+    let (kernel, asks) = World::open_asked(root.path(), owner, agents).await;
+    let world = World::in_a_project(kernel, owner, "fake").await;
+
+    let (thread, _) = world.finish(None, "hello").await;
+    let started = asks.of("banda-fake-agent");
+    let [thread_s] = &started[..] else {
+        panic!("one process for the Thread: {started:?}");
+    };
+    assert_eq!(thread_s.how, How::Spawn);
+    let project = world.project.to_string();
+    assert_eq!(thread_s.program.env["BANDA_PROJECT"], project);
+    assert_eq!(thread_s.program.cwd, None, "the engine's, as before");
+    let asked_cli = asks.of("fake-cli");
+    let [version] = &asked_cli[..] else {
+        panic!("its CLI asked once: {asked_cli:?}");
+    };
+    assert_eq!(version.program.args, ["--version"]);
+    assert_eq!(version.program.env["BANDA_PROJECT"], project);
+
+    // The machine's own process, which only says who is signed in.
+    world.account().await;
+    let started = asks.of("banda-fake-agent");
+    assert_eq!(started.len(), 2, "{started:?}");
+    assert!(!started[1].program.env.contains_key("BANDA_PROJECT"));
+    assert_eq!(
+        asks.of("fake-cli").len(),
+        3,
+        "its start and the account ask"
+    );
+
+    // A short run goes to the Thread's process, already running.
+    let written = world.written(json!({ "thread": thread, "prompt": "which session" }));
+    written.await.unwrap();
+    assert_eq!(asks.of("banda-fake-agent").len(), 2);
 }
 
 /// A CLI in `folder` that says it is 9.9.9.

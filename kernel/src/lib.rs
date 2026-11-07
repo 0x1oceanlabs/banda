@@ -21,10 +21,13 @@
 //!   whether its caller may reach it. [`ModuleProject::watch`] watches
 //!   folders (ADR 0073, decision 14).
 //! - [`https`] is the one client for the requests the engine makes itself.
+//! - [`Environment`] is the port every program a Project runs starts
+//!   through ([`ModuleProject::environment`], ADR 0084).
 //! - [`api`] serves all of it over WebSocket.
 
 pub mod access;
 pub mod api;
+mod environment;
 mod error;
 mod events;
 mod foreign;
@@ -44,6 +47,7 @@ mod watching;
 mod window;
 
 pub use access::{Caller, Right};
+pub use environment::{Environment, Input, Program};
 pub use error::{Code, Error, Refusal};
 pub use events::{Event, EventFilter};
 pub use foreign::{Foreign, ForeignWhy};

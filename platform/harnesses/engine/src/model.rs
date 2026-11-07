@@ -1,9 +1,9 @@
 //! What the window reads of a Harness, written once in Rust for
 //! TypeScript too (ADR 0014).
 
+use banda_kernel::Program;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use ts_rs::TS;
 
 /// A Harness this machine can run, as `harnesses.toml` has it: a
@@ -84,16 +84,6 @@ pub struct CliView {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outdated: Option<String>,
-}
-
-/// A program with its arguments, never a shell line, and what it adds to
-/// the engine's environment.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "harnesses/")]
-pub struct Program {
-    pub program: String,
-    pub args: Vec<String>,
-    pub env: BTreeMap<String, String>,
 }
 
 /// Who is signed in to a Harness: a Harness entry on this computer as its

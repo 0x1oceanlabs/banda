@@ -32,9 +32,8 @@ use crate::acp::{Answer, Connection, Session};
 use crate::model::{ItemId, ThreadId, TurnId, Values};
 use crate::touching::Touches;
 use banda_harnesses::hosts::Hosts;
-use banda_harnesses::model::Program;
 use banda_harnesses::{Failed, Harness};
-use banda_kernel::{AgentId, Heard, ModuleProject, ProjectId};
+use banda_kernel::{AgentId, Heard, ModuleProject, Program, ProjectId};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -160,7 +159,9 @@ impl Live {
         if let Some(pipe) = &self.pipe {
             pipe.first_on_path(&mut started.env);
         }
-        let connection = self.hosts.get(project.id(), &started).await?;
+        let connection = (self.hosts)
+            .get(project.id(), project.environment(), &started)
+            .await?;
         connection.touch();
         Ok(connection)
     }

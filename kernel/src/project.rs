@@ -3,6 +3,7 @@
 //! the engine's data, in `projects/<id>/`: `project.json`, which names the
 //! folder, the SQLite, the lock, and the modules' files.
 
+use crate::environment::Environment;
 use crate::events::{self, Event, EventFilter};
 use crate::kernel::Entry;
 use crate::module::Module;
@@ -174,6 +175,8 @@ pub(crate) struct Shared {
     pub owner: PersonId,
     pub passes: Arc<Passes>,
     pub window: Arc<Window>,
+    /// Where its programs run (ADR 0084).
+    pub environment: Arc<dyn Environment>,
     /// This machine's scope; none for the machine itself.
     pub machine: Option<Arc<Project>>,
     /// Every Project, for the machine itself only: weak, as each Project holds
@@ -223,6 +226,7 @@ pub struct Project {
     modules: Arc<[Arc<dyn Module>]>,
     passes: Arc<Passes>,
     window: Arc<Window>,
+    environment: Arc<dyn Environment>,
     /// How far each module reacting to the log has reacted: see
     /// [`ModuleProject::react`].
     reactions: std::sync::Mutex<Vec<watch::Receiver<i64>>>,
@@ -274,6 +278,7 @@ impl Project {
             owner,
             passes,
             window,
+            environment,
             machine,
             projects,
         } = engine;
@@ -302,6 +307,7 @@ impl Project {
             modules,
             passes,
             window,
+            environment,
             reactions: Default::default(),
             machine,
             projects,
@@ -742,6 +748,13 @@ impl ModuleProject {
     /// changes.
     pub fn trusted(&self) -> bool {
         self.project.trusted()
+    }
+
+    /// Where the Project's programs run (ADR 0084): a module starts each
+    /// one there, never by itself. The machine's scope has the engine's,
+    /// for what its modules start.
+    pub fn environment(&self) -> Arc<dyn Environment> {
+        self.project.environment.clone()
     }
 
     /// A new pass that names `agent` in this Project, and works only in it:
