@@ -1,0 +1,40 @@
+[package]
+name = "banda-fence"
+description = "The fence around a Harness's programs (ADR 0083, decision 1): what `banda fence` does before it runs one, and what an environment hands it."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock.workspace = true
+libc.workspace = true
+rustix = { workspace = true, features = ["event", "fs", "mount", "pipe", "process", "stdio", "thread"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+rustix = { workspace = true, features = ["pty"] }
+
+# Its tests' program is also the launcher they start and the program it
+# fences, so it has a `main` of its own, not libtest's.
+[[test]]
+name = "fence"
+harness = false
+
+# Not the workspace's lints: the launcher makes the calls Rust cannot make
+# safe (unshare, fork, exec, the signal mask, close_range, mount_setattr,
+# a terminal's ioctl), each in one
+# audited wrapper that allows it (`src/linux/sys.rs`, `attach`). Everywhere
+# else `unsafe` stays forbidden.
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

@@ -303,6 +303,34 @@ The kernel holds only what every module needs, and it names no module.
   (`act`) are the Person's own, outside it. `local` reads whose a program is
   to start it where it belongs: a terminal's only on a terminal, and one to
   fence never on one.
+- **The fence** (ADR 0083, decision 1). `platform/fence` on Linux: the
+  engine is its own launcher, `banda fence`, which an environment starts
+  from the engine's running program (`/proc/self/exe`) with the program
+  after `--` and what to do, a `Spec`, on a sealed memfd only that child
+  keeps; it refuses a spec another build wrote, and refuses to run as
+  root. On its one thread, before anything else in the engine runs, it
+  closes what its starter left open, lets go of the starter's terminal,
+  makes a user, a mount and an IPC namespace (the user mapped to itself),
+  keeps `/sys` read-only and gives the program a `/dev` of the fence's own
+  (the devices a program needs, its own terminals and shared memory), pins
+  every folder above what it covers that the user may rename, covers each
+  folder the spec hides with an empty one of its own and puts back the
+  holes in it, keeps the read-only folders so, sets `no_new_privs` and
+  Landlock's scopes where the kernel has them (scopes only, so the
+  sandboxes Harnesses make inside still work), and then starts the program
+  in a PID namespace whose first process mounts its own `/proc`, reaps and
+  passes signals on, each signal reaching the program once. It writes
+  nothing on stdout, exits as the program did (a signal `n` as `128 + n`),
+  takes the fenced tree along when it is killed, and stops with `125`
+  before running anything when a step fails. `banda fence --probe` does
+  all of it for real over Banda's own folders (every Banda's state and data
+  hidden, every Banda's config read-only, the session's runtime folder
+  hidden; a folder reached through a link the user could move refused),
+  checks from inside what it covered, and prints one JSON line: `holds`
+  with its layers, or `missing` and why (`no_user_namespaces`, `refused`
+  by the system, `setup_failed`). The crate makes no process of its own:
+  `platform/environments` stays the one place that does. `local` does not
+  start Harnesses behind it yet.
 - **Passes** (ADR 0083, decision 2). A module asks its `ModuleProject` for
   a new pass of an Agent (`pass(agent)`), 32 random bytes in hex; the
   agents module asks as a session opens. The kernel keeps passes in the
@@ -1435,6 +1463,7 @@ banda/
     settings/         Rust: Banda's settings files, each described once, and the one writer that changes them (ADR 0016)
     git-cli/          Rust: how Banda starts git: its own bookkeeping, which runs no program a repository names, and the acts the Person asks for
     environments/     Rust: where a Project's programs run, the adapters of the kernel's Environment port: local (ADR 0084)
+    fence/            Rust: the fence a Harness's programs run behind on Linux, and `banda fence`, its launcher and probe (ADR 0083)
     harnesses/        Rust: the Harnesses and how each starts; adapters/ the ACP adapters Banda carries and its shim of Claude's Agent SDK, a Node package run on the host (ADR 0059, ADR 0078)
   client/             the window
     ui/               shadcn/ui and the Pane contract
@@ -1550,6 +1579,12 @@ images. Sweeps retain images still referenced by a fork after a rewind.
     and the skills, plugins and agents a Harness lists as its own.
   - T3 Code's Claude and Codex fixtures record other protocols (Claude's
     SDK messages, Codex's app server), so they do not replay here.
+- **The fence's tests** make real namespaces. Where the system refuses
+  them, as devbox's CI containers do, each says why and skips;
+  `scripts/check.sh` outside CI sets `BANDA_FENCE_TESTS=require`, so there
+  that skip fails. CI's `fence` part, on GitHub's Ubuntu runner, sets
+  `BANDA_FENCE_TESTS=all`: every test runs, and one that would skip for
+  anything it lacks (namespaces, Landlock's scopes, bwrap) fails.
 - **End to end.** Playwright drives the Electron window against a scripted
   fake ACP agent. Screenshots let Agents check the UI themselves.
 - **Speed budget.** A window test measures start-up time, memory and input

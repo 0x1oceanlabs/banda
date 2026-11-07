@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["apps/agents/engine", "apps/browser/engine", "apps/files/engine", "apps/git/engine", "apps/pulls/engine", "apps/terminal/engine", "engine", "kernel", "platform/environments", "platform/git-cli", "platform/harnesses/engine", "platform/keys/engine", "platform/look", "platform/problems/engine", "platform/settings", "platform/sharing/engine", "platform/skill", "platform/workspaces/engine", "tools/fake-agent"]
+members = ["apps/agents/engine", "apps/browser/engine", "apps/files/engine", "apps/git/engine", "apps/pulls/engine", "apps/terminal/engine", "engine", "kernel", "platform/environments", "platform/fence", "platform/git-cli", "platform/harnesses/engine", "platform/keys/engine", "platform/look", "platform/problems/engine", "platform/settings", "platform/sharing/engine", "platform/skill", "platform/workspaces/engine", "tools/fake-agent"]
 
 [workspace.package]
 version = "0.1.0"
@@ -35,6 +35,12 @@ ignore = "0.4.25"
 infer = "0.19"
 # A picture's EXIF, for Files' info (BSD-2-Clause).
 kamadak-exif = "0.6.2"
+# Landlock's scopes for the fence around a Harness's programs (ADR 0083,
+# decision 1), in pure Rust.
+landlock = "0.4.7"
+# What the fence's launcher asks of the C library: fork, exec and the
+# signal mask, whose bookkeeping is the C library's (platform/fence).
+libc = "0.2.191"
 # The name freedesktop gives a thumbnail is the MD5 of its file's URI.
 md-5 = "0.10.6"
 mime_guess = "2.0.5"
@@ -53,7 +59,7 @@ rusqlite = { version = "0.41.1", features = ["bundled"] }
 # rustls with the system's certificates, and the proxy the variables name,
 # or on macOS the system's settings (kernel/src/https.rs).
 reqwest = { version = "0.12.28", default-features = false, features = ["rustls-tls-native-roots", "system-proxy"] }
-rustix = { version = "1.1.5", features = ["process", "termios"] }
+rustix = { version = "1.1.6", features = ["process", "termios"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # An archive is only listed, never unpacked, so neither carries codecs of
