@@ -1,0 +1,90 @@
+# GitHub keeps 10 GB of Actions caches for the repository, and past that
+# deletes those used least lately, main's too. A run reads only its own
+# ref's entries and main's, so a PR's entries help only its own later
+# runs, and main's newest serves those too; main's older ones are stale.
+# Each day this keeps the newest entry main saved of each family of keys,
+# and deletes the rest.
+#
+# A family is a key without its hashes: every "-" part of 8 or more hex
+# digits comes off, wherever it is (rust-cache's toolchain and lockfile
+# hashes, setup-node's lockfile hash, CodeQL's config hash, a commit, a
+# run id). So v0-rust-macos-test-Darwin-arm64-b1372a82-0d8e5b5b is of the
+# family v0-rust-macos-test-Darwin-arm64, and CodeQL's
+# codeql-overlay-base-database-1-<hash>-javascript-2.27.4-<commit>-<run>-1
+# of codeql-overlay-base-database-1-javascript-2.27.4-1.
+#
+# In each family the newest entry whose ref is refs/heads/main stays;
+# every other goes, main's older ones and all of refs/pull/*, a branch's
+# or a tag's, and a family with none of main's goes whole. So each job
+# that saves a cache names it for itself (rust-cache's shared-key): two
+# that shared a name would keep one entry between them.
+#
+# By hand, to see what it would delete, and delete nothing:
+#
+#   gh workflow run cache-prune.yml -f dry_run=true
+name: cache prune
+
+on:
+  schedule:
+    # The quietest hour of the day for the repository's runs.
+    - cron: "23 7 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: List what it would delete, and delete nothing
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: cache-prune
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    name: prune
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: keep main's newest of each family
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          caches=$(gh cache list --limit 1000 --json id,key,ref,sizeInBytes,createdAt)
+          # keep or delete, id, MiB, ref, key: each family, newest first.
+          plan=$(jq -r '
+            def family: .key | split("-") | map(select(test("^[0-9a-f]{8,}$") | not)) | join("-");
+            group_by(family)[]
+            | (map(select(.ref == "refs/heads/main")) | max_by(.createdAt) | .id) as $kept
+            | sort_by(.createdAt) | reverse[]
+            | [(if .id == $kept then "keep" else "delete" end),
+               .id, (.sizeInBytes / 1048576 | floor), .ref, .key]
+            | @tsv' <<<"$caches")
+
+          kept=0 kept_mib=0 deleted=0 deleted_mib=0 failed=0
+          while IFS=$'\t' read -r verdict id mib ref key; do
+            [[ -n $verdict ]] || continue
+            printf '%-6s %6s MiB  %-22s %s\n' "$verdict" "$mib" "$ref" "$key"
+            if [[ $verdict == keep ]]; then
+              kept=$((kept + 1)) kept_mib=$((kept_mib + mib))
+            elif [[ $DRY_RUN == true ]]; then
+              deleted=$((deleted + 1)) deleted_mib=$((deleted_mib + mib))
+            elif gh cache delete "$id" >/dev/null; then
+              deleted=$((deleted + 1)) deleted_mib=$((deleted_mib + mib))
+            else
+              echo "::warning::could not delete $key ($ref, id $id)"
+              failed=$((failed + 1))
+            fi
+          done <<<"$plan"
+
+          verb=Deleted
+          if [[ $DRY_RUN == true ]]; then verb="A dry run: would delete"; fi
+          echo "Kept $kept entries, $kept_mib MiB. $verb $deleted, $deleted_mib MiB." |
+            tee -a "$GITHUB_STEP_SUMMARY"
+          ((failed == 0)) || { echo "::error::$failed entries could not be deleted"; exit 1; }
