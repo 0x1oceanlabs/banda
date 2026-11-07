@@ -1,8 +1,8 @@
-//! A Harness process, spoken to over ACP v1 on its stdio: starting it,
-//! recording what it says, agreeing on ACP, and who is signed in to it
-//! (`account`). A client adds what it needs to the connection: the agents
-//! module its sessions' handlers and the capabilities they declare
-//! ([`Process::start`]).
+//! A Harness process, spoken to over ACP v1 on its stdio: starting it in
+//! its Project's environment (ADR 0084), recording what it says, agreeing
+//! on ACP, and who is signed in to it (`account`). A client adds what it
+//! needs to the connection: the agents module its sessions' handlers and
+//! the capabilities they declare ([`Process::start`]).
 //!
 //! Starting a Harness is bounded: [`STARTING`].
 
@@ -13,15 +13,19 @@ use crate::{Failed, Harness};
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1 as acp;
 use agent_client_protocol::{
-    AcpAgent, AcpAgentConfig, Agent, Builder, Client, ConnectionTo, HandleConnectionClose,
-    HandleDispatchFrom, LineDirection, RunWithConnectionTo,
+    Agent, Builder, Client, ConnectionTo, HandleConnectionClose, HandleDispatchFrom,
+    RunWithConnectionTo,
 };
+use banda_kernel::Environment;
+use pipes::{Pipes, Said};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
 mod account;
+mod pipes;
 
 use account::*;
 
@@ -49,6 +53,8 @@ pub struct Process {
     about: About,
     /// Where the Person's CLI it runs was found when it started.
     cli: Option<Located>,
+    /// Where it runs, which looks for its CLI again.
+    environment: Arc<dyn Environment>,
     /// Who it last said is signed in.
     account: watch::Receiver<Option<AuthStatus>>,
     driver: JoinHandle<()>,
@@ -68,15 +74,17 @@ fn in_words(error: &agent_client_protocol::Error) -> &str {
 }
 
 impl Process {
-    /// Starts `harness` and agrees on ACP v1 with it. `client` holds the
-    /// caller's handlers and `shows` what it declares it can show; terminal
-    /// sign-in is declared here. `ended` runs once the connection ends, in
+    /// Starts `harness` in `environment`, its Project's or the machine's,
+    /// and agrees on ACP v1 with it. `client` holds the caller's handlers
+    /// and `shows` what it declares it can show; terminal sign-in is
+    /// declared here. `ended` runs once the connection ends, in
     /// whatever way, a failed start too, which the builder's own close
     /// hook does not see. Answers the process and what the Harness agreed
     /// to, less its account's part: its information and ways to sign in.
     /// Only a CLI that is not installed and an ACP version Banda does not
     /// speak stop it for good; any other start that fails may pass.
     pub async fn start<H, R, C>(
+        environment: Arc<dyn Environment>,
         harness: &Harness,
         client: Builder<Client, H, R, C>,
         shows: acp::ClientCapabilities,
@@ -88,29 +96,29 @@ impl Process {
         C: HandleConnectionClose<Agent> + 'static,
     {
         // The entry as it starts, with its CLI's path when it runs one.
-        let (harness, cli) = crate::cli::find(harness).await?;
-        let start = harness.start();
-        let config = AcpAgentConfig::new(&start.program)
-            .args(start.args)
-            .envs(start.env);
+        let (harness, cli) = crate::cli::find(&*environment, harness).await?;
         let recording = match &harness.record {
             Some(folder) => Some(Recording::start(folder, &harness.id).map_err(Failed::Passing)?),
             None => None,
         };
         let id = harness.id.clone();
-        let process = AcpAgent::new(config).with_debug(move |line, direction| {
-            let to = match direction {
-                LineDirection::Stdin => To::Harness,
-                LineDirection::Stdout => To::Banda,
-                LineDirection::Stderr => {
-                    tracing::debug!(harness = %id, "{line}");
-                    return;
+        let process = Pipes {
+            environment: environment.clone(),
+            program: harness.start(),
+            hears: Arc::new(move |line, said| {
+                let to = match said {
+                    Said::ToHarness => To::Harness,
+                    Said::ToBanda => To::Banda,
+                    Said::Stderr => {
+                        tracing::debug!(harness = %id, "{line}");
+                        return;
+                    }
+                };
+                if let Some(recording) = &recording {
+                    recording.write(to, line);
                 }
-            };
-            if let Some(recording) = &recording {
-                recording.write(to, line);
-            }
-        });
+            }),
+        };
         let (ready, started) = oneshot::channel();
         let (told, account) = watch::channel(None);
         let shows = shows.auth(acp::AuthCapabilities::new().terminal(true));
@@ -150,6 +158,7 @@ impl Process {
             ways: ways(&harness, std::mem::take(&mut answer.auth_methods)),
             about,
             cli: cli.map(|cli| Located::new(cli.path, &harness)),
+            environment,
             account,
             driver,
         };
@@ -186,7 +195,7 @@ impl Process {
 type Started = (ConnectionTo<Agent>, acp::InitializeResponse);
 
 async fn drive<H, R, C>(
-    process: AcpAgent,
+    process: Pipes,
     client: Builder<Client, H, R, C>,
     shows: acp::ClientCapabilities,
     told: watch::Sender<Option<AuthStatus>>,

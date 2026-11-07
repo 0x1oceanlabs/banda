@@ -4,12 +4,15 @@
 //! mark: a status, each diff, the reads before an act, a turn's
 //! checkpoints, a watch's tick and its fetch, the commits, an ignore
 //! check, a file's last commit and the remote a pull request is read
-//! from. None leaves one, while the Person's own git does.
+//! from. None leaves one, while the Person's own git does. None asks the
+//! Project's environment either: what keeps Banda's books runs on the
+//! host (ADR 0084, decision 4).
 #![cfg(unix)]
 
 #[path = "../../platform/git-cli/tests/trap/mod.rs"]
 mod trap;
 
+use banda_environments::{Asks, Local, Recorded};
 use banda_files::Files;
 use banda_git::Git;
 use banda_kernel::{
@@ -61,6 +64,8 @@ struct World {
     owner: PersonId,
     project: ProjectId,
     trap: Trap,
+    /// What the Project's environment was asked to start.
+    asks: Asks,
     _root: tempfile::TempDir,
 }
 
@@ -70,7 +75,10 @@ impl World {
         let owner = PersonId::new();
         let gh = root.path().join("gh");
         executable(&gh, "#!/bin/sh\nexit 1\n");
+        let environment = Recorded::new(Local);
+        let asks = environment.asks();
         let kernel = Kernel::builder(root.path(), root.path().join(".data"), owner)
+            .environment(environment)
             .module(Git::new())
             .module(Files::new())
             .module(Pulls::new().gh(gh))
@@ -100,6 +108,7 @@ impl World {
             owner,
             project,
             trap: Trap::new(&folder),
+            asks,
             _root: root,
         }
     }
@@ -265,6 +274,7 @@ async fn what_the_modules_run_by_themselves_runs_no_program_the_repository_names
     }
 
     assert_eq!(world.trap.left(), Vec::<String>::new());
+    assert_eq!(world.asks.all(), [], "nothing ran in the environment");
 
     // The Person's own git runs them.
     tried(repo, &["status", "--porcelain"]);

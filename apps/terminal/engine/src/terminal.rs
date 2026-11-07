@@ -1,8 +1,9 @@
 //! One terminal: a program on a PTY, what it printed, and who watches it.
 //!
-//! The program leads a session and a process group of its own. A close
-//! while it runs reaches its group: a hangup and a request to stop, then a
-//! kill a second later; a shell passes the hangup on to its jobs. Once the
+//! The program starts in its Project's environment (ADR 0084), and leads
+//! a session and a process group of its own there. A close while it runs
+//! reaches its group: a hangup and a request to stop, then a kill a
+//! second later; a shell passes the hangup on to its jobs. Once the
 //! program ended, its number may name another process, so a close sends
 //! nothing: the kernel hung up the terminal when its session's leader
 //! ended. When the engine stops, the PTY closes and the program hears the
@@ -12,9 +13,10 @@ use crate::front::Front;
 use crate::history::{Decoder, History, Since};
 use crate::model::{Ended, Open, Piece, Size, Title};
 use crate::servers::TERMINAL_VARIABLE;
-use banda_kernel::{ProjectId, Stream, project_env};
+use banda_kernel::{Environment, Program, ProjectId, Stream, project_env};
 use pty_process::{OwnedReadPty, OwnedWritePty};
 use rustix::process::{Pid, Signal, kill_process_group};
+use std::collections::BTreeMap;
 use std::os::unix::process::ExitStatusExt;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -54,29 +56,38 @@ struct Now {
 }
 
 impl Terminal {
-    /// Starts `open.program`, or the Person's shell, in `folder`.
-    pub fn start(project: ProjectId, folder: &Path, open: Open) -> Result<Arc<Terminal>, String> {
+    /// Starts `open.program`, or the Person's shell, in `folder`, in the
+    /// Project's `environment`.
+    pub fn start(
+        project: ProjectId,
+        environment: &dyn Environment,
+        folder: &Path,
+        open: Open,
+    ) -> Result<Arc<Terminal>, String> {
         let (pty, pts) = pty_process::open().map_err(plain)?;
         pty.resize(open.size.pty()).map_err(plain)?;
-        let program = open.program.clone().unwrap_or_else(shell);
-        let mut command = pty_process::Command::new(&program)
-            .args(&open.args)
-            .current_dir(folder)
-            .env("TERM", "xterm-256color")
-            .env("COLORTERM", "truecolor");
-        // What Electron tells its own children is not for a Person's program.
-        for (key, _) in std::env::vars_os() {
-            if key.to_string_lossy().starts_with("ELECTRON_") {
-                command = command.env_remove(key);
-            }
-        }
+        let mut env = BTreeMap::from([
+            ("TERM".to_owned(), "xterm-256color".to_owned()),
+            ("COLORTERM".to_owned(), "truecolor".to_owned()),
+        ]);
         // What it carries tells its servers (ADR 0044, decision 2).
-        let child = command
-            .envs(&open.env)
-            .envs(project_env(project))
-            .env(TERMINAL_VARIABLE, open.terminal.to_string())
-            .spawn(pts)
-            .map_err(|e| format!("{program} could not start: {e}."))?;
+        env.extend(open.env.clone());
+        env.extend(project_env(project).map(|(key, id)| (key.to_owned(), id)));
+        env.insert(TERMINAL_VARIABLE.to_owned(), open.terminal.to_string());
+        let program = Program {
+            program: open.program.clone().unwrap_or_else(shell),
+            args: open.args.clone(),
+            env,
+            // What Electron tells its own children is not for a Person's
+            // program.
+            unset: (std::env::vars_os())
+                .filter_map(|(key, _)| key.into_string().ok())
+                .filter(|key| key.starts_with("ELECTRON_"))
+                .collect(),
+            cwd: Some(folder.to_owned()),
+        };
+        let child = (environment.pty(&program, pts))
+            .map_err(|e| format!("{} could not start: {e}.", program.program))?;
         let group = child
             .id()
             .and_then(|id| i32::try_from(id).ok())

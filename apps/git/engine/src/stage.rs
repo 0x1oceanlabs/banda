@@ -52,7 +52,8 @@ pub async fn change(repo: &Repo, act: Act, ask: ChangeAsk) -> Result<(), Refusal
 
 /// `args` on the files, given as they are.
 async fn on(repo: &Repo, args: &[&str], files: &[&str]) -> Result<(), Refusal> {
-    repo.run_on_paths(args, files, Opts::asked()).await?;
+    repo.run_on_paths(args, files, Opts::asked(repo.environment()))
+        .await?;
     Ok(())
 }
 
@@ -231,7 +232,7 @@ async fn lines(repo: &Repo, act: Act, files: &[&str], hunk: HunkAsk) -> Result<(
     }
     let opts = Opts {
         stdin: Some(picked.into_bytes()),
-        ..Opts::asked()
+        ..Opts::asked(repo.environment())
     };
     let applied = git(&repo.top, apply, opts).await?;
     if applied.success {

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["apps/agents/engine", "apps/browser/engine", "apps/files/engine", "apps/git/engine", "apps/pulls/engine", "apps/terminal/engine", "engine", "kernel", "platform/git-cli", "platform/harnesses/engine", "platform/keys/engine", "platform/look", "platform/problems/engine", "platform/settings", "platform/sharing/engine", "platform/skill", "platform/workspaces/engine", "tools/fake-agent"]
+members = ["apps/agents/engine", "apps/browser/engine", "apps/files/engine", "apps/git/engine", "apps/pulls/engine", "apps/terminal/engine", "engine", "kernel", "platform/environments", "platform/git-cli", "platform/harnesses/engine", "platform/keys/engine", "platform/look", "platform/problems/engine", "platform/settings", "platform/sharing/engine", "platform/skill", "platform/workspaces/engine", "tools/fake-agent"]
 
 [workspace.package]
 version = "0.1.0"

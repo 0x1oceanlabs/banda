@@ -2,10 +2,11 @@
 //! (`docs/research/2026-11-02-t3-code-git-backend.md`, section 0).
 //!
 //! Every git the module runs goes through [`git`], in the folder it is
-//! given: Banda's own bookkeeping, which runs no program the repository
-//! names, unless it is an act the Person asked for ([`Opts::asked`]),
-//! which runs as their own git, hooks and all (`banda_git_cli` says how
-//! far each holds). Only a Person asks for one: the methods that run an
+//! given: Banda's own bookkeeping, on the host, which runs no program the
+//! repository names, unless it is an act the Person asked for
+//! ([`Opts::asked`]), which runs as their own git, hooks and all, in the
+//! Project's environment (`banda_git_cli` says how far each holds; ADR
+//! 0084, decision 8). Only a Person asks for one: the methods that run an
 //! act need `Right::Run`, which no Agent holds. Either takes no optional
 //! lock, so a status read beside the Person's own git never takes
 //! `.git/index.lock`, and asks nothing. At most eight run at once; each
@@ -15,8 +16,9 @@
 //! goes to the engine's log only, and a caller hears a [`Reason`]; a line
 //! a caller follows has its credentials taken out ([`redact`]).
 
-use banda_kernel::Refusal;
-use std::ffi::OsStr;
+use banda_kernel::{Environment, Input, Program, Refusal};
+use std::ffi::{OsStr, OsString};
+use std::io;
 use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
@@ -73,19 +75,20 @@ pub struct Opts<'a> {
     pub lines: Option<mpsc::UnboundedSender<String>>,
     pub pool: Pool,
     /// It is an act the Person asked for, as a commit or a push, which
-    /// runs as their own git; else it is Banda's own bookkeeping.
-    pub asked: bool,
+    /// runs as their own git in this, its Project's environment; with
+    /// none, it is Banda's own bookkeeping, on the host.
+    pub asked: Option<&'a dyn Environment>,
 }
 
-impl Opts<'_> {
+impl<'a> Opts<'a> {
     /// For an act the Person asked for, as a commit, a push or a stage: it
-    /// runs as their own git, hooks and all, for up to [`LONG`], beside
-    /// the reads.
-    pub fn asked() -> Self {
+    /// runs as their own git, hooks and all, in `environment`, for up to
+    /// [`LONG`], beside the reads.
+    pub fn asked(environment: &'a dyn Environment) -> Self {
         Opts {
             time: Some(LONG),
             pool: Pool::Long,
-            asked: true,
+            asked: Some(environment),
             ..Opts::default()
         }
     }
@@ -358,27 +361,37 @@ where
         tracing::warn!(%error, args = %said, "git did not start");
         Failure(Reason::Other)
     };
-    let mut command = match opts.asked {
-        true => banda_git_cli::asked(folder, &args),
-        false => banda_git_cli::bookkeeping(folder, &args)
-            .await
-            .map_err(did_not_start)?,
+    // A group of its own either way, so stopping it stops the hooks it
+    // runs too.
+    let mut child = match opts.asked {
+        Some(environment) => {
+            let act = act(folder, &args, &opts).map_err(did_not_start)?;
+            let input = match opts.stdin {
+                Some(_) => Input::Piped,
+                None => Input::Null,
+            };
+            environment.spawn(&act, input).map_err(did_not_start)?
+        }
+        None => {
+            let mut command = banda_git_cli::bookkeeping(folder, &args)
+                .await
+                .map_err(did_not_start)?;
+            command
+                .stdin(match opts.stdin {
+                    Some(_) => Stdio::piped(),
+                    None => Stdio::null(),
+                })
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+            #[cfg(unix)]
+            command.process_group(0);
+            if let Some(index) = opts.index {
+                command.env("GIT_INDEX_FILE", index);
+            }
+            command.envs(opts.env.iter().copied());
+            command.spawn().map_err(did_not_start)?
+        }
     };
-    command
-        .stdin(match opts.stdin {
-            Some(_) => Stdio::piped(),
-            None => Stdio::null(),
-        })
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    // A group of its own, so stopping it stops the hooks it runs too.
-    #[cfg(unix)]
-    command.process_group(0);
-    if let Some(index) = opts.index {
-        command.env("GIT_INDEX_FILE", index);
-    }
-    command.envs(opts.env.iter().copied());
-    let mut child = command.spawn().map_err(did_not_start)?;
     let time = opts.time.unwrap_or(TIME);
     let cap = opts.cap.unwrap_or(OUTPUT);
     let stdin = child.stdin.take();
@@ -442,6 +455,28 @@ where
         stderr: err,
         args: said,
     })
+}
+
+/// The act `args` asks for in `folder`, as its Project's environment
+/// starts it: `opts`'s index and variables over git's own. Its arguments
+/// and variables are text, as the methods' params are.
+fn act(folder: &Path, args: &[OsString], opts: &Opts) -> io::Result<Program> {
+    let text = |said: &OsStr| {
+        let text = said.to_str().map(str::to_owned);
+        text.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "git takes text here"))
+    };
+    let args = (args.iter())
+        .map(|arg| text(arg))
+        .collect::<io::Result<Vec<_>>>()?;
+    let mut act = banda_git_cli::asked(folder, args);
+    if let Some(index) = opts.index {
+        act.env
+            .insert("GIT_INDEX_FILE".to_owned(), text(index.as_os_str())?);
+    }
+    for (name, value) in opts.env {
+        act.env.insert((*name).to_owned(), text(value)?);
+    }
+    Ok(act)
 }
 
 /// A git running, in a process group of its own with the hooks it runs.
@@ -605,6 +640,7 @@ async fn capped(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use banda_environments::Local;
 
     #[test]
     fn stderr_reads_as_a_reason_from_its_fatal_and_error_lines() {
@@ -671,7 +707,7 @@ mod tests {
         let began = std::time::Instant::now();
         let opts = Opts {
             time: Some(Duration::from_secs(1)),
-            ..Opts::asked()
+            ..Opts::asked(&Local)
         };
         let ran = git(folder.path(), COMMIT, opts).await;
         assert_eq!(ran.err(), Some(Failure(Reason::TimedOut)));
@@ -684,7 +720,9 @@ mod tests {
     async fn a_git_ends_as_it_exits_though_its_hook_left_a_child_with_its_stderr() {
         let folder = with_hook("#!/bin/sh\nsleep 30 >&2 &\necho checked >&2\n");
         let began = std::time::Instant::now();
-        let ran = git(folder.path(), COMMIT, Opts::asked()).await.unwrap();
+        let ran = git(folder.path(), COMMIT, Opts::asked(&Local))
+            .await
+            .unwrap();
         assert!(ran.success);
         assert!(began.elapsed() < Duration::from_secs(10));
         assert_eq!(ran.last_line().as_deref(), Some("checked"));
@@ -694,7 +732,9 @@ mod tests {
     #[tokio::test]
     async fn an_act_asked_for_runs_the_hooks_and_bandas_own_git_runs_none() {
         let folder = with_hook("#!/bin/sh\necho checked >&2\nexit 1\n");
-        let asked = git(folder.path(), COMMIT, Opts::asked()).await.unwrap();
+        let asked = git(folder.path(), COMMIT, Opts::asked(&Local))
+            .await
+            .unwrap();
         assert!(!asked.success);
         assert_eq!(asked.last_line().as_deref(), Some("checked"));
         let own = git(folder.path(), COMMIT, Opts::default()).await.unwrap();

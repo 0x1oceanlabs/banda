@@ -4,8 +4,8 @@
 //! `agents.toml` (ADR 0040, decision 6).
 
 use crate::carried::Carried;
-use crate::model::{AccountKind, HarnessView, LimitsLook, Program};
-use banda_kernel::{ProjectId, project_env};
+use crate::model::{AccountKind, HarnessView, LimitsLook};
+use banda_kernel::{Program, ProjectId, project_env};
 use banda_look::Problem;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -96,6 +96,7 @@ impl Harness {
             program: start.program,
             args: start.args.into_iter().chain(args.iter().cloned()).collect(),
             env: start.env.into_iter().chain(env.clone()).collect(),
+            ..Program::default()
         }
     }
 
@@ -105,6 +106,7 @@ impl Harness {
             program: self.command.clone(),
             args: self.args.clone(),
             env: self.env.clone(),
+            ..Program::default()
         }
     }
 

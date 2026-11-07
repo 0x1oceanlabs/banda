@@ -6,6 +6,7 @@ use crate::places::{FOLDER, HOST, Places, Running, channel, from_checkout};
 use crate::{Failure, build_id, parent};
 use banda_agents::{Agents, Pipe};
 use banda_browser::Browser;
+use banda_environments::Local;
 use banda_files::Files;
 use banda_git::Git;
 use banda_harnesses::carried::{Carried, Here};
@@ -63,6 +64,9 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
     };
     let kernel = Kernel::builder(&places.root, &places.data, owner)
         .machine(places.machine())
+        // Every Project's programs run on this host, as the Person's own
+        // do (ADR 0084).
+        .environment(Local)
         .module(
             Agents::new(harnesses.clone())
                 .config_in(places.config.clone())

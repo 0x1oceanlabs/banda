@@ -1,4 +1,5 @@
 use crate::access::{self, Caller, Right};
+use crate::environment::{Environment, Nowhere};
 use crate::foreign::{self, Foreign};
 use crate::methods::{Asks, Kind, Nothing, Tool, needs_command_id};
 use crate::module::{Call, Module, Scope, Stream, Wall};
@@ -38,6 +39,8 @@ pub struct Kernel {
     passes: Arc<Passes>,
     /// The road from a module to the window (ADR 0029).
     window: Arc<Window>,
+    /// Where the Projects' programs run (ADR 0084).
+    environment: Arc<dyn Environment>,
     /// The tools of the modules in Projects, made once as it opens.
     tools: Vec<Tool>,
 }
@@ -131,6 +134,7 @@ pub struct KernelBuilder {
     owner: PersonId,
     modules: Vec<Arc<dyn Module>>,
     machine: Option<PathBuf>,
+    environment: Arc<dyn Environment>,
 }
 
 impl KernelBuilder {
@@ -143,6 +147,13 @@ impl KernelBuilder {
     /// engine's state folder's `machine`. A module of the machine needs it.
     pub fn machine(mut self, folder: impl Into<PathBuf>) -> Self {
         self.machine = Some(folder.into());
+        self
+    }
+
+    /// Where every Project's programs run, and the machine's (ADR 0084):
+    /// with none, the kernel's modules start no program.
+    pub fn environment(mut self, environment: impl Environment) -> Self {
+        self.environment = Arc::new(environment);
         self
     }
 
@@ -195,6 +206,7 @@ impl KernelBuilder {
                 owner: self.owner,
                 passes: passes.clone(),
                 window: window.clone(),
+                environment: self.environment.clone(),
                 machine: None,
                 projects: Some(Arc::downgrade(&projects)),
             };
@@ -213,6 +225,7 @@ impl KernelBuilder {
             machine,
             passes,
             window,
+            environment: self.environment,
         });
         let mut found: Vec<PathBuf> = std::fs::read_dir(&kernel.projects_data)?
             .filter_map(|entry| entry.ok().map(|e| e.path()))
@@ -549,6 +562,7 @@ impl Kernel {
             owner,
             modules: Vec::new(),
             machine: None,
+            environment: Arc::new(Nowhere),
         }
     }
 
@@ -882,6 +896,7 @@ impl Kernel {
             owner: self.owner,
             passes: self.passes.clone(),
             window: self.window.clone(),
+            environment: self.environment.clone(),
             machine: self.machine.clone(),
             projects: None,
         };
