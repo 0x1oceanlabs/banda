@@ -2,14 +2,17 @@
 //!
 //! The writer is one thread that owns the only writing connection. Every
 //! change is a job that runs in one transaction. A change's events go out
-//! to subscribers only after it commits, in commit order. Readers use their
-//! own connection: SQLite's WAL lets them read while the writer writes.
+//! to subscribers only after it commits, in commit order. A change that
+//! panics is rolled back and refused, and the writer goes on. Readers use
+//! their own connection: SQLite's WAL lets them read while the writer
+//! writes.
 
 use crate::events::{self, Event};
 use crate::{CommandId, Error, EventId, Participant, Refusal, now_ms};
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde::Serialize;
 use serde_json::Value;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 use std::sync::{Arc, Mutex, mpsc};
 use tokio::sync::{Notify, broadcast, oneshot};
@@ -174,7 +177,7 @@ impl Store {
             .name(format!("banda-writer {}", path.display()))
             .spawn(move || {
                 while let Ok(job) = inbox.recv() {
-                    job(&mut writer);
+                    run(job, &mut writer);
                 }
             })?;
         let (published, _) = broadcast::channel(SUBSCRIBER_LAG);
@@ -297,7 +300,23 @@ impl Store {
                 let _ = reply.send(job(sql));
             }))
             .map_err(|_| Error::Closed)?;
-        answer.await.map_err(|_| Error::Closed)?
+        // The writer drops a job's answer unsent only as it panics.
+        answer.await.map_err(|_| Error::Panicked)?
+    }
+}
+
+/// Runs one job on the writer. A job that panics loses its change, never
+/// the writer, which would leave the Project unable to write until the
+/// engine restarts: its transaction rolls back as it unwinds, its caller
+/// hears [`Error::Panicked`], an engine failure that ran nothing, and the
+/// next job runs. The engine's panic hook keeps the panic as a Problem
+/// (ADR 0039).
+fn run(job: Job, writer: &mut Connection) {
+    if catch_unwind(AssertUnwindSafe(|| job(writer))).is_err() && !writer.is_autocommit() {
+        // A transaction its drop did not end.
+        if let Err(error) = writer.execute_batch("ROLLBACK") {
+            tracing::error!(%error, "a change that panicked could not be rolled back");
+        }
     }
 }
 
@@ -650,6 +669,55 @@ mod tests {
             .command(receipt(command, "add", who), |_| Ok(Value::from(1)))
             .await;
         assert_eq!(ran.unwrap_err().code, Code::Forbidden);
+    }
+
+    #[tokio::test]
+    async fn a_change_that_panics_is_refused_and_the_writer_goes_on() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store(&dir);
+        let mut heard = store.subscribe();
+        let (command, who) = (CommandId::new(), author());
+        let add = move |tx: &mut Tx<'_>, text: &str| -> Result<(), Error> {
+            tx.sql()
+                .execute("INSERT INTO notes_items (text) VALUES (?1)", [text])?;
+            tx.emit("added", 1, None, who, &text)?;
+            Ok(())
+        };
+        let refused = store
+            .command(receipt(command, "add", who), move |tx| {
+                add(tx, "lost")?;
+                panic!("a handler's bug");
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(
+            refused.code,
+            Code::Internal,
+            "an engine failure, not maybe run"
+        );
+        let panicked = store.write("notes", |_| -> Result<(), Error> { panic!("again") });
+        assert!(matches!(panicked.await, Err(Error::Panicked)));
+
+        // The writer goes on, and nothing of either change was kept.
+        store
+            .write("notes", move |tx| add(tx, "kept"))
+            .await
+            .unwrap();
+        let texts = store
+            .read(|sql| {
+                let mut rows = sql.prepare("SELECT text FROM notes_items")?;
+                let texts = rows.query_map([], |row| row.get::<_, String>(0))?;
+                Ok(texts.collect::<Result<Vec<_>, _>>()?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(texts, ["kept"]);
+        assert_eq!(heard.recv().await.unwrap().payload, Value::from("kept"));
+        // It kept no receipt, so the same command may go again.
+        let again = store
+            .command(receipt(command, "add", who), |_| Ok(Value::from(1)))
+            .await;
+        assert_eq!(again, Ok(Value::from(1)));
     }
 
     #[tokio::test]

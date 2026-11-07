@@ -175,13 +175,22 @@ defaults and stay his to change.
     - _Changed on 2026-11-06, as it was built._ The tool and the CLI say
       how long with `after` (`30m`, `2h`, `1d`) and a moment with
       `until`, in milliseconds since the epoch; with neither, a Thread at
-      work sleeps until its turn ends. Words for a day (`fri 14`) stay the
+      work sleeps until its turn ends, so an Agent's sleeps only until
+      the turn it calls from ends. Words for a day (`fri 14`) stay the
       window's: the engine knows no Person's timezone, and an Agent can
-      work the moment out itself.
+      work the moment out itself. A snooze lasts a year at most: the
+      field reads no longer while, and the engine takes no later `until`.
     - _Changed on 2026-11-07, as ADR 0083 holds._ The Agent snoozes as
       itself, under its pass: only its own Thread, never so that it goes
       on by itself (decision 8 is the Person's), and the CLI in its shell
-      is walled to its Project. The Person's CLI snoozes and wakes any
+      is walled to its Project under its pass, and fully once ADR 0083's
+      fence (F0) lands. While its Person's snooze goes on by itself, the
+      Agent neither snoozes nor wakes its Thread: either would undo it.
+      `wake` is the Agent's tool too, its own Thread by default: a pass's
+      scopes are its tools (ADR 0083, decision 2), so without it the
+      CLI's `banda thread wake` would not be the Agent's; and waking only
+      brings its Thread back into its Person's sight, which a snooze of a
+      minute would do anyway. The Person's CLI snoozes and wakes any
       Thread.
 
 11. **Later: waking on an event** (_decided_). A snooze "until the PR is

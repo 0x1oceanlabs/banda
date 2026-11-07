@@ -3227,8 +3227,18 @@ async fn threads_one_thread_send_show_visual_and_preview_visual_are_an_agents_to
     // The machine's module `harnesses` comes first, with its own.
     let limits = tools.as_array_mut().unwrap().remove(0);
     assert_eq!(limits["method"], "harnesses.limits");
-    // The last: its own Thread snoozed while it waits (ADR 0074), with
-    // only what an Agent sets.
+    // The last: its own Thread snoozed while it waits, and woken (ADR
+    // 0074), with only what an Agent sets.
+    let wake = tools.as_array_mut().unwrap().pop().unwrap();
+    assert_eq!(
+        (&wake["name"], &wake["method"]),
+        (&json!("wake"), &json!("agents.wake"))
+    );
+    assert_eq!(
+        wake["schema"]["required"],
+        Value::Null,
+        "its own by default"
+    );
     let snooze = tools.as_array_mut().unwrap().pop().unwrap();
     assert_eq!(
         (&snooze["name"], &snooze["method"]),
@@ -4990,9 +5000,68 @@ async fn an_agent_snoozes_its_own_thread_for_a_while() {
         snooze(agent, both).await.is_err(),
         "after or until, not both"
     );
+    // A year at most, and only the field's numbers: none overflows.
+    for after in ["inf h", "1e300 d", "99999999999999999999d", "366d"] {
+        let refused = snooze(agent, json!({ "after": after })).await.unwrap_err();
+        assert_eq!(refused.code, Code::Invalid, "{after}");
+    }
+    let later = banda_kernel::now_ms() + 400 * 86_400_000;
+    for until in [later, i64::MAX] {
+        let refused = snooze(agent, json!({ "until": until })).await.unwrap_err();
+        assert_eq!(refused.code, Code::Invalid, "{until}");
+    }
     // It starts no turn: going on by itself is its Person's alone.
     let resume = json!({ "after": "2h", "resume": true });
     let refused = snooze(agent, resume).await.unwrap_err();
     assert_eq!(refused.code, Code::Forbidden, "{refused:?}");
     assert_eq!(world.snooze_of(&mine).await.unwrap().until, Some(until));
+    // Its own, by default, it wakes too.
+    world.call(agent, "agents.wake", json!({})).await.unwrap();
+    let woke = world.snooze_of(&mine).await.unwrap().woke;
+    assert_eq!(woke.map(|w| w.by), Some(Wake::Woken));
+    let refused = world.call(world.person(), "agents.wake", json!({})).await;
+    assert_eq!(
+        refused.unwrap_err().code,
+        Code::Invalid,
+        "a Person names it"
+    );
+}
+
+#[tokio::test]
+async fn an_agent_leaves_its_persons_snooze_that_goes_on_alone() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, view) = world.finish(None, "hello").await;
+    let agent = agent_of(&view);
+    let sent = world.send(Some(&thread), "flaky please").await;
+    let failed = |v: &ThreadView| state(v, &sent["turn"]) == Some(TurnState::Failed);
+    world.until(&thread, failed).await;
+    let thread = &thread;
+    let until = in_an_hour();
+    let goes_on = json!({ "thread": thread, "resume": true, "until": until });
+    world
+        .call(world.person(), "agents.snooze", goes_on)
+        .await
+        .unwrap();
+
+    // Snoozed again or woken, it would not go on: that is its Person's.
+    for (method, params) in [
+        ("agents.snooze", json!({ "after": "5m" })),
+        ("agents.wake", json!({})),
+    ] {
+        let refused = world.call(agent, method, params).await.unwrap_err();
+        assert_eq!(refused.code, Code::Forbidden, "{method}: {refused:?}");
+    }
+    let snooze = world.snooze_of(thread).await.unwrap();
+    assert_eq!((snooze.until, snooze.woke), (Some(until), None));
+    assert!(snooze.resume.is_some(), "it still goes on");
+
+    // Woken by its Person, it goes on no more, and is the Agent's again.
+    world
+        .call(world.person(), "agents.wake", json!({ "thread": thread }))
+        .await
+        .unwrap();
+    let again = json!({ "after": "5m" });
+    world.call(agent, "agents.snooze", again).await.unwrap();
+    assert_eq!(world.snooze_of(thread).await.unwrap().by, agent);
 }

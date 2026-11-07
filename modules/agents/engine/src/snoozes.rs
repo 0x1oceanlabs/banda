@@ -5,7 +5,7 @@
 //! early as that fact is written ([`heard`]), and its time needs no timer.
 
 use crate::model::{Fact, Snooze, ThreadId, TurnState, Wake, Woke};
-use crate::rules::snooze::{asleep, may_snooze, wake_of, wakes};
+use crate::rules::snooze::{asleep, goes_on, may_snooze, wake_of, wakes};
 use crate::{emit, store};
 use banda_kernel::{Error, EventFilter, Heard, Participant, Refusal, Tx, now_ms};
 use schemars::JsonSchema;
@@ -38,8 +38,19 @@ pub struct SnoozeAsk {
     pub resume: bool,
 }
 
+/// What `agents.wake` is asked: a Thread.
+#[derive(Deserialize, TS, JsonSchema)]
+#[ts(export_to = "agents/")]
+pub struct WakeAsk {
+    /// The Thread's ID, as `threads` lists it; an Agent's own by default.
+    #[serde(default)]
+    #[ts(optional)]
+    pub thread: Option<ThreadId>,
+}
+
 /// Snoozes `thread` for `author`, in place of a snooze it had. An Agent
-/// snoozes only its own Thread, and never so that it goes on by itself.
+/// snoozes only its own Thread, never so that it goes on by itself, and
+/// not while its Person's goes on.
 pub fn snooze(tx: &mut Tx<'_>, author: Participant, ask: SnoozeAsk) -> Result<(), Error> {
     let SnoozeAsk {
         thread,
@@ -60,8 +71,13 @@ pub fn snooze(tx: &mut Tx<'_>, author: Participant, ask: SnoozeAsk) -> Result<()
     if after.is_some() && until.is_some() {
         return Err(Refusal::invalid("Give `after` or `until`, not both.").into());
     }
-    let after = after.as_deref().map(while_of).transpose()?;
-    let until = after.map(|after| tx.now() + after).or(until);
+    let until =
+        match after.as_deref().map(while_of).transpose()? {
+            Some(after) => Some(tx.now().checked_add(after).ok_or_else(|| {
+                Refusal::invalid("That while ends past any time Banda can keep.")
+            })?),
+            None => until,
+        };
     if resume && until.is_none() {
         return Err(Refusal::invalid("A turn goes on by itself at a time: give `until`.").into());
     }
@@ -95,7 +111,8 @@ pub fn snooze(tx: &mut Tx<'_>, author: Participant, ask: SnoozeAsk) -> Result<()
     emit(tx, author, thread, &snoozed)
 }
 
-/// The Thread a snooze names, or for an Agent that names none, its own.
+/// The Thread a snooze or a wake names, or for an Agent that names none,
+/// its own.
 fn thread_of(
     tx: &Tx<'_>,
     author: Participant,
@@ -105,28 +122,30 @@ fn thread_of(
         (Some(thread), _) => Ok(thread),
         // A pass of no Thread, as a Harness's process's, has none to snooze.
         (None, Participant::Agent(agent)) => store::thread_of(tx.sql(), agent)?.ok_or_else(|| {
-            Refusal::forbidden("An Agent snoozes only its own Thread, and this pass names none.")
-                .into()
+            Refusal::forbidden(
+                "An Agent snoozes or wakes only its own Thread, and this pass names none.",
+            )
+            .into()
         }),
-        (None, Participant::Person(_)) => {
-            Err(Refusal::invalid("Name the Thread to snooze.").into())
-        }
+        (None, Participant::Person(_)) => Err(Refusal::invalid("Name the Thread.").into()),
     }
 }
 
 /// `30m`, `2h`, `1d`, `90 minutes`: how long, in milliseconds, as the
-/// snooze's field reads it (`banda_look::snooze`).
+/// snooze's field reads it (`banda_look::snooze`), a year at most.
 fn while_of(text: &str) -> Result<i64, Refusal> {
     banda_look::snooze::while_of(text).ok_or_else(|| {
         Refusal::invalid(format!(
-            "`after` is how long, as 30m, 2h or 1d, not \"{text}\"."
+            "`after` is how long, up to a year, as 30m, 2h or 1d, not \"{text}\"."
         ))
     })
 }
 
 /// Wakes `thread` now, if it sleeps; one awake stays so, and nothing is
-/// written, as `mkdir -p` answers.
-pub fn wake(tx: &mut Tx<'_>, author: Participant, thread: ThreadId) -> Result<(), Error> {
+/// written, as `mkdir -p` answers. An Agent wakes only its own Thread,
+/// its default, and not while its Person's snooze goes on.
+pub fn wake(tx: &mut Tx<'_>, author: Participant, thread: Option<ThreadId>) -> Result<(), Error> {
+    let thread = thread_of(tx, author, thread)?;
     may_touch(tx, author, thread)?;
     let now = tx.now();
     match store::snooze(tx.sql(), thread)? {
@@ -165,12 +184,22 @@ fn woke(
 }
 
 /// Whether `author` may snooze or wake `thread`: a Thread there is, and,
-/// for an Agent, its own.
+/// for an Agent, its own, with no snooze of its Person's that goes on by
+/// itself: snoozed again or woken, it would not go on (decision 8).
 fn may_touch(tx: &Tx<'_>, author: Participant, thread: ThreadId) -> Result<(), Error> {
     let (_, its) = store::title_and_agent(tx.sql(), thread)?
         .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
-    if author.agent().is_some_and(|agent| agent != its) {
-        return Err(Refusal::forbidden("An Agent snoozes only its own Thread.").into());
+    let Some(agent) = author.agent() else {
+        return Ok(());
+    };
+    if agent != its {
+        return Err(Refusal::forbidden("An Agent snoozes or wakes only its own Thread.").into());
+    }
+    if store::snooze(tx.sql(), thread)?.is_some_and(|snooze| goes_on(&snooze)) {
+        return Err(Refusal::forbidden(
+            "Your Person snoozed this Thread to go on by itself: only they change that snooze.",
+        )
+        .into());
     }
     Ok(())
 }

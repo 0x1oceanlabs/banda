@@ -410,6 +410,7 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "draft_issue",
                 "notify",
                 "snooze",
+                "wake",
                 "limits",
                 "browser_tabs",
                 "browser_snapshot",
@@ -795,9 +796,13 @@ fn an_agent_snoozes_its_own_thread_from_its_shell_and_the_person_any() {
     let snooze = snooze_of(&work, &mine);
     assert_eq!(snooze["by"]["kind"], json!("agent"), "{snooze}");
     assert!(snooze["until"].is_i64(), "{snooze}");
-    let woken = places.as_agent(session, &["thread", "wake", &mine]);
+    // Waking it is its own too: `wake` is its tool, as `snooze` is, and a
+    // pass's scopes are its tools (ADR 0083, decision 2).
+    let woken = places.as_agent(session, &["thread", "wake"]);
     assert!(woken.status.success(), "{woken:?}");
     assert!(snooze_of(&work, &mine)["woke"].is_object());
+    let named = places.as_agent(session, &["thread", "wake", &mine]);
+    assert!(named.status.success(), "awake, it stays so: {named:?}");
 
     // Another Thread is its Person's, another Project is past its wall,
     // and a pass of no Thread, its Harness's process's, has none of its own.
