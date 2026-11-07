@@ -1,0 +1,91 @@
+# What a PR changes in the workflows and the dependencies, checked on
+# GitHub's runners: zizmor audits the workflows and any action or Dependabot
+# config in the repo (injection, unpinned actions, tokens, caches), and
+# GitHub's dependency review lists the packages a lockfile adds or changes,
+# with their known vulnerabilities.
+#
+# Neither is a gate yet: each writes what it found to its job's summary and
+# the job passes. zizmor's findings add a warning, and dependency review's
+# step shows as failed when a package it adds has a known high-severity
+# vulnerability. Only zizmor failing to run turns its job red.
+name: audit
+
+on:
+  pull_request:
+    paths:
+      - .github/**
+      - Cargo.lock
+      - pnpm-lock.yaml
+
+permissions: {}
+
+concurrency:
+  group: audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  workflows:
+    name: workflows (zizmor)
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      # zizmor's own build for Linux, and the SHA-256 its release lists for
+      # it (gh release view v<version> -R zizmorcore/zizmor --json assets).
+      ZIZMOR_VERSION: 1.32.0
+      ZIZMOR_SHA256: bb110cc765eca9cd7efb2e284a956be5974c60027b0970f16397d86208a9957b
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: zizmor
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/zizmor.tar.gz" \
+            "https://github.com/zizmorcore/zizmor/releases/download/v$ZIZMOR_VERSION/zizmor-x86_64-unknown-linux-gnu.tar.gz"
+          echo "$ZIZMOR_SHA256  $RUNNER_TEMP/zizmor.tar.gz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/zizmor.tar.gz" -C "$RUNNER_TEMP" zizmor
+      # The token, read-only, lets zizmor ask GitHub about the actions used:
+      # a tag that moved, a commit that is not the action's, a known
+      # vulnerability. zizmor exits 10 to 14 on findings, by their highest
+      # severity, and 1 or 2 when it could not audit.
+      - name: audit the workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          "$RUNNER_TEMP/zizmor" --no-progress --color never . > "$RUNNER_TEMP/zizmor.txt"
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/zizmor.txt"
+          {
+            echo "### zizmor $ZIZMOR_VERSION"
+            echo
+            echo '```text'
+            cat "$RUNNER_TEMP/zizmor.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          case $status in
+            0) ;;
+            1[0-4]) echo "::warning title=zizmor::findings, listed in this job's summary" ;;
+            *)
+              echo "zizmor failed (exit $status), see the log" >> "$GITHUB_STEP_SUMMARY"
+              exit "$status"
+              ;;
+          esac
+
+  dependencies:
+    name: dependencies
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      # Reads the PR's dependency changes from GitHub's dependency graph,
+      # with no checkout, and writes them to the job's summary.
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        continue-on-error: true
+        with:
+          fail-on-severity: high
+          # A comment would need a token that writes to the PR.
+          comment-summary-in-pr: never
