@@ -235,6 +235,10 @@ impl banda_kernel::Module for Says {
         Some(banda_kernel::Right::Write)
     }
 
+    fn kind(&self, _: &str) -> Option<banda_kernel::Kind> {
+        Some(banda_kernel::Kind::Command)
+    }
+
     /// `say` emits `{ kind, payload }`.
     async fn call(
         &self,

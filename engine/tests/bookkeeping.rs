@@ -13,7 +13,7 @@ mod trap;
 use banda_files::Files;
 use banda_git::Git;
 use banda_kernel::{
-    Call, Code, CommandId, Kernel, Module, Participant, PersonId, ProjectId, Refusal, Right,
+    Call, Code, CommandId, Kernel, Kind, Module, Participant, PersonId, ProjectId, Refusal, Right,
 };
 use banda_pulls::Pulls;
 use serde_json::{Value, json};
@@ -37,6 +37,10 @@ impl Module for Agents {
 
     fn right(&self, _: &str) -> Option<Right> {
         Some(Right::Write)
+    }
+
+    fn kind(&self, _: &str) -> Option<Kind> {
+        Some(Kind::Command)
     }
 
     async fn call(&self, call: Call, _: &str, fact: Value) -> Result<Value, Refusal> {

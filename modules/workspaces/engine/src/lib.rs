@@ -18,7 +18,8 @@
 pub mod model;
 
 use banda_kernel::{
-    AgentId, Call, Error, Module, ModuleProject, Nothing, Refusal, Right, Scope, Tool, Tx, Wall,
+    AgentId, Call, Error, Kind, Module, ModuleProject, Nothing, Refusal, Right, Scope, Tool, Tx,
+    Wall,
 };
 use banda_look::columns::Display;
 use model::{Arrangement, ColumnId, PaneId, Place, Shown, Side, Sight, Toward, WorkspaceId};
@@ -543,6 +544,10 @@ impl Module for Workspaces {
 
     fn right(&self, method: &str) -> Option<Right> {
         Self::method_right(method)
+    }
+
+    fn kind(&self, method: &str) -> Option<Kind> {
+        Self::method_kind(method)
     }
 
     fn tools(&self) -> Vec<Tool> {

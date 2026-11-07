@@ -18,4 +18,9 @@ machine?: ProjectId,
  * This boot of the engine: another once it restarted, and every
  * session of the last ended with it.
  */
-boot: string, } | { "type": "result", id: number, ok?: JsonValue, error?: Refusal, } | { "type": "event", subscription: number, event: Event, } | { "type": "resync", subscription: number, } | { "type": "piece", stream: number, data: JsonValue, } | { "type": "ended", stream: number, } | { "type": "goodbye", reason: Refusal, };
+boot: string, } | { "type": "result", id: number, ok?: JsonValue, error?: Refusal, 
+/**
+ * A command's place in the log: what it wrote is at or before it,
+ * so a view current there shows it (ADR 0082, decision 4).
+ */
+at?: number, } | { "type": "event", subscription: number, event: Event, } | { "type": "resync", subscription: number, } | { "type": "piece", stream: number, data: JsonValue, } | { "type": "ended", stream: number, } | { "type": "goodbye", reason: Refusal, };

@@ -1,7 +1,8 @@
 use crate::access::Right;
-use crate::methods::Tool;
+use crate::methods::{Kind, Tool, needs_command_id};
 use crate::outbox::{Effect, OnRestart, Outcome, Retry, Settled};
 use crate::project::ModuleProject;
+use crate::store::Receipt;
 use crate::{CommandId, Error, Participant, ProjectId, Refusal, Tx};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -52,6 +53,11 @@ pub trait Module: Send + Sync + 'static {
     /// `match`, so the compiler rejects a method without a right (ADR 0002,
     /// decision 9). The kernel decides before [`Module::call`] runs.
     fn right(&self, method: &str) -> Option<Right>;
+
+    /// The kind of each of its methods, `Self::method_kind(method)`, or
+    /// `None` when it has no such method. A command keeps a receipt
+    /// ([`Kernel::answer`](crate::Kernel::answer)).
+    fn kind(&self, method: &str) -> Option<Kind>;
 
     /// Its methods an Agent may call as tools: the lines of its `methods!`
     /// table marked `tool`, `Self::method_tools(self.name())` (ADR 0019,
@@ -143,12 +149,12 @@ pub struct Wall {
 }
 
 /// One allowed call to a module's method: who makes it, in which Project, and
-/// the command ID that makes it run once.
+/// for a command the receipt that makes it run once.
 pub struct Call {
     participant: Participant,
     project: ModuleProject,
     method: String,
-    command: Option<CommandId>,
+    receipt: Option<Receipt>,
     wall: Option<Wall>,
 }
 
@@ -157,14 +163,14 @@ impl Call {
         participant: Participant,
         project: ModuleProject,
         method: String,
-        command: Option<CommandId>,
+        receipt: Option<Receipt>,
         wall: Option<Wall>,
     ) -> Self {
         Self {
             participant,
             project,
             method,
-            command,
+            receipt,
             wall,
         }
     }
@@ -201,36 +207,25 @@ impl Call {
             .map_err(|e| Refusal::invalid(format!("Banda's window answered amiss: {e}.")))
     }
 
-    /// The ID this call runs under as a command. A module whose command
-    /// acts before it writes asks first, so a call without one does
-    /// nothing.
+    /// The ID this call runs under as a command; a `call` has none.
     pub fn command_id(&self) -> Result<CommandId, Refusal> {
-        self.command.ok_or_else(|| {
-            Refusal::invalid(format!(
-                "{} is a command and needs a command ID.",
-                self.method
-            ))
-        })
+        Ok(self.receipt()?.command)
     }
 
-    /// Runs this call as a command: once per command ID, in one transaction
-    /// with its receipt, its events and its outbox rows. A repeated command
-    /// answers what the first one did.
-    pub async fn command<T>(
+    fn receipt(&self) -> Result<&Receipt, Refusal> {
+        (self.receipt.as_ref()).ok_or_else(|| needs_command_id(&self.method))
+    }
+
+    /// Writes this command's change in one transaction with its events,
+    /// its outbox rows and a mark on its receipt, so a crash leaves all of
+    /// it or none. Once it is written, a resend never runs the command
+    /// again ([`Kernel::answer`](crate::Kernel::answer)).
+    pub async fn command<T: Send + 'static>(
         &self,
         change: impl FnOnce(&mut Tx<'_>) -> Result<T, Error> + Send + 'static,
-    ) -> Result<T, Refusal>
-    where
-        T: Serialize + DeserializeOwned,
-    {
-        let command = self.command_id()?;
-        let kept = self
-            .project
-            .command(command, &self.method, self.participant, move |tx| {
-                Ok(serde_json::to_value(change(tx)?)?)
-            })
-            .await?;
-        Ok(serde_json::from_value(kept).map_err(Error::from)?)
+    ) -> Result<T, Refusal> {
+        let receipt = self.receipt()?.clone();
+        self.project.command(receipt, change).await
     }
 }
 

@@ -117,15 +117,19 @@ impl World {
 
     /// The Person's command, as the window sends it, with an ID of its own.
     pub async fn command(&self, method: &str, params: Value) -> Result<Value, Refusal> {
+        self.command_as(CommandId::new(), method, params).await
+    }
+
+    /// The Person's command under `command`, as a window sends one again.
+    pub async fn command_as(
+        &self,
+        command: CommandId,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, Refusal> {
         let person = Participant::Person(self.owner);
         (self.kernel)
-            .call(
-                person,
-                method,
-                Some(self.project),
-                Some(CommandId::new()),
-                params,
-            )
+            .call(person, method, Some(self.project), Some(command), params)
             .await
     }
 

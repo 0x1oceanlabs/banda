@@ -20,7 +20,7 @@ mod outbox;
 pub mod settings;
 pub mod usage;
 
-use banda_kernel::{Call, Error, Module, ModuleProject, Nothing, Refusal, Right, Scope};
+use banda_kernel::{Call, Error, Kind, Module, ModuleProject, Nothing, Refusal, Right, Scope};
 use rusqlite::Row;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -250,6 +250,10 @@ impl Module for Sharing {
 
     fn right(&self, method: &str) -> Option<Right> {
         Self::method_right(method)
+    }
+
+    fn kind(&self, method: &str) -> Option<Kind> {
+        Self::method_kind(method)
     }
 
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {

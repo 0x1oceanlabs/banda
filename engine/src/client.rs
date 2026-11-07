@@ -193,6 +193,7 @@ impl Client {
                 id: answered,
                 ok,
                 error,
+                ..
             } = self.receive().await?
                 && answered == id
             {

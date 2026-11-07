@@ -8,7 +8,8 @@
 //!    `goodbye`. `welcome` lists the engine's modules, so a window shows
 //!    only what the engine has (ADR 0002, decision 8), and the ID this
 //!    machine's modules are followed by (ADR 0025).
-//! 2. `call` runs a method and gets one `result` with the same `id`.
+//! 2. `call` runs a method and gets one `result` with the same `id`; a
+//!    command's carries its place in the log, `at` (ADR 0082, decision 4).
 //! 3. `subscribe` follows a Project's events after a position. The window first
 //!    reads a view with its position, then subscribes after it (ADR 0002,
 //!    decision 5). The log is replayed a page at a time, then live events
@@ -27,7 +28,7 @@
 use crate::access::Caller;
 use crate::events::{Event, EventFilter};
 use crate::module::Stream;
-use crate::{Code, CommandId, Kernel, PROTOCOL, Participant, PersonId, ProjectId, Refusal};
+use crate::{Answer, Code, CommandId, Kernel, PROTOCOL, Participant, PersonId, ProjectId, Refusal};
 use axum::Router;
 use axum::extract::State;
 use axum::extract::ws::{Message, Utf8Bytes, WebSocket, WebSocketUpgrade};
@@ -125,6 +126,11 @@ pub enum EngineFrame {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         error: Option<Refusal>,
+        /// A command's place in the log: what it wrote is at or before it,
+        /// so a view current there shows it (ADR 0082, decision 4).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional, type = "number")]
+        at: Option<i64>,
     },
     Event {
         #[ts(type = "number")]
@@ -249,16 +255,23 @@ fn same_secret(a: &str, b: &str) -> bool {
 }
 
 fn result(id: u64, answer: Result<Value, Refusal>) -> Outgoing {
+    answered(id, answer.map(|value| Answer { value, at: None }))
+}
+
+/// A call's answer, with a command's place in the log.
+fn answered(id: u64, answer: Result<Answer, Refusal>) -> Outgoing {
     let frame = match answer {
-        Ok(ok) => EngineFrame::Result {
+        Ok(Answer { value, at }) => EngineFrame::Result {
             id,
-            ok: Some(ok),
+            ok: Some(value),
             error: None,
+            at,
         },
         Err(error) => EngineFrame::Result {
             id,
             ok: None,
             error: Some(error),
+            at: None,
         },
     };
     frame.into()
@@ -376,8 +389,8 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                 let kernel = api.kernel.clone();
                 let out = out.clone();
                 tokio::spawn(async move {
-                    let answer = kernel.call(caller, &method, project, command, params).await;
-                    let _ = out.send(result(id, answer)).await;
+                    let answer = kernel.answer(caller, &method, project, command, params);
+                    let _ = out.send(answered(id, answer.await)).await;
                 });
             }
             ClientFrame::Subscribe {

@@ -1004,24 +1004,29 @@ impl ModuleProject {
         self.project.head().await
     }
 
-    /// The receipt of `command`, made by `author` for `method`.
-    pub(crate) fn receipt(&self, command: CommandId, method: &str, author: Participant) -> Receipt {
+    /// The receipt of `command`, made by `author` for `method` with
+    /// `params`.
+    pub(crate) fn receipt(
+        &self,
+        command: CommandId,
+        method: &str,
+        author: Participant,
+        params: &Value,
+    ) -> Receipt {
         Receipt {
             command,
             module: self.module,
             method: method.to_owned(),
             author,
+            params: Receipt::hash(params),
         }
     }
 
-    pub(crate) async fn command(
+    pub(crate) async fn command<T: Send + 'static>(
         &self,
-        command: CommandId,
-        method: &str,
-        author: Participant,
-        change: impl FnOnce(&mut Tx<'_>) -> Result<Value, Error> + Send + 'static,
-    ) -> Result<Value, Refusal> {
-        let receipt = self.receipt(command, method, author);
+        receipt: Receipt,
+        change: impl FnOnce(&mut Tx<'_>) -> Result<T, Error> + Send + 'static,
+    ) -> Result<T, Refusal> {
         self.project.store.command(receipt, change).await
     }
 }

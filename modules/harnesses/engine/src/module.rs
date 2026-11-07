@@ -22,7 +22,7 @@ use crate::{FILE, Harness, Harnesses};
 use agent_client_protocol::Client;
 use agent_client_protocol::schema::v1 as acp;
 use banda_kernel::{
-    Call, Error, EventFilter, Module, ModuleProject, Nothing, Refusal, Right, Scope, Tool,
+    Call, Error, EventFilter, Kind, Module, ModuleProject, Nothing, Refusal, Right, Scope, Tool,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -194,6 +194,10 @@ impl Module for HarnessesModule {
 
     fn right(&self, method: &str) -> Option<Right> {
         Self::method_right(method)
+    }
+
+    fn kind(&self, method: &str) -> Option<Kind> {
+        Self::method_kind(method)
     }
 
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {

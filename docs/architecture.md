@@ -234,9 +234,11 @@ The kernel holds only what every module needs, and it names no module.
 
 ```
 command (with its ID)
+  → receipt, begun: a resend gets the answer kept, or waits for the run
   → access decision (one exhaustive map: method → right)
   → module operation: rules decide, store writes
-  → one transaction: receipt · events · view tables · outbox rows
+  → one transaction: the change · events · view tables · outbox rows · "written" on the receipt
+  → receipt, answered: the value or a final refusal, and `at`
   → publish: one ordered lane per Project
   → outbox: side effects in order per target, run by the engine under this boot,
     or by a worker outside it under a lease; retried as their kind says
@@ -249,10 +251,29 @@ command (with its ID)
   failed too. So no effect stays running, holding its key, until a
   restart.
 
-- A repeated command returns its first result, a refusal included. A
-  receipt names its author: the same command ID from someone else, or for
-  another method, is a conflict. A read is not a command and keeps no
-  receipt.
+- Every command keeps a receipt, whatever its handler does (ADR 0082,
+  decision 4). The method's kind decides, not its right: a `call` keeps
+  none, whatever it changes. `Kernel::answer` has the rule in full.
+  - The receipt is written before the handler runs. A resend gets the
+    answer it keeps and runs nothing again. A resend while the command
+    runs waits, and gets what the run answers.
+  - It names its author and keeps a hash of the params. The same command
+    ID from someone else, for another method or with other params, is
+    refused as `conflict`.
+  - It keeps a value or a final refusal. A passing refusal, `internal` or
+    `protocol`, is not kept, so a resend may go through, unless the
+    command's change was written: then a resend gets `may_have_run`.
+  - A run cut short, by a crash or by a caller that went away, gets no
+    answer. A resend then gets `may_have_run`, and keeps getting it while
+    the receipt is kept (below): the command never runs twice. So Files'
+    writes and renames, which act on the disk before anything is written,
+    are safe to resend.
+  - The answer carries `at`, the log's head once the change was written.
+  - The writer syncs with `synchronous = NORMAL`, so receipts hold across
+    a crash of the engine. A power cut may lose the last ones, and with
+    them the `may_have_run` of a disk change made just before.
+  - The kernel's own `projects.*` commands keep no receipt yet; they
+    leave the kernel with A1 and A2 of the architecture vision.
 - A side effect never starts from a live subscription.
 - An effect holds its key while it runs, so its module bounds how long a run
   takes. A restart that cuts an effect short counts as a try. An effect
@@ -277,8 +298,12 @@ command (with its ID)
   owned by its boot, which needs no clock.
 - A receipt, and the row of an effect that settled, are kept 30 days,
   longer than the seven days a client keeps a command to send again; then
-  the Project's loop lets them go. A command sent again within them gets
-  its first answer; past them, it runs as a new one.
+  the Project's loop lets them go. A receipt's 30 days run from when it
+  was last written, as its command began or was answered, so never from
+  before its command first came: every resend finds it, `may_have_run`
+  included. A receipt whose command still runs stays, however long. A
+  command sent again within them gets its first answer; past them, it
+  runs as a new one.
 - Outbox rows are the kernel's bookkeeping, not records of the work. What a
   Person sees of an effect is the events its module writes.
 - A window loads a snapshot at sequence N, then streams the events after N.

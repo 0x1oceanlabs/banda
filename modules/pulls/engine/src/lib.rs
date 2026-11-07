@@ -21,7 +21,8 @@ pub mod shell;
 mod store;
 
 use banda_kernel::{
-    Call, Error, Module, ModuleProject, Nothing, Participant, ProjectId, Refusal, Right, Stream,
+    Call, Error, Kind, Module, ModuleProject, Nothing, Participant, ProjectId, Refusal, Right,
+    Stream,
 };
 use model::{By, LinkAsk, Listed, Pull, PullRef, ThreadAsk};
 use reader::Live;
@@ -102,6 +103,10 @@ impl Module for Pulls {
 
     fn right(&self, method: &str) -> Option<Right> {
         Self::method_right(method)
+    }
+
+    fn kind(&self, method: &str) -> Option<Kind> {
+        Self::method_kind(method)
     }
 
     fn tools(&self) -> Vec<banda_kernel::Tool> {

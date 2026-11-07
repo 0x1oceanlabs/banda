@@ -114,7 +114,10 @@ impl CommandId {
     /// them the same ID runs as a new command, so a reaction that catches
     /// up on older events keeps its own cursor of what it did. `source`
     /// names one sender, and only it: another sender with the same steps
-    /// gets other IDs.
+    /// gets other IDs. The ID names the step, not what it asks: the
+    /// receipt keeps the method, the author and a hash of the params, so a
+    /// step sent again asks the same, and one that asks otherwise under
+    /// its ID is refused as `conflict`.
     pub fn derive(source: &str, step: &str) -> CommandId {
         let source = uuid::Uuid::new_v5(&DERIVED, source.as_bytes());
         CommandId(uuid::Uuid::new_v5(&source, step.as_bytes()))

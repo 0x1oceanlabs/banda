@@ -15,7 +15,7 @@ mod history;
 mod servers;
 mod terminal;
 
-use banda_kernel::{Call, Module, ModuleProject, Nothing, ProjectId, Refusal, Right, Stream};
+use banda_kernel::{Call, Kind, Module, ModuleProject, Nothing, ProjectId, Refusal, Right, Stream};
 use model::{Open, Piece, Servers, Size, TerminalId};
 use serde::Deserialize;
 use serde_json::Value;
@@ -130,6 +130,10 @@ impl Module for Terminals {
 
     fn right(&self, method: &str) -> Option<Right> {
         Self::method_right(method)
+    }
+
+    fn kind(&self, method: &str) -> Option<Kind> {
+        Self::method_kind(method)
     }
 
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {

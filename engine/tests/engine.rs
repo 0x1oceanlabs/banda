@@ -270,6 +270,34 @@ fn refusal(output: &Output) -> String {
 }
 
 #[test]
+fn a_resend_with_its_command_id_answers_what_it_did() {
+    let places = Places::new();
+    let (mut engine, stdin, _) = places.serve();
+    let project = places.ok("projects.create", None, json!({ "name": "Work" }));
+    let project = text(&project["id"]);
+
+    // As the CLI says to repeat a call cut short (ADR 0082, decision 4): a
+    // file made once answers the same, not "already there".
+    let command = uuid::Uuid::now_v7().to_string();
+    let make = |name: &str| {
+        let params = json!({ "dir": "", "name": name, "kind": "file" }).to_string();
+        (places.banda(&["call", "files.make", "--params", &params]))
+            .args(["--project", project, "--command", &command])
+            .output()
+            .unwrap()
+    };
+    let first = make("a.txt");
+    assert!(first.status.success(), "{first:?}");
+    let again = make("a.txt");
+    assert!(again.status.success(), "{again:?}");
+    assert_eq!(again.stdout, first.stdout);
+    assert_eq!(refusal(&make("b.txt")), "conflict", "another call, one ID");
+
+    drop(stdin);
+    assert!(engine.wait().unwrap().success());
+}
+
+#[test]
 fn bad_params_are_refused_before_the_engine_is_reached() {
     let places = Places::new();
     let output = places
@@ -478,6 +506,15 @@ fn an_agent_reaches_banda_through_banda_mcp() {
     // starts no other Thread (ADR 0082, decision 4).
     let (error, again) = mcp.call(11, "send", new_thread.clone());
     assert!(!error && again == said, "{again}");
+    // Its receipt keeps a hash of the arguments: the same request ID that
+    // asks otherwise, which MCP forbids, is refused and starts nothing.
+    let otherwise = json!({ "harness": "fake", "text": "bye" });
+    let (error, other) = mcp.call(11, "send", otherwise);
+    assert!(error && other.contains("Refused (conflict)"), "{other}");
+    let (error, threads) = mcp.call(20, "threads", json!({}));
+    assert!(!error, "{threads}");
+    let threads: Value = serde_json::from_str(&threads).unwrap();
+    assert_eq!(threads["threads"].as_array().unwrap().len(), 2, "{threads}");
 
     // It puts its Thread on the screen, in its Project, without the focus.
     let shown = json!({ "kind": "agents.thread", "args": { "thread": thread } });

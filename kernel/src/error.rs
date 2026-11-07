@@ -33,6 +33,21 @@ pub enum Code {
     Internal,
 }
 
+impl Code {
+    /// Whether a command's receipt keeps a refusal with this code as its
+    /// answer, as long as it would keep a value (ADR 0082, decision 4). A
+    /// passing one is not kept, so a resend may go through. `may_have_run`
+    /// is kept: a resend must not run again what may have run. A new code
+    /// decides here.
+    pub fn is_final(self) -> bool {
+        match self {
+            Code::Invalid | Code::NotFound | Code::Forbidden | Code::Conflict => true,
+            Code::MayHaveRun => true,
+            Code::Protocol | Code::Internal => false,
+        }
+    }
+}
+
 impl std::fmt::Display for Code {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {

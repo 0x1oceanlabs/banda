@@ -8,7 +8,8 @@
 //!
 //! - `call`: a read, or an act that keeps no receipt; `engine.call`.
 //! - `command`: runs once per command ID, and is refused without one;
-//!   `engine.command`.
+//!   `engine.command`. See [`Kernel::answer`](crate::Kernel::answer) for
+//!   its receipt.
 //! - `stream`: pieces until it ends (`Module::stream`); its "answer" is
 //!   the piece; `engine.stream`.
 //!
@@ -111,14 +112,28 @@ pub fn bare(name: &'static str) -> &'static str {
     name.strip_prefix("r#").unwrap_or(name)
 }
 
+/// A method's kind, as its line in `methods!` says: `call`, `command` or
+/// `stream`, each as this module's doc says (ADR 0082, decision 3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Kind {
+    Call,
+    Command,
+    Stream,
+}
+
+/// The refusal for a command sent with no command ID.
+pub(crate) fn needs_command_id(method: &str) -> Refusal {
+    Refusal::invalid(format!("{method} is a command and needs a command ID."))
+}
+
 /// One line of a module's `methods!` table, as `banda modules` prints it
 /// (ADR 0022, decision 1).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Method {
     /// Without the module's prefix: `send`.
     pub name: &'static str,
-    /// `call`, `command` or `stream`.
-    pub kind: &'static str,
+    pub kind: Kind,
     /// The right it needs.
     pub right: crate::Right,
     /// Its tool's name, when an Agent may call it as one.
@@ -182,6 +197,7 @@ pub fn answer(answer: impl serde::Serialize) -> Result<serde_json::Value, Refusa
 /// [`Stream`](crate::Stream). It makes, on the type:
 ///
 /// - `fn method_right(name) -> Option<Right>`, for [`Module::right`](crate::Module::right);
+/// - `fn method_kind(name) -> Option<Kind>`, for [`Module::kind`](crate::Module::kind);
 /// - `async fn dispatch(&self, ask, name, params) -> Result<Value, Refusal>`,
 ///   for [`Module::call`](crate::Module::call);
 /// - `async fn dispatch_stream(&self, ask, name, params) -> Result<Stream, Refusal>`,
@@ -209,6 +225,14 @@ macro_rules! methods {
             fn method_right(name: &str) -> Option<$crate::Right> {
                 $( if name == $crate::methods::bare(stringify!($name)) {
                     return Some($crate::Right::$right);
+                } )*
+                None
+            }
+
+            #[allow(dead_code)]
+            fn method_kind(name: &str) -> Option<$crate::Kind> {
+                $( if name == $crate::methods::bare(stringify!($name)) {
+                    return Some($crate::methods!(@kind $kind));
                 } )*
                 None
             }
@@ -244,7 +268,7 @@ macro_rules! methods {
                 vec![$(
                     $crate::methods::Method {
                         name: $crate::methods::bare(stringify!($name)),
-                        kind: stringify!($kind),
+                        kind: $crate::methods!(@kind $kind),
                         right: $crate::Right::$right,
                         tool: $crate::methods!(@tool_name $($tool)?),
                         about: $crate::methods::words(&[$($doc),*]),
@@ -268,6 +292,9 @@ macro_rules! methods {
         }
     };
 
+    (@kind call) => { $crate::Kind::Call };
+    (@kind command) => { $crate::Kind::Command };
+    (@kind stream) => { $crate::Kind::Stream };
     (@tool_name) => { None };
     (@tool_name $tool:literal) => { Some($tool) };
     (@tool $tools:ident $module:ident $name:ident($p:ty) [$($doc:literal)*]) => {};
@@ -285,7 +312,8 @@ macro_rules! methods {
     };
 
     (@call $kind:ident $self:ident $ask:ident $params:ident $name:ident $p:ty, $a:ty) => {{
-        // A command may act before it writes, so it needs its ID first.
+        // The kernel refuses a module's command with no ID before it runs;
+        // this guards its own `projects.*`, which keep no receipt yet.
         $crate::methods!(@check $kind $ask);
         let params: $p = $crate::decode($params)?;
         let answer: $a = $self.$name($ask, params).await?;

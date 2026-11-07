@@ -10,7 +10,7 @@
 //! would type, a `none` that frees nothing. Only the Person binds a key
 //! that acts as them (ADR 0083, decision 3).
 
-use banda_kernel::{Call, Module, Nothing, Participant, Refusal, Right, Scope, Tool};
+use banda_kernel::{Call, Kind, Module, Nothing, Participant, Refusal, Right, Scope, Tool};
 use banda_look::Problem;
 use banda_look::keys::{self as look, Args, Keys, Mod, NONE};
 use schemars::JsonSchema;
@@ -366,6 +366,10 @@ impl Module for KeysModule {
 
     fn right(&self, method: &str) -> Option<Right> {
         Self::method_right(method)
+    }
+
+    fn kind(&self, method: &str) -> Option<Kind> {
+        Self::method_kind(method)
     }
 
     fn tools(&self) -> Vec<Tool> {
