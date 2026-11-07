@@ -3,8 +3,9 @@
  * Flow, Solo, snoozes, Alt+U with the Sidebar hidden, keys pressed faster
  * than the Window draws. A net under the Window's split (ADR 0087): each
  * test holds what the Person sees today, so a move that changes it fails
- * here first. Two hold what sight is to become (ADR 0087, decision 9),
- * and fail until it is.
+ * here first. Two hold sight (ADR 0087, decision 9): an Agent that
+ * finishes scrolled out of view, or behind the Group Solo fills the
+ * screen with, gets its toast. One on screen gets none, in window.spec.ts.
  *
  * An Agent whose first message says "wait" works until the test ends its
  * turn, so what calls and when is the test's to say, never a clock's.
@@ -138,11 +139,10 @@ async function leaveSidebar(page: Page) {
 }
 
 /**
- * The Agent at work in the Thread named `title`, out of view, finishes:
- * it calls, with its sound. Then its toast comes, as sight is to be;
- * today none does, so `test.fail` marks the test from there, after the
- * setup, so a setup that breaks still fails. Once sight is built, the
- * test passes and its `test.fail` goes.
+ * The Agent at work in the Thread named `title`, out of sight on the
+ * workspace on screen, finishes: it calls with its sound and its toast,
+ * as an Agent on another workspace does (ADR 0087, decision 9). Its toast's
+ * region and its "Done" are pinned for that one, in window.spec.ts.
  */
 async function toastedOutOfView(
   window: Window,
@@ -167,18 +167,10 @@ async function toastedOutOfView(
   finish(window, title)
   await expect(done(title)).toBeVisible()
   await expect.poll(notes).toBeGreaterThan(0)
-
-  // Today any Pane of the workspace on screen counts as on screen, so no
-  // toast comes (ADR 0011, decision 1). Once half a Tile must show for it
-  // to count, and in solo only the Group that fills the screen, one does.
-  test.fail(true, "sight from what shows (ADR 0087, decision 9) is not built")
-  // The toast is told with the sound (`tell`), so it shows moments after
-  // it: the short wait goes with `test.fail`. Its region and its "Done"
-  // are pinned where an Agent on another workspace finishes, in
-  // window.spec.ts.
+  // Its own toast, or the joined one it is in.
   await expect(
     toastsOf(page).getByRole("listitem").filter({ hasText: title })
-  ).toContainText("Done", { timeout: 3_000 })
+  ).toContainText("Done")
 }
 
 test("the Flow is picked in the Sidebar's header and kept in agents.toml, and Alt+Shift+M goes between the row and solo (ADR 0079)", async () => {

@@ -828,9 +828,10 @@ not of an App; `Alt+U` walks it in the sidebar's order (ADR 0079, ADR
 
 **Toast**:
 A short card at the window's top right that tells of a Call whose Thread is
-not on screen, of a new Problem, or of how a commit, push or pull from a
-Thread's card ended out of its sight; Sonner's, stacked (ADR 0048). It goes
-away by itself; the Mark remembers, and the bell shows the last ones again.
+not on screen, less than half of its Tile in view (ADR 0087), of a new
+Problem, or of how a commit, push or pull from a Thread's card ended out of
+its sight; Sonner's, stacked (ADR 0048). It goes away by itself; the Mark
+remembers, and the bell shows the last ones again.
 
 **Pull request**:
 A GitHub pull request linked to a Thread: by Create PR, by the Agent's

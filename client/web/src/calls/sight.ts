@@ -1,7 +1,8 @@
 /**
- * Where the Person looks, for a thing that calls (ADR 0011, decision 1),
- * from the workspaces and whether the window is in front. Pure, so plain
- * tests cover it.
+ * Where the Person looks, for a thing that calls (ADR 0011, decision 1;
+ * ADR 0087, decision 9), from the workspaces, what of the one on screen
+ * shows, and whether the window is in front. Pure, so plain tests cover
+ * it: what shows, the Tiling measures.
  */
 import type { ProjectId } from "@banda/contract"
 import type { Columns } from "@banda/contract/look"
@@ -9,6 +10,7 @@ import type { Sight } from "@banda/ui/module"
 import { type Call, type Lists, listedOf, type PaneState } from "@banda/ui/pane"
 import { placeIn } from "../sidebar/order"
 import {
+  type Column,
   current,
   entries,
   find,
@@ -29,23 +31,64 @@ export function isShowing(
   return entry.project === thing.project && shows(entry.pane) === thing.about
 }
 
-/** A tile behind another tab is not on screen (`look.display`). */
+/** How much of a Tile shows inside the Strip's clip for it to be on
+ * screen (ADR 0087, decision 9). */
+const ON_SCREEN_SHARE = 0.5
+
+/** What of the workspace on screen shows: the share of each column inside
+ * its Strip's clip, by its id, as the Tiling measures it (`shownOf`, in
+ * `workspaces/layout.ts`); none when nothing is measured. */
+export type Shown = () => ReadonlyMap<string, number> | undefined
+
+/** What the screen shows of the workspace on screen, past its model. */
+export type Screen = {
+  /** How columns show their Panes: a Tile behind another tab does not
+   * show (`look.display`). */
+  look?: Pick<Columns, "display">
+  /** What of the Strip shows; left out, every column shows whole. */
+  shown?: Shown
+  /** The Panes in windows of their own (ADR 0025, decision 9): those
+   * windows show them, wherever the Strip has their stand-ins. */
+  away?: ReadonlySet<string>
+  /** A Pane is zoomed over the whole window (`Alt+Shift+F`): the focused
+   * one, and no other shows. */
+  zoomed?: boolean
+}
+
+/**
+ * Where the Person looks for `thing`: at it, in the focused Pane of the
+ * window in front; on screen, in a Tile at least half of which shows
+ * inside the Strip's clip, as the Tiling measures it, so in Solo only the
+ * filled Group's, which takes the whole clip; else in the window, or away.
+ * `shown` is asked only for a thing a Tile of the workspace on screen
+ * shows, outside a window of its own and with no Pane zoomed; with nothing
+ * measured, as while the overview shows the Strip whole, every column
+ * shows whole.
+ */
 export function sightOf(
   workspaces: Workspaces,
   thing: { project: ProjectId; about: string },
   front: boolean,
   shows: Shows,
-  look?: Pick<Columns, "display">
+  { look, shown, away, zoomed }: Screen = {}
 ): Sight {
   if (!front) return "away"
   const isIt = (entry: { project: ProjectId; pane: PaneState }) =>
     isShowing(entry, thing, shows)
   const entry = focused(workspaces)
   if (entry && isIt(entry)) return "looking"
-  const onScreen = current(workspaces).columns.some((column) =>
-    shownIn(column, look).some(isIt)
+  const tiles = current(workspaces).columns.flatMap((column) =>
+    shownIn(column, look)
+      .filter(isIt)
+      .map((entry) => ({ column, entry }))
   )
-  return onScreen ? "on-screen" : "in-window"
+  if (tiles.length === 0) return "in-window"
+  if (tiles.some(({ entry }) => away?.has(entry.id))) return "on-screen"
+  if (zoomed) return "in-window"
+  const shares = shown?.()
+  const enough = ({ column }: { column: Column }) =>
+    (shares?.get(column.id) ?? 1) >= ON_SCREEN_SHARE
+  return tiles.some(enough) ? "on-screen" : "in-window"
 }
 
 /** The entry that shows the thing, on any workspace, if one does. */

@@ -25,7 +25,7 @@ import {
   summaryOf,
   toldOfCall,
 } from "./system"
-import { newsOf, placeOf, tell } from "./tell"
+import { lookedAt, newsOf, placeOf, tell } from "./tell"
 import { clickToasts, toastTold } from "./toast"
 import { type Button, clicked, type Told } from "./told"
 
@@ -174,9 +174,9 @@ export function startTelling(
   // while the call may still wait for them, as a Question does.
   const seen = () =>
     withdraw(
-      calling
-        .filter((call) => window.sight(call) === "looking")
-        .map((call) => call.key)
+      lookedAt(calling, window.focused(), (call) => window.sight(call)).map(
+        (call) => call.key
+      )
     )
 
   const heard = (lists: Lists) => {
