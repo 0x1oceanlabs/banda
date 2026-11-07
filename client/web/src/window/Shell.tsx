@@ -72,15 +72,12 @@ import {
 import { modules as known } from "../modules"
 import {
   closedOf,
-  groupedOf,
   homeOf,
   identityOf,
   minOf,
   runs,
   showsOf,
   sources,
-  startable,
-  widthOf,
 } from "../registry"
 import { Edge } from "../sidebar/Edge"
 import { Sidebar } from "../sidebar/Sidebar"
@@ -97,19 +94,9 @@ import {
 import { archive as keepArchived, toggled } from "../sidebar/archived"
 import { attachTo, focusedOn } from "./attach"
 import { useNarrow } from "./narrow"
-import type { Arranged } from "@banda/contract/workspaces"
-import {
-  type Asked,
-  NO_VIEW,
-  resolve,
-  send,
-  tidied,
-  type View,
-  viewOf,
-  withAsked,
-} from "../tiling/arrange"
 import { floorOf, type Reveal, shownOf } from "../tiling/layout"
-import { useArranged } from "../tiling/useArranged"
+import type { Change } from "../tiling/arrange"
+import { useTiling } from "../tiling/useTiling"
 import {
   current,
   displayOf,
@@ -129,7 +116,6 @@ import {
   share,
   step,
   widthIn,
-  type Workspaces as State,
 } from "../tiling/model"
 import { soloing, unsoloing } from "../tiling/groups"
 import { AGENTS_FILE } from "@banda/contract/agents"
@@ -143,13 +129,10 @@ import {
   keepLooked,
   keepSidebar,
   keepSidebarWidth,
-  keepView,
   loadDrawer,
   loadLooked,
   loadSidebar,
   loadSidebarWidth,
-  loadView,
-  moveOver,
 } from "../tiling/store"
 import { Workspaces } from "../tiling/Workspaces"
 import {
@@ -165,57 +148,15 @@ import {
   updating,
   type Shell as Parts,
   type SnoozeAsked,
-  type Step,
 } from "./actions"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { holdsAlone, withMore } from "@banda/ui/lib/keys"
 import { ThreadMenus } from "../titles/ThreadMenu"
 import { scopesOf } from "@banda/ui/hooks/use-scope"
 
-type Change = (workspaces: State) => Step
-
-/** What the window draws while the engine's arrangement is read. */
-const WAITING: State = { list: [{ id: "", columns: [], focus: 0 }], current: 0 }
-
-/** The engine's arrangement, the view and the workspaces they draw. */
-type Seen = {
-  kept: Arranged["workspaces"] | null
-  /** Where in the machine's log `kept` stands. */
-  at: number
-  view: View
-  /** Args Panes asked for, drawn over `kept` until it shows them. */
-  asked: Asked
-  state: State
-}
-
-const NOTHING_SEEN: Seen = {
-  kept: null,
-  at: 0,
-  view: NO_VIEW,
-  asked: {},
-  state: WAITING,
-}
-
-/** How long a change waits for its event before the next goes anyway. */
-const DRAWN_WITHIN = 2000
-
 /** What takes an Esc before Quick Look's tile: a menu, a dialog or a
  * list of suggestions over it. */
 const OVER_PEEK = "[role=menu], [role=dialog], [role=listbox]"
-
-/** The workspaces `view` draws of what `seen` keeps; the view then keeps
- * where each ID it holds stands now. */
-function looking(seen: Seen, view: View): Seen {
-  if (!seen.kept) return { ...seen, view }
-  const { kept, asked } = withAsked(seen.kept, seen.asked, seen.at)
-  const state = resolve(kept, view, seen.state, seen.at)
-  return { ...seen, asked, state, view: viewOf(state, view.want, seen.at) }
-}
-
-/** A change the engine refused is logged: the window draws what it says. */
-function refused(error: unknown): void {
-  console.warn("The workspaces did not change:", error)
-}
 
 /**
  * The window (ADR 0005): the bar on top, the sidebar docked on the left,
@@ -304,56 +245,17 @@ export function Shell({
   useEffect(() => {
     openNow.current = open
   }, [open])
-  // The arrangement is the engine's; the view, the window's (ADR 0025).
+  // The Tiling: the engine's arrangement, the view of it and the queue
+  // its changes go through (ADR 0087).
   const machine = useMachine(engine)
-  const live = useArranged(engine)
-  const ready = live.state === "ready"
+  const { ready, aside, workspaces, drawnNow, changing, change, update } =
+    useTiling({ engine, machine, modules, home })
   // A start that drew its workspaces and stayed up went well (ADR 0039).
   useEffect(() => {
     if (!ready) return
     const well = setTimeout(wentWell, WELL)
     return () => clearTimeout(well)
   }, [ready])
-  const [drawing, setDrawing] = useState(() =>
-    looking(NOTHING_SEEN, loadView())
-  )
-  // A new arrangement is drawn as the view looks at it, at once.
-  if (ready && live.view.workspaces !== drawing.kept) {
-    const { workspaces: kept, at } = live.view
-    setDrawing(looking({ ...drawing, kept, at }, drawing.view))
-  }
-  const workspaces = drawing.state
-  const setView = useCallback(
-    (how: (view: View) => View) =>
-      setDrawing((was) => looking(was, how(was.view))),
-    []
-  )
-  useEffect(() => keepView(drawing.view), [drawing.view])
-  // The window's arrangement moves to the engine once (decision 2).
-  useEffect(() => {
-    if (!machine || modules.length === 0) return
-    const first = startable(modules)[0]
-    moveOver(
-      engine,
-      home,
-      first && {
-        pane: first,
-        width: widthOf(first),
-        grouped: groupedOf(first),
-      }
-    )
-      .then((kept) => kept && setView(() => kept))
-      .catch(refused)
-  }, [engine, machine, modules, home, setView])
-  // An empty workspace the Person left goes, as niri's.
-  const tidying = useRef("")
-  useEffect(() => {
-    const command = ready ? tidied(workspaces) : undefined
-    const key = command ? JSON.stringify([command, workspaces.list.length]) : ""
-    if (key === tidying.current) return
-    tidying.current = key
-    if (command) send(engine, command).catch(refused)
-  }, [engine, workspaces, ready])
   const [sidebar, setSidebar] = useState(loadSidebar)
   // How wide the Person dragged it, which the page's every part that
   // starts past it reads.
@@ -390,17 +292,8 @@ export function Shell({
   const [attention, setAttention] = useState(QUIET)
   const [lists, setLists] = useState<Lists>({})
 
-  // What is drawn, for what runs between draws; and the changes that
-  // wait to see theirs drawn, each with when it is.
-  const waiting = useRef(new Set<(seen: Seen) => boolean>())
-  const seenNow = useRef(drawing)
-  useEffect(() => {
-    seenNow.current = drawing
-    for (const drawn of waiting.current)
-      if (drawn(drawing)) waiting.current.delete(drawn)
-  }, [drawing])
   // The Panes that had the focus, for where an App's attach goes.
-  const focusedId = focused(drawing.state)?.id
+  const focusedId = focused(workspaces)?.id
   useEffect(() => {
     if (focusedId) focusedOn(focusedId)
   }, [focusedId])
@@ -442,89 +335,6 @@ export function Shell({
     before.current = workspaces
   }, [engine, workspaces])
 
-  // Changes go one after another, each worked out from what the last one
-  // drew: keys pressed quickly act as they would slowly.
-  const changes = useRef(Promise.resolve())
-  const drawnWhen = useCallback(
-    (done: (seen: Seen) => boolean) =>
-      new Promise<void>((go) => {
-        const drawn = (seen: Seen) => done(seen) && (go(), true)
-        if (drawn(seenNow.current)) return
-        waiting.current.add(drawn)
-        setTimeout(() => {
-          waiting.current.delete(drawn)
-          go()
-        }, DRAWN_WITHIN)
-      }),
-    []
-  )
-  // The engine answers in turn: a command that changed nothing finds
-  // the arrangement as the last one answered left it.
-  const answered = useRef(0)
-  const answeredAt = useCallback((at: number | null) => {
-    if (at !== null) answered.current = Math.max(answered.current, at)
-    return answered.current
-  }, [])
-  // A change, and once drawn, the Pane it focuses; none if refused.
-  const changing = useCallback(
-    (how: Change) => {
-      const run = async () => {
-        const was = seenNow.current.state
-        const next = how(was)
-        if (!next || next === was) return
-        if (!("command" in next)) {
-          // The view alone: drawn as `next` at once.
-          seenNow.current = looking(seenNow.current, viewOf(next))
-          setView(() => viewOf(next))
-          return focused(next)?.id
-        }
-        const answer = (await send(engine, next.command)) as {
-          at: number | null
-          pane?: string
-        }
-        const want =
-          next.focus === false ? undefined : (next.want ?? answer.pane)
-        const after = answeredAt(answer.at)
-        if (want) setView((view) => ({ ...view, want: { pane: want, after } }))
-        await drawnWhen(
-          (seen) =>
-            seen.at >= after && (!want || focused(seen.state)?.id === want)
-        )
-        return want
-      }
-      // What it focuses, once drawn; none for a change refused.
-      const done = changes.current.then(run).catch(refused)
-      changes.current = done.then(() => undefined)
-      return done
-    },
-    [engine, setView, drawnWhen, answeredAt]
-  )
-  const change = useCallback(
-    (how: Change) => changing(how).then(() => undefined),
-    [changing]
-  )
-  // A Pane's new args are drawn at once, and kept until their event is.
-  const update = useCallback(
-    (pane: string, { args }: PaneState) => {
-      // Drawn again only as asked, or when the engine refused: an
-      // answer only says until when.
-      const ask = (until: number, draw: boolean) =>
-        setDrawing((was) => {
-          if (until !== Infinity && was.asked[pane]?.args !== args) return was
-          const seen = {
-            ...was,
-            asked: { ...was.asked, [pane]: { args, until } },
-          }
-          return draw ? looking(seen, was.view) : seen
-        })
-      ask(Infinity, true)
-      engine.command("workspaces.update", { pane, args }).then(
-        (done) => ask(answeredAt(done.at), false),
-        (error) => (refused(error), ask(0, true))
-      )
-    },
-    [engine, answeredAt]
-  )
   // What calls the Person, for the Marks, the rings and Alt+U; the
   // notifications module tells of it (ADR 0056, decision 1).
   // Snoozes, read by a clock that moves as the next one wakes (ADR 0074):
@@ -568,12 +378,12 @@ export function Shell({
   const answer = useCallback(() => {
     const { calling, snoozes, projects } = heard.current
     const order = sidebarOrder(listsNow.current, projects, snoozes)
-    const entry = focused(seenNow.current.state)
+    const entry = focused(drawnNow())
     const thing = entry && showsOf(entry.pane)
     const here = entry && thing ? `${entry.project}:${thing}` : undefined
     const call = nextCall(calling, order, here)
     if (call) goToCall(call)
-  }, [goToCall])
+  }, [goToCall, drawnNow])
   useEffect(() => {
     for (const listener of sightHeard.current) listener()
   }, [workspaces, front])
@@ -588,11 +398,11 @@ export function Shell({
   const closeShown = useCallback(
     (project: ProjectId, thing: string) => {
       const shown = { project, about: thing }
-      for (const entry of entries(seenNow.current.state))
+      for (const entry of entries(drawnNow()))
         if (isShowing(entry, shown, showsOf))
           change((w) => closingShown(w, shown))
     },
-    [change]
+    [change, drawnNow]
   )
   const listedOf = (project: ProjectId, thing: string): Listed | undefined =>
     listsNow.current[project]?.find((listed) => listed.id === thing)
@@ -654,17 +464,17 @@ export function Shell({
     [archiveThread]
   )
   const archive = useCallback(() => {
-    const entry = focused(seenNow.current.state)
+    const entry = focused(drawnNow())
     const thing = entry && showsOf(entry.pane)
     if (entry && thing) toggleArchived(entry.project, thing)
-  }, [toggleArchived])
+  }, [toggleArchived, drawnNow])
   /** The Thread of the Pane in focus, as its Project lists it. */
   const threadInFocus = useCallback((): Snoozing | undefined => {
-    const entry = focused(seenNow.current.state)
+    const entry = focused(drawnNow())
     const thing = entry && showsOf(entry.pane)
     const listed = entry && thing ? listedOf(entry.project, thing) : undefined
     return entry && listed ? { project: entry.project, listed } : undefined
-  }, [])
+  }, [drawnNow])
   // A Thread that woke stops saying so once its Person looks at it.
   useEffect(() => {
     const looked = threadInFocus()
@@ -799,15 +609,15 @@ export function Shell({
   const hideOver = useCallback(() => setOver(false), [])
   // Each Alt+C brings the focused column to the middle, once.
   const toCenter = useCallback(() => {
-    const entry = focused(seenNow.current.state)?.id
+    const entry = focused(drawnNow())?.id
     if (entry) setReveal({ entry, how: "middle" })
-  }, [])
+  }, [drawnNow])
   const toggleZoom = useCallback(
     () =>
       setZoom((was) =>
-        was === undefined ? focused(seenNow.current.state)?.id : undefined
+        was === undefined ? focused(drawnNow())?.id : undefined
       ),
-    []
+    [drawnNow]
   )
   const closeOverview = useCallback(() => setOverview("closing"), [])
   const leftOverview = useCallback(
@@ -839,11 +649,11 @@ export function Shell({
     window.banda?.popped.open(entry, size?.width ?? 0, size?.height ?? 0)
   }, [])
   const togglePopOut = useCallback(() => {
-    const entry = focused(seenNow.current.state)?.id
+    const entry = focused(drawnNow())?.id
     if (!entry) return
     if (awayNow.current.has(entry)) window.banda?.popped.close(entry)
     else popOut(entry)
-  }, [popOut])
+  }, [popOut, drawnNow])
   // Goes to workspace `id`, as its number does.
   const goTo = useCallback(
     (id: string) =>
@@ -940,7 +750,7 @@ export function Shell({
         })
       },
       focused: () => {
-        const entry = focused(seenNow.current.state)
+        const entry = focused(drawnNow())
         if (!entry) return null
         const shows = showsOf(entry.pane)
         return {
@@ -950,12 +760,7 @@ export function Shell({
         }
       },
       beside: (agent) => {
-        const at = besideOf(
-          seenNow.current.state,
-          listsNow.current,
-          agent,
-          showsOf
-        )
+        const at = besideOf(drawnNow(), listsNow.current, agent, showsOf)
         return at && { project: at.project, right: at.from ? at.right : null }
       },
       lists: () => listsNow.current,
@@ -965,7 +770,7 @@ export function Shell({
       },
       sight: (thing) => {
         if (!thing) return inFront() ? "in-window" : "away"
-        const { state } = seenNow.current
+        const state = drawnNow()
         const look = columnsOf()
         // What shows is measured as it is asked, only for a Tile on the
         // workspace on screen (ADR 0087, decision 9).
@@ -1002,9 +807,7 @@ export function Shell({
             ? {
                 pane,
                 project:
-                  project ??
-                  projectIn(seenNow.current.state) ??
-                  partsNow.current.home,
+                  project ?? projectIn(drawnNow()) ?? partsNow.current.home,
                 fill: was?.fill ?? false,
               }
             : null
@@ -1023,7 +826,7 @@ export function Shell({
         window.banda?.settings.set(file, key, value) ??
         Promise.resolve(["Only Banda's app writes the settings."]),
       attach: (chips) => {
-        const at = focused(seenNow.current.state)
+        const at = focused(drawnNow())
         const to = attachTo(at ? { id: at.id, project: at.project } : null)
         if (!to) {
           // One toast, however many files were added at once.
@@ -1059,6 +862,7 @@ export function Shell({
     settings,
     quit,
     engine,
+    drawnNow,
   ])
   // Each module that runs starts once, with the window as it is when it
   // asks (ADR 0022): the browser opens a Pane for an Agent's tab.
@@ -1237,7 +1041,7 @@ export function Shell({
     sidebarShown,
     current: agentAhead,
     onOpen: pickPane,
-    aside: (ready && live.view.aside) || null,
+    aside,
   })
   // A widget moved with the mod writes the parts of `[bar]` it changed, one
   // after another, as they are one file (ADR 0064).
@@ -1311,7 +1115,7 @@ export function Shell({
       popOut,
       // As the window draws it now, when the menu opens.
       stand: (entry) => {
-        const state = seenNow.current.state
+        const state = drawnNow()
         const spot = find(state, entry)
         if (!spot) return undefined
         const workspace = state.list[spot.workspace]
@@ -1336,7 +1140,7 @@ export function Shell({
         }
       },
     }),
-    [change, update, parts, popOut, snoozeIn]
+    [change, update, parts, popOut, snoozeIn, drawnNow]
   )
   // What a Pane in its own window asks, the window does, as for its own.
   useEffect(

@@ -1214,9 +1214,15 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
 - **A Pane reads a view, then follows.** `useLive` reads the view once,
   applies each event after its `at`, and reads again when the engine says
   so. Events that arrive within one frame render once.
-- **The shell** (`client/web/src/window/Shell.tsx`) puts the parts together:
-  the bar on top, the sidebar docked on the left, and the workspaces, or
-  the overview over them (ADR 0005, decisions 7–9).
+- **The Window** (`client/web/src/window/`, its root `Shell.tsx`) puts the
+  areas together: the Bar on top, the Sidebar docked on the left, the Top
+  layer over them (the Banda menu, the Drawer, Quick Look, dialogs and
+  toasts), and the middle, which it gives to the Tiling
+  (`client/web/src/tiling/`): the workspaces, or the overview over them
+  (ADR 0005, decisions 7–9; ADR 0087). A popped-out Pane's window is the
+  Window's too (`window/Popped.tsx`). The Window may import the Tiling;
+  what the Tiling still imports of the Window, the architecture test
+  lists, and the list only falls.
 - **The workspaces** follow niri (`client/web/src/tiling/model.ts`); every
   change to them is a pure function.
   - They sit one under another, and there is always one empty workspace
@@ -1250,12 +1256,14 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
     storage (`$BANDA_STATE/window` when that is set), and draws the two
     together (`tiling/arrange.ts`). A key works out its change with
     `model.ts` and sends it as one command; the window draws the event
-    that comes back. A Pane's new args are drawn at once and kept over
-    the arrangement until their event is, since a Pane works out its next
-    args from the ones it drew. What a window kept before moves over once
-    (`tiling/store.ts`). A Pane an Agent opened is marked until the
-    Person has it in focus; the window keeps which of them they have
-    looked at (`banda.looked`).
+    that comes back. Changes go one after another through one queue
+    (`tiling/useTiling.ts`), each worked out from what the last one drew,
+    so keys pressed quickly act as they would slowly. A Pane's new args
+    are drawn at once and kept over the arrangement until their event is,
+    since a Pane works out its next args from the ones it drew. What a
+    window kept before moves over once (`tiling/store.ts`). A Pane an
+    Agent opened is marked until the Person has it in focus; the window
+    keeps which of them they have looked at (`banda.looked`).
 - **One list of actions** (`client/web/src/window/actions.ts`) holds what the
   window does, the modules' actions and its own, each with a name, its
   key sheet section and a default key, by its physical place.
@@ -1483,7 +1491,7 @@ banda/
   client/             the window
     ui/               shadcn/ui and the Pane contract
     ghostty/          T3 Code's Ghostty adapter and its WebAssembly, vendored
-    web/              React: the shell (bar, sidebar, workspaces, overview), the actions, the Pane registry
+    web/              React: the Window (window/: the Bar, the Sidebar, the Top layer), the Tiling (tiling/: the workspaces, the overview), the actions, the Pane registry
     desktop/          Electron: the window and the engine's start; e2e tests
     desktop-kit/      what a module's part in main may use of main (ADR 0028)
   sdk/contract/       the engine's API for TypeScript: generated types and the client

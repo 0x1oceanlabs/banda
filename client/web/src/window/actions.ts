@@ -49,11 +49,13 @@ import {
   toggleUnread,
 } from "../titles/titles"
 import {
+  type Change,
   columnMoved,
   moved,
   opened,
   type Plan,
   resized,
+  type Step,
   workspaceMoved,
 } from "../tiling/arrange"
 import { filling, grouping, regrouping, shiftingInside } from "../tiling/groups"
@@ -91,18 +93,11 @@ import {
   type Workspaces,
 } from "../tiling/model"
 
-/**
- * What a change of the workspaces comes to: the view alone, as the
- * workspaces the window shows next, or a plan for the engine, which
- * arranges them (ADR 0025, decision 1); nothing when nothing changes.
- */
-export type Step = Workspaces | Plan | undefined
-
 /** What the window's own actions can change: its parts, more than a
  * module's get (`WindowApi`). */
 export type Shell = WindowApi & {
   /** Changes the workspaces. */
-  change: (how: (workspaces: Workspaces) => Step) => void
+  change: (how: Change) => void
   toggleSidebar: () => void
   /** Shows the sidebar, as a notice of many calls asks (ADR 0011). */
   showSidebar: () => void

@@ -310,6 +310,16 @@ type Command = {
  * `focus` is false. */
 export type Plan = { command: Command; want?: string; focus?: false }
 
+/**
+ * What a change of the workspaces comes to: the view alone, as the
+ * workspaces the window shows next, or a plan for the engine, which
+ * arranges them (ADR 0025, decision 1); nothing when nothing changes.
+ */
+export type Step = Workspaces | Plan | undefined
+
+/** A change of the workspaces, worked out from those the last one drew. */
+export type Change = (workspaces: Workspaces) => Step
+
 type Spot = { workspace: Workspace; column: Column; c: number; e: number }
 
 function spotOf(state: Workspaces, id: string): Spot | undefined {
