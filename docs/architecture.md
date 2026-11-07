@@ -1061,13 +1061,22 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   window only closes it: the engine and its Agents go on. Quit Banda
   (`banda.quit`, Ctrl+Q, but for a terminal's program, whose key it is
   there) asks first while Agents work ("2 Agents are working. Stop them
-  and quit?"), then main runs `banda stop --force`. On macOS the app
-  menu's ⌘Q quits as before, without asking, and the engine is the
-  window's child, until plan step 7. `banda look --follow --with-parent`
-  stays the window's child. Both are Effect services in main (`Engine`,
-  `Look`; ADR 0020), started by one runtime and stopped when it is
-  disposed. The client then reconnects and follows on from the last
-  event it delivered, so a Pane sees no gap.
+  and quit?"), then main runs `banda stop --force`. On macOS the engine
+  is the app's child until plan step 7, so the app stays
+  (`client/desktop/src/closing.ts`): closing the main window hides it,
+  its page left to call the Person and sound, and its Panes' own windows
+  close; the Dock's icon, or Window > Banda, shows it again. In the page
+  ⌘Q is Quit Banda's own key. The app menu's and the Dock's Quit, and ⌘Q
+  where the page leaves the key (in a terminal, over a dialog, with the
+  window hidden), run `banda stop`, which stops the engine where no Agent
+  works; where some do, the window comes to the front and its Quit Banda
+  asks first, or a system dialog does when the page crashed or loads, or
+  the Person quits again within 10 s. A logout, restart or shutdown quits
+  without asking. `banda look --follow --with-parent` stays the window's
+  child. Both are Effect services in main (`Engine`, `Look`; ADR 0020),
+  started by one runtime and stopped when it is disposed. The client
+  then reconnects and follows on from the last event it delivered, so a
+  Pane sees no gap.
 - **A packed Banda runs its own copy of `banda`** (ADR 0086, decision
   2), never the one inside its AppImage or its app, whose folder may go
   while the program runs. Main copies it into `<data>/engine/<version>/`,

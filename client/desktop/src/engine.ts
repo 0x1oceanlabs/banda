@@ -7,7 +7,8 @@
  * leaves the engine running (decisions 1 and 3). Where the engine is the
  * window's child, as on macOS for now and for Banda Local, that program
  * is the engine, `serve --with-parent` (ADR 0020), and stops with the
- * window (child.ts).
+ * window (child.ts); on macOS the app, and so the engine, stays as its
+ * window closes (closing.ts).
  *
  * The window learns the engine's address from the first line, and forgets
  * it while the engine is down. An engine that stops as asked, as Quit
@@ -18,7 +19,7 @@
  * shell's (login.ts), and with `env` over the window's environment: the
  * Node the app provides for the adapters it carries (ADR 0059).
  */
-import { type Address, Engine as Client } from "@banda/contract"
+import { type Address, type Code, Engine as Client } from "@banda/contract"
 import { Engine } from "@banda/desktop-kit"
 import {
   Context,
@@ -133,40 +134,74 @@ export const engineLayer = (
     })
   )
 
+/** What `banda stop` prints as it refuses: the refusal's code, which a
+ * caller acts on (`Refusal`). */
+const Refused = Schema.fromJsonString(
+  Schema.Struct({ error: Schema.Struct({ code: Schema.String }) })
+)
+/** The code `banda stop` refuses with while Agents work, with no terminal
+ * to ask in. */
+const WORKING: Code = "conflict"
+
 /**
  * Quit Banda's stop of the engine (ADR 0086, decision 3): `banda stop
  * --force` on the window's `banda`, which stops the engine, its Agents,
  * Harnesses and Terminals, and returns once it has gone, or after half a
  * minute. The page asked first while Agents work; an update restarts the
  * engine with it, once no Thread works or the Person said so.
+ * `unlessWorking` is `banda stop` with no terminal to ask in, as macOS's
+ * Quit runs it (closing.ts): it stops the engine where no Agent works,
+ * and refuses where some do, for the window to ask.
  */
 export class Stop extends Context.Service<
   Stop,
-  { readonly engine: Effect.Effect<void> }
+  {
+    readonly engine: Effect.Effect<void>
+    /** Whether Agents work, and it stopped nothing. Else it stopped the
+     * engine, found none running, or could not stop it, as when it does
+     * not run or takes over half a minute. */
+    readonly unlessWorking: Effect.Effect<boolean>
+  }
 >()("banda/Stop") {
   static readonly layer = Layer.effect(Stop)(
     Effect.gen(function* () {
       const program = yield* Program
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
-      const stop = (binary: string) =>
-        ChildProcess.make(binary, ["stop", "--force"], {
-          extendEnv: true,
-          stdin: "ignore",
-          stdout: "ignore",
-          stderr: "inherit",
-        })
-      return {
-        engine: program.path.pipe(
-          Effect.flatMap((binary) =>
-            Effect.scoped(
-              Effect.flatMap(
-                spawner.spawn(stop(binary)),
-                (child) => child.exitCode
-              )
+      /** `banda stop` with `more`: its exit code, and what it printed; it
+       * fails when it cannot run, or after half a minute. */
+      const stop = (...more: string[]) =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            const binary = yield* program.path
+            const child = yield* spawner.spawn(
+              ChildProcess.make(binary, ["stop", ...more], {
+                extendEnv: true,
+                stdin: "ignore",
+                stdout: "pipe",
+                stderr: "inherit",
+              })
             )
+            return yield* Effect.all(
+              [
+                child.exitCode,
+                child.stdout.pipe(Stream.decodeText, Stream.mkString),
+              ],
+              { concurrency: 2 }
+            )
+          })
+        ).pipe(Effect.timeout("30 seconds"))
+      return {
+        engine: Effect.ignore(stop("--force")),
+        unlessWorking: stop().pipe(
+          Effect.map(
+            ([code, said]) =>
+              code !== 0 &&
+              Option.exists(
+                Schema.decodeUnknownOption(Refused)(said.trim()),
+                (refused) => refused.error.code === WORKING
+              )
           ),
-          Effect.timeout("30 seconds"),
-          Effect.ignore
+          Effect.orElseSucceed(() => false)
         ),
       }
     })

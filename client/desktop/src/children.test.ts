@@ -7,7 +7,7 @@ import { ChildProcessSpawner } from "effect/process"
 import { TestClock } from "effect/testing"
 import { command, keepRunning } from "./child"
 import { Engine, Look } from "@banda/desktop-kit"
-import { engineLayer } from "./engine"
+import { engineLayer, Stop } from "./engine"
 import { firstLook, lookLayer } from "./look"
 import { Program } from "./program"
 import { script } from "./testing"
@@ -160,6 +160,47 @@ it.live(
       expect(readFileSync(join(dirname(program), "path"), "utf8").trim()).toBe(
         path
       )
+    })
+)
+
+/** Quit Banda's stop of the engine, its `banda` `program`. */
+const stopOf = (program: string) =>
+  Stop.layer.pipe(
+    Layer.provide(Program.layer({ program })),
+    Layer.provide(NodeServices.layer)
+  )
+
+it.live(
+  "Quit Banda runs banda stop --force; macOS's Quit runs banda stop, which says whether Agents work and stopped nothing",
+  () =>
+    Effect.gen(function* () {
+      // Without --force it refuses, as `banda stop` with no terminal to
+      // ask in does while Agents work (engine/src/control.rs).
+      const working = script(
+        `echo "$@" >> "$(dirname "$0")/runs"\n` +
+          `[ "$2" = "--force" ] && exit 0\n` +
+          `echo '{"error":{"code":"conflict","message":"An Agent is working. Stop it and quit?"}}'\n` +
+          "exit 1"
+      )
+      const asks = yield* Stop.use((stop) =>
+        Effect.andThen(stop.engine, stop.unlessWorking)
+      ).pipe(Effect.provide(stopOf(working)))
+      expect(asks).toBe(true)
+      const runs = readFileSync(join(dirname(working), "runs"), "utf8")
+      expect(runs.trim().split("\n")).toEqual(["stop --force", "stop"])
+      // With none at work it stopped the engine; one that refuses for
+      // another reason, breaks, or does not run could not: Banda quits.
+      for (const program of [
+        script("exit 0"),
+        script(`echo '{"error":{"code":"forbidden","message":"No."}}'\nexit 1`),
+        script("exit 2"),
+        join(dirname(working), "missing"),
+      ])
+        expect(
+          yield* Stop.use((stop) => stop.unlessWorking).pipe(
+            Effect.provide(stopOf(program))
+          )
+        ).toBe(false)
     })
 )
 
