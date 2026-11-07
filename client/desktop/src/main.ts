@@ -1,6 +1,9 @@
 /**
- * The desktop window. It runs the engine as its child, serves the page
- * from `app://banda` and hands the page the engine's address. It also
+ * The desktop window. It reaches the engine, the session's service on
+ * Linux, which it starts when it does not run, or else its child
+ * (engine.ts, ADR 0086), serves the page from `app://banda` and hands the
+ * page the engine's address. Closing it is not quitting Banda: the engine
+ * and its Agents go on, and Quit Banda stops them. It also
  * runs `banda look --follow` and hands the page each look (ADR 0007),
  * writes the preset the page picks into `sidebar.toml` (ADR 0008), and
  * opens the system's folder picker for "Add Project" (ADR 0026), and a
@@ -30,6 +33,7 @@ import {
 import { type Look as LookValue, WALLPAPER_URL } from "@banda/contract/look"
 import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
+import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import {
   Engine,
   FileHost,
@@ -205,7 +209,10 @@ const runtime = ManagedRuntime.make(
             own: process.env.PATH,
             term: process.env.TERM,
           }),
-          node
+          node,
+          // The engine stopped as asked, by Quit Banda here or `banda
+          // stop`: the window goes with it.
+          () => app.quit()
         ),
         lookLayer,
         settingsLayer,
@@ -215,8 +222,9 @@ const runtime = ManagedRuntime.make(
         Editors.layer
       )
     ),
-    // A packed Banda that cannot run a copy of its own says why.
-    Layer.provide(
+    // A packed Banda that cannot run a copy of its own says why. Quit
+    // Banda runs it too.
+    Layer.provideMerge(
       Program.layer(where, (why) =>
         keepProblem({
           source: "main",
@@ -226,7 +234,7 @@ const runtime = ManagedRuntime.make(
         })
       )
     ),
-    Layer.provide(NodeServices.layer)
+    Layer.provideMerge(NodeServices.layer)
   )
 )
 // What breaks in main, or crashes, is kept as the page's is (ADR 0039).
@@ -452,6 +460,9 @@ async function ready(): Promise<void> {
     menu: {
       open: [text, ([route]) => Effect.sync(() => openMenu(route))],
     },
+    // Quit Banda (ADR 0086, decision 3): the page asked first when Agents
+    // are working.
+    quit: [none, () => quitBanda],
     // Banda's own update (ADR 0041).
     update: {
       current: [none, () => Effect.sync(update.current)],
@@ -507,6 +518,35 @@ async function ready(): Promise<void> {
 
 /** Shuts the door `banda menu` knocks at. */
 let shutDoor: (() => void) | null = null
+
+/**
+ * Quit Banda (ADR 0086, decision 3): `banda stop --force` stops the
+ * engine, which stops its Agents, Harnesses and Terminals, and the window
+ * quits once it has gone. Its follower hears the engine stop as asked and
+ * quits the window too (engine.ts); one that cannot be stopped in time
+ * still leaves the window to quit.
+ */
+const quitBanda = Effect.gen(function* () {
+  const program = yield* Program.use((program) => program.path)
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
+  yield* Effect.scoped(
+    Effect.flatMap(
+      spawner.spawn(
+        ChildProcess.make(program, ["stop", "--force"], {
+          extendEnv: true,
+          stdin: "ignore",
+          stdout: "ignore",
+          stderr: "inherit",
+        })
+      ),
+      (child) => child.exitCode
+    )
+  )
+}).pipe(
+  Effect.timeout("30 seconds"),
+  Effect.ignore,
+  Effect.ensuring(Effect.sync(() => app.quit()))
+)
 
 /** Opens the menu at `route` in the window, brought to the front; the
  * page tells the routes apart, the settings' too. */
@@ -796,6 +836,9 @@ function macMenu(): Menu {
   return Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }])
 }
 
+// Closing the last window closes the window only: an engine that is the
+// session's service goes on, and its Agents with it (ADR 0086, decision
+// 3). One that is the window's child stops with it, as on macOS for now.
 app.on("window-all-closed", () => app.quit())
 
 let stopped = false

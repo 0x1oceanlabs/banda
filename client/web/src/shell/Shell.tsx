@@ -86,6 +86,7 @@ import { Edge } from "../sidebar/Edge"
 import { Sidebar } from "../sidebar/Sidebar"
 import { pickPreset } from "../sidebar/settings"
 import { SnoozePicker, type Snoozing } from "../sidebar/SnoozePicker"
+import { QuitDialog } from "./Quit"
 import {
   seeWoke,
   snoozeAct,
@@ -591,6 +592,9 @@ export function Shell({
   // an archived one is, its Panes closed, and it leaves Archive; Undo
   // wakes it.
   const [snoozing, setSnoozing] = useState<Snoozing>()
+  // How many Agents worked as the Person asked to quit, while Banda asks
+  // whether to stop them (ADR 0086, decision 3).
+  const [quitting, setQuitting] = useState<number | null>(null)
   const wakeThread = useCallback(
     (project: ProjectId, thing: string) => {
       engine
@@ -880,6 +884,13 @@ export function Shell({
     setShipped(saidNow.current)
     settings("keys")
   }, [settings])
+  const quit = useCallback(() => {
+    const working = Object.values(listsNow.current)
+      .flat()
+      .filter((listed) => works(listed.mark)).length
+    if (working === 0) window.banda?.quit()
+    else setQuitting(working)
+  }, [])
 
   const parts: Parts = useMemo(() => {
     const parts: Parts = {
@@ -990,6 +1001,7 @@ export function Shell({
       route,
       ownKeys,
       settings,
+      quit,
       lookInto: (fingerprint) =>
         void lookingInto(engine, fingerprint)
           .then((thread) => runAction(parts, "thread.new", thread))
@@ -1034,6 +1046,7 @@ export function Shell({
     route,
     ownKeys,
     settings,
+    quit,
     engine,
   ])
   // Each module that runs starts once, with the window as it is when it
@@ -1512,6 +1525,11 @@ export function Shell({
                 onWake={(target) =>
                   wakeThread(target.project, target.listed.id)
                 }
+              />
+              <QuitDialog
+                working={quitting}
+                onQuit={() => window.banda?.quit()}
+                onClose={() => setQuitting(null)}
               />
               <BandaMenu
                 opening={menu}

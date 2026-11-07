@@ -1,10 +1,11 @@
 /**
  * A program the window keeps running as its child (ADR 0020, decision 2):
- * the engine and the look. It starts the program, reads it while it runs,
- * and starts it again when it dies: after half a second, then a wait
- * that doubles up to ten seconds, and back to half a second once a run
- * lasted half a minute. When its scope closes, the program gets SIGTERM,
- * and SIGKILL if it has not gone five seconds later.
+ * the engine's follower and the look. It starts the program, reads it
+ * while it runs, and starts it again when it dies: after half a second,
+ * then a wait that doubles up to ten seconds, and back to half a second
+ * once a run lasted half a minute. A run that ends as `last` says is the
+ * last one. When its scope closes, the program gets SIGTERM, and SIGKILL
+ * if it has not gone five seconds later.
  */
 import {
   Clock,
@@ -52,32 +53,35 @@ type Start = Effect.Effect<
 >
 
 /** Runs what `start` starts for good, `name` in what it says when it
- * dies; `use` reads each run, and a run whose `use` fails is stopped.
- * `start` is asked anew for each run, so a run starts the program where
- * it is then. */
+ * dies, or until a run exits with a code `last` takes; `use` reads each
+ * run, and a run whose `use` fails is stopped. `start` is asked anew for
+ * each run, so a run starts the program where it is then. */
 export const keepRunning = <E extends { message: string }, R>(
   name: string,
   start: Start,
   use: (
     child: ChildProcessSpawner.ChildProcessHandle
-  ) => Effect.Effect<void, E, R>
+  ) => Effect.Effect<void, E, R>,
+  last: (code: number) => boolean = () => false
 ) =>
   Effect.gen(function* () {
     let wait = FIRST_WAIT
     while (true) {
       const started = yield* Clock.currentTimeMillis
       const ended = yield* Effect.scoped(once(start, use))
+      if (typeof ended === "number" && last(ended)) return
       if ((yield* Clock.currentTimeMillis) - started > HEALTHY)
         wait = FIRST_WAIT
+      const how = typeof ended === "number" ? `code ${ended}` : ended
       yield* Console.error(
-        `banda: the ${name} stopped (${ended}); starting it again in ${wait} ms`
+        `banda: the ${name} stopped (${how}); starting it again in ${wait} ms`
       )
       yield* Effect.sleep(wait)
       wait = Math.min(wait * 2, LONGEST_WAIT)
     }
   })
 
-/** One run: how it ended, in words. */
+/** One run: the code it exited with, or how it ended, in words. */
 const once = <E extends { message: string }, R>(
   start: Start,
   use: (
@@ -86,12 +90,15 @@ const once = <E extends { message: string }, R>(
 ) =>
   Effect.gen(function* () {
     const child = yield* start
-    const exited = child.exitCode.pipe(Effect.map((code) => `code ${code}`))
+    const exited: Effect.Effect<number | string, PlatformError.PlatformError> =
+      child.exitCode.pipe(Effect.map(Number))
     return yield* use(child).pipe(
       Effect.andThen(Effect.never),
       Effect.raceFirst(exited)
     )
-  }).pipe(Effect.catch((error) => Effect.succeed(error.message)))
+  }).pipe(
+    Effect.catch((error) => Effect.succeed<number | string>(error.message))
+  )
 
 /** What a child prints, line by line. */
 export const lines = (child: ChildProcessSpawner.ChildProcessHandle) =>

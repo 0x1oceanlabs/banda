@@ -107,6 +107,39 @@ it.live(
 )
 
 it.live(
+  "the window follows the engine with banda start; one that stopped as asked quits the window, one that crashed starts again",
+  () =>
+    Effect.gen(function* () {
+      const program = script(
+        `echo "$@" >> "$(dirname "$0")/runs"\n` +
+          `echo '{"protocol":1,"port":1,"secret":"s","window":"/w"}'\n` +
+          `[ "$(wc -l < "$(dirname "$0")/runs")" -ge 2 ] && exit 0\n` +
+          "exit 3"
+      )
+      let quit = () => {}
+      const quits = new Promise<void>((done) => {
+        quit = done
+      })
+      yield* Effect.gen(function* () {
+        yield* Engine.use((engine) => engine.address)
+        yield* Effect.promise(() => quits)
+      }).pipe(
+        Effect.provide(
+          engineLayer(Effect.succeed(Option.none()), {}, quit).pipe(
+            Layer.provide(Program.layer({ program })),
+            Layer.provide(NodeServices.layer)
+          )
+        )
+      )
+      const runs = readFileSync(join(dirname(program), "runs"), "utf8")
+      expect(runs.trim().split("\n")).toEqual([
+        "start --with-parent",
+        "start --with-parent",
+      ])
+    })
+)
+
+it.live(
   "the engine starts with the PATH it is given, as the login shell's",
   () =>
     Effect.gen(function* () {
