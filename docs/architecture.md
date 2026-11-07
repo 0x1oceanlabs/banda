@@ -244,6 +244,33 @@ The kernel holds only what every module needs, and it names no module.
   the kinds that run nothing as the Person, given only the args that
   choose what each shows (ADR 0083, decision 3), moving and closing only
   the ones it opened (`Pane.by`).
+- **Tables by prefix** (ADR 0062, decision 5; A4 of the architecture
+  vision). A module's tables and indexes go by its name and `_`
+  (`notes_items`), and a SQLite authorizer on each store's writer and
+  reader holds its SQL to them (`kernel/src/tables.rs`): in its
+  transactions, its reads and views, and its migrations, which open no
+  store once one reaches past. The kernel's own tables, `kernel_*`, a
+  module reaches only through the kernel's API (`Tx::emit`,
+  `Tx::enqueue`, the log's reads); all the kernel's SQL in a `Tx` goes
+  through `Tx::kernel`. A module's SQL reads and writes its own tables
+  and reads `json_each`; only its migration steps make tables and
+  indexes and change columns, and each foreign key they leave must point
+  at its own tables, which the kernel reads after each step. The rest is
+  refused until a module needs it: a transaction or a savepoint, another
+  database, a pragma, a view, a trigger, a temporary or virtual table,
+  dropping a table (its data is kept, ADR 0085), and renaming one, as
+  SQLite does not tell the new name (a module rebuilds a table under a
+  new name it owns). A module whose id changed keeps its tables' names,
+  for data at rest is never renamed: its `module.toml` declares the
+  prefixes it kept, `legacy-prefixes`, which its engine part tells the
+  kernel (`Module::legacy_prefixes`), and the kernel refuses one that is
+  another module's name or reserved (`kernel`, `sqlite`, `pragma`,
+  `json`) (ADR 0085, decision 12). Entering a module empties its
+  connection's statement cache, so it is never handed a statement
+  decided for someone else, and both connections run with
+  `trusted_schema = OFF`. What a module's SQL reaches past is refused as
+  it is prepared, logged with the module and the table, and reaches its
+  caller as `internal`.
 - **Identity.** A port: it says which Participant a connection's token names.
   On one computer, whoever holds the engine's secret is the owner. Later it
   is OIDC, or our accounts.
@@ -422,7 +449,7 @@ contract. It is one folder: an App's in `apps/`, the platform's in
 <name>/
   engine/      Rust crate: rules · store · operation · adapters
   pane/        React package: its window part, one defineModule
-  module.toml  id, name, version, from Banda, settings files, unstable marks
+  module.toml  id, name, version, from Banda, settings files, legacy table prefixes, unstable marks
   window.json  its window part as the engine reads it, written by the window's tests
 ```
 
@@ -468,7 +495,8 @@ only falls, and `scripts/check.sh` prints them.
 - **Events it publishes.** These are its published language, and they carry a
   version.
 - **Its tables.** Only this module writes them, and no other module reads
-  them.
+  them: the kernel refuses any table outside its prefix (Tables by
+  prefix, above).
 - **Tools** it offers Agents: a `methods!` line marked `tool "<name>"`
   is one, with its `///` as its description and the JSON Schema of its
   params, from `schemars` (ADR 0019, decision 3). The agents module's

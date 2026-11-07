@@ -339,7 +339,7 @@ pub(crate) async fn recover(project: &Arc<Project>) -> Result<(), Error> {
     project
         .store()
         .write(KERNEL, move |tx| {
-            tx.sql().execute(
+            tx.kernel().execute(
                 "UPDATE kernel_outbox SET boot = ?1, lease_until = ?2 + COALESCE(lease_ms, 0),
                    carried = 1
                  WHERE state = 'running' AND runner = 'worker' AND carried = 0
@@ -371,7 +371,7 @@ async fn cut_short(project: &Arc<Project>, claimed: Claimed, cut: Cut) -> Result
         return project
             .store()
             .write(KERNEL, move |tx| {
-                tx.sql().execute(
+                tx.kernel().execute(
                     "UPDATE kernel_outbox SET lease_until = NULL WHERE id = ?1",
                     params![id],
                 )?;
@@ -384,7 +384,7 @@ async fn cut_short(project: &Arc<Project>, claimed: Claimed, cut: Cut) -> Result
         .store()
         .write(name, move |tx| {
             if let Cut::Lease { at } = cut {
-                let ran_out: bool = tx.sql().query_row(
+                let ran_out: bool = tx.kernel().query_row(
                     "SELECT EXISTS (SELECT 1 FROM kernel_outbox WHERE id = ?1 AND claim = ?2
                        AND state = 'running' AND lease_until <= ?3)",
                     params![id, claimed.token, at],
@@ -409,7 +409,7 @@ async fn cut_short(project: &Arc<Project>, claimed: Claimed, cut: Cut) -> Result
                 };
                 return settle(tx, &*module, &claimed, Settled::Failed(reason.to_owned()));
             }
-            tx.sql().execute(
+            tx.kernel().execute(
                 "UPDATE kernel_outbox SET state = 'pending', boot = NULL, lease_until = NULL,
                    attempts = attempts + 1, cuts = cuts + 1, late_from = ?1, next_at = ?2
                  WHERE id = ?3 AND claim = ?4 AND state = 'running'",
@@ -590,7 +590,7 @@ pub(crate) async fn lease(
         .store()
         .write(KERNEL, move |tx| {
             let ready = tx
-                .sql()
+                .kernel()
                 .query_row(
                     &format!(
                         "SELECT {CLAIMED} FROM kernel_outbox o
@@ -606,8 +606,8 @@ pub(crate) async fn lease(
             let Some(mut claimed) = ready else {
                 return Ok(None);
             };
-            take(tx.sql(), &mut claimed, &id)?;
-            tx.sql().execute(
+            take(&tx.kernel(), &mut claimed, &id)?;
+            tx.kernel().execute(
                 "UPDATE kernel_outbox SET worker = ?1, lease_ms = ?2, lease_until = ?3, carried = 0
                  WHERE id = ?4",
                 params![worker, term, now + term, claimed.effect.id],
@@ -637,7 +637,7 @@ pub(crate) async fn renew(
     let renewed = project
         .store()
         .write(KERNEL, move |tx| {
-            Ok(tx.sql().execute(
+            Ok(tx.kernel().execute(
                 "UPDATE kernel_outbox SET lease_ms = ?1, lease_until = ?2, carried = 0
                  WHERE id = ?3 AND module = ?4 AND claim = ?5 AND state = 'running'
                    AND runner = 'worker'",
@@ -667,7 +667,7 @@ pub(crate) async fn finish_leased(
         .store()
         .write(module, move |tx| {
             let claimed = tx
-                .sql()
+                .kernel()
                 .query_row(
                     &format!(
                         "SELECT {CLAIMED} FROM kernel_outbox o
@@ -736,9 +736,9 @@ fn leases_ran_out(sql: &Connection, boot: &str, now: i64) -> Result<Vec<Claimed>
 /// Claims for this boot the first pending effect the engine runs of every
 /// key with nothing running, once it is due.
 fn claim(tx: &mut Tx<'_>, boot: &str) -> Result<Vec<Claimed>, Error> {
-    let now = tx.now();
+    let (now, sql) = (tx.now(), tx.kernel());
     let mut ready = {
-        let mut statement = tx.sql().prepare(&format!(
+        let mut statement = sql.prepare(&format!(
             "SELECT {CLAIMED} FROM kernel_outbox o
              WHERE o.state = 'pending' AND o.runner = 'engine' AND o.next_at <= ?1
                AND {FIRST_OF_ITS_KEY}
@@ -748,7 +748,7 @@ fn claim(tx: &mut Tx<'_>, boot: &str) -> Result<Vec<Claimed>, Error> {
         rows.collect::<rusqlite::Result<Vec<_>>>()?
     };
     for claimed in &mut ready {
-        take(tx.sql(), claimed, boot)?;
+        take(&sql, claimed, boot)?;
     }
     Ok(ready)
 }
@@ -780,21 +780,21 @@ fn finish(
         Outcome::Done | Outcome::DoneWriting(_) => {
             // Its module writes while the claim holds, as a worker's
             // writes check it with `Tx::holds`.
-            if !holds(tx.sql(), &claimed.module, claimed.claim())? {
+            if !holds(&tx.kernel(), &claimed.module, claimed.claim())? {
                 return Ok(false);
             }
             if let Outcome::DoneWriting(Writing(write)) = outcome {
                 debug_assert_eq!(tx.module(), module.name());
                 write(tx)?;
             }
-            tx.sql().execute(
+            tx.kernel().execute(
                 "UPDATE kernel_outbox SET state = 'done', settled_at = ?1, lease_until = NULL
                  WHERE id = ?2",
                 params![now, effect.id],
             )?;
             Ok(true)
         }
-        Outcome::Retry(reason) if !retry.gives_up(attempts + 1, late) => Ok(tx.sql().execute(
+        Outcome::Retry(reason) if !retry.gives_up(attempts + 1, late) => Ok(tx.kernel().execute(
             "UPDATE kernel_outbox SET state = 'pending', boot = NULL, lease_until = NULL,
                attempts = attempts + 1, late_from = ?1, next_at = ?2, error = ?3
              WHERE id = ?4 AND claim = ?5 AND state = 'running'",
@@ -824,7 +824,7 @@ fn settle(
         Settled::Abandoned => ("abandoned", None),
         Settled::Failed(reason) => ("failed", Some(reason.as_str())),
     };
-    let held = tx.sql().execute(
+    let held = tx.kernel().execute(
         "UPDATE kernel_outbox SET state = ?1, error = COALESCE(?2, error), settled_at = ?3,
            lease_until = NULL
          WHERE id = ?4 AND claim = ?5 AND state = 'running'",

@@ -7,7 +7,8 @@
 //!   every change, and events are published only after commit (ADR 0002).
 //! - A [`Module`] owns its words, its tables and its events. It reaches its
 //!   Project only through a [`ModuleProject`], which can emit only that module's
-//!   events.
+//!   events, and its SQL reaches only its own tables: a SQLite authorizer
+//!   refuses it the rest, the kernel's included (ADR 0062, decision 5).
 //! - The outbox runs side effects after commit, in order per target: the
 //!   engine's own, and workers' outside it under leases. It settles what a
 //!   restart or a lease that ran out cut short, and lets old rows go.
@@ -44,6 +45,7 @@ mod project;
 mod reach;
 mod sign;
 mod store;
+mod tables;
 mod watching;
 mod window;
 

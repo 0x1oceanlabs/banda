@@ -125,6 +125,12 @@ struct Manifest {
     /// The settings files it owns, in `~/.config/banda`.
     #[serde(default)]
     settings: Vec<String>,
+    /// The prefixes its tables kept from an id it had before (ADR 0085,
+    /// decision 12), which its SQL reaches beside its own: its engine part
+    /// tells the kernel them (`Module::legacy_prefixes`), and the tests
+    /// hold the two alike.
+    #[serde(default)]
+    legacy_prefixes: Vec<String>,
     /// The paths it takes that the contract lacks yet, each with why.
     #[serde(default)]
     unstable: BTreeMap<String, String>,
@@ -367,20 +373,45 @@ mod tests {
             .filter(|offer| offer.engine.is_some())
             .map(|offer| offer.manifest.id.as_str())
             .collect();
-        let engine = [
-            Agents::new(Default::default()).name(),
-            HarnessesModule::new(Default::default()).name(),
-            Terminals::new().name(),
-            Browser::new().name(),
-            Git::new().name(),
-            FilesModule::new().name(),
-            KeysModule::new(Default::default()).name(),
-            Pulls::new().name(),
-            Workspaces::new().name(),
-            Problems::new("", "").name(),
-            Sharing::new("", "").name(),
-        ];
+        let engine: Vec<&str> = engine_parts().iter().map(|part| part.name()).collect();
         assert_eq!(with_engine, engine);
+    }
+
+    /// Each module's engine part, in the window's order.
+    fn engine_parts() -> Vec<Box<dyn Module>> {
+        vec![
+            Box::new(Agents::new(Default::default())),
+            Box::new(HarnessesModule::new(Default::default())),
+            Box::new(Terminals::new()),
+            Box::new(Browser::new()),
+            Box::new(Git::new()),
+            Box::new(FilesModule::new()),
+            Box::new(KeysModule::new(Default::default())),
+            Box::new(Pulls::new()),
+            Box::new(Workspaces::new()),
+            Box::new(Problems::new("", "")),
+            Box::new(Sharing::new("", "")),
+        ]
+    }
+
+    /// The kernel lets a module's SQL reach the legacy prefixes its engine
+    /// part tells it, so its `module.toml` says the same (ADR 0085,
+    /// decision 12); a module with no engine part has no tables.
+    #[test]
+    fn a_module_s_legacy_prefixes_are_the_ones_its_engine_part_reaches() {
+        let parts = engine_parts();
+        for offer in offers() {
+            let Manifest {
+                id,
+                legacy_prefixes,
+                ..
+            } = &offer.manifest;
+            let reached: Vec<&str> = (parts.iter())
+                .find(|part| part.name() == id)
+                .map(|part| part.legacy_prefixes().to_vec())
+                .unwrap_or_default();
+            assert_eq!(legacy_prefixes, &reached, "{id}'s module.toml");
+        }
     }
 
     #[test]
