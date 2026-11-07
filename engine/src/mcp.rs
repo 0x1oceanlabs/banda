@@ -16,9 +16,9 @@
 //! Each tool call is a command whose ID comes from this session of `banda
 //! mcp` and the request's ID (ADR 0082, decision 4). A request sent again,
 //! by its client or by `banda mcp` as it connects again to an engine that
-//! broke off, gets the first answer and runs nothing again. Another
-//! session, as its Harness starts `banda mcp` again, numbers its requests
-//! from one again, and they get other IDs.
+//! broke off, gets the first answer and runs nothing again. A session ends
+//! as `banda mcp` does, or as its client says `initialize` again: the next
+//! numbers its requests from one again, and they get other IDs.
 //!
 //! A refused or malformed call is the tool's answer, marked as an error,
 //! with what was wrong and that nothing was done. Only an engine that does
@@ -46,8 +46,9 @@ type Error = (i64, String);
 
 struct Mcp {
     pass: Pass,
-    /// This session, new each time `banda mcp` starts: what its tool
-    /// calls' command IDs are derived from.
+    /// This session, new each time `banda mcp` starts and each time its
+    /// client says `initialize`: what its tool calls' command IDs are
+    /// derived from.
     session: String,
     connected: Option<Connected>,
 }
@@ -67,7 +68,7 @@ pub async fn serve() -> Result<(), Failure> {
     })?;
     let mut mcp = Mcp {
         pass,
-        session: CommandId::new().to_string(),
+        session: new_session(),
         connected: None,
     };
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
@@ -112,7 +113,10 @@ impl Mcp {
         let id = message.get("id")?.clone();
         let params = message.get("params").cloned().unwrap_or(Value::Null);
         let answer = match method.as_str() {
-            "initialize" => Ok(initialize(&params)),
+            "initialize" => {
+                self.session = new_session();
+                Ok(initialize(&params))
+            }
             "ping" => Ok(json!({})),
             "tools/list" => self.tools().await.map(|tools| json!({ "tools": tools })),
             "tools/call" => self.call(&id, &params).await,
@@ -149,7 +153,8 @@ impl Mcp {
     /// Runs one tool in the Project of the pass, as the command request
     /// `id` of this session makes. An engine that broke off is connected
     /// to again, once, and asked again under the same ID, so what ran
-    /// before it broke off runs nothing again.
+    /// before it broke off runs nothing again. If it does not answer then
+    /// either, how it broke off first is what is said.
     async fn call(&mut self, id: &Value, params: &Value) -> Result<Value, Error> {
         let name = params["name"].as_str().unwrap_or_default();
         let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
@@ -157,45 +162,59 @@ impl Mcp {
             return Ok(skill(&arguments));
         }
         let command = command_id(&self.session, id);
-        // How the engine broke off the first ask: what is answered when it
-        // does not answer again.
-        let mut broke: Option<Failure> = None;
-        loop {
-            let connected = match self.connected().await {
-                Ok(connected) => connected,
-                Err(failure) => return Err(lost(broke.unwrap_or(failure))),
-            };
-            let Some(tool) = connected.tools.iter().find(|tool| tool.name == name) else {
-                return Ok(said(
-                    format!("Banda has no tool \"{name}\". Nothing was done."),
-                    true,
-                ));
-            };
-            let method = tool.method.clone();
-            let asked = connected
-                .client
-                .ask(&method, None, command, arguments.clone())
-                .await;
-            match asked {
-                Ok(answer) => return Ok(answered(answer)),
-                Err(Failure::Refused(refusal)) => return Ok(refused(&refusal)),
-                Err(broken) => {
-                    // The next ask connects again.
-                    self.connected = None;
-                    if let Some(first) = broke {
-                        return Err(lost(first));
-                    }
-                    broke = Some(broken);
-                }
+        let first = match self.ask(name, command, &arguments).await {
+            Ok(answer) => return Ok(answer),
+            Err(broke) => broke,
+        };
+        (self.ask(name, command, &arguments).await).map_err(|_| lost(first))
+    }
+
+    /// Asks the engine once to run the tool `name` as `command`: the tool's
+    /// answer, a refusal among them, or how the engine did not answer,
+    /// after which the next ask connects again.
+    async fn ask(
+        &mut self,
+        name: &str,
+        command: CommandId,
+        arguments: &Value,
+    ) -> Result<Value, Failure> {
+        let connected = self.connected().await?;
+        let Some(tool) = connected.tools.iter().find(|tool| tool.name == name) else {
+            return Ok(said(
+                format!("Banda has no tool \"{name}\". Nothing was done."),
+                true,
+            ));
+        };
+        let method = tool.method.clone();
+        let asked = (connected.client)
+            .ask(&method, None, command, arguments.clone())
+            .await;
+        match asked {
+            Ok(answer) => Ok(answered(answer)),
+            Err(Failure::Refused(refusal)) => Ok(refused(&refusal)),
+            Err(broken) => {
+                self.connected = None;
+                Err(broken)
             }
         }
     }
 }
 
+/// A session of `banda mcp`: its tool calls' commands are its own.
+fn new_session() -> String {
+    uuid::Uuid::now_v7().to_string()
+}
+
 /// The command ID of request `id` in `session`. A JSON-RPC ID is a number
-/// or a string, and `7` and `"7"` are two requests.
+/// or a string, and `7` and `"7"` are two requests. Any other, such as
+/// `null`, which MCP forbids, makes a command of its own each time.
 fn command_id(session: &str, id: &Value) -> CommandId {
-    CommandId::derive(session, &id.to_string())
+    let integer = id.as_i64().is_some() || id.as_u64().is_some();
+    if integer || id.is_string() {
+        CommandId::derive(session, &id.to_string())
+    } else {
+        CommandId::new()
+    }
 }
 
 fn initialize(params: &Value) -> Value {
@@ -296,15 +315,126 @@ mod tests {
     }
 
     #[test]
-    fn a_request_is_one_command_in_its_session_and_only_there() {
-        let session = CommandId::new().to_string();
+    fn a_request_is_one_command_by_its_id_as_json_says_it() {
+        let session = new_session();
         let seven = command_id(&session, &json!(7));
         assert_eq!(seven, command_id(&session, &json!(7)), "sent again");
-        assert_ne!(seven, command_id(&session, &json!(8)));
         assert_ne!(seven, command_id(&session, &json!("7")));
-        // A new `banda mcp` numbers its requests from one again.
-        let next = CommandId::new().to_string();
-        assert_ne!(seven, command_id(&next, &json!(7)));
+        // An ID MCP forbids collapses no two requests into one command.
+        let null = command_id(&session, &Value::Null);
+        assert_ne!(null, command_id(&session, &Value::Null));
+        assert_ne!(
+            command_id(&session, &json!(7.5)),
+            command_id(&session, &json!(7.5))
+        );
+    }
+
+    /// An engine that lists one tool, `send`, and takes one call to it on
+    /// each connection, one after another: it answers it with what
+    /// `answers` says, or breaks off the connection at `None`. No engine
+    /// listens after the last. It hands back the command each call carried.
+    async fn engine(
+        answers: Vec<Option<Value>>,
+    ) -> (Pass, tokio::task::JoinHandle<Vec<CommandId>>) {
+        use banda_kernel::PROTOCOL;
+        use banda_kernel::api::{ClientFrame, EngineFrame};
+        use futures::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message;
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let engine = format!("ws://{}", listener.local_addr().unwrap());
+        let served = tokio::spawn(async move {
+            let (mut listener, last) = (Some(listener), answers.len());
+            let mut commands = vec![];
+            for (n, answer) in answers.into_iter().enumerate() {
+                let (stream, _) = listener.as_ref().unwrap().accept().await.unwrap();
+                if n + 1 == last {
+                    listener = None;
+                }
+                let mut socket = tokio_tungstenite::accept_async(stream).await.unwrap();
+                let say =
+                    |frame: EngineFrame| Message::text(serde_json::to_string(&frame).unwrap());
+                socket.next().await.unwrap().unwrap();
+                let welcome = EngineFrame::Welcome {
+                    protocol: PROTOCOL,
+                    engine: "fake".into(),
+                    modules: vec![],
+                    machine: None,
+                    boot: "a boot".into(),
+                };
+                socket.send(say(welcome)).await.unwrap();
+                while let Some(Ok(Message::Text(text))) = socket.next().await {
+                    let Ok(ClientFrame::Call {
+                        id,
+                        method,
+                        command,
+                        ..
+                    }) = serde_json::from_str(&text)
+                    else {
+                        continue;
+                    };
+                    if method == "projects.tools" {
+                        let tools = json!([
+                            { "name": "send", "method": "agents.send", "description": "", "schema": {} }
+                        ]);
+                        let listed = EngineFrame::Result {
+                            id,
+                            ok: Some(tools),
+                            error: None,
+                        };
+                        socket.send(say(listed)).await.unwrap();
+                        continue;
+                    }
+                    commands.push(command.unwrap());
+                    if let Some(ok) = answer {
+                        let answered = EngineFrame::Result {
+                            id,
+                            ok: Some(ok),
+                            error: None,
+                        };
+                        socket.send(say(answered)).await.unwrap();
+                    }
+                    break;
+                }
+            }
+            commands
+        });
+        let pass = Pass {
+            engine,
+            token: "a pass".into(),
+        };
+        (pass, served)
+    }
+
+    fn mcp(pass: Pass) -> Mcp {
+        Mcp {
+            pass,
+            session: new_session(),
+            connected: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_call_the_engine_broke_off_is_asked_again_once_under_the_same_command() {
+        let (pass, served) = engine(vec![None, Some(json!("sent"))]).await;
+        let mut mcp = mcp(pass);
+        let call = json!({ "name": "send", "arguments": { "text": "hi" } });
+        let answer = mcp.call(&json!(7), &call).await;
+        assert_eq!(answer, Ok(said("sent".into(), false)));
+        let command = command_id(&mcp.session, &json!(7));
+        assert_eq!(served.await.unwrap(), [command, command]);
+    }
+
+    #[tokio::test]
+    async fn an_engine_that_does_not_answer_again_is_told_by_how_it_broke_off() {
+        let (pass, served) = engine(vec![None]).await;
+        let mut mcp = mcp(pass);
+        let call = json!({ "name": "send", "arguments": {} });
+        let (code, words) = mcp.call(&json!(7), &call).await.unwrap_err();
+        assert_eq!(code, INTERNAL);
+        // Not that nothing listens now: the call may have run.
+        assert!(!words.contains("does not answer"), "{words}");
+        assert_eq!(served.await.unwrap().len(), 1);
     }
 
     #[test]
