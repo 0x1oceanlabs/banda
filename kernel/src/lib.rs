@@ -14,7 +14,8 @@
 //! - [`access::decide`] is the one place that says whether a Participant may
 //!   do something, and [`access::within`] keeps an Agent in its Project.
 //! - A pass names an Agent's session in its Project, for `banda mcp`
-//!   ([`ModuleProject::pass`]).
+//!   ([`ModuleProject::pass`]). The host keeps it hashed, so it outlives
+//!   an engine restart, until its session ends or it expires.
 //! - The window's road lets a module ask the window and await its answer
 //!   ([`Call::ask_window`]).
 //! - [`Reach`] is the path guard: where a path a call names is, and
@@ -56,7 +57,7 @@ pub use kernel::{Kernel, KernelBuilder, ProjectSummary, decode};
 pub use methods::{Kind, Method, Nothing, Picture, Tool};
 pub use module::{Call, Module, Scope, Stream, Wall};
 pub use outbox::{Claim, Effect, LONGEST_LEASE, Lease, OnRestart, Outcome, Retry, Settled};
-pub use passes::secret;
+pub use passes::{Audience, Pass, secret};
 pub use project::{Committed, Heard, ModuleProject, Project, Tally};
 pub use reach::Reach;
 /// For `methods!` and `id!`, which name it from a module's crate.

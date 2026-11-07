@@ -4,8 +4,8 @@
 use banda_kernel::api::Identity;
 use banda_kernel::{
     AgentId, Call, Caller, Code, CommandId, Effect, Error, EventFilter, Kernel, Kind, Lease,
-    Module, ModuleProject, OnRestart, Outcome, Participant, PersonId, ProjectId, ProjectSummary,
-    Refusal, Retry, Right, Scope, Settled, SignKind, Stream, Tx, decode, now_ms,
+    Module, ModuleProject, OnRestart, Outcome, Participant, Pass, PersonId, ProjectId,
+    ProjectSummary, Refusal, Retry, Right, Scope, Settled, SignKind, Stream, Tx, decode, now_ms,
 };
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -44,6 +44,8 @@ struct Notes {
     closed: Arc<Mutex<Vec<ProjectId>>>,
     /// Each Project it was told changed its trust, as it read it then.
     trusts: Arc<Mutex<Vec<(ProjectId, bool)>>>,
+    /// The passes it gave, held as a session holds its own.
+    passes: Arc<Mutex<Vec<Pass>>>,
 }
 
 #[derive(Deserialize)]
@@ -156,7 +158,10 @@ impl Module for Notes {
             // module asks for one when it opens a session.
             "pass" => {
                 let agent: AgentId = decode(params["agent"].clone())?;
-                Ok(json!(call.project().pass(agent)?))
+                let pass = call.project().pass(agent)?;
+                let secret = pass.secret().to_owned();
+                self.passes.lock().unwrap().push(pass);
+                Ok(json!(secret))
             }
             // Asks the window to show what it is given, as the browser asks
             // it for a page.
@@ -2107,6 +2112,76 @@ async fn a_pass_connects_as_its_agent_and_only_in_its_project() {
         "forbidden",
         "nor may it manage it"
     );
+}
+
+#[tokio::test]
+async fn a_pass_outlives_a_restart_until_its_session_ends_or_it_expires() {
+    let dir = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let term = Duration::from_millis(400);
+    let open = |notes: &Notes| {
+        Kernel::builder(dir.path().join("root"), dir.path().join("data"), owner)
+            .module(notes.clone())
+            .passes(dir.path().join("state").join("passes.sqlite3"))
+            .pass_term(term)
+            .open()
+    };
+    let notes = Notes::default();
+    let kernel = open(&notes).await.unwrap();
+    let work = create(&kernel, owner, "Work").await;
+    let agent = AgentId::new();
+    let issue = async |kernel: &Kernel| {
+        let ask = json!({ "agent": agent });
+        let pass = kernel.call(person, "notes.pass", Some(work.id), None, ask);
+        pass.await.unwrap().as_str().unwrap().to_owned()
+    };
+    let going_on = issue(&kernel).await;
+    let ended = issue(&kernel).await;
+    // The second session ends: its pass is revoked as it lets go of it.
+    drop(notes.passes.lock().unwrap().remove(1));
+    assert_eq!(kernel.holder(&going_on), Some((agent, work.id)));
+    assert_eq!(kernel.holder(&ended), None);
+
+    // The engine stops, and what held the passes goes with it: the next
+    // engine takes the pass of the session that goes on, through its API
+    // too, and never the one revoked.
+    kernel.stopping();
+    let_go(kernel, &dir.path().join("data"), &[]).await;
+    notes.passes.lock().unwrap().clear();
+    let kernel = open(&Notes::default()).await.unwrap();
+    assert_eq!(kernel.holder(&going_on), Some((agent, work.id)));
+    assert_eq!(kernel.holder(&ended), None);
+    let address = serve(&kernel, owner).await;
+    let hello = |token: &str| json!({ "type": "hello", "protocol": 1, "token": token });
+    assert_eq!(
+        connect(address, hello(&going_on)).await.1["type"],
+        "welcome"
+    );
+    assert_eq!(connect(address, hello(&ended)).await.1["type"], "goodbye");
+
+    // No session of this engine holds it: a term after its last use, it
+    // expires.
+    tokio::time::sleep(term * 3 / 2).await;
+    assert_eq!(kernel.holder(&going_on), None);
+    assert_eq!(
+        connect(address, hello(&going_on)).await.1["type"],
+        "goodbye"
+    );
+
+    // A Project removed takes its passes with it, held or not.
+    let held = issue(&kernel).await;
+    assert!(kernel.holder(&held).is_some());
+    let remove = json!({ "project": work.id });
+    let removed = kernel.call(
+        person,
+        "projects.remove",
+        None,
+        Some(CommandId::new()),
+        remove,
+    );
+    removed.await.unwrap();
+    assert_eq!(kernel.holder(&held), None);
 }
 
 #[tokio::test]

@@ -4,7 +4,7 @@ use crate::foreign::{self, Foreign};
 use crate::methods::{Asks, Kind, Nothing, Tool, needs_command_id};
 use crate::module::{Call, Module, Scope, Stream, Wall};
 use crate::outbox::Boot;
-use crate::passes::Passes;
+use crate::passes::{self, Audience, Passes};
 use crate::project::{self, GONE, Manifest, Project, Shared, UNFINISHED};
 use crate::sign::{self, Kept, Picked, Sign, SignPick};
 use crate::store::{Answer, Begun};
@@ -135,6 +135,8 @@ pub struct KernelBuilder {
     modules: Vec<Arc<dyn Module>>,
     machine: Option<PathBuf>,
     environment: Arc<dyn Environment>,
+    passes: Option<PathBuf>,
+    pass_term: std::time::Duration,
 }
 
 impl KernelBuilder {
@@ -154,6 +156,20 @@ impl KernelBuilder {
     /// with none, the kernel's modules start no program.
     pub fn environment(mut self, environment: impl Environment) -> Self {
         self.environment = Arc::new(environment);
+        self
+    }
+
+    /// The file that keeps this host's passes, hashed: the engine's state
+    /// folder's `passes.sqlite3`. Without it, the data folder's.
+    pub fn passes(mut self, file: impl Into<PathBuf>) -> Self {
+        self.passes = Some(file.into());
+        self
+    }
+
+    /// How long a pass no session holds lasts after its last use or
+    /// renewal, instead of an hour ([`passes::TERM`]).
+    pub fn pass_term(mut self, term: std::time::Duration) -> Self {
+        self.pass_term = term;
         self
     }
 
@@ -181,7 +197,12 @@ impl KernelBuilder {
         let (of_machine, in_projects): (Vec<_>, Vec<_>) =
             (self.modules.iter().cloned()).partition(|module| module.scope() == Scope::Machine);
         let boot = Boot::new();
-        let passes = Arc::<Passes>::default();
+        let passes_file = (self.passes.clone()).unwrap_or_else(|| self.data.join(PASSES));
+        let term = self.pass_term;
+        let passes = tokio::task::spawn_blocking(move || Passes::open(&passes_file, term))
+            .await
+            .map_err(|_| Error::Closed)??;
+        tokio::spawn(passes::renewing(Arc::downgrade(&passes)));
         let window = Arc::<Window>::default();
         let projects = Projects::default();
         let machine = if of_machine.is_empty() {
@@ -483,6 +504,9 @@ struct TrustProject {
 /// The most folders `projects.browse` answers.
 const BROWSED: usize = 200;
 
+/// The file that keeps the passes when the engine names none.
+const PASSES: &str = "passes.sqlite3";
+
 /// Why the scratch Project of a Thread in No Project is never untrusted.
 const SCRATCH_TRUSTED: &str = "A Thread in No Project is trusted: its folder is Banda's own.";
 
@@ -563,6 +587,8 @@ impl Kernel {
             modules: Vec::new(),
             machine: None,
             environment: Arc::new(Nowhere),
+            passes: None,
+            pass_term: passes::TERM,
         }
     }
 
@@ -575,9 +601,17 @@ impl Kernel {
         self.modules.iter().map(|m| m.name()).collect()
     }
 
-    /// The Agent a pass names and the Project it works in, or `None`.
+    /// The Agent a pass names and the Project it works in, when the API
+    /// takes it, or `None`. A use renews it.
     pub fn holder(&self, pass: &str) -> Option<(AgentId, ProjectId)> {
-        self.passes.holder(pass)
+        self.passes.holder(pass, Audience::Ws)
+    }
+
+    /// The engine stops: the passes its sessions hold get a whole term, for
+    /// the sessions that go on past the restart, and none is revoked as
+    /// what holds it goes from here on (ADR 0083, decision 2).
+    pub fn stopping(&self) {
+        self.passes.stopping();
     }
 
     /// Routes a call: `projects.*` to the kernel, `<module>.*` to that module
@@ -1400,6 +1434,8 @@ impl Kernel {
             }
         };
         project.delete_when_closed(put_away(project.data(), gone));
+        // What acts for it stops reaching Banda.
+        self.passes.revoke_project(project.id());
         for module in project.modules() {
             module.closing(project.module(module.name())).await;
         }

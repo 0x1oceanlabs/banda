@@ -31,7 +31,7 @@ use agent_client_protocol::{Agent, Builder, Client, ConnectionTo, HandleDispatch
 use banda_harnesses::acp::Process;
 use banda_harnesses::hosts::{Activity, Held, Host};
 use banda_harnesses::{Failed, Harness};
-use banda_kernel::{Environment, Program};
+use banda_kernel::{Environment, Pass, Program};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
@@ -94,6 +94,10 @@ pub struct Connection {
     activity: Activity,
     /// The Harness's session for each Thread, in this process.
     sessions: tokio::sync::Mutex<HashMap<ThreadId, acp::SessionId>>,
+    /// The pass each Thread's session here was given, held while the
+    /// session is open: revoked as it is let go, or as the process stops
+    /// (ADR 0083, decision 2).
+    passes: Mutex<HashMap<ThreadId, Pass>>,
     /// Whether its sessions load what the Project's folder names, as the
     /// Project's trust was when it started (ADR 0083, decision 5).
     trusted: bool,
@@ -123,6 +127,7 @@ impl Host for Connection {
             learned,
             activity: Activity::default(),
             sessions: Default::default(),
+            passes: Default::default(),
             trusted: harness.trusted(),
         }))
     }
@@ -149,6 +154,16 @@ impl Connection {
         if let Some(session) = session {
             Session::new(self, session).close().await;
         }
+        self.passes.lock().unwrap().remove(&thread);
+    }
+
+    /// Holds the pass `thread`'s session here was given, while it is open.
+    fn hold(&self, thread: ThreadId, pass: Option<Pass>) {
+        let mut passes = self.passes.lock().unwrap();
+        match pass {
+            Some(pass) => passes.insert(thread, pass),
+            None => passes.remove(&thread),
+        };
     }
 
     /// The Harness process.

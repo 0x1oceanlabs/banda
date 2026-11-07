@@ -153,7 +153,7 @@ impl Connection {
         roots: &[PathBuf],
         earlier: Option<&Evidence>,
         kin: &(dyn Fn(&str) -> bool + Sync),
-        banda: impl FnOnce() -> Option<Program>,
+        banda: impl FnOnce() -> Option<(Program, Pass)>,
     ) -> Result<(Session, Opened), Ending> {
         let mut sessions = self.sessions.lock().await;
         // A session to fork goes before one open here, which knows more;
@@ -165,7 +165,8 @@ impl Connection {
         {
             return Ok((Session::new(self, session.clone()), Opened::Known));
         }
-        let given = Given::of(banda(), self.trusted);
+        let (program, pass) = banda().unzip();
+        let given = Given::of(program, self.trusted);
         if let Some((
             earlier,
             ForkAt {
@@ -185,6 +186,7 @@ impl Connection {
                 .meta(forked_at(given.meta.unwrap_or_default(), message));
             let made = self.open(fork, "fork this Thread's conversation").await?;
             let (session, options) = (made.session_id, made.config_options);
+            self.hold(thread, pass);
             return Ok(self.opened(thread, &mut sessions, session, options, folder, false));
         }
         if let Some(session) = earlier.and_then(|e| e.continued_by(self.process.harness(), kin))
@@ -192,6 +194,7 @@ impl Connection {
         {
             opened(&self.learned, &session, options, folder);
             sessions.insert(thread, session.clone());
+            self.hold(thread, pass);
             return Ok((Session::new(self, session), Opened::Continued));
         }
         let new = acp::NewSessionRequest::new(folder)
@@ -200,6 +203,7 @@ impl Connection {
             .meta(given.meta);
         let made = self.open(new, "open a session").await?;
         let (session, options) = (made.session_id, made.config_options);
+        self.hold(thread, pass);
         Ok(self.opened(
             thread,
             &mut sessions,

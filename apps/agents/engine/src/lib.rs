@@ -56,7 +56,7 @@ use banda_harnesses::hosts::IDLE;
 use banda_harnesses::{Harness, Harnesses};
 use banda_kernel::{
     AgentId, Call, Effect, Error, Kind, Module, ModuleProject, Nothing, OnRestart, Outcome,
-    Participant, Picture, Program, Refusal, Right, Settled, Tool, Tx, pass_env,
+    Participant, Pass, Picture, Program, Refusal, Right, Settled, Tool, Tx, pass_env,
 };
 use banda_look::OneFile as _;
 use base64::Engine as _;
@@ -114,34 +114,37 @@ pub struct Pipe {
 
 impl Pipe {
     /// `banda mcp` as a session of `agent`'s in `project` starts it, with a
-    /// new pass; `None`, said in the log, if there is no pass.
-    fn program(&self, project: &ModuleProject, agent: AgentId) -> Option<Program> {
-        Some(Program {
+    /// new pass, which the session holds; `None`, said in the log, if there
+    /// is no pass.
+    fn program(&self, project: &ModuleProject, agent: AgentId) -> Option<(Program, Pass)> {
+        let (env, pass) = self.variables(project, agent)?;
+        let program = Program {
             program: self.program.display().to_string(),
             args: vec!["mcp".to_owned()],
-            env: self.variables(project, agent)?,
+            env,
             ..Program::default()
-        })
+        };
+        Some((program, pass))
     }
 
     /// The variables that hand `banda` a new pass of `agent`'s, which the
-    /// kernel walls in `project`, and where the engine listens; `None`,
-    /// said in the log, if there is no pass.
+    /// kernel walls in `project`, and where the engine listens, with the
+    /// pass, for what it is given to to hold; `None`, said in the log, if
+    /// there is no pass.
     fn variables(
         &self,
         project: &ModuleProject,
         agent: AgentId,
-    ) -> Option<BTreeMap<String, String>> {
+    ) -> Option<(BTreeMap<String, String>, Pass)> {
         let pass = project
             .pass(agent)
             .inspect_err(|error| tracing::warn!(%error, "an Agent goes without Banda"))
             .ok()?;
-        let variables = pass_env(pass, self.engine.clone());
-        Some(
-            variables
-                .map(|(name, value)| (name.to_owned(), value))
-                .into(),
-        )
+        let variables = pass_env(pass.secret().to_owned(), self.engine.clone());
+        let variables = variables
+            .map(|(name, value)| (name.to_owned(), value))
+            .into();
+        Some((variables, pass))
     }
 
     /// `env`'s PATH, or the engine's, with the folder of this `banda`
