@@ -13,6 +13,8 @@ async-trait.workspace = true
 dirs.workspace = true
 banda-kernel = { path = "../../../kernel" }
 banda-look = { path = "../../../platform/look" }
+icu_normalizer.workspace = true
+nix.workspace = true
 reqwest.workspace = true
 rusqlite.workspace = true
 schemars.workspace = true

@@ -8,15 +8,22 @@
  * The copy is `<data>/engine/<version>/banda`, beside `version`, which
  * holds what the program's `--version` says: its version and its build
  * id, and beside the ACP adapters the app carries (`adapters/`), which the
- * engine finds beside its program and runs (ADR 0059), so they never run
- * from inside the AppImage either. It is written into a folder of its
- * own, run once with `--version`, and renamed into place only when it
- * says the same, so a half-written copy, or one that does not start, is
- * never run. A copy in place is run again while it is of the window's
- * build, it and its adapters as long as the program's, and says so when
- * it is run; one that goes while the window runs is made again before
- * the next run. The last two versions are kept; an older
- * one goes once no program runs from it.
+ * engine finds beside its program (ADR 0059): their files never run from
+ * inside the AppImage either. It is written into a folder of its own, run
+ * once with `--version`, and renamed into place only when it says the
+ * same, so a half-written copy, or one that does not start, is never run.
+ * A copy in place is run again while it is of the window's build, it and
+ * its adapters as long as the program's, and says so when it is run; one
+ * that goes while the window runs is made again before the next run. The
+ * last two versions are kept; an older one goes once no program runs from
+ * it.
+ *
+ * What runs the adapters is a Node: the window names its own Electron to
+ * the engine it starts (main.ts). For an engine started with no window,
+ * the copy also has `electron` beside it, which names this Electron, when
+ * it stays where it is, as a macOS app's does. An AppImage's goes as it
+ * stops, so its copy names none, and such an engine runs the adapters on a
+ * `node` of the host's, when it has one (the harnesses' `carried.rs`).
  *
  * A copy that cannot be made, as in a data folder that runs nothing, is
  * not the end of Banda: the window runs the packed program as before, and
@@ -39,6 +46,7 @@ import {
   realpathSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs"
 import {
   cp,
@@ -65,31 +73,42 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process"
 /** The file beside a copy that says what its `--version` said. */
 const VERSION = "version"
 /** The folder of the adapters the app carries, beside its `banda` and its
- * copy's: where the engine looks for them (the harnesses' `ADAPTERS`). */
-export const ADAPTERS = "adapters"
+ * copy's: where the engine looks for them (the harnesses' `carried::FOLDER`). */
+export const CARRIED = "adapters"
+/** The file beside a copy that names the app's Electron, which runs the
+ * adapters as Node (the harnesses' `carried::ELECTRON`). */
+export const ELECTRON = "electron"
 /** A version that names a folder: no slash, no leading dot. */
 const PLAIN = /^[0-9A-Za-z][0-9A-Za-z.+_-]*$/
 /** How long `banda --version` may take before it counts as broken. */
 const WAIT = "10 seconds"
 
 /** The `banda` the window has, and the folder it keeps its copies of it
- * in, when it runs a copy. */
-export type Where = { readonly program: string; readonly copies?: string }
+ * in, when it runs a copy, with the Electron its copies name. */
+export type Where = {
+  readonly program: string
+  readonly copies?: string
+  readonly electron?: string
+}
 
 /** Where the window's `banda` is: a trial's, `named`; a checkout's, with
  * no `resources`; else the one packed in `resources`, copied into `data`
- * unless a package manager owns it. */
+ * unless a package manager owns it. Its copies name `electron`, the app's
+ * Electron when it stays where it is. */
 export function whereOf(options: {
   readonly named: string | undefined
   readonly checkout: string
   readonly resources: string | undefined
   readonly data: string
+  readonly electron?: string | undefined
 }): Where {
   if (options.named) return { program: options.named }
   if (!options.resources) return { program: options.checkout }
   const program = join(options.resources, "banda")
   if (existsSync(join(options.resources, "package-type"))) return { program }
-  return { program, copies: join(options.data, "engine") }
+  const copies = join(options.data, "engine")
+  const { electron } = options
+  return electron ? { program, copies, electron } : { program, copies }
 }
 
 /** The copy could not be made, or did not say what its program says. */
@@ -119,7 +138,7 @@ export class Program extends Context.Service<
         const folder = where.copies
         if (!folder) return { path: Effect.succeed(where.program) }
         const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
-        const copied = ownCopy(where.program, folder).pipe(
+        const copied = ownCopy(where.program, folder, where.electron).pipe(
           Effect.catch((error) =>
             Console.error(
               `banda: the engine runs from ${where.program}, not a copy of its own: ${error.message}`
@@ -141,8 +160,7 @@ export class Program extends Context.Service<
         return {
           path: one.withPermits(1)(
             Effect.suspend(() =>
-              whole(path, where.program) &&
-              carries(dirname(path), where.program)
+              whole(path, where.program)
                 ? Effect.succeed(path)
                 : Effect.tap(copied, (made) =>
                     Effect.sync(() => {
@@ -158,8 +176,13 @@ export class Program extends Context.Service<
 
 /** `program`'s own copy in `folder`: the one there when it is of the same
  * build, whole, and says so when run; else a new one, checked before it
- * is put in place. */
-export const ownCopy = (program: string, folder: string) =>
+ * is put in place. Either names `electron` beside it, when given. */
+export const ownCopy = (program: string, folder: string, electron?: string) =>
+  copyIn(program, folder).pipe(
+    Effect.tap((copy) => naming(dirname(copy), electron))
+  )
+
+const copyIn = (program: string, folder: string) =>
   Effect.gen(function* () {
     const said = yield* versionOf(program)
     const version = /^banda (\S+)/.exec(said)?.[1]
@@ -169,11 +192,7 @@ export const ownCopy = (program: string, folder: string) =>
       })
     const kept = join(folder, version)
     const copy = join(kept, "banda")
-    if (
-      textOf(join(kept, VERSION)) === said &&
-      whole(copy, program) &&
-      carries(kept, program)
-    ) {
+    if (textOf(join(kept, VERSION)) === said && whole(copy, program)) {
       const again = yield* Effect.option(versionOf(copy))
       if (Option.contains(again, said)) return copy
     }
@@ -249,9 +268,9 @@ async function copyInto(program: string, fresh: string, said: string) {
   const tables = `${program}.dSYM`
   if (existsSync(tables))
     await cp(tables, join(fresh, "banda.dSYM"), { recursive: true })
-  const adapters = join(dirname(program), ADAPTERS)
+  const adapters = join(dirname(program), CARRIED)
   if (existsSync(adapters))
-    await cp(adapters, join(fresh, ADAPTERS), { recursive: true })
+    await cp(adapters, join(fresh, CARRIED), { recursive: true })
   await writeFile(join(fresh, VERSION), `${said}\n`, { flush: true })
 }
 
@@ -340,21 +359,39 @@ export function programsOf(listed: string): string[] {
     .filter(Boolean)
 }
 
-/** Whether `kept`, a copy's folder, holds each of the adapters that lie
- * beside `program`, as long as it: a copy made before it carried them
- * does not. */
-function carries(kept: string, program: string): boolean {
-  const adapters = join(dirname(program), ADAPTERS)
-  if (!existsSync(adapters)) return true
-  return readdirSync(adapters).every((name) =>
-    whole(join(kept, ADAPTERS, name), join(adapters, name))
-  )
+/** Writes `electron` beside the copy in `kept`, unless it is there
+ * already. A file it cannot write leaves an engine started with no window
+ * a `node` of the host's to find, and stops nothing. */
+const naming = (kept: string, electron: string | undefined) =>
+  Effect.suspend(() => {
+    const file = join(kept, ELECTRON)
+    if (!electron || textOf(file) === electron) return Effect.void
+    return Effect.try(() => writeFileSync(file, `${electron}\n`)).pipe(
+      Effect.catch((error) =>
+        Console.error(`banda: ${file} names no Electron: ${error.message}`)
+      )
+    )
+  })
+
+/** Whether `copy` is whole: there, as long as `program`, and beside each
+ * of the adapters beside `program`, as long as it. A copy made before the
+ * app carried them is not. */
+function whole(copy: string, program: string): boolean {
+  const adapters = join(dirname(program), CARRIED)
+  const carried = existsSync(adapters) ? readdirSync(adapters) : []
+  return [
+    [copy, program],
+    ...carried.map((name) => [
+      join(dirname(copy), CARRIED, name),
+      join(adapters, name),
+    ]),
+  ].every(([kept, packed]) => sameSize(kept, packed))
 }
 
-/** Whether `copy` is there, as long as `program`. */
-function whole(copy: string, program: string): boolean {
+/** Whether `kept` is there, as long as `packed`. */
+function sameSize(kept: string, packed: string): boolean {
   try {
-    return statSync(copy).size === statSync(program).size
+    return statSync(kept).size === statSync(packed).size
   } catch {
     return false
   }

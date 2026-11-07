@@ -44,8 +44,11 @@ defaults and stay his to change.
      adapters are the harnesses' host package,
      `platform/harnesses/adapters`, and `banda serve` finds them and a
      Node itself: the adapters beside its program or in its checkout; the
-     Electron the window names, else the packed app's own, else a `node`
-     on PATH. So an engine started with no window runs them too._
+     Electron the window names, else the packed app's own, else the one
+     the engine's own copy names (a macOS app's, which stays where it
+     is), else a `node` on PATH of at least Node 22. So an engine started
+     with no window runs them too. An AppImage's Electron goes as it
+     stops, so such an engine started from its copy needs that `node`._
    - An adapter's version moves with Banda's, with the CLI minimum beside
      it, so a Banda and its adapters are tested together.
    - No Node on the machine, no `npx`, and no network at the first Thread.

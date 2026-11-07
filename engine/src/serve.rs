@@ -44,7 +44,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
     let owner = places.owner().map_err(Failure::broken)?;
     let program = std::env::current_exe().map_err(Failure::broken)?;
     let harnesses = Harnesses::load(&places.harnesses()).map_err(Failure::broken)?;
-    let harnesses = harnesses.carrying(carried(&program));
+    harnesses.carry(carried(&program));
     let listener = tokio::net::TcpListener::bind((HOST, port))
         .await
         .map_err(Failure::broken)?;
@@ -150,8 +150,13 @@ async fn stopped(with_parent: bool) {
 /// (ADR 0059; ADR 0062, step S1): an engine started in a shell, with no
 /// window, runs Banda's own Harness entries through them too.
 fn carried(program: &Path) -> Option<Carried> {
+    // Where it is, through any link it was started by, as macOS names
+    // it: the app's resources or the engine's own copy.
+    let program = program
+        .canonicalize()
+        .unwrap_or_else(|_| program.to_owned());
     let here = Here {
-        program,
+        program: &program,
         app: FOLDER,
         checkout: from_checkout(),
     };

@@ -2,14 +2,15 @@
 //! and 8). The courier keeps each event first and decides what goes; this
 //! posts one, exactly as kept, to PostHog's US capture and nowhere else.
 //! It goes from the host, as no client does the host's work (ADR 0062,
-//! decision 3): through the system's proxy, with the system's
-//! certificates, following no redirect and keeping no cookie.
+//! decision 3), by the engine's one client ([`banda_kernel::https`]):
+//! through the proxy it reads, with the system's certificates, following
+//! no redirect and keeping no cookie.
 
-use std::sync::OnceLock;
+use banda_kernel::https::{cause, client};
 use std::time::Duration;
 
 /// Where an event goes: PostHog's capture, in the US.
-pub const CAPTURE: &str = "https://us.i.posthog.com/i/v0/e/";
+pub(crate) const CAPTURE: &str = "https://us.i.posthog.com/i/v0/e/";
 
 /// How long PostHog may take to take one event.
 const POSTING: Duration = Duration::from_secs(30);
@@ -22,38 +23,24 @@ pub trait Post: Send + Sync {
     async fn post(&self, event: &str) -> Result<(), String>;
 }
 
-/// PostHog's capture, over HTTPS, with one client made at the first post.
-pub struct Capture {
+/// PostHog's capture, over HTTPS.
+pub(crate) struct Capture {
     url: String,
-    client: OnceLock<reqwest::Client>,
 }
 
 impl Capture {
     /// Posts to `url`: [`CAPTURE`], or a test's stand-in.
-    pub fn at(url: &str) -> Self {
+    pub(crate) fn at(url: &str) -> Self {
         Self {
             url: url.to_owned(),
-            client: OnceLock::new(),
         }
-    }
-
-    fn client(&self) -> Result<reqwest::Client, String> {
-        if let Some(client) = self.client.get() {
-            return Ok(client.clone());
-        }
-        let made = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .user_agent(format!("banda/{}", banda_kernel::version()))
-            .build()
-            .map_err(|e| format!("Banda's HTTPS did not start: {}", cause(&e)))?;
-        Ok(self.client.get_or_init(|| made).clone())
     }
 }
 
 #[async_trait::async_trait]
 impl Post for Capture {
     async fn post(&self, event: &str) -> Result<(), String> {
-        let response = (self.client()?.post(&self.url))
+        let response = (client()?.post(&self.url))
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .body(event.to_owned())
             .timeout(POSTING)
@@ -66,16 +53,6 @@ impl Post for Capture {
             false => Err(format!("PostHog answered {}", status.as_u16())),
         }
     }
-}
-
-/// What went wrong at the bottom of `error`: "connection refused", not
-/// only "error sending request".
-fn cause(error: &(dyn std::error::Error + 'static)) -> String {
-    let mut at = error;
-    while let Some(under) = at.source() {
-        at = under;
-    }
-    at.to_string()
 }
 
 #[cfg(test)]

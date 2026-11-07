@@ -150,12 +150,15 @@ const where = whereOf({
   checkout: resolve(here, "../../target/debug/banda"),
   resources: app.isPackaged ? process.resourcesPath : undefined,
   data: dataFolder(app.getPath("appData")),
+  // The copy names this Electron for an engine started with no window,
+  // when it stays where it is: an AppImage's goes as it stops.
+  electron: process.env.APPIMAGE ? undefined : process.execPath,
 })
 // The Node the app provides for the ACP adapters it carries: this
-// Electron, which the engine runs as Node (ADR 0059). The engine finds the
-// adapters itself, beside its program or in its checkout, but an engine
-// run from its own copy cannot find this app; with none named, as for a
-// `banda serve` started in a shell, it finds a Node of its own.
+// Electron, which the engine it starts runs as Node (ADR 0059). The
+// engine finds the adapters itself, beside its program or in its
+// checkout; with no Node named, as for a `banda serve` started in a
+// shell, it finds one of its own (the harnesses' `carried.rs`).
 const node = { BANDA_NODE: process.execPath }
 
 // The window keeps its profile in the engine's state folder, so Banda,

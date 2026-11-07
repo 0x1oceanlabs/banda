@@ -20,7 +20,8 @@ import { NodeServices } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import {
-  ADAPTERS,
+  CARRIED,
+  ELECTRON,
   ownCopy,
   Program,
   programsOf,
@@ -209,7 +210,7 @@ describe("the copy", () => {
 describe("the copy and the adapters the app carries", () => {
   /** `adapters/` beside `program`, holding one adapter that says `text`. */
   function carried(program: string, text: string) {
-    const adapters = join(dirname(program), ADAPTERS)
+    const adapters = join(dirname(program), CARRIED)
     mkdirSync(adapters, { recursive: true })
     writeFileSync(join(adapters, "claude-agent-acp.mjs"), text)
   }
@@ -222,7 +223,7 @@ describe("the copy and the adapters the app carries", () => {
       const copy = yield* copyOf(program, copies)
       expect(
         readFileSync(
-          join(dirname(copy), ADAPTERS, "claude-agent-acp.mjs"),
+          join(dirname(copy), CARRIED, "claude-agent-acp.mjs"),
           "utf8"
         )
       ).toBe("// the adapter")
@@ -234,7 +235,7 @@ describe("the copy and the adapters the app carries", () => {
       const copies = join(folder("data"), "engine")
       const program = banda("banda 1.2.3 (build aa)")
       const copy = yield* copyOf(program, copies)
-      const adapter = join(dirname(copy), ADAPTERS, "claude-agent-acp.mjs")
+      const adapter = join(dirname(copy), CARRIED, "claude-agent-acp.mjs")
       expect(existsSync(adapter)).toBe(false)
       carried(program, "// the adapter")
       expect(yield* copyOf(program, copies)).toBe(copy)
@@ -246,6 +247,55 @@ describe("the copy and the adapters the app carries", () => {
       )
     })
   )
+})
+
+describe("the copy and the Electron that runs the adapters", () => {
+  it.live("names the app's, for an engine started with no window", () =>
+    Effect.gen(function* () {
+      const copies = join(folder("data"), "engine")
+      const program = banda("banda 1.2.3 (build aa)")
+      const app = "/Applications/Banda.app/Contents/MacOS/Banda"
+      const named = (copy: string) =>
+        readFileSync(join(dirname(copy), ELECTRON), "utf8")
+      const copy = yield* ownCopy(program, copies, app).pipe(
+        Effect.provide(NodeServices.layer)
+      )
+      expect(named(copy)).toBe(`${app}\n`)
+      // The app moved: the copy in place names where it is now.
+      const moved = "/Users/p/Applications/Banda.app/Contents/MacOS/Banda"
+      const again = yield* ownCopy(program, copies, moved).pipe(
+        Effect.provide(NodeServices.layer)
+      )
+      expect(again).toBe(copy)
+      expect(named(copy)).toBe(`${moved}\n`)
+    })
+  )
+
+  it.live("names none for an app that goes as it stops", () =>
+    Effect.gen(function* () {
+      const copies = join(folder("data"), "engine")
+      const copy = yield* copyOf(banda("banda 1.2.3 (build aa)"), copies)
+      expect(existsSync(join(dirname(copy), ELECTRON))).toBe(false)
+    })
+  )
+
+  it("a packed app's copies name the Electron it gives", () => {
+    const resources = folder("resources")
+    const data = "/home/p/.local/share/banda"
+    const electron = "/Applications/Banda.app/Contents/MacOS/Banda"
+    const where = whereOf({
+      named: undefined,
+      checkout: "/c",
+      resources,
+      data,
+      electron,
+    })
+    expect(where.electron).toBe(electron)
+    writeFileSync(join(resources, "package-type"), "pacman\n")
+    expect(
+      whereOf({ named: undefined, checkout: "/c", resources, data, electron })
+    ).toEqual({ program: join(resources, "banda") })
+  })
 })
 
 describe("the window's program", () => {

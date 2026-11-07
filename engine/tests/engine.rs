@@ -5,6 +5,7 @@
 
 mod common;
 
+use banda_harnesses::carried::{ADAPTERS_VARIABLE, NODE_VARIABLE};
 use common::wait_for;
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Write};
@@ -85,8 +86,8 @@ impl Places {
             .env_remove("BANDA_SPACE")
             // No window started it: no Node nor adapters named, as for a
             // `banda serve` run in a shell.
-            .env_remove("BANDA_NODE")
-            .env_remove("BANDA_ADAPTERS")
+            .env_remove(NODE_VARIABLE)
+            .env_remove(ADAPTERS_VARIABLE)
             .env_remove("ELECTRON_RUN_AS_NODE");
         command
     }

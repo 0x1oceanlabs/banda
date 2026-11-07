@@ -20,6 +20,7 @@
 //! - [`Reach`] is the path guard: where a path a call names is, and
 //!   whether its caller may reach it. [`ModuleProject::watch`] watches
 //!   folders (ADR 0073, decision 14).
+//! - [`https`] is the one client for the requests the engine makes itself.
 //! - [`api`] serves all of it over WebSocket.
 
 pub mod access;
@@ -27,6 +28,7 @@ pub mod api;
 mod error;
 mod events;
 mod foreign;
+pub mod https;
 mod ids;
 mod kernel;
 pub mod methods;

@@ -63,7 +63,6 @@ fn fake_with(env: &[(&str, &str)]) -> Harness {
         mark: None,
         colour: None,
         carried: None,
-        found: None,
         record: None,
     }
 }
@@ -1368,7 +1367,6 @@ fn with_cli_since(program: &str, minimum: Option<&str>) -> Agents {
         mark: None,
         colour: None,
         carried: None,
-        found: None,
         record: None,
     }]))
 }
@@ -2879,7 +2877,8 @@ async fn the_real_harnesses_say_what_they_run_and_who_is_signed_in() {
     };
     let carried = banda_harnesses::carried::Carried::find(&here);
     println!("carried: {carried:?}");
-    let known = Harnesses::known().carrying(carried);
+    let known = Harnesses::known();
+    known.carry(carried);
     let real = ["claude", "codex"].map(|id| known.find(id).unwrap().clone());
     let fake = Harness {
         id: "fake".into(),
@@ -2895,7 +2894,6 @@ async fn the_real_harnesses_say_what_they_run_and_who_is_signed_in() {
         mark: None,
         colour: None,
         carried: None,
-        found: None,
         record: None,
     };
     let harnesses = Harnesses::new([vec![fake], real.to_vec()].concat());
@@ -4961,7 +4959,6 @@ fn two_claude_accounts(cli: &Path) -> Agents {
         mark: None,
         colour: None,
         carried: None,
-        found: None,
         record: None,
     };
     let claude = || {
@@ -5023,6 +5020,66 @@ async fn a_thread_moves_to_another_account_and_keeps_its_session() {
     let by_agent = world.call(world.agent(), "agents.switch", params).await;
     assert!(by_agent.is_err(), "only a Person moves a Thread");
     assert!(switch("gone").await.is_err(), "an entry the list has not");
+}
+
+/// Banda's own Claude Code entry, with the adapters the engine found on
+/// its host and a Node to run them on (ADR 0059; ADR 0062, step S1): a
+/// Thread's process is the carried adapter on that Node, told where the
+/// Project keeps Claude Code's sessions, which the shim in it reads (ADR
+/// 0078, decision 3).
+#[tokio::test]
+async fn a_threads_process_runs_the_carried_adapter_on_the_node_found_with_the_projects_sessions() {
+    use banda_harnesses::carried::{Carried, Node};
+    let root = tempfile::tempdir().unwrap();
+    let adapters = root.path().join("adapters");
+    std::fs::create_dir(&adapters).unwrap();
+    // A stand-in of the Node the engine found: it writes how it was
+    // started, then runs the fake agent in the adapter's place.
+    let (node, told) = (root.path().join("node"), root.path().join("told"));
+    let script = format!(
+        "#!/bin/sh\nprintf '%s|%s|%s\\n' \"$1\" \"$BANDA_CLAUDE_SESSIONS\" \"$ELECTRON_RUN_AS_NODE\" >> '{}'\nexec '{}'\n",
+        told.display(),
+        fake_agent().display()
+    );
+    std::fs::write(&node, script).unwrap();
+    std::fs::set_permissions(&node, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let claude = Harness {
+        id: "claude".into(),
+        name: "Claude Code".into(),
+        short: None,
+        command: "npx".into(),
+        enabled: true,
+        args: Vec::new(),
+        env: Default::default(),
+        cli: None,
+        of: None,
+        kind: Default::default(),
+        mark: None,
+        colour: None,
+        carried: Some("claude-agent-acp.mjs".into()),
+        record: None,
+    };
+    let harnesses = Harnesses::new(vec![claude]);
+    harnesses.carry(Some(Carried {
+        adapters: adapters.clone(),
+        node: Node {
+            program: node,
+            electron: false,
+        },
+    }));
+    let world = World::new_on(root.path(), Agents::new(harnesses), "claude").await;
+    ask_session(&world, None).await;
+
+    let told = std::fs::read_to_string(&told).unwrap();
+    let file = adapters.join("claude-agent-acp.mjs").display().to_string();
+    let sessions = project_data(root.path()).join("sessions").join("claude");
+    let thread = format!("{file}|{}|", sessions.display());
+    assert!(told.lines().any(|line| line == thread), "{told}");
+    assert!(
+        told.lines()
+            .all(|line| line.starts_with(&format!("{file}|"))),
+        "every start runs the carried adapter: {told}"
+    );
 }
 
 impl World {

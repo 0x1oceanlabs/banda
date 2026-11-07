@@ -17,12 +17,13 @@
 pub mod events;
 mod exception;
 mod outbox;
-pub mod post;
+mod post;
 pub mod settings;
 pub mod usage;
 
 use banda_kernel::{Call, Error, Kind, Module, ModuleProject, Nothing, Refusal, Right, Scope};
-use post::{CAPTURE, Capture, Post};
+pub use post::Post;
+use post::{CAPTURE, Capture};
 use rusqlite::Row;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
