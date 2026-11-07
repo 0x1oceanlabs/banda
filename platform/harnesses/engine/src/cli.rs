@@ -5,8 +5,8 @@
 //! a bundled one in its place. A CLI older than the entry's `minimum` runs,
 //! with a warning (ADR 0003, decision 3).
 
-use crate::Harness;
 use crate::model::CliView;
+use crate::{Failed, Harness};
 use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -56,16 +56,17 @@ fn warning(name: &str, path: &str, version: &str, minimum: &str) -> Option<Strin
 }
 
 /// Finds the CLI `harness` names, and the version it says. The entry it
-/// returns sets the adapter's variable to the CLI's path.
-pub async fn find(harness: &Harness) -> Result<(Harness, Option<CliView>), String> {
+/// returns sets the adapter's variable to the CLI's path. A CLI that is not
+/// installed stays so until the Person installs it.
+pub async fn find(harness: &Harness) -> Result<(Harness, Option<CliView>), Failed> {
     let Some(cli) = &harness.cli else {
         return Ok((harness.clone(), None));
     };
     let path = located(&cli.program).ok_or_else(|| {
-        format!(
+        Failed::Lasting(format!(
             "{} runs `{}`, which is not installed on this computer: install it, then check again.",
             harness.name, cli.program
-        )
+        ))
     })?;
     let path = path.display().to_string();
     let version = version_of(&path, harness).await;

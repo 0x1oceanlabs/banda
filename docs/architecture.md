@@ -551,6 +551,12 @@ If Chat is removed, Agents still works through its own Thread.
   - A sign-in writes nothing to the Project, and its receipt keeps the
     answer. Every process of that Harness entry is let go, so each reads
     the account when it next starts.
+  - A sign-in or sign-out that failed in a way that may pass, as a
+    Harness that did not start, took too long or answered an error, is
+    refused as `internal`, which its receipt does not keep, so the same
+    command sent again runs. Only a state that lasts is `conflict`: a CLI
+    that is not installed, an ACP version Banda does not speak, a Harness
+    that does not sign out from Banda.
   - A turn that failed for a sign-in offers the ways, and goes again once
     the Person signed in.
   - Who is signed in comes from the Harness itself: Claude Code's and

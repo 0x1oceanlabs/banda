@@ -547,7 +547,7 @@ async fn work(
     let connection = live
         .connection(project, &harness)
         .await
-        .map_err(|reason| Ending::failed(reason, Some(Failure::HarnessStopped)))?;
+        .map_err(|failed| Ending::failed(failed.to_string(), Some(Failure::HarnessStopped)))?;
     let earlier = project
         .read(move |sql| store::evidence(sql, thread))
         .await

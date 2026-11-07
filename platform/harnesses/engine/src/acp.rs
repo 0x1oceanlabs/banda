@@ -6,10 +6,10 @@
 //!
 //! Starting a Harness is bounded: [`STARTING`].
 
-use crate::Harness;
 use crate::cli::Located;
 use crate::model::{Adapter, SignInWay};
 use crate::record::{Recording, To};
+use crate::{Failed, Harness};
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1 as acp;
 use agent_client_protocol::{
@@ -74,12 +74,14 @@ impl Process {
     /// whatever way, a failed start too, which the builder's own close
     /// hook does not see. Answers the process and what the Harness agreed
     /// to, less its account's part: its information and ways to sign in.
+    /// Only a CLI that is not installed and an ACP version Banda does not
+    /// speak stop it for good; any other start that fails may pass.
     pub async fn start<H, R, C>(
         harness: &Harness,
         client: Builder<Client, H, R, C>,
         shows: acp::ClientCapabilities,
         ended: impl FnOnce() + Send + 'static,
-    ) -> Result<(Process, acp::InitializeResponse), String>
+    ) -> Result<(Process, acp::InitializeResponse), Failed>
     where
         H: HandleDispatchFrom<Agent> + 'static,
         R: RunWithConnectionTo<Agent> + 'static,
@@ -92,7 +94,7 @@ impl Process {
             .args(start.args)
             .envs(start.env);
         let recording = match &harness.record {
-            Some(folder) => Some(Recording::start(folder, &harness.id)?),
+            Some(folder) => Some(Recording::start(folder, &harness.id).map_err(Failed::Passing)?),
             None => None,
         };
         let id = harness.id.clone();
@@ -118,11 +120,17 @@ impl Process {
         });
         let (cx, mut answer) = match timeout(STARTING, started).await {
             Ok(Ok(Ok(started))) => started,
-            Ok(Ok(Err(error))) => return Err(error),
-            Ok(Err(_)) => return Err("The Harness stopped while it started.".to_owned()),
+            Ok(Ok(Err(failed))) => return Err(failed),
+            Ok(Err(_)) => {
+                return Err(Failed::Passing(
+                    "The Harness stopped while it started.".to_owned(),
+                ));
+            }
             Err(_) => {
                 driver.abort();
-                return Err("The Harness did not start within two minutes.".to_owned());
+                return Err(Failed::Passing(
+                    "The Harness did not start within two minutes.".to_owned(),
+                ));
             }
         };
         let capabilities = &answer.agent_capabilities;
@@ -182,7 +190,7 @@ async fn drive<H, R, C>(
     client: Builder<Client, H, R, C>,
     shows: acp::ClientCapabilities,
     told: watch::Sender<Option<AuthStatus>>,
-    ready: oneshot::Sender<Result<Started, String>>,
+    ready: oneshot::Sender<Result<Started, Failed>>,
 ) where
     H: HandleDispatchFrom<Agent>,
     R: RunWithConnectionTo<Agent>,
@@ -208,14 +216,15 @@ async fn drive<H, R, C>(
                     let _ = ready.send(Ok((cx.clone(), answer)));
                 }
                 Ok(answer) => {
-                    let _ = ready.send(Err(format!(
+                    let _ = ready.send(Err(Failed::Lasting(format!(
                         "The Harness speaks ACP {:?}; Banda speaks version 1.",
                         answer.protocol_version
-                    )));
+                    ))));
                     return Ok(());
                 }
                 Err(error) => {
-                    let _ = ready.send(Err(format!("The Harness did not start: {error}")));
+                    let said = format!("The Harness did not start: {error}");
+                    let _ = ready.send(Err(Failed::Passing(said)));
                     return Ok(());
                 }
             }

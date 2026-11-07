@@ -31,9 +31,9 @@ use crate::Pipe;
 use crate::acp::{Answer, Connection, Session};
 use crate::model::{ItemId, ThreadId, TurnId, Values};
 use crate::touching::Touches;
-use banda_harnesses::Harness;
 use banda_harnesses::hosts::Hosts;
 use banda_harnesses::model::Program;
+use banda_harnesses::{Failed, Harness};
 use banda_kernel::{AgentId, Heard, ModuleProject, ProjectId};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -152,7 +152,7 @@ impl Live {
         &self,
         project: &ModuleProject,
         harness: &Harness,
-    ) -> Result<Arc<Connection>, String> {
+    ) -> Result<Arc<Connection>, Failed> {
         let pass = self.process_pass(project, harness);
         let (id, data) = (project.id(), project.data());
         let started = harness.in_project(id, data, &pass, project.trusted());
