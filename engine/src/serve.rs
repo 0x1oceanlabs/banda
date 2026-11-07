@@ -100,6 +100,12 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
     };
     let engine = format!("banda {}", env!("BANDA_VERSION"));
     let app = api::router(kernel, identity, engine);
+    // Heard from here on: a TERM that comes as soon as the first line is
+    // out stops the engine as any other does, not by the signal's default.
+    #[cfg(unix)]
+    let term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).ok();
+    #[cfg(not(unix))]
+    let term = None::<()>;
     places.announce(&running).map_err(Failure::broken)?;
     if with_parent {
         // And where the window listens for `banda menu`, so the CLI and
@@ -111,14 +117,19 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
     tracing::info!(port = running.port, root = %places.root.display(), "the engine serves");
 
     let served = axum::serve(listener, app)
-        .with_graceful_shutdown(stopped(with_parent))
+        .with_graceful_shutdown(stopped(with_parent, term))
         .await;
     places.withdraw();
     drop(lock);
     served.map_err(Failure::broken)
 }
 
-async fn stopped(with_parent: bool) {
+#[cfg(unix)]
+type Term = Option<tokio::signal::unix::Signal>;
+#[cfg(not(unix))]
+type Term = Option<()>;
+
+async fn stopped(with_parent: bool, term: Term) {
     let parent = async move {
         if !with_parent {
             return std::future::pending().await;
@@ -130,17 +141,19 @@ async fn stopped(with_parent: bool) {
         let _ = parent_gone.await;
     };
     #[cfg(unix)]
-    let terminated = async {
-        use tokio::signal::unix::{SignalKind, signal};
-        match signal(SignalKind::terminate()) {
-            Ok(mut term) => {
+    let terminated = async move {
+        match term {
+            Some(mut term) => {
                 term.recv().await;
             }
-            Err(_) => std::future::pending().await,
+            None => std::future::pending().await,
         }
     };
     #[cfg(not(unix))]
-    let terminated = std::future::pending::<()>();
+    let terminated = {
+        let _ = term;
+        std::future::pending::<()>()
+    };
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {}
         () = terminated => {}
