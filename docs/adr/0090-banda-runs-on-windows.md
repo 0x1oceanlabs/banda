@@ -763,6 +763,14 @@ not known yet (Open questions, 1).
      as errors, as the `rust` part does for Linux.
      - It runs on a runner of its own beside `rust ts`, so it adds
        runner time, not time to wait. It is a merge gate.
+     - **Until devbox's image is rebuilt with cargo-xwin**, the part runs
+       the same `scripts/check.sh windows` on GitHub's `windows-2025`
+       runner, with plain cargo and Visual Studio's build tools. It runs
+       for PRs that change Rust or what builds it, and `ci` waits for it
+       there, so until it moves it adds time to wait. It gates merges once
+       it has passed on main, which main's green run leaves an artifact to
+       say. Before that a failure only warns and the part stays green, so
+       neither a PR nor main's Dev build is held up on day one.
      - It is not one of `check.sh`'s default parts, nor of
        `--no-window`: on a laptop, it builds every crate a second time.
        It runs locally only by name.
@@ -785,7 +793,9 @@ not known yet (Open questions, 1).
    - **Line ends.** GitHub's Windows runners check out with
      `core.autocrlf=true`, and the repository has no `.gitattributes`.
      Step 1 adds one with `* text=auto eol=lf`, so every checkout has
-     LF line ends and tests that compare text pass on Windows.
+     LF line ends and tests that compare text pass on Windows. Batch
+     files are the exception, `*.cmd` and `*.bat` with CRLF, as cmd.exe
+     misreads labels with LF.
    - Tests that run `sh` or `chmod` get a Windows version, or become
      `cfg(unix)` with the reason written next to them.
      `tools/fake-agent` already works on Windows.
