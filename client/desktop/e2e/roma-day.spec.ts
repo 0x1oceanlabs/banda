@@ -343,7 +343,7 @@ test("ten Agents of a Project work side by side on its workspace, and a pick bri
   await expect(one).toBeInViewport({ ratio: 0.99 })
 })
 
-test("with the Sidebar hidden, Alt+U goes down what calls in the sidebar list's order, and the bar's counts are the switcher (ADR 0065, ADR 0079)", async () => {
+test("with the Sidebar hidden, Alt+U goes down what calls in the sidebar list's order, the bar's counts list it in that order, and they are the switcher (ADR 0065, ADR 0079, ADR 0087)", async () => {
   window = await startWindow()
   const { page } = window
   const [a, b, c] = await agents(
@@ -369,21 +369,21 @@ test("with the Sidebar hidden, Alt+U goes down what calls in the sidebar list's 
   finish(window, "wait c")
   await expect(counts).toHaveAccessibleName("3 done")
 
-  // The counts' list puts the first done first, loudest first (ADR 0035,
-  // decision 3), where the sidebar list puts the last first, until one
-  // order holds (ADR 0087, decision 8).
+  // The counts' list goes in the sidebar list's order, the one order of
+  // what calls (ADR 0087, decision 8): the `inbox` preset puts the last
+  // done first.
   await counts.click()
   const waiting = page.getByRole("group", { name: "Wait for you" })
   await expect(waiting.getByRole("menuitem")).toHaveText([
-    /wait a/,
-    /wait b/,
     /wait c/,
+    /wait b/,
+    /wait a/,
   ])
   await page.keyboard.press("Escape")
   await expect(waiting).toBeHidden()
 
   // Alt+U takes the next below, as the sidebar list orders them though it
-  // is hidden; the bar names each as it comes.
+  // is hidden: down the counts' list. The bar names each as it comes.
   await page.keyboard.press("Alt+KeyU")
   await expect(c).toHaveAttribute("data-focused", "true")
   await expect(counts).toHaveAccessibleName("2 done")

@@ -228,6 +228,8 @@ for any Panes, and an Agent's Panes are simply its Group.
    - With the sidebar hidden, the bar's agents widget is the switcher.
      It shows the current Agent and the counts, opens the same list as
      the Inbox, and new calls come as toasts (ADR 0048).
+     _Changed by ADR 0087, decision 8: the list goes in the sidebar's
+     order._
 
 ## Out of scope
 

@@ -16,6 +16,7 @@ import type { Listed, Lists, PaneState } from "@banda/ui/pane"
 import { useMemo, useState } from "react"
 import { useLookSidebar } from "../look"
 import { ThreadMark, toneOf } from "@banda/ui/components/banda-mark"
+import { sidebarOrder } from "../sidebar/order"
 import { Status } from "../sidebar/Row"
 import { useSnoozes } from "../sidebar/snoozed"
 import { type Counted, inOrder, type Tally, tally } from "./tally"
@@ -59,10 +60,10 @@ export function Counts({
   onOpen: Open
 }) {
   const settings = useLookSidebar().bar
-  const { away } = useSnoozes(lists)
+  const snoozes = useSnoozes(lists)
   const tallies = useMemo(
-    () => tally(lists, settings.counts, away),
-    [lists, settings.counts, away]
+    () => tally(lists, settings.counts, snoozes.away),
+    [lists, settings.counts, snoozes.away]
   )
   const shows =
     settings.show === "always" || (settings.show === "closed" && !sidebarShown)
@@ -126,23 +127,31 @@ export function Counts({
         ))}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="center" className="w-96">
-        <List tallies={tallies} projects={projects} onOpen={onOpen} />
+        <List
+          tallies={tallies}
+          order={() => sidebarOrder(lists, projects, snoozes)}
+          projects={projects}
+          onOpen={onOpen}
+        />
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
-/** What the counts count, drawn only while the list is open. */
+/** What the counts count, drawn only while the list is open, in the
+ * sidebar's `order`, which is worked out only then. */
 function List({
   tallies,
+  order,
   projects,
   onOpen,
 }: {
   tallies: readonly Tally[]
+  order: () => string[]
   projects: readonly ProjectSummary[]
   onOpen: Open
 }) {
-  const { waiting, working } = inOrder(tallies)
+  const { waiting, working } = inOrder(tallies, order())
   const named = new Map(projects.map((project) => [project.id, project]))
   const rows = (things: Counted[]) =>
     things.map(({ project, listed }) => {

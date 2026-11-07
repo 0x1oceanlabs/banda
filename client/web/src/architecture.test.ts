@@ -9,6 +9,9 @@
  *   (decision 6); one that no longer does leaves the list.
  * - Nothing more animates a size or a place (ADR 0088, decision 2): the
  *   cases of today are listed, and the list only falls.
+ * - What calls has one order, the sidebar's (ADR 0087, decision 8): a
+ *   mark's rank is read only to pick the loudest, on the lines listed,
+ *   and no list sorts by it.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join, relative } from "node:path"
@@ -176,4 +179,34 @@ test("nothing more animates a size or a place: only what does today", () => {
 
 test("a case that no longer animates one leaves the list", () => {
   expect(beyond(LAYOUT_MOTION, moving)).toEqual([])
+})
+
+/**
+ * A mark's rank (`MARK_ORDER`) is read only to pick the loudest of a few:
+ * each line that reads it is listed here, by its file. What calls has one
+ * order, the Person's sidebar arrangement, which the sidebar list, the
+ * bar's counts and Alt+U go by (ADR 0087, decision 8), so no list sorts
+ * by the rank. A line that goes leaves the list; a new one is added on
+ * purpose.
+ */
+const RANKING = [
+  // `loudest`
+  "client/ui/src/components/banda-mark.tsx",
+  // the loudest of what an Agent's Thread calls about
+  "client/web/src/bar/attention.ts",
+  // the loudest chime, and whether it is louder than the last
+  "platform/notifications/pane/src/sound.ts",
+  "platform/notifications/pane/src/sound.ts",
+]
+
+test("a mark's rank is read only to pick the loudest, where the list holds", () => {
+  const reading = drawing
+    .flatMap((file) =>
+      readFileSync(file, "utf8")
+        .split("\n")
+        .filter((line) => /\bMARK_ORDER\[/.test(line))
+        .map(() => relative(root, file))
+    )
+    .sort()
+  expect(reading).toEqual(RANKING)
 })

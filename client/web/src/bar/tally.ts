@@ -6,13 +6,13 @@
 import type { ProjectId } from "@banda/contract"
 import type { Count } from "@banda/contract/sidebar"
 import {
-  callOrder,
   loudest,
   type MarkState,
   waits,
   works,
 } from "@banda/ui/components/banda-mark"
 import type { Listed, Lists } from "@banda/ui/pane"
+import { placeIn } from "../sidebar/order"
 
 /** A Thread counted, with the Project it is in. */
 export type Counted = { project: ProjectId; listed: Listed }
@@ -54,21 +54,26 @@ export function tally(
 }
 
 /**
- * What waits for the Person, then what works, as their list shows it: in
- * the order calls are answered, as Alt+U goes.
+ * What waits for the Person, then what works, as their list shows it:
+ * each in the sidebar's `order` of `project:thing` keys, the one order of
+ * what calls, which Alt+U walks (ADR 0087, decision 8). A thing the
+ * sidebar lists nowhere comes last, the one that changed first first, as
+ * Alt+U takes it (`placeIn`).
  */
-export function inOrder(tallies: readonly Tally[]): {
+export function inOrder(
+  tallies: readonly Tally[],
+  order: readonly string[]
+): {
   waiting: Counted[]
   working: Counted[]
 } {
+  const key = ({ project, listed }: Counted) => `${project}:${listed.id}`
   const seen = new Map<string, Counted>()
   for (const { things } of tallies)
-    for (const thing of things) seen.set(thing.listed.id, thing)
+    for (const thing of things) seen.set(key(thing), thing)
+  const at = placeIn(order)
   const sorted = [...seen.values()].sort(
-    callOrder(
-      (t) => t.listed.mark,
-      (t) => t.listed.changed
-    )
+    (a, b) => at(key(a)) - at(key(b)) || a.listed.changed - b.listed.changed
   )
   return {
     waiting: sorted.filter((t) => !works(t.listed.mark)),
