@@ -45,30 +45,43 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
 - **The engine is the machine's, and outlives the window** (ADR 0086,
   decisions 1 and 3). On Linux it is a systemd user unit of the Person's
   session, `<folder>-engine` (`banda-engine`, `banda-dev-engine`; a state
-  folder a test names adds a short hash of it). Any client starts it when
-  no engine answers: the window, and every command that reaches the
-  engine; it is started with `systemd-run --user`, then waited for while
-  its unit runs. It gets the user manager's environment, never its
+  folder other than the default adds a short hash of it). Any client
+  starts it when no engine answers: the window, and every command that
+  reaches the engine; it is started with `systemd-run --user`, then
+  waited for while its unit runs, for up to two minutes, as it opens its
+  Projects first. It gets the user manager's environment, never its
   starter's, but for Banda's own `BANDA_*` variables (never an Agent's
-  pass or Project) and every place its starter resolved, and PATH from
-  the login shell before the manager's. The unit has `OOMPolicy=continue`
-  and `KillMode=mixed`: SIGTERM goes to the engine, which stops its
-  Harnesses and Terminals, and what is left is killed after 15 s
-  (`engine/src/service.rs`). Where no systemd user manager answers
-  (macOS until its launchd agent, plan step 7; a container; CI) the
-  engine is the window's child, as before, and the log says so; so is a
-  checkout's, Banda Local, unless `BANDA_ENGINE_AS=service`. `banda
-  status` says whether it runs, since when and its build; `banda stop` is
-  Quit Banda, and asks first while Agents work (`--force` does not), and
-  refuses an Agent's pass.
-- **It knows how the last run left, and is whole before it listens**
-  (`engine/src/run.rs`). `run.json` in its state says since when the
-  engine runs and on which port, and, once it left cleanly, how:
-  `stopped`, or `handed over` (an update, plan step 6). An engine that
-  finds no such word keeps a crash as a Problem before it opens anything.
-  It opens every Project, with its modules' migrations and the outbox's
+  pass or Project), the places its starter set or its XDG folders moved,
+  the session's display and ssh agent where the manager lacks them, and
+  PATH from the login shell, asked with the manager's PATH, before the
+  manager's. The unit has `OOMPolicy=continue` and `KillMode=mixed`:
+  SIGTERM goes to the engine, which stops its Harnesses and Terminals,
+  and what is left is killed after 15 s. An engine that crashed starts
+  again (`Restart=on-failure`), but not after three crashes in a minute.
+  The engine raises its soft limit on open files to the hard one, as the
+  window's child had it (`engine/src/service.rs`). Where no systemd user
+  manager answers (macOS until its launchd agent, plan step 7; a
+  container; CI), or the unit does not start, the engine is the window's
+  child, as before, and the log says so; so is a checkout's, Banda
+  Local, unless `BANDA_ENGINE_AS=service`. `banda status` says whether
+  it runs, since when and its build; it names its unit only as that
+  unit's own process. `banda stop` is Quit Banda: it asks first while
+  Agents work (`--force` does not), refuses an Agent's pass, and stops
+  an engine that does not answer too. An engine of another build, whose
+  protocol this one does not speak, says so, and runs until Banda quits;
+  an update stops the engine as it restarts the window, until the engine
+  updates by itself (plan step 6).
+- **It knows how the last run left, and is whole before clients find it**
+  (`engine/src/run.rs`). `run.json` in its state says on which port the
+  engine listens, and how it left: `stopping` as soon as it is asked to
+  stop, as it opens too, and `stopped` once it has. An engine that finds
+  neither word keeps a crash as a Problem before it opens anything; one
+  killed while it stopped as asked left as asked. An `engine.json` it
+  finds is the run before's, and goes as soon as it takes the lock. It
+  opens every Project, with its modules' migrations and the outbox's
   recovery, and only then writes `engine.json`, so no client finds it
-  half started.
+  half started. A client waits 3 s at most for the engine it names to
+  say welcome.
 - **The look is the window's machine's** (ADR 0007). `banda look`
   reads Omarchy's theme, Hyprland's windows and `~/.config/banda/look.toml`
   and prints the CSS variables as JSON, with no engine; `--follow` prints
@@ -263,11 +276,13 @@ The kernel holds only what every module needs, and it names no module.
   session's pass while the session is open in it, and the module holds
   each process's pass while its Project is open. A pass a session holds
   is renewed an hour ahead every quarter of an hour; one no session of
-  this run holds, as one of the run before, lasts an hour from its last
-  use. As the engine stops it revokes none, and gives every pass its
-  sessions hold a whole hour, so a restart keeps the passes of the
-  sessions that go on. A Project removed takes its passes with it. A
-  `hello` with a pass connects as that Agent, in that Project.
+  this run holds, as one of the run before, lasts until the hour its
+  last holder gave it ends, and a use does not renew it. As the engine
+  stops it revokes none, and gives every pass its sessions hold a whole
+  hour, so a restart keeps the passes of the sessions that go on. A
+  Project removed takes its passes with it. A store that does not open
+  is put aside, and a new one made. A `hello` with a pass connects as
+  that Agent, in that Project.
 - **Module registry and API.** The registry routes commands to their
   module, delivers events to subscribers, and serves the API. `welcome`
   lists the engine's modules, so a window shows only what the engine has,
@@ -1044,13 +1059,15 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   program ends with code 0 and the window quits; when it crashed, main
   starts it again (waiting up to 10 s between tries). Closing the last
   window only closes it: the engine and its Agents go on. Quit Banda
-  (`banda.quit`, Ctrl+Q, ⌘Q on macOS) asks first while Agents work
-  ("2 Agents are working. Stop them and quit?"), then main runs `banda
-  stop --force`. `banda look --follow --with-parent` stays the window's
-  child. Both are Effect services in main (`Engine`, `Look`; ADR 0020),
-  started by one runtime and stopped when it is disposed. The client then
-  reconnects and follows on from the last event it delivered, so a Pane
-  sees no gap.
+  (`banda.quit`, Ctrl+Q, but for a terminal's program, whose key it is
+  there) asks first while Agents work ("2 Agents are working. Stop them
+  and quit?"), then main runs `banda stop --force`. On macOS the app
+  menu's ⌘Q quits as before, without asking, and the engine is the
+  window's child, until plan step 7. `banda look --follow --with-parent`
+  stays the window's child. Both are Effect services in main (`Engine`,
+  `Look`; ADR 0020), started by one runtime and stopped when it is
+  disposed. The client then reconnects and follows on from the last
+  event it delivered, so a Pane sees no gap.
 - **A packed Banda runs its own copy of `banda`** (ADR 0086, decision
   2), never the one inside its AppImage or its app, whose folder may go
   while the program runs. Main copies it into `<data>/engine/<version>/`,

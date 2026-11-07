@@ -444,16 +444,18 @@ fn main() -> ExitCode {
         Command::Modules { unstable } => return print_modules(unstable),
         _ => {}
     }
-    // The engine keeps its panics and its log (ADR 0039, decision 1): as
-    // `banda serve`, and as the window's child.
+    // How this Banda runs its engine, for `banda start`.
     let way = match cli.command {
-        Command::Start {
-            with_parent: true, ..
-        } => Some(service::way_here(&service::User)),
+        Command::Start { .. } => Some(service::way_here(&service::User)),
         _ => None,
     };
+    // The engine keeps its panics and its log (ADR 0039, decision 1): as
+    // `banda serve`, and as the window's child.
     let serving = match (&cli.command, way) {
-        (Command::Serve { .. }, _) | (_, Some(service::Way::Child(_))) => Places::from_env().ok(),
+        (Command::Serve { .. }, _)
+        | (Command::Start { with_parent: true }, Some(service::Way::Child(_))) => {
+            Places::from_env().ok()
+        }
         _ => None,
     };
     if let Some(places) = &serving {
@@ -461,14 +463,14 @@ fn main() -> ExitCode {
     }
     logging(serving.map(|places| places.logs().join("engine.log")));
     let runtime = || tokio::runtime::Runtime::new().map_err(Failure::broken);
-    let done = match cli.command {
+    let done = match (cli.command, way) {
         // It needs no places: its variables say where the engine is.
-        Command::Mcp => runtime().and_then(|runtime| runtime.block_on(mcp::serve())),
-        Command::Start { with_parent } => Places::from_env().and_then(|places| {
-            let way = way.unwrap_or_else(|| service::way_here(&service::User));
-            runtime()?.block_on(control::start(places, with_parent, way))
-        }),
-        command => Places::from_env().and_then(|places| runtime()?.block_on(run(command, places))),
+        (Command::Mcp, _) => runtime().and_then(|runtime| runtime.block_on(mcp::serve())),
+        (Command::Start { with_parent }, Some(way)) => Places::from_env()
+            .and_then(|places| runtime()?.block_on(control::start(places, with_parent, way))),
+        (command, _) => {
+            Places::from_env().and_then(|places| runtime()?.block_on(run(command, places)))
+        }
     };
     match done {
         Ok(()) => ExitCode::SUCCESS,

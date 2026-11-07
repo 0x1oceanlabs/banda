@@ -3,17 +3,19 @@
 //! on this machine only.
 //!
 //! It knows how the run before left (`run.rs`), and keeps a crash as a
-//! Problem before it opens anything. It is whole before it listens: it
+//! Problem before it opens anything. It is whole before clients find it:
+//! an `engine.json` it finds is the run before's, and goes at once; it
 //! opens every Project, with its modules' migrations and the outbox's
 //! recovery, and only then says where it listens, in `engine.json`. It
 //! listens on the port the run before did when that is free, so the
 //! address its Agents' passes name stays across a restart (ADR 0086,
-//! decision 1; ADR 0083, decision 2). As it stops, it keeps its sessions'
-//! passes for the next run, and says that it stopped.
+//! decision 1; ADR 0083, decision 2). Asked to stop, as it opens too, it
+//! says so at once; as it stops, it keeps its sessions' passes for the
+//! next run, and says that it stopped.
 
 use crate::places::{FOLDER, HOST, Places, Running, channel, from_checkout};
-use crate::run::{self, Before, Left};
-use crate::service::UNIT_VARIABLE;
+use crate::run::{self, Before, Left, Run};
+use crate::service;
 use crate::{Failure, build_id, parent};
 use banda_agents::{Agents, Pipe};
 use banda_browser::Browser;
@@ -54,6 +56,9 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         Err(TryLockError::Error(error)) => return Err(Failure::broken(error)),
     }
     let (before, last_port) = run::before(&places);
+    // Whatever `engine.json` says now, the run before said: no client
+    // waits on an engine that is still opening.
+    places.withdraw();
     match before {
         Before::Crashed => {
             tracing::warn!(
@@ -64,23 +69,31 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         Before::Left(left) => tracing::info!(?left, "the engine's last run left"),
         Before::None => {}
     }
+    open_files();
     let owner = places.owner().map_err(Failure::broken)?;
     let program = std::env::current_exe().map_err(Failure::broken)?;
     let harnesses = Harnesses::load(&places.harnesses()).map_err(Failure::broken)?;
     harnesses.carry(carried(&program));
     let listener = listen(port, last_port).await?;
+    let port = listener.local_addr().map_err(Failure::broken)?.port();
+    let run = Run::began(&places, port);
+    // Heard from here on: a TERM as the engine opens, or as soon as it
+    // says where it listens, stops it as any other does, not by the
+    // signal's default.
+    #[cfg(unix)]
+    let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).ok();
+    #[cfg(not(unix))]
+    let mut term = None::<()>;
     // A secret for this run of the engine: whoever has it is the owner.
     let running = Running {
         protocol: PROTOCOL,
-        port: listener.local_addr().map_err(Failure::broken)?.port(),
+        port,
         secret: banda_kernel::secret().map_err(Failure::broken)?,
         build: build_id::own(),
         version: Some(env!("BANDA_VERSION").to_owned()),
         since: Some(banda_kernel::now_ms()),
         pid: Some(std::process::id()),
-        unit: std::env::var(UNIT_VARIABLE)
-            .ok()
-            .filter(|unit| !unit.is_empty()),
+        unit: own_unit(),
     };
     // Every Thread's session reaches the engine through this program's
     // `banda mcp` (ADR 0019).
@@ -88,7 +101,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         program,
         engine: running.url(),
     };
-    let kernel = Kernel::builder(&places.root, &places.data, owner)
+    let opening = Kernel::builder(&places.root, &places.data, owner)
         .machine(places.machine())
         // Every Project's programs run on this host, as the Person's own
         // do (ADR 0084).
@@ -118,27 +131,23 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         .module(Workspaces::new())
         .module(problems(&places))
         .module(sharing(&places))
-        .open()
-        .await
-        .map_err(Failure::broken)?;
+        .open();
+    let kernel = tokio::select! {
+        opened = opening => opened.map_err(Failure::broken)?,
+        () = terminated(&mut term) => {
+            tracing::info!("the engine stops as it opens");
+            run.left(Left::Stopping);
+            return Ok(());
+        }
+    };
     let identity = OwnerSecret {
         secret: running.secret.clone(),
         owner,
     };
     let engine = format!("banda {}", env!("BANDA_VERSION"));
     let app = api::router(kernel.clone(), identity, engine);
-    // Heard from here on: a TERM that comes as soon as the first line is
-    // out stops the engine as any other does, not by the signal's default.
-    #[cfg(unix)]
-    let term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).ok();
-    #[cfg(not(unix))]
-    let term = None::<()>;
     // Whole now: clients may find it.
     places.announce(&running).map_err(Failure::broken)?;
-    let since = running.since.unwrap_or_default();
-    if let Err(error) = run::began(&places, since, running.port) {
-        tracing::error!(%error, "the engine could not say that it runs");
-    }
     if with_parent {
         // And where the window listens for `banda menu`, so the CLI and
         // the window find it the same way.
@@ -148,14 +157,18 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
     }
     tracing::info!(port = running.port, root = %places.root.display(), "the engine serves");
 
+    let asked = run.clone();
+    let stop = async move {
+        stopped(with_parent, term).await;
+        // Asked to stop: what ends it from here on ends it as asked.
+        asked.left(Left::Stopping);
+    };
     let served = axum::serve(listener, app)
-        .with_graceful_shutdown(stopped(with_parent, term))
+        .with_graceful_shutdown(stop)
         .await;
     kernel.stopping();
     places.withdraw();
-    if let Err(error) = run::left(&places, since, running.port, Left::Stopped) {
-        tracing::error!(%error, "the engine could not say that it stopped");
-    }
+    run.left(Left::Stopped);
     drop(lock);
     served.map_err(Failure::broken)
 }
@@ -181,7 +194,50 @@ async fn listen(port: u16, last: Option<u16>) -> Result<tokio::net::TcpListener,
         .map_err(Failure::broken)
 }
 
-async fn stopped(with_parent: bool, term: Term) {
+/// The unit this engine runs as, when it is the session's service.
+fn own_unit() -> Option<String> {
+    if cfg!(target_os = "linux") {
+        service::own_unit(&service::User)
+    } else {
+        None
+    }
+}
+
+/// Raises the soft limit on open files to the hard one, as a window's
+/// child had it from Electron: a user manager's units start at 1024, too
+/// few for the builds and watchers of the Agents' shells.
+#[cfg(target_os = "linux")]
+fn open_files() {
+    use rustix::process::{Resource, getrlimit, setrlimit};
+    let mut limit = getrlimit(Resource::Nofile);
+    if limit.current < limit.maximum {
+        limit.current = limit.maximum;
+        if let Err(error) = setrlimit(Resource::Nofile, limit) {
+            tracing::warn!(%error, "the engine keeps its limit on open files");
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn open_files() {}
+
+/// Returns once TERM comes; never where it is not heard.
+#[cfg(unix)]
+async fn terminated(term: &mut Term) {
+    match term {
+        Some(term) => {
+            term.recv().await;
+        }
+        None => std::future::pending().await,
+    }
+}
+
+#[cfg(not(unix))]
+async fn terminated(_: &mut Term) {
+    std::future::pending().await
+}
+
+async fn stopped(with_parent: bool, mut term: Term) {
     let parent = async move {
         if !with_parent {
             return std::future::pending().await;
@@ -192,23 +248,9 @@ async fn stopped(with_parent: bool, term: Term) {
         });
         let _ = parent_gone.await;
     };
-    #[cfg(unix)]
-    let terminated = async move {
-        match term {
-            Some(mut term) => {
-                term.recv().await;
-            }
-            None => std::future::pending().await,
-        }
-    };
-    #[cfg(not(unix))]
-    let terminated = {
-        let _ = term;
-        std::future::pending::<()>()
-    };
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {}
-        () = terminated => {}
+        () = terminated(&mut term) => {}
         () = parent => {}
     }
     tracing::info!("the engine stops");

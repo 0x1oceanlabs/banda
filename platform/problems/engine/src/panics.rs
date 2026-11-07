@@ -50,16 +50,11 @@ pub fn catch(folder: PathBuf) {
     }));
 }
 
-fn add(folder: &Path, record: &Record) -> std::io::Result<()> {
+/// Keeps `record` beside the panics in `folder`: the module takes it in
+/// as it opens, as a crash of the run before is (ADR 0086, decision 1).
+pub fn add(folder: &Path, record: &Record) -> std::io::Result<()> {
     let mut file = append_private(&folder.join(FILE))?;
     writeln!(file, "{}", serde_json::to_string(record)?)
-}
-
-/// Keeps what broke in the engine before its store opened, as a crash of
-/// the run before (ADR 0086, decision 1): the module takes it in as it
-/// opens, as it takes the panics of the run before.
-pub fn keep(folder: &Path, record: &Record) -> std::io::Result<()> {
-    add(folder, record)
 }
 
 /// Opens `path` to add to, made first, with its folder, for this user

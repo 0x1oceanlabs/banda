@@ -6,94 +6,111 @@
 //! The window runs `banda start --with-parent`: it prints where the engine
 //! listens, as `serve --with-parent` does, then follows the engine until
 //! the window goes, which leaves the engine running, or until the engine
-//! stops. It exits 0 when the engine said it stopped, as Quit Banda stops
-//! it, so the window quits too; otherwise the window starts it again.
-//! Where the engine is the window's child (`service.rs`), it serves the
-//! engine itself.
+//! stops. It exits 0 when the engine said it was asked to stop, as Quit
+//! Banda asks it, so the window quits too; otherwise the window starts it
+//! again. Where the engine is the window's child (`service.rs`), or its
+//! unit does not start, it serves the engine itself.
 
 use crate::client::Client;
 use crate::places::{Places, Running};
-use crate::run::{self, Before, Left};
-use crate::service::{self, Systemd, User, Way};
-use crate::{Failure, parent, serve};
-use banda_kernel::{CommandId, ENGINE_VARIABLE, Refusal};
+use crate::run::{self, Before};
+use crate::service::{self, Systemd, User, Way, Why};
+use crate::{Failure, build_id, parent, serve};
+use banda_kernel::{Code, CommandId, ENGINE_VARIABLE, Refusal};
 use serde_json::{Value, json};
+use std::fs::{File, TryLockError};
 use std::io::{BufRead, IsTerminal, Write};
 use std::time::{Duration, Instant};
 
-/// How long `banda stop` waits for the engine to go, past its own timeout
-/// to stop its Harnesses (`TimeoutStopSec`).
+/// How long `banda stop`, and the window's follower, wait for the engine
+/// to go: past its own timeout to stop its Harnesses (`TimeoutStopSec`),
+/// after which systemd kills what is left.
 const STOPS_WITHIN: Duration = Duration::from_secs(20);
 
-/// How long the window's follower waits for an engine that let go of it to
-/// end, before it reads how it left.
-const ENDS_WITHIN: Duration = Duration::from_secs(10);
+/// How long a client waits for the engine `engine.json` names to say
+/// welcome: one that takes connections and does not answer is none.
+const ANSWERS_WITHIN: Duration = Duration::from_secs(3);
+
+/// Says that no engine answers where `engine.json` says one listens.
+const NOWHERE: &str = "Banda's engine does not answer. Start it with: banda serve";
 
 /// A client of the running engine, as its owner: one that answers, or else
 /// one this starts as the session's service where it runs as one. Where
 /// the engine is the window's child, a client says that none runs, as
 /// before.
 pub async fn connect(places: &Places) -> Result<Client, Failure> {
-    if let Some(client) = answering(places).await {
-        return Ok(client.1);
-    }
-    let systemd = User;
-    match service::way_here(&systemd) {
-        Way::Service { systemd: version } => {
-            let running = started(places, version, &systemd).await?;
-            let nowhere = "Banda's engine does not answer.";
-            Client::hello(&running.url(), running.secret, nowhere).await
-        }
-        Way::Child(_) => {
-            let running = places.running()?;
-            let nowhere = "Banda's engine does not answer. Start it with: banda serve";
-            Client::hello(&running.url(), running.secret, nowhere).await
-        }
+    let none = match answering(places).await {
+        Ok((_, client)) => return Ok(client),
+        Err(refused @ Failure::Refused(_)) => return Err(refused),
+        Err(none) => none,
+    };
+    match service::way_here(&User) {
+        Way::Service { version } => Ok(started(places, version, &User).await?.1),
+        Way::Child(_) => Err(none),
     }
 }
 
-/// The running engine and a client of it as its owner, when one answers.
-async fn answering(places: &Places) -> Option<(Running, Client)> {
-    let running = places.running().ok()?;
-    let client = Client::hello(&running.url(), running.secret.clone(), "").await;
-    Some((running, client.ok()?))
+/// The running engine and a client of it as its owner, when one answers
+/// within [`ANSWERS_WITHIN`]; else why not: none runs, none answers, or
+/// it refused, as one of another build that does not speak this program's
+/// protocol does, which says so.
+async fn answering(places: &Places) -> Result<(Running, Client), Failure> {
+    let running = places.running()?;
+    let url = running.url();
+    let hello = Client::hello(&url, running.secret.clone(), NOWHERE);
+    match tokio::time::timeout(ANSWERS_WITHIN, hello).await {
+        Ok(Ok(client)) => Ok((running, client)),
+        Ok(Err(Failure::Refused(refusal))) if refusal.code == Code::Protocol => {
+            Err(Failure::Refused(Refusal::new(
+                Code::Protocol,
+                format!(
+                    "Banda's engine of another build runs: {} Quit Banda, or run banda stop, \
+                     and the next start is this build's.",
+                    refusal.message
+                ),
+            )))
+        }
+        Ok(Err(failed)) => Err(failed),
+        Err(_) => Err(Failure::broken(NOWHERE)),
+    }
 }
 
 /// Starts the engine as the session's service, and returns once it
-/// answers.
-async fn started(places: &Places, version: u32, systemd: &dyn Systemd) -> Result<Running, Failure> {
+/// answers, with a client of it.
+async fn started(
+    places: &Places,
+    version: u32,
+    systemd: &dyn Systemd,
+) -> Result<(Running, Client), Failure> {
     let program = std::env::current_exe().map_err(Failure::broken)?;
     let unit = service::unit(places, program, version, systemd).await;
     tracing::info!(unit = %unit.name, "Banda's engine starts as the session's service");
-    service::start(systemd, &unit, || async {
-        answering(places).await.map(|(running, _)| running)
-    })
-    .await
+    service::start(systemd, &unit, || answering(places)).await
 }
 
 /// `banda start`: starts the engine when none answers, and says how it
 /// runs. With `with_parent`, for the window: see the module's words.
 pub async fn start(places: Places, with_parent: bool, way: Way) -> Result<(), Failure> {
-    if !with_parent {
-        let running = match (answering(&places).await, way) {
-            (Some((running, _)), _) => running,
-            (None, Way::Service { systemd: version }) => started(&places, version, &User).await?,
-            (None, Way::Child(why)) => {
-                return Err(Failure::Broken(format!(
-                    "Banda's engine is the window's child here ({}): open Banda, or start it with: banda serve",
-                    why.words()
-                )));
+    let found = match (answering(&places).await, way) {
+        (Ok(found), _) => found,
+        (Err(refused @ Failure::Refused(_)), _) => return Err(refused),
+        (Err(_), Way::Service { version }) => match started(&places, version, &User).await {
+            Ok(found) => found,
+            // The window still gets an engine: its own child, this once.
+            Err(failed @ Failure::Broken(_)) if with_parent => {
+                tracing::warn!(
+                    "{} The engine runs as the window's child this time, and stops with it; \
+                     its log is the window's.",
+                    failed.words()
+                );
+                banda_problems::catch_panics(places.problems());
+                return serve::serve(places, 0, true).await;
             }
-        };
-        println!("{}", said(&running));
-        return Ok(());
-    }
-    let running = match (answering(&places).await, way) {
-        (Some((running, _)), _) => running,
-        (None, Way::Service { systemd: version }) => started(&places, version, &User).await?,
-        (None, Way::Child(why)) => {
+            Err(failed) => return Err(failed),
+        },
+        (Err(_), Way::Child(why)) if with_parent => {
             match why {
-                service::Why::NoSystemd => tracing::warn!(
+                Why::NoSystemd => tracing::warn!(
                     "{}: the engine runs as the window's child, and stops with it",
                     why.words()
                 ),
@@ -101,14 +118,32 @@ pub async fn start(places: Places, with_parent: bool, way: Way) -> Result<(), Fa
             }
             return serve::serve(places, 0, true).await;
         }
+        (Err(_), Way::Child(why)) => {
+            return Err(Failure::Broken(format!(
+                "Banda's engine is the window's child here ({}): open Banda, or start it with: banda serve",
+                why.words()
+            )));
+        }
     };
-    follow(&places, running).await
+    if with_parent {
+        return follow(&places, found).await;
+    }
+    println!("{}", said(&found.0));
+    Ok(())
 }
 
 /// Prints where the engine listens, as `serve --with-parent` does, and
 /// follows it until the window goes, or until it stops: then it says
 /// whether it stopped as asked, or must be started again.
-async fn follow(places: &Places, running: Running) -> Result<(), Failure> {
+async fn follow(places: &Places, (running, client): (Running, Client)) -> Result<(), Failure> {
+    let own = build_id::own();
+    if running.build.is_some() && own.is_some() && running.build != own {
+        tracing::warn!(
+            running = ?running.build,
+            own = ?own,
+            "the engine that runs is another build than this window's: it runs until Banda quits"
+        );
+    }
     let mut line = serde_json::to_value(&running).map_err(Failure::broken)?;
     line["window"] = places.window().display().to_string().into();
     println!("{line}");
@@ -117,31 +152,36 @@ async fn follow(places: &Places, running: Running) -> Result<(), Failure> {
     parent::on_gone(move || {
         let _ = gone.send(());
     });
-    let nowhere = "Banda's engine does not answer.";
-    let client = Client::hello(&running.url(), running.secret.clone(), nowhere).await?;
     tokio::select! {
         // The window went: the engine goes on.
         _ = window_gone => return Ok(()),
         () = client.closed() => {}
     }
+    // It says it is stopping as soon as it is asked to, and may take as
+    // long as systemd gives it to stop its Harnesses.
     let began = Instant::now();
-    while running.pid.is_some_and(alive) && began.elapsed() < ENDS_WITHIN {
+    while running.pid.is_some_and(alive) && began.elapsed() < STOPS_WITHIN {
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
     match run::before(places).0 {
-        Before::Left(Left::Stopped) => Ok(()),
+        Before::Left(_) => Ok(()),
         _ => Err(Failure::Broken(
-            "Banda's engine stopped without saying it left: the window starts it again.".into(),
+            "Banda's engine stopped without being asked to: the window starts it again.".into(),
         )),
     }
 }
 
 /// `banda status`: whether the engine runs, since when, and its build, as
-/// one JSON line. It starts nothing.
+/// one JSON line. It starts nothing. An engine of another build, which
+/// this program cannot speak with, runs too.
 pub async fn status(places: &Places) -> Result<(), Failure> {
     let line = match answering(places).await {
-        Some((running, _)) => said(&running),
-        None => json!({ "running": false }),
+        Ok((running, _)) => said(&running),
+        Err(Failure::Refused(refusal)) if refusal.code == Code::Protocol => {
+            said(&places.running()?)
+        }
+        Err(refused @ Failure::Refused(_)) => return Err(refused),
+        Err(_) => json!({ "running": false }),
     };
     println!("{line}");
     Ok(())
@@ -149,7 +189,7 @@ pub async fn status(places: &Places) -> Result<(), Failure> {
 
 /// What `banda status` says of a running engine.
 fn said(running: &Running) -> Value {
-    let mut line = json!({ "running": true });
+    let mut line = json!({ "running": true, "protocol": running.protocol });
     for (key, value) in [
         ("version", running.version.clone().map(Value::from)),
         ("build", running.build.clone().map(Value::from)),
@@ -167,6 +207,8 @@ fn said(running: &Running) -> Value {
 /// `banda stop`: Quit Banda. It asks first when Agents are working, unless
 /// `force`; then it stops the engine, which stops its Harnesses and
 /// Terminals, and returns once it has gone. A window open on it quits too.
+/// An engine that does not answer, hung or still opening, is stopped
+/// without asking.
 pub async fn stop(places: &Places, force: bool) -> Result<(), Failure> {
     if std::env::var_os(ENGINE_VARIABLE).is_some_and(|set| !set.is_empty()) {
         return Err(Failure::Refused(Refusal::forbidden(format!(
@@ -174,9 +216,9 @@ pub async fn stop(places: &Places, force: bool) -> Result<(), Failure> {
              Nothing was stopped."
         ))));
     }
-    let Some((running, mut client)) = answering(places).await else {
-        eprintln!("banda: Banda's engine is not running.");
-        return Ok(());
+    let systemd = User;
+    let Ok((running, mut client)) = answering(places).await else {
+        return stop_unanswering(places, &systemd).await;
     };
     if !force {
         let working = working(&mut client).await?;
@@ -186,13 +228,7 @@ pub async fn stop(places: &Places, force: bool) -> Result<(), Failure> {
     }
     drop(client);
     match (&running.unit, running.pid) {
-        (Some(unit), _) => {
-            let unit = unit.clone();
-            let stopped = tokio::task::spawn_blocking(move || User.stop(&unit)).await;
-            stopped
-                .map_err(Failure::broken)?
-                .map_err(|said| Failure::Broken(format!("Banda's engine did not stop: {said}")))?;
-        }
+        (Some(unit), _) => stop_unit(&systemd, unit)?,
         (None, Some(pid)) => terminate(pid)?,
         (None, None) => {
             return Err(Failure::Broken(
@@ -200,12 +236,42 @@ pub async fn stop(places: &Places, force: bool) -> Result<(), Failure> {
             ));
         }
     }
-    let began = Instant::now();
-    loop {
-        let ended = !running.pid.is_some_and(alive) && answering(places).await.is_none();
-        if ended {
-            return Ok(());
+    gone(&systemd, running.unit.as_deref(), running.pid).await
+}
+
+/// Stops an engine that does not answer: its unit when it runs, else the
+/// process `engine.json` names while the engine's lock is held, which
+/// only a running engine holds and only it wrote. With neither, none runs.
+async fn stop_unanswering(places: &Places, systemd: &dyn Systemd) -> Result<(), Failure> {
+    let unit = service::unit_of(places);
+    if systemd.runs(&unit) {
+        return stop_unit(systemd, &unit);
+    }
+    let pid = (places.running().ok())
+        .and_then(|running| running.pid)
+        .filter(|_| locked(places));
+    match pid {
+        Some(pid) => {
+            terminate(pid)?;
+            gone(systemd, None, Some(pid)).await
         }
+        None => {
+            eprintln!("banda: Banda's engine is not running.");
+            Ok(())
+        }
+    }
+}
+
+/// Stops the engine's `unit`, and returns once systemd has.
+fn stop_unit(systemd: &dyn Systemd, unit: &str) -> Result<(), Failure> {
+    (systemd.stop(unit))
+        .map_err(|said| Failure::Broken(format!("Banda's engine did not stop: {said}")))
+}
+
+/// Waits until the engine's process `pid` and its `unit` have gone.
+async fn gone(systemd: &dyn Systemd, unit: Option<&str>, pid: Option<u32>) -> Result<(), Failure> {
+    let began = Instant::now();
+    while pid.is_some_and(alive) || unit.is_some_and(|unit| systemd.runs(unit)) {
         if began.elapsed() > STOPS_WITHIN {
             return Err(Failure::Broken(format!(
                 "Banda's engine did not stop within {} s.",
@@ -214,6 +280,15 @@ pub async fn stop(places: &Places, force: bool) -> Result<(), Failure> {
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
+    Ok(())
+}
+
+/// Whether an engine holds the lock of `places`' state.
+fn locked(places: &Places) -> bool {
+    let Ok(lock) = File::options().write(true).open(places.lock()) else {
+        return false;
+    };
+    matches!(lock.try_lock(), Err(TryLockError::WouldBlock))
 }
 
 /// How many Agents are working now: Threads whose latest turn runs, in
@@ -243,7 +318,7 @@ async fn working(client: &mut Client) -> Result<usize, Failure> {
 }
 
 /// The question Quit asks when Agents are working (decision 3).
-pub fn question(working: usize) -> String {
+fn question(working: usize) -> String {
     match working {
         1 => "An Agent is working. Stop it and quit?".to_owned(),
         n => format!("{n} Agents are working. Stop them and quit?"),
@@ -342,10 +417,12 @@ mod tests {
         assert_eq!(
             line,
             json!({
-                "running": true, "version": "0.3.0", "build": "16da2821",
+                "running": true, "protocol": 1, "version": "0.3.0", "build": "16da2821",
                 "since": 1_794_000_000_000_i64, "pid": 42, "unit": "banda-engine",
             })
         );
         assert!(!line.to_string().contains("never said"), "no secret");
+        let bare = said(&Running::default());
+        assert_eq!(bare, json!({ "running": true, "protocol": 0 }));
     }
 }

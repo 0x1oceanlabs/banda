@@ -83,8 +83,8 @@ service of the Person's session: closing the window leaves it and every
 Agent running, and the next window, or any `banda` command, finds it, or
 starts it when it does not run. `banda status` prints whether it runs,
 since when, and its build. Quitting Banda is the Person's: `banda stop`,
-Quit Banda in the window and Ctrl+Q stop the engine and every Agent's
-turn, and `banda stop` refuses under your pass.
+Quit Banda in the window and Ctrl+Q (outside a terminal Pane) stop the
+engine and every Agent's turn, and `banda stop` refuses under your pass.
 
 ## Adding a folder as a Project
 
