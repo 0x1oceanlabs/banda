@@ -17,10 +17,12 @@
 pub mod events;
 mod exception;
 mod outbox;
+pub mod post;
 pub mod settings;
 pub mod usage;
 
 use banda_kernel::{Call, Error, Kind, Module, ModuleProject, Nothing, Refusal, Right, Scope};
+use post::{CAPTURE, Capture, Post};
 use rusqlite::Row;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -49,6 +51,8 @@ pub struct Sharing {
     channel: &'static str,
     /// The time now, in ms since the epoch: what tells a day has ended.
     clock: Clock,
+    /// What posts an event.
+    post: Arc<dyn Post>,
 }
 
 /// The time now, in ms since the epoch.
@@ -80,6 +84,7 @@ impl Sharing {
             never: None,
             channel: "local",
             clock: Arc::new(banda_kernel::now_ms),
+            post: Arc::new(Capture::at(CAPTURE)),
         }
     }
 
@@ -102,6 +107,14 @@ impl Sharing {
     /// Says it is Banda's `channel`: `stable` or `dev`.
     pub fn channel(self, channel: &'static str) -> Self {
         Self { channel, ..self }
+    }
+
+    /// Posts what goes with `post`, not to PostHog: only a test does.
+    pub fn posting(self, post: impl Post + 'static) -> Self {
+        Self {
+            post: Arc::new(post),
+            ..self
+        }
     }
 
     async fn shared(&self, call: &Call, shares: Shares, anew: bool) -> Result<Shared, Refusal> {
@@ -236,7 +249,7 @@ impl Module for Sharing {
 
     /// From where it last heard, it makes an event of each Problem as the
     /// problems module says it, and sends what waits: at once, and again
-    /// every few minutes, through Banda's window.
+    /// every few minutes, from the host.
     async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
         let courier = outbox::Courier {
             file: self.file.clone(),
@@ -244,6 +257,7 @@ impl Module for Sharing {
             never: self.never,
             channel: self.channel,
             clock: self.clock.clone(),
+            post: self.post.clone(),
         };
         outbox::start(courier, project).await
     }

@@ -5,10 +5,9 @@
 //! `problems` is on. As a day ends, while `usage` is on, the day before
 //! becomes `day`; it looks as it starts, as it hears, and every hour.
 //! What waits goes as it is made, and every few minutes
-//! while any waits, the oldest first, through Banda's window: the window's
-//! main posts it to PostHog with Chromium's network, so the engine holds
-//! no TLS of its own. With no window, or no network, it waits, and goes
-//! once it can; after seven days it is dropped.
+//! while any waits, the oldest first, posted from the host ([`crate::post`])
+//! with no window needed. With no network, it waits, and goes once it can;
+//! after seven days it is dropped.
 //!
 //! What waits goes only as it was made: an event whose ID is no longer
 //! the one sharing has, or whose kind was turned off since, is dropped
@@ -16,13 +15,13 @@
 //! a later run sends nothing of this one.
 
 use crate::exception::{self, Banda};
+use crate::post::Post;
 use crate::settings::{self, Shares};
 use crate::usage::{self, DAY_MS};
 use crate::{Clock, Ids, KEPT_MS, Never};
-use banda_kernel::{Error, Event, EventFilter, Heard, ModuleProject, Participant, Tx};
+use banda_kernel::{Error, Event, EventFilter, Heard, ModuleProject, Tx};
 use banda_problems::model::Problem;
 use rusqlite::{OptionalExtension, params};
-use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -31,8 +30,6 @@ use std::time::Duration;
 const AGAIN: Duration = Duration::from_secs(5 * 60);
 /// How often it looks whether a day ended, while nothing waits.
 const HOURLY: Duration = Duration::from_secs(60 * 60);
-/// How long the window may take to post one event.
-const POSTING: Duration = Duration::from_secs(30);
 
 pub(crate) struct Courier {
     pub file: PathBuf,
@@ -40,6 +37,7 @@ pub(crate) struct Courier {
     pub never: Option<Never>,
     pub channel: &'static str,
     pub clock: Clock,
+    pub post: Arc<dyn Post>,
 }
 
 /// Starts hearing the problems module and sending what waits.
@@ -218,12 +216,9 @@ impl Courier {
                 Ok(rows.collect::<Result<_, _>>()?)
             })
             .await?;
-        let owner = Participant::Person(project.owner());
         for (row, json) in waiting {
-            let event: Value = serde_json::from_str(&json)?;
-            let asked = json!({ "event": event });
-            if let Err(refusal) = project.ask_window(owner, "post", asked, POSTING).await {
-                tracing::debug!(%refusal, "an event waits to be sent");
+            if let Err(why) = self.post.post(&json).await {
+                tracing::debug!(%why, "an event waits to be sent");
                 return Ok(true);
             }
             let now = banda_kernel::now_ms();

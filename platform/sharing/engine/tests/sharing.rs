@@ -1,14 +1,46 @@
-//! The sharing module through the kernel, as the window uses it: in this
+//! The sharing module through the kernel, as a client uses it: in this
 //! machine's scope, nothing shared and no ID until the file turns
 //! something on, a new ID only for the Person, and none kept once all of
 //! it is off again.
 
 use banda_kernel::{CommandId, Kernel, Participant, PersonId, ProjectId};
+use banda_sharing::post::Post;
 use banda_sharing::{Never, Sharing};
 use serde_json::{Value, json};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
+use tokio::sync::{mpsc, oneshot};
+
+/// One event posted, and how the stand-in for PostHog answers it.
+struct Posted {
+    event: Value,
+    answer: oneshot::Sender<Result<(), String>>,
+}
+
+impl Posted {
+    /// PostHog took it.
+    fn took(self) {
+        let _ = self.answer.send(Ok(()));
+    }
+}
+
+/// A stand-in for PostHog, which hands each post to the test and waits
+/// for its answer.
+struct PostHog(mpsc::UnboundedSender<Posted>);
+
+#[async_trait::async_trait]
+impl Post for PostHog {
+    async fn post(&self, event: &str) -> Result<(), String> {
+        let (answer, answered) = oneshot::channel();
+        let event = serde_json::from_str(event).map_err(|e| e.to_string())?;
+        (self.0.send(Posted { event, answer })).map_err(|_| "no test hears".to_owned())?;
+        answered.await.map_err(|_| "no answer".to_owned())?
+    }
+}
+
+/// What hears the posts of [`PostHog`].
+type Posts = mpsc::UnboundedReceiver<Posted>;
 
 async fn open(root: &Path, owner: PersonId) -> Arc<Kernel> {
     let sharing = Sharing::new(root.join("config"), root.join("state"));
@@ -79,20 +111,24 @@ async fn an_id_is_made_as_sharing_turns_on_and_erased_as_it_turns_off() {
 }
 
 /// A Banda that sends, with the problems module whose Problems it hears.
-async fn sending(root: &Path, owner: PersonId, never: Option<Never>) -> Arc<Kernel> {
+async fn sending(root: &Path, owner: PersonId, never: Option<Never>) -> (Arc<Kernel>, Posts) {
     banda(root, owner, never, None, Vec::new()).await
 }
 
-/// A Banda that sends, with the problems module, `says` beside it, and
-/// its days told by `clock` when there is one.
+/// A Banda that sends to a stand-in for PostHog, with the problems
+/// module, `says` beside it, and its days told by `clock` when there is
+/// one.
 async fn banda(
     root: &Path,
     owner: PersonId,
     never: Option<Never>,
     clock: Option<Arc<AtomicI64>>,
     says: Vec<Says>,
-) -> Arc<Kernel> {
-    let mut sharing = Sharing::new(root.join("config"), root.join("state")).channel("dev");
+) -> (Arc<Kernel>, Posts) {
+    let (posting, posts) = mpsc::unbounded_channel();
+    let mut sharing = Sharing::new(root.join("config"), root.join("state"))
+        .channel("dev")
+        .posting(PostHog(posting));
     if let Some(why) = never {
         sharing = sharing.never(why);
     }
@@ -108,7 +144,7 @@ async fn banda(
     for one in says {
         kernel = kernel.module(one);
     }
-    kernel.module(sharing).open().await.unwrap()
+    (kernel.module(sharing).open().await.unwrap(), posts)
 }
 
 async fn record(kernel: &Kernel, owner: PersonId, function: &str) {
@@ -140,20 +176,16 @@ async fn kept(kernel: &Kernel, owner: PersonId, count: usize) -> Vec<Value> {
 }
 
 #[tokio::test]
-async fn a_problem_goes_once_a_day_through_the_window_while_problems_are_shared() {
+async fn a_problem_goes_once_a_day_from_the_host_while_problems_are_shared() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     share(root.path(), "problems = true\n");
-    let kernel = sending(root.path(), owner, None).await;
-    let person = Participant::Person(owner);
-    let mut window = (kernel.stream(person, "window.requests", None, Value::Null))
-        .await
-        .unwrap();
+    // No window: the engine posts itself.
+    let (kernel, mut posts) = sending(root.path(), owner, None).await;
 
     record(&kernel, owner, "Tabs").await;
-    let asked = window.recv().await.unwrap();
-    assert_eq!(asked["method"], "sharing.post");
-    let event = &asked["params"]["event"];
+    let posted = posts.recv().await.unwrap();
+    let event = &posted.event;
     assert_eq!(event["event"], "$exception");
     let id = state(&kernel, owner).await["id"].clone();
     assert_eq!(event["distinct_id"], id);
@@ -167,9 +199,7 @@ async fn a_problem_goes_once_a_day_through_the_window_while_problems_are_shared(
     let json: Value = serde_json::from_str(sent[0]["json"].as_str().unwrap()).unwrap();
     assert_eq!(&json, event);
 
-    let answer = json!({ "request": asked["id"], "ok": null });
-    let call = kernel.call(person, "window.answer", None, None, answer);
-    call.await.unwrap();
+    posted.took();
     for _ in 0..200 {
         if !state(&kernel, owner).await["sent"][0]["sent"].is_null() {
             break;
@@ -181,10 +211,12 @@ async fn a_problem_goes_once_a_day_through_the_window_while_problems_are_shared(
     // The same fault again today makes nothing more; another fault goes.
     record(&kernel, owner, "Tabs").await;
     record(&kernel, owner, "Bar").await;
-    let asked = window.recv().await.unwrap();
-    let frames = &asked["params"]["event"]["properties"]["$exception_list"][0]["stacktrace"];
+    let posted = posts.recv().await.unwrap();
+    let frames = &posted.event["properties"]["$exception_list"][0]["stacktrace"];
     assert_eq!(frames["frames"][0]["function"], "Bar");
     assert_eq!(kept(&kernel, owner, 2).await.len(), 2);
+    // One PostHog did not take waits, and goes again.
+    let _ = posted.answer.send(Err("PostHog answered 503".into()));
 
     // Off: no more, and what waits is dropped.
     share(root.path(), "problems = false\nusage = true\n");
@@ -204,10 +236,11 @@ async fn a_banda_that_never_sends_makes_nothing() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     share(root.path(), "problems = true\nusage = true\n");
-    let kernel = sending(root.path(), owner, Some(Never::Run)).await;
+    let (kernel, mut posts) = sending(root.path(), owner, Some(Never::Run)).await;
     record(&kernel, owner, "Tabs").await;
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     assert_eq!(state(&kernel, owner).await["sent"], json!([]));
+    assert!(posts.try_recv().is_err(), "nothing posted");
 }
 
 /// Stands in for the agents of a Project and the workspaces of the machine:
@@ -313,10 +346,7 @@ async fn a_day_goes_once_it_ends_with_what_every_project_counted() {
     // Usage was on all of today: it turned on yesterday.
     let now = clock(-DAY);
     let says = vec![agents(), workspaces()];
-    let kernel = banda(root.path(), owner, None, Some(now.clone()), says).await;
-    let mut window = (kernel.stream(person, "window.requests", None, Value::Null))
-        .await
-        .unwrap();
+    let (kernel, mut posts) = banda(root.path(), owner, None, Some(now.clone()), says).await;
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     let mut projects: Vec<ProjectId> = Vec::new();
@@ -365,8 +395,8 @@ async fn a_day_goes_once_it_ends_with_what_every_project_counted() {
     // A day later, today has ended: it goes as it is heard, once.
     now.store(banda_kernel::now_ms() + DAY, Ordering::SeqCst);
     record(&kernel, owner, "Tabs").await;
-    let asked = window.recv().await.unwrap();
-    let event = &asked["params"]["event"];
+    let posted = posts.recv().await.unwrap();
+    let event = &posted.event;
     assert_eq!(event["event"], "day");
     assert_eq!(event["distinct_id"], state(&kernel, owner).await["id"]);
     let said = &event["properties"];
@@ -379,11 +409,7 @@ async fn a_day_goes_once_it_ends_with_what_every_project_counted() {
     );
     assert!(!event.to_string().contains("secret"));
     assert_eq!(kept(&kernel, owner, 1).await[0]["event"], "day");
-    let answer = json!({ "request": asked["id"], "ok": null });
-    kernel
-        .call(person, "window.answer", None, None, answer)
-        .await
-        .unwrap();
+    posted.took();
     record(&kernel, owner, "Bar").await;
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     assert_eq!(
@@ -402,7 +428,7 @@ async fn a_day_before_usage_turned_on_is_not_counted() {
     share(root.path(), "usage = true\n");
     // Turned on now: today is not whole, so tomorrow sends nothing of it.
     let now = clock(0);
-    let kernel = banda(
+    let (kernel, _posts) = banda(
         root.path(),
         owner,
         None,

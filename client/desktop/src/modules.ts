@@ -9,7 +9,6 @@
 import { agentsDesktop } from "@banda/agents-desktop"
 import { browserDesktop } from "@banda/browser-desktop"
 import { notificationsDesktop } from "@banda/notifications-desktop"
-import { sharingDesktop } from "@banda/sharing-desktop"
 import type { Asked, DesktopModule } from "@banda/desktop-kit"
 import { Layer } from "effect"
 
@@ -27,7 +26,6 @@ const asked: Readonly<
       Uses<
         | typeof browserDesktop
         | typeof agentsDesktop
-        | typeof sharingDesktop
         | typeof notificationsDesktop
       >
     >
@@ -35,7 +33,6 @@ const asked: Readonly<
 > = {
   browser: browserDesktop.asked,
   agents: agentsDesktop.asked,
-  sharing: sharingDesktop.asked,
 }
 
 export const modules = {
