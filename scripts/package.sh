@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Packs Banda into an app (ADR 0033, step 2): the engine, the page and the
-# window, in app/desktop/dist/.
+# window, in client/desktop/dist/.
 #
 #   scripts/package.sh [stable|dev|local]
 #

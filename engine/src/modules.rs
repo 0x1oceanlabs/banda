@@ -43,69 +43,69 @@ struct Files {
 const FILES: &[Files] = &[
     Files {
         folder: "agents",
-        toml: include_str!("../../modules/agents/module.toml"),
+        toml: include_str!("../../apps/agents/module.toml"),
         methods: Some(Agents::method_list),
     },
     Files {
         folder: "harnesses",
-        toml: include_str!("../../modules/harnesses/module.toml"),
+        toml: include_str!("../../platform/harnesses/module.toml"),
         methods: Some(HarnessesModule::method_list),
     },
     Files {
         folder: "terminal",
-        toml: include_str!("../../modules/terminal/module.toml"),
+        toml: include_str!("../../apps/terminal/module.toml"),
         methods: Some(Terminals::method_list),
     },
     Files {
         folder: "browser",
-        toml: include_str!("../../modules/browser/module.toml"),
+        toml: include_str!("../../apps/browser/module.toml"),
         methods: Some(Browser::method_list),
     },
     Files {
         folder: "git",
-        toml: include_str!("../../modules/git/module.toml"),
+        toml: include_str!("../../apps/git/module.toml"),
         methods: Some(Git::method_list),
     },
     Files {
         folder: "files",
-        toml: include_str!("../../modules/files/module.toml"),
+        toml: include_str!("../../apps/files/module.toml"),
         methods: Some(FilesModule::method_list),
     },
     Files {
         folder: "keys",
-        toml: include_str!("../../modules/keys/module.toml"),
+        toml: include_str!("../../platform/keys/module.toml"),
         methods: Some(KeysModule::method_list),
     },
     Files {
         folder: "pulls",
-        toml: include_str!("../../modules/pulls/module.toml"),
+        toml: include_str!("../../apps/pulls/module.toml"),
         methods: Some(Pulls::method_list),
     },
     Files {
         folder: "notifications",
-        toml: include_str!("../../modules/notifications/module.toml"),
+        toml: include_str!("../../platform/notifications/module.toml"),
         methods: None,
     },
     Files {
         folder: "workspaces",
-        toml: include_str!("../../modules/workspaces/module.toml"),
+        toml: include_str!("../../platform/workspaces/module.toml"),
         methods: Some(Workspaces::method_list),
     },
     Files {
         folder: "problems",
-        toml: include_str!("../../modules/problems/module.toml"),
+        toml: include_str!("../../platform/problems/module.toml"),
         methods: Some(Problems::method_list),
     },
     Files {
         folder: "sharing",
-        toml: include_str!("../../modules/sharing/module.toml"),
+        toml: include_str!("../../platform/sharing/module.toml"),
         methods: Some(Sharing::method_list),
     },
     // The window's own actions, the tiling's first (ADR 0071, decision 2),
     // after the modules', as the window lists them.
     Files {
         folder: "window",
-        toml: include_str!("../../app/web/module.toml"),
+        toml: include_str!("../../client/web/module.toml"),
         methods: None,
     },
 ];
@@ -177,11 +177,11 @@ pub fn offers() -> Vec<Offer> {
             let folder = files.folder;
             Offer {
                 manifest: toml::from_str(files.toml)
-                    .unwrap_or_else(|error| panic!("modules/{folder}/module.toml: {error}")),
+                    .unwrap_or_else(|error| panic!("{folder}'s module.toml: {error}")),
                 engine: files.methods.map(|methods| methods()),
                 window: banda_settings::window(folder).map(|window| {
                     serde_json::from_str(window)
-                        .unwrap_or_else(|error| panic!("modules/{folder}/window.json: {error}"))
+                        .unwrap_or_else(|error| panic!("{folder}'s window.json: {error}"))
                 }),
             }
         })
@@ -359,7 +359,7 @@ mod tests {
                 version,
                 ..
             } = &offer.manifest;
-            assert_eq!(files.folder, id, "modules/{}/module.toml", files.folder);
+            assert_eq!(files.folder, id, "{}'s module.toml", files.folder);
             assert!(!name.is_empty() && !about.is_empty() && !version.is_empty());
         }
         let with_engine: Vec<&str> = offers

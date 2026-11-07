@@ -25,9 +25,9 @@ on:
       - .github/workflows/release.yml
       - scripts/package.sh
       - scripts/release.mjs
-      - app/desktop/electron-builder.config.mjs
-      - app/desktop/src/channel.ts
-      - app/desktop/package.json
+      - client/desktop/electron-builder.config.mjs
+      - client/desktop/src/channel.ts
+      - client/desktop/package.json
   workflow_dispatch:
 
 permissions:
@@ -138,16 +138,16 @@ jobs:
           ${{ needs.which.outputs.channel }}
           ${{ needs.which.outputs.version }}
           ${{ needs.which.outputs.commit }}
-          app/desktop/dist/*.AppImage
-          app/desktop/dist/latest-linux.yml
+          client/desktop/dist/*.AppImage
+          client/desktop/dist/latest-linux.yml
       - name: keep what was packed
         if: needs.which.outputs.publish != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: banda-linux-${{ github.run_number }}
           path: |
-            app/desktop/dist/*.AppImage
-            app/desktop/dist/latest-linux.yml
+            client/desktop/dist/*.AppImage
+            client/desktop/dist/latest-linux.yml
           retention-days: 3
 
   mac:
@@ -181,13 +181,13 @@ jobs:
           BANDA_VERSION: ${{ needs.which.outputs.version }}
           CSC_FOR_PULL_REQUEST: true
       - name: the app is signed
-        run: codesign --verify --deep --strict --verbose=2 app/desktop/dist/mac-arm64/*.app
+        run: codesign --verify --deep --strict --verbose=2 client/desktop/dist/mac-arm64/*.app
       - uses: actions/upload-artifact@v4
         with:
           name: banda-mac-${{ github.run_number }}
           path: |
-            app/desktop/dist/*.zip
-            app/desktop/dist/latest-mac.yml
+            client/desktop/dist/*.zip
+            client/desktop/dist/latest-mac.yml
           retention-days: 3
 
   # On GitHub's runner, which has ssh for the tap (devbox's image has

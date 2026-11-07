@@ -10,7 +10,7 @@ import { createHash } from "node:crypto"
 import { readFileSync } from "node:fs"
 import { basename } from "node:path"
 
-import { CHANNELS, DESCRIPTION } from "../app/desktop/src/channel.ts"
+import { CHANNELS, DESCRIPTION } from "../client/desktop/src/channel.ts"
 
 const [which, version, zip] = process.argv.slice(2)
 const channel = CHANNELS[which]

@@ -1,0 +1,10 @@
+# The window's own part, as a module declares itself (ADR 0022, ADR 0071):
+# its actions, the tiling's first, its code declares; client/web's tests copy
+# them into window.json beside this file. When the window is split into
+# parts with names of their own, each takes its actions from here.
+id = "window"
+name = "Window"
+about = "The window's own actions: the tiling of columns, Panes and workspaces, the sidebar, the Banda menu and the settings."
+version = "0.1.0"
+from-banda = true
+settings = []

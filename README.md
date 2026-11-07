@@ -78,7 +78,7 @@ crash is kept on your machine. At the first run Banda asks whether to
 send problem reports and usage counts, both unticked; Settings → Sharing
 changes it, and shows each event exactly as it went. They go to PostHog
 (US) with a random ID, no IP and no location, and only from a released
-Banda: the code that sends is `modules/sharing`, and nothing else does.
+Banda: the code that sends is `platform/sharing`, and nothing else does.
 [docs/sharing.md](docs/sharing.md) lists every event and every field.
 Your Agents talk to their providers as they do in a terminal, and the
 browser loads the pages you or your Agents open.
@@ -149,7 +149,7 @@ scripts/package.sh dev    # or local
 
 It builds the engine for release, the page and the window, and packs an
 AppImage on Linux or an Apple silicon app in a zip on macOS, under
-`app/desktop/dist/` (ADR 0033). `BANDA_VERSION` names its version; unset,
+`client/desktop/dist/` (ADR 0033). `BANDA_VERSION` names its version; unset,
 it is the workspace's version, marked local. The release workflow packs
 and publishes Dev on a green push to `main`
 ([`.github/workflows/release.yml`](.github/workflows/release.yml)).

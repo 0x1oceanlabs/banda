@@ -588,12 +588,16 @@ mod tests {
         );
         files(
             root,
-            &["logo.png", "build/icon.png", "app/desktop/icons/banda.png"],
+            &[
+                "logo.png",
+                "build/icon.png",
+                "client/desktop/icons/banda.png",
+            ],
             &png(32),
         );
         files(
             root,
-            &["public/favicon.svg", "app/desktop/icons/banda.svg"],
+            &["public/favicon.svg", "client/desktop/icons/banda.svg"],
             svg,
         );
         let named = |root: &Path| {
@@ -604,13 +608,16 @@ mod tests {
         };
         assert_eq!(
             named(root),
-            ["app/desktop/icons/banda.svg", "app/desktop/icons/banda.png"]
+            [
+                "client/desktop/icons/banda.svg",
+                "client/desktop/icons/banda.png"
+            ]
         );
         let placed: Vec<_> = placed(root).into_iter().map(|(p, _)| p).collect();
         assert_eq!(placed, ["public/favicon.svg", "logo.png", "build/icon.png"]);
         assert_eq!(
             find(root, "banda").unwrap().path,
-            "app/desktop/icons/banda.svg"
+            "client/desktop/icons/banda.svg"
         );
         assert_eq!(find(root, "site").unwrap().path, "public/favicon.svg");
 

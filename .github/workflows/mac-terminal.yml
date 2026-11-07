@@ -1,5 +1,5 @@
 # The terminal module reads what runs in front of a shell from macOS
-# itself (modules/terminal/engine/src/front.rs): its tests run on GitHub's
+# itself (apps/terminal/engine/src/front.rs): its tests run on GitHub's
 # Apple silicon runner as it changes, or by hand:
 #
 #   gh workflow run "mac terminal" --ref <branch>
@@ -13,7 +13,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/mac-terminal.yml
-      - modules/terminal/engine/**
+      - apps/terminal/engine/**
 
 permissions:
   contents: read

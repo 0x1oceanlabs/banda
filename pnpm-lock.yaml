@@ -42,7 +42,269 @@ importers:
         specifier: ^8
         version: 8.72.1(eslint@10.14.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
 
-  app/desktop:
+  apps/agents/desktop:
+    dependencies:
+      '@banda/agents-pane':
+        specifier: workspace:*
+        version: link:../pane
+      '@banda/contract':
+        specifier: workspace:*
+        version: link:../../../sdk/contract
+      '@banda/desktop-kit':
+        specifier: workspace:*
+        version: link:../../../client/desktop-kit
+      effect:
+        specifier: 4.1.1
+        version: 4.1.1
+    devDependencies:
+      '@banda/ui':
+        specifier: workspace:*
+        version: link:../../../client/ui
+      '@effect/vitest':
+        specifier: 4.1.1
+        version: 4.1.1(effect@4.1.1)(vitest@5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)))
+      '@types/node':
+        specifier: ^24
+        version: 24.19.2
+      electron:
+        specifier: 45.1.0
+        version: 45.1.0(supports-color@7.2.0)
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
+
+  apps/agents/pane:
+    dependencies:
+      '@banda/contract':
+        specifier: workspace:*
+        version: link:../../../sdk/contract
+      '@banda/ui':
+        specifier: workspace:*
+        version: link:../../../client/ui
+      lucide-react:
+        specifier: ^1.65.0
+        version: 1.65.0(@types/react@19.3.0)(react@19.3.1)
+      react:
+        specifier: ^19.3.1
+        version: 19.3.1
+    devDependencies:
+      '@types/node':
+        specifier: ^24
+        version: 24.19.2
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.3.0(@types/react@19.3.0)
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vitest:
+        specifier: ^5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
+
+  apps/browser/desktop:
+    dependencies:
+      '@banda/browser-pane':
+        specifier: workspace:*
+        version: link:../pane
+      '@banda/contract':
+        specifier: workspace:*
+        version: link:../../../sdk/contract
+      '@banda/desktop-kit':
+        specifier: workspace:*
+        version: link:../../../client/desktop-kit
+      '@effect/platform-node':
+        specifier: 4.1.1
+        version: 4.1.1(effect@4.1.1)(redis@6.3.1(@opentelemetry/api@1.10.0))
+      '@ghostery/adblocker-electron':
+        specifier: 2.20.3
+        version: 2.20.3(electron@45.1.0(supports-color@7.2.0))
+      effect:
+        specifier: 4.1.1
+        version: 4.1.1
+      electron-chrome-extensions:
+        specifier: 4.10.0
+        version: 4.10.0(supports-color@7.2.0)
+      electron-chrome-web-store:
+        specifier: 0.13.0
+        version: 0.13.0(supports-color@7.2.0)
+      playwright-core:
+        specifier: 1.64.1
+        version: 1.64.1
+      tldts-experimental:
+        specifier: 7.4.19
+        version: 7.4.19
+    devDependencies:
+      '@banda/ui':
+        specifier: workspace:*
+        version: link:../../../client/ui
+      '@effect/vitest':
+        specifier: 4.1.1
+        version: 4.1.1(effect@4.1.1)(vitest@5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)))
+      '@types/chrome':
+        specifier: ^0.3.7
+        version: 0.3.7
+      '@types/node':
+        specifier: ^24
+        version: 24.19.2
+      electron:
+        specifier: 45.1.0
+        version: 45.1.0(supports-color@7.2.0)
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
+
+  apps/browser/pane:
+    dependencies:
+      '@banda/contract':
+        specifier: workspace:*
+        version: link:../../../sdk/contract
+      '@banda/ui':
+        specifier: workspace:*
+        version: link:../../../client/ui
+      lucide-react:
+        specifier: ^1.65.0
+        version: 1.65.0(@types/react@19.3.0)(react@19.3.1)
+      react:
+        specifier: ^19.3.1
+        version: 19.3.1
+    devDependencies:
+      '@types/node':
+        specifier: ^24
+        version: 24.19.2
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.3.0(@types/react@19.3.0)
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8
+        version: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)
+      vitest:
+        specifier: ^5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
+
+  apps/files/pane:
+    dependencies:
+      '@banda/contract':
+        specifier: workspace:*
+        version: link:../../../sdk/contract
+      '@banda/ui':
+        specifier: workspace:*
+        version: link:../../../client/ui
+      lucide-react:
+        specifier: ^1.65.0
+        version: 1.65.0(@types/react@19.3.0)(react@19.3.1)
+      pdfjs-dist:
+        specifier: 6.4.299
+        version: 6.4.299
+      react:
+        specifier: ^19.3.1
+        version: 19.3.1
+    devDependencies:
+      '@types/node':
+        specifier: ^24
+        version: 24.19.2
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.3.0(@types/react@19.3.0)
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8
+        version: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)
+      vitest:
+        specifier: ^5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
+
+  apps/git/pane:
+    dependencies:
+      '@banda/contract':
+        specifier: workspace:*
+        version: link:../../../sdk/contract
+      '@banda/ui':
+        specifier: workspace:*
+        version: link:../../../client/ui
+      lucide-react:
+        specifier: ^1.65.0
+        version: 1.65.0(@types/react@19.3.0)(react@19.3.1)
+      react:
+        specifier: ^19.3.1
+        version: 19.3.1
+    devDependencies:
+      '@types/node':
+        specifier: ^24
+        version: 24.19.2
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.3.0(@types/react@19.3.0)
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8
+        version: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)
+      vitest:
+        specifier: ^5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
+
+  apps/terminal/pane:
+    dependencies:
+      '@banda/contract':
+        specifier: workspace:*
+        version: link:../../../sdk/contract
+      '@banda/ghostty':
+        specifier: workspace:*
+        version: link:../../../client/ghostty
+      '@banda/ui':
+        specifier: workspace:*
+        version: link:../../../client/ui
+      lucide-react:
+        specifier: ^1.65.0
+        version: 1.65.0(@types/react@19.3.0)(react@19.3.1)
+      react:
+        specifier: ^19.3.1
+        version: 19.3.1
+    devDependencies:
+      '@types/node':
+        specifier: ^24
+        version: 24.19.2
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.3.0(@types/react@19.3.0)
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8
+        version: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)
+      vitest:
+        specifier: ^5
+        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
+
+  client/desktop:
     dependencies:
       '@effect/platform-node':
         specifier: 4.1.1
@@ -68,28 +330,28 @@ importers:
     devDependencies:
       '@banda/agents-desktop':
         specifier: workspace:*
-        version: link:../../modules/agents/desktop
+        version: link:../../apps/agents/desktop
       '@banda/browser-desktop':
         specifier: workspace:*
-        version: link:../../modules/browser/desktop
+        version: link:../../apps/browser/desktop
       '@banda/browser-pane':
         specifier: workspace:*
-        version: link:../../modules/browser/pane
+        version: link:../../apps/browser/pane
       '@banda/contract':
         specifier: workspace:*
-        version: link:../../contract
+        version: link:../../sdk/contract
       '@banda/desktop-kit':
         specifier: workspace:*
         version: link:../desktop-kit
       '@banda/harnesses-desktop':
         specifier: workspace:*
-        version: link:../../modules/harnesses/desktop
+        version: link:../../platform/harnesses/desktop
       '@banda/notifications-desktop':
         specifier: workspace:*
-        version: link:../../modules/notifications/desktop
+        version: link:../../platform/notifications/desktop
       '@banda/sharing-desktop':
         specifier: workspace:*
-        version: link:../../modules/sharing/desktop
+        version: link:../../platform/sharing/desktop
       '@banda/web':
         specifier: workspace:*
         version: link:../web
@@ -118,11 +380,11 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
 
-  app/desktop-kit:
+  client/desktop-kit:
     dependencies:
       '@banda/contract':
         specifier: workspace:*
-        version: link:../../contract
+        version: link:../../sdk/contract
       effect:
         specifier: 4.1.1
         version: 4.1.1
@@ -143,7 +405,7 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
 
-  app/ghostty:
+  client/ghostty:
     dependencies:
       react-dom:
         specifier: ^19.3.1
@@ -165,11 +427,11 @@ importers:
         specifier: ^5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
 
-  app/ui:
+  client/ui:
     dependencies:
       '@banda/contract':
         specifier: workspace:*
-        version: link:../../contract
+        version: link:../../sdk/contract
       '@base-ui/react':
         specifier: ^1.9.0
         version: 1.9.0(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -322,32 +584,32 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
 
-  app/web:
+  client/web:
     dependencies:
       '@banda/agents-pane':
         specifier: workspace:*
-        version: link:../../modules/agents/pane
+        version: link:../../apps/agents/pane
       '@banda/browser-pane':
         specifier: workspace:*
-        version: link:../../modules/browser/pane
+        version: link:../../apps/browser/pane
       '@banda/contract':
         specifier: workspace:*
-        version: link:../../contract
+        version: link:../../sdk/contract
       '@banda/files-pane':
         specifier: workspace:*
-        version: link:../../modules/files/pane
+        version: link:../../apps/files/pane
       '@banda/git-pane':
         specifier: workspace:*
-        version: link:../../modules/git/pane
+        version: link:../../apps/git/pane
       '@banda/harnesses-pane':
         specifier: workspace:*
-        version: link:../../modules/harnesses/pane
+        version: link:../../platform/harnesses/pane
       '@banda/notifications-pane':
         specifier: workspace:*
-        version: link:../../modules/notifications/pane
+        version: link:../../platform/notifications/pane
       '@banda/terminal-pane':
         specifier: workspace:*
-        version: link:../../modules/terminal/pane
+        version: link:../../apps/terminal/pane
       '@banda/ui':
         specifier: workspace:*
         version: link:../ui
@@ -386,248 +648,7 @@ importers:
         specifier: ^5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
 
-  contract:
-    dependencies:
-      '@jridgewell/trace-mapping':
-        specifier: ^0.3.31
-        version: 0.3.31
-    devDependencies:
-      '@types/node':
-        specifier: ^24
-        version: 24.19.2
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vitest:
-        specifier: ^5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
-
-  modules/agents/desktop:
-    dependencies:
-      '@banda/agents-pane':
-        specifier: workspace:*
-        version: link:../pane
-      '@banda/contract':
-        specifier: workspace:*
-        version: link:../../../contract
-      '@banda/desktop-kit':
-        specifier: workspace:*
-        version: link:../../../app/desktop-kit
-      effect:
-        specifier: 4.1.1
-        version: 4.1.1
-    devDependencies:
-      '@banda/ui':
-        specifier: workspace:*
-        version: link:../../../app/ui
-      '@effect/vitest':
-        specifier: 4.1.1
-        version: 4.1.1(effect@4.1.1)(vitest@5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)))
-      '@types/node':
-        specifier: ^24
-        version: 24.19.2
-      electron:
-        specifier: 45.1.0
-        version: 45.1.0(supports-color@7.2.0)
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vitest:
-        specifier: ^5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
-
-  modules/agents/pane:
-    dependencies:
-      '@banda/contract':
-        specifier: workspace:*
-        version: link:../../../contract
-      '@banda/ui':
-        specifier: workspace:*
-        version: link:../../../app/ui
-      lucide-react:
-        specifier: ^1.65.0
-        version: 1.65.0(@types/react@19.3.0)(react@19.3.1)
-      react:
-        specifier: ^19.3.1
-        version: 19.3.1
-    devDependencies:
-      '@types/node':
-        specifier: ^24
-        version: 24.19.2
-      '@types/react':
-        specifier: ^19
-        version: 19.3.0
-      '@types/react-dom':
-        specifier: ^19
-        version: 19.3.0(@types/react@19.3.0)
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vitest:
-        specifier: ^5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
-
-  modules/browser/desktop:
-    dependencies:
-      '@banda/browser-pane':
-        specifier: workspace:*
-        version: link:../pane
-      '@banda/contract':
-        specifier: workspace:*
-        version: link:../../../contract
-      '@banda/desktop-kit':
-        specifier: workspace:*
-        version: link:../../../app/desktop-kit
-      '@effect/platform-node':
-        specifier: 4.1.1
-        version: 4.1.1(effect@4.1.1)(redis@6.3.1(@opentelemetry/api@1.10.0))
-      '@ghostery/adblocker-electron':
-        specifier: 2.20.3
-        version: 2.20.3(electron@45.1.0(supports-color@7.2.0))
-      effect:
-        specifier: 4.1.1
-        version: 4.1.1
-      electron-chrome-extensions:
-        specifier: 4.10.0
-        version: 4.10.0(supports-color@7.2.0)
-      electron-chrome-web-store:
-        specifier: 0.13.0
-        version: 0.13.0(supports-color@7.2.0)
-      playwright-core:
-        specifier: 1.64.1
-        version: 1.64.1
-      tldts-experimental:
-        specifier: 7.4.19
-        version: 7.4.19
-    devDependencies:
-      '@banda/ui':
-        specifier: workspace:*
-        version: link:../../../app/ui
-      '@effect/vitest':
-        specifier: 4.1.1
-        version: 4.1.1(effect@4.1.1)(vitest@5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)))
-      '@types/chrome':
-        specifier: ^0.3.7
-        version: 0.3.7
-      '@types/node':
-        specifier: ^24
-        version: 24.19.2
-      electron:
-        specifier: 45.1.0
-        version: 45.1.0(supports-color@7.2.0)
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vitest:
-        specifier: ^5.0.5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
-
-  modules/browser/pane:
-    dependencies:
-      '@banda/contract':
-        specifier: workspace:*
-        version: link:../../../contract
-      '@banda/ui':
-        specifier: workspace:*
-        version: link:../../../app/ui
-      lucide-react:
-        specifier: ^1.65.0
-        version: 1.65.0(@types/react@19.3.0)(react@19.3.1)
-      react:
-        specifier: ^19.3.1
-        version: 19.3.1
-    devDependencies:
-      '@types/node':
-        specifier: ^24
-        version: 24.19.2
-      '@types/react':
-        specifier: ^19
-        version: 19.3.0
-      '@types/react-dom':
-        specifier: ^19
-        version: 19.3.0(@types/react@19.3.0)
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8
-        version: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)
-      vitest:
-        specifier: ^5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
-
-  modules/files/pane:
-    dependencies:
-      '@banda/contract':
-        specifier: workspace:*
-        version: link:../../../contract
-      '@banda/ui':
-        specifier: workspace:*
-        version: link:../../../app/ui
-      lucide-react:
-        specifier: ^1.65.0
-        version: 1.65.0(@types/react@19.3.0)(react@19.3.1)
-      pdfjs-dist:
-        specifier: 6.4.299
-        version: 6.4.299
-      react:
-        specifier: ^19.3.1
-        version: 19.3.1
-    devDependencies:
-      '@types/node':
-        specifier: ^24
-        version: 24.19.2
-      '@types/react':
-        specifier: ^19
-        version: 19.3.0
-      '@types/react-dom':
-        specifier: ^19
-        version: 19.3.0(@types/react@19.3.0)
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8
-        version: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)
-      vitest:
-        specifier: ^5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
-
-  modules/git/pane:
-    dependencies:
-      '@banda/contract':
-        specifier: workspace:*
-        version: link:../../../contract
-      '@banda/ui':
-        specifier: workspace:*
-        version: link:../../../app/ui
-      lucide-react:
-        specifier: ^1.65.0
-        version: 1.65.0(@types/react@19.3.0)(react@19.3.1)
-      react:
-        specifier: ^19.3.1
-        version: 19.3.1
-    devDependencies:
-      '@types/node':
-        specifier: ^24
-        version: 24.19.2
-      '@types/react':
-        specifier: ^19
-        version: 19.3.0
-      '@types/react-dom':
-        specifier: ^19
-        version: 19.3.0(@types/react@19.3.0)
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8
-        version: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)
-      vitest:
-        specifier: ^5
-        version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
-
-  modules/harnesses/desktop:
+  platform/harnesses/desktop:
     dependencies:
       '@agentclientprotocol/claude-agent-acp':
         specifier: 0.99.1
@@ -637,17 +658,17 @@ importers:
         version: 2.5.0(patch_hash=952416e092770efa1d8732cf297249bf6909b3789ca702c4f3d91933e2041f52)(@modelcontextprotocol/server@2.4.0)
       '@banda/contract':
         specifier: workspace:*
-        version: link:../../../contract
+        version: link:../../../sdk/contract
       '@banda/desktop-kit':
         specifier: workspace:*
-        version: link:../../../app/desktop-kit
+        version: link:../../../client/desktop-kit
       effect:
         specifier: 4.1.1
         version: 4.1.1
     devDependencies:
       '@banda/ui':
         specifier: workspace:*
-        version: link:../../../app/ui
+        version: link:../../../client/ui
       '@types/node':
         specifier: ^24
         version: 24.19.2
@@ -664,14 +685,14 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
 
-  modules/harnesses/pane:
+  platform/harnesses/pane:
     dependencies:
       '@banda/contract':
         specifier: workspace:*
-        version: link:../../../contract
+        version: link:../../../sdk/contract
       '@banda/ui':
         specifier: workspace:*
-        version: link:../../../app/ui
+        version: link:../../../client/ui
       lucide-react:
         specifier: ^1.65.0
         version: 1.65.0(@types/react@19.3.0)(react@19.3.1)
@@ -701,14 +722,14 @@ importers:
         specifier: ^5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
 
-  modules/notifications/desktop:
+  platform/notifications/desktop:
     dependencies:
       '@banda/contract':
         specifier: workspace:*
-        version: link:../../../contract
+        version: link:../../../sdk/contract
       '@banda/desktop-kit':
         specifier: workspace:*
-        version: link:../../../app/desktop-kit
+        version: link:../../../client/desktop-kit
       '@banda/notifications-pane':
         specifier: workspace:*
         version: link:../pane
@@ -721,7 +742,7 @@ importers:
     devDependencies:
       '@banda/ui':
         specifier: workspace:*
-        version: link:../../../app/ui
+        version: link:../../../client/ui
       '@types/node':
         specifier: ^24
         version: 24.19.2
@@ -735,14 +756,14 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
 
-  modules/notifications/pane:
+  platform/notifications/pane:
     dependencies:
       '@banda/contract':
         specifier: workspace:*
-        version: link:../../../contract
+        version: link:../../../sdk/contract
       '@banda/ui':
         specifier: workspace:*
-        version: link:../../../app/ui
+        version: link:../../../client/ui
       lucide-react:
         specifier: ^1.65.0
         version: 1.65.0(@types/react@19.3.0)(react@19.3.1)
@@ -769,21 +790,21 @@ importers:
         specifier: ^5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
 
-  modules/sharing/desktop:
+  platform/sharing/desktop:
     dependencies:
       '@banda/contract':
         specifier: workspace:*
-        version: link:../../../contract
+        version: link:../../../sdk/contract
       '@banda/desktop-kit':
         specifier: workspace:*
-        version: link:../../../app/desktop-kit
+        version: link:../../../client/desktop-kit
       effect:
         specifier: 4.1.1
         version: 4.1.1
     devDependencies:
       '@banda/ui':
         specifier: workspace:*
-        version: link:../../../app/ui
+        version: link:../../../client/ui
       '@types/node':
         specifier: ^24
         version: 24.19.2
@@ -797,39 +818,18 @@ importers:
         specifier: ^5.0.5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
 
-  modules/terminal/pane:
+  sdk/contract:
     dependencies:
-      '@banda/contract':
-        specifier: workspace:*
-        version: link:../../../contract
-      '@banda/ghostty':
-        specifier: workspace:*
-        version: link:../../../app/ghostty
-      '@banda/ui':
-        specifier: workspace:*
-        version: link:../../../app/ui
-      lucide-react:
-        specifier: ^1.65.0
-        version: 1.65.0(@types/react@19.3.0)(react@19.3.1)
-      react:
-        specifier: ^19.3.1
-        version: 19.3.1
+      '@jridgewell/trace-mapping':
+        specifier: ^0.3.31
+        version: 0.3.31
     devDependencies:
       '@types/node':
         specifier: ^24
         version: 24.19.2
-      '@types/react':
-        specifier: ^19
-        version: 19.3.0
-      '@types/react-dom':
-        specifier: ^19
-        version: 19.3.0(@types/react@19.3.0)
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
-      vite:
-        specifier: ^8
-        version: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)
       vitest:
         specifier: ^5
         version: 5.0.5(@opentelemetry/api@1.10.0)(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))

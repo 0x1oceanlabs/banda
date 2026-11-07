@@ -20,20 +20,21 @@ fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
-fn modules() -> Vec<String> {
-    std::fs::read_dir(repository().join("modules"))
-        .map(|entries| {
-            entries
-                .filter_map(|e| e.ok())
-                .filter(|e| e.path().is_dir())
-                .map(|e| e.file_name().to_string_lossy().into_owned())
-                .collect()
-        })
-        .unwrap_or_default()
+/// Each module's folder, with its `module.toml`: an App's under `apps/`,
+/// the platform's under `platform/` (ADR 0062, decision 11).
+fn modules() -> Vec<PathBuf> {
+    ["apps", "platform"]
+        .iter()
+        .filter_map(|bucket| std::fs::read_dir(repository().join(bucket)).ok())
+        .flatten()
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|path| path.join("module.toml").exists())
+        .collect()
 }
 
-/// Every folder under `modules/` is a name the kernel's source must not
-/// contain: the kernel reaches modules only through the Module trait.
+/// Every module's folder is a name the kernel's source must not contain:
+/// the kernel reaches modules only through the Module trait.
 #[test]
 fn the_kernel_names_no_module() {
     let mut files = Vec::new();
@@ -43,7 +44,8 @@ fn the_kernel_names_no_module() {
     );
     for file in files {
         let code = std::fs::read_to_string(&file).unwrap();
-        for module in modules() {
+        for folder in modules() {
+            let module = folder.file_name().unwrap().to_string_lossy();
             for needle in [
                 format!("\"{module}\""),
                 format!("\"{module}."),
@@ -63,9 +65,9 @@ fn the_kernel_names_no_module() {
 /// outbox are the kernel's, reached through `Tx::emit` and `Tx::enqueue`.
 #[test]
 fn no_module_touches_the_kernels_tables() {
-    for module in modules() {
+    for folder in modules() {
         let mut files = Vec::new();
-        sources(&repository().join("modules").join(&module), &mut files);
+        sources(&folder, &mut files);
         for file in files {
             let code = std::fs::read_to_string(&file).unwrap();
             assert!(

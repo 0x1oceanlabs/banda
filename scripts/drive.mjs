@@ -116,7 +116,7 @@ if (command === "close") {
   process.exit(0)
 }
 
-const require = createRequire(join(tree, "app/desktop/package.json"))
+const require = createRequire(join(tree, "client/desktop/package.json"))
 const { chromium } = require("playwright-core")
 const pause = (ms) => new Promise((done) => setTimeout(done, ms))
 
@@ -190,7 +190,7 @@ switch (command) {
   case "started":
     // The page counts the starts that did not go well, and forgets them
     // once one stays up 5 s with its workspaces drawn
-    // (app/web/src/safe/starts.ts). It checks on a timer: a window out of
+    // (client/web/src/safe/starts.ts). It checks on a timer: a window out of
     // sight draws no frames.
     try {
       await page.waitForFunction(

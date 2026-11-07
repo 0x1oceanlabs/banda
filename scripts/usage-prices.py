@@ -26,6 +26,6 @@ for model, values in prices.items():
             and (key.startswith(("input_cost_per_token", "output_cost_per_token", "cache_read_input_token_cost", "cache_creation_input_token_cost")))}
     if "input_cost_per_token" in kept and "output_cost_per_token" in kept:
         models[model] = kept
-output = pathlib.Path(__file__).resolve().parents[1] / "modules/harnesses/engine/src/usage/prices.json"
+output = pathlib.Path(__file__).resolve().parents[1] / "platform/harnesses/engine/src/usage/prices.json"
 output.write_text(json.dumps({"revision": revision, "source": url, "models": models}, sort_keys=True, indent=2) + "\n")
 print(f"{len(models)} models from {revision}")

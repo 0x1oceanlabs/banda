@@ -55,7 +55,7 @@ impl Running {
 /// `BANDA_CHANNEL` (build.rs): the folder Banda, Banda Dev or a build from
 /// a checkout keeps its things in, so they never share a data, state or
 /// config folder, a lock or a socket. The window names the same
-/// (`app/desktop/src/channel.ts`).
+/// (`client/desktop/src/channel.ts`).
 pub const FOLDER: &str = env!("BANDA_FOLDER");
 
 /// Whether this Banda was built from a checkout, not released: its own

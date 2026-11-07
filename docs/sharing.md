@@ -1,4 +1,4 @@
-<!-- Written by `cargo test -p banda-sharing` from modules/sharing/engine/src/events.rs: do not edit. -->
+<!-- Written by `cargo test -p banda-sharing` from platform/sharing/engine/src/events.rs: do not edit. -->
 
 # What Banda sends
 
@@ -47,7 +47,7 @@ An example:
         "stacktrace": {
           "frames": [
             {
-              "filename": "app/web/src/browser/Tabs.tsx",
+              "filename": "client/web/src/browser/Tabs.tsx",
               "function": "Tabs",
               "in_app": true,
               "lineno": 41,
