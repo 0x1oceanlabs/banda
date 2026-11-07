@@ -1,11 +1,13 @@
 /**
  * What the architecture tests read (docs/architecture.md, "Checks that
  * hold the shape"): the source files of a folder, the modules each one
- * names, and what each one animates. For tests alone: it reads the disk.
+ * names, the Apps each one names and what each one animates. For tests
+ * alone: it reads the disk.
  */
 /// <reference types="node" />
 import { readdirSync } from "node:fs"
 import { join } from "node:path"
+import ts from "typescript"
 
 /** Every `.ts` and `.tsx` file under `folder`, and `.css` with `styles`;
  * without tests when `tests` is false. */
@@ -29,6 +31,34 @@ export function imports(source: string): string[] {
     /(?:\bfrom\s*|\bimport\s*\(?\s*)["']([^"'\n]+)["']/g
   )
   return [...found].map((match) => match[1])
+}
+
+/**
+ * What `source`, the code of `file`, says of an App (ADR 0087, decision
+ * 1), once for each place it does: a string that names an action or a
+ * kind of the agents module's (`agents.…`) or a Thread's (`thread.…`), a
+ * template that starts so, and that module's settings file
+ * (`AGENTS_FILE`). Read as TypeScript reads it, by the file's kind, so
+ * comments and imports are not taken for a place.
+ */
+export function appStrings(source: string, file: string): string[] {
+  const named = /^(agents|thread)\./
+  const found: string[] = []
+  const visit = (node: ts.Node): void => {
+    if (ts.isImportDeclaration(node)) return
+    if (ts.isIdentifier(node) && node.text === "AGENTS_FILE")
+      found.push(node.text)
+    else if (
+      (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) &&
+      named.test(node.text)
+    )
+      found.push(node.text)
+    else if (ts.isTemplateExpression(node) && named.test(node.head.text))
+      found.push(`${node.head.text}…`)
+    ts.forEachChild(node, visit)
+  }
+  visit(ts.createSourceFile(file, source, ts.ScriptTarget.Latest))
+  return found
 }
 
 /** What lays the page out when it changes; `all` takes it in. */
