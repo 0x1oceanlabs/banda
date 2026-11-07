@@ -9,12 +9,13 @@
  * holds what the program's `--version` says: its version and its build
  * id, and beside the ACP adapters the app carries (`adapters/`), which the
  * engine finds beside its program and runs (ADR 0059), so they never run
- * from inside the AppImage either. It is written into a folder of its own, run once with `--version`,
- * and renamed into place only when it says the same, so a half-written
- * copy, or one that does not start, is never run. A copy in place is run
- * again while it is of the window's build, as long as the program, and
- * says so when it is run; one that goes while the window runs is made
- * again before the next run. The last two versions are kept; an older
+ * from inside the AppImage either. It is written into a folder of its
+ * own, run once with `--version`, and renamed into place only when it
+ * says the same, so a half-written copy, or one that does not start, is
+ * never run. A copy in place is run again while it is of the window's
+ * build, it and its adapters as long as the program's, and says so when
+ * it is run; one that goes while the window runs is made again before
+ * the next run. The last two versions are kept; an older
  * one goes once no program runs from it.
  *
  * A copy that cannot be made, as in a data folder that runs nothing, is

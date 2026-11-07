@@ -55,6 +55,10 @@ rust() {
   # it runs after this one, in the same checkout.
   export BANDA_CHECKPOINTS="$PWD/target/checkpoints"
   rm -rf "$BANDA_CHECKPOINTS" && mkdir -p "$BANDA_CHECKPOINTS"
+  # The engine's tests start the adapters Banda carries on the host's
+  # Node, as the harnesses' host package builds them (ADR 0059).
+  quiet pnpm install --frozen-lockfile
+  quiet pnpm --filter @banda/harnesses-adapters build
   cargo test --workspace --quiet
 
   step "The modules' unstable marks (ADR 0022, decision 6)"
