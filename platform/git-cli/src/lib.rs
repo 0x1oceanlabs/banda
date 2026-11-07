@@ -178,24 +178,21 @@ const READING: Duration = Duration::from_secs(10);
 const LACKED: &str = "0123456789abcdef0123456789abcdef01234567";
 
 /// git in `dir` running `args` for an act the Person asked for, as their
-/// own git runs it: a [`Program`] for the Project's environment to start.
+/// own git runs it: a [`Program`] for the Project's environment to start,
+/// outside the fence (ADR 0083, decision 1).
 pub fn asked<I, S>(dir: &Path, args: I) -> Program
 where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    Program {
-        program: "git".to_owned(),
-        args: args
-            .into_iter()
-            .map(|arg| arg.as_ref().to_owned())
-            .collect(),
-        env: (EVERY.iter())
-            .map(|&(name, value)| (name.to_owned(), value.to_owned()))
-            .collect(),
-        unset: ELSEWHERE.map(str::to_owned).to_vec(),
-        cwd: Some(dir.to_owned()),
-    }
+    let args = args.into_iter().map(|arg| arg.as_ref().to_owned());
+    let mut program = Program::act("git", args.collect());
+    program.env = (EVERY.iter())
+        .map(|&(name, value)| (name.to_owned(), value.to_owned()))
+        .collect();
+    program.unset = ELSEWHERE.map(str::to_owned).to_vec();
+    program.cwd = Some(dir.to_owned());
+    program
 }
 
 /// git in `dir` running `args`, which name its subcommand, for Banda's

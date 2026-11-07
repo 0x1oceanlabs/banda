@@ -28,13 +28,13 @@
 //! in it. The kernel keeps every pass past an engine restart, until what
 //! holds it lets it go or it expires (ADR 0083, decision 2).
 
-use crate::Pipe;
 use crate::acp::{Answer, Connection, Session};
 use crate::model::{ItemId, ThreadId, TurnId, Values};
 use crate::touching::Touches;
+use crate::{Pipe, kept};
 use banda_harnesses::hosts::Hosts;
 use banda_harnesses::{Failed, Harness};
-use banda_kernel::{AgentId, Heard, ModuleProject, Pass, Program, ProjectId};
+use banda_kernel::{AgentId, Heard, Holes, ModuleProject, Pass, Program, ProjectId};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -155,6 +155,11 @@ impl Live {
     /// running, with the pass its Agents' shells share, this `banda` first
     /// on its PATH, and the Project's trust as it is now: one started
     /// under the other is let go.
+    ///
+    /// It is one to start behind the fence, reading its sessions' extra
+    /// roots there (ADR 0083, decision 1), and in the Project's folder once
+    /// the Person trusts it: a trusted folder that is gone is said so
+    /// before a process starts in it.
     pub async fn connection(
         &self,
         project: &ModuleProject,
@@ -162,7 +167,18 @@ impl Live {
     ) -> Result<Arc<Connection>, Failed> {
         let pass = self.process_pass(project, harness);
         let (id, data) = (project.id(), project.data());
-        let mut started = harness.in_project(id, data, &pass, project.trusted());
+        let (folder, trusted) = (project.folder(), project.trusted());
+        if trusted && !folder.is_dir() {
+            return Err(Failed::Lasting(format!(
+                "The Project's folder {} is not there.",
+                folder.display()
+            )));
+        }
+        let holes = Holes {
+            reads: kept::roots(data),
+            ..Holes::default()
+        };
+        let mut started = harness.in_project(id, data, &folder, holes, &pass, trusted);
         if let Some(pipe) = &self.pipe {
             pipe.first_on_path(&mut started.env);
         }

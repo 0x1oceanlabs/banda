@@ -5,6 +5,11 @@
 //! named here, with how many processes it makes and why. A new one is
 //! either that, and named here, or it goes through the Project's
 //! environment.
+//!
+//! And every program says whose it is where it is made (ADR 0083, decision
+//! 1): a Harness's and its CLI's are ones to start behind the fence, the
+//! Person's terminal and git act outside it. Each place that makes one is
+//! named here with whose it makes ([`WHOSE`]).
 
 use std::path::{Path, PathBuf};
 
@@ -77,6 +82,68 @@ const ON_THE_HOST: [(&str, usize, &str); 10] = [
 
 /// This crate, the one place a Project's program starts.
 const ENVIRONMENTS: &str = "platform/environments/src";
+
+/// The kernel's constructors of a program, one for each `Whose`: only
+/// these make one, and each gives it holes in the fence exactly when it is
+/// one to start behind it.
+const MADE_BY: [&str; 4] = ["harness", "harness_probe", "terminal", "act"];
+
+/// What else code reaches through a program's type, which makes none.
+const READ_BY: [&str; 2] = ["whose", "holes"];
+
+/// The kernel's port, where each constructor is.
+const PORT: &str = "kernel/src/environment.rs";
+
+/// Where the engine makes a program, and whose: the file, the constructor
+/// it calls there, how many places, and why. A Harness's process is one to
+/// start behind the fence with its Project's holes, and its CLI asked
+/// about itself with none; a terminal the Person opened and a git act they
+/// asked for, outside it (ADR 0083, decision 1).
+const WHOSE: [(&str, &str, usize, &str); 7] = [
+    (
+        "apps/agents/engine/src/lib.rs",
+        "harness",
+        1,
+        "`banda mcp`, which a Harness's process starts behind its own fence",
+    ),
+    (
+        "apps/terminal/engine/src/terminal.rs",
+        "terminal",
+        1,
+        "a terminal the Person opened",
+    ),
+    (
+        "platform/git-cli/src/lib.rs",
+        "act",
+        1,
+        "a git act the Person asked for, which runs the repository's hooks",
+    ),
+    (
+        "platform/harnesses/engine/src/cli.rs",
+        "harness_probe",
+        1,
+        "asks a Harness's CLI its version",
+    ),
+    (
+        "platform/harnesses/engine/src/limits/codex.rs",
+        "harness_probe",
+        1,
+        "asks Codex's app-server an account's limits",
+    ),
+    (
+        "platform/harnesses/engine/src/list.rs",
+        "harness",
+        1,
+        "a Harness's process: a trusted Project's in its folder, each Project's with its holes, \
+         the machine's with none",
+    ),
+    (
+        "platform/harnesses/engine/src/list.rs",
+        "terminal",
+        1,
+        "a Harness's sign-in, which the Person runs in a terminal",
+    ),
+];
 
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -171,7 +238,49 @@ fn makings(code: &str) -> Vec<&'static str> {
 /// Whether `code` imports a command under another name, which this check
 /// would not see make a process.
 fn renames_a_command(code: &str) -> bool {
-    (code.match_indices("Command as ")).any(|(at, _)| whole(code, at))
+    renames(code, "Command")
+}
+
+/// Whether `code` calls `name` another: `use … name as …`, or
+/// `type … = name`.
+fn renames(code: &str, name: &str) -> bool {
+    let imported = format!("{name} as ");
+    let imports = (code.match_indices(&imported)).any(|(at, _)| whole(code, at));
+    let aliases = code.lines().any(|line| {
+        let typed = line.match_indices("type ").find(|(at, _)| whole(line, *at));
+        typed.is_some_and(|(at, _)| {
+            let aliased = line[at..].split_once('=').map(|(_, aliased)| aliased);
+            aliased.is_some_and(|aliased| names(aliased, name))
+        })
+    });
+    imports || aliases
+}
+
+/// Whether `code` says `name` as a whole name of its own.
+fn names(code: &str, name: &str) -> bool {
+    (code.match_indices(name)).any(|(at, _)| whole(code, at) && ends(code, at + name.len()))
+}
+
+/// Whether a name in `code` ends at `at`, as no name goes on there.
+fn ends(code: &str, at: usize) -> bool {
+    let next = code[at..].chars().next();
+    !next.is_some_and(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// Each name `code` reaches through a program's type, `Program::name` or
+/// `<Program>::name`, called or not.
+fn through_program(code: &str) -> Vec<&str> {
+    let mut reached = Vec::new();
+    for path in ["Program::", "<Program>::"] {
+        for (at, _) in code.match_indices(path).filter(|(at, _)| whole(code, *at)) {
+            let rest = &code[at + path.len()..];
+            let end = (rest.char_indices())
+                .find(|&(at, _)| ends(rest, at))
+                .map_or(rest.len(), |(at, _)| at);
+            reached.push(&rest[..end]);
+        }
+    }
+    reached
 }
 
 #[test]
@@ -220,6 +329,65 @@ fn each_place_on_the_host_still_makes_what_it_names() {
     }
 }
 
+/// Each place a program is made says whose it is, as named in [`WHOSE`]:
+/// a new one is named there, with whose it makes and why.
+#[test]
+fn each_program_says_whose_it_is_where_it_is_made() {
+    let root = repository();
+    let files = sources();
+    assert!(files.iter().any(|file| file == PORT));
+    for file in files.iter().filter(|file| *file != PORT) {
+        let code = running(&std::fs::read_to_string(root.join(file)).unwrap());
+        assert!(
+            !renames(&code, "Program"),
+            "{file} calls Program another name: name it as it is, so this check sees whose \
+             program it makes"
+        );
+        let reached = through_program(&code);
+        for name in &reached {
+            assert!(
+                MADE_BY.contains(name) || READ_BY.contains(name),
+                "{file} reaches Program::{name}, which neither makes a program as MADE_BY names \
+                 nor reads one as READ_BY does: a program is made for whose it is, and only by \
+                 its constructor (ADR 0083, decision 1)"
+            );
+        }
+        for made_by in MADE_BY {
+            let made = reached.iter().filter(|name| **name == made_by).count();
+            let named = WHOSE
+                .iter()
+                .find(|(whose, by, ..)| whose == file && *by == made_by);
+            let allowed = named.map_or(0, |(_, _, places, _)| *places);
+            assert!(
+                made <= allowed,
+                "{file} makes a program by Program::{made_by} in {made} places, {allowed} named: \
+                 say whose it is in WHOSE, with why. A Harness's is one to start behind the \
+                 fence, the Person's own outside it (ADR 0083, decision 1)"
+            );
+        }
+    }
+}
+
+/// A place named that no longer makes as many is named anew.
+#[test]
+fn each_place_that_makes_a_program_still_makes_what_it_names() {
+    let root = repository();
+    for (file, made_by, places, why) in WHOSE {
+        assert!(MADE_BY.contains(&made_by), "Program::{made_by} makes none");
+        let code = std::fs::read_to_string(root.join(file))
+            .unwrap_or_else(|_| panic!("{file} is gone: take it from WHOSE"));
+        let code = running(&code);
+        let made = (through_program(&code).iter())
+            .filter(|name| **name == made_by)
+            .count();
+        assert_eq!(
+            made, places,
+            "{file} makes a program by Program::{made_by} in {made} places now, not {places} \
+             ({why}): say so in WHOSE, or take it from there"
+        );
+    }
+}
+
 #[test]
 fn the_check_reads_rust_as_it_is_written() {
     let made = makings("let c = tokio::process::Command::new(\"git\");");
@@ -250,4 +418,23 @@ fn the_check_reads_rust_as_it_is_written() {
     assert!(!renames_a_command(
         "use crate::AvailableCommand as Offered;"
     ));
+
+    let made = "let p = banda_kernel::Program::harness(\"a\", vec![], holes);";
+    assert_eq!(through_program(made), ["harness"]);
+    let probed = "Program::harness_probe(p, a);\nlet w = program.whose();";
+    assert_eq!(through_program(probed), ["harness_probe"]);
+    assert_eq!(through_program("args.map(Program::terminal)"), ["terminal"]);
+    assert_eq!(through_program("let make = <Program>::act;"), ["act"]);
+    assert_eq!(through_program("let w = Program::whose(&p);"), ["whose"]);
+    assert!(through_program("let p = MyProgram::act(x);").is_empty());
+    assert!(through_program("fn of(p: Option<Program>) -> Program {").is_empty());
+    assert!(renames("use banda_kernel::{Program as Run};", "Program"));
+    assert!(renames("type Run = banda_kernel::Program;", "Program"));
+    assert!(renames("pub(crate) type Run<'a> = &'a Program;", "Program"));
+    assert!(!renames(
+        "use banda_kernel::ProgramAsked as Asked;",
+        "Program"
+    ));
+    assert!(!renames("type Asked = ProgramAsked;", "Program"));
+    assert!(!renames("let p: Program = told;", "Program"));
 }

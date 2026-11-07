@@ -68,18 +68,17 @@ impl Terminal {
         env.extend(open.env.clone());
         env.extend(project_env(project.id()).map(|(key, id)| (key.to_owned(), id)));
         env.insert(TERMINAL_VARIABLE.to_owned(), open.terminal.to_string());
-        let program = Program {
-            program: open.program.clone().unwrap_or_else(shell),
-            args: open.args.clone(),
-            env,
-            // What Electron tells its own children is not for a Person's
-            // program.
-            unset: (std::env::vars_os())
-                .filter_map(|(key, _)| key.into_string().ok())
-                .filter(|key| key.starts_with("ELECTRON_"))
-                .collect(),
-            cwd: Some(project.folder()),
-        };
+        // The Person's, outside the fence (ADR 0083, decision 1).
+        let shell_or_program = open.program.clone().unwrap_or_else(shell);
+        let mut program = Program::terminal(shell_or_program, open.args.clone());
+        program.env = env;
+        // What Electron tells its own children is not for a Person's
+        // program.
+        program.unset = (std::env::vars_os())
+            .filter_map(|(key, _)| key.into_string().ok())
+            .filter(|key| key.starts_with("ELECTRON_"))
+            .collect();
+        program.cwd = Some(project.folder());
         let child = (project.environment().pty(&program, pts))
             .map_err(|e| format!("{} could not start: {e}.", program.program))?;
         let group = ProcessGroup::of(&child);

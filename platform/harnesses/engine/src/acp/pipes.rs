@@ -312,6 +312,7 @@ impl Tail {
 mod tests {
     use super::*;
     use banda_environments::Local;
+    use banda_kernel::Holes;
     use rustix::process::{Pid, test_kill_process};
     use std::path::Path;
     use std::time::Instant;
@@ -325,13 +326,13 @@ mod tests {
         let heard = heard.clone();
         Pipes {
             environment: Arc::new(Local),
-            program: Program {
-                program: "sh".to_owned(),
-                args: ["-c", script, "sh", &file.display().to_string()]
+            program: Program::harness(
+                "sh",
+                ["-c", script, "sh", &file.display().to_string()]
                     .map(str::to_owned)
                     .to_vec(),
-                ..Program::default()
-            },
+                Holes::default(),
+            ),
             hears: Arc::new(move |line, said| {
                 if said == Said::Stderr {
                     heard.lock().unwrap().push(line.to_owned());
@@ -424,13 +425,8 @@ mod tests {
 
     #[tokio::test]
     async fn a_write_to_a_program_that_closed_its_stdout_ends_soon() {
-        let program = Program {
-            program: "sh".to_owned(),
-            args: ["-c", "exec 1>&-; exec sleep 30"]
-                .map(str::to_owned)
-                .to_vec(),
-            ..Program::default()
-        };
+        let args = ["-c", "exec 1>&-; exec sleep 30"].map(str::to_owned);
+        let program = Program::harness("sh", args.to_vec(), Holes::default());
         let mut child = Local.spawn(&program, Input::Piped).unwrap();
         let mut stdin = child.stdin.take().unwrap();
         let (_closed, mut stdout_closed) = watch::channel(true);
@@ -445,13 +441,8 @@ mod tests {
 
     #[tokio::test]
     async fn each_line_of_stderr_is_heard_without_its_return() {
-        let program = Program {
-            program: "sh".to_owned(),
-            args: ["-c", "printf 'one\\r\\ntwo\\n\\nlast' >&2"]
-                .map(str::to_owned)
-                .to_vec(),
-            ..Program::default()
-        };
+        let args = ["-c", "printf 'one\\r\\ntwo\\n\\nlast' >&2"].map(str::to_owned);
+        let program = Program::harness("sh", args.to_vec(), Holes::default());
         let mut child = Local.spawn(&program, Input::Null).unwrap();
         let heard = Arc::new(Mutex::new(Vec::new()));
         let hears: Hears = {

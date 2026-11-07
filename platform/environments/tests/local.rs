@@ -2,25 +2,35 @@
 //! has (ADR 0084, decision 1): in its folder, with the engine's
 //! environment less what it takes away and plus what it adds, leading a
 //! process group of its own on pipes, or a session of its own on a PTY.
+//! A terminal's program starts only on a terminal, and a Harness's never
+//! on one (ADR 0083, decision 1).
 #![cfg(unix)]
 
 use banda_environments::{Asked, How};
 use banda_environments::{Local, Recorded};
-use banda_kernel::{Environment, Input, Program};
+use banda_kernel::{Environment, Holes, Input, Program, Whose};
 use rustix::process::{Pid, getpgid, getsid};
 use std::collections::BTreeMap;
+use std::path::Path;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
-/// `/bin/sh -c script` in `cwd`, with `ADDED` added, and `HOME` and
-/// `ADDED` taken away first.
-fn sh(script: &str, cwd: &std::path::Path) -> Program {
-    Program {
-        program: "/bin/sh".to_owned(),
-        args: vec!["-c".to_owned(), script.to_owned()],
-        env: BTreeMap::from([("ADDED".to_owned(), "yes".to_owned())]),
-        unset: vec!["HOME".to_owned(), "ADDED".to_owned()],
-        cwd: Some(cwd.to_owned()),
-    }
+/// `/bin/sh -c script` as the Person's own runs on pipes, a git act's, as
+/// [`changed`] says.
+fn sh(script: &str, cwd: &Path) -> Program {
+    changed(Program::act("/bin/sh", args(script)), cwd)
+}
+
+/// `program` in `cwd`, with `ADDED` added, and `HOME` and `ADDED` taken
+/// away first.
+fn changed(mut program: Program, cwd: &Path) -> Program {
+    program.env = BTreeMap::from([("ADDED".to_owned(), "yes".to_owned())]);
+    program.unset = vec!["HOME".to_owned(), "ADDED".to_owned()];
+    program.cwd = Some(cwd.to_owned());
+    program
+}
+
+fn args(script: &str) -> Vec<String> {
+    vec!["-c".to_owned(), script.to_owned()]
 }
 
 const SAYS: &str =
@@ -89,10 +99,8 @@ async fn a_program_on_a_terminal_leads_its_session_there() {
     let folder = tempfile::tempdir().unwrap();
     let (pty, pts) = pty_process::open().unwrap();
     pty.resize(pty_process::Size::new(24, 80)).unwrap();
-    let program = sh(
-        "echo $$; pwd; echo \"$ADDED\"; tty -s && echo on-a-terminal; sleep 1",
-        folder.path(),
-    );
+    let script = "echo $$; pwd; echo \"$ADDED\"; tty -s && echo on-a-terminal; sleep 1";
+    let program = changed(Program::terminal("/bin/sh", args(script)), folder.path());
     let child = Local.pty(&program, pts).unwrap();
     let (mut output, _input) = pty.into_split();
     let mut said = String::new();
@@ -116,7 +124,8 @@ async fn a_recorded_environment_says_what_it_was_asked_and_starts_it() {
     let folder = tempfile::tempdir().unwrap();
     let recorded = Recorded::new(Local);
     let asks = recorded.asks();
-    let program = sh("echo started", folder.path());
+    let harness_s = Program::harness("/bin/sh", args("echo started"), Holes::default());
+    let program = changed(harness_s, folder.path());
     let child = recorded.spawn(&program, Input::Null).unwrap();
     let ended = child.wait_with_output().await.unwrap();
     assert_eq!(ended.stdout, b"started\n");
@@ -125,6 +134,41 @@ async fn a_recorded_environment_says_what_it_was_asked_and_starts_it() {
         program,
     };
     assert_eq!(asks.all(), std::slice::from_ref(&asked));
+    let whose = &asks.all()[0].program;
+    assert_eq!(
+        (whose.whose(), whose.holes()),
+        (Whose::Harness, Some(&Holes::default()))
+    );
     assert_eq!(asks.of("sh"), [asked]);
     assert_eq!(asks.of("git"), []);
+}
+
+#[tokio::test]
+async fn a_harness_s_program_never_starts_on_a_terminal_nor_a_terminal_s_on_pipes() {
+    let folder = tempfile::tempdir().unwrap();
+    let marked = folder.path().join("ran");
+    let script = format!("touch '{}'", marked.display());
+    let harness_s = [
+        Program::harness("/bin/sh", args(&script), Holes::default()),
+        Program::harness_probe("/bin/sh", args(&script)),
+    ];
+    for program in harness_s {
+        let (_pty, pts) = pty_process::open().unwrap();
+        let refused = Local.pty(&program, pts).unwrap_err();
+        assert_eq!(refused.kind(), std::io::ErrorKind::PermissionDenied);
+        assert!(
+            refused.to_string().contains("behind the fence"),
+            "{refused}"
+        );
+    }
+    let terminal_s = Program::terminal("/bin/sh", args(&script));
+    let refused = Local.spawn(&terminal_s, Input::Null).unwrap_err();
+    assert_eq!(refused.kind(), std::io::ErrorKind::PermissionDenied);
+    assert!(refused.to_string().contains("on a terminal"), "{refused}");
+    assert!(!marked.exists(), "none of them ran");
+
+    let (_pty, pts) = pty_process::open().unwrap();
+    let ran = Local.pty(&terminal_s, pts).unwrap().wait().await.unwrap();
+    assert!(ran.success());
+    assert!(marked.exists(), "a terminal's starts on one");
 }

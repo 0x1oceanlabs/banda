@@ -9,7 +9,8 @@ use banda_agents::{Agents, Pipe};
 use banda_environments::{Asks, How, Local, Recorded};
 use banda_harnesses::{Cli, Harness, Harnesses, HarnessesModule, account_changed};
 use banda_kernel::{
-    AgentId, Caller, Code, CommandId, EventFilter, Kernel, Participant, PersonId, ProjectId,
+    AgentId, Caller, Code, CommandId, EventFilter, Holes, Kernel, Participant, PersonId, ProjectId,
+    Whose,
 };
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -65,6 +66,8 @@ fn fake_with(env: &[(&str, &str)]) -> Harness {
         colour: None,
         carried: None,
         record: None,
+        cwd: None,
+        holes: Holes::default(),
     }
 }
 
@@ -1379,6 +1382,8 @@ fn with_cli_since(program: &str, minimum: Option<&str>) -> Agents {
         colour: None,
         carried: None,
         record: None,
+        cwd: None,
+        holes: Holes::default(),
     }]))
 }
 
@@ -1404,7 +1409,10 @@ async fn a_harness_runs_the_persons_own_cli_and_says_its_version() {
 /// for, and the machine's own in the engine's, never by the module itself
 /// (ADR 0084, decisions 4 and 5): the Harness's program, and the CLI it
 /// runs as it is asked its version. A short run apart from the Thread
-/// runs in the process the Thread has.
+/// runs in the process the Thread has. Each says it is a Harness's, to
+/// start behind the fence: the Project's with its holes in it, in its
+/// folder once the Person trusts it; the machine's and the CLI asked with
+/// none (ADR 0083, decision 1).
 #[tokio::test]
 async fn every_harness_process_starts_in_its_projects_environment() {
     let (root, bin) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
@@ -1422,19 +1430,32 @@ async fn every_harness_process_starts_in_its_projects_environment() {
     assert_eq!(thread_s.how, How::Spawn);
     let project = world.project.to_string();
     assert_eq!(thread_s.program.env["BANDA_PROJECT"], project);
-    assert_eq!(thread_s.program.cwd, None, "the engine's, as before");
+    let opened = world.kernel.project(world.project).await.unwrap();
+    assert_eq!(thread_s.program.cwd, Some(opened.folder()), "its folder");
+    assert_eq!(thread_s.program.whose(), Whose::Harness);
+    let holes = Holes {
+        reads: vec![opened.data().join("files")],
+        ..Holes::default()
+    };
+    assert_eq!(thread_s.program.holes(), Some(&holes), "its kept files");
     let asked_cli = asks.of("fake-cli");
     let [version] = &asked_cli[..] else {
         panic!("its CLI asked once: {asked_cli:?}");
     };
     assert_eq!(version.program.args, ["--version"]);
     assert_eq!(version.program.env["BANDA_PROJECT"], project);
+    assert_eq!(version.program.whose(), Whose::HarnessProbe);
+    assert_eq!(version.program.holes(), Some(&Holes::default()));
 
     // The machine's own process, which only says who is signed in.
     world.account().await;
     let started = asks.of("banda-fake-agent");
     assert_eq!(started.len(), 2, "{started:?}");
-    assert!(!started[1].program.env.contains_key("BANDA_PROJECT"));
+    let machine_s = &started[1].program;
+    assert!(!machine_s.env.contains_key("BANDA_PROJECT"));
+    assert_eq!(machine_s.whose(), Whose::Harness);
+    let none = (machine_s.cwd.as_ref(), machine_s.holes());
+    assert_eq!(none, (None, Some(&Holes::default())), "no Project's");
     assert_eq!(
         asks.of("fake-cli").len(),
         3,
@@ -1445,6 +1466,40 @@ async fn every_harness_process_starts_in_its_projects_environment() {
     let written = world.written(json!({ "thread": thread, "prompt": "which session" }));
     written.await.unwrap();
     assert_eq!(asks.of("banda-fake-agent").len(), 2);
+
+    // A Project the Person has not trusted starts its process where the
+    // engine runs, with the same holes as any.
+    let create = json!({ "name": "Cloned", "trusted": false });
+    let cloned = (world.kernel)
+        .call(
+            world.person(),
+            "projects.create",
+            None,
+            Some(CommandId::new()),
+            create,
+        )
+        .await
+        .unwrap();
+    let cloned = World {
+        kernel: world.kernel.clone(),
+        owner: world.owner,
+        project: serde_json::from_value(cloned["id"].clone()).unwrap(),
+        harness: world.harness.clone(),
+    };
+    cloned.finish(None, "hello").await;
+    let started = asks.of("banda-fake-agent");
+    let [.., cloned_s] = &started[..] else {
+        panic!("its own process: {started:?}");
+    };
+    assert_eq!(started.len(), 3, "{started:?}");
+    let opened = cloned.kernel.project(cloned.project).await.unwrap();
+    assert!(!opened.trusted());
+    assert_eq!(cloned_s.program.cwd, None, "not in its folder");
+    let holes = Holes {
+        reads: vec![opened.data().join("files")],
+        ..Holes::default()
+    };
+    assert_eq!(cloned_s.program.holes(), Some(&holes));
 }
 
 /// A CLI in `folder` that says it is 9.9.9.
@@ -2953,6 +3008,8 @@ async fn the_real_harnesses_say_what_they_run_and_who_is_signed_in() {
         colour: None,
         carried: None,
         record: None,
+        cwd: None,
+        holes: Holes::default(),
     };
     let harnesses = Harnesses::new([vec![fake], real.to_vec()].concat());
     let root = tempfile::tempdir().unwrap();
@@ -5018,6 +5075,8 @@ fn two_claude_accounts(cli: &Path) -> Agents {
         colour: None,
         carried: None,
         record: None,
+        cwd: None,
+        holes: Holes::default(),
     };
     let claude = || {
         Some(Cli {
@@ -5116,6 +5175,8 @@ async fn a_threads_process_runs_the_carried_adapter_on_the_node_found_with_the_p
         colour: None,
         carried: Some("claude-agent-acp.mjs".into()),
         record: None,
+        cwd: None,
+        holes: Holes::default(),
     };
     let harnesses = Harnesses::new(vec![claude]);
     harnesses.carry(Some(Carried {

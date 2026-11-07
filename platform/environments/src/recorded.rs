@@ -16,7 +16,8 @@ pub enum How {
     Pty,
 }
 
-/// One program an environment was asked to start.
+/// One program an environment was asked to start: whose it is too, as
+/// [`Program::whose`] and [`Program::holes`] say.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Asked {
     pub how: How,

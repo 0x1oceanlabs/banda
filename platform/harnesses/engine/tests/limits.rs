@@ -6,7 +6,7 @@
 
 use banda_environments::{Asks, Local, Recorded};
 use banda_harnesses::{Harnesses, HarnessesModule};
-use banda_kernel::{Kernel, Participant, PersonId};
+use banda_kernel::{Holes, Kernel, Participant, PersonId, Whose};
 use serde_json::{Value, json};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -200,12 +200,15 @@ async fn each_harnesss_limits_read_on_the_host_with_no_window_and_a_failed_read_
     assert_eq!(codex["windows"][0]["used"], 5.0);
     assert_eq!(codex["windows"][0]["resets_at"], 4_102_444_800_000_i64);
     // Codex's app-server is a Harness's CLI: it starts in the machine's
-    // environment, never by the module itself (ADR 0084, decision 4).
+    // environment, never by the module itself (ADR 0084, decision 4), and
+    // behind the fence, with no Project's grants (ADR 0083, decision 1).
     let servers = asks.of("codex");
     let [server] = &servers[..] else {
         panic!("one app-server: {servers:?}");
     };
     assert_eq!(server.program.args.last().unwrap(), "app-server");
+    let whose = (server.program.whose(), server.program.holes());
+    assert_eq!(whose, (Whose::HarnessProbe, Some(&Holes::default())));
     let asked = anthropic.asked();
     assert_eq!(asked.len(), 1);
     assert!(

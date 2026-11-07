@@ -564,7 +564,7 @@ async fn work(
         .session(
             thread,
             &project.folder(),
-            &[kept::folder(project.data())],
+            &kept::roots(project.data()),
             earlier.as_ref(),
             &kin,
             banda,

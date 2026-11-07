@@ -9,10 +9,16 @@ use crate::images::write_whole;
 use std::io;
 use std::path::{Path, PathBuf};
 
-/// The folder of the kept files of the Project whose data is in `data`: a
-/// Thread's session gets it as an extra root.
+/// The folder of the kept files of the Project whose data is in `data`.
 pub fn folder(data: &Path) -> PathBuf {
     data.join("files")
+}
+
+/// The extra roots of a Thread's session in the Project whose data is in
+/// `data`: its kept files' folder, which its Harness's process reads
+/// through the fence too (ADR 0083, decision 1).
+pub fn roots(data: &Path) -> Vec<PathBuf> {
+    vec![folder(data)]
 }
 
 /// Keeps `bytes` as a file named `name` for the Project whose data is in

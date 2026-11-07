@@ -27,14 +27,9 @@ pub(super) async fn read(
     let program = harness.cli.as_ref().map_or("codex", |cli| &cli.program);
     let path = cli::located(program)
         .ok_or_else(|| Failure::new(format!("`{program}` is not installed on this computer.")))?;
-    let server = Program {
-        program: path.display().to_string(),
-        args: ["-s", "read-only", "-a", "on-request", "app-server"]
-            .map(str::to_owned)
-            .to_vec(),
-        env: harness.env.clone(),
-        ..Program::default()
-    };
+    let args = ["-s", "read-only", "-a", "on-request", "app-server"].map(str::to_owned);
+    let mut server = Program::harness_probe(path.display().to_string(), args.to_vec());
+    server.env = harness.env.clone();
     let mut child = (environment.spawn(&server, Input::Piped))
         .map_err(|e| Failure::new(format!("Codex's app-server did not start: {e}.")))?;
     // What it says on stderr is heard by no one, and read so it never

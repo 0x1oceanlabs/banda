@@ -302,6 +302,7 @@ impl Connection {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use banda_kernel::Holes;
     use serde_json::{Value, json};
 
     #[test]
@@ -313,12 +314,8 @@ mod tests {
             ),
             ("BANDA_TOKEN".to_owned(), "f00d".to_owned()),
         ]);
-        let banda = Program {
-            program: "/bin/banda".to_owned(),
-            args: vec!["mcp".to_owned()],
-            env: env.clone(),
-            ..Program::default()
-        };
+        let mut banda = Program::harness("/bin/banda", vec!["mcp".to_owned()], Holes::default());
+        banda.env = env.clone();
         let given = Given::of(Some(banda), true);
         let [acp::McpServer::Stdio(server)] = &given.servers[..] else {
             panic!("one stdio server: {:?}", given.servers);
@@ -344,12 +341,8 @@ mod tests {
     #[test]
     fn a_session_in_a_project_not_trusted_reads_only_the_persons_own_settings() {
         let env = BTreeMap::from([("BANDA_TOKEN".to_owned(), "f00d".to_owned())]);
-        let banda = Program {
-            program: "/bin/banda".to_owned(),
-            args: vec!["mcp".to_owned()],
-            env: env.clone(),
-            ..Program::default()
-        };
+        let mut banda = Program::harness("/bin/banda", vec!["mcp".to_owned()], Holes::default());
+        banda.env = env.clone();
         let trusted = Given::of(Some(banda.clone()), true).meta.map(Value::Object);
         let options = &trusted.unwrap()["claudeCode"]["options"];
         assert_eq!(options.get("settingSources"), None, "Claude Code's own");
