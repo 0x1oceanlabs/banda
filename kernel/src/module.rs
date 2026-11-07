@@ -32,11 +32,22 @@ pub enum Scope {
 ///
 /// A module's name prefixes its methods (`notes.add`) and its tables
 /// (`notes_items`), and its events carry it. It writes only its own tables and reads no
-/// other module's. Modules reach each other only by commands and events.
+/// other module's, and the kernel holds it to that: its SQL reaches no
+/// table outside its prefixes (ADR 0062, decision 5). Modules reach each
+/// other only by commands and events.
 #[async_trait::async_trait]
 pub trait Module: Send + Sync + 'static {
     /// Lowercase letters: the prefix of its methods, events and tables.
     fn name(&self) -> &'static str;
+
+    /// The prefixes its tables kept from an id it had before, as its
+    /// `module.toml` declares them (`legacy-prefixes`): its SQL reaches
+    /// `<prefix>_*` too. A module whose id changes keeps its tables'
+    /// names, for data at rest is never renamed (ADR 0085, decision 12).
+    /// Lowercase letters, none another module's name.
+    fn legacy_prefixes(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     /// Where its data lives: each Project's, or this machine's.
     fn scope(&self) -> Scope {

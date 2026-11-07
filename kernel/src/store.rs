@@ -6,9 +6,15 @@
 //! panics is rolled back and refused, and the writer goes on. Readers use
 //! their own connection: SQLite's WAL lets them read while the writer
 //! writes.
+//!
+//! Both connections have an authorizer (`tables`): what a module's SQL
+//! runs on them reaches only its own tables. All the kernel's SQL in a
+//! [`Tx`], in a module's transaction or its own, goes through
+//! [`Tx::kernel`].
 
 use crate::events::{self, Event};
 use crate::outbox::Claim;
+use crate::tables::{AsKernel, Authorizer, Tables};
 use crate::{CommandId, Error, EventId, Participant, Refusal, now_ms};
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde::Serialize;
@@ -138,16 +144,25 @@ type Runs = Arc<Mutex<HashMap<CommandId, watch::Receiver<Ended>>>>;
 /// One open Project database.
 pub(crate) struct Store {
     jobs: mpsc::Sender<Job>,
-    reader: Arc<Mutex<Connection>>,
+    /// Who runs SQL on the writer, which its thread owns.
+    writer_authorizer: Arc<Authorizer>,
+    reader: Arc<Mutex<Reader>>,
     published: broadcast::Sender<Arc<Event>>,
     outbox: Arc<Notify>,
     running: Runs,
 }
 
+/// The reader connection, and who runs SQL on it.
+struct Reader {
+    sql: Connection,
+    authorizer: Arc<Authorizer>,
+}
+
 /// One change, inside one transaction. A module sees only its own scope: the
-/// events it emits carry its name.
+/// events it emits carry its name, and its SQL reaches only its own tables.
 pub struct Tx<'c> {
     tx: rusqlite::Transaction<'c>,
+    authorizer: &'c Authorizer,
     module: &'static str,
     now: i64,
     emitted: Vec<Event>,
@@ -155,9 +170,16 @@ pub struct Tx<'c> {
 }
 
 impl Tx<'_> {
-    /// The transaction's connection, for the module's own tables.
+    /// The transaction's connection, for the module's own tables: SQL that
+    /// reaches another table is refused (ADR 0062, decision 5).
     pub fn sql(&self) -> &Connection {
         &self.tx
+    }
+
+    /// The transaction's connection for the kernel's own SQL, its tables
+    /// open, until the guard is dropped.
+    pub(crate) fn kernel(&self) -> AsKernel<'_> {
+        self.authorizer.as_kernel(&self.tx)
     }
 
     /// The time of this change, read once.
@@ -185,7 +207,7 @@ impl Tx<'_> {
             at: self.now,
             payload: serde_json::to_value(payload)?,
         };
-        events::append(&self.tx, &mut event)?;
+        events::append(&self.kernel(), &mut event)?;
         self.emitted.push(event);
         Ok(self.emitted.last().expect("just pushed"))
     }
@@ -223,7 +245,7 @@ impl Tx<'_> {
         payload: &impl Serialize,
     ) -> Result<(), Error> {
         let payload = serde_json::to_string(payload)?;
-        self.tx.execute(
+        self.kernel().execute(
             "INSERT INTO kernel_outbox (module, kind, key, payload, state, next_at, created_at, runner)
              VALUES (?1, ?2, ?3, ?4, 'pending', ?5, ?5, ?6)",
             params![self.module, kind, key, payload, self.now, runner],
@@ -237,7 +259,7 @@ impl Tx<'_> {
     /// worker under a lease, so a worker writes nothing once its effect was
     /// taken again, after its lease ran out, or settled (ADR 0082, A6).
     pub fn holds(&self, claim: Claim) -> Result<(), Error> {
-        if crate::outbox::holds(&self.tx, self.module, claim)? {
+        if crate::outbox::holds(&self.kernel(), self.module, claim)? {
             Ok(())
         } else {
             Err(crate::outbox::lost_lease().into())
@@ -250,25 +272,35 @@ impl Tx<'_> {
 }
 
 impl Store {
-    /// Opens `path`, brings the kernel's and every module's tables up to
-    /// date, and starts the writer.
-    pub(crate) fn open(
-        path: &Path,
-        ledgers: &[(&'static str, &'static [&'static str])],
-    ) -> Result<Store, Error> {
+    /// Opens `path`, puts an authorizer on both its connections by
+    /// `modules`' tables, brings the kernel's and every module's tables up
+    /// to date, each module's steps reaching only its own, and starts the
+    /// writer.
+    pub(crate) fn open(path: &Path, modules: &[Tables]) -> Result<Store, Error> {
+        let owners: Arc<[Tables]> = modules.into();
         let mut writer = Connection::open(path)?;
         writer.execute_batch(
             "PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;
              PRAGMA foreign_keys = ON;
-             PRAGMA busy_timeout = 5000;",
+             PRAGMA busy_timeout = 5000;
+             PRAGMA trusted_schema = OFF;",
         )?;
+        let writer_authorizer = Authorizer::install(&mut writer, owners.clone())?;
         migrate(&mut writer, KERNEL, KERNEL_MIGRATIONS)?;
-        for (module, steps) in ledgers {
-            migrate(&mut writer, module, steps)?;
+        for tables in modules {
+            migrate_in(
+                &mut writer,
+                tables.module,
+                tables.migrations,
+                Some((&writer_authorizer, tables)),
+            )?;
         }
-        let reader = Connection::open(path)?;
-        reader.execute_batch("PRAGMA query_only = ON; PRAGMA busy_timeout = 5000;")?;
+        let mut reader = Connection::open(path)?;
+        reader.execute_batch(
+            "PRAGMA query_only = ON; PRAGMA busy_timeout = 5000; PRAGMA trusted_schema = OFF;",
+        )?;
+        let reader_authorizer = Authorizer::install(&mut reader, owners)?;
 
         let (jobs, inbox) = mpsc::channel::<Job>();
         std::thread::Builder::new()
@@ -281,15 +313,20 @@ impl Store {
         let (published, _) = broadcast::channel(SUBSCRIBER_LAG);
         Ok(Store {
             jobs,
-            reader: Arc::new(Mutex::new(reader)),
+            writer_authorizer,
+            reader: Arc::new(Mutex::new(Reader {
+                sql: reader,
+                authorizer: reader_authorizer,
+            })),
             published,
             outbox: Arc::new(Notify::new()),
             running: Runs::default(),
         })
     }
 
-    /// Runs `change` in one transaction on the writer. Its events are
-    /// published after commit; if it fails, nothing of it remains.
+    /// Runs `change` in one transaction on the writer, as `module`, or as
+    /// the kernel itself ([`KERNEL`]). Its events are published after
+    /// commit; if it fails, nothing of it remains.
     pub(crate) async fn write<T: Send + 'static>(
         &self,
         module: &'static str,
@@ -297,8 +334,9 @@ impl Store {
     ) -> Result<T, Error> {
         let published = self.published.clone();
         let outbox = self.outbox.clone();
+        let authorizer = self.writer_authorizer.clone();
         self.on_writer(move |sql| {
-            let (value, emitted, enqueued) = transact(sql, module, change)?;
+            let (value, emitted, enqueued) = transact(sql, &authorizer, module, change)?;
             publish(&published, &outbox, emitted, enqueued);
             Ok(value)
         })
@@ -354,7 +392,7 @@ impl Store {
     ) -> Result<T, Refusal> {
         let written = self.write(receipt.module, move |tx| {
             let value = change(tx)?;
-            receipt.written(tx.sql())?;
+            receipt.written(&tx.kernel())?;
             Ok(value)
         });
         Ok(written.await?)
@@ -411,17 +449,56 @@ impl Store {
         }
     }
 
-    /// Reads on the reader connection, off the async threads.
+    /// Reads as the kernel on the reader connection, off the async threads.
     pub(crate) async fn read<T: Send + 'static>(
         &self,
         query: impl FnOnce(&Connection) -> Result<T, Error> + Send + 'static,
     ) -> Result<T, Error> {
+        self.read_as(KERNEL, query).await
+    }
+
+    /// Reads as `module` on the reader connection: its SQL reaches only its
+    /// own tables.
+    pub(crate) async fn read_as<T: Send + 'static>(
+        &self,
+        module: &'static str,
+        query: impl FnOnce(&Connection) -> Result<T, Error> + Send + 'static,
+    ) -> Result<T, Error> {
+        self.on_reader(move |reader| {
+            let _as = reader.authorizer.enter(&reader.sql, module);
+            query(&reader.sql)
+        })
+        .await
+    }
+
+    /// Reads as `module` in one read transaction, with the log's head it
+    /// is current at, which the kernel reads.
+    pub(crate) async fn view<T: Send + 'static>(
+        &self,
+        module: &'static str,
+        query: impl FnOnce(&Connection) -> Result<T, Error> + Send + 'static,
+    ) -> Result<(i64, T), Error> {
+        self.on_reader(move |reader| {
+            // Ends when dropped, even if the query panics, as the kernel:
+            // the guard below is dropped first.
+            let snapshot = reader.sql.unchecked_transaction()?;
+            let at = events::head(&snapshot)?;
+            let _as = reader.authorizer.enter(&snapshot, module);
+            Ok((at, query(&snapshot)?))
+        })
+        .await
+    }
+
+    async fn on_reader<T: Send + 'static>(
+        &self,
+        job: impl FnOnce(&Reader) -> Result<T, Error> + Send + 'static,
+    ) -> Result<T, Error> {
         let reader = self.reader.clone();
         tokio::task::spawn_blocking(move || {
-            let sql = reader
+            let reader = reader
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            query(&sql)
+            job(&reader)
         })
         .await
         .map_err(|_| Error::Closed)?
@@ -467,20 +544,29 @@ fn run(job: Job, writer: &mut Connection) {
     }
 }
 
+/// Runs `change` as `module` in one transaction, which the kernel begins
+/// and ends.
 fn transact<T>(
     sql: &mut Connection,
+    authorizer: &Authorizer,
     module: &'static str,
     change: impl FnOnce(&mut Tx<'_>) -> Result<T, Error>,
 ) -> Result<(T, Vec<Event>, bool), Error> {
     let tx = sql.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let mut scope = Tx {
         tx,
+        authorizer,
         module,
         now: now_ms(),
         emitted: Vec::new(),
         enqueued: false,
     };
-    let value = change(&mut scope)?;
+    // Dropped before the transaction is, as it fails or panics too, so
+    // the kernel rolls it back.
+    let value = {
+        let _as = authorizer.enter(&scope.tx, module);
+        change(&mut scope)?
+    };
     let Tx {
         tx,
         emitted,
@@ -778,6 +864,19 @@ struct Stored {
 /// its own transaction. A database that has seen more steps than this engine
 /// knows was written by a newer engine and is not opened.
 pub(crate) fn migrate(sql: &mut Connection, ledger: &str, steps: &[&str]) -> Result<(), Error> {
+    migrate_in(sql, ledger, steps, None)
+}
+
+/// [`migrate`], with a module's tables: each step runs as the module
+/// through the writer's authorizer, and the foreign keys it leaves are
+/// read after it. A step that reaches past its module's tables is
+/// refused, and the store is not opened.
+fn migrate_in(
+    sql: &mut Connection,
+    ledger: &str,
+    steps: &[&str],
+    module: Option<(&Authorizer, &Tables)>,
+) -> Result<(), Error> {
     sql.execute_batch(
         "CREATE TABLE IF NOT EXISTS kernel_migrations (
             ledger TEXT NOT NULL,
@@ -803,7 +902,16 @@ pub(crate) fn migrate(sql: &mut Connection, ledger: &str, steps: &[&str]) -> Res
         .skip(usize::try_from(done).unwrap_or(usize::MAX))
     {
         let tx = sql.transaction()?;
-        tx.execute_batch(script)?;
+        match module {
+            None => tx.execute_batch(script)?,
+            Some((authorizer, tables)) => {
+                {
+                    let _as = authorizer.migrate(&tx, ledger);
+                    tx.execute_batch(script)?;
+                }
+                tables.parents_are_its_own(&tx)?;
+            }
+        }
         tx.execute(
             "INSERT INTO kernel_migrations (ledger, step, at) VALUES (?1, ?2, ?3)",
             params![ledger, step, now_ms()],
@@ -818,12 +926,29 @@ mod tests {
     use super::*;
     use crate::{Code, EventFilter, PersonId};
 
+    /// The notes module's tables, with `migrations`.
+    fn tables_of_notes(migrations: &'static [&'static str]) -> [Tables; 1] {
+        [Tables {
+            module: "notes",
+            legacy: &[],
+            migrations,
+        }]
+    }
+
     fn store(dir: &tempfile::TempDir) -> Store {
         Store::open(
             &dir.path().join("project.sqlite3"),
-            &[("notes", &["CREATE TABLE notes_items (text TEXT NOT NULL)"])],
+            &tables_of_notes(&["CREATE TABLE notes_items (text TEXT NOT NULL)"]),
         )
         .unwrap()
+    }
+
+    /// Whether `error` is the authorizer's refusal: SQLite's for a
+    /// statement, or for a function it uses, which comes as a plain error.
+    fn refused(error: &Error) -> bool {
+        matches!(error, Error::Database(e)
+            if e.sqlite_error_code() == Some(rusqlite::ErrorCode::AuthorizationForStatementDenied)
+                || e.to_string().starts_with("not authorized to use function"))
     }
 
     fn author() -> Participant {
@@ -1274,10 +1399,15 @@ mod tests {
             "UPDATE kernel_events SET payload = '\"changed\"'",
             "DELETE FROM kernel_events",
         ] {
-            let refused = store
+            // Not even by the kernel, which the authorizer lets through.
+            let rewritten = store
+                .write(KERNEL, move |tx| Ok(tx.kernel().execute(rewrite, [])?))
+                .await;
+            assert!(rewritten.is_err_and(|e| !refused(&e)), "{rewrite}");
+            let denied = store
                 .write("notes", move |tx| Ok(tx.sql().execute(rewrite, [])?))
                 .await;
-            assert!(refused.is_err(), "{rewrite}");
+            assert!(denied.is_err_and(|e| refused(&e)), "{rewrite}");
         }
     }
 
@@ -1285,21 +1415,222 @@ mod tests {
     async fn steps_run_once_and_a_newer_database_is_not_opened() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("project.sqlite3");
-        drop(
-            Store::open(
-                &path,
-                &[("notes", &["CREATE TABLE notes_items (text TEXT)"])],
-            )
-            .unwrap(),
-        );
-        drop(
-            Store::open(
-                &path,
-                &[("notes", &["CREATE TABLE notes_items (text TEXT)"])],
-            )
-            .unwrap(),
-        );
-        let older = Store::open(&path, &[("notes", &[])]);
+        let notes_items = tables_of_notes(&["CREATE TABLE notes_items (text TEXT)"]);
+        drop(Store::open(&path, &notes_items).unwrap());
+        drop(Store::open(&path, &notes_items).unwrap());
+        let older = Store::open(&path, &tables_of_notes(&[]));
         assert!(matches!(older, Err(Error::Refused(r)) if r.code == Code::Conflict));
+    }
+
+    #[tokio::test]
+    async fn a_module_s_change_and_reads_reach_its_own_tables_and_the_kernel_s_api() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store(&dir);
+        let who = author();
+        let seq = store
+            .write("notes", move |tx| {
+                tx.sql()
+                    .execute("INSERT INTO notes_items (text) VALUES ('kept')", [])?;
+                tx.enqueue("publish", "feed", &"kept")?;
+                Ok(tx.emit("added", 1, None, who, &"kept")?.seq)
+            })
+            .await
+            .unwrap();
+        let receipts = "SELECT count(*) FROM kernel_receipts";
+        let changed = store
+            .write("notes", move |tx| {
+                tx.sql()
+                    .execute("INSERT INTO notes_items (text) VALUES ('lost')", [])?;
+                Ok(tx
+                    .sql()
+                    .query_row(receipts, [], |row| row.get::<_, i64>(0))?)
+            })
+            .await;
+        assert!(changed.is_err_and(|e| refused(&e)));
+        let count = |sql: &Connection| {
+            Ok(
+                sql.query_row("SELECT count(*) FROM notes_items", [], |row| {
+                    row.get::<_, i64>(0)
+                })?,
+            )
+        };
+        assert_eq!(
+            store.read_as("notes", count).await.unwrap(),
+            1,
+            "rolled back"
+        );
+        let log = |sql: &Connection| Ok(sql.query_row(receipts, [], |row| row.get::<_, i64>(0))?);
+        let read = store.read_as("notes", log).await;
+        assert!(read.is_err_and(|e| refused(&e)));
+        let (at, notes) = store.view("notes", count).await.unwrap();
+        assert_eq!((at, notes), (seq, 1));
+        let viewed = store.view("notes", log).await;
+        assert!(viewed.is_err_and(|e| refused(&e)));
+        // The reader is the kernel's again, out of the view's transaction.
+        assert_eq!(store.read(log).await.unwrap(), 0);
+        let stranger = store.read_as("stranger", count).await;
+        assert!(stranger.is_err_and(|e| refused(&e)));
+    }
+
+    /// The count of `table`'s rows.
+    fn count(table: &'static str) -> impl FnOnce(&Connection) -> Result<i64, Error> + Send {
+        move |sql| {
+            Ok(
+                sql.query_row(&format!("SELECT count(*) FROM {table}"), [], |row| {
+                    row.get(0)
+                })?,
+            )
+        }
+    }
+
+    #[tokio::test]
+    async fn a_module_runs_no_transaction_nor_any_change_of_shape_as_it_runs() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store(&dir);
+        for sql in [
+            "INSERT INTO notes_items (text) VALUES ('early'); COMMIT",
+            "SAVEPOINT inner; INSERT INTO notes_items (text) VALUES ('inner')",
+            "CREATE TABLE notes_more (text TEXT)",
+            "ALTER TABLE notes_items ADD COLUMN at INTEGER",
+            "ALTER TABLE notes_items RENAME TO notes_old",
+            "ATTACH DATABASE ':memory:' AS elsewhere",
+            "PRAGMA writable_schema = ON",
+            "PRAGMA table_info(notes_items)",
+            "SELECT sql FROM sqlite_master",
+            "SELECT name FROM sqlite_sequence",
+            "DELETE FROM sqlite_sequence WHERE name = 'kernel_outbox'",
+        ] {
+            let ran = store
+                .write("notes", move |tx| Ok(tx.sql().execute_batch(sql)?))
+                .await;
+            assert!(matches!(&ran, Err(e) if refused(e)), "{sql}: {ran:?}");
+        }
+        assert_eq!(
+            store.read_as("notes", count("notes_items")).await.unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn a_module_s_read_holds_the_reader_in_no_transaction() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(
+            &dir.path().join("project.sqlite3"),
+            &[
+                tables_of_notes(&["CREATE TABLE notes_items (text TEXT NOT NULL)"])[0],
+                Tables {
+                    module: "other",
+                    legacy: &[],
+                    migrations: &["CREATE TABLE other_items (text TEXT NOT NULL)"],
+                },
+            ],
+        )
+        .unwrap();
+        let pinned = store
+            .read_as("notes", |sql| {
+                Ok(sql.execute_batch("SAVEPOINT pin; SELECT count(*) FROM notes_items")?)
+            })
+            .await;
+        assert!(pinned.is_err_and(|e| refused(&e)));
+        let who = author();
+        let seq = store
+            .write("notes", move |tx| {
+                Ok(tx.emit("added", 1, None, who, &"kept")?.seq)
+            })
+            .await
+            .unwrap();
+        let (at, others) = store.view("other", count("other_items")).await.unwrap();
+        assert_eq!((at, others), (seq, 0), "a view of now, from another module");
+    }
+
+    #[tokio::test]
+    async fn a_module_is_not_given_a_statement_the_kernel_cached() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store(&dir);
+        // No value is bound, so SQLite would hand it back as it was.
+        let receipts = "SELECT count(*) FROM kernel_receipts";
+        let cached = move |sql: &Connection| Ok(sql.prepare_cached(receipts).map(drop)?);
+        store.read(cached).await.unwrap();
+        let read = store.read_as("notes", cached).await;
+        assert!(read.is_err_and(|e| refused(&e)));
+        let written = store
+            .write("notes", move |tx| {
+                cached(&tx.kernel())?;
+                cached(tx.sql())
+            })
+            .await;
+        assert!(written.is_err_and(|e| refused(&e)));
+    }
+
+    #[tokio::test]
+    async fn both_connections_trust_no_function_the_schema_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store(&dir);
+        let trusted = |sql: &Connection| {
+            Ok(sql.query_row("PRAGMA trusted_schema", [], |row| row.get::<_, i64>(0))?)
+        };
+        assert_eq!(store.read(trusted).await.unwrap(), 0);
+        let written = store.write(KERNEL, move |tx| trusted(&tx.kernel()));
+        assert_eq!(written.await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn a_module_s_steps_reach_only_its_own_tables_and_those_it_kept_from_before() {
+        let dir = tempfile::tempdir().unwrap();
+        let refused_steps: [&'static [&'static str]; 10] = [
+            &["CREATE TABLE other_items (text TEXT)"],
+            &["CREATE INDEX notes_by_seq ON kernel_events (seq)"],
+            &["DROP TRIGGER kernel_events_are_not_changed"],
+            &["INSERT INTO kernel_migrations (ledger, step, at) VALUES ('other', 1, 0)"],
+            &["DELETE FROM sqlite_sequence WHERE name = 'kernel_outbox'"],
+            &["CREATE TABLE notes_old (text TEXT); DROP TABLE notes_old"],
+            &["CREATE VIEW notes_recent AS SELECT 1"],
+            &["CREATE TABLE notes_items (text TEXT);
+               CREATE TRIGGER notes_t AFTER INSERT ON notes_items BEGIN SELECT 1; END"],
+            &["CREATE TEMP TABLE notes_scratch (text TEXT)"],
+            &["CREATE TABLE notes_items (text TEXT); ALTER TABLE notes_items RENAME TO kernel_x"],
+        ];
+        let path = dir.path().join("refused.sqlite3");
+        for steps in refused_steps {
+            let opened = Store::open(&path, &tables_of_notes(steps));
+            assert!(opened.is_err_and(|e| refused(&e)), "{steps:?}");
+        }
+        // SQLite asks nothing of a key's parent: the kernel reads it after.
+        let keyed: [&'static [&'static str]; 2] = [
+            &["CREATE TABLE notes_items (seq INTEGER REFERENCES kernel_events (seq))"],
+            &["CREATE TABLE notes_items (id INTEGER PRIMARY KEY);
+               ALTER TABLE notes_items ADD COLUMN thread TEXT REFERENCES other_threads (id)"],
+        ];
+        for steps in keyed {
+            let opened = Store::open(&path, &tables_of_notes(steps));
+            assert!(
+                matches!(&opened, Err(Error::Refused(r)) if r.code == Code::Invalid),
+                "{steps:?}"
+            );
+        }
+        let renamed = [Tables {
+            module: "notes",
+            legacy: &["jots"],
+            // A key SQLite makes an index for, and keys between its tables.
+            migrations: &[
+                "CREATE TABLE jots_items (text TEXT PRIMARY KEY, at INTEGER UNIQUE);
+                 CREATE INDEX jots_by_at ON jots_items (at, text);
+                 CREATE TABLE notes_tags (item TEXT REFERENCES jots_items (text));",
+                "ALTER TABLE notes_tags ADD COLUMN seen INTEGER NOT NULL DEFAULT 0;
+                 CREATE TABLE notes_counted (id INTEGER PRIMARY KEY AUTOINCREMENT);",
+            ],
+        }];
+        let store = Store::open(&dir.path().join("kept.sqlite3"), &renamed).unwrap();
+        store
+            .write("notes", |tx| {
+                tx.sql().execute_batch(
+                    "INSERT INTO jots_items (text) VALUES ('kept');
+                     INSERT INTO notes_tags (item) VALUES ('kept');
+                     INSERT INTO notes_counted DEFAULT VALUES;",
+                )?;
+                Ok(())
+            })
+            .await
+            .unwrap();
     }
 }

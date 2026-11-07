@@ -63,6 +63,9 @@ fn the_kernel_names_no_module() {
 
 /// A module writes its own tables only: the event log, the receipts and the
 /// outbox are the kernel's, reached through `Tx::emit` and `Tx::enqueue`.
+/// The kernel's authorizer holds a module's SQL to that as it runs
+/// (`kernel/src/tables.rs`); this keeps a module's Rust from naming them
+/// too, as in SQL it would run on a connection of its own.
 #[test]
 fn no_module_touches_the_kernels_tables() {
     for folder in modules() {
