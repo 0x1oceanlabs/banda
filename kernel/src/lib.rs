@@ -57,7 +57,7 @@ pub use kernel::{Kernel, KernelBuilder, ProjectSummary, decode};
 pub use methods::{Kind, Method, Nothing, Picture, Tool};
 pub use module::{Call, Module, Scope, Stream, Wall};
 pub use outbox::{Claim, Effect, LONGEST_LEASE, Lease, OnRestart, Outcome, Retry, Settled};
-pub use passes::{Audience, Pass, secret};
+pub use passes::{Pass, secret};
 pub use project::{Committed, Heard, ModuleProject, Project, Tally};
 pub use reach::Reach;
 /// For `methods!` and `id!`, which name it from a module's crate.

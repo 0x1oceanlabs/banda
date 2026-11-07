@@ -82,6 +82,10 @@ struct Agreed {
     closes: bool,
 }
 
+/// A Thread's session open in a Harness process, and the pass it was
+/// given, if it was given one.
+pub(crate) type Open = (acp::SessionId, Option<Pass>);
+
 /// One Harness process and its Threads' sessions in it. Dropping it stops
 /// the process and everything it started.
 pub struct Connection {
@@ -92,12 +96,10 @@ pub struct Connection {
     /// When a turn last began or ended here, and the turns the Agent went
     /// on with by itself here, which keep the host as the engine's do.
     activity: Activity,
-    /// The Harness's session for each Thread, in this process.
-    sessions: tokio::sync::Mutex<HashMap<ThreadId, acp::SessionId>>,
-    /// The pass each Thread's session here was given, held while the
-    /// session is open: revoked as it is let go, or as the process stops
-    /// (ADR 0083, decision 2).
-    passes: Mutex<HashMap<ThreadId, Pass>>,
+    /// The Harness's session for each Thread, in this process, with the
+    /// pass it was given, held while the session is open: revoked as it is
+    /// let go, or as the process stops (ADR 0083, decision 2).
+    sessions: tokio::sync::Mutex<HashMap<ThreadId, Open>>,
     /// Whether its sessions load what the Project's folder names, as the
     /// Project's trust was when it started (ADR 0083, decision 5).
     trusted: bool,
@@ -127,7 +129,6 @@ impl Host for Connection {
             learned,
             activity: Activity::default(),
             sessions: Default::default(),
-            passes: Default::default(),
             trusted: harness.trusted(),
         }))
     }
@@ -150,20 +151,10 @@ impl Connection {
     /// Thread runs on another account now, and this process does not know
     /// what was said there (ADR 0078, decision 4).
     pub async fn forget_thread(self: &Arc<Self>, thread: ThreadId) {
-        let session = self.sessions.lock().await.remove(&thread);
-        if let Some(session) = session {
+        let open = self.sessions.lock().await.remove(&thread);
+        if let Some((session, _pass)) = open {
             Session::new(self, session).close().await;
         }
-        self.passes.lock().unwrap().remove(&thread);
-    }
-
-    /// Holds the pass `thread`'s session here was given, while it is open.
-    fn hold(&self, thread: ThreadId, pass: Option<Pass>) {
-        let mut passes = self.passes.lock().unwrap();
-        match pass {
-            Some(pass) => passes.insert(thread, pass),
-            None => passes.remove(&thread),
-        };
     }
 
     /// The Harness process.

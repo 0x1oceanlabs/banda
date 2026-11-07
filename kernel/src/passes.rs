@@ -14,14 +14,18 @@
 //!   renewed a term ahead as long as it does. Dropping it revokes it: its
 //!   session ended.
 //! - A pass no session of this run of the engine holds, as one of the run
-//!   before, lasts until it expires, a term after it was last renewed or
-//!   used. So an engine restart keeps the passes of the sessions that go
-//!   on, and lets go of the rest within the term.
+//!   before, lasts until it expires, at most a term after the run that
+//!   held it last renewed it; a use does not renew it. So an engine
+//!   restart keeps the passes of the sessions that go on, and lets go of
+//!   the rest within the term.
 //! - As the engine stops, every pass its sessions hold gets a whole term
 //!   and none is revoked ([`Passes::stopping`]).
 //! - A Project removed takes its passes with it.
 //! - A pass is taken only by its audience: today every pass is the API's,
 //!   `ws`.
+//! - A store that does not open is put aside, and a new one started: the
+//!   passes from before are gone, and the sessions that held them reach
+//!   Banda no more.
 
 use crate::{AgentId, Error, ProjectId, now_ms};
 use rusqlite::{Connection, OptionalExtension, params};
@@ -56,21 +60,19 @@ pub fn secret() -> Result<String, Error> {
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 
-/// Where a pass is taken (ADR 0083, decision 2): the API, the gateway's MCP
-/// over HTTP, or an isolated Project's door. Anywhere else it is refused.
+/// Where a pass is taken (ADR 0083, decision 2). Anywhere else it is
+/// refused. Today only the API takes passes; the store knows the
+/// gateway's MCP over HTTP and an isolated Project's door, which come
+/// with the fence.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Audience {
+pub(crate) enum Audience {
     Ws,
-    Gateway,
-    Door,
 }
 
 impl Audience {
     fn word(self) -> &'static str {
         match self {
             Audience::Ws => "ws",
-            Audience::Gateway => "gateway",
-            Audience::Door => "door",
         }
     }
 }
@@ -118,8 +120,31 @@ pub(crate) struct Passes {
 
 impl Passes {
     /// Opens the store at `path`, made for this user alone on first use, and
-    /// lets go of the passes that expired.
+    /// lets go of the passes that expired. One that does not open is put
+    /// aside beside it, and a new one made.
     pub(crate) fn open(path: &Path, term: Duration) -> Result<Arc<Passes>, Error> {
+        match Passes::opened(path, term) {
+            Ok(passes) => Ok(passes),
+            Err(error) => {
+                let aside = path.with_extension("sqlite3.broken");
+                tracing::error!(
+                    %error,
+                    aside = %aside.display(),
+                    "the passes' store did not open: it is put aside, and the Agents' sessions \
+                     from before reach Banda no more"
+                );
+                std::fs::rename(path, &aside)?;
+                for kept in ["-wal", "-shm"] {
+                    let mut file = path.as_os_str().to_owned();
+                    file.push(kept);
+                    let _ = std::fs::remove_file(file);
+                }
+                Passes::opened(path, term)
+            }
+        }
+    }
+
+    fn opened(path: &Path, term: Duration) -> Result<Arc<Passes>, Error> {
         if let Some(folder) = path.parent() {
             std::fs::create_dir_all(folder)?;
         }
@@ -194,40 +219,34 @@ impl Passes {
     }
 
     /// The Agent `pass` names and the Project it works in, when it is a
-    /// pass for `audience` that a session holds or that has not expired;
-    /// a use renews it.
+    /// pass for `audience` that a session holds, or that has not expired.
     pub(crate) fn holder(&self, pass: &str, audience: Audience) -> Option<(AgentId, ProjectId)> {
         let hash = hash(pass);
         let held = self.held().contains(&hash);
-        let found = (|| {
-            let sql = self.sql();
-            let row: Option<(String, String, String, i64)> = sql
-                .query_row(
-                    "SELECT agent, project, audience, expires_at FROM passes WHERE hash = ?1",
-                    params![hash],
-                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-                )
-                .optional()?;
-            let Some((agent, project, taken_by, expires)) = row else {
-                return Ok(None);
-            };
-            if taken_by != audience.word() || (!held && expires <= now_ms()) {
-                return Ok(None);
-            }
-            sql.execute(
-                "UPDATE passes SET expires_at = MAX(expires_at, ?2) WHERE hash = ?1",
-                params![hash, self.until()],
-            )?;
-            Ok::<_, Error>(Some((agent, project)))
-        })();
-        match found {
-            Ok(Some((agent, project))) => Some((agent.parse().ok()?, project.parse().ok()?)),
-            Ok(None) => None,
+        let (agent, project, taken_by, expires) = match self.row(&hash) {
+            Ok(row) => row?,
             Err(error) => {
                 tracing::error!(%error, "the passes could not be read");
-                None
+                return None;
             }
+        };
+        if taken_by != audience.word() || (!held && expires <= now_ms()) {
+            return None;
         }
+        Some((agent.parse().ok()?, project.parse().ok()?))
+    }
+
+    /// The Agent, Project, audience and expiry of the pass with `hash`.
+    fn row(&self, hash: &str) -> Result<Option<(String, String, String, i64)>, Error> {
+        let row = self
+            .sql()
+            .query_row(
+                "SELECT agent, project, audience, expires_at FROM passes WHERE hash = ?1",
+                params![hash],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .optional()?;
+        Ok(row)
     }
 
     /// Revokes the pass with `hash`: its session ended. Nothing while the
@@ -332,8 +351,22 @@ mod tests {
         assert_ne!(other.secret(), pass.secret(), "a session gets its own");
         assert_eq!(passes.holder("", Audience::Ws), None);
         assert_eq!(passes.holder(&secret().unwrap(), Audience::Ws), None);
-        // Only its audience takes it.
-        assert_eq!(passes.holder(pass.secret(), Audience::Gateway), None);
+        // Only its audience takes it: one for the gateway, which comes with
+        // the fence, is not the API's.
+        let gateway = secret().unwrap();
+        passes
+            .sql()
+            .execute(
+                "INSERT INTO passes VALUES (?1, ?2, ?3, 'gateway', 0, ?4)",
+                params![
+                    hash(&gateway),
+                    agent.to_string(),
+                    project.to_string(),
+                    i64::MAX
+                ],
+            )
+            .unwrap();
+        assert_eq!(passes.holder(&gateway, Audience::Ws), None);
     }
 
     #[test]
@@ -380,9 +413,10 @@ mod tests {
     }
 
     #[test]
-    fn a_pass_no_session_holds_lasts_a_term_from_its_last_use() {
+    fn a_pass_no_session_holds_lasts_the_term_its_last_engine_gave_it_and_a_use_does_not_renew_it()
+    {
         let dir = tempfile::tempdir().unwrap();
-        let term = Duration::from_millis(400);
+        let term = Duration::from_millis(600);
         let passes = open(&dir, term);
         let (agent, project) = (AgentId::new(), ProjectId::new());
         let pass = passes.issue(agent, project).unwrap();
@@ -392,11 +426,8 @@ mod tests {
         drop(passes);
         let again = open(&dir, term);
         std::thread::sleep(term / 2);
-        // A use renews it.
         assert!(again.holder(&secret, Audience::Ws).is_some());
         std::thread::sleep(term * 3 / 4);
-        assert!(again.holder(&secret, Audience::Ws).is_some());
-        std::thread::sleep(term * 5 / 4);
         assert_eq!(again.holder(&secret, Audience::Ws), None);
         // And it goes from the store as the next engine opens it.
         drop(again);
@@ -405,6 +436,21 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM passes", [], |row| row.get(0))
             .unwrap();
         assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn a_store_that_does_not_open_is_put_aside_and_a_new_one_made() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("passes.sqlite3");
+        std::fs::write(
+            &file,
+            b"not a database, and longer than its header ".repeat(4),
+        )
+        .unwrap();
+        let passes = open(&dir, TERM);
+        let pass = passes.issue(AgentId::new(), ProjectId::new()).unwrap();
+        assert!(passes.holder(pass.secret(), Audience::Ws).is_some());
+        assert!(dir.path().join("passes.sqlite3.broken").exists());
     }
 
     #[test]

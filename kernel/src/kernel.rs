@@ -166,8 +166,8 @@ impl KernelBuilder {
         self
     }
 
-    /// How long a pass no session holds lasts after its last use or
-    /// renewal, instead of an hour ([`passes::TERM`]).
+    /// How long a pass lasts past the last renewal of the session that
+    /// held it, instead of an hour ([`passes::TERM`]).
     pub fn pass_term(mut self, term: std::time::Duration) -> Self {
         self.pass_term = term;
         self
@@ -602,7 +602,7 @@ impl Kernel {
     }
 
     /// The Agent a pass names and the Project it works in, when the API
-    /// takes it, or `None`. A use renews it.
+    /// takes it, or `None`.
     pub fn holder(&self, pass: &str) -> Option<(AgentId, ProjectId)> {
         self.passes.holder(pass, Audience::Ws)
     }
