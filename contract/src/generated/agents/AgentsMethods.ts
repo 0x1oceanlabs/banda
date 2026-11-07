@@ -35,6 +35,7 @@ import type { ThreadView } from "./ThreadView";
 import type { Touching } from "./Touching";
 import type { TurnChanges } from "./TurnChanges";
 import type { VisualPage } from "./VisualPage";
+import type { WakeAsk } from "./WakeAsk";
 import type { WriteAsk } from "./WriteAsk";
 import type { Written } from "./Written";
 
@@ -210,19 +211,23 @@ notify: CommandMethod<Notify, string>,
 visual: CallMethod<OneVisual, VisualPage>, 
 /**
  * Snoozes your own Thread: it leaves your Person's list for
- * `after` (`30m`, `2h`, `1d`), or until `until`, in milliseconds
- * since the epoch. Anything that needs your Person wakes it
- * early, and so does their message. It does not wake you or
- * start a turn. Use it when you wait on something slow and have
- * nothing for your Person meanwhile; a Thread that asks cannot be
- * snoozed. A Person snoozes any Thread,
- * a Thread at work until its turn ends too (ADR 0074).
+ * `after` (`30m`, `2h`, `1d`, a year at most), or until `until`,
+ * in milliseconds since the epoch. Give one of them: with
+ * neither, it leaves the list only until this turn ends.
+ * Anything that needs your Person wakes it early, and so does
+ * their message. It does not wake you or start a turn. Use it
+ * when you wait on something slow and have nothing for your
+ * Person meanwhile. A Thread that asks cannot be snoozed, nor
+ * one your Person snoozed to go on by itself. A Person snoozes
+ * any Thread (ADR 0074).
  */
 snooze: CommandMethod<SnoozeAsk, null>, 
 /**
- * Brings a snoozed Thread back now. One awake stays so.
+ * Brings your own snoozed Thread back to your Person's list now,
+ * as when what you waited on came early. One awake stays so. A
+ * Person wakes any Thread (ADR 0074).
  */
-wake: CommandMethod<OneThread, null>, 
+wake: CommandMethod<WakeAsk, null>, 
 /**
  * Renames a Thread: one line of up to 120 characters. Without a
  * title, or with a blank one, its first message's title comes

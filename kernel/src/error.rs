@@ -93,6 +93,10 @@ pub enum Error {
     /// The Project's database closed while a change or a read waited for it.
     #[error("the Project's database has closed")]
     Closed,
+    /// The change panicked, and nothing of it was kept: its transaction
+    /// rolled back, and the writer went on to the next.
+    #[error("the change panicked and was rolled back")]
+    Panicked,
     #[error(transparent)]
     Refused(#[from] Refusal),
 }

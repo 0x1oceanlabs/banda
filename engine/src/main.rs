@@ -250,9 +250,11 @@ enum ThreadCommand {
         #[arg(long)]
         until: Option<i64>,
     },
-    /// Wakes a snoozed Thread now; one awake stays so.
+    /// Wakes a snoozed Thread now; one awake stays so. In a Thread, an
+    /// Agent's own is the default.
     Wake {
-        thread: String,
+        /// The Thread's ID; an Agent's own Thread when left out.
+        thread: Option<String>,
         /// Its Project; `$BANDA_PROJECT` when left out, as in a Thread.
         #[arg(long)]
         project: Option<ProjectId>,
@@ -580,9 +582,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
                 }
             };
             // In a Thread, the Agent's Project, by either of its names.
-            let project = project.or_else(|| {
-                std::env::vars().find_map(|(key, value)| banda_kernel::project_in_env(&key, &value))
-            });
+            let project = project.or_else(banda_kernel::project_from_env);
             print_call(&places, method, project, CommandId::new(), params).await
         }
         Command::Problems { what: None } => problems::list(&places).await,

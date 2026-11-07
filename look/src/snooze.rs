@@ -13,6 +13,10 @@ pub const MOST: usize = 8;
 /// A minute, an hour and a day, in milliseconds: `UNITS`' order.
 const UNIT_MS: [i64; 3] = [60_000, 3_600_000, 86_400_000];
 
+/// The longest a snooze lasts, in milliseconds: a year. The field reads
+/// no longer while, and the engine takes no later moment.
+pub const LONGEST: i64 = 365 * 86_400_000;
+
 const UNITS: [&[&str]; 3] = [
     &[
         "m",
@@ -102,8 +106,9 @@ pub fn reads(text: &str) -> bool {
 }
 
 /// How long a while in the field's words lasts, in milliseconds: `45m`,
-/// `2 h`, `1.5d`, `in 2 hours`, `через 3 часа`. Nothing for what is no
-/// while, as `fri` or `18:00`, whose moment needs the Person's clock.
+/// `2 h`, `1.5d`, `in 2 hours`, `через 3 часа`, up to a year. Nothing
+/// for what is no while, as `fri` or `18:00`, whose moment needs the
+/// Person's clock, nor for a while longer than [`LONGEST`].
 pub fn while_of(text: &str) -> Option<i64> {
     let lower = text.trim().to_lowercase();
     let all: Vec<&str> = lower.split_whitespace().collect();
@@ -112,13 +117,24 @@ pub fn while_of(text: &str) -> Option<i64> {
         [number, word] => (*number, *word),
         _ => return None,
     };
-    let n = number
-        .replace(',', ".")
+    let unit = UNITS.iter().position(|unit| unit.contains(&word))?;
+    let ms = number_of(number)? * UNIT_MS[unit] as f64;
+    (ms > 0.0 && ms <= LONGEST as f64).then(|| ms.round() as i64)
+}
+
+/// `2`, `1.5`, `1,5`: digits, then a point or a comma and digits, as the
+/// field reads a number. Never `inf`, `1e9`, `.5` or `5.`.
+fn number_of(text: &str) -> Option<f64> {
+    let (whole, part) = text.split_once(['.', ',']).unwrap_or((text, "0"));
+    let digits = |text: &str| !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit());
+    if !(digits(whole) && digits(part)) {
+        return None;
+    }
+    // Digits alone, so only too many of them make it endless.
+    format!("{whole}.{part}")
         .parse::<f64>()
         .ok()
-        .filter(|n| *n > 0.0)?;
-    let unit = UNITS.iter().position(|unit| unit.contains(&word))?;
-    Some((n * UNIT_MS[unit] as f64).round() as i64)
+        .filter(|n| n.is_finite())
 }
 
 /// The words without the one that leads into a time: `in`, `через`.
@@ -171,8 +187,29 @@ mod tests {
         assert_eq!(while_of("in 2 hours"), Some(7_200_000));
         assert_eq!(while_of("1.5d"), Some(129_600_000));
         assert_eq!(while_of("через 3 часа"), Some(10_800_000));
+        assert_eq!(while_of("365d"), Some(LONGEST));
         for text in ["fri", "18:00", "soon", "0h", "2 weeks"] {
             assert_eq!(while_of(text), None, "{text}");
         }
+        // Only the field's numbers, and never past a year: none of these
+        // may overflow the moment it ends at.
+        for text in [
+            "inf h",
+            "infd",
+            "NaN m",
+            "1e300 d",
+            "1e3m",
+            ".5h",
+            "5.h",
+            "1.2.3h",
+            "-1h",
+            "+1h",
+            "366d",
+            "99999999999999999999d",
+        ] {
+            assert_eq!(while_of(text), None, "{text}");
+        }
+        let endless = format!("{}d", "9".repeat(400));
+        assert_eq!(while_of(&endless), None);
     }
 }

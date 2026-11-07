@@ -3,11 +3,12 @@
 
 use crate::model::{Fact, Snooze, TurnState, Wake};
 use banda_kernel::{Participant, Refusal};
+use banda_look::snooze::LONGEST;
 
 /// Whether a Thread may be snoozed until `until`, or, without it, until
 /// the turn that runs ends, at `now`. One that `asks` may not be: what
 /// calls its Person is never put away. One snoozed until its turn ends
-/// needs a turn that `works`.
+/// needs a turn that `works`, and none sleeps longer than a year.
 pub fn may_snooze(asks: bool, works: bool, until: Option<i64>, now: i64) -> Result<(), Refusal> {
     if asks {
         return Err(Refusal::conflict(
@@ -16,6 +17,9 @@ pub fn may_snooze(asks: bool, works: bool, until: Option<i64>, now: i64) -> Resu
     }
     match until {
         Some(until) if until <= now => Err(Refusal::invalid("That time has passed.")),
+        Some(until) if until.saturating_sub(now) > LONGEST => {
+            Err(Refusal::invalid("A snooze lasts a year at most."))
+        }
         None if !works => Err(Refusal::conflict(
             "Only a Thread at work can be snoozed until it is done.",
         )),
@@ -27,6 +31,13 @@ pub fn may_snooze(asks: bool, works: bool, until: Option<i64>, now: i64) -> Resu
 /// its time has not come.
 pub fn asleep(snooze: &Snooze, now: i64) -> bool {
     snooze.woke.is_none() && snooze.until.is_none_or(|until| until > now)
+}
+
+/// Whether `snooze` is its Person's that goes on by itself (ADR 0074,
+/// decision 8), and has not yet: nothing woke it, and its turn has not
+/// gone again. While it is, it stays theirs to change.
+pub fn goes_on(snooze: &Snooze) -> bool {
+    matches!(snooze.by, Participant::Person(_)) && snooze.woke.is_none() && snooze.resume.is_some()
 }
 
 /// What `fact`, by `author`, would wake a snoozed Thread for: what
@@ -104,6 +115,38 @@ mod tests {
             may_snooze(false, false, None, NOW).is_err(),
             "until done needs work"
         );
+        assert!(may_snooze(false, false, Some(NOW + LONGEST), NOW).is_ok());
+        for later in [NOW + LONGEST + 1, i64::MAX] {
+            assert!(
+                may_snooze(false, false, Some(later), NOW).is_err(),
+                "a year at most"
+            );
+        }
+    }
+
+    #[test]
+    fn only_the_persons_snooze_that_has_yet_to_go_on_goes_on() {
+        let turn = Some(TurnId::new());
+        let going = Snooze {
+            resume: turn,
+            ..until(Some(NOW + 60))
+        };
+        assert!(goes_on(&going));
+        assert!(!goes_on(&until(Some(NOW + 60))), "it only sleeps");
+        let woken = Woke {
+            at: NOW,
+            by: Wake::Message,
+        };
+        let woke = Snooze {
+            woke: Some(woken),
+            ..going.clone()
+        };
+        assert!(!goes_on(&woke), "woken, it goes on no more");
+        let agents = Snooze {
+            by: Participant::Agent(AgentId::new()),
+            ..going
+        };
+        assert!(!goes_on(&agents), "an Agent's starts no turn");
     }
 
     #[test]

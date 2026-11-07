@@ -5,6 +5,10 @@
  */
 import { DAY, HOUR, MINUTE } from "@banda/ui/lib/words"
 
+/** The longest a snooze lasts: a year, as the engine takes it
+ * (`look/src/snooze.rs`). */
+const LONGEST = 365 * DAY
+
 /** One preset, as the picker lists it. */
 export type Preset = { label: string; at: number }
 
@@ -70,12 +74,14 @@ function read(text: string, now: number): When | undefined {
     .replace(/\s+/g, " ")
     .replace(/^(in|через|в|до) /, "")
   if (!words) return undefined
-  // A while: `45m`, `2 h`, `1.5d`, `3 часа`.
+  // A while: `45m`, `2 h`, `1.5d`, `3 часа`, up to a year.
   const span = /^(\d+(?:[.,]\d+)?) ?(\S+)$/.exec(words)
   const unit = span && UNITS.find(([unit]) => unit.test(span[2]))
   if (span && unit) {
     const after = Number(span[1].replace(",", ".")) * unit[1]
-    return after > 0 ? { kind: "while", at: now + after, after } : undefined
+    return after > 0 && after <= LONGEST
+      ? { kind: "while", at: now + after, after }
+      : undefined
   }
   if (WEEK.has(words)) {
     const days = daysTo(1, now) || 7

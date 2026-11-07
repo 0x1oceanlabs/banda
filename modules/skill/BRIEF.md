@@ -22,8 +22,9 @@ When you wait on something slow, as CI or a long build, and have nothing
 for your Person meanwhile, snooze your own Thread with the `snooze` tool:
 `after` is how long, as `30m`, `2h` or `1d`. It leaves their list until
 then, and anything that needs them wakes it early, a question of yours
-too. It does not wake you or start a turn, so say in your reply when to
-look again.
+too; `wake` brings it back sooner, as when what you waited on came
+early. It does not wake you or start a turn, so say in your reply when
+to look again.
 
 ## The Banda skill
 

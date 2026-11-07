@@ -75,7 +75,7 @@ use rules::Event;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use snoozes::SnoozeAsk;
+use snoozes::{SnoozeAsk, WakeAsk};
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::path::PathBuf;
@@ -356,16 +356,20 @@ banda_kernel::methods! {
         /// A Visual's page, as the window serves it.
         call visual(OneVisual) -> VisualPage, Read;
         /// Snoozes your own Thread: it leaves your Person's list for
-        /// `after` (`30m`, `2h`, `1d`), or until `until`, in milliseconds
-        /// since the epoch. Anything that needs your Person wakes it
-        /// early, and so does their message. It does not wake you or
-        /// start a turn. Use it when you wait on something slow and have
-        /// nothing for your Person meanwhile; a Thread that asks cannot be
-        /// snoozed. A Person snoozes any Thread,
-        /// a Thread at work until its turn ends too (ADR 0074).
+        /// `after` (`30m`, `2h`, `1d`, a year at most), or until `until`,
+        /// in milliseconds since the epoch. Give one of them: with
+        /// neither, it leaves the list only until this turn ends.
+        /// Anything that needs your Person wakes it early, and so does
+        /// their message. It does not wake you or start a turn. Use it
+        /// when you wait on something slow and have nothing for your
+        /// Person meanwhile. A Thread that asks cannot be snoozed, nor
+        /// one your Person snoozed to go on by itself. A Person snoozes
+        /// any Thread (ADR 0074).
         command snooze(SnoozeAsk) -> (), Write, tool "snooze";
-        /// Brings a snoozed Thread back now. One awake stays so.
-        command wake(OneThread) -> (), Write;
+        /// Brings your own snoozed Thread back to your Person's list now,
+        /// as when what you waited on came early. One awake stays so. A
+        /// Person wakes any Thread (ADR 0074).
+        command wake(WakeAsk) -> (), Write, tool "wake";
         /// Renames a Thread: one line of up to 120 characters. Without a
         /// title, or with a blank one, its first message's title comes
         /// back. Only a Person renames a Thread (ADR 0077).
@@ -1021,7 +1025,7 @@ impl Agents {
             .await
     }
 
-    async fn wake(&self, call: Call, OneThread { thread }: OneThread) -> Result<(), Refusal> {
+    async fn wake(&self, call: Call, WakeAsk { thread }: WakeAsk) -> Result<(), Refusal> {
         let author = call.participant();
         call.command(move |tx| snoozes::wake(tx, author, thread))
             .await

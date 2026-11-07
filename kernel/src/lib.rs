@@ -86,6 +86,15 @@ pub fn project_in_env(key: &str, value: &str) -> Option<ProjectId> {
         .flatten()
 }
 
+/// The Project this process's environment names, by either of
+/// `project_env`'s variables, read as they are: one that is not UTF-8,
+/// or no Project's ID, names none.
+pub fn project_from_env() -> Option<ProjectId> {
+    [PROJECT_VARIABLE, SPACE_VARIABLE]
+        .into_iter()
+        .find_map(|key| std::env::var(key).ok()?.parse().ok())
+}
+
 /// The variable that holds an Agent's pass for `banda`, in its `banda
 /// mcp` and in the shell it runs commands in (ADR 0019, decision 2).
 pub const TOKEN_VARIABLE: &str = "BANDA_TOKEN";
