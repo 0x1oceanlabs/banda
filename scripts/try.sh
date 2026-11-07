@@ -120,7 +120,12 @@ elif [[ -d $worktrees/$tree ]]; then
 else
   fail "no tree $tree (a path, or a slug in $worktrees)"
 fi
-[[ -f $tree/client/desktop/package.json ]] || fail "$tree is not a Banda checkout"
+# The window's folder. A branch not moved to ADR 0062's folders yet has it
+# where it was (decision 11).
+for desktop in {client,app}/desktop; do
+  [[ -f $tree/$desktop/package.json ]] && break
+done
+[[ -f $tree/$desktop/package.json ]] || fail "$tree is not a Banda checkout"
 slug=$(basename "$tree")
 trial=$trials/$slug
 # A unit's name takes letters, digits and _.:- only.
@@ -156,7 +161,7 @@ if ((build)); then
   fi
   pnpm --filter @banda/desktop exec install-electron
   pnpm --filter @banda/web build
-  (cd client/desktop && node build.mjs)
+  (cd "$desktop" && node build.mjs)
 fi
 [[ -x $trial/bin/banda ]] || fail "nothing built for $slug yet: run without --no-build"
 
@@ -177,7 +182,7 @@ close
 
 step "Banda Local from $slug"
 echo "Its things: $trial"
-cd client/desktop
+cd "$desktop"
 # Started from an AppImage's terminal (Banda Dev's, T3 Code's), the shell
 # carries that AppImage's variables, and the window would list and update
 # that one as itself (entry.ts, update.ts). T3 Code's makes Electron Node.
