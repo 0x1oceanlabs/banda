@@ -77,9 +77,12 @@ impl Places {
             .env("BANDA_THUMBNAILS", "")
             .env("BANDA_LOG", "warn")
             // The test's own engine, as its owner, wherever the tests run:
-            // in an Agent's shell too, which hands `banda` a pass.
+            // in an Agent's shell too, which hands `banda` a pass and names
+            // its Project.
             .env_remove("BANDA_TOKEN")
-            .env_remove("BANDA_ENGINE");
+            .env_remove("BANDA_ENGINE")
+            .env_remove("BANDA_PROJECT")
+            .env_remove("BANDA_SPACE");
         command
     }
 
@@ -742,6 +745,112 @@ fn a_project_the_person_does_not_trust_loads_only_their_own_settings() {
     let mine = holding("mine");
     let mine = ["project", "add", &mine, "--trusted", "true"];
     assert_eq!(added(&mine), json!(true));
+
+    drop(stdin);
+    assert!(engine.wait().unwrap().success());
+}
+
+#[test]
+fn an_agent_snoozes_its_own_thread_from_its_shell_and_the_person_any() {
+    let places = Places::new();
+    let (mut engine, stdin, _) = places.serve();
+    let work = places.ok("projects.create", None, json!({ "name": "Work" }));
+    let work = text(&work["id"]).to_owned();
+    let home = places.ok("projects.create", None, json!({ "name": "Home" }));
+    let home = text(&home["id"]).to_owned();
+    let sent = places.ok(
+        "agents.send",
+        Some(&work),
+        json!({ "harness": "fake", "text": "hello" }),
+    );
+    let mine = text(&sent["thread"]).to_owned();
+    let shells = wait_for(Duration::from_secs(30), || {
+        let bytes = std::fs::read(&places.shells).ok()?;
+        serde_json::from_slice::<Value>(&bytes).ok()
+    })
+    .expect("the session told what its shells get");
+    let (session, process) = (&shells["session"], &shells["process"]);
+    let theirs = places.ok(
+        "agents.send",
+        Some(&work),
+        json!({ "harness": "fake", "text": "hi there" }),
+    );
+    let theirs = text(&theirs["thread"]).to_owned();
+    let elsewhere = places.ok(
+        "agents.send",
+        Some(&home),
+        json!({ "harness": "fake", "text": "hello" }),
+    );
+    let elsewhere = text(&elsewhere["thread"]).to_owned();
+    let snooze_of = |project: &str, thread: &str| {
+        let listed = places.ok("agents.threads", Some(project), json!({}));
+        let threads = listed["threads"].as_array().unwrap();
+        let found = threads.iter().find(|t| t["id"] == json!(thread));
+        found.expect("the Thread is listed")["snooze"].clone()
+    };
+
+    // Its own Thread by default, in its Project, as itself.
+    let snoozed = places.as_agent(session, &["thread", "snooze", "--after", "30m"]);
+    assert!(snoozed.status.success(), "{snoozed:?}");
+    let snooze = snooze_of(&work, &mine);
+    assert_eq!(snooze["by"]["kind"], json!("agent"), "{snooze}");
+    assert!(snooze["until"].is_i64(), "{snooze}");
+    let woken = places.as_agent(session, &["thread", "wake", &mine]);
+    assert!(woken.status.success(), "{woken:?}");
+    assert!(snooze_of(&work, &mine)["woke"].is_object());
+
+    // Another Thread is its Person's, another Project is past its wall,
+    // and a pass of no Thread, its Harness's process's, has none of its own.
+    let other = ["thread", "snooze", &theirs, "--after", "30m"];
+    assert_eq!(refusal(&places.as_agent(session, &other)), "forbidden");
+    let past = [
+        "thread",
+        "snooze",
+        &elsewhere,
+        "--project",
+        &home,
+        "--after",
+        "1h",
+    ];
+    assert_eq!(refusal(&places.as_agent(session, &past)), "forbidden");
+    let named = places
+        .agent(session, &["thread", "wake", &elsewhere])
+        .env("BANDA_PROJECT", &home)
+        .output()
+        .unwrap();
+    assert_eq!(refusal(&named), "forbidden");
+    let bare = ["thread", "snooze", "--after", "30m"];
+    assert_eq!(refusal(&places.as_agent(process, &bare)), "forbidden");
+    assert_eq!(snooze_of(&work, &theirs), json!(null));
+
+    // The Person's CLI snoozes any Thread it names, in the Project its
+    // terminal names or it is told.
+    let any = [
+        "thread",
+        "snooze",
+        &theirs,
+        "--project",
+        &work,
+        "--after",
+        "2h",
+    ];
+    let any = places.banda(&any).output().unwrap();
+    assert!(any.status.success(), "{any:?}");
+    assert_eq!(snooze_of(&work, &theirs)["by"]["kind"], json!("person"));
+    let until = (snooze_of(&work, &mine)["until"].as_i64().unwrap() + 60_000).to_string();
+    let there = places
+        .banda(&["thread", "snooze", &elsewhere, "--until", &until])
+        .env("BANDA_PROJECT", &home)
+        .output()
+        .unwrap();
+    assert!(there.status.success(), "{there:?}");
+    assert_eq!(
+        snooze_of(&home, &elsewhere)["until"],
+        json!(until.parse::<i64>().unwrap())
+    );
+    let unnamed = ["thread", "snooze", "--project", &work, "--after", "1h"];
+    let unnamed = places.banda(&unnamed).output().unwrap();
+    assert_eq!(refusal(&unnamed), "invalid");
 
     drop(stdin);
     assert!(engine.wait().unwrap().success());
