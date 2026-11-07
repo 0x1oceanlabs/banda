@@ -38,7 +38,7 @@ import { ScrollPlace } from "../ScrollPlace"
 import { holds } from "../findIn"
 import { Minimap } from "../Minimap"
 import { Ended } from "./Ended"
-import { Entry } from "./Entry"
+import { Entry } from "../entries"
 import { useThreadAround } from "./context"
 
 type Answering = {
@@ -83,13 +83,13 @@ export function Transcript({
   // A reply forks its Thread at the end of its turn, once it may.
   const forkAt = (item: Item) => {
     const its = item.turn === undefined ? undefined : turns.get(item.turn)
-    return its && (its.can.fork ? () => acts.fork(its) : null)
+    return its && (its.can.fork ? its : null)
   }
   // A Person's message is edited from the turn that ran it first.
   const editAt = (item: Item) => {
     if (item.author.kind !== "person") return undefined
     const its = firstTurnOf(state.turns, item.id)
-    return its && (its.can.rewind ? () => acts.rewind(its, item) : null)
+    return its && (its.can.rewind ? its : null)
   }
   const forkedFrom = useMemo(
     () => state.forkedFrom && threadOf(writers, state.forkedFrom),
@@ -101,8 +101,8 @@ export function Transcript({
         return (
           <Entry
             item={line.item}
-            onFork={forkAt(line.item)}
-            onEdit={editAt(line.item)}
+            forks={forkAt(line.item)}
+            edits={editAt(line.item)}
             turn={line.item.turn ? turns.get(line.item.turn)?.state : undefined}
             asks={asks.has(line.item.id)}
             took={thoughts.get(line.item.id)}
