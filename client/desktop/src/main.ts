@@ -15,6 +15,7 @@
  * 0028). Settings are a Pane of the page; the desktop writes their files
  * (settings.ts, ADR 0016). It updates Banda itself (update.ts, ADR 0041).
  */
+import { existsSync } from "node:fs"
 import { userInfo } from "node:os"
 import { join, resolve, sep } from "node:path"
 import { pathToFileURL } from "node:url"
@@ -77,7 +78,7 @@ import { roadLayer } from "./road"
 import { settingsLayer } from "./settings"
 import { updates } from "./update"
 import { ensure } from "./sidebar"
-import { Program, whereOf } from "./program"
+import { NODE_FOLDER, Program, whereOf } from "./program"
 
 /** What a Pane in its own window asks of the window (`PoppedAsk`). */
 const PoppedAsk = Schema.Union([
@@ -157,6 +158,11 @@ delete process.env.BANDA_ENGINE
 
 const here = app.getAppPath()
 const pageFolder = resolve(here, "../web/dist")
+// Whether the app carries a Node of its own for the ACP adapters, as
+// Windows' does (ADR 0090, decision 5): the engine finds it beside its
+// program, and its copies carry it (program.ts).
+const ownNode =
+  app.isPackaged && existsSync(join(process.resourcesPath, NODE_FOLDER))
 // The window's `banda` (program.ts).
 const where = whereOf({
   named: process.env.BANDA_PROGRAM,
@@ -164,15 +170,18 @@ const where = whereOf({
   resources: app.isPackaged ? process.resourcesPath : undefined,
   data: dataFolder(app.getPath("appData")),
   // The copy names this Electron for an engine started with no window,
-  // when it stays where it is: an AppImage's goes as it stops.
-  electron: process.env.APPIMAGE ? undefined : process.execPath,
+  // when it stays where it is and the app carries no Node: an AppImage's
+  // goes as it stops.
+  electron: process.env.APPIMAGE || ownNode ? undefined : process.execPath,
 })
-// The Node the app provides for the ACP adapters it carries: this
-// Electron, which the engine it starts runs as Node (ADR 0059). The
-// engine finds the adapters itself, beside its program or in its
-// checkout; with no Node named, as for a `banda serve` started in a
+// The Node the app provides for the ACP adapters it carries: its own,
+// or else this Electron, which the engine it starts runs as Node (ADR
+// 0059). The engine finds the adapters itself, beside its program or in
+// its checkout; with no Node named, as for a `banda serve` started in a
 // shell, it finds one of its own (the harnesses' `carried.rs`).
-const node = { BANDA_NODE: process.execPath }
+const node: Record<string, string> = ownNode
+  ? {}
+  : { BANDA_NODE: process.execPath }
 
 // The window keeps its profile in the engine's state folder, so Banda,
 // Banda Dev, a checkout and a test never share one (ADR 0033).

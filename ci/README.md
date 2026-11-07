@@ -37,6 +37,14 @@ builds it, and on every push to main; `ci` waits for it.
   (`gh workflow run windows --ref <branch>`). It is not a merge gate, and
   each run keeps the `banda.exe` it built. With no cache its tests took
   6.5 minutes (2026-11-07).
+- `.github/workflows/release-windows.yml` packs Banda Dev's installer on
+  `windows-2025` (ADR 0090, step 5), by hand
+  (`gh workflow run release-windows --ref <branch>`) and on PRs that change
+  how it is packed. It installs it, installs it again over a program
+  running from its folder, and uninstalls it, then keeps the installer for
+  14 days. It starts the app too, which runs its engine from a copy and
+  removes old copies, and writes how long the run took to its summary. It
+  publishes nothing and is not a merge gate.
 
 ## The fence's tests
 

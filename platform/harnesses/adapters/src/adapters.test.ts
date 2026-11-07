@@ -37,6 +37,59 @@ test("Codex's adapter marks a session's folder trusted only in a trusted Project
   expect(level({ [variable]: "1" })).toBe("untrusted")
 })
 
+test("On Windows, Codex's adapter starts codex hidden, and with no shell to split its path", () => {
+  const manifest =
+    require.resolve("@agentclientprotocol/codex-acp/package.json")
+  const adapter = readFileSync(join(dirname(manifest), "dist/index.js"), "utf8")
+  // Each start of the Person's codex (CODEX_PATH): the app server's, and
+  // its own commands', as the terminal's sign-in runs (codex-acp#602).
+  const server = /^\s*(codex = .*\(codexPath, appServerStartupArgs, .*)$/m.exec(
+    adapter
+  )
+  const command = /^\s*(return .*\(codexPath, args, .*)$/m.exec(adapter)
+  if (!server || !command) throw new Error("codex-acp starts codex elsewhere")
+  /** How a start runs on `platform`: which call, with which options. */
+  const how = (start: string, platform: string) =>
+    runInNewContext(`(() => { ${start}; return codex })()`, {
+      process: { platform },
+      codexPath: "C:\\Program Files\\Codex\\codex.exe",
+      appServerStartupArgs: ["app-server"],
+      args: ["login"],
+      spawnEnv: {},
+      options: { env: {}, stdio: "inherit" },
+      import_cross_spawn: {
+        default: (_: string, __: string[], options: object) => ({
+          by: "cross-spawn",
+          options,
+        }),
+      },
+      spawn: (_: string, __: string[], options: object) => ({
+        by: "spawn",
+        options,
+      }),
+      spawn2: (_: string, __: string[], options: object) => ({
+        by: "spawn",
+        options,
+      }),
+      codex: undefined,
+    })
+  expect(how(server[1], "win32")).toEqual({
+    by: "cross-spawn",
+    options: { env: {}, windowsHide: true },
+  })
+  expect(how(server[1], "linux").by).toBe("spawn")
+  const commandOn = (platform: string) =>
+    how(`const codex = (() => { ${command[1]} })()`, platform)
+  expect(commandOn("win32")).toEqual({
+    by: "cross-spawn",
+    options: { env: {}, stdio: "inherit" },
+  })
+  expect(commandOn("linux")).toEqual({
+    by: "spawn",
+    options: { env: {}, stdio: "inherit" },
+  })
+})
+
 test("Claude Code's adapter resolves only the Person's own settings in a Project not trusted", () => {
   expect(untrusted({ [variable]: "1" })).toBe(true)
   expect(untrusted({ [variable]: "" })).toBe(false)

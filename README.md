@@ -149,10 +149,21 @@ scripts/package.sh dev    # or local
 
 It builds the engine for release, the page and the window, and packs an
 AppImage on Linux or an Apple silicon app in a zip on macOS, under
-`client/desktop/dist/` (ADR 0033). `BANDA_VERSION` names its version; unset,
-it is the workspace's version, marked local. The release workflow packs
-and publishes Dev on a green push to `main`
+`client/desktop/dist/` (ADR 0033). On Windows, under Git Bash, it packs a
+per-user installer for x64, with the Node the adapters run on there (ADR
+0090). `BANDA_VERSION` names its version; unset, it is the workspace's
+version, marked local. The release workflow packs and publishes Dev on a
+green push to `main`
 ([`.github/workflows/release.yml`](.github/workflows/release.yml)).
+
+Windows' installer is built by hand for now, and published nowhere
+([`.github/workflows/release-windows.yml`](.github/workflows/release-windows.yml)):
+`gh workflow run release-windows --ref <branch>`, then the run's artifact.
+It is Banda Dev, unsigned: SmartScreen warns once (More info, then Run
+anyway), and where Smart App Control is on, Windows refuses it. Its
+version is marked local, which sorts after every Dev of the same version:
+once Dev updates itself on Windows (ADR 0090, step 6), the first Dev goes
+over it by hand.
 
 The ways to bring Banda to Linux: [`docs/research/2026-11-02-linux-distribution.md`](docs/research/2026-11-02-linux-distribution.md).
 

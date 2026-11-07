@@ -5,7 +5,8 @@
  * as it stops, and whatever still runs from there dies, as `banda serve`
  * and `banda look --follow` did.
  *
- * The copy is `<data>/engine/<version>/banda`, beside `version`, which
+ * The copy is `<data>/engine/<version>/banda` (`banda.exe` on Windows,
+ * `PROGRAM`), beside `version`, which
  * holds what the program's `--version` says: its version and its build
  * id, and beside the ACP adapters the app carries (`adapters/`), which the
  * engine finds beside its program (ADR 0059): their files never run from
@@ -13,17 +14,28 @@
  * once with `--version`, and renamed into place only when it says the
  * same, so a half-written copy, or one that does not start, is never run.
  * A copy in place is run again while it is of the window's build, it and
- * its adapters as long as the program's, and says so when it is run; one
- * that goes while the window runs is made again before the next run. The
- * last two versions are kept; an older one goes once no program runs from
- * it.
+ * what it carries as long as the program's, and says so when it is run;
+ * one that goes while the window runs is made again before the next run.
+ * The last two versions are kept; an older one goes once no program runs
+ * from it.
  *
- * What runs the adapters is a Node: the window names its own Electron to
- * the engine it starts (main.ts). For an engine started with no window,
- * the copy also has `electron` beside it, which names this Electron, when
- * it stays where it is, as a macOS app's does. An AppImage's goes as it
- * stops, so its copy names none, and such an engine runs the adapters on a
- * `node` of the host's, when it has one (the harnesses' `carried.rs`).
+ * What runs the adapters is a Node. The Windows app carries one of its
+ * own (`node/node.exe`), which its copies carry too, and the engine runs
+ * them on it (ADR 0090, decision 5): Windows locks a program while it
+ * runs, so adapters on the installed app would make each install stop
+ * them. Elsewhere the window names its own Electron to the engine it
+ * starts (main.ts). For an engine started with no window, the copy also
+ * has `electron` beside it, which names this Electron, when it stays where
+ * it is, as a macOS app's does. An AppImage's goes as it stops, so its
+ * copy names none, and such an engine runs the adapters on a `node` of
+ * the host's, when it has one (the harnesses' `carried.rs`).
+ *
+ * On Windows nothing here tells which programs run, but a program that
+ * runs cannot be removed: an old copy is renamed aside first, its programs
+ * removed there first and the rest only then, and one whose program will
+ * not go is moved back (ADR 0090, decision 5). Putting a copy in place is tried for a few
+ * seconds, as Defender or the search indexer there may hold a file just
+ * written for a moment.
  *
  * A copy that cannot be made, as in a data folder that runs nothing, is
  * not the end of Banda: the window runs the packed program as before, and
@@ -38,6 +50,7 @@
  * Agent's test run leaves nothing behind.
  */
 import { execFileSync } from "node:child_process"
+import { randomUUID } from "node:crypto"
 import {
   existsSync,
   readdirSync,
@@ -65,23 +78,33 @@ import {
   Effect,
   Layer,
   Option,
+  Schedule,
   Semaphore,
   Stream,
 } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 
+/** The program's name: `banda`, or `banda.exe` on Windows (ADR 0090,
+ * decision 7), packed and copied alike. */
+export const PROGRAM = process.platform === "win32" ? "banda.exe" : "banda"
 /** The file beside a copy that says what its `--version` said. */
 const VERSION = "version"
 /** The folder of the adapters the app carries, beside its `banda` and its
  * copy's: where the engine looks for them (the harnesses' `carried::FOLDER`). */
 export const CARRIED = "adapters"
+/** The folder of the Node the Windows app carries to run them, beside its
+ * `banda.exe` and its copy's (the harnesses' `carried::NODE_FOLDER`). */
+export const NODE_FOLDER = "node"
+/** What a copy carries beside its program, each folder of it whole. */
+const BESIDE = [CARRIED, NODE_FOLDER]
 /** The file beside a copy that names the app's Electron, which runs the
  * adapters as Node (the harnesses' `carried::ELECTRON`). */
 export const ELECTRON = "electron"
 /** A version that names a folder: no slash, no leading dot. */
 const PLAIN = /^[0-9A-Za-z][0-9A-Za-z.+_-]*$/
-/** How long `banda --version` may take before it counts as broken. */
-const WAIT = "10 seconds"
+/** How long `banda --version` may take before it counts as broken: on
+ * Windows longer, as Defender scans a new program before its first run. */
+const WAIT = process.platform === "win32" ? "30 seconds" : "10 seconds"
 
 /** The `banda` the window has, and the folder it keeps its copies of it
  * in, when it runs a copy, with the Electron its copies name. */
@@ -104,7 +127,7 @@ export function whereOf(options: {
 }): Where {
   if (options.named) return { program: options.named }
   if (!options.resources) return { program: options.checkout }
-  const program = join(options.resources, "banda")
+  const program = join(options.resources, PROGRAM)
   if (existsSync(join(options.resources, "package-type"))) return { program }
   const copies = join(options.data, "engine")
   const { electron } = options
@@ -191,7 +214,7 @@ const copyIn = (program: string, folder: string) =>
         message: `${program} --version said ${JSON.stringify(said)}`,
       })
     const kept = join(folder, version)
-    const copy = join(kept, "banda")
+    const copy = join(kept, PROGRAM)
     if (textOf(join(kept, VERSION)) === said && whole(copy, program)) {
       const again = yield* Effect.option(versionOf(copy))
       if (Option.contains(again, said)) return copy
@@ -202,12 +225,12 @@ const copyIn = (program: string, folder: string) =>
     })
     yield* Effect.gen(function* () {
       yield* attempt(() => copyInto(program, fresh, said))
-      const copied = yield* versionOf(join(fresh, "banda"))
+      const copied = yield* versionOf(join(fresh, PROGRAM))
       if (copied !== said)
         return yield* new Uncopied({
           message: `its copy said ${JSON.stringify(copied)}, not ${JSON.stringify(said)}`,
         })
-      yield* attempt(() => putInPlace(fresh, kept))
+      yield* putInPlace(fresh, kept)
     }).pipe(
       Effect.onError(() =>
         attempt(() => rm(fresh, { recursive: true, force: true })).pipe(
@@ -257,43 +280,97 @@ const versionOf = (program: string) =>
   )
 
 /** Writes `program` into `fresh`, with its line tables when they lie
- * beside it (`banda.dSYM`, on macOS) and the adapters the app carries,
- * and `said` as its version. Its bytes are written, not the file copied,
- * so what the system marks a download with stays on the app. */
+ * beside it (`banda.dSYM` on macOS, `banda.pdb` on Windows), what the app
+ * carries beside it (`BESIDE`), and `said` as its version. Its bytes are
+ * written, not the file copied, so what the system marks a download with
+ * stays on the app. */
 async function copyInto(program: string, fresh: string, said: string) {
-  await writeFile(join(fresh, "banda"), await readFile(program), {
+  await writeFile(join(fresh, PROGRAM), await readFile(program), {
     mode: 0o755,
     flush: true,
   })
-  const tables = `${program}.dSYM`
-  if (existsSync(tables))
-    await cp(tables, join(fresh, "banda.dSYM"), { recursive: true })
-  const adapters = join(dirname(program), CARRIED)
-  if (existsSync(adapters))
-    await cp(adapters, join(fresh, CARRIED), { recursive: true })
+  const tables = {
+    "banda.dSYM": `${program}.dSYM`,
+    "banda.pdb": `${program.replace(/\.exe$/i, "")}.pdb`,
+  }
+  for (const [name, beside] of Object.entries(tables))
+    if (existsSync(beside))
+      await cp(beside, join(fresh, name), { recursive: true })
+  for (const name of BESIDE) {
+    const carried = join(dirname(program), name)
+    if (existsSync(carried))
+      await cp(carried, join(fresh, name), { recursive: true })
+  }
   await writeFile(join(fresh, VERSION), `${said}\n`, { flush: true })
 }
 
 /** Renames `fresh` to `kept`. A copy already there, of another build of
  * the same version, is moved aside first, and goes as an old one does. */
-async function putInPlace(fresh: string, kept: string) {
-  if (existsSync(kept)) await rename(kept, `${fresh}-old`)
-  await rename(fresh, kept)
-}
+const putInPlace = (fresh: string, kept: string) =>
+  Effect.gen(function* () {
+    if (existsSync(kept)) yield* renaming(kept, `${fresh}-old`)
+    yield* renaming(fresh, kept)
+  })
 
-/** Removes the old copies from `folder` (`prune`), apart from the start:
- * nothing waits for it, and it never stops the window. */
+/** The errors of a file another program holds a moment, as Defender or
+ * the search indexer holds one just written, on Windows. */
+const HELD = new Set(["EPERM", "EACCES", "EBUSY"])
+
+/**
+ * Renames `from` to `to`, tried again for up to ten seconds while the file
+ * is held (`HELD`): a copy not put in place leaves the window on the packed
+ * program, which each install then has to stop. A rename that still fails
+ * is `Uncopied`.
+ */
+export const renaming = (
+  from: string,
+  to: string,
+  renames: (from: string, to: string) => Promise<void> = rename
+) =>
+  Effect.tryPromise({
+    try: () => renames(from, to),
+    catch: (error) => error as NodeJS.ErrnoException,
+  }).pipe(
+    Effect.retry({
+      schedule: Schedule.spaced("200 millis").pipe(
+        Schedule.upTo({ duration: "10 seconds" })
+      ),
+      while: (error) => HELD.has(error.code ?? ""),
+    }),
+    Effect.mapError(
+      (error) => new Uncopied({ message: error.message ?? String(error) })
+    )
+  )
+
+/** Removes the old copies from `folder` (`prune`, or on Windows
+ * `pruneAside`), apart from the start: nothing waits for it, and it never
+ * stops the window. */
 const leaveTwo = (folder: string, kept: string) =>
-  Effect.try(() => prune(folder, kept, runningPrograms())).pipe(
+  (process.platform === "win32"
+    ? Effect.tryPromise(() => pruneAside(folder, kept))
+    : Effect.try(() => prune(folder, kept, runningPrograms()))
+  ).pipe(
     Effect.catch((error) =>
       Console.error(`banda: the engine's old copies stay: ${error.message}`)
     )
   )
 
+/** The copies in `folder` that go: every one but `kept` and the newest
+ * other one, and any dot-folder a failed or replaced copy left. */
+function oldCopies(folder: string, kept: string): string[] {
+  const folders = readdirSync(folder, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(folder, entry.name))
+  const leftover = (path: string) => basename(path).startsWith(".")
+  const copies = folders
+    .filter((path) => !leftover(path) && path !== kept)
+    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
+  return [...copies.slice(1), ...folders.filter(leftover)]
+}
+
 /**
- * Removes every copy in `folder` but `kept` and the newest other one, and
- * any dot-folder a failed or replaced copy left, unless a program in
- * `running` runs from inside it, by its path as given or its real path.
+ * Removes the old copies in `folder` (`oldCopies`), unless a program in
+ * `running` runs from inside one, by its path as given or its real path.
  * When what runs is not known, nothing is removed. Returns what it
  * removed.
  */
@@ -303,22 +380,57 @@ export function prune(
   running: readonly string[] | undefined
 ): string[] {
   if (!running) return []
-  const folders = readdirSync(folder, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => join(folder, entry.name))
-  const leftover = (path: string) => basename(path).startsWith(".")
-  const copies = folders
-    .filter((path) => !leftover(path) && path !== kept)
-    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
   const idle = (path: string) => {
     const inside = [path, realpathSync(path)].map((at) => at + sep)
     return !running.some((program) =>
       inside.some((at) => program.startsWith(at))
     )
   }
-  const old = [...copies.slice(1), ...folders.filter(leftover)].filter(idle)
+  const old = oldCopies(folder, kept).filter(idle)
   for (const path of old) rmSync(path, { recursive: true, force: true })
   return old
+}
+
+/** What a copy runs, the first to be removed: the engine before the Node
+ * its adapters run on, so a copy whose engine runs keeps its Node. */
+const PROGRAMS = [PROGRAM, join(NODE_FOLDER, "node.exe")]
+
+/**
+ * Removes the old copies in `folder` (`oldCopies`) as Windows allows,
+ * where nothing tells what runs: each is renamed aside, to a dot-folder,
+ * with `renames`, and its programs removed there first. Windows removes
+ * no program that runs, though it may move the folder one runs from: a
+ * copy that will not move stays, and one whose program will not go moves
+ * back.
+ * Returns what it removed.
+ */
+export async function pruneAside(
+  folder: string,
+  kept: string,
+  renames: (from: string, to: string) => Promise<void> = rename
+): Promise<string[]> {
+  const gone: string[] = []
+  for (const path of oldCopies(folder, kept)) {
+    const aside = join(folder, `.gone-${randomUUID()}`)
+    try {
+      await renames(path, aside)
+    } catch {
+      continue
+    }
+    try {
+      for (const program of PROGRAMS)
+        await rm(join(aside, program), { force: true })
+    } catch {
+      await renames(aside, path).catch(() => {})
+      continue
+    }
+    // What is held a moment longer goes at a later start, a dot-folder.
+    await rm(aside, { recursive: true, force: true, maxRetries: 3 }).catch(
+      () => {}
+    )
+    gone.push(path)
+  }
+  return gone
 }
 
 /** The programs this user's processes run, by their paths; none when that
@@ -374,18 +486,20 @@ const naming = (kept: string, electron: string | undefined) =>
   })
 
 /** Whether `copy` is whole: there, as long as `program`, and beside each
- * of the adapters beside `program`, as long as it. A copy made before the
- * app carried them is not. */
+ * file the app carries beside `program` (`BESIDE`), as long as it. A copy
+ * made before the app carried them is not. */
 function whole(copy: string, program: string): boolean {
-  const adapters = join(dirname(program), CARRIED)
-  const carried = existsSync(adapters) ? readdirSync(adapters) : []
-  return [
-    [copy, program],
-    ...carried.map((name) => [
-      join(dirname(copy), CARRIED, name),
-      join(adapters, name),
-    ]),
-  ].every(([kept, packed]) => sameSize(kept, packed))
+  const carried = BESIDE.flatMap((folder) => {
+    const packed = join(dirname(program), folder)
+    const names = existsSync(packed) ? readdirSync(packed) : []
+    return names.map((name) => [
+      join(dirname(copy), folder, name),
+      join(packed, name),
+    ])
+  })
+  return [[copy, program], ...carried].every(([kept, packed]) =>
+    sameSize(kept, packed)
+  )
 }
 
 /** Whether `kept` is there, as long as `packed`. */

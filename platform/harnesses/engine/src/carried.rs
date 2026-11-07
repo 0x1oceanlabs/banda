@@ -11,11 +11,14 @@
 //!   for a build from a checkout, what the harnesses' host package built
 //!   in it (`platform/harnesses/adapters/dist`).
 //! - The Node: [`NODE_VARIABLE`] when whoever started the engine names
-//!   one, as the window names its own Electron; else the packed app's own
-//!   Electron, beside the resources the engine's program is in; else the
-//!   Electron that [`ELECTRON`], beside the engine's own copy, names, as
-//!   the window wrote it for an app that stays where it is; else the first
-//!   `node` on PATH that is at least [`NODE_MINIMUM`].
+//!   one, as the window names its own Electron; else the Node the app
+//!   carries in [`NODE_FOLDER`] beside the engine's program, as Windows'
+//!   app does in its resources and its copies beside them (ADR 0090,
+//!   decision 5); else the packed app's own Electron, beside the resources
+//!   the engine's program is in; else the Electron that [`ELECTRON`],
+//!   beside the engine's own copy, names, as the window wrote it for an app
+//!   that stays where it is; else the first `node` on PATH that is at least
+//!   [`NODE_MINIMUM`].
 //!
 //! An Electron runs them as Node with `ELECTRON_RUN_AS_NODE`. A `node`
 //! needs no such variable, so the programs an Agent runs inherit none.
@@ -39,6 +42,13 @@ pub const NODE_VARIABLE: &str = "BANDA_NODE";
 /// `resources/adapters` (`client/desktop/electron-builder.config.mjs`),
 /// and the copy's (`client/desktop/src/program.ts`, `CARRIED`).
 pub const FOLDER: &str = "adapters";
+
+/// The folder of the Node the app carries, beside the engine's program:
+/// Windows' app's `resources\node\node.exe`, and its copy's
+/// (`client/desktop/src/program.ts`, `NODE_FOLDER`). Not beside the program
+/// itself: the engine puts its own folder first on every Agent's PATH, and
+/// a `node` there would stand in for the Person's own.
+pub const NODE_FOLDER: &str = "node";
 
 /// The file beside the engine's own copy that names the packed app's
 /// Electron, which runs the adapters as Node: the window writes it when
@@ -104,16 +114,24 @@ impl Carried {
                 let electron = name.is_none_or(|name| !name.starts_with("node"));
                 Node { program, electron }
             }
-            None => match packed(here).or_else(|| written(beside(ELECTRON)?)) {
-                Some(program) => Node {
+            None => {
+                let node = |program| Node {
+                    program,
+                    electron: false,
+                };
+                let electron = |program| Node {
                     program,
                     electron: true,
-                },
-                None => Node {
-                    program: node_on(var("PATH"))?,
-                    electron: false,
-                },
-            },
+                };
+                carried_node(beside(NODE_FOLDER))
+                    .map(node)
+                    .or_else(|| {
+                        packed(here)
+                            .or_else(|| written(beside(ELECTRON)?))
+                            .map(electron)
+                    })
+                    .or_else(|| node_on(var("PATH")).map(node))?
+            }
         };
         Some(Carried { adapters, node })
     }
@@ -146,6 +164,12 @@ fn packed(here: &Here) -> Option<PathBuf> {
         .filter(|path| runnable(path));
     let program = programs.next()?;
     programs.next().is_none().then_some(program)
+}
+
+/// The Node in `folder`, the one the app carries, when it is there.
+fn carried_node(folder: Option<PathBuf>) -> Option<PathBuf> {
+    let program = folder?.join(format!("node{}", std::env::consts::EXE_SUFFIX));
+    runnable(&program).then_some(program)
 }
 
 /// The program the file `record` names, when it names one that runs: an
@@ -330,6 +354,50 @@ mod tests {
     }
 
     #[test]
+    fn the_node_the_app_carries_runs_them_before_its_electron_or_one_on_path() {
+        let root = tempfile::tempdir().unwrap();
+        let bin = root.path().join("bin");
+        node(&bin, "v22.11.0");
+        // In the packed app's resources, beside its own Electron.
+        let banda = program(&root.path().join("app/resources/banda"));
+        std::fs::create_dir(root.path().join("app/resources/adapters")).unwrap();
+        program(&root.path().join("app/banda"));
+        let carried = node(&root.path().join("app/resources").join(NODE_FOLDER), "");
+        let here = Here {
+            program: &banda,
+            app: "banda",
+            checkout: false,
+        };
+        let expected = Node {
+            program: carried,
+            electron: false,
+        };
+        assert_eq!(found(&here, &[("PATH", &bin)]).unwrap().node, expected);
+
+        // In the engine's own copy, though it names an Electron too.
+        let banda = program(&root.path().join("data/engine/1.2.3/banda"));
+        std::fs::create_dir(root.path().join("data/engine/1.2.3/adapters")).unwrap();
+        let carried = node(&root.path().join("data/engine/1.2.3").join(NODE_FOLDER), "");
+        let electron = program(&root.path().join("Banda.app/Contents/MacOS/Banda"));
+        let record = root.path().join("data/engine/1.2.3").join(ELECTRON);
+        std::fs::write(&record, format!("{}\n", electron.display())).unwrap();
+        let here = Here {
+            program: &banda,
+            ..here
+        };
+        let carried = Node {
+            program: carried,
+            electron: false,
+        };
+        assert_eq!(found(&here, &[("PATH", &bin)]).unwrap().node, carried);
+
+        // One named still comes first: a trial's, a test's.
+        let named = Path::new("/usr/local/bin/node");
+        let node = found(&here, &[(NODE_VARIABLE, named)]).unwrap().node;
+        assert_eq!(node.program, named);
+    }
+
+    #[test]
     fn the_copy_of_an_app_that_stays_runs_them_on_the_electron_it_names() {
         let root = tempfile::tempdir().unwrap();
         let banda = program(&root.path().join("data/engine/1.2.3/banda"));
@@ -399,5 +467,39 @@ mod tests {
             checkout: false,
         };
         assert_eq!(found(&here, &[]), None);
+    }
+}
+
+// Windows tells a program by its name, not an exec bit: an empty
+// `banda.exe` and `node.exe` will do (windows.yml runs it).
+#[cfg(windows)]
+#[cfg(test)]
+mod windows_tests {
+    use super::*;
+
+    #[test]
+    fn the_node_the_app_carries_runs_them_before_one_on_path() {
+        let root = tempfile::tempdir().unwrap();
+        let resources = root.path().join("banda-dev/resources");
+        std::fs::create_dir_all(resources.join(FOLDER)).unwrap();
+        std::fs::create_dir_all(resources.join(NODE_FOLDER)).unwrap();
+        let banda = resources.join("banda.exe");
+        std::fs::write(&banda, "").unwrap();
+        let carried = resources.join(NODE_FOLDER).join("node.exe");
+        std::fs::write(&carried, "").unwrap();
+        let here = Here {
+            program: &banda,
+            app: "banda-dev",
+            checkout: false,
+        };
+        let path = root.path().join("bin").into_os_string();
+        let found = Carried::find_in(&here, |name| (name == "PATH").then(|| path.clone()));
+        assert_eq!(
+            found.map(|carried| carried.node),
+            Some(Node {
+                program: carried,
+                electron: false
+            })
+        );
     }
 }

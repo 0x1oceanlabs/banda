@@ -10,10 +10,17 @@
 // build tools are not shipped and are not read. Electron and Chromium bring
 // their own notices: electron-builder packs LICENSE.electron.txt and
 // LICENSES.chromium.html beside the app.
+//
+// The crates are those of the system the engine is built for: --target
+// names it when it is not this machine's, as the Rust target triple. The
+// Windows app also carries a Node (ADR 0090, decision 5): --node names the
+// folder scripts/node.mjs downloaded it into, with its LICENSE.
 import { createHash } from "node:crypto"
 import { execFileSync } from "node:child_process"
 import { readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
+import { parseArgs } from "node:util"
+import { NODE_RELEASE } from "./node.mjs"
 
 // Permissive, or MPL-2.0, which binds only its own files. Nothing that
 // would bind Banda's code, as the GPL does. A new one is Roma's call.
@@ -56,12 +63,28 @@ const VENDORED = [
   files: [file],
 }))
 
-const args = process.argv.slice(2)
-const notices = args[0] === "--notices" ? args[1] : undefined
-if (args.length && !notices) throw new Error("licenses.mjs [--notices FILE]")
+const { values: options } = (() => {
+  try {
+    return parseArgs({
+      options: {
+        notices: { type: "string" },
+        target: { type: "string" },
+        node: { type: "string" },
+      },
+    })
+  } catch {
+    throw new Error(
+      "licenses.mjs [--notices FILE] [--target TRIPLE] [--node FOLDER]"
+    )
+  }
+})()
+const { notices } = options
 
+// On Windows pnpm is pnpm.cmd, which only cmd.exe runs.
 const run = (command, args) =>
-  execFileSync(command, args, { encoding: "utf8", maxBuffer: 1 << 28 })
+  process.platform === "win32" && command === "pnpm"
+    ? run("cmd.exe", ["/d", "/c", command, ...args])
+    : execFileSync(command, args, { encoding: "utf8", maxBuffer: 1 << 28 })
 
 /** Whether an SPDX expression lets Banda ship it: one side of an OR, both
  * of an AND. `X WITH Y` is one name; `MIT/Apache-2.0`, as old crates
@@ -100,16 +123,16 @@ function allowed(expression) {
   return any() && at === tokens.length
 }
 
-/** The crates the banda binary is built from on this machine's platform:
- * normal dependencies, not tests' or build scripts'. */
-function crates() {
-  const host = run("rustc", ["-vV"]).match(/^host: (.+)$/m)[1]
+/** The crates the banda binary is built from for `target`, or else this
+ * machine's platform: normal dependencies, not tests' or build scripts'. */
+function crates(target) {
+  const platform = target ?? run("rustc", ["-vV"]).match(/^host: (.+)$/m)[1]
   const metadata = JSON.parse(
     run("cargo", [
       "metadata",
       "--format-version=1",
       "--locked",
-      `--filter-platform=${host}`,
+      `--filter-platform=${platform}`,
     ])
   )
   const nodes = new Map(metadata.resolve.nodes.map((n) => [n.id, n]))
@@ -173,8 +196,17 @@ const carries = (files, sha256) =>
       createHash("sha256").update(readFileSync(file)).digest("hex") === sha256
   )
 
+/** The Node the Windows app carries, by the LICENSE downloaded with it:
+ * Node's own, MIT, followed by those of what Node is built from. */
+const carriedNode = (folder) => ({
+  name: "Node.js",
+  version: NODE_RELEASE.version,
+  license: "MIT",
+  files: [join(folder, "LICENSE")],
+})
+
 const LICENSE_FILE = /^(licen[cs]e|copying|notice|unlicense)([.-].*)?$/i
-const shipped = [...crates(), ...npm()]
+const shipped = [...crates(options.target), ...npm()]
   .map(({ name, version, license, dir }) => ({
     name,
     version,
@@ -183,7 +215,7 @@ const shipped = [...crates(), ...npm()]
       .filter((file) => LICENSE_FILE.test(file))
       .map((file) => join(dir, file)),
   }))
-  .concat(VENDORED)
+  .concat(VENDORED, options.node ? [carriedNode(options.node)] : [])
   .map((p) => {
     const verified = VERIFIED_TEXT[`${p.name}@${p.version}`]
     if (p.license !== "Unknown" || !verified) return p

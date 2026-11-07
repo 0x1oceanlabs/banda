@@ -10,7 +10,8 @@ packages:
 
 allowBuilds:
   electron: true
-  # electron-builder's Windows installer; Banda isn't built for Windows (ADR 0033).
+  # Squirrel.Windows' installer, under electron-builder: Banda's Windows
+  # installer is NSIS (ADR 0090, decision 8).
   electron-winstaller: false
   esbuild: true
 
@@ -27,7 +28,9 @@ ignoredOptionalDependencies:
 # option for what Banda needs; each goes once its adapter takes one (ADR
 # 0062, decision 16). codex-acp marks every session's folder trusted: with
 # BANDA_UNTRUSTED set, as Banda sets it for a Project its Person has not
-# trusted, it marks none (ADR 0083, decision 5).
+# trusted, it marks none (ADR 0083, decision 5). On Windows it starts
+# codex hidden, and its commands with no shell, which split a path with a
+# space (codex-acp#602; ADR 0090, decision 3).
 patchedDependencies:
   "@agentclientprotocol/codex-acp@2.5.0": platform/harnesses/adapters/patches/@agentclientprotocol__codex-acp@2.5.0.patch
 
