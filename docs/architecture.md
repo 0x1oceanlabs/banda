@@ -332,10 +332,11 @@ stored as references.
 ## Modules
 
 A module is a bounded context with its own words, its own data and its own
-contract. It is one folder:
+contract. It is one folder: an App's in `apps/`, the platform's in
+`platform/` (ADR 0062, decision 11).
 
 ```
-modules/<name>/
+<name>/
   engine/      Rust crate: rules · store · operation · adapters
   pane/        React package: its window part, one defineModule
   module.toml  id, name, version, from Banda, settings files, unstable marks
@@ -919,15 +920,13 @@ module reaches a Harness through an adapter:
 ## Window
 
 ```
-client/desktop      Electron main: starts the engine, serves the page, hands it the address
-client/desktop-kit  what a module's part in main may use of main: its services, dialogs, errors, the bridge's answers, the byte host
-client/web          the page: the bar, the sidebar, the workspaces and the overview; the actions; the Pane registry
-client/ui           shadcn/ui (preset b0, on Base UI), Banda's Mark and sounds, and the Pane contract
-client/ghostty      T3 Code's Ghostty adapter: a terminal on a canvas
-apps/*/pane   each module's Panes
-platform/*/pane   each module's Panes
-apps/*/desktop  a module's part in Electron main
-platform/*/desktop  a module's part in Electron main
+client/desktop                      Electron main: starts the engine, serves the page, hands it the address
+client/desktop-kit                  what a module's part in main may use of main: its services, dialogs, errors, the bridge's answers, the byte host
+client/web                          the page: the bar, the sidebar, the workspaces and the overview; the actions; the Pane registry
+client/ui                           shadcn/ui (preset b0, on Base UI), Banda's Mark and sounds, and the Pane contract
+client/ghostty                      T3 Code's Ghostty adapter: a terminal on a canvas
+apps/*/pane, platform/*/pane        each module's Panes
+apps/*/desktop, platform/*/desktop  a module's part in Electron main
 ```
 
 - **The page reaches the engine only through the API.** Electron main gives
@@ -1218,7 +1217,8 @@ platform/*/desktop  a module's part in Electron main
 ```
 banda/
   kernel/             Rust: Project, event log, access, registry, API
-  modules/
+  engine/             the banda program: serve (the kernel and its modules), call, follow, look, skill, mcp, menu
+  apps/               each App's module (ADR 0062, decision 11)
     agents/engine/    Rust: Threads, turns, Questions, the ACP adapter
     agents/pane/      React: the Thread, the settings' Agents, each Thread as the sidebar lists it
     agents/desktop/   Electron main: serves the Visuals Agents show (ADR 0037)
@@ -1226,20 +1226,23 @@ banda/
     terminal/pane/    React: a terminal, drawn by Ghostty
     browser/pane/     React: the browser Pane, its tabs and row (ADR 0013)
     browser/desktop/  Electron main: the browser's pages and profiles, extensions, blocker and tab sockets (ADR 0028)
+  platform/           what the Apps stand on; it names no App (ADR 0062)
     skill/            Rust: the Banda skill, its core and the topics it gathers (ADR 0012)
-  look/               Rust: banda look, the look, the sidebar's arrangement and the browser's; skill/ its topics
-  platform/git-cli/   Rust: how Banda starts git: its own bookkeeping, which runs no program a repository names, and the acts the Person asks for
-  engine/             the banda program: serve (the kernel and its modules), call, follow, look, skill, mcp, menu
-  client/ui/             shadcn/ui and the Pane contract
-  client/ghostty/        T3 Code's Ghostty adapter and its WebAssembly, vendored
-  client/web/            React: the shell (bar, sidebar, workspaces, overview), the actions, the Pane registry
-  client/desktop/        Electron: the window and the engine's start; e2e tests
-  client/desktop-kit/    what a module's part in main may use of main (ADR 0028)
-  contract/           the engine's API for TypeScript: generated types and the client
+    look/             Rust: banda look, the look, the sidebar's arrangement and the browser's; skill/ its topics
+    settings/         Rust: Banda's settings files, each described once, and the one writer that changes them (ADR 0016)
+    git-cli/          Rust: how Banda starts git: its own bookkeeping, which runs no program a repository names, and the acts the Person asks for
+  client/             the window
+    ui/               shadcn/ui and the Pane contract
+    ghostty/          T3 Code's Ghostty adapter and its WebAssembly, vendored
+    web/              React: the shell (bar, sidebar, workspaces, overview), the actions, the Pane registry
+    desktop/          Electron: the window and the engine's start; e2e tests
+    desktop-kit/      what a module's part in main may use of main (ADR 0028)
+  sdk/contract/       the engine's API for TypeScript: generated types and the client
   tools/fake-agent/   a scripted ACP agent for tests and window checks; it replays recordings too
   scripts/check.sh    every check a change must pass
   scripts/try.sh      builds a tree and opens a window of its own from it, to click through
   scripts/local.sh    starts a checkout's window in a systemd unit of its own (ADR 0086)
+  scripts/layout.sh   moves the old folders where ADR 0062 puts them, on a branch made before too
   docs/               adr/ · architecture.md · research/
   GLOSSARY.md
 ```
