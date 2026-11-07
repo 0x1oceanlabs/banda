@@ -32,7 +32,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use ts_rs::TS;
 
-pub use panics::{append_private, catch as catch_panics, keep as keep_crash};
+pub use panics::{add as keep_crash, append_private, catch as catch_panics};
 
 /// The version of every event this module writes.
 pub const VERSION: u32 = 1;

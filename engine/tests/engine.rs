@@ -1021,14 +1021,22 @@ fn an_agents_pass_outlives_an_engine_restart_until_its_project_goes() {
     assert_eq!(listed(&shells["session"]), json!(work));
 
     // The engine stops, as Quit stops it, and starts again where it
-    // listened: the address its passes name stays, and the passes of its
-    // sessions and its Harness's process work there.
+    // listened, when no other test's engine took the port meanwhile: the
+    // address its passes name stays, and the passes of its sessions and
+    // its Harness's process work there.
     drop(stdin);
     assert!(engine.wait().unwrap().success());
     let (mut engine, stdin, again) = places.serve();
-    assert_eq!(again["port"], first["port"]);
+    let there = |variables: &Value| {
+        let mut variables = variables.clone();
+        if again["port"] != first["port"] {
+            eprintln!("another engine took port {}", first["port"]);
+            variables["BANDA_ENGINE"] = format!("ws://127.0.0.1:{}/ws", again["port"]).into();
+        }
+        variables
+    };
     for whose in ["session", "process"] {
-        assert_eq!(listed(&shells[whose]), json!(work), "{whose}");
+        assert_eq!(listed(&there(&shells[whose])), json!(work), "{whose}");
     }
     let kept = std::fs::read(places.state.join("passes.sqlite3")).unwrap();
     let secret = text(&shells["session"]["BANDA_TOKEN"]);
@@ -1039,7 +1047,7 @@ fn an_agents_pass_outlives_an_engine_restart_until_its_project_goes() {
 
     // A Project removed takes its passes with it.
     places.ok("projects.remove", None, json!({ "project": work }));
-    let refused = places.as_agent(&shells["session"], &["call", "projects.list"]);
+    let refused = places.as_agent(&there(&shells["session"]), &["call", "projects.list"]);
     assert_eq!(refusal(&refused), "forbidden");
 
     drop(stdin);

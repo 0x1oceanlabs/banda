@@ -34,7 +34,7 @@ pub struct Places {
 /// What a client needs to reach the running engine, and what `banda
 /// status` says of it. Only this machine's user can read the file that
 /// holds it.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Running {
     pub protocol: u32,
     pub port: u16,
@@ -53,9 +53,9 @@ pub struct Running {
     /// Its process.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pid: Option<u32>,
-    /// The systemd user unit it runs in, when it runs as the session's
-    /// service (ADR 0086, decision 1); none as a window's child or a
-    /// `banda serve` in a shell.
+    /// The systemd user unit it runs as, when it is the session's service
+    /// (ADR 0086, decision 1); none as a window's child, or a `banda
+    /// serve` in a shell, even one inside that unit (`service::own_unit`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unit: Option<String>,
 }
@@ -117,6 +117,16 @@ pub fn state_named() -> bool {
     std::env::var_os(STATE).is_some_and(|set| !set.is_empty())
 }
 
+/// What the state's place is under when no variable moves it.
+fn state_base() -> Option<PathBuf> {
+    dirs::state_dir().or_else(dirs::data_local_dir)
+}
+
+/// The state's place when no variable moves it.
+pub fn default_state() -> Option<PathBuf> {
+    state_base().map(|base| base.join(FOLDER))
+}
+
 fn place(variable: &str, default: Option<PathBuf>, under: &str) -> Result<PathBuf, Failure> {
     if let Some(set) = std::env::var_os(variable).filter(|v| !v.is_empty()) {
         return Ok(PathBuf::from(set));
@@ -130,14 +140,27 @@ fn place(variable: &str, default: Option<PathBuf>, under: &str) -> Result<PathBu
 
 impl Places {
     pub fn from_env() -> Result<Places, Failure> {
-        let state = dirs::state_dir().or_else(dirs::data_local_dir);
+        let [root, data, state, config, cache] = VARIABLES;
         Ok(Places {
-            root: place("BANDA_ROOT", dirs::home_dir(), "Banda")?,
-            data: place("BANDA_DATA", dirs::data_dir(), FOLDER)?,
-            state: place(STATE, state, FOLDER)?,
-            config: place("BANDA_CONFIG", dirs::config_dir(), FOLDER)?,
-            cache: place("BANDA_CACHE", dirs::cache_dir(), FOLDER)?,
+            root: place(root, dirs::home_dir(), "Banda")?,
+            data: place(data, dirs::data_dir(), FOLDER)?,
+            state: place(state, state_base(), FOLDER)?,
+            config: place(config, dirs::config_dir(), FOLDER)?,
+            cache: place(cache, dirs::cache_dir(), FOLDER)?,
         })
+    }
+
+    /// Every place under `base`, by its name: for tests.
+    #[cfg(test)]
+    pub fn under(base: &Path) -> Places {
+        let at = |name: &str| base.join(name);
+        Places {
+            root: at("root"),
+            data: at("data"),
+            state: at("state"),
+            config: at("config"),
+            cache: at("cache"),
+        }
     }
 
     /// Each place by the variable that moves it, so an engine started

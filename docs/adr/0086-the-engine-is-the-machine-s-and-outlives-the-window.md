@@ -253,6 +253,11 @@ Another machine (decision 8) is ADR 0081's plan, after step 3.
 - ADR 0041, decision 2: an update still restarts the window into the new
   version; the engine restarts from its new copy only when no Turn runs
   (decision 6).
+- Decision 1, as step 3 built it (2026-11-07): a client waits up to two
+  minutes, not 5 s, for an engine whose unit runs, as the engine answers
+  only once it has opened every Project, with their migrations. The
+  session's display and ssh agent come from the starter where the user
+  manager lacks them, as some desktops do not hand them to it.
 - The draft in PR #460, decision 6: the engine's own `hello` with a
   "generation" gives way to ADR 0082's `challenge`, `hello` with a
   range, and `welcome`.
