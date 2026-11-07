@@ -2,9 +2,11 @@
  * The engine as the session's service (ADR 0086, decisions 1 and 3):
  * closing the window leaves it and its Agents running, a window opened
  * again attaches to it, and Quit Banda stops it. Banda Local's engine is
- * the window's child, as every other test has it; this one asks for the
- * service with BANDA_ENGINE_AS. Where no systemd of the user's answers, as
- * in CI's containers, there is no service to start, and it says so.
+ * the window's child, as every other test has it; the first test asks for
+ * the service with BANDA_ENGINE_AS. Where no systemd of the user's
+ * answers, as in CI's containers, there is no service to start, and it
+ * says so. The last is the page's side of macOS's Quit, which main runs
+ * on every platform alike.
  */
 import { spawnSync } from "node:child_process"
 import { rmSync } from "node:fs"
@@ -82,6 +84,37 @@ test("closing the window leaves the engine and its Agent at work, and Quit Banda
   await page.keyboard.press("Control+q")
   const ask = page.getByRole("dialog", { name: "Quit Banda?" })
   await expect(ask).toContainText("An Agent is working. Stop it and quit?")
+  await ask.getByRole("button", { name: "Stop and quit" }).click()
+  await quitting
+  await expect.poll(() => statusOf(window!).running).toBe(false)
+})
+
+test("main runs the page's Quit Banda, as macOS's Quit does while Agents work, and it asks first (ADR 0086, decision 3)", async () => {
+  window = await startWindow()
+  dir = window.dir
+  const { app, page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("wait")
+  await composer.press("Enter")
+  await expect(thread.getByText("Waiting.", { exact: true })).toBeVisible()
+
+  // As main does on macOS where `banda stop` refused (closing.ts): it runs
+  // the action in the window, as what a Pane in its own window asks.
+  const quit = () =>
+    app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.webContents.send("popped.asked", {
+        run: { action: "banda.quit" },
+      })
+    )
+  await quit()
+  const ask = page.getByRole("dialog", { name: "Quit Banda?" })
+  await expect(ask).toContainText("An Agent is working. Stop it and quit?")
+  await ask.getByRole("button", { name: "Cancel" }).click()
+  await expect(ask).toBeHidden()
+  expect(statusOf(window).running).toBe(true)
+
+  await quit()
+  const quitting = app.waitForEvent("close")
   await ask.getByRole("button", { name: "Stop and quit" }).click()
   await quitting
   await expect.poll(() => statusOf(window!).running).toBe(false)
