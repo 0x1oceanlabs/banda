@@ -161,6 +161,13 @@ not known yet (Open questions, 1).
        and Windows interop (`/run/WSL`, `WSL_INTEROP`). Otherwise a
        fenced Agent reads those folders under `/mnt/c`, or through
        `powershell.exe`.
+   - **Banda never runs `wsl.exe` to learn whether WSL is there.** On
+     Windows 11 the `wsl.exe` in System32 is a stub: any command, even
+     `wsl --version`, downloads and installs WSL and turns on
+     VirtualMachinePlatform. The probe did exactly that on Roma's
+     laptop. The same goes for `bash.exe` in `WindowsApps`. Banda looks
+     for `%ProgramFiles%\WSL\wsl.exe` and reads the distros from
+     `HKCU\Software\Microsoft\Windows\CurrentVersion\Lxss` instead.
    - **WSL2 is not an environment of a Windows engine.** ADR 0084's
      decisions do not hold across that border:
      - paths differ inside and outside (`C:\…` against `/mnt/c/…`),
@@ -870,6 +877,23 @@ recommendation.
    it off on this test laptop: on builds before 25H2 it then stays off
    until Windows is reinstalled, which is fine for a test laptop.
    Otherwise signing has to move before step 5.
+
+   _Answered_ by the probe on 2026-11-07:
+   - Windows 11 Pro 25H2, build 26200.9457, x64 (Intel i7-1255U), 16 GB
+     of RAM, an NVMe disk with about 400 GB free, virtualization on in
+     the firmware. So Mica, ConPTY and MXC are all there.
+   - An admin account with UAC's default prompt; no domain, no Entra
+     ID, no MDM; no space or letter outside ASCII in the user name.
+   - Smart App Control is off, so an unsigned Banda runs. Developer
+     Mode and long paths are off.
+   - Keyboard layouts ru-UA, ru and en-US, switched with Windows'
+     default keys; no PowerToys.
+   - No Git for Windows, Node, PowerShell 7 or Claude Code. Codex CLI
+     0.150.1 is there from OpenAI's installer, with its own sandbox set
+     to `elevated`.
+   - WSL was not installed. The probe's `wsl --version` installed it
+     (WSL 3.0.3, no distro), which decision 2 now forbids Banda to do;
+     the probe no longer runs `wsl.exe`.
 
 2. **Native first, or a WSL2 host first?** _Recommendation:_ native
    first (decision 2). It depends on no other plan, and it works on a

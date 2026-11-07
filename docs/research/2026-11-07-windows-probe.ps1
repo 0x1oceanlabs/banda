@@ -1,6 +1,7 @@
 # What a Windows computer offers Banda (ADR 0090, plan step 0).
-# Read-only: it changes nothing, asks for no admin rights, and starts no
-# program that opens a window (it never runs a `claude` from WindowsApps,
+# Read-only: it changes nothing, asks for no admin rights, never runs
+# wsl.exe (a stub that installs WSL), and starts no program that opens a
+# window (it never runs a `claude` from WindowsApps,
 # which is Claude Desktop's and opens it).
 # Run in PowerShell:
 #   powershell -ExecutionPolicy Bypass -File 2026-11-07-windows-probe.ps1
@@ -80,13 +81,15 @@ Show "Switch layout with" $hotkeyName
 Show "PowerToys running (Alt+Space)" ([bool](Get-Process PowerToys* | Select-Object -First 1))
 
 "`n--- WSL"
-# wsl.exe writes UTF-16 unless WSL_UTF8 is set; an older one ignores it,
-# so the NULs are taken out too.
-$env:WSL_UTF8 = "1"
-if (Get-Command wsl.exe) {
-  & wsl.exe --version 2>&1 | Select-Object -First 3 | ForEach-Object { "$_" -replace '\x00', '' }
-  & wsl.exe -l -v 2>&1 | ForEach-Object { "$_" -replace '\x00', '' }
-} else { "no wsl.exe" }
+# Never run wsl.exe here. On Windows 11 the one in System32 is a stub:
+# any command, even `wsl --version`, downloads and installs WSL and turns
+# on VirtualMachinePlatform (this probe did that once, on 2026-11-07).
+# The WSL that is installed lives in Program Files; its distros are in
+# the registry.
+Show "WSL installed" (Test-Path "$env:ProgramFiles\WSL\wsl.exe")
+$distros = Get-ChildItem "HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss" |
+  ForEach-Object { (Get-ItemProperty $_.PSPath).DistributionName } | Where-Object { $_ }
+Show "WSL distros" ($distros -join ", ")
 
 "`n--- Programs on PATH (found, not run)"
 foreach ($p in "claude", "codex", "node", "npx", "git", "bash", "pwsh", "powershell", "winget", "code") {
