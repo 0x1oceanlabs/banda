@@ -300,17 +300,24 @@ neither (borders.5, device.5).
 | a key to its frame, p95, also at `--latency 150` | ≤ 16 ms |
 | a Tree | render ≤ 5 ms at p95, ≤ 30 KB |
 
-These are ADR 0088's. The hard ones (counts) gate in `motion.spec.ts`;
-timings gate softly once CI's variance is known.
+These are ADR 0088's. `client/desktop/e2e/motion.spec.ts` measures all
+but the last two (a key to its frame, a Tree) against
+`client/desktop/e2e/motion-budget.json`, which only warns while it is in
+record mode; then the hard ones (counts) gate, and timings gate softly once
+CI's variance is known.
 
 - **motion.1 Animate only `transform`, `translate`, `scale` and
   `opacity`.** Never width, height, left, top or a scroll offset per
-  frame, CSS transitions included. *Check:* planned (a ratchet on
-  `transition-[width|height|left|top]` and `transition-all`).
+  frame, CSS transitions included. *Check:* a ratchet in
+  `client/web/src/architecture.test.ts` lists today's `transition-all`,
+  transitions and keyframes of a size or a place, and the list only falls.
 - **motion.2 Never read layout in a tick that writes it.** Read
   `offset*`, `getBoundingClientRect` and `getComputedStyle` when a move
   starts or settles, or in the clock's read phase (`afterMoves`).
-  *Check:* planned (motion.spec counts reads inside moves).
+  *Check:* motion.spec counts the reads of `offset*`, `client*`,
+  `scroll*` and the rects inside the page's ticks, those `afterMoves`
+  may make too, and the layouts in each moving frame; only the layouts
+  have budgets, which gate when they leave record mode.
 - **motion.3 No animation-frame loop of your own.** Use the shared clock
   (`client/ui/src/lib/frames.ts`) and the platform's motion driver, and
   ask for ticks only while something moves. *Check:* planned (an
@@ -425,9 +432,11 @@ each `[unstable]` mark says why and their count stays at the ceiling
 (`scripts/check.sh:63-65`); the generated TypeScript matches the Rust;
 prettier, ESLint, typecheck and tests; each App's Pane imports only the
 contract, the kit, React and lucide; only `modules.ts` and the bridge
-table name an App's package (`client/web/src/architecture.test.ts:41-90`);
-the window's end-to-end tests, and motion.spec, which measures and asserts
-nothing yet.
+table name an App's package (`client/web/src/architecture.test.ts:45-96`);
+the window's end-to-end tests; nothing more animates a size or a place
+(`client/web/src/architecture.test.ts:98-154`); and motion.spec, which
+measures every phase against `client/desktop/e2e/motion-budget.json` and,
+in record mode, only warns.
 
 **Planned,** each an allowlist whose count only falls:
 

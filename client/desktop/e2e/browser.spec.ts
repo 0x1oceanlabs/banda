@@ -17,6 +17,7 @@ import {
   agentSays,
   firstThread,
   GLASS,
+  pressInPage,
   SANDBOXED,
   startWindow,
   textOf,
@@ -63,32 +64,6 @@ function inPages(app: ElectronApplication, code: string): Promise<unknown[]> {
     // it goes back.
     return Promise.all(pages.map((page) => page.executeJavaScript(code, true)))
   }, code)
-}
-
-/**
- * Presses a key in the browser page that has the focus as the keyboard
- * does. Playwright's own
- * keys skip Electron's `before-input-event`, where the desktop takes
- * Banda's keys from a page.
- */
-async function pressInPage(
-  app: ElectronApplication,
-  keyCode: string,
-  modifiers: ("alt" | "shift" | "control")[],
-  types: ("keyDown" | "keyUp")[] = ["keyDown", "keyUp"]
-) {
-  await app.evaluate(
-    ({ webContents }, { keyCode, modifiers, types }) => {
-      const pages = webContents
-        .getAllWebContents()
-        .filter((contents) => contents.getType() === "webview")
-      const page = pages.find((each) => each.isFocused()) ?? pages[0]!
-      for (const type of types) {
-        page.sendInputEvent({ type, keyCode, modifiers })
-      }
-    },
-    { keyCode, modifiers, types }
-  )
 }
 
 /** Opens a browser beside the first Thread; returns its address bar. */
@@ -235,7 +210,7 @@ test("with Alt held in a browser's page, the mouse moves its Pane from the page"
   await held.click()
   await expect.poll(() => inPages(app, "document.hasFocus()")).toEqual([true])
   const alt = (type: "keyDown" | "keyUp") =>
-    pressInPage(app, "Alt", ["alt"], [type])
+    pressInPage(app, "Alt", ["alt"], { types: [type] })
   await alt("keyDown")
   await expect(page.locator("html[data-mod]")).toHaveCount(1)
   await expect.poll(pointer).toBe("none")

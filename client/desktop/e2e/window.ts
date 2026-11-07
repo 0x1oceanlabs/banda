@@ -86,6 +86,10 @@ function fakeCli(dir: string, version: string, minimum: string): string {
   return `cli = { program = ${program}, variable = "FAKE_AGENT_CLI", minimum = ${JSON.stringify(minimum)} }\n`
 }
 
+/** How main's line starts, on its console, when one of the window's
+ * processes went. */
+const GONE = "window.ts:"
+
 /** A file's text, empty until it is written: `expect.poll` stops at a
  * throw, so a file the next click creates is read this way. */
 export const textOf = (file: string) =>
@@ -183,12 +187,32 @@ export async function startWindow({
     ),
     chromiumSandbox: SANDBOXED,
   })
+  // Playwright says only that a page crashed: main says why.
+  app.on("console", (message) => {
+    if (message.text().startsWith(GONE)) console.warn(message.text())
+  })
+  await app.evaluate(({ app }, gone) => {
+    app.on("render-process-gone", (_, contents, { reason, exitCode }) =>
+      console.log(
+        `${gone} a ${contents.getType()}'s page went: ${reason}, code ${exitCode}`
+      )
+    )
+    app.on("child-process-gone", (_, { type, reason, exitCode }) => {
+      if (reason !== "clean-exit")
+        console.log(
+          `${gone} the ${type} process went: ${reason}, code ${exitCode}`
+        )
+    })
+  }, GONE)
   const page = await app.firstWindow()
   // A headless screen is small; the window takes a laptop's size.
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0]?.setContentSize(1280, 800)
   )
-  await page.setViewportSize({ width: 1280, height: 800 })
+  // Playwright's viewport holds the page at a scale of 1, whatever the
+  // screen's: on a screen of another, the window's own size is the page's.
+  if (deviceScaleFactor === 1)
+    await page.setViewportSize({ width: 1280, height: 800 })
   // No test starts an editor of the machine's: none is found, unless the
   // test says which (`editorsOn`).
   await editorsOn(app, [])
@@ -217,6 +241,39 @@ export async function startWindow({
       rmSync(dir, { recursive: true, force: true })
     },
   }
+}
+
+/**
+ * Presses a key in the browser page that has the focus, as the keyboard
+ * does: Playwright's own keys skip Electron's `before-input-event`, where
+ * the desktop takes Banda's keys from a page. `keyCode` and `modifiers` are
+ * Electron's. With no page focused, the first page takes it, unless
+ * `focused` says only a focused one may. Whether a page took it.
+ */
+export async function pressInPage(
+  app: ElectronApplication,
+  keyCode: string,
+  modifiers: ("alt" | "shift" | "control")[],
+  {
+    types = ["keyDown", "keyUp"],
+    focused = false,
+  }: { types?: ("keyDown" | "keyUp")[]; focused?: boolean } = {}
+): Promise<boolean> {
+  return app.evaluate(
+    ({ webContents }, { keyCode, modifiers, types, focused }) => {
+      const pages = webContents
+        .getAllWebContents()
+        .filter((contents) => contents.getType() === "webview")
+      const page =
+        pages.find((each) => each.isFocused()) ??
+        (focused ? undefined : pages[0])
+      if (!page) return false
+      for (const type of types)
+        page.sendInputEvent({ type, keyCode, modifiers })
+      return true
+    },
+    { keyCode, modifiers, types, focused }
+  )
 }
 
 /**

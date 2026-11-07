@@ -1,0 +1,172 @@
+{
+  "mode": "record",
+  "measures": [
+    {
+      "measure": "quiet.ticks.callbacksPerSecond",
+      "gate": "hard",
+      "budget": 0
+    },
+    {
+      "measure": "printing.draws.hidden",
+      "gate": "hard",
+      "budget": 0,
+      "tolerance": 0.2,
+      "note": "follows the lines the shell prints, until P2"
+    },
+    {
+      "measure": "focus.moving.layouts",
+      "gate": "hard",
+      "budget": 0
+    },
+    {
+      "measure": "workspace.moving.layouts",
+      "gate": "hard",
+      "budget": 0
+    },
+    {
+      "measure": "width.moving.layouts",
+      "gate": "hard",
+      "budget": 0,
+      "note": "after P7, if B or C is picked"
+    },
+    {
+      "measure": "width.fits",
+      "gate": "hard",
+      "budget": 6,
+      "tolerance": 0.2,
+      "note": "one per width change, after P7; until then, follows the frames each change gets"
+    },
+    {
+      "measure": "printing.page.trailing",
+      "gate": "hard",
+      "budget": 0
+    },
+    {
+      "measure": "quiet.page.trailing",
+      "gate": "hard",
+      "budget": 0
+    },
+    {
+      "measure": "width.page.trailing",
+      "gate": "hard",
+      "budget": 0
+    },
+    {
+      "measure": "focus.page.trailing",
+      "gate": "hard",
+      "budget": 0
+    },
+    {
+      "measure": "maximize.page.trailing",
+      "gate": "hard",
+      "budget": 0
+    },
+    {
+      "measure": "workspace.page.trailing",
+      "gate": "hard",
+      "budget": 0
+    },
+    {
+      "measure": "overview.page.trailing",
+      "gate": "hard",
+      "budget": 0
+    },
+    {
+      "measure": "width.moving.mainMs.p95",
+      "gate": "soft",
+      "budget": 4
+    },
+    {
+      "measure": "focus.moving.mainMs.p95",
+      "gate": "soft",
+      "budget": 4
+    },
+    {
+      "measure": "maximize.moving.mainMs.p95",
+      "gate": "soft",
+      "budget": 4
+    },
+    {
+      "measure": "workspace.moving.mainMs.p95",
+      "gate": "soft",
+      "budget": 4
+    },
+    {
+      "measure": "overview.moving.mainMs.p95",
+      "gate": "soft",
+      "budget": 4
+    },
+    {
+      "measure": "focus.tasks.longestMs",
+      "gate": "soft",
+      "budget": 8.3
+    },
+    {
+      "measure": "workspace.tasks.longestMs",
+      "gate": "soft",
+      "budget": 8.3
+    },
+    {
+      "measure": "focus.longFrames.count",
+      "gate": "soft",
+      "budget": 0,
+      "note": "never a long animation frame in a move that only translates"
+    },
+    {
+      "measure": "workspace.longFrames.count",
+      "gate": "soft",
+      "budget": 0,
+      "note": "never a long animation frame in a move that only translates"
+    }
+  ],
+  "recorded": {
+    "1": {
+      "quiet.ticks.callbacksPerSecond": 122.1,
+      "printing.draws.hidden": 45.2,
+      "focus.moving.layouts": 0,
+      "workspace.moving.layouts": 0.03,
+      "width.moving.layouts": 1.39,
+      "width.fits": 52,
+      "printing.page.trailing": 0,
+      "quiet.page.trailing": 0,
+      "width.page.trailing": 0,
+      "focus.page.trailing": 0,
+      "maximize.page.trailing": 0,
+      "workspace.page.trailing": 0,
+      "overview.page.trailing": 0,
+      "width.moving.mainMs.p95": 4.5,
+      "focus.moving.mainMs.p95": 3.6,
+      "maximize.moving.mainMs.p95": 4.6,
+      "workspace.moving.mainMs.p95": 3.3,
+      "overview.moving.mainMs.p95": 6.8,
+      "focus.tasks.longestMs": 10.1,
+      "workspace.tasks.longestMs": 13.7,
+      "focus.longFrames.count": 0,
+      "workspace.longFrames.count": 0
+    },
+    "1.6": {
+      "quiet.ticks.callbacksPerSecond": 122.2,
+      "printing.draws.hidden": 44.9,
+      "focus.moving.layouts": 0,
+      "workspace.moving.layouts": 0.04,
+      "width.moving.layouts": 1.38,
+      "width.fits": 51,
+      "printing.page.trailing": 0,
+      "quiet.page.trailing": 0,
+      "width.page.trailing": 0,
+      "focus.page.trailing": 0,
+      "maximize.page.trailing": 0,
+      "workspace.page.trailing": 0,
+      "overview.page.trailing": 0,
+      "width.moving.mainMs.p95": 4.9,
+      "focus.moving.mainMs.p95": 4,
+      "maximize.moving.mainMs.p95": 6.4,
+      "workspace.moving.mainMs.p95": 4.1,
+      "overview.moving.mainMs.p95": 7.3,
+      "focus.tasks.longestMs": 10.7,
+      "workspace.tasks.longestMs": 22.1,
+      "focus.longFrames.count": 0,
+      "workspace.longFrames.count": 0
+    }
+  }
+}
