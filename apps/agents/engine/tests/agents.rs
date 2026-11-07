@@ -63,6 +63,7 @@ fn fake_with(env: &[(&str, &str)]) -> Harness {
         mark: None,
         colour: None,
         carried: None,
+        found: None,
         record: None,
     }
 }
@@ -1367,6 +1368,7 @@ fn with_cli_since(program: &str, minimum: Option<&str>) -> Agents {
         mark: None,
         colour: None,
         carried: None,
+        found: None,
         record: None,
     }]))
 }
@@ -2862,14 +2864,22 @@ async fn a_command_that_ends_after_its_turn_opens_no_turn() {
 /// Starts the real Claude Code and Codex adapters on the Person's own CLIs
 /// and asks what they run and who is signed in; no model is called. Run it
 /// by hand: `cargo test -p banda-agents --test agents real -- --ignored
-/// --nocapture`. With `BANDA_NODE` (an Electron) and `BANDA_ADAPTERS`
-/// (`platform/harnesses/desktop/adapters`, from `pnpm --filter
-/// @banda/harnesses-desktop adapters`) set, these real runs go through the
-/// adapters the app carries, as Banda's do; without, `npx` fetches them.
+/// --nocapture`. Once `pnpm --filter @banda/harnesses-adapters build` has
+/// built them, these real runs go through the adapters Banda carries, on
+/// the `node` on PATH or `BANDA_NODE`, as `banda serve` finds them in a
+/// checkout; without, `npx` fetches them.
 #[tokio::test]
 #[ignore = "starts the real adapters"]
 async fn the_real_harnesses_say_what_they_run_and_who_is_signed_in() {
-    let known = Harnesses::known();
+    let program = std::env::current_exe().unwrap();
+    let here = banda_harnesses::carried::Here {
+        program: &program,
+        app: "banda-local",
+        checkout: true,
+    };
+    let carried = banda_harnesses::carried::Carried::find(&here);
+    println!("carried: {carried:?}");
+    let known = Harnesses::known().carrying(carried);
     let real = ["claude", "codex"].map(|id| known.find(id).unwrap().clone());
     let fake = Harness {
         id: "fake".into(),
@@ -2885,6 +2895,7 @@ async fn the_real_harnesses_say_what_they_run_and_who_is_signed_in() {
         mark: None,
         colour: None,
         carried: None,
+        found: None,
         record: None,
     };
     let harnesses = Harnesses::new([vec![fake], real.to_vec()].concat());
@@ -4950,6 +4961,7 @@ fn two_claude_accounts(cli: &Path) -> Agents {
         mark: None,
         colour: None,
         carried: None,
+        found: None,
         record: None,
     };
     let claude = || {

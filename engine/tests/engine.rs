@@ -82,7 +82,12 @@ impl Places {
             .env_remove("BANDA_TOKEN")
             .env_remove("BANDA_ENGINE")
             .env_remove("BANDA_PROJECT")
-            .env_remove("BANDA_SPACE");
+            .env_remove("BANDA_SPACE")
+            // No window started it: no Node nor adapters named, as for a
+            // `banda serve` run in a shell.
+            .env_remove("BANDA_NODE")
+            .env_remove("BANDA_ADAPTERS")
+            .env_remove("ELECTRON_RUN_AS_NODE");
         command
     }
 
@@ -305,6 +310,81 @@ fn bad_params_are_refused_before_the_engine_is_reached() {
         .output()
         .unwrap();
     assert_eq!(refusal(&output), "invalid");
+}
+
+/// The adapters Banda carries, as the harnesses' host package builds them
+/// in this checkout (ADR 0059): built here when they are not yet, which
+/// takes the workspace's npm packages (`pnpm install`).
+fn carried_adapters() -> PathBuf {
+    let package = Path::new(env!("CARGO_MANIFEST_DIR")).join("../platform/harnesses/adapters");
+    let dist = package.join("dist");
+    if !dist.join("claude-agent-acp.mjs").is_file() {
+        let built = Command::new("node")
+            .arg("build.mjs")
+            .current_dir(&package)
+            .status()
+            .expect("node runs");
+        assert!(built.success(), "the adapters build: run `pnpm install`");
+    }
+    dist.canonicalize().unwrap()
+}
+
+/// The first `node` on this test's PATH.
+fn node() -> PathBuf {
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    (std::env::split_paths(&path).map(|folder| folder.join("node")))
+        .find(|node| node.is_file())
+        .expect("a node on PATH")
+}
+
+#[test]
+fn an_engine_no_window_started_runs_claude_codes_adapter_with_its_shim_on_the_hosts_node() {
+    let adapters = carried_adapters();
+    let places = Places::new();
+    // Banda's own Claude Code entry, with a stand-in of the Person's CLI
+    // that only says its version: no model is asked.
+    let cli = places._dir.path().join("claude");
+    std::fs::write(&cli, "#!/bin/sh\necho '2.1.312 (Claude Code)'\n").unwrap();
+    std::fs::set_permissions(&cli, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let list = format!(
+        "[[harness]]\nid = \"claude\"\ncli = {{ program = {:?}, variable = \"CLAUDE_CODE_EXECUTABLE\" }}\n",
+        cli.display().to_string()
+    );
+    std::fs::write(places.config.join("harnesses.toml"), list).unwrap();
+    let (mut engine, stdin, _) = places.serve();
+
+    // The engine set the program itself: the adapter its checkout built,
+    // on the node it found on PATH, with no Electron's variable.
+    let listed = places.ok("harnesses.list", None, json!({}));
+    let claude = &listed[0];
+    assert_eq!(claude["id"], "claude");
+    let command: Vec<PathBuf> = (claude["command"].as_array().unwrap().iter())
+        .map(|part| PathBuf::from(text(part)))
+        .collect();
+    assert_eq!(command.len(), 2, "{command:?}");
+    assert_eq!(command[0], node());
+    assert_eq!(
+        command[1].canonicalize().unwrap(),
+        adapters.join("claude-agent-acp.mjs")
+    );
+    let env = claude["env"].as_array().unwrap();
+    assert!(!env.contains(&json!("ELECTRON_RUN_AS_NODE")), "{env:?}");
+    // The bundle takes the SDK through Banda's shim, which alone reads
+    // the folder of a Project's sessions (ADR 0078, decision 3).
+    let bundle = std::fs::read_to_string(&command[1]).unwrap();
+    assert!(
+        bundle.contains("BANDA_CLAUDE_SESSIONS"),
+        "the shim is in it"
+    );
+
+    // And it starts: the adapter answers who it is, run on that node.
+    let account = places.ok("harnesses.account", None, json!({ "harness": "claude" }));
+    let adapter = &account["account"]["adapter"];
+    assert_eq!(adapter["version"], "0.99.1", "{account}");
+    assert_eq!(account["account"]["cli"]["version"], "2.1.312");
+
+    drop(stdin);
+    assert!(engine.wait().unwrap().success());
 }
 
 #[cfg(unix)]

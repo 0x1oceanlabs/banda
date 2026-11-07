@@ -15,11 +15,12 @@ import {
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { NodeServices } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import {
+  ADAPTERS,
   ownCopy,
   Program,
   programsOf,
@@ -201,6 +202,48 @@ describe("the copy", () => {
           "utf8"
         )
       ).toBe("lines")
+    })
+  )
+})
+
+describe("the copy and the adapters the app carries", () => {
+  /** `adapters/` beside `program`, holding one adapter that says `text`. */
+  function carried(program: string, text: string) {
+    const adapters = join(dirname(program), ADAPTERS)
+    mkdirSync(adapters, { recursive: true })
+    writeFileSync(join(adapters, "claude-agent-acp.mjs"), text)
+  }
+
+  it.live("takes them, so the engine finds them beside it", () =>
+    Effect.gen(function* () {
+      const copies = join(folder("data"), "engine")
+      const program = banda("banda 1.2.3 (build aa)")
+      carried(program, "// the adapter")
+      const copy = yield* copyOf(program, copies)
+      expect(
+        readFileSync(
+          join(dirname(copy), ADAPTERS, "claude-agent-acp.mjs"),
+          "utf8"
+        )
+      ).toBe("// the adapter")
+    })
+  )
+
+  it.live("made before it carried them, or missing one, is made again", () =>
+    Effect.gen(function* () {
+      const copies = join(folder("data"), "engine")
+      const program = banda("banda 1.2.3 (build aa)")
+      const copy = yield* copyOf(program, copies)
+      const adapter = join(dirname(copy), ADAPTERS, "claude-agent-acp.mjs")
+      expect(existsSync(adapter)).toBe(false)
+      carried(program, "// the adapter")
+      expect(yield* copyOf(program, copies)).toBe(copy)
+      expect(readFileSync(adapter, "utf8")).toBe("// the adapter")
+      carried(program, "// the adapter, a newer build")
+      yield* copyOf(program, copies)
+      expect(readFileSync(adapter, "utf8")).toBe(
+        "// the adapter, a newer build"
+      )
     })
   )
 })

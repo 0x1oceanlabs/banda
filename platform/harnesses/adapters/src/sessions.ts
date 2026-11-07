@@ -4,7 +4,7 @@
 // every transcript entry here and reads a session back from here to
 // resume it (its `sessionStore`, @alpha). The carried adapter is bundled
 // with a shim of the SDK that passes this store to each call that takes
-// one (`claude-sdk.mjs`, `adapters.mjs`).
+// one (`claude-sdk.mjs`, `build.mjs`).
 //
 // A session is found by its ID, a UUID, whatever project key a call
 // names: the adapter reads a session without saying its folder, and the

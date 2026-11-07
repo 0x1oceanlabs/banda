@@ -1,12 +1,12 @@
 {
-  "name": "@banda/harnesses-desktop",
+  "name": "@banda/harnesses-adapters",
   "version": "0.0.0",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "description": "The ACP adapters for Claude Code and Codex that Banda carries, bundled for the engine to run (ADR 0059).",
+  "description": "The ACP adapters for Claude Code and Codex that Banda carries (ADR 0059), with its shim of Claude's Agent SDK that keeps a Thread's sessions in its Project (ADR 0078): a host package, bundled into dist/ for the engine to run on the Node its host provides.",
   "scripts": {
-    "adapters": "node adapters.mjs",
+    "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --dir src"
   },

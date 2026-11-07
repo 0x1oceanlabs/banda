@@ -151,15 +151,12 @@ const where = whereOf({
   resources: app.isPackaged ? process.resourcesPath : undefined,
   data: dataFolder(app.getPath("appData")),
 })
-// The ACP adapters the app carries, which the engine runs on this
-// Electron as Node (ADR 0059): a checkout's are built beside the
-// harnesses module's desktop part (adapters.mjs).
-const carried = {
-  BANDA_NODE: process.execPath,
-  BANDA_ADAPTERS: app.isPackaged
-    ? join(process.resourcesPath, "adapters")
-    : resolve(here, "../../platform/harnesses/desktop/adapters"),
-}
+// The Node the app provides for the ACP adapters it carries: this
+// Electron, which the engine runs as Node (ADR 0059). The engine finds the
+// adapters itself, beside its program or in its checkout, but an engine
+// run from its own copy cannot find this app; with none named, as for a
+// `banda serve` started in a shell, it finds a Node of its own.
+const node = { BANDA_NODE: process.execPath }
 
 // The window keeps its profile in the engine's state folder, so Banda,
 // Banda Dev, a checkout and a test never share one (ADR 0033).
@@ -205,7 +202,7 @@ const runtime = ManagedRuntime.make(
             own: process.env.PATH,
             term: process.env.TERM,
           }),
-          carried
+          node
         ),
         lookLayer,
         settingsLayer,

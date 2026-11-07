@@ -5,6 +5,8 @@ packages:
   - platform/*/pane
   - apps/*/desktop
   - platform/*/desktop
+  # The adapters Banda carries, which run on the host (ADR 0059).
+  - platform/harnesses/adapters
 
 allowBuilds:
   electron: true
@@ -27,7 +29,7 @@ ignoredOptionalDependencies:
 # BANDA_UNTRUSTED set, as Banda sets it for a Project its Person has not
 # trusted, it marks none (ADR 0083, decision 5).
 patchedDependencies:
-  "@agentclientprotocol/codex-acp@2.5.0": platform/harnesses/desktop/patches/@agentclientprotocol__codex-acp@2.5.0.patch
+  "@agentclientprotocol/codex-acp@2.5.0": platform/harnesses/adapters/patches/@agentclientprotocol__codex-acp@2.5.0.patch
 
 # One KaTeX for all: what draws the math (rehype-katex, under
 # @streamdown/math, and Mermaid) and the stylesheet `@banda/ui` takes.

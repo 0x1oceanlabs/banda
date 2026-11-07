@@ -8,6 +8,7 @@
 use banda_kernel::{Code, Refusal};
 
 pub mod acp;
+pub mod carried;
 pub mod cli;
 pub mod hosts;
 mod limits;

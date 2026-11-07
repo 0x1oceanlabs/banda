@@ -31,9 +31,10 @@ export default {
   extraResources: [
     { from: "../../target/release/banda", to: "banda" },
     { from: "../web/dist", to: "web/dist" },
-    // The ACP adapters, bundled, that the engine runs on Electron's Node
-    // (ADR 0059).
-    { from: "../../platform/harnesses/desktop/adapters", to: "adapters" },
+    // The ACP adapters, bundled, that the engine runs (ADR 0059): the
+    // harnesses' host package. The engine finds them beside its program,
+    // and the engine's own copy carries them (src/program.ts).
+    { from: "../../platform/harnesses/adapters/dist", to: "adapters" },
     { from: "../../LICENSE", to: "LICENSE" },
     { from: "../../NOTICE", to: "NOTICE" },
     {

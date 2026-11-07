@@ -4,9 +4,9 @@
  * copy (ADR 0086). It learns the engine's address from the first line it
  * prints, forgets it while the engine is down, and stops the engine with
  * the window (child.ts). It starts with `path` as its PATH, when there
- * is one: on macOS, the login shell's (login.ts), and with `carried`'s
- * variables over the window's environment: where the adapters the app
- * carries are, and the Node to run them on (ADR 0059).
+ * is one: on macOS, the login shell's (login.ts), and with `node`'s
+ * variables over the window's environment: the Node the app provides for
+ * the adapters it carries (ADR 0059).
  */
 import { type Address, Engine as Client } from "@banda/contract"
 import { Engine } from "@banda/desktop-kit"
@@ -47,14 +47,14 @@ export const engineLayer = (
     never,
     ChildProcessSpawner.ChildProcessSpawner
   > = Effect.succeed(Option.none()),
-  carried: Record<string, string> = {}
+  node: Record<string, string> = {}
 ) =>
   Layer.effect(Engine)(
     Effect.gen(function* () {
       const program = yield* Program
       const env = Option.match(yield* path, {
-        onNone: () => carried,
-        onSome: (PATH) => ({ ...carried, PATH }),
+        onNone: () => node,
+        onSome: (PATH) => ({ ...node, PATH }),
       })
       const address = yield* SubscriptionRef.make(Option.none<Address>())
       const door = yield* Deferred.make<string>()

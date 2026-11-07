@@ -1,4 +1,4 @@
-// The Agent SDK as the carried Claude Code adapter sees it: adapters.mjs
+// The Agent SDK as the carried Claude Code adapter sees it: build.mjs
 // bundles this in place of `@anthropic-ai/claude-agent-sdk`, which it
 // reaches as `banda:claude-agent-sdk`. When the engine names a folder in
 // BANDA_CLAUDE_SESSIONS, the Project's, each call that takes a
