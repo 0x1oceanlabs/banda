@@ -4,7 +4,7 @@ Research, 2026-11-07. It answers Roma's question of 2026-11-07: how to split the
 
 ## 0. Status and sources
 
-- **Status:** proposed. Nothing here is decided or built. Every choice that needs Roma is in §11, with options and a recommendation. Three ADR drafts carry the decisions, accepted together (§11.13):
+- **Status:** accepted by Roma on 2026-11-07, every recommendation in §11 with it. Nothing here is built yet. Three ADRs carry the decisions, accepted together (§11.13):
   - ADR 0087: the Window, the Tiling, what Apps show, Here, the Agents, the words;
   - ADR 0088: motion on the compositor, the Tile contract, budgets, prediction;
   - ADR 0089: one client core for desktop, web and phone.
