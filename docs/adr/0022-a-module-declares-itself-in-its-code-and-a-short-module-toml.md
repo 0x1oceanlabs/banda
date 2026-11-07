@@ -51,6 +51,12 @@ from the first. Roma chose to declare in code what is code, and to keep
      - whether it comes from Banda;
      - the settings files it owns, by name (`browser.toml`);
      - its unstable marks (decision 6).
+     - _Changed on 2026-11-07, by ADR 0062 (decision 11) and ADR 0082
+       (decisions 2 and 14):_ it also says its `kind`, `app` in `apps/`
+       or `platform` in `platform/`; the `api` it is written to, a major; and
+       `[needs]`, empty until what an App needs is built. The engine's
+       build scans every manifest into one list of Apps, and refuses one
+       that is wrong. The file becomes `app.toml`.
    - Its skill topics stay in its `skill/` folder, found as ADR 0012 has
      it.
    - **`banda modules` prints the three as one JSON per module**: what a
