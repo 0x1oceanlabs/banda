@@ -6,8 +6,8 @@
 //! Harness that does not report it shows no one.
 
 use super::{Process, in_words};
-use crate::Harness;
 use crate::model::{Account, SignInWay, SignedInAs};
+use crate::{Failed, Harness};
 use agent_client_protocol::schema::v1 as acp;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -100,7 +100,7 @@ impl Process {
     /// Who is signed in, what the Harness runs, and the Person's CLI as
     /// `harness` finds it now: updated since the start, its Threads stop
     /// warning that it is old.
-    pub async fn account(&self, harness: &Harness) -> Result<Account, String> {
+    pub async fn account(&self, harness: &Harness) -> Result<Account, Failed> {
         let (_, cli) = crate::cli::find(harness).await?;
         let mut account = self.account.clone();
         if self.about.reports_account {
@@ -117,33 +117,37 @@ impl Process {
         })
     }
 
-    /// Asks the Harness to sign out, when it says it does.
-    pub async fn sign_out(&self) -> Result<(), String> {
+    /// Asks the Harness to sign out, when it says it does. One that does
+    /// not stays so; one that did not answer, or answered an error, may
+    /// sign out when asked again.
+    pub async fn sign_out(&self) -> Result<(), Failed> {
+        let name = &self.name;
         if !self.about.signs_out {
-            return Err(format!(
-                "{} does not sign out from Banda: sign out in a terminal.",
-                self.name
-            ));
+            return Err(Failed::Lasting(format!(
+                "{name} does not sign out from Banda: sign out in a terminal."
+            )));
         }
         let asked = self.cx.send_request(acp::LogoutRequest::new()).block_task();
-        let signed_out = timeout(SIGNING_OUT, asked)
-            .await
-            .map_err(|_| format!("Signing out of {} took too long: try again.", self.name))?;
-        signed_out
-            .map(|_| ())
-            .map_err(|error| format!("{} could not sign out: {}", self.name, in_words(&error)))
+        let signed_out = timeout(SIGNING_OUT, asked).await.map_err(|_| {
+            Failed::Passing(format!("Signing out of {name} took too long: try again."))
+        })?;
+        signed_out.map(|_| ()).map_err(|error| {
+            Failed::Passing(format!("{name} could not sign out: {}", in_words(&error)))
+        })
     }
 
     /// Signs in with `way`, which the Harness does by itself: Codex opens
-    /// the browser and waits there for the Person.
-    pub async fn sign_in(&self, way: &str) -> Result<(), String> {
+    /// the browser and waits there for the Person. One that did not answer,
+    /// or answered an error, may sign in when asked again.
+    pub async fn sign_in(&self, way: &str) -> Result<(), Failed> {
+        let name = &self.name;
         let request = acp::AuthenticateRequest::new(way.to_owned());
         let asked = self.cx.send_request(request).block_task();
-        let signed_in = timeout(SIGNING_IN, asked)
-            .await
-            .map_err(|_| format!("Signing in to {} took too long: try again.", self.name))?;
-        signed_in
-            .map(|_| ())
-            .map_err(|error| format!("{} could not sign in: {}", self.name, in_words(&error)))
+        let signed_in = timeout(SIGNING_IN, asked).await.map_err(|_| {
+            Failed::Passing(format!("Signing in to {name} took too long: try again."))
+        })?;
+        signed_in.map(|_| ()).map_err(|error| {
+            Failed::Passing(format!("{name} could not sign in: {}", in_words(&error)))
+        })
     }
 }

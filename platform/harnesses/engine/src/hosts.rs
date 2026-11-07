@@ -13,7 +13,7 @@
 //! - A host's process runs in its own process group, which is killed when
 //!   the host is dropped; an engine that dies closes the host's stdin.
 
-use crate::Harness;
+use crate::{Failed, Harness};
 use banda_kernel::ProjectId;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -84,7 +84,7 @@ impl Default for Activity {
 /// A Harness process as its client holds it.
 pub trait Host: Send + Sync + Sized + 'static {
     /// Starts `harness`.
-    fn start(harness: &Harness) -> impl Future<Output = Result<Arc<Self>, String>> + Send;
+    fn start(harness: &Harness) -> impl Future<Output = Result<Arc<Self>, Failed>> + Send;
     /// Whether the process still answers.
     fn alive(&self) -> bool;
     /// Since when it has had nothing to do, or `None` while it has.
@@ -163,7 +163,7 @@ impl<H: Host> Hosts<H> {
         self: &Arc<Self>,
         project: ProjectId,
         harness: &Harness,
-    ) -> Result<Arc<H>, String> {
+    ) -> Result<Arc<H>, Failed> {
         self.sweeping.call_once(|| {
             tokio::spawn(sweep(Arc::downgrade(self), self.idle));
         });
@@ -314,7 +314,7 @@ mod tests {
     static GO: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(0);
 
     impl Host for Counted {
-        async fn start(_: &Harness) -> Result<Arc<Self>, String> {
+        async fn start(_: &Harness) -> Result<Arc<Self>, Failed> {
             GO.acquire().await.unwrap().forget();
             Ok(Arc::new(Counted(STARTS.fetch_add(1, Ordering::SeqCst) + 1)))
         }
@@ -360,7 +360,7 @@ mod tests {
     static KEPT: AtomicUsize = AtomicUsize::new(0);
 
     impl Host for Kept {
-        async fn start(_: &Harness) -> Result<Arc<Self>, String> {
+        async fn start(_: &Harness) -> Result<Arc<Self>, Failed> {
             Ok(Arc::new(Kept(KEPT.fetch_add(1, Ordering::SeqCst) + 1)))
         }
 

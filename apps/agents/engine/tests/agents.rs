@@ -41,7 +41,12 @@ fn harnesses() -> Harnesses {
 
 /// The fake agent as the only Harness, started with `env`.
 fn harnesses_with(env: &[(&str, &str)]) -> Harnesses {
-    Harnesses::new(vec![Harness {
+    Harnesses::new(vec![fake_with(env)])
+}
+
+/// The fake agent's Harness entry, started with `env`.
+fn fake_with(env: &[(&str, &str)]) -> Harness {
+    Harness {
         id: "fake".into(),
         name: "Fake".into(),
         short: None,
@@ -59,7 +64,7 @@ fn harnesses_with(env: &[(&str, &str)]) -> Harnesses {
         colour: None,
         carried: None,
         record: None,
-    }])
+    }
 }
 
 /// A module as the agents module hears its notices: `say { thread,
@@ -1426,6 +1431,46 @@ async fn a_harness_whose_cli_is_not_installed_does_not_start() {
         "{}",
         refused.message
     );
+    // It stays so until the Person installs it: a final refusal, which a
+    // sign-in's receipt keeps (ADR 0082, decision 4).
+    let refused = world.sign_in(world.person(), "fake-browser").await;
+    let refused = refused.unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+    assert!(refused.code.is_final());
+}
+
+/// A Harness that did not start may start when asked again: its sign-in
+/// is refused as `internal`, which the receipt does not keep, so the same
+/// command sent again runs (ADR 0082, decision 4).
+#[tokio::test]
+async fn a_sign_in_whose_harness_did_not_start_runs_when_sent_again() {
+    let (root, home, bin) = (
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+    );
+    let home = home.path().display().to_string();
+    let program = bin.path().join("fake-agent");
+    let mut fake = fake_with(&[("FAKE_AGENT_HOME", &home)]);
+    fake.command = program.display().to_string();
+    let agents = Agents::new(Harnesses::new(vec![fake]));
+    let world = World::new_with(root.path(), agents).await;
+
+    let command = CommandId::new();
+    let way = json!({ "harness": "fake", "way": "fake-browser" });
+    let sign_in = || {
+        let (kernel, who) = (&world.kernel, world.person());
+        kernel.call(who, "harnesses.sign_in", None, Some(command), way.clone())
+    };
+    let refused = sign_in().await.unwrap_err();
+    assert_eq!(refused.code, Code::Internal, "{refused:?}");
+    assert!(refused.message.contains("Harness"), "{}", refused.message);
+
+    // Its program is there now, as after an install that was still going.
+    std::os::unix::fs::symlink(fake_agent(), &program).unwrap();
+    assert_eq!(sign_in().await.unwrap(), Value::Null, "it ran this time");
+    let account = world.account().await;
+    assert_eq!(account["signed_in_as"]["signed_in"], true, "{account}");
 }
 
 #[tokio::test]
@@ -1439,6 +1484,7 @@ async fn a_harness_that_does_not_report_shows_no_one() {
         .on_machine(world.person(), "sign_out", json!({ "harness": "fake" }))
         .await
         .unwrap_err();
+    // It does not sign out from Banda for as long as it runs so.
     assert_eq!(refused.code, Code::Conflict, "{refused:?}");
 }
 

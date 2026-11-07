@@ -18,7 +18,7 @@ use crate::hosts::{Activity, Held, Host, Hosts};
 use crate::limits::Reader;
 use crate::model::{Account, HarnessView, Limits, LimitsLook};
 use crate::usage::UsageNow;
-use crate::{FILE, Harness, Harnesses};
+use crate::{FILE, Failed, Harness, Harnesses};
 use agent_client_protocol::Client;
 use agent_client_protocol::schema::v1 as acp;
 use banda_kernel::{
@@ -218,11 +218,8 @@ impl HarnessesModule {
         // Read before the Harness is: a change after it is a later event.
         let at = call.project().at().await?;
         let (harness, asker, _asking) = self.asker(&call, &harness).await?;
-        let account = asker.process.account(&harness).await;
-        Ok(Accounted {
-            at,
-            account: account.map_err(Refusal::conflict)?,
-        })
+        let account = asker.process.account(&harness).await?;
+        Ok(Accounted { at, account })
     }
 
     async fn limits(
@@ -273,7 +270,7 @@ impl HarnessesModule {
             Refusal::not_found(format!("{} offers no such way to sign in.", harness.name))
         })?;
         if found.terminal.is_none() {
-            process.sign_in(&way).await.map_err(Refusal::conflict)?;
+            process.sign_in(&way).await?;
         }
         self.changed(&call, &harness.id).await
     }
@@ -284,16 +281,16 @@ impl HarnessesModule {
         OneHarness { harness }: OneHarness,
     ) -> Result<(), Refusal> {
         let (harness, asker, _asking) = self.asker(&call, &harness).await?;
-        asker.process.sign_out().await.map_err(Refusal::conflict)?;
+        asker.process.sign_out().await?;
         self.changed(&call, &harness.id).await
     }
 
     /// Harness entry `id` with the module's process of it, started if need
-    /// be, held busy while the guard lives.
+    /// be, held busy while the guard lives. A start that failed is refused
+    /// as [`Failed`] says: `conflict` only when it lasts.
     async fn asker(&self, call: &Call, id: &str) -> Result<(Harness, Arc<Asker>, Held), Refusal> {
         let harness = self.harnesses.get(id).map_err(Refusal::invalid)?;
-        let asker = self.hosts.get(call.project().id(), &harness).await;
-        let asker = asker.map_err(Refusal::conflict)?;
+        let asker = self.hosts.get(call.project().id(), &harness).await?;
         let held = asker.activity.hold();
         Ok((harness, asker, held))
     }
@@ -331,7 +328,7 @@ struct Asker {
 }
 
 impl Host for Asker {
-    async fn start(harness: &Harness) -> Result<Arc<Self>, String> {
+    async fn start(harness: &Harness) -> Result<Arc<Self>, Failed> {
         let shows = acp::ClientCapabilities::new();
         let (process, _) = Process::start(harness, Client.builder(), shows, || {}).await?;
         let activity = Activity::default();

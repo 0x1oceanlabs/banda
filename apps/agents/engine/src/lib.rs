@@ -232,7 +232,7 @@ impl Agents {
     async fn running(&self, project: &ModuleProject, id: &str) -> Result<Arc<Connection>, Refusal> {
         let harness = self.harness(id)?;
         let connection = self.live.connection(project, &harness).await;
-        connection.map_err(Refusal::conflict)
+        connection.map_err(Refusal::from)
     }
 }
 
