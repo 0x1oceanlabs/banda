@@ -343,9 +343,6 @@ importers:
       '@banda/desktop-kit':
         specifier: workspace:*
         version: link:../desktop-kit
-      '@banda/harnesses-desktop':
-        specifier: workspace:*
-        version: link:../../platform/harnesses/desktop
       '@banda/notifications-desktop':
         specifier: workspace:*
         version: link:../../platform/notifications/desktop
@@ -656,25 +653,10 @@ importers:
       '@agentclientprotocol/codex-acp':
         specifier: 2.5.0
         version: 2.5.0(patch_hash=952416e092770efa1d8732cf297249bf6909b3789ca702c4f3d91933e2041f52)(@modelcontextprotocol/server@2.4.0)
-      '@banda/contract':
-        specifier: workspace:*
-        version: link:../../../sdk/contract
-      '@banda/desktop-kit':
-        specifier: workspace:*
-        version: link:../../../client/desktop-kit
-      effect:
-        specifier: 4.1.1
-        version: 4.1.1
     devDependencies:
-      '@banda/ui':
-        specifier: workspace:*
-        version: link:../../../client/ui
       '@types/node':
         specifier: ^24
         version: 24.19.2
-      electron:
-        specifier: 45.1.0
-        version: 45.1.0(supports-color@7.2.0)
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2

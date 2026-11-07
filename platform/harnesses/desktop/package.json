@@ -4,10 +4,7 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "description": "The harnesses module's part in the window's main process (ADR 0028, ADR 0043): it asks Anthropic for Claude Code's usage limits with Claude Code's own sign-in, which only it reads; and it carries the ACP adapters for Claude Code and Codex, bundled for the engine to run on Electron's Node (ADR 0059).",
-  "exports": {
-    ".": "./src/index.ts"
-  },
+  "description": "The ACP adapters for Claude Code and Codex that Banda carries, bundled for the engine to run (ADR 0059).",
   "scripts": {
     "adapters": "node adapters.mjs",
     "typecheck": "tsc --noEmit",
@@ -15,15 +12,10 @@
   },
   "dependencies": {
     "@agentclientprotocol/claude-agent-acp": "0.99.1",
-    "@agentclientprotocol/codex-acp": "2.5.0",
-    "@banda/contract": "workspace:*",
-    "@banda/desktop-kit": "workspace:*",
-    "effect": "4.1.1"
+    "@agentclientprotocol/codex-acp": "2.5.0"
   },
   "devDependencies": {
-    "@banda/ui": "workspace:*",
     "@types/node": "^24",
-    "electron": "45.1.0",
     "esbuild": "^0.28.2",
     "typescript": "~6.0.2",
     "vitest": "^5.0.5"
