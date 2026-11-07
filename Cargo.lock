@@ -590,6 +590,7 @@ dependencies = [
  "banda-look",
  "banda-problems",
  "banda-workspaces",
+ "reqwest",
  "rusqlite",
  "schemars 1.2.3",
  "serde",

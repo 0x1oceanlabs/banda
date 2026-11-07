@@ -17,7 +17,6 @@
   "devDependencies": {
     "@banda/agents-desktop": "workspace:*",
     "@banda/browser-desktop": "workspace:*",
-    "@banda/sharing-desktop": "workspace:*",
     "@banda/notifications-desktop": "workspace:*",
     "@banda/browser-pane": "workspace:*",
     "@banda/contract": "workspace:*",

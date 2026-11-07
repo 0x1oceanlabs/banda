@@ -13,6 +13,7 @@ banda-kernel = { path = "../../../kernel" }
 banda-look = { path = "../../../platform/look" }
 banda-problems = { path = "../../problems/engine" }
 banda-workspaces = { path = "../../workspaces/engine" }
+reqwest.workspace = true
 rusqlite.workspace = true
 schemars.workspace = true
 serde.workspace = true
