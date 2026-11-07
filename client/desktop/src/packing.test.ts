@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { afterEach, expect, test, vi } from "vitest"
-import { ADAPTERS } from "./program"
+import { CARRIED, ELECTRON } from "./program"
 
 const root = resolve(import.meta.dirname, "../../..")
 const text = (path: string) => readFileSync(resolve(root, path), "utf8")
@@ -22,12 +22,8 @@ test("the app carries the harnesses' host package's adapters beside its engine",
     default: { extraResources: unknown[] }
   }
   expect(config.extraResources).toContainEqual({
-    from: "../../target/release/banda",
-    to: "banda",
-  })
-  expect(config.extraResources).toContainEqual({
     from: "../../platform/harnesses/adapters/dist",
-    to: ADAPTERS,
+    to: CARRIED,
   })
   // The window's build builds them first, as scripts/package.sh runs it
   // before electron-builder; the host package builds them into dist/.
@@ -40,8 +36,9 @@ test("the app carries the harnesses' host package's adapters beside its engine",
   expect(text("pnpm-workspace.yaml")).toContain(
     "  - platform/harnesses/adapters\n"
   )
-  // The folder the engine looks for beside its program.
-  expect(text("platform/harnesses/engine/src/carried.rs")).toContain(
-    `pub const ADAPTERS: &str = "${ADAPTERS}";`
-  )
+  // The folder the engine looks for beside its program, and the file
+  // beside its copy that names the app's Electron.
+  const carried = text("platform/harnesses/engine/src/carried.rs")
+  expect(carried).toContain(`pub const FOLDER: &str = "${CARRIED}";`)
+  expect(carried).toContain(`pub const ELECTRON: &str = "${ELECTRON}";`)
 })

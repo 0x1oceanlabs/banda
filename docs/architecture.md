@@ -451,7 +451,8 @@ If Chat is removed, Agents still works through its own Thread.
   `resources/adapters`, and the engine's own copy's), else what a
   checkout's package built; the Node in `BANDA_NODE`, which the window sets
   to its own Electron, else the packed app's Electron beside the engine's
-  resources, else the first `node` on PATH. An Electron runs them with
+  resources, else the Electron the copy's `electron` file names, else the
+  first `node` on PATH of at least Node 22. An Electron runs them with
   `ELECTRON_RUN_AS_NODE`; a `node` needs nothing. So an engine started in
   a shell, with no window, runs Banda's own entries through them too.
   With no adapters or no Node, those entries start through `npx`.
@@ -975,22 +976,25 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   last event it delivered, so a Pane sees no gap.
 - **A packed Banda runs its own copy of `banda`** (ADR 0086, decision
   2), never the one inside its AppImage or its app, whose folder may go
-  while the program runs. Main copies it into
-  `<data>/engine/<version>/`, beside what its `--version` said and the
-  ACP adapters the app carries, runs the
-  copy once with `--version`, and renames it into place only when it says
-  the same version and build id (`program.ts`). A copy in place is run
-  again while it and its adapters are as long as the packed ones and it
-  says the same, and one
-  that goes while the window runs is made again before the next run. The
-  last two versions are kept. A copy that cannot be made leaves the
-  engine where it was packed, and a Problem says why. A `banda` that a
-  package manager owns, as the AUR's, says so in `package-type` beside it
-  and runs where it was put; a checkout's runs where cargo built it.
+  while the program runs. Main copies it into `<data>/engine/<version>/`,
+  beside what its `--version` said and the ACP adapters the app carries,
+  runs the copy once with `--version`, and renames it into place only
+  when it says the same version and build id (`program.ts`). A copy in
+  place is run again while it and its adapters are as long as the packed
+  ones and it says the same, and one that goes while the window runs is
+  made again before the next run. The last two versions are kept. A copy
+  that cannot be made leaves the engine where it was packed, and a
+  Problem says why. A `banda` that a package manager owns, as the AUR's,
+  says so in `package-type` beside it and runs where it was put; a
+  checkout's runs where cargo built it.
 - **What still runs from inside the AppImage** is Electron's, and the
-  Node the ACP adapters run on, the window's Electron, until the engine is
-  the machine's (ADR 0086, plan step 3). The adapters themselves run from
-  the engine's own copy, which carries them. On Quit nothing of it is left. When main is
+  Node the ACP adapters run on, the window's Electron, until the engine
+  is the machine's (ADR 0086, plan step 3). The adapters' files run from
+  the engine's own copy, which carries them. A macOS app's copy also has
+  `electron` beside it, which names the app's Electron, so an engine
+  started with no window runs the adapters on it; an AppImage's copy
+  names none, as its Electron goes when it stops, and such an engine
+  looks for a `node` on PATH. On Quit nothing of it is left. When main is
   killed, `chrome_crashpad_handler` and the network service die with
   SIGBUS as the AppImage's folder goes; `banda` does not. That is
   Electron's helper, kept apart from the engine (seen on 2026-11-07).
@@ -1264,7 +1268,7 @@ banda/
     look/             Rust: banda look, the look, the sidebar's arrangement and the browser's; skill/ its topics
     settings/         Rust: Banda's settings files, each described once, and the one writer that changes them (ADR 0016)
     git-cli/          Rust: how Banda starts git: its own bookkeeping, which runs no program a repository names, and the acts the Person asks for
-    harnesses/adapters/  Node, on the host: the ACP adapters Banda carries and its shim of Claude's Agent SDK (ADR 0059, ADR 0078)
+    harnesses/        Rust: the Harnesses and how each starts; adapters/ the ACP adapters Banda carries and its shim of Claude's Agent SDK, a Node package run on the host (ADR 0059, ADR 0078)
   client/             the window
     ui/               shadcn/ui and the Pane contract
     ghostty/          T3 Code's Ghostty adapter and its WebAssembly, vendored

@@ -4,7 +4,7 @@
 //! it is off again.
 
 use banda_kernel::{CommandId, Kernel, Participant, PersonId, ProjectId};
-use banda_sharing::post::Post;
+use banda_sharing::Post;
 use banda_sharing::{Never, Sharing};
 use serde_json::{Value, json};
 use std::path::Path;

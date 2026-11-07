@@ -54,14 +54,11 @@ pub struct Harness {
     pub mark: Option<String>,
     /// Its colour, 1 to 4, when its entry names one (decision 10).
     pub colour: Option<u8>,
-    /// The file of the adapter Banda carries, which starts in place of
-    /// `command` and `args` when the engine found the adapters and a Node
-    /// on its host (ADR 0059): only Banda's own entries have one.
+    /// The file of the adapter Banda carries: only Banda's own entries
+    /// have one. When the engine found the adapters and a Node on its
+    /// host, the list starts the entry through it, on that Node, in place
+    /// of the `command` and `args` it names (ADR 0059; [`Harnesses::carry`]).
     pub carried: Option<String>,
-    /// Where this host keeps the adapters Banda carries and the Node that
-    /// runs them, as the engine found them: the list gives it to each of
-    /// its entries ([`Harnesses::carrying`]).
-    pub found: Option<Arc<Carried>>,
     /// A folder where each start of the program writes what Banda and
     /// the Harness say to each other, one ACP frame per line, for tests to
     /// replay. Only a test sets it, never a Harness list: a recording holds
@@ -102,22 +99,32 @@ impl Harness {
         }
     }
 
-    /// How its process starts: the adapter Banda carries, on the Node the
-    /// engine found on its host, when it has one and the engine found them
-    /// (ADR 0059); else its `command` and `args`.
+    /// How its process starts: its `command` and `args`, with its `env`.
     pub fn start(&self) -> Program {
-        let mut env = self.env.clone();
-        let (program, args) = match (&self.carried, self.found.as_deref()) {
-            (Some(file), Some(Carried { node, adapters })) => {
-                if node.electron {
-                    env.insert("ELECTRON_RUN_AS_NODE".to_owned(), "1".to_owned());
-                }
-                let file = adapters.join(file).display().to_string();
-                (node.program.display().to_string(), vec![file])
-            }
-            _ => (self.command.clone(), self.args.clone()),
+        Program {
+            program: self.command.clone(),
+            args: self.args.clone(),
+            env: self.env.clone(),
+        }
+    }
+
+    /// The entry as it starts on this host: through the adapter Banda
+    /// carries, on the Node `carried` names, when it is one of Banda's own
+    /// and the engine found them (ADR 0059); else as it is.
+    fn carried_by(self, carried: Option<&Carried>) -> Harness {
+        let (Some(file), Some(Carried { adapters, node })) = (&self.carried, carried) else {
+            return self;
         };
-        Program { program, args, env }
+        let mut env = self.env;
+        if node.electron {
+            env.insert("ELECTRON_RUN_AS_NODE".to_owned(), "1".to_owned());
+        }
+        Harness {
+            command: node.program.display().to_string(),
+            args: vec![adapters.join(file).display().to_string()],
+            env,
+            ..self
+        }
     }
 
     /// Whether its process may load what the Project's folder names: not
@@ -239,7 +246,10 @@ pub struct Harnesses(Arc<Mutex<List>>);
 
 #[derive(Debug, Default)]
 struct List {
+    /// The entries as they start on this host ([`Harness::carried_by`]).
     harnesses: Arc<[Harness]>,
+    /// The entries as the file, or the list made in code, names them.
+    listed: Vec<Harness>,
     limits: LimitsSettings,
     usage: UsageSettings,
     /// The file the list follows, and its text when last read: none when
@@ -247,18 +257,19 @@ struct List {
     /// as the look's files do: two quick saves of one length share both.
     file: Option<(PathBuf, Option<String>)>,
     /// Where this host keeps the adapters Banda carries and their Node,
-    /// which each entry is given.
-    carried: Option<Arc<Carried>>,
+    /// as the engine found them.
+    carried: Option<Carried>,
 }
 
-/// `harnesses` with `carried` given to each.
-fn given(harnesses: Vec<Harness>, carried: &Option<Arc<Carried>>) -> Arc<[Harness]> {
-    (harnesses.into_iter())
-        .map(|harness| Harness {
-            found: carried.clone(),
-            ..harness
-        })
-        .collect()
+impl List {
+    /// Starts each of `listed` as it starts on this host.
+    fn list(&mut self, listed: Vec<Harness>) {
+        let carried = self.carried.as_ref();
+        self.harnesses = (listed.iter().cloned())
+            .map(|harness| harness.carried_by(carried))
+            .collect();
+        self.listed = listed;
+    }
 }
 
 /// `harnesses.toml` as the settings know it (ADR 0016): its schema, the
@@ -518,7 +529,6 @@ impl HarnessEntry {
             mark: self.mark,
             colour: self.colour,
             carried,
-            found: None,
             record: None,
         })
     }
@@ -610,26 +620,25 @@ impl Harnesses {
             limits,
             usage,
         } = read;
-        let harnesses = harnesses.into();
-        Self(Arc::new(Mutex::new(List {
-            harnesses,
+        let mut list = List {
             limits,
             usage,
             file,
-            carried: None,
-        })))
+            ..List::default()
+        };
+        list.list(harnesses);
+        Self(Arc::new(Mutex::new(list)))
     }
 
     /// Starts Banda's own entries through the adapters Banda carries, on
     /// the Node `carried` names, as the engine found them on its host
-    /// (ADR 0059); with none, as their `command` and `args` say.
-    pub fn carrying(self, carried: Option<Carried>) -> Self {
-        {
-            let mut list = self.0.lock().unwrap();
-            list.carried = carried.map(Arc::new);
-            list.harnesses = given(list.harnesses.to_vec(), &list.carried);
-        }
-        self
+    /// (ADR 0059), from now on and after each read of the file; with none,
+    /// as their `command` and `args` say. Every clone of the list follows.
+    pub fn carry(&self, carried: Option<Carried>) {
+        let mut list = self.0.lock().unwrap();
+        list.carried = carried;
+        let listed = std::mem::take(&mut list.listed);
+        list.list(listed);
     }
 
     /// The Harnesses Banda starts when a machine names none: the ACP
@@ -657,30 +666,28 @@ impl Harnesses {
     /// The list and `[limits]` as the file says now, in one read.
     pub(crate) fn followed(&self) -> (Arc<[Harness]>, LimitsSettings) {
         let mut list = self.0.lock().unwrap();
-        let List {
-            harnesses,
-            limits,
-            usage,
-            file,
-            carried,
-        } = &mut *list;
-        if let Some((path, was)) = file {
-            match read(path) {
-                Ok(text) if text != *was => {
-                    match listed(path, text.as_deref()) {
+        if let Some((path, was)) = list.file.take() {
+            let now = match read(&path) {
+                Ok(text) if text != was => {
+                    match listed(&path, text.as_deref()) {
                         Ok(read) => {
-                            (*harnesses, *limits, *usage) =
-                                (given(read.harnesses, carried), read.limits, read.usage)
+                            list.limits = read.limits;
+                            list.usage = read.usage;
+                            list.list(read.harnesses);
                         }
                         Err(error) => tracing::warn!(%error, "the Harness list does not read"),
                     }
-                    *was = text;
+                    text
                 }
-                Ok(_) => {}
-                Err(error) => tracing::warn!(%error, "the Harness list cannot be read"),
-            }
+                Ok(_) => was,
+                Err(error) => {
+                    tracing::warn!(%error, "the Harness list cannot be read");
+                    was
+                }
+            };
+            list.file = Some((path, now));
         }
-        (harnesses.clone(), *limits)
+        (list.harnesses.clone(), list.limits)
     }
 
     pub(crate) fn usage(&self) -> (Arc<[Harness]>, UsageSettings) {
@@ -770,7 +777,6 @@ fn known() -> Vec<Harness> {
                 mark: None,
                 colour: None,
                 carried: Some(adapter.file()),
-                found: None,
                 record: None,
             }
         })
@@ -1040,7 +1046,8 @@ mod tests {
             },
             adapters: "/app/resources/adapters".into(),
         };
-        let list = Harnesses::new(known()).carrying(Some(electron));
+        let list = Harnesses::new(known());
+        list.carry(Some(electron));
         let start = list.find("claude").unwrap().start();
         assert_eq!(start.program, "/app/banda");
         assert_eq!(start.args, ["/app/resources/adapters/claude-agent-acp.mjs"]);
@@ -1052,7 +1059,7 @@ mod tests {
             },
             adapters: "/srv/banda/adapters".into(),
         };
-        let list = list.carrying(Some(node));
+        list.carry(Some(node));
         let start = list.find("codex").unwrap().start();
         assert_eq!(
             (start.program.as_str(), start.args.as_slice()),
@@ -1065,7 +1072,8 @@ mod tests {
             !start.env.contains_key("ELECTRON_RUN_AS_NODE"),
             "nothing for an Agent's programs to inherit"
         );
-        let npx = list.carrying(None).find("claude").unwrap().start();
+        list.carry(None);
+        let npx = list.find("claude").unwrap().start();
         assert_eq!(
             (npx.program.as_str(), npx.args.as_slice()),
             ("npx", ["-y".to_owned(), ADAPTERS[0].npm()].as_slice())
@@ -1085,7 +1093,8 @@ mod tests {
             },
             adapters: "/a".into(),
         };
-        let list = Harnesses::load(&path).unwrap().carrying(Some(carried));
+        let list = Harnesses::load(&path).unwrap();
+        list.carry(Some(carried));
         assert_eq!(
             list.find("claude").unwrap().start().program,
             "/usr/bin/node"
@@ -1124,7 +1133,7 @@ mod tests {
     }
 
     #[test]
-    fn the_carried_versions_are_the_desktop_packages() {
+    fn the_carried_versions_are_the_host_packages() {
         let package = include_str!("../../adapters/package.json");
         for adapter in &ADAPTERS {
             let pin = format!("\"{}\": \"{}\"", adapter.package, adapter.version);

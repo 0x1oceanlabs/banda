@@ -6,10 +6,10 @@
 //!
 //! The engine reads them every `[limits] every` while a window is open,
 //! and, window or not, after an account changed and when a client or an
-//! Agent asks, at most once a minute for each Harness. The last read is kept in the
-//! machine's store, with when; one that failed keeps the read before it,
-//! and says why. Each kept read says `limits_changed`, whose subject is
-//! the Harness's ID.
+//! Agent asks, at most once a minute for each Harness. The last read is
+//! kept in the machine's store, with when; one that failed keeps the read
+//! before it, and says why. Each kept read says `limits_changed`, whose
+//! subject is the Harness's ID.
 
 mod claude;
 mod codex;

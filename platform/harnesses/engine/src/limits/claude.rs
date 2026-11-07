@@ -1,9 +1,11 @@
 //! Claude Code's limits (ADR 0043, decision 2): Anthropic's
 //! `GET /api/oauth/usage`, asked with Claude Code's own access token. The
 //! engine reads the token on its host, where Claude Code keeps it: in the
-//! entry's configuration folder, or that folder's Keychain item on macOS.
-//! No client reads it, as no client reads the host's disk (ADR 0062,
-//! decision 3), so the limits read with no window open too.
+//! entry's configuration folder, or that folder's Keychain item on macOS,
+//! named as Claude Code names them. No client reads it, as no client reads
+//! the host's disk (ADR 0062, decision 3), so the limits read with no
+//! window open too. It asks by the engine's one client
+//! ([`banda_kernel::https`]), which follows no redirect.
 //!
 //! The token lives only in that one request: it is kept nowhere, written
 //! in no log or Problem, sent nowhere but [`USAGE`], never renewed, and
@@ -12,11 +14,12 @@
 use super::{Failure, Found, WAIT, instant, window};
 use crate::Harness;
 use crate::model::{LimitWindow, WindowKind};
+use banda_kernel::https::{cause, client};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::time::Duration;
 
 /// Where Claude Code's limits are read: the one place the token goes.
@@ -49,33 +52,15 @@ struct Answer {
 }
 
 /// Where the engine asks for Claude Code's limits: Anthropic, or a test's
-/// stand-in. Every read shares one client, made at the first.
+/// stand-in.
 #[derive(Clone)]
 pub(crate) struct Anthropic {
     url: Arc<str>,
-    client: Arc<OnceLock<reqwest::Client>>,
 }
 
 impl Anthropic {
     pub(crate) fn at(url: &str) -> Self {
-        Self {
-            url: url.into(),
-            client: Arc::default(),
-        }
-    }
-
-    /// The client: it follows no redirect, so the token goes to [`USAGE`]
-    /// alone, and it goes through the system's proxy.
-    fn client(&self) -> Result<reqwest::Client, Failure> {
-        if let Some(client) = self.client.get() {
-            return Ok(client.clone());
-        }
-        let made = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .user_agent(format!("banda/{}", banda_kernel::version()))
-            .build()
-            .map_err(|e| Failure::new(format!("Banda's HTTPS did not start: {}.", cause(&e))))?;
-        Ok(self.client.get_or_init(|| made).clone())
+        Self { url: url.into() }
     }
 
     /// What Claude Code's sign-in in `place` says, and what Anthropic
@@ -114,7 +99,10 @@ impl Anthropic {
                 ..answer
             });
         }
-        let response = (self.client()?.get(&*self.url))
+        // The client follows no redirect, so the token goes to [`USAGE`]
+        // alone.
+        let client = client().map_err(|why| Failure::new(format!("{why}.")))?;
+        let response = (client.get(&*self.url))
             .bearer_auth(token)
             .header("anthropic-beta", "oauth-2025-04-20")
             .header(reqwest::header::ACCEPT, "application/json")
@@ -136,31 +124,23 @@ impl Anthropic {
     }
 }
 
-/// What went wrong at the bottom of `error`: "connection refused", not
-/// only "error sending request".
-fn cause(error: &(dyn std::error::Error + 'static)) -> String {
-    let mut at = error;
-    while let Some(under) = at.source() {
-        at = under;
-    }
-    at.to_string()
-}
-
 /// Where Claude Code keeps an entry's sign-in on this host.
 struct Place {
-    /// Its configuration folder, as the entry names it.
-    folder: String,
-    /// Whether that is Claude Code's own, `~/.claude`, whose `.claude.json`
-    /// and Keychain item go by other names.
-    standard: bool,
+    /// The configuration folder `CLAUDE_CONFIG_DIR` names, as it names
+    /// it; none when no variable names one, for Claude Code's own,
+    /// `~/.claude`. Only Claude Code's own has the `.claude.json` beside it
+    /// in the home and the Keychain item of no folder, even when a
+    /// variable names that same folder: Claude Code decides by the
+    /// variable, not by the path.
+    named: Option<String>,
     home: PathBuf,
     /// Whether to look in the macOS Keychain first.
     keychain: bool,
 }
 
 impl Place {
-    /// The entry's `CLAUDE_CONFIG_DIR`, else the engine's own, else
-    /// Claude Code's own folder.
+    /// The entry's `CLAUDE_CONFIG_DIR`, else the engine's own, which the
+    /// entry's process inherits; else Claude Code's own folder.
     fn of(harness: &Harness) -> Option<Place> {
         let named = |folder: Option<String>| folder.filter(|folder| !folder.is_empty());
         let folder =
@@ -172,14 +152,19 @@ impl Place {
         ))
     }
 
-    fn new(home: PathBuf, folder: Option<String>, keychain: bool) -> Place {
-        let own = home.join(".claude");
-        let folder = folder.unwrap_or_else(|| own.display().to_string());
+    fn new(home: PathBuf, named: Option<String>, keychain: bool) -> Place {
         Place {
-            standard: Path::new(&folder) == own,
-            folder,
+            named,
             home,
             keychain,
+        }
+    }
+
+    /// The configuration folder.
+    fn folder(&self) -> PathBuf {
+        match &self.named {
+            Some(named) => PathBuf::from(named),
+            None => self.home.join(".claude"),
         }
     }
 }
@@ -220,11 +205,11 @@ impl Login {
 /// not there.
 async fn kept(place: &Place) -> Result<Option<String>, Failure> {
     if place.keychain
-        && let Some(item) = keychain(&service(&place.folder, place.standard)).await
+        && let Some(item) = keychain(&service(place.named.as_deref())).await
     {
         return Ok(Some(item));
     }
-    let file = Path::new(&place.folder).join(".credentials.json");
+    let file = place.folder().join(".credentials.json");
     match std::fs::read_to_string(&file) {
         Ok(text) => Ok(Some(text)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -236,22 +221,44 @@ async fn kept(place: &Place) -> Result<Option<String>, Failure> {
 }
 
 /// The Keychain item Claude Code keeps its sign-in in on macOS: a folder
-/// other than its own has its own, named by the first 8 hex digits of the
-/// folder's SHA-256.
-fn service(folder: &str, standard: bool) -> String {
-    if standard {
+/// a variable `named` has its own, named by the first 8 hex digits of the
+/// SHA-256 of the name as given, in Unicode's composed form (NFC).
+fn service(named: Option<&str>) -> String {
+    let Some(folder) = named else {
         return "Claude Code-credentials".to_owned();
-    }
+    };
+    let folder = icu_normalizer::ComposingNormalizerBorrowed::new_nfc().normalize(folder);
     let hash = Sha256::digest(folder.as_bytes());
     let hex: String = hash[..4].iter().map(|byte| format!("{byte:02x}")).collect();
     format!("Claude Code-credentials-{hex}")
 }
 
-/// A macOS Keychain item's secret, by `security`, as this computer's user;
-/// none when it is not there or the Keychain does not answer in time. The
-/// Keychain asks the Person once to let Banda read it.
+/// The account Claude Code keeps its Keychain item under: `user`, the
+/// `USER` variable, else `system`, this user's name as the system has it;
+/// `claude-code-user` for a name of anything but `a-z`, `A-Z`, `0-9`, `.`,
+/// `_` and `-`, or none.
+fn account(user: Option<String>, system: impl FnOnce() -> Option<String>) -> String {
+    let name = user.filter(|user| !user.is_empty()).or_else(system);
+    let plain = |name: &String| {
+        let allowed = |c: char| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-');
+        !name.is_empty() && name.chars().all(allowed)
+    };
+    name.filter(plain)
+        .unwrap_or_else(|| "claude-code-user".to_owned())
+}
+
+/// This user's name in the system's user database.
+fn system_user() -> Option<String> {
+    let user = nix::unistd::User::from_uid(nix::unistd::getuid()).ok()??;
+    Some(user.name)
+}
+
+/// A macOS Keychain item's secret, by `security`, under the account
+/// Claude Code keeps it under; none when it is not there or the Keychain
+/// does not answer in time. The Keychain asks the Person once to let
+/// Banda read it.
 async fn keychain(service: &str) -> Option<String> {
-    let account = std::env::var("USER").ok()?;
+    let account = account(std::env::var("USER").ok(), system_user);
     let asked = tokio::process::Command::new("/usr/bin/security")
         .args(["find-generic-password", "-a", &account, "-s", service, "-w"])
         .stdin(Stdio::null())
@@ -264,12 +271,12 @@ async fn keychain(service: &str) -> Option<String> {
 }
 
 /// The address Claude Code is signed in with, `oauthAccount.emailAddress`
-/// in its `.claude.json`: in the folder, or beside it in the home for its
-/// own folder. None when the file is not there or does not read.
+/// in its `.claude.json`: in the folder a variable names, else in the
+/// home. None when the file is not there or does not read.
 fn email_in(place: &Place) -> Option<String> {
-    let file = match place.standard {
-        true => place.home.join(".claude.json"),
-        false => Path::new(&place.folder).join(".claude.json"),
+    let file = match &place.named {
+        Some(named) => Path::new(named).join(".claude.json"),
+        None => place.home.join(".claude.json"),
     };
     let kept: Value = serde_json::from_str(&std::fs::read_to_string(file).ok()?).ok()?;
     let email = kept.pointer("/oauthAccount/emailAddress")?.as_str()?;
@@ -597,15 +604,64 @@ mod tests {
     }
 
     #[test]
-    fn on_macos_the_keychain_holds_it_under_the_folders_own_item() {
-        assert_eq!(service("/home/p/.claude", true), "Claude Code-credentials");
+    fn on_macos_the_keychain_holds_it_under_the_item_of_the_folder_a_variable_names() {
+        assert_eq!(service(None), "Claude Code-credentials");
         // The first 8 hex digits of the folder's SHA-256, as Claude Code
         // names it: `printf %s /work | sha256sum`.
-        assert_eq!(service("/work", false), "Claude Code-credentials-0c9a453f");
-        let home = PathBuf::from("/home/p");
-        assert!(Place::new(home.clone(), None, true).standard);
-        assert!(Place::new(home.clone(), Some("/home/p/.claude/".into()), true).standard);
-        assert!(!Place::new(home, Some("/work".into()), true).standard);
+        assert_eq!(service(Some("/work")), "Claude Code-credentials-0c9a453f");
+        // Claude Code's own folder, named: its own item, as Claude Code
+        // decides by the variable. `printf %s /home/p/.claude | sha256sum`.
+        assert_eq!(
+            service(Some("/home/p/.claude")),
+            "Claude Code-credentials-c5255054"
+        );
+        assert_ne!(
+            service(Some("/home/p/.claude/")),
+            service(Some("/home/p/.claude"))
+        );
+        // A name decomposed, as a Mac's file names may be, hashes as
+        // composed: `printf %s /Users/zoë | sha256sum`.
+        let composed = service(Some("/Users/zo\u{eb}"));
+        assert_eq!(service(Some("/Users/zoe\u{308}")), composed);
+        assert_eq!(composed, "Claude Code-credentials-b87a2303");
+        let place = Place::new(PathBuf::from("/home/p"), None, true);
+        assert_eq!(place.folder(), Path::new("/home/p/.claude"));
+    }
+
+    #[test]
+    fn the_keychain_account_is_the_one_claude_code_names() {
+        let none = || None;
+        assert_eq!(account(Some("roma".into()), none), "roma");
+        assert_eq!(account(None, || Some("p.l-2_x".into())), "p.l-2_x");
+        assert_eq!(account(Some(String::new()), || Some("p".into())), "p");
+        assert_eq!(account(None, none), "claude-code-user");
+        assert_eq!(account(Some("jean paul".into()), none), "claude-code-user");
+        assert_eq!(account(Some("zo\u{eb}".into()), none), "claude-code-user");
+    }
+
+    #[tokio::test]
+    async fn claude_codes_own_folder_named_by_a_variable_reads_as_any_named_folder() {
+        let root = tempfile::tempdir().unwrap();
+        let home = root.path().join("home");
+        let account =
+            |email: &str| json!({ "oauthAccount": { "emailAddress": email } }).to_string();
+        write(&home.join(".claude.json"), &account("own@example.com"));
+        write(
+            &home.join(".claude/.claude.json"),
+            &account("named@example.com"),
+        );
+        write(
+            &home.join(".claude/.credentials.json"),
+            &login(signed(NOW - 1)),
+        );
+        let (anthropic, _heads) = stand_in(200, "", "{}").await;
+        let named = Some(home.join(".claude").display().to_string());
+        let at = Place::new(home.clone(), named, false);
+        let answer = anthropic.asked(&at, NOW).await.unwrap();
+        assert_eq!(
+            (answer.expired, answer.email.as_deref()),
+            (true, Some("named@example.com"))
+        );
     }
 
     fn answered(body: Value) -> Answer {

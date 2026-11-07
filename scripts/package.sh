@@ -29,3 +29,14 @@ pnpm install --frozen-lockfile --silent
 node scripts/licenses.mjs --notices target/release/THIRD-PARTY-NOTICES.txt
 pnpm --filter @banda/desktop build
 pnpm --filter @banda/desktop exec electron-builder --config electron-builder.config.mjs --publish never
+
+# electron-builder only warns when a resource it was told to pack is
+# missing: an app without the adapters it carries (ADR 0059) stops here.
+resources=$(find client/desktop/dist -maxdepth 4 -type d \
+  \( -path '*-unpacked/resources' -o -path '*.app/Contents/Resources' \) -print -quit)
+for adapter in claude-agent-acp.mjs codex-acp.mjs; do
+  if [[ ! -s ${resources:-/nowhere}/adapters/$adapter ]]; then
+    echo "package.sh: the app carries no adapters/$adapter" >&2
+    exit 1
+  fi
+done
