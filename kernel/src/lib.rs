@@ -47,7 +47,7 @@ pub use events::{Event, EventFilter};
 pub use foreign::{Foreign, ForeignWhy};
 pub use ids::{AgentId, CommandId, EventId, Participant, PersonId, ProjectId};
 pub use kernel::{Kernel, KernelBuilder, ProjectSummary, decode};
-pub use methods::{Method, Nothing, Picture, Tool};
+pub use methods::{Kind, Method, Nothing, Picture, Tool};
 pub use module::{Call, Module, Scope, Stream, Wall};
 pub use outbox::{Claim, Effect, LONGEST_LEASE, Lease, OnRestart, Outcome, Retry, Settled};
 pub use passes::secret;
@@ -56,7 +56,7 @@ pub use reach::Reach;
 /// For `methods!` and `id!`, which name it from a module's crate.
 pub use schemars;
 pub use sign::{PictureKind, Sign, SignColor, SignKind, SignPick};
-pub use store::Tx;
+pub use store::{Answer, Tx};
 pub use watching::{Changed, Watch};
 pub use window::{WindowAnswer, WindowRequest};
 

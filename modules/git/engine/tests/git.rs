@@ -7,8 +7,8 @@ use banda_git::model::{
     Change, Changed, Commit, Contents, Diff, Done, Progress, Ref, Status, Step,
 };
 use banda_kernel::{
-    AgentId, Call, Code, CommandId, EventFilter, Kernel, Module, Participant, PersonId, ProjectId,
-    Refusal, Right,
+    AgentId, Call, Code, CommandId, EventFilter, Kernel, Kind, Module, Participant, PersonId,
+    ProjectId, Refusal, Right,
 };
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -32,6 +32,10 @@ impl Module for Agents {
 
     fn right(&self, _: &str) -> Option<Right> {
         Some(Right::Write)
+    }
+
+    fn kind(&self, _: &str) -> Option<Kind> {
+        Some(Kind::Command)
     }
 
     /// `say { kind, thread, turn }` writes the fact `kind` about `thread`.

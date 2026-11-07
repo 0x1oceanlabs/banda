@@ -33,7 +33,7 @@ mod stage;
 mod status;
 mod watch;
 
-use banda_kernel::{Call, Error, Module, ModuleProject, Nothing, Refusal, Right, Stream};
+use banda_kernel::{Call, Error, Kind, Module, ModuleProject, Nothing, Refusal, Right, Stream};
 use model::{
     ActAsk, BranchAsk, ChangeAsk, Commit, CommitsAsk, Contents, ContentsAsk, Diff, DiffAsk,
     Message, Progress, PromptAsk, Prompted, Ref, RefsAsk, Status, SwitchAsk, WrittenAsk,
@@ -184,6 +184,10 @@ impl Module for Git {
 
     fn right(&self, method: &str) -> Option<Right> {
         Self::method_right(method)
+    }
+
+    fn kind(&self, method: &str) -> Option<Kind> {
+        Self::method_kind(method)
     }
 
     /// From now on, it keeps a checkpoint as each turn begins and ends,

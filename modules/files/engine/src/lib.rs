@@ -37,7 +37,9 @@ pub mod thumb;
 mod trashcan;
 mod write;
 
-use banda_kernel::{Call, Changed, Module, Nothing, Participant, Reach, Refusal, Right, Stream};
+use banda_kernel::{
+    Call, Changed, Code, Kind, Module, Nothing, Participant, Reach, Refusal, Right, Stream,
+};
 use model::{
     Archive, ArchiveAsk, CancelAsk, Counted, Done, FindAsk, Found, Info, InfoAsk, ItemsAsk, Job,
     ListAsk, Listing, Locked, MakeAsk, Making, MoveAsk, Opened, OpenedAsk, Places, ReadAsk,
@@ -207,6 +209,10 @@ impl Module for Files {
         Self::method_right(method)
     }
 
+    fn kind(&self, method: &str) -> Option<Kind> {
+        Self::method_kind(method)
+    }
+
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
         self.dispatch(call, method, params).await
     }
@@ -245,6 +251,13 @@ pub(crate) fn shown(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
+/// A refusal for a failure of the disk that may pass, as a full disk or a
+/// busy file: a command's receipt does not keep it, so a resend may go
+/// through (ADR 0082, decision 4).
+fn failed(message: String) -> Refusal {
+    Refusal::new(Code::Internal, message)
+}
+
 /// A refusal for what the disk said about `asked`.
 fn amiss(asked: &str, error: &std::io::Error) -> Refusal {
     use std::io::ErrorKind::*;
@@ -253,7 +266,7 @@ fn amiss(asked: &str, error: &std::io::Error) -> Refusal {
         NotADirectory => Refusal::invalid(format!("{asked} is not a folder.")),
         IsADirectory => Refusal::invalid(format!("{asked} is a folder.")),
         PermissionDenied => Refusal::forbidden(format!("{asked} may not be read.")),
-        _ => Refusal::conflict(format!("{asked} could not be read: {error}.")),
+        _ => failed(format!("{asked} could not be read: {error}.")),
     }
 }
 
@@ -268,7 +281,7 @@ fn unchanged(asked: &str, error: &std::io::Error) -> Refusal {
             Refusal::forbidden(format!("{asked} may not be changed."))
         }
         NotFound | NotADirectory | IsADirectory => amiss(asked, error),
-        _ => Refusal::conflict(format!("{asked} could not be changed: {error}.")),
+        _ => failed(format!("{asked} could not be changed: {error}.")),
     }
 }
 
@@ -320,9 +333,7 @@ fn unwritten(asked: &str, why: write::Unwritten) -> Refusal {
         Unwritten::Io(error) if error.kind() == std::io::ErrorKind::IsADirectory => {
             Refusal::invalid(format!("{asked} is a folder."))
         }
-        Unwritten::Io(error) => {
-            Refusal::conflict(format!("{asked} could not be written: {error}."))
-        }
+        Unwritten::Io(error) => failed(format!("{asked} could not be written: {error}.")),
     }
 }
 
@@ -846,5 +857,29 @@ async fn send(say: &tokio::sync::mpsc::Sender<Value>, piece: &impl serde::Serial
     match serde_json::to_value(piece) {
         Ok(piece) => say.send(piece).await.is_ok(),
         Err(_) => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Error, ErrorKind::*};
+
+    #[test]
+    fn a_disk_failure_that_may_pass_is_not_kept_on_a_receipt() {
+        for kind in [StorageFull, ResourceBusy, Interrupted, TimedOut, Other] {
+            let passing = [
+                amiss("a.txt", &Error::from(kind)),
+                unchanged("a.txt", &Error::from(kind)),
+                unwritten("a.txt", write::Unwritten::Io(Error::from(kind))),
+            ];
+            for refusal in passing {
+                assert!(!refusal.code.is_final(), "{kind:?}: {refusal:?}");
+            }
+        }
+        for kind in [NotFound, AlreadyExists, PermissionDenied] {
+            let refusal = unchanged("a.txt", &Error::from(kind));
+            assert!(refusal.code.is_final(), "{kind:?}: {refusal:?}");
+        }
     }
 }

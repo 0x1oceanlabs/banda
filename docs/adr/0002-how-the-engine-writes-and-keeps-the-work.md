@@ -40,6 +40,8 @@ calls, approvals and agent sessions were lost.
    receipt, its events, the tables its views read and its outbox rows commit
    together. A repeated command returns the first result and runs nothing
    again. A refusal gets a receipt too.
+   _Changed by ADR 0082, decision 4: only a final refusal is kept, and the
+   receipt keeps a hash of the params and the command's place in the log._
 
 3. **Side effects run from the outbox, never from a live subscription.**
    Starting a turn, interrupting it and answering a Question are outbox

@@ -3,9 +3,9 @@
 
 use banda_kernel::api::Identity;
 use banda_kernel::{
-    AgentId, Call, Caller, Code, CommandId, Effect, Error, EventFilter, Kernel, Lease, Module,
-    ModuleProject, OnRestart, Outcome, Participant, PersonId, ProjectId, ProjectSummary, Refusal,
-    Retry, Right, Scope, Settled, SignKind, Stream, Tx, decode, now_ms,
+    AgentId, Call, Caller, Code, CommandId, Effect, Error, EventFilter, Kernel, Kind, Lease,
+    Module, ModuleProject, OnRestart, Outcome, Participant, PersonId, ProjectId, ProjectSummary,
+    Refusal, Retry, Right, Scope, Settled, SignKind, Stream, Tx, decode, now_ms,
 };
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -13,15 +13,29 @@ use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::future::Future;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio_tungstenite::tungstenite::Message;
 
 /// Notes: `add` writes a note and queues `publish`, keyed by one feed.
+/// `stamp` is a command that acts outside the store and writes nothing
+/// there, as a file's rename does; `post` writes a note, then answers
+/// other than its change; `touch` is a call that acts and keeps no
+/// receipt.
 #[derive(Clone, Default)]
 struct Notes {
     published: Arc<Mutex<Vec<String>>>,
+    /// How many times `stamp` acted.
+    stamped: Arc<AtomicUsize>,
+    /// How the next runs of `stamp` and `post` are refused, after acting;
+    /// they answer once the script is empty.
+    stamp_refusals: Arc<Mutex<VecDeque<Refusal>>>,
+    /// Said as each run of `stamp` begins; a run waits while it is held.
+    stamp_began: Arc<tokio::sync::Notify>,
+    stamp_held: Arc<tokio::sync::RwLock<()>>,
+    /// How many times `touch` acted.
+    touched: Arc<AtomicUsize>,
     /// How the next runs of `publish` end; `Done` once the script is empty.
     script: Arc<Mutex<VecDeque<Outcome>>>,
     /// Whether the next run of `publish` panics.
@@ -57,12 +71,21 @@ impl Module for Notes {
 
     fn right(&self, method: &str) -> Option<Right> {
         match method {
-            "add" => Some(Right::Write),
+            "add" | "stamp" | "post" | "touch" => Some(Right::Write),
             "list" => Some(Right::Read),
             "purge" => Some(Right::Manage),
             "count" => Some(Right::Read),
             "pass" => Some(Right::Read),
             "show" => Some(Right::Read),
+            _ => None,
+        }
+    }
+
+    fn kind(&self, method: &str) -> Option<Kind> {
+        match method {
+            "add" | "purge" | "stamp" | "post" => Some(Kind::Command),
+            "list" | "pass" | "show" | "touch" => Some(Kind::Call),
+            "count" => Some(Kind::Stream),
             _ => None,
         }
     }
@@ -104,6 +127,31 @@ impl Module for Notes {
                 })
                 .await
             }
+            // Acts, and writes nothing in the store: the kernel keeps its
+            // receipt all the same.
+            "stamp" => {
+                self.stamp_began.notify_one();
+                let _held = self.stamp_held.read().await;
+                let stamp = self.stamped.fetch_add(1, Ordering::SeqCst) + 1;
+                match self.stamp_refusals.lock().unwrap().pop_front() {
+                    Some(refusal) => Err(refusal),
+                    None => Ok(json!({ "stamp": stamp, "params": params })),
+                }
+            }
+            "post" => {
+                let author = call.participant();
+                call.command(move |tx| {
+                    tx.sql()
+                        .execute("INSERT INTO notes_items (text) VALUES ('post')", [])?;
+                    Ok(tx.emit("added", 1, Some("feed"), author, &"post")?.seq)
+                })
+                .await?;
+                match self.stamp_refusals.lock().unwrap().pop_front() {
+                    Some(refusal) => Err(refusal),
+                    None => Ok(json!("posted")),
+                }
+            }
+            "touch" => Ok(json!(self.touched.fetch_add(1, Ordering::SeqCst) + 1)),
             // The pass of the Agent `agent` in this Project, as the agents
             // module asks for one when it opens a session.
             "pass" => {
@@ -208,6 +256,10 @@ impl Module for Posts {
         (method == "post").then_some(Right::Write)
     }
 
+    fn kind(&self, method: &str) -> Option<Kind> {
+        (method == "post").then_some(Kind::Command)
+    }
+
     async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
         self.projects.lock().unwrap().push(project);
         Ok(())
@@ -284,6 +336,14 @@ impl Module for Desk {
         }
     }
 
+    fn kind(&self, method: &str) -> Option<Kind> {
+        match method {
+            "open" => Some(Kind::Command),
+            "list" => Some(Kind::Call),
+            _ => None,
+        }
+    }
+
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
         if method == "open" {
             let kind = params["kind"].as_str().unwrap_or_default().to_owned();
@@ -336,6 +396,10 @@ impl Module for Hears {
     }
 
     fn right(&self, _: &str) -> Option<Right> {
+        None
+    }
+
+    fn kind(&self, _: &str) -> Option<Kind> {
         None
     }
 
@@ -612,8 +676,65 @@ async fn a_command_runs_once_and_its_effect_runs_after_commit() {
     );
 }
 
+/// Calls `notes.stamp` with `params` under `command`, as the owner.
+async fn stamp(
+    kernel: &Kernel,
+    owner: PersonId,
+    project: &ProjectSummary,
+    command: CommandId,
+    params: Value,
+) -> Result<Value, Refusal> {
+    let person = Participant::Person(owner);
+    let stamped = kernel.call(
+        person,
+        "notes.stamp",
+        Some(project.id),
+        Some(command),
+        params,
+    );
+    stamped.await
+}
+
 #[tokio::test]
-async fn a_read_keeps_no_receipt_so_its_id_stays_free() {
+async fn every_command_keeps_a_receipt_whatever_its_handler_does() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let project = create(&kernel, owner, "Work").await;
+    let command = CommandId::new();
+    let params = json!({ "to": "a.txt", "from": "b.txt" });
+
+    let first = stamp(&kernel, owner, &project, command, params.clone()).await;
+    let again = stamp(&kernel, owner, &project, command, params).await;
+    assert_eq!(first, again, "the same command gets the same answer");
+    assert_eq!(first.unwrap()["stamp"], 1);
+    let reordered = json!({ "from": "b.txt", "to": "a.txt" });
+    let reordered = stamp(&kernel, owner, &project, command, reordered).await;
+    assert_eq!(reordered, again, "the same params, however ordered");
+    assert_eq!(notes.stamped.load(Ordering::SeqCst), 1, "it acted once");
+
+    let other = json!({ "to": "c.txt", "from": "b.txt" });
+    let other = stamp(&kernel, owner, &project, command, other).await;
+    assert_eq!(other.unwrap_err().code, Code::Conflict, "other params");
+    let person = Participant::Person(owner);
+    let added = kernel.call(
+        person,
+        "notes.add",
+        Some(project.id),
+        Some(command),
+        json!({ "text": "x" }),
+    );
+    assert_eq!(
+        added.await.unwrap_err().code,
+        Code::Conflict,
+        "another method"
+    );
+    assert_eq!(notes.stamped.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn a_call_keeps_no_receipt_whatever_it_changes() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let notes = Notes::default();
@@ -621,26 +742,286 @@ async fn a_read_keeps_no_receipt_so_its_id_stays_free() {
     let project = create(&kernel, owner, "Work").await;
     let person = Participant::Person(owner);
     let id = CommandId::new();
-    kernel
-        .call(
+    for touch in 1..=2 {
+        let touched = kernel.call(
             person,
-            "notes.list",
+            "notes.touch",
             Some(project.id),
             Some(id),
             Value::Null,
+        );
+        assert_eq!(touched.await, Ok(json!(touch)), "a call runs each time");
+    }
+    let stamped = stamp(&kernel, owner, &project, id, Value::Null).await;
+    assert!(stamped.is_ok(), "the ID was never a command's");
+}
+
+#[tokio::test]
+async fn a_passing_refusal_is_not_kept_and_a_final_one_is() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let project = create(&kernel, owner, "Work").await;
+    let refuse = |refusal| notes.stamp_refusals.lock().unwrap().push_back(refusal);
+
+    let command = CommandId::new();
+    refuse(Refusal::internal());
+    let broke = stamp(&kernel, owner, &project, command, Value::Null).await;
+    assert_eq!(broke.unwrap_err().code, Code::Internal);
+    let again = stamp(&kernel, owner, &project, command, Value::Null).await;
+    assert_eq!(again.unwrap()["stamp"], 2, "a resend goes through");
+
+    // What may have run never runs again under its ID.
+    for refusal in [
+        Refusal::may_have_run("no answer in time"),
+        Refusal::conflict("already there"),
+    ] {
+        let (command, code) = (CommandId::new(), refusal.code);
+        refuse(refusal);
+        for _ in 0..2 {
+            let refused = stamp(&kernel, owner, &project, command, Value::Null).await;
+            assert_eq!(refused.unwrap_err().code, code);
+        }
+    }
+    assert_eq!(
+        notes.stamped.load(Ordering::SeqCst),
+        4,
+        "a final refusal is the command's answer: it does not run again"
+    );
+}
+
+#[tokio::test]
+async fn a_command_sent_again_while_it_runs_waits_for_its_answer() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let project = create(&kernel, owner, "Work").await;
+    let command = CommandId::new();
+
+    let held = notes.stamp_held.clone().write_owned().await;
+    let first = tokio::spawn({
+        let (kernel, project) = (kernel.clone(), project.clone());
+        async move { stamp(&kernel, owner, &project, command, Value::Null).await }
+    });
+    notes.stamp_began.notified().await;
+    let second = tokio::spawn({
+        let (kernel, project) = (kernel.clone(), project.clone());
+        async move { stamp(&kernel, owner, &project, command, Value::Null).await }
+    });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(!second.is_finished(), "the second waits for the first");
+    drop(held);
+
+    let (first, second) = (first.await.unwrap(), second.await.unwrap());
+    assert_eq!(first, second);
+    assert_eq!(first.unwrap()["stamp"], 1);
+    assert_eq!(notes.stamped.load(Ordering::SeqCst), 1, "it acted once");
+
+    // A run that fails as it may pass: the resend that waited hears the
+    // same, and runs nothing.
+    let command = CommandId::new();
+    notes
+        .stamp_refusals
+        .lock()
+        .unwrap()
+        .push_back(Refusal::internal());
+    let held = notes.stamp_held.clone().write_owned().await;
+    let first = tokio::spawn({
+        let (kernel, project) = (kernel.clone(), project.clone());
+        async move { stamp(&kernel, owner, &project, command, Value::Null).await }
+    });
+    notes.stamp_began.notified().await;
+    let second = tokio::spawn({
+        let (kernel, project) = (kernel.clone(), project.clone());
+        async move { stamp(&kernel, owner, &project, command, Value::Null).await }
+    });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    drop(held);
+    let (first, second) = (first.await.unwrap(), second.await.unwrap());
+    assert_eq!(first.unwrap_err().code, Code::Internal);
+    assert_eq!(second.unwrap_err().code, Code::Internal);
+    assert_eq!(notes.stamped.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn a_command_cut_short_may_have_run_and_never_runs_again() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let project = create(&kernel, owner, "Work").await;
+    let command = CommandId::new();
+
+    // The run stops where it acts, outside the store, and its caller goes.
+    let held = notes.stamp_held.clone().write_owned().await;
+    let cut = tokio::spawn({
+        let (kernel, project) = (kernel.clone(), project.clone());
+        async move { stamp(&kernel, owner, &project, command, Value::Null).await }
+    });
+    notes.stamp_began.notified().await;
+    cut.abort();
+    assert!(cut.await.unwrap_err().is_cancelled());
+    drop(held);
+
+    for _ in 0..2 {
+        let unsure = stamp(&kernel, owner, &project, command, Value::Null).await;
+        assert_eq!(unsure.unwrap_err().code, Code::MayHaveRun);
+    }
+    assert_eq!(notes.stamped.load(Ordering::SeqCst), 0, "never run again");
+}
+
+#[tokio::test]
+async fn a_command_begun_before_a_restart_may_have_run_for_every_resend() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let project = create(&kernel, owner, "Work").await;
+    let command = CommandId::new();
+
+    // The engine stops while the command acts: its receipt says it began.
+    let held = notes.stamp_held.clone().write_owned().await;
+    let cut = tokio::spawn({
+        let (kernel, project) = (kernel.clone(), project.clone());
+        async move { stamp(&kernel, owner, &project, command, Value::Null).await }
+    });
+    notes.stamp_began.notified().await;
+    cut.abort();
+    let _ = cut.await;
+    drop(held);
+    let data = root.path().join(".data");
+    let_go(kernel, &data, &[]).await;
+
+    // Two resends at once, as two clients after the restart: neither runs.
+    let kernel = reopen(root.path(), owner, &notes, 1).await;
+    let resend = || stamp(&kernel, owner, &project, command, Value::Null);
+    let (one, two) = tokio::join!(resend(), resend());
+    for unsure in [one, two, resend().await] {
+        assert_eq!(unsure.unwrap_err().code, Code::MayHaveRun);
+    }
+    assert_eq!(notes.stamped.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_command_whose_change_was_written_never_writes_it_again() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let project = create(&kernel, owner, "Work").await;
+    let person = Participant::Person(owner);
+    let post = |command| {
+        kernel.call(
+            person,
+            "notes.post",
+            Some(project.id),
+            Some(command),
+            json!({}),
         )
-        .await
-        .unwrap();
-    kernel
-        .call(
+    };
+    let count = || async {
+        let listed = kernel.call(person, "notes.list", Some(project.id), None, Value::Null);
+        listed.await.unwrap()["items"].as_array().unwrap().len()
+    };
+
+    let command = CommandId::new();
+    let posted = post(command).await;
+    assert_eq!(posted, Ok(json!("posted")));
+    assert_eq!(
+        post(command).await,
+        posted,
+        "the handler's answer, not its change's"
+    );
+
+    // It fails after its change, as a failure that may pass: a resend
+    // hears that it ran, and writes nothing.
+    let command = CommandId::new();
+    notes
+        .stamp_refusals
+        .lock()
+        .unwrap()
+        .push_back(Refusal::internal());
+    assert_eq!(post(command).await.unwrap_err().code, Code::Internal);
+    for _ in 0..2 {
+        assert_eq!(post(command).await.unwrap_err().code, Code::MayHaveRun);
+    }
+    assert_eq!(count().await, 2);
+}
+
+#[tokio::test]
+async fn a_passing_refusal_kept_before_adr_0082_is_no_answer() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let project = create(&kernel, owner, "Work").await;
+    let data = root.path().join(".data");
+    let_go(kernel, &data, &[]).await;
+
+    // Receipts as the kernel kept them before, just now: every refusal, no
+    // params.
+    let database =
+        rusqlite::Connection::open(data.join(format!("projects/{}/project.sqlite3", project.id)))
+            .unwrap();
+    let (broke, refused) = (CommandId::new(), CommandId::new());
+    for (command, code) in [(broke, "internal"), (refused, "forbidden")] {
+        let refusal = json!({ "code": code, "message": "kept before" }).to_string();
+        database
+            .execute(
+                "INSERT INTO kernel_receipts (command, module, method, author_kind, author_id, refusal, at)
+                 VALUES (?1, 'notes', 'notes.stamp', 'person', ?2, ?3, ?4)",
+                rusqlite::params![command.to_string(), owner.to_string(), refusal, now_ms()],
+            )
+            .unwrap();
+    }
+    drop(database);
+
+    let kernel = reopen(root.path(), owner, &notes, 1).await;
+    let ran = stamp(&kernel, owner, &project, broke, json!({ "any": 1 })).await;
+    assert_eq!(ran.unwrap()["stamp"], 1);
+    let kept = stamp(&kernel, owner, &project, refused, json!({ "any": 2 })).await;
+    assert_eq!(kept.unwrap_err().code, Code::Forbidden);
+}
+
+#[tokio::test]
+async fn a_command_s_answer_carries_its_place_in_the_log() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let project = create(&kernel, owner, "Work").await;
+    let person = Participant::Person(owner);
+    let (command, text) = (CommandId::new(), json!({ "text": "one" }));
+
+    let add = || {
+        kernel.answer(
             person,
             "notes.add",
             Some(project.id),
-            Some(id),
-            json!({ "text": "later" }),
+            Some(command),
+            text.clone(),
         )
-        .await
-        .expect("the ID was never a command's");
+    };
+    let added = add().await.unwrap();
+    assert_eq!(added.at, added.value["seq"].as_i64(), "where its event is");
+    assert_eq!(add().await.unwrap(), added, "a resend, the same place");
+
+    let stamped = kernel.answer(
+        person,
+        "notes.stamp",
+        Some(project.id),
+        Some(CommandId::new()),
+        Value::Null,
+    );
+    assert_eq!(
+        stamped.await.unwrap().at,
+        added.at,
+        "one that wrote no event: where the log stood as it ended"
+    );
+    let listed = kernel.answer(person, "notes.list", Some(project.id), None, Value::Null);
+    assert_eq!(listed.await.unwrap().at, None, "a call has no place");
 }
 
 #[tokio::test]
@@ -1322,6 +1703,77 @@ async fn receipts_and_settled_effects_go_after_thirty_days_and_not_before() {
     assert_eq!(listed["items"], json!(["old", "recent", "old"]));
 }
 
+/// Sets `command`'s receipt as last written `days` ago, with the engine
+/// stopped.
+fn age(data: &Path, project: &ProjectSummary, command: CommandId, days: i64) {
+    let at = now_ms() - days * 86_400_000;
+    let aged = sqlite(data, project).execute(
+        "UPDATE kernel_receipts SET at = ?1 WHERE command = ?2",
+        rusqlite::params![at, command.to_string()],
+    );
+    assert_eq!(aged.unwrap(), 1, "{command} has a receipt");
+}
+
+fn has_receipt(data: &Path, project: &ProjectSummary, command: CommandId) -> bool {
+    let kept = sqlite(data, project).query_row(
+        "SELECT COUNT(*) FROM kernel_receipts WHERE command = ?1",
+        [command.to_string()],
+        |row| row.get::<_, i64>(0),
+    );
+    kept.unwrap() == 1
+}
+
+#[tokio::test]
+async fn a_command_cut_short_may_have_run_for_every_resend_its_window_lets_come() {
+    let root = tempfile::tempdir().unwrap();
+    let data = root.path().join(".data");
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let notes = Notes::default();
+    let mut kernel = open(root.path(), owner, &notes).await;
+    let project = create(&kernel, owner, "Work").await;
+    let cut = CommandId::new();
+
+    // The engine stops while `stamp` acts, outside the store.
+    let held = notes.stamp_held.clone().write_owned().await;
+    let stamping = tokio::spawn({
+        let (kernel, project) = (kernel.clone(), project.clone());
+        async move { stamp(&kernel, owner, &project, cut, Value::Null).await }
+    });
+    notes.stamp_began.notified().await;
+    stamping.abort();
+    let _ = stamping.await;
+    drop(held);
+
+    // Its first resend comes as its window ends, seven days after it was
+    // sent; the next as that one's answer is 29 days old. Each comes once
+    // the Project's loop has let go of an older receipt: never this one.
+    for days in [7, 29] {
+        let older = CommandId::new();
+        let params = json!({ "text": "older" });
+        let added = kernel.call(person, "notes.add", Some(project.id), Some(older), params);
+        added.await.unwrap();
+        let_go(kernel, &data, &[]).await;
+        age(&data, &project, cut, days);
+        age(&data, &project, older, 31);
+
+        kernel = reopen(root.path(), owner, &notes, 1).await;
+        eventually(|| async { !has_receipt(&data, &project, older) }).await;
+        let unsure = stamp(&kernel, owner, &project, cut, Value::Null).await;
+        assert_eq!(unsure.unwrap_err().code, Code::MayHaveRun, "{days} days");
+        assert_eq!(notes.stamped.load(Ordering::SeqCst), 0, "never run again");
+    }
+
+    // Thirty days past its last answer, long past its window, it goes, and
+    // the same ID runs as a new command.
+    let_go(kernel, &data, &[]).await;
+    age(&data, &project, cut, 31);
+    let kernel = reopen(root.path(), owner, &notes, 1).await;
+    eventually(|| async { !has_receipt(&data, &project, cut) }).await;
+    let stamped = stamp(&kernel, owner, &project, cut, Value::Null).await;
+    assert_eq!(stamped.unwrap()["stamp"], 1);
+}
+
 #[tokio::test]
 async fn an_agent_works_in_the_project_but_may_not_manage_it() {
     let root = tempfile::tempdir().unwrap();
@@ -1489,6 +1941,12 @@ async fn the_api_refuses_strangers_and_follows_events_without_gaps() {
         "no event before the view's position, no gap after it"
     );
     assert_eq!(frames[1]["type"], "result");
+    assert_eq!(
+        frames[1]["at"],
+        at + 1,
+        "a command's answer carries its place in the log"
+    );
+    assert!(view.get("at").is_none(), "a call's answer has none");
 
     socket
         .send(Message::text(r#"{"type":"call","id":4}"#))

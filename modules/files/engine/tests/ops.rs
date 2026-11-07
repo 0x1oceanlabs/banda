@@ -8,7 +8,7 @@
 //! a throwaway one, and leave the Person's alone anywhere else.
 
 use banda_files::model::{Done, Job, Searched, Step, Trashcan};
-use banda_kernel::{Code, Participant, Refusal};
+use banda_kernel::{Code, CommandId, Participant, Refusal};
 use serde_json::{Value, json};
 use std::path::Path;
 use std::time::Duration;
@@ -165,6 +165,37 @@ async fn rename_renames_in_its_folder_and_answers_how_to_name_it_back() {
     world.undo(&done.undo).await;
     assert_eq!(world.text("a.txt"), "a");
     assert!(!world.has("c.txt") && !world.has("C.txt"));
+}
+
+#[tokio::test]
+async fn a_resend_of_a_change_answers_what_it_did_and_does_nothing_more() {
+    let world = World::new().await;
+    world.write("a.txt", "a");
+    // Each acts on the disk before the kernel keeps its answer: a resend,
+    // as after a lost connection, answers from its receipt, not "not
+    // there" nor "already there" (ADR 0082, decision 4).
+    let read = world.call("files.read", json!({ "path": "a.txt" })).await;
+    let base = read.unwrap()["hash"].clone();
+    let changes = [
+        (
+            "files.make",
+            json!({ "dir": "", "name": "new.txt", "kind": "file" }),
+        ),
+        ("files.rename", json!({ "path": "a.txt", "name": "b.txt" })),
+        (
+            "files.write",
+            json!({ "path": "b.txt", "text": "b", "base": base }),
+        ),
+    ];
+    for (method, params) in changes {
+        let command = CommandId::new();
+        let first = world.command_as(command, method, params.clone()).await;
+        assert!(first.is_ok(), "{method}: {first:?}");
+        let again = world.command_as(command, method, params).await;
+        assert_eq!(again, first, "{method}");
+    }
+    assert!(!world.has("a.txt") && world.has("new.txt"));
+    assert_eq!(world.text("b.txt"), "b");
 }
 
 #[cfg(unix)]

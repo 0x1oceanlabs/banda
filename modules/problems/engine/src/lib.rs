@@ -20,7 +20,7 @@ mod panics;
 mod report;
 
 use banda_kernel::{
-    Call, Error, Module, ModuleProject, Nothing, Participant, Refusal, Right, Scope, Tool, Tx,
+    Call, Error, Kind, Module, ModuleProject, Nothing, Participant, Refusal, Right, Scope, Tool, Tx,
 };
 use issue::{Issue, Sent};
 use model::{Fingerprint, Log, Problem, Record, Recorded, Report, word};
@@ -160,6 +160,10 @@ impl Module for Problems {
 
     fn right(&self, method: &str) -> Option<Right> {
         Self::method_right(method)
+    }
+
+    fn kind(&self, method: &str) -> Option<Kind> {
+        Self::method_kind(method)
     }
 
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {

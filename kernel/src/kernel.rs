@@ -1,11 +1,12 @@
 use crate::access::{self, Caller, Right};
 use crate::foreign::{self, Foreign};
-use crate::methods::{Asks, Nothing, Tool};
+use crate::methods::{Asks, Kind, Nothing, Tool, needs_command_id};
 use crate::module::{Call, Module, Scope, Stream, Wall};
 use crate::outbox::Boot;
 use crate::passes::Passes;
 use crate::project::{self, GONE, Manifest, Project, Shared, UNFINISHED};
 use crate::sign::{self, Kept, Picked, Sign, SignPick};
+use crate::store::{Answer, Begun};
 use crate::window::Window;
 use crate::{AgentId, CommandId, Error, Participant, PersonId, ProjectId, Refusal};
 use serde::{Deserialize, Serialize};
@@ -333,12 +334,7 @@ struct Own<'a> {
 
 impl Asks for Own<'_> {
     fn command_id(&self) -> Result<CommandId, Refusal> {
-        self.command.ok_or_else(|| {
-            Refusal::invalid(format!(
-                "{} is a command and needs a command ID.",
-                self.method
-            ))
-        })
+        self.command.ok_or_else(|| needs_command_id(self.method))
     }
 }
 
@@ -573,7 +569,7 @@ impl Kernel {
     /// Routes a call: `projects.*` to the kernel, `<module>.*` to that module
     /// in the given Project. Every method passes the Project wall and the
     /// access decision first. A caller with a pass that names no Project
-    /// calls in its own.
+    /// calls in its own. See [`Kernel::answer`] for a command's receipt.
     pub async fn call(
         &self,
         caller: impl Into<Caller>,
@@ -582,12 +578,55 @@ impl Kernel {
         command: Option<CommandId>,
         params: Value,
     ) -> Result<Value, Refusal> {
+        let answer = self.answer(caller, method, project, command, params);
+        answer.await.map(|answer| answer.value)
+    }
+
+    /// Routes a call as [`Kernel::call`] does, and answers a module's
+    /// command with its place in the log, `at`.
+    ///
+    /// Every command keeps a receipt, whatever its handler does (ADR 0082,
+    /// decision 4):
+    ///
+    /// - It is written before the handler runs, and keeps the answer once
+    ///   it ends, so a resend gets that answer and runs nothing again. A
+    ///   resend while the command runs waits, and gets what the run answers.
+    /// - It keeps a hash of the params. The same ID from someone else, for
+    ///   another method or with other params, is refused as `conflict`.
+    /// - It keeps a value or a final refusal (`Code::is_final`). After a
+    ///   passing refusal it is forgotten, so a resend runs, unless the
+    ///   command's change was written: then it answers `may_have_run`.
+    /// - A run cut short, by a crash or by a caller that went away, leaves
+    ///   it unanswered. A resend then gets `may_have_run`, kept as any
+    ///   answer is, as the handler may have acted outside the store before
+    ///   it ended.
+    /// - `at` is the log's head once the command's change was written, or
+    ///   once its answer was kept when it wrote none. A resend gets the
+    ///   same `at`.
+    /// - A receipt is kept thirty days past its last write, as its command
+    ///   began or was answered, and while its command runs, however long.
+    ///   A resend comes within seven days of the first send (ADR 0082,
+    ///   decision 16), so each finds its receipt. Past them the same ID
+    ///   runs as a new command.
+    ///
+    /// A `call` keeps no receipt, whatever it changes. The kernel's own
+    /// `projects.*` commands are not yet among these: they leave the
+    /// kernel with A1 and A2 of the architecture vision.
+    pub async fn answer(
+        &self,
+        caller: impl Into<Caller>,
+        method: &str,
+        project: Option<ProjectId>,
+        command: Option<CommandId>,
+        params: Value,
+    ) -> Result<Answer, Refusal> {
+        let plain = |value| Answer { value, at: None };
         let Caller { participant, only } = caller.into();
         if let Some(own) = method.strip_prefix("window.")
             && let Some(right) = Window::right(own)
         {
             access::decide(&participant, right, self.owner)?;
-            return self.window.call(participant, own, params).await;
+            return self.window.call(participant, own, params).await.map(plain);
         }
         // `spaces.*` is their name before ADR 0069 (grace).
         if let Some(own) =
@@ -602,34 +641,34 @@ impl Kernel {
                 only,
                 command,
             };
-            return self.dispatch(ask, own, params).await;
+            return self.dispatch(ask, own, params).await.map(plain);
         }
         let (module, rest, right) = self.method(method)?;
+        let kind = module.kind(rest).ok_or_else(|| no_method(method))?;
         let (project, wall) = self.place(&**module, method, project, only).await?;
         let _moving = project.moving.read().await;
         let scope = project.module(module.name());
-        // A read is not a command: it keeps no receipt, so its ID is free.
-        let command = command.filter(|_| right != Right::Read);
-        let receipt = command.map(|command| scope.receipt(command, method, participant));
-        if let Some(receipt) = &receipt {
-            let earlier = project.store().answered(receipt.clone()).await?;
-            if let Some(answer) = earlier {
-                return answer;
-            }
+        if kind != Kind::Command {
+            access::decide(&participant, right, project.owner())?;
+            let call = Call::new(participant, scope, method.to_owned(), None, wall);
+            return module.call(call, rest, params).await.map(plain);
         }
+        let command = command.ok_or_else(|| needs_command_id(method))?;
+        let receipt = scope.receipt(command, method, participant, &params);
+        let running = match project.store().begin(receipt.clone()).await? {
+            Begun::Run(running) => running,
+            Begun::Answered(answer) => return answer,
+        };
+        // A refusal made before the handler runs is the command's answer
+        // too (ADR 0002, decision 2).
         let answer = match access::decide(&participant, right, project.owner()) {
             Ok(()) => {
-                let call = Call::new(participant, scope, method.to_owned(), command, wall);
+                let call = Call::new(participant, scope, method.to_owned(), Some(receipt), wall);
                 module.call(call, rest, params).await
             }
             Err(refusal) => Err(refusal),
         };
-        // A refusal made before the command ran is its answer too (ADR
-        // 0002, decision 2). The store keeps it only if nothing answered.
-        if let (Some(receipt), Err(refusal)) = (receipt, &answer) {
-            project.store().refused(receipt, refusal.clone()).await?;
-        }
-        answer
+        project.store().settle(running, answer).await
     }
 
     /// Opens a module's stream in a Project, or this machine's for a module

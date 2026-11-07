@@ -3,7 +3,8 @@
 //! and by its own `gh pr create`, read and judged, and let go of.
 
 use banda_kernel::{
-    AgentId, Call, CommandId, Kernel, Module, Participant, PersonId, ProjectId, Refusal, Right,
+    AgentId, Call, CommandId, Kernel, Kind, Module, Participant, PersonId, ProjectId, Refusal,
+    Right,
 };
 use banda_pulls::Pulls;
 use serde_json::{Value, json};
@@ -28,6 +29,10 @@ impl Module for Agents {
 
     fn right(&self, _: &str) -> Option<Right> {
         Some(Right::Write)
+    }
+
+    fn kind(&self, _: &str) -> Option<Kind> {
+        Some(Kind::Command)
     }
 
     async fn call(&self, call: Call, _: &str, fact: Value) -> Result<Value, Refusal> {

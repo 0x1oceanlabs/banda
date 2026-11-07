@@ -16,9 +16,12 @@
 //! Each tool call is a command whose ID comes from this session of `banda
 //! mcp` and the request's ID (ADR 0082, decision 4). A request sent again,
 //! by its client or by `banda mcp` as it connects again to an engine that
-//! broke off, gets the first answer and runs nothing again. A session ends
-//! as `banda mcp` does, or as its client says `initialize` again: the next
-//! numbers its requests from one again, and they get other IDs.
+//! broke off, gets the first answer and runs nothing again. It is sent with
+//! the same arguments, and the receipt keeps their hash: the same request
+//! ID with other arguments or for another tool, which MCP forbids, is
+//! refused as `conflict` and runs nothing. A session ends as `banda mcp`
+//! does, or as its client says `initialize` again: the next numbers its
+//! requests from one again, and they get other IDs.
 //!
 //! A refused or malformed call is the tool's answer, marked as an error,
 //! with what was wrong and that nothing was done. Only an engine that does
@@ -207,7 +210,10 @@ fn new_session() -> String {
 
 /// The command ID of request `id` in `session`. A JSON-RPC ID is a number
 /// or a string, and `7` and `"7"` are two requests. Any other, such as
-/// `null`, which MCP forbids, makes a command of its own each time.
+/// `null`, which MCP forbids, makes a command of its own each time. The ID
+/// names the request, not what it asks: the kernel's receipt holds the
+/// tool's method and a hash of its arguments, so a reused ID never gets
+/// another call's answer.
 fn command_id(session: &str, id: &Value) -> CommandId {
     let integer = id.as_i64().is_some() || id.as_u64().is_some();
     if integer || id.is_string() {
@@ -381,6 +387,7 @@ mod tests {
                             id,
                             ok: Some(tools),
                             error: None,
+                            at: None,
                         };
                         socket.send(say(listed)).await.unwrap();
                         continue;
@@ -391,6 +398,7 @@ mod tests {
                             id,
                             ok: Some(ok),
                             error: None,
+                            at: Some(1),
                         };
                         socket.send(say(answered)).await.unwrap();
                     }

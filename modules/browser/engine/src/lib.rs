@@ -11,7 +11,7 @@
 
 pub mod settings;
 
-use banda_kernel::{Call, Module, Nothing, Picture, Refusal, Right, Tool};
+use banda_kernel::{Call, Kind, Module, Nothing, Picture, Refusal, Right, Tool};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -709,6 +709,10 @@ impl Module for Browser {
 
     fn right(&self, method: &str) -> Option<Right> {
         Self::method_right(method)
+    }
+
+    fn kind(&self, method: &str) -> Option<Kind> {
+        Self::method_kind(method)
     }
 
     fn tools(&self) -> Vec<Tool> {
