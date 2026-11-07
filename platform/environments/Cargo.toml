@@ -14,9 +14,10 @@ tokio.workspace = true
 [target.'cfg(unix)'.dependencies]
 # A terminal is a PTY on Unix; Windows' ConPTY comes later (ADR 0090, step 7).
 pty-process.workspace = true
+# Its size, and what runs in front on it.
+rustix.workspace = true
 
 [dev-dependencies]
-rustix.workspace = true
 tempfile.workspace = true
 
 [lints]

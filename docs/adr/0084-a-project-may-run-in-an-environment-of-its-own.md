@@ -343,10 +343,10 @@ the SDK road.
    - The port does not say whose program it starts. F0 makes it say: a
      Harness's, which `local` fences, or the Person's own terminal or git
      act (ADR 0083, decision 1).
-   - A holder stops what it started by its process group on the host,
-     and `spawn` starts at once. Before step 3, the port hands back a
-     handle that stops what it started, and starts asynchronously, as a
-     box may have to start first.
+   - The port hands back a handle that stops what it started
+     (`Started`, ADR 0090's step 2), and a terminal's own (`Pty`). It
+     still starts at once; before step 3 it comes to start
+     asynchronously, as a box may have to start first.
    - One adapter serves every Project. Step 3 picks it per Project, and
      lets a Project's Harness processes go once its environment changes.
 2. The door. Passes with an audience first. A spike: both Harnesses reach

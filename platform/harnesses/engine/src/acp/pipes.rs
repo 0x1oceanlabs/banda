@@ -4,11 +4,11 @@
 //! line by line, and the last of it is kept: a program that ended with
 //! another code than 0 says it as the connection ends.
 //!
-//! The program leads a process group of its own. That group is killed as
-//! the program ends, so a launcher such as `npx` leaves nothing behind,
-//! and as the connection is dropped, so what it started stops too. Windows
-//! has no process groups: there the program alone is killed as it is
-//! dropped, until it is born in a Job Object (ADR 0090, step 3).
+//! The program is killed with what it started ([`Started::kill`]) as it
+//! ends, so a launcher such as `npx` leaves nothing behind, and as the
+//! connection is dropped, so what it started stops too. On Windows that
+//! kills the program alone, until it is born in a Job Object (ADR 0090,
+//! step 3).
 //!
 //! It keeps the transport of ACP's own `AcpAgent` as of
 //! agent-client-protocol 3.6: its grace periods, its "Process exited
@@ -17,11 +17,7 @@
 
 use agent_client_protocol::util::internal_error;
 use agent_client_protocol::{Agent, Client, ConnectTo, Lines};
-#[cfg(unix)]
-use banda_kernel::ProcessGroup;
-use banda_kernel::{Environment, Input, Program};
-#[cfg(unix)]
-use rustix::process::Signal;
+use banda_kernel::{Environment, Input, Program, Started};
 use std::collections::VecDeque;
 use std::io;
 use std::process::ExitStatus;
@@ -70,11 +66,13 @@ impl ConnectTo<Client> for Pipes {
             program,
             hears,
         } = self;
-        let mut child = (environment.spawn(&program, Input::Piped)).map_err(internal_error)?;
-        let mut group = Killed::of(&child);
-        let (Some(stdin), Some(stdout), Some(stderr)) =
-            (child.stdin.take(), child.stdout.take(), child.stderr.take())
-        else {
+        let started = (environment.spawn(&program, Input::Piped)).map_err(internal_error)?;
+        let mut started = Killed(started);
+        let (Some(stdin), Some(stdout), Some(stderr)) = (
+            started.stdin.take(),
+            started.stdout.take(),
+            started.stderr.take(),
+        ) else {
             return Err(internal_error("The Harness's pipes did not open."));
         };
         let tail = Tail::default();
@@ -96,14 +94,14 @@ impl ConnectTo<Client> for Pipes {
                 spoken = &mut protocol => {
                     spoken?;
                     // Given a moment, a program that ended badly says so;
-                    // one that goes on is killed as its group is dropped.
-                    match timeout(GRACE, child.wait()).await {
-                        Ok(status) => ended(status, &mut group, stderr_ended, &tail).await,
+                    // one that goes on is killed as it is dropped.
+                    match timeout(GRACE, started.wait()).await {
+                        Ok(status) => ended(status, &mut started, stderr_ended, &tail).await,
                         Err(_) => Ok(()),
                     }
                 }
-                status = child.wait() => {
-                    ended(status, &mut group, stderr_ended, &tail).await?;
+                status = started.wait() => {
+                    ended(status, &mut started, stderr_ended, &tail).await?;
                     timeout(GRACE, protocol).await.unwrap_or(Ok(()))
                 }
             }
@@ -116,18 +114,18 @@ impl ConnectTo<Client> for Pipes {
     }
 }
 
-/// After the program ended: its group is killed, and an end with another
-/// code than 0 is an error that says the last of its stderr.
+/// After the program ended: what it started is killed, and an end with
+/// another code than 0 is an error that says the last of its stderr.
 async fn ended(
     status: io::Result<ExitStatus>,
-    group: &mut Killed,
+    started: &mut Killed,
     stderr_ended: oneshot::Receiver<()>,
     tail: &Tail,
 ) -> Result<(), agent_client_protocol::Error> {
     let status =
         status.map_err(|error| internal_error(format!("Failed to wait for process: {error}")))?;
     // A launcher may end while what it started holds its pipes.
-    group.kill();
+    started.kill();
     if status.success() {
         return Ok(());
     }
@@ -139,40 +137,26 @@ async fn ended(
     }))
 }
 
-/// The process group the program leads, killed when dropped.
-#[cfg(unix)]
-struct Killed(Option<ProcessGroup>);
+/// The program, killed with what it started when dropped.
+struct Killed(Started);
 
-/// None on Windows, where the program is killed alone (ADR 0090, step 3).
-#[cfg(not(unix))]
-struct Killed;
+impl std::ops::Deref for Killed {
+    type Target = Started;
 
-impl Killed {
-    #[cfg(unix)]
-    fn of(child: &tokio::process::Child) -> Killed {
-        Killed(ProcessGroup::of(child))
+    fn deref(&self) -> &Started {
+        &self.0
     }
+}
 
-    #[cfg(not(unix))]
-    fn of(_: &tokio::process::Child) -> Killed {
-        Killed
+impl std::ops::DerefMut for Killed {
+    fn deref_mut(&mut self) -> &mut Started {
+        &mut self.0
     }
-
-    /// Kills it; a group already gone stays so.
-    #[cfg(unix)]
-    fn kill(&mut self) {
-        if let Some(group) = self.0 {
-            group.signal(Signal::KILL);
-        }
-    }
-
-    #[cfg(not(unix))]
-    fn kill(&mut self) {}
 }
 
 impl Drop for Killed {
     fn drop(&mut self) {
-        self.kill();
+        self.0.kill();
     }
 }
 

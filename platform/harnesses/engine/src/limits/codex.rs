@@ -8,11 +8,11 @@
 use super::{Failure, Found, window};
 use crate::model::{LimitWindow, WindowKind};
 use crate::{Harness, cli};
-use banda_kernel::{Environment, Input, Program};
+use banda_kernel::{Environment, Input, Program, Started};
 use serde_json::{Value, json};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines};
-use tokio::process::{Child, ChildStdin, ChildStdout};
+use tokio::process::{ChildStdin, ChildStdout};
 use tokio::time::timeout;
 
 /// How long each question may take.
@@ -30,14 +30,14 @@ pub(super) async fn read(
     let args = ["-s", "read-only", "-a", "on-request", "app-server"].map(str::to_owned);
     let mut server = Program::harness_probe(path.display().to_string(), args.to_vec());
     server.env = harness.env.clone();
-    let mut child = (environment.spawn(&server, Input::Piped))
+    let mut started = (environment.spawn(&server, Input::Piped))
         .map_err(|e| Failure::new(format!("Codex's app-server did not start: {e}.")))?;
     // What it says on stderr is heard by no one, and read so it never
     // fills.
-    if let Some(mut stderr) = child.stderr.take() {
+    if let Some(mut stderr) = started.stderr.take() {
         tokio::spawn(async move { tokio::io::copy(&mut stderr, &mut tokio::io::sink()).await });
     }
-    let mut server = Server::of(&mut child)?;
+    let mut server = Server::of(&mut started)?;
     let client = json!({ "clientInfo": { "name": "banda", "version": banda_kernel::version() } });
     server.ask("initialize", client).await?;
     server
@@ -181,9 +181,9 @@ struct Server {
 }
 
 impl Server {
-    /// Takes the pipes of `child`, which stops as it drops.
-    fn of(child: &mut Child) -> Result<Self, Failure> {
-        let (Some(stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
+    /// Takes the pipes of `started`, which stops as it drops.
+    fn of(started: &mut Started) -> Result<Self, Failure> {
+        let (Some(stdin), Some(stdout)) = (started.stdin.take(), started.stdout.take()) else {
             return Err(Failure::new("Codex's app-server has no pipes."));
         };
         Ok(Self {

@@ -280,15 +280,21 @@ The kernel holds only what every module needs, and it names no module.
   arguments, never a shell line; what it adds to and takes from the
   environment it starts in; its folder, `cwd`) on pipes (`spawn`), where
   it leads a process group of its own and is killed once let go of, or on
-  a terminal (`pty`), where it leads a session of its own. Its holder
-  signals that group through the kernel's `ProcessGroup`. The engine
-  gives the kernel its adapter: `local`, the platform's
-  `banda-environments`, which runs the program on the host as Banda always
-  has; a kernel given none starts nothing. Harness processes, terminals
-  and the git acts the Person asks for start there, and with them all
-  they start: an Agent's tools, the MCP servers its Harness runs, dev
-  servers. What keeps Banda's books (git's status, diffs, checkpoints and
-  watch through `banda-git-cli`, Files' reads) runs on the host and
+  a terminal (`pty`), where it leads a session of its own. Either hands
+  back the kernel's `Started`, the handle that asks it and what it started
+  to stop and kills them (ADR 0090, decision 3): TERM and KILL to its
+  group on Unix, with HUP first on a terminal; the program alone on
+  Windows, until Job Objects. A terminal comes back as the port's own
+  `Pty`: what the program prints, what is typed, its size and what runs
+  in front. A module signals none of the programs it started: the git
+  module's bookkeeping git starts as a `Started` too. The engine gives
+  the kernel its adapter: `local`, the platform's `banda-environments`,
+  which runs the program on the host as Banda always has; a kernel given
+  none starts nothing. Harness processes, terminals and the git acts the
+  Person asks for start there, and with them all they start: an Agent's
+  tools, the MCP servers its Harness runs, dev servers. What keeps
+  Banda's books (git's status, diffs, checkpoints and watch through
+  `banda-git-cli`, Files' reads) runs on the host and
   executes nothing of a Project's. The machine's scope has the same
   environment, for the Harness process its `harnesses` module asks and
   Codex's app-server that reads its limits. A `Program` says whose it is

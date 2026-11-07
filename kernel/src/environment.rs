@@ -9,8 +9,10 @@
 //! git's status for one, runs on the host and executes nothing of the
 //! Project's, so it does not come here.
 //!
-//! A program leads a process group of its own wherever it starts, so
-//! stopping the group stops what it started too ([`ProcessGroup`]).
+//! Each program comes back with the handle that stops it and what it
+//! started ([`Started`]), and one on a terminal with the terminal, the
+//! port's own ([`Pty`]): a module holds no system's process or terminal
+//! (ADR 0090, decision 3).
 //!
 //! Each program says whose it is ([`Whose`]): a Harness's is one to start
 //! behind the fence, which keeps Banda's own state out of its reach, with
@@ -20,17 +22,15 @@
 //! is, and nowhere else, so a program has holes exactly when it is one to
 //! fence.
 //!
-//! Windows has neither yet (ADR 0090): a program there is no group's,
-//! and stopping it stops it alone, until each is born in a Job Object
-//! (step 3); and it has no terminal to start on, until ConPTY (step 7).
+//! On Windows (ADR 0090) stopping a program stops it alone, until each
+//! is born in a Job Object (step 3), and no program starts on a terminal,
+//! until ConPTY (step 7).
 
-#[cfg(unix)]
-use rustix::process::{Pid, Signal, kill_process_group};
+use crate::{Pty, PtySize, Started};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::io;
 use std::path::PathBuf;
-use tokio::process::Child;
 use ts_rs::TS;
 
 /// A program with its arguments, never a shell line, what it changes of
@@ -170,44 +170,15 @@ pub enum Input {
 /// connection is. Each method starts one program, or says why it did not.
 pub trait Environment: Send + Sync + 'static {
     /// Starts `program`, with its stdin as `input` says and its stdout and
-    /// stderr piped to the engine. It leads a process group of its own,
-    /// and is killed once its holder lets go of it.
-    fn spawn(&self, program: &Program, input: Input) -> io::Result<Child>;
+    /// stderr piped to the engine. On Unix it leads a process group of its
+    /// own. It is killed once its holder lets go of it.
+    fn spawn(&self, program: &Program, input: Input) -> io::Result<Started>;
 
-    /// Starts `program` on the terminal `pts`, which it reads and writes
-    /// on all three of its streams, as the leader of a session of its own
-    /// whose controlling terminal `pts` is. It outlives its holder: it
-    /// hears the hangup once the terminal closes.
-    #[cfg(unix)]
-    fn pty(&self, program: &Program, pts: pty_process::Pts) -> io::Result<Child>;
-}
-
-/// The process group a program an [`Environment`] started leads, named by
-/// its leader's number: a signal to it reaches what the program started
-/// too. Once the program ended and was waited for, that number may name
-/// another process, so a holder signals it only while the program runs.
-#[cfg(unix)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ProcessGroup(Pid);
-
-#[cfg(unix)]
-impl ProcessGroup {
-    /// The group `child` leads, while it runs.
-    pub fn of(child: &Child) -> Option<ProcessGroup> {
-        let id = i32::try_from(child.id()?).ok()?;
-        Pid::from_raw(id).map(ProcessGroup)
-    }
-
-    /// Sends `signal` to each process in it; a group already gone stays
-    /// so.
-    pub fn signal(self, signal: Signal) {
-        let _ = kill_process_group(self.0, signal);
-    }
-
-    /// Its leader's number.
-    pub fn leader(self) -> i32 {
-        self.0.as_raw_pid()
-    }
+    /// Opens a terminal of `size` and starts `program` on it, which it
+    /// reads and writes on all three of its streams: on Unix as the leader
+    /// of a session of its own whose controlling terminal it is. It
+    /// outlives its holder: it hears the hangup once the terminal closes.
+    fn pty(&self, program: &Program, size: PtySize) -> io::Result<(Started, Pty)>;
 }
 
 /// The environment of a kernel the engine gave none: it starts nothing. A
@@ -227,12 +198,11 @@ impl Nowhere {
 }
 
 impl Environment for Nowhere {
-    fn spawn(&self, program: &Program, _: Input) -> io::Result<Child> {
+    fn spawn(&self, program: &Program, _: Input) -> io::Result<Started> {
         Err(Nowhere::refused(program))
     }
 
-    #[cfg(unix)]
-    fn pty(&self, program: &Program, _: pty_process::Pts) -> io::Result<Child> {
+    fn pty(&self, program: &Program, _: PtySize) -> io::Result<(Started, Pty)> {
         Err(Nowhere::refused(program))
     }
 }

@@ -16,16 +16,13 @@
 //! goes to the engine's log only, and a caller hears a [`Reason`]; a line
 //! a caller follows has its credentials taken out ([`redact`]).
 
-#[cfg(unix)]
-use banda_kernel::ProcessGroup;
-use banda_kernel::{Environment, Input, Program, Refusal};
+use banda_kernel::{Environment, Input, Program, Refusal, Started};
 use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
-use tokio::process::Child;
 use tokio::sync::{Semaphore, mpsc};
 
 /// How long one git may run.
@@ -364,9 +361,10 @@ where
         Failure(Reason::Other)
     };
     let feeds = opts.stdin.is_some();
-    // A group of its own either way, so stopping it stops the hooks it
-    // runs too. `opts`'s index and variables go over git's own, last.
-    let mut child = match opts.asked {
+    // Stopped through its handle either way, which stops the hooks it runs
+    // too, on Unix: on Windows git alone, until ADR 0090's step 3. `opts`'s
+    // index and variables go over git's own, last.
+    let mut started = match opts.asked {
         Some(environment) => {
             let act = program(folder, &args, &opts).map_err(did_not_start)?;
             let input = if feeds { Input::Piped } else { Input::Null };
@@ -380,24 +378,22 @@ where
                 .stdin(if feeds { Stdio::piped() } else { Stdio::null() })
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
-            #[cfg(unix)]
-            command.process_group(0);
             if let Some(index) = opts.index {
                 command.env("GIT_INDEX_FILE", index);
             }
             command.envs(opts.env.iter().copied());
-            command.spawn().map_err(did_not_start)?
+            Started::spawn(command).map_err(did_not_start)?
         }
     };
     let time = opts.time.unwrap_or(TIME);
     let cap = opts.cap.unwrap_or(OUTPUT);
-    let stdin = child.stdin.take();
-    let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
+    let stdin = started.stdin.take();
+    let (Some(stdout), Some(stderr)) = (started.stdout.take(), started.stderr.take()) else {
         tracing::warn!(args = %said, "git started without its pipes");
         return Err(Failure(Reason::Other));
     };
     let mut running = Running {
-        child: Some(child),
+        started: Some(started),
         ended: false,
     };
     let (mut out, mut err) = (Vec::new(), Vec::new());
@@ -478,78 +474,60 @@ fn program(folder: &Path, args: &[OsString], opts: &Opts) -> io::Result<Program>
     Ok(act)
 }
 
-/// A git running, in a process group of its own with the hooks it runs.
-/// Let go before it ended, as when its call is, it is stopped as
-/// [`Running::stop`] stops it, meanwhile.
+/// A git running, with the hooks it runs. Let go before it ended, as when
+/// its call is, it is stopped as [`Running::stop`] stops it, meanwhile.
 struct Running {
     /// Taken only as it is stopped.
-    child: Option<Child>,
+    started: Option<Started>,
     ended: bool,
 }
 
 impl Running {
-    fn child(&mut self) -> &mut Child {
-        self.child.as_mut().expect("there till it is stopped")
+    fn started(&mut self) -> &mut Started {
+        self.started.as_mut().expect("there till it is stopped")
     }
 
     async fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
-        let exited = self.child().wait().await;
+        let exited = self.started().wait().await;
         self.ended = exited.is_ok();
         exited
     }
 
-    /// Asks it and its hooks to stop.
+    /// Asks it and its hooks to stop: SIGTERM on Unix, on which git takes
+    /// its lock files away, as `index.lock`. On Windows git alone is
+    /// killed, until ADR 0090's step 3: what it ran goes on, and a lock it
+    /// held may stay.
     fn terminate(&mut self) {
-        terminate(self.child());
+        self.started().ask_to_stop();
     }
 
     /// Stops it and its hooks, and waits till it has.
     async fn stop(mut self) {
-        if let Some(child) = self.child.take() {
-            stopped(child).await;
+        if let Some(started) = self.started.take() {
+            stopped(started).await;
         }
     }
 }
 
 impl Drop for Running {
     fn drop(&mut self) {
-        let Some(mut child) = self.child.take() else {
+        let Some(started) = self.started.take() else {
             return;
         };
         if self.ended {
             return;
         }
-        match tokio::runtime::Handle::try_current() {
-            Ok(runtime) => drop(runtime.spawn(stopped(child))),
-            Err(_) => drop(child.start_kill()),
+        // With no runtime to stop it in, it is killed as it is let go of.
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            drop(runtime.spawn(stopped(started)));
         }
     }
 }
 
-/// Asks a git and its hooks to stop: SIGTERM, on which git takes its lock
-/// files away, as `index.lock`.
-fn terminate(child: &mut Child) {
-    #[cfg(unix)]
-    if let Some(group) = ProcessGroup::of(child) {
-        group.signal(rustix::process::Signal::TERM);
-        return;
-    }
-    let _ = child.start_kill();
-}
-
 /// Stops a git and its hooks: asked first, killed if it has not ended
 /// soon after.
-async fn stopped(mut child: Child) {
-    terminate(&mut child);
-    if tokio::time::timeout(STOPPING, child.wait()).await.is_ok() {
-        return;
-    }
-    #[cfg(unix)]
-    if let Some(group) = ProcessGroup::of(&child) {
-        group.signal(rustix::process::Signal::KILL);
-    }
-    let _ = child.start_kill();
-    let _ = child.wait().await;
+async fn stopped(mut started: Started) {
+    let _ = started.stop(STOPPING).await;
 }
 
 /// Up to `cap` bytes of `from` into `kept`, read to its end; each line

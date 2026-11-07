@@ -17,7 +17,6 @@ banda-look = { path = "../../../platform/look" }
 icu_normalizer.workspace = true
 reqwest.workspace = true
 rusqlite.workspace = true
-rustix.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -34,6 +33,7 @@ nix.workspace = true
 
 [dev-dependencies]
 banda-environments = { path = "../../environments" }
+rustix.workspace = true
 tempfile.workspace = true
 
 [lints]

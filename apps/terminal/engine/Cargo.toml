@@ -13,7 +13,6 @@ banda-kernel = { path = "../../../kernel" }
 banda-look = { path = "../../../platform/look" }
 dirs.workspace = true
 rusqlite.workspace = true
-rustix.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -25,8 +24,9 @@ uuid.workspace = true
 sysinfo.workspace = true
 
 [target.'cfg(unix)'.dependencies]
-# A terminal is a PTY on Unix; Windows' ConPTY comes later (ADR 0090, step 7).
-pty-process.workspace = true
+# A server found running stops by signals to it (ADR 0044); Windows'
+# servers come later (ADR 0090, step 8).
+rustix.workspace = true
 
 [dev-dependencies]
 banda-environments = { path = "../../../platform/environments" }

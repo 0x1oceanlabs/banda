@@ -2,10 +2,9 @@
 //! then has another start it: for a test, to see that a module started a
 //! program through its Project's environment, and which.
 
-use banda_kernel::{Environment, Input, Program};
+use banda_kernel::{Environment, Input, Program, Pty, PtySize, Started};
 use std::io;
 use std::sync::{Arc, Mutex};
-use tokio::process::Child;
 
 /// How a program was asked to start.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -70,14 +69,13 @@ impl<E: Environment> Recorded<E> {
 }
 
 impl<E: Environment> Environment for Recorded<E> {
-    fn spawn(&self, program: &Program, input: Input) -> io::Result<Child> {
+    fn spawn(&self, program: &Program, input: Input) -> io::Result<Started> {
         self.write(How::Spawn, program);
         self.starts.spawn(program, input)
     }
 
-    #[cfg(unix)]
-    fn pty(&self, program: &Program, pts: pty_process::Pts) -> io::Result<Child> {
+    fn pty(&self, program: &Program, size: PtySize) -> io::Result<(Started, Pty)> {
         self.write(How::Pty, program);
-        self.starts.pty(program, pts)
+        self.starts.pty(program, size)
     }
 }

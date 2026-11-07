@@ -7,17 +7,16 @@
 //! Person's, outside it. So a terminal's program starts only on a terminal,
 //! and one to fence never does.
 
-use banda_kernel::{Environment, Input, Program, Whose};
+use banda_kernel::{Environment, Input, Program, Pty, PtySize, Started, Whose};
 use std::io;
 use std::process::Stdio;
-use tokio::process::Child;
 
 /// Runs a Project's programs on the host.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Local;
 
 impl Environment for Local {
-    fn spawn(&self, program: &Program, input: Input) -> io::Result<Child> {
+    fn spawn(&self, program: &Program, input: Input) -> io::Result<Started> {
         if program.whose() == Whose::Terminal {
             return Err(refused(
                 program,
@@ -39,36 +38,16 @@ impl Environment for Local {
                 Input::Piped => Stdio::piped(),
             })
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
-        // Windows has no process groups: a Job Object takes their place
-        // (ADR 0090, step 3).
-        #[cfg(unix)]
-        command.process_group(0);
-        command.spawn()
+            .stderr(Stdio::piped());
+        Started::spawn(command)
     }
 
-    #[cfg(unix)]
-    fn pty(&self, program: &Program, pts: pty_process::Pts) -> io::Result<Child> {
+    fn pty(&self, program: &Program, size: PtySize) -> io::Result<(Started, Pty)> {
         if program.whose().fenced() {
             let why = "on a terminal: a Harness's program starts only behind the fence";
             return Err(refused(program, why));
         }
-        let mut command = pty_process::Command::new(&program.program).args(&program.args);
-        if let Some(cwd) = &program.cwd {
-            command = command.current_dir(cwd);
-        }
-        for name in &program.unset {
-            command = command.env_remove(name);
-        }
-        command
-            .envs(&program.env)
-            .spawn(pts)
-            .map_err(|error| match error {
-                pty_process::Error::Io(error) => error,
-                pty_process::Error::Rustix(errno) => errno.into(),
-                other => io::Error::other(other.to_string()),
-            })
+        crate::pty::start(program, size)
     }
 }
 
