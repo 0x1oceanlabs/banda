@@ -10,8 +10,9 @@
 //! Project's, so it does not come here.
 //!
 //! A program leads a process group of its own wherever it starts, so
-//! stopping the group stops what it started too.
+//! stopping the group stops what it started too ([`ProcessGroup`]).
 
+use rustix::process::{Pid, Signal, kill_process_group};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::io;
@@ -62,6 +63,32 @@ pub trait Environment: Send + Sync + 'static {
     /// whose controlling terminal `pts` is. It outlives its holder: it
     /// hears the hangup once the terminal closes.
     fn pty(&self, program: &Program, pts: pty_process::Pts) -> io::Result<Child>;
+}
+
+/// The process group a program an [`Environment`] started leads, named by
+/// its leader's number: a signal to it reaches what the program started
+/// too. Once the program ended and was waited for, that number may name
+/// another process, so a holder signals it only while the program runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProcessGroup(Pid);
+
+impl ProcessGroup {
+    /// The group `child` leads, while it runs.
+    pub fn of(child: &Child) -> Option<ProcessGroup> {
+        let id = i32::try_from(child.id()?).ok()?;
+        Pid::from_raw(id).map(ProcessGroup)
+    }
+
+    /// Sends `signal` to each process in it; a group already gone stays
+    /// so.
+    pub fn signal(self, signal: Signal) {
+        let _ = kill_process_group(self.0, signal);
+    }
+
+    /// Its leader's number.
+    pub fn leader(self) -> i32 {
+        self.0.as_raw_pid()
+    }
 }
 
 /// The environment of a kernel the engine gave none: it starts nothing. A

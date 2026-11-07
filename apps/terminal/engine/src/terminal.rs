@@ -13,12 +13,11 @@ use crate::front::Front;
 use crate::history::{Decoder, History, Since};
 use crate::model::{Ended, Open, Piece, Size, Title};
 use crate::servers::TERMINAL_VARIABLE;
-use banda_kernel::{Environment, Program, ProjectId, Stream, project_env};
+use banda_kernel::{ModuleProject, ProcessGroup, Program, ProjectId, Stream, project_env};
 use pty_process::{OwnedReadPty, OwnedWritePty};
-use rustix::process::{Pid, Signal, kill_process_group};
+use rustix::process::Signal;
 use std::collections::BTreeMap;
 use std::os::unix::process::ExitStatusExt;
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -39,7 +38,7 @@ const LOOKS: [Duration; 2] = [Duration::from_millis(250), Duration::from_secs(1)
 
 pub struct Terminal {
     pub project: ProjectId,
-    group: Option<Pid>,
+    group: Option<ProcessGroup>,
     input: tokio::sync::Mutex<OwnedWritePty>,
     now: Mutex<Now>,
     /// Ticks at every change, so watchers look again.
@@ -56,14 +55,9 @@ struct Now {
 }
 
 impl Terminal {
-    /// Starts `open.program`, or the Person's shell, in `folder`, in the
-    /// Project's `environment`.
-    pub fn start(
-        project: ProjectId,
-        environment: &dyn Environment,
-        folder: &Path,
-        open: Open,
-    ) -> Result<Arc<Terminal>, String> {
+    /// Starts `open.program`, or the Person's shell, in `project`'s
+    /// folder and environment.
+    pub fn start(project: &ModuleProject, open: Open) -> Result<Arc<Terminal>, String> {
         let (pty, pts) = pty_process::open().map_err(plain)?;
         pty.resize(open.size.pty()).map_err(plain)?;
         let mut env = BTreeMap::from([
@@ -72,7 +66,7 @@ impl Terminal {
         ]);
         // What it carries tells its servers (ADR 0044, decision 2).
         env.extend(open.env.clone());
-        env.extend(project_env(project).map(|(key, id)| (key.to_owned(), id)));
+        env.extend(project_env(project.id()).map(|(key, id)| (key.to_owned(), id)));
         env.insert(TERMINAL_VARIABLE.to_owned(), open.terminal.to_string());
         let program = Program {
             program: open.program.clone().unwrap_or_else(shell),
@@ -84,14 +78,11 @@ impl Terminal {
                 .filter_map(|(key, _)| key.into_string().ok())
                 .filter(|key| key.starts_with("ELECTRON_"))
                 .collect(),
-            cwd: Some(folder.to_owned()),
+            cwd: Some(project.folder()),
         };
-        let child = (environment.pty(&program, pts))
+        let child = (project.environment().pty(&program, pts))
             .map_err(|e| format!("{} could not start: {e}.", program.program))?;
-        let group = child
-            .id()
-            .and_then(|id| i32::try_from(id).ok())
-            .and_then(Pid::from_raw);
+        let group = ProcessGroup::of(&child);
         // A shell's header says what runs in it; another program's keeps
         // the title it was opened with.
         let front = match open.program {
@@ -100,7 +91,7 @@ impl Terminal {
         };
         let (output, input) = pty.into_split();
         let terminal = Arc::new(Terminal {
-            project,
+            project: project.id(),
             group,
             input: tokio::sync::Mutex::new(input),
             now: Mutex::new(Now {
@@ -111,7 +102,7 @@ impl Terminal {
         });
         let reading = tokio::spawn(terminal.clone().read(output));
         if let Some(front) = front {
-            let shell = group.map(Pid::as_raw_pid);
+            let shell = group.map(ProcessGroup::leader);
             tokio::spawn(terminal.clone().title(Front::new(front, shell)));
         }
         tokio::spawn(terminal.clone().wait(child, reading));
@@ -202,13 +193,13 @@ impl Terminal {
         if self.now.lock().unwrap().ended.is_some() {
             return;
         }
-        let _ = kill_process_group(group, Signal::HUP);
-        let _ = kill_process_group(group, Signal::TERM);
+        group.signal(Signal::HUP);
+        group.signal(Signal::TERM);
         let terminal = self.clone();
         tokio::spawn(async move {
             tokio::time::sleep(GRACE).await;
             if terminal.now.lock().unwrap().ended.is_none() {
-                let _ = kill_process_group(group, Signal::KILL);
+                group.signal(Signal::KILL);
             }
         });
     }

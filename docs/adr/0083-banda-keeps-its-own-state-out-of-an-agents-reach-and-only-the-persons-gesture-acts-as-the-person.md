@@ -229,8 +229,9 @@ IDs are the vision's (§9.3).
    before the rename.
 4. **F0, the fence** (decisions 1 and 2), after the environment port with
    its `local` adapter (A7) and the engine as the machine's service with
-   passes kept hashed and expiring (S3, ADR 0086): the fence on every
-   Harness; the owner socket; the network listener takes only passes and
+   passes kept hashed and expiring (S3, ADR 0086): the port says whose
+   program it starts, and the fence goes on every Harness; the owner
+   socket; the network listener takes only passes and
    signatures; the default mode follows the fence; the `docker` group
    detected and shown.
 5. **B14, one access rule**: the wall checked on the resolved Project, in

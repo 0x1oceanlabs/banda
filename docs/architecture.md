@@ -211,7 +211,8 @@ The kernel holds only what every module needs, and it names no module.
   arguments, never a shell line; what it adds to and takes from the
   environment it starts in; its folder, `cwd`) on pipes (`spawn`), where
   it leads a process group of its own and is killed once let go of, or on
-  a terminal (`pty`), where it leads a session of its own. The engine
+  a terminal (`pty`), where it leads a session of its own. Its holder
+  signals that group through the kernel's `ProcessGroup`. The engine
   gives the kernel its adapter: `local`, the platform's
   `banda-environments`, which runs the program on the host as Banda always
   has; a kernel given none starts nothing. Harness processes, terminals
@@ -220,7 +221,8 @@ The kernel holds only what every module needs, and it names no module.
   servers. What keeps Banda's books (git's status, diffs, checkpoints and
   watch through `banda-git-cli`, Files' reads) runs on the host and
   executes nothing of a Project's. The machine's scope has the same
-  environment, for the Harness process its `harnesses` module asks.
+  environment, for the Harness process its `harnesses` module asks and
+  Codex's app-server that reads its limits.
 - **Passes.** A module asks its `ModuleProject` for a new pass of an Agent
   (`pass(agent)`), 32 random bytes in hex; the agents module asks as a
   session opens. The kernel keeps passes in memory, so they end with the
@@ -781,15 +783,20 @@ If Chat is removed, Agents still works through its own Thread.
 - **The code that speaks to a Harness is the crate `banda-harnesses`**,
   which knows nothing of Threads: the list and its file, finding the
   Person's CLI, a process (`acp::Process`: starting, recording, agreeing
-  on ACP, who is signed in) and the pool of processes. A process, and
-  its CLI asked its version, start in the environment of the Project the
-  pool is asked for (ADR 0084, decision 5), and ACP speaks on its pipes
-  (`acp/pipes.rs`); a short run apart from a Thread runs in the Thread's
-  process. The agents module wraps a process with its sessions' handlers
-  and capabilities. The agents module and `harnesses` share one list. The version a CLI says is
-  kept by its path as the latest look found it, by any process, and
-  checked against its entry's `minimum` at each read: a Thread stops
-  warning once the Person updated it and checked again.
+  on ACP, who is signed in) and the pool of processes. A process starts
+  in the environment of the Project the pool is asked for, and ACP speaks
+  on its pipes (`acp/pipes.rs`); a short run apart from a Thread runs in
+  the Thread's process. That program is the entry's start: a carried
+  Harness's is its adapter, on Node, which runs the CLI. The CLI is found
+  on the host and asked its version in the environment, and with `local`
+  all of it runs on the host. ADR 0084's split, the adapter on the host
+  and its CLI in a box, found there, comes with the `container` adapter
+  (its decision 5, plan step 3). The agents module wraps a process with
+  its sessions' handlers and capabilities. The agents module and
+  `harnesses` share one list. The version a CLI says is kept by its path
+  as the latest look found it, by any process, and checked against its
+  entry's `minimum` at each read: a Thread stops warning once the Person
+  updated it and checked again.
 
 - **Usage comes from local journals** (ADR 0043). `harnesses.usage`
   returns tokens and estimated USD API cost for a half-open interval of up
@@ -1375,9 +1382,9 @@ images. Sweeps retain images still referenced by a fork after a rewind.
   another's tables, and a Pane imports only the API, `@banda/ui`, React
   and its icons; the terminal's Pane also Ghostty. No code of the engine
   makes a process but `banda-environments`, and the places named in its
-  test, with why, that ask the host about itself or keep Banda's books and
-  run nothing of a Project's (ADR 0084, decision 4); no crate takes ACP's
-  agent that starts its own.
+  test, each with how many and why, that ask the host about itself or keep
+  Banda's books and run nothing of a Project's (ADR 0084, decision 4); no
+  code uses ACP's agent that starts its own.
 - **Module tests** run through the module's interface: commands go in and
   events come out. Nothing past the interface is mocked.
 - **Checkpoints** (ADR 0014, decision 3). With `BANDA_CHECKPOINTS` set,

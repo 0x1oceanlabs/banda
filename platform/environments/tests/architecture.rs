@@ -2,67 +2,68 @@
 //! 0084, decision 4): no code of the engine but this crate makes a
 //! process. What keeps Banda's books, or asks the host about itself, runs
 //! on the host and executes nothing of a Project's; each such place is
-//! named here, with why. A new one is either that, and named here, or it
-//! goes through the Project's environment.
+//! named here, with how many processes it makes and why. A new one is
+//! either that, and named here, or it goes through the Project's
+//! environment.
 
 use std::path::{Path, PathBuf};
 
 /// What makes a process, as Rust's source says it: std's, tokio's,
 /// `pty-process`'s and `async-process`'s commands, and ACP's agent that
 /// starts its own.
-const MAKES: [&str; 4] = [
-    "Command::new(",
-    "Command::from(",
-    "AcpAgent",
-    "spawn_process(",
-];
+const MAKES: [&str; 3] = ["Command::new(", "Command::from(", "AcpAgent"];
 
-/// Where the engine makes a process on the host for no Project's program,
-/// with why.
-const ON_THE_HOST: [(&str, &str); 10] = [
+/// Where the engine makes a process on the host for no Project's
+/// program: the file, how many places in it make one, and why.
+const ON_THE_HOST: [(&str, usize, &str); 9] = [
     (
         "platform/git-cli/src/lib.rs",
+        1,
         "Banda's own git bookkeeping, which runs no program a repository names (ADR 0083, \
          decision 5); an act the Person asks for is a Program for the Project's environment",
     ),
     (
         "kernel/src/foreign.rs",
+        1,
         "asks `gh` which account it is signed in to, offline, to tell whether a folder looks \
          foreign (ADR 0084, decision 13)",
     ),
     (
         "apps/pulls/engine/src/github.rs",
+        1,
         "reads pull requests from GitHub with the Person's `gh`, whose sign-in stays on the host \
          (ADR 0084, decision 8)",
     ),
     (
         "apps/terminal/engine/src/servers.rs",
-        "lists the host's processes and what listens, on macOS, to find the servers started in \
-         Banda (ADR 0044)",
+        1,
+        "lists the host's processes and what listens, on macOS, with `ps` and `lsof`, to find \
+         the servers started in Banda (ADR 0044)",
     ),
     (
         "platform/harnesses/engine/src/carried.rs",
+        1,
         "asks a Node on the host its version, for the adapters Banda carries, which run on the \
          host (ADR 0084, decision 5)",
     ),
     (
         "platform/harnesses/engine/src/limits/claude.rs",
+        1,
         "reads Claude Code's sign-in from the macOS Keychain, for an account's limits (ADR 0043)",
     ),
     (
-        "platform/harnesses/engine/src/limits/codex.rs",
-        "asks Codex's app server an account's limits, for no Project (ADR 0043)",
-    ),
-    (
         "platform/problems/engine/src/issue.rs",
+        1,
         "files a Problem in Banda's own repository with the Person's `gh`",
     ),
     (
         "platform/look/src/fonts.rs",
+        1,
         "asks fontconfig which font a family is",
     ),
     (
         "platform/look/src/wallpaper.rs",
+        1,
         "asks the desktop which wallpaper it shows",
     ),
 ];
@@ -104,29 +105,66 @@ fn sources() -> Vec<String> {
     found
 }
 
-/// `code` up to its tests, `#[cfg(test)] mod …`, which make what they
-/// test with.
-fn without_tests(code: &str) -> &str {
-    let mut at = 0;
-    for line in code.split_inclusive('\n') {
-        let rest = &code[at + line.len()..];
-        if line.trim() == "#[cfg(test)]" && rest.trim_start().starts_with("mod ") {
-            return &code[..at];
+/// `code` as it runs: without its comments' lines, nor the test modules
+/// it holds (`#[cfg(test)] mod … { … }`, to the brace that closes it),
+/// which make what they test with.
+fn running(code: &str) -> String {
+    let mut kept = String::new();
+    let mut lines = code.lines().map(str::trim);
+    while let Some(line) = lines.next() {
+        if line.starts_with("//") {
+            continue;
         }
-        at += line.len();
+        if line != "#[cfg(test)]" {
+            kept.push_str(line);
+            kept.push('\n');
+            continue;
+        }
+        let Some(next) = lines.next() else { break };
+        if !(next.starts_with("mod ") || next.starts_with("pub mod ")) {
+            kept.push_str(next);
+            kept.push('\n');
+            continue;
+        }
+        // `mod tests;` ends on its line, `mod tests {` at its last brace.
+        let mut depth = opened(next);
+        while depth > 0 {
+            let Some(inside) = lines.next() else { break };
+            depth += opened(inside);
+        }
     }
-    code
+    kept
 }
 
-/// Whether `code` makes a process: one of [`MAKES`], not as the end of a
-/// longer name (`AvailableCommand::new(` is no command).
-fn makes(code: &str) -> Option<&'static str> {
-    MAKES.into_iter().find(|making| {
-        code.match_indices(making).any(|(at, _)| {
-            let before = code[..at].chars().next_back();
-            !before.is_some_and(|c| c.is_alphanumeric() || c == '_')
-        })
-    })
+/// How many more braces `line` opens than it closes.
+fn opened(line: &str) -> isize {
+    let count = |brace| isize::try_from(line.matches(brace).count()).unwrap();
+    count('{') - count('}')
+}
+
+/// Whether `code` holds `name` at `at` as a name of its own, not as the
+/// end of a longer one (`AvailableCommand::new(` is no command).
+fn whole(code: &str, at: usize) -> bool {
+    let before = code[..at].chars().next_back();
+    !before.is_some_and(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// Each place `code` makes a process: one of [`MAKES`].
+fn makings(code: &str) -> Vec<&'static str> {
+    let mut found = Vec::new();
+    for making in MAKES {
+        let places = code
+            .match_indices(making)
+            .filter(|(at, _)| whole(code, *at));
+        found.extend(places.map(|_| making));
+    }
+    found
+}
+
+/// Whether `code` imports a command under another name, which this check
+/// would not see make a process.
+fn renames_a_command(code: &str) -> bool {
+    (code.match_indices("Command as ")).any(|(at, _)| whole(code, at))
 }
 
 #[test]
@@ -135,82 +173,74 @@ fn only_an_environment_starts_a_projects_program() {
     let files = sources();
     assert!(files.iter().any(|file| file.starts_with(ENVIRONMENTS)));
     for file in &files {
-        let code = std::fs::read_to_string(root.join(file)).unwrap();
-        let Some(making) = makes(without_tests(&code)) else {
+        if file.starts_with(ENVIRONMENTS) {
             continue;
-        };
-        let known = file.starts_with(ENVIRONMENTS)
-            || ON_THE_HOST
-                .iter()
-                .any(|(on_the_host, _)| on_the_host == file);
+        }
+        let code = running(&std::fs::read_to_string(root.join(file)).unwrap());
         assert!(
-            known,
-            "{file} makes a process ({making}): a program for a Project starts through its \
-             environment (ModuleProject::environment, ADR 0084); one on the host for Banda's own \
-             books is named in ON_THE_HOST, with why"
+            !renames_a_command(&code),
+            "{file} imports a command under another name: name it as it is, so this check sees \
+             where a process is made"
+        );
+        let made = makings(&code);
+        let named = ON_THE_HOST
+            .iter()
+            .find(|(on_the_host, ..)| on_the_host == file);
+        let allowed = named.map_or(0, |(_, places, _)| *places);
+        assert!(
+            made.len() <= allowed,
+            "{file} makes a process ({made:?}) in {} places, {allowed} named: a program for a \
+             Project starts through its environment (ModuleProject::environment, ADR 0084); one \
+             on the host for Banda's own books is named in ON_THE_HOST, with why",
+            made.len()
         );
     }
 }
 
-/// A place named that no longer makes one is no longer named.
+/// A place named that no longer makes as many is named anew.
 #[test]
-fn each_place_on_the_host_still_makes_one() {
+fn each_place_on_the_host_still_makes_what_it_names() {
     let root = repository();
-    for (file, why) in ON_THE_HOST {
+    for (file, places, why) in ON_THE_HOST {
         let code = std::fs::read_to_string(root.join(file))
             .unwrap_or_else(|_| panic!("{file} is gone: take it from ON_THE_HOST"));
-        assert!(
-            makes(without_tests(&code)).is_some(),
-            "{file} makes no process now ({why}): take it from ON_THE_HOST"
+        let made = makings(&running(&code)).len();
+        assert_eq!(
+            made, places,
+            "{file} makes a process in {made} places now, not {places} ({why}): say so in \
+             ON_THE_HOST, or take it from there"
         );
-    }
-}
-
-/// No crate takes ACP's agent that starts its own process: a Harness's
-/// program starts in its Project's environment, and ACP speaks on its
-/// pipes.
-#[test]
-fn no_crate_starts_a_harness_as_acp_would() {
-    let root = repository();
-    let mut manifests = vec![root.join("Cargo.toml")];
-    for file in sources() {
-        let mut folder = root.join(&file);
-        while folder.pop() && folder != root {
-            let manifest = folder.join("Cargo.toml");
-            if manifest.exists() {
-                if !manifests.contains(&manifest) {
-                    manifests.push(manifest);
-                }
-                break;
-            }
-        }
-    }
-    for manifest in manifests {
-        let text = std::fs::read_to_string(&manifest).unwrap();
-        for line in text.lines() {
-            let acp = line.trim_start().starts_with("agent-client-protocol");
-            assert!(
-                !(acp && line.contains("\"process\"")),
-                "{} takes ACP's `process` feature",
-                manifest.display()
-            );
-        }
     }
 }
 
 #[test]
 fn the_check_reads_rust_as_it_is_written() {
+    let made = makings("let c = tokio::process::Command::new(\"git\");");
+    assert_eq!(made, ["Command::new("]);
+    assert!(makings("AvailableCommand::new(\"review\")").is_empty());
+    assert_eq!(makings("let agent = AcpAgent::new(config);"), ["AcpAgent"]);
     assert_eq!(
-        makes("let c = tokio::process::Command::new(\"git\");"),
-        Some("Command::new(")
+        makings("Command::new(\"ps\");\nCommand::new(\"sh\");").len(),
+        2
     );
-    assert_eq!(makes("AvailableCommand::new(\"review\")"), None);
-    assert_eq!(
-        makes("let agent = AcpAgent::new(config);"),
-        Some("AcpAgent")
-    );
-    let tested = "fn a() {}\n#[cfg(test)]\nmod tests {\n    Command::new(\"x\");\n}\n";
-    assert_eq!(makes(without_tests(tested)), None);
+
+    let said = "/// Not `Command::new(` but its doc.\nfn a() {}\n";
+    assert!(makings(&running(said)).is_empty());
+    let tested = "fn a() {}\n#[cfg(test)]\nmod tests {\n    fn t() { Command::new(\"x\"); }\n}\n";
+    assert!(makings(&running(tested)).is_empty());
+    let after = format!("{tested}fn b() {{ Command::new(\"y\"); }}\n");
+    assert_eq!(makings(&running(&after)).len(), 1, "what follows counts");
+    let declared = "#[cfg(test)]\nmod helpers;\nfn b() { Command::new(\"y\"); }\n";
+    assert_eq!(makings(&running(declared)).len(), 1);
     let gated = "#[cfg(test)]\nfn helper() {}\nfn b() { Command::new(\"y\"); }\n";
-    assert_eq!(makes(without_tests(gated)), Some("Command::new("));
+    assert_eq!(makings(&running(gated)).len(), 1);
+
+    assert!(renames_a_command("use tokio::process::Command as Cmd;"));
+    assert!(renames_a_command(
+        "use std::process::{Command as Run, Stdio};"
+    ));
+    assert!(!renames_a_command("use tokio::process::Command;"));
+    assert!(!renames_a_command(
+        "use crate::AvailableCommand as Offered;"
+    ));
 }

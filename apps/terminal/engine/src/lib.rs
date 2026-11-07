@@ -186,9 +186,7 @@ impl Terminals {
             found => found.cloned(),
         };
         let id = open.terminal;
-        let environment = project.environment();
-        let started = Terminal::start(project.id(), &*environment, &project.folder(), open)
-            .map_err(Refusal::invalid)?;
+        let started = Terminal::start(project, open).map_err(Refusal::invalid)?;
         open_now.insert(id, started);
         drop(open_now);
         if let Some(ended) = ended {

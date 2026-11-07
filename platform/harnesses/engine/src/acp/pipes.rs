@@ -7,18 +7,23 @@
 //! The program leads a process group of its own. That group is killed as
 //! the program ends, so a launcher such as `npx` leaves nothing behind,
 //! and as the connection is dropped, so what it started stops too.
+//!
+//! It keeps the transport of ACP's own `AcpAgent` as of
+//! agent-client-protocol 3.6: its grace periods, its "Process exited
+//! with …" and how much of stderr it keeps. Compare it with that on an
+//! upgrade.
 
 use agent_client_protocol::util::internal_error;
 use agent_client_protocol::{Agent, Client, ConnectTo, Lines};
-use banda_kernel::{Environment, Input, Program};
-use rustix::process::{Pid, Signal, kill_process_group};
+use banda_kernel::{Environment, Input, ProcessGroup, Program};
+use rustix::process::Signal;
 use std::collections::VecDeque;
 use std::io;
 use std::process::ExitStatus;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout};
+use tokio::process::{ChildStderr, ChildStdin, ChildStdout};
 use tokio::sync::{oneshot, watch};
 use tokio::time::timeout;
 
@@ -61,7 +66,7 @@ impl ConnectTo<Client> for Pipes {
             hears,
         } = self;
         let mut child = (environment.spawn(&program, Input::Piped)).map_err(internal_error)?;
-        let mut group = Group::of(&child);
+        let mut group = Killed(ProcessGroup::of(&child));
         let (Some(stdin), Some(stdout), Some(stderr)) =
             (child.stdin.take(), child.stdout.take(), child.stderr.take())
         else {
@@ -110,7 +115,7 @@ impl ConnectTo<Client> for Pipes {
 /// code than 0 is an error that says the last of its stderr.
 async fn ended(
     status: io::Result<ExitStatus>,
-    group: &mut Group,
+    group: &mut Killed,
     stderr_ended: oneshot::Receiver<()>,
     tail: &Tail,
 ) -> Result<(), agent_client_protocol::Error> {
@@ -129,24 +134,19 @@ async fn ended(
     }))
 }
 
-/// The process group a program leads, killed when dropped.
-struct Group(Option<Pid>);
+/// The process group the program leads, killed when dropped.
+struct Killed(Option<ProcessGroup>);
 
-impl Group {
-    fn of(child: &Child) -> Group {
-        let id = child.id().and_then(|id| i32::try_from(id).ok());
-        Group(id.and_then(Pid::from_raw))
-    }
-
+impl Killed {
     /// Kills it; a group already gone stays so.
     fn kill(&mut self) {
         if let Some(group) = self.0 {
-            let _ = kill_process_group(group, Signal::KILL);
+            group.signal(Signal::KILL);
         }
     }
 }
 
-impl Drop for Group {
+impl Drop for Killed {
     fn drop(&mut self) {
         self.kill();
     }
@@ -311,6 +311,159 @@ impl Tail {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use banda_environments::Local;
+    use rustix::process::{Pid, test_kill_process};
+    use std::path::Path;
+    use std::time::Instant;
+
+    /// How long a test waits for what should come at once.
+    const SOON: Duration = Duration::from_secs(5);
+
+    /// `script` run by `sh` on the host, with `file` as its `$1`; each
+    /// line of stderr it says heard into `heard`.
+    fn sh(script: &str, file: &Path, heard: &Arc<Mutex<Vec<String>>>) -> Pipes {
+        let heard = heard.clone();
+        Pipes {
+            environment: Arc::new(Local),
+            program: Program {
+                program: "sh".to_owned(),
+                args: ["-c", script, "sh", &file.display().to_string()]
+                    .map(str::to_owned)
+                    .to_vec(),
+                ..Program::default()
+            },
+            hears: Arc::new(move |line, said| {
+                if said == Said::Stderr {
+                    heard.lock().unwrap().push(line.to_owned());
+                }
+            }),
+        }
+    }
+
+    /// The process whose number the script wrote to `file`, once it has.
+    async fn written(file: &Path) -> Pid {
+        let reading = async {
+            loop {
+                let said = std::fs::read_to_string(file).unwrap_or_default();
+                if let Ok(id) = said.trim().parse() {
+                    return Pid::from_raw(id).unwrap();
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        };
+        timeout(SOON, reading)
+            .await
+            .expect("the script said its child")
+    }
+
+    /// Whether `pid` still runs: a killed one may stay a zombie a moment,
+    /// till it is reaped.
+    fn runs(pid: Pid) -> bool {
+        if test_kill_process(pid).is_err() {
+            return false;
+        }
+        let stat = std::fs::read_to_string(format!("/proc/{}/stat", pid.as_raw_pid()));
+        stat.map_or(true, |stat| {
+            let state = stat.rsplit(')').next().unwrap_or_default().trim_start();
+            !state.starts_with('Z')
+        })
+    }
+
+    async fn gone(pid: Pid) {
+        let ending = async {
+            while runs(pid) {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        };
+        timeout(SOON, ending)
+            .await
+            .expect("what it started is gone");
+    }
+
+    #[tokio::test]
+    async fn a_program_that_ends_badly_says_why_with_the_last_of_its_stderr() {
+        let folder = tempfile::tempdir().unwrap();
+        let heard = Arc::default();
+        let pipes = sh("echo oops >&2; exit 3", &folder.path().join("pid"), &heard);
+        let ended = timeout(SOON, Client.builder().connect_to(pipes)).await;
+        let error = ended.expect("it ends with the program").unwrap_err();
+        let said = error.data.map(|data| data.to_string()).unwrap_or_default();
+        assert!(said.contains("Process exited with"), "{said}");
+        assert!(said.contains('3'), "{said}");
+        assert!(said.contains("oops"), "{said}");
+        assert_eq!(*heard.lock().unwrap(), ["oops"]);
+    }
+
+    #[tokio::test]
+    async fn what_a_launcher_left_behind_is_killed_as_it_ends() {
+        let folder = tempfile::tempdir().unwrap();
+        let file = folder.path().join("pid");
+        // As `npx` may: it ends, and what it started holds its pipes.
+        let pipes = sh(
+            "sleep 30 & echo $! > \"$1\"; exit 0",
+            &file,
+            &Arc::default(),
+        );
+        let ended = timeout(SOON, Client.builder().connect_to(pipes)).await;
+        ended.expect("it ends with the launcher").unwrap();
+        gone(written(&file).await).await;
+    }
+
+    #[tokio::test]
+    async fn what_it_started_is_killed_as_the_connection_is_dropped() {
+        let folder = tempfile::tempdir().unwrap();
+        let file = folder.path().join("pid");
+        let pipes = sh("sleep 30 & echo $! > \"$1\"; wait", &file, &Arc::default());
+        let connection = tokio::spawn(Client.builder().connect_to(pipes));
+        let child = written(&file).await;
+        assert!(runs(child));
+        connection.abort();
+        let _ = connection.await;
+        gone(child).await;
+    }
+
+    #[tokio::test]
+    async fn a_write_to_a_program_that_closed_its_stdout_ends_soon() {
+        let program = Program {
+            program: "sh".to_owned(),
+            args: ["-c", "exec 1>&-; exec sleep 30"]
+                .map(str::to_owned)
+                .to_vec(),
+            ..Program::default()
+        };
+        let mut child = Local.spawn(&program, Input::Piped).unwrap();
+        let mut stdin = child.stdin.take().unwrap();
+        let (_closed, mut stdout_closed) = watch::channel(true);
+        // More than a pipe holds, which it never reads.
+        let line = "x".repeat(4 * 1024 * 1024);
+        let began = Instant::now();
+        let written = timeout(SOON, write(&mut stdin, line, &mut stdout_closed)).await;
+        let error = written.expect("bounded by the grace").unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+        assert!(began.elapsed() < GRACE * 3, "{:?}", began.elapsed());
+    }
+
+    #[tokio::test]
+    async fn each_line_of_stderr_is_heard_without_its_return() {
+        let program = Program {
+            program: "sh".to_owned(),
+            args: ["-c", "printf 'one\\r\\ntwo\\n\\nlast' >&2"]
+                .map(str::to_owned)
+                .to_vec(),
+            ..Program::default()
+        };
+        let mut child = Local.spawn(&program, Input::Null).unwrap();
+        let heard = Arc::new(Mutex::new(Vec::new()));
+        let hears: Hears = {
+            let heard = heard.clone();
+            Arc::new(move |line, _| heard.lock().unwrap().push(line.to_owned()))
+        };
+        let tail = Tail::default();
+        let stderr = child.stderr.take().unwrap();
+        timeout(SOON, hear(stderr, &hears, &tail)).await.unwrap();
+        assert_eq!(*heard.lock().unwrap(), ["one", "two", "", "last"]);
+        assert_eq!(tail.take(), "one\r\ntwo\n\nlast");
+    }
 
     #[test]
     fn only_the_last_of_stderr_is_kept() {

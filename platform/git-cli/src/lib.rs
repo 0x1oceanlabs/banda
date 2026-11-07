@@ -178,9 +178,7 @@ const READING: Duration = Duration::from_secs(10);
 const LACKED: &str = "0123456789abcdef0123456789abcdef01234567";
 
 /// git in `dir` running `args` for an act the Person asked for, as their
-/// own git runs it: the program for the Project's environment to start,
-/// as every git starts but for its bookkeeping. Its stdio and the rest
-/// are the caller's.
+/// own git runs it: a [`Program`] for the Project's environment to start.
 pub fn asked<I, S>(dir: &Path, args: I) -> Program
 where
     I: IntoIterator<Item = S>,

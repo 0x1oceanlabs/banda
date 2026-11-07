@@ -4,6 +4,7 @@
 //! here a stand-in that answers as Codex 0.166.0 did. A read is kept in
 //! the machine's store, and a failed one keeps the read before it.
 
+use banda_environments::{Asks, Local, Recorded};
 use banda_harnesses::{Harnesses, HarnessesModule};
 use banda_kernel::{Kernel, Participant, PersonId};
 use serde_json::{Value, json};
@@ -108,13 +109,18 @@ impl Anthropic {
     }
 }
 
-async fn open(root: &Path, owner: PersonId, anthropic: &Anthropic) -> Arc<Kernel> {
-    Kernel::builder(root.join("projects"), root.join("data"), owner)
+/// The kernel, and what its environment, the host's, is asked to start.
+async fn open(root: &Path, owner: PersonId, anthropic: &Anthropic) -> (Arc<Kernel>, Asks) {
+    let environment = Recorded::new(Local);
+    let asks = environment.asks();
+    let kernel = Kernel::builder(root.join("projects"), root.join("data"), owner)
         .machine(root.join("machine"))
+        .environment(environment)
         .module(HarnessesModule::new(list(root)).anthropic_at(&anthropic.url))
         .open()
         .await
-        .unwrap()
+        .unwrap();
+    (kernel, asks)
 }
 
 async fn limits(kernel: &Kernel, owner: PersonId, read: bool) -> Value {
@@ -151,7 +157,7 @@ async fn each_harnesss_limits_read_on_the_host_with_no_window_and_a_failed_read_
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let anthropic = Anthropic::start().await;
-    let kernel = open(root.path(), owner, &anthropic).await;
+    let (kernel, asks) = open(root.path(), owner, &anthropic).await;
 
     // Before any read: each Harness Banda can read, none other.
     let before = limits(&kernel, owner, false).await;
@@ -193,6 +199,13 @@ async fn each_harnesss_limits_read_on_the_host_with_no_window_and_a_failed_read_
     assert_eq!(codex["windows"][0]["label"], "Weekly");
     assert_eq!(codex["windows"][0]["used"], 5.0);
     assert_eq!(codex["windows"][0]["resets_at"], 4_102_444_800_000_i64);
+    // Codex's app-server is a Harness's CLI: it starts in the machine's
+    // environment, never by the module itself (ADR 0084, decision 4).
+    let servers = asks.of("codex");
+    let [server] = &servers[..] else {
+        panic!("one app-server: {servers:?}");
+    };
+    assert_eq!(server.program.args.last().unwrap(), "app-server");
     let asked = anthropic.asked();
     assert_eq!(asked.len(), 1);
     assert!(
@@ -213,7 +226,7 @@ async fn each_harnesss_limits_read_on_the_host_with_no_window_and_a_failed_read_
     // The next run reads anew; Anthropic asks it to wait, and the last
     // read stays, with why.
     drop(kernel);
-    let kernel = open(root.path(), owner, &anthropic).await;
+    let (kernel, _) = open(root.path(), owner, &anthropic).await;
     let kept = limits(&kernel, owner, false).await;
     assert_eq!(
         kept["limits"][0]["windows"][0]["used"], 12.5,

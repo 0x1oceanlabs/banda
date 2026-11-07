@@ -9,9 +9,10 @@ _Accepted by Roma on 2026-11-06 with the architecture vision, whose
 decisions 11 and 18 it records. Plan step 1 is built: the port, the
 `local` adapter, and every program Banda starts for a Project on it.
 Its architecture test refuses a process made outside
-`banda-environments`, but for the places it names, with why, that ask
-the host about itself or keep Banda's books and run nothing of a
-Project's. Research: docs/research/2026-11-06-architecture-vision.md
+`banda-environments`, but for the places it names, each with how many
+and why, that ask the host about itself or keep Banda's books and run
+nothing of a Project's. What step 1 leaves to later steps is under
+Plan. Research: docs/research/2026-11-06-architecture-vision.md
 §6, and docs/research/2026-11-06-architecture-vision/isolation.md._
 
 Banda starts programs for a Project in about ten places: a Harness's CLI,
@@ -334,6 +335,20 @@ the SDK road.
    Visuals; the ACP adapters as a host package on the host's Node.
 1. The port, `Program.cwd` and the `local` adapter. Every spawn site moves
    onto it, with the architecture test. Nothing changes for the Person.
+   Built. What it leaves to the steps that need it:
+   - The Harness's program on the port is the entry's start, a carried
+     Harness's adapter with it, and its CLI is found on the host. The
+     adapter on the host and the CLI in the box (decision 5) come with
+     step 3.
+   - The port does not say whose program it starts. F0 makes it say: a
+     Harness's, which `local` fences, or the Person's own terminal or git
+     act (ADR 0083, decision 1).
+   - A holder stops what it started by its process group on the host,
+     and `spawn` starts at once. Before step 3, the port hands back a
+     handle that stops what it started, and starts asynchronously, as a
+     box may have to start first.
+   - One adapter serves every Project. Step 3 picks it per Project, and
+     lets a Project's Harness processes go once its environment changes.
 2. The door. Passes with an audience first. A spike: both Harnesses reach
    Banda's tools through `banda-run` over a mounted socket; if not,
    loopback (decision 6). The gateway's first slice, Banda's tools only.

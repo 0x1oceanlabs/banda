@@ -250,7 +250,7 @@ impl Reader {
         tokio::spawn(async move {
             let read = match kind {
                 Kind::Claude => claude::read(&harness, &reader.anthropic).await,
-                Kind::Codex => codex::read(&harness).await,
+                Kind::Codex => codex::read(&*project.environment(), &harness).await,
             };
             let wait = read.as_ref().err().and_then(|failure| failure.wait);
             if let Err(error) = keep(&project, &harness.id, read).await {
