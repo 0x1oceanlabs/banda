@@ -31,9 +31,28 @@ ignoredOptionalDependencies:
 patchedDependencies:
   "@agentclientprotocol/codex-acp@2.5.0": platform/harnesses/adapters/patches/@agentclientprotocol__codex-acp@2.5.0.patch
 
-# One KaTeX for all: what draws the math (rehype-katex, under
-# @streamdown/math, and Mermaid) and the stylesheet `@banda/ui` takes.
-# They still ask for 0.16, which has GHSA-238p-pmpm-9mq7, and 0.18's
-# stylesheet no longer fits 0.16's markup (its classes have a prefix).
+# Versions set for what other packages ask for: each says why, and when it
+# goes.
 overrides:
+  # One KaTeX for all: what draws the math (rehype-katex, under
+  # @streamdown/math, and Mermaid) and the stylesheet `@banda/ui` takes.
+  # They still ask for 0.16, which has GHSA-238p-pmpm-9mq7, and 0.18's
+  # stylesheet no longer fits 0.16's markup (its classes have a prefix).
+  # Goes once rehype-katex and Mermaid ask for 0.18.
   katex: ^0.18.2
+  # The browser's extensions are unpacked by adm-zip, under
+  # electron-chrome-web-store, whose newest (0.13.0) still asks for
+  # ^0.5.16. adm-zip 0.6.1 fixes GHSA-xcpc-8h2w-3j85, GHSA-7q85-xj36-vmfc,
+  # GHSA-j5f4-cc29-5x44, GHSA-rcw4-f5rp-g42v, GHSA-8238-w5pm-2374,
+  # GHSA-c6fg-446q-cg94, GHSA-p634-w6r4-rjp2 and GHSA-vwc7-r8mq-g2x9, and
+  # keeps the two calls it makes: new AdmZip(buffer) and
+  # extractAllTo(folder, true). Goes once it asks for 0.6.1 or later.
+  "electron-chrome-web-store>adm-zip@<0.6.1": ^0.6.1
+  # minimatch 7 to 11.0.0 have GHSA-g3hv-75wg-m249, fixed in 11.0.1.
+  # ESLint, typescript-eslint, electron-builder, @electron/universal and
+  # ts-morph (under shadcn) still ask for 9 or 10. None of them calls
+  # makeRe(), regexp, matchOne() or the AST, which 11 drops, nor reads
+  # set's parts as RegExps. Any package added later that asks for 7 to
+  # 11.0.0 gets 11 too. The 3 and 5 others ask for are not affected.
+  # Goes once none asks for one below 11.0.1.
+  "minimatch@>=7.0.0 <11.0.1": ^11.0.1
