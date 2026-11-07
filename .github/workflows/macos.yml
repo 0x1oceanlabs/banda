@@ -1,43 +1,141 @@
-# The terminal module reads what runs in front of a shell from macOS
-# itself (apps/terminal/engine/src/front.rs): its tests run on GitHub's
-# Apple silicon runner as it changes, or by hand:
+# Banda's Rust on macOS, on GitHub's Apple silicon runner: some of it
+# reads the system in a way of its own there (cfg(target_os = "macos")),
+# and devbox, where ci runs, is Linux.
 #
-#   gh workflow run "mac terminal" --ref <branch>
+# - A PR's run tests the crates with such code, and the kernel, whose
+#   file watching is FSEvents there, when one of them, what their tests
+#   start, the workspace's manifests or the toolchain changes.
+# - On main, a push that changes Rust, or one of those crates, tests the
+#   whole workspace. A newer push cancels the run before it, so main has
+#   one macOS run at a time; with the release's Mac pack and a few PR runs
+#   that stays under the five macOS jobs GitHub runs at once for the
+#   organization.
+# - By hand, the whole workspace on any branch:
 #
-# Not on every push: while the repository is private, a macOS minute
-# costs ten.
-name: mac terminal
+#     gh workflow run macos.yml --ref <branch>
+#
+# Not a merge gate: a red run on main is fixed as a red `ci` is, and Roma
+# decides when it gates. The repository is public, so GitHub's standard
+# runners cost it nothing, macOS included.
+name: macos
 
 on:
-  workflow_dispatch:
   pull_request:
     paths:
-      - .github/workflows/mac-terminal.yml
+      - .github/workflows/macos.yml
+      - .cargo/config.toml
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+      # The Node the engine's tests start the adapters on.
+      - ci/Dockerfile
+      # The crates with code of their own for macOS:
+      #   git grep -l 'target_os = "macos"' -- '*.rs' '*Cargo.toml'
+      - apps/files/engine/**
       - apps/terminal/engine/**
+      - engine/**
+      - platform/harnesses/engine/**
+      - platform/keys/engine/**
+      - platform/look/**
+      - kernel/**
+      # The adapters the engine's tests build and start.
+      - platform/harnesses/adapters/**
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/macos.yml
+      - .cargo/config.toml
+      - "**/Cargo.toml"
+      - Cargo.lock
+      - rust-toolchain.toml
+      - "**/*.rs"
+      # As a PR's: what those crates compile in (themes, keys.toml) is not
+      # Rust, nor are the adapters and the Node.
+      - ci/Dockerfile
+      - apps/files/engine/**
+      - apps/terminal/engine/**
+      - engine/**
+      - platform/harnesses/engine/**
+      - platform/keys/engine/**
+      - platform/look/**
+      - kernel/**
+      - platform/harnesses/adapters/**
+  workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
+# The newest run of a PR, or of main, wins.
 concurrency:
-  group: mac-terminal-${{ github.ref }}
+  group: macos-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
+  # As on devbox (ci/Dockerfile): no test reads the debug info.
+  CARGO_PROFILE_DEV_DEBUG: 0
 
 jobs:
   test:
-    name: terminal (macOS)
-    # A fork's PR never spends this repository's macOS minutes.
+    name: tests (macOS)
+    # Not a fork's PR, as `ci` checks none (ADR 0038, decision 4).
     if: >-
-      github.event_name == 'workflow_dispatch' ||
+      github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    env:
+      # Known to fail on macOS (2026-11-07), skipped until each is fixed:
+      # a test runs here again once its line goes.
+      # - `banda stop` waits 20 s for the test's engine, which has ended
+      #   but is not yet reaped: off Linux, `alive` asks kill(pid, 0), and
+      #   a zombie answers it (engine/src/control.rs).
+      # - Git reads the repository the test says another user owns.
+      # - FSEvents: a new file in one of two watched folders is not heard
+      #   within 5 s.
+      # - A promoted folder comes back as /private/var/…, the temporary
+      #   folder it was given as /var/….
+      SKIP: >-
+        --skip banda_status_says_whether_the_engine_runs_and_banda_stop_quits_it
+        --skip a_repository_another_user_owns_says_why_git_will_not_read_it
+        --skip a_new_file_is_heard_in_its_folder_and_only_there
+        --skip promotion_moves_files_and_keeps_the_open_project_and_log
     steps:
-      - uses: actions/checkout@v5
-      - run: rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          shared-key: mac-terminal
-      - run: cargo test -p banda-terminal
+          persist-credentials: false
+      # The engine's tests build the adapters Banda carries from their npm
+      # packages, and start them on the host's Node (ADR 0059): the Node
+      # ci/Dockerfile pins, and package.json's pnpm.
+      - id: node
+        run: echo "version=$(sed -n 's/^ARG NODE_VERSION=//p' ci/Dockerfile)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          package-manager-cache: false
+      - run: npm install --global --silent "$(jq -r .packageManager package.json)"
+      - run: pnpm install --frozen-lockfile --filter @banda/harnesses-adapters
+      - run: rustup toolchain install
+      # The dependencies main's last run built, a failed one's too: a PR's
+      # run reads them and saves none, as GitHub keeps 10 GB of caches and a
+      # PR's would push main's out (cache-prune.yml). A main run cancelled
+      # by a newer push saves what it had built by then, and the runs after
+      # it, with the same Cargo.lock, build the rest without saving it
+      # until the lock changes.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: macos-test
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+      # Every test binary runs, so a red run shows all that fails. $SKIP
+      # is unquoted to split into its arguments.
+      - name: test the crates with macOS code
+        if: github.event_name == 'pull_request'
+        run: >-
+          cargo test --no-fail-fast -p banda-files -p banda-terminal -p banda
+          -p banda-harnesses -p banda-keys -p banda-look -p banda-kernel
+          -- $SKIP
+      - name: test the workspace
+        if: github.event_name != 'pull_request'
+        run: cargo test --no-fail-fast --workspace -- $SKIP

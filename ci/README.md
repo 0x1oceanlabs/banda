@@ -38,6 +38,39 @@ builds it, and on every push to main; `ci` waits for it.
   each run keeps the `banda.exe` it built. With no cache its tests took
   6.5 minutes (2026-11-07).
 
+## macOS
+
+`.github/workflows/macos.yml` runs the Rust tests on GitHub's `macos-15`
+runner, free for a public repository. It is not a merge gate.
+
+- A PR's run tests the crates with code of their own for macOS
+  (`git grep -l 'target_os = "macos"'`) and the kernel, whose file
+  watching is FSEvents there. It runs when one of them, the adapters the
+  engine's tests start, the workspace's manifests or the toolchain
+  changes. A crate that gains macOS code goes into both its path filter
+  and its `-p` list.
+- On main, a push that changes Rust tests the whole workspace. A newer
+  push cancels the run before it, so main has one macOS run at a time,
+  under the five macOS jobs GitHub runs at once for the organization.
+- By hand: `gh workflow run macos.yml --ref <branch>`, the whole
+  workspace.
+
+## Caches
+
+GitHub keeps 10 GB of Actions caches for the repository, and past that
+deletes those used least lately, main's too. The tests'
+`Swatinem/rust-cache` entries (`macos-test`, `windows-test`,
+`windows-check`) are saved only from main (`save-if`), and a PR's run
+reads main's.
+
+`.github/workflows/cache-prune.yml` runs each day and keeps, of each
+family of keys, the newest entry main saved; it deletes the rest, main's
+older entries and every PR's or branch's. A family is a key without its
+hashes, commits and run ids (every `-` part of 8 or more hex digits), so
+a job that saves a cache names it for itself (`shared-key`). To see what
+it would delete, and delete nothing:
+`gh workflow run cache-prune.yml -f dry_run=true`.
+
 ## A fork's PR
 
 A PR whose branch is in a fork is not checked at all (ADR 0038, decision 4):
