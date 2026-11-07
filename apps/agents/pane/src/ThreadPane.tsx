@@ -278,6 +278,13 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
     ? (shown: boolean) =>
         update({ ...args, details: shown ? undefined : false })
     : setPopped
+  // What the key last asked for: a wide Thread's card is in its args, which
+  // come back from the engine a moment later, and a second press before
+  // then would read the old value and hide the card again.
+  const detailsWanted = useRef(detailsShown)
+  useEffect(() => {
+    detailsWanted.current = detailsShown
+  }, [detailsShown])
   // Its keys (ADR 0071, decision 1): its zoom, which sizes its words, its
   // details, and Ctrl+F (⌘F) to find in it, as in T3 Code.
   const scope = useScope(
@@ -285,7 +292,8 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
     {
       ...zoomHandlers("agents.thread", zoom.by),
       "agents.thread.details": () => {
-        setDetailsShown(!detailsShown)
+        detailsWanted.current = !detailsWanted.current
+        setDetailsShown(detailsWanted.current)
         return true
       },
       "agents.thread.find": () => {
