@@ -84,6 +84,9 @@ impl Places {
             .env_remove("BANDA_ENGINE")
             .env_remove("BANDA_PROJECT")
             .env_remove("BANDA_SPACE")
+            // A checkout's engine is the window's child, or a `banda
+            // serve` of the test's own: never the session's service.
+            .env_remove("BANDA_ENGINE_AS")
             // No window started it: no Node nor adapters named, as for a
             // `banda serve` run in a shell.
             .env_remove(NODE_VARIABLE)
@@ -988,6 +991,141 @@ fn an_agent_snoozes_its_own_thread_from_its_shell_and_the_person_any() {
     let unnamed = places.banda(&unnamed).output().unwrap();
     assert_eq!(refusal(&unnamed), "invalid");
 
+    drop(stdin);
+    assert!(engine.wait().unwrap().success());
+}
+
+#[test]
+fn an_agents_pass_outlives_an_engine_restart_until_its_project_goes() {
+    let places = Places::new();
+    let (mut engine, stdin, first) = places.serve();
+    let work = places.ok("projects.create", None, json!({ "name": "Work" }));
+    let work = text(&work["id"]).to_owned();
+    places.ok(
+        "agents.send",
+        Some(&work),
+        json!({ "harness": "fake", "text": "hello" }),
+    );
+    let read = |file: &Path| {
+        let bytes = std::fs::read(file).ok()?;
+        serde_json::from_slice::<Value>(&bytes).ok()
+    };
+    let shells = wait_for(Duration::from_secs(30), || read(&places.shells))
+        .expect("the session told what its shells get");
+    let listed = |variables: &Value| {
+        let listed = places.as_agent(variables, &["call", "projects.list"]);
+        assert!(listed.status.success(), "{listed:?}");
+        let listed: Value = serde_json::from_slice(&listed.stdout).unwrap();
+        listed["ok"][0]["id"].clone()
+    };
+    assert_eq!(listed(&shells["session"]), json!(work));
+
+    // The engine stops, as Quit stops it, and starts again where it
+    // listened: the address its passes name stays, and the passes of its
+    // sessions and its Harness's process work there.
+    drop(stdin);
+    assert!(engine.wait().unwrap().success());
+    let (mut engine, stdin, again) = places.serve();
+    assert_eq!(again["port"], first["port"]);
+    for whose in ["session", "process"] {
+        assert_eq!(listed(&shells[whose]), json!(work), "{whose}");
+    }
+    let kept = std::fs::read(places.state.join("passes.sqlite3")).unwrap();
+    let secret = text(&shells["session"]["BANDA_TOKEN"]);
+    assert!(
+        !String::from_utf8_lossy(&kept).contains(secret),
+        "the store keeps no pass"
+    );
+
+    // A Project removed takes its passes with it.
+    places.ok("projects.remove", None, json!({ "project": work }));
+    let refused = places.as_agent(&shells["session"], &["call", "projects.list"]);
+    assert_eq!(refusal(&refused), "forbidden");
+
+    drop(stdin);
+    assert!(engine.wait().unwrap().success());
+}
+
+#[test]
+fn banda_status_says_whether_the_engine_runs_and_banda_stop_quits_it() {
+    let places = Places::new();
+    let status = || {
+        let said = places.banda(&["status"]).output().unwrap();
+        assert!(said.status.success(), "{said:?}");
+        serde_json::from_slice::<Value>(&said.stdout).unwrap()
+    };
+    assert_eq!(status(), json!({ "running": false }));
+    // With no engine, it says so, and stops nothing.
+    let none = places.banda(&["stop"]).output().unwrap();
+    assert!(none.status.success(), "{none:?}");
+    assert!(String::from_utf8_lossy(&none.stderr).contains("not running"));
+
+    let (mut engine, _stdin, _) = places.serve();
+    let now = status();
+    assert_eq!(now["running"], true);
+    assert_eq!(now["pid"], engine.id());
+    assert!(now["since"].as_i64().unwrap() > 0, "{now}");
+    assert!(now["version"].is_string(), "{now}");
+    assert!(now.get("unit").is_none(), "a test's engine runs in no unit");
+    assert!(now.get("secret").is_none());
+
+    // While an Agent works, Quit asks first; with no terminal to ask in,
+    // it refuses and says how to stop it anyway.
+    let work = places.ok("projects.create", None, json!({ "name": "Work" }));
+    let work = text(&work["id"]).to_owned();
+    let wait = json!({ "harness": "fake", "text": "wait" });
+    places.ok("agents.send", Some(&work), wait);
+    let working = || {
+        let threads = places.ok("agents.threads", Some(&work), json!({}));
+        (threads["threads"][0]["latest"]["state"] == "running").then_some(())
+    };
+    wait_for(Duration::from_secs(30), working).expect("the Agent works");
+    let asked = places.banda(&["stop"]).output().unwrap();
+    assert_eq!(refusal(&asked), "conflict");
+    let said: Value = serde_json::from_slice(&asked.stdout).unwrap();
+    assert!(
+        text(&said["error"]["message"]).starts_with("An Agent is working. Stop it and quit?"),
+        "{said}"
+    );
+    assert_eq!(status()["running"], true, "nothing was stopped");
+    // An Agent cannot quit Banda.
+    let by_agent = places
+        .banda(&["stop", "--force"])
+        .env("BANDA_ENGINE", "ws://127.0.0.1:1/ws")
+        .env("BANDA_TOKEN", "0".repeat(64))
+        .output()
+        .unwrap();
+    assert_eq!(refusal(&by_agent), "forbidden");
+
+    let stopped = places.banda(&["stop", "--force"]).output().unwrap();
+    assert!(stopped.status.success(), "{stopped:?}");
+    let Some(ended) = wait_for(Duration::from_secs(5), || engine.try_wait().unwrap()) else {
+        engine.kill().unwrap();
+        panic!("the engine did not stop");
+    };
+    assert!(ended.success(), "{ended:?}");
+    assert_eq!(status(), json!({ "running": false }));
+
+    // The next engine knows the last one stopped: it keeps no crash.
+    let (_engine, stdin, _) = places.serve();
+    let problems = places.ok("problems.list", None, json!({}));
+    assert_eq!(problems["problems"], json!([]), "{problems}");
+    drop(stdin);
+}
+
+#[cfg(unix)]
+#[test]
+fn an_engine_that_was_killed_is_kept_as_a_crash_by_the_next() {
+    let places = Places::new();
+    let (mut engine, _stdin, _) = places.serve();
+    engine.kill().unwrap();
+    engine.wait().unwrap();
+    let (mut engine, stdin, _) = places.serve();
+    let problems = places.ok("problems.list", None, json!({}));
+    let kinds: Vec<_> = (problems["problems"].as_array().unwrap().iter())
+        .map(|problem| text(&problem["kind"]).to_owned())
+        .collect();
+    assert_eq!(kinds, ["crash"], "{problems}");
     drop(stdin);
     assert!(engine.wait().unwrap().success());
 }

@@ -1,6 +1,10 @@
 //! `banda`: the engine and its CLI in one program.
 //!
-//! - `banda serve` runs this machine's engine.
+//! - `banda serve` runs this machine's engine. On Linux it runs as a
+//!   service of the Person's session, which any command that reaches it
+//!   starts when it does not run (ADR 0086, decision 1); `banda start` only
+//!   starts it, `banda status` says whether it runs, since when and its
+//!   build, and `banda stop` is Quit Banda (decision 3).
 //! - `banda call <method>` calls one API method and prints `{"ok": …}`.
 //! - `banda follow --project <id>` prints the Project's events, one JSON
 //!   object per line.
@@ -32,13 +36,16 @@
 
 mod build_id;
 mod client;
+mod control;
 mod files;
 mod mcp;
 mod modules;
 mod parent;
 mod places;
 mod problems;
+mod run;
 mod serve;
+mod service;
 
 use banda_kernel::{CommandId, EventFilter, ProjectId, Refusal};
 use clap::{Parser, Subcommand};
@@ -65,13 +72,35 @@ struct Cli {
 enum Command {
     /// Runs the engine for this computer.
     Serve {
-        /// The port on 127.0.0.1. 0 picks a free one.
+        /// The port on 127.0.0.1. 0 takes the one it listened on last when
+        /// that is free, else any free one.
         #[arg(long, default_value_t = 0)]
         port: u16,
         /// For a window that starts the engine: prints where it listens on
         /// the first line, and stops when stdin closes.
         #[arg(long)]
         with_parent: bool,
+    },
+    /// Starts the engine as this session's service when it does not run,
+    /// as every command that reaches it does, and says how it runs, as
+    /// `banda status` does.
+    Start {
+        /// For a window: prints where the engine listens on the first
+        /// line, and follows it until stdin closes, which leaves it
+        /// running, or until it stops. Where the engine is the window's
+        /// child, this serves it, and stops it when stdin closes.
+        #[arg(long)]
+        with_parent: bool,
+    },
+    /// Says whether the engine runs, since when, and its build, as one
+    /// JSON line. It starts nothing.
+    Status,
+    /// Quits Banda: stops the engine, its Agents, Harnesses and Terminals,
+    /// and any window open on it. When Agents are working it asks first.
+    Stop {
+        /// Stops them without asking.
+        #[arg(long)]
+        force: bool,
     },
     /// Calls one API method and prints its answer as JSON.
     Call {
@@ -415,9 +444,16 @@ fn main() -> ExitCode {
         Command::Modules { unstable } => return print_modules(unstable),
         _ => {}
     }
-    // The engine keeps its panics and its log (ADR 0039, decision 1).
-    let serving = match cli.command {
-        Command::Serve { .. } => Places::from_env().ok(),
+    // The engine keeps its panics and its log (ADR 0039, decision 1): as
+    // `banda serve`, and as the window's child.
+    let way = match cli.command {
+        Command::Start {
+            with_parent: true, ..
+        } => Some(service::way_here(&service::User)),
+        _ => None,
+    };
+    let serving = match (&cli.command, way) {
+        (Command::Serve { .. }, _) | (_, Some(service::Way::Child(_))) => Places::from_env().ok(),
         _ => None,
     };
     if let Some(places) = &serving {
@@ -428,6 +464,10 @@ fn main() -> ExitCode {
     let done = match cli.command {
         // It needs no places: its variables say where the engine is.
         Command::Mcp => runtime().and_then(|runtime| runtime.block_on(mcp::serve())),
+        Command::Start { with_parent } => Places::from_env().and_then(|places| {
+            let way = way.unwrap_or_else(|| service::way_here(&service::User));
+            runtime()?.block_on(control::start(places, with_parent, way))
+        }),
         command => Places::from_env().and_then(|places| runtime()?.block_on(run(command, places))),
     };
     match done {
@@ -525,6 +565,9 @@ impl std::io::Write for Rolling {
 async fn run(command: Command, places: Places) -> Result<(), Failure> {
     match command {
         Command::Serve { port, with_parent } => serve::serve(places, port, with_parent).await,
+        Command::Start { .. } => unreachable!("banda start knows how this Banda runs its engine"),
+        Command::Status => control::status(&places).await,
+        Command::Stop { force } => control::stop(&places, force).await,
         Command::Call {
             method,
             project,

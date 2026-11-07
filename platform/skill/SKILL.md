@@ -76,6 +76,16 @@ settings.<section>.<row>` opens the settings Pane there. Other words
 open it with them typed in, as a search. It exits 2 when the window is
 not open.
 
+## Banda's engine
+
+Banda's engine keeps the Projects and runs the Agents. On Linux it is a
+service of the Person's session: closing the window leaves it and every
+Agent running, and the next window, or any `banda` command, finds it, or
+starts it when it does not run. `banda status` prints whether it runs,
+since when, and its build. Quitting Banda is the Person's: `banda stop`,
+Quit Banda in the window and Ctrl+Q stop the engine and every Agent's
+turn, and `banda stop` refuses under your pass.
+
 ## Adding a folder as a Project
 
 A Project is the Person's to add: when they ask for a folder to become

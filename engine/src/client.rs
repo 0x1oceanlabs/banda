@@ -75,15 +75,14 @@ pub struct Client {
 
 impl Client {
     /// Connects to this machine's engine: under the pass the environment
-    /// hands this program, when it hands one, else as the owner.
+    /// hands this program, when it hands one, else as the owner, to the
+    /// engine that runs or the one this starts (`control.rs`).
     pub async fn connect(places: &Places) -> Result<Client, Failure> {
         if let Some(pass) = Pass::from_env()? {
             pass.meant(places)?;
             return Client::connect_as(&pass).await;
         }
-        let running = places.running()?;
-        let nowhere = "Banda's engine does not answer. Start it with: banda serve";
-        Client::hello(&running.url(), running.secret, nowhere).await
+        crate::control::connect(places).await
     }
 
     /// Connects to the engine the pass names, and says hello with it. The
@@ -98,7 +97,8 @@ impl Client {
             Failure::Refused(refusal) if refusal.code == Code::Forbidden => {
                 Failure::Refused(Refusal::forbidden(format!(
                     "The engine at {} does not know the pass in {TOKEN_VARIABLE}: a pass \
-                     lasts only while the engine that gave it runs. Nothing was done.",
+                     lasts while its session does, and a while after an engine restart. \
+                     Nothing was done.",
                     pass.engine
                 )))
             }
@@ -109,7 +109,7 @@ impl Client {
     /// Connects to the engine at `url` and says hello with `token`: the
     /// owner's secret, or an Agent's pass. `nowhere` says that no engine
     /// answers there.
-    async fn hello(url: &str, token: String, nowhere: &str) -> Result<Client, Failure> {
+    pub(crate) async fn hello(url: &str, token: String, nowhere: &str) -> Result<Client, Failure> {
         let (socket, _) = tokio_tungstenite::connect_async(url)
             .await
             .map_err(|_| Failure::broken(nowhere))?;
@@ -125,6 +125,11 @@ impl Client {
             EngineFrame::Goodbye { reason } => Err(Failure::Refused(reason)),
             _ => Err(Failure::broken("The engine did not say welcome.")),
         }
+    }
+
+    /// Returns once the engine closed the connection, or it broke.
+    pub async fn closed(mut self) {
+        while self.receive().await.is_ok() {}
     }
 
     fn next_id(&mut self) -> u64 {
