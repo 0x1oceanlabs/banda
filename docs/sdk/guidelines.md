@@ -70,10 +70,10 @@ What Apps give never talk to each other.
   marks (B4f).
 - **borders.2 Own your data.** A module's name prefixes its methods,
   events and tables; it writes only its own tables and reads no other
-  module's (`kernel/src/module.rs:32-34`). *Check:* today, only that no
-  module touches the kernel's tables
-  (`kernel/tests/architecture.rs:66-80`); planned, reading another
-  module's tables, with the SQLite authorizer (A4).
+  module's (`kernel/src/module.rs:33-37`). *Check:* the kernel's SQLite
+  authorizer refuses a module's SQL any table outside its prefixes, the
+  kernel's included (`kernel/src/tables.rs`, A4), and no module's code
+  names the kernel's tables (`kernel/tests/architecture.rs:69-83`).
 - **borders.3 Reach another App only by names it publishes.** Published
   facts you list in `listens`, published queries you list in `calls`, and
   intents (ADR 0082 d2, d7). Never call another App's method by its
@@ -397,7 +397,7 @@ timings gate softly once CI's variance is known.
 
 - **words.1 An App id is one lowercase word.** It prefixes the App's
   methods, facts, tables, Panes, Widgets and actions
-  (`kernel/src/module.rs:37-38`). The one exception: an id a Person may
+  (`kernel/src/module.rs:40-41`). The one exception: an id a Person may
   already bind keeps its name, with an alias, when its owner changes
   (`thread.unread` becomes the platform's; `thread.rename` stays Threads',
   whose App id is `agents`, later `threads`). A new id never takes

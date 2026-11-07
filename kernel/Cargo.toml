@@ -17,7 +17,7 @@ reqwest.workspace = true
 axum.workspace = true
 futures.workspace = true
 getrandom.workspace = true
-rusqlite.workspace = true
+rusqlite = { workspace = true, features = ["hooks"] }
 rustix = { workspace = true, features = ["fs"] }
 schemars.workspace = true
 serde.workspace = true

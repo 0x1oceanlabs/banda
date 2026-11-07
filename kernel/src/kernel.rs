@@ -189,6 +189,7 @@ impl KernelBuilder {
                 return Err(Refusal::invalid(format!("Two modules are named \"{name}\".")).into());
             }
         }
+        crate::tables::check(&self.modules)?;
         std::fs::create_dir_all(&self.root)?;
         let projects_data = self.data.join("projects");
         crate::old::from_spaces(&self.data, &projects_data, self.machine.as_deref());

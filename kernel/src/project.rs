@@ -11,6 +11,7 @@ use crate::outbox::{self, Boot, Claim, Lease, Outcome};
 use crate::passes::{Pass, Passes};
 use crate::sign::{self, Kept, Picked, Sign};
 use crate::store::{Receipt, Store};
+use crate::tables::Tables;
 use crate::window::Window;
 use crate::{
     AgentId, CommandId, Error, Participant, PersonId, ProjectId, ProjectSummary, Refusal, Tx,
@@ -291,9 +292,9 @@ impl Project {
             .into());
         }
         let lock = locked(&data.join(LOCK))?;
-        let ledgers: Vec<_> = modules.iter().map(|m| (m.name(), m.migrations())).collect();
+        let tables: Vec<_> = modules.iter().map(|m| Tables::of(&**m)).collect();
         let path = data.join(DATABASE);
-        let store = tokio::task::spawn_blocking(move || Store::open(&path, &ledgers))
+        let store = tokio::task::spawn_blocking(move || Store::open(&path, &tables))
             .await
             .map_err(|_| Error::Closed)??;
         let project = Arc::new(Project {
@@ -986,30 +987,24 @@ impl ModuleProject {
         tokio::time::timeout(within, all).await.is_ok()
     }
 
-    /// A read on the Project's reader connection.
+    /// A read of this module's own tables, on the Project's reader
+    /// connection: SQL that reaches another table is refused.
     pub async fn read<T: Send + 'static>(
         &self,
         query: impl FnOnce(&rusqlite::Connection) -> Result<T, Error> + Send + 'static,
     ) -> Result<T, Error> {
-        self.project.store.read(query).await
+        self.project.store.read_as(self.module, query).await
     }
 
-    /// Reads a view together with the log position it is current at, in one
-    /// read transaction. A window shows the view, then follows the events
-    /// after that position (ADR 0002, decision 5).
+    /// Reads a view of this module's own tables together with the log
+    /// position it is current at, in one read transaction. A window shows
+    /// the view, then follows the events after that position (ADR 0002,
+    /// decision 5).
     pub async fn view<T: Send + 'static>(
         &self,
         query: impl FnOnce(&rusqlite::Connection) -> Result<T, Error> + Send + 'static,
     ) -> Result<(i64, T), Error> {
-        self.project
-            .store
-            .read(|sql| {
-                // Ends when dropped, even if the query panics.
-                let snapshot = sql.unchecked_transaction()?;
-                let at = events::head(&snapshot)?;
-                Ok((at, query(&snapshot)?))
-            })
-            .await
+        self.project.store.view(self.module, query).await
     }
 
     /// The log position now: what a view read now is current at, for an
