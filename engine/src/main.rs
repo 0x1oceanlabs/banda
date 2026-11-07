@@ -38,6 +38,7 @@ mod apps;
 mod build_id;
 mod client;
 mod control;
+mod fence;
 mod files;
 mod mcp;
 mod modules;
@@ -53,6 +54,7 @@ use clap::{Parser, Subcommand};
 use client::Client;
 use places::Places;
 use serde_json::{Value, json};
+use std::ffi::OsString;
 use std::fmt::Display;
 use std::io::Write;
 use std::path::PathBuf;
@@ -227,6 +229,21 @@ enum Command {
     /// methods, and the Banda skill. The agents module starts it for each
     /// session, with BANDA_TOKEN and BANDA_ENGINE.
     Mcp,
+    /// Runs a program behind the fence (ADR 0083, decision 1): the engine
+    /// starts it so, from its own program, with the spec on an fd.
+    #[command(hide = true)]
+    Fence {
+        /// Prints whether the fence holds here as one JSON line: over the
+        /// spec on --spec-fd, else over this Banda's own folders.
+        #[arg(long)]
+        probe: bool,
+        /// The sealed memfd that holds the spec.
+        #[arg(long)]
+        spec_fd: Option<i32>,
+        /// The program, by its path or name, and its arguments.
+        #[arg(last = true)]
+        program: Vec<OsString>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -433,6 +450,12 @@ fn main() -> ExitCode {
     banda_kernel::set_version(env!("BANDA_VERSION"));
     let cli = parse();
     match cli.command {
+        // Before anything else: it stays on this one thread.
+        Command::Fence {
+            probe,
+            spec_fd,
+            program,
+        } => return fence::run(probe, spec_fd, program),
         Command::Look {
             what,
             follow,
@@ -644,6 +667,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             unreachable!("the modules say what they offer without the engine")
         }
         Command::Mcp => unreachable!("banda mcp finds the engine by its variables"),
+        Command::Fence { .. } => unreachable!("the fence runs before anything else"),
         Command::Follow {
             project,
             after,

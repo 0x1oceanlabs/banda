@@ -60,6 +60,12 @@ rust() {
   # The engine's tests build the adapters Banda carries from npm's
   # packages, and start them on the host's Node (ADR 0059).
   packages
+  # The fence's tests skip, saying why, where the system refuses the
+  # namespaces they make, as devbox's runners do: ci.yml's `fence` part
+  # runs them on a runner that gives them (ci/README.md). Here such a skip
+  # would hide a fence that no longer holds. Set BANDA_FENCE_TESTS=skip on
+  # a system that refuses them.
+  [[ -n "${CI:-}" ]] || export BANDA_FENCE_TESTS="${BANDA_FENCE_TESTS:-require}"
   cargo test --workspace --quiet
 
   step "The modules' unstable marks (ADR 0022, decision 6)"

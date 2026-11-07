@@ -38,6 +38,19 @@ builds it, and on every push to main; `ci` waits for it.
   each run keeps the `banda.exe` it built. With no cache its tests took
   6.5 minutes (2026-11-07).
 
+## The fence's tests
+
+The fence's tests (`platform/fence`, `engine/tests/fence.rs`) make user,
+mount and PID namespaces, which the runners' containers do not give a job:
+on devbox they skip, each saying why. `ci`'s `fence` part runs them on
+GitHub's `ubuntu-24.04` runner, a VM of the job's own, free for a public
+repository. Ubuntu keeps unprivileged user namespaces off there behind
+AppArmor, so the job turns them on for itself, installs bubblewrap, and
+runs the tests with `BANDA_FENCE_TESTS=all`: every test runs, and one that
+would skip fails the part. As `windows`, it runs when a PR changes Rust or
+what builds it, and on every push to main; `ci` waits for it. With no
+cache the job took about 2 minutes (2026-11-07).
+
 ## macOS
 
 `.github/workflows/macos.yml` runs the Rust tests on GitHub's `macos-15`
@@ -60,8 +73,8 @@ runner, free for a public repository. It is not a merge gate.
 GitHub keeps 10 GB of Actions caches for the repository, and past that
 deletes those used least lately, main's too. The tests'
 `Swatinem/rust-cache` entries (`macos-test`, `windows-test`,
-`windows-check`) are saved only from main (`save-if`), and a PR's run
-reads main's.
+`windows-check`, `linux-fence`) are saved only from main (`save-if`), and
+a PR's run reads main's.
 
 `.github/workflows/cache-prune.yml` runs each day and keeps, of each
 family of keys, the newest entry main saved; it deletes the rest, main's

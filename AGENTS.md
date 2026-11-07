@@ -28,9 +28,10 @@ loose beside the main checkout:
 Remove it once its PR is merged.
 
 Before a PR, run `scripts/check.sh --no-window`. CI runs every part,
-the window's end-to-end tests too, on runners on devbox, and builds the
-Rust for Windows on GitHub's runner ([`ci/README.md`](ci/README.md)); the
-`ci` status sums them up. A call only Unix has goes behind `cfg(unix)`,
+the window's end-to-end tests too, on runners on devbox, builds the Rust
+for Windows on GitHub's runner, and runs the fence's tests on GitHub's
+Ubuntu runner ([`ci/README.md`](ci/README.md)); the `ci` status sums them
+up. A call only Unix has goes behind `cfg(unix)`,
 with Windows code beside it or a refusal that says it is not on Windows
 yet (ADR 0090); `scripts/check.sh windows` checks that here, with
 cargo-xwin and clang. Merge with

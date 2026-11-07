@@ -73,6 +73,11 @@ impl Running {
 /// (`client/desktop/src/channel.ts`).
 pub const FOLDER: &str = env!("BANDA_FOLDER");
 
+/// Every Banda's folder: Stable's, Dev's and a checkout's. The fence hides
+/// them all (`fence.rs`), on Linux so far.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub const FOLDERS: [&str; 3] = ["banda", "banda-dev", "banda-local"];
+
 /// Whether this Banda was built from a checkout, not released: its own
 /// folder, `banda-local`.
 pub fn from_checkout() -> bool {
@@ -118,7 +123,7 @@ pub fn state_named() -> bool {
 }
 
 /// What the state's place is under when no variable moves it.
-fn state_base() -> Option<PathBuf> {
+pub fn state_base() -> Option<PathBuf> {
     dirs::state_dir().or_else(dirs::data_local_dir)
 }
 

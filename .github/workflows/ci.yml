@@ -1,7 +1,8 @@
 # scripts/check.sh's parts side by side on the runners on devbox
-# (ci/README.md), and its `windows` part on GitHub's Windows runner. One
-# required status, `ci`, sums them up: a PR that changes only docs passes it
-# without running them.
+# (ci/README.md), its `windows` part on GitHub's Windows runner, and the
+# fence's tests on GitHub's Ubuntu runner, as devbox's containers give no
+# user namespaces to make. One required status, `ci`, sums them up: a PR
+# that changes only docs passes it without running them.
 #
 # A PR from a fork is not checked at all (ADR 0038, decision 4): `ci` fails
 # on it, so it cannot be merged as it is. Roma reads it and takes its
@@ -45,7 +46,7 @@ jobs:
         with:
           fetch-depth: 2
       # A PR's checkout is its merge with main, whose first parent is main.
-      # `rust` is the Rust and what builds it, all `windows` checks.
+      # `rust` is the Rust and what builds it, all `windows` and `fence` check.
       - id: diff
         run: |
           changes() { [[ "$GITHUB_EVENT_NAME" != pull_request ]] || ! git diff --quiet HEAD^1 HEAD -- "$@"; }
@@ -163,9 +164,46 @@ jobs:
           path: windows-passed
           retention-days: 90
 
+  # The fence's tests make user, mount and PID namespaces, which devbox's
+  # containers refuse, so there they skip, each saying why. GitHub's Ubuntu
+  # runner is a VM of the job's own, free for a public repository: Ubuntu
+  # keeps unprivileged user namespaces off behind AppArmor, and the job
+  # turns them on for itself. Here every test runs: one that would skip,
+  # for want of namespaces, Landlock or bwrap, fails the part.
+  fence:
+    name: fence (Linux namespaces)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      # As on devbox (ci/Dockerfile): no test reads the debug info.
+      CARGO_PROFILE_DEV_DEBUG: 0
+      BANDA_FENCE_TESTS: all
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      # As `windows`: main's dependencies, saved by main's runs alone.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: linux-fence
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+      - name: Unprivileged user namespaces, and bwrap for the test of one inside the fence
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends bubblewrap
+      - run: cargo test -p banda-fence
+      - run: cargo test -p banda --test fence
+
   ci:
     name: ci
-    needs: [changes, check, windows]
+    needs: [changes, check, windows, fence]
     if: always()
     runs-on: devbox
     timeout-minutes: 5
@@ -177,7 +215,8 @@ jobs:
           exit 1
       - name: Every part passed or had nothing to check
         run: |
-          echo "changes=${{ needs.changes.result }} check=${{ needs.check.result }} windows=${{ needs.windows.result }}"
+          echo "changes=${{ needs.changes.result }} check=${{ needs.check.result }} windows=${{ needs.windows.result }} fence=${{ needs.fence.result }}"
           [[ "${{ needs.changes.result }}" == success ]]
           [[ "${{ needs.check.result }}" == success || "${{ needs.check.result }}" == skipped ]]
           [[ "${{ needs.windows.result }}" == success || "${{ needs.windows.result }}" == skipped ]]
+          [[ "${{ needs.fence.result }}" == success || "${{ needs.fence.result }}" == skipped ]]
