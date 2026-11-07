@@ -79,8 +79,10 @@ for the old Banda's CI and are reused as they are. `ci/devbox.sh` only runs
   store and Electron's download in its own volume (`/state`), so a run builds
   incrementally. `/tmp` is a 4 GB tmpfs: the tests' SQLite fsyncs stall on
   the shared disk.
-- `ci/target.sh`: links the checkout's `target/` into the volume and empties
-  it once it outgrows 15 GB (cargo never removes old artifacts).
+- `ci/target.sh`: links the checkout's `target/` into the volume, which
+  cargo never prunes. Past 12 GB it drops `debug/incremental` and, in any
+  job but `release.yml`'s pack, which builds on it, `release/`; still past
+  15 GB, it empties it.
 
 ## Start (once)
 
