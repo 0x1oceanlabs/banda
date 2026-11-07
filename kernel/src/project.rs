@@ -309,13 +309,13 @@ impl Project {
             boot: boot.clone(),
             _lock: lock,
         });
-        outbox::recover(&project, boot).await?;
+        outbox::recover(&project).await?;
         // Each module picks up its work before any effect runs, so what it
         // finds is what the last boot left.
         for module in project.modules.iter() {
             module.opened(project.module(module.name())).await?;
         }
-        tokio::spawn(outbox::work(Arc::downgrade(&project), boot.clone()));
+        tokio::spawn(outbox::work(Arc::downgrade(&project)));
         Ok(project)
     }
 
@@ -531,6 +531,10 @@ impl Project {
 
     pub(crate) fn modules(&self) -> &[Arc<dyn Module>] {
         &self.modules
+    }
+
+    pub(crate) fn boot(&self) -> &Boot {
+        &self.boot
     }
 }
 
@@ -790,26 +794,24 @@ impl ModuleProject {
         kinds: &[&str],
         term: Duration,
     ) -> Result<Option<Lease>, Error> {
-        let project = &self.project;
-        outbox::lease(project, &project.boot, self.module, worker, kinds, term).await
+        outbox::lease(&self.project, self.module, worker, kinds, term).await
     }
 
     /// Renews the lease of `claim` for `term` from now. Refused as
-    /// `conflict` once its lease ran out and the effect was taken again, or
-    /// it was settled: its worker stops, and writes nothing.
+    /// `conflict` once the effect was taken again, after its lease ran out,
+    /// or settled: its worker stops, and writes nothing.
     pub async fn renew(&self, claim: Claim, term: Duration) -> Result<(), Refusal> {
-        let project = &self.project;
-        outbox::renew(project, &project.boot, self.module, claim, term).await
+        outbox::renew(&self.project, self.module, claim, term).await
     }
 
     /// Settles a run a worker held under `claim`, as a run in the engine
     /// ends: done, with what this module writes of it; to retry, as its
     /// kind's [`Retry`](crate::Retry) says; or failed. Refused as
-    /// `conflict`, writing nothing, once its lease ran out and the effect
-    /// was taken again, or it was settled. A write that fails leaves the
-    /// lease as it was, for the worker to finish again.
+    /// `conflict`, writing nothing, once the effect was taken again, after
+    /// its lease ran out, or settled. A write that fails leaves the lease
+    /// as it was, for the worker to finish again.
     pub async fn finish(&self, claim: Claim, outcome: Outcome) -> Result<(), Refusal> {
-        outbox::settle_leased(&self.project, self.module, claim, outcome).await
+        outbox::finish_leased(&self.project, self.module, claim, outcome).await
     }
 
     /// One change in one transaction, outside any command: what a module

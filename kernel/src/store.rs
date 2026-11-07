@@ -13,6 +13,7 @@ use serde::Serialize;
 use serde_json::Value;
 use std::path::Path;
 use std::sync::{Arc, Mutex, mpsc};
+use std::time::Duration;
 use tokio::sync::{Notify, broadcast, oneshot};
 
 /// The kernel's name in the event log, the receipts and the ledger.
@@ -22,8 +23,15 @@ pub(crate) const KERNEL: &str = "kernel";
 /// told to read again.
 const SUBSCRIBER_LAG: usize = 4096;
 
+/// How long the kernel keeps a receipt, and an effect's row once it
+/// settled. A command sent again within it gets its first answer and runs
+/// nothing again: a client keeps a command to send again seven days at most
+/// (ADR 0082, decision 4), and `banda mcp` only while its session lasts.
+/// Past it, the same command ID runs as a new command.
+pub(crate) const KEPT: Duration = Duration::from_secs(30 * 24 * 3600);
+
 /// The kernel's own steps. Each module keeps its own ledger next to them.
-const KERNEL_MIGRATIONS: &[&str] = &[
+pub(crate) const KERNEL_MIGRATIONS: &[&str] = &[
     r#"
 CREATE TABLE kernel_events (
     seq INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,9 +79,12 @@ CREATE TABLE kernel_outbox (
 CREATE INDEX kernel_outbox_by_key ON kernel_outbox (module, key, state, id);
 "#,
     // Who runs an effect: the engine, or a worker outside it under a lease,
-    // `lease_until` on the clock of the boot that gave it. `claim` counts the
-    // times an effect was taken, its fencing token. The indexes let the rows
-    // a resend no longer needs go (ADR 0082, A6).
+    // `lease_until` on the clock of the boot that gave it, and `carried`
+    // while a restart gave it a fresh term its worker has not renewed.
+    // `claim` counts the times an effect was taken: its claim's token.
+    // `late_from` is the try an effect over the network counts its tries
+    // from, past its deadline, and `cuts` its runs cut short. The indexes
+    // let the rows a resend no longer needs go (ADR 0082, A6).
     r#"
 ALTER TABLE kernel_outbox ADD COLUMN runner TEXT NOT NULL DEFAULT 'engine'
     CHECK (runner IN ('engine', 'worker'));
@@ -81,6 +92,9 @@ ALTER TABLE kernel_outbox ADD COLUMN claim INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE kernel_outbox ADD COLUMN worker TEXT;
 ALTER TABLE kernel_outbox ADD COLUMN lease_ms INTEGER;
 ALTER TABLE kernel_outbox ADD COLUMN lease_until INTEGER;
+ALTER TABLE kernel_outbox ADD COLUMN carried INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE kernel_outbox ADD COLUMN late_from INTEGER;
+ALTER TABLE kernel_outbox ADD COLUMN cuts INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX kernel_outbox_by_settled ON kernel_outbox (settled_at) WHERE settled_at IS NOT NULL;
 CREATE INDEX kernel_receipts_by_at ON kernel_receipts (at);
 "#,
@@ -186,8 +200,8 @@ impl Tx<'_> {
 
     /// Refuses as `conflict` unless `claim` still holds its effect, which
     /// is this module's. A module checks it in each write it makes for a
-    /// worker under a lease, so a worker whose lease ran out, and whose
-    /// effect was taken again, writes nothing (ADR 0082, A6).
+    /// worker under a lease, so a worker writes nothing once its effect was
+    /// taken again, after its lease ran out, or settled (ADR 0082, A6).
     pub fn holds(&self, claim: Claim) -> Result<(), Error> {
         if crate::outbox::holds(&self.tx, self.module, claim)? {
             Ok(())
@@ -315,25 +329,25 @@ impl Store {
     }
 
     /// Lets go of the receipts, and of the rows of effects that settled,
-    /// from before `before` in ms since the epoch, a batch at a time, so the
-    /// writer is never held long. An effect pending or running stays,
-    /// however old. Answers how many rows went.
-    pub(crate) async fn collect(&self, before: i64) -> Result<usize, Error> {
-        const BATCH: i64 = 1000;
+    /// older than [`KEPT`], a batch at a time, so the writer is never held
+    /// long. An effect pending or running stays, however old: only one that
+    /// settled has `settled_at`. Answers how many rows went.
+    pub(crate) async fn collect(&self) -> Result<usize, Error> {
+        const BATCH: u16 = 1000;
+        let before = now_ms().saturating_sub(i64::try_from(KEPT.as_millis()).unwrap_or(i64::MAX));
         let mut gone = 0;
         for delete in [
             "DELETE FROM kernel_receipts WHERE rowid IN
                (SELECT rowid FROM kernel_receipts WHERE at < ?1 LIMIT ?2)",
             "DELETE FROM kernel_outbox WHERE id IN
-               (SELECT id FROM kernel_outbox
-                WHERE settled_at < ?1 AND state IN ('done', 'abandoned', 'failed') LIMIT ?2)",
+               (SELECT id FROM kernel_outbox WHERE settled_at < ?1 LIMIT ?2)",
         ] {
             loop {
                 let went = self
                     .on_writer(move |sql| Ok(sql.execute(delete, params![before, BATCH])?))
                     .await?;
                 gone += went;
-                if i64::try_from(went).unwrap_or(i64::MAX) < BATCH {
+                if went < usize::from(BATCH) {
                     break;
                 }
             }
@@ -497,7 +511,7 @@ impl Receipt {
 /// Applies the steps of `ledger` that this database has not seen, each in
 /// its own transaction. A database that has seen more steps than this engine
 /// knows was written by a newer engine and is not opened.
-fn migrate(sql: &mut Connection, ledger: &str, steps: &[&str]) -> Result<(), Error> {
+pub(crate) fn migrate(sql: &mut Connection, ledger: &str, steps: &[&str]) -> Result<(), Error> {
     sql.execute_batch(
         "CREATE TABLE IF NOT EXISTS kernel_migrations (
             ledger TEXT NOT NULL,

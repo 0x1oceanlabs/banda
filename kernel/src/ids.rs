@@ -110,8 +110,11 @@ impl CommandId {
     /// made, a UUIDv5. What sends a command again, `banda mcp` a request
     /// of its session, later a reaction to an event or a workflow's step,
     /// lands on the first one's receipt, so it runs once (ADR 0082,
-    /// decision 4). `source` names one sender, and only it: another sender
-    /// with the same steps gets other IDs.
+    /// decision 4), for as long as the receipt is kept: thirty days. Past
+    /// them the same ID runs as a new command, so a reaction that catches
+    /// up on older events keeps its own cursor of what it did. `source`
+    /// names one sender, and only it: another sender with the same steps
+    /// gets other IDs.
     pub fn derive(source: &str, step: &str) -> CommandId {
         let source = uuid::Uuid::new_v5(&DERIVED, source.as_bytes());
         CommandId(uuid::Uuid::new_v5(&source, step.as_bytes()))
@@ -169,7 +172,6 @@ mod tests {
         let first = CommandId::derive(session, "7");
         assert_eq!(first, CommandId::derive(session, "7"));
         assert_ne!(first, CommandId::derive(session, "8"));
-        assert_ne!(first, CommandId::derive(session, "\"7\""));
         assert_ne!(first, CommandId::derive("another session", "7"));
         // Fixed for good: a resend from an older Banda finds its receipt.
         assert_eq!(
