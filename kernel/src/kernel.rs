@@ -2,6 +2,7 @@ use crate::access::{self, Caller, Right};
 use crate::foreign::{self, Foreign};
 use crate::methods::{Asks, Nothing, Tool};
 use crate::module::{Call, Module, Scope, Stream, Wall};
+use crate::outbox::Boot;
 use crate::passes::Passes;
 use crate::project::{self, GONE, Manifest, Project, Shared, UNFINISHED};
 use crate::sign::{self, Kept, Picked, Sign, SignPick};
@@ -21,9 +22,9 @@ pub struct Kernel {
     /// `projects/` in the engine's data: one folder per Project.
     projects_data: PathBuf,
     owner: PersonId,
-    /// This boot of the engine. Outbox rows claimed under another boot were
-    /// cut short by a restart.
-    boot: String,
+    /// This boot of the engine. Outbox rows the engine claimed under another
+    /// boot were cut short by a restart; workers' leases run on its clock.
+    boot: Boot,
     modules: Arc<[Arc<dyn Module>]>,
     /// The modules each Project runs: those of the Project's scope.
     in_projects: Arc<[Arc<dyn Module>]>,
@@ -167,7 +168,7 @@ impl KernelBuilder {
         crate::old::move_out(&self.root, &projects_data);
         let (of_machine, in_projects): (Vec<_>, Vec<_>) =
             (self.modules.iter().cloned()).partition(|module| module.scope() == Scope::Machine);
-        let boot = uuid::Uuid::now_v7().to_string();
+        let boot = Boot::new();
         let passes = Arc::<Passes>::default();
         let window = Arc::<Window>::default();
         let projects = Projects::default();
@@ -709,7 +710,7 @@ impl Kernel {
     /// This boot of the engine: another after a restart, which ended every
     /// session of the last.
     pub fn boot(&self) -> &str {
-        &self.boot
+        self.boot.id()
     }
 
     /// Where a method of `module` runs. A module of the machine runs in

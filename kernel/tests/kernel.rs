@@ -3,9 +3,9 @@
 
 use banda_kernel::api::Identity;
 use banda_kernel::{
-    AgentId, Call, Caller, Code, CommandId, Effect, Error, EventFilter, Kernel, Module,
+    AgentId, Call, Caller, Code, CommandId, Effect, Error, EventFilter, Kernel, Lease, Module,
     ModuleProject, OnRestart, Outcome, Participant, PersonId, ProjectId, ProjectSummary, Refusal,
-    Right, Scope, Settled, SignKind, Stream, Tx, decode,
+    Retry, Right, Scope, Settled, SignKind, Stream, Tx, decode, now_ms,
 };
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -178,6 +178,76 @@ impl Module for Notes {
             &json!({ "kind": effect.kind, "how": how }),
         )?;
         Ok(())
+    }
+}
+
+/// Posts: `post` queues an effect of the kind it is given for a worker
+/// outside the engine, keyed by one feed. A `post` goes over the network,
+/// and tries until its deadline; a `ping` tries three times; a `notify`
+/// whose worker went is abandoned. It keeps each Project it opens in, so a
+/// test acts as its worker (ADR 0082, A6).
+#[derive(Clone, Default)]
+struct Posts {
+    projects: Arc<Mutex<Vec<ModuleProject>>>,
+    /// The kinds of its effects the engine ran: none, as workers run them.
+    ran: Arc<Mutex<Vec<String>>>,
+}
+
+#[async_trait::async_trait]
+impl Module for Posts {
+    fn name(&self) -> &'static str {
+        "posts"
+    }
+
+    fn migrations(&self) -> &'static [&'static str] {
+        &[]
+    }
+
+    fn right(&self, method: &str) -> Option<Right> {
+        (method == "post").then_some(Right::Write)
+    }
+
+    async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
+        self.projects.lock().unwrap().push(project);
+        Ok(())
+    }
+
+    async fn call(&self, call: Call, _: &str, params: Value) -> Result<Value, Refusal> {
+        let kind = params["kind"].as_str().unwrap_or("post").to_owned();
+        let text = params["text"].clone();
+        let author = call.participant();
+        call.command(move |tx| {
+            let payload = json!({ "text": text, "author": author });
+            tx.enqueue_for_worker(&kind, "feed", &payload)?;
+            Ok(Value::Null)
+        })
+        .await
+    }
+
+    async fn run(&self, _project: ModuleProject, effect: Effect) -> Outcome {
+        self.ran.lock().unwrap().push(effect.kind);
+        Outcome::Done
+    }
+
+    fn on_restart(&self, kind: &str) -> OnRestart {
+        if kind == "notify" {
+            OnRestart::Abandon
+        } else {
+            OnRestart::Replay
+        }
+    }
+
+    fn retry(&self, kind: &str) -> Retry {
+        let soon = Duration::from_millis(1);
+        let retry = match kind {
+            "ping" => Retry::tries(3),
+            _ => Retry::within(Duration::from_secs(3600)),
+        };
+        retry.waiting(soon, soon)
+    }
+
+    fn settle(&self, tx: &mut Tx<'_>, effect: &Effect, settled: &Settled) -> Result<(), Error> {
+        Notes::default().settle(tx, effect, settled)
     }
 }
 
@@ -749,6 +819,355 @@ async fn a_restart_replays_or_abandons_what_it_cut_short() {
             json!("failed: Restarts cut it short too many times.")
         ]
     );
+}
+
+async fn open_posts(root: &Path, owner: PersonId, posts: &Posts) -> Arc<Kernel> {
+    Kernel::builder(root, root.join(".data"), owner)
+        .module(posts.clone())
+        .open()
+        .await
+        .unwrap()
+}
+
+/// Queues a `kind` of effect for a worker, as the owner.
+async fn post(kernel: &Kernel, owner: PersonId, project: &ProjectSummary, kind: &str, text: &str) {
+    let (owner, params) = (
+        Participant::Person(owner),
+        json!({ "kind": kind, "text": text }),
+    );
+    (kernel.call(
+        owner,
+        "posts.post",
+        Some(project.id),
+        Some(CommandId::new()),
+        params,
+    ))
+    .await
+    .unwrap();
+}
+
+/// Where a worker of `posts` reaches the Project it opened in last.
+fn worker_of(posts: &Posts) -> ModuleProject {
+    posts.projects.lock().unwrap().last().unwrap().clone()
+}
+
+/// The lease `worker` takes of one of `kinds`, once one is ready: within
+/// five seconds.
+async fn leased(project: &ModuleProject, worker: &str, kinds: &[&str]) -> Lease {
+    for _ in 0..500 {
+        let term = Duration::from_secs(60);
+        if let Some(lease) = project.lease(worker, kinds, term).await.unwrap() {
+            return lease;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("nothing was ready to lease");
+}
+
+/// Done, with a `posted` event that says `by` whom.
+fn posted(by: &'static str, author: Participant) -> Outcome {
+    Outcome::done_writing(move |tx| {
+        tx.emit("posted", 1, Some("feed"), author, &json!({ "by": by }))?;
+        Ok(())
+    })
+}
+
+/// Who posted, as the `posted` events say.
+async fn posted_by(kernel: &Kernel, project: &ProjectSummary) -> Vec<Value> {
+    let project = kernel.project(project.id).await.unwrap();
+    let events = project
+        .events_after(0, Default::default(), 100)
+        .await
+        .unwrap();
+    let posted = events.into_iter().filter(|e| e.kind == "posted");
+    posted.map(|e| e.payload["by"].clone()).collect()
+}
+
+#[tokio::test]
+async fn a_worker_outside_the_engine_runs_an_effect_under_a_lease_and_settles_it_once() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, posts) = (PersonId::new(), Posts::default());
+    let kernel = open_posts(root.path(), owner, &posts).await;
+    let project = create(&kernel, owner, "Work").await;
+    let person = Participant::Person(owner);
+    post(&kernel, owner, &project, "post", "a").await;
+    post(&kernel, owner, &project, "post", "b").await;
+    let worker = worker_of(&posts);
+    let minute = Duration::from_secs(60);
+
+    let lease = worker.lease("w1", &["post"], minute).await.unwrap();
+    let lease = lease.expect("the engine left it for a worker");
+    assert_eq!(
+        (lease.effect.payload["text"].clone(), lease.effect.attempts),
+        (json!("a"), 0)
+    );
+    // One effect of a key runs at a time, in order.
+    assert!(
+        worker
+            .lease("w2", &["post"], minute)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        worker
+            .lease("w2", &["ping"], minute)
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    worker.renew(lease.claim, minute).await.unwrap();
+    // What its module writes for the worker checks the claim, which holds.
+    let claim = lease.claim;
+    let noted = worker.write(move |tx| tx.holds(claim)).await;
+    assert!(noted.is_ok(), "{noted:?}");
+    worker.finish(claim, posted("w1", person)).await.unwrap();
+    // It settled once: the same claim again is refused, and writes nothing.
+    let again = worker.finish(claim, posted("w1 again", person)).await;
+    assert_eq!(again.unwrap_err().code, Code::Conflict);
+    assert_eq!(
+        worker.renew(claim, minute).await.unwrap_err().code,
+        Code::Conflict
+    );
+    assert_eq!(posted_by(&kernel, &project).await, [json!("w1")]);
+
+    let next = worker.lease("w2", &["post"], minute).await.unwrap();
+    assert_eq!(next.expect("b is next").effect.payload["text"], "b");
+    assert!(posts.ran.lock().unwrap().is_empty(), "the engine ran none");
+}
+
+#[tokio::test]
+async fn a_lease_that_runs_out_is_taken_again_and_its_late_worker_writes_nothing() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, posts) = (PersonId::new(), Posts::default());
+    let kernel = open_posts(root.path(), owner, &posts).await;
+    let project = create(&kernel, owner, "Work").await;
+    let person = Participant::Person(owner);
+    let worker = worker_of(&posts);
+    let (minute, short) = (Duration::from_secs(60), Duration::from_millis(50));
+
+    post(&kernel, owner, &project, "post", "a").await;
+    let late = worker.lease("w1", &["post"], short).await.unwrap().unwrap();
+    // w1 stops renewing: its run is cut short, as a restart cuts the
+    // engine's, and the effect is taken again under a newer claim.
+    let taken = leased(&worker, "w2", &["post"]).await;
+    assert_eq!(taken.effect.id, late.effect.id);
+    assert!(taken.claim.token > late.claim.token);
+    assert_eq!(taken.effect.attempts, 1, "a run cut short counts as a try");
+
+    // However late it comes, w1 is refused at every step.
+    let (renewed, wrote, finished) = (
+        worker.renew(late.claim, minute).await,
+        worker.write(move |tx| tx.holds(late.claim)).await,
+        worker.finish(late.claim, posted("w1", person)).await,
+    );
+    assert_eq!(renewed.unwrap_err().code, Code::Conflict);
+    assert!(matches!(wrote, Err(Error::Refused(r)) if r.code == Code::Conflict));
+    assert_eq!(finished.unwrap_err().code, Code::Conflict);
+    worker
+        .finish(taken.claim, posted("w2", person))
+        .await
+        .unwrap();
+    assert_eq!(posted_by(&kernel, &project).await, [json!("w2")]);
+
+    // A kind that dies with its worker is abandoned instead, and its module
+    // says so.
+    post(&kernel, owner, &project, "notify", "b").await;
+    let gone = worker
+        .lease("w1", &["notify"], short)
+        .await
+        .unwrap()
+        .unwrap();
+    eventually(|| async { kinds(&kernel, &project).await.contains(&"lost".to_owned()) }).await;
+    assert_eq!(lost_how(&kernel, &project).await, "abandoned");
+    let finished = worker.finish(gone.claim, Outcome::Done).await;
+    assert_eq!(finished.unwrap_err().code, Code::Conflict);
+}
+
+#[tokio::test]
+async fn a_lease_outlives_a_restart_of_the_engine_until_its_term_runs_out() {
+    let root = tempfile::tempdir().unwrap();
+    let data = root.path().join(".data");
+    let (owner, posts) = (PersonId::new(), Posts::default());
+    let kernel = open_posts(root.path(), owner, &posts).await;
+    let project = create(&kernel, owner, "Work").await;
+    let person = Participant::Person(owner);
+    let minute = Duration::from_secs(60);
+    post(&kernel, owner, &project, "post", "a").await;
+    let held = worker_of(&posts).lease("w1", &["post"], minute).await;
+    let held = held.unwrap().unwrap();
+
+    // The engine stops and starts again while its worker runs on.
+    posts.projects.lock().unwrap().clear();
+    let_go(kernel, &data, &[]).await;
+    let kernel = open_posts(root.path(), owner, &posts).await;
+    let worker = worker_of(&posts);
+    // A restart cut nothing short: the worker's claim holds on the new boot.
+    assert!(
+        worker
+            .lease("w2", &["post"], minute)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    worker.renew(held.claim, minute).await.unwrap();
+    worker
+        .finish(held.claim, posted("w1", person))
+        .await
+        .unwrap();
+    assert_eq!(posted_by(&kernel, &project).await, [json!("w1")]);
+
+    // A worker that went with the engine lets its fresh term run out.
+    post(&kernel, owner, &project, "post", "b").await;
+    let short = Duration::from_millis(100);
+    let gone = worker.lease("w1", &["post"], short).await.unwrap().unwrap();
+    drop(worker);
+    posts.projects.lock().unwrap().clear();
+    let_go(kernel, &data, &[]).await;
+    let kernel = open_posts(root.path(), owner, &posts).await;
+    let taken = leased(&worker_of(&posts), "w2", &["post"]).await;
+    assert_eq!(
+        (taken.effect.id, taken.effect.attempts),
+        (gone.effect.id, 1)
+    );
+    drop(kernel);
+}
+
+#[tokio::test]
+async fn an_effect_retries_as_its_kind_says() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, posts) = (PersonId::new(), Posts::default());
+    let kernel = open_posts(root.path(), owner, &posts).await;
+    let project = create(&kernel, owner, "Work").await;
+    let person = Participant::Person(owner);
+    let worker = worker_of(&posts);
+
+    // Work on this host gives up after its tries.
+    post(&kernel, owner, &project, "ping", "p").await;
+    for tried in 0..3 {
+        let lease = leased(&worker, "w", &["ping"]).await;
+        assert_eq!(lease.effect.attempts, tried);
+        let offline = Outcome::Retry("offline".into());
+        worker.finish(lease.claim, offline).await.unwrap();
+    }
+    assert_eq!(lost_how(&kernel, &project).await, "failed: offline");
+
+    // Work over the network goes on past five tries, until its deadline.
+    post(&kernel, owner, &project, "post", "q").await;
+    for tried in 0..8 {
+        let lease = leased(&worker, "w", &["post"]).await;
+        assert_eq!(lease.effect.attempts, tried);
+        let offline = Outcome::Retry("offline".into());
+        worker.finish(lease.claim, offline).await.unwrap();
+    }
+    let lease = leased(&worker, "w", &["post"]).await;
+    worker
+        .finish(lease.claim, posted("w", person))
+        .await
+        .unwrap();
+    assert_eq!(posted_by(&kernel, &project).await, [json!("w")]);
+}
+
+/// The Project's SQLite, opened beside the engine's.
+fn sqlite(data: &Path, project: &ProjectSummary) -> rusqlite::Connection {
+    let path = data.join(format!("projects/{}/project.sqlite3", project.id));
+    rusqlite::Connection::open(path).unwrap()
+}
+
+#[tokio::test]
+async fn receipts_and_settled_effects_go_after_thirty_days_and_not_before() {
+    let root = tempfile::tempdir().unwrap();
+    let data = root.path().join(".data");
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let project = create(&kernel, owner, "Work").await;
+    let person = Participant::Person(owner);
+    let (old, recent) = (CommandId::new(), CommandId::new());
+    let add = async |kernel: &Kernel, command: CommandId, text: &str| {
+        let params = json!({ "text": text });
+        (kernel.call(person, "notes.add", Some(project.id), Some(command), params)).await
+    };
+    add(&kernel, old, "old").await.unwrap();
+    let first = add(&kernel, recent, "recent").await.unwrap();
+    eventually(|| async { notes.published.lock().unwrap().len() == 2 }).await;
+    let_go(kernel, &data, &[]).await;
+
+    // Days go by.
+    let (now, day) = (now_ms(), 86_400_000_i64);
+    let author = serde_json::to_string(&person).unwrap();
+    let database = sqlite(&data, &project);
+    for (age, command, text) in [(31, old, "old"), (29, recent, "recent")] {
+        let at = now - age * day;
+        let (command, text) = (command.to_string(), format!("%\"{text}\"%"));
+        database
+            .execute(
+                "UPDATE kernel_receipts SET at = ?1 WHERE command = ?2",
+                rusqlite::params![at, command],
+            )
+            .unwrap();
+        database
+            .execute(
+                "UPDATE kernel_outbox SET settled_at = ?1 WHERE payload LIKE ?2",
+                rusqlite::params![at, text],
+            )
+            .unwrap();
+    }
+    // An effect not yet run stays, however old: this one is due tomorrow.
+    database
+        .execute(
+            "INSERT INTO kernel_outbox (module, kind, key, payload, state, next_at, created_at)
+             VALUES ('notes', 'publish', 'later', ?1, 'pending', ?2, ?3)",
+            rusqlite::params![
+                format!(r#"{{"text":"later","author":{author}}}"#),
+                now + day,
+                now - 40 * day
+            ],
+        )
+        .unwrap();
+    drop(database);
+
+    let kernel = reopen(root.path(), owner, &notes, 1).await;
+    let receipts = || {
+        let database = sqlite(&data, &project);
+        let mut statement = database
+            .prepare("SELECT command FROM kernel_receipts ORDER BY at")
+            .unwrap();
+        let rows = statement
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap();
+        rows.collect::<rusqlite::Result<Vec<_>>>().unwrap()
+    };
+    eventually(|| async { !receipts().contains(&old.to_string()) }).await;
+    assert!(receipts().contains(&recent.to_string()));
+    let database = sqlite(&data, &project);
+    let mut statement = database
+        .prepare("SELECT json_extract(payload, '$.text'), state FROM kernel_outbox ORDER BY id")
+        .unwrap();
+    let rows = statement
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .unwrap();
+    let rows = rows.collect::<rusqlite::Result<Vec<_>>>().unwrap();
+    assert_eq!(
+        rows,
+        [
+            ("recent".to_owned(), "done".to_owned()),
+            ("later".to_owned(), "pending".to_owned())
+        ]
+    );
+
+    // Within thirty days a command sent again gets its first answer and
+    // runs nothing; past them, it is a new command.
+    assert_eq!(add(&kernel, recent, "recent").await.unwrap(), first);
+    add(&kernel, old, "old").await.unwrap();
+    let listed = kernel
+        .call(person, "notes.list", Some(project.id), None, Value::Null)
+        .await
+        .unwrap();
+    assert_eq!(listed["items"], json!(["old", "recent", "old"]));
 }
 
 #[tokio::test]

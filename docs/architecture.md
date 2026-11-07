@@ -232,7 +232,8 @@ command (with its ID)
   → module operation: rules decide, store writes
   → one transaction: receipt · events · view tables · outbox rows
   → publish: one ordered lane per Project
-  → outbox worker: side effects in order per target, claimed by this boot, retried
+  → outbox: side effects in order per target, run by the engine under this boot,
+    or by a worker outside it under a lease; retried as their kind says
   → how one ended: one transaction with what its module writes of it, tried until it commits
 ```
 
@@ -248,8 +249,26 @@ command (with its ID)
   receipt.
 - A side effect never starts from a live subscription.
 - An effect holds its key while it runs, so its module bounds how long a run
-  takes. A restart that cuts an effect short counts as a try: after five,
-  the effect fails and its module says so.
+  takes. A restart that cuts an effect short counts as a try. An effect
+  that asks to retry waits longer after each try, for as long as its kind's
+  `Retry` says (`Module::retry`): five tries by default, for work on the
+  host; for work over the network, until a deadline after it was queued,
+  and at least five times. Then the effect fails and its module says so.
+- A worker outside the engine runs the effects queued for one
+  (`Tx::enqueue_for_worker`), under a lease (ADR 0082, A6): it takes one
+  with `ModuleProject::lease`, keeps it with `renew` and settles it with
+  `finish`. A lease runs on the engine's monotonic clock, never the wall
+  clock. One that runs out is cut short at once, as a restart cuts the
+  engine's own runs, and a restart gives each lease a fresh term instead.
+  Each claim of an effect has a fencing token, checked as the worker renews,
+  as its module writes for it (`Tx::holds`) and as it settles: a worker
+  whose lease ran out writes nothing. So an effect a worker runs runs at
+  least once, and its end is written once. The engine's own effects stay
+  owned by its boot, which needs no clock.
+- A receipt, and the row of an effect that settled, are kept 30 days
+  (`KEPT`), longer than the seven days a client keeps a command to send
+  again; then the Project's loop lets them go. A command sent again within
+  them gets its first answer; past them, it runs as a new one.
 - Outbox rows are the kernel's bookkeeping, not records of the work. What a
   Person sees of an effect is the events its module writes.
 - A window loads a snapshot at sequence N, then streams the events after N.

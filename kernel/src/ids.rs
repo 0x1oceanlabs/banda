@@ -1,5 +1,6 @@
 //! Our IDs are the identity, and a Harness's IDs are evidence (ADR 0002,
-//! decision 7). Every ID here is a UUIDv7 made by Banda.
+//! decision 7). Every ID here is a UUIDv7 made by Banda, but a command ID
+//! derived from what sends it, a UUIDv5 ([`CommandId::derive`]).
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -100,6 +101,23 @@ id!(
     CommandId
 );
 
+/// The namespace of the command IDs Banda derives: any UUID, fixed for good,
+/// as a derived ID must come out the same in every version.
+const DERIVED: uuid::Uuid = uuid::Uuid::from_u128(0x1381_b1cc_08e3_41ff_b9bd_24b4_06cb_f01c);
+
+impl CommandId {
+    /// The command `step` of `source` sends: the same ID each time it is
+    /// made, a UUIDv5. What sends a command again, `banda mcp` a request
+    /// of its session, later a reaction to an event or a workflow's step,
+    /// lands on the first one's receipt, so it runs once (ADR 0082,
+    /// decision 4). `source` names one sender, and only it: another sender
+    /// with the same steps gets other IDs.
+    pub fn derive(source: &str, step: &str) -> CommandId {
+        let source = uuid::Uuid::new_v5(&DERIVED, source.as_bytes());
+        CommandId(uuid::Uuid::new_v5(&source, step.as_bytes()))
+    }
+}
+
 /// Anyone who acts in a Project: a Person or an Agent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "id", rename_all = "snake_case")]
@@ -138,5 +156,25 @@ impl Participant {
             "agent" => id.parse().ok().map(Participant::Agent),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CommandId;
+
+    #[test]
+    fn a_derived_command_id_is_the_same_each_time_and_its_senders_own() {
+        let session = "6f1c0e52-3b1a-4d55-9f7e-2a9a8e0c1d11";
+        let first = CommandId::derive(session, "7");
+        assert_eq!(first, CommandId::derive(session, "7"));
+        assert_ne!(first, CommandId::derive(session, "8"));
+        assert_ne!(first, CommandId::derive(session, "\"7\""));
+        assert_ne!(first, CommandId::derive("another session", "7"));
+        // Fixed for good: a resend from an older Banda finds its receipt.
+        assert_eq!(
+            CommandId::derive("a", "b").to_string(),
+            "a6a85341-5cd4-5383-a684-ad949636c543"
+        );
     }
 }
