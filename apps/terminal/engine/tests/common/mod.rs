@@ -70,14 +70,7 @@ impl World {
 
     /// The Project's folder.
     pub async fn folder(&self) -> std::path::PathBuf {
-        let person = Participant::Person(self.owner);
-        let listed = (self.kernel)
-            .call(person, "projects.list", None, None, json!({}))
-            .await
-            .unwrap();
-        let listed = listed.as_array().unwrap().iter();
-        let ours = listed.clone().find(|p| p["id"] == json!(self.project));
-        ours.unwrap()["folder"].as_str().unwrap().into()
+        self.kernel.project(self.project).await.unwrap().folder()
     }
 
     pub async fn another_project(&self) -> ProjectId {

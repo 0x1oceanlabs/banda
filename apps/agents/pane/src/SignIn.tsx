@@ -3,10 +3,11 @@ import {
   type CommandCall,
   type Engine,
   newId,
+  type Program,
   type ProjectId,
 } from "@banda/contract"
 import type { TurnId } from "@banda/contract/agents"
-import type { Program, SignInWay } from "@banda/contract/harnesses"
+import type { SignInWay } from "@banda/contract/harnesses"
 import { Button } from "@banda/ui/components/button"
 import { CopyButton } from "@banda/ui/components/copy-button"
 import { Spinner } from "@banda/ui/components/spinner"

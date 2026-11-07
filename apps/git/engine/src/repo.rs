@@ -78,9 +78,10 @@ impl Repo {
             .ok_or_else(|| Failure(Reason::NotRepository).into())
     }
 
-    /// Where the acts the Person asks for run ([`Opts::asked`]).
-    pub fn environment(&self) -> &dyn Environment {
-        &*self.environment
+    /// How an act the Person asks for runs here: in its Project's
+    /// environment ([`Opts::asked`]).
+    pub fn asked(&self) -> Opts<'_> {
+        Opts::asked(&*self.environment)
     }
 
     /// Runs git at the top, and fails when git does.

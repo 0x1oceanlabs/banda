@@ -2,12 +2,14 @@
 //! with its CLI and its `CODEX_HOME`, asked `initialize`, then
 //! `account/rateLimits/read`, and `account/read` for the account's email,
 //! and its plan when the limits name none. Codex reads its own sign-in. The process stops after.
+//! It is a Harness's CLI, so it starts in the environment of the scope
+//! that reads, the machine's (ADR 0084, decision 4).
 
 use super::{Failure, Found, window};
 use crate::model::{LimitWindow, WindowKind};
 use crate::{Harness, cli};
+use banda_kernel::{Environment, Input, Program};
 use serde_json::{Value, json};
-use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines};
 use tokio::process::{Child, ChildStdin, ChildStdout};
@@ -18,19 +20,28 @@ const ASKING: Duration = Duration::from_secs(8);
 
 const MINUTE: i64 = 60 * 1000;
 
-pub(super) async fn read(harness: &Harness) -> Result<Found, Failure> {
+pub(super) async fn read(
+    environment: &dyn Environment,
+    harness: &Harness,
+) -> Result<Found, Failure> {
     let program = harness.cli.as_ref().map_or("codex", |cli| &cli.program);
     let path = cli::located(program)
         .ok_or_else(|| Failure::new(format!("`{program}` is not installed on this computer.")))?;
-    let mut child = tokio::process::Command::new(path)
-        .args(["-s", "read-only", "-a", "on-request", "app-server"])
-        .envs(&harness.env)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .kill_on_drop(true)
-        .spawn()
+    let server = Program {
+        program: path.display().to_string(),
+        args: ["-s", "read-only", "-a", "on-request", "app-server"]
+            .map(str::to_owned)
+            .to_vec(),
+        env: harness.env.clone(),
+        ..Program::default()
+    };
+    let mut child = (environment.spawn(&server, Input::Piped))
         .map_err(|e| Failure::new(format!("Codex's app-server did not start: {e}.")))?;
+    // What it says on stderr is heard by no one, and read so it never
+    // fills.
+    if let Some(mut stderr) = child.stderr.take() {
+        tokio::spawn(async move { tokio::io::copy(&mut stderr, &mut tokio::io::sink()).await });
+    }
     let mut server = Server::of(&mut child)?;
     let client = json!({ "clientInfo": { "name": "banda", "version": banda_kernel::version() } });
     server.ask("initialize", client).await?;

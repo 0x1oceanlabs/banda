@@ -1,4 +1,4 @@
-import type { Program } from "@banda/contract/harnesses"
+import type { Program } from "@banda/contract"
 
 /**
  * A program as a line a Person can paste into a shell: what it adds to

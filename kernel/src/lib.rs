@@ -47,7 +47,7 @@ mod watching;
 mod window;
 
 pub use access::{Caller, Right};
-pub use environment::{Environment, Input, Program};
+pub use environment::{Environment, Input, ProcessGroup, Program};
 pub use error::{Code, Error, Refusal};
 pub use events::{Event, EventFilter};
 pub use foreign::{Foreign, ForeignWhy};

@@ -16,7 +16,7 @@
 //! goes to the engine's log only, and a caller hears a [`Reason`]; a line
 //! a caller follows has its credentials taken out ([`redact`]).
 
-use banda_kernel::{Environment, Input, Program, Refusal};
+use banda_kernel::{Environment, Input, ProcessGroup, Program, Refusal};
 use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::Path;
@@ -361,15 +361,13 @@ where
         tracing::warn!(%error, args = %said, "git did not start");
         Failure(Reason::Other)
     };
+    let feeds = opts.stdin.is_some();
     // A group of its own either way, so stopping it stops the hooks it
-    // runs too.
+    // runs too. `opts`'s index and variables go over git's own, last.
     let mut child = match opts.asked {
         Some(environment) => {
-            let act = act(folder, &args, &opts).map_err(did_not_start)?;
-            let input = match opts.stdin {
-                Some(_) => Input::Piped,
-                None => Input::Null,
-            };
+            let act = program(folder, &args, &opts).map_err(did_not_start)?;
+            let input = if feeds { Input::Piped } else { Input::Null };
             environment.spawn(&act, input).map_err(did_not_start)?
         }
         None => {
@@ -377,10 +375,7 @@ where
                 .await
                 .map_err(did_not_start)?;
             command
-                .stdin(match opts.stdin {
-                    Some(_) => Stdio::piped(),
-                    None => Stdio::null(),
-                })
+                .stdin(if feeds { Stdio::piped() } else { Stdio::null() })
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
             #[cfg(unix)]
@@ -395,8 +390,10 @@ where
     let time = opts.time.unwrap_or(TIME);
     let cap = opts.cap.unwrap_or(OUTPUT);
     let stdin = child.stdin.take();
-    let stdout = child.stdout.take().expect("stdout is piped");
-    let stderr = child.stderr.take().expect("stderr is piped");
+    let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
+        tracing::warn!(args = %said, "git started without its pipes");
+        return Err(Failure(Reason::Other));
+    };
     let mut running = Running {
         child: Some(child),
         ended: false,
@@ -460,7 +457,7 @@ where
 /// The act `args` asks for in `folder`, as its Project's environment
 /// starts it: `opts`'s index and variables over git's own. Its arguments
 /// and variables are text, as the methods' params are.
-fn act(folder: &Path, args: &[OsString], opts: &Opts) -> io::Result<Program> {
+fn program(folder: &Path, args: &[OsString], opts: &Opts) -> io::Result<Program> {
     let text = |said: &OsStr| {
         let text = said.to_str().map(str::to_owned);
         text.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "git takes text here"))
@@ -527,19 +524,12 @@ impl Drop for Running {
     }
 }
 
-/// The process group a git leads, while it runs.
-#[cfg(unix)]
-fn group(child: &Child) -> Option<rustix::process::Pid> {
-    let id = i32::try_from(child.id()?).ok()?;
-    rustix::process::Pid::from_raw(id)
-}
-
 /// Asks a git and its hooks to stop: SIGTERM, on which git takes its lock
 /// files away, as `index.lock`.
 fn terminate(child: &mut Child) {
     #[cfg(unix)]
-    if let Some(group) = group(child) {
-        let _ = rustix::process::kill_process_group(group, rustix::process::Signal::TERM);
+    if let Some(group) = ProcessGroup::of(child) {
+        group.signal(rustix::process::Signal::TERM);
         return;
     }
     let _ = child.start_kill();
@@ -553,8 +543,8 @@ async fn stopped(mut child: Child) {
         return;
     }
     #[cfg(unix)]
-    if let Some(group) = group(&child) {
-        let _ = rustix::process::kill_process_group(group, rustix::process::Signal::KILL);
+    if let Some(group) = ProcessGroup::of(&child) {
+        group.signal(rustix::process::Signal::KILL);
     }
     let _ = child.start_kill();
     let _ = child.wait().await;
