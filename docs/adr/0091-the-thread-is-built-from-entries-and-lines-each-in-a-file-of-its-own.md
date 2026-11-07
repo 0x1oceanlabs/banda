@@ -59,12 +59,15 @@ is (ADR 0089 d8).
 
 4. **What every part needs comes from the Thread's context, not down
    through props.**
-   - `useThread()` gives the stable things: the Project, the Thread, the
-     `Engine` (`sessionOf(project)` once H5 lands, ADR 0089 d5), the
-     image reader, the writers, and the acts.
+   - `useThreadAround()` gives the stable things: the Project, the
+     Thread, the `Engine` (`sessionOf(project)` once H5 lands, ADR 0089
+     d5), the image reader, and the acts. (`useThread` is already the
+     live Thread's hook.) The writers change with the Threads' list, so
+     they go as props to what shows them.
    - The acts are named for what they ask, not for who does it: open a
-     turn's changes, open a Visual, open another Thread, fork, edit,
-     retry, snooze, answer. The Thread Pane gives them now with
+     turn's changes, open a Visual, open another Thread, fork, rewind
+     (to edit a message), retry, snooze, sign in; answering a Question
+     joins them when the dock moves (step 4). The Thread Pane gives them now with
      `open(paneOf(…))`; when ADR 0087's channels land they become
      `pane.pick` and intents such as `show.diff@1`, and a phone's Thread
      screen answers them by pushing a screen or naming a wide screen
