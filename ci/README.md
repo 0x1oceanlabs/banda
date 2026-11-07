@@ -42,13 +42,13 @@ for the old Banda's CI and are reused as they are. `ci/devbox.sh` only runs
   Electron runs on. A job installs `rust-toolchain.toml`'s toolchain itself
   and pnpm switches itself to `package.json`'s pin, so a new pin needs no new
   image; Node's pin lives here.
-- `ci/compose.yaml`: runners `devbox-1` to `devbox-6`. Each keeps its
+- `ci/compose.yaml`: runners `devbox-1` to `devbox-12`. Each keeps its
   registration, checkout, toolchain, `target/`, cargo's registry, the pnpm
   store and Electron's download in its own volume (`/state`), so a run builds
   incrementally. `/tmp` is a 4 GB tmpfs: the tests' SQLite fsyncs stall on
   the shared disk.
 - `ci/target.sh`: links the checkout's `target/` into the volume and empties
-  it once it outgrows 25 GB (cargo never removes old artifacts).
+  it once it outgrows 15 GB (cargo never removes old artifacts).
 
 ## Start (once)
 

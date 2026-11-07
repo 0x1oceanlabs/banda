@@ -27,6 +27,12 @@ services:
   runner-4: { <<: *runner, command: devbox-4, volumes: [runner-4:/state] }
   runner-5: { <<: *runner, command: devbox-5, volumes: [runner-5:/state] }
   runner-6: { <<: *runner, command: devbox-6, volumes: [runner-6:/state] }
+  runner-7: { <<: *runner, command: devbox-7, volumes: [runner-7:/state] }
+  runner-8: { <<: *runner, command: devbox-8, volumes: [runner-8:/state] }
+  runner-9: { <<: *runner, command: devbox-9, volumes: [runner-9:/state] }
+  runner-10: { <<: *runner, command: devbox-10, volumes: [runner-10:/state] }
+  runner-11: { <<: *runner, command: devbox-11, volumes: [runner-11:/state] }
+  runner-12: { <<: *runner, command: devbox-12, volumes: [runner-12:/state] }
 
 volumes:
   runner-1:
@@ -35,3 +41,9 @@ volumes:
   runner-4:
   runner-5:
   runner-6:
+  runner-7:
+  runner-8:
+  runner-9:
+  runner-10:
+  runner-11:
+  runner-12:

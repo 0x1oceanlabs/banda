@@ -95,7 +95,9 @@ window() {
   # The window starts the engine and the fake agent from target/debug.
   cargo build --workspace --quiet
   packages
-  pnpm --filter @banda/desktop --silent e2e
+  # BANDA_E2E_SHARD (1/4, …) runs one part of the tests: CI splits them
+  # over runners, as one at a time they took 19 minutes.
+  pnpm --filter @banda/desktop --silent e2e ${BANDA_E2E_SHARD:+--shard="$BANDA_E2E_SHARD"}
 }
 
 for part in "${parts[@]}"; do "$part"; done
