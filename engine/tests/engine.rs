@@ -464,10 +464,15 @@ fn an_agent_reaches_banda_through_banda_mcp() {
     assert!(error && said.contains("do not fit"), "{said}");
     let (error, said) = mcp.call(8, "send", json!({ "thread": thread, "text": "hi" }));
     assert!(error && said.contains("your own Thread"), "{said}");
-    let (error, said) = mcp.call(11, "send", json!({ "harness": "fake", "text": "hi" }));
+    let new_thread = json!({ "harness": "fake", "text": "hi" });
+    let (error, said) = mcp.call(11, "send", new_thread.clone());
     assert!(!error, "{said}");
     let started = serde_json::from_str::<Value>(&said).unwrap()["thread"].clone();
     assert_ne!(started, thread);
+    // A request sent again is one command: it gets the first answer and
+    // starts no other Thread (ADR 0082, decision 4).
+    let (error, again) = mcp.call(11, "send", new_thread.clone());
+    assert!(!error && again == said, "{again}");
 
     // It puts its Thread on the screen, in its Project, without the focus.
     let shown = json!({ "kind": "agents.thread", "args": { "thread": thread } });
@@ -530,6 +535,14 @@ fn an_agent_reaches_banda_through_banda_mcp() {
     assert!(said.contains("sidebar.toml"), "{said}");
     let unknown = mcp.ask(10, "resources/list", json!({}));
     assert_eq!(unknown["error"]["code"], -32601);
+    // Another session numbers its requests from one again: its request 11
+    // is a command of its own.
+    let mut next = Mcp::start(server);
+    let (error, said) = next.call(11, "send", new_thread);
+    assert!(!error, "{said}");
+    let other = serde_json::from_str::<Value>(&said).unwrap()["thread"].clone();
+    assert_ne!(other, started);
+    next.end();
     mcp.end();
 
     drop(stdin);
