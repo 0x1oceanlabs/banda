@@ -1153,6 +1153,7 @@ banda/
   tools/fake-agent/   a scripted ACP agent for tests and window checks; it replays recordings too
   scripts/check.sh    every check a change must pass
   scripts/try.sh      builds a tree and opens a window of its own from it, to click through
+  scripts/local.sh    starts a checkout's window in a systemd unit of its own (ADR 0086)
   docs/               adr/ · architecture.md · research/
   GLOSSARY.md
 ```

@@ -68,6 +68,17 @@ opens there to be clicked through, and is driven the same way.
 `scripts/drive.mjs --help` has the rest: `--tab` for the browser's tabs,
 `drag`, `fill`, `wait`, `eval`, `size`.
 
+A checkout's window starts only through `scripts/local.sh`: `try.sh`,
+the end-to-end tests and `pnpm --filter @banda/desktop start` go through
+it. On Linux it runs the window in a systemd user unit of its own (the
+trial's is `banda-trial-<slug>.scope`), so your Turn ending, or your
+unit stopping, neither crashes it nor leaves part of it in yours
+([ADR 0086](docs/adr/0086-the-engine-is-the-machine-s-and-outlives-the-window.md),
+decision 7). Never start one with a bare `electron .`, and never stop
+one by killing its process group or its unit while it runs: `try.sh
+--stop` closes it as the Person does, and SIGTERM to its main process
+does too.
+
 The trial's own `banda` is its `bin/banda`, with `BANDA_STATE` set to its
 `state`. In an Agent's shell, `banda` acts under the Agent's pass for the
 engine the Agent runs in, and refuses a `BANDA_STATE` that names another:
