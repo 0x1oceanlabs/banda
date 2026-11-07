@@ -80,13 +80,14 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   `instructions` are the skill's brief (`modules/skill/BRIEF.md`), under
   the 4,096 characters Claude Code keeps of them; the core and its topics
   come through `skill` (ADR 0037, decision 7). Each tool call is a command
-  whose ID is derived from the session, new each time `banda mcp` starts,
-  and the request's ID (`CommandId::derive`): a request sent again, by its
-  client or by `banda mcp` as it connects again once to an engine that
-  broke off, gets the first answer and runs nothing again (ADR 0082,
-  decision 4). A refused or malformed call is a
-  tool result marked `isError`, with the refusal and that nothing was
-  done; only an engine that does not answer is a JSON-RPC error.
+  whose ID is derived from the session, new each time `banda mcp` starts
+  or its client says `initialize`, and the request's ID
+  (`CommandId::derive`): a request sent again, by its client or by `banda
+  mcp` as it connects again once to an engine that broke off, gets the
+  first answer and runs nothing again (ADR 0082, decision 4). A refused
+  or malformed call is a tool result marked `isError`, with the refusal
+  and that nothing was done; only an engine that does not answer is a
+  JSON-RPC error.
 - **An Agent's `banda` acts under its pass.** The shells an Agent runs
   commands in get `BANDA_TOKEN` and `BANDA_ENGINE` too. Each Harness
   process carries a pass its Agents share, of an Agent no one Thread
@@ -258,22 +259,26 @@ command (with its ID)
   that asks to retry waits longer after each try, for as long as its kind's
   `Retry` says (`Module::retry`): five tries by default, for work on the
   host; for work over the network, until a deadline after it was queued,
-  and at least five times. Then the effect fails and its module says so.
+  then five tries more, so a host that slept through it still tries as it
+  wakes. Runs cut short count up to five whatever the deadline. Then the
+  effect fails and its module says so.
 - A worker outside the engine runs the effects queued for one
   (`Tx::enqueue_for_worker`), under a lease (ADR 0082, A6): it takes one
   with `ModuleProject::lease`, keeps it with `renew` and settles it with
   `finish`. A lease runs on the engine's monotonic clock, never the wall
   clock. One that runs out is cut short at once, as a restart cuts the
-  engine's own runs, and a restart gives each lease a fresh term instead.
-  Each claim of an effect has a fencing token, checked as the worker renews,
-  as its module writes for it (`Tx::holds`) and as it settles: a worker
-  whose lease ran out writes nothing. So an effect a worker runs runs at
-  least once, and its end is written once. The engine's own effects stay
+  engine's own runs. A restart gives a lease a fresh term once: one its
+  worker did not renew through a whole run of the engine is cut short as
+  the next starts. Each time an effect is taken, its claim gets a new
+  token, checked as the worker renews, as its module writes for it
+  (`Tx::holds`) and as it settles: once the effect was taken again or
+  settled, its late worker writes nothing. So an effect a worker runs may
+  run twice, and its end is written once. The engine's own effects stay
   owned by its boot, which needs no clock.
-- A receipt, and the row of an effect that settled, are kept 30 days
-  (`KEPT`), longer than the seven days a client keeps a command to send
-  again; then the Project's loop lets them go. A command sent again within
-  them gets its first answer; past them, it runs as a new one.
+- A receipt, and the row of an effect that settled, are kept 30 days,
+  longer than the seven days a client keeps a command to send again; then
+  the Project's loop lets them go. A command sent again within them gets
+  its first answer; past them, it runs as a new one.
 - Outbox rows are the kernel's bookkeeping, not records of the work. What a
   Person sees of an effect is the events its module writes.
 - A window loads a snapshot at sequence N, then streams the events after N.

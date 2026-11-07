@@ -49,9 +49,7 @@ pub use ids::{AgentId, CommandId, EventId, Participant, PersonId, ProjectId};
 pub use kernel::{Kernel, KernelBuilder, ProjectSummary, decode};
 pub use methods::{Method, Nothing, Picture, Tool};
 pub use module::{Call, Module, Scope, Stream, Wall};
-pub use outbox::{
-    ATTEMPTS, Claim, Effect, KEPT, LONGEST_LEASE, Lease, OnRestart, Outcome, Retry, Settled,
-};
+pub use outbox::{Claim, Effect, LONGEST_LEASE, Lease, OnRestart, Outcome, Retry, Settled};
 pub use passes::secret;
 pub use project::{Committed, Heard, ModuleProject, Project, Tally};
 pub use reach::Reach;

@@ -345,6 +345,12 @@ the log, so a resend gets the same answer and runs nothing twice (ADR
 Work outside the store (a push, a post, starting a turn), written with the
 change and run after it commits (ADR 0002, ADR 0082).
 
+**Lease**:
+How long a worker holds an effect of the outbox it runs. The worker
+renews it; one that runs out is cut short, and the effect is taken again
+under a new claim, whose token refuses the worker that comes late (ADR
+0082).
+
 **Projection**:
 A table worked out from published facts, such as the Inbox. It can be
 rebuilt, and it writes nothing back (ADR 0082).

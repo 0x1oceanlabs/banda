@@ -17,12 +17,15 @@
 //! - A worker outside the engine runs the effects queued for one, under a
 //!   lease it renews. A lease runs on the engine's monotonic clock, never
 //!   the wall clock, and one that runs out is cut short as a restart cuts
-//!   the engine's runs, at any time, not only as the engine starts. Each
-//!   claim of an effect has its fencing token, checked as the worker
-//!   renews and settles, and as its module writes for it: a worker whose
-//!   lease ran out writes nothing, however late it comes. So an effect a
-//!   worker runs may run twice, and its end is written once: what it does
-//!   outside Banda carries an idempotency key, or looks before it writes.
+//!   the engine's runs, at any time, not only as the engine starts. A
+//!   restart gives a lease a fresh term once: one its worker did not renew
+//!   through a whole run of the engine is cut short as the next starts.
+//!   Each claim of an effect has its token, checked as the worker renews
+//!   and settles, and as its module writes for it: once the effect was
+//!   taken again or settled, its late worker writes nothing. So an effect
+//!   a worker runs may run twice, and its end is written once: what it
+//!   does outside Banda carries an idempotency key, or looks before it
+//!   writes.
 //!
 //! How a run ended is written in one transaction with what its module
 //! writes of it, and that transaction is tried again until it commits: a
@@ -31,7 +34,7 @@
 //!
 //! An effect that asks to retry waits longer after each try, for as long
 //! as its kind's [`Retry`] says. The rows of effects that settled, and the
-//! receipts, go once they are older than [`KEPT`].
+//! receipts, go once the kernel keeps them no longer (`Store::collect`).
 
 use crate::events::json_column;
 use crate::module::Module;
@@ -40,12 +43,11 @@ use crate::store::KERNEL;
 use crate::{Error, Refusal, Tx, now_ms};
 use futures::FutureExt;
 use rusqlite::{Connection, OptionalExtension, params};
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::panic::AssertUnwindSafe;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-use tokio::time::Instant;
+use tokio::time::{Instant, MissedTickBehavior};
 
 /// One side effect, as its module queued it.
 #[derive(Clone, Debug)]
@@ -58,9 +60,9 @@ pub struct Effect {
     pub attempts: u32,
 }
 
-/// One claim of an effect: its row, and its fencing token, which counts the
-/// times the effect was taken. Only its latest claim holds an effect.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// One claim of an effect: its row, and its token, which counts the times
+/// the effect was taken. Only its latest claim holds an effect.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Claim {
     pub effect: i64,
     pub token: i64,
@@ -91,8 +93,8 @@ pub enum Outcome {
 impl Outcome {
     /// Done, with `write` in the transaction that records it. The kernel
     /// tries that transaction again until it commits, so `write` may run
-    /// more than once, and only its last run stays. After [`ATTEMPTS`]
-    /// tries the effect is settled as failed instead (see [`Settled`]).
+    /// more than once, and only its last run stays. After five tries the
+    /// effect is settled as failed instead (see [`Settled`]).
     pub fn done_writing(
         write: impl Fn(&mut Tx<'_>) -> Result<(), Error> + Send + Sync + 'static,
     ) -> Self {
@@ -132,12 +134,12 @@ pub enum Settled {
 /// Tries before an effect that keeps asking to retry, that restarts keep
 /// cutting short, or whose module's writing keeps failing, is failed, unless
 /// its kind's [`Retry`] says otherwise.
-pub const ATTEMPTS: u32 = 5;
+pub(crate) const ATTEMPTS: u32 = 5;
 
 /// How an effect that asks to retry tries again: its module's
 /// [`Module::retry`](crate::Module::retry) for its kind (ADR 0082, A6). A
-/// run cut short, by a restart or a lease that ran out, counts as a try.
-/// The wait doubles after each try, up to its longest.
+/// run cut short, by a restart or a lease that ran out, counts as a try,
+/// and waits as one. The wait doubles after each try, up to its longest.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Retry {
     tries: u32,
@@ -148,8 +150,8 @@ pub struct Retry {
 
 impl Retry {
     /// For work on this host, such as a Harness's: `tries` tries, the wait
-    /// doubling from half a second up to thirty seconds. [`ATTEMPTS`] is
-    /// the default.
+    /// doubling from half a second up to thirty seconds. Five is the
+    /// default.
     pub const fn tries(tries: u32) -> Retry {
         Retry {
             tries,
@@ -161,9 +163,11 @@ impl Retry {
 
     /// For work over the network, which a dropped Wi-Fi or a host waking
     /// from sleep fails for a while: tries until `within` after the effect
-    /// was queued, and at least [`ATTEMPTS`] times, so a host that slept
-    /// through it still tries as it wakes; the wait doubling from half a
-    /// second up to five minutes.
+    /// was queued, then five tries more, so a host that slept through its
+    /// deadline still tries as it wakes; the wait doubling from half a
+    /// second up to five minutes. Its runs cut short count up to five
+    /// whatever the deadline: an effect that takes the engine down with it,
+    /// or its worker, does not replay until then.
     pub const fn within(within: Duration) -> Retry {
         Retry {
             tries: ATTEMPTS,
@@ -182,14 +186,24 @@ impl Retry {
         }
     }
 
-    /// Whether an effect queued at `queued` gives up at `now`, its `tries`-th
-    /// try having asked to retry or been cut short. A deadline is read on
-    /// the wall clock: it bounds how long to try, and nothing that runs
-    /// once rests on it.
-    fn gives_up(&self, tries: u32, queued: i64, now: i64) -> bool {
+    /// The try from which an effect over the network counts its tries: the
+    /// first that ended past its deadline. `late` is that try, if an earlier
+    /// one ended past it, and `attempts` are the tries before the one that
+    /// ends at `now`. None for work on this host, which counts every try,
+    /// and before the deadline. A deadline is read on the wall clock: it
+    /// bounds how long to try, and nothing that runs once rests on it.
+    fn late_from(&self, late: Option<u32>, attempts: u32, queued: i64, now: i64) -> Option<u32> {
+        let within = self.within?;
+        late.or_else(|| (now >= queued.saturating_add(ms(within))).then_some(attempts))
+    }
+
+    /// Whether an effect gives up as its `tries`-th try asked to retry or
+    /// was cut short, `late` being where it counts its tries from, as
+    /// [`Retry::late_from`] says.
+    fn gives_up(&self, tries: u32, late: Option<u32>) -> bool {
         match self.within {
             None => tries >= self.tries,
-            Some(within) => tries >= self.tries && now >= queued.saturating_add(ms(within)),
+            Some(_) => late.is_some_and(|late| tries.saturating_sub(late) >= self.tries),
         }
     }
 
@@ -206,20 +220,15 @@ impl Default for Retry {
     }
 }
 
-/// How long the kernel keeps a receipt, and an effect's row once it
-/// settled. A command sent again within it gets its first answer and runs
-/// nothing again: a client keeps a command to send again seven days at most
-/// (ADR 0082, decision 4), and `banda mcp` only while its session lasts.
-pub const KEPT: Duration = Duration::from_secs(30 * 24 * 3600);
-
-/// How often a Project's loop lets go of what [`KEPT`] keeps no longer.
+/// How often a Project's loop lets go of what the kernel keeps no longer.
 const COLLECT_EVERY: Duration = Duration::from_secs(3600);
 
 /// The longest lease a worker gets at once: an effect whose worker stopped
 /// renewing it is taken again within it.
 pub const LONGEST_LEASE: Duration = Duration::from_secs(600);
 
-/// How long the loop waits when it could not read the outbox.
+/// How long the loop waits when it could not read the outbox, or cut a
+/// lease short.
 const READ_AGAIN: Duration = Duration::from_secs(1);
 
 /// How long it sleeps with nothing due.
@@ -248,8 +257,8 @@ fn record_wait(tries: u32) -> Duration {
 /// its leases run on. That clock is monotonic: setting the wall clock moves
 /// no lease, and on Linux and macOS it stands still while the host sleeps,
 /// as a worker on the host does, so a laptop that wakes finds its leases as
-/// it left them. That an end is written once never rests on it: the fencing
-/// token sees to that.
+/// it left them. That an end is written once never rests on it: the
+/// claim's token sees to that.
 #[derive(Clone, Debug)]
 pub(crate) struct Boot {
     id: String,
@@ -275,16 +284,25 @@ impl Boot {
 }
 
 /// An effect as the kernel holds it while it runs: its module, its claim,
-/// and when it was queued.
+/// and how it counts its tries.
 struct Claimed {
     module: String,
     effect: Effect,
     token: i64,
+    /// When it was queued, on the wall clock.
     queued: i64,
+    /// Where it counts its tries from, past its deadline
+    /// ([`Retry::late_from`]).
+    late_from: Option<u32>,
+    /// How many of its runs were cut short.
+    cuts: u32,
+    /// The worker it was leased to last, for one a worker runs.
+    worker: Option<String>,
 }
 
 /// The columns [`read_claimed`] reads, of the outbox as `o`.
-const CLAIMED: &str = "o.module, o.id, o.kind, o.key, o.payload, o.attempts, o.claim, o.created_at";
+const CLAIMED: &str = "o.module, o.id, o.kind, o.key, o.payload, o.attempts, o.claim, o.created_at,
+     o.late_from, o.cuts, o.worker";
 
 /// A pending effect that may run now: the first of its key, with nothing of
 /// its key running, whoever runs it.
@@ -298,26 +316,34 @@ fn find<'m>(modules: &'m [Arc<dyn Module>], name: &str) -> Option<&'m Arc<dyn Mo
 }
 
 /// What cut a run short.
+#[derive(Clone, Copy)]
 enum Cut {
-    /// The engine started again: the run died with the boot before.
+    /// The engine started again: the run died with the boot before, or its
+    /// worker renewed its lease at no time on that boot, which gave it a
+    /// fresh term.
     Restart,
-    /// Its worker's lease, given by `boot`, ran out by `at` on its clock.
-    Lease { boot: String, at: i64 },
+    /// Its worker's lease ran out by `at`, on this boot's clock.
+    Lease { at: i64 },
 }
 
-/// Settles the effects an earlier boot ran in the engine, and gives the
-/// leases an earlier boot gave a fresh term on this one's clock: a worker
-/// that still runs renews or settles under its claim, and one that went
-/// lets its term run out. Runs once, while the Project opens, before its
-/// loop starts.
-pub(crate) async fn recover(project: &Arc<Project>, boot: &Boot) -> Result<(), Error> {
+/// Settles what a restart cut short: the effects an earlier boot ran in
+/// the engine, and the leases an earlier boot gave a fresh term that their
+/// workers did not renew. Every other lease gets a fresh term on this
+/// boot's clock, once: a worker that still runs renews or settles under
+/// its claim, and one that went lets the term run out, or the next restart
+/// cut it short. Runs once, while the Project opens, before its loop starts
+/// and before any worker can reach it.
+pub(crate) async fn recover(project: &Arc<Project>) -> Result<(), Error> {
+    let boot = project.boot();
     let (id, now) = (boot.id.clone(), boot.now());
     project
         .store()
         .write(KERNEL, move |tx| {
             tx.sql().execute(
-                "UPDATE kernel_outbox SET boot = ?1, lease_until = ?2 + COALESCE(lease_ms, 0)
-                 WHERE state = 'running' AND runner = 'worker' AND (boot IS NULL OR boot != ?1)",
+                "UPDATE kernel_outbox SET boot = ?1, lease_until = ?2 + COALESCE(lease_ms, 0),
+                   carried = 1
+                 WHERE state = 'running' AND runner = 'worker' AND carried = 0
+                   AND boot IS NOT ?1",
                 params![id, now],
             )?;
             Ok(())
@@ -338,115 +364,122 @@ pub(crate) async fn recover(project: &Arc<Project>, boot: &Boot) -> Result<(), E
 /// again, which counts as a try, or is abandoned. A lease renewed or
 /// settled meanwhile is left as it is.
 async fn cut_short(project: &Arc<Project>, claimed: Claimed, cut: Cut) -> Result<(), Error> {
+    let (id, worker) = (claimed.effect.id, claimed.worker.clone());
     let Some(module) = find(project.modules(), &claimed.module).cloned() else {
-        tracing::warn!(module = %claimed.module, id = claimed.effect.id, "an effect of a module this engine lacks stays as it is");
+        tracing::warn!(module = %claimed.module, id, "an effect of a module this engine lacks stays as it is");
         // It no longer counts among the leases to wait for.
         return project
             .store()
             .write(KERNEL, move |tx| {
                 tx.sql().execute(
                     "UPDATE kernel_outbox SET lease_until = NULL WHERE id = ?1",
-                    params![claimed.effect.id],
+                    params![id],
                 )?;
                 Ok(())
             })
             .await;
     };
-    let kind = &claimed.effect.kind;
-    let (replay, retry) = (
-        module.on_restart(kind) == OnRestart::Replay,
-        module.retry(kind),
-    );
     let name = module.name();
-    project
+    let was_cut = project
         .store()
         .write(name, move |tx| {
-            if let Cut::Lease { boot, at } = &cut {
+            if let Cut::Lease { at } = cut {
                 let ran_out: bool = tx.sql().query_row(
                     "SELECT EXISTS (SELECT 1 FROM kernel_outbox WHERE id = ?1 AND claim = ?2
-                       AND state = 'running' AND boot = ?3 AND lease_until <= ?4)",
-                    params![claimed.effect.id, claimed.token, boot, at],
+                       AND state = 'running' AND lease_until <= ?3)",
+                    params![id, claimed.token, at],
                     |row| row.get(0),
                 )?;
                 if !ran_out {
-                    return Ok(());
+                    return Ok(false);
                 }
             }
-            if !replay {
-                return settle(tx, &*module, &claimed, Settled::Abandoned).map(drop);
+            let kind = &claimed.effect.kind;
+            if module.on_restart(kind) == OnRestart::Abandon {
+                return settle(tx, &*module, &claimed, Settled::Abandoned);
             }
+            let (retry, now, attempts) = (module.retry(kind), tx.now(), claimed.effect.attempts);
+            let late = retry.late_from(claimed.late_from, attempts, claimed.queued, now);
             // An effect that takes the engine down with it, or its worker,
-            // must not replay forever.
-            if retry.gives_up(claimed.effect.attempts + 1, claimed.queued, tx.now()) {
-                let reason = match cut {
-                    Cut::Restart => "Restarts cut it short too many times.",
-                    Cut::Lease { .. } => "Its worker stopped renewing its lease too many times.",
+            // must not replay forever, nor until a deadline far off.
+            if retry.gives_up(attempts + 1, late) || claimed.cuts + 1 >= retry.tries {
+                let reason = match claimed.worker {
+                    None => "Restarts cut it short too many times.",
+                    Some(_) => "Its worker stopped renewing its lease too many times.",
                 };
-                return settle(tx, &*module, &claimed, Settled::Failed(reason.to_owned()))
-                    .map(drop);
+                return settle(tx, &*module, &claimed, Settled::Failed(reason.to_owned()));
             }
             tx.sql().execute(
                 "UPDATE kernel_outbox SET state = 'pending', boot = NULL, lease_until = NULL,
-                   attempts = attempts + 1
-                 WHERE id = ?1 AND claim = ?2 AND state = 'running'",
-                params![claimed.effect.id, claimed.token],
+                   attempts = attempts + 1, cuts = cuts + 1, late_from = ?1, next_at = ?2
+                 WHERE id = ?3 AND claim = ?4 AND state = 'running'",
+                params![late, now + retry.wait_ms(attempts), id, claimed.token],
             )?;
-            Ok(())
+            Ok(true)
         })
-        .await
+        .await?;
+    if let (true, Some(worker)) = (was_cut, worker) {
+        tracing::warn!(id, %worker, "a worker renewed its lease no longer: its run was cut short");
+    }
+    Ok(())
 }
 
-/// The Project's loop: lets go of what is kept no longer, cuts short the
-/// leases that ran out, starts what the engine runs once it is ready,
-/// records how each run ended, and sleeps until a commit queues more, a
-/// retry is due or a lease runs out. It ends when the Project is closed.
-pub(crate) async fn work(project: Weak<Project>, boot: Boot) {
-    let Some(signal) = project.upgrade().map(|s| s.store().outbox_signal()) else {
+/// The Project's loop: cuts short the leases that ran out, starts what the
+/// engine runs once it is ready, records how each run ended, and sleeps
+/// until a commit queues more, a retry is due or a lease runs out. As it
+/// starts, and then every hour, it lets go of what the kernel keeps no
+/// longer. It ends when the Project is closed.
+pub(crate) async fn work(project: Weak<Project>) {
+    let Some(signal) = project.upgrade().map(|open| open.store().outbox_signal()) else {
         return;
     };
-    let mut collected: Option<Instant> = None;
+    // Its first tick is at once.
+    let mut collect = tokio::time::interval(COLLECT_EVERY);
+    collect.set_missed_tick_behavior(MissedTickBehavior::Delay);
     loop {
         let Some(open) = project.upgrade() else {
             return;
         };
-        if collected.is_none_or(|at| at.elapsed() >= COLLECT_EVERY) {
-            collected = Some(Instant::now());
-            let before = now_ms() - ms(KEPT);
-            match open.store().collect(before).await {
-                Ok(0) => {}
-                Ok(gone) => tracing::info!(gone, "the outbox let go of old rows"),
-                Err(error) => tracing::error!(%error, "the outbox could not let go of old rows"),
-            }
-        }
-        let wait = start_ready(&open, &boot).await.unwrap_or_else(|error| {
+        let wait = start_ready(&open).await.unwrap_or_else(|error| {
             tracing::error!(%error, "the outbox could not claim its effects");
             READ_AGAIN
-        });
-        let next_collect = collected.map_or(Duration::ZERO, |at| {
-            COLLECT_EVERY.saturating_sub(at.elapsed())
         });
         drop(open);
         tokio::select! {
             () = signal.notified() => {}
-            () = tokio::time::sleep(wait.min(next_collect)) => {}
+            () = tokio::time::sleep(wait) => {}
+            _ = collect.tick() => {
+                let Some(open) = project.upgrade() else {
+                    return;
+                };
+                match open.store().collect().await {
+                    Ok(0) => {}
+                    Ok(gone) => tracing::info!(gone, "the outbox let go of old rows"),
+                    Err(error) => tracing::error!(%error, "the outbox could not let go of old rows"),
+                }
+            }
         }
     }
 }
 
 /// Cuts short the leases that ran out, starts what is ready, and answers
-/// how long until the next effect is due or the next lease runs out.
-async fn start_ready(project: &Arc<Project>, boot: &Boot) -> Result<Duration, Error> {
+/// how long until the next effect is due or the next lease runs out. A
+/// lease that could not be cut short holds up only its own key, and is
+/// tried again soon.
+async fn start_ready(project: &Arc<Project>) -> Result<Duration, Error> {
+    let boot = project.boot();
     let (id, now) = (boot.id.clone(), boot.now());
     let ran_out = project
         .store()
         .read(move |sql| leases_ran_out(sql, &id, now))
         .await?;
+    let mut wait = IDLE;
     for claimed in ran_out {
-        let cut = Cut::Lease {
-            boot: boot.id.clone(),
-            at: now,
-        };
-        cut_short(project, claimed, cut).await?;
+        let id = claimed.effect.id;
+        if let Err(error) = cut_short(project, claimed, Cut::Lease { at: now }).await {
+            tracing::error!(%error, id, "the outbox could not cut short a lease that ran out");
+            wait = READ_AGAIN;
+        }
     }
     let id = boot.id.clone();
     let claimed = project
@@ -457,9 +490,11 @@ async fn start_ready(project: &Arc<Project>, boot: &Boot) -> Result<Duration, Er
         start(project, claimed);
     }
     let id = boot.id.clone();
-    let (due, runs_out) = project.store().read(move |sql| next_due(sql, &id)).await?;
+    let (due, runs_out) = project
+        .store()
+        .read(move |sql| next_due(sql, &id, now))
+        .await?;
     let until = |at: i64, now: i64| Duration::from_millis((at - now).max(0).unsigned_abs());
-    let mut wait = IDLE;
     if let Some(at) = due {
         wait = wait.min(until(at, now_ms()));
     }
@@ -517,17 +552,13 @@ async fn record(
             let outcome = outcome.clone();
             open.store()
                 .write(module.name(), move |tx| {
-                    let retry = module.retry(&claimed.effect.kind);
-                    finish(tx, &*module, &claimed, &outcome, retry)
+                    finish(tx, &*module, &claimed, &outcome)
                 })
                 .await
         };
         match written {
-            Ok(held) => {
-                if !held {
-                    let id = claimed.effect.id;
-                    tracing::warn!(id, "an effect the engine ran was taken from it as it ran");
-                }
+            // The boot that claimed it holds it until then.
+            Ok(_) => {
                 open.store().outbox_signal().notify_one();
                 return;
             }
@@ -544,50 +575,42 @@ async fn record(
 }
 
 /// Takes for `worker` the first ready effect of `module`'s `kinds` queued
-/// for a worker, leased for `term` on `boot`'s clock.
+/// for a worker, leased for `term` on this boot's clock.
 pub(crate) async fn lease(
     project: &Arc<Project>,
-    boot: &Boot,
     module: &'static str,
     worker: &str,
     kinds: &[&str],
     term: Duration,
 ) -> Result<Option<Lease>, Error> {
+    let boot = project.boot();
     let (id, now, term) = (boot.id.clone(), boot.now(), ms(term.min(LONGEST_LEASE)));
-    let worker = worker.to_owned();
-    let kinds: Vec<String> = kinds.iter().map(|&kind| kind.to_owned()).collect();
+    let (worker, kinds) = (worker.to_owned(), serde_json::to_string(kinds)?);
     let taken = project
         .store()
         .write(KERNEL, move |tx| {
-            let ready = {
-                let mut statement = tx.sql().prepare(&format!(
-                    "SELECT {CLAIMED} FROM kernel_outbox o
-                     WHERE o.module = ?1 AND o.state = 'pending' AND o.runner = 'worker'
-                       AND o.next_at <= ?2 AND {FIRST_OF_ITS_KEY}
-                     ORDER BY o.id"
-                ))?;
-                let rows = statement.query_map(params![module, tx.now()], read_claimed)?;
-                rows.collect::<rusqlite::Result<Vec<_>>>()?
-            };
-            let Some(mut claimed) = ready
-                .into_iter()
-                .find(|claimed| kinds.contains(&claimed.effect.kind))
-            else {
+            let ready = tx
+                .sql()
+                .query_row(
+                    &format!(
+                        "SELECT {CLAIMED} FROM kernel_outbox o
+                         WHERE o.module = ?1 AND o.state = 'pending' AND o.runner = 'worker'
+                           AND o.kind IN (SELECT value FROM json_each(?2)) AND o.next_at <= ?3
+                           AND {FIRST_OF_ITS_KEY}
+                         ORDER BY o.id LIMIT 1"
+                    ),
+                    params![module, kinds, tx.now()],
+                    read_claimed,
+                )
+                .optional()?;
+            let Some(mut claimed) = ready else {
                 return Ok(None);
             };
-            claimed.token += 1;
+            take(tx.sql(), &mut claimed, &id)?;
             tx.sql().execute(
-                "UPDATE kernel_outbox SET state = 'running', boot = ?1, claim = ?2, worker = ?3,
-                   lease_ms = ?4, lease_until = ?5
-                 WHERE id = ?6",
-                params![
-                    id,
-                    claimed.token,
-                    worker,
-                    term,
-                    now + term,
-                    claimed.effect.id
-                ],
+                "UPDATE kernel_outbox SET worker = ?1, lease_ms = ?2, lease_until = ?3, carried = 0
+                 WHERE id = ?4",
+                params![worker, term, now + term, claimed.effect.id],
             )?;
             let claim = claimed.claim();
             Ok(Some(Lease {
@@ -603,34 +626,35 @@ pub(crate) async fn lease(
     Ok(taken)
 }
 
-/// Renews `claim`'s lease for `term` from now, on `boot`'s clock.
+/// Renews `claim`'s lease for `term` from now, on this boot's clock.
 pub(crate) async fn renew(
     project: &Arc<Project>,
-    boot: &Boot,
     module: &'static str,
     claim: Claim,
     term: Duration,
 ) -> Result<(), Refusal> {
-    let (id, now, term) = (boot.id.clone(), boot.now(), ms(term.min(LONGEST_LEASE)));
+    let (now, term) = (project.boot().now(), ms(term.min(LONGEST_LEASE)));
     let renewed = project
         .store()
         .write(KERNEL, move |tx| {
             Ok(tx.sql().execute(
-                "UPDATE kernel_outbox SET boot = ?1, lease_ms = ?2, lease_until = ?3
-                 WHERE id = ?4 AND module = ?5 AND claim = ?6 AND state = 'running'
+                "UPDATE kernel_outbox SET lease_ms = ?1, lease_until = ?2, carried = 0
+                 WHERE id = ?3 AND module = ?4 AND claim = ?5 AND state = 'running'
                    AND runner = 'worker'",
-                params![id, term, now + term, claim.effect, module, claim.token],
+                params![term, now + term, claim.effect, module, claim.token],
             )?)
         })
         .await?;
     if renewed == 0 {
         return Err(lost_lease());
     }
+    // A shorter term runs out before its loop would wake.
+    project.store().outbox_signal().notify_one();
     Ok(())
 }
 
-/// Settles a run a worker held under `claim`, as `outcome` says.
-pub(crate) async fn settle_leased(
+/// Records how a run a worker held under `claim` ended, as `outcome` says.
+pub(crate) async fn finish_leased(
     project: &Arc<Project>,
     module: &'static str,
     claim: Claim,
@@ -657,8 +681,7 @@ pub(crate) async fn settle_leased(
             let Some(claimed) = claimed else {
                 return Ok(false);
             };
-            let retry = of.retry(&claimed.effect.kind);
-            finish(tx, &*of, &claimed, &outcome, retry)
+            finish(tx, &*of, &claimed, &outcome)
         })
         .await?;
     if !held {
@@ -681,16 +704,17 @@ pub(crate) fn holds(sql: &Connection, module: &str, claim: Claim) -> Result<bool
 /// What a worker whose claim no longer holds its effect is told.
 pub(crate) fn lost_lease() -> Refusal {
     Refusal::conflict(
-        "This effect's lease ran out and it was taken again, or it was settled: \
+        "This effect was taken again, as its lease ran out, or it was settled: \
          nothing was written.",
     )
 }
 
-/// What the engine ran under an earlier boot.
+/// What runs under an earlier boot: the engine's runs, and the leases an
+/// earlier boot gave a fresh term that their workers did not renew.
 fn running_before(sql: &Connection, boot: &str) -> Result<Vec<Claimed>, Error> {
     let mut statement = sql.prepare(&format!(
         "SELECT {CLAIMED} FROM kernel_outbox o
-         WHERE o.state = 'running' AND o.runner = 'engine' AND (o.boot IS NULL OR o.boot != ?1)
+         WHERE o.state = 'running' AND o.boot IS NOT ?1
          ORDER BY o.id"
     ))?;
     let rows = statement.query_map(params![boot], read_claimed)?;
@@ -724,26 +748,34 @@ fn claim(tx: &mut Tx<'_>, boot: &str) -> Result<Vec<Claimed>, Error> {
         rows.collect::<rusqlite::Result<Vec<_>>>()?
     };
     for claimed in &mut ready {
-        claimed.token += 1;
-        tx.sql().execute(
-            "UPDATE kernel_outbox SET state = 'running', boot = ?1, claim = ?2, worker = NULL
-             WHERE id = ?3",
-            params![boot, claimed.token, claimed.effect.id],
-        )?;
+        take(tx.sql(), claimed, boot)?;
     }
     Ok(ready)
 }
 
-/// Records how a run ended, if its claim still holds it: false, writing
-/// nothing, once the effect was taken again or settled.
+/// Takes a pending effect for `boot`, under a claim whose token counts one
+/// take more.
+fn take(sql: &Connection, claimed: &mut Claimed, boot: &str) -> Result<(), Error> {
+    claimed.token += 1;
+    sql.execute(
+        "UPDATE kernel_outbox SET state = 'running', boot = ?1, claim = ?2 WHERE id = ?3",
+        params![boot, claimed.token, claimed.effect.id],
+    )?;
+    Ok(())
+}
+
+/// Records how a run ended, as its kind's [`Retry`] says, if its claim
+/// still holds it: false, writing nothing, once the effect was taken again
+/// or settled.
 fn finish(
     tx: &mut Tx<'_>,
     module: &dyn Module,
     claimed: &Claimed,
     outcome: &Outcome,
-    retry: Retry,
 ) -> Result<bool, Error> {
     let effect = &claimed.effect;
+    let (retry, now, attempts) = (module.retry(&effect.kind), tx.now(), effect.attempts);
+    let late = retry.late_from(claimed.late_from, attempts, claimed.queued, now);
     match outcome {
         Outcome::Done | Outcome::DoneWriting(_) => {
             // Its module writes while the claim holds, as a worker's
@@ -758,21 +790,22 @@ fn finish(
             tx.sql().execute(
                 "UPDATE kernel_outbox SET state = 'done', settled_at = ?1, lease_until = NULL
                  WHERE id = ?2",
-                params![tx.now(), effect.id],
+                params![now, effect.id],
             )?;
             Ok(true)
         }
-        Outcome::Retry(reason)
-            if !retry.gives_up(effect.attempts + 1, claimed.queued, tx.now()) =>
-        {
-            let next = tx.now() + retry.wait_ms(effect.attempts);
-            Ok(tx.sql().execute(
-                "UPDATE kernel_outbox SET state = 'pending', boot = NULL, lease_until = NULL,
-                   attempts = attempts + 1, next_at = ?1, error = ?2
-                 WHERE id = ?3 AND claim = ?4 AND state = 'running'",
-                params![next, reason, effect.id, claimed.token],
-            )? == 1)
-        }
+        Outcome::Retry(reason) if !retry.gives_up(attempts + 1, late) => Ok(tx.sql().execute(
+            "UPDATE kernel_outbox SET state = 'pending', boot = NULL, lease_until = NULL,
+               attempts = attempts + 1, late_from = ?1, next_at = ?2, error = ?3
+             WHERE id = ?4 AND claim = ?5 AND state = 'running'",
+            params![
+                late,
+                now + retry.wait_ms(attempts),
+                reason,
+                effect.id,
+                claimed.token
+            ],
+        )? == 1),
         Outcome::Retry(reason) | Outcome::Fail(reason) => {
             settle(tx, module, claimed, Settled::Failed(reason.clone()))
         }
@@ -805,10 +838,11 @@ fn settle(
     Ok(true)
 }
 
-/// When the first effect the engine runs that waits for no other is due,
-/// on the wall clock, and when the first lease `boot` gave runs out, on
-/// its own.
-fn next_due(sql: &Connection, boot: &str) -> Result<(Option<i64>, Option<i64>), Error> {
+/// When the first effect the engine runs that may start is due, on the
+/// wall clock, and when the first lease `boot` gave that had not run out by
+/// `now` runs out, on its own. One that waits behind a run of its key is
+/// not due: the loop wakes as that run ends.
+fn next_due(sql: &Connection, boot: &str, now: i64) -> Result<(Option<i64>, Option<i64>), Error> {
     let due = sql.query_row(
         &format!(
             "SELECT MIN(o.next_at) FROM kernel_outbox o
@@ -819,8 +853,8 @@ fn next_due(sql: &Connection, boot: &str) -> Result<(Option<i64>, Option<i64>), 
     )?;
     let runs_out = sql.query_row(
         "SELECT MIN(lease_until) FROM kernel_outbox
-         WHERE state = 'running' AND runner = 'worker' AND boot = ?1",
-        params![boot],
+         WHERE state = 'running' AND runner = 'worker' AND boot = ?1 AND lease_until > ?2",
+        params![boot, now],
         |row| row.get(0),
     )?;
     Ok((due, runs_out))
@@ -838,6 +872,9 @@ fn read_claimed(row: &rusqlite::Row<'_>) -> rusqlite::Result<Claimed> {
         },
         token: row.get(6)?,
         queued: row.get(7)?,
+        late_from: row.get(8)?,
+        cuts: row.get(9)?,
+        worker: row.get(10)?,
     })
 }
 
@@ -852,7 +889,9 @@ impl Claimed {
 
 #[cfg(test)]
 mod tests {
-    use super::{ATTEMPTS, Retry, record_wait};
+    use super::{ATTEMPTS, Retry, next_due, record_wait, running_before};
+    use crate::store::{KERNEL, KERNEL_MIGRATIONS, migrate};
+    use rusqlite::Connection;
     use std::time::Duration;
 
     #[test]
@@ -881,20 +920,84 @@ mod tests {
     #[test]
     fn work_on_this_host_gives_up_after_its_tries() {
         let here = Retry::default();
-        assert!(!here.gives_up(ATTEMPTS - 1, 0, 0));
-        assert!(here.gives_up(ATTEMPTS, 0, 0));
-        assert!(Retry::tries(1).gives_up(1, 0, 0));
+        assert_eq!(here.late_from(None, 40, 0, i64::MAX), None);
+        assert!(!here.gives_up(ATTEMPTS - 1, None));
+        assert!(here.gives_up(ATTEMPTS, None));
+        assert!(Retry::tries(1).gives_up(1, None));
     }
 
     #[test]
-    fn work_over_the_network_tries_until_its_deadline_and_at_least_five_times() {
+    fn work_over_the_network_tries_until_its_deadline_then_five_times_more() {
         let hour = 3_600_000;
         let away = Retry::within(Duration::from_secs(3600));
-        // Past five tries, it goes on until the hour is out.
-        assert!(!away.gives_up(40, 0, hour - 1));
-        assert!(away.gives_up(40, 0, hour));
-        // A host that slept through the hour still tries as it wakes.
-        assert!(!away.gives_up(2, 0, 10 * hour));
-        assert!(away.gives_up(ATTEMPTS, 0, 10 * hour));
+        // Before its deadline, it goes on however many tries it had.
+        assert_eq!(away.late_from(None, 40, 0, hour - 1), None);
+        assert!(!away.gives_up(41, None));
+        // Its tries count from the first that ends past it.
+        let late = away.late_from(None, 40, 0, hour);
+        assert_eq!(late, Some(40));
+        assert!(!away.gives_up(44, late));
+        assert!(away.gives_up(45, late));
+        // A host that slept through the hour, ten tries in, still tries
+        // five times as it wakes, and the first late try is where they
+        // count from, however late the next ones are.
+        let woke = away.late_from(None, 10, 0, 10 * hour);
+        assert_eq!(woke, Some(10));
+        assert!(!away.gives_up(11, woke));
+        assert_eq!(away.late_from(woke, 13, 0, 11 * hour), Some(10));
+        assert!(!away.gives_up(14, woke));
+        assert!(away.gives_up(15, woke));
+    }
+
+    #[test]
+    fn an_effect_queued_before_workers_had_leases_is_the_engines_after_the_step() {
+        let mut sql = Connection::open_in_memory().unwrap();
+        migrate(&mut sql, KERNEL, &KERNEL_MIGRATIONS[..1]).unwrap();
+        sql.execute(
+            "INSERT INTO kernel_outbox (module, kind, key, payload, state, boot, next_at, created_at)
+             VALUES ('notes', 'publish', 'a', '{}', 'running', 'an-earlier-boot', 0, 0)",
+            [],
+        )
+        .unwrap();
+        migrate(&mut sql, KERNEL, KERNEL_MIGRATIONS).unwrap();
+        let cut = running_before(&sql, "this boot").unwrap();
+        assert_eq!(cut.len(), 1);
+        let claimed = &cut[0];
+        assert_eq!(
+            (
+                claimed.token,
+                claimed.cuts,
+                claimed.late_from,
+                &claimed.worker
+            ),
+            (0, 0, None, &None)
+        );
+        let (runner, carried): (String, i64) = sql
+            .query_row("SELECT runner, carried FROM kernel_outbox", [], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .unwrap();
+        assert_eq!((runner.as_str(), carried), ("engine", 0));
+    }
+
+    #[test]
+    fn an_effect_behind_a_run_of_its_key_is_not_due() {
+        let mut sql = Connection::open_in_memory().unwrap();
+        migrate(&mut sql, KERNEL, KERNEL_MIGRATIONS).unwrap();
+        let queue = |key: &str, state: &str, next_at: i64| {
+            sql.execute(
+                "INSERT INTO kernel_outbox (module, kind, key, payload, state, boot, next_at, created_at)
+                 VALUES ('notes', 'publish', ?1, '{}', ?2, 'this boot', ?3, 0)",
+                rusqlite::params![key, state, next_at],
+            )
+            .unwrap();
+        };
+        queue("a", "running", 0);
+        queue("a", "pending", 0);
+        // Due at once, it would wake the loop with nothing to start, again
+        // and again, for as long as the run lasts.
+        assert_eq!(next_due(&sql, "this boot", 0).unwrap(), (None, None));
+        queue("b", "pending", 7);
+        assert_eq!(next_due(&sql, "this boot", 0).unwrap(), (Some(7), None));
     }
 }

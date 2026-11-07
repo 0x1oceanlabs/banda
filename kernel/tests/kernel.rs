@@ -182,10 +182,11 @@ impl Module for Notes {
 }
 
 /// Posts: `post` queues an effect of the kind it is given for a worker
-/// outside the engine, keyed by one feed. A `post` goes over the network,
-/// and tries until its deadline; a `ping` tries three times; a `notify`
-/// whose worker went is abandoned. It keeps each Project it opens in, so a
-/// test acts as its worker (ADR 0082, A6).
+/// outside the engine, keyed by one feed, or for the engine when asked. A
+/// `post` goes over the network, and tries until its deadline; a `ping`
+/// tries three times; a `notify` whose worker went is abandoned, and one
+/// of the text `stuck` cannot write that. It keeps each Project it opens
+/// in, so a test acts as its worker (ADR 0082, A6).
 #[derive(Clone, Default)]
 struct Posts {
     projects: Arc<Mutex<Vec<ModuleProject>>>,
@@ -214,11 +215,15 @@ impl Module for Posts {
 
     async fn call(&self, call: Call, _: &str, params: Value) -> Result<Value, Refusal> {
         let kind = params["kind"].as_str().unwrap_or("post").to_owned();
-        let text = params["text"].clone();
+        let (text, engine) = (params["text"].clone(), params["engine"] == true);
         let author = call.participant();
         call.command(move |tx| {
             let payload = json!({ "text": text, "author": author });
-            tx.enqueue_for_worker(&kind, "feed", &payload)?;
+            if engine {
+                tx.enqueue(&kind, "engine", &payload)?;
+            } else {
+                tx.enqueue_for_worker(&kind, "feed", &payload)?;
+            }
             Ok(Value::Null)
         })
         .await
@@ -247,6 +252,9 @@ impl Module for Posts {
     }
 
     fn settle(&self, tx: &mut Tx<'_>, effect: &Effect, settled: &Settled) -> Result<(), Error> {
+        if effect.payload["text"] == "stuck" {
+            return Err(Refusal::invalid("This one never settles.").into());
+        }
         Notes::default().settle(tx, effect, settled)
     }
 }
@@ -851,11 +859,19 @@ fn worker_of(posts: &Posts) -> ModuleProject {
     posts.projects.lock().unwrap().last().unwrap().clone()
 }
 
-/// The lease `worker` takes of one of `kinds`, once one is ready: within
-/// five seconds.
+/// The lease `worker` takes of one of `kinds`, for a minute, once one is
+/// ready: within five seconds.
 async fn leased(project: &ModuleProject, worker: &str, kinds: &[&str]) -> Lease {
+    leased_for(project, worker, kinds, Duration::from_secs(60)).await
+}
+
+async fn leased_for(
+    project: &ModuleProject,
+    worker: &str,
+    kinds: &[&str],
+    term: Duration,
+) -> Lease {
     for _ in 0..500 {
-        let term = Duration::from_secs(60);
         if let Some(lease) = project.lease(worker, kinds, term).await.unwrap() {
             return lease;
         }
@@ -1067,6 +1083,142 @@ async fn an_effect_retries_as_its_kind_says() {
         .await
         .unwrap();
     assert_eq!(posted_by(&kernel, &project).await, [json!("w")]);
+}
+
+/// Stops the engine and starts it again, while its workers run on.
+async fn restart_posts(
+    kernel: Arc<Kernel>,
+    root: &Path,
+    owner: PersonId,
+    posts: &Posts,
+) -> Arc<Kernel> {
+    posts.projects.lock().unwrap().clear();
+    let_go(kernel, &root.join(".data"), &[]).await;
+    open_posts(root, owner, posts).await
+}
+
+#[tokio::test]
+async fn a_lease_its_worker_does_not_renew_outlives_one_restart_only() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, posts) = (PersonId::new(), Posts::default());
+    let kernel = open_posts(root.path(), owner, &posts).await;
+    let project = create(&kernel, owner, "Work").await;
+    let minute = Duration::from_secs(60);
+    post(&kernel, owner, &project, "post", "a").await;
+    let held = leased(&worker_of(&posts), "w1", &["post"]).await;
+    let holds = async |posts: &Posts| {
+        let claim = held.claim;
+        worker_of(posts)
+            .write(move |tx| tx.holds(claim))
+            .await
+            .is_ok()
+    };
+
+    // A worker that renews on each run of the engine keeps its lease
+    // through every restart.
+    let kernel = restart_posts(kernel, root.path(), owner, &posts).await;
+    assert!(holds(&posts).await);
+    worker_of(&posts).renew(held.claim, minute).await.unwrap();
+    let kernel = restart_posts(kernel, root.path(), owner, &posts).await;
+    assert!(holds(&posts).await);
+
+    // One that renews no more is cut short as the engine starts again,
+    // however short its runs: its effect waits on no gone worker.
+    let kernel = restart_posts(kernel, root.path(), owner, &posts).await;
+    assert!(!holds(&posts).await);
+    let taken = leased(&worker_of(&posts), "w2", &["post"]).await;
+    assert_eq!(
+        (taken.effect.id, taken.effect.attempts),
+        (held.effect.id, 1)
+    );
+    let renewed = worker_of(&posts).renew(held.claim, minute).await;
+    assert_eq!(renewed.unwrap_err().code, Code::Conflict);
+    drop(kernel);
+}
+
+#[tokio::test]
+async fn a_lease_that_cannot_be_cut_short_holds_up_only_its_own_key() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, posts) = (PersonId::new(), Posts::default());
+    let kernel = open_posts(root.path(), owner, &posts).await;
+    let project = create(&kernel, owner, "Work").await;
+    post(&kernel, owner, &project, "notify", "stuck").await;
+    let short = Duration::from_millis(20);
+    let stuck = leased_for(&worker_of(&posts), "w1", &["notify"], short).await;
+    tokio::time::sleep(Duration::from_millis(60)).await;
+
+    // Its module cannot write that it was abandoned, and the engine still
+    // runs the effects of other keys.
+    let (person, params) = (
+        Participant::Person(owner),
+        json!({ "kind": "ping", "text": "p", "engine": true }),
+    );
+    (kernel.call(
+        person,
+        "posts.post",
+        Some(project.id),
+        Some(CommandId::new()),
+        params,
+    ))
+    .await
+    .unwrap();
+    eventually(|| async { posts.ran.lock().unwrap().contains(&"ping".to_owned()) }).await;
+    let claim = stuck.claim;
+    let held = worker_of(&posts).write(move |tx| tx.holds(claim)).await;
+    assert!(held.is_ok(), "it waits to be cut short: {held:?}");
+}
+
+#[tokio::test]
+async fn an_effect_whose_worker_keeps_going_fails_before_its_deadline() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, posts) = (PersonId::new(), Posts::default());
+    let kernel = open_posts(root.path(), owner, &posts).await;
+    let project = create(&kernel, owner, "Work").await;
+    let worker = worker_of(&posts);
+    let short = Duration::from_millis(20);
+
+    // A post tries for an hour, but a run cut short counts up to five
+    // times: a post that takes its worker down with it does not replay
+    // all that hour.
+    post(&kernel, owner, &project, "post", "a").await;
+    for cut in 0..5 {
+        let lease = leased_for(&worker, "w", &["post"], short).await;
+        assert_eq!(lease.effect.attempts, cut);
+    }
+    eventually(|| async { kinds(&kernel, &project).await.contains(&"lost".to_owned()) }).await;
+    assert_eq!(
+        lost_how(&kernel, &project).await,
+        "failed: Its worker stopped renewing its lease too many times."
+    );
+}
+
+#[tokio::test]
+async fn work_over_the_network_tries_five_times_more_past_its_deadline() {
+    let root = tempfile::tempdir().unwrap();
+    let data = root.path().join(".data");
+    let (owner, posts) = (PersonId::new(), Posts::default());
+    let kernel = open_posts(root.path(), owner, &posts).await;
+    let project = create(&kernel, owner, "Work").await;
+    post(&kernel, owner, &project, "post", "a").await;
+    posts.projects.lock().unwrap().clear();
+    let_go(kernel, &data, &[]).await;
+
+    // It tried ten times in its hour, then the host slept all night.
+    let night = now_ms() - 10 * 3_600_000;
+    (sqlite(&data, &project).execute(
+        "UPDATE kernel_outbox SET attempts = 10, created_at = ?1",
+        rusqlite::params![night],
+    ))
+    .unwrap();
+    let kernel = open_posts(root.path(), owner, &posts).await;
+    let worker = worker_of(&posts);
+    for tried in 10..15 {
+        let lease = leased(&worker, "w", &["post"]).await;
+        assert_eq!(lease.effect.attempts, tried, "it tries as it wakes");
+        let offline = Outcome::Retry("offline".into());
+        worker.finish(lease.claim, offline).await.unwrap();
+    }
+    assert_eq!(lost_how(&kernel, &project).await, "failed: offline");
 }
 
 /// The Project's SQLite, opened beside the engine's.
