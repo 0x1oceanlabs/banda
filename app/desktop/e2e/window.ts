@@ -12,6 +12,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs"
+import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import {
@@ -24,6 +25,28 @@ import {
 
 const repository = resolve(import.meta.dirname, "../../..")
 const desktop = resolve(import.meta.dirname, "..")
+
+/** Playwright's loader, of the Playwright that runs the tests: it holds
+ * the window's `ready` back until Playwright has attached. Playwright
+ * puts it first only in an Electron it finds itself. */
+const loader = (() => {
+  let from = createRequire(import.meta.url).resolve("@playwright/test")
+  for (const name of ["playwright", "playwright-core"])
+    from = createRequire(from).resolve(`${name}/package.json`)
+  return join(dirname(from), "lib/server/electron/loader.js")
+})()
+
+/**
+ * What `electron.launch` takes to start the window of the checkout at
+ * `app` in a systemd unit of its own, as scripts/local.sh does: so the
+ * test's window lives and dies apart from the Agent running the tests
+ * (ADR 0086, decision 7). The window's own args follow `args`.
+ */
+export const inUnit = (app: string) => ({
+  executablePath: join(repository, "scripts/local.sh"),
+  cwd: app,
+  args: ["-r", loader, app],
+})
 
 /**
  * Whether the window runs in Chromium's sandbox, as Banda does: extensions'
@@ -136,10 +159,12 @@ export async function startWindow({
     // the same disk as the throwaway Projects (ADR 0073, decision 10).
     XDG_DATA_HOME: join(dir, "xdg-data"),
   }
+  const local = inUnit(desktop)
   const app = await electron.launch({
+    ...local,
     chromiumSandbox: SANDBOXED,
     args: [
-      desktop,
+      ...local.args,
       `--force-device-scale-factor=${deviceScaleFactor}`,
       ...(process.env.BANDA_E2E_SHOW ? [] : ["--ozone-platform=headless"]),
     ],

@@ -15,7 +15,9 @@
 # trial's Projects and its history stay between runs. A window of the trial
 # that still runs closes first, so the new build is the one shown. The
 # window serves CDP, which scripts/drive.mjs drives: an Agent sees and
-# works what it built.
+# works what it built. On Linux the window runs in a systemd user unit of
+# its own, banda-trial-<slug>.scope (scripts/local.sh), so it lives and
+# dies apart from the Agent that started it (ADR 0086, decision 7).
 #
 #   --real        the engine offers Claude Code and Codex, as Banda does
 #   --fresh       forget the trial's Projects and settings first
@@ -68,15 +70,30 @@ running() {
   kill -0 "${lock##*-}" 2>/dev/null
 }
 # Closes it as the Person does, so main stops the engine: a signal would
-# leave a crash behind.
+# leave a crash behind. Then what is left of it goes with its unit.
 close() {
-  running "$trial" || return 0
-  node "$here/scripts/drive.mjs" --trial "$slug" close
-  for _ in $(seq 40); do
-    running "$trial" || return 0
+  if running "$trial"; then
+    node "$here/scripts/drive.mjs" --trial "$slug" close
+    local tries=40
+    while running "$trial"; do
+      ((--tries)) || fail "the window of $slug did not close"
+      sleep 0.25
+    done
+  fi
+  sweep
+}
+# The trial's unit ends with its last process. One still there 5 s after
+# the window closed is stopped, which ends what it holds: the helpers of a
+# window that crashed, say. Stopped while the window runs, it would crash
+# it (scripts/local.sh).
+sweep() {
+  command -v systemctl >/dev/null || return 0
+  for _ in $(seq 20); do
+    systemctl --user is-active --quiet "$unit" 2>/dev/null || return 0
     sleep 0.25
   done
-  fail "the window of $slug did not close"
+  echo "Stopping what is left of the trial in $unit."
+  systemctl --user stop "$unit"
 }
 
 if ((list)); then
@@ -103,6 +120,8 @@ fi
 [[ -f $tree/app/desktop/package.json ]] || fail "$tree is not a Banda checkout"
 slug=$(basename "$tree")
 trial=$trials/$slug
+# A unit's name takes letters, digits and _.:- only.
+unit=banda-trial-${slug//[^A-Za-z0-9_.:-]/_}.scope
 
 ((stop || forget || fresh)) && close
 ((stop)) && exit 0
@@ -171,7 +190,7 @@ if ((hidden)); then
   # The notices go to a list, as the end-to-end tests' do.
   export BANDA_DESKTOP=recorded
 fi
-window=(node_modules/.bin/electron . "${flags[@]}")
+window=("$here/scripts/local.sh" --unit "${unit%.scope}" . "${flags[@]}")
 ((detach)) || exec "${window[@]}"
 
 # Its own session, so it outlives the shell that started it.

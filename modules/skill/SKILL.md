@@ -114,6 +114,15 @@ one, and never describe it after: say only what it doesn't. A picture
 to post, send or use elsewhere is a `.png` file and its path, not a
 Visual. Ordinary coding work needs neither tool.
 
+## Starting Banda from its own code
+
+In a checkout of Banda, start its window with `scripts/try.sh --hidden
+--detach` and close it with `scripts/try.sh --stop`, as its `AGENTS.md`
+says. On Linux it runs in a systemd unit of its own, apart from yours, so
+it does not crash when your process group or your unit stops (ADR 0086).
+Never start it with a bare `electron .`, and never stop it by killing its
+process group: send its main process SIGTERM.
+
 ## Where things live
 
 `~/.config/banda/` (or `$BANDA_CONFIG`) holds what belongs to this machine.

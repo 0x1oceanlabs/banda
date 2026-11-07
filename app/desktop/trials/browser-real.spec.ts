@@ -9,6 +9,7 @@ import { join, resolve } from "node:path"
 import { promisify } from "node:util"
 import { _electron as electron, expect, test } from "@playwright/test"
 import type { ThreadView } from "@banda/contract/agents"
+import { inUnit } from "../e2e/window"
 
 const run = promisify(execFile)
 const desktop =
@@ -182,9 +183,12 @@ test(`real ${harness} exercises Banda's browser`, async () => {
     notes.push(line)
     console.log(line)
   }
+  // In a unit of its own, apart from the Agent running the trial.
+  const local = inUnit(desktop)
   const app = await electron.launch({
+    ...local,
     chromiumSandbox: false,
-    args: [desktop, "--ozone-platform=headless"],
+    args: [...local.args, "--ozone-platform=headless"],
     env,
   })
   app.context().on("page", (page) => page.on("dialog", () => {}))

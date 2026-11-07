@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process"
 import {
   copyFileSync,
   existsSync,
@@ -418,6 +419,41 @@ test("the engine dies mid-work, comes back, and the Thread goes on", async () =>
   await composer.press("Enter")
   await expect(thread.getByText("You said: after the break")).toBeVisible()
   await expect(thread.getByText("You said: hello")).toBeVisible()
+})
+
+test("no process of the window stays in the unit of what started it (ADR 0086, decision 7)", async () => {
+  const systemd = spawnSync(
+    "systemctl",
+    ["--user", "show", "--property=Version", "--value"],
+    { encoding: "utf8" }
+  )
+  test.skip(
+    process.platform !== "linux" || !systemd.stdout?.trim(),
+    "no systemd of the user's here, as in CI's containers"
+  )
+  window = await startWindow()
+  // The window's main process and every process under it: its helpers,
+  // the engine and the engine's own.
+  const under = (pid: number): number[] => [
+    pid,
+    ...spawnSync("pgrep", ["-P", String(pid)], { encoding: "utf8" })
+      .stdout.split("\n")
+      .filter(Boolean)
+      .flatMap((child) => under(Number(child))),
+  ]
+  // A process's control group, which names its unit; none once it ended.
+  const unitOf = (pid: number) => {
+    try {
+      return readFileSync(`/proc/${pid}/cgroup`, "utf8")
+    } catch {
+      return undefined
+    }
+  }
+  const processes = under(window.app.process().pid!)
+  expect(processes.length).toBeGreaterThan(3)
+  // The tests run in the unit of the Agent or the shell that started them.
+  const starter = unitOf(process.pid)
+  expect(processes.filter((pid) => unitOf(pid) === starter)).toEqual([])
 })
 
 test("a failed turn says what to do, and Try again sends its message again", async () => {

@@ -17,6 +17,13 @@ Those rules hold for you too.
 
 - Build and run it as the [README](README.md#build-it) says. A build from
   a checkout is Banda Local and never touches an installed Banda's Projects.
+- Start its window with `scripts/try.sh` or `pnpm --filter @banda/desktop
+  start`, never a bare `electron .`: both go through `scripts/local.sh`,
+  which on Linux runs it in a systemd user unit of its own
+  (`systemd-run --user --scope`), apart from the terminal or the Agent
+  that started it. Stop it as you would Banda, with `scripts/try.sh
+  --stop`, or with SIGTERM to its main process, never by killing its
+  process group.
 - `scripts/check.sh` must pass: formatting, lints, types, the Rust and
   TypeScript tests, and the window's end-to-end tests.
 - One change per PR, its title saying what it does.
