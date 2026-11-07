@@ -72,7 +72,15 @@ per moving frame, 22 tasks over 8.3 ms and the longest at 29.8 ms in the
 workspace phase; p95 3.3 ms and 4 tasks over 16.7 ms in the overview) come
 from Chrome traces of the same runs, summarised over the frames in which
 something moved. The raw traces were not kept, so these figures stand as
-recorded on the day; P0's per-phase trace summary reproduces them.
+recorded on the day.
+
+P0's per-phase trace summary (`client/desktop/e2e/motion-trace.ts`) does
+not reproduce them, as it defines its own: a moving frame is a tick of the
+window's compositor whose frame was presented or dropped, and its main
+thread time is that of the tasks that began in it, each whole, so a task
+longer than a frame shows in full. Its numbers, recorded in
+`client/desktop/e2e/motion-budget.json`, are the baseline the budgets
+read.
 
 ## The GPU
 

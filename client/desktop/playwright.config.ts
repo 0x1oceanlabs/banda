@@ -15,4 +15,14 @@ export default defineConfig({
   reporter: [["list"]],
   outputDir: "test-results",
   use: { trace: "retain-on-failure" },
+  projects: [
+    { name: "window" },
+    // How the Tiling moves, once more on a screen of 1.6 pixels to the
+    // point, as Roma's (ADR 0088, decision 13).
+    {
+      name: "scale 1.6",
+      testMatch: /motion\.spec\.ts$/,
+      metadata: { scale: 1.6 },
+    },
+  ],
 })

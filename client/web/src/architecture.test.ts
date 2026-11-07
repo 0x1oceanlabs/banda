@@ -1,14 +1,18 @@
 /**
- * The window knows no module (ADR 0022, decision 2): only `modules.ts`
- * names one, in the page and in the desktop's main process, and every
- * registry is built from it; the bridge's table takes in each module's
- * part of it (ADR 0028). The files listed here still reach a module's
- * package, each by an unstable mark its module's `module.toml` names
- * (decision 6); one that no longer does leaves the list.
+ * The window's shape, as its tests hold it.
+ *
+ * - The window knows no module (ADR 0022, decision 2): only `modules.ts`
+ *   names one, in the page and in the desktop's main process, and every
+ *   registry is built from it; the bridge's table takes in each module's
+ *   part of it (ADR 0028). The files listed here still reach a module's
+ *   package, each by an unstable mark its module's `module.toml` names
+ *   (decision 6); one that no longer does leaves the list.
+ * - Nothing more animates a size or a place (ADR 0088, decision 2): the
+ *   cases of today are listed, and the list only falls.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join, relative } from "node:path"
-import { imports, sources } from "@banda/ui/testing/architecture"
+import { imports, layoutMotion, sources } from "@banda/ui/testing/architecture"
 import { expect, test } from "vitest"
 
 const app = join(import.meta.dirname, "../..")
@@ -89,4 +93,62 @@ test("each file on the list names an unstable mark its module holds, and each ma
     marksOf(module).map((mark) => `${module}.${mark}`)
   )
   expect(held.filter((mark) => !named.has(mark))).toEqual([])
+})
+
+/**
+ * Only compositor properties animate (ADR 0088, decision 2): a transition
+ * or keyframes of a size, a place, a margin or a padding lays the page out
+ * again on every tick, on the main thread. Today's cases are listed here,
+ * each by its file and what it animates, once for each place it does, and
+ * the list only falls.
+ */
+const LAYOUT_MOTION = [
+  "apps/agents/pane/src/Minimap.tsx: transition-all",
+  "apps/files/pane/src/acts.tsx: transition-[width]",
+  "client/ui/src/components/button.tsx: transition-all",
+  "client/ui/src/components/level-slider.tsx: transition-[inset-inline-start,scale,box-shadow]",
+  "client/ui/src/components/level-slider.tsx: transition-[width]",
+  "client/ui/src/components/trace.tsx: transition-[height]",
+  "client/ui/src/styles/globals.css: @keyframes update-in",
+  "client/ui/src/styles/globals.css: @keyframes update-out",
+  "client/web/src/bar/Update.tsx: transition-[width]",
+  "client/web/src/workspaces/PaneMenu.tsx: transition-[width]",
+  "client/web/src/workspaces/Peek.tsx: transition-[width,height]",
+]
+
+/** The window's own code and the Panes', with their stylesheets; not
+ * what only tests use. */
+const drawing = [
+  ...["web/src", "ui/src", "ghostty/src"].map((folder) => join(app, folder)),
+  ...[...folders.values()]
+    .map((folder) => join(folder, "pane/src"))
+    .filter((folder) => existsSync(folder)),
+]
+  .flatMap((folder) => sources(folder, { tests: false, styles: true }))
+  .filter((file) => !file.startsWith(join(app, "ui/src/testing")))
+
+const moving = drawing.flatMap((file) =>
+  layoutMotion(readFileSync(file, "utf8")).map(
+    (what) => `${relative(root, file)}: ${what}`
+  )
+)
+
+/** What `list` holds more often than `than` does: once for each time
+ * more. */
+function beyond(list: string[], than: string[]): string[] {
+  const left = [...than]
+  return list.filter((each) => {
+    const at = left.indexOf(each)
+    if (at >= 0) left.splice(at, 1)
+    return at < 0
+  })
+}
+
+test("nothing more animates a size or a place: only what does today", () => {
+  expect(drawing).toContain(join(app, "ui/src/styles/globals.css"))
+  expect(beyond(moving, LAYOUT_MOTION)).toEqual([])
+})
+
+test("a case that no longer animates one leaves the list", () => {
+  expect(beyond(LAYOUT_MOTION, moving)).toEqual([])
 })

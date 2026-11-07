@@ -85,6 +85,16 @@ jobs:
           name: window-traces-${{ strategy.job-index }}
           path: client/desktop/test-results/
           retention-days: 7
+      # How the Tiling moved, for a PR's numbers before and after (ADR 0088,
+      # decision 13); the job's summary has them as tables.
+      - name: The motion numbers
+        if: always() && matrix.parts == 'window'
+        uses: actions/upload-artifact@v4
+        with:
+          name: motion-${{ strategy.job-index }}
+          path: client/desktop/test-results/motion.*
+          if-no-files-found: ignore
+          retention-days: 30
 
   ci:
     name: ci
