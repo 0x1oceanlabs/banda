@@ -13,6 +13,7 @@ import type {
 } from "@banda/contract/agents"
 import { duration } from "@banda/ui/lib/words"
 import { outcome, said, type Said as Words } from "./calls"
+import { isWorkKind, staysKind } from "./entries/kinds"
 import { changes, type FileChange, total } from "./changes"
 import {
   isReply,
@@ -48,15 +49,12 @@ export function timeline(state: ThreadState): Line[] {
 
 /** Whether `row` is work: a tool call or a thought. */
 function isWork(line: Line): line is Extract<Row, { kind: "item" }> {
-  return (
-    line.kind === "item" &&
-    (line.item.body.kind === "tool" || line.item.body.kind === "thought")
-  )
+  return line.kind === "item" && isWorkKind(line.item.body.kind)
 }
 
-/** Whether `line` is a Visual the Agent showed. */
-function isVisual(line: Line): boolean {
-  return line.kind === "item" && line.item.body.kind === "visual"
+/** Whether `line` is an entry that stays out of its turn's fold. */
+function staysOut(line: Line): boolean {
+  return line.kind === "item" && staysKind(line.item.body.kind)
 }
 
 /** The turn a line belongs to, if any. */
@@ -114,7 +112,7 @@ function fold(lines: Line[], turns: TurnView[]): Line[] {
     const own = lines.flatMap((line, at) =>
       turnOf(line) === turn.id &&
       line.kind !== "ended" &&
-      !isVisual(line) &&
+      !staysOut(line) &&
       !(line.kind === "item" && line.item.id === turn.message)
         ? [at]
         : []
@@ -384,12 +382,7 @@ const DID: Record<Kind, (count: number) => string> = {
 /** The items a fold or a line of work holds, its calls and thoughts. */
 export function workOf(lines: Line[]): Item[] {
   return lines.flatMap((line) =>
-    line.kind === "work"
-      ? line.items
-      : line.kind === "item" &&
-          (line.item.body.kind === "tool" || line.item.body.kind === "thought")
-        ? [line.item]
-        : []
+    line.kind === "work" ? line.items : isWork(line) ? [line.item] : []
   )
 }
 
