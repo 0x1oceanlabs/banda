@@ -55,7 +55,7 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   `~/.config/banda/browser.toml` comes with it too (ADR 0013), and the
   browser's switch and its pins ask the desktop to write `tabs` and
   `pinned` into it, through `banda settings set`; its `blocker` turns
-  the desktop's ad blocker (`modules/browser/desktop/src/blocker.ts`) on and off.
+  the desktop's ad blocker (`apps/browser/desktop/src/blocker.ts`) on and off.
   The agents module's
   `agents.toml`, what Enter does in the composer, comes with it the same
   way (ADR 0016). The settings Pane writes every file through `banda
@@ -65,8 +65,8 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   prints its core, `banda skill <topic>` a topic, and
   `banda skill --export <folder>` writes an Agent Skills folder. Each
   part of Banda writes its topics in a `skill/` folder beside its code,
-  and `modules/skill` gathers them when it is built; a topic may include a
-  file the part ships, such as `look/sidebar.toml`.
+  and `platform/skill` gathers them when it is built; a topic may include a
+  file the part ships, such as `platform/look/sidebar.toml`.
 - **An Agent reaches Banda through `banda mcp`** (ADR 0019). The agents
   module hands it to every ACP session it opens (`session/new`, `load`
   and `resume`), as a stdio MCP server named `banda`, with two
@@ -77,7 +77,7 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   Its tools are `projects.tools`, read once as it connects: the module
   methods marked `tool` in their `methods!` tables. It adds `skill`,
   which it answers itself from the Banda skill. Its
-  `instructions` are the skill's brief (`modules/skill/BRIEF.md`), under
+  `instructions` are the skill's brief (`platform/skill/BRIEF.md`), under
   the 4,096 characters Claude Code keeps of them; the core and its topics
   come through `skill` (ADR 0037, decision 7). Each tool call is a command
   whose ID is derived from the session, new each time `banda mcp` starts
@@ -347,7 +347,7 @@ Its engine part is the `Module` it gives the kernel, with its `methods!`
 table. Its window part is one
 `defineModule({ id, engine, panes, watches, actions, sources, bar, threadDetails, previewers, listed, start })`
 exported from its Pane package; the window lists these in
-`app/web/src/modules.ts`, the one place that names a module, and builds its
+`client/web/src/modules.ts`, the one place that names a module, and builds its
 registries from them. `start` runs once with the window API, for a module
 that acts on the window when the desktop tells it something.
 `threadDetails` are its rows in a Thread's details card (ADR 0034): the
@@ -501,7 +501,7 @@ If Chat is removed, Agents still works through its own Thread.
     models, effort and modes, from the Person's alone too (its shim of the
     SDK, `claude-sdk.mjs`).
   - The Codex adapter Banda carries is patched
-    (`modules/harnesses/desktop/patches/`) to mark no session's folder
+    (`platform/harnesses/desktop/patches/`) to mark no session's folder
     trusted, where it marks every one trusted otherwise, so Codex loads no
     `.codex/` config of the folder. Codex still reads `AGENTS.md`.
   - Another Harness, or a Codex the Person runs from a command of their
@@ -615,7 +615,7 @@ If Chat is removed, Agents still works through its own Thread.
   its HTML in the Project's data, `projects/<id>/visuals/`, and the Agent's
   turn that runs gets an item, `visual.shown`, which no fold hides. The
   window serves it at `app://visuals/<project>/<visual>`, an origin of its
-  own, sandboxed by its response and its frame (`modules/agents/desktop`),
+  own, sandboxed by its response and its frame (`apps/agents/desktop`),
   and the frame passes it the look's colours as T3 Code's variables.
 - **An Agent's plan** for its turn is one entry whose steps follow the
   Harness: each plan it sends replaces the steps, and an empty one clears
@@ -710,7 +710,7 @@ If Chat is removed, Agents still works through its own Thread.
   open Questions. Turns that waited stay queued, and the queue is held. A
   message sent into a turn that never got it waits for a turn of its own.
 - Its methods and their rights are the `methods!` table in
-  `modules/agents/engine/src/lib.rs`, and its facts in `model.rs`.
+  `apps/agents/engine/src/lib.rs`, and its facts in `model.rs`.
 
 ### harnesses
 
@@ -775,10 +775,10 @@ If Chat is removed, Agents still works through its own Thread.
   session and a process group of its own. While it runs, a close sends the
   group a hangup and a request to stop, then a kill a second later; a
   shell passes the hangup on to its jobs. A close ends every watch.
-- Its methods are the `methods!` table in `modules/terminal/engine/src/lib.rs`.
-- **Its Pane** (`modules/terminal/pane`) draws a terminal with Ghostty:
+- Its methods are the `methods!` table in `apps/terminal/engine/src/lib.rs`.
+- **Its Pane** (`apps/terminal/pane`) draws a terminal with Ghostty:
   T3 Code's adapter over `libghostty-vt` compiled to WebAssembly,
-  vendored in `app/ghostty`, on a canvas in the window's colours.
+  vendored in `client/ghostty`, on a canvas in the window's colours.
   - Opened from the menu, it starts the Person's shell, and starts it
     again when the engine lost it.
   - Another Pane that started a program opens it on that terminal, as a
@@ -833,7 +833,7 @@ If Chat is removed, Agents still works through its own Thread.
   whether hidden and ignored files show, and `[previewers]`, the
   previewer an extension shows in; a folder's menu pins it and "Open
   with…" picks one through the settings bridge.
-- **Its Pane** (`modules/files/pane`), `files.file`, shows one file, one
+- **Its Pane** (`apps/files/pane`), `files.file`, shows one file, one
   Pane per file. `files.stat` says what it is, and the previewer that
   claims it draws it (`previewers.ts`, each view in `views/`):
   - code and text: `files.read`, drawn by `@banda/ui`'s `CodeFile`, the
@@ -919,13 +919,15 @@ module reaches a Harness through an adapter:
 ## Window
 
 ```
-app/desktop      Electron main: starts the engine, serves the page, hands it the address
-app/desktop-kit  what a module's part in main may use of main: its services, dialogs, errors, the bridge's answers, the byte host
-app/web          the page: the bar, the sidebar, the workspaces and the overview; the actions; the Pane registry
-app/ui           shadcn/ui (preset b0, on Base UI), Banda's Mark and sounds, and the Pane contract
-app/ghostty      T3 Code's Ghostty adapter: a terminal on a canvas
-modules/*/pane   each module's Panes
-modules/*/desktop  a module's part in Electron main
+client/desktop      Electron main: starts the engine, serves the page, hands it the address
+client/desktop-kit  what a module's part in main may use of main: its services, dialogs, errors, the bridge's answers, the byte host
+client/web          the page: the bar, the sidebar, the workspaces and the overview; the actions; the Pane registry
+client/ui           shadcn/ui (preset b0, on Base UI), Banda's Mark and sounds, and the Pane contract
+client/ghostty      T3 Code's Ghostty adapter: a terminal on a canvas
+apps/*/pane   each module's Panes
+platform/*/pane   each module's Panes
+apps/*/desktop  a module's part in Electron main
+platform/*/desktop  a module's part in Electron main
 ```
 
 - **The page reaches the engine only through the API.** Electron main gives
@@ -970,10 +972,10 @@ modules/*/desktop  a module's part in Electron main
 - **A Pane reads a view, then follows.** `useLive` reads the view once,
   applies each event after its `at`, and reads again when the engine says
   so. Events that arrive within one frame render once.
-- **The shell** (`app/web/src/shell/Shell.tsx`) puts the parts together:
+- **The shell** (`client/web/src/shell/Shell.tsx`) puts the parts together:
   the bar on top, the sidebar docked on the left, and the workspaces, or
   the overview over them (ADR 0005, decisions 7–9).
-- **The workspaces** follow niri (`app/web/src/workspaces/model.ts`); every
+- **The workspaces** follow niri (`client/web/src/workspaces/model.ts`); every
   change to them is a pure function.
   - They sit one under another, and there is always one empty workspace
     at the bottom; an empty one in the middle goes once the Person leaves
@@ -1000,7 +1002,7 @@ modules/*/desktop  a module's part in Electron main
     same with other args; moving it to another column or workspace draws
     it again without that.
   - The workspaces live in the engine (ADR 0005, decision 3; ADR 0025):
-    the `workspaces` module of this machine (`modules/workspaces/engine`)
+    the `workspaces` module of this machine (`platform/workspaces/engine`)
     keeps the arrangement and its rules, and says each change in one
     event that holds it whole. The window keeps only the view, in its
     storage (`$BANDA_STATE/window` when that is set), and draws the two
@@ -1012,7 +1014,7 @@ modules/*/desktop  a module's part in Electron main
     (`workspaces/store.ts`). A Pane an Agent opened is marked until the
     Person has it in focus; the window keeps which of them they have
     looked at (`banda.looked`).
-- **One list of actions** (`app/web/src/shell/actions.ts`) holds what the
+- **One list of actions** (`client/web/src/shell/actions.ts`) holds what the
   window does, the modules' actions and its own, each with a name, its
   key sheet section and a default key, by its physical place.
   Alt is the mod: Arrows focus, Shift+Arrows move, Ctrl+Left and Right
@@ -1034,8 +1036,8 @@ modules/*/desktop  a module's part in Electron main
   at all; sorted by need, by change or by title; shelves at the bottom;
   a list of Projects above; rows of one, two or three lines. `arrange.ts` is
   the one pure rule. `banda look` resolves the keys from `sidebar.toml`
-  (`look/src/sidebar.rs`; Banda's presets `inbox`, `projects` and `places`
-  are files in `look/sidebars/`), and the view menu writes the preset
+  (`platform/look/src/sidebar.rs`; Banda's presets `inbox`, `projects` and `places`
+  are files in `platform/look/sidebars/`), and the view menu writes the preset
   into the file, keeping the Person's other keys and comments. The sidebar
   knows nothing of Threads: each module's Watch reports a `Listed` per
   row (its title, mark, times, what calls the Person, what it was last
@@ -1057,19 +1059,19 @@ modules/*/desktop  a module's part in Electron main
   module offers a `Watch` for this: a component the window draws for
   each Project while the engine runs the module, which shows nothing and
   reports a Mark state, a count and the Project's rows for the sidebar
-  (`Report` in `app/ui/src/pane.ts`). The bar and the sidebar read the same
+  (`Report` in `client/ui/src/pane.ts`). The bar and the sidebar read the same
   report, so they never disagree, and the bar knows even while the sidebar
-  is hidden. The window combines them (`app/web/src/bar`) and knows
+  is hidden. The window combines them (`client/web/src/bar`) and knows
   nothing of Threads.
 - **Calls** (ADR 0011, ADR 0056). A row whose Mark is done, asking or
-  failed calls the Person (`callsOf` in `app/ui/src/pane.ts`). The window
+  failed calls the Person (`callsOf` in `client/ui/src/pane.ts`). The window
   knows what calls, for the Marks, the rings and `Alt+U`, which goes to
-  the loudest first; and where the Person looks (`app/web/src/calls`). It
+  the loudest first; and where the Person looks (`client/web/src/calls`). It
   knows nothing of Threads: a Pane kind's `shows` names the thing it
   shows, so the window knows when the Person looks at it (its Pane has
   the focus and the window is in front), sees it on screen, or is
   elsewhere.
-  - The `notifications` module tells of it (`modules/notifications/pane`),
+  - The `notifications` module tells of it (`platform/notifications/pane`),
     from its `start`, asking the window only what it knows (`WindowApi`:
     `lists`, `sight`, `goTo`, `look`). It compares each list with the one
     before: what starts calling is news, what stops is taken back, and a
@@ -1089,7 +1091,7 @@ modules/*/desktop  a module's part in Electron main
     data: the last five are kept in the window's storage (`recent.ts`),
     and the bell on the bar shows them again, across a restart.
   - A system notification is the desktop's, through the module's desktop
-    part (`modules/notifications/desktop/src/notices.ts`):
+    part (`platform/notifications/desktop/src/notices.ts`):
     the module asks for it through `window.banda.notifications`, its bridge, with the mark
     still in its state as its icon (`stillMark`, drawn to a PNG), and the
     desktop shows it silent, takes it back once the Person sees the
@@ -1099,7 +1101,7 @@ modules/*/desktop  a module's part in Electron main
     change. The end-to-end tests run with a recorded desktop
     (`BANDA_DESKTOP=recorded`), so nothing reaches the screen.
   - Every step of this is the Person's to choose: `[notify]` in
-    `look.toml` (`look/src/notify.rs`) turns the system notifications to
+    `look.toml` (`platform/look/src/notify.rs`) turns the system notifications to
     always or off and the toasts to always or off, drops the words, keeps
     no quiet but its own, or leaves done, asking or failed to the Marks.
     The window holds Banda's defaults till the look comes
@@ -1108,13 +1110,13 @@ modules/*/desktop  a module's part in Electron main
     front, so a Thread that finishes behind another window calls.
 - **Sounds** (ADR 0009). Of the news, the window plays the loudest, and
   for 1.5 s after plays only a louder one.
-  - The sounds are made in code with Web Audio, in `app/ui/src/sound`: a
+  - The sounds are made in code with Web Audio, in `client/ui/src/sound`: a
     few instruments (a bell, a marimba bar, a bubble, a string), five
     families that play the three calls on them, and the level of each
     sound, measured so done is the softest and asking the clearest in
     every family. Their noise is seeded, so a sound is the same every
     time.
-  - What the Person chose is `[sound]` in `look.toml` (`look/src/sound.rs`):
+  - What the Person chose is `[sound]` in `look.toml` (`platform/look/src/sound.rs`):
     the family, the volume, the room, and each call on, off or borrowed
     from another family. The page takes it with the look
     (`useLookSound`); until the first look comes, the defaults play.
@@ -1122,17 +1124,17 @@ modules/*/desktop  a module's part in Electron main
 - **Only `window.banda` ties the page to the desktop.** It names no
   Electron API, so a browser can host it later; for now the engine lets in
   only `app://banda` and pages on localhost. Its channels are one table,
-  `BRIDGE` in `app/web/src/host.ts`, each named by its path (ADR 0028):
+  `BRIDGE` in `client/web/src/host.ts`, each named by its path (ADR 0028):
   the preload builds `window.banda` from it, and in main each channel
   answers Banda's page alone, decodes its arguments with a `Schema` and
   runs one effect (`serve` in `@banda/desktop-kit`, ADR 0020). A module
-  brings its part of the table and of main; `app/desktop/src/modules.ts`
+  brings its part of the table and of main; `client/desktop/src/modules.ts`
   is the one file in main that names one.
 - **The browser's pages** (ADR 0013) are Electron `<webview>`s in the
   window's layer over its workspaces (`PANE_LAYER`), which never moves:
   Electron destroys a `<webview>` that moves in the DOM. The browser Pane
   draws an empty slot, and its page follows the slot on every frame, cut
-  to what the workspace shows of it (`modules/browser/pane/src/pages.ts`).
+  to what the workspace shows of it (`apps/browser/pane/src/pages.ts`).
   - The desktop attaches a page only in one of the browser's profiles:
     the Person's, `persist:browser`, or a Project's Agents',
     `persist:agents-<project>`, where the tabs they open load (ADR 0083,
@@ -1142,7 +1144,7 @@ modules/*/desktop  a module's part in Electron main
     supplies synchronous `prompt` (ADR 0060); in each profile alike a site
     asks before it uses the camera, the location or another program, and
     downloads go to the Person's Downloads
-    (`modules/browser/desktop/src/profile.ts`). An Agents' profile loads
+    (`apps/browser/desktop/src/profile.ts`). An Agents' profile loads
     the web alone, no file by any way, and shows a site none of the
     Person's client certificates. The extensions live in the Person's
     profile alone (`Extensions`, ADR 0020): an Agents' page is no
@@ -1159,7 +1161,7 @@ modules/*/desktop  a module's part in Electron main
     once, held back from the page, and main reads it in
     `before-input-event`, which Electron tells of a key sent with
     `sendInputEvent` before that returns, as Electron makes it
-    (`modules/browser/desktop/src/keys.ts`; ADR 0083, decision 3). A key
+    (`apps/browser/desktop/src/keys.ts`; ADR 0083, decision 3). A key
     of theirs the page leaves unhandled goes on to the window as the
     Person's does, where only the app menu's keys act: Linux and Windows
     have no menu, and a Mac's hears a key only with its native event,
@@ -1176,7 +1178,7 @@ modules/*/desktop  a module's part in Electron main
   - Agents drive tabs with Banda's tools (ADR 0029): the engine part asks
     main, and each request names the call's Project and its Agent. Main
     answers only about the tabs in that call's reach
-    (`modules/browser/desktop/src/asked.ts`, `Tabs.seen`): those its
+    (`apps/browser/desktop/src/asked.ts`, `Tabs.seen`): those its
     Project's Agents opened, and those the Person lent its Thread (ADR
     0083, decision 4). A tab outside its reach is refused as one there is
     not. The workspaces' `panes` tool shows an Agent a browser's args with
@@ -1197,9 +1199,9 @@ modules/*/desktop  a module's part in Electron main
     Each lend and each end goes to the engine as `browser.lent`, whose
     fact the agents module posts in the Thread as a notice its Agent
     reads before its next message, the page's title quoted
-    (`modules/browser/desktop/src/lends.ts`).
+    (`apps/browser/desktop/src/lends.ts`).
   - Main's hands are Playwright, over each tab's own CDP socket
-    (`modules/browser/desktop/src/cdp.ts`): an Effect HTTP server on
+    (`apps/browser/desktop/src/cdp.ts`): an Effect HTTP server on
     127.0.0.1 whose sockets each see one tab, at an address with a
     secret of its own that opens once, within seconds, and is never
     written down. No endpoint drives the whole browser. A tab's `webContents.debugger` is
@@ -1228,11 +1230,11 @@ banda/
   look/               Rust: banda look, the look, the sidebar's arrangement and the browser's; skill/ its topics
   platform/git-cli/   Rust: how Banda starts git: its own bookkeeping, which runs no program a repository names, and the acts the Person asks for
   engine/             the banda program: serve (the kernel and its modules), call, follow, look, skill, mcp, menu
-  app/ui/             shadcn/ui and the Pane contract
-  app/ghostty/        T3 Code's Ghostty adapter and its WebAssembly, vendored
-  app/web/            React: the shell (bar, sidebar, workspaces, overview), the actions, the Pane registry
-  app/desktop/        Electron: the window and the engine's start; e2e tests
-  app/desktop-kit/    what a module's part in main may use of main (ADR 0028)
+  client/ui/             shadcn/ui and the Pane contract
+  client/ghostty/        T3 Code's Ghostty adapter and its WebAssembly, vendored
+  client/web/            React: the shell (bar, sidebar, workspaces, overview), the actions, the Pane registry
+  client/desktop/        Electron: the window and the engine's start; e2e tests
+  client/desktop-kit/    what a module's part in main may use of main (ADR 0028)
   contract/           the engine's API for TypeScript: generated types and the client
   tools/fake-agent/   a scripted ACP agent for tests and window checks; it replays recordings too
   scripts/check.sh    every check a change must pass
@@ -1327,7 +1329,7 @@ images. Sweeps retain images still referenced by a fork after a rewind.
     aside. The Harness's frames after it follow. A frame that differs
     fails the replay, so a wrong answer to a Question fails its test.
   - Real Claude Code and Codex conversations live in
-    `modules/agents/engine/tests/recordings/`. An ignored test records
+    `apps/agents/engine/tests/recordings/`. An ignored test records
     them again, a paid run on the Person's own sign-in, when an adapter
     changes.
   - A recording leaves out who is signed in, the Person's home folder,
@@ -1337,7 +1339,7 @@ images. Sweeps retain images still referenced by a fork after a rewind.
 - **End to end.** Playwright drives the Electron window against a scripted
   fake ACP agent. Screenshots let Agents check the UI themselves.
 - **Speed budget.** A window test measures start-up time, memory and input
-  latency, and writes them to `app/desktop/test-results/speed.json`. Its
+  latency, and writes them to `client/desktop/test-results/speed.json`. Its
   budgets are loose: they catch a regression.
 - **`scripts/check.sh`** runs every check in the order a failure is
   cheapest to find. It also fails when `cargo test` rewrites the generated

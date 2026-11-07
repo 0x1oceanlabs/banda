@@ -10,7 +10,7 @@
 #   scripts/local.sh [--unit NAME] [ARGS]
 #
 # It is the Electron of the folder it starts in, as `pnpm exec electron`
-# is, with ARGS: `scripts/local.sh .` in app/desktop. --unit names the unit
+# is, with ARGS: `scripts/local.sh .` in client/desktop. --unit names the unit
 # NAME.scope; without it, systemd names it. With BANDA_LOCAL_PARENT set to
 # a pid, the window closes once that process has gone, however it went: a
 # test's window, which nothing else closes once its test runner is killed.
@@ -51,7 +51,7 @@ fi
 
 # Electron's own way to its program, which fetches it first when missing.
 electron=$(node -p 'require("electron")' | tail -n 1) ||
-  fail "no Electron in $PWD: start it in app/desktop, after pnpm install"
+  fail "no Electron in $PWD: start it in client/desktop, after pnpm install"
 run=("$electron" "$@")
 if [[ -n ${BANDA_LOCAL_PARENT:-} ]]; then
   [[ $BANDA_LOCAL_PARENT =~ ^[0-9]+$ ]] || fail "BANDA_LOCAL_PARENT takes a pid"

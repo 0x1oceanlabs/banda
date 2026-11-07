@@ -12,12 +12,12 @@
 // say theirs, so Banda runs its engine where pacman put it, not from a
 // copy of its own (ADR 0086, decision 2). electron-updater reads that
 // file too, and would update through `sudo pacman -U`: Banda's update
-// (app/desktop/src/update.ts) leaves it alone with no APPIMAGE.
+// (client/desktop/src/update.ts) leaves it alone with no APPIMAGE.
 import { createHash } from "node:crypto"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
-import { CHANNELS, DESCRIPTION } from "../app/desktop/src/channel.ts"
+import { CHANNELS, DESCRIPTION } from "../client/desktop/src/channel.ts"
 
 const [which, version, image, folder] = process.argv.slice(2)
 const channel = CHANNELS[which]

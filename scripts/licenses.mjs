@@ -40,15 +40,15 @@ const ALLOWED = new Set(
 )
 
 // devDependencies the page's build reads in all the same: CSS that
-// app/ui/src/styles/globals.css imports.
-const BUNDLED_DEV = { "app/ui": ["tailwindcss", "shadcn"] }
+// client/ui/src/styles/globals.css imports.
+const BUNDLED_DEV = { "client/ui": ["tailwindcss", "shadcn"] }
 
 // Code copied into the repository, which no package manager knows of
-// (app/ghostty/README.md).
+// (client/ghostty/README.md).
 const VENDORED = [
-  ["T3 Code's terminal adapter", "app/ghostty/LICENSE-T3"],
-  ["Ghostty's libghostty-vt", "app/ghostty/native/LICENSE-GHOSTTY"],
-  ["Symbols Nerd Font Mono", "app/ghostty/src/t3/fonts/LICENSE"],
+  ["T3 Code's terminal adapter", "client/ghostty/LICENSE-T3"],
+  ["Ghostty's libghostty-vt", "client/ghostty/native/LICENSE-GHOSTTY"],
+  ["Symbols Nerd Font Mono", "client/ghostty/src/t3/fonts/LICENSE"],
 ].map(([name, file]) => ({
   name,
   version: "vendored",

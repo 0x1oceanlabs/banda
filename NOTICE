@@ -5,17 +5,17 @@ Licensed under the Apache License, Version 2.0 (LICENSE).
 
 Banda includes code from others, under their own licenses:
 
-- T3 Code's terminal adapter, in app/ghostty/src/t3: MIT,
-  app/ghostty/LICENSE-T3. Copyright (c) 2026 T3 Tools Inc.
-- Ghostty's libghostty-vt, built to WebAssembly in app/ghostty/src/t3/vendor,
-  and its key header in app/ghostty/native: MIT,
-  app/ghostty/native/LICENSE-GHOSTTY. Copyright (c) 2024 Mitchell
+- T3 Code's terminal adapter, in client/ghostty/src/t3: MIT,
+  client/ghostty/LICENSE-T3. Copyright (c) 2026 T3 Tools Inc.
+- Ghostty's libghostty-vt, built to WebAssembly in client/ghostty/src/t3/vendor,
+  and its key header in client/ghostty/native: MIT,
+  client/ghostty/native/LICENSE-GHOSTTY. Copyright (c) 2024 Mitchell
   Hashimoto, Ghostty contributors.
-- Symbols Nerd Font Mono, in app/ghostty/src/t3/fonts: MIT,
-  app/ghostty/src/t3/fonts/LICENSE. Copyright (c) 2014 Ryan L McIntyre.
+- Symbols Nerd Font Mono, in client/ghostty/src/t3/fonts: MIT,
+  client/ghostty/src/t3/fonts/LICENSE. Copyright (c) 2014 Ryan L McIntyre.
 
-app/ghostty/README.md says where each came from, at which commit.
+client/ghostty/README.md says where each came from, at which commit.
 
-- LiteLLM's model price data, in modules/harnesses/engine/src/usage/prices.json:
-  MIT, modules/harnesses/engine/src/usage/LICENSE-LITELLM.
+- LiteLLM's model price data, in platform/harnesses/engine/src/usage/prices.json:
+  MIT, platform/harnesses/engine/src/usage/LICENSE-LITELLM.
   Copyright (c) 2023 Berri AI. The snapshot records its source and commit.

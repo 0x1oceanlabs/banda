@@ -92,8 +92,8 @@ call the trial's engine under `env -u BANDA_TOKEN -u BANDA_ENGINE`.
 
 ## Effect in the window's main process
 
-Electron main is written in Effect 4: `app/desktop/src` (not the
-preload), `app/desktop-kit` and the modules' `desktop` parts, never the
+Electron main is written in Effect 4: `client/desktop/src` (not the
+preload), `client/desktop-kit` and the modules' `desktop` parts, never the
 page
 ([ADR 0020](docs/adr/0020-the-windows-main-process-is-written-in-effect.md)):
 

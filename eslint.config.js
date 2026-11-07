@@ -10,11 +10,11 @@ export default defineConfig([
     "**/dist",
     "**/out",
     "**/node_modules",
-    "contract/src/generated",
+    "sdk/contract/src/generated",
     "target",
-    "app/desktop/test-results",
+    "client/desktop/test-results",
     // T3 Code's terminal adapter, vendored as it is: a newer pin is a copy.
-    "app/ghostty/src/t3",
+    "client/ghostty/src/t3",
   ]),
   {
     files: ["**/*.{ts,tsx}"],
@@ -35,9 +35,10 @@ export default defineConfig([
     // The window's main process has no React; Effect's `Service.use` is
     // not a hook (ADR 0020).
     files: [
-      "app/desktop/src/**/*.ts",
-      "app/desktop-kit/src/**/*.ts",
-      "modules/*/desktop/src/**/*.ts",
+      "client/desktop/src/**/*.ts",
+      "client/desktop-kit/src/**/*.ts",
+      "apps/*/desktop/src/**/*.ts",
+      "platform/*/desktop/src/**/*.ts",
     ],
     rules: { "react-hooks/rules-of-hooks": "off" },
   },

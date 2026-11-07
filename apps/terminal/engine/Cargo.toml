@@ -1,0 +1,32 @@
+[package]
+name = "banda-terminal"
+description = "The terminal module: programs a Person runs in a terminal, in the engine."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+banda-kernel = { path = "../../../kernel" }
+banda-look = { path = "../../../platform/look" }
+dirs.workspace = true
+pty-process.workspace = true
+rusqlite.workspace = true
+rustix.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+ts-rs.workspace = true
+uuid.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+sysinfo.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

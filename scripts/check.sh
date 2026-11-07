@@ -39,9 +39,9 @@ packages() {
   quiet pnpm --filter @banda/desktop exec install-electron
 }
 
-# The Rust tests write contract/src/generated; a change there means the
+# The Rust tests write sdk/contract/src/generated; a change there means the
 # TypeScript types on disk were stale.
-types() { find contract/src/generated -type f -print0 | sort -z | xargs -0 sha256sum; }
+types() { find sdk/contract/src/generated -type f -print0 | sort -z | xargs -0 sha256sum; }
 
 rust() {
   step "Rust: format, lints"
@@ -63,7 +63,7 @@ rust() {
 
   step "The TypeScript types match the Rust"
   if [[ "$before" != "$(types)" ]]; then
-    echo "cargo test rewrote contract/src/generated: review it and run again." >&2
+    echo "cargo test rewrote sdk/contract/src/generated: review it and run again." >&2
     exit 1
   fi
 }
