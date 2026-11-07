@@ -151,9 +151,10 @@ The host that keeps the Person's documents: the always-on host when the
 Person has one, else the laptop (ADR 0082).
 
 **Client**:
-What shows the hosts' work and asks for changes: the desktop window, a
+What shows the hosts' work and asks for changes: the desktop app, a
 browser tab, a phone, the CLI. One client works with several hosts, and
-only a client joins them (ADR 0062, ADR 0082).
+only a client joins them (ADR 0062, ADR 0082). Every client but the CLI
+shares one core, and only its Window knows the device (ADR 0089).
 _Avoid_: frontend.
 
 **Device**:
@@ -218,8 +219,17 @@ A verb with a version and typed args, such as `show.diff@1`, asked for
 without naming who handles it. In v1 one App handles each (ADR 0082).
 
 **Slot**:
-A place in one App's thing that other Apps fill with typed rows, such as a
+A place in one App's thing that other Apps fill with Items, such as a
 Thread's details or the Pane header (ADR 0082).
+
+**Item**:
+A thing an App lists, `item@1`: an Address, a title, a Mark, when it
+changed, what is new to see, its owner and the Pane to open. Any App lists
+its things as Items, and the sidebar list, the bar and push read them; a
+Slot holds Items too. A row is how the sidebar list draws an Item (ADR
+0082, ADR 0087).
+_Avoid_: row and card for what an App lists or puts in a Slot (a card is
+a Thread's block).
 
 **Web App**:
 A site as an App, in a webview of its own with its own sign-in. Its
@@ -236,7 +246,7 @@ drawn with: shadcn's, Banda's own, and the live components (ADR 0062).
 **Live component**:
 A catalogue component that needs every frame or a fast stream: a Thread
 with its message box, a terminal, a browser's page, a file's view (ADR
-0062).
+0062). It obeys its Tile's Configure (ADR 0088).
 
 **Tree**:
 What an App's view answers: catalogue components and their props, as
@@ -246,6 +256,7 @@ data, drawn by each client (ADR 0062).
 A sandboxed iframe on an origin of its own, for HTML a spec walls in, such
 as an MCP App's page. It acts as itself, never as the Person (ADR 0062,
 ADR 0083).
+_Avoid_: frame for an animation frame (say tick).
 
 **Site**:
 Where a Web App runs: a webview on the device, in a partition of its own
@@ -532,13 +543,41 @@ move ships the same (ADR 0085).
 ## Window
 
 **Window**:
-The desktop client: the Electron app, which shows Projects as tiled Panes
-(ADR 0062).
+Banda's program on one client screen: the desktop app's window, a browser
+tab, the phone's PWA, a popped-out Pane's window. It holds what its form
+has of the Bar, the Sidebar and the Top layer (a popped-out Pane's window
+has only the Top layer), gives the middle to the Tiling where there is
+one, keeps Here and routes the keys. It names no App (ADR 0087).
+_Avoid_: shell (that is a program a terminal runs); window for a Pane.
+
+**Area**:
+One of the Window's regions: the Bar, the Sidebar, the Top layer, and the
+middle, which is the Tiling's. Each device's form maps them: on a phone the
+sidebar list is the home screen (ADR 0087, ADR 0089).
+_Avoid_: place (in code, where a Pane opens), dock.
+
+**Top layer**:
+What sits over the tiles: the Banda menu, the launcher, the Drawer, Quick
+Look, dialogs, menus and toasts. There is one of each at a time, but
+toasts, which stack up to three. The Drawer and Quick Look each hold one
+Pane; the Window draws the toasts (ADR 0011, ADR 0087).
+_Avoid_: overlay (that is the tiling's unsaved changes), float.
+
+**Here**:
+Where the Person is in one Window: the workspace, the Pane in focus, its
+Project and the one thing it shows, whether the Sidebar shows, and whether
+the device is in front. It is the context Widgets and every action read,
+as a program reads its working folder; only the Window writes it, and no
+host keeps it. A Pane never reads it to draw (ADR 0087).
+_Avoid_: focus (the keyboard's, and the focused Pane).
 
 **Pane**:
-One tile in a client that shows an App's view, such as a Thread or a
-browser page. It names its Project, never a host, and reaches the host only
-through the API (ADR 0062).
+An App's view opened for one Project, such as a Thread or a browser page,
+with what it shows kept in the arrangement. It stands in a Tile, the
+Drawer, Quick Look or a window of its own, and looks the same on every
+client. It names its Project and the one thing it shows, never a host, and
+reaches the host only through the API (ADR 0062, ADR 0087).
+_Avoid_: window (that is Banda's program), tile (that is its box).
 
 **Mod**:
 The keys held for every Banda key and the mouse's moves: Alt, unless the
@@ -546,6 +585,12 @@ Person picks another in `keys.toml`'s `mod`, as Ctrl+Alt where the desktop
 holds Alt. With Shift, or with one key more, it makes Banda's other keys.
 Banda writes keys as they are pressed, never "Mod" (ADR 0068).
 _Avoid_: main key, except as Settings' label for it.
+
+**Action**:
+One thing the Person can do, by id, with a JSON Schema of what it takes:
+keys, buttons, menus, widgets, the CLI and Agents all run the same one
+(ADR 0005, ADR 0071).
+_Avoid_: command (that is a request to an App).
 
 **Pane menu**:
 What the Person can do to a Pane and its column with the mouse, each row
@@ -558,7 +603,13 @@ _Avoid_: window menu, layout menu.
 What the Person can do to a Thread: rename it, suggest a title, mark it
 unread, archive it. A click on the title in its Pane's header and a right
 click on its row in the sidebar open it (ADR 0077). The Pane menu is
-another: it acts on the Pane, not the Thread.
+another: it acts on the Pane, not the Thread. Its rows are item actions:
+the Threads App's, then Banda's own (ADR 0087).
+
+**Item action**:
+An action that takes one Item, such as renaming or snoozing a Thread. The
+Item's App gives its own; Banda gives marking it unread and archiving it
+(ADR 0087).
 
 **Message box**:
 Where the Person writes to an Agent, at a Thread's foot (ADR 0062).
@@ -575,10 +626,24 @@ Web Store (ADR 0084). Its button sits in every browser Pane's row when it is pin
 and behind the Extensions button when it is not.
 
 **Tiling**:
-How Banda lays out Panes: one Rust model, with its authority on the home
-host and a copy in each client that draws a key at once (ADR 0062). Its
-other name is the composer.
+How Banda lays out Panes, and the program in the Window's middle that does
+it: one Rust model, with its authority on the home host and a copy in each
+client that draws a key at once, and on each client the view, the Tiles
+and the motion. It knows Panes, never what they show (ADR 0062, ADR 0087).
+Its other name is the composer.
 _Avoid_: composer for anything else.
+
+**Tile**:
+The Tiling's box for one Pane on the screen: where it is, what of it shows,
+and its state: shown, moving or hidden. The look's `tile` is its glass
+(ADR 0088).
+_Avoid_: Pane (that is what an App draws in it).
+
+**Configure**:
+What the Tiling tells a Pane: its settled size, its scale and its Tile's
+state, as a Wayland compositor configures a window. A Pane draws nothing
+while hidden, and measures and resizes nothing while moving (ADR 0088).
+_Avoid_: resize.
 
 **Arrangement**:
 The workspaces, columns, Groups and widths, kept by the tiling on the home
@@ -587,18 +652,22 @@ host. The client's view is not part of it (ADR 0062, ADR 0082).
 **Overlay**:
 The changes to the arrangement a client keeps, marked "not yet saved",
 while the home host is away: an hour and 200 changes at most (ADR 0062).
+_Avoid_: overlay for what sits over the tiles (that is the Top layer).
 
 **Workspace**:
 One screen of Panes. It can hold Panes of any Projects; it only lays out the
 screen, and the Project stays the boundary. Workspaces sit one under another,
 and there is always one empty workspace at the bottom. A Project has one
 workspace where its Agents' Groups open, in a row (ADR 0065).
-_Avoid_: Desk.
+_Avoid_: Desk (in speech, «стол» is a workspace; the look's desk is the
+glass under the tiles).
 
 **Flow**:
-How an Agent's windows stand, as the sidebar's header switches it: free,
+How an Agent's Panes stand, as the sidebar's header switches it: free,
 where they are; in a row on its Project's workspace; or solo, the Agent
-you are at filling the screen (ADR 0079).
+you are at filling the screen (ADR 0079). Free and the row are where the
+Tiling places a Pane; solo is each client's own view, so a phone and a
+desktop open at once do not fight over it (ADR 0087).
 
 **Strip**:
 How a workspace lays out its Panes: columns side by side that scroll
@@ -625,10 +694,10 @@ knows it; the arrangement stays as it was.
 Every workspace zoomed out at once, to pick a Pane or a workspace.
 
 **Quick Look**:
-A file shown in a tile that floats over the desk, as Space shows the row
-picked in Files: the tiling stays, the tree keeps the keys and its arrows
-move the tile, ↵ opens the file as a Pane (ADR 0073, decision 7). One per
-window.
+A file shown in a Pane that floats over the tiles, in the Top layer, as
+Space shows the row picked in Files: the tiling stays, the tree keeps the
+keys and the Pane follows its arrows, ↵ opens the file as a Pane of its
+own (ADR 0073, decision 7; ADR 0087). One per Window.
 _Avoid_: preview Pane, peek (that is its code's word).
 
 **Columns, Gallery**:
@@ -652,9 +721,14 @@ and is lifted again as it was. It is in no workspace until its pin makes
 it a column of the one on screen.
 
 **Sidebar**:
-The list of every Thread of every Project, docked at the window's left edge.
-Each Thread shows its own Mark. A preset arranges it, and the Person's own
-keys change any part of it.
+The Window's area at its left edge, and Banda's list that fills it, the
+sidebar list: every Thread of every Project, and whatever else an App
+lists as an Item. Each row shows its own Mark. A preset arranges it, and
+the Person's own keys change any part of it. The list is a part of Banda,
+not of the Threads App: it reads only what Apps list (ADR 0087). On a
+phone it is the home screen. Where the two must be told apart, say "the
+Sidebar" for the area and "the sidebar list" for the list.
+_Avoid_: panel; Inbox (that is the merged Calls).
 
 **Archive**:
 Where the Threads the Person put away wait, folded at the sidebar's
@@ -691,16 +765,18 @@ A section at the bottom of the sidebar, folded or open, with its count,
 as a Person's `group.bottom` asks; none of Banda's presets has one.
 
 **Bar**:
-The line across the window's top: the Mark, which is the sidebar's button,
+The Window's line across its top: the Mark, which is the sidebar's button,
 at its left edge, then widgets on its left, in its middle and on its right,
-the workspaces' numbers and their `+` among them (ADR 0024, ADR 0064).
+the workspaces' numbers and their `+` among them (ADR 0024, ADR 0064). On a
+phone it is a header with at most two compact widgets (ADR 0089).
 
 **Widget**:
-A module's item on the bar, or the window's own: an icon, maybe a
-number, that shows only while it has something to say. A click runs one
-of its module's actions. The look's `[bar]` says which widgets stand on
-the left, in the middle and on the right, and in what order; with Alt held,
-the mouse moves one there and writes it (ADR 0064).
+A small view on the Bar, an App's or one of Banda's own parts', as the
+sidebar list's counts: an icon, maybe a number, that shows only while it
+has something to say. It reads Here for where the Person is, and a click runs an action or
+opens its own list. The look's `[bar]` says which widgets stand on the
+left, in the middle and on the right, and in what order; with Alt held,
+the mouse moves one there and writes it (ADR 0064, ADR 0087).
 
 **Update**:
 A newer Banda of the same channel, which Banda downloads by itself and
@@ -720,7 +796,9 @@ it is answered.
 What a module draws for each Project, showing nothing, to tell the window what
 its work there calls the Person for and what the sidebar lists for it. The
 bar's Mark shows the loudest, and the window tells the Person of each thing
-that starts calling.
+that starts calling. It is going: an App's host part lists Items and raises
+Calls instead, and the Watches go once calls are worked out on the host
+(ADR 0082, ADR 0087).
 
 **Call**:
 Something that calls for the Person now: a Thread finished while they were
@@ -731,7 +809,9 @@ notification when the window is behind. `Alt+U` goes to it.
 
 **Inbox**:
 Every Call of every host, merged by the client. Each row keeps its host,
-so an answer goes back there (ADR 0081, ADR 0082).
+so an answer goes back there (ADR 0081, ADR 0082). It is a part of Banda,
+not of an App; `Alt+U` walks it in the sidebar's order (ADR 0079, ADR
+0087).
 
 **Toast**:
 A short card at the window's top right that tells of a Call whose Thread is
