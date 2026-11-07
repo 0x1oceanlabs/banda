@@ -4990,4 +4990,9 @@ async fn an_agent_snoozes_its_own_thread_for_a_while() {
         snooze(agent, both).await.is_err(),
         "after or until, not both"
     );
+    // It starts no turn: going on by itself is its Person's alone.
+    let resume = json!({ "after": "2h", "resume": true });
+    let refused = snooze(agent, resume).await.unwrap_err();
+    assert_eq!(refused.code, Code::Forbidden, "{refused:?}");
+    assert_eq!(world.snooze_of(&mine).await.unwrap().until, Some(until));
 }

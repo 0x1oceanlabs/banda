@@ -6,7 +6,6 @@
 
 use crate::model::{Fact, Snooze, ThreadId, TurnState, Wake, Woke};
 use crate::rules::snooze::{asleep, may_snooze, wake_of, wakes};
-use crate::rules::to_thread::own_thread;
 use crate::{emit, store};
 use banda_kernel::{Error, EventFilter, Heard, Participant, Refusal, Tx, now_ms};
 use schemars::JsonSchema;
@@ -40,7 +39,7 @@ pub struct SnoozeAsk {
 }
 
 /// Snoozes `thread` for `author`, in place of a snooze it had. An Agent
-/// snoozes only its own Thread.
+/// snoozes only its own Thread, and never so that it goes on by itself.
 pub fn snooze(tx: &mut Tx<'_>, author: Participant, ask: SnoozeAsk) -> Result<(), Error> {
     let SnoozeAsk {
         thread,
@@ -50,6 +49,14 @@ pub fn snooze(tx: &mut Tx<'_>, author: Participant, ask: SnoozeAsk) -> Result<()
     } = ask;
     let thread = thread_of(tx, author, thread)?;
     may_touch(tx, author, thread)?;
+    // An Agent's snooze sends nothing and starts no turn (decision 10):
+    // only its Person's goes on by itself.
+    if resume && author.agent().is_some() {
+        return Err(Refusal::forbidden(
+            "An Agent's snooze starts no turn: only its Person's goes on by itself.",
+        )
+        .into());
+    }
     if after.is_some() && until.is_some() {
         return Err(Refusal::invalid("Give `after` or `until`, not both.").into());
     }
@@ -96,7 +103,11 @@ fn thread_of(
 ) -> Result<ThreadId, Error> {
     match (thread, author) {
         (Some(thread), _) => Ok(thread),
-        (None, Participant::Agent(agent)) => Ok(own_thread(store::thread_of(tx.sql(), agent)?)?),
+        // A pass of no Thread, as a Harness's process's, has none to snooze.
+        (None, Participant::Agent(agent)) => store::thread_of(tx.sql(), agent)?.ok_or_else(|| {
+            Refusal::forbidden("An Agent snoozes only its own Thread, and this pass names none.")
+                .into()
+        }),
         (None, Participant::Person(_)) => {
             Err(Refusal::invalid("Name the Thread to snooze.").into())
         }

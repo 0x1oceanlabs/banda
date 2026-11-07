@@ -178,6 +178,11 @@ defaults and stay his to change.
       work sleeps until its turn ends. Words for a day (`fri 14`) stay the
       window's: the engine knows no Person's timezone, and an Agent can
       work the moment out itself.
+    - _Changed on 2026-11-07, as ADR 0083 holds._ The Agent snoozes as
+      itself, under its pass: only its own Thread, never so that it goes
+      on by itself (decision 8 is the Person's), and the CLI in its shell
+      is walled to its Project. The Person's CLI snoozes and wakes any
+      Thread.
 
 11. **Later: waking on an event** (_decided_). A snooze "until the PR is
     merged" or "until CI passes" is "until done" with other events. It
