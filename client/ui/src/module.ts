@@ -76,7 +76,8 @@ export type WindowApi = {
   /** The Project a new Thread starts in. */
   home: ProjectId
   /** Shows a new Pane right of the focused one, with its width, and
-   * focuses it: in `project`, else in the focused Pane's Project. It is a new
+   * focuses it: in `project`, else in the Project the Person is in, the
+   * focused Pane's or, on an empty workspace, the workspace's. It is a new
    * tile each time, as a browser's new window, even when another shows
    * the same Pane. With `focus: false` the focus stays where it is, as
    * for a tab an Agent opened. With `beside`, an Agent's ID, it shows
@@ -325,8 +326,8 @@ export type MenuRow = {
   acts?: readonly MenuAct[]
 }
 
-/** Where the Banda menu looks: the focused Project, or the one the Person
- * went into (`entered`). */
+/** Where the Banda menu looks: the Project the Person is in, or the one
+ * they went into (`entered`). */
 export type Here = {
   engine: Engine
   project: ProjectId
@@ -366,7 +367,8 @@ export type Source = {
 export type WidgetProps = {
   engine: Engine
   projects: readonly ProjectSummary[]
-  /** The focused Pane's Project. */
+  /** The Project the Person is in: the focused Pane's, else the
+   * workspace's, else home. */
   project: ProjectId
   window: WindowApi
 }

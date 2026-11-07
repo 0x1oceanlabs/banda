@@ -124,6 +124,7 @@ import {
   heightsOf,
   inBar,
   left,
+  projectIn,
   samePane,
   share,
   step,
@@ -870,10 +871,9 @@ export function Shell({
   useEffect(() => {
     saidNow.current = said
   }, [said])
-  // The settings Pane (ADR 0016), in the focused Pane's Project.
+  // The settings Pane (ADR 0016), in the Project the Person is in.
   const settings = useCallback(
-    (link?: string) =>
-      change((w) => settingsAt(w, focused(w)?.project ?? home, link)),
+    (link?: string) => change((w) => settingsAt(w, projectIn(w) ?? home, link)),
     [change, home]
   )
   // A settings route opens the settings there; any other, the menu.
@@ -921,7 +921,7 @@ export function Shell({
           // shows, or takes these args when asked to update it.
           return (again || !update ? opening : updating)(
             w,
-            project ?? at?.project ?? focused(w)?.project ?? home,
+            project ?? at?.project ?? projectIn(w) ?? home,
             pane,
             {
               ...how,
@@ -997,7 +997,7 @@ export function Shell({
                 pane,
                 project:
                   project ??
-                  focused(seenNow.current.state)?.project ??
+                  projectIn(seenNow.current.state) ??
                   partsNow.current.home,
                 fill: was?.fill ?? false,
               }
@@ -1189,8 +1189,9 @@ export function Shell({
         : startThread(project, ask),
     [startThread, route]
   )
-  // The Project the focused Pane is in: where the menu's New Thread starts.
-  const here = focused(workspaces)?.project ?? home
+  // The Project the Person is in: where the menu's New Thread starts, on
+  // an empty Project workspace too.
+  const here = projectIn(workspaces) ?? home
   // The bar's widgets, the window's own and the modules', where the
   // look's `[bar]` puts them (ADR 0024).
   const listed = useCallback((entry: Entry) => listedIn(lists, entry), [lists])
@@ -1485,10 +1486,10 @@ export function Shell({
                   onStep={(by) => change((w) => step(w, by))}
                   onGo={goTo}
                   onStart={(pane) =>
-                    // Started on this workspace, it opens here, whatever its
-                    // kind's home.
+                    // Started on this workspace, it opens here, in its
+                    // Project, whatever its kind's home.
                     change((w) =>
-                      opening(w, focused(w)?.project ?? home, pane, {
+                      opening(w, projectIn(w) ?? home, pane, {
                         place: "right",
                         again: true,
                       })

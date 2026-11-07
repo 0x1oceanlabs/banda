@@ -332,6 +332,17 @@ export function wallpaper(dir: string) {
   )
 }
 
+/** Makes a Project called `name` from the Banda menu, as the Person does:
+ * its New Thread shows. */
+export async function newProject(page: Page, name: string): Promise<void> {
+  await page.getByRole("button", { name: "Add Project", exact: true }).click()
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  await menu.getByRole("option", { name: /New Project/ }).click()
+  await menu.getByRole("combobox").fill(name)
+  await menu.getByRole("combobox").press("Enter")
+  await expect(menu).toBeHidden()
+}
+
 export async function firstThread(
   page: Page
 ): Promise<{ thread: Locator; composer: Locator }> {
@@ -340,12 +351,7 @@ export async function firstThread(
     .getByRole("region", { name: "New Thread" })
     .getByRole("button", { name: "Close New Thread", exact: true })
     .click()
-  await page.getByRole("button", { name: "Add Project", exact: true }).click()
-  const menu = page.getByRole("dialog", { name: "Banda menu" })
-  await menu.getByRole("option", { name: /New Project/ }).click()
-  await menu.getByRole("combobox").fill("Work")
-  await menu.getByRole("combobox").press("Enter")
-  await expect(menu).toBeHidden()
+  await newProject(page, "Work")
   const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
   const thread = page.locator("section").filter({ has: composer })
   return { thread, composer }
