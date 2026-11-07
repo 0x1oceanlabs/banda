@@ -302,13 +302,17 @@ command (with its ID)
   run twice, and its end is written once. The engine's own effects stay
   owned by its boot, which needs no clock.
 - A receipt, and the row of an effect that settled, are kept 30 days,
-  longer than the seven days a client keeps a command to send again; then
-  the Project's loop lets them go. A receipt's 30 days run from when it
-  was last written, as its command began or was answered, so never from
-  before its command first came: every resend finds it, `may_have_run`
-  included. A receipt whose command still runs stays, however long. A
-  command sent again within them gets its first answer; past them, it
-  runs as a new one.
+  longer than the seven days within which a client sends a command again;
+  then the Project's loop lets them go. A receipt's 30 days run from when
+  it was last written, as its command began or was answered, so never
+  from before its command first came: every resend finds it,
+  `may_have_run` included. A receipt whose command still runs stays,
+  however long. A command sent again within them gets its first answer;
+  past them, it runs as a new one.
+- Those seven days are today a convention of Banda's clients, not a
+  check: `banda mcp` sends a command again at once, within its session.
+  The host will check them: a command will carry `not_after`, and past it
+  the host will refuse it (ADR 0082, decisions 4 and 16).
 - Outbox rows are the kernel's bookkeeping, not records of the work. What a
   Person sees of an effect is the events its module writes.
 - A window loads a snapshot at sequence N, then streams the events after N.
