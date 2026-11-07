@@ -205,6 +205,22 @@ The kernel holds only what every module needs, and it names no module.
 - **Identity.** A port: it says which Participant a connection's token names.
   On one computer, whoever holds the engine's secret is the owner. Later it
   is OIDC, or our accounts.
+- **Environment** (ADR 0084, decision 1). A port beside Identity: where a
+  Project's programs run. A module starts each through its Project's
+  (`ModuleProject::environment`), never itself: a `Program` (its
+  arguments, never a shell line; what it adds to and takes from the
+  environment it starts in; its folder, `cwd`) on pipes (`spawn`), where
+  it leads a process group of its own and is killed once let go of, or on
+  a terminal (`pty`), where it leads a session of its own. The engine
+  gives the kernel its adapter: `local`, the platform's
+  `banda-environments`, which runs the program on the host as Banda always
+  has; a kernel given none starts nothing. Harness processes, terminals
+  and the git acts the Person asks for start there, and with them all
+  they start: an Agent's tools, the MCP servers its Harness runs, dev
+  servers. What keeps Banda's books (git's status, diffs, checkpoints and
+  watch through `banda-git-cli`, Files' reads) runs on the host and
+  executes nothing of a Project's. The machine's scope has the same
+  environment, for the Harness process its `harnesses` module asks.
 - **Passes.** A module asks its `ModuleProject` for a new pass of an Agent
   (`pass(agent)`), 32 random bytes in hex; the agents module asks as a
   session opens. The kernel keeps passes in memory, so they end with the
@@ -765,9 +781,12 @@ If Chat is removed, Agents still works through its own Thread.
 - **The code that speaks to a Harness is the crate `banda-harnesses`**,
   which knows nothing of Threads: the list and its file, finding the
   Person's CLI, a process (`acp::Process`: starting, recording, agreeing
-  on ACP, who is signed in) and the pool of processes. The agents module
-  wraps a process with its sessions' handlers and capabilities. The
-  agents module and `harnesses` share one list. The version a CLI says is
+  on ACP, who is signed in) and the pool of processes. A process, and
+  its CLI asked its version, start in the environment of the Project the
+  pool is asked for (ADR 0084, decision 5), and ACP speaks on its pipes
+  (`acp/pipes.rs`); a short run apart from a Thread runs in the Thread's
+  process. The agents module wraps a process with its sessions' handlers
+  and capabilities. The agents module and `harnesses` share one list. The version a CLI says is
   kept by its path as the latest look found it, by any process, and
   checked against its entry's `minimum` at each read: a Thread stops
   warning once the Person updated it and checked again.
@@ -790,10 +809,12 @@ If Chat is removed, Agents still works through its own Thread.
 
 - **A Terminal is a program on a PTY** in the engine, run as the Person:
   their shell in the Project's folder, or a program with its arguments,
-  never a shell line, such as a Harness's sign-in. It needs the Run right,
-  and it belongs to its Project. The window chooses its ID, so a Pane names
-  its terminal before the engine answers (`terminal.open`). Opening one
-  whose program ended runs the program again.
+  never a shell line, such as a Harness's sign-in. It starts in the
+  Project's environment (ADR 0084), as does every server run in it. It
+  needs the Run right, and it belongs to its Project. The window chooses
+  its ID, so a Pane names its terminal before the engine answers
+  (`terminal.open`). Opening one whose program ended runs the program
+  again.
 - **What it printed stays in memory**, the newest 2 MB, never in the log: a
   screen repaints megabytes, and the program ends with the engine anyway.
   The bytes become text as they come, a character split between reads
@@ -1268,6 +1289,7 @@ banda/
     look/             Rust: banda look, the look, the sidebar's arrangement and the browser's; skill/ its topics
     settings/         Rust: Banda's settings files, each described once, and the one writer that changes them (ADR 0016)
     git-cli/          Rust: how Banda starts git: its own bookkeeping, which runs no program a repository names, and the acts the Person asks for
+    environments/     Rust: where a Project's programs run, the adapters of the kernel's Environment port: local (ADR 0084)
     harnesses/        Rust: the Harnesses and how each starts; adapters/ the ACP adapters Banda carries and its shim of Claude's Agent SDK, a Node package run on the host (ADR 0059, ADR 0078)
   client/             the window
     ui/               shadcn/ui and the Pane contract
@@ -1351,7 +1373,11 @@ images. Sweeps retain images still referenced by a fork after a rewind.
 
 - **Architecture tests.** The kernel names no module, no module reads
   another's tables, and a Pane imports only the API, `@banda/ui`, React
-  and its icons; the terminal's Pane also Ghostty.
+  and its icons; the terminal's Pane also Ghostty. No code of the engine
+  makes a process but `banda-environments`, and the places named in its
+  test, with why, that ask the host about itself or keep Banda's books and
+  run nothing of a Project's (ADR 0084, decision 4); no crate takes ACP's
+  agent that starts its own.
 - **Module tests** run through the module's interface: commands go in and
   events come out. Nothing past the interface is mocked.
 - **Checkpoints** (ADR 0014, decision 3). With `BANDA_CHECKPOINTS` set,

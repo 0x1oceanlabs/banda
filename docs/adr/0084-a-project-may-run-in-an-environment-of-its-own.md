@@ -6,9 +6,13 @@ date: 2026-11-06
 # A Project may run in an environment of its own
 
 _Accepted by Roma on 2026-11-06 with the architecture vision, whose
-decisions 11 and 18 it records. Nothing here is built. Research:
-docs/research/2026-11-06-architecture-vision.md §6, and
-docs/research/2026-11-06-architecture-vision/isolation.md._
+decisions 11 and 18 it records. Plan step 1 is built: the port, the
+`local` adapter, and every program Banda starts for a Project on it.
+Its architecture test refuses a process made outside
+`banda-environments`, but for the places it names, with why, that ask
+the host about itself or keep Banda's books and run nothing of a
+Project's. Research: docs/research/2026-11-06-architecture-vision.md
+§6, and docs/research/2026-11-06-architecture-vision/isolation.md._
 
 Banda starts programs for a Project in about ten places: a Harness's CLI,
 and through it every tool an Agent runs; a terminal's shell; git; the
