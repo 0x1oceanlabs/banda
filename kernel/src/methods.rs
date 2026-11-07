@@ -75,6 +75,12 @@ pub struct Tool {
     pub name: String,
     /// The method it calls: `<module>.<method>`.
     pub method: String,
+    /// Its method's kind. After a broken connection, `banda mcp` sends a
+    /// tool call again only when it is a command, whose receipt keeps it
+    /// from running twice (ADR 0082, decision 4). An older engine lists no
+    /// kind: its tools count as `call`s.
+    #[serde(default = "unsaid")]
+    pub kind: Kind,
     /// What it does, from the method's `///`.
     pub description: String,
     /// The JSON Schema of its params.
@@ -83,13 +89,14 @@ pub struct Tool {
 
 impl Tool {
     /// A tool from a `methods!` line, its doc lines joined into words.
-    pub fn new(name: &str, method: String, doc: &[&str], mut schema: Schema) -> Tool {
+    pub fn new(name: &str, method: String, kind: Kind, doc: &[&str], mut schema: Schema) -> Tool {
         // What a reader of the schema needs, without the generator's notes.
         schema.remove("$schema");
         schema.remove("title");
         Tool {
             name: name.to_owned(),
             method,
+            kind,
             description: words(doc),
             schema: schema.to_value(),
         }
@@ -114,12 +121,19 @@ pub fn bare(name: &'static str) -> &'static str {
 
 /// A method's kind, as its line in `methods!` says: `call`, `command` or
 /// `stream`, each as this module's doc says (ADR 0082, decision 3).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, serde::Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
+#[ts(export, rename = "MethodKind")]
 pub enum Kind {
     Call,
     Command,
     Stream,
+}
+
+/// The kind of a tool its engine did not say: a `call`, which keeps no
+/// receipt, so nothing sends it again.
+fn unsaid() -> Kind {
+    Kind::Call
 }
 
 /// The refusal for a command sent with no command ID.
@@ -279,7 +293,7 @@ macro_rules! methods {
             #[allow(dead_code, unused_mut, unused_variables)]
             fn method_tools(module: &str) -> Vec<$crate::methods::Tool> {
                 let mut tools = Vec::new();
-                $( $crate::methods!(@tool tools module $name($params) [$($doc)*] $($tool)?); )*
+                $( $crate::methods!(@tool tools module $kind $name($params) [$($doc)*] $($tool)?); )*
                 tools
             }
         }
@@ -297,11 +311,12 @@ macro_rules! methods {
     (@kind stream) => { $crate::Kind::Stream };
     (@tool_name) => { None };
     (@tool_name $tool:literal) => { Some($tool) };
-    (@tool $tools:ident $module:ident $name:ident($p:ty) [$($doc:literal)*]) => {};
-    (@tool $tools:ident $module:ident $name:ident($p:ty) [$($doc:literal)*] $tool:literal) => {
+    (@tool $tools:ident $module:ident $kind:ident $name:ident($p:ty) [$($doc:literal)*]) => {};
+    (@tool $tools:ident $module:ident $kind:ident $name:ident($p:ty) [$($doc:literal)*] $tool:literal) => {
         $tools.push($crate::methods::Tool::new(
             $tool,
             format!("{}.{}", $module, $crate::methods::bare(stringify!($name))),
+            $crate::methods!(@kind $kind),
             &[$($doc),*],
             $crate::schemars::schema_for!($p),
         ));

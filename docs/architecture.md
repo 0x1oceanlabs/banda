@@ -79,15 +79,20 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   which it answers itself from the Banda skill. Its
   `instructions` are the skill's brief (`platform/skill/BRIEF.md`), under
   the 4,096 characters Claude Code keeps of them; the core and its topics
-  come through `skill` (ADR 0037, decision 7). Each tool call is a command
-  whose ID is derived from the session, new each time `banda mcp` starts
+  come through `skill` (ADR 0037, decision 7). Each tool call carries a
+  command ID derived from the session, new each time `banda mcp` starts
   or its client says `initialize`, and the request's ID
-  (`CommandId::derive`): a request sent again, by its client or by `banda
-  mcp` as it connects again once to an engine that broke off, gets the
-  first answer and runs nothing again (ADR 0082, decision 4). A refused
-  or malformed call is a tool result marked `isError`, with the refusal
-  and that nothing was done; only an engine that does not answer is a
-  JSON-RPC error.
+  (`CommandId::derive`). A tool whose method is a command keeps a receipt
+  under it: a request sent again, by its client or by `banda mcp` as it
+  connects again once to an engine that broke off, gets the first answer
+  and runs nothing again (ADR 0082, decision 4). Any other tool, a
+  `call`, keeps no receipt, so `banda mcp` never sends it again: one the
+  engine broke off on is answered that it may have run, and the Agent
+  looks before it calls again. Each tool's kind comes in
+  `projects.tools`, from its line in `methods!`. A refused or malformed
+  call is a tool result marked `isError`, with the refusal and that
+  nothing was done; only an engine that does not answer is a JSON-RPC
+  error.
 - **An Agent's `banda` acts under its pass.** The shells an Agent runs
   commands in get `BANDA_TOKEN` and `BANDA_ENGINE` too. Each Harness
   process carries a pass its Agents share, of an Agent no one Thread
