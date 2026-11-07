@@ -150,6 +150,48 @@ export function releaseScroll(strip: HTMLElement): void {
   strip.scrollLeft = left
 }
 
+/** The share of a column that shows between `from` and `to` of its
+ * Strip's scroll, 0 to 1. */
+export function shownShare(
+  place: { left: number; right: number },
+  view: { from: number; to: number }
+): number {
+  const shown = Math.min(place.right, view.to) - Math.max(place.left, view.from)
+  return Math.max(0, shown) / (place.right - place.left)
+}
+
+/**
+ * How much of each column of `workspace` shows inside its Strip's clip, 0
+ * to 1, by its id (ADR 0087, decision 9): by where the columns end up and
+ * where the scroll is headed, as `reveal` aims, so a move under way counts
+ * as done. Read as it is asked, never in a move's frames. None while its
+ * Strip is not drawn, or the overview shows it whole. The margin the Tile
+ * states keep shown past the clip (ADR 0088) is not in it.
+ */
+export function shownOf(
+  workspace: Workspace,
+  look: Look = columnsOf()
+): ReadonlyMap<string, number> | undefined {
+  const strip = stripOf(workspace.id)
+  if (!strip || held.has(strip)) return undefined
+  const view = viewOf(strip)
+  if (view.room.inner <= 0) return undefined
+  return new Map(
+    places(strip, sized(workspace, look), view.room).map((place) => [
+      place.id,
+      shownShare(place, view),
+    ])
+  )
+}
+
+/** What of `strip` shows once its scroll is where it is headed: from
+ * `from` to `to` of the scroll, in its `room`. */
+function viewOf(strip: HTMLElement) {
+  const space = room(strip)
+  const from = scrollOf(strip).target + space.pad
+  return { room: space, from, to: from + space.inner }
+}
+
 /**
  * The width the focused column of `workspace` takes to fill the room the
  * columns wholly in view beside it leave, as niri's
@@ -163,14 +205,14 @@ export function roomLeft(
   const strip = stripOf(workspace.id)
   const focused = workspace.columns[workspace.focus]
   if (!strip || !focused) return undefined
-  const { pad, gap, inner } = room(strip)
-  const from = scrollOf(strip).target + pad
-  const taken = places(strip, sized(workspace, look))
+  const { room: space, from, to } = viewOf(strip)
+  const { gap, inner } = space
+  const taken = places(strip, sized(workspace, look), space)
     .filter(
       (place) =>
         place.id !== focused.id &&
         place.left >= from - 1 &&
-        place.right <= from + inner + 1
+        place.right <= to + 1
     )
     .reduce((sum, place) => sum + place.right - place.left + gap, 0)
   // The share whose width, as `widthAt` draws it, is what is left.
@@ -179,14 +221,15 @@ export function roomLeft(
 }
 
 /**
- * Where the columns end up, from their widths, as CSS lays them out: so a
- * scroll aims at where a column will be, not where a move has it now.
+ * Where the columns end up, from their widths, as CSS lays them out in
+ * the Strip's room, read unless its caller has it: so a scroll aims at
+ * where a column will be, not where a move has it now.
  */
 export function places(
   strip: HTMLElement,
-  columns: readonly { id: string; width: Width; min: number; ends?: Ends }[]
+  columns: readonly { id: string; width: Width; min: number; ends?: Ends }[],
+  { pad, gap, inner }: ReturnType<typeof room> = room(strip)
 ): Place[] {
-  const { pad, gap, inner } = room(strip)
   const out = (side: boolean) => (side ? gap / 2 : 0)
   let left = pad
   return columns.map((column) => {

@@ -24,6 +24,7 @@ import {
   type Reveal,
   room,
   scrollOf,
+  shownShare,
   widthAt,
 } from "./layout"
 import { groupState } from "@banda/ui/components/banda-mark"
@@ -512,11 +513,7 @@ function land(
     from: strip.scrollLeft + pad,
     to: strip.scrollLeft + pad + inner,
   }
-  const shares = all.map((place) => {
-    const shown =
-      Math.min(place.right, view.to) - Math.max(place.left, view.from)
-    return Math.max(0, shown) / (place.right - place.left)
-  })
+  const shares = all.map((place) => shownShare(place, view))
   const most = Math.max(...shares) - 0.01
   const at = all.findIndex((place) => place.id === focus)
   const picked = all

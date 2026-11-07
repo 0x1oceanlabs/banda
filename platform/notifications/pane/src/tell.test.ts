@@ -2,7 +2,7 @@ import type { Call } from "@banda/ui/pane"
 import type { Chime } from "@banda/ui/sound"
 import type { Notify } from "@banda/contract/look"
 import { expect, test } from "vitest"
-import { newsOf, tell } from "./tell"
+import { lookedAt, newsOf, tell } from "./tell"
 
 const NOTIFY: Notify = {
   system: "away",
@@ -39,6 +39,26 @@ test("the first list is what already was: no news", () => {
     fresh: [],
     gone: [],
   })
+})
+
+test("only the focused Pane's thing is asked whether the Person looks at it, so what shows is never measured for it", () => {
+  const calling = [call("t1", "done"), call("t2", "asking"), call("t3", "done")]
+  const asked: string[] = []
+  const sight = (looking: boolean) => (one: Call) => {
+    asked.push(one.about)
+    return looking ? ("looking" as const) : ("away" as const)
+  }
+  const at = { project: "s", shows: "t2" }
+  expect(lookedAt(calling, at, sight(true)).map((c) => c.about)).toEqual(["t2"])
+  // The window behind: the focused Pane is not looked at.
+  expect(lookedAt(calling, at, sight(false))).toEqual([])
+  // No Pane focused, one that shows no thing, or one of another Project.
+  expect(lookedAt(calling, null, sight(true))).toEqual([])
+  expect(lookedAt(calling, { project: "s" }, sight(true))).toEqual([])
+  expect(
+    lookedAt(calling, { project: "other", shows: "t2" }, sight(true))
+  ).toEqual([])
+  expect(asked).toEqual(["t2", "t2"])
 })
 
 test("a call is told once, where the Person will notice it", () => {

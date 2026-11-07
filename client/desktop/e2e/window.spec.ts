@@ -4063,7 +4063,15 @@ test("a Thread that finishes on screen makes its sound, and no toast", async () 
   const { composer } = await firstThread(page)
   const notes = await countNotes(page)
   await sendAndLeave(page, composer, "slow hello")
+  // Beside the New Thread in front, at least half of its Tile shows (ADR
+  // 0087, decision 9).
+  await expect(page.getByRole("region", { name: "slow hello" })).toBeInViewport(
+    { ratio: 0.5 }
+  )
   await expect.poll(notes).toBeGreaterThan(0)
+  // A toast would be told with the sound (`tell`): a moment after it,
+  // none has come.
+  await page.waitForTimeout(1_000)
   await expect(page.getByRole("region", { name: "Notifications" })).toBeHidden()
 })
 

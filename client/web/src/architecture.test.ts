@@ -12,6 +12,9 @@
  * - What calls has one order, the sidebar's (ADR 0087, decision 8): a
  *   mark's rank is read only to pick the loudest, on the lines listed,
  *   and no list sorts by it.
+ * - The Tiling imports no more of the Window than its list holds (ADR
+ *   0087, decision 5); the calls part reads no page, and of the Tiling
+ *   only its model (decision 9).
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join, relative } from "node:path"
@@ -99,6 +102,28 @@ test("the Tiling imports no more of the Window than the list holds", () => {
     })
   )
   expect(imported).toEqual(TILING_STILL)
+})
+
+/**
+ * The calls part reads no page: where the Person looks comes from the
+ * model and from what the Tiling measures, handed in (ADR 0087, decision
+ * 9), so plain tests cover it. Of the Tiling it imports the model alone.
+ */
+test("the calls part reads no layout, and of the Tiling only its model", () => {
+  const files = sources(join(app, "web/src/calls"), { tests: false })
+  expect(files).toContain(join(app, "web/src/calls/sight.ts"))
+  // As code reads the page, not as prose says "a document".
+  const page =
+    /\bdocument\.|\bgetComputedStyle\s*\(|\.(?:getBoundingClientRect|getClientRects)\s*\(|\.(?:offset|client|scroll)(?:Left|Top|Width|Height)\b/
+  const reading = files.filter((file) => page.test(readFileSync(file, "utf8")))
+  expect(reading.map((file) => relative(app, file))).toEqual([])
+  const tiling = files.flatMap((file) =>
+    imports(readFileSync(file, "utf8"))
+      .filter((name) => /^\.\.\/workspaces\//.test(name))
+      .filter((name) => name !== "../workspaces/model")
+      .map((name) => `${relative(app, file)}: ${name}`)
+  )
+  expect(tiling).toEqual([])
 })
 
 /** The `[unstable]` marks a module's `module.toml` names. */

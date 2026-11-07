@@ -108,7 +108,7 @@ import {
   viewOf,
   withAsked,
 } from "../workspaces/arrange"
-import { floorOf, type Reveal } from "../workspaces/layout"
+import { floorOf, type Reveal, shownOf } from "../workspaces/layout"
 import { useArranged } from "../workspaces/useArranged"
 import {
   current,
@@ -790,6 +790,11 @@ export function Shell({
       ? zoom
       : undefined
   if (zoom !== undefined && zoomed === undefined) setZoom(undefined)
+  // Under a zoom no other Tile shows, for where the Person looks.
+  const zoomedNow = useRef(false)
+  useEffect(() => {
+    zoomedNow.current = zoomed !== undefined
+  }, [zoomed])
   const sidebarShown = (narrow ? over : sidebar) && !zoomed
   const hideOver = useCallback(() => setOver(false), [])
   // Each Alt+C brings the focused column to the middle, once.
@@ -958,18 +963,19 @@ export function Shell({
         listsHeard.current.add(listener)
         return () => listsHeard.current.delete(listener)
       },
-      sight: (thing) =>
-        thing
-          ? sightOf(
-              seenNow.current.state,
-              thing,
-              inFront(),
-              showsOf,
-              columnsOf()
-            )
-          : inFront()
-            ? "in-window"
-            : "away",
+      sight: (thing) => {
+        if (!thing) return inFront() ? "in-window" : "away"
+        const { state } = seenNow.current
+        const look = columnsOf()
+        // What shows is measured as it is asked, only for a Tile on the
+        // workspace on screen (ADR 0087, decision 9).
+        return sightOf(state, thing, inFront(), showsOf, {
+          look,
+          shown: () => shownOf(current(state), look),
+          away: awayNow.current,
+          zoomed: zoomedNow.current,
+        })
+      },
       watchSight: (listener) => {
         sightHeard.current.add(listener)
         return () => sightHeard.current.delete(listener)

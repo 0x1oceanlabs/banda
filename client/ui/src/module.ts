@@ -32,8 +32,9 @@ import type { Previewer } from "./previewer"
 
 /**
  * Where the Person's eyes are, for a thing that calls (ADR 0011): on its
- * Pane, with the window in front; on the window, its Pane on screen or
- * not; or elsewhere.
+ * Pane, with the window in front; on the window, its Pane on screen, at
+ * least half of its Tile in view (ADR 0087, decision 9), or not; or
+ * elsewhere.
  */
 export type Sight = "looking" | "on-screen" | "in-window" | "away"
 
@@ -117,7 +118,9 @@ export type WindowApi = {
    * none, whether at the window or away. */
   sight: (thing?: Thing) => Sight
   /** Calls `listener` when where the Person looks may have changed: the
-   * workspaces, or the window in front or behind. Returns how to stop. */
+   * workspaces, or the window in front or behind. A Strip that only
+   * scrolls calls it not: `sight` measures that as it is asked. Returns
+   * how to stop. */
   watchSight: (listener: () => void) => () => void
   /** Goes to `thing`: to the Pane that shows it, on any workspace, else
    * opens `pane` for it. */

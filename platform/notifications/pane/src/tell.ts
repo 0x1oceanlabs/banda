@@ -2,6 +2,7 @@
  * What is news among what calls, and where to tell of it (ADR 0011,
  * decisions 1 and 6; ADR 0056, decision 1). Pure, so plain tests cover it.
  */
+import type { ProjectId } from "@banda/contract"
 import type { Notify } from "@banda/contract/look"
 import type { Sight } from "@banda/ui/module"
 import type { Call } from "@banda/ui/pane"
@@ -23,6 +24,26 @@ export function newsOf(
     fresh: now.filter((call) => was.get(call.key)?.chime !== call.chime),
     gone: before.filter((call) => !is.has(call.key)),
   }
+}
+
+/**
+ * The calls the Person looks at (ADR 0011, decision 1): only the thing the
+ * focused Pane shows can be one, so `sight` is asked of it alone. What
+ * shows of the Strip is never measured for this, as the focus, a width or
+ * the workspace moves (ADR 0087, decision 9).
+ */
+export function lookedAt(
+  calling: readonly Call[],
+  focused: { project: ProjectId; shows?: string } | null,
+  sight: (call: Call) => Sight
+): Call[] {
+  return calling.filter(
+    (call) =>
+      focused?.shows !== undefined &&
+      call.project === focused.project &&
+      call.about === focused.shows &&
+      sight(call) === "looking"
+  )
 }
 
 /** How the window tells of one call. */
