@@ -605,9 +605,11 @@ impl Kernel {
     ///   same `at`.
     /// - A receipt is kept thirty days past its last write, as its command
     ///   began or was answered, and while its command runs, however long.
-    ///   A resend comes within seven days of the first send (ADR 0082,
-    ///   decision 16), so each finds its receipt. Past them the same ID
-    ///   runs as a new command.
+    ///   A resend comes within seven days of the first send, so each finds
+    ///   its receipt. Past them the same ID runs as a new command. Today
+    ///   those seven days are a convention of Banda's clients; the host
+    ///   will check them, refusing a command past its `not_after` (ADR
+    ///   0082, decisions 4 and 16), and nothing here checks it yet.
     ///
     /// A `call` keeps no receipt, whatever it changes, so `banda mcp`
     /// never sends one again ([`Tool::kind`](crate::Tool)). The kernel's own

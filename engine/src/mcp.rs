@@ -27,6 +27,12 @@
 //! mcp` does, or as its client says `initialize` again: the next numbers
 //! its requests from one again, and they get other IDs.
 //!
+//! A resend comes within seven days of the first send. Today that is a
+//! convention of Banda's clients, which `banda mcp` keeps by sending again
+//! at once, within its session. The host will check it: a command will
+//! carry `not_after`, and past it the host will refuse it (ADR 0082,
+//! decisions 4 and 16).
+//!
 //! A refused or malformed call is the tool's answer, marked as an error,
 //! with what was wrong and that nothing was done. Only an engine that does
 //! not answer is an error of the protocol.

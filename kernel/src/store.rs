@@ -31,16 +31,18 @@ const SUBSCRIBER_LAG: usize = 4096;
 /// How long the kernel keeps a receipt past its `at`, and an effect's row
 /// past `settled_at`.
 ///
-/// A resend comes within seven days of its command's first send: a client
-/// keeps a command to send again seven days at most (`not_after`, ADR 0082,
-/// decisions 4 and 16), and `banda mcp` sends one again at once, within its
-/// session. A receipt's `at` is when it was last written, as its command
-/// began or as it was answered, so never before its command first came:
-/// every receipt outlives its resends' window by three weeks, on the host's
-/// clock, where `not_after` is checked too. Within it a command sent again
-/// gets its first answer and runs nothing again, `may_have_run` included;
-/// past it, the same command ID runs as a new command. A receipt whose
-/// command still runs stays however old ([`Store::collect`]).
+/// A resend comes within seven days of its command's first send. Today
+/// that is a convention of Banda's clients, not a check: `banda mcp` sends
+/// a command again at once, within its session. The host will check it: a
+/// command will carry `not_after`, seven days at most, and past it the host
+/// will refuse it, on its own clock (ADR 0082, decisions 4 and 16). A
+/// receipt's `at` is when it was last written, as its command began or as
+/// it was answered, so never before its command first came: every receipt
+/// outlives its resends' window by three weeks, on the host's clock. Within
+/// it a command sent again gets its first answer and runs nothing again,
+/// `may_have_run` included; past it, the same command ID runs as a new
+/// command. A receipt whose command still runs stays however old
+/// ([`Store::collect`]).
 pub(crate) const KEPT: Duration = Duration::from_secs(30 * 24 * 3600);
 
 /// How many rows [`Store::collect`] lets go of in one transaction.
