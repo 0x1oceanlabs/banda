@@ -10,9 +10,10 @@ use banda_agents::{Agents, Pipe};
 use banda_environments::How;
 use banda_environments::{Asks, Local, Recorded};
 use banda_harnesses::{Cli, Harness, Harnesses, HarnessesModule, account_changed};
+#[cfg(unix)]
+use banda_kernel::Whose;
 use banda_kernel::{
     AgentId, Caller, Code, CommandId, EventFilter, Holes, Kernel, Participant, PersonId, ProjectId,
-    Whose,
 };
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
