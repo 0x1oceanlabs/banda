@@ -183,13 +183,9 @@ test(`real ${harness} exercises Banda's browser`, async () => {
     notes.push(line)
     console.log(line)
   }
-  // In a unit of its own, apart from the Agent running the trial.
-  const local = inUnit(desktop)
   const app = await electron.launch({
-    ...local,
+    ...inUnit(desktop, ["--ozone-platform=headless"], env),
     chromiumSandbox: false,
-    args: [...local.args, "--ozone-platform=headless"],
-    env,
   })
   app.context().on("page", (page) => page.on("dialog", () => {}))
   const page = await app.firstWindow()

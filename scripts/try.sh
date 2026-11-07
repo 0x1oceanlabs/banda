@@ -16,8 +16,9 @@
 # that still runs closes first, so the new build is the one shown. The
 # window serves CDP, which scripts/drive.mjs drives: an Agent sees and
 # works what it built. On Linux the window runs in a systemd user unit of
-# its own, banda-trial-<slug>.scope (scripts/local.sh), so it lives and
-# dies apart from the Agent that started it (ADR 0086, decision 7).
+# its own, banda-trial-<slug>.scope (scripts/local.sh), and with --detach
+# in a session of its own too: so it lives and dies apart from the Agent
+# that started it (ADR 0086, decision 7).
 #
 #   --real        the engine offers Claude Code and Codex, as Banda does
 #   --fresh       forget the trial's Projects and settings first
@@ -87,13 +88,15 @@ close() {
 # window that crashed, say. Stopped while the window runs, it would crash
 # it (scripts/local.sh).
 sweep() {
-  command -v systemctl >/dev/null || return 0
-  for _ in $(seq 20); do
-    systemctl --user is-active --quiet "$unit" 2>/dev/null || return 0
+  local tries=20
+  while systemctl --user is-active --quiet "$unit.scope" 2>/dev/null; do
+    ((--tries)) || break
     sleep 0.25
   done
-  echo "Stopping what is left of the trial in $unit."
-  systemctl --user stop "$unit"
+  ((tries)) && return
+  echo "Stopping what is left of the trial in $unit.scope."
+  # It may have ended since.
+  systemctl --user stop "$unit.scope" 2>/dev/null || true
 }
 
 if ((list)); then
@@ -121,7 +124,7 @@ fi
 slug=$(basename "$tree")
 trial=$trials/$slug
 # A unit's name takes letters, digits and _.:- only.
-unit=banda-trial-${slug//[^A-Za-z0-9_.:-]/_}.scope
+unit=banda-trial-${slug//[^A-Za-z0-9_.:-]/_}
 
 ((stop || forget || fresh)) && close
 ((stop)) && exit 0
@@ -190,7 +193,7 @@ if ((hidden)); then
   # The notices go to a list, as the end-to-end tests' do.
   export BANDA_DESKTOP=recorded
 fi
-window=("$here/scripts/local.sh" --unit "${unit%.scope}" . "${flags[@]}")
+window=("$here/scripts/local.sh" --unit "$unit" . "${flags[@]}")
 ((detach)) || exec "${window[@]}"
 
 # Its own session, so it outlives the shell that started it.
