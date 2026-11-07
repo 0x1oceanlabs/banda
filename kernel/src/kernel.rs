@@ -609,7 +609,8 @@ impl Kernel {
     ///   decision 16), so each finds its receipt. Past them the same ID
     ///   runs as a new command.
     ///
-    /// A `call` keeps no receipt, whatever it changes. The kernel's own
+    /// A `call` keeps no receipt, whatever it changes, so `banda mcp`
+    /// never sends one again ([`Tool::kind`](crate::Tool)). The kernel's own
     /// `projects.*` commands are not yet among these: they leave the
     /// kernel with A1 and A2 of the architecture vision.
     pub async fn answer(

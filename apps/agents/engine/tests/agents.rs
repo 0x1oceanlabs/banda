@@ -3306,6 +3306,9 @@ async fn threads_one_thread_send_show_visual_and_preview_visual_are_an_agents_to
         (&send["name"], &send["method"]),
         (&json!("send"), &json!("agents.send"))
     );
+    // A command: `banda mcp` sends it again after a broken connection,
+    // as its receipt keeps it from running twice (ADR 0082, decision 4).
+    assert_eq!(send["kind"], "command");
     let description = send["description"].as_str().unwrap();
     assert!(
         description.starts_with("Writes into a Thread of this Project"),
@@ -3328,6 +3331,7 @@ async fn threads_one_thread_send_show_visual_and_preview_visual_are_an_agents_to
             {
                 "name": "threads",
                 "method": "agents.threads",
+                "kind": "call",
                 "description": "The Threads of this Project, the latest first: each one's ID, \
                     title and Harness, what it was last asked, how its latest turn stands, and \
                     the Questions it waits on.",
@@ -3336,6 +3340,7 @@ async fn threads_one_thread_send_show_visual_and_preview_visual_are_an_agents_to
             {
                 "name": "read",
                 "method": "agents.thread",
+                "kind": "call",
                 "description": "One Thread of this Project as its Person reads it: its messages \
                     and replies, its turns and what each may do now, and its settings.",
                 "schema": {

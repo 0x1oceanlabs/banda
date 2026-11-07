@@ -13,15 +13,19 @@
 //! connects, and `skill`, which it answers itself from the Banda skill, as
 //! `banda skill` does.
 //!
-//! Each tool call is a command whose ID comes from this session of `banda
-//! mcp` and the request's ID (ADR 0082, decision 4). A request sent again,
-//! by its client or by `banda mcp` as it connects again to an engine that
+//! Each tool call carries a command ID that comes from this session of
+//! `banda mcp` and the request's ID (ADR 0082, decision 4). A tool whose
+//! method is a command keeps a receipt under it: a request sent again, by
+//! its client or by `banda mcp` as it connects again to an engine that
 //! broke off, gets the first answer and runs nothing again. It is sent with
 //! the same arguments, and the receipt keeps their hash: the same request
 //! ID with other arguments or for another tool, which MCP forbids, is
-//! refused as `conflict` and runs nothing. A session ends as `banda mcp`
-//! does, or as its client says `initialize` again: the next numbers its
-//! requests from one again, and they get other IDs.
+//! refused as `conflict` and runs nothing. Any other tool, a `call`, keeps
+//! no receipt, so `banda mcp` never sends it again: one the engine broke
+//! off on is answered that it may have run. Each tool's kind comes with the
+//! engine's tools, from its line in `methods!`. A session ends as `banda
+//! mcp` does, or as its client says `initialize` again: the next numbers
+//! its requests from one again, and they get other IDs.
 //!
 //! A refused or malformed call is the tool's answer, marked as an error,
 //! with what was wrong and that nothing was done. Only an engine that does
@@ -29,7 +33,9 @@
 
 use crate::Failure;
 use crate::client::{Client, Pass};
-use banda_kernel::{Code, CommandId, ENGINE_VARIABLE, Picture, Refusal, TOKEN_VARIABLE, Tool};
+use banda_kernel::{
+    Code, CommandId, ENGINE_VARIABLE, Kind, Picture, Refusal, TOKEN_VARIABLE, Tool,
+};
 use banda_skill::Reach;
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -154,43 +160,47 @@ impl Mcp {
     }
 
     /// Runs one tool in the Project of the pass, as the command request
-    /// `id` of this session makes. An engine that broke off is connected
-    /// to again, once, and asked again under the same ID, so what ran
-    /// before it broke off runs nothing again. If it does not answer then
-    /// either, how it broke off first is what is said.
+    /// `id` of this session makes. After the engine broke off, a tool whose
+    /// method is a command is asked again, once, under the same ID, on a
+    /// new connection: its receipt makes what ran before it broke off run
+    /// nothing again. If the engine does not answer then either, how it
+    /// broke off first is what is said. Any other tool keeps no receipt, so
+    /// it is not sent again: its Agent is told that it may have run, and
+    /// decides.
     async fn call(&mut self, id: &Value, params: &Value) -> Result<Value, Error> {
         let name = params["name"].as_str().unwrap_or_default();
         let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
         if name == "skill" {
             return Ok(skill(&arguments));
         }
+        let tools = &self.connected().await.map_err(lost)?.tools;
+        let Some(tool) = tools.iter().find(|tool| tool.name == name).cloned() else {
+            let text = format!("Banda has no tool \"{name}\". Nothing was done.");
+            return Ok(said(text, true));
+        };
         let command = command_id(&self.session, id);
-        let first = match self.ask(name, command, &arguments).await {
+        let first = match self.ask(&tool.method, command, &arguments).await {
             Ok(answer) => return Ok(answer),
             Err(broke) => broke,
         };
-        (self.ask(name, command, &arguments).await).map_err(|_| lost(first))
+        if tool.kind != Kind::Command {
+            return Ok(cut_short(name, first));
+        }
+        (self.ask(&tool.method, command, &arguments).await).map_err(|_| lost(first))
     }
 
-    /// Asks the engine once to run the tool `name` as `command`: the tool's
+    /// Asks the engine once to run `method` as `command`: the tool's
     /// answer, a refusal among them, or how the engine did not answer,
     /// after which the next ask connects again.
     async fn ask(
         &mut self,
-        name: &str,
+        method: &str,
         command: CommandId,
         arguments: &Value,
     ) -> Result<Value, Failure> {
         let connected = self.connected().await?;
-        let Some(tool) = connected.tools.iter().find(|tool| tool.name == name) else {
-            return Ok(said(
-                format!("Banda has no tool \"{name}\". Nothing was done."),
-                true,
-            ));
-        };
-        let method = tool.method.clone();
         let asked = (connected.client)
-            .ask(&method, None, command, arguments.clone())
+            .ask(method, None, command, arguments.clone())
             .await;
         match asked {
             Ok(answer) => Ok(answered(answer)),
@@ -272,6 +282,20 @@ fn refused(refusal: &Refusal) -> Value {
     said(text, true)
 }
 
+/// The answer to a tool call the engine broke off on, when its method is
+/// not a command: with no receipt to answer a resend from, it was not sent
+/// again, and its Agent looks before it asks again.
+fn cut_short(name: &str, broke: Failure) -> Value {
+    let text = format!(
+        "{name} may have run: the connection to Banda broke before it \
+         answered, and it was not sent again, as it keeps no receipt and a \
+         second send could run it twice. Look before you call it again. \
+         How it broke: {}",
+        broke.words()
+    );
+    said(text, true)
+}
+
 fn skill_tool() -> Value {
     json!({
         "name": "skill",
@@ -335,10 +359,12 @@ mod tests {
         );
     }
 
-    /// An engine that lists one tool, `send`, and takes one call to it on
-    /// each connection, one after another: it answers it with what
-    /// `answers` says, or breaks off the connection at `None`. No engine
-    /// listens after the last. It hands back the command each call carried.
+    /// An engine that lists three tools: `send`, a command; `act`, a
+    /// `call`; and `old`, with no kind, as an older engine lists one. It
+    /// takes one call to them on each connection, one after another: it
+    /// answers it with what `answers` says, or breaks off the connection at
+    /// `None`. No engine listens after the last. It hands back the command
+    /// each call carried.
     async fn engine(
         answers: Vec<Option<Value>>,
     ) -> (Pass, tokio::task::JoinHandle<Vec<CommandId>>) {
@@ -381,7 +407,9 @@ mod tests {
                     };
                     if method == "projects.tools" {
                         let tools = json!([
-                            { "name": "send", "method": "agents.send", "description": "", "schema": {} }
+                            { "name": "send", "method": "agents.send", "kind": "command", "description": "", "schema": {} },
+                            { "name": "act", "method": "browser.act", "kind": "call", "description": "", "schema": {} },
+                            { "name": "old", "method": "browser.old", "description": "", "schema": {} },
                         ]);
                         let listed = EngineFrame::Result {
                             id,
@@ -423,7 +451,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_call_the_engine_broke_off_is_asked_again_once_under_the_same_command() {
+    async fn a_command_the_engine_broke_off_is_asked_again_once_under_the_same_id() {
         let (pass, served) = engine(vec![None, Some(json!("sent"))]).await;
         let mut mcp = mcp(pass);
         let call = json!({ "name": "send", "arguments": { "text": "hi" } });
@@ -443,6 +471,23 @@ mod tests {
         // Not that nothing listens now: the call may have run.
         assert!(!words.contains("does not answer"), "{words}");
         assert_eq!(served.await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_tool_with_no_receipt_the_engine_broke_off_on_is_not_sent_again() {
+        // A `call` keeps no receipt, and a tool with no kind counts as one.
+        for name in ["act", "old"] {
+            let (pass, served) = engine(vec![None]).await;
+            let mut mcp = mcp(pass);
+            let call = json!({ "name": name, "arguments": { "click": "Buy" } });
+            let answer = mcp.call(&json!(7), &call).await.unwrap();
+            assert_eq!(answer["isError"], true, "{answer}");
+            let text = answer["content"][0]["text"].as_str().unwrap();
+            assert!(text.starts_with(&format!("{name} may have run")), "{text}");
+            assert!(text.contains("not sent again"), "{text}");
+            assert!(text.contains("How it broke: "), "{text}");
+            assert_eq!(served.await.unwrap().len(), 1, "{name} was sent once");
+        }
     }
 
     #[test]
