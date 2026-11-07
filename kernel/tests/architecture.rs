@@ -21,16 +21,22 @@ fn repository() -> PathBuf {
 }
 
 /// Each module's folder, with its `module.toml`: an App's under `apps/`,
-/// the platform's under `platform/` (ADR 0062, decision 11).
+/// the platform's under `platform/` (ADR 0062, decision 11). Finding none
+/// fails, so a manifest renamed cannot leave these tests checking nothing.
 fn modules() -> Vec<PathBuf> {
-    ["apps", "platform"]
+    let found: Vec<PathBuf> = ["apps", "platform"]
         .iter()
         .filter_map(|bucket| std::fs::read_dir(repository().join(bucket)).ok())
         .flatten()
         .filter_map(|e| e.ok())
         .map(|e| e.path())
         .filter(|path| path.join("module.toml").exists())
-        .collect()
+        .collect();
+    assert!(
+        !found.is_empty(),
+        "no folder of apps/ or platform/ has a module.toml"
+    );
+    found
 }
 
 /// Every module's folder is a name the kernel's source must not contain:

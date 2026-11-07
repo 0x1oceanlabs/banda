@@ -1,8 +1,15 @@
 # The problems module, as it declares itself (ADR 0022). What its code
 # says, its methods, its code declares; this holds the rest.
 id = "problems"
+kind = "platform"
 name = "Problems"
 about = "What broke in Banda itself, kept on this computer with a fingerprint, so it can be looked into (ADR 0039). It sends nothing anywhere."
 version = "0.1.0"
+# The major of the App API it is written to (ADR 0062, ADR 0082).
+api = 1
 from-banda = true
 settings = []
+
+# What it needs of Banda (ADR 0082, decision 2): nothing it could
+# declare here is built yet.
+[needs]

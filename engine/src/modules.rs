@@ -1,27 +1,18 @@
 //! `banda modules`: what each module offers, for a Person, an Agent and
 //! the skill's reference (ADR 0022, decision 1). A module says it in three
-//! places, and this puts them together:
+//! places, and this puts them together, for each part in the list of Apps
+//! (`apps.rs`), then the window's own:
 //!
-//! - its `module.toml`: its id, name, version, the settings files it owns,
-//!   and its unstable marks;
+//! - its manifest: its id, kind, name, version, the App API it is written
+//!   to, the settings files it owns, what it needs, and its unstable marks;
 //! - its engine part's `methods!` table, when it has one;
 //! - its window part's `defineModule`, when it has one, which the window's
-//!   tests copy into `window.json` beside the `module.toml`, as the engine
+//!   tests copy into `window.json` beside the manifest, as the engine
 //!   has no window.
 
-use banda_agents::Agents;
-use banda_browser::Browser;
-use banda_files::Files as FilesModule;
-use banda_git::Git;
-use banda_harnesses::HarnessesModule;
+use crate::apps::{APPS, MANIFEST, Part, WINDOW};
 use banda_kernel::Method;
-use banda_keys::KeysModule;
 use banda_look::keys::{Action, Scope};
-use banda_problems::Problems;
-use banda_pulls::Pulls;
-use banda_sharing::Sharing;
-use banda_terminal::Terminals;
-use banda_workspaces::Workspaces;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -31,86 +22,7 @@ use std::collections::BTreeMap;
 /// fewer fails them until it is lowered, so the count only falls.
 pub const CEILING: usize = 2;
 
-/// One module's folder: its `module.toml`, and its engine part's methods
-/// when it has them; its `window.json` is `banda_settings::window`'s.
-struct Files {
-    folder: &'static str,
-    toml: &'static str,
-    methods: Option<fn() -> Vec<Method>>,
-}
-
-/// Every module, in the window's order.
-const FILES: &[Files] = &[
-    Files {
-        folder: "agents",
-        toml: include_str!("../../apps/agents/module.toml"),
-        methods: Some(Agents::method_list),
-    },
-    Files {
-        folder: "harnesses",
-        toml: include_str!("../../platform/harnesses/module.toml"),
-        methods: Some(HarnessesModule::method_list),
-    },
-    Files {
-        folder: "terminal",
-        toml: include_str!("../../apps/terminal/module.toml"),
-        methods: Some(Terminals::method_list),
-    },
-    Files {
-        folder: "browser",
-        toml: include_str!("../../apps/browser/module.toml"),
-        methods: Some(Browser::method_list),
-    },
-    Files {
-        folder: "git",
-        toml: include_str!("../../apps/git/module.toml"),
-        methods: Some(Git::method_list),
-    },
-    Files {
-        folder: "files",
-        toml: include_str!("../../apps/files/module.toml"),
-        methods: Some(FilesModule::method_list),
-    },
-    Files {
-        folder: "keys",
-        toml: include_str!("../../platform/keys/module.toml"),
-        methods: Some(KeysModule::method_list),
-    },
-    Files {
-        folder: "pulls",
-        toml: include_str!("../../apps/pulls/module.toml"),
-        methods: Some(Pulls::method_list),
-    },
-    Files {
-        folder: "notifications",
-        toml: include_str!("../../platform/notifications/module.toml"),
-        methods: None,
-    },
-    Files {
-        folder: "workspaces",
-        toml: include_str!("../../platform/workspaces/module.toml"),
-        methods: Some(Workspaces::method_list),
-    },
-    Files {
-        folder: "problems",
-        toml: include_str!("../../platform/problems/module.toml"),
-        methods: Some(Problems::method_list),
-    },
-    Files {
-        folder: "sharing",
-        toml: include_str!("../../platform/sharing/module.toml"),
-        methods: Some(Sharing::method_list),
-    },
-    // The window's own actions, the tiling's first (ADR 0071, decision 2),
-    // after the modules', as the window lists them.
-    Files {
-        folder: "window",
-        toml: include_str!("../../client/web/module.toml"),
-        methods: None,
-    },
-];
-
-/// What `module.toml` holds: only what no code says.
+/// What a manifest holds: only what no code says.
 #[derive(Serialize, Deserialize)]
 #[serde(
     rename_all(serialize = "camelCase", deserialize = "kebab-case"),
@@ -118,9 +30,16 @@ const FILES: &[Files] = &[
 )]
 struct Manifest {
     id: String,
+    /// An App's or the platform's; none for the window's own, a client's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    kind: Option<Whose>,
     name: String,
     about: String,
     version: String,
+    /// The major of the App API it is written to (ADR 0062, decision 11;
+    /// ADR 0082, decision 14); none for the window's own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    api: Option<u32>,
     from_banda: bool,
     /// The settings files it owns, in `~/.config/banda`.
     #[serde(default)]
@@ -131,10 +50,32 @@ struct Manifest {
     /// hold the two alike.
     #[serde(default)]
     legacy_prefixes: Vec<String>,
+    /// What it needs of Banda (ADR 0082, decision 2); none for the
+    /// window's own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    needs: Option<Needs>,
     /// The paths it takes that the contract lacks yet, each with why.
     #[serde(default)]
     unstable: BTreeMap<String, String>,
 }
+
+/// Whose a part is, its manifest's `kind` (ADR 0062, decision 11): an
+/// App's, in `apps/`, or the platform's, in `platform/`, which may hold
+/// rights no App gets.
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum Whose {
+    App,
+    Platform,
+}
+
+/// What a part needs of Banda, as it will declare it (ADR 0082, decision
+/// 2): the facts it hears, the methods and intents it calls, its
+/// capabilities and what it asks of a device. None is built yet, so the
+/// table is empty, and a need in it is refused.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Needs {}
 
 /// One module, as `banda modules` prints it.
 #[derive(Serialize)]
@@ -174,24 +115,23 @@ struct Widget {
     about: String,
 }
 
-/// Every module, in the window's order. The files are Banda's own, so a
-/// wrong one is a bug the tests catch.
+/// Every part in the list of Apps, then the window's own. The files are
+/// Banda's own, so a wrong one is a bug the tests catch.
 pub fn offers() -> Vec<Offer> {
-    FILES
-        .iter()
-        .map(|files| {
-            let folder = files.folder;
-            Offer {
-                manifest: toml::from_str(files.toml)
-                    .unwrap_or_else(|error| panic!("{folder}'s module.toml: {error}")),
-                engine: files.methods.map(|methods| methods()),
-                window: banda_settings::window(folder).map(|window| {
-                    serde_json::from_str(window)
-                        .unwrap_or_else(|error| panic!("{folder}'s window.json: {error}"))
-                }),
-            }
-        })
-        .collect()
+    APPS.iter().chain([&WINDOW]).map(offer).collect()
+}
+
+fn offer(part: &Part) -> Offer {
+    let id = part.id;
+    Offer {
+        manifest: toml::from_str(part.manifest)
+            .unwrap_or_else(|error| panic!("{id}'s {MANIFEST}: {error}")),
+        engine: part.methods.map(|methods| methods()),
+        window: part.window.map(|window| {
+            serde_json::from_str(window)
+                .unwrap_or_else(|error| panic!("{id}'s window.json: {error}"))
+        }),
+    }
 }
 
 /// The unstable marks: `module.mark`, and why.
@@ -216,13 +156,13 @@ pub fn marks(offers: &[Offer]) -> Vec<(String, &str)> {
 fn topic(offers: &[Offer]) -> String {
     use std::fmt::Write as _;
 
-    let mut text = String::from(
+    let mut text = format!(
         "---\n\
          name: modules\n\
          description: Banda's modules - what each is, the settings files it owns, its actions and their keys, and what an Agent may call.\n\
          ---\n\n\
          # Modules\n\n\
-         <!-- Written by banda's tests from each module's module.toml and code: do not edit. -->\n\n\
+         <!-- Written by banda's tests from each module's {MANIFEST} and code: do not edit. -->\n\n\
          Banda's work is done by modules. `banda modules` prints all of this \
          as JSON, one line per module; `banda modules --unstable` lists the \
          paths a module takes that are not in the contract yet.\n",
@@ -351,13 +291,15 @@ fn line_of(action: &Action) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use banda_kernel::Module;
     use std::path::Path;
 
     #[test]
-    fn each_module_is_named_once_and_its_engine_part_by_the_same_id() {
+    fn each_module_is_named_once() {
         let offers = offers();
-        for (files, offer) in FILES.iter().zip(&offers) {
+        let ids: Vec<&str> = offers.iter().map(|o| o.manifest.id.as_str()).collect();
+        let named: std::collections::BTreeSet<&str> = ids.iter().copied().collect();
+        assert_eq!(named.len(), ids.len(), "{ids:?}");
+        for offer in &offers {
             let Manifest {
                 id,
                 name,
@@ -365,41 +307,20 @@ mod tests {
                 version,
                 ..
             } = &offer.manifest;
-            assert_eq!(files.folder, id, "{}'s module.toml", files.folder);
-            assert!(!name.is_empty() && !about.is_empty() && !version.is_empty());
+            assert!(
+                !name.is_empty() && !about.is_empty() && !version.is_empty(),
+                "{id}'s {MANIFEST}"
+            );
         }
-        let with_engine: Vec<&str> = offers
-            .iter()
-            .filter(|offer| offer.engine.is_some())
-            .map(|offer| offer.manifest.id.as_str())
-            .collect();
-        let engine: Vec<&str> = engine_parts().iter().map(|part| part.name()).collect();
-        assert_eq!(with_engine, engine);
-    }
-
-    /// Each module's engine part, in the window's order.
-    fn engine_parts() -> Vec<Box<dyn Module>> {
-        vec![
-            Box::new(Agents::new(Default::default())),
-            Box::new(HarnessesModule::new(Default::default())),
-            Box::new(Terminals::new()),
-            Box::new(Browser::new()),
-            Box::new(Git::new()),
-            Box::new(FilesModule::new()),
-            Box::new(KeysModule::new(Default::default())),
-            Box::new(Pulls::new()),
-            Box::new(Workspaces::new()),
-            Box::new(Problems::new("", "")),
-            Box::new(Sharing::new("", "")),
-        ]
     }
 
     /// The kernel lets a module's SQL reach the legacy prefixes its engine
-    /// part tells it, so its `module.toml` says the same (ADR 0085,
-    /// decision 12); a module with no engine part has no tables.
+    /// part tells it, so its manifest says the same (ADR 0085, decision
+    /// 12); a module with no engine part has no tables. Each engine part
+    /// as the list of Apps builds it.
     #[test]
     fn a_module_s_legacy_prefixes_are_the_ones_its_engine_part_reaches() {
-        let parts = engine_parts();
+        let parts = crate::apps::on_a_test_host(crate::apps::scanned::parts);
         for offer in offers() {
             let Manifest {
                 id,
@@ -407,10 +328,10 @@ mod tests {
                 ..
             } = &offer.manifest;
             let reached: Vec<&str> = (parts.iter())
-                .find(|part| part.name() == id)
-                .map(|part| part.legacy_prefixes().to_vec())
+                .find(|(_, part)| part.name() == id)
+                .map(|(_, part)| part.legacy_prefixes().to_vec())
                 .unwrap_or_default();
-            assert_eq!(legacy_prefixes, &reached, "{id}'s module.toml");
+            assert_eq!(legacy_prefixes, &reached, "{id}'s {MANIFEST}");
         }
     }
 
@@ -430,7 +351,7 @@ mod tests {
             .collect();
         said.sort();
         described.sort();
-        assert_eq!(said, described, "each module.toml's settings, its crate's");
+        assert_eq!(said, described, "each {MANIFEST}'s settings, its crate's");
     }
 
     #[test]

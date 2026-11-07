@@ -1,8 +1,15 @@
 # The pulls module, as it declares itself (ADR 0022). What its code says,
 # its methods, its code declares; this holds the rest.
 id = "pulls"
+kind = "app"
 name = "Pull requests"
 about = "The GitHub pull requests linked to a Project's Threads (ADR 0076): Create PR's, an Agent's own `gh pr create`, its tools' and the Person's. It reads them through `gh`, one reader for the Project while something follows it, and works out what each needs and whose turn it is."
 version = "0.1.0"
+# The major of the App API it is written to (ADR 0062, ADR 0082).
+api = 1
 from-banda = true
 settings = []
+
+# What it needs of Banda (ADR 0082, decision 2): nothing it could
+# declare here is built yet.
+[needs]

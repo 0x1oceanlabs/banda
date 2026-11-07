@@ -49,47 +49,6 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 - `snooze`: Snoozes your own Thread: it leaves your Person's list for `after` (`30m`, `2h`, `1d`, a year at most), or until `until`, in milliseconds since the epoch. Give one of them: with neither, it leaves the list only until this turn ends. Anything that needs your Person wakes it early, and so does their message. It does not wake you or start a turn. Use it when you wait on something slow and have nothing for your Person meanwhile. A Thread that asks cannot be snoozed, nor one your Person snoozed to go on by itself. A Person snoozes any Thread (ADR 0074).
 - `wake`: Brings your own snoozed Thread back to your Person's list now, as when what you waited on came early. One awake stays so. A Person wakes any Thread (ADR 0074).
 
-## Harnesses (`harnesses`)
-
-The agent programs this computer can start, who is signed in to each, how much of its usage limits is spent, and the tokens and estimated API cost in its local journals.
-
-Its settings: `harnesses.toml`.
-
-Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
-
-- Usage (`harnesses.usage`)
-
-Its widgets on the bar, which `[bar]` in look.toml places by id:
-
-- `harnesses.limits`: The room left of each Harness's best account; click for each account's limits.
-
-Its methods, `banda call harnesses.<method>`: `list`, `account`, `sign_in`, `sign_out`, `limits`, `usage`.
-
-What an Agent in a Thread may call as a tool of `banda mcp`:
-
-- `limits`: How much of each Harness account's usage limits is spent: a window for its session and its week, each with the share spent out of 100 and when it starts again, as last read. Before a long task, look how much is left. `read` reads them anew, at most once a minute; `limits_changed` says when that read is kept.
-
-## Terminal (`terminal`)
-
-Programs the Person runs in a terminal: a shell, or a Harness's sign-in.
-
-Its settings: `terminal.toml`.
-
-Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
-
-- New terminal (`terminal.new`), Ctrl+Alt+Return
-- Zoom the terminal in (`terminal.zoom-in`), Ctrl+= or Ctrl+Shift+=, `[binds.terminal]`
-- Zoom the terminal out (`terminal.zoom-out`), Ctrl+-, `[binds.terminal]`
-- The terminal at its own size (`terminal.zoom-reset`), Ctrl+0, `[binds.terminal]`
-
-Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `terminal` (the Terminal).
-
-Its widgets on the bar, which `[bar]` in look.toml places by id:
-
-- `terminal.ports`: The servers started in Banda: the first one's port and how many more; a click lists them.
-
-Its methods, `banda call terminal.<method>`: `open`, `write`, `resize`, `close`, `watch`, `ports`, `stop_server`.
-
 ## Browser (`browser`)
 
 Chromium pages in the window: the Person's tabs, and each Project's Agents' in a profile of their own; extensions, and a blocker of ads and trackers.
@@ -139,17 +98,6 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 - `browser_wait_for`: Waits until a tab shows a text, an element by its ref, or an address with a part, for 15 s or the seconds given, 60 at most. It answers where the tab is then.
 - `browser_handoff`: Hands a tab to your Person for a step that is theirs: a password or a card to fill, signing up, accepting terms, the last press to pay, place an order, send money or post in public. Say why, as "Sign in to GitHub". The tab asks them, and you may not use it meanwhile: end your turn, and their message says when they are done.
 
-## Git (`git`)
-
-The Project's folder as git sees it: its branch, its changes, and the diff against a base, the last commit or the index; it stages, unstages and reverts them, commits, pushes and pulls, and switches and makes branches.
-
-Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
-
-- Show the Diff, or hide it (`git.diff`), Alt+D
-- Switch branch (`git.branch`), Alt+Shift+G
-
-Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `contents`, `stage`, `unstage`, `revert`, `watch`, `act`, `switch`, `branch`, `init`, `prompt`, `written`.
-
 ## Files (`files`)
 
 Any folder, as a Finder shows it: a tree with the places beside it and its path above, what git ignores greyed and what git sees changed marked, what is hidden shown or not; what a path is; a file's text; fuzzy paths under a folder, what was opened lately first; and what changed in the folders shown. An Agent reaches only its Project's folder. A file opens in its Pane, drawn by the previewer that claims it (code, markdown, a picture, a PDF, video and sound, a page run in a sandbox, a CSV as a table, JSON as a tree, a notebook's saved outputs, a font's specimen, what an archive or a workbook holds, and any other file's bytes as hex) at a line, and lines picked there take a comment for a Thread; Open with… picks another previewer for an extension. Code and markdown are edited in place and saved as one types, each save only over the text it was read at: when the disk moved meanwhile, as an Agent wrote the file, nothing is written, and the Person compares, takes the disk's text or keeps theirs. A markdown task's box ticks. It makes, renames, duplicates, copies and moves files and folders, never over another unless asked (a name taken asks Replace, Keep both or Skip), and sends them to the system's Trash, which it lists, puts back from and empties where the system lets it (not on macOS, whose Finder keeps it); each is undone by Ctrl+Z or its toast's Undo. Several names are renamed as text, after a diff. Nothing in .git, nor Banda's settings, is written. It finds words or a pattern in the files under a folder, and Alt+P opens one of the Project's files. Space shows a file in Quick Look, over the desk. A folder shows as a tree, as Miller columns whose last one previews the file picked, or as a gallery, a big preview over a filmstrip of small pictures (Ctrl+1, 2, 3); a picture's small one comes from the desktop's thumbnails or is made and kept. Ctrl+I shows what the row picked is at length: its size (a folder's counted as asked), times, permissions and owner, where a link leads, a picture's size and EXIF, and the last commit that changed it. The file each Agent works on pulses in the tree, which can follow it, and what the turn changed is marked.
@@ -185,6 +133,70 @@ Its scopes, whose actions' keys work while the focus is in them and are bound in
 
 Its methods, `banda call files.<method>`: `list`, `stat`, `read`, `write`, `find`, `watch`, `places`, `opened`, `recent`, `archive`, `sheet`, `make`, `rename`, `move`, `copy`, `cancel`, `trash`, `trashed`, `restore`, `delete`, `empty`, `search`, `thumb`, `info`, `size`.
 
+## Git (`git`)
+
+The Project's folder as git sees it: its branch, its changes, and the diff against a base, the last commit or the index; it stages, unstages and reverts them, commits, pushes and pulls, and switches and makes branches.
+
+Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
+
+- Show the Diff, or hide it (`git.diff`), Alt+D
+- Switch branch (`git.branch`), Alt+Shift+G
+
+Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `contents`, `stage`, `unstage`, `revert`, `watch`, `act`, `switch`, `branch`, `init`, `prompt`, `written`.
+
+## Pull requests (`pulls`)
+
+The GitHub pull requests linked to a Project's Threads (ADR 0076): Create PR's, an Agent's own `gh pr create`, its tools' and the Person's. It reads them through `gh`, one reader for the Project while something follows it, and works out what each needs and whose turn it is.
+
+Its methods, `banda call pulls.<method>`: `list`, `watch`, `refresh`, `link`, `unlink`, `list_thread`.
+
+What an Agent in a Thread may call as a tool of `banda mcp`:
+
+- `link_pull_request`: Links a pull request to a Thread, by its URL or `#42` in the Project's own repository on GitHub: Banda shows what it needs on the bar. An Agent links one to its own Thread.
+- `unlink_pull_request`: Lets go of a pull request in a Thread; what made it does not link it again.
+- `list_thread_pull_requests`: The pull requests a Thread links, with what each needs: an Agent's own Thread's when it asks. Not to check on CI: Banda watches them.
+
+## Terminal (`terminal`)
+
+Programs the Person runs in a terminal: a shell, or a Harness's sign-in.
+
+Its settings: `terminal.toml`.
+
+Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
+
+- New terminal (`terminal.new`), Ctrl+Alt+Return
+- Zoom the terminal in (`terminal.zoom-in`), Ctrl+= or Ctrl+Shift+=, `[binds.terminal]`
+- Zoom the terminal out (`terminal.zoom-out`), Ctrl+-, `[binds.terminal]`
+- The terminal at its own size (`terminal.zoom-reset`), Ctrl+0, `[binds.terminal]`
+
+Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `terminal` (the Terminal).
+
+Its widgets on the bar, which `[bar]` in look.toml places by id:
+
+- `terminal.ports`: The servers started in Banda: the first one's port and how many more; a click lists them.
+
+Its methods, `banda call terminal.<method>`: `open`, `write`, `resize`, `close`, `watch`, `ports`, `stop_server`.
+
+## Harnesses (`harnesses`)
+
+The agent programs this computer can start, who is signed in to each, how much of its usage limits is spent, and the tokens and estimated API cost in its local journals.
+
+Its settings: `harnesses.toml`.
+
+Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
+
+- Usage (`harnesses.usage`)
+
+Its widgets on the bar, which `[bar]` in look.toml places by id:
+
+- `harnesses.limits`: The room left of each Harness's best account; click for each account's limits.
+
+Its methods, `banda call harnesses.<method>`: `list`, `account`, `sign_in`, `sign_out`, `limits`, `usage`.
+
+What an Agent in a Thread may call as a tool of `banda mcp`:
+
+- `limits`: How much of each Harness account's usage limits is spent: a window for its session and its week, each with the share spent out of 100 and when it starts again, as last read. Before a long task, look how much is left. `read` reads them anew, at most once a minute; `limits_changed` says when that read is kept.
+
 ## Keys (`keys`)
 
 Banda's keys (ADR 0071): every action with its keys in force, and the lines of keys.toml that bind them, written as `banda settings set` writes after the look's checks. `banda keys` is its command; an Agent has its methods as tools.
@@ -199,18 +211,6 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 - `keys_reset`: Takes the Person's line of a key out of keys.toml, so Banda's own key is back.
 - `keys_mod`: Sets the mod, held for every Banda key and the mouse's moves: one or two of Alt, Ctrl and Super, as `Ctrl+Alt` where the desktop holds Alt. It moves the Person's lines with it.
 
-## Pull requests (`pulls`)
-
-The GitHub pull requests linked to a Project's Threads (ADR 0076): Create PR's, an Agent's own `gh pr create`, its tools' and the Person's. It reads them through `gh`, one reader for the Project while something follows it, and works out what each needs and whose turn it is.
-
-Its methods, `banda call pulls.<method>`: `list`, `watch`, `refresh`, `link`, `unlink`, `list_thread`.
-
-What an Agent in a Thread may call as a tool of `banda mcp`:
-
-- `link_pull_request`: Links a pull request to a Thread, by its URL or `#42` in the Project's own repository on GitHub: Banda shows what it needs on the bar. An Agent links one to its own Thread.
-- `unlink_pull_request`: Lets go of a pull request in a Thread; what made it does not link it again.
-- `list_thread_pull_requests`: The pull requests a Thread links, with what each needs: an Agent's own Thread's when it asks. Not to check on CI: Banda watches them.
-
 ## Notifications (`notifications`)
 
 Tells you of what calls, by toasts and the desktop's notifications; the bell on the bar shows the last toasts again.
@@ -218,19 +218,6 @@ Tells you of what calls, by toasts and the desktop's notifications; the bell on 
 Its widgets on the bar, which `[bar]` in look.toml places by id:
 
 - `notifications.recent`: A click shows the last toasts again.
-
-## Workspaces (`workspaces`)
-
-How this machine's Panes are arranged: workspaces one under another, each a Strip of columns.
-
-Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`, `move_pane`, `move_column`, `move_workspace`, `size`, `height`, `even`, `maximize`, `display`, `group`, `regroup`, `move_group`, `fill`, `tidy`, `take`, `set_aside`, `bring_back`, `panes`, `open_pane`, `move_own`, `close_own`.
-
-What an Agent in a Thread may call as a tool of `banda mcp`:
-
-- `panes`: The Panes on the workspaces, from the top down and from the left: your Project's with their args, a browser's with the tabs your Project's Agents opened alone, and, when your Person lets you see the other Projects, theirs without. `yours` marks the ones you opened, which alone you move and close.
-- `open_pane`: Opens a Pane of your Project for your Person to see: one of its Threads (`agents.thread`, args `{"thread": "<id>"}` alone, an ID `threads` lists; `send` starts a Thread), the Diff (`git.diff`, args `{"scope": {"kind": "changes"}}`, or `uncommitted`, `staged`, or `{"kind": "commit", "sha": "<sha>"}`, with `"file": "<path>"` to show one), a file (`files.file`, args `{"path": "<path>", "line": <n>}`), or a browser at a web address (`browser.browser`, args `{"url": "https://…"}` alone). Only the args that choose what a Pane shows are yours to give; the rest are your Person's. Beside a Pane `panes` lists, or, left out, beside your Project's Panes. One shown already, a Thread's by its ID, stays where it is, and is named. It takes no focus; the Person sees a mark on it until they look.
-- `move_pane`: Moves a Pane you opened beside another that `panes` lists.
-- `close_pane`: Closes a Pane you opened.
 
 ## Problems (`problems`)
 
@@ -250,6 +237,19 @@ The one part of Banda that sends anything anywhere (ADR 0039, decision 4): probl
 Its settings: `sharing.toml`.
 
 Its methods, `banda call sharing.<method>`: `state`, `new_id`, `example`.
+
+## Workspaces (`workspaces`)
+
+How this machine's Panes are arranged: workspaces one under another, each a Strip of columns.
+
+Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`, `move_pane`, `move_column`, `move_workspace`, `size`, `height`, `even`, `maximize`, `display`, `group`, `regroup`, `move_group`, `fill`, `tidy`, `take`, `set_aside`, `bring_back`, `panes`, `open_pane`, `move_own`, `close_own`.
+
+What an Agent in a Thread may call as a tool of `banda mcp`:
+
+- `panes`: The Panes on the workspaces, from the top down and from the left: your Project's with their args, a browser's with the tabs your Project's Agents opened alone, and, when your Person lets you see the other Projects, theirs without. `yours` marks the ones you opened, which alone you move and close.
+- `open_pane`: Opens a Pane of your Project for your Person to see: one of its Threads (`agents.thread`, args `{"thread": "<id>"}` alone, an ID `threads` lists; `send` starts a Thread), the Diff (`git.diff`, args `{"scope": {"kind": "changes"}}`, or `uncommitted`, `staged`, or `{"kind": "commit", "sha": "<sha>"}`, with `"file": "<path>"` to show one), a file (`files.file`, args `{"path": "<path>", "line": <n>}`), or a browser at a web address (`browser.browser`, args `{"url": "https://…"}` alone). Only the args that choose what a Pane shows are yours to give; the rest are your Person's. Beside a Pane `panes` lists, or, left out, beside your Project's Panes. One shown already, a Thread's by its ID, stays where it is, and is named. It takes no focus; the Person sees a mark on it until they look.
+- `move_pane`: Moves a Pane you opened beside another that `panes` lists.
+- `close_pane`: Closes a Pane you opened.
 
 ## Window (`window`)
 

@@ -509,6 +509,7 @@ fn an_agent_reaches_banda_through_banda_mcp() {
         .iter()
         .map(|t| text(&t["name"]))
         .collect();
+    // In the list of Apps' order: the Apps', then the platform's.
     let arranging = ["panes", "open_pane", "move_pane", "close_pane"];
     assert_eq!(
         names,
@@ -523,7 +524,6 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "notify",
                 "snooze",
                 "wake",
-                "limits",
                 "browser_tabs",
                 "browser_snapshot",
                 "browser_screenshot",
@@ -535,14 +535,17 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "link_pull_request",
                 "unlink_pull_request",
                 "list_thread_pull_requests",
+                "limits",
                 "keys_list",
                 "keys_bind",
                 "keys_free",
                 "keys_reset",
-                "keys_mod"
+                "keys_mod",
+                "problems",
+                "problem"
             ][..],
             &arranging,
-            &["problems", "problem", "skill"]
+            &["skill"]
         ]
         .concat()
     );

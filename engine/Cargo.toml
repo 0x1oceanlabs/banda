@@ -43,5 +43,11 @@ uuid.workspace = true
 async-trait.workspace = true
 tempfile.workspace = true
 
+# build.rs scans each App's manifest into the list of Apps (ADR 0062,
+# decision 11).
+[build-dependencies]
+serde_json.workspace = true
+toml.workspace = true
+
 [lints]
 workspace = true

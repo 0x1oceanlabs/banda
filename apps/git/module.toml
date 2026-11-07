@@ -1,8 +1,15 @@
 # The git module, as it declares itself (ADR 0022). What its code says,
 # its methods and its Panes, its code declares; this holds the rest.
 id = "git"
+kind = "app"
 name = "Git"
 about = "The Project's folder as git sees it: its branch, its changes, and the diff against a base, the last commit or the index; it stages, unstages and reverts them, commits, pushes and pulls, and switches and makes branches."
 version = "0.1.0"
+# The major of the App API it is written to (ADR 0062, ADR 0082).
+api = 1
 from-banda = true
 settings = []
+
+# What it needs of Banda (ADR 0082, decision 2): nothing it could
+# declare here is built yet.
+[needs]
