@@ -1,8 +1,21 @@
 diff --git a/dist/index.js b/dist/index.js
-index 2ce28d2f67d6e977760dd6cb784b8f96e4b6cab3..24653062f421688a6b30eec3f34945b46409653f 100755
+index 2ce28d2f67d6e977760dd6cb784b8f96e4b6cab3..ffaf579736b852404bb1e044b2aabbcb06f32210 100755
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -41914,7 +41914,11 @@ var CodexAcpClient = class _CodexAcpClient {
+@@ -28098,7 +28098,11 @@ function startCodexConnection(codexPath, env, appServerStartupArgs = ["app-serve
+   const spawnEnv = env ?? process.env;
+   let codex;
+   if (codexPath) {
+-    codex = process.platform === "win32" ? (0, import_cross_spawn.default)(codexPath, appServerStartupArgs, { env: spawnEnv }) : spawn(codexPath, appServerStartupArgs, { env: spawnEnv });
++    // Banda (ADR 0090, decision 3): codex.exe, a console program, opens
++    // a console window of its own when the adapter has no console, as on
++    // Electron; windowsHide keeps it hidden. Dropped once the adapter
++    // starts it hidden.
++    codex = process.platform === "win32" ? (0, import_cross_spawn.default)(codexPath, appServerStartupArgs, { env: spawnEnv, windowsHide: true }) : spawn(codexPath, appServerStartupArgs, { env: spawnEnv });
+   } else {
+     const bundledCodexPath = require2.resolve("@openai/codex/bin/codex.js");
+     codex = spawn(process.execPath, [bundledCodexPath, ...appServerStartupArgs], { env: spawnEnv });
+@@ -41914,7 +41918,11 @@ var CodexAcpClient = class _CodexAcpClient {
      const mergedConfig = {
        ...disableUnsupportedSkills(forceGitRootTurnDiffPaths(mergeGatewayConfig(this.config, this.gatewayConfig))),
        projects: Object.fromEntries(sessionRoots.map((root) => [root, {
@@ -15,3 +28,15 @@ index 2ce28d2f67d6e977760dd6cb784b8f96e4b6cab3..24653062f421688a6b30eec3f34945b4
        }]))
      };
      const configWithWorkspaceRoots = mergeSandboxWorkspaceWriteRoots(mergedConfig, additionalDirectories);
+@@ -54014,7 +54022,10 @@ function spawnCodexCli(codexPath, args) {
+     stdio: "inherit"
+   };
+   if (codexPath) {
+-    return spawn2(codexPath, args, { ...options, shell: process.platform === "win32" });
++    // Banda (ADR 0090): on Windows, cross-spawn, as for the app server,
++    // not a shell, which split a CODEX_PATH with a space in it
++    // (codex-acp#602). Dropped once the adapter takes the fix.
++    return process.platform === "win32" ? (0, import_cross_spawn.default)(codexPath, args, options) : spawn2(codexPath, args, options);
+   }
+   const bundledCodexPath = createRequire2(import.meta.url).resolve("@openai/codex/bin/codex.js");
+   return spawn2(process.execPath, [bundledCodexPath, ...args], options);

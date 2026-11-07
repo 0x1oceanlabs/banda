@@ -1,0 +1,283 @@
+# Banda Dev's installer for Windows, built by hand (ADR 0090, step 5): x64,
+# per user, unsigned, with scripts/package.sh on GitHub's windows-2025
+# runner. It publishes nothing: each run keeps the installer, to try on a
+# Windows machine, and writes how long it took to its summary.
+#
+#   gh workflow run release-windows --ref <branch>
+#   gh run download <run id>
+#
+# A PR that changes how the installer is built builds one too, as a run by
+# hand only works once this file is on main. Step 6 runs it after every Dev
+# and adds its files to the release.
+#
+# Before it keeps the installer, the run installs it, installs it again over
+# a program running from its folder, and uninstalls it: it stops only what
+# runs from inside its own folder (installer.nsh). Then it starts the app,
+# which runs its engine from a copy of its own and removes the old copies
+# no program runs from (client/desktop/src/program.ts).
+name: release-windows
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/release-windows.yml
+      - client/desktop/electron-builder.config.mjs
+      - client/desktop/installer.nsh
+      - scripts/licenses.mjs
+      - scripts/node.mjs
+      - scripts/package.sh
+
+permissions: {}
+
+concurrency:
+  group: release-windows-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  pack:
+    name: pack (Windows)
+    # Not a fork's PR, as `ci` checks none (ADR 0038, decision 4).
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: windows-2025
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - id: start
+        run: echo "at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      # The Node ci/Dockerfile pins, to build with, and package.json's pnpm.
+      # The app carries a Node of its own (scripts/node.mjs).
+      - id: node
+        run: echo "version=$(sed -n 's/^ARG NODE_VERSION=//p' ci/Dockerfile)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          # It would cache pnpm's store before pnpm is installed.
+          package-manager-cache: false
+      - run: npm install --global --silent "$(node -p 'require("./package.json").packageManager')"
+      - run: rustup toolchain install
+      # The release build main's last run left: a PR's run reads it and
+      # saves none, as in windows.yml, so no PR's target/ crowds out the
+      # repository's other caches.
+      - id: cache
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: windows-release
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # Banda Dev, as a Dev is (ADR 0033), with the workspace's version
+      # marked local and this run's number: the engine's --version tells no
+      # two builds apart on Windows yet (its build id comes in step 3), and
+      # the window keeps one copy of the engine per version. A -local
+      # version sorts after each -dev one of the same: the updater (step 6)
+      # offers no Dev over it.
+      - id: version
+        run: echo "version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)-local.$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+      - id: pack
+        name: pack
+        env:
+          BANDA_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          scripts/package.sh dev
+          echo "at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: install, install over a running Banda, uninstall
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $installer = (Get-Item client/desktop/dist/banda-dev-*-x64.exe).FullName
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\banda-dev'
+          # An installer or uninstaller, silent, that fails as it does.
+          function Run($program) {
+            $run = Start-Process $program -ArgumentList '/S' -Wait -PassThru
+            if ($run.ExitCode) { throw "$program ended with code $($run.ExitCode)" }
+          }
+          # The uninstaller hands over to a copy of itself, which ends later.
+          function Uninstall {
+            Run (Get-Item (Join-Path $dir 'Uninstall *.exe')).FullName
+            for ($i = 0; $i -lt 30 -and (Test-Path (Join-Path $dir 'banda-dev.exe')); $i++) { Start-Sleep 1 }
+            if (Test-Path (Join-Path $dir 'banda-dev.exe')) { throw 'the uninstall left the app' }
+          }
+          function Fact($said) { "- $said" >> $env:GITHUB_STEP_SUMMARY }
+          "### What Windows did`n" >> $env:GITHUB_STEP_SUMMARY
+
+          Run $installer
+          foreach ($file in 'banda-dev.exe', 'resources\banda.exe', 'resources\banda.pdb', 'resources\node\node.exe', 'resources\adapters\claude-agent-acp.mjs', 'resources\adapters\codex-acp.mjs') {
+            if (-not (Test-Path (Join-Path $dir $file))) { throw "the install has no $file" }
+          }
+          $said = & (Join-Path $dir 'resources\banda.exe') --version
+          if ($said -notlike "banda $env:VERSION*") { throw "banda.exe --version said $said" }
+          $node = Join-Path $dir 'resources\node\node.exe'
+          & $node --version
+          # The Node the app carries runs an adapter: Claude Code's answers
+          # ACP's first question with no Claude Code installed, and says on
+          # stderr that it found none.
+          $adapter = Join-Path $dir 'resources\adapters\claude-agent-acp.mjs'
+          $asked = Start-Job {
+            param($node, $adapter)
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}' | & $node $adapter 2>$null
+          } -ArgumentList $node, $adapter
+          if (-not (Wait-Job $asked -Timeout 60)) { throw 'the adapter did not answer in a minute' }
+          $answer = (Receive-Job $asked) -join "`n"
+          if ($answer -notmatch '"result":\{"protocolVersion":1') { throw "the adapter answered: $answer" }
+
+          # What the engine's old copies rest on (program.ts, pruneAside):
+          # Windows removes no program that runs. The summary says whether
+          # it renames a folder one runs from, or from a folder in it.
+          $waiting = '-e', 'setInterval(()=>{},1000)'
+          $beside = "$dir-beside"
+          $nested = "$dir-nested"
+          New-Item -ItemType Directory -Force $beside, "$nested\node" | Out-Null
+          Copy-Item $node $beside
+          Copy-Item $node "$nested\node"
+          $outside = Start-Process "$beside\node.exe" -ArgumentList $waiting -PassThru
+          $deep = Start-Process "$nested\node\node.exe" -ArgumentList $waiting -PassThru
+          Start-Sleep 2
+          $removed = $true
+          try { Remove-Item "$nested\node\node.exe" -Force } catch { $removed = $false }
+          if ($removed) { throw 'Windows removed a program that runs' }
+          foreach ($at in $beside, $nested) {
+            $moved = $true
+            try { Rename-Item $at "$(Split-Path -Leaf $at)-moved" } catch { $moved = $false }
+            if ($moved) { Rename-Item "$at-moved" (Split-Path -Leaf $at) }
+            Fact "it renames ``$(Split-Path -Leaf $at)``, which a program runs from: $moved"
+          }
+          Stop-Process -Id $deep.Id
+
+          # The next install stops what runs from the install's folder, and
+          # not what runs from the folder beside it, whose name starts the
+          # same.
+          $inside = Start-Process $node -ArgumentList $waiting -PassThru
+          Run $installer
+          if (-not $inside.HasExited) { throw 'the install left a program from its folder running' }
+          if ($outside.HasExited) { throw 'the install stopped a program from the folder beside its own' }
+          Stop-Process -Id $outside.Id
+          # The uninstall stops it too.
+          $inside = Start-Process $node -ArgumentList $waiting -PassThru
+          Uninstall
+          if (-not $inside.HasExited) { throw 'the uninstall left a program from its folder running' }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: banda-dev-windows-x64-${{ github.run_number }}
+          path: client/desktop/dist/banda-dev-*-x64.exe
+          if-no-files-found: error
+          retention-days: 14
+      - name: the app runs its engine from a copy, and removes old copies
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = (Get-Item client/desktop/dist/banda-dev-*-x64.exe).FullName
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\banda-dev'
+          $logs = Join-Path $env:RUNNER_TEMP 'banda'
+          New-Item -ItemType Directory -Force $logs | Out-Null
+          function Run($program) {
+            $run = Start-Process $program -ArgumentList '/S' -Wait -PassThru
+            if ($run.ExitCode) { throw "$program ended with code $($run.ExitCode)" }
+          }
+          function Fact($said) { "- $said" >> $env:GITHUB_STEP_SUMMARY }
+          # The engine the window runs, `start --with-parent`, from its copy.
+          function Engine {
+            Get-CimInstance Win32_Process -Filter "Name = 'banda.exe'" |
+              ? { $_.ExecutablePath -like "*\$env:VERSION\banda.exe" -and $_.CommandLine -match ' start ' }
+          }
+          function Wait-Until([scriptblock]$done, $seconds) {
+            for ($i = 0; $i -lt $seconds -and -not (& $done); $i++) { Start-Sleep 1 }
+            [bool](& $done)
+          }
+          # Starts the app, and waits for its engine.
+          function Open-Banda($name) {
+            $app = Start-Process (Join-Path $dir 'banda-dev.exe') -PassThru `
+              -RedirectStandardOutput "$logs\$name.out" -RedirectStandardError "$logs\$name.err"
+            if (-not (Wait-Until { Engine } 120)) {
+              Get-Content "$logs\$name.out", "$logs\$name.err" -ErrorAction SilentlyContinue
+              Get-CimInstance Win32_Process -Filter "Name = 'banda.exe'" | Format-List ProcessId, ExecutablePath, CommandLine
+              throw 'the app ran no engine from a copy of its own'
+            }
+            $app
+          }
+
+          Run $installer
+          $app = Open-Banda first
+          $copy = Split-Path (@(Engine)[0].ExecutablePath)
+          $engines = Split-Path $copy
+          Fact "the engine's copy: ``$copy``"
+          foreach ($file in 'version', 'banda.pdb', 'node\node.exe', 'adapters\claude-agent-acp.mjs', 'adapters\codex-acp.mjs') {
+            if (-not (Test-Path (Join-Path $copy $file))) { throw "the copy has no $file" }
+          }
+          # What keeps a copy whose engine runs: its program will not go.
+          $removed = $true
+          try { Remove-Item "$copy\banda.exe" -Force } catch { $removed = $false }
+          if ($removed) { throw 'Windows removed the program the engine runs' }
+          $moved = $true
+          try { Rename-Item $copy "$(Split-Path -Leaf $copy)-moved" } catch { $moved = $false }
+          if ($moved) { Rename-Item "$copy-moved" (Split-Path -Leaf $copy) }
+          Fact "it renames the copy its engine runs from: $moved"
+          Stop-Process -Id $app.Id
+          Fact "the engine stopped with its window, stopped by force: $(Wait-Until { -not (Engine) } 30)"
+          Get-CimInstance Win32_Process -Filter "Name = 'banda.exe'" | % { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+
+          # Old copies: the oldest runs a program, which keeps it; the next
+          # goes, as does a cut one; the newest stays, the last before.
+          $old = '0.0.1', '0.0.2', '0.0.3', '.0.0.4-cut' | % { Join-Path $engines $_ }
+          foreach ($at in $old) {
+            New-Item -ItemType Directory -Force "$at\node" | Out-Null
+            Set-Content "$at\banda.exe" ''
+          }
+          Copy-Item "$copy\node\node.exe" "$($old[0])\node"
+          $held = Start-Process "$($old[0])\node\node.exe" -ArgumentList '-e', 'setInterval(()=>{},1000)' -PassThru
+          for ($i = 0; $i -lt 3; $i++) { (Get-Item $old[$i]).LastWriteTime = (Get-Date).AddDays($i - 3) }
+          $app = Open-Banda second
+          if (-not (Wait-Until { -not (Test-Path $old[1]) -and -not (Test-Path $old[3]) } 60)) {
+            Get-ChildItem -Force $engines | Format-Table Name, LastWriteTime
+            throw 'the app removed no old copy'
+          }
+          if (-not (Test-Path "$($old[0])\node\node.exe")) { throw 'the app removed a copy a program runs from' }
+          if (-not (Test-Path $old[2])) { throw 'the app removed the last copy before its own' }
+          if (Get-ChildItem -Force $engines -Filter '.gone-*') { throw 'the app left a copy aside' }
+          Stop-Process -Id $held.Id
+
+          # An install over the running app closes it.
+          Run $installer
+          if (-not $app.HasExited) { throw 'the install left the app running' }
+          Fact "the engine stopped with its window, closed by the install: $(Wait-Until { -not (Engine) } 30)"
+          Run (Get-Item (Join-Path $dir 'Uninstall *.exe')).FullName
+      - name: how long it took
+        if: ${{ !cancelled() && steps.start.outputs.at }}
+        env:
+          START: ${{ steps.start.outputs.at }}
+          PACKED: ${{ steps.pack.outputs.at }}
+          CACHED: ${{ steps.cache.outputs.cache-hit }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          minutes() { printf '%d min %02d s' $(($1 / 60)) $(($1 % 60)); }
+          now=$(date +%s)
+          {
+            echo "### Banda Dev $VERSION for Windows x64"
+            echo
+            echo "- the whole run: $(minutes $((now - START)))"
+            if [[ -n $PACKED ]]; then
+              echo "- to the installer: $(minutes $((PACKED - START)))"
+            fi
+            # cache-hit is true only for this key, not for an older one's.
+            echo "- the Rust cache: $([[ $CACHED == true ]] && echo "this build's" || echo "an older build's, or none")"
+            for installer in client/desktop/dist/banda-dev-*-x64.exe; do
+              if [[ -f $installer ]]; then
+                echo "- $(basename "$installer"): $(($(stat -c %s "$installer") / 1048576)) MB"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

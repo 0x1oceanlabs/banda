@@ -99,6 +99,8 @@ ts() {
 
   step "What Banda ships is under a license it may ship (ADR 0038, decision 1)"
   node scripts/licenses.mjs
+  # And for Windows, whose engine is built of crates of its own (ADR 0090).
+  node scripts/licenses.mjs --target x86_64-pc-windows-msvc
 }
 
 window() {

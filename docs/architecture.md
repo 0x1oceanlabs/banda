@@ -613,7 +613,9 @@ If Chat is removed, Agents still works through its own Thread.
   `BANDA_ADAPTERS`, else beside its program (a packed app's
   `resources/adapters`, and the engine's own copy's), else what a
   checkout's package built; the Node in `BANDA_NODE`, which the window sets
-  to its own Electron, else the packed app's Electron beside the engine's
+  to its own Electron, else the Node the app carries in `node/` beside the
+  engine's program (Windows', ADR 0090, decision 5: its window then names
+  no Electron), else the packed app's Electron beside the engine's
   resources, else the Electron the copy's `electron` file names, else the
   first `node` on PATH of at least Node 22. An Electron runs them with
   `ELECTRON_RUN_AS_NODE`; a `node` needs nothing. So an engine started in
@@ -1169,16 +1171,20 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
 - **A packed Banda runs its own copy of `banda`** (ADR 0086, decision
   2), never the one inside its AppImage or its app, whose folder may go
   while the program runs. Main copies it into `<data>/engine/<version>/`,
-  beside what its `--version` said and the ACP adapters the app carries,
-  runs the copy once with `--version`, and renames it into place only
-  when it says the same version and build id (`program.ts`). A copy in
-  place is run again while it and its adapters are as long as the packed
-  ones and it says the same, and one that goes while the window runs is
-  made again before the next run. The last two versions are kept. A copy
-  that cannot be made leaves the engine where it was packed, and a
-  Problem says why. A `banda` that a package manager owns, as the AUR's,
-  says so in `package-type` beside it and runs where it was put; a
-  checkout's runs where cargo built it.
+  beside what its `--version` said, its line tables (`banda.dSYM` on
+  macOS, `banda.pdb` on Windows), the ACP adapters the app carries, and on
+  Windows the Node they run on there (`node/`), runs the copy once with
+  `--version`, and renames it into place only when it says the same
+  version and build id (`program.ts`). A copy in place is run again while
+  it and what it carries are as long as the packed ones and it says the
+  same, and one that goes while the window runs is made again before the
+  next run. The last two versions are kept. On Windows, where nothing
+  tells what runs, an old copy is renamed aside and removed there, its
+  programs first; one Windows will not move, or whose program will not
+  go, stays (ADR 0090, decision 5). A copy that cannot be made leaves the
+  engine where it was packed, and a Problem says why. A `banda` that a
+  package manager owns, as the AUR's, says so in `package-type` beside it
+  and runs where it was put; a checkout's runs where cargo built it.
 - **What still runs from inside the AppImage** is Electron's, and, for an
   engine that is the window's child, the Node the ACP adapters run on,
   the window's Electron. An engine started as the session's service from

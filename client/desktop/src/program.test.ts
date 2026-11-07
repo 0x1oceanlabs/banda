@@ -14,18 +14,23 @@ import {
   utimesSync,
   writeFileSync,
 } from "node:fs"
+import { rename } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { NodeServices } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
-import { Effect } from "effect"
+import { Effect, Exit, Fiber } from "effect"
+import { TestClock } from "effect/testing"
 import {
   CARRIED,
   ELECTRON,
+  NODE_FOLDER,
   ownCopy,
   Program,
   programsOf,
   prune,
+  pruneAside,
+  renaming,
   runningPrograms,
   type Where,
   whereOf,
@@ -205,6 +210,18 @@ describe("the copy", () => {
       ).toBe("lines")
     })
   )
+
+  it.live("takes a Windows program's line tables, its .pdb", () =>
+    Effect.gen(function* () {
+      const copies = join(folder("data"), "engine")
+      const program = banda("banda 1.2.3 (build aa)")
+      writeFileSync(`${program}.pdb`, "lines")
+      yield* copyOf(program, copies)
+      expect(readFileSync(join(copies, "1.2.3", "banda.pdb"), "utf8")).toBe(
+        "lines"
+      )
+    })
+  )
 })
 
 describe("the copy and the adapters the app carries", () => {
@@ -245,6 +262,88 @@ describe("the copy and the adapters the app carries", () => {
       expect(readFileSync(adapter, "utf8")).toBe(
         "// the adapter, a newer build"
       )
+    })
+  )
+})
+
+describe("the copy and the Node the app carries", () => {
+  /** `node/` beside `program`, holding a Node that is `text`. */
+  function carried(program: string, text: string) {
+    const node = join(dirname(program), NODE_FOLDER)
+    mkdirSync(node, { recursive: true })
+    writeFileSync(join(node, "node.exe"), text)
+  }
+
+  it.live("takes it, so the engine runs the adapters on it", () =>
+    Effect.gen(function* () {
+      const copies = join(folder("data"), "engine")
+      const program = banda("banda 1.2.3 (build aa)")
+      carried(program, "a node")
+      const copy = yield* copyOf(program, copies)
+      expect(
+        readFileSync(join(dirname(copy), NODE_FOLDER, "node.exe"), "utf8")
+      ).toBe("a node")
+    })
+  )
+
+  it.live("made without it, or with another, is made again", () =>
+    Effect.gen(function* () {
+      const copies = join(folder("data"), "engine")
+      const program = banda("banda 1.2.3 (build aa)")
+      const copy = yield* copyOf(program, copies)
+      const node = join(dirname(copy), NODE_FOLDER, "node.exe")
+      expect(existsSync(node)).toBe(false)
+      carried(program, "a node")
+      expect(yield* copyOf(program, copies)).toBe(copy)
+      expect(readFileSync(node, "utf8")).toBe("a node")
+      carried(program, "a newer node")
+      yield* copyOf(program, copies)
+      expect(readFileSync(node, "utf8")).toBe("a newer node")
+    })
+  )
+})
+
+describe("a rename on Windows", () => {
+  /** A rename that fails as `codes` say, one a try, and then works. */
+  const failing = (...codes: string[]) => {
+    const tried: string[] = []
+    const renames = async (from: string) => {
+      tried.push(from)
+      const code = codes.shift()
+      if (code)
+        throw Object.assign(new Error(`${code}: held`), { code }) as Error
+    }
+    return { tried, renames }
+  }
+
+  it.live("is tried again while another program holds the file", () =>
+    Effect.gen(function* () {
+      const { tried, renames } = failing("EPERM", "EBUSY", "EACCES")
+      yield* renaming("a", "b", renames)
+      expect(tried).toHaveLength(4)
+    })
+  )
+
+  it.live("fails at once for anything else", () =>
+    Effect.gen(function* () {
+      const { tried, renames } = failing("ENOENT")
+      const failed = yield* Effect.flip(renaming("a", "b", renames))
+      expect(failed.message).toBe("ENOENT: held")
+      expect(tried).toHaveLength(1)
+    })
+  )
+
+  it.effect("gives up after ten seconds", () =>
+    Effect.gen(function* () {
+      const { tried, renames } = failing(...Array(100).fill("EPERM"))
+      const fiber = yield* Effect.forkChild(
+        Effect.exit(renaming("a", "b", renames))
+      )
+      yield* TestClock.adjust("9 seconds")
+      expect(fiber.pollUnsafe()).toBeUndefined()
+      yield* TestClock.adjust("2 seconds")
+      expect(Exit.isFailure(yield* Fiber.join(fiber))).toBe(true)
+      expect(tried.length).toBeGreaterThan(40)
     })
   )
 })
@@ -415,6 +514,41 @@ describe("the old copies", () => {
     const running = [join(copies, "1.0.0", "banda"), "/usr/bin/1.0.0"]
     expect(prune(copies, kept, running)).toEqual([join(copies, "0.9.0")])
     expect(listed(copies)).toEqual(["1.0.0", "1.1.0", "1.2.0"])
+  })
+
+  it("on Windows, are moved aside and removed, unless they will not move", async () => {
+    const copies = folder("engine")
+    made(copies, "0.9.0", 400)
+    made(copies, "1.0.0", 300)
+    made(copies, "1.1.0", 200)
+    const kept = made(copies, "1.2.0", 100)
+    made(copies, ".1.3.0-cut", 50)
+    // Windows renames no folder a program runs from.
+    const busy = join(copies, "1.0.0")
+    const renames = async (from: string, to: string) => {
+      if (from === busy)
+        throw Object.assign(new Error("EPERM"), { code: "EPERM" })
+      await rename(from, to)
+    }
+    expect((await pruneAside(copies, kept, renames)).sort()).toEqual([
+      join(copies, ".1.3.0-cut"),
+      join(copies, "0.9.0"),
+    ])
+    expect(listed(copies)).toEqual(["1.0.0", "1.1.0", "1.2.0"])
+  })
+
+  it("on Windows, move back when a program in them will not go", async () => {
+    const copies = folder("engine")
+    const kept = made(copies, "1.2.0", 100)
+    const old = made(copies, ".1.2.0-old", 50)
+    // Its Node runs, though its folder moved: here a folder in its place,
+    // whose removal as a file fails, as Windows removes no program that
+    // runs.
+    const node = join(old, NODE_FOLDER, "node.exe")
+    mkdirSync(node, { recursive: true })
+    expect(await pruneAside(copies, kept)).toEqual([])
+    expect(listed(copies)).toEqual([".1.2.0-old", "1.2.0"])
+    expect(existsSync(node)).toBe(true)
   })
 
   it("are read from ps, each by its whole path", () => {

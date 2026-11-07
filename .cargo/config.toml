@@ -2,3 +2,12 @@
 # ts-rs writes the API's TypeScript types here when the tests run
 # (ADR 0001, decision 1: one source of truth for the contract).
 TS_RS_EXPORT_DIR = { value = "sdk/contract/src/generated", relative = true }
+
+# Windows' programs link Microsoft's C runtime in, as node.exe does, so
+# they start on a Windows with no Visual C++ runtime installed (ADR 0090,
+# step 5).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
