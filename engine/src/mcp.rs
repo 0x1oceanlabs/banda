@@ -13,6 +13,13 @@
 //! connects, and `skill`, which it answers itself from the Banda skill, as
 //! `banda skill` does.
 //!
+//! Each tool call is a command whose ID comes from this session of `banda
+//! mcp` and the request's ID (ADR 0082, decision 4). A request sent again,
+//! by its client or by `banda mcp` as it connects again to an engine that
+//! broke off, gets the first answer and runs nothing again. Another
+//! session, as its Harness starts `banda mcp` again, numbers its requests
+//! from one again, and they get other IDs.
+//!
 //! A refused or malformed call is the tool's answer, marked as an error,
 //! with what was wrong and that nothing was done. Only an engine that does
 //! not answer is an error of the protocol.
@@ -39,6 +46,9 @@ type Error = (i64, String);
 
 struct Mcp {
     pass: Pass,
+    /// This session, new each time `banda mcp` starts: what its tool
+    /// calls' command IDs are derived from.
+    session: String,
     connected: Option<Connected>,
 }
 
@@ -57,6 +67,7 @@ pub async fn serve() -> Result<(), Failure> {
     })?;
     let mut mcp = Mcp {
         pass,
+        session: CommandId::new().to_string(),
         connected: None,
     };
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
@@ -104,7 +115,7 @@ impl Mcp {
             "initialize" => Ok(initialize(&params)),
             "ping" => Ok(json!({})),
             "tools/list" => self.tools().await.map(|tools| json!({ "tools": tools })),
-            "tools/call" => self.call(&params).await,
+            "tools/call" => self.call(&id, &params).await,
             _ => Err((NO_METHOD, format!("banda mcp has no method {method}."))),
         };
         Some(reply(id, answer))
@@ -135,35 +146,56 @@ impl Mcp {
         Ok(listed.chain([skill_tool()]).collect())
     }
 
-    /// Runs one tool in the Project of the pass.
-    async fn call(&mut self, params: &Value) -> Result<Value, Error> {
+    /// Runs one tool in the Project of the pass, as the command request
+    /// `id` of this session makes. An engine that broke off is connected
+    /// to again, once, and asked again under the same ID, so what ran
+    /// before it broke off runs nothing again.
+    async fn call(&mut self, id: &Value, params: &Value) -> Result<Value, Error> {
         let name = params["name"].as_str().unwrap_or_default();
         let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
         if name == "skill" {
             return Ok(skill(&arguments));
         }
-        let connected = self.connected().await.map_err(lost)?;
-        let Some(tool) = connected.tools.iter().find(|tool| tool.name == name) else {
-            return Ok(said(
-                format!("Banda has no tool \"{name}\". Nothing was done."),
-                true,
-            ));
-        };
-        let method = tool.method.clone();
-        match connected
-            .client
-            .ask(&method, None, CommandId::new(), arguments)
-            .await
-        {
-            Ok(answer) => Ok(answered(answer)),
-            Err(Failure::Refused(refusal)) => Ok(refused(&refusal)),
-            Err(broken) => {
-                // The next call connects again.
-                self.connected = None;
-                Err(lost(broken))
+        let command = command_id(&self.session, id);
+        // How the engine broke off the first ask: what is answered when it
+        // does not answer again.
+        let mut broke: Option<Failure> = None;
+        loop {
+            let connected = match self.connected().await {
+                Ok(connected) => connected,
+                Err(failure) => return Err(lost(broke.unwrap_or(failure))),
+            };
+            let Some(tool) = connected.tools.iter().find(|tool| tool.name == name) else {
+                return Ok(said(
+                    format!("Banda has no tool \"{name}\". Nothing was done."),
+                    true,
+                ));
+            };
+            let method = tool.method.clone();
+            let asked = connected
+                .client
+                .ask(&method, None, command, arguments.clone())
+                .await;
+            match asked {
+                Ok(answer) => return Ok(answered(answer)),
+                Err(Failure::Refused(refusal)) => return Ok(refused(&refusal)),
+                Err(broken) => {
+                    // The next ask connects again.
+                    self.connected = None;
+                    if let Some(first) = broke {
+                        return Err(lost(first));
+                    }
+                    broke = Some(broken);
+                }
             }
         }
     }
+}
+
+/// The command ID of request `id` in `session`. A JSON-RPC ID is a number
+/// or a string, and `7` and `"7"` are two requests.
+fn command_id(session: &str, id: &Value) -> CommandId {
+    CommandId::derive(session, &id.to_string())
 }
 
 fn initialize(params: &Value) -> Value {
@@ -261,6 +293,18 @@ mod tests {
                 "isError": false,
             })
         );
+    }
+
+    #[test]
+    fn a_request_is_one_command_in_its_session_and_only_there() {
+        let session = CommandId::new().to_string();
+        let seven = command_id(&session, &json!(7));
+        assert_eq!(seven, command_id(&session, &json!(7)), "sent again");
+        assert_ne!(seven, command_id(&session, &json!(8)));
+        assert_ne!(seven, command_id(&session, &json!("7")));
+        // A new `banda mcp` numbers its requests from one again.
+        let next = CommandId::new().to_string();
+        assert_ne!(seven, command_id(&next, &json!(7)));
     }
 
     #[test]
