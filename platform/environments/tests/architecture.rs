@@ -336,6 +336,10 @@ fn each_place_on_the_host_still_makes_what_it_names() {
 /// Each place a program is made says whose it is, as named in [`WHOSE`]:
 /// a new one is named there, with whose it makes and why.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "it reads the sources by their Unix paths, the same on every platform: Linux checks them"
+)]
 fn each_program_says_whose_it_is_where_it_is_made() {
     let root = repository();
     let files = sources();
