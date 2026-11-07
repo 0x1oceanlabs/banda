@@ -126,6 +126,14 @@ export function focused(state: Workspaces): Entry | undefined {
   return column?.entries[column.active]
 }
 
+/** The Project the Person is in, as Here says it (ADR 0087, decision 4):
+ * the focused Pane's, else the current workspace's, which a Project's
+ * workspace keeps once its last Pane goes. None on an empty workspace of
+ * no Project, where the window takes its home Project. */
+export function projectIn(state: Workspaces): ProjectId | undefined {
+  return (focused(state) ?? current(state)).project
+}
+
 /** Every entry of every workspace, from the top down, left to right. */
 export function entries(state: Workspaces): Entry[] {
   return state.list.flatMap((workspace) =>

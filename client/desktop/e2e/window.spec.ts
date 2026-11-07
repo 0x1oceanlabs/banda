@@ -19,6 +19,7 @@ import {
   countNotes,
   desktopOf,
   firstThread,
+  newProject,
   GLASS,
   sendAndLeave,
   setInFront,
@@ -4631,6 +4632,52 @@ test("the Banda menu goes into a Project and the sidebar's view, and Tab shows w
   await expect(
     sidebar.getByRole("button", { name: "View: projects" })
   ).toBeVisible()
+})
+
+test("on a Project's empty workspace, a new Thread starts in that Project", async () => {
+  window = await startWindow({ sidebar: 'preset = "projects"\n' })
+  const { page } = window
+  // Work, the first Project, is home; Play's workspace is the one emptied.
+  await firstThread(page)
+  await newProject(page, "Play")
+  const inPlay = page.getByRole("region", { name: "New Thread" }).filter({
+    has: page.getByRole("button", { name: "Project: Play" }),
+  })
+  const composer = inPlay.getByRole("textbox", { name: "Message to Fake AI" })
+  await composer.fill("hello")
+  await composer.press("Enter")
+  const thread = page.getByRole("region", { name: "hello" })
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const play = sidebar.getByRole("group", { name: "Play" })
+  await expect(play.getByRole("button", { name: /hello/ })).toBeVisible()
+  // Its turn over, as a Thread at work is never archived.
+  await expect(thread.getByRole("img", { name: "Nothing runs" })).toBeVisible()
+  // Its last Thread archived, Play's workspace stays on screen, empty, and
+  // no Pane has the focus (ADR 0087, decision 4).
+  await page.keyboard.press("Alt+S")
+  await expect(thread).toBeHidden()
+  // The workspace on screen: the others are drawn hidden.
+  const tiling = page.getByRole("main")
+  const empty = tiling
+    .getByRole("paragraph")
+    .filter({ hasText: "This workspace is empty." })
+  await expect(empty).toBeVisible()
+
+  // Its own New Thread starts in Play, not in home.
+  await tiling.getByRole("button", { name: "New Thread", exact: true }).click()
+  await expect(inPlay).toBeVisible()
+  await page.keyboard.press("Alt+KeyW")
+  await expect(empty).toBeVisible()
+
+  // So does the Banda menu's, with the words typed.
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const search = menu.getByRole("combobox", { name: "Search" })
+  await page.keyboard.press("Alt+Space")
+  await search.fill("again")
+  await menu.getByRole("option", { name: /New Thread: “again”/ }).click()
+  await expect(menu).toBeHidden()
+  await expect(play.getByRole("button", { name: /again/ })).toBeVisible()
 })
 
 test("banda menu opens the Banda menu at a route, from outside the window", async () => {

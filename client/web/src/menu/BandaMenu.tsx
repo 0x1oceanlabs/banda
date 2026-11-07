@@ -122,7 +122,7 @@ export function BandaMenu({
   engine: Engine
   /** The modules the engine runs: the sources of the others find nothing. */
   modules: readonly string[]
-  /** The focused Project, where the sources look. */
+  /** The Project the Person is in, where the sources look. */
   project: ProjectId
   lists: Lists
   /** Whether a Thread sleeps now (ADR 0074), by the window's clock. */

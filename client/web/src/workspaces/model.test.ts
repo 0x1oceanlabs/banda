@@ -24,6 +24,7 @@ import {
   move,
   open,
   parse,
+  projectIn,
   send,
   shift,
   inBar,
@@ -580,6 +581,37 @@ describe("closing", () => {
       args: { terminal: pane.args.terminal },
     })
     expect(left(before, after, identity)).toEqual([])
+  })
+})
+
+describe("the Project the Person is in", () => {
+  /** The first workspace made Project `project`'s, as the engine makes
+   * the one its Agents' Threads open on (ADR 0065, decision 9). */
+  const of = (state: Workspaces, project: string): Workspaces => ({
+    ...state,
+    list: state.list.map((one, i) => (i === 0 ? { ...one, project } : one)),
+  })
+
+  test("is the focused Pane's, whatever its workspace's", () => {
+    let state = of(open(start(), A, thread("t1")), A)
+    state = open(state, B, terminal("x1"), { place: "right" })
+    expect(projectIn(state)).toBe(B)
+  })
+
+  test("on a Project's workspace its last Pane left, is that Project", () => {
+    // As when the Person archives the Project's last Thread: no Pane has
+    // the focus, and a new Thread starts there, not in home.
+    let state = of(open(start(), A, thread("t1")), A)
+    state = close(state, focused(state)!.id)
+    expect(focused(state)).toBeUndefined()
+    expect(projectIn(state)).toBe(A)
+  })
+
+  test("is none on an empty workspace of no Project", () => {
+    expect(projectIn(start())).toBeUndefined()
+    let state = open(start(), A, thread("t1"))
+    state = close(state, focused(state)!.id)
+    expect(projectIn(state)).toBeUndefined()
   })
 })
 
