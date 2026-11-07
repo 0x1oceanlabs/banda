@@ -71,13 +71,19 @@ opens there to be clicked through, and is driven the same way.
 A checkout's window starts only through `scripts/local.sh`: `try.sh`,
 the end-to-end tests and `pnpm --filter @banda/desktop start` go through
 it. On Linux it runs the window in a systemd user unit of its own (the
-trial's is `banda-trial-<slug>.scope`), so your Turn ending, or your
-unit stopping, neither crashes it nor leaves part of it in yours
+trial's is `banda-trial-<slug>.scope`), so your unit stopping neither
+crashes it nor leaves part of it in yours
 ([ADR 0086](docs/adr/0086-the-engine-is-the-machine-s-and-outlives-the-window.md),
-decision 7). Never start one with a bare `electron .`, and never stop
-one by killing its process group or its unit while it runs: `try.sh
---stop` closes it as the Person does, and SIGTERM to its main process
-does too.
+decision 7). That unit does not take it out of your process group:
+`--detach` does, with a session of its own, so start yours only with
+`try.sh --hidden --detach`. `pnpm --filter @banda/desktop start` and
+`try.sh` without `--detach` are for a Person's terminal: in your shell,
+the window crashes when your Turn's processes are killed. The end-to-end
+tests' windows are apart already, and close once the tests have gone,
+however they went. Never start one with a bare `electron .`, and never
+stop one by killing its process group or its unit while it runs:
+`try.sh --stop` closes it as the Person does, and SIGTERM to its main
+process does too.
 
 The trial's own `banda` is its `bin/banda`, with `BANDA_STATE` set to its
 `state`. In an Agent's shell, `banda` acts under the Agent's pass for the

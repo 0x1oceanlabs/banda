@@ -38,14 +38,23 @@ const loader = (() => {
 
 /**
  * What `electron.launch` takes to start the window of the checkout at
- * `app` in a systemd unit of its own, as scripts/local.sh does: so the
- * test's window lives and dies apart from the Agent running the tests
- * (ADR 0086, decision 7). The window's own args follow `args`.
+ * `app`, with `args` and `env`, in a systemd unit of its own, as
+ * scripts/local.sh does: so the test's window lives and dies apart from
+ * the Agent running the tests (ADR 0086, decision 7). It closes once this
+ * test runner has gone, however it went, since nothing else would close
+ * it there. Playwright's own args come before the loader then, so main's
+ * `process.argv` keeps `-r <loader>` before the app, where Playwright
+ * takes out only its own; Banda reads argv only when packaged.
  */
-export const inUnit = (app: string) => ({
+export const inUnit = (
+  app: string,
+  args: string[],
+  env: NodeJS.ProcessEnv
+) => ({
   executablePath: join(repository, "scripts/local.sh"),
   cwd: app,
-  args: ["-r", loader, app],
+  args: ["-r", loader, app, ...args],
+  env: { ...env, BANDA_LOCAL_PARENT: String(process.pid) },
 })
 
 /**
@@ -159,16 +168,16 @@ export async function startWindow({
     // the same disk as the throwaway Projects (ADR 0073, decision 10).
     XDG_DATA_HOME: join(dir, "xdg-data"),
   }
-  const local = inUnit(desktop)
   const app = await electron.launch({
-    ...local,
+    ...inUnit(
+      desktop,
+      [
+        `--force-device-scale-factor=${deviceScaleFactor}`,
+        ...(process.env.BANDA_E2E_SHOW ? [] : ["--ozone-platform=headless"]),
+      ],
+      variables
+    ),
     chromiumSandbox: SANDBOXED,
-    args: [
-      ...local.args,
-      `--force-device-scale-factor=${deviceScaleFactor}`,
-      ...(process.env.BANDA_E2E_SHOW ? [] : ["--ozone-platform=headless"]),
-    ],
-    env: variables,
   })
   const page = await app.firstWindow()
   // A headless screen is small; the window takes a laptop's size.

@@ -428,7 +428,7 @@ test("no process of the window stays in the unit of what started it (ADR 0086, d
     { encoding: "utf8" }
   )
   test.skip(
-    process.platform !== "linux" || !systemd.stdout?.trim(),
+    !systemd.stdout?.trim(),
     "no systemd of the user's here, as in CI's containers"
   )
   window = await startWindow()
@@ -441,8 +441,8 @@ test("no process of the window stays in the unit of what started it (ADR 0086, d
       .filter(Boolean)
       .flatMap((child) => under(Number(child))),
   ]
-  // A process's control group, which names its unit; none once it ended.
-  const unitOf = (pid: number) => {
+  // None once the process has ended.
+  const cgroupOf = (pid: number) => {
     try {
       return readFileSync(`/proc/${pid}/cgroup`, "utf8")
     } catch {
@@ -450,10 +450,11 @@ test("no process of the window stays in the unit of what started it (ADR 0086, d
     }
   }
   const processes = under(window.app.process().pid!)
+  // The walk found more than main: its helpers and the engine.
   expect(processes.length).toBeGreaterThan(3)
   // The tests run in the unit of the Agent or the shell that started them.
-  const starter = unitOf(process.pid)
-  expect(processes.filter((pid) => unitOf(pid) === starter)).toEqual([])
+  const starter = cgroupOf(process.pid)
+  expect(processes.filter((pid) => cgroupOf(pid) === starter)).toEqual([])
 })
 
 test("a failed turn says what to do, and Try again sends its message again", async () => {
