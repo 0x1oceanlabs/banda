@@ -98,10 +98,12 @@ What Apps give never talk to each other.
   shared test).
 - **borders.5 The kernel, the platform, the Window and the Tiling name no
   App.** No App id in their strings, no Thread-shaped type such as
-  `Listed` (`client/ui/src/pane.ts:229`). *Check:* today for the kernel
-  (`kernel/tests/architecture.rs:38-64`) and for package imports
-  (`client/web/src/architecture.test.ts:59-64`); planned, a ratchet on
-  strings (B4a).
+  `Listed` (`client/ui/src/pane.ts:232`). *Check:* today for the kernel
+  (`kernel/tests/architecture.rs:38-64`), for package imports and for the
+  Window's and the Tiling's App strings, a ratchet that only falls
+  (`client/web/src/architecture.test.ts`, "only modules.ts, and the
+  bridge's table, name a module's package" and "the Window and the Tiling
+  name an App no more than the list holds"); planned, no `Listed`.
 - **borders.6 Don't reach into the Window.** Keep no `WindowApi` in a
   module variable (`apps/browser/pane/src/threads.ts:22`,
   `apps/git/pane/src/ended.ts:12-21`); use no module global as a channel
@@ -431,12 +433,18 @@ module and no module touches its tables (`kernel/tests/architecture.rs`);
 each `[unstable]` mark says why and their count stays at the ceiling
 (`scripts/check.sh:63-65`); the generated TypeScript matches the Rust;
 prettier, ESLint, typecheck and tests; each App's Pane imports only the
-contract, the kit, React and lucide; only `modules.ts` and the bridge
-table name an App's package (`client/web/src/architecture.test.ts:45-96`);
-the window's end-to-end tests; nothing more animates a size or a place
-(`client/web/src/architecture.test.ts:98-154`); and motion.spec, which
-measures every phase against `client/desktop/e2e/motion-budget.json` and,
-in record mode, only warns.
+contract, the kit, React and lucide; the window's end-to-end tests; and
+motion.spec, which measures every phase against
+`client/desktop/e2e/motion-budget.json` and, in record mode, only warns.
+The window's architecture test (`client/web/src/architecture.test.ts`)
+holds that only `modules.ts` and the bridge table name an App's package
+and that nothing more animates a size or a place. Of ADR 0087, it holds
+three ratchets that only fall: what the Tiling imports of the Window,
+the App strings in the Window and the Tiling, and a line ceiling on the
+Window's root (`client/web/src/window/Shell.tsx`); and two rules: a
+mark's rank is read only to pick the loudest, on the lines listed
+(decision 8), and the calls part reads no page and, of the Tiling,
+imports only its model (decision 9).
 
 **Planned,** each an allowlist whose count only falls:
 
@@ -445,8 +453,9 @@ in record mode, only warns.
    methods not listed in `calls`; `requestAnimationFrame`, `localStorage`,
    `window.banda`; a module-level variable holding a `WindowApi`; colour
    literals. Each case is a line naming its rule id and why.
-2. **The Window and Tiling ratchets** (ADR 0087): no App strings, no
-   `Listed`, no Thread imports; the Window's root at 400 lines or fewer.
+2. **The rest of the Window and Tiling ratchets** (ADR 0087): no
+   `Listed`, no Thread imports; the Window's root's ceiling down to 400
+   lines.
 3. **The motion gates** (ADR 0088): quiet ticks, hidden draws, layouts per
    moving frame, renders per focus step, trailing frames.
 4. **Manifest checks,** with the Level 1 manifest sections at V2: every

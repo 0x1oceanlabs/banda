@@ -7,18 +7,27 @@
  *   part of it (ADR 0028). The files listed here still reach a module's
  *   package, each by an unstable mark its module's `module.toml` names
  *   (decision 6); one that no longer does leaves the list.
+ * - The Window holds the areas and the Tiling the Panes (ADR 0087,
+ *   decisions 1 and 5): the Tiling imports no more of the Window than it
+ *   does today, neither names an App more than it does today, and the
+ *   Window's root keeps under a line ceiling, 400 at last. Each count only
+ *   falls.
  * - Nothing more animates a size or a place (ADR 0088, decision 2): the
  *   cases of today are listed, and the list only falls.
  * - What calls has one order, the sidebar's (ADR 0087, decision 8): a
  *   mark's rank is read only to pick the loudest, on the lines listed,
  *   and no list sorts by it.
- * - The Tiling imports no more of the Window than its list holds (ADR
- *   0087, decision 5); the calls part reads no page, and of the Tiling
- *   only its model (decision 9).
+ * - The calls part reads no page, and of the Tiling only its model (ADR
+ *   0087, decision 9).
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join, relative } from "node:path"
-import { imports, layoutMotion, sources } from "@banda/ui/testing/architecture"
+import {
+  appStrings,
+  imports,
+  layoutMotion,
+  sources,
+} from "@banda/ui/testing/architecture"
 import { expect, test } from "vitest"
 
 const app = join(import.meta.dirname, "../..")
@@ -123,6 +132,69 @@ test("the calls part reads no layout, and of the Tiling only its model", () => {
       .map((name) => `${relative(app, file)}: ${name}`)
   )
   expect(tiling).toEqual([])
+})
+
+/**
+ * What the Window and the Tiling still say of an App, once for each place
+ * they do, by file (`appStrings`): a string that names an action or a kind
+ * of the agents module's (`agents.…`) or a Thread's (`thread.…`), and that
+ * module's settings file (`AGENTS_FILE`). Neither names an App (ADR 0087,
+ * decision 1); these go with the Thread verbs (B4d), the Flow (B4e, T-b)
+ * and intents (B8c). None joins the list, and one that goes leaves it. Not
+ * what only tests use.
+ */
+const APP_STRINGS = [
+  "web/src/tiling/PaneMenu.tsx: thread.…",
+  "web/src/tiling/PaneMenu.tsx: thread.…",
+  "web/src/window/Shell.tsx: AGENTS_FILE",
+  "web/src/window/Shell.tsx: agents.snooze",
+  "web/src/window/Shell.tsx: agents.wake",
+  "web/src/window/Shell.tsx: thread.new",
+  "web/src/window/Shell.tsx: thread.new",
+  "web/src/window/Shell.tsx: thread.new",
+  "web/src/window/actions.ts: AGENTS_FILE",
+  "web/src/window/actions.ts: AGENTS_FILE",
+  "web/src/window/actions.ts: thread.rename",
+  "web/src/window/actions.ts: thread.snooze",
+  "web/src/window/actions.ts: thread.suggest-title",
+  "web/src/window/actions.ts: thread.unread",
+  "web/src/window/actions.ts: thread.wake",
+]
+
+const saying = ["web/src/window", "web/src/tiling"]
+  .flatMap((folder) => sources(join(app, folder), { tests: false }))
+  .flatMap((file) =>
+    appStrings(readFileSync(file, "utf8"), file).map(
+      (what) => `${relative(app, file)}: ${what}`
+    )
+  )
+
+test("the Window and the Tiling name an App no more than the list holds", () => {
+  expect(beyond(saying, APP_STRINGS)).toEqual([])
+})
+
+test("a string that no longer names an App leaves the list", () => {
+  expect(beyond(APP_STRINGS, saying)).toEqual([])
+})
+
+/**
+ * The ceiling on the Window's root component, in lines: 400 or fewer once
+ * the Window holds only its areas (ADR 0087, decision 1). The file stays
+ * under it, and a PR that cuts the file more than `SLACK` lines below it
+ * lowers it; the room lets PRs in flight that each cut a few lines leave
+ * it alone.
+ */
+const WINDOW_LINES = 1401
+const SLACK = 20
+
+test("the Window's root keeps under its ceiling, and the ceiling follows it down", () => {
+  const text = readFileSync(join(app, "web/src/window/Shell.tsx"), "utf8")
+  const lines = text.split("\n").length - 1
+  expect(lines).toBeLessThanOrEqual(WINDOW_LINES)
+  expect(
+    WINDOW_LINES - lines,
+    `Shell.tsx has ${lines} lines: lower WINDOW_LINES to it`
+  ).toBeLessThanOrEqual(SLACK)
 })
 
 /** The `[unstable]` marks a module's `module.toml` names. */
