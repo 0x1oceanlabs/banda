@@ -450,13 +450,22 @@ impl Project {
         serde_json::to_writer(&file, &next)?;
         file.sync_all()?;
         std::fs::rename(pending, &journal)?;
-        if let Err(error) = rustix::fs::renameat_with(
+        #[cfg(unix)]
+        let moved = rustix::fs::renameat_with(
             rustix::fs::CWD,
             &manifest.folder,
             rustix::fs::CWD,
             target,
             rustix::fs::RenameFlags::NOREPLACE,
-        ) {
+        );
+        // Windows' rename takes the place of a file that is there, so it
+        // looks first; a rename that never does comes with ADR 0090's step 3.
+        #[cfg(not(unix))]
+        let moved = match std::fs::symlink_metadata(target) {
+            Ok(_) => Err(std::io::Error::from(std::io::ErrorKind::AlreadyExists)),
+            Err(_) => std::fs::rename(&manifest.folder, target),
+        };
+        if let Err(error) = moved {
             std::fs::remove_file(&journal)?;
             return Err(
                 Refusal::conflict(format!("The folder could not be moved: {error}")).into(),

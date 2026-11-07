@@ -155,6 +155,10 @@ fn text(value: &Value) -> &str {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "the build id read from Windows' PE comes with ADR 0090's step 3"
+)]
 fn a_script_drives_an_agent_through_the_engine_a_window_started() {
     let places = Places::new();
     let (mut engine, stdin, running) = places.serve();
@@ -319,6 +323,7 @@ fn bad_params_are_refused_before_the_engine_is_reached() {
 /// The adapters Banda carries, as the harnesses' host package builds them
 /// in this checkout (ADR 0059): built here when they are not yet, which
 /// takes the workspace's npm packages (`pnpm install`).
+#[cfg(unix)]
 fn carried_adapters() -> PathBuf {
     let package = Path::new(env!("CARGO_MANIFEST_DIR")).join("../platform/harnesses/adapters");
     let dist = package.join("dist");
@@ -334,6 +339,7 @@ fn carried_adapters() -> PathBuf {
 }
 
 /// The first `node` on this test's PATH.
+#[cfg(unix)]
 fn node() -> PathBuf {
     let path = std::env::var_os("PATH").unwrap_or_default();
     (std::env::split_paths(&path).map(|folder| folder.join("node")))
@@ -341,6 +347,9 @@ fn node() -> PathBuf {
         .expect("a node on PATH")
 }
 
+// Its Claude Code is a `sh` script, and Windows finds `node.exe` from ADR
+// 0090's step 3.
+#[cfg(unix)]
 #[test]
 fn an_engine_no_window_started_runs_claude_codes_adapter_with_its_shim_on_the_hosts_node() {
     let adapters = carried_adapters();
@@ -482,8 +491,9 @@ fn an_agent_reaches_banda_through_banda_mcp() {
 
     // The session the agents module opened for the Thread got it.
     let servers = wait_for(Duration::from_secs(30), || {
+        // One half written is read again.
         let bytes = std::fs::read(&places.mcp).ok()?;
-        Some(serde_json::from_slice::<Value>(&bytes).unwrap())
+        serde_json::from_slice::<Value>(&bytes).ok()
     })
     .expect("the session got its MCP servers");
     let server = &servers[0];
@@ -1109,6 +1119,13 @@ fn banda_status_says_whether_the_engine_runs_and_banda_stop_quits_it() {
     assert_eq!(refusal(&by_agent), "forbidden");
 
     let stopped = places.banda(&["stop", "--force"]).output().unwrap();
+    // banda stop comes to Windows with ADR 0090's step 10.
+    if cfg!(windows) {
+        let said = String::from_utf8_lossy(&stopped.stderr);
+        assert!(said.contains("not on Windows yet"), "{stopped:?}");
+        engine.kill().unwrap();
+        return;
+    }
     assert!(stopped.status.success(), "{stopped:?}");
     let Some(ended) = wait_for(Duration::from_secs(5), || engine.try_wait().unwrap()) else {
         engine.kill().unwrap();

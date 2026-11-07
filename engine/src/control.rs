@@ -388,7 +388,10 @@ fn terminate(pid: u32) -> Result<(), Failure> {
 
 #[cfg(not(unix))]
 fn terminate(_: u32) -> Result<(), Failure> {
-    Err(Failure::broken("banda stop needs a Unix system."))
+    Err(Failure::broken(
+        "banda stop is not on Windows yet (ADR 0090, step 10): close the window, or stop \
+         `banda serve` where it runs.",
+    ))
 }
 
 #[cfg(test)]

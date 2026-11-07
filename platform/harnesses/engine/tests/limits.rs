@@ -3,6 +3,8 @@
 //! folder, from a stand-in of Anthropic's; Codex's from its app-server,
 //! here a stand-in that answers as Codex 0.166.0 did. A read is kept in
 //! the machine's store, and a failed one keeps the read before it.
+// Its `codex` is a script its `#!` line runs, which Windows does not.
+#![cfg(unix)]
 
 use banda_environments::{Asks, Local, Recorded};
 use banda_harnesses::{Harnesses, HarnessesModule};

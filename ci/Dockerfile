@@ -3,9 +3,11 @@
 FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
 ARG DEBIAN_FRONTEND=noninteractive
 # A C toolchain for the bundled SQLite, procps for the tests' process checks,
-# and what Electron's Chromium loads, even headless.
+# clang and LLVM's tools for the workspace built for Windows, and what
+# Electron's Chromium loads, even headless.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl git jq unzip xz-utils build-essential pkg-config procps \
+        clang llvm \
         libnss3 libatk-bridge2.0-0t64 libatk1.0-0t64 libcups2t64 libgbm1 libasound2t64 \
         libgtk-3-0t64 libxss1 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
         libpango-1.0-0 libcairo2 libdrm2 libxkbcommon0 libx11-xcb1 libxshmfence1 \
@@ -16,6 +18,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -fsSL https://sh.rustup.rs | CARGO_HOME=/usr/local/cargo RUSTUP_HOME=/tmp/rustup \
         sh -s -- -y --no-modify-path --profile minimal --default-toolchain none \
     && rm -rf /tmp/rustup && chmod -R a+rX /usr/local/cargo
+# cargo-xwin, which builds the workspace for Windows from Linux
+# (`scripts/check.sh windows`, ADR 0090, decision 9). It fetches Microsoft's
+# CRT and Windows SDK into the runner's volume on first use, under
+# Microsoft's license (ADR 0090, open question 14).
+ARG CARGO_XWIN_VERSION=0.23.1
+ARG CARGO_XWIN_SHA256=c492c6dfb7e5ac0eee586b796e0fc950ba13077e7f0bbb046f445d71790d5360
+RUN curl -fsSLo xwin.tar.gz "https://github.com/rust-cross/cargo-xwin/releases/download/v$CARGO_XWIN_VERSION/cargo-xwin-v$CARGO_XWIN_VERSION.x86_64-unknown-linux-musl.tar.gz" \
+    && echo "$CARGO_XWIN_SHA256  xwin.tar.gz" | sha256sum -c - \
+    && tar -xzf xwin.tar.gz -C /usr/local/cargo/bin cargo-xwin && rm xwin.tar.gz
 # Node, and pnpm, which switches itself to package.json's packageManager pin.
 ARG NODE_VERSION=26.12.0
 ARG NODE_SHA256=fd47865ecd6391ebb431fc815e01b9135bf83ded5cf373247e9331e196b7aded

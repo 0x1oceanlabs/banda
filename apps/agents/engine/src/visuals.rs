@@ -241,6 +241,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "a page names its local images by Unix paths: Windows' come with ADR 0090's step 3"
+    )]
     fn local_images_go_in_within_their_limits() {
         let folder = tempfile::tempdir().unwrap();
         let image = |name: &str, size: u64| {

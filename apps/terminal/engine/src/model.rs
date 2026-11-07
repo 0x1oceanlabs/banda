@@ -31,6 +31,7 @@ impl Size {
         (1..=1000).contains(&self.cols) && (1..=500).contains(&self.rows)
     }
 
+    #[cfg(unix)]
     pub fn pty(self) -> pty_process::Size {
         pty_process::Size::new(self.rows, self.cols)
     }

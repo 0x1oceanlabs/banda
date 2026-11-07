@@ -10,6 +10,7 @@ use crate::model::CliView;
 use crate::{Failed, Harness};
 use banda_kernel::{Environment, Input, Program};
 use std::collections::BTreeMap;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -99,8 +100,22 @@ pub(crate) fn located(program: &str) -> Option<PathBuf> {
         .find(|candidate| runnable(candidate))
 }
 
+#[cfg(unix)]
 pub(crate) fn runnable(path: &Path) -> bool {
     std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+}
+
+/// A file whose name says it runs, on Windows, which has no exec bit: npm's
+/// `sh` shim beside a `.cmd` does not. `PATHEXT` and the names tried with
+/// it come with ADR 0090's step 3.
+#[cfg(not(unix))]
+pub(crate) fn runnable(path: &Path) -> bool {
+    let runs = |extension: &std::ffi::OsStr| {
+        ["exe", "cmd", "bat", "com"]
+            .iter()
+            .any(|run| extension.eq_ignore_ascii_case(run))
+    };
+    path.extension().is_some_and(runs) && std::fs::metadata(path).is_ok_and(|m| m.is_file())
 }
 
 async fn version_of(

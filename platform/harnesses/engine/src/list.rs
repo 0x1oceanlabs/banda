@@ -1063,6 +1063,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "its places are Unix paths: Windows' come with ADR 0090's step 3"
+    )]
     fn a_carried_adapter_runs_on_the_node_the_engine_found() {
         use crate::carried::Node;
         let electron = Carried {
@@ -1399,6 +1403,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "its places are Unix paths: Windows' come with ADR 0090's step 3"
+    )]
     fn claude_s_sessions_go_in_the_project_s_folder() {
         let project = ProjectId::new();
         let data = Path::new("/state/projects/p");

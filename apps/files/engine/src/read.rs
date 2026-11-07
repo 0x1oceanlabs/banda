@@ -149,7 +149,11 @@ mod tests {
     #[test]
     fn a_nul_or_bytes_that_are_not_utf8_make_it_binary() {
         let dir = tempfile::tempdir().unwrap();
-        for (name, bytes) in [("nul", &b"ab\0cd"[..]), ("latin1", &b"caf\xe9 au lait"[..])] {
+        // Not `nul`, which Windows keeps for its null device.
+        for (name, bytes) in [
+            ("a-nul", &b"ab\0cd"[..]),
+            ("latin1", &b"caf\xe9 au lait"[..]),
+        ] {
             let path = dir.path().join(name);
             std::fs::write(&path, bytes).unwrap();
             let text = read(&path, UPTO).unwrap();

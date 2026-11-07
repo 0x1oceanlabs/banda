@@ -690,6 +690,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "a systemd unit, Linux's: Windows starts the engine its own way with ADR 0090's step 10"
+    )]
     fn the_unit_has_banda_s_own_variables_and_none_of_its_starter_s_else() {
         let starter = pairs(&[
             ("CLAUDECODE", "1"),

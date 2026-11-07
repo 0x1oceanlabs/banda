@@ -1679,23 +1679,24 @@ async fn receipts_and_settled_effects_go_after_thirty_days_and_not_before() {
     };
     eventually(|| async { !receipts().contains(&old.to_string()) }).await;
     assert!(receipts().contains(&recent.to_string()));
-    let database = sqlite(&data, &project);
-    let mut statement = database
-        .prepare("SELECT json_extract(payload, '$.text'), state FROM kernel_outbox ORDER BY id")
-        .unwrap();
-    let rows = statement
-        .query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })
-        .unwrap();
-    let rows = rows.collect::<rusqlite::Result<Vec<_>>>().unwrap();
-    assert_eq!(
-        rows,
-        [
-            ("recent".to_owned(), "done".to_owned()),
-            ("later".to_owned(), "pending".to_owned())
-        ]
-    );
+    let effects = || {
+        let database = sqlite(&data, &project);
+        let mut statement = database
+            .prepare("SELECT json_extract(payload, '$.text'), state FROM kernel_outbox ORDER BY id")
+            .unwrap();
+        let rows = statement
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .unwrap();
+        rows.collect::<rusqlite::Result<Vec<_>>>().unwrap()
+    };
+    let left = [
+        ("recent".to_owned(), "done".to_owned()),
+        ("later".to_owned(), "pending".to_owned()),
+    ];
+    // The settled effects go in batches of their own, after the receipts.
+    eventually(|| async { effects() == left }).await;
 
     // Within thirty days a command sent again gets its first answer and
     // runs nothing; past them, it is a new command.
@@ -2451,6 +2452,8 @@ async fn a_module_of_the_machine_needs_the_machines_folder() {
     assert!(opened.is_err());
 }
 
+// A link on Windows needs Developer Mode.
+#[cfg(unix)]
 #[tokio::test]
 async fn any_folder_is_added_as_a_project_and_one_folder_is_one_project() {
     let root = tempfile::tempdir().unwrap();
@@ -3038,6 +3041,8 @@ async fn a_removed_project_left_half_deleted_is_cleared_on_start() {
     assert!(!gone.exists());
 }
 
+// A link on Windows needs Developer Mode.
+#[cfg(unix)]
 #[tokio::test]
 async fn the_owner_browses_the_folders_as_a_path_is_typed() {
     let root = tempfile::tempdir().unwrap();
@@ -3142,6 +3147,10 @@ async fn an_effect_waits_until_the_modules_reacting_to_the_log_have_reacted() {
 }
 
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "a folder named by its verbatim prefix or its short name: dunce comes with ADR 0090's step 3"
+)]
 async fn promotion_moves_files_and_keeps_the_open_project_and_log() {
     let root = tempfile::tempdir().unwrap();
     let (owner, notes) = (PersonId::new(), Notes::default());

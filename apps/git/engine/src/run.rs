@@ -16,7 +16,9 @@
 //! goes to the engine's log only, and a caller hears a [`Reason`]; a line
 //! a caller follows has its credentials taken out ([`redact`]).
 
-use banda_kernel::{Environment, Input, ProcessGroup, Program, Refusal};
+#[cfg(unix)]
+use banda_kernel::ProcessGroup;
+use banda_kernel::{Environment, Input, Program, Refusal};
 use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::Path;
@@ -630,6 +632,7 @@ async fn capped(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use banda_environments::Local;
 
     #[test]
@@ -688,6 +691,7 @@ mod tests {
         folder
     }
 
+    #[cfg(unix)]
     const COMMIT: [&str; 4] = ["commit", "--quiet", "-am", "second"];
 
     #[cfg(unix)]

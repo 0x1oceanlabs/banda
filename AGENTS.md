@@ -28,8 +28,12 @@ loose beside the main checkout:
 Remove it once its PR is merged.
 
 Before a PR, run `scripts/check.sh --no-window`. CI runs every part,
-the window's end-to-end tests too, on runners on devbox
-([`ci/README.md`](ci/README.md)); the `ci` status sums them up. Merge with
+the window's end-to-end tests too, on runners on devbox, and builds the
+Rust for Windows on GitHub's runner ([`ci/README.md`](ci/README.md)); the
+`ci` status sums them up. A call only Unix has goes behind `cfg(unix)`,
+with Windows code beside it or a refusal that says it is not on Windows
+yet (ADR 0090); `scripts/check.sh windows` checks that here, with
+cargo-xwin and clang. Merge with
 `gh pr merge --auto --rebase` and go on: the PR merges itself once `ci` is
 green. A red `ci` is yours to fix, on the PR or, after a merge, on `main`.
 That is for Roma's PRs and yours. A PR with someone else's commits, taken

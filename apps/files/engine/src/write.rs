@@ -51,9 +51,16 @@ pub fn locked(path: &Path, config: Option<&Path>) -> Option<Locked> {
     }
     // What is not there yet is no one's to refuse: a new file needs only
     // its folder, and a missing folder is the write's to say.
+    #[cfg(unix)]
     let denied = |path: &Path| {
         let access = rustix::fs::access(path, rustix::fs::Access::WRITE_OK);
         access.is_err_and(|error| error != rustix::io::Errno::NOENT)
+    };
+    // Windows says who may write in access lists, which only a try asks
+    // (ADR 0090, step 3); its read-only mark it says plainly.
+    #[cfg(not(unix))]
+    let denied = |path: &Path| {
+        std::fs::metadata(path).is_ok_and(|meta| meta.is_file() && meta.permissions().readonly())
     };
     (denied(path) || path.parent().is_some_and(denied)).then_some(Locked::Denied)
 }

@@ -19,7 +19,12 @@
 //! says so as it makes the program, through the constructor of whose it
 //! is, and nowhere else, so a program has holes exactly when it is one to
 //! fence.
+//!
+//! Windows has neither yet (ADR 0090): a program there is no group's,
+//! and stopping it stops it alone, until each is born in a Job Object
+//! (step 3); and it has no terminal to start on, until ConPTY (step 7).
 
+#[cfg(unix)]
 use rustix::process::{Pid, Signal, kill_process_group};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -173,6 +178,7 @@ pub trait Environment: Send + Sync + 'static {
     /// on all three of its streams, as the leader of a session of its own
     /// whose controlling terminal `pts` is. It outlives its holder: it
     /// hears the hangup once the terminal closes.
+    #[cfg(unix)]
     fn pty(&self, program: &Program, pts: pty_process::Pts) -> io::Result<Child>;
 }
 
@@ -180,9 +186,11 @@ pub trait Environment: Send + Sync + 'static {
 /// its leader's number: a signal to it reaches what the program started
 /// too. Once the program ended and was waited for, that number may name
 /// another process, so a holder signals it only while the program runs.
+#[cfg(unix)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProcessGroup(Pid);
 
+#[cfg(unix)]
 impl ProcessGroup {
     /// The group `child` leads, while it runs.
     pub fn of(child: &Child) -> Option<ProcessGroup> {
@@ -223,6 +231,7 @@ impl Environment for Nowhere {
         Err(Nowhere::refused(program))
     }
 
+    #[cfg(unix)]
     fn pty(&self, program: &Program, _: pty_process::Pts) -> io::Result<Child> {
         Err(Nowhere::refused(program))
     }

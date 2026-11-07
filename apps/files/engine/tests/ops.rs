@@ -7,7 +7,9 @@
 //! process of their own (`the_trash_is_tried_in_a_throwaway_home`), with
 //! a throwaway one, and leave the Person's alone anywhere else.
 
-use banda_files::model::{Done, Job, Searched, Step, Trashcan};
+#[cfg(all(unix, not(target_os = "macos")))]
+use banda_files::model::Trashcan;
+use banda_files::model::{Done, Job, Searched, Step};
 use banda_kernel::{Code, CommandId, Participant, Refusal};
 use serde_json::{Value, json};
 use std::path::Path;
@@ -728,10 +730,12 @@ fn the_trash_is_tried_in_a_throwaway_home() {
 }
 
 /// What says a process's Trash is a throwaway one.
+#[cfg(all(unix, not(target_os = "macos")))]
 const TRASH_HOME: &str = "BANDA_FILES_TEST_TRASH";
 
 /// Whether this process's Trash is a throwaway one; else a `trash_` test
 /// does nothing, as the Person's Trash is not for tests.
+#[cfg(all(unix, not(target_os = "macos")))]
 fn throwaway() -> bool {
     std::env::var_os(TRASH_HOME).is_some()
 }

@@ -112,6 +112,7 @@ impl World {
 
     /// Another Project of the same engine, named `name`, whose folder is a
     /// repository with no commits, on `main`.
+    #[cfg(unix)]
     async fn project(&self, name: &str) -> (ProjectId, PathBuf) {
         let made = (self.kernel)
             .call(
@@ -1120,6 +1121,10 @@ async fn a_hunk_drawn_with_whitespace_hidden_takes_its_whitespace_along() {
 }
 
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "Git for Windows checks text out with CRLF (core.autocrlf in its own config)"
+)]
 async fn revert_puts_a_hunk_or_a_file_back_and_an_untracked_file_goes() {
     let world = World::new().await;
     world.write("ten.txt", TEN);
@@ -1970,6 +1975,10 @@ fn as_another_owner(test: &str) -> bool {
 }
 
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "Git for Windows does not take GIT_TEST_ASSUME_DIFFERENT_OWNER, by which it plays another owner"
+)]
 async fn a_repository_another_user_owns_says_why_git_will_not_read_it() {
     if as_another_owner("a_repository_another_user_owns_says_why_git_will_not_read_it") {
         return;

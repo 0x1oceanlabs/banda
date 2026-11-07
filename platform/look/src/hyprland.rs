@@ -4,13 +4,18 @@
 //!
 //! Banda asks Hyprland over its socket, as `hyprctl getoption` does, so any
 //! Hyprland config works, Lua or not, and listens on its event socket for
-//! `configreloaded`.
+//! `configreloaded`. Hyprland runs on Linux only, so elsewhere Banda never
+//! runs under it.
 
 use crate::motion::MotionSettings;
 use crate::settings::{Corner, Gaps, Settings, Step, Tile};
+#[cfg(target_os = "linux")]
 use std::io::{BufRead, BufReader, Read, Write};
+#[cfg(target_os = "linux")]
 use std::os::unix::net::UnixStream;
+#[cfg(target_os = "linux")]
 use std::path::PathBuf;
+#[cfg(target_os = "linux")]
 use std::time::Duration;
 
 /// The settings Banda takes: sizes in pixels, and how much windows
@@ -54,11 +59,33 @@ impl Windows {
 }
 
 /// The Hyprland instance this program runs under.
+#[cfg(target_os = "linux")]
 #[derive(Clone, Debug)]
 pub struct Hyprland {
     folder: PathBuf,
 }
 
+/// None: Hyprland runs on Linux only.
+#[cfg(not(target_os = "linux"))]
+#[derive(Clone, Debug)]
+pub enum Hyprland {}
+
+#[cfg(not(target_os = "linux"))]
+impl Hyprland {
+    pub fn from_env() -> Option<Hyprland> {
+        None
+    }
+
+    pub fn windows(&self) -> std::io::Result<Windows> {
+        match *self {}
+    }
+
+    pub fn on_reload(&self, _: impl Fn() + Send + 'static) {
+        match *self {}
+    }
+}
+
+#[cfg(target_os = "linux")]
 impl Hyprland {
     /// From `HYPRLAND_INSTANCE_SIGNATURE` and `XDG_RUNTIME_DIR`, as
     /// `hyprctl` finds it; `None` outside Hyprland.
