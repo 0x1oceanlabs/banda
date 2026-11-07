@@ -97,7 +97,9 @@ export const textOf = (file: string) =>
  * listed after it. `look` and `sidebar` are the text of `look.toml` and
  * `sidebar.toml`; `files` are more, by their paths in the throwaway
  * folder. Unless `asked` is false, the first run's sharing question was
- * answered already: nothing shared. */
+ * answered already: nothing shared. `env` is more of the window's
+ * environment; `dir`, the throwaway folder of a window before, to open
+ * again on what it left. */
 export async function startWindow({
   account = false,
   oldCli = false,
@@ -107,9 +109,10 @@ export async function startWindow({
   files = {} as Record<string, string>,
   asked = true,
   deviceScaleFactor = 1,
+  env: more = {} as Record<string, string>,
+  dir = mkdtempSync(join(tmpdir(), "banda-window-")),
 } = {}): Promise<Window> {
-  const dir = mkdtempSync(join(tmpdir(), "banda-window-"))
-  mkdirSync(join(dir, "config"))
+  mkdirSync(join(dir, "config"), { recursive: true })
   for (const [path, text] of Object.entries(files)) {
     mkdirSync(dirname(join(dir, path)), { recursive: true })
     writeFileSync(join(dir, path), text)
@@ -122,7 +125,7 @@ export async function startWindow({
     writeFileSync(join(dir, "config/sharing.toml"), "problems = false\n")
   const fake = join(repository, "target/debug/banda-fake-agent")
   const home = join(dir, "fake-home")
-  mkdirSync(home)
+  mkdirSync(home, { recursive: true })
   // The fake agent writes where each new session's MCP servers are, for
   // `agentCalls`.
   const mcp = `FAKE_AGENT_MCP = ${JSON.stringify(join(dir, "mcp.json"))}`
@@ -167,6 +170,7 @@ export async function startWindow({
     // The system's Trash is a throwaway one, as freedesktop finds it, on
     // the same disk as the throwaway Projects (ADR 0073, decision 10).
     XDG_DATA_HOME: join(dir, "xdg-data"),
+    ...more,
   }
   const app = await electron.launch({
     ...inUnit(

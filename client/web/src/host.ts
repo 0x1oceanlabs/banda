@@ -228,6 +228,11 @@ export const BRIDGE = bridge({
     /** Calls `listener` with each thing a popped Pane asked. */
     asked: push<PoppedAsk>(),
   },
+  /** Quits Banda: stops the engine, which stops its Agents, Harnesses and
+   * Terminals, and closes the window (ADR 0086, decision 3). The page
+   * asks first when Agents are working. Closing the window only closes
+   * it. */
+  quit: send<[]>(),
   /** Banda's own update (ADR 0041): main looks, downloads and installs
    * it on quit. */
   update: {

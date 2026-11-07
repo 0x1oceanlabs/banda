@@ -141,6 +141,9 @@ export type Shell = WindowApi & {
   settings: (link?: string) => void
   /** Asks an Agent to look into a Problem, in a new Thread (ADR 0039). */
   lookInto: (fingerprint: string) => void
+  /** Quits Banda: stops the engine and its Agents, asking first while
+   * they work (ADR 0086, decision 3). */
+  quit: () => void
   /** The engine, for what the window asks of it itself, as a title for a
    * Thread (ADR 0077). */
   engine: Engine
@@ -975,6 +978,15 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     // (ADR 0041, decision 2).
     unlisted: true,
     run: () => window.banda?.update.restart(),
+  },
+  {
+    id: "banda.quit",
+    section: "Banda",
+    title: "Quit Banda",
+    // It stops the engine and its Agents; closing the window does not
+    // (ADR 0086, decision 3).
+    keys: [{ code: "KeyQ", primary: true }],
+    run: (shell) => shell.quit(),
   },
   {
     id: "keys.reset",

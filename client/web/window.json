@@ -904,6 +904,17 @@
       "unlisted": true
     },
     {
+      "id": "banda.quit",
+      "title": "Quit Banda",
+      "section": "Banda",
+      "keys": [
+        {
+          "code": "KeyQ",
+          "primary": true
+        }
+      ]
+    },
+    {
       "id": "keys.reset",
       "title": "Banda's own keys, until keys.toml changes",
       "section": "Banda",

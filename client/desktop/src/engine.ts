@@ -1,12 +1,21 @@
 /**
- * The engine as the window's child: `banda serve --with-parent` (ADR
- * 0020), run on the window's `banda` (program.ts), a packed Banda's own
- * copy (ADR 0086). It learns the engine's address from the first line it
- * prints, forgets it while the engine is down, and stops the engine with
- * the window (child.ts). It starts with `path` as its PATH, when there
- * is one: on macOS, the login shell's (login.ts), and with `env` over the
- * window's environment: the Node the app provides for the adapters it
- * carries (ADR 0059).
+ * The engine, as the window reaches it: `banda start --with-parent`, run
+ * on the window's `banda` (program.ts), a packed Banda's own copy (ADR
+ * 0086). On Linux the engine is the session's service, which outlives the
+ * window: that program starts it when it does not run, prints where it
+ * listens, and follows it while the window is open; the window's end
+ * leaves the engine running (decisions 1 and 3). Where the engine is the
+ * window's child, as on macOS for now and for Banda Local, that program
+ * is the engine, `serve --with-parent` (ADR 0020), and stops with the
+ * window (child.ts).
+ *
+ * The window learns the engine's address from the first line, and forgets
+ * it while the engine is down. An engine that stops as asked, as Quit
+ * Banda or `banda stop` stops it, ends the program with code 0: the window
+ * quits then (`stopped`). One that crashed is started again. It starts
+ * with `path` as its PATH, when there is one: on macOS, the login
+ * shell's (login.ts), and with `env` over the window's environment: the
+ * Node the app provides for the adapters it carries (ADR 0059).
  */
 import { type Address, Engine as Client } from "@banda/contract"
 import { Engine } from "@banda/desktop-kit"
@@ -24,7 +33,7 @@ import type { ChildProcessSpawner } from "effect/process"
 import { command, keepRunning, known, lines } from "./child"
 import { Program } from "./program"
 
-/** The first line `serve --with-parent` prints; `window` is where the
+/** The first line `start --with-parent` prints; `window` is where the
  * window listens for `banda menu`. */
 const Running = Schema.fromJsonString(
   Schema.Struct({
@@ -35,19 +44,21 @@ const Running = Schema.fromJsonString(
   })
 )
 
-/** The engine's first line was not what `serve --with-parent` prints. */
+/** The engine's first line was not what `start --with-parent` prints. */
 class Unexpected extends Data.TaggedError("Unexpected")<{
   readonly message: string
 }> {}
 
-/** The engine's layer: see `Engine` (@banda/desktop-kit). */
+/** The engine's layer: see `Engine` (@banda/desktop-kit). `stopped` is
+ * called once the engine stopped as asked. */
 export const engineLayer = (
   path: Effect.Effect<
     Option.Option<string>,
     never,
     ChildProcessSpawner.ChildProcessSpawner
   > = Effect.succeed(Option.none()),
-  env: Record<string, string> = {}
+  env: Record<string, string> = {},
+  stopped: () => void = () => {}
 ) =>
   Layer.effect(Engine)(
     Effect.gen(function* () {
@@ -84,7 +95,7 @@ export const engineLayer = (
         keepRunning(
           "engine",
           Effect.flatMap(program.path, (binary) =>
-            command(binary, ["serve", "--with-parent"], variables)
+            command(binary, ["start", "--with-parent"], variables)
           ),
           (child) => {
             let first = true
@@ -99,8 +110,10 @@ export const engineLayer = (
               Effect.andThen(Effect.never),
               Effect.ensuring(SubscriptionRef.set(address, Option.none()))
             )
-          }
-        )
+          },
+          // It stopped as asked: Banda quits.
+          (code) => code === 0
+        ).pipe(Effect.andThen(Effect.sync(stopped)))
       )
       const at = known(address).pipe(
         Stream.runHead,

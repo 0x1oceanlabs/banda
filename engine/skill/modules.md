@@ -316,6 +316,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Every action and its key (`menu.keys`), Alt+K
 - Open the settings (`settings.open`), Alt+,; takes `link` (a section, or a row in it, as keys)
 - Check for updates (`update.check`)
+- Quit Banda (`banda.quit`), Ctrl+Q
 - Banda's own keys, until keys.toml changes (`keys.reset`), Ctrl+Alt+Shift+K
 - Show or hide the sidebar (`sidebar.toggle`), Alt+A
 - Go to workspace 1 (`workspace.go-1`), Alt+1
