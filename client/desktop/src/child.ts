@@ -5,11 +5,16 @@
  * then a wait that doubles up to ten seconds, and back to half a second
  * once a run lasted half a minute. A run that ends as `last` says is the
  * last one. When its scope closes, the program gets SIGTERM, and SIGKILL
- * if it has not gone five seconds later.
+ * if it has not gone five seconds later. Windows has no SIGTERM: Node's
+ * is a kill there. So on Windows its stdin closes, which `--with-parent`
+ * reads as "stop", and it is killed only if it has not gone a while later,
+ * five seconds unless its caller says (ADR 0090, decision 5). It starts
+ * with no console window there.
  */
 import {
   Clock,
   Console,
+  type Duration,
   Effect,
   Option,
   type PlatformError,
@@ -23,6 +28,8 @@ const FIRST_WAIT = 500
 const LONGEST_WAIT = 10_000
 /** A program that ran this long without dying starts again at once. */
 const HEALTHY = 30_000
+/** How long a program asked to stop has before it is killed. */
+const GRACE = "5 seconds"
 /** `program args…`, its stderr the window's. Its stdin is a pipe the
  * window holds: if the window dies, the program sees it close. It has the
  * window's environment, `env` over it. */
@@ -37,11 +44,38 @@ export function command(
     stdin: "pipe",
     stdout: "pipe",
     stderr: "inherit",
-    // In the window's process group, as any child: Ctrl+C stops both.
+    // In the window's process group, as any child: Ctrl+C in a terminal
+    // stops both. On Windows it has a console of its own, hidden, and
+    // Node's Job Object ends it as the window ends.
     detached: false,
+    // A console program started by Electron, which has none, would open
+    // a console window of its own on Windows.
+    windowsHide: true,
     killSignal: "SIGTERM",
-    forceKillAfter: "5 seconds",
+    forceKillAfter: GRACE,
   })
+}
+
+/** Asks `child` to stop by closing its stdin, and waits for it to go, at
+ * most `grace`: Windows' way to stop the window's children. What is
+ * still there after is killed as the run's scope closes. */
+export const letGo = (
+  child: ChildProcessSpawner.ChildProcessHandle,
+  grace: Duration.Input = GRACE
+) =>
+  Stream.run(Stream.empty, child.stdin).pipe(
+    Effect.andThen(child.exitCode),
+    Effect.timeoutOption(grace),
+    Effect.ignore
+  )
+
+/** How a run ends: whether a run that exits with a code is the last
+ * (`last`), and how it is asked to stop as its scope closes: by its stdin
+ * closing (`letGo`, with `grace` to go), as on Windows, or by SIGTERM. */
+type Ending = {
+  last?: (code: number) => boolean
+  byStdin?: boolean
+  grace?: Duration.Input
 }
 
 /** What starts one run: a `command`, or an effect that makes one as the
@@ -62,13 +96,19 @@ export const keepRunning = <E extends { message: string }, R>(
   use: (
     child: ChildProcessSpawner.ChildProcessHandle
   ) => Effect.Effect<void, E, R>,
-  last: (code: number) => boolean = () => false
+  {
+    last = () => false,
+    byStdin = process.platform === "win32",
+    grace = GRACE,
+  }: Ending = {}
 ) =>
   Effect.gen(function* () {
     let wait = FIRST_WAIT
     while (true) {
       const started = yield* Clock.currentTimeMillis
-      const ended = yield* Effect.scoped(once(start, use))
+      const ended = yield* Effect.scoped(
+        once(start, use, byStdin ? grace : undefined)
+      )
       if (typeof ended === "number" && last(ended)) return
       if ((yield* Clock.currentTimeMillis) - started > HEALTHY)
         wait = FIRST_WAIT
@@ -81,15 +121,20 @@ export const keepRunning = <E extends { message: string }, R>(
     }
   })
 
-/** One run: the code it exited with, or how it ended, in words. */
+/** One run: the code it exited with, or how it ended, in words. With a
+ * `grace`, it is asked to stop by its stdin. */
 const once = <E extends { message: string }, R>(
   start: Start,
   use: (
     child: ChildProcessSpawner.ChildProcessHandle
-  ) => Effect.Effect<void, E, R>
+  ) => Effect.Effect<void, E, R>,
+  grace: Duration.Input | undefined
 ) =>
   Effect.gen(function* () {
     const child = yield* start
+    // Closed first, as the scope closes: before the kill.
+    if (grace !== undefined)
+      yield* Effect.addFinalizer(() => letGo(child, grace))
     const exited: Effect.Effect<number | string, PlatformError.PlatformError> =
       child.exitCode.pipe(Effect.map(Number))
     return yield* use(child).pipe(

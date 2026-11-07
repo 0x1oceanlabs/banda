@@ -12,7 +12,7 @@ import type { Engine as Client } from "@banda/contract"
 import { afterEach, beforeEach, expect, it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
 import { Engine } from "./engine"
-import { byteRange, FileHost, FileLinks } from "./files"
+import { byteRange, FileHost, FileLinks, wholeIn } from "./files"
 
 let dir: string
 beforeEach(async () => {
@@ -195,5 +195,7 @@ it.effect(
         "//server/notes.md",
       ])
         expect(yield* FileHost.url("p", path), path).toBeNull()
+      // One letter and a colon is a Windows drive, not a scheme.
+      expect(yield* wholeIn("p", "C:\\notes.md")).not.toBeNull()
     }).pipe(Effect.provide(Layer.merge(FileHost.layer, engine())))
 )

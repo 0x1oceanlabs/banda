@@ -5,6 +5,7 @@ import {
   findEditors,
   foldersOf,
   type Machine,
+  noAppFor,
 } from "./editors"
 
 /** A machine with only these programs on it. */
@@ -134,4 +135,97 @@ test("none found, none listed; a relative folder on PATH is never looked in", ()
 test("every editor has an id of its own", () => {
   const ids = EDITORS.map((editor) => editor.id)
   expect(new Set(ids).size).toBe(ids.length)
+})
+
+/** A Windows machine with only these programs on it, and these folders
+ * in each folder `listed` names. */
+const windows = (
+  programs: readonly string[],
+  path: string,
+  listed: Record<string, readonly string[]> = {}
+): Machine => ({
+  platform: "win32",
+  home: "C:\\Users\\me",
+  path,
+  runs: (file) => programs.includes(file),
+  programs: ["C:\\Users\\me\\AppData\\Local\\Programs", "C:\\Program Files"],
+  list: (folder) => listed[folder] ?? [],
+})
+
+test("on Windows an editor is found by its own program, beside its command on PATH, as VS Code's bin\\code.cmd", () => {
+  const vscode = "C:\\Tools\\VS Code"
+  const found = findEditors(
+    windows(
+      [`${vscode}\\bin\\code.cmd`, `${vscode}\\Code.exe`],
+      `C:\\Windows\\system32;${vscode}\\bin`
+    )
+  )
+  expect(found).toEqual([
+    {
+      id: "vscode",
+      name: "VS Code",
+      style: "goto",
+      command: `${vscode}\\Code.exe`,
+    },
+  ])
+})
+
+test("on Windows an editor off PATH is found where its installer puts it, a JetBrains IDE's newest version first", () => {
+  const local = "C:\\Users\\me\\AppData\\Local\\Programs"
+  const jetbrains = "C:\\Program Files\\JetBrains"
+  const found = findEditors(
+    windows(
+      [
+        `${local}\\cursor\\Cursor.exe`,
+        `${local}\\Zed\\bin\\zed.exe`,
+        "C:\\Program Files\\Sublime Text\\subl.exe",
+        `${jetbrains}\\IntelliJ IDEA 2024.3\\bin\\idea64.exe`,
+        `${jetbrains}\\IntelliJ IDEA 2025.2\\bin\\idea64.exe`,
+        `${local}\\PyCharm Professional\\bin\\pycharm64.exe`,
+        `${jetbrains}\\Jetbrains Rider 2025.1\\bin\\rider64.exe`,
+      ],
+      "C:\\Windows\\system32",
+      {
+        [local]: ["cursor", "Zed", "PyCharm Professional"],
+        [jetbrains]: [
+          "IntelliJ IDEA 2024.3",
+          "IntelliJ IDEA 2025.2",
+          // Windows' names are the same in any case.
+          "Jetbrains Rider 2025.1",
+        ],
+      }
+    )
+  ).map((editor) => [editor.id, editor.command])
+  expect(found).toEqual([
+    ["cursor", `${local}\\cursor\\Cursor.exe`],
+    ["zed", `${local}\\Zed\\bin\\zed.exe`],
+    ["sublime", "C:\\Program Files\\Sublime Text\\subl.exe"],
+    ["idea", `${jetbrains}\\IntelliJ IDEA 2025.2\\bin\\idea64.exe`],
+    ["pycharm", `${local}\\PyCharm Professional\\bin\\pycharm64.exe`],
+    ["rider", `${jetbrains}\\Jetbrains Rider 2025.1\\bin\\rider64.exe`],
+  ])
+})
+
+test("on Windows no editor is looked for on a share, among the store's stubs, or as a .cmd", () => {
+  const share = "\\\\server\\tools"
+  const stubs = "C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps"
+  const machine = windows(
+    [`${share}\\Code.exe`, `${stubs}\\Code.exe`, "C:\\bin\\code.cmd"],
+    `${share};${stubs};C:\\bin;bin`
+  )
+  expect(findEditors(machine)).toEqual([])
+  expect(foldersOf(machine)).toEqual(["C:\\bin"])
+})
+
+test("a .toml opens in an editor on Windows, which has no app for one; elsewhere in the system's", () => {
+  expect(
+    noAppFor(
+      "C:\\Users\\me\\AppData\\Local\\banda\\config\\sidebar.toml",
+      "win32"
+    )
+  ).toBe(true)
+  expect(noAppFor("C:\\work\\Cargo.TOML", "win32")).toBe(true)
+  expect(noAppFor("C:\\work\\notes.md", "win32")).toBe(false)
+  expect(noAppFor("/home/me/.config/banda/sidebar.toml", "linux")).toBe(false)
+  expect(noAppFor("/Users/me/Library/banda/sidebar.toml", "darwin")).toBe(false)
 })

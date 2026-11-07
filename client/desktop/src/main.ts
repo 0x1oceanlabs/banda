@@ -70,7 +70,7 @@ import {
   onDock,
   quitAsking,
 } from "./closing"
-import { listApp } from "./entry"
+import { listApp, listShortcut } from "./entry"
 import { startLog, watchProblems } from "./problems"
 import { Editors } from "./editors"
 import { dragOut, exists, openFile, showFile } from "./outside"
@@ -78,7 +78,7 @@ import { roadLayer } from "./road"
 import { settingsLayer } from "./settings"
 import { updates } from "./update"
 import { ensure } from "./sidebar"
-import { NODE_FOLDER, Program, whereOf } from "./program"
+import { NODE_FOLDER, PROGRAM, Program, whereOf } from "./program"
 
 /** What a Pane in its own window asks of the window (`PoppedAsk`). */
 const PoppedAsk = Schema.Union([
@@ -166,7 +166,7 @@ const ownNode =
 // The window's `banda` (program.ts).
 const where = whereOf({
   named: process.env.BANDA_PROGRAM,
-  checkout: resolve(here, "../../target/debug/banda"),
+  checkout: resolve(here, "../../target/debug", PROGRAM),
   resources: app.isPackaged ? process.resourcesPath : undefined,
   data: dataFolder(app.getPath("appData")),
   // The copy names this Electron for an engine started with no window,
@@ -194,6 +194,9 @@ startLog(state, banda)
 // window's class (Wayland's app ID), which window rules match.
 app.setName(channel.name)
 app.setDesktopName(`${channel.folder}.desktop`)
+// Windows shows the notices of an app ID that a Start menu shortcut
+// carries, and none before it is set (ADR 0090, decision 7; entry.ts).
+if (process.platform === "win32") app.setAppUserModelId(channel.appId)
 
 // The page reads the byte host's ranges across origins, as its CORS
 // allows (`corsEnabled`).
@@ -265,11 +268,11 @@ const runtime = ManagedRuntime.make(
         ),
         Stop.layer,
         lookLayer,
-        settingsLayer,
+        // The settings open their files with `Editors.edit`.
+        settingsLayer.pipe(Layer.provideMerge(Editors.layer)),
         Window.layer(() => window),
         FileHost.layer,
-        PreviewHost.layer,
-        Editors.layer
+        PreviewHost.layer
       )
     ),
     // A packed Banda that cannot run a copy of its own says why.
@@ -323,6 +326,7 @@ if (process.env.APPIMAGE_EXIT_AFTER_INSTALL === "true") {
 }
 
 async function ready(): Promise<void> {
+  listShortcut()
   followAccent()
   const listen = (now: LookValue) => {
     // Native parts (scrollbars, menus) and the page's own
@@ -424,10 +428,7 @@ async function ready(): Promise<void> {
           Effect.gen(function* () {
             const sidebar = yield* Look.part("sidebar", "The sidebar's file")
             ensure(sidebar.file)
-            const failed = yield* Effect.promise(() =>
-              shell.openPath(sidebar.file)
-            )
-            if (failed) return yield* new Refused({ message: failed })
+            yield* Editors.use((editors) => editors.edit(sidebar.file))
           }),
       ],
     },
@@ -467,7 +468,7 @@ async function ready(): Promise<void> {
         Schema.Tuple([Schema.String, Schema.String]),
         ([project, path]) => PreviewHost.url(project, path),
       ],
-      outside: [text, ([path]) => Effect.sync(() => openFile(path))],
+      outside: [text, ([path]) => openFile(path)],
       show: [text, ([path]) => Effect.sync(() => showFile(path))],
       exists: [text, ([path]) => Effect.sync(() => exists(path))],
       editors: [

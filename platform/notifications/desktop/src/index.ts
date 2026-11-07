@@ -66,6 +66,7 @@ export const notificationsDesktop: DesktopModule<
       ([key]) => Notices.use((notices) => notices.withdraw(key)),
     ],
     quiet: [none, () => Notices.use((notices) => notices.quiet)],
+    sounds: [none, () => Notices.use((notices) => notices.sounds)],
   },
   asked: {},
   served: {},

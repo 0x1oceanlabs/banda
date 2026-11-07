@@ -3,11 +3,14 @@
  * names, if there is one. A path from the root or home is that file. A
  * relative one starts at the Thread's folder, and then at the root of the
  * repository each file its tools named is in: a worktree beside the Project
- * then works too (#492). Only a file is found, never a folder.
+ * then works too (#492). Only a file is found, never a folder, and only on
+ * this machine: a path to a share is never looked at (ADR 0090, decision
+ * 7), as a look sends the Person's NTLM hash to its host.
  */
 import { stat } from "node:fs/promises"
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import type { FoundFile as Found } from "@banda/contract/agents"
+import { onThisMachine } from "@banda/desktop-kit"
 
 /** At most this many paths are looked at in one call. */
 const PATHS = 200
@@ -59,6 +62,7 @@ async function fileIn(
   file: string,
   folder: string | null
 ): Promise<Found | null> {
+  if (!onThisMachine(file)) return null
   const found = await stat(file).catch(() => null)
   if (!found?.isFile()) return null
   const inside = folder !== null && within(file, folder)
@@ -84,7 +88,7 @@ export async function basesOf(
 ): Promise<string[]> {
   const roots = await Promise.all(
     worked
-      .filter(isAbsolute)
+      .filter(onThisMachine)
       .map((file) => rootOf(dirname(resolve(file)), home))
   )
   const bases = roots.filter((root) => root !== null && root !== folder)

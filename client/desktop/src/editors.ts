@@ -6,16 +6,23 @@
  *
  * An editor is found by its command, on PATH or in the folders its
  * installer uses, then by its app's own copy of the command: in an
- * Applications folder on macOS, in /opt or /usr/share on Linux. What is
- * found is kept for the run. An editor starts on its own, apart from
- * Banda, with the path as one argument and no shell between.
+ * Applications folder on macOS, in /opt or /usr/share on Linux. On
+ * Windows it is found by its own program, on PATH, beside it or where
+ * its installer puts it (ADR 0090, decision 7). What is found is kept for
+ * the run. An editor starts on its own, apart from Banda, with the path
+ * as one argument and no shell between.
+ *
+ * Banda's own text files, as its `.toml` settings, open where the Person
+ * edits text: on Windows, which has no app for a `.toml`, in the first
+ * editor found, or else in Notepad.
  */
 import { spawn } from "node:child_process"
-import { accessSync, constants, statSync } from "node:fs"
+import { accessSync, constants, readdirSync, statSync } from "node:fs"
 import { homedir } from "node:os"
-import { delimiter, isAbsolute, join } from "node:path"
-import { Refused } from "@banda/desktop-kit"
+import { posix, win32 } from "node:path"
+import { onThisMachine, onThisMachineOn, Refused } from "@banda/desktop-kit"
 import { Context, Effect, Layer } from "effect"
+import { shell } from "electron"
 
 /** How an editor takes a line: `--goto path:line:col` (VS Code and its
  * kin), `--line n --column n path` (JetBrains), or `path:line:col` (Zed,
@@ -35,6 +42,12 @@ type Known = {
   /** Where a package puts its command off PATH (Linux): whole, or from
    * home with `~/`. */
   linux?: readonly string[]
+  /** Its own program on Windows, and the folders its installers put it
+   * in, each under a folder of programs (`Machine.programs`). Node starts
+   * a `.cmd`, as VS Code's `code.cmd`, only through a shell, so the
+   * program is the app's own. A name that ends with `*` goes on with a
+   * version: the newest found comes first. */
+  windows?: { exe: string; in: readonly string[] }
 }
 
 /** Where a VS Code-like app keeps its command on macOS. */
@@ -42,7 +55,9 @@ const vscodeApp = (app: string, command: string) =>
   `${app}.app/Contents/Resources/app/bin/${command}`
 
 /** A JetBrains IDE: its command is its launcher, in its app on macOS and
- * among the Toolbox's scripts anywhere. */
+ * among the Toolbox's scripts anywhere. On Windows it is its 64-bit
+ * program, in a folder of each version, whether the Toolbox or its own
+ * installer put it there. */
 const jetbrains = (
   id: string,
   name: string,
@@ -55,6 +70,10 @@ const jetbrains = (
   style: "line",
   commands: [command, ...more],
   mac: apps.map((app) => `${app}.app/Contents/MacOS/${command}`),
+  windows: {
+    exe: `${command}64.exe`,
+    in: apps.flatMap((app) => [`${app}*/bin`, `JetBrains/${app}*/bin`]),
+  },
 })
 
 /** The editors, in the order a menu lists them; the first found is the
@@ -71,6 +90,7 @@ export const EDITORS: readonly Known[] = [
       "/opt/cursor/bin/cursor",
       "/opt/Cursor/resources/app/bin/cursor",
     ],
+    windows: { exe: "Cursor.exe", in: ["cursor"] },
   },
   {
     id: "vscode",
@@ -79,6 +99,7 @@ export const EDITORS: readonly Known[] = [
     commands: ["code", "com.visualstudio.code"],
     mac: [vscodeApp("Visual Studio Code", "code")],
     linux: ["/usr/share/code/bin/code", "/opt/visual-studio-code/bin/code"],
+    windows: { exe: "Code.exe", in: ["Microsoft VS Code"] },
   },
   {
     id: "vscode-insiders",
@@ -90,6 +111,7 @@ export const EDITORS: readonly Known[] = [
       "/usr/share/code-insiders/bin/code-insiders",
       "/opt/visual-studio-code-insiders/bin/code-insiders",
     ],
+    windows: { exe: "Code - Insiders.exe", in: ["Microsoft VS Code Insiders"] },
   },
   {
     id: "vscodium",
@@ -98,6 +120,7 @@ export const EDITORS: readonly Known[] = [
     commands: ["codium", "com.vscodium.codium"],
     mac: [vscodeApp("VSCodium", "codium")],
     linux: ["/usr/share/codium/bin/codium", "/opt/vscodium-bin/bin/codium"],
+    windows: { exe: "VSCodium.exe", in: ["VSCodium"] },
   },
   {
     id: "windsurf",
@@ -106,6 +129,7 @@ export const EDITORS: readonly Known[] = [
     commands: ["windsurf"],
     mac: [vscodeApp("Windsurf", "windsurf")],
     linux: ["/usr/share/windsurf/bin/windsurf", "/opt/Windsurf/bin/windsurf"],
+    windows: { exe: "Windsurf.exe", in: ["Windsurf"] },
   },
   {
     id: "zed",
@@ -115,6 +139,8 @@ export const EDITORS: readonly Known[] = [
     commands: ["zed", "zeditor", "zedit", "dev.zed.Zed"],
     mac: ["Zed.app/Contents/MacOS/cli"],
     linux: ["~/.local/zed.app/bin/zed"],
+    // Its command, which goes to a line; the app itself is Zed.exe.
+    windows: { exe: "zed.exe", in: ["Zed/bin"] },
   },
   {
     id: "sublime",
@@ -123,6 +149,7 @@ export const EDITORS: readonly Known[] = [
     commands: ["subl", "sublime_text", "com.sublimetext.three"],
     mac: ["Sublime Text.app/Contents/SharedSupport/bin/subl"],
     linux: ["/opt/sublime_text/sublime_text"],
+    windows: { exe: "subl.exe", in: ["Sublime Text", "Sublime Text 3"] },
   },
   jetbrains(
     "idea",
@@ -144,7 +171,8 @@ export const EDITORS: readonly Known[] = [
   jetbrains("clion", "CLion", "clion", ["CLion"]),
   jetbrains("phpstorm", "PhpStorm", "phpstorm", ["PhpStorm"]),
   jetbrains("rubymine", "RubyMine", "rubymine", ["RubyMine"]),
-  jetbrains("rider", "Rider", "rider", ["Rider"]),
+  // Its own installer names its folder JetBrains Rider.
+  jetbrains("rider", "Rider", "rider", ["Rider", "JetBrains Rider"]),
 ]
 
 /** An editor found, and the command that starts it. */
@@ -158,13 +186,35 @@ export type Machine = {
   path: string | undefined
   /** Whether a program that may be run is at the full `path`. */
   runs: (path: string) => boolean
+  /** Windows' folders of programs: `%LOCALAPPDATA%\Programs`, where a
+   * per-user installer puts an app, and `%ProgramFiles%`. */
+  programs?: readonly string[]
+  /** The names in `folder`; none when it cannot be read. */
+  list?: (folder: string) => readonly string[]
 }
+
+/** Windows' folders of apps from its store: the programs on PATH there
+ * are stubs that may start the store or an install (ADR 0090, decision
+ * 2), so Banda never looks for one there. */
+const ALIASES = /[\\/]WindowsApps([\\/]|$)/i
 
 /** The folders a command is looked for in: PATH's, then those an
  * installer puts one in that a window started from the desktop may lack
- * on its PATH, each once. */
+ * on its PATH, each once. On Windows, only PATH's on a drive. */
 export function foldersOf({ platform, home, path }: Machine): string[] {
-  const own = (path ?? "").split(delimiter)
+  if (platform === "win32")
+    return [
+      ...new Set(
+        (path ?? "")
+          .split(win32.delimiter)
+          .filter(
+            (folder) =>
+              onThisMachineOn(platform)(folder) && !ALIASES.test(folder)
+          )
+      ),
+    ]
+  const { join } = posix
+  const own = (path ?? "").split(posix.delimiter)
   const usual = [
     join(home, ".local/bin"),
     join(home, "bin"),
@@ -182,12 +232,16 @@ export function foldersOf({ platform, home, path }: Machine): string[] {
           join(home, ".local/share/JetBrains/Toolbox/scripts"),
         ]),
   ]
-  return [...new Set([...own, ...usual].filter((folder) => isAbsolute(folder)))]
+  return [
+    ...new Set([...own, ...usual].filter((folder) => posix.isAbsolute(folder))),
+  ]
 }
 
 /** The editors on `machine`, each by the first command found for it, in
  * the order of {@link EDITORS}. */
 export function findEditors(machine: Machine): Found[] {
+  if (machine.platform === "win32") return onWindows(machine)
+  const { join } = posix
   const folders = foldersOf(machine)
   const whole = (path: string) =>
     path.startsWith("~/") ? join(machine.home, path.slice(2)) : path
@@ -203,6 +257,56 @@ export function findEditors(machine: Machine): Found[] {
       ...(machine.platform === "linux" ? (linux ?? []).map(whole) : []),
     ]
     const command = candidates.find(machine.runs)
+    return command ? [{ id, name, style, command }] : []
+  })
+}
+
+/** The editors on a Windows `machine`: each by its own program, on PATH or
+ * beside a PATH folder named `bin`, as VS Code puts `bin\code.cmd` on
+ * PATH beside its app, then where its installers put it. */
+function onWindows(machine: Machine): Found[] {
+  const { join } = win32
+  const folders = foldersOf(machine)
+  const programs = (machine.programs ?? []).filter(onThisMachineOn("win32"))
+  // A folder of programs is read once, however many editors look in it.
+  const listed = new Map<string, readonly string[]>()
+  const list = (folder: string) => {
+    if (!listed.has(folder)) listed.set(folder, machine.list?.(folder) ?? [])
+    return listed.get(folder)!
+  }
+  /** The folders `place` names under `base`, its versions newest first.
+   * Windows' names are the same in any case. */
+  const under = (base: string, place: string): string[] =>
+    place.split("/").reduce<string[]>(
+      (bases, part) =>
+        bases.flatMap((at) =>
+          part.endsWith("*")
+            ? list(at)
+                .filter((one) =>
+                  one.toLowerCase().startsWith(part.slice(0, -1).toLowerCase())
+                )
+                .sort((a, b) => b.localeCompare(a, "en", { numeric: true }))
+                .map((one) => join(at, one))
+            : [join(at, part)]
+        ),
+      [base]
+    )
+  return EDITORS.flatMap(({ id, name, style, windows }) => {
+    if (!windows) return []
+    const onPath = folders.flatMap((folder) => [
+      join(folder, windows.exe),
+      ...(/[\\/]bin[\\/]?$/i.test(folder)
+        ? [join(folder, "..", windows.exe)]
+        : []),
+    ])
+    // Its installers' folders are read only for one not found on PATH.
+    const installed = () =>
+      programs.flatMap((base) =>
+        windows.in.flatMap((place) =>
+          under(base, place).map((folder) => join(folder, windows.exe))
+        )
+      )
+    const command = onPath.find(machine.runs) ?? installed().find(machine.runs)
     return command ? [{ id, name, style, command }] : []
   })
 }
@@ -238,6 +342,28 @@ function runs(path: string): boolean {
   } catch {
     return false
   }
+}
+
+/** The names in `folder`; none when it cannot be read. */
+function namesIn(folder: string): string[] {
+  try {
+    return readdirSync(folder)
+  } catch {
+    return []
+  }
+}
+
+/** Windows' Notepad, where a text file opens with no editor found. */
+const notepad = () =>
+  win32.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "notepad.exe")
+
+/** Whether the system has no app for the file at `path`, so it opens in
+ * an editor: a `.toml` on Windows. */
+export function noAppFor(
+  path: string,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  return platform === "win32" && /\.toml$/i.test(path)
 }
 
 /** Starts `command` with `args`, on its own: no shell, its output
@@ -277,6 +403,11 @@ export class Editors extends Context.Service<
       line: number | null,
       column: number | null
     ): Effect.Effect<void, Refused>
+    /** Opens the text file at the whole `path` for the Person to edit, as
+     * one of Banda's `.toml` files: in the system's app for it, or where
+     * the system has none (`noAppFor`), in the first editor found, else in
+     * Notepad. Refused when it did not open. */
+    edit(path: string): Effect.Effect<void, Refused>
   }
 >()("banda/Editors") {
   /** On this machine, as the window finds it. */
@@ -289,11 +420,37 @@ export class Editors extends Context.Service<
             home: homedir(),
             path: process.env.PATH,
             runs,
+            programs: [
+              process.env.LOCALAPPDATA &&
+                win32.join(process.env.LOCALAPPDATA, "Programs"),
+              process.env.ProgramFiles,
+              process.env["ProgramFiles(x86)"],
+            ].filter((folder) => !!folder) as string[],
+            list: namesIn,
           })
         )
       )
+      /** Starts `command` with `args`, or says why it did not. */
+      const started = (name: string, command: string, args: string[]) =>
+        Effect.tryPromise({
+          try: () => launch(command, args),
+          catch: (error) =>
+            new Refused({ message: `${name} did not start: ${String(error)}` }),
+        })
       return {
         list,
+        edit: (path) =>
+          Effect.gen(function* () {
+            if (!noAppFor(path)) {
+              const failed = yield* Effect.promise(() => shell.openPath(path))
+              if (failed) return yield* new Refused({ message: failed })
+              return
+            }
+            const [first] = yield* list
+            yield* first
+              ? started(first.name, first.command, argsFor(first.style, path))
+              : started("Notepad", notepad(), [path])
+          }),
         open: (id, path, line, column) =>
           Effect.gen(function* () {
             const editor = (yield* list).find((one) => one.id === id)
@@ -301,19 +458,16 @@ export class Editors extends Context.Service<
               return yield* new Refused({
                 message: `No editor ${JSON.stringify(id)} on this computer.`,
               })
-            if (!isAbsolute(path) || !statSync(path, { throwIfNoEntry: false }))
+            if (
+              !onThisMachine(path) ||
+              !statSync(path, { throwIfNoEntry: false })
+            )
               return yield* new Refused({ message: `No such file: ${path}` })
-            yield* Effect.tryPromise({
-              try: () =>
-                launch(
-                  editor.command,
-                  argsFor(editor.style, path, line, column)
-                ),
-              catch: (error) =>
-                new Refused({
-                  message: `${editor.name} did not start: ${String(error)}`,
-                }),
-            })
+            yield* started(
+              editor.name,
+              editor.command,
+              argsFor(editor.style, path, line, column)
+            )
           }),
       }
     })

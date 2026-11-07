@@ -2,10 +2,19 @@ import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
-import { Clock, Effect, Layer, Option, Sink, Stream } from "effect"
+import {
+  Clock,
+  Deferred,
+  Effect,
+  Fiber,
+  Layer,
+  Option,
+  Sink,
+  Stream,
+} from "effect"
 import { ChildProcessSpawner } from "effect/process"
 import { TestClock } from "effect/testing"
-import { command, keepRunning } from "./child"
+import { command, keepRunning, letGo, lines } from "./child"
 import { Engine, Look } from "@banda/desktop-kit"
 import { engineLayer, Stop } from "./engine"
 import { firstLook, lookLayer } from "./look"
@@ -78,6 +87,53 @@ it.effect(
       yield* runFor(spawner, 33_500)
       expect(starts).toEqual([0, 500, 1500, 33_000])
     })
+)
+
+it.live(
+  "Windows' stop: a child's stdin closes, and it is waited for, a while at most",
+  () =>
+    Effect.gen(function* () {
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
+      // As `--with-parent` does: it goes once its stdin closes.
+      const hears = yield* spawner.spawn(
+        command(script("cat > /dev/null\nexit 0"), [])
+      )
+      yield* letGo(hears)
+      expect(yield* hears.isRunning).toBe(false)
+      // One that does not hear it is left to be killed after the wait.
+      const deaf = yield* spawner.spawn(command(script("exec sleep 60"), []))
+      const asked = Date.now()
+      yield* letGo(deaf, "300 millis")
+      expect(Date.now() - asked).toBeGreaterThanOrEqual(250)
+      expect(yield* deaf.isRunning).toBe(true)
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer))
+)
+
+it.live(
+  "Windows' stop as a kept run's scope closes: its stdin closes first, before the kill",
+  () =>
+    Effect.gen(function* () {
+      // It says it is up, and notes that it heard its stdin close: a
+      // SIGTERM before that would leave no note.
+      const program = script(
+        `echo up\ncat > /dev/null\necho heard > "$(dirname "$0")/heard"`
+      )
+      const up = yield* Deferred.make<void>()
+      const run = yield* keepRunning(
+        "listener",
+        command(program, []),
+        (child) =>
+          lines(child).pipe(
+            Stream.runForEach(() => Deferred.succeed(up, undefined))
+          ),
+        { byStdin: true, last: () => true }
+      ).pipe(Effect.forkScoped)
+      yield* Deferred.await(up)
+      yield* Fiber.interrupt(run)
+      expect(readFileSync(join(dirname(program), "heard"), "utf8")).toBe(
+        "heard\n"
+      )
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer))
 )
 
 it.live(

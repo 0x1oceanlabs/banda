@@ -5,7 +5,7 @@
  * folder, which is the window's class too.
  */
 import { homedir } from "node:os"
-import { isAbsolute, join } from "node:path"
+import { posix, win32 } from "node:path"
 
 /** What Banda says it is, where an app is listed. */
 export const DESCRIPTION = "A tiling workspace for working with Agents"
@@ -41,14 +41,29 @@ export const CHANNELS = {
 export const channel =
   CHANNELS[(process.env.BANDA_CHANNEL ?? "local") as keyof typeof CHANNELS]
 
+/** What Banda's places are found from: this system, or a test's. */
+export type System = {
+  platform: NodeJS.Platform
+  env: Record<string, string | undefined>
+  home: string
+  /** Electron's folder for apps' data, which `dirs` takes on macOS. */
+  appData: string
+}
+
+const system = (appData: string): System => ({
+  platform: process.platform,
+  env: process.env,
+  home: homedir(),
+  appData,
+})
+
 /**
  * The engine's state folder, where the window keeps its profile too
  * (`window/`): `BANDA_STATE`, or the system's state folder as the engine
  * finds it (`dirs`, engine/src/places.rs) with this Banda's folder in it.
- * `appData` is Electron's, which `dirs` takes on macOS.
  */
 export function stateFolder(appData: string): string {
-  return folder("BANDA_STATE", "XDG_STATE_HOME", "state", appData)
+  return folderOf("state", system(appData))
 }
 
 /**
@@ -57,25 +72,41 @@ export function stateFolder(appData: string): string {
  * as the engine finds it, with this Banda's folder in it.
  */
 export function dataFolder(appData: string): string {
-  return folder("BANDA_DATA", "XDG_DATA_HOME", "share", appData)
+  return folderOf("data", system(appData))
 }
 
-/** The folder `named` names, or this Banda's in the system's: on macOS in
- * `appData`, elsewhere in `xdg`'s, or `~/.local/<local>`. */
-function folder(
-  named: string,
-  xdg: string,
-  local: string,
-  appData: string
+/** The variable that moves each place, and its XDG folder and the one
+ * under `~/.local` that holds it when none is set. */
+const PLACES = {
+  state: { named: "BANDA_STATE", xdg: "XDG_STATE_HOME", local: "state" },
+  data: { named: "BANDA_DATA", xdg: "XDG_DATA_HOME", local: "share" },
+} as const
+
+/**
+ * The place `name` on `on`, as the engine finds it: its variable's, or
+ * this Banda's `folder` in the system's. On Windows that is
+ * `%LOCALAPPDATA%\<folder>\<name>`, all of Banda's under one folder and
+ * none in Roaming (ADR 0090, decision 3); on macOS in `appData`; elsewhere
+ * in XDG's folder, or `~/.local/<local>`.
+ */
+export function folderOf(
+  name: keyof typeof PLACES,
+  on: System,
+  folder: string = channel.folder
 ): string {
-  const set = process.env[named]
+  const { named, xdg, local } = PLACES[name]
+  const set = on.env[named]
   if (set) return set
-  const system = process.env[xdg]
+  if (on.platform === "win32") {
+    const base = on.env.LOCALAPPDATA || win32.join(on.home, "AppData", "Local")
+    return win32.join(base, folder, name)
+  }
+  const xdgFolder = on.env[xdg]
   const base =
-    process.platform === "darwin"
-      ? appData
-      : system && isAbsolute(system)
-        ? system
-        : join(homedir(), ".local", local)
-  return join(base, channel.folder)
+    on.platform === "darwin"
+      ? on.appData
+      : xdgFolder && posix.isAbsolute(xdgFolder)
+        ? xdgFolder
+        : posix.join(on.home, ".local", local)
+  return posix.join(base, folder)
 }

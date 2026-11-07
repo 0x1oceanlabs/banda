@@ -48,6 +48,7 @@ mod problems;
 mod run;
 mod serve;
 mod service;
+mod window;
 
 use banda_kernel::{CommandId, EventFilter, ProjectId, Refusal};
 use clap::{Parser, Subcommand};
@@ -464,7 +465,7 @@ fn main() -> ExitCode {
         Command::Skill { topic, export } => return skill(topic, export),
         Command::Settings { what } => return settings(what),
         Command::Keys { what, json } => return keys(what, json),
-        Command::Menu { route } => return menu(route.unwrap_or_default()),
+        Command::Menu { route } => return window::menu(route.unwrap_or_default()),
         Command::Modules { unstable } => return print_modules(unstable),
         _ => {}
     }
@@ -750,47 +751,6 @@ fn skill(topic: Option<String>, export: Option<PathBuf>) -> ExitCode {
     // A reader that went away is not an error.
     let _ = write!(out, "{}", text.trim_end()).and_then(|()| writeln!(out));
     ExitCode::SUCCESS
-}
-
-/// Asks the window to open its menu at `route`: one JSON line to its
-/// socket, and `ok` back.
-fn menu(route: String) -> ExitCode {
-    let told = Places::from_env()
-        .and_then(|places| tell_window(&places.window(), &json!({ "menu": route })));
-    match told {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(failure) => failure.exit(),
-    }
-}
-
-#[cfg(unix)]
-fn tell_window(socket: &std::path::Path, message: &Value) -> Result<(), Failure> {
-    use std::io::{BufRead, BufReader};
-    use std::os::unix::net::UnixStream;
-    let mut stream = UnixStream::connect(socket)
-        .map_err(|_| Failure::Broken("Banda's window is not open.".into()))?;
-    stream
-        .set_read_timeout(Some(std::time::Duration::from_secs(5)))
-        .map_err(Failure::broken)?;
-    writeln!(stream, "{message}").map_err(Failure::broken)?;
-    let mut answer = String::new();
-    BufReader::new(stream)
-        .read_line(&mut answer)
-        .map_err(|error| Failure::Broken(format!("Banda's window did not answer: {error}")))?;
-    match answer.trim() {
-        "ok" => Ok(()),
-        other => Err(Failure::Broken(format!("Banda's window said: {other}"))),
-    }
-}
-
-/// The window's socket is a named pipe on Windows, which comes with the
-/// window there (ADR 0090, step 4).
-#[cfg(not(unix))]
-fn tell_window(_: &std::path::Path, _: &Value) -> Result<(), Failure> {
-    Err(Failure::Broken(
-        "banda menu is not on Windows yet (ADR 0090, step 4): open the menu in Banda's window."
-            .into(),
-    ))
 }
 
 /// The look's places, in this Banda's config folder.

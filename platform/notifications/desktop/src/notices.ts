@@ -18,6 +18,7 @@ export const NoticeArg = Schema.Struct({
   icon: Schema.optional(Schema.String),
   answer: Schema.String,
   lasts: Schema.Boolean,
+  silent: Schema.optional(Schema.Boolean),
 }) satisfies Schema.Decoder<Notice>
 
 export class Notices extends Context.Service<
@@ -30,11 +31,16 @@ export class Notices extends Context.Service<
     withdraw(key: string): Effect.Effect<void>
     /** Whether the desktop is quiet now. */
     readonly quiet: Effect.Effect<boolean>
+    /** Whether a notice makes the desktop's own sound (`Desktop.sounds`). */
+    readonly sounds: Effect.Effect<boolean>
   }
 >()("banda/Notices") {
   /**
    * The Person's desktop: its notification server, through Electron, and
-   * Omarchy's Do Not Disturb, when Omarchy is there.
+   * Omarchy's Do Not Disturb, when Omarchy is there. On Windows a notice
+   * that is not silent carries Windows' own sound, so its Do Not Disturb
+   * silences it and holds it, as no documented call reads that switch
+   * (ADR 0090, decision 7); elsewhere Banda plays its own (ADR 0009).
    */
   static readonly system = Layer.effect(Notices)(
     Effect.gen(function* () {
@@ -47,23 +53,28 @@ export class Notices extends Context.Service<
           notification?.close()
         })
       // Whether Omarchy's Do Not Disturb is on, read at most every two
-      // seconds. A desktop without Omarchy, or one that does not answer
-      // quickly, is not quiet.
-      const quiet = yield* Effect.cachedWithTTL(
-        spawner
-          .string(
-            ChildProcess.make("omarchy-shell", ["notifications", "isDnd"])
-          )
-          .pipe(
-            Effect.map((said) => said.trim() === "on"),
-            Effect.timeout("500 millis"),
-            Effect.orElseSucceed(() => false)
-          ),
-        "2 seconds"
-      )
+      // seconds. A desktop without Omarchy, which is Linux's, or one that
+      // does not answer quickly, is not quiet.
+      const quiet =
+        process.platform === "linux"
+          ? yield* Effect.cachedWithTTL(
+              spawner
+                .string(
+                  ChildProcess.make("omarchy-shell", ["notifications", "isDnd"])
+                )
+                .pipe(
+                  Effect.map((said) => said.trim() === "on"),
+                  Effect.timeout("500 millis"),
+                  Effect.orElseSucceed(() => false)
+                ),
+              "2 seconds"
+            )
+          : Effect.succeed(false)
+      const sounds = process.platform === "win32"
       return {
         withdraw,
         quiet,
+        sounds: Effect.succeed(sounds),
         show: (notice, answered) =>
           Effect.andThen(
             withdraw(notice.key),
@@ -71,8 +82,7 @@ export class Notices extends Context.Service<
               const notification = new Notification({
                 title: notice.title,
                 body: notice.body ?? "",
-                // Banda plays its own sound (ADR 0009).
-                silent: true,
+                silent: !sounds || notice.silent === true,
                 icon: notice.icon
                   ? nativeImage.createFromDataURL(notice.icon)
                   : undefined,
@@ -106,6 +116,7 @@ export class Notices extends Context.Service<
         Effect.sync(() => desktop.show(notice, answered)),
       withdraw: (key) => Effect.sync(() => desktop.withdraw(key)),
       quiet: Effect.sync(() => desktop.isQuiet),
+      sounds: Effect.sync(() => desktop.sounds),
     })
 }
 
@@ -118,6 +129,8 @@ export class RecordedDesktop {
   readonly shown: Notice[] = []
   readonly withdrawn: string[] = []
   isQuiet = false
+  /** Whether its notices sound by themselves, as Windows' do. */
+  sounds = false
   #answers = new Map<string, (key: string) => void>()
 
   show(notice: Notice, answered: (key: string) => void) {
