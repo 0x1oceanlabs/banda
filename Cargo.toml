@@ -79,6 +79,18 @@ zip = { version = "9.4.1", default-features = false }
 [profile.release]
 debug = "line-tables-only"
 
+# A debug build keeps only the line tables too, and the crates Banda uses
+# none: a test binary was 250–500 MB of debug info, each Agent's checkout
+# has a target/ of its own, and their builds side by side wrote gigabytes
+# a minute to the disk. A panic's backtrace still names file and line; a
+# debugger no longer sees local variables (set `debug = true` locally for
+# that).
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 [profile.release.package."*"]
 debug = false
 
