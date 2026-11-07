@@ -185,7 +185,7 @@ describe("plans", () => {
   test("a Pane opened in the place of another, instead of it", () => {
     const before = arranged()
     const three = focused(before)?.id
-    const next = open(before, A, pane("a.four"), { place: "here" })
+    const next = open(before, A, pane("a.four"), { place: "instead" })
     expect(opened(before, next)?.command.params).toMatchObject({
       instead: three,
     })

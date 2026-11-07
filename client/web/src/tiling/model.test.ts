@@ -107,9 +107,9 @@ describe("opening", () => {
     expect(focusName(state)).toBe("x1")
   })
 
-  test("here replaces the opener's Pane", () => {
+  test("instead replaces the opener's Pane", () => {
     let state = open(start(), A, thread("t1"))
-    state = open(state, A, terminal("x1"), { place: "here" })
+    state = open(state, A, terminal("x1"), { place: "instead" })
     expect(columns(state)).toEqual([["x1"]])
   })
 
@@ -168,10 +168,10 @@ describe("opening", () => {
     expect(current(state).focus).toBe(2)
   })
 
-  test("here, the Pane takes the opener's place though another shows it", () => {
+  test("instead, the Pane takes the opener's place though another shows it", () => {
     let state = open(start(), A, thread("t1"))
     state = open(state, A, terminal("launcher"), { place: "right" })
-    state = open(state, A, thread("t1"), { place: "here" })
+    state = open(state, A, thread("t1"), { place: "instead" })
     expect(columns(state)).toEqual([["t1"], ["t1"]])
     expect(current(state).focus).toBe(1)
   })
