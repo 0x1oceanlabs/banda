@@ -1,15 +1,17 @@
 // Publishes what scripts/package.sh packed as a GitHub release (ADR 0033,
 // step 3), for the release workflow:
 //
-//   node scripts/release.mjs <stable|dev> <version> <commit> <files…>
+//   node scripts/release.mjs dev <version> <commit> <files…>
 //   node scripts/release.mjs add <version> <files…>
 //
-// Stable is the release of its tag v<version>, pushed by Roma, with the
-// PRs since the last Stable as its notes. Dev is a prerelease v<version>
-// made at <commit>; only the last 20 Dev releases are kept. `add` puts the
-// Mac's files on a release already out (ADR 0033, decision 6), and says
-// `added=true` to the workflow. GITHUB_TOKEN
-// and GITHUB_REPOSITORY come from the workflow.
+// A Dev is a prerelease v<version> made at <commit>; only the last 20 Dev
+// releases are kept. `add` puts the Mac's files on a release already out
+// (ADR 0033, decision 6), and says `added=true` to the workflow.
+// GITHUB_TOKEN and GITHUB_REPOSITORY come from the workflow.
+//
+// It publishes no Stable: a Stable is no longer the release of a tag
+// pushed by hand, and Banda will be promoted from a Dev once a day (ADR
+// 0092, steps 2 and 6).
 import { execFileSync } from "node:child_process"
 import { appendFileSync, readFileSync, statSync } from "node:fs"
 import { basename } from "node:path"
@@ -19,13 +21,13 @@ const [channel, version, ...files] = process.argv.slice(2)
 const adding = channel === "add"
 const commit = adding ? "" : files.shift()
 if (
-  !["stable", "dev", "add"].includes(channel) ||
+  !["dev", "add"].includes(channel) ||
   !version ||
   !(adding || commit) ||
   !files.length
 ) {
   throw new Error(
-    "release.mjs <stable|dev> <version> <commit> <files…>, or add <version> <files…>"
+    "release.mjs dev <version> <commit> <files…>, or add <version> <files…>"
   )
 }
 const repo = process.env.GITHUB_REPOSITORY
@@ -78,7 +80,7 @@ async function upload(release, file) {
 }
 
 if (adding) {
-  // A Dev skipped (its commit changes a workflow) has no release to add to.
+  // A Dev the fallback below skipped has no release to add to.
   const release = releases.find((r) => r.tag_name === tag && !r.draft)
   if (!release) {
     console.log(`::warning::${tag} is not out: its Mac files are not added.`)
@@ -109,33 +111,18 @@ for (const r of releases.filter((r) => r.tag_name === tag)) {
   await github("DELETE", `/repos/${repo}/releases/${r.id}`)
 }
 
-let fields
-if (channel === "stable") {
-  const previous = git("tag", "-l", "v[0-9]*", "--sort=-v:refname")
-    .split("\n")
-    .find((t) => t && t !== tag && !t.includes("-"))
-  const notes = await github("POST", `/repos/${repo}/releases/generate-notes`, {
-    tag_name: tag,
-    ...(previous && { previous_tag_name: previous }),
-  })
-  fields = { name: `Banda ${version}`, body: notes.body, make_latest: "true" }
-} else {
-  const subject = git("log", "-1", "--format=%s", commit)
-  fields = {
-    target_commitish: commit,
-    name: `Banda Dev ${version}`,
-    body: `Built from ${commit.slice(0, 7)}: ${subject}`,
-    prerelease: true,
-    make_latest: "false",
-  }
-}
+const subject = git("log", "-1", "--format=%s", commit)
 
 // A draft first, so nobody (electron-updater, step 5) sees a release
 // without its files; it is published once they are up.
 const release = await github("POST", `/repos/${repo}/releases`, {
   tag_name: tag,
   draft: true,
-  ...fields,
+  target_commitish: commit,
+  name: `Banda Dev ${version}`,
+  body: `Built from ${commit.slice(0, 7)}: ${subject}`,
+  prerelease: true,
+  make_latest: "false",
 })
 // A file that fails to go up takes the draft with it: a draft left behind
 // only waits for a run again of the same number, which may never come.
@@ -155,8 +142,10 @@ try {
   )
   console.log(published.html_url)
 } catch (error) {
-  // GitHub lets the workflow's token make no tag at a commit that changes
-  // a workflow. That Dev is skipped; the next push to main is the next.
+  // A fallback that has not been needed: the workflow's token has tagged
+  // Devs whose commit changes a workflow (v0.1.0-dev.390, v0.1.0-dev.400),
+  // as such a commit is on main already. Should GitHub refuse one, that Dev
+  // is skipped, and the next push to main is the next.
   const workflows = git(
     "diff-tree",
     "--no-commit-id",
@@ -166,7 +155,7 @@ try {
   )
     .split("\n")
     .some((file) => file.startsWith(".github/workflows/"))
-  if (channel !== "dev" || !workflows || ![403, 404].includes(error.status)) {
+  if (!workflows || ![403, 404].includes(error.status)) {
     throw error
   }
   await github("DELETE", `/repos/${repo}/releases/${release.id}`)
@@ -176,14 +165,12 @@ try {
   process.exit(0)
 }
 
-if (channel === "dev") {
-  const old = releases
-    .filter((r) => r.prerelease && !r.draft && r.tag_name.includes("-dev."))
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .slice(KEEP_DEV - 1)
-  for (const r of old) {
-    await github("DELETE", `/repos/${repo}/releases/${r.id}`)
-    await github("DELETE", `/repos/${repo}/git/refs/tags/${r.tag_name}`)
-    console.log(`${r.tag_name}: removed, older than the last ${KEEP_DEV}`)
-  }
+const old = releases
+  .filter((r) => r.prerelease && !r.draft && r.tag_name.includes("-dev."))
+  .sort((a, b) => b.created_at.localeCompare(a.created_at))
+  .slice(KEEP_DEV - 1)
+for (const r of old) {
+  await github("DELETE", `/repos/${repo}/releases/${r.id}`)
+  await github("DELETE", `/repos/${repo}/git/refs/tags/${r.tag_name}`)
+  console.log(`${r.tag_name}: removed, older than the last ${KEEP_DEV}`)
 }

@@ -111,6 +111,21 @@ build on, and Roma decides what comes in.
   and it fails a job whose PR or `workflow_run` comes from another
   repository.
 
+## A tag
+
+A pushed tag runs the workflows of the commit it names, and every
+`release.yml` before ADR 0092's step 2 built a Stable from one, starting on
+devbox. `ci/job-started.sh` fails every job for a pushed tag, so a tag
+pushed by hand ships nothing, on any commit. It holds once the runners run
+the image that has it (below). If a layer fails to build, compose leaves
+the old runners running, without it. Check a runner, never with a test tag,
+as a tag stays (ADR 0092):
+
+    ci/devbox.sh compose exec -e GITHUB_EVENT_NAME=push \
+      -e GITHUB_REF=refs/tags/v0.0.0 runner-1 banda-job-started.sh
+
+It says `devbox builds no tag` and ends 1 there.
+
 ## Where they run
 
 The runners are containers on the rootless Docker engine of devbox's OS user

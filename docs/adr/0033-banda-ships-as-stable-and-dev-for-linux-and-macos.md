@@ -51,6 +51,8 @@ Roma, 2026-11-02:
 
 4. **Stable is a Dev that Roma has lived with.** Roma tags a commit that has a Dev build, `v0.X.Y`, with `node scripts/promote.mjs [dev.N]`: Dev `0.X.Y-dev.N` becomes Stable `0.X.Y` at the commit it was built from, the last Dev when none is named. Roma's own token pushes the tag, so it starts the workflow, as the workflow's token would not. Roma merges many PRs a day, so a Stable is not each Dev, nor on a clock: it is the one Roma picks. A fix to a Stable is a branch from its tag and the tag `v0.X.Y+1` on it, by hand. The workflow builds it again from that commit with the Stable channel and publishes a release, with its notes taken from the titles of the PRs merged since the last Stable. Stable never loses a Person's data: an update runs the modules' migrations (ADR 0002), and a change that cannot migrate does not go into a Stable.
 
+   _Changed on 2026-11-08, by ADR 0092, which replaces this decision._ A tag pushed by hand ships nothing since its step 2, and `scripts/promote.mjs` refuses until its step 6, when Banda is promoted from a Dev once a day. Its step 8 notes the rest here.
+
 5. **Linux: an AppImage for x64, which updates itself.**
    - Built with electron-builder on the devbox runners, the engine inside.
    - electron-updater finds a new version in the background, downloads it, and installs it when the app quits. Banda reads the Stable releases, Banda Dev the prereleases. Neither asks, and neither restarts by itself: Dev can change many times a day.
