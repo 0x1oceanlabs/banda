@@ -265,6 +265,13 @@ const menuSources = sources.map(({ source }) => source)
 /** The presses the window made to hand a key on, which it leaves alone. */
 const HANDED = new WeakSet<Event>()
 
+/** How many of what the modules list work now: the Agents at work. */
+function workingIn(lists: Lists): number {
+  return Object.values(lists)
+    .flat()
+    .filter((listed) => works(listed.mark)).length
+}
+
 /** What a Pane shows, as its module lists it in `lists`. */
 function listedIn(lists: Lists, entry: Entry): Listed | undefined {
   const thing = showsOf(entry.pane)
@@ -885,9 +892,7 @@ export function Shell({
     settings("keys")
   }, [settings])
   const quit = useCallback(() => {
-    const working = Object.values(listsNow.current)
-      .flat()
-      .filter((listed) => works(listed.mark)).length
+    const working = workingIn(listsNow.current)
     if (working === 0) window.banda?.quit()
     else setQuitting(working)
   }, [])
@@ -1396,11 +1401,7 @@ export function Shell({
             widgets={bar.parts}
             listed={bar.listed}
             onArrange={arrangeBar}
-            working={
-              Object.values(lists)
-                .flat()
-                .filter((listed) => works(listed.mark)).length
-            }
+            working={workingIn(lists)}
             onPick={(index) =>
               index === workspaces.current
                 ? toggleOverview()

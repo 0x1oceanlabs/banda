@@ -51,8 +51,13 @@ export type Updates = {
   readonly seen: () => void
 }
 
-/** Starts looking for Banda's update; `tell` hears each change. */
-export function updates(tell: (now: Update) => void): Updates {
+/** Starts looking for Banda's update; `tell` hears each change, and
+ * `before` runs before a restart into the new version, as the engine
+ * stops. */
+export function updates(
+  tell: (now: Update) => void,
+  before: () => Promise<void> = async () => {}
+): Updates {
   const image = process.env.APPIMAGE
   const brew =
     process.platform === "darwin" &&
@@ -178,12 +183,17 @@ export function updates(tell: (now: Update) => void): Updates {
     // The same error comes as an "error" event.
     autoUpdater.checkForUpdates().catch(() => {})
   }
+  let restarting = false
   const restart = () => {
-    if (now.state !== "ready") return
-    leave({ from: have, to: now.version, notes: now.notes })
-    // Installed by the time it returns; the app quits right after.
-    autoUpdater.quitAndInstall(true, false)
-    startAfter(installed)
+    if (now.state !== "ready" || restarting) return
+    const ready = now
+    restarting = true
+    void before().finally(() => {
+      leave({ from: have, to: ready.version, notes: ready.notes })
+      // Installed by the time it returns; the app quits right after.
+      autoUpdater.quitAndInstall(true, false)
+      startAfter(installed)
+    })
   }
   setTimeout(() => look(false), FIRST_LOOK)
   setInterval(() => look(false), EVERY)
