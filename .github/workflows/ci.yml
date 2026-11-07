@@ -63,7 +63,16 @@ jobs:
       fail-fast: false
       matrix:
         # ts reads the checkpoints rust's tests write, so they share a job.
-        parts: [rust ts, window]
+        # The window's tests start the app one at a time; split over four
+        # runners they take about a quarter of their 19 minutes.
+        include:
+          - parts: rust ts
+          - { parts: window, shard: 1/4 }
+          - { parts: window, shard: 2/4 }
+          - { parts: window, shard: 3/4 }
+          - { parts: window, shard: 4/4 }
+    env:
+      BANDA_E2E_SHARD: ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@v5
       - name: target/ from the runner's volume, and rust-toolchain.toml's toolchain
@@ -73,7 +82,7 @@ jobs:
         if: failure() && matrix.parts == 'window'
         uses: actions/upload-artifact@v4
         with:
-          name: window-traces
+          name: window-traces-${{ strategy.job-index }}
           path: client/desktop/test-results/
           retention-days: 7
 
