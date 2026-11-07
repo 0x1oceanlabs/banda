@@ -10,7 +10,7 @@ import {
 } from "@banda/ui/components/trace"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { clock } from "@banda/ui/lib/words"
-import { sleeps } from "@banda/ui/pane"
+import { sleeps } from "@banda/ui/lib/snooze"
 import { useThreadAround } from "../thread/context"
 import type { LineProps } from "./types"
 import {

@@ -69,7 +69,7 @@ const MATCHERS = new Set([
 
 /** The keys still read by hand, by file and key, and why. */
 const LEFT: { readonly [place: string]: string } = {
-  "apps/agents/pane/src/Composer.tsx KeyV":
+  "apps/agents/pane/src/composer/Composer.tsx KeyV":
     "Ctrl+Shift+V pastes as plain text, as the platform's own paste does",
   "apps/files/pane/src/views/pdf.tsx KeyF":
     "a PDF's find waits for a scope of a file's Pane, files.file (ADR 0073)",

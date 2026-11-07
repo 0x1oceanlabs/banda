@@ -1,5 +1,5 @@
 /** A Visual the Agent showed (ADR 0037). */
-import { Visual } from "../Visual"
+import { Visual } from "../visual/Visual"
 import { useThreadAround } from "../thread/context"
 import type { EntryProps } from "./types"
 

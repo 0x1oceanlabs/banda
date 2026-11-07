@@ -11,7 +11,7 @@ import {
   TraceLine,
   TraceTitle,
 } from "@banda/ui/components/trace"
-import type { Did, Line } from "../timeline"
+import type { Did, Line } from "../thread/timeline"
 import { DiffCounts } from "@banda/ui/components/diff"
 import type { LineFacts } from "./types"
 import { key, LineOf } from "./index"

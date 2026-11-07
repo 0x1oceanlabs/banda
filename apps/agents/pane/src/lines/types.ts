@@ -2,7 +2,7 @@
 import type { ComponentType } from "react"
 import type { Item, Snooze, TurnState } from "@banda/contract/agents"
 import type { EntryFacts } from "../entries/types"
-import type { Line } from "../timeline"
+import type { Line } from "../thread/timeline"
 
 /** What the Thread knows that its lines show, the same for a line and
  * the lines it holds. */

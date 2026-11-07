@@ -104,7 +104,7 @@ is (ADR 0089 d8).
 
 7. **The folder says what each part is.** Under `apps/agents/pane/src/`:
    - `thread/`: `Thread.tsx`, `Transcript.tsx`, `context.ts`, and the
-     Thread's state and timeline (`thread.ts`, `timeline.ts`) with their
+     Thread's state and timeline (`state.ts`, `timeline.ts`) with their
      tests;
    - `entries/` and `lines/` (decisions 2 and 3);
    - `composer/`: the message box, its menus, attachments, drafts and
@@ -138,6 +138,13 @@ screenshots in `window.spec.ts` stay as they are.
 3. `lines/` and its table; `Transcript`'s `switch` goes.
 4. The folders of decision 7, the Frame out of `Visual.tsx`, the border
    test and the README.
+
+_After step 4 (2026-11-07):_ the entries and lines read no `PaneProps`,
+and the border test holds them to it. `thread/Thread.tsx` still takes
+the Pane's props, and find, zoom and the details card stay in it: its
+session opens Panes, updates its args and runs the window's actions
+through them. They leave it with ADR 0087's channels, when each act
+becomes `pane.pick` or an intent, which is decision 5's last part.
 
 **Consequences.**
 

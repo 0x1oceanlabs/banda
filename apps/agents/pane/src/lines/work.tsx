@@ -1,6 +1,6 @@
 import { LayersIcon } from "lucide-react"
-import { holds } from "../findIn"
-import { did } from "../timeline"
+import { holds } from "../thread/findIn"
+import { did } from "../thread/timeline"
 import { Folded, Kinds } from "./folded"
 import type { LineProps } from "./types"
 
