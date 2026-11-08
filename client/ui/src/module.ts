@@ -91,7 +91,9 @@ export type WindowApi = {
    * `update` too, it shows these args, as a file's Pane the line a link
    * names. With `toggle`, the Pane in focus closes instead when it is
    * this one, as its kind names it: Mod+D's Diff. One whose kind says
-   * `home` opens on its Project's workspace (ADR 0065).
+   * `home` opens on its Project's workspace (ADR 0065). With `place:
+   * "drawer"` it is the drawer's Pane instead, dropped, in place of any
+   * the drawer held (ADR 0025, decision 8).
    */
   open: (
     pane: PaneState,
@@ -102,6 +104,7 @@ export type WindowApi = {
       again?: false
       update?: true
       toggle?: true
+      place?: "drawer"
     }
   ) => void
   /** Here (ADR 0087, decision 4): where the Person is in this Window. An

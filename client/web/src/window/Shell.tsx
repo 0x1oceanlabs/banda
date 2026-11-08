@@ -298,7 +298,7 @@ export function Shell({
   )
   // The drawer (ADR 0025, decision 8): its Pane, kept between runs, and
   // whether it shows. Dropped with none, it gets a new Thread in the home
-  // Project, the agents module's, caught before a workspace opens it.
+  // Project, the agents module's, which opens it there (`place`).
   const [drawer, setDrawer] = useState(loadDrawer)
   const [drawerShown, setDrawerShown] = useState(false)
   // Kept from the last run, it is drawn from its first drop in this one.
@@ -311,26 +311,26 @@ export function Shell({
   }, [drawer])
   const toggleDrawer = useCallback(
     (parts: Parts) => {
-      if (!drawerNow.current) {
-        const harness = drawerLook.harness
-        const catching: Parts = {
-          ...parts,
-          open: (pane, project) => {
-            const entry = { id: newId(), project: project ?? home, pane }
-            drawerNow.current = entry
-            setDrawer(entry)
-          },
-        }
-        runAction(catching, "thread.new", {
+      const harness = drawerLook.harness
+      if (!drawerNow.current)
+        return parts.run("thread.new", {
           project: home,
+          place: "drawer",
           ...(harness && { harness }),
         })
-      }
       setDrawerShown((shown) => !shown)
       setDropped(true)
     },
     [home, drawerLook.harness]
   )
+  // A Pane opened into the drawer, dropped, in place of what it held.
+  const intoDrawer = useCallback((pane: PaneState, project: ProjectId) => {
+    const entry = { id: newId(), project, pane }
+    drawerNow.current = entry
+    setDrawer(entry)
+    setDrawerShown(true)
+    setDropped(true)
+  }, [])
   const liftDrawer = useCallback(() => setDrawerShown(false), [])
   const closeDrawer = useCallback(() => {
     setDrawerShown(false)
@@ -475,8 +475,9 @@ export function Shell({
     open: (
       pane,
       project,
-      { beside, again = true, update, toggle, ...how } = {}
+      { beside, again = true, update, toggle, place, ...how } = {}
     ) => {
+      if (place === "drawer") return intoDrawer(pane, project ?? home)
       // The Pane that peeks, opened in the workspace, peeks no more.
       const peeked = peekNow.current
       if (

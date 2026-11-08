@@ -28,6 +28,10 @@
           "harness": {
             "type": "string",
             "description": "the Harness it starts on"
+          },
+          "place": {
+            "type": "string",
+            "description": "drawer: it opens in the drawer, in place of what the drawer held"
           }
         },
         "additionalProperties": false
