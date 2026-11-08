@@ -3716,13 +3716,21 @@ test("a tile fades in as it opens and fades out where it was as it closes", asyn
   expect(drawn).toBe(true)
   await expect(still).toHaveCount(0)
 
-  // The last Pane of a workspace fades out too, over the empty workspace.
+  // The last Pane of a workspace fades out too, over the empty workspace:
+  // the one on screen. The spare at the bottom is drawn hidden with the
+  // same words, so the whole page has them once until the close is drawn,
+  // and twice after. The fading copy is looked for first, while it lasts.
   await page.keyboard.press("Alt+KeyW")
-  await expect(page.getByText("This workspace is empty.")).toBeVisible()
   const last = page.locator("[aria-hidden=true][inert]", {
     hasText: "Write to Fake AI",
   })
   await expect(last).toHaveCount(1)
+  const empty = page
+    .getByRole("main")
+    .getByRole("paragraph")
+    .filter({ hasText: "This workspace is empty." })
+  await expect(empty).toBeVisible()
+  await expect(page.getByText("This workspace is empty.")).toHaveCount(2)
   await expect(last).toHaveCount(0)
 })
 
