@@ -74,6 +74,10 @@ test("a terminal draws nothing while it is hidden, and has drawn what it printed
   const terminals = page.getByRole("region", { name: "Terminal screen" })
   const print = async (n: number, into: ReturnType<typeof files>) => {
     await terminals.nth(n).click()
+    // It types into this terminal, not one a landing swipe focused.
+    await expect(
+      terminals.nth(n).getByRole("textbox", { name: "Terminal input" })
+    ).toBeFocused()
     await page.keyboard.type(printing(into.stop, into.printed))
     await page.keyboard.press("Enter")
     await expect.poll(() => lines(into.printed)).toBeGreaterThan(3)
@@ -150,6 +154,9 @@ test("a terminal draws nothing while it is hidden, and has drawn what it printed
   await page.evaluate(resetTexts)
   for (let i = 0; i < 6; i++) await page.mouse.wheel(60, 0)
   expect(await drewBefore(page, 2), "drawn before it shows").toContain(saidEdge)
+  // The swipe lands 160 ms after its last wheel (`SWIPE_END`), and focuses
+  // the column it lands on: a click before that loses its focus to it.
+  await page.waitForTimeout(500)
 
   // On a workspace away, as on the Strip.
   const away = files("away")
