@@ -25,6 +25,7 @@ import {
   markFullAccess,
   ON_SCREEN,
   newProject,
+  projectId,
   sendAndLeave,
   sharesOf,
   setInFront,
@@ -4618,12 +4619,25 @@ test("a Thread that finishes behind another window sends a system notification, 
     .getByRole("button", { name: /slow hello/ })
     .getByRole("img", { name: "Done" })
   await expect(done).toBeVisible()
+  // Nor does its host, which every window reads, hold it seen (ADR 0096).
+  const work = projectId(window, "Work")
+  const listed = () =>
+    JSON.parse(window.banda("call", "agents.threads", "--project", work)).ok
+      .threads[0] as { seen?: string; latest: { turn: string } }
+  expect(listed().seen).toBeUndefined()
 
-  // The Person clicks it: the window is in front again, the Thread seen.
+  // The Person clicks it: the window is in front again, the Thread seen,
+  // here and on its host.
   await setInFront(page, true)
   await clickNotice(app, notice!.key)
   await expect(thread).toHaveAttribute("data-focused", "true")
   await expect(done).toBeHidden()
+  await expect
+    .poll(() => {
+      const { seen, latest } = listed()
+      return seen !== undefined && seen === latest.turn
+    })
+    .toBe(true)
   // Seen, its notice is taken back.
   await expect
     .poll(async () => (await desktopOf(app)).withdrawn)
