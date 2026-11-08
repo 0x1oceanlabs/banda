@@ -1175,7 +1175,13 @@ fn banda_status_says_whether_the_engine_runs_and_banda_stop_quits_it() {
         assert!(said.status.success(), "{said:?}");
         serde_json::from_slice::<Value>(&said.stdout).unwrap()
     };
-    assert_eq!(status(), json!({ "running": false }));
+    let idle = status();
+    assert_eq!(idle["running"], false, "{idle}");
+    // And what the machine is, which another machine's Test shows, read
+    // with no engine.
+    assert!(idle["system"].is_string(), "{idle}");
+    assert!(idle["named"]["name"].is_string(), "{idle}");
+    assert!(idle["named"]["icon"].is_string(), "{idle}");
     // With no engine, it says so, and stops nothing.
     let none = places.banda(&["stop"]).output().unwrap();
     assert!(none.status.success(), "{none:?}");
@@ -1189,6 +1195,9 @@ fn banda_status_says_whether_the_engine_runs_and_banda_stop_quits_it() {
     assert!(now["version"].is_string(), "{now}");
     assert!(now.get("unit").is_none(), "a test's engine runs in no unit");
     assert!(now.get("secret").is_none());
+    // The machine as its engine names it, in its welcome.
+    assert_eq!(now["named"], idle["named"], "{now}");
+    assert_eq!(now["system"], idle["system"], "{now}");
     // Whether the fence holds, as the engine said in its welcome.
     let fence = now["fence"]["fence"].as_str().unwrap_or_default();
     assert!(["holds", "missing"].contains(&fence), "{now}");
@@ -1235,7 +1244,7 @@ fn banda_status_says_whether_the_engine_runs_and_banda_stop_quits_it() {
         panic!("the engine did not stop");
     };
     assert!(ended.success(), "{ended:?}");
-    assert_eq!(status(), json!({ "running": false }));
+    assert_eq!(status()["running"], false);
 
     // The next engine knows the last one stopped: it keeps no crash.
     let (_engine, stdin, _) = places.serve();

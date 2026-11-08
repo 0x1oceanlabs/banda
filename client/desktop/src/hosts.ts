@@ -1,8 +1,9 @@
 /**
  * Other machines' engines, as the window reaches them over ssh (ADR 0081,
  * decision 4: the `ssh` route). `hosts.toml`, in the config folder, names
- * each host; only main reads it, and writes it as the page adds or takes
- * out a host, its comments and other hosts kept. It applies as it changes
+ * each host; only main reads it, and writes it as the page adds, changes
+ * or takes out a host, its comments, its other hosts and a hand edit made
+ * meanwhile kept (`rewrite`). It applies as it changes
  * (ADR 0095, decision 9): a host that comes is reached, one that goes has
  * its ssh ended, and one whose `ssh` or `banda` changed is reached again.
  * For each, main runs two of the system's ssh, never through a shell:
@@ -28,7 +29,10 @@
  * read only up to 4 KiB, its stderr is logged cut short, a few lines a
  * minute, and the page gets only the window's own words, and Tailscale's
  * sign-in link once checked. Those words name no machine: the page puts
- * the machine's own name before them (ADR 0095, decision 2). An engine
+ * the machine's own name before them (ADR 0095, decision 2). Test's are
+ * the one exception: the system the machine runs, and its own name and
+ * icon, as its `banda status` says them, cleaned as the page cleans a
+ * Welcome's (decision 2). An engine
  * that stops there as asked leaves this Banda running, and is started
  * again only when the page asks; so is one Stop Banda stopped, whether the
  * host was live then or not. A refused host is tried again every ten
@@ -36,9 +40,9 @@
  * there runs on, as that machine's service.
  *
  * Test asks what is at an address and starts nothing there (#837): what
- * the machine is, the `banda` found and its build, and whether its engine
- * runs, as `banda status` says. Stop Banda there is that machine's own
- * `banda stop`.
+ * the machine is and its own name and icon, the `banda` found and its
+ * build, and whether its engine runs, as `banda status` says. Stop Banda
+ * there is that machine's own `banda stop`.
  */
 import { createConnection, createServer, type AddressInfo } from "node:net"
 import {
@@ -51,8 +55,13 @@ import {
 } from "node:fs"
 import { homedir } from "node:os"
 import { basename, dirname, join } from "node:path"
-import { type Address, PROTOCOL } from "@banda/contract"
-import { Refused, writeWhole } from "@banda/desktop-kit"
+import {
+  type Address,
+  type MachineIcon,
+  type Named,
+  PROTOCOL,
+} from "@banda/contract"
+import { Refused, writeWholeIf } from "@banda/desktop-kit"
 import type { HostEntry, HostState, HostTest } from "@banda/web/host"
 import { parse } from "smol-toml"
 import {
@@ -250,13 +259,23 @@ const HEADER = /^\s*\[\[?[^[\]=#]+\]\]?\s*(?:#.*)?$/
 const HOSTS = /^\s*\[\[\s*hosts\s*\]\]\s*(?:#.*)?$/
 const COMMENT = /^\s*#/
 
-/** `text` with host `name` taken out, the rest as it was: its
- * `[[hosts]]`, what it holds, and the comment just above it, unless that
- * starts the file; or why it cannot be. */
-export function removedFrom(
+/** Host `name` in `hosts.toml`'s `text`: the file as a table, its hosts
+ * and where `name` is among them, the file's lines, those that start a
+ * table, and the one that starts its `[[hosts]]`; or why it cannot be
+ * found safely. */
+function blockOf(
   text: string,
   name: string
-): { text: string } | { why: string } {
+):
+  | {
+      table: Record<string, unknown>
+      listed: unknown[]
+      at: number
+      lines: string[]
+      headers: number[]
+      header: number
+    }
+  | { why: string } {
   const table = tableOf(text)
   if (typeof table === "string") return { why: `hosts.toml: ${table}` }
   const listed = listOf(table)
@@ -270,6 +289,19 @@ export function removedFrom(
   )
   const header = headers.filter((index) => HOSTS.test(lines[index]!))[at]
   if (header === undefined) return { why: LAID_OUT }
+  return { table, listed, at, lines, headers, header }
+}
+
+/** `text` with host `name` taken out, the rest as it was: its
+ * `[[hosts]]`, what it holds, and the comment just above it, unless that
+ * starts the file; or why it cannot be. */
+export function removedFrom(
+  text: string,
+  name: string
+): { text: string } | { why: string } {
+  const block = blockOf(text, name)
+  if ("why" in block) return block
+  const { table, listed, at, lines, headers, header } = block
   /** Where the block of the table at line `index` starts: at the comment
    * just above it, unless that starts the file. */
   const startOf = (index: number) => {
@@ -293,13 +325,70 @@ export function removedFrom(
   )
 }
 
+/** A line that gives `key` a plain string, with or without a comment
+ * after it: `ssh = "roma@arc"   # at home`. */
+const keyLine = (key: string) =>
+  new RegExp(`^(\\s*${key}\\s*=\\s*)(?:"[^"\\\\]*"|'[^']*')(\\s*(?:#.*)?)$`)
+const BLANK = /^\s*(?:#.*)?$/
+
+/** `text` with host `name`'s `ssh` and `banda` set in place as `change`
+ * says, an empty one taken out: the line that holds each, its comment
+ * kept, or a new line after the host's last; its other keys, the
+ * comments and every other host as they were. Or why it cannot be. Its
+ * values are plain (`addressRefusal`), so JSON's quotes are TOML's. */
+export function setIn(
+  text: string,
+  name: string,
+  change: { ssh?: string; banda?: string }
+): { text: string } | { why: string } {
+  const block = blockOf(text, name)
+  if ("why" in block) return block
+  const { table, listed, at, lines, headers, header } = block
+  let end = headers.find((index) => index > header) ?? lines.length
+  const now: Record<string, unknown> = { ...(listed[at] as object) }
+  for (const key of ["ssh", "banda"] as const) {
+    const value = change[key]
+    if (value === undefined || (now[key] ?? "") === value) continue
+    const line = keyLine(key)
+    const held = lines.findIndex(
+      (one, index) => index > header && index < end && line.test(one)
+    )
+    if (value === "") {
+      delete now[key]
+      if (held < 0) continue
+      lines.splice(held, 1)
+      end -= 1
+    } else {
+      now[key] = value
+      if (held >= 0)
+        lines[held] = lines[held]!.replace(
+          line,
+          (_, before: string, after: string) => `${before}"${value}"${after}`
+        )
+      else {
+        let last = end - 1
+        while (last > header && BLANK.test(lines[last]!)) last -= 1
+        lines.splice(last + 1, 0, `${key} = "${value}"`)
+        end += 1
+      }
+    }
+  }
+  return checked(lines.join("\n"), {
+    ...table,
+    hosts: listed.map((one, index) => (index === at ? now : one)),
+  })
+}
+
 /** The machine an ssh destination names, as its config's Host or
- * HostName would: no `ssh://`, user, port or brackets, in lowercase. */
+ * HostName would: no `ssh://`, user, port or brackets, in lowercase. A
+ * bare address with two `:` or more is an IPv6 one, whole. */
 const machineOf = (ssh: string) => {
-  const rest = ssh.replace(/^ssh:\/\//, "")
+  const link = ssh.startsWith("ssh://")
+  const rest = link ? ssh.slice("ssh://".length) : ssh
   const host = rest.slice(rest.lastIndexOf("@") + 1)
   const bracketed = /^\[([^\]]*)\]/.exec(host)?.[1]
-  return (bracketed ?? host.split(/[:/]/)[0]!).toLowerCase()
+  const bare = !link && /:.*:/.test(host)
+  return (bracketed ?? (bare ? host : host.split(/[:/]/)[0]!)).toLowerCase()
 }
 
 /** A name for a new host, made from its address `ssh` (ADR 0095,
@@ -321,6 +410,115 @@ export function nameFrom(
   let named = base
   for (let next = 2; names.has(named); next++) named = `${base}-${next}`
   return named
+}
+
+/** The hosts listed in `text`'s `table` that are tables, good or not. */
+const tablesIn = (table: Record<string, unknown> | string) =>
+  (typeof table === "string" ? [] : listOf(table)).filter(
+    (one): one is { name?: unknown; ssh?: unknown } =>
+      typeof one === "object" && one !== null && !Array.isArray(one)
+  )
+
+/** Why `ssh` cannot go beside the hosts `others`: one of them reaches
+ * its machine already, at this address or another (`machineOf`), as
+ * `roma@arc` and `arc` do. */
+function reachedBy(
+  ssh: string,
+  others: readonly { name?: unknown; ssh?: unknown }[]
+): string | undefined {
+  const machine = machineOf(ssh)
+  const there = others.find(
+    (one) => typeof one.ssh === "string" && machineOf(one.ssh) === machine
+  )
+  if (!there) return undefined
+  const name = typeof there.name === "string" ? there.name : machine
+  return `${name} is in hosts.toml already`
+}
+
+/** `hosts.toml`'s `text` with `machine` added (`addedTo`), and the entry
+ * written: its name made from `ssh` when it has none. Or why not: a host
+ * Banda refuses, a name taken, or a machine there already. */
+export function addOf(
+  text: string,
+  machine: { name?: string; ssh: string; banda?: string }
+): { text: string; value: Entry } | { why: string } {
+  const taken = tablesIn(tableOf(text))
+  const entry: Entry = {
+    name: machine.name || nameFrom(machine.ssh, taken),
+    ssh: machine.ssh,
+    ...(machine.banda ? { banda: machine.banda } : {}),
+  }
+  const why = refusalOf(entry, taken) ?? reachedBy(entry.ssh, taken)
+  if (why) return { why }
+  const added = addedTo(text, entry)
+  return "why" in added ? added : { text: added.text, value: entry }
+}
+
+/** `hosts.toml`'s `text` with host `name`'s `ssh` or `banda` changed as
+ * `change` says (`setIn`), an empty `banda` none; and the entry written.
+ * Or why not: no such host, an address Banda refuses, or one of a
+ * machine another host reaches. */
+export function setOf(
+  text: string,
+  name: string,
+  change: { ssh?: string; banda?: string }
+): { text: string; value: Entry } | { why: string } {
+  const table = tableOf(text)
+  if (typeof table === "string") return { why: `hosts.toml: ${table}` }
+  const listed = tablesIn(table)
+  const at = listed.findIndex((one) => one.name === name)
+  const was = listed[at] as Record<string, unknown> | undefined
+  if (!was) return { why: noHostWords(name) }
+  const banda = change.banda ?? was.banda
+  const entry = {
+    name,
+    ssh: change.ssh ?? was.ssh,
+    ...(banda === undefined || banda === "" ? {} : { banda }),
+  }
+  // Only an address moved to another machine is checked, so a machine the
+  // file has twice from before stays editable.
+  const ssh = String(entry.ssh)
+  const moved = machineOf(ssh) !== machineOf(String(was.ssh))
+  const others = listed.filter((_, index) => index !== at)
+  const why =
+    refusalOf(entry, listed.slice(0, at)) ??
+    (moved ? reachedBy(ssh, others) : undefined)
+  if (why) return { why }
+  const set = setIn(text, name, change)
+  return "why" in set ? set : { text: set.text, value: entry as Entry }
+}
+
+/** Banda's words for a `hosts.toml` that changed by hand again as Banda
+ * wrote it. */
+const CHANGED = "hosts.toml changed while Banda wrote it; try again"
+
+/** Changes `file` as `edit` makes its text, written whole, and gives what
+ * `edit` says of it; or why not. Just before the rename the file is read
+ * again: a change by hand since `edit` read it is not lost, as `edit`
+ * runs once more on the file as it is then; should it change again,
+ * Banda refuses. A text `edit` leaves as it was is not written. */
+export function rewrite<A>(
+  file: string,
+  edit: (text: string) => { text: string; value: A } | { why: string }
+): { value: A } | { why: string } {
+  for (let tries = 0; tries < 2; tries++) {
+    const read = textOf(file)
+    if ("why" in read) return { why: `hosts.toml ${read.why}` }
+    const made = edit(read.text)
+    if ("why" in made) return made
+    const done = { value: made.value }
+    if (made.text === read.text) return done
+    const still = () => {
+      const now = textOf(file)
+      return "text" in now && now.text === read.text
+    }
+    try {
+      if (writeWholeIf(file, made.text, modeOf(file), still)) return done
+    } catch (error) {
+      return { why: `hosts.toml cannot be written: ${String(error)}` }
+    }
+  }
+  return { why: CHANGED }
 }
 
 /** The Hosts of an ssh config's `text` to suggest for Add, in their
@@ -590,15 +788,61 @@ const Refusal = Schema.fromJsonString(
   })
 )
 /** What `banda status` prints there: whether its engine runs, and what
- * it says of itself (engine/src/control.rs). */
+ * it says of itself; and the system the machine runs, and its own name
+ * and icon, which are read by hand (`namedOf`), so a bad one leaves the
+ * rest (engine/src/control.rs). */
 const Status = Schema.fromJsonString(
   Schema.Struct({
     running: Schema.Boolean,
     protocol: Schema.optional(Schema.Number),
     build: Schema.optional(Schema.String),
     version: Schema.optional(Schema.String),
+    system: Schema.optional(Schema.Unknown),
+    named: Schema.optional(Schema.Unknown),
   })
 )
+
+/** Text the other machine wrote of itself, as the page may draw it, as
+ * the page cleans a Welcome's name (`cleanNamed` in client/ui): no
+ * control or format characters (Unicode's Cc and Cf: the bidi controls,
+ * zero-width spaces), nor line or paragraph separators, cut at `most`
+ * characters, trimmed; none when none is left. */
+const cleaned = (said: unknown, most: number) => {
+  if (typeof said !== "string") return null
+  const text = [...said.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, "")]
+  return text.slice(0, most).join("").trim() || null
+}
+
+/** The ten icons a machine takes (ADR 0095, decision 1). */
+const ICONS: Record<MachineIcon, true> = {
+  laptop: true,
+  desktop: true,
+  tower: true,
+  server: true,
+  database: true,
+  storage: true,
+  router: true,
+  vm: true,
+  phone: true,
+  tablet: true,
+}
+
+/** A machine's name and icon as its `banda status` says them, cleaned as
+ * the page cleans a Welcome's (ADR 0095, decision 2): the name cut at 16
+ * characters, an icon not of the ten as `desktop`; none with no name. */
+function namedOf(said: unknown): Named | null {
+  if (typeof said !== "object" || said === null) return null
+  const { name, icon } = said as Record<string, unknown>
+  const named = cleaned(name, 16)
+  if (!named) return null
+  return {
+    name: named,
+    icon:
+      typeof icon === "string" && Object.hasOwn(ICONS, icon)
+        ? (icon as MachineIcon)
+        : "desktop",
+  }
+}
 
 /** A build and a version as the page may show them: plain, or none. */
 const buildOf = (build: unknown) =>
@@ -620,9 +864,11 @@ export function ownOf(said: string) {
 type Build = ReturnType<typeof ownOf>
 
 /** What Test found, from the `lines` its probe printed there
- * (`probeCommand`) and the `code` it ended with: what `uname` says the
- * machine is, its banda's build as `--version` says it, and its engine
- * while one runs, as `banda status` says. `own` is this window's build. */
+ * (`probeCommand`) and the `code` it ended with: the system the machine
+ * runs and its own name and icon, as `banda status` says them, else what
+ * `uname` says it is; its banda's build as `--version` says it; and its
+ * engine while one runs, as `banda status` says. `own` is this window's
+ * build. */
 export function foundIn(
   lines: readonly string[],
   code: number,
@@ -639,7 +885,10 @@ export function foundIn(
   const engine = running.value
   return {
     state: "found",
-    system: system === "Linux" ? "Linux" : system === "Darwin" ? "macOS" : null,
+    system:
+      cleaned(engine.system, 40) ??
+      (system === "Linux" ? "Linux" : system === "Darwin" ? "macOS" : null),
+    named: namedOf(engine.named),
     banda: ownOf(version),
     own,
     engine: engine.running
@@ -738,13 +987,21 @@ export class Hosts extends Context.Service<
     readonly start: (name: string) => Effect.Effect<void, Refused>
     /** Adds `machine` to `hosts.toml`, as a `[[hosts]]` at its end, and
      * reaches it at once: its name made from `ssh` when it has none. The
-     * entry written; it fails for one refused, or one whose name or
-     * address is there already. */
+     * entry written; it fails for one refused, or one whose name is
+     * there already, or whose machine is at this address or another. */
     readonly add: (machine: {
       name?: string
       ssh: string
       banda?: string
     }) => Effect.Effect<Entry, Refused>
+    /** Changes host `name`'s `ssh` or `banda` in `hosts.toml`, in place,
+     * the rest as it was, and reaches it again; an empty `banda` is none.
+     * The entry written; it fails for a host not there, an address
+     * refused, or one of a machine another host reaches. */
+    readonly set: (
+      name: string,
+      change: { ssh?: string; banda?: string }
+    ) => Effect.Effect<Entry, Refused>
     /** Takes host `name` out of `hosts.toml`, the rest as it was, and ends
      * its ssh. */
     readonly remove: (name: string) => Effect.Effect<void, Refused>
@@ -927,28 +1184,20 @@ export class Hosts extends Context.Service<
           )
         )
 
-        /** Writes `text` to `hosts.toml` whole, its mode kept, then reads
-         * it as any change. */
-        const write = (text: string) =>
-          Effect.try({
-            try: () => writeWhole(file, text, modeOf(file)),
-            catch: (error) =>
-              new Refused({
-                message: `hosts.toml cannot be written: ${String(error)}`,
-              }),
-          }).pipe(Effect.andThen(reread))
-        /** `hosts.toml`'s text, or why it cannot be read. */
-        const hostsText = Effect.suspend(() => {
-          const read = textOf(file)
-          return "why" in read
-            ? Effect.fail(new Refused({ message: `hosts.toml ${read.why}` }))
-            : Effect.succeed(read.text)
-        })
-        /** The text a change made, or why it cannot be. */
-        const made = (change: { text: string } | { why: string }) =>
-          "why" in change
-            ? Effect.fail(new Refused({ message: change.why }))
-            : Effect.succeed(change.text)
+        /** Changes `hosts.toml` as `edit` makes its text (`rewrite`), its
+         * mode kept, then reads it as any change; gives what `edit` says
+         * of it. */
+        const change = <A>(
+          edit: (text: string) => { text: string; value: A } | { why: string }
+        ) =>
+          lock.withPermit(
+            Effect.suspend(() => {
+              const done = rewrite(file, edit)
+              return "why" in done
+                ? Effect.fail(new Refused({ message: done.why }))
+                : Effect.as(reread, done.value)
+            })
+          )
 
         const seen = (list: readonly Kept[]): HostState[] =>
           list.map(({ name, link }) => ({ name, ...link }))
@@ -989,38 +1238,16 @@ export class Hosts extends Context.Service<
             }),
           start: (name: string) =>
             Effect.asVoid(wake(name, ["stopped", "refused"])),
-          add: (machine) =>
-            lock.withPermit(
-              Effect.gen(function* () {
-                const text = yield* hostsText
-                const table = tableOf(text)
-                const taken = (
-                  typeof table === "string" ? [] : listOf(table)
-                ).filter(
-                  (one): one is { name?: unknown; ssh?: unknown } =>
-                    typeof one === "object" && one !== null
-                )
-                const entry: Entry = {
-                  name: machine.name || nameFrom(machine.ssh, taken),
-                  ssh: machine.ssh,
-                  ...(machine.banda ? { banda: machine.banda } : {}),
-                }
-                const why =
-                  refusalOf(entry, taken) ??
-                  (taken.some((one) => one.ssh === entry.ssh)
-                    ? `${entry.ssh} is in hosts.toml already`
-                    : undefined)
-                if (why) return yield* new Refused({ message: why })
-                yield* write(yield* made(addedTo(text, entry)))
-                return entry
-              })
-            ),
+          add: (machine) => change((text) => addOf(text, machine)),
+          set: (name, to) => change((text) => setOf(text, name, to)),
           remove: (name) =>
-            lock.withPermit(
-              hostsText.pipe(
-                Effect.flatMap((text) => made(removedFrom(text, name))),
-                Effect.flatMap(write)
-              )
+            Effect.asVoid(
+              change((text) => {
+                const removed = removedFrom(text, name)
+                return "why" in removed
+                  ? removed
+                  : { text: removed.text, value: undefined }
+              })
             ),
           test: (ssh, banda) =>
             Effect.suspend(() => {

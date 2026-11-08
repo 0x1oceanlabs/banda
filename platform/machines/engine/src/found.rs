@@ -99,7 +99,7 @@ const MODELS: [&str; 7] = [
 
 /// The model in a hostname macOS made of a Mac's owner and its model:
 /// `Romas-MacBook-Pro`, or `Romas-iMac-2` where another had the name.
-fn model(host: &str) -> Option<&'static str> {
+pub(crate) fn model(host: &str) -> Option<&'static str> {
     let lower = host.to_ascii_lowercase();
     let lower = match lower.rsplit_once('-') {
         Some((before, number))
@@ -296,7 +296,8 @@ mod linux {
         Facts {
             hostname,
             system: System::Linux,
-            system_name: release.as_deref().and_then(name_in),
+            system_name: (release.as_deref())
+                .and_then(|release| crate::about::value_in(release, "NAME")),
             battery: battery(&root.join("sys/class/power_supply")),
             boxed,
         }
@@ -321,15 +322,6 @@ mod linux {
         (cpuinfo.lines())
             .filter(|line| line.starts_with("flags"))
             .any(|line| line.split_whitespace().any(|flag| flag == "hypervisor"))
-    }
-
-    /// The `NAME` an os-release gives.
-    fn name_in(release: &str) -> Option<String> {
-        let value = release
-            .lines()
-            .find_map(|line| line.strip_prefix("NAME="))?;
-        let name = value.trim().trim_matches(['"', '\'']).trim();
-        (!name.is_empty()).then(|| name.to_owned())
     }
 }
 

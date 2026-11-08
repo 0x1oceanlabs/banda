@@ -160,10 +160,16 @@ async fn the_welcome_names_the_machine_and_machine_named_says_each_change() {
     let (mut later, welcome) = connect(address).await;
     assert_eq!(welcome["named"], tower, "every window after it is told");
     let got = call(&mut later, 4, "machines.get", json!({})).await;
-    assert_eq!(
-        got["ok"],
-        json!({ "name": "studio", "icon": "tower", "found": arc })
-    );
+    let mut naming = json!({ "name": "studio", "icon": "tower", "found": arc });
+    // And what it is, in words, where the system says.
+    let about = banda_machines::about();
+    assert!(about.system.is_some(), "every system this runs on says");
+    for (key, said) in [("system", about.system), ("model", about.model)] {
+        if let Some(said) = said {
+            naming[key] = json!(said);
+        }
+    }
+    assert_eq!(got["ok"], naming);
 
     // Taken out: what Banda found.
     let params = json!({ "file": "machine.toml", "key": "name" });

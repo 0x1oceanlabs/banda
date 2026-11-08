@@ -9,6 +9,7 @@
 //! the file changes by hand. This module follows the file for it, and
 //! answers `get` for Settings.
 
+mod about;
 mod file;
 mod found;
 
@@ -22,6 +23,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::watch;
 use ts_rs::TS;
 
+pub use about::{About, about};
 pub use found::found;
 
 /// The module's settings files in `~/.config/banda` (ADR 0016).
@@ -110,7 +112,8 @@ banda_kernel::methods! {
     }
 }
 
-/// This machine's name and icon now, and what Banda found.
+/// This machine's name and icon now, and what Banda found; and what it
+/// is, in words, for Settings' "This machine", as its system says now.
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "machines/")]
 pub struct Naming {
@@ -118,13 +121,26 @@ pub struct Naming {
     pub named: Named,
     /// What it is when its machine.toml says nothing.
     pub found: Named,
+    /// The system it runs, "Arch Linux", "macOS 26.1"; none where the
+    /// system does not say.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub system: Option<String>,
+    /// Its model, as its maker names it, "MacBook Pro"; none where its
+    /// firmware does not say.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub model: Option<String>,
 }
 
 impl Machines {
     async fn get(&self, _: Call, _: Nothing) -> Result<Naming, Refusal> {
+        let About { system, model } = about();
         Ok(Naming {
             named: self.machine.now(),
             found: self.machine.0.found.clone(),
+            system,
+            model,
         })
     }
 }

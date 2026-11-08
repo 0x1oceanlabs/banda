@@ -102,7 +102,8 @@ enum Command {
         #[arg(long)]
         with_parent: bool,
     },
-    /// Says whether the engine runs, since when, and its build, as one
+    /// Says whether the engine runs, since when, and its build, and what
+    /// this machine is: its system, and its own name and icon; as one
     /// JSON line. It starts nothing.
     Status,
     /// Quits Banda: stops the engine, its Agents, Harnesses and Terminals,
