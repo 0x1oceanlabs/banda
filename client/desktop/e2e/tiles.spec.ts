@@ -9,17 +9,32 @@
  *
  * It counts with motion-probe.ts: each terminal's draws, on screen and
  * off, when it came on screen, and the text it drew before.
+ *
+ * A Tile's size, as the resize gate gives it (decision 5): a terminal's
+ * screen and a browser's page take each size their Tile is laid out at,
+ * and what their Pane takes of it inside, as a footer or the tabs on the
+ * left.
  */
+import { createServer, type Server } from "node:http"
+import type { AddressInfo } from "node:net"
 import { join } from "node:path"
 import { writeFileSync } from "node:fs"
 import { expect, test, type Page } from "@playwright/test"
 import { install, read, reset, resetTexts } from "./motion-probe"
-import { newTerminal, startWindow, textOf, type Window } from "./window"
+import {
+  newTerminal,
+  pressInPage,
+  startWindow,
+  textOf,
+  type Window,
+} from "./window"
 
 let window: Window
+let site: Server | undefined
 
 test.afterEach(async () => {
   await window?.close()
+  site?.close()
 })
 
 /** A shell loop that prints a numbered line into `printed` and on its
@@ -154,4 +169,176 @@ test("a terminal draws nothing while it is hidden, and has drawn what it printed
   await page.evaluate(resetTexts)
   await page.keyboard.press("Alt+PageUp")
   expect(await drewBefore(page, 2), "drawn before it shows").toContain(saidAway)
+})
+
+/** How far, on screen, each terminal's canvas is from its screen's size,
+ * in the screen's pixels, and the browser's page from its slot, in CSS
+ * pixels: 0 once each took the size it is laid out at. Off screen, a
+ * terminal sizes nothing and the page waits out of sight: neither is
+ * counted. */
+const off = (page: Page) =>
+  page.evaluate(() => {
+    const ratio = devicePixelRatio
+    const terminals = [
+      ...document.querySelectorAll<HTMLElement>(
+        '[aria-label="Terminal screen"]'
+      ),
+    ].flatMap((screen) => {
+      const { left, right } = screen.getBoundingClientRect()
+      if (right <= 0 || left >= innerWidth) return []
+      const canvas = screen.querySelector("canvas")!
+      return [
+        Math.abs(canvas.width - Math.round(screen.clientWidth * ratio)) +
+          Math.abs(canvas.height - Math.round(screen.clientHeight * ratio)),
+      ]
+    })
+    const box = document.querySelector("[data-held-by]")!
+    const slot = document.querySelector("[data-holds]")!
+    const [a, b] = [box.getBoundingClientRect(), slot.getBoundingClientRect()]
+    const away = b.right <= 0 || b.left >= innerWidth
+    return {
+      terminals,
+      // Less than a pixel is none: the page takes its slot's whole pixels.
+      page: away
+        ? null
+        : Math.floor(
+            Math.max(
+              Math.abs(a.x - b.x),
+              Math.abs(a.y - b.y),
+              Math.abs(a.width - b.width),
+              Math.abs(a.height - b.height)
+            )
+          ),
+    }
+  })
+
+/** Whether all `off` counts are 0. */
+const fitted = async (page: Page) => {
+  const { terminals, page: box } = await off(page)
+  return terminals.every((each) => each === 0) && (box ?? 0) === 0
+}
+
+test("a terminal and a browser's page take each size their Tile gives them, and what their Pane keeps inside it", async () => {
+  test.setTimeout(120_000)
+  site = createServer((_, response) => {
+    response.writeHead(200, { "content-type": "text/html" })
+    response.end("<title>Page</title><body style='margin:0'><h1>Page</h1>")
+  })
+  await new Promise<void>((done) => site!.listen(0, "127.0.0.1", done))
+  const address = `http://127.0.0.1:${(site.address() as AddressInfo).port}/`
+  window = await startWindow()
+  const { app, page, dir } = window
+  const screen = await newTerminal(page)
+  await page.keyboard.press("Alt+KeyN")
+  await page
+    .getByRole("region", { name: "New Pane" })
+    .getByRole("button", { name: "Browser" })
+    .click()
+  const bar = page.getByRole("textbox", { name: "Address" })
+  await bar.fill(address)
+  await bar.press("Enter")
+  const browser = page.getByRole("region", { name: "Page" })
+  await expect(browser).toBeVisible()
+  await expect.poll(() => off(page)).toEqual({ terminals: [0], page: 0 })
+
+  // The browser's column first, by a key from its page.
+  await bar.press("Escape")
+  const inPage = async (key: string, held: ("alt" | "control" | "shift")[]) =>
+    expect(await pressInPage(app, key, held, { focused: true })).toBe(true)
+  await inPage("Home", ["alt", "shift"])
+  await expect
+    .poll(async () => (await browser.boundingBox())!.x)
+    .toBeLessThan((await screen.boundingBox())!.x)
+  await page.waitForTimeout(700)
+  await expect.poll(() => fitted(page)).toBe(true)
+
+  // A step narrower and wider, by keys from its page.
+  for (const key of ["Left", "Right", "Right", "Left"]) {
+    await inPage(key, ["control", "alt"])
+    await page.waitForTimeout(700)
+    await expect.poll(() => fitted(page)).toBe(true)
+  }
+
+  // A hand drags the gap right of it: in each frame that lays its slot
+  // out at a new size, the page has taken it before the frame is drawn,
+  // as an observer of the slot made after the window's own sees.
+  await page.evaluate(() => {
+    const slot = document.querySelector("[data-holds]")!
+    const box = document.querySelector("[data-held-by]")!
+    const seen: number[] = []
+    ;(globalThis as { seen?: number[] }).seen = seen
+    new ResizeObserver(() => {
+      const [a, b] = [box.getBoundingClientRect(), slot.getBoundingClientRect()]
+      seen.push(
+        Math.max(
+          Math.abs(a.x - b.x),
+          Math.abs(a.y - b.y),
+          Math.abs(a.width - b.width),
+          Math.abs(a.height - b.height)
+        )
+      )
+    }).observe(slot)
+  })
+  const tile = (await browser.boundingBox())!
+  const from = { x: tile.x + tile.width + 6, y: tile.y + tile.height / 2 }
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await expect(page.locator("html[data-drag]")).toHaveCount(1)
+  await page.mouse.move(from.x + 160, from.y, { steps: 16 })
+  await page.mouse.up()
+  await expect(page.locator("html[data-drag]")).toHaveCount(0)
+  const seen = await page.evaluate(
+    () => (globalThis as { seen?: number[] }).seen!
+  )
+  expect(seen.length, "the sizes the slot was laid out at").toBeGreaterThan(5)
+  // Less than a pixel: the page takes its slot's whole pixels.
+  expect(Math.max(...seen), "how far the page was from its slot").toBeLessThan(
+    1
+  )
+  await page.waitForTimeout(700)
+  await expect.poll(() => fitted(page)).toBe(true)
+
+  // Over the whole window and back.
+  for (let i = 0; i < 2; i++) {
+    await inPage("F", ["alt", "shift"])
+    await page.waitForTimeout(700)
+    await expect.poll(async () => (await off(page)).page).toBe(0)
+  }
+  await expect.poll(() => fitted(page)).toBe(true)
+
+  // The tabs on the left, as browser.toml says, take the slot's left
+  // inside the Tile; and back on top.
+  const tabs = page.getByRole("tablist", { name: "Tabs" })
+  const file = join(dir, "config/browser.toml")
+  writeFileSync(file, 'tabs = "left"\n')
+  await expect(tabs).toHaveAttribute("aria-orientation", "vertical")
+  await expect.poll(() => fitted(page)).toBe(true)
+  writeFileSync(file, 'tabs = "top"\n')
+  await expect(tabs).not.toHaveAttribute("aria-orientation", "vertical")
+  await expect.poll(() => fitted(page)).toBe(true)
+
+  // The terminal's column, a step wider and back.
+  await screen.click()
+  await expect.poll(async () => (await off(page)).terminals).toEqual([0])
+  for (const key of ["Control+Alt+ArrowRight", "Control+Alt+ArrowLeft"]) {
+    await page.keyboard.press(key)
+    await page.waitForTimeout(700)
+    await expect.poll(() => fitted(page)).toBe(true)
+  }
+
+  // The shell ends: the footer that says so takes its room from the
+  // screen, which fits to what is left.
+  const before = await screen.evaluate((element) => element.clientHeight)
+  await page.keyboard.type("exit")
+  await page.keyboard.press("Enter")
+  await expect(
+    page
+      .locator("section[data-tile]")
+      .filter({ has: screen })
+      .getByRole("status")
+  ).toContainText("The shell ended.")
+  expect(await screen.evaluate((element) => element.clientHeight)).toBeLessThan(
+    before
+  )
+  await expect.poll(async () => (await off(page)).terminals).toEqual([0])
 })

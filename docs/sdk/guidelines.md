@@ -340,15 +340,19 @@ are the same on every run, so they gate already.
   Ask `tileOf` from an effect: from a layout effect of the Pane's first
   drawing, the Tiling holds no Tile yet, and it finds one always shown.
   Hidden: draw nothing, stop timers, keep state; `useLive` holds what
-  changes for a second. Moving: measure nothing, resize nothing. Fit once
-  per settled size, *after* P3, which adds the size to the Configure.
-  *Until* then, Banda's own Panes still measure while moving: a terminal
+  changes for a second. Moving: measure nothing, resize nothing. Size
+  what you draw as the Configure's `size` and `scale` change, the resize
+  gate's (P3); what your Pane lays out inside its Tile, as a footer, you
+  fit to yourself as it changes. Fit once per settled size *after* P7:
+  *until* then the gate's policy is "every frame", so a terminal still
   fits on each frame its size changes, and a browser's page box measures
   its slot on each tick (the research's §8.10). *Check:* motion.spec
   fails where a terminal draws while its Tile is hidden; tiles.spec.ts
   shows one has drawn what it printed before the frame that shows it
-  again; the architecture test lists the files that configure a Tile, and
-  finds no state of it in a Pane's props.
+  again, and that a terminal and a page take each size their Tile and
+  their Pane give them; the architecture test lists the files that
+  configure a Tile, finds no state of it in a Pane's props, and lists
+  what observes a size outside the gate.
 - **motion.5 No animation values in React state.** Read Here and data by
   selector; memoise; pass no inline functions or objects into a memoised
   child; act by action id. *Check:* review; motion.spec counts the
@@ -633,7 +637,7 @@ code:
   and data.8, design.1 and design.3 to design.8, motion.1 to motion.8,
   device.2 to device.5, trust.1, trust.3 to trust.8, and the words.
 - **These bind after their step:** give.4 (B7); give.5 (B4i); give.6
-  (B4d); motion.4's one fit (P3); borders.8 (B8); data.5 (E8); device.1
+  (B4d); motion.4's one fit (P7); borders.8 (B8); data.5 (E8); device.1
   (E3); borders.1's marks (B4f).
 - **These wait for the renderer:** data.7, design.2 and trust.2 (V1, V2).
 
