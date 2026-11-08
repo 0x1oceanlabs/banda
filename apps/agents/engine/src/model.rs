@@ -811,6 +811,36 @@ pub struct ListedThread {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub snooze: Option<Snooze>,
+    /// When its Person archived it (ADR 0096), unless they brought it
+    /// back or snoozed it since. It is archived only while it neither
+    /// works nor asks and nothing happened in it after: `updated_at <=
+    /// archived.at`, both the host's times.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived: Option<Archived>,
+}
+
+impl ListedThread {
+    /// Whether the Thread is archived now, by the rule a window applies to
+    /// the list it follows too.
+    pub fn is_archived(&self) -> bool {
+        let latest = self.latest.as_ref();
+        let works = latest.is_some_and(|latest| latest.state == TurnState::Running);
+        let asks = !self.asking.is_empty();
+        let changed = self.thread.updated_at;
+        crate::rules::archive::holds(self.archived, changed, works, asks)
+    }
+}
+
+/// When its Person archived a Thread (ADR 0096, decision 4): by its
+/// host's clock, never a window's, so it is compared only with the host's
+/// own times.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Archived {
+    /// In milliseconds since the epoch.
+    #[ts(type = "number")]
+    pub at: i64,
 }
 
 /// A Thread put away by its Person, or by its own Agent, until a time or
@@ -1004,6 +1034,20 @@ pub enum Fact {
     /// nothing.
     #[serde(rename = "thread.woke")]
     ThreadWoke { thread: ThreadId, by: Wake },
+    /// The Person archived the Thread (ADR 0096): it is put away until
+    /// something new happens in it. Its `archived.at` is the event's own
+    /// `at`. Like the two below, it moves the Thread nowhere in a list.
+    #[serde(rename = "thread.archived")]
+    ThreadArchived { thread: ThreadId },
+    /// The Thread left Archive: its Person brought it back, or a snooze
+    /// took it out (ADR 0074, decision 4).
+    #[serde(rename = "thread.unarchived")]
+    ThreadUnarchived { thread: ThreadId },
+    /// A window moved the marks it kept of the Project's Threads to their
+    /// host, once (`agents.import_marks`, ADR 0096, decision 9). It names
+    /// no Thread: a list reads itself again.
+    #[serde(rename = "marks.moved")]
+    MarksMoved {},
     /// The Thread went back to before `turn`'s message, to edit it (ADR
     /// 0027): that turn and every turn after it leave it, with their
     /// items. The Project's log keeps what they said.

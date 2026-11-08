@@ -95,6 +95,9 @@ pub fn snooze(tx: &mut Tx<'_>, author: Participant, ask: SnoozeAsk) -> Result<()
     let works = store::running(tx.sql(), thread)?.is_some();
     let at = tx.now();
     may_snooze(asks, works, until, at)?;
+    // Snoozed, an archived Thread leaves Archive, whoever snoozed it (ADR
+    // 0074, decision 4).
+    crate::marks::unarchived(tx, author, thread)?;
     let snooze = Snooze {
         at,
         by: author,

@@ -3,9 +3,9 @@
 
 use crate::full_access::Chosen;
 use crate::model::{
-    Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE, LatestTurn, ListedThread,
-    Offer, Opener, PlanStep, QuestionState, Settings, Snooze, ThreadId, ThreadSummary, ToolContent,
-    TurnId, TurnState, TurnView, Usage, VisualId,
+    Archived, Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE, LatestTurn,
+    ListedThread, Offer, Opener, PlanStep, QuestionState, Settings, Snooze, ThreadId,
+    ThreadSummary, ToolContent, TurnId, TurnState, TurnView, Usage, VisualId,
 };
 use banda_kernel::{AgentId, Error, Participant, Refusal};
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -186,6 +186,11 @@ ALTER TABLE agents_turns ADD COLUMN harness TEXT;
 -- any other mode, and for Full access from before the fence.
 ALTER TABLE agents_threads ADD COLUMN full_access TEXT;
 "#,
+    r#"
+-- When its Person archived the Thread, as JSON (ADR 0096): its host
+-- keeps it beside the snooze, as each window kept it before.
+ALTER TABLE agents_threads ADD COLUMN archived TEXT;
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -199,6 +204,13 @@ fn unreadable(index: usize, error: serde_json::Error) -> rusqlite::Error {
 fn column<T: DeserializeOwned>(row: &Row<'_>, index: usize) -> rusqlite::Result<T> {
     let text: String = row.get(index)?;
     serde_json::from_str(&text).map_err(|e| unreadable(index, e))
+}
+
+/// A JSON column that may hold nothing.
+fn maybe_column<T: DeserializeOwned>(row: &Row<'_>, index: usize) -> rusqlite::Result<Option<T>> {
+    let text: Option<String> = row.get(index)?;
+    let value = text.map(|text| serde_json::from_str(&text));
+    value.transpose().map_err(|e| unreadable(index, e))
 }
 
 /// A turn's state or opener as its table keeps it: the word serde gives.
@@ -317,6 +329,26 @@ pub fn resuming(sql: &Connection) -> Result<Vec<(ThreadId, Snooze)>, Error> {
 
 pub fn set_snooze(sql: &Connection, thread: ThreadId, snooze: &Snooze) -> Result<(), Error> {
     set_thread_json(sql, thread, "snooze", snooze)
+}
+
+/// When its Person archived the Thread, unless it left Archive since
+/// (ADR 0096).
+pub fn archived(sql: &Connection, thread: ThreadId) -> Result<Option<Archived>, Error> {
+    thread_json(sql, thread, "archived")
+}
+
+/// Marks the Thread archived, or with none, not. Its `updated_at` stays:
+/// a mark moves it nowhere in a list.
+pub fn set_archived(
+    sql: &Connection,
+    thread: ThreadId,
+    archived: Option<Archived>,
+) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_threads SET archived = ?2 WHERE id = ?1",
+        params![thread, archived.as_ref().map(json).transpose()?],
+    )?;
+    Ok(())
 }
 
 pub fn usage(sql: &Connection, thread: ThreadId) -> Result<Option<Usage>, Error> {
@@ -620,27 +652,27 @@ pub fn set_forked_from(sql: &Connection, thread: ThreadId, from: ThreadId) -> Re
 
 /// The Project's Threads, the latest first, each with where its work stands.
 pub fn threads(sql: &Connection) -> Result<Vec<ListedThread>, Error> {
-    // The snooze comes with each row, not by a query of its own.
+    // The Person's marks come with each row, not by a query of their own.
     let mut statement = sql.prepare(
-        "SELECT id, COALESCE(harness, ''), title, updated_at, was_title, agent, snooze
+        "SELECT id, COALESCE(harness, ''), title, updated_at, was_title, agent, snooze,
+                archived
          FROM agents_threads ORDER BY updated_at DESC, id DESC",
     )?;
     let rows = statement.query_map([], |row| {
-        let snooze: Option<String> = row.get(6)?;
-        let snooze = snooze.map(|text| serde_json::from_str(&text));
-        let snooze = snooze.transpose().map_err(|e| unreadable(6, e))?;
-        Ok((read_thread(row)?, row.get(5)?, snooze))
+        let marks = (maybe_column(row, 6)?, maybe_column(row, 7)?);
+        Ok((read_thread(row)?, row.get(5)?, marks))
     })?;
     let summaries = rows.collect::<rusqlite::Result<Vec<_>>>()?;
     summaries
         .into_iter()
-        .map(|(thread, agent, snooze)| {
+        .map(|(thread, agent, (snooze, archived))| {
             Ok(ListedThread {
                 agent,
                 latest: last_begun(sql, thread.id)?,
                 asking: asking(sql, thread.id)?,
                 message: latest_message(sql, thread.id)?,
                 snooze,
+                archived,
                 thread,
             })
         })

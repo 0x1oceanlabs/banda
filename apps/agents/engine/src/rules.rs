@@ -11,6 +11,7 @@ use crate::model::{Can, Failure, Opener, TurnId, TurnState, TurnView};
 use banda_kernel::Refusal;
 use std::collections::HashMap;
 
+pub mod archive;
 pub mod message;
 mod moves;
 pub mod snooze;
