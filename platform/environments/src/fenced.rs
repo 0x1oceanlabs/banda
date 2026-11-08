@@ -149,6 +149,92 @@ impl Fenced {
         holes.ssh_agent && (self.agents.named_in_sight || self.agent_for(holes).is_some())
     }
 
+    /// What the fence keeps read-only from every Harness's program, where
+    /// it holds: every Banda's config and gh's, and where each link in
+    /// them leads now. None where it does not hold.
+    pub fn kept(&self) -> Vec<PathBuf> {
+        #[cfg(target_os = "linux")]
+        if let Some(base) = &self.base {
+            return base.read_only.clone();
+        }
+        Vec::new()
+    }
+
+    /// How the engine's own bookkeeping starts behind this fence, where it
+    /// holds ([`banda_kernel::host::fence_books`]): through the launcher,
+    /// behind the base with the base's holes that are there now, the
+    /// folders it reads besides opened to it, in the command's folder.
+    /// It is given the SSH agent, as Banda's own git was on the host: its
+    /// fetch over ssh signs as before, and it runs no program a
+    /// repository names.
+    pub fn books(&self) -> Option<banda_kernel::host::Fencing> {
+        #[cfg(target_os = "linux")]
+        if let Some(base) = self.base.clone() {
+            let launcher = self.launcher.clone();
+            let agent = self.agents.hole.clone();
+            return Some(Box::new(move |command, reads| {
+                Fenced::bookkeeping(&base, agent.as_deref(), &launcher, command, reads)
+            }));
+        }
+        None
+    }
+
+    /// `command`, set to start behind `base` through `launcher`, with
+    /// `reads` opened to it and the hole to the SSH agent's socket `agent`:
+    /// as [`Fenced::books`] says.
+    #[cfg(target_os = "linux")]
+    fn bookkeeping(
+        base: &banda_fence::Spec,
+        agent: Option<&Path>,
+        launcher: &Path,
+        command: &tokio::process::Command,
+        reads: &[PathBuf],
+    ) -> io::Result<tokio::process::Command> {
+        let asked = command.as_std();
+        let sealed = Fenced::books_spec(base, agent, asked, reads)?.seal()?;
+        let args: Vec<&std::ffi::OsStr> = asked.get_args().collect();
+        let mut started = std::process::Command::new(launcher);
+        started.args(banda_fence::argv(&sealed, None, asked.get_program(), &args));
+        banda_fence::attach(&mut started, sealed, None);
+        for (name, value) in asked.get_envs() {
+            match value {
+                Some(value) => started.env(name, value),
+                None => started.env_remove(name),
+            };
+        }
+        for name in ENGINES_OWN {
+            started.env_remove(name);
+        }
+        let mut command = tokio::process::Command::from(started);
+        command.kill_on_drop(true);
+        Ok(command)
+    }
+
+    /// The spec `asked` starts behind as bookkeeping: the base, with its
+    /// own holes and the SSH agent's socket `agent` where they are there
+    /// now, `reads` opened to read, and the command's folder, resolved.
+    #[cfg(target_os = "linux")]
+    fn books_spec(
+        base: &banda_fence::Spec,
+        agent: Option<&Path>,
+        asked: &std::process::Command,
+        reads: &[PathBuf],
+    ) -> io::Result<banda_fence::Spec> {
+        let mut spec = base.clone();
+        spec.holes.writes.extend(agent.map(Path::to_owned));
+        spec.holes.writes.retain(|hole| hole.exists());
+        spec.holes.reads.retain(|hole| hole.exists());
+        for read in reads {
+            spec.holes.reads.push(dunce::canonicalize(read)?);
+        }
+        let cwd = match asked.get_current_dir() {
+            Some(dir) => dir.to_owned(),
+            None => std::env::current_dir()?,
+        };
+        spec.cwd = Some(dunce::canonicalize(cwd)?);
+        Ok(spec)
+    }
+
     /// The spec a program with `holes` starts behind: the base, with those
     /// holes (each made where it is not there yet, as a folder of the
     /// Person's alone) and the program's folder; with the hole to the SSH
@@ -296,15 +382,15 @@ fn made(hole: &Path) -> io::Result<()> {
 #[cfg(target_os = "linux")]
 pub async fn probe(base: &banda_fence::Spec, launcher: &Path) -> Fence {
     match probed(base, launcher).await {
-        Ok(banda_fence::Probe::Holds { layers }) => Fence::Holds {
-            layers: (layers.into_iter())
+        Ok(banda_fence::Probe::Holds { layers }) => Fence::holds(
+            (layers.into_iter())
                 .map(|layer| match layer {
                     banda_fence::Layer::Namespaces => FenceLayer::Namespaces,
                     banda_fence::Layer::Landlock => FenceLayer::Landlock,
                 })
                 .collect(),
-            docker_group: in_docker_group(),
-        },
+            in_docker_group(),
+        ),
         Ok(banda_fence::Probe::Missing { why, words }) => {
             let why = match why {
                 banda_fence::Why::NoUserNamespaces | banda_fence::Why::Refused
@@ -482,10 +568,7 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     fn holds() -> Fence {
-        Fence::Holds {
-            layers: vec![FenceLayer::Namespaces, FenceLayer::Landlock],
-            docker_group: false,
-        }
+        Fence::holds(vec![FenceLayer::Namespaces, FenceLayer::Landlock], false)
     }
 
     #[cfg(target_os = "linux")]
@@ -544,6 +627,69 @@ mod tests {
         let unfenced = Local::unfenced(Fence::not_built()).launcher("/nonexistent");
         let started = unfenced.spawn(&script(harness), Input::Null).unwrap();
         assert_eq!(started.wait_with_output().await.unwrap().stdout, b"ran\n");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_engine_s_own_bookkeeping_starts_through_the_launcher_in_its_folder() {
+        let t = tempfile::tempdir().unwrap();
+        let home = dunce::canonicalize(t.path()).unwrap();
+        let (data, project) = (home.join("data"), home.join("project"));
+        let shadow = data.join("p/git-fetched");
+        std::fs::create_dir_all(&shadow).unwrap();
+        std::fs::create_dir(&project).unwrap();
+        let base = banda_fence::Spec {
+            build: "b".to_owned(),
+            hidden: vec![data.clone()],
+            read_only: vec![home.join("config")],
+            ..banda_fence::Spec::default()
+        };
+        let agent = home.join("agent.sock");
+        let agents = SshAgents {
+            hole: Some(agent.clone()),
+            ..SshAgents::default()
+        };
+        let fenced = Local::fenced(base.clone(), holds())
+            .ssh_agents(agents)
+            .launcher("/opt/banda");
+        let mut git = tokio::process::Command::new("/usr/bin/git");
+        git.arg("status")
+            .env("GIT_CONFIG_COUNT", "1")
+            .env_remove("GIT_DIR")
+            .current_dir(&project);
+        let books = fenced.books().unwrap();
+        let started = books(&git, std::slice::from_ref(&shadow)).unwrap();
+        let started = started.as_std();
+        assert_eq!(started.get_program(), "/opt/banda");
+        let args: Vec<_> = started.get_args().map(|a| a.to_str().unwrap()).collect();
+        assert_eq!(args[..2], ["fence", "--spec-fd"]);
+        assert_eq!(args[3..], ["--", "/usr/bin/git", "status"]);
+        let envs: Vec<_> = started.get_envs().collect();
+        assert!(envs.contains(&("GIT_CONFIG_COUNT".as_ref(), Some("1".as_ref()))));
+        assert!(envs.contains(&("GIT_DIR".as_ref(), None)));
+        for name in ENGINES_OWN {
+            assert!(envs.contains(&(name.as_ref(), None)), "{name} taken away");
+        }
+        let spec = || {
+            Fenced::books_spec(
+                &base,
+                Some(&agent),
+                git.as_std(),
+                std::slice::from_ref(&shadow),
+            )
+            .unwrap()
+        };
+        assert_eq!(spec().cwd.as_deref(), Some(project.as_path()));
+        assert_eq!(spec().holes.reads, std::slice::from_ref(&shadow));
+        assert!(spec().holes.writes.is_empty(), "a socket gone is no hole");
+        // The SSH agent's socket, while it is there: its fetch signs as
+        // Banda's own git did on the host.
+        let _listening = std::os::unix::net::UnixListener::bind(&agent).unwrap();
+        assert_eq!(spec().holes.writes, std::slice::from_ref(&agent));
+        // Where the fence does not hold, there is no fence to start behind.
+        assert!(Local::unfenced(Fence::not_built()).books().is_none());
+        assert_eq!(fenced.kept(), [home.join("config")]);
+        assert!(Local::unfenced(Fence::not_built()).kept().is_empty());
     }
 
     #[test]

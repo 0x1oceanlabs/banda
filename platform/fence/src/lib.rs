@@ -147,7 +147,7 @@ mod tests {
             ]
         );
         let (_hears, tells) = status().unwrap();
-        let said = argv(&sealed, Some(&tells), "claude", &[]);
+        let said = argv::<String>(&sealed, Some(&tells), "claude", &[]);
         assert_eq!(said[3], "--status-fd");
         assert_eq!(said[5], "--");
     }

@@ -140,9 +140,14 @@ pub trait Systemd: Sync {
 pub struct User;
 
 impl User {
-    /// What `program arguments…` printed, or the words it failed with.
+    /// What `program arguments…` printed, or the words it failed with:
+    /// the system's own `program`, one only root changes, never one of
+    /// its name an Agent could have put first on the PATH
+    /// ([`banda_kernel::host::system`]).
     fn ran(program: &str, arguments: &[&str]) -> Result<String, String> {
-        let output = Command::new(program)
+        let found = banda_kernel::host::system(program)
+            .ok_or_else(|| format!("there is no {program} of the system's on the PATH"))?;
+        let output = Command::new(found)
             .args(arguments)
             .stdin(Stdio::null())
             .output()

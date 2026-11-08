@@ -1,5 +1,6 @@
 //! How Banda starts the `git` program in a folder: for its own
-//! bookkeeping ([`bookkeeping`]), on the host, or for an act the Person
+//! bookkeeping ([`bookkeeping`]), on the host and behind the fence where
+//! it holds (ADR 0083), or for an act the Person
 //! asked for ([`asked`]), which its Project's environment starts (ADR
 //! 0084, decision 8).
 //!
@@ -15,7 +16,8 @@
 //! own upload-pack, the Person's own ssh and credential helpers, and no
 //! proxy command. Every filter driver, diff driver and hook that git's
 //! config names as it is read just before is blanked too. The rest of the
-//! Person's config holds: their name, the remotes, what they ignore.
+//! Person's config holds: their name, the remotes, what they ignore;
+//! where the guard holds, of the home's only what Banda carries over.
 //!
 //! It needs git 2.31 or later: on an older one, none starts. A fetch
 //! needs one that takes `GIT_NO_LAZY_FETCH` too, 2.45 or later or a
@@ -35,6 +37,15 @@
 //!   never the repository's, so one that needs the repository's fails.
 //!   Where the fence holds, it takes only the system's, and ssh reads no
 //!   config of the Person's (ADR 0083, F0-3a).
+//! - Where the guard holds, git reads none of the home's config but the
+//!   values Banda carries over by name (what the Person ignores, how
+//!   line ends read, the folders they trust), and a fetch reaches only
+//!   remotes over the network unless the fence holds too.
+//! - A fetch from github.com over https may sign in with the Person's
+//!   token, which Banda reads itself ([`signed_fetch`]): into a
+//!   repository of Banda's own, whose config only Banda writes and which
+//!   borrows the Project's objects, with git's tracing off, and from there
+//!   into the Project's with no token.
 //!
 //! An act the Person asked for, as a commit, a push, a pull or a switch,
 //! runs as their own git does: hooks, filters, signing and all.
@@ -98,9 +109,31 @@ const UNASKED: [(&str, &str); 7] = [
     ("GIT_ALLOW_PROTOCOL", ""),
 ];
 
+/// What every bookkeeping git runs with besides: no trace of git's own
+/// written anywhere, whatever a config of the home's says
+/// (`trace2.*Target`).
+const UNTRACED: [(&str, &str); 3] = [
+    ("GIT_TRACE2", "0"),
+    ("GIT_TRACE2_EVENT", "0"),
+    ("GIT_TRACE2_PERF", "0"),
+];
+
 /// The transports a fetch Banda runs by itself goes over: git's own, and
 /// none a repository's config names a helper for.
 const TRANSPORTS: &str = "file:git:http:https:ssh";
+
+/// The transports where the fence holds and Banda's own git runs outside
+/// it, as where the fence was set up and failed: none to a repository on
+/// this disk, which git would read on the host as well.
+const REMOTE_TRANSPORTS: &str = "git:http:https:ssh";
+
+/// The one transport of a fetch that signs in ([`signed_fetch`]).
+const SIGNED_TRANSPORT: &str = "https";
+
+/// What a bookkeeping git reads for its home's config where the fence
+/// holds: none, as the home's is an Agent's to write as much as a
+/// repository's is ([`carried`] says what is kept of it).
+const NO_HOME_CONFIG: (&str, &str) = ("GIT_CONFIG_GLOBAL", "/dev/null");
 
 /// What a fetch Banda runs by itself takes after `fetch`: git's own
 /// upload-pack. A remote's `uploadpack` is the first git reads, so no
@@ -218,9 +251,22 @@ fn emptied(folder: &Path) -> io::Result<()> {
 
 /// What the config is read for first, by git's lowercase names: every
 /// filter driver, diff driver's text conversion and command, and hook it
-/// names; the Person's own ssh command and credential helpers; and
-/// [`PROBE`].
-const NAMING: &str = r"^filter\.|^diff\..+\.(textconv|command)$|^hook\.|^core\.sshcommand$|^credential\..*helper$|^banda\.probe$";
+/// names; the Person's own ssh command and credential helpers; what is
+/// kept of the home's where the fence holds ([`CARRIED`]); and [`PROBE`].
+const NAMING: &str = r"^filter\.|^diff\..+\.(textconv|command)$|^hook\.|^core\.sshcommand$|^credential\..*helper$|^core\.(excludesfile|attributesfile|autocrlf|eol)$|^safe\.directory$|^banda\.probe$";
+
+/// What is kept of the home's config where the fence holds and git reads
+/// none of it, as git's lowercase names: what the Person ignores and how
+/// their files' attributes and line ends read, which change what a status
+/// says, and the folders they trust that another user owns. Each names a
+/// file to read, or a word, and no program.
+const CARRIED: [&str; 5] = [
+    "core.excludesfile",
+    "core.attributesfile",
+    "core.autocrlf",
+    "core.eol",
+    "safe.directory",
+];
 
 /// A setting the config read is given through its environment, as every
 /// override after it is (`GIT_CONFIG_COUNT`): a git that does not list it
@@ -263,7 +309,9 @@ where
 
 /// git in `dir` running `args`, which name its subcommand, for Banda's
 /// own bookkeeping: it runs no program the repository names (the crate's
-/// doc says how far that holds). A fetch is the one that reaches a
+/// doc says how far that holds), and where the fence holds it starts
+/// behind it ([`banda_kernel::host::books`]), so what it runs all the same
+/// reaches no more than an Agent does. A fetch is the one that reaches a
 /// remote, over git's own transports with git's own upload-pack, and only
 /// on a git that takes `GIT_NO_LAZY_FETCH` ([`lazy_fetch_off`]). The
 /// repository's config is read first, for the names of its drivers and
@@ -275,31 +323,158 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
+    bookkeeping_reading(dir, args, &[]).await
+}
+
+/// [`bookkeeping`], with `reads`, folders the fence hides, opened to it to
+/// read where it starts behind the fence: a repository of Banda's own
+/// that a fetch takes from ([`signed_fetch`]).
+pub async fn bookkeeping_reading<I, S>(
+    dir: &Path,
+    args: I,
+    reads: &[PathBuf],
+) -> io::Result<Command>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
     let listed = tokio::time::timeout(READING, configured(dir))
         .await
         .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "git's config took too long"))??;
-    let git_ssh = std::env::var_os("GIT_SSH");
-    let config = overrides(&listed, git_ssh.as_deref(), banda_kernel::host::guarded())?;
-    let mut git = own(dir)?;
-    git.env("GIT_CONFIG_COUNT", config.len().to_string());
-    for (at, (key, value)) in config.into_iter().enumerate() {
-        git.env(format!("GIT_CONFIG_KEY_{at}"), os(key)?)
-            .env(format!("GIT_CONFIG_VALUE_{at}"), os(value)?);
-    }
     let mut args: Vec<OsString> = args.into_iter().map(|a| a.as_ref().to_owned()).collect();
-    if let Some(at) = subcommand(&args).filter(|at| args[*at] == "fetch") {
-        if !lazy_fetch_off().await? {
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "git takes no GIT_NO_LAZY_FETCH: Banda's own fetch needs git 2.45 or later, \
-                 or a release of 2.39 to 2.44 from May 2024 on",
-            ));
-        }
+    let fetch = subcommand(&args).filter(|at| args[*at] == "fetch");
+    let git_ssh = std::env::var_os("GIT_SSH");
+    let guarded = banda_kernel::host::guarded();
+    let config = overrides(&listed, git_ssh.as_deref(), guarded)?;
+    let mut git = own(dir, guarded)?;
+    configure(&mut git, config)?;
+    if let Some(at) = fetch {
+        lazy_fetch_needed().await?;
         args.insert(at + 1, UPLOAD_PACK.into());
-        git.env("GIT_ALLOW_PROTOCOL", TRANSPORTS);
+        let fenced = banda_kernel::host::books_fenced();
+        git.env("GIT_ALLOW_PROTOCOL", transports(guarded, fenced));
     }
     git.args(args);
+    banda_kernel::host::books(git, reads)
+}
+
+/// The transports a bookkeeping fetch goes over: every one of git's own,
+/// but where the fence holds (`guarded`) and git runs outside it
+/// (`fenced` not), none to a repository on this disk.
+fn transports(guarded: bool, fenced: bool) -> &'static str {
+    match guarded && !fenced {
+        true => REMOTE_TRANSPORTS,
+        false => TRANSPORTS,
+    }
+}
+
+/// What a fetch signs in to a remote on github.com with, over https: the
+/// Person's token, which Banda reads itself, never through a helper a
+/// config names (ADR 0083). It goes to the remote at `url` alone, as its
+/// `http.<url>.extraHeader` ([`signed_fetch`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SignIn {
+    /// The remote's address, as git reaches it: `https://github.com/…`.
+    pub url: String,
+    /// The account's login, when known.
+    pub user: Option<String>,
+    pub token: String,
+}
+
+/// Whether `url` is a repository on github.com over https, which a fetch
+/// may sign in to ([`SignIn`]).
+pub fn on_github(url: &str) -> bool {
+    const GITHUB: &str = "https://github.com/";
+    url.get(..GITHUB.len())
+        .is_some_and(|start| start.eq_ignore_ascii_case(GITHUB))
+        && url.len() > GITHUB.len()
+        && url.bytes().all(|b| b.is_ascii_graphic())
+}
+
+/// git running `args`, a fetch from `sign_in`'s remote that signs in with
+/// the Person's token, into a repository of Banda's own at `shadow`,
+/// which borrows the objects of the repository whose objects are in
+/// `objects` (`objects/info/alternates`), so it fetches only what that one
+/// lacks. Banda makes it, writes its whole config and keeps it in its own
+/// state, which the fence hides: the git that holds the token reads no
+/// config an Agent writes, neither the home's nor a repository's, and no
+/// hook, so nothing an Agent wrote changes where the token goes or how
+/// the remote's certificate is checked; only the system's config holds. It
+/// goes over https alone, asks for nothing, and traces nothing. It starts
+/// on the host: a bookkeeping fetch of the repository's own then takes
+/// what it fetched from `shadow`, behind the fence where it holds
+/// ([`bookkeeping_reading`]), with no token.
+pub async fn signed_fetch<I, S>(
+    shadow: &Path,
+    objects: &Path,
+    args: I,
+    sign_in: &SignIn,
+) -> io::Result<Command>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    if !on_github(&sign_in.url) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Banda's own fetch signs in only to github.com over https",
+        ));
+    }
+    let args: Vec<OsString> = args.into_iter().map(|a| a.as_ref().to_owned()).collect();
+    if subcommand(&args).is_none_or(|at| args[at] != "fetch") {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "only a fetch signs in",
+        ));
+    }
+    lazy_fetch_needed().await?;
+    shadow_made(shadow, objects)?;
+    let mut git = base(shadow)?;
+    git.arg("--no-pager")
+        .envs(UNASKED)
+        .envs(UNTRACED)
+        .envs([NO_HOME_CONFIG])
+        .env("GIT_ALLOW_PROTOCOL", SIGNED_TRANSPORT)
+        .arg("--git-dir")
+        .arg(shadow);
+    let mut config = always()?;
+    let mut set = |key: Vec<u8>, value: &[u8]| config.push((key, value.to_vec()));
+    set(b"credential.helper".to_vec(), b"");
+    let header = [b"http.", sign_in.url.as_bytes(), b".extraHeader"].concat();
+    set(header.clone(), b"");
+    set(header, authorization(sign_in).as_bytes());
+    configure(&mut git, config)?;
+    git.args(args);
     Ok(git)
+}
+
+/// Makes the repository of Banda's own at `shadow` ([`signed_fetch`]),
+/// or makes it again: bare, its config Banda's alone, its objects
+/// borrowed from `objects`, and its own folder this user's alone.
+fn shadow_made(shadow: &Path, objects: &Path) -> io::Result<()> {
+    let mut folders = std::fs::DirBuilder::new();
+    folders.recursive(true);
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut folders, 0o700);
+    for folder in ["objects/info", "refs/heads", "refs/remotes"] {
+        folders.create(shadow.join(folder))?;
+    }
+    let objects = objects.to_str().filter(|text| !text.contains('\n'));
+    let objects = objects.ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "the repository's objects are where git names no alternate",
+        )
+    })?;
+    std::fs::write(shadow.join("HEAD"), "ref: refs/heads/main\n")?;
+    std::fs::write(
+        shadow.join("config"),
+        "[core]\n\trepositoryformatversion = 0\n\tbare = true\n",
+    )?;
+    std::fs::write(
+        shadow.join("objects/info/alternates"),
+        format!("{objects}\n"),
+    )
 }
 
 /// The lock file git takes on the index as it changes it, for the
@@ -372,11 +547,48 @@ fn base(dir: &Path) -> io::Result<Command> {
     Ok(git)
 }
 
-/// git in `dir` as every bookkeeping git starts, before its config.
-fn own(dir: &Path) -> io::Result<Command> {
+/// git in `dir` as every bookkeeping git reads its config: asking
+/// nothing and tracing nothing ([`UNASKED`], [`UNTRACED`]).
+fn reading(dir: &Path) -> io::Result<Command> {
     let mut git = base(dir)?;
-    git.arg("--no-pager").envs(UNASKED);
+    git.arg("--no-pager").envs(UNASKED).envs(UNTRACED);
     Ok(git)
+}
+
+/// git in `dir` as every bookkeeping git starts, before its config: as
+/// [`reading`] starts it, and where the fence holds (`guarded`) reading
+/// none of the home's config ([`NO_HOME_CONFIG`]).
+fn own(dir: &Path, guarded: bool) -> io::Result<Command> {
+    let mut git = reading(dir)?;
+    if guarded {
+        git.envs([NO_HOME_CONFIG]);
+    }
+    Ok(git)
+}
+
+/// `config` given to `git` as `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>` and
+/// `GIT_CONFIG_VALUE_<n>` take it: after every config git reads, so it
+/// wins over each.
+fn configure(git: &mut Command, config: Vec<(Vec<u8>, Vec<u8>)>) -> io::Result<()> {
+    git.env("GIT_CONFIG_COUNT", config.len().to_string());
+    for (at, (key, value)) in config.into_iter().enumerate() {
+        git.env(format!("GIT_CONFIG_KEY_{at}"), os(key)?)
+            .env(format!("GIT_CONFIG_VALUE_{at}"), os(value)?);
+    }
+    Ok(())
+}
+
+/// Fails when git would fetch an object it lacks for a fetch Banda runs
+/// by itself ([`lazy_fetch_off`]).
+async fn lazy_fetch_needed() -> io::Result<()> {
+    match lazy_fetch_off().await? {
+        true => Ok(()),
+        false => Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "git takes no GIT_NO_LAZY_FETCH: Banda's own fetch needs git 2.45 or later, \
+             or a release of 2.39 to 2.44 from May 2024 on",
+        )),
+    }
 }
 
 /// Whether git takes `GIT_NO_LAZY_FETCH`, as it says by starting no other
@@ -412,7 +624,7 @@ async fn starts_no_lazy_fetch() -> io::Result<bool> {
          [remote \"none\"]\n\turl = ./none\n",
     )?;
     let trace = folder.path().join("trace");
-    let mut probe = own(folder.path())?;
+    let mut probe = reading(folder.path())?;
     probe
         .arg("--git-dir")
         .arg(&repo)
@@ -444,7 +656,7 @@ fn subcommand(args: &[OsString]) -> Option<usize> {
 /// The config of `dir` that [`NAMING`] matches, as `git config
 /// --show-scope -z` lists it.
 async fn configured(dir: &Path) -> io::Result<Vec<u8>> {
-    let mut read = own(dir)?;
+    let mut read = reading(dir)?;
     read.env("GIT_CONFIG_COUNT", "1")
         .env("GIT_CONFIG_KEY_0", PROBE)
         .env("GIT_CONFIG_VALUE_0", "true")
@@ -469,17 +681,19 @@ async fn configured(dir: &Path) -> io::Result<Vec<u8>> {
 /// What a bookkeeping git is configured with, as `GIT_CONFIG_KEY_<n>` and
 /// `GIT_CONFIG_VALUE_<n>` take it, after the config [`configured`] read;
 /// `git_ssh` is the engine's `GIT_SSH`. `guarded` says that the fence
-/// holds ([`banda_kernel::host::guard`]): then the home's config is not
-/// taken as the Person's own, no more than the repository's.
+/// holds ([`banda_kernel::host::guard`]): then git reads none of the
+/// home's config ([`own`]), which is not taken as the Person's own, no more
+/// than the repository's, and only what [`CARRIED`] names of it is given
+/// back.
 ///
-/// First [`ALWAYS`], and every hook event off. Then the Person's own
-/// network: their ssh command, from their config (system, or global where
-/// not `guarded`), else `GIT_SSH`'s program, else `ssh` (their
-/// `GIT_SSH_COMMAND` wins over it as it is), which reads no config in the
-/// home where `guarded`; and their credential helpers alone. Then what
-/// the config names: every filter driver blanked, which need not run;
-/// every diff driver's text conversion and command blanked, so a git that
-/// would run one fails instead; and every hook off.
+/// First [`always`]. Then the Person's own network: their ssh command,
+/// from their config (system, or global where not `guarded`), else
+/// `GIT_SSH`'s program, else `ssh` (their `GIT_SSH_COMMAND` wins over it
+/// as it is), which reads no config in the home where `guarded`; and
+/// their credential helpers alone. Then what the config names: every
+/// filter driver blanked, which need not run; every diff driver's text
+/// conversion and command blanked, so a git that would run one fails
+/// instead; and every hook off.
 fn overrides(
     listed: &[u8],
     git_ssh: Option<&OsStr>,
@@ -488,6 +702,7 @@ fn overrides(
     let (mut filters, mut diffs, mut hooks) = (BTreeSet::new(), BTreeSet::new(), BTreeSet::new());
     let mut persons_ssh: Option<&[u8]> = None;
     let mut persons_helpers: Vec<(&[u8], &[u8])> = Vec::new();
+    let mut carried: Vec<(&[u8], &[u8])> = Vec::new();
     let mut probed = false;
     let mut fields = listed.split(|b| *b == 0);
     while let Some(scope) = fields.next().filter(|scope| !scope.is_empty()) {
@@ -514,6 +729,9 @@ fn overrides(
             (b"core", None, b"sshcommand") if persons => persons_ssh = Some(value),
             (b"credential", _, b"helper") if persons => persons_helpers.push((key, value)),
             (b"banda", None, b"probe") => probed |= scope == b"command",
+            _ if guarded && scope == b"global" && CARRIED.iter().any(|c| c.as_bytes() == key) => {
+                carried.push((key, value));
+            }
             _ => {}
         }
     }
@@ -523,15 +741,8 @@ fn overrides(
             "git took no config from its environment: Banda's own git needs git 2.31 or later",
         ));
     }
-    let mut config: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
+    let mut config = always()?;
     let mut set = |parts: &[&[u8]], value: &[u8]| config.push((parts.concat(), value.to_vec()));
-    set(&[b"core.hooksPath"], &no_hooks()?);
-    for (key, value) in ALWAYS {
-        set(&[key.as_bytes()], value.as_bytes());
-    }
-    for event in EVENTS {
-        set(&[b"hook.", event.as_bytes(), b".enabled"], b"false");
-    }
     let ssh = match (persons_ssh, git_ssh) {
         (Some(command), _) => command.to_vec(),
         (None, Some(program)) if !program.is_empty() => quoted(program.as_encoded_bytes()),
@@ -542,6 +753,9 @@ fn overrides(
     // An empty helper empties the list git has read so far.
     set(&[b"credential.helper"], b"");
     for (key, value) in persons_helpers {
+        set(&[key], value);
+    }
+    for (key, value) in carried {
         set(&[key], value);
     }
     for driver in &filters {
@@ -558,6 +772,31 @@ fn overrides(
         set(&[b"hook.", name, b".enabled"], b"false");
     }
     Ok(config)
+}
+
+/// What every git Banda runs by itself is configured with, whatever any
+/// config says: its hooks folder where none is ([`no_hooks`]), [`ALWAYS`],
+/// and every hook event off.
+fn always() -> io::Result<Vec<(Vec<u8>, Vec<u8>)>> {
+    let mut config = vec![(b"core.hooksPath".to_vec(), no_hooks()?)];
+    for (key, value) in ALWAYS {
+        config.push((key.as_bytes().to_vec(), value.as_bytes().to_vec()));
+    }
+    for event in EVENTS {
+        let key = [b"hook.", event.as_bytes(), b".enabled"].concat();
+        config.push((key, b"false".to_vec()));
+    }
+    Ok(config)
+}
+
+/// The header a fetch signs in with: HTTP's basic scheme, the account's
+/// login, or a name GitHub takes for any, and the token.
+fn authorization(sign_in: &SignIn) -> String {
+    use base64::Engine;
+    let user = sign_in.user.as_deref().unwrap_or("x-access-token");
+    let pair = format!("{user}:{}", sign_in.token);
+    let encoded = base64::engine::general_purpose::STANDARD.encode(pair);
+    format!("Authorization: Basic {encoded}")
 }
 
 /// `program` as one word of a command the shell runs.
@@ -848,5 +1087,204 @@ mod tests {
             assert_eq!(named, Some((OsStr::new(name), Some(OsStr::new(value)))));
             assert_eq!(asked.env.get(name).map(String::as_str), Some(value));
         }
+    }
+
+    #[test]
+    fn where_the_fence_holds_git_reads_no_home_config_but_what_it_ignores_and_trusts() {
+        let listed = listing(&[
+            ("global", "core.excludesfile", "~/.gitignore_global"),
+            ("global", "safe.directory", "/srv/a"),
+            ("global", "safe.directory", "/srv/b"),
+            ("global", "core.autocrlf", "input"),
+            ("local", "core.excludesfile", "./mine"),
+            ("system", "core.attributesfile", "/etc/attributes"),
+        ]);
+        let config = overrides(&listed, None, true).unwrap();
+        assert_eq!(
+            set(&config)[2..],
+            pairs(&[
+                ("core.excludesfile", "~/.gitignore_global"),
+                ("safe.directory", "/srv/a"),
+                ("safe.directory", "/srv/b"),
+                ("core.autocrlf", "input"),
+            ])
+        );
+        // Where the fence does not hold, git reads the home's itself.
+        let config = overrides(&listed, None, false).unwrap();
+        assert_eq!(set(&config).len(), 2);
+        let guarded = own(Path::new("."), true).unwrap();
+        let unguarded = own(Path::new("."), false).unwrap();
+        let env = |git: &Command, name: &str| {
+            let named = git.as_std().get_envs().find(|(key, _)| *key == name);
+            named.and_then(|(_, value)| value.map(OsStr::to_owned))
+        };
+        assert_eq!(
+            env(&guarded, "GIT_CONFIG_GLOBAL").as_deref(),
+            Some(OsStr::new("/dev/null"))
+        );
+        assert_eq!(env(&unguarded, "GIT_CONFIG_GLOBAL"), None);
+        for git in [&guarded, &unguarded] {
+            for (name, value) in UNTRACED {
+                assert_eq!(env(git, name).as_deref(), Some(OsStr::new(value)), "{name}");
+            }
+        }
+        // A fetch reaches no repository on this disk where git runs
+        // outside the fence that holds.
+        assert_eq!(transports(true, false), REMOTE_TRANSPORTS);
+        assert_eq!(transports(true, true), TRANSPORTS);
+        assert_eq!(transports(false, false), TRANSPORTS);
+        assert!(!REMOTE_TRANSPORTS.split(':').any(|t| t == "file"));
+    }
+
+    fn sign_in(url: &str) -> SignIn {
+        SignIn {
+            url: url.to_owned(),
+            user: Some("octo".to_owned()),
+            token: "gho_t".to_owned(),
+        }
+    }
+
+    #[test]
+    fn a_fetch_signs_in_with_the_persons_token_as_github_takes_it() {
+        let url = "https://github.com/o/r.git";
+        // octo:gho_t
+        assert_eq!(
+            authorization(&sign_in(url)),
+            "Authorization: Basic b2N0bzpnaG9fdA=="
+        );
+        let anyone = SignIn {
+            user: None,
+            ..sign_in(url)
+        };
+        assert_eq!(
+            authorization(&anyone),
+            "Authorization: Basic eC1hY2Nlc3MtdG9rZW46Z2hvX3Q="
+        );
+        assert!(on_github(url));
+        for elsewhere in [
+            "http://github.com/o/r",
+            "https://github.com.example/o/r",
+            "https://user@github.com/o/r",
+            "git@github.com:o/r.git",
+            "https://github.com/",
+            "https://github.com/o/r\n.git",
+        ] {
+            assert!(!on_github(elsewhere), "{elsewhere}");
+        }
+    }
+
+    /// The variables `git` is given, as text.
+    fn given(git: &Command) -> Vec<(String, Option<String>)> {
+        let text = |value: &OsStr| value.to_string_lossy().into_owned();
+        (git.as_std().get_envs())
+            .map(|(key, value)| (text(key), value.map(text)))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn a_fetch_that_signs_in_reads_no_config_but_the_systems_and_banda_s_own() {
+        let t = tempfile::tempdir().unwrap();
+        let (shadow, objects) = (
+            t.path().join("state/fetch"),
+            t.path().join("p/.git/objects"),
+        );
+        std::fs::create_dir_all(&objects).unwrap();
+        let url = "https://github.com/o/r.git";
+        let args = [
+            "fetch",
+            "--quiet",
+            "--",
+            url,
+            "+refs/heads/main:refs/remotes/origin/main",
+        ];
+        let git = signed_fetch(&shadow, &objects, args, &sign_in(url))
+            .await
+            .unwrap();
+        let given = given(&git);
+        let value = |name: &str| {
+            let found = given.iter().find(|(key, _)| key == name);
+            found.and_then(|(_, value)| value.clone())
+        };
+        assert_eq!(value("GIT_CONFIG_GLOBAL").as_deref(), Some("/dev/null"));
+        assert_eq!(value("GIT_ALLOW_PROTOCOL").as_deref(), Some("https"));
+        for (name, off) in UNTRACED {
+            assert_eq!(value(name).as_deref(), Some(off), "{name}");
+        }
+        let headers: Vec<&str> = (given.iter())
+            .filter_map(|(_, value)| value.as_deref())
+            .filter(|value| value.starts_with("Authorization:"))
+            .collect();
+        assert_eq!(headers, ["Authorization: Basic b2N0bzpnaG9fdA=="]);
+        let args: Vec<OsString> = git.as_std().get_args().map(OsStr::to_owned).collect();
+        let named = [
+            OsStr::new("--no-pager"),
+            OsStr::new("--git-dir"),
+            shadow.as_os_str(),
+        ];
+        assert_eq!(args[..3], named);
+        assert_eq!(args[3], "fetch");
+        // Banda's own repository, which borrows the Project's objects.
+        let alternates = std::fs::read_to_string(shadow.join("objects/info/alternates"));
+        assert_eq!(alternates.unwrap(), format!("{}\n", objects.display()));
+        let config = std::fs::read_to_string(shadow.join("config")).unwrap();
+        assert!(config.contains("bare = true"), "{config}");
+        // Only a fetch, and only from github.com.
+        let status = signed_fetch(&shadow, &objects, ["status"], &sign_in(url)).await;
+        assert!(status.is_err());
+        let other = sign_in("https://example.com/o/r.git");
+        assert!(signed_fetch(&shadow, &objects, args, &other).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_fetch_that_signs_in_traces_nothing_a_config_of_the_home_asks() {
+        let t = tempfile::tempdir().unwrap();
+        let home = t.path().join("home");
+        std::fs::create_dir_all(&home).unwrap();
+        let trace = t.path().join("trace");
+        std::fs::write(
+            home.join(".gitconfig"),
+            // As git's config reads a `\`: on Windows, a path's own.
+            format!(
+                "[trace2]\n\tnormalTarget = {}\n",
+                trace.display().to_string().replace('\\', "\\\\")
+            ),
+        )
+        .unwrap();
+        let (shadow, objects) = (t.path().join("fetch"), t.path().join("objects"));
+        std::fs::create_dir_all(&objects).unwrap();
+        let url = "https://github.com/o/r.git";
+        let fetch = ["fetch", "--", url];
+        let git = signed_fetch(&shadow, &objects, fetch, &sign_in(url))
+            .await
+            .unwrap();
+        // The fetch's own environment, asked only for a config in Banda's
+        // repository: a git reads its config and traces as it starts.
+        let ran = |dropped: &[&str]| {
+            let _ = std::fs::remove_file(&trace);
+            let mut read = std::process::Command::new("git");
+            for (name, value) in given(&git) {
+                match value {
+                    Some(value) if !dropped.contains(&name.as_str()) => read.env(name, value),
+                    _ => read.env_remove(name),
+                };
+            }
+            read.env("HOME", &home)
+                .env_remove("XDG_CONFIG_HOME")
+                .arg("--git-dir")
+                .arg(&shadow)
+                .args(["config", "core.bare"])
+                .output()
+                .unwrap();
+            trace.exists()
+        };
+        assert!(!ran(&[]), "the fetch traced as the home's config asks");
+        // Without what the fetch is given, git traces as that config asks:
+        // the test sees what it means to.
+        assert!(ran(&[
+            "GIT_CONFIG_GLOBAL",
+            "GIT_TRACE2",
+            "GIT_TRACE2_EVENT",
+            "GIT_TRACE2_PERF",
+        ]));
     }
 }

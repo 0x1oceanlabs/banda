@@ -835,12 +835,18 @@ test("where the fence holds whole, a new Thread starts Full access, with the Per
   const { page } = window
   const { thread, composer } = await firstThread(page)
   const { fence } = JSON.parse(window.banda("status")) as {
-    fence?: { fence: string; layers?: string[]; docker_group?: boolean }
+    fence?: {
+      fence: string
+      layers?: string[]
+      docker_group?: boolean
+      movable?: string[]
+    }
   }
   test.skip(
     fence?.fence !== "holds" ||
       !fence.layers?.includes("landlock") ||
-      fence.docker_group === true,
+      fence.docker_group === true ||
+      (fence.movable?.length ?? 0) > 0,
     `the fence does not hold whole here: ${JSON.stringify(fence)}`
   )
   await thread.getByRole("button", { name: "Mode: Full access" }).click()

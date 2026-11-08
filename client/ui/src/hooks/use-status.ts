@@ -82,7 +82,18 @@ export function useFence(engine: Engine): Fence | undefined {
  * Person in Banda.
  */
 export function holdsWhole(fence: Fence | undefined): boolean {
-  return fence?.fence === "holds" && !fence.docker_group && !hasGaps(fence)
+  return (
+    fence?.fence === "holds" &&
+    !fence.docker_group &&
+    !hasGaps(fence) &&
+    !hasLinks(fence)
+  )
+}
+
+/** Whether some of the settings a fence that holds keeps from Agents are
+ * links, which an Agent could point elsewhere: dotfiles kept as links. */
+export function hasLinks(fence: Fence & { fence: "holds" }): boolean {
+  return (fence.movable?.length ?? 0) > 0
 }
 
 /** Whether a fence that holds lacks Landlock's scopes, its second layer:

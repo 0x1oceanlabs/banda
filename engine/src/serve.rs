@@ -75,6 +75,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
     // Whether the fence holds here, found once (ADR 0083), before the
     // engine runs any program of its own on the host.
     let environment = crate::fence::environment(&places).await;
+    let kept = environment.kept();
     harnesses.carry(carried(&program));
     // Heard from here on: a TERM as the engine opens, or as soon as it
     // says where it listens, stops it as any other does, not by the
@@ -113,6 +114,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         places: &places,
         harnesses: &harnesses,
         pipe: &pipe,
+        kept: &kept,
     };
     let opening = apps::serve(builder, &host).open();
     let kernel = tokio::select! {

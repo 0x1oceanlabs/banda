@@ -2,14 +2,14 @@
 //! (`docs/research/2026-11-02-t3-code-git-backend.md`, section 0).
 //!
 //! Every git the module runs goes through [`git`], in the folder it is
-//! given: Banda's own bookkeeping, on the host, which runs no program the
-//! repository names, unless it is an act the Person asked for
-//! ([`Opts::asked`]), which runs as their own git, hooks and all, in the
-//! Project's environment (`banda_git_cli` says how far each holds; ADR
-//! 0084, decision 8). Only a Person asks for one: the methods that run an
-//! act need `Right::Run`, which no Agent holds. Either takes no optional
-//! lock, so a status read beside the Person's own git never takes
-//! `.git/index.lock`, and asks nothing. At most eight run at once; each
+//! given: Banda's own bookkeeping, on the host and behind the fence where
+//! it holds, which runs no program the repository names, unless it is an
+//! act the Person asked for ([`Opts::asked`]), which runs as their own
+//! git, hooks and all, in the Project's environment (`banda_git_cli` says
+//! how far each holds; ADR 0084, decision 8). Only a Person asks for one:
+//! the methods that run an act need `Right::Run`, which no Agent holds.
+//! Either takes no optional lock, so a status read beside the Person's
+//! own git never takes `.git/index.lock`, and asks nothing. At most eight run at once; each
 //! is stopped after 30 seconds, or [`LONG`] for an act, with SIGTERM first
 //! so it takes its lock files away, or on Windows killed, the index lock
 //! of an act that takes one taken away after it ([`Left`]); its output is
@@ -77,8 +77,16 @@ pub struct Opts<'a> {
     pub pool: Pool,
     /// It is an act the Person asked for, as a commit or a push, which
     /// runs as their own git in this, its Project's environment; with
-    /// none, it is Banda's own bookkeeping, on the host.
+    /// none, it is Banda's own bookkeeping, on the host, behind the fence
+    /// where it holds.
     pub asked: Option<&'a dyn Environment>,
+    /// What Banda's own fetch signs in to its remote with, where it may,
+    /// and the objects its own repository borrows, which is the folder
+    /// `git` runs in ([`banda_git_cli::signed_fetch`]).
+    pub signed: Option<(&'a Path, &'a banda_git_cli::SignIn)>,
+    /// Folders the fence hides that a bookkeeping git reads, where it
+    /// starts behind it, as Banda's own repository a fetch takes from.
+    pub reads: &'a [PathBuf],
 }
 
 impl<'a> Opts<'a> {
@@ -374,9 +382,13 @@ where
             environment.spawn(&act, input).map_err(did_not_start)?
         }
         None => {
-            let mut command = banda_git_cli::bookkeeping(folder, &args)
-                .await
-                .map_err(did_not_start)?;
+            let command = match opts.signed {
+                Some((objects, sign_in)) => {
+                    banda_git_cli::signed_fetch(folder, objects, &args, sign_in).await
+                }
+                None => banda_git_cli::bookkeeping_reading(folder, &args, opts.reads).await,
+            };
+            let mut command = command.map_err(did_not_start)?;
             command
                 .stdin(if feeds { Stdio::piped() } else { Stdio::null() })
                 .stdout(Stdio::piped())

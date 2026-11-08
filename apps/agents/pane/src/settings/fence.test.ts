@@ -12,6 +12,7 @@ const whole: Fence = { fence: "holds", layers: ["namespaces", "landlock"] }
 const docker: Fence = { ...whole, docker_group: true }
 const partly: Fence = { fence: "holds", layers: ["namespaces"] }
 const both: Fence = { ...partly, docker_group: true }
+const links: Fence = { ...whole, movable: ["/home/p/.config/banda"] }
 const off: Fence = { fence: "missing", why: "off", words: "BANDA_FENCE=off" }
 
 test("where the fence holds whole, Full access is the Agent's own rights, and nothing needs saying", () => {
@@ -23,7 +24,7 @@ test("where the fence holds whole, Full access is the Agent's own rights, and no
 })
 
 test("anywhere else, Full access is the Person, in Banda too, and the menu says why", () => {
-  for (const fence of [docker, partly, both, off, undefined])
+  for (const fence of [docker, partly, both, links, off, undefined])
     expect(fullAccessAbout(fence)).toBe(
       "Never asks. This Agent is you, in Banda too."
     )
@@ -36,6 +37,20 @@ test("anywhere else, Full access is the Person, in Banda too, and the menu says 
   expect(shortReasonOf(docker)).toBe("You're in the docker group.")
   expect(shortReasonOf(partly)).toBe("The fence has gaps.")
   expect(shortReasonOf(off)).toBe(reasonOf(off))
+})
+
+test("settings kept as links an Agent could point elsewhere are the Person's own setup, said after the gaps and the docker group", () => {
+  expect(reasonOf(links)).toBe(
+    "Some settings the fence keeps from Agents are links, which an Agent could point elsewhere."
+  )
+  expect(shortReasonOf(links)).toBe("Some settings are links.")
+  expect(warns(links)).toBe(true)
+  const gapsToo: Fence = { ...partly, movable: ["/home/p/.config/banda"] }
+  expect(reasonOf(gapsToo)).toBe(reasonOf(partly))
+  expect(warns(gapsToo)).toBe(false)
+  expect(shortReasonOf({ ...links, docker_group: true })).toBe(
+    "You're in the docker group."
+  )
 })
 
 test("before the engine said, the menu says no reason", () => {

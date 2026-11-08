@@ -1,16 +1,16 @@
 //! Whether a folder looks like code the Person did not write (ADR 0083,
 //! decision 5; ADR 0084, decision 13): what Add Project asks by, and what
 //! decides a new Project's trust when nobody said. A look is a few `stat`s,
-//! small reads of the repository's own files, and at most one `gh` that
-//! says which GitHub account it is signed in to on this computer. It runs
-//! no git, and nothing the folder names. It reads only regular files, a
-//! bounded start of each, so whatever the folder holds, a look ends.
+//! small reads of the repository's own files, and of gh's config, which
+//! says which GitHub account gh is signed in to on this computer. It runs
+//! no program: no git, no gh, and nothing the folder names. It reads only
+//! regular files, a bounded start of each, so whatever the folder holds, a
+//! look ends.
 
 use crate::ProjectId;
 use serde::Serialize;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 use ts_rs::TS;
 
 /// Whether a folder looks like code the Person did not write, and why.
@@ -63,9 +63,6 @@ const LOG_LIMIT: u64 = 64 * 1024;
 /// The most of a `.git` file or a `commondir` read: one path.
 const PATH_LIMIT: u64 = 4096;
 
-/// How long `gh` may take to say its account.
-const GH_LIMIT: Duration = Duration::from_secs(2);
-
 /// Looks at `folder`, resolved. One not made yet holds nothing itself:
 /// what it would load comes from the folders above it in its repository.
 pub(crate) async fn look(folder: &Path) -> Foreign {
@@ -85,22 +82,12 @@ fn home() -> Option<PathBuf> {
 }
 
 /// The GitHub account `gh` is signed in to on this computer, as its own
-/// config says, with no network: none without `gh`, signed out, or slow.
+/// config says ([`crate::gh::login`]): none without `gh`, or signed out.
 async fn github_login() -> Option<String> {
-    // A `gh` that is not installed is not found, and nothing runs.
-    let mut gh = crate::host::own("gh").ok()?;
-    gh.args(["config", "get", "user", "--host", "github.com"])
-        .current_dir("/")
-        .env("GH_PROMPT_DISABLED", "1")
-        .env("GH_NO_UPDATE_NOTIFIER", "1")
-        .stdin(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-    let output = tokio::time::timeout(GH_LIMIT, gh.output())
+    tokio::task::spawn_blocking(|| crate::gh::login(crate::gh::GITHUB))
         .await
-        .ok()?
-        .ok()?;
-    let login = String::from_utf8(output.stdout).ok()?.trim().to_owned();
-    (output.status.success() && !login.is_empty()).then_some(login)
+        .ok()
+        .flatten()
 }
 
 /// Where a remote's URL points: a host and the account that owns it.

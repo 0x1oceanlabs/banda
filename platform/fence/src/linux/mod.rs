@@ -22,11 +22,11 @@ pub const LAUNCHER: &str = "/proc/self/exe";
 /// The launcher's arguments, after its program's own: the spec's fd, the
 /// fd it says how its start went on when it has one, then the program and
 /// its arguments.
-pub fn argv(
+pub fn argv<S: AsRef<std::ffi::OsStr>>(
     spec: &Sealed,
     status: Option<&Tells>,
-    program: &str,
-    args: &[String],
+    program: impl AsRef<std::ffi::OsStr>,
+    args: &[S],
 ) -> Vec<OsString> {
     let mut argv: Vec<OsString> = vec![
         "fence".into(),
@@ -36,8 +36,8 @@ pub fn argv(
     if let Some(Tells(status)) = status {
         argv.extend(["--status-fd".into(), status.as_raw_fd().to_string().into()]);
     }
-    argv.extend(["--".into(), program.into()]);
-    argv.extend(args.iter().map(OsString::from));
+    argv.extend(["--".into(), program.as_ref().to_owned()]);
+    argv.extend(args.iter().map(|arg| arg.as_ref().to_owned()));
     argv
 }
 
