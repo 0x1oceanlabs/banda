@@ -3,6 +3,7 @@ import { createConnection, createServer, type Server } from "node:net"
 import {
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -17,6 +18,7 @@ import { afterEach, beforeEach, vi } from "vitest"
 import { channel, CHANNELS } from "./channel"
 import {
   addedTo,
+  addOf,
   diffOf,
   followerArgs,
   forwardArgs,
@@ -31,6 +33,9 @@ import {
   probeCommand,
   remoteCommand,
   removedFrom,
+  rewrite,
+  setIn,
+  setOf,
   signInOf,
   stopCommand,
   suggestionsOf,
@@ -391,6 +396,129 @@ kept = true
   })
 })
 
+it("a host's ssh and banda are changed in place, its comments, other keys and every other host kept", () => {
+  // The address in its own line, the comment after it kept; a banda the
+  // host had not goes after its last key, before the next host's comment.
+  const withNote = WRITTEN.replace(
+    'ssh = "roma@arc"',
+    'ssh = "roma@arc"   # tailnet\nnote = "mine"'
+  )
+  expect(
+    setIn(withNote, "arc", { ssh: "roma@arc.ts.net", banda: "/opt/banda" })
+  ).toEqual({
+    text: withNote.replace(
+      'ssh = "roma@arc"   # tailnet\nnote = "mine"',
+      'ssh = "roma@arc.ts.net"   # tailnet\nnote = "mine"\nbanda = "/opt/banda"'
+    ),
+  })
+  // An empty banda takes its line out; the rest stays as it was.
+  expect(setIn(WRITTEN, "devbox", { banda: "" })).toEqual({
+    text: WRITTEN.replace('banda = "~/.local/bin/banda-dev"\n', ""),
+  })
+  // What is as it was is not written again, nor an empty banda it has not.
+  expect(setIn(WRITTEN, "arc", { ssh: "roma@arc", banda: "" })).toEqual({
+    text: WRITTEN,
+  })
+  expect(setIn(WRITTEN, "pi5", { ssh: "pi5" })).toEqual({
+    why: 'There is no host "pi5" in hosts.toml.',
+  })
+  // A value Banda cannot find in a line of its own is not changed.
+  const split = `[[hosts]]\nname = "a"\nssh = """\na"""\n`
+  expect(setIn(split, "a", { ssh: "b" })).toEqual({
+    why: expect.stringMatching(/cannot change safely/),
+  })
+})
+
+it("a change of a host is refused for one not there, an address Banda refuses, or a machine another host reaches", () => {
+  expect(setOf(WRITTEN, "devbox", { ssh: "roma@devbox", banda: "" })).toEqual({
+    text: WRITTEN.replace(
+      'ssh = "devbox"\nbanda = "~/.local/bin/banda-dev"',
+      'ssh = "roma@devbox"'
+    ),
+    value: { name: "devbox", ssh: "roma@devbox" },
+  })
+  expect(setOf(WRITTEN, "arc", { banda: "/opt/banda" })).toMatchObject({
+    value: { name: "arc", ssh: "roma@arc", banda: "/opt/banda" },
+  })
+  for (const [name, change, why] of [
+    ["pi5", { ssh: "pi5" }, 'There is no host "pi5" in hosts.toml.'],
+    ["arc", { ssh: "" }, /`ssh` is not/],
+    ["arc", { ssh: "-oProxyCommand=x" }, /`ssh` is not/],
+    ["arc", { banda: "banda; rm" }, /`banda` is not/],
+    ["arc", { ssh: "roma@devbox" }, "devbox is in hosts.toml already"],
+  ] as const)
+    expect(setOf(WRITTEN, name, change)).toEqual({
+      why: expect.stringMatching(why),
+    })
+  // A machine the file has twice from before stays editable, as long as
+  // its address stays on that machine.
+  const twice = `${WRITTEN}\n[[hosts]]\nname = "root"\nssh = "root@arc"\n`
+  expect(setOf(twice, "arc", { banda: "/opt/banda" })).toMatchObject({
+    value: { name: "arc", ssh: "roma@arc", banda: "/opt/banda" },
+  })
+  expect(setOf(twice, "root", { ssh: "admin@arc" })).toMatchObject({
+    value: { name: "root", ssh: "admin@arc" },
+  })
+})
+
+it("a machine is added once, whatever its address: by its machine, not its words", () => {
+  for (const ssh of ["arc", "ARC", "ssh://roma@arc:22", "other@arc"])
+    expect(addOf(WRITTEN, { ssh })).toEqual({
+      why: "arc is in hosts.toml already",
+    })
+  expect(addOf(WRITTEN, { ssh: "roma@pi5" })).toMatchObject({
+    value: { name: "pi5", ssh: "roma@pi5" },
+  })
+  // A bare IPv6 address is its machine whole, not up to its first `:`.
+  const six = (
+    addOf(WRITTEN, { name: "one", ssh: "fd7a:115c:a1e0::1" }) as {
+      text: string
+    }
+  ).text
+  expect(addOf(six, { name: "two", ssh: "fd7a:115c:a1e0::2" })).toMatchObject({
+    value: { name: "two", ssh: "fd7a:115c:a1e0::2" },
+  })
+  expect(setOf(six, "one", { ssh: "roma@fd7a:115c:a1e0::9" })).toMatchObject({
+    value: { name: "one", ssh: "roma@fd7a:115c:a1e0::9" },
+  })
+  for (const ssh of ["roma@FD7A:115C:A1E0::1", "ssh://[fd7a:115c:a1e0::1]:22"])
+    expect(addOf(six, { ssh })).toEqual({
+      why: "one is in hosts.toml already",
+    })
+})
+
+it("a change by hand as Banda writes hosts.toml is kept, and Banda refuses when it comes again", () => {
+  const file = join(folder(), "hosts.toml")
+  writeFileSync(file, WRITTEN)
+  const hand = (text: string) => `${text}\n# by hand ${text.length}\n`
+  // The Person saves the file after Banda read it: the change is made
+  // again on what they saved.
+  let edits = 0
+  const once = rewrite(file, (text) => {
+    if (edits++ === 0) writeFileSync(file, hand(text))
+    return addOf(text, { ssh: "pi5" })
+  })
+  expect(once).toEqual({ value: { name: "pi5", ssh: "pi5" } })
+  expect(edits).toBe(2)
+  const kept = readFileSync(file, "utf8")
+  expect(kept).toBe(
+    (addedTo(hand(WRITTEN), { name: "pi5", ssh: "pi5" }) as { text: string })
+      .text
+  )
+  // Saved again each time: nothing Banda wrote, and the Person's kept.
+  const always = rewrite(file, (text) => {
+    writeFileSync(file, hand(text))
+    return setOf(text, "pi5", { banda: "/opt/banda" })
+  })
+  expect(always).toEqual({
+    why: "hosts.toml changed while Banda wrote it; try again",
+  })
+  expect(readFileSync(file, "utf8")).toBe(hand(hand(kept)))
+  expect(readFileSync(file, "utf8")).not.toContain("/opt/banda")
+  // No file of Banda's left beside it.
+  expect(readdirSync(dirname(file))).toEqual(["hosts.toml"])
+})
+
 it("a new host's name is made from its address, past the names taken", () => {
   const taken = [{ name: "devbox" }, { name: "box2" }]
   expect(nameFrom("arc", taken)).toBe("arc")
@@ -436,9 +564,36 @@ it("Test reads what the machine is, its banda's build, and its engine while one 
   expect(foundIn(["Linux", version, `{"running":false}`], 0, own)).toEqual({
     state: "found",
     system: "Linux",
+    named: null,
     banda: { build: "abc123", version: "0.1.0-dev.2" },
     own,
     engine: null,
+  })
+  // The system and the machine's own name and icon, as banda status says
+  // them over uname, cleaned as the page cleans a Welcome's.
+  const said = (system: unknown, named: unknown) =>
+    foundIn(
+      ["Linux", version, JSON.stringify({ running: false, system, named })],
+      0,
+      own
+    )
+  expect(said("Arch Linux", { name: "arc", icon: "server" })).toMatchObject({
+    system: "Arch Linux",
+    named: { name: "arc", icon: "server" },
+  })
+  expect(
+    said("macOS\u202e 26.1\n", {
+      name: "\u200bRoma's\u0007 MacBook\u2028 Pro 14-inch",
+      icon: "toaster",
+    })
+  ).toMatchObject({
+    system: "macOS 26.1",
+    named: { name: "Roma's MacBook P", icon: "desktop" },
+  })
+  for (const named of [null, "arc", { name: " \u200b ", icon: "vm" }, {}])
+    expect(said(3, named)).toMatchObject({ system: "Linux", named: null })
+  expect(said("x".repeat(100), null)).toMatchObject({
+    system: "x".repeat(40),
   })
   const running = JSON.stringify({
     running: true,
@@ -1589,9 +1744,11 @@ it.live(
         // Reached at once, not on the watch's word.
         expect(yield* names).toEqual(["devbox", "box2"])
         yield* hosts.address("box2")
-        // Refused: an address there already, a name taken, an option.
+        // Refused: a machine there already, at this address or another; a
+        // name taken; an option.
         for (const [machine, why] of [
-          [{ ssh: "roma@box2.tail1234.ts.net" }, /is in hosts.toml already/],
+          [{ ssh: "roma@box2.tail1234.ts.net" }, /^box2 is in hosts.toml/],
+          [{ ssh: "box2.tail1234.ts.net" }, /^box2 is in hosts.toml/],
           [{ name: "devbox", ssh: "other" }, /"devbox" is taken/],
           [{ name: "this", ssh: "other" }, /is Banda's own/],
           [{ ssh: "-oProxyCommand=x" }, /`ssh` is not/],
@@ -1612,6 +1769,44 @@ it.live(
 )
 
 it.live(
+  "a host's address changed over the bridge is written in place and reached again at it; an empty banda is none",
+  () =>
+    Effect.gen(function* () {
+      const fake = fakeSsh({
+        followers: [
+          [{ out: running("one", 1111) }],
+          [{ out: running("two", 2222) }],
+        ],
+      })
+      const file = join(fake.dir, "hosts.toml")
+      const written = `# mine\n\n${DEVBOX_TOML.replace('ssh = "devbox"', 'ssh = "devbox"  # home')}`
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        expect((yield* hosts.address("devbox")).secret).toBe("one")
+        const pids = fake.pidsOf("devbox")
+        expect(
+          yield* hosts.set("devbox", { ssh: "roma@devbox", banda: "" })
+        ).toEqual({ name: "devbox", ssh: "roma@devbox" })
+        expect(readFileSync(file, "utf8")).toBe(
+          `# mine\n\n[[hosts]]\nname = "devbox"\nssh = "roma@devbox"  # home\n`
+        )
+        // Reached again at once, at the new address, the old ssh ended.
+        expect((yield* hosts.address("devbox")).secret).toBe("two")
+        expect(fake.runs("follower", "roma@devbox")).toHaveLength(1)
+        expect(fake.runs("follower").at(-1)!.args.at(-1)).toBe(
+          remoteCommand(undefined)
+        )
+        yield* until(() => pids.every((pid) => !alive(pid)))
+        expect(
+          (yield* Effect.flip(hosts.set("nowhere", { ssh: "x" }))).message
+        ).toBe('There is no host "nowhere" in hosts.toml.')
+        expect(yield* names).toEqual(["devbox"])
+      }).pipe(Effect.scoped, Effect.provide(hostsOn(fake, {}, written)))
+    }),
+  20_000
+)
+
+it.live(
   "Test asks banda status there and starts nothing: what the machine is, its banda's build, and whether its engine runs",
   () =>
     Effect.gen(function* () {
@@ -1621,7 +1816,13 @@ it.live(
           [
             { out: "Linux" },
             { out: "banda 0.1.0-dev.2 (build abc123)" },
-            { out: `{"running":false}` },
+            {
+              out: JSON.stringify({
+                running: false,
+                system: "Arch Linux",
+                named: { name: "pi5", icon: "router" },
+              }),
+            },
             { exit: 0 },
           ],
           [{ err: "ssh: connect to host pi5 port 22: refused", exit: 255 }],
@@ -1638,7 +1839,8 @@ it.live(
         const hosts = yield* Hosts
         expect(yield* hosts.test("roma@pi5", undefined)).toEqual({
           state: "found",
-          system: "Linux",
+          system: "Arch Linux",
+          named: { name: "pi5", icon: "router" },
           banda: { build: "abc123", version: "0.1.0-dev.2" },
           own: { build: "def456", version: "0.1.0-dev.1" },
           engine: null,

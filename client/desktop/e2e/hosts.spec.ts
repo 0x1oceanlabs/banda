@@ -13,9 +13,10 @@
  * for the follower, as a Mac's does not (engine/src/control.rs).
  * hosts.toml applies as it changes: a machine written there by hand, or
  * added through the bridge as the page will, shows at once, and goes as
- * it is taken out; Test finds arc's Banda and starts nothing there, and
- * Stop Banda stops it. arc names itself in its machine.toml (ADR 0095),
- * as this checkout's engine says in its welcome: "arc", a server. With
+ * it is taken out, and its address changes in place; Test finds arc's
+ * Banda, its system and its own name, and starts nothing there, and Stop
+ * Banda stops it. arc names itself in its machine.toml (ADR 0095), as
+ * this checkout's engine says in its welcome: "arc", a server. With
  * BANDA_E2E_SHOTS set to a folder, it leaves pictures of each state there
  * for the Person to see.
  */
@@ -657,11 +658,13 @@ test("hosts.toml applies as it changes: a machine added by hand or through the b
     )
   await expect(sidebarOf(page)).toBeVisible()
 
-  // Test, before arc is added: its Banda is found, and its engine, which
-  // does not run, is not started.
+  // Test, before arc is added: its Banda is found, with the system it
+  // runs and its own name and icon, and its engine, which does not run,
+  // is not started.
   expect(await tested()).toMatchObject({
     state: "found",
-    system: "Linux",
+    system: expect.stringMatching(/\S/),
+    named: { name: "arc", icon: "server" },
     engine: null,
   })
   expect(JSON.parse(arc.banda("status"))).toMatchObject({ running: false })
@@ -699,4 +702,26 @@ test("hosts.toml applies as it changes: a machine added by hand or through the b
   ).toEqual({ name: "arc", ssh: "arc", banda: program })
   expect(readFileSync(file, "utf8")).toBe(entry)
   await expect(there.getByText("Bench window tests")).toBeVisible()
+
+  // Its address changed through the bridge: written in place, and arc is
+  // reached again at it.
+  expect(
+    await page.evaluate(() =>
+      (globalThis as unknown as Paged).banda.hostSet("arc", {
+        ssh: "roma@arc",
+      })
+    )
+  ).toEqual({ name: "arc", ssh: "roma@arc", banda: program })
+  expect(readFileSync(file, "utf8")).toBe(
+    entry.replace('ssh = "arc"', 'ssh = "roma@arc"')
+  )
+  await expect(there.getByText("Bench window tests")).toBeVisible()
+  // The same machine again, at another address, is refused.
+  expect(
+    await page.evaluate(() =>
+      (globalThis as unknown as Paged).banda
+        .hostAdd({ ssh: "arc" })
+        .then(String, (error: Error) => error.message)
+    )
+  ).toMatch(/arc is in hosts.toml already/)
 })

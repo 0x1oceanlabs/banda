@@ -3,13 +3,24 @@ import type { MachineIcon } from "../MachineIcon";
 import type { Named } from "../Named";
 
 /**
- * This machine's name and icon now, and what Banda found.
+ * This machine's name and icon now, and what Banda found; and what it
+ * is, in words, for Settings' "This machine", as its system says now.
  */
 export type Naming = { 
 /**
  * What it is when its machine.toml says nothing.
  */
 found: Named, 
+/**
+ * The system it runs, "Arch Linux", "macOS 26.1"; none where the
+ * system does not say.
+ */
+system?: string, 
+/**
+ * Its model, as its maker names it, "MacBook Pro"; none where its
+ * firmware does not say.
+ */
+model?: string, 
 /**
  * Up to 16 characters, never empty.
  */

@@ -9,7 +9,7 @@
 import { AGENTS_BRIDGE } from "@banda/agents-pane/desktop"
 import { BROWSER_BRIDGE, type BrowserHost } from "@banda/browser-pane/desktop"
 import { NOTIFY_BRIDGE } from "@banda/notifications-pane/desktop"
-import type { Address, ProjectId } from "@banda/contract"
+import type { Address, Named, ProjectId } from "@banda/contract"
 import { FILES_BRIDGE } from "@banda/ui/desktop"
 import type { Args } from "@banda/ui/module"
 import type { PaneState, Place } from "@banda/ui/pane"
@@ -104,17 +104,24 @@ export type HostEntry = { name: string; ssh: string; banda?: string }
 
 /**
  * What Test, and Add's Connect, find at an address over ssh, starting
- * nothing there (ADR 0095, decision 9; #837): found, with what its `uname`
- * says the machine is, the `banda` found there and this window's own, and
- * its engine while one runs, by what it says of itself (`banda status`),
- * whether it speaks this window's protocol; waiting for the Person to
- * sign in to Tailscale at `url`, Test asked again once they have; away; or
- * refused. `why` is as a host's state's.
+ * nothing there (ADR 0095, decision 9; #837): found, with the system the
+ * machine runs, its own name and icon, the `banda` found there and this
+ * window's own, and its engine while one runs, by what it says of itself
+ * (`banda status`), whether it speaks this window's protocol; waiting for
+ * the Person to sign in to Tailscale at `url`, Test asked again once they
+ * have; away; or refused. `why` is as a host's state's.
  */
 export type HostTest =
   | {
       state: "found"
-      system: "Linux" | "macOS" | null
+      /** As its `banda status` says it, "Arch Linux", "macOS 26.1"; from
+       * a banda before that, "Linux" or "macOS", as its `uname` says;
+       * none when neither does. Plain text, cut short. */
+      system: string | null
+      /** Its own name and icon, as its `machine.toml` says them over what
+       * Banda finds there (ADR 0095, decisions 2 and 3), cleaned as the
+       * page cleans a Welcome's; none from a banda before them. */
+      named: Named | null
       banda: { build: string | null; version: string | null }
       own: { build: string | null; version: string | null }
       engine: {
@@ -192,9 +199,20 @@ export const BRIDGE = bridge({
   /** Adds a machine to `hosts.toml`, its comments and other hosts kept,
    * and reaches it at once: `name` is made from `ssh` when not given, and
    * an empty `banda` is none. The entry written; fails for one Banda
-   * refuses, or whose name or address is there already. */
+   * refuses, or whose name is there already, or whose machine is, at this
+   * address or another (`roma@arc` and `arc`). */
   hostAdd: invoke<
     [machine: { name?: string; ssh: string; banda?: string }],
+    HostEntry
+  >(),
+  /** Changes host `name`'s address (`ssh`) or `banda` in `hosts.toml`, in
+   * place, its comments and other hosts kept, and reaches it again: Settings
+   * → Machines' Address and "Banda on …". A key left out stays as it was;
+   * an empty `banda` is none. The entry written; fails for a host not
+   * there, an address Banda refuses, or one of a machine another host
+   * reaches. */
+  hostSet: invoke<
+    [name: string, change: { ssh?: string; banda?: string }],
     HostEntry
   >(),
   /** Takes host `name` out of `hosts.toml`, the rest kept, and ends its

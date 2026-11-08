@@ -43,10 +43,16 @@ TOML, as one saved half-written, leaves the hosts as they were.
 The window changes the file through Banda's main process, never by
 itself: `hostAdd` writes a `[[hosts]]` at its end, its `name` made from
 the address when none is given, and `hostRemove` takes one out with the
-comment just above it; each keeps your other hosts and comments, and
-writes the file whole. `hostTest` is Test connection, and Add's Connect:
-it runs `uname`, `banda --version` and `banda status` there, which starts
-nothing. `hostStop` is Stop Banda: that machine's own `banda stop`; the
+comment just above it.
+`hostSet` changes a host's `ssh` or `banda` in its own line, its comment
+kept; an empty `banda` takes that line out.
+`hostAdd` and `hostSet` refuse a machine the file reaches already, at that
+address or another: `roma@arc` and `arc` are one machine.
+Each keeps your other hosts and comments, writes the file whole, and
+keeps a change you saved meanwhile. `hostTest` is Test connection, and
+Add's Connect: it runs `uname`, `banda --version` and `banda status`
+there, which starts nothing, and says the system there and the machine's
+own name and icon. `hostStop` is Stop Banda: that machine's own `banda stop`; the
 host then shows stopped, and Banda starts nothing there until you start
 it, even when the host was away as you stopped it.
 `sshSuggestions` lists the Hosts of `~/.ssh/config`, with no pattern and

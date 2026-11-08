@@ -439,6 +439,16 @@ async function ready(): Promise<void> {
       ]),
       ([machine]) => Hosts.use((hosts) => hosts.add(machine)),
     ],
+    hostSet: [
+      Schema.Tuple([
+        Schema.String,
+        Schema.Struct({
+          ssh: Schema.optionalKey(Schema.String),
+          banda: Schema.optionalKey(Schema.String),
+        }),
+      ]),
+      ([name, change]) => Hosts.use((hosts) => hosts.set(name, change)),
+    ],
     hostRemove: [text, ([name]) => Hosts.use((hosts) => hosts.remove(name))],
     hostTest: [
       Schema.Tuple([Schema.String, Schema.NullOr(Schema.String)]),
