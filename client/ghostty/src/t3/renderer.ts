@@ -410,20 +410,19 @@ function moveDrawn(drawn: Drawn, rows: number): void {
  * row's pixels are its own and move with it (ADR 0088, step P4). The
  * drawing is in CSS pixels and rounds its edges onto screen pixels. That
  * rounds alike on every row only where every edge it rounds is exact: where
- * the screen's scale is a power of two, 1 or 2, and the rows' height and
- * origin are whole screen pixels. Anywhere else, 1.25, 1.5 or the 1.6 that
- * Chromium reports as 1.600000023841858, a screen pixel is no binary
- * fraction of a CSS pixel: an edge half way between two screen pixels
- * rounds up on one row and down on the next, a strike or a block's edge a
- * pixel lower there, and an edge on a screen pixel's lands a hair past it,
- * so a cursor's outline or a clear leaves 1 in 255 on the row beside it
- * until that row is drawn again. The pixel fuzz finds both
- * (`tools/pixel-fuzz`).
+ * the screen's scale is 1 or 2, and the rows' height and origin are whole
+ * screen pixels. At 1.25, 1.5 or the 1.6 that Chromium reports as
+ * 1.600000023841858, a screen pixel is no binary fraction of a CSS pixel:
+ * an edge half way between two screen pixels rounds up on one row and down
+ * on the next, a strike or a block's edge a pixel lower there, and an edge
+ * on a screen pixel's lands a hair past it, so a cursor's outline or a
+ * clear leaves 1 in 255 on the row beside it until that row is drawn
+ * again. The pixel fuzz finds both (`tools/pixel-fuzz`), and finds 0.5 off
+ * too, though it is a power of two, so only 1 and 2 are taken (#806).
  */
 export function rowsDrawAlike(ratio: number, height: number, originY: number): boolean {
   return (
-    ratio > 0 &&
-    2 ** Math.round(Math.log2(ratio)) === ratio &&
+    (ratio === 1 || ratio === 2) &&
     Number.isInteger(height * ratio) &&
     Number.isInteger(originY * ratio)
   );
