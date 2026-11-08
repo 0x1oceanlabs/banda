@@ -307,7 +307,8 @@ These are ADR 0088's. `client/desktop/e2e/motion.spec.ts` measures all
 but the last two (a key to its frame, a Tree) against
 `client/desktop/e2e/motion-budget.json`, which only warns while it is in
 record mode; then the hard ones (counts) gate, and timings gate softly once
-CI's variance is known.
+CI's variance is known. The Tiles and widgets React draws again for a key
+are the same on every run, so they gate already.
 
 - **motion.1 Animate only `transform`, `translate`, `scale` and
   `opacity`.** Never width, height, left, top or a scroll offset per
@@ -336,8 +337,9 @@ CI's variance is known.
   selector; memoise; pass no inline functions or objects into a memoised
   child; act by action id. *Check:* review; motion.spec counts the
   Tiles, Strips, widgets and sidebar React draws again for each key, and
-  the window's architecture test holds the Window's memo boundaries
-  (each Tile and its Pane, each Strip, the widgets).
+  fails where a key draws more Tiles or widgets than its budget; the
+  window's architecture test holds the Window's memo boundaries (each
+  Tile and its Pane, each Strip, the widgets).
 - **motion.6 Keep heavy work off the main thread.** Over 4 ms goes to a
   worker or is cut into pieces; lists over about 200 rows are windowed;
   fast output comes as a stream. *Check:* review.

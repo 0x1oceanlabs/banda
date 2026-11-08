@@ -7,7 +7,7 @@ import { Moving } from "../motion"
 import type { Entry, Workspaces as State } from "./model"
 import type { Frame } from "./PaneFrame"
 import type { Reveal } from "./layout"
-import type { Listing } from "./listing"
+import type { Shows } from "./shows"
 import { Strip } from "./Strip"
 import { useModHeld } from "./held"
 import { pixels, Swipe } from "./swipe"
@@ -30,11 +30,12 @@ export function Workspaces({
   engine,
   modules,
   projectOf,
-  listing,
+  shows,
   marked,
   away,
   zoomed,
   reveal,
+  inset,
   frame,
   onStep,
   onGo,
@@ -50,7 +51,7 @@ export function Workspaces({
   modules: readonly string[]
   projectOf: (project: ProjectId) => ProjectSummary | undefined
   /** What the Panes show, as their Apps list it, and how each calls. */
-  listing: Listing
+  shows: Shows
   /** An Agent opened it, and the Person has not looked at it yet. */
   marked: (entry: Entry) => boolean
   /** The Panes in windows of their own, which stand-ins keep the places of. */
@@ -59,6 +60,8 @@ export function Workspaces({
   zoomed: string | undefined
   /** A column to show once, as asked: Alt+C's, or a Thread picked. */
   reveal?: Reveal
+  /** How far the sidebar reaches over their left, in rem (`Strip`). */
+  inset: number
   frame: Frame
   /** A swipe up or down with the mod held steps once, however long it is. */
   onStep: (by: 1 | -1) => void
@@ -210,11 +213,12 @@ export function Workspaces({
               engine={engine}
               modules={modules}
               projectOf={projectOf}
-              listing={listing}
+              shows={shows}
               marked={marked}
               away={away}
               zoomed={zoomed}
               reveal={reveal}
+              inset={inset}
               frame={frame}
               onStep={onStep}
               onStart={onStart}

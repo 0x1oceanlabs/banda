@@ -52,7 +52,7 @@ import {
 } from "lucide-react"
 import { KEYS_FILE, writeBind } from "../actions/actions"
 import type { Listed } from "@banda/ui/pane"
-import { all, useItems } from "../calls/stores"
+import { useLists } from "../calls/stores"
 import { useLookSidebar } from "../look"
 import { runs, sources as allSources } from "../registry"
 import type { Shell } from "../window/actions"
@@ -282,7 +282,7 @@ function Menu({
   onChoose: (row: Exclude<Choice, Branch | Own>) => void
   onAdded: (project: ProjectSummary) => void
 }) {
-  const lists = useItems(all)
+  const lists = useLists()
   // New Thread's key in force starts one with the words.
   const ask = useKeyOf()("thread.new")
   const { preset, presets } = useLookSidebar()

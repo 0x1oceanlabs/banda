@@ -145,6 +145,34 @@ export type Shell = WindowApi & {
   engine: Engine
 }
 
+/** What a module is given of `shell`, a steady face of it (`useSteady`):
+ * its `WindowApi` alone, so an App's `start` and its widgets reach no more
+ * of the Window than the API says. */
+export function windowApiOf(shell: Shell): WindowApi {
+  return {
+    get engine() {
+      return shell.engine
+    },
+    get home() {
+      return shell.home
+    },
+    open: shell.open,
+    focused: shell.focused,
+    beside: shell.beside,
+    lists: shell.lists,
+    watchLists: shell.watchLists,
+    run: shell.run,
+    sight: shell.sight,
+    watchSight: shell.watchSight,
+    goTo: shell.goTo,
+    projects: shell.projects,
+    look: shell.look,
+    writeSetting: shell.writeSetting,
+    attach: shell.attach,
+    peek: shell.peek,
+  }
+}
+
 /** What `thread.snooze` and `thread.wake` are asked: a Thread by its
  * Project, or none for the one in focus, and a time to snooze it till. */
 export type SnoozeAsked = {

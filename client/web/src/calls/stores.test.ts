@@ -120,6 +120,19 @@ test("the calls follow the lists, and a snooze that wakes by its time", () => {
   expect(stores.calls.get().list).toHaveLength(2)
 })
 
+test("the calls are told of after each change of the items, one that calls none too", () => {
+  // The Tiling listens to the calls alone (`Shows`), for both.
+  const stores = newStores(0)
+  const stop = followCalls(stores)
+  const heard = vi.fn()
+  stores.calls.subscribe(heard)
+  takeLists(stores, { [p]: [thread("a")] })
+  takeLists(stores, { [p]: [thread("a", { title: "A" })] })
+  expect(stores.calls.get().list).toEqual([])
+  expect(heard).toHaveBeenCalledTimes(2)
+  stop()
+})
+
 test("what watches the lists hears them change, and a snooze wake, not a mark", () => {
   vi.useFakeTimers({ now: 1_000 })
   const stores = newStores(1_000)

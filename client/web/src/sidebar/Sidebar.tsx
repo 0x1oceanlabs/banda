@@ -34,7 +34,7 @@ import { trustProject } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
 import { clock, problem } from "@banda/ui/lib/words"
 import type { Listed, PaneState } from "@banda/ui/pane"
-import { all, useItems } from "../calls/stores"
+import { useLists, useSnoozesNow } from "../calls/stores"
 import {
   AlarmClockIcon,
   BadgeCheckIcon,
@@ -68,7 +68,7 @@ import { useNaming } from "../titles/titles"
 import { pickPreset, PRESET_WORDS, type Settings } from "./settings"
 import { type Held, held, hold, rowKey } from "./hold"
 import { useIsArchived } from "./archived"
-import { seeWoke, snoozable, useSnoozes } from "./snoozed"
+import { seeWoke, snoozable } from "./snoozed"
 import { FlowMenu } from "./FlowMenu"
 import { ThemeMenu } from "./ThemeMenu"
 import { TrustCard, type Trusting } from "../trust/TrustCard"
@@ -141,8 +141,9 @@ export function Sidebar({
 }) {
   const keyFor = useKeyLabel()
   const { projects, home, isCurrent, onPin } = props
-  // What every module lists, from the Window's items.
-  const lists = useItems(all)
+  // What every module lists, from the Window's items, and its snoozes by
+  // the calls' clock.
+  const lists = useLists()
   const done =
     <A extends unknown[]>(act: (...args: A) => void) =>
     (...args: A) => {
@@ -175,7 +176,7 @@ export function Sidebar({
   // The Threads the Person archived (ADR 0069), and those that sleep or
   // woke (ADR 0074).
   const archived = useIsArchived()
-  const { asleep, woke } = useSnoozes(lists)
+  const { asleep, woke } = useSnoozesNow()
   const fresh = useMemo(
     () =>
       arrange(lists, projects, settings, only, toggled, {

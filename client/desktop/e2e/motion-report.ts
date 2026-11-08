@@ -13,7 +13,9 @@
  * worse for a count, 20% for a timing, or the `tolerance` the measure
  * names, for a count that follows the machine's speed (the frames an
  * animation gets, the lines a shell prints); and `SLACK` more. A measure
- * with no number this run is not read. `MOTION_RECORD=1` writes the
+ * with no number this run is not read. A measure that `blocks`, a count
+ * the same on every run as React's drawings for a key, fails the test
+ * over its budget, in record mode too. `MOTION_RECORD=1` writes the
  * recorded numbers, the median of the runs this test run made (with
  * `--repeat-each=3`, of three), over those recorded before. A PR may lower
  * one, and raises one only by saying why.
@@ -25,7 +27,7 @@ import {
   writeFileSync,
 } from "node:fs"
 import { join } from "node:path"
-import { test } from "@playwright/test"
+import { expect, test } from "@playwright/test"
 import type { Reading, TerminalCount } from "./motion-probe"
 import {
   quantile,
@@ -85,6 +87,8 @@ type Budget = {
     budget: number
     tolerance?: number
     note?: string
+    /** Over its budget, or with no number, it fails the test. */
+    blocks?: boolean
   }[]
   /** By scale, then by measure. */
   recorded: Record<string, Record<string, number>>
@@ -459,4 +463,12 @@ export function report(
     )
     writeFileSync(BUDGET, `${JSON.stringify(budget, null, 2)}\n`)
   }
+
+  const over = budget.measures.flatMap(({ measure, budget: most, blocks }) => {
+    const now = valueOf(numbers, measure)
+    return blocks && !(now !== undefined && now <= most)
+      ? [`${measure} at ${scale}×: ${now ?? "none"}, budget ${most}`]
+      : []
+  })
+  expect(over, "measures over a budget that blocks").toEqual([])
 }

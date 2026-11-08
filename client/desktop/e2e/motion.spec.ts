@@ -154,12 +154,13 @@ test("how the Tiling moves, against motion-budget.json", async () => {
   )
 
   const phases: Record<string, Phase> = {}
-  /** Measures `act` as the phase `name`; a `still` one moves nothing,
-   * and one of `steps` presses that many keys. */
+  // The keys a phase pressed, counted as each is pressed.
+  let pressed = 0
+  /** Measures `act` as the phase `name`; a `still` one moves nothing. */
   const measure = async (
     name: string,
     act: () => Promise<void>,
-    { still = false, steps = 0 } = {}
+    { still = false } = {}
   ) => {
     if (traced) await startTrace(cdp, name)
     const profile = profiled.includes(name)
@@ -177,7 +178,9 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     await page.evaluate((mark) => console.timeStamp(mark), MARKS.start)
     const before = await metrics(name)
     const started = Date.now()
+    pressed = 0
     await act()
+    const steps = pressed
     const seconds = (Date.now() - started) / 1000
     const after = await metrics(name)
     await page.evaluate((mark) => console.timeStamp(mark), MARKS.end)
@@ -210,6 +213,11 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     ).toBeGreaterThan(0)
     if (trace && !still)
       expect(trace.moving.frames, `${name}: moving frames`).toBeGreaterThan(0)
+    for (const [part, found] of Object.entries(counted.hooked))
+      expect(
+        found,
+        `${name}: the ${part} whose drawings it counts`
+      ).toBeGreaterThan(0)
     phases[name] = {
       seconds,
       steps,
@@ -219,11 +227,17 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     }
   }
 
+  /** Presses `key` in the window, counted as the phase's. */
+  const inWindow = async (key: string) => {
+    pressed += 1
+    await page.keyboard.press(key)
+  }
   // A key goes where the keyboard is: to the browser's page when it has
   // the focus, as the keyboard sends it there, so main's
   // `before-input-event` takes Banda's keys from it; else to the window.
   // Where it went.
   const press = async (key: string) => {
+    pressed += 1
     const held = key.split("+")
     const keyCode = held.pop()!.replace(/^(Arrow|Key)/, "")
     const modifiers = held.map(
@@ -274,80 +288,60 @@ test("how the Tiling moves, against motion-budget.json", async () => {
   await terminal(2).click()
   // Through the widths short of the whole screen, and back: the browser
   // beside it stays in sight.
-  await measure(
-    "width",
-    async () => {
-      await presses([
-        "Control+Alt+ArrowLeft",
-        "Control+Alt+ArrowRight",
-        "Control+Alt+ArrowRight",
-        "Control+Alt+ArrowLeft",
-        "Control+Alt+ArrowLeft",
-        "Control+Alt+ArrowRight",
-      ])
-    },
-    { steps: 6 }
-  )
+  await measure("width", async () => {
+    await presses([
+      "Control+Alt+ArrowLeft",
+      "Control+Alt+ArrowRight",
+      "Control+Alt+ArrowRight",
+      "Control+Alt+ArrowLeft",
+      "Control+Alt+ArrowLeft",
+      "Control+Alt+ArrowRight",
+    ])
+  })
   await terminal(2).click()
   // To the first terminal and back to the browser, its page sliding out
   // and in, and from the page to the last terminal.
   let went: string[] = []
-  await measure(
-    "focus",
-    async () => {
-      went = await presses([
-        "Alt+ArrowLeft",
-        "Alt+ArrowLeft",
-        "Alt+ArrowRight",
-        "Alt+ArrowRight",
-        "Alt+ArrowRight",
-        "Alt+ArrowLeft",
-      ])
-    },
-    { steps: 6 }
-  )
+  await measure("focus", async () => {
+    went = await presses([
+      "Alt+ArrowLeft",
+      "Alt+ArrowLeft",
+      "Alt+ArrowRight",
+      "Alt+ArrowRight",
+      "Alt+ArrowRight",
+      "Alt+ArrowLeft",
+    ])
+  })
   // The last key went from the page, and reached the window.
   expect(went.at(-1)).toBe("page")
+  // Each key drew again the two Tiles the focus moved between, as it must
+  // to show it: the probe counts React's drawings.
+  expect(phases.focus.counted.renders.tiles, "focus: Tiles drawn again").toBe(
+    2 * phases.focus.steps
+  )
   await expect(
     terminal(2).locator("xpath=ancestor::section[@data-tile][1]")
   ).toHaveAttribute("data-focused", "true")
   await terminal(2).click()
-  await measure(
-    "maximize",
-    async () => {
-      await presses(["Alt+KeyF", "Alt+KeyF", "Alt+KeyF", "Alt+KeyF"])
-    },
-    { steps: 4 }
-  )
+  await measure("maximize", async () => {
+    await presses(["Alt+KeyF", "Alt+KeyF", "Alt+KeyF", "Alt+KeyF"])
+  })
   await terminal(2).click()
-  await measure(
-    "workspace",
-    async () => {
-      await presses([
-        "Alt+PageDown",
-        "Alt+PageUp",
-        "Alt+PageDown",
-        "Alt+PageUp",
-      ])
-    },
-    { steps: 4 }
-  )
+  await measure("workspace", async () => {
+    await presses(["Alt+PageDown", "Alt+PageUp", "Alt+PageDown", "Alt+PageUp"])
+  })
   await terminal(2).click()
   const overview = page.getByRole("dialog", { name: "Overview" })
-  await measure(
-    "overview",
-    async () => {
-      for (let i = 0; i < 2; i++) {
-        await page.keyboard.press("Alt+KeyO")
-        await expect(overview).toBeVisible()
-        await page.waitForTimeout(900)
-        await page.keyboard.press("Escape")
-        await expect(overview).toBeHidden()
-        await page.waitForTimeout(900)
-      }
-    },
-    { steps: 4 }
-  )
+  await measure("overview", async () => {
+    for (let i = 0; i < 2; i++) {
+      await inWindow("Alt+KeyO")
+      await expect(overview).toBeVisible()
+      await page.waitForTimeout(900)
+      await inWindow("Escape")
+      await expect(overview).toBeHidden()
+      await page.waitForTimeout(900)
+    }
+  })
 
   report(scale, versions, phases)
 })

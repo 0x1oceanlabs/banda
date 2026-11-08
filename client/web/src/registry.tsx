@@ -33,7 +33,7 @@ import {
 } from "@banda/ui/pane"
 import { useScope } from "@banda/ui/hooks/use-scope"
 import { LayoutGridIcon, type LucideIcon } from "lucide-react"
-import { type ComponentType, memo, useSyncExternalStore } from "react"
+import { memo, useCallback, useSyncExternalStore } from "react"
 import { columnsOf } from "./look"
 import { modules } from "./modules"
 import { keepProblem } from "./problems/keep"
@@ -100,28 +100,16 @@ const all: readonly Module[] = [windowModule, ...modules]
 /** The Panes the modules offer, after the window's launcher. */
 export const kinds: readonly AnyPaneKind[] = all.flatMap((m) => m.panes)
 
-/** What a module draws, a Pane or a widget, the same memo of it for
- * every drawing: drawn again only as its own props change (ADR 0088,
- * decision 7). */
-const MEMOS = new WeakMap<object, unknown>()
-export function memoOf<P extends object>(
-  component: ComponentType<P>
-): ComponentType<P> {
-  let memoised = MEMOS.get(component) as ComponentType<P> | undefined
-  if (!memoised) MEMOS.set(component, (memoised = memo(component)))
-  return memoised
-}
-
 /** Each kind of Pane, and its module, by its kind. Its Pane is drawn
- * again only as its own props change: not as its Tile's title or its
- * Thread's mark does. */
+ * again only as its own props change (ADR 0088, decision 7): not as its
+ * Tile's title or its Thread's mark does. */
 const byKind = new Map(
   all.flatMap((module) =>
     module.panes.map(
       (kind) =>
         [
           kind.kind,
-          { kind: { ...kind, Pane: memoOf(kind.Pane) }, module },
+          { kind: { ...kind, Pane: memo(kind.Pane) }, module },
         ] as const
     )
   )
@@ -143,11 +131,19 @@ export const previewers: readonly Previewer[] = all.flatMap(
   (module) => module.previewers
 )
 
-/** What the modules show on the bar, each with its module, by its id. */
+/** What the modules show on the bar, each with its module, by its id.
+ * Each is drawn again only as its own props change (ADR 0088, decision
+ * 7). */
 export const widgets: ReadonlyMap<string, { widget: Widget; module: Module }> =
   new Map(
     all.flatMap((module) =>
-      module.bar.map((widget) => [widget.id, { widget, module }] as const)
+      module.bar.map(
+        (widget) =>
+          [
+            widget.id,
+            { widget: { ...widget, Widget: memo(widget.Widget) }, module },
+          ] as const
+      )
     )
   )
 /** The rows a Thread's details card has of the modules that run, in the
@@ -261,7 +257,8 @@ export function useSaid(): ReadonlyMap<string, Label> {
 /** What the Pane of `entry` said it shows now, drawn again only as it
  * says another. */
 export function useLabel(entry: string): Label | undefined {
-  return useSyncExternalStore(hearSaid, () => said.get(entry))
+  const read = useCallback(() => said.get(entry), [entry])
+  return useSyncExternalStore(hearSaid, read)
 }
 
 /** A Pane's title, quieter detail and icon: what it said it shows `now`,

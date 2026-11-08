@@ -1,7 +1,14 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react"
+import {
+  memo,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import type { Listed, Report, Watch } from "@banda/ui/pane"
-import { type Stores, takeAttention, takeLists } from "../calls/stores"
+import { StoresContext, takeAttention, takeLists } from "../calls/stores"
 import { runs, watches } from "../registry"
 import { combine, folded } from "./attention"
 
@@ -16,13 +23,12 @@ export const Watches = memo(function Watches({
   engine,
   modules,
   projects,
-  stores,
 }: {
   engine: Engine
   modules: readonly string[]
   projects: ProjectSummary[]
-  stores: Stores
 }) {
+  const stores = useContext(StoresContext)
   const [reports, setReports] = useState<Record<string, Heard>>({})
   const hear = useCallback((key: string, heard?: Heard) => {
     setReports((reports) => {

@@ -12,16 +12,13 @@ import {
 } from "@banda/ui/components/dropdown-menu"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import { cn } from "@banda/ui/lib/utils"
-import type { Lists, PaneState } from "@banda/ui/pane"
+import type { PaneState } from "@banda/ui/pane"
 import { useMemo, useState } from "react"
-import { all, listedIn, useItems } from "../calls/stores"
+import { useLists, useSnoozesNow } from "../calls/stores"
 import { useLookSidebar } from "../look"
-import { showsOf } from "../registry"
-import type { Entry } from "../tiling/model"
 import { ThreadMark, toneOf } from "@banda/ui/components/banda-mark"
 import { sidebarOrder } from "../sidebar/order"
 import { Status } from "../sidebar/Row"
-import { useSnoozes } from "../sidebar/snoozed"
 import { type Counted, inOrder, type Tally, tally } from "./tally"
 
 /** Each count's words, after its number. */
@@ -41,6 +38,9 @@ function colourOf(mark: MarkState, color: boolean): string {
 
 type Open = (project: ProjectId, pane: PaneState) => void
 
+/** The one thing a Pane shows, by its Project. */
+export type Ahead = { project: ProjectId; thing: string }
+
 /**
  * The sidebar's counts in the bar's middle (ADR 0035): who waits for the
  * Person and who works, each by its mark, as `[bar]` in `sidebar.toml`
@@ -56,17 +56,18 @@ export function Counts({
   projects: readonly ProjectSummary[]
   /** Whether the sidebar shows, and with it the same. */
   sidebarShown: boolean
-  /** The Pane in front: its Thread, an Agent's, is named while the
-   * sidebar is hidden, as the counts are then the switcher (ADR 0065,
-   * decision 9). */
-  ahead?: Entry
+  /** The thing the Pane in front shows: its Thread, an Agent's, is named
+   * while the sidebar is hidden, as the counts are then the switcher (ADR
+   * 0065, decision 9). */
+  ahead?: Ahead
   onOpen: Open
 }) {
-  const lists: Lists = useItems(all)
-  const aheadRow = ahead && listedIn(lists, ahead, showsOf)
+  const lists = useLists()
+  const aheadRow =
+    ahead && lists[ahead.project]?.find((listed) => listed.id === ahead.thing)
   const current = aheadRow?.agent !== undefined ? aheadRow : undefined
   const settings = useLookSidebar().bar
-  const snoozes = useSnoozes(lists)
+  const snoozes = useSnoozesNow()
   const tallies = useMemo(
     () => tally(lists, settings.counts, snoozes.away),
     [lists, settings.counts, snoozes.away]

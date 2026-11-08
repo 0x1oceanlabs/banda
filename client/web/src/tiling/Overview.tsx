@@ -21,7 +21,7 @@ import { moveOf, useLookColumns, useLookOverview } from "../look"
 import { Moving } from "../motion"
 import { followMoves, moved } from "@banda/ui/lib/frames"
 import { fit, ROW } from "./fit"
-import { type Listing, useShown } from "./listing"
+import { type Shows, useShows } from "./shows"
 import {
   drawnColumns,
   heightAt,
@@ -124,7 +124,7 @@ export function Overview({
   onExited,
   workspaces,
   projectOf,
-  listing,
+  shows,
   frame,
   onPick,
   onArrow,
@@ -138,7 +138,7 @@ export function Overview({
   projectOf: (project: ProjectId) => ProjectSummary | undefined
   /** The Thread each Pane shows, as its module lists it, and how it
    * calls the Person. */
-  listing: Listing
+  shows: Shows
   frame: Pick<Frame, "arrange" | "focus" | "close">
   /** Puts the focus on a Pane, and goes to its workspace. */
   onPick: (entry: string) => void
@@ -654,7 +654,7 @@ export function Overview({
                       zoom={zoom}
                       screen={screen}
                       projectOf={projectOf}
-                      listing={listing}
+                      shows={shows}
                       onClosePane={frame.close}
                       onPick={(entry) => {
                         onPick(entry)
@@ -709,7 +709,7 @@ function Row({
   zoom,
   screen,
   projectOf,
-  listing,
+  shows,
   onPick,
   onClosePane,
   onGo,
@@ -726,7 +726,7 @@ function Row({
   zoom: number
   screen: Screen
   projectOf: (project: ProjectId) => ProjectSummary | undefined
-  listing: Listing
+  shows: Shows
   onPick: (entry: string) => void
   /** Closes a Pane, as Alt+W does: a middle click on it, or its cross. */
   onClosePane: (entry: string) => void
@@ -734,7 +734,7 @@ function Row({
 }) {
   const closeTitle = useKeyLabel()("pane.close", "Close")
   const said = useSaid()
-  const { listed, called } = useShown(listing, workspace)
+  const { listed, called } = useShows(shows, workspace)
   const empty = workspace.columns.length === 0
   const scale = empty ? zoom : fit.zoom
   return (

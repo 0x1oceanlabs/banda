@@ -4,7 +4,7 @@
  * clock, and whether its Person has seen it wake is this window's mark, as
  * "seen" is (ADR 0005, decision 8).
  */
-import { useEffect, useMemo, useState } from "react"
+import { useMemo } from "react"
 import { kept } from "@banda/ui/lib/kept"
 import type { ProjectId } from "@banda/contract"
 import type { Args } from "@banda/ui/module"
@@ -81,23 +81,9 @@ export type Snoozes = {
   archived: (listed: Listed) => boolean
 }
 
-/**
- * The snoozes of `lists`, read against a clock that moves only when the
- * next of them wakes by its time: nothing ticks while none sleeps.
- */
-export function useSnoozes(lists: Lists): Snoozes {
-  const [now, setNow] = useState(Date.now)
-  const next = nextWake(lists, now)
-  useEffect(() => {
-    if (next === undefined) return
-    const timer = setTimeout(() => setNow(Date.now()), wakeAfter(next))
-    return () => clearTimeout(timer)
-  }, [next])
-  return useSnoozesAt(now)
-}
-
-/** The snoozes read against `now`, as the calls store keeps its clock
- * (`followCalls`). */
+/** The snoozes read against `now`: the calls store's clock, which moves
+ * only as the next of them wakes by its time, so nothing ticks while none
+ * sleeps (`followCalls`). */
 export function useSnoozesAt(now: number): Snoozes {
   const acked = seen.use()
   const archived = useIsArchived()

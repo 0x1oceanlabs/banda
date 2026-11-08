@@ -3596,6 +3596,38 @@ test("columns grow and go to their new places on the look's motion", async () =>
   await expect.poll(slide).toBe("")
 })
 
+test("columns slide over as the sidebar comes or goes, and a key after it slides none", async () => {
+  const slow = 'easing = { duration-ms = 1500, curve = "linear" }'
+  window = await startWindow({ look: `[motion.move]\n${slow}\n` })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  await page.keyboard.press("Alt+KeyN")
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  const column = thread.locator("xpath=ancestor::*[@data-column][1]")
+  const slide = () => column.evaluate((e: HTMLElement) => e.style.translate)
+  const pad = () =>
+    column.evaluate((e) => getComputedStyle(e.parentElement!).paddingLeft)
+  await expect.poll(slide).toBe("")
+
+  // The sidebar floats over the Strip's left, which it pads: as it goes,
+  // the columns slide over to where the padding puts them.
+  const shown = await pad()
+  await page.keyboard.press("Alt+KeyA")
+  await expect(
+    page.getByRole("complementary", { name: "Sidebar" })
+  ).toBeHidden()
+  expect(await pad()).not.toBe(shown)
+  await expect.poll(slide).not.toBe("")
+  await expect.poll(slide).toBe("")
+
+  // The focus goes to the Thread: no column moves, and none slides.
+  await page.keyboard.press("Alt+ArrowLeft")
+  await expect(thread).toHaveAttribute("data-focused", "true")
+  expect(await slide()).toBe("")
+})
+
 test("a tile fades in as it opens and fades out where it was as it closes", async () => {
   const slow = 'easing = { duration-ms = 1500, curve = "linear" }'
   window = await startWindow({
