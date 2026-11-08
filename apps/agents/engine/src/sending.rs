@@ -63,10 +63,10 @@ pub struct AgentsSettings {
     /// What Enter does with a message written while the Agent works.
     /// Ctrl+Enter (⌘+Enter on a Mac) does the other.
     pub enter: Option<Enter>,
-    /// What a new Thread on each Harness starts with, by the Harness's ID:
-    /// `[start.claude]`. The Agents section sets it from the composer's
-    /// bar.
-    pub start: Option<BTreeMap<String, Start>>,
+    /// How a new Thread starts: on which account (ADR 0093, decision 7),
+    /// and with what on each Harness, by the Harness's ID: `[start.claude]`.
+    /// The Agents section sets it from the composer's bar.
+    pub start: Option<Starts>,
     /// The Flow (ADR 0079). `workspaces` before ADR 0079 (grace).
     #[serde(alias = "workspaces")]
     pub flow: Option<Flow>,
@@ -78,6 +78,32 @@ pub struct AgentsSettings {
 pub struct Agents {
     pub enter: Enter,
     pub flow: Flow,
+    /// The account a new Thread starts on, by its entry's ID: none, the
+    /// first one on (ADR 0093, decision 7).
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+    /// The account a new Thread starts on while `account` is out, of any
+    /// Harness: none, no other.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fallback: Option<String>,
+}
+
+/// `agents.toml`'s `[start]`: the accounts a new Thread starts on, and
+/// what it starts with on each Harness.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+pub struct Starts {
+    /// The account a new Thread starts on, by its entry's ID in
+    /// harnesses.toml: `account = "work"`. By default the first one on.
+    pub account: Option<String>,
+    /// The account a new Thread starts on while `account` is out, a limit
+    /// window spent, when it has room itself; of any Harness:
+    /// `fallback = "personal"`. By default none.
+    pub fallback: Option<String>,
+    /// What a new Thread on each Harness starts with, by its ID.
+    #[serde(flatten)]
+    pub harnesses: BTreeMap<String, Start>,
 }
 
 impl OneFile for AgentsSettings {
@@ -111,9 +137,12 @@ impl OneFile for AgentsSettings {
     }
 
     fn resolved(self) -> Agents {
+        let start = self.start.unwrap_or_default();
         Agents {
             enter: self.enter.unwrap_or_default(),
             flow: self.flow.unwrap_or_default(),
+            account: start.account,
+            fallback: start.fallback,
         }
     }
 }
@@ -169,7 +198,7 @@ impl Start {
 /// look leaves it out, and the rest still reads.
 pub fn start(file: &Path, harness: &str) -> Start {
     let read = banda_look::file::read_at::<AgentsSettings>(file);
-    let start = read.and_then(|settings| settings.start?.remove(harness));
+    let start = read.and_then(|settings| settings.start?.harnesses.remove(harness));
     start.unwrap_or_default()
 }
 
@@ -241,5 +270,21 @@ mod tests {
             !start(&file, "claude").options.is_empty(),
             "a wrong key elsewhere leaves the rest"
         );
+    }
+
+    #[test]
+    fn start_names_the_accounts_beside_each_harness_s_own() {
+        let text = "[start]\naccount = \"work\"\nfallback = \"personal\"\n\n[start.claude]\nmode = \"auto\"\n";
+        let (agents, _, problems) = resolved(Some(text));
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(agents.account.as_deref(), Some("work"));
+        assert_eq!(agents.fallback.as_deref(), Some("personal"));
+        let folder = tempfile::tempdir().unwrap();
+        let file = folder.path().join("agents.toml");
+        std::fs::write(&file, text).unwrap();
+        assert_eq!(start(&file, "claude").mode, Some(Mode::Auto));
+        assert_eq!(start(&file, "account"), Start::default(), "no Harness's");
+        let (agents, _, _) = resolved(None);
+        assert_eq!((agents.account, agents.fallback), (None, None));
     }
 }

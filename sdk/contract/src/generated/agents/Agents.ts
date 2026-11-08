@@ -5,4 +5,14 @@ import type { Flow } from "./Flow";
 /**
  * How messages to an Agent are sent, every key resolved.
  */
-export type Agents = { enter: Enter, flow: Flow, };
+export type Agents = { enter: Enter, flow: Flow, 
+/**
+ * The account a new Thread starts on, by its entry's ID: none, the
+ * first one on (ADR 0093, decision 7).
+ */
+account?: string, 
+/**
+ * The account a new Thread starts on while `account` is out, of any
+ * Harness: none, no other.
+ */
+fallback?: string, };

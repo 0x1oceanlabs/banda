@@ -9,11 +9,8 @@
       "$ref": "#/$defs/Enter"
     },
     "start": {
-      "description": "What a new Thread on each Harness starts with, by the Harness's ID:\n`[start.claude]`. The Agents section sets it from the composer's\nbar.",
-      "type": "object",
-      "additionalProperties": {
-        "$ref": "#/$defs/Start"
-      }
+      "description": "How a new Thread starts: on which account (ADR 0093, decision 7),\nand with what on each Harness, by the Harness's ID: `[start.claude]`.\nThe Agents section sets it from the composer's bar.",
+      "$ref": "#/$defs/Starts"
     },
     "flow": {
       "description": "The Flow (ADR 0079). `workspaces` before ADR 0079 (grace).",
@@ -36,6 +33,23 @@
           "const": "queue"
         }
       ]
+    },
+    "Starts": {
+      "description": "`agents.toml`'s `[start]`: the accounts a new Thread starts on, and\nwhat it starts with on each Harness.",
+      "type": "object",
+      "properties": {
+        "account": {
+          "description": "The account a new Thread starts on, by its entry's ID in\nharnesses.toml: `account = \"work\"`. By default the first one on.",
+          "type": "string"
+        },
+        "fallback": {
+          "description": "The account a new Thread starts on while `account` is out, a limit\nwindow spent, when it has room itself; of any Harness:\n`fallback = \"personal\"`. By default none.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/Start"
+      }
     },
     "Start": {
       "description": "What a new Thread on a Harness starts with, over the Harness's own:\nwhat it leaves out, the Harness chooses.",

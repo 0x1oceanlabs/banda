@@ -63,6 +63,7 @@ fn only_the_person_at(name: &str, parts: &[&str], value: Option<&str>) -> Option
         ("harnesses.toml", ["harness", _]) if value.is_none() || names(&RUNS) => Some(RUNS_WORDS),
         ("harnesses.toml", ["harness", _, leaf, ..]) if RUNS.contains(leaf) => Some(RUNS_WORDS),
         ("agents.toml", ["start"]) => Some(MODE_WORDS),
+        ("agents.toml", ["start", "account" | "fallback"]) => None,
         ("agents.toml", ["start", _]) if value.is_none() || names(&["mode"]) => Some(MODE_WORDS),
         ("agents.toml", ["start", _, "mode"]) => Some(MODE_WORDS),
         ("browser.toml", ["agents", ..]) => Some(BROWSER_WORDS),
@@ -93,6 +94,8 @@ pub fn chose(record: &Path, name: &str, key: &str, value: Option<&str>) -> std::
     };
     match (name, parts.as_slice(), &value) {
         ("agents.toml", ["start"], _) => chosen_modes::forget(record),
+        // The accounts a new Thread starts on are no Harness's mode.
+        ("agents.toml", ["start", "account" | "fallback"], _) => Ok(()),
         ("agents.toml", ["start", harness], None) => chosen_modes::choose(record, harness, None),
         ("agents.toml", ["start", harness], Some(table)) => {
             let set = (table.as_inline_table()).and_then(|table| table.get("mode"));
