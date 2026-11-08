@@ -5,6 +5,7 @@
  * changed. Pure, so plain tests cover it.
  */
 import type { ListedThread, Touched, TouchKind } from "@banda/contract/agents"
+import { emblemColour } from "@banda/ui/components/emblem"
 import type { HarnessView } from "@banda/contract/harnesses"
 import { wholeOf, within } from "./where"
 
@@ -33,15 +34,14 @@ export function threadOf(
   return best
 }
 
-/** A Thread's colour: its Harness entry's, one of the account colours
- * (ADR 0078, decision 10); the primary colour for one this computer does
- * not know. */
+/** A Thread's colour: its account's emblem's (ADR 0093, decision 3); the
+ * primary colour for one this computer does not know. */
 export function colourOf(
   harnesses: readonly HarnessView[],
   harness: string
 ): string {
-  const colour = harnesses.find((one) => one.id === harness)?.colour
-  return colour ? `var(--account-${colour})` : "var(--primary)"
+  const found = harnesses.find((one) => one.id === harness)
+  return found ? emblemColour(found) : "var(--primary)"
 }
 
 /** `path` whole: one the Harness named from the Project's folder `top`

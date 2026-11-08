@@ -4,7 +4,7 @@
  * which the window finds itself; the files module finds the files.
  */
 import { useLayoutEffect, useMemo } from "react"
-import { HarnessLogo } from "@banda/ui/components/harness-logo"
+import { Emblem } from "@banda/ui/components/emblem"
 import type { FindProps, MenuRow, Source } from "@banda/ui/module"
 import { SquarePenIcon } from "lucide-react"
 import { useHarnesses } from "../harnesses"
@@ -30,13 +30,10 @@ function FindAsk({ words, at, found }: FindProps) {
       {
         id: entered ? `agents.ask.${project}` : "agents.ask",
         title: words ? `New Thread: “${words}”` : "New Thread here",
-        icon: (
-          <HarnessLogo
-            id={first?.id}
-            name={first?.name ?? ""}
-            className="size-4"
-            fallback={<SquarePenIcon className="size-4 shrink-0" />}
-          />
+        icon: first ? (
+          <Emblem of={first} className="size-4" />
+        ) : (
+          <SquarePenIcon className="size-4 shrink-0" />
         ),
         detail: first?.name,
         run: (window) => window.run("thread.new", start()),

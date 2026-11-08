@@ -16,6 +16,10 @@ Banda includes code from others, under their own licenses:
 
 client/ghostty/README.md says where each came from, at which commit.
 
+- The drawings of Claude's spark and OpenAI's knot, T3 Code's, and of Codex's
+  mark, LobeHub's, in client/ui/src/components/emblem.tsx: MIT,
+  client/ui/src/components/LICENSE-EMBLEMS. Copyright (c) 2026 T3 Tools Inc.;
+  Copyright (c) 2023 LobeHub. The marks are their owners'.
 - LiteLLM's model price data, in platform/harnesses/engine/src/usage/prices.json:
   MIT, platform/harnesses/engine/src/usage/LICENSE-LITELLM.
   Copyright (c) 2023 Berri AI. The snapshot records its source and commit.

@@ -57,11 +57,12 @@ test("Files is with the Thread it was opened from, else the one at work that beg
   expect(threadOf([thread("never")], undefined)).toBeNull()
 })
 
-test("a Thread's colour is its Harness entry's account colour", () => {
+test("a Thread's colour is its account's emblem's", () => {
   const harnesses = [
-    { id: "claude", colour: 1 },
-    { id: "claude-2", colour: 3 },
+    { id: "claude", icon: "claude-code", colour: 0 },
+    { id: "claude-2", icon: "work", colour: 3 },
   ] as HarnessView[]
+  expect(colourOf(harnesses, "claude")).toBe("var(--account-claude)")
   expect(colourOf(harnesses, "claude-2")).toBe("var(--account-3)")
   expect(colourOf(harnesses, "codex")).toBe("var(--primary)")
 })

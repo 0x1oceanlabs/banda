@@ -6,7 +6,7 @@ import type {
   Settings,
 } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
-import { HarnessLogo } from "@banda/ui/components/harness-logo"
+import { Emblem, emblemOf, type EmblemOf } from "@banda/ui/components/emblem"
 import { LevelSlider } from "@banda/ui/components/level-slider"
 import {
   Popover,
@@ -50,10 +50,13 @@ export function ModelPicker({
   onChange,
   starts,
   onStart,
+  harnesses,
 }: {
-  /** The Harness's id, for its logo, and its name. */
+  /** The Harness's id, for its emblem, and its name. */
   harness: string
   name: string
+  /** The Harness list, whose entries' emblems it draws. */
+  harnesses: readonly EmblemOf[]
   settings: Settings
   picked: Picked
   disabled: boolean
@@ -82,7 +85,7 @@ export function ModelPicker({
   const unset = chosenLevel.unset && preview === undefined
   const level = unset ? undefined : levels[at]
   const reset = resetOf(settings, picked)
-  const logo = <HarnessLogo id={harness} name={name} fallback={null} />
+  const logo = <Emblem of={emblemOf(harnesses, harness, name)} />
   // A Harness that has not said its models yet goes by its own name.
   const what = now ? modelName(now) : level ? undefined : name
   const named = (
@@ -207,6 +210,7 @@ export function ModelPicker({
           </>
         ) : (
           <Models
+            harnesses={harnesses}
             groups={groups}
             current={harness}
             onBack={effort && (() => setView("levels"))}
@@ -273,7 +277,9 @@ function Models({
   current,
   onBack,
   onChoose,
+  harnesses,
 }: {
+  harnesses: readonly EmblemOf[]
   groups: Group[]
   current: string
   onBack?: () => void
@@ -304,7 +310,7 @@ function Models({
           // Beside its name, the logo only decorates the row.
           const logo = (
             <span aria-hidden className="contents">
-              <HarnessLogo id={group.id} name={group.name} fallback={null} />
+              <Emblem of={emblemOf(harnesses, group.id, group.name)} />
             </span>
           )
           const here = group.id === current

@@ -16,7 +16,8 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@banda/ui/components/empty"
-import { HarnessLogo } from "@banda/ui/components/harness-logo"
+import { Emblem, emblemOf, type EmblemOf } from "@banda/ui/components/emblem"
+import { useHarnesses } from "../harnesses"
 import { Spinner } from "@banda/ui/components/spinner"
 import { ZoomBadge } from "@banda/ui/components/zoom-badge"
 import { useZoom, zoomHandlers } from "@banda/ui/hooks/use-zoom"
@@ -81,6 +82,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     composer: says,
   } = props
   const machine = useMachine(engine)
+  const harnesses = useHarnesses(engine)
   const unplaced = project === machine
   const fence = useFence(engine)
   const { thread } = args
@@ -339,6 +341,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
             <Start
               harness={harness}
               name={name}
+              harnesses={harnesses}
               // Full access never asks; a No Space draft's mode is the
               // engine's, which is Full access where the fence holds
               // whole (ADR 0083).
@@ -502,6 +505,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
                 onChange={configure}
                 starts={starts}
                 onStart={startOn}
+                harnesses={harnesses}
               />
             </>
           )}
@@ -536,27 +540,31 @@ function Centered({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** A Thread not yet started: whom it writes to, by the Harness's logo,
+/** A Thread not yet started: whom it writes to, by its account's emblem,
  * and one quiet line (ADR 0058), where its mode asks at all. */
 function Start({
   harness,
   name,
   asks,
+  harnesses,
 }: {
   harness: string
   name: string
   asks: boolean
+  harnesses: readonly EmblemOf[]
 }) {
   return (
     <Empty className="h-full">
       <EmptyHeader className="gap-1">
         <EmptyMedia className="mb-2">
-          <HarnessLogo
-            id={harness}
-            name={name}
-            className="size-6"
-            fallback={<BotIcon className="size-6 text-muted-foreground" />}
-          />
+          {harness ? (
+            <Emblem
+              of={emblemOf(harnesses, harness, name)}
+              className="size-6"
+            />
+          ) : (
+            <BotIcon className="size-6 text-muted-foreground" />
+          )}
         </EmptyMedia>
         <EmptyTitle>Write to {name}</EmptyTitle>
         {asks && (

@@ -27,7 +27,7 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@banda/ui/components/field"
-import { HarnessLogo } from "@banda/ui/components/harness-logo"
+import { Emblem } from "@banda/ui/components/emblem"
 import { Input } from "@banda/ui/components/input"
 import {
   Item,
@@ -226,12 +226,7 @@ function Frame({
     >
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <HarnessLogo
-            id={harness.id}
-            name={harness.name}
-            className="size-4"
-            fallback={null}
-          />
+          <Emblem of={harness} className="size-4" />
           {harness.name}
         </CardTitle>
         {about && <CardDescription title={aboutTitle}>{about}</CardDescription>}
