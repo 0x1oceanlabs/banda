@@ -35,6 +35,9 @@
  * - What the Window draws on every move it makes is drawn again only as
  *   its own props change (ADR 0088, decision 7): the parts listed stay
  *   memoized, and the list only grows.
+ * - What a change makes takes IDs derived from its command's ID (ADR
+ *   0088, decision 11): the places in the Tiling that make an ID of their
+ *   own are counted, and the counts only fall.
  */
 import { existsSync, readFileSync } from "node:fs"
 import { join, relative } from "node:path"
@@ -553,4 +556,37 @@ test("a mark's rank is read only to pick the loudest, where the list holds", () 
     )
     .sort()
   expect(reading).toEqual(RANKING)
+})
+
+/**
+ * Where the Tiling makes an ID of its own (`newId`), by file. What a
+ * change makes takes IDs derived from its command's ID (ADR 0088,
+ * decision 11), so these are all there are: `model.ts`'s, for what the
+ * view works out, which reach the engine only in the arrangement of the
+ * very first start, sent once; `store.ts`'s, for that arrangement's Group;
+ * and `useTiling.ts`'s, each change's command ID. None joins the list, and
+ * the counts only fall.
+ */
+const MAKING_IDS: Record<string, number> = {
+  "web/src/tiling/model.ts": 5,
+  "web/src/tiling/store.ts": 1,
+  "web/src/tiling/useTiling.ts": 1,
+}
+
+const making = Object.fromEntries(
+  sources(join(app, "web/src/tiling"), { tests: false }).flatMap((file) => {
+    const found = readFileSync(file, "utf8").match(/\bnewId\(/g)
+    return found ? [[relative(app, file), found.length]] : []
+  })
+)
+
+test("the Tiling makes no more IDs of its own than the list holds", () => {
+  for (const [file, count] of Object.entries(making))
+    expect(count, `${file} makes an ID`).toBeLessThanOrEqual(
+      MAKING_IDS[file] ?? 0
+    )
+})
+
+test("a place that no longer makes one comes off the list", () => {
+  expect(making).toEqual(MAKING_IDS)
 })

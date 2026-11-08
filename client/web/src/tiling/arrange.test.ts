@@ -1,4 +1,4 @@
-import type { Event } from "@banda/contract"
+import type { Engine, Event } from "@banda/contract"
 import type { PaneState } from "@banda/ui/pane"
 import { describe, expect, test } from "vitest"
 import {
@@ -10,6 +10,7 @@ import {
   opened,
   resized,
   resolve,
+  send as sendToEngine,
   tidied,
   viewOf,
   withAsked,
@@ -341,5 +342,27 @@ describe("withAsked", () => {
     const shown = withAsked(kept, asked, 7)
     expect(shown).toEqual({ kept, asked: {} })
     expect(shown.kept).toBe(kept)
+  })
+})
+
+describe("send", () => {
+  test("sends a change under the command ID given, which names what it makes", async () => {
+    const sent: unknown[][] = []
+    const engine = {
+      command: (...call: unknown[]) => (sent.push(call), Promise.resolve({})),
+    } as unknown as Engine
+    const close = { method: "workspaces.close", params: { pane: "p" } } as const
+    await sendToEngine(engine, close, "019a5b2e-3c4d-7e8f-9a0b-1c2d3e4f5a6b")
+    await sendToEngine(engine, close)
+    expect(sent).toEqual([
+      [
+        "workspaces.close",
+        { pane: "p" },
+        undefined,
+        "019a5b2e-3c4d-7e8f-9a0b-1c2d3e4f5a6b",
+      ],
+      // Left out, the engine's client makes one.
+      ["workspaces.close", { pane: "p" }, undefined, undefined],
+    ])
   })
 })

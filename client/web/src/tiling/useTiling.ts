@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { Engine, ProjectId } from "@banda/contract"
+import { type Engine, newId, type ProjectId } from "@banda/contract"
 import type { Arranged } from "@banda/contract/workspaces"
 import type { PaneState } from "@banda/ui/pane"
 import { groupedOf, startable, widthOf } from "../registry"
@@ -166,7 +166,10 @@ export function useTiling({
           setView(() => viewOf(next))
           return focused(next)?.id
         }
-        const answer = (await send(engine, next.command)) as {
+        // The change's command ID: what it makes takes IDs derived from
+        // it, so a client can draw it before the engine answers.
+        const id = newId()
+        const answer = (await send(engine, next.command, id)) as {
           at: number | null
           pane?: string
         }
