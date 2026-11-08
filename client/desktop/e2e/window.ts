@@ -286,6 +286,48 @@ export async function pressInPage(
   )
 }
 
+/** Ten tiling keys, from a New Thread and three launchers: they end with
+ * the launchers before the Thread, the last one first (roma-day.spec.ts,
+ * and keys.spec.ts with the engine far). */
+export const TEN_KEYS = [
+  "Alt+KeyN",
+  "Alt+Shift+Home",
+  "Alt+ArrowRight",
+  "Alt+Shift+End",
+  "Alt+Home",
+  "Alt+KeyW",
+  "Alt+Shift+ArrowRight",
+  "Alt+Shift+ArrowRight",
+  "Alt+ArrowLeft",
+  "Alt+Shift+Home",
+]
+
+/**
+ * Presses `keys`, each as Playwright names it (`Alt+Shift+Home`), in one
+ * task of the page, as the Window's keys hear them: each lands before the
+ * one before is drawn, however fast the machine.
+ */
+export async function pressAtOnce(page: Page, keys: string[]): Promise<void> {
+  const events = keys.map((press) => {
+    const mods = press.split("+")
+    const code = mods.pop()!
+    return {
+      code,
+      key: code.startsWith("Key") ? code.slice(3).toLowerCase() : code,
+      altKey: mods.includes("Alt"),
+      shiftKey: mods.includes("Shift"),
+    }
+  })
+  await page.evaluate((events) => {
+    const target = document.activeElement ?? document.body
+    for (const key of events)
+      for (const type of ["keydown", "keyup"])
+        target.dispatchEvent(
+          new KeyboardEvent(type, { ...key, bubbles: true, cancelable: true })
+        )
+  }, events)
+}
+
 /**
  * Main as if `editors` were the code editors on this machine. What the
  * page opens in one is kept, never started: `openedIn` reads it, each as

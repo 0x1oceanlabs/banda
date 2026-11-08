@@ -5899,8 +5899,7 @@ test("Alt+Up and Down go on past a column's end to the workspace there, and with
 
   // With Shift the Thread goes along, as a column beside the launcher.
   // The workspace it left, empty, goes as niri's: the launcher's is the
-  // first now. It is drawn so at once (ADR 0088, T-pred), never as the
-  // second for the moment the engine took to answer.
+  // first now, drawn so before the engine answers (ADR 0088, T-pred).
   await page.keyboard.press("Alt+Shift+ArrowDown")
   await on("1")
   await expect(thread).toHaveAttribute("data-focused", "true")

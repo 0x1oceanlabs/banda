@@ -27,7 +27,9 @@ import {
   firstThread,
   layoutOf,
   newTerminal,
+  pressAtOnce,
   startWindow,
+  TEN_KEYS,
   type Window,
 } from "./window"
 
@@ -301,20 +303,26 @@ for (const latency of [0, 150]) {
       expect(each("workspace").tiles, "workspace: Tiles drawn").toBe(
         steps("workspace")
       )
-      // Each key is drawn before the frame after it begins, the engine
-      // near or far (decision 11): no frame begins between a key and its
-      // commit, a count however busy the machine is.
+      // Each key is drawn without waiting for the host, near or far
+      // (decision 11): no frame begins between a key and its commit, a
+      // count however busy the machine is. It bounds no ms: a slow commit
+      // in the key's own task counts none.
       const tiling = ["width", "maximize", "focus", "workspace", "move"]
-      for (const phase of tiling) {
-        const keys = keysOf(measured[phase].keys)!
+      const opening = measured["open and close"].keys
+      const open = keysOf(opening.filter((k) => k.code === "KeyN"))!
+      const close = keysOf(opening.filter((k) => k.code === "KeyW"))!
+      const counted = [
+        ...tiling.map((phase) => ({
+          phase,
+          keys: keysOf(measured[phase].keys)!,
+        })),
+        { phase: "open", keys: open },
+        { phase: "close", keys: close },
+      ]
+      for (const { phase, keys } of counted) {
         expect(keys.missed, `${phase}: keys not drawn`).toBe(0)
         expect(keys.framesLate.max, `${phase}: frames late`).toBe(0)
       }
-      // A Pane opened is drawn too.
-      const open = keysOf(
-        measured["open and close"].keys.filter((k) => k.code === "KeyN")
-      )!
-      expect(open.missed, "open: keys not drawn").toBe(0)
       // And in ms: the tiling keys within 16, all of them together, so one
       // key the machine held up does not fail it, as a phase of four
       // would; a Pane opened within a mount's budget, 50. Only on a machine
@@ -322,7 +330,9 @@ for (const latency of [0, 150]) {
       // itself, not the window (focus and workspace keys, which T-pred
       // left as they were, took 35 to 90 ms before it at load 18 of 20),
       // and there the ms are only told, as the plan's §8.11 has them, a
-      // soft gate. The frames late above hold either way.
+      // soft gate. The frames late above hold either way. A close is
+      // only told: its commit lets a Tile go in the key's own task, and
+      // takes longer than 16 (#894).
       const all = keysOf(tiling.flatMap((phase) => measured[phase].keys))!
       const busy = loadavg()[0] / availableParallelism()
       if (busy <= 0.25) {
@@ -333,6 +343,10 @@ for (const latency of [0, 150]) {
           type: "busy",
           description: `load ${busy.toFixed(2)} a core, not gated: tiling keys p95 ${all.p95} ms, open p95 ${open.p95} ms`,
         })
+      test.info().annotations.push({
+        type: "close",
+        description: `close p95 ${close.p95} ms, not gated in ms`,
+      })
     })
 
     test("ten tiling keys pressed faster than the Window draws land in order, as the engine has them", async () => {
@@ -351,39 +365,7 @@ for (const latency of [0, 150]) {
       }
       const [[thread], [one], [two], [three]] = await layoutOf(page)
       // roma-day.spec.ts's ten, in one task of the page.
-      const keys = [
-        "Alt+KeyN",
-        "Alt+Shift+Home",
-        "Alt+ArrowRight",
-        "Alt+Shift+End",
-        "Alt+Home",
-        "Alt+KeyW",
-        "Alt+Shift+ArrowRight",
-        "Alt+Shift+ArrowRight",
-        "Alt+ArrowLeft",
-        "Alt+Shift+Home",
-      ].map((press) => {
-        const mods = press.split("+")
-        const code = mods.pop()!
-        return {
-          code,
-          key: code.startsWith("Key") ? code.slice(3).toLowerCase() : code,
-          altKey: mods.includes("Alt"),
-          shiftKey: mods.includes("Shift"),
-        }
-      })
-      await page.evaluate((keys) => {
-        const target = document.activeElement ?? document.body
-        for (const key of keys)
-          for (const type of ["keydown", "keyup"])
-            target.dispatchEvent(
-              new KeyboardEvent(type, {
-                ...key,
-                bubbles: true,
-                cancelable: true,
-              })
-            )
-      }, keys)
+      await pressAtOnce(page, TEN_KEYS)
       await expect
         .poll(() => layoutOf(page))
         .toEqual([[three], [two], [one], [thread]])
@@ -510,7 +492,8 @@ async function twoTerminals(page: Page) {
 test.describe("a key drawn before the engine answers", () => {
   test("a Pane drawn before the engine has it stays the one drawn: its terminal keeps its stream, its page its document", async () => {
     test.setTimeout(120_000)
-    const late = 800
+    // Long enough for a launcher's clicks and typing to land before it.
+    const late = 1500
     const address = await pageSite()
     window = await startWindow({ latency: late })
     const { app, page, dir } = window
@@ -561,6 +544,7 @@ test.describe("a key drawn before the engine answers", () => {
         )
       })
     })
+    const opened = Date.now()
     await page.keyboard.press("Alt+KeyN")
     await page
       .getByRole("region", { name: "New Pane" })
@@ -570,6 +554,10 @@ test.describe("a key drawn before the engine answers", () => {
     await bar.fill(address)
     await bar.press("Enter")
     await expect(page.locator("[data-held-by]")).toHaveCount(1)
+    expect(
+      Date.now() - opened,
+      "its page made before the engine spoke"
+    ).toBeLessThan(late - 100)
     await expect.poll(() => apart(page, window)).toEqual([])
     await expect
       .poll(() =>
