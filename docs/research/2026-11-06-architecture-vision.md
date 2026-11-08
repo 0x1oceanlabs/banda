@@ -751,6 +751,8 @@ One concern per PR; `scripts/check.sh` green after each; a move is a pure `git m
 
 ## 10. Roadmap
 
+_The order we build in since 2026-11-08 is in `2026-11-08-roadmap-in-slices.md`: the same items, as slices to try on two machines._
+
 **Where to start: the next five PRs.** The critical weakness (§3 row 1) waits for F0, which sits behind R0, A6, S1, S3 and A7. So a stopgap goes first, then what needs nothing else.
 
 1. **A stopgap, S, now.** It narrows accidents, not attacks; F0 is the fix.
