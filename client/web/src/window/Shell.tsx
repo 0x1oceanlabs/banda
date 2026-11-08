@@ -107,9 +107,9 @@ import {
   type View,
   viewOf,
   withAsked,
-} from "../workspaces/arrange"
-import { floorOf, type Reveal, shownOf } from "../workspaces/layout"
-import { useArranged } from "../workspaces/useArranged"
+} from "../tiling/arrange"
+import { floorOf, type Reveal, shownOf } from "../tiling/layout"
+import { useArranged } from "../tiling/useArranged"
 import {
   current,
   displayOf,
@@ -130,14 +130,14 @@ import {
   step,
   widthIn,
   type Workspaces as State,
-} from "../workspaces/model"
-import { soloing, unsoloing } from "../workspaces/groups"
+} from "../tiling/model"
+import { soloing, unsoloing } from "../tiling/groups"
 import { AGENTS_FILE } from "@banda/contract/agents"
 import { useFile } from "@banda/ui/lib/look"
-import { Drawer } from "../workspaces/Drawer"
-import { Peek, type Peeked } from "../workspaces/Peek"
-import { Overview } from "../workspaces/Overview"
-import type { Frame } from "../workspaces/PaneFrame"
+import { Drawer } from "./Drawer"
+import { Peek, type Peeked } from "./Peek"
+import { Overview } from "../tiling/Overview"
+import type { Frame } from "../tiling/PaneFrame"
 import {
   keepDrawer,
   keepLooked,
@@ -150,8 +150,8 @@ import {
   loadSidebarWidth,
   loadView,
   moveOver,
-} from "../workspaces/store"
-import { Workspaces } from "../workspaces/Workspaces"
+} from "../tiling/store"
+import { Workspaces } from "../tiling/Workspaces"
 import {
   ACTIONS,
   heldBy,

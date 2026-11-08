@@ -1,6 +1,6 @@
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test } from "vitest"
-import { entries, open, start } from "../workspaces/model"
+import { entries, open, start } from "../tiling/model"
 import { closingShown, opening, updating } from "./actions"
 
 const thread = (id: string): PaneState => ({

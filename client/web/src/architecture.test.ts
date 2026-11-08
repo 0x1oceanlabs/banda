@@ -86,15 +86,14 @@ test("a file that no longer reaches a module leaves the list", () => {
  * and an import that goes leaves it.
  */
 const TILING_STILL: Record<string, string[]> = {
-  "web/src/workspaces/PaneFrame.tsx": ["../shell/attach", "../titles/Title"],
-  "web/src/workspaces/Popped.tsx": ["../shell/actions"],
-  "web/src/workspaces/store.ts": ["../sidebar/width"],
+  "web/src/tiling/PaneFrame.tsx": ["../window/attach", "../titles/Title"],
+  "web/src/tiling/store.ts": ["../sidebar/width"],
 }
 
 test("the Tiling imports no more of the Window than the list holds", () => {
-  const outside = /^\.\.\/(shell|bar|sidebar|titles|menu)(\/|$)/
+  const outside = /^\.\.\/(window|bar|sidebar|titles|menu)(\/|$)/
   const imported = Object.fromEntries(
-    sources(join(app, "web/src/workspaces")).flatMap((file) => {
+    sources(join(app, "web/src/tiling")).flatMap((file) => {
       const names = imports(readFileSync(file, "utf8")).filter((name) =>
         outside.test(name)
       )
@@ -119,8 +118,8 @@ test("the calls part reads no layout, and of the Tiling only its model", () => {
   expect(reading.map((file) => relative(app, file))).toEqual([])
   const tiling = files.flatMap((file) =>
     imports(readFileSync(file, "utf8"))
-      .filter((name) => /^\.\.\/workspaces\//.test(name))
-      .filter((name) => name !== "../workspaces/model")
+      .filter((name) => /^\.\.\/tiling\//.test(name))
+      .filter((name) => name !== "../tiling/model")
       .map((name) => `${relative(app, file)}: ${name}`)
   )
   expect(tiling).toEqual([])
@@ -165,8 +164,8 @@ const LAYOUT_MOTION = [
   "client/ui/src/styles/globals.css: @keyframes update-in",
   "client/ui/src/styles/globals.css: @keyframes update-out",
   "client/web/src/bar/Update.tsx: transition-[width]",
-  "client/web/src/workspaces/PaneMenu.tsx: transition-[width]",
-  "client/web/src/workspaces/Peek.tsx: transition-[width,height]",
+  "client/web/src/tiling/PaneMenu.tsx: transition-[width]",
+  "client/web/src/window/Peek.tsx: transition-[width,height]",
 ]
 
 /** The window's own code and the Panes', with their stylesheets; not

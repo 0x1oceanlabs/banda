@@ -1214,10 +1214,10 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
 - **A Pane reads a view, then follows.** `useLive` reads the view once,
   applies each event after its `at`, and reads again when the engine says
   so. Events that arrive within one frame render once.
-- **The shell** (`client/web/src/shell/Shell.tsx`) puts the parts together:
+- **The shell** (`client/web/src/window/Shell.tsx`) puts the parts together:
   the bar on top, the sidebar docked on the left, and the workspaces, or
   the overview over them (ADR 0005, decisions 7–9).
-- **The workspaces** follow niri (`client/web/src/workspaces/model.ts`); every
+- **The workspaces** follow niri (`client/web/src/tiling/model.ts`); every
   change to them is a pure function.
   - They sit one under another, and there is always one empty workspace
     at the bottom; an empty one in the middle goes once the Person leaves
@@ -1232,7 +1232,7 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
     Ctrl-click (⌘ on a Mac) always opens a new column.
   - Every workspace stays drawn, so its Panes keep running; only the
     current one takes clicks and keys.
-  - A touchpad's swipe is read as niri reads one (`workspaces/swipe.ts`).
+  - A touchpad's swipe is read as niri reads one (`tiling/swipe.ts`).
     Each swipe goes one way, picked as it starts. Up and down belongs to
     the Pane under the pointer, and the Strip never drifts sideways under
     it. A sideways swipe moves the Strip with the fingers. Where it ends,
@@ -1248,15 +1248,15 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
     keeps the arrangement and its rules, and says each change in one
     event that holds it whole. The window keeps only the view, in its
     storage (`$BANDA_STATE/window` when that is set), and draws the two
-    together (`workspaces/arrange.ts`). A key works out its change with
+    together (`tiling/arrange.ts`). A key works out its change with
     `model.ts` and sends it as one command; the window draws the event
     that comes back. A Pane's new args are drawn at once and kept over
     the arrangement until their event is, since a Pane works out its next
     args from the ones it drew. What a window kept before moves over once
-    (`workspaces/store.ts`). A Pane an Agent opened is marked until the
+    (`tiling/store.ts`). A Pane an Agent opened is marked until the
     Person has it in focus; the window keeps which of them they have
     looked at (`banda.looked`).
-- **One list of actions** (`client/web/src/shell/actions.ts`) holds what the
+- **One list of actions** (`client/web/src/window/actions.ts`) holds what the
   window does, the modules' actions and its own, each with a name, its
   key sheet section and a default key, by its physical place.
   Alt is the mod: Arrows focus, Shift+Arrows move, Ctrl+Left and Right

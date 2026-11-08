@@ -38,7 +38,7 @@ import { columnsOf } from "./look"
 import { modules } from "./modules"
 import { keepProblem } from "./problems/keep"
 import { settingsPane } from "./settings/pane"
-import type { Entry, Width } from "./workspaces/model"
+import type { Entry, Width } from "./tiling/model"
 
 type Args = { [key: string]: JsonValue }
 

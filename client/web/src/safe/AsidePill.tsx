@@ -3,7 +3,7 @@ import type { Aside } from "@banda/contract/workspaces"
 import { Button } from "@banda/ui/components/button"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { RowFrame, Rows } from "../settings/SettingRow"
-import { useArranged } from "../workspaces/useArranged"
+import { useArranged } from "../tiling/useArranged"
 
 /** The workspaces set aside, in words: "3 workspaces, 7 Panes". */
 export function asideWords(aside: Aside): string {

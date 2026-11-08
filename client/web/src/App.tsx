@@ -5,7 +5,7 @@ import { Previewers } from "@banda/ui/lib/previewers"
 import { useMachine, useModules, useStatus } from "@banda/ui/hooks/use-status"
 import { shownProjects } from "@banda/ui/lib/projects"
 import { previewers } from "./registry"
-import { Shell } from "./shell/Shell"
+import { Shell } from "./window/Shell"
 import { AskToShare } from "./sharing/AskToShare"
 
 /**

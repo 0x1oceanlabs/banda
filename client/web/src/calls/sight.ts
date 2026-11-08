@@ -17,7 +17,7 @@ import {
   focused,
   shownIn,
   type Workspaces,
-} from "../workspaces/model"
+} from "../tiling/model"
 
 /** The thing a Pane shows, as the registry knows it. */
 export type Shows = (pane: PaneState) => string | null
@@ -37,7 +37,7 @@ const ON_SCREEN_SHARE = 0.5
 
 /** What of the workspace on screen shows: the share of each column inside
  * its Strip's clip, by its id, as the Tiling measures it (`shownOf`, in
- * `workspaces/layout.ts`); none when nothing is measured. */
+ * `tiling/layout.ts`); none when nothing is measured. */
 export type Shown = () => ReadonlyMap<string, number> | undefined
 
 /** What the screen shows of the workspace on screen, past its model. */

@@ -15,7 +15,7 @@ import {
   SquareArrowOutUpRightIcon,
 } from "lucide-react"
 import { kindOf, kindRuns, labelOf } from "../registry"
-import { Broken } from "./PaneFrame"
+import { Broken } from "../tiling/PaneFrame"
 
 /** What peeks over the desk: a Pane of a Project, and whether it fills
  * the desk. */

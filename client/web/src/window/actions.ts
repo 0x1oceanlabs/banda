@@ -55,14 +55,9 @@ import {
   type Plan,
   resized,
   workspaceMoved,
-} from "../workspaces/arrange"
-import {
-  filling,
-  grouping,
-  regrouping,
-  shiftingInside,
-} from "../workspaces/groups"
-import { floorOf, roomLeft } from "../workspaces/layout"
+} from "../tiling/arrange"
+import { filling, grouping, regrouping, shiftingInside } from "../tiling/groups"
+import { floorOf, roomLeft } from "../tiling/layout"
 import {
   across,
   bring,
@@ -94,7 +89,7 @@ import {
   toEdge,
   widen,
   type Workspaces,
-} from "../workspaces/model"
+} from "../tiling/model"
 
 /**
  * What a change of the workspaces comes to: the view alone, as the

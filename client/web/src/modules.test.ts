@@ -4,9 +4,9 @@ import type { ProjectId } from "@banda/contract"
 import type { Action, Module } from "@banda/ui/module"
 import { expect, test } from "vitest"
 import { modules } from "./modules"
-import { WINDOW_ACTIONS } from "./shell/actions"
+import { WINDOW_ACTIONS } from "./window/actions"
 import { windowModule } from "./registry"
-import { samePane } from "./workspaces/model"
+import { samePane } from "./tiling/model"
 import {
   identityOf,
   kindRuns,

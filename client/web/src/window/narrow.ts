@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react"
-import { remInPx } from "../workspaces/layout"
+import { remInPx } from "../tiling/layout"
 
 /**
  * Whether the window is narrower than the sidebar, `sidebar` rem wide, and

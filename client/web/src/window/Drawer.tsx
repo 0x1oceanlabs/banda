@@ -4,8 +4,8 @@ import { Button } from "@banda/ui/components/button"
 import { cn } from "@banda/ui/lib/utils"
 import type { Listed, PaneState } from "@banda/ui/pane"
 import { PinIcon } from "lucide-react"
-import type { Entry } from "./model"
-import { type Frame, PaneFrame } from "./PaneFrame"
+import type { Entry } from "../tiling/model"
+import { type Frame, PaneFrame } from "../tiling/PaneFrame"
 
 /**
  * The drawer (ADR 0025, decision 8): a Thread that drops from the top
