@@ -11,7 +11,7 @@ import {
 import { ProjectName } from "@banda/ui/components/project-sign"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import type { Named } from "@banda/contract/machines"
-import { MachineIcon, MachineMark } from "@banda/ui/components/machine-icon"
+import { MachineIcon } from "@banda/ui/components/machine-icon"
 import { seenNamed } from "@banda/ui/hooks/use-status"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -59,10 +59,10 @@ import {
 import { reachWords, runOnHost, useReach, useShownNow } from "../calls/hosts"
 import { sayComposer } from "../window/attach"
 import { heightAt } from "./layout"
-import { ThreadMark } from "@banda/ui/components/banda-mark"
 import type { Plan } from "./arrange"
 import type { Entry } from "./model"
 import { type MenuFrame, PaneMenu, type Stand } from "./PaneMenu"
+import { PaneSlot } from "./PaneSlot"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { Title } from "../titles/Title"
 
@@ -166,11 +166,13 @@ function handleOf(
 /**
  * One tile: a header with the Pane's icon and title, and its Project when the
  * workspace mixes Projects, unless the Pane draws its own; under it, the Pane
- * itself. A Pane that shows a listed thing, as a Thread, has its mark in the
- * icon's place and its Project before the title (ADR 0031). A Deck's
- * bar of names sits over its tile, outside it (`Tabs`). It is drawn again
- * only as its own props change, so a key that moves the focus draws the
- * two tiles it moves between (ADR 0088, decision 7).
+ * itself. A Pane that shows an Item, as a Thread, has what its App shows of
+ * it in the icon's place, as a Thread's Mark, and its Project before the
+ * title (ADR 0031); what the Apps show there and after the Project is the
+ * Slot `pane.header`'s (ADR 0062, decision 17). A Deck's bar of names sits
+ * over its tile, outside it (`Tabs`). It is drawn again only as its own
+ * props change, so a key that moves the focus draws the two tiles it moves
+ * between (ADR 0088, decision 7).
  */
 export const PaneFrame = memo(function PaneFrame({
   entry,
@@ -203,7 +205,7 @@ export const PaneFrame = memo(function PaneFrame({
   zoomed?: boolean
   /** Its share of its column's height; left out, an even one. */
   height?: number
-  /** The listed thing it shows, if it shows one. */
+  /** The Item it shows, as its App lists it, if it shows one. */
   listed: Listed | undefined
   /** The Project it is in; none while the list is read, which names none. */
   project: ProjectSummary | undefined
@@ -231,8 +233,8 @@ export const PaneFrame = memo(function PaneFrame({
   const reach = useReach(engine, entry.project, named)
   const there = reach.host
   const words = there === undefined ? undefined : reachWords(there, reach.shown)
-  // Where the Person writes to another machine, it is named (ADR 0095,
-  // decision 7).
+  // Another machine, by its name under its icon where its Pane cannot
+  // show (ADR 0095, decision 7); its header names it in the Slot.
   const machine =
     there === undefined ? undefined : (reach.shown?.named ?? seenNamed(there))
   const handle = useMemo(
@@ -265,6 +267,8 @@ export const PaneFrame = memo(function PaneFrame({
   }, [frame, entry.id, entry.pane, onHost])
   const summary =
     project ?? reach.shown?.projects.find((one) => one.id === entry.project)
+  // What the Slot in its header is given: the Pane, and the Item it shows.
+  const slot = { project: entry.project, pane: entry.pane, listed }
   // Its Tile, which the Tiling configures and its Pane reads (ADR 0088,
   // decision 4): the same for as long as it is drawn, so no Configure
   // draws it again.
@@ -388,21 +392,16 @@ export const PaneFrame = memo(function PaneFrame({
               onClose={close}
               className={kind?.header === "bare" ? "border-b-0" : undefined}
             >
+              <PaneSlot {...slot} at="start" />
               {listed && (
                 <>
-                  <ThreadMark
-                    listed={listed}
-                    className={
-                      listed.mark === "rest" ? "opacity-40" : undefined
-                    }
-                  />
                   {summary && (
                     <ProjectName
                       project={summary}
                       className="shrink-0 text-muted-foreground"
                     />
                   )}
-                  {machine && <MachineMark named={machine} form="full" />}
+                  <PaneSlot {...slot} at="project" />
                 </>
               )}
               {listed && reach.engine ? (
@@ -419,7 +418,7 @@ export const PaneFrame = memo(function PaneFrame({
               )}
               <Edits edits={edits} />
               {/* The detail takes what room the title leaves: a long
-                    one, as a folder's path, gives way first. */}
+                  one, as a folder's path, gives way first. */}
               {detail && (
                 <span className="max-w-fit min-w-0 flex-[1_1_0] truncate text-xs text-muted-foreground">
                   {detail}
@@ -431,9 +430,7 @@ export const PaneFrame = memo(function PaneFrame({
                   className="shrink-0 gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground"
                 />
               )}
-              {machine && !listed && (
-                <MachineMark named={machine} form="full" />
-              )}
+              {!listed && <PaneSlot {...slot} at="project" />}
               {zoomed && (
                 <button
                   type="button"
@@ -484,7 +481,7 @@ export const PaneFrame = memo(function PaneFrame({
               </p>
             )}
             {/* Its host out of reach, it shows what it showed, and
-                  catches up once that host is back. */}
+                catches up once that host is back. */}
             {!away && reach.engine && words && (
               <p
                 role="status"

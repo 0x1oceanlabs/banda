@@ -55,6 +55,11 @@
  *   lists of what stands in for intents and Window stores meanwhile: an
  *   App writing the title field's store, the Window finding an item
  *   action by what it does, and the Window's module-level stores.
+ * - Apps meet in Slots (ADR 0082, decision 8; ADR 0087, decision 5): each
+ *   Slot's owner reads who fills it in one place, the Window alone gives
+ *   them, and a Pane's header and its tile in the Overview draw no
+ *   Thread's Mark of the Tiling's own: Threads fills the Slot with it, and
+ *   what the Tiling still reads of an Item's Mark is listed, only falling.
  */
 import { existsSync, readFileSync } from "node:fs"
 import { join, relative } from "node:path"
@@ -144,6 +149,38 @@ test("the Tiling imports no more of the Window than the list holds", () => {
     })
   )
   expect(imported).toEqual(TILING_STILL)
+})
+
+/**
+ * A Thread's Mark on its Pane's header and on its tile in the Overview is
+ * Threads' part of the Slot `pane.header` (ADR 0062, decision 17): nothing
+ * in the Tiling draws one itself.
+ */
+test("nothing in the Tiling draws a Thread's Mark", () => {
+  const drawingMarks = sources(join(app, "web/src/tiling"))
+    .filter((file) => /\bThreadMark\b/.test(readFileSync(file, "utf8")))
+    .map((file) => relative(app, file))
+  expect(drawingMarks).toEqual([])
+})
+
+/**
+ * What the Tiling still reads of an Item's Mark or what it calls, by file,
+ * once for each place: a Group's plate takes its Agent's colour, which T-a
+ * reads by the Group's owner instead. A Pane's header and its tile in the
+ * Overview read none: what an App shows there is its part of the Slot.
+ * None joins the list, and one that goes leaves it.
+ */
+const TILING_MARKS = ["web/src/tiling/Strip.tsx: mark"]
+
+test("the Tiling reads an Item's Mark no more than the list holds", () => {
+  const reading = sources(join(app, "web/src/tiling"), {
+    tests: false,
+  }).flatMap((file) =>
+    [...readFileSync(file, "utf8").matchAll(/\.(mark|calls)\b(?!\s*\()/g)].map(
+      ([, what]) => `${relative(app, file)}: ${what}`
+    )
+  )
+  expect(reading).toEqual(TILING_MARKS)
 })
 
 /**
@@ -918,4 +955,48 @@ test("the Window keeps no more stores in a module than the list holds", () => {
     )
   )
   expect(kept.sort()).toEqual(MODULE_STORES)
+})
+
+/**
+ * Each Slot is read in one place, by its owner (ADR 0082, decision 8):
+ * Threads draws its details card, and the Tiling a Pane's header and its
+ * tile's label in the Overview, through one part. Only the Window gives
+ * what fills them, as it gives the previewers; no module gives a Slot's
+ * fillers a field of its own, as `threadDetails` was.
+ */
+const SLOT_READERS = {
+  "pane.header": "client/web/src/tiling/PaneSlot.tsx",
+  "thread.details": "apps/agents/pane/src/thread/Details.tsx",
+}
+
+test("each Slot is read in one place, and only the Window gives what fills them", () => {
+  // By its name as it is written: a Slot read by a name worked out is
+  // not one place.
+  const read = pageFiles.flatMap((file) =>
+    [
+      ...readFileSync(file, "utf8").matchAll(/\buseSlot\(\s*([^)]*?)\s*\)/g),
+    ].map(([, slot]) => [
+      slot.replace(/^"([\w.]+)"$/, "$1"),
+      relative(root, file),
+    ])
+  )
+  expect(Object.fromEntries(read)).toEqual(SLOT_READERS)
+  expect(read).toHaveLength(Object.keys(SLOT_READERS).length)
+  const giving = pageFiles
+    .filter((file) => /<Slots\s+value=/.test(readFileSync(file, "utf8")))
+    .map((file) => relative(root, file))
+    .sort()
+  expect(giving).toEqual([
+    "client/web/src/App.tsx",
+    "client/web/src/window/Popped.tsx",
+  ])
+  const around = pageFiles
+    .filter((file) => file !== join(app, "ui/src/slots.ts"))
+    .filter((file) =>
+      /\buseContext\(\s*Slots\b|\bthreadDetails\b/.test(
+        readFileSync(file, "utf8")
+      )
+    )
+    .map((file) => relative(root, file))
+  expect(around).toEqual([])
 })

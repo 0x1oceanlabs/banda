@@ -1,8 +1,9 @@
 /**
  * The kinds of Pane this window knows, the Watches on what calls for the
  * Person, the previewers that draw files and what fills the Slots, built
- * from the modules (ADR 0022): theirs, and the window's own, the launcher.
- * A Pane or a Watch runs only while the engine runs its module.
+ * from the modules (ADR 0022): theirs, and the window's own, the launcher
+ * and another machine's name. A Pane or a Watch runs only while the
+ * engine runs its module.
  */
 import type { Engine, JsonValue } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
@@ -34,6 +35,7 @@ import { useScope } from "@banda/ui/hooks/use-scope"
 import type { Fillers } from "@banda/ui/slots"
 import { LayoutGridIcon, type LucideIcon } from "lucide-react"
 import { memo, useCallback, useSyncExternalStore } from "react"
+import { machineHeader } from "./calls/named"
 import { columnsOf } from "./look"
 import { modules } from "./modules"
 import { keepProblem } from "./problems/keep"
@@ -77,7 +79,8 @@ const opening = (id: string, title: string, shift: boolean) =>
   })
 
 /** The window's own things, as a module of their own: the launcher, its
- * letters, and the settings and their search (ADR 0016). */
+ * letters, the settings and their search (ADR 0016), and another
+ * machine's name in a Pane's header (ADR 0095, decision 7). */
 export const windowModule = defineModule({
   id: "window",
   engine: false,
@@ -93,6 +96,7 @@ export const windowModule = defineModule({
     }),
   ],
   scopes: [LAUNCHER, SETTINGS],
+  slots: [machineHeader],
 })
 
 const all: readonly Module[] = [windowModule, ...modules]

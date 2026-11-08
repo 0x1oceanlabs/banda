@@ -16,7 +16,6 @@ import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { DEFAULT_OVERVIEW } from "@banda/contract/look"
 import { labelOf, useSaid } from "../registry"
 import { workspaceTo } from "./arrange"
-import { ThreadMark } from "@banda/ui/components/banda-mark"
 import { moveOf, useLookColumns, useLookOverview } from "../look"
 import { Moving } from "../motion"
 import { followMoves, moved } from "@banda/ui/lib/frames"
@@ -44,6 +43,7 @@ import {
 } from "./model"
 import { lying, nudge, pushed } from "./moving"
 import type { Frame } from "./PaneFrame"
+import { PaneSlot } from "./PaneSlot"
 import { STEP_ASIDE, useReorder } from "./reorder"
 import { type Carrying, landIn, useMoving } from "./useMoving"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
@@ -777,7 +777,6 @@ function Row({
               const { title } = labelOf(entry.pane, said.get(entry.id))
               const project = projectLabel(projectOf(entry.project))
               const active = column.active === e
-              const thread = listed(entry)
               const call = called(entry)
               return (
                 <div
@@ -835,16 +834,18 @@ function Row({
                   >
                     <XIcon />
                   </Button>
-                  {/* How its Thread is, at a size to read, and what it asks
-                      when it calls. */}
-                  {thread && (call || thread.mark !== "rest") && (
-                    <span className="pointer-events-none absolute top-1.5 left-1.5 z-1 flex max-w-[calc(100%-3rem)] items-center gap-1 rounded-md border border-overview-foreground/15 bg-popover px-1.5 py-0.5 text-xs text-popover-foreground shadow-sm">
-                      <ThreadMark listed={thread} className="size-3.5" />
-                      {call && thread.calls && (
-                        <span className="min-w-0 truncate">{thread.calls}</span>
-                      )}
-                    </span>
-                  )}
+                  {/* What the Apps show of it at a size to read: how its
+                      Thread is, and what it asks when it calls. With
+                      nothing to show, no label. */}
+                  <span className="pointer-events-none absolute top-1.5 left-1.5 z-1 flex max-w-[calc(100%-3rem)] items-center gap-1 rounded-md border border-overview-foreground/15 bg-popover px-1.5 py-0.5 text-xs text-popover-foreground shadow-sm empty:hidden">
+                    <PaneSlot
+                      project={entry.project}
+                      pane={entry.pane}
+                      listed={listed(entry)}
+                      at="overview"
+                      calling={call !== undefined}
+                    />
+                  </span>
                   {/* Over the column's group bar, each tab of it: one
                       carries its Pane. */}
                   {column.decked && active && (
