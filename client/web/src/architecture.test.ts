@@ -403,7 +403,7 @@ test("the sidebar list pins no Project and writes no agents.toml", () => {
     files
       .filter((file) => writing.test(readFileSync(file, "utf8")))
       .map((file) => relative(app, file))
-  ).toEqual(["web/src/sidebar/FlowMenu.tsx", "web/src/sidebar/MakeProject.tsx"])
+  ).toEqual(["web/src/sidebar/FlowMenu.tsx"])
 })
 
 /**
@@ -1064,8 +1064,8 @@ test("the Window finds an item action by what it does no more than the list hold
  * list, and one that goes leaves it.
  */
 const MODULE_STORES = [
-  "web/src/sidebar/MakeProject.tsx: making",
   "web/src/sidebar/Snoozing.tsx: picking",
+  "web/src/titles/MakeProject.tsx: making",
 ]
 
 test("the Window keeps no more stores in a module than the list holds", () => {
