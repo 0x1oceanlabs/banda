@@ -14,6 +14,13 @@
 //! it opens Panes of its Project that run nothing as the Person, given only
 //! the args that choose what each shows (ADR 0083, decision 3), and moves
 //! and closes only those it opened.
+//!
+//! What a command makes, a Pane, a column, a Group or a workspace, takes
+//! an ID derived from the command's ID (`model::Seed`, ADR 0088, decision
+//! 11). So the client that sends it knows the IDs before the answer and
+//! can draw them at once, two clients never make the same, and a command
+//! sent again makes nothing twice: its receipt answers it, and past the
+//! receipt the workspaces refuse it while they hold what it made.
 
 pub mod model;
 
@@ -22,7 +29,9 @@ use banda_kernel::{
     Wall,
 };
 use banda_look::columns::Display;
-use model::{Arrangement, ColumnId, PaneId, Place, Shown, Side, Sight, Toward, WorkspaceId};
+use model::{
+    Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Side, Sight, Toward, WorkspaceId,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
@@ -369,6 +378,9 @@ pub struct Open {
 #[derive(Serialize, Deserialize, TS)]
 #[ts(export_to = "workspaces/")]
 pub struct Opened {
+    /// The Pane: a new one's ID is derived from the command's ID
+    /// (`model::Seed`), so the client that sent it knows it before this
+    /// answer.
     pub pane: PaneId,
     /// False when the workspaces showed it already.
     pub new: bool,
@@ -573,12 +585,12 @@ impl Workspaces {
     }
 
     async fn set_aside(&self, call: Call, _: Nothing) -> Result<Done, Refusal> {
-        change(&call, "set_aside", None, Say::Aside, |list, tx| {
+        change(&call, "set_aside", None, Say::Aside, |list, tx, seed| {
             if model::panes(list).next().is_none() {
                 return Ok(());
             }
             let mut aside = load_aside(tx.sql())?;
-            aside.extend(std::mem::replace(list, model::start()));
+            aside.extend(std::mem::replace(list, model::start_from(seed)));
             aside.retain(|w| !w.columns.is_empty());
             keep_aside(tx, &aside)
         })
@@ -587,14 +599,14 @@ impl Workspaces {
     }
 
     async fn bring_back(&self, call: Call, _: Nothing) -> Result<Done, Refusal> {
-        change(&call, "brought_back", None, Say::Aside, |list, tx| {
+        change(&call, "brought_back", None, Say::Aside, |list, tx, seed| {
             let aside = load_aside(tx.sql())?;
             if aside.is_empty() {
                 return Ok(());
             }
             // The ones there are now first; a Pane shown in both, once.
             let now = std::mem::replace(list, aside);
-            model::take(list, now)?;
+            model::take(list, now, seed)?;
             keep_aside(tx, &[])
         })
         .await
@@ -602,7 +614,7 @@ impl Workspaces {
     }
 
     async fn open(&self, call: Call, open: Open) -> Result<Opened, Refusal> {
-        let ((pane, new), at) = change(&call, "opened", None, Say::Whole, move |list, _| {
+        let ((pane, new), at) = change(&call, "opened", None, Say::Whole, move |list, _, seed| {
             let again = open.again == Some(true) || open.instead.is_some();
             let new = again || model::showing(list, &open.shows).is_none();
             let Open {
@@ -613,9 +625,17 @@ impl Workspaces {
                 grouped,
                 ..
             } = open;
-            let pane = model::open(list, shows, place, instead, width, again, None)?;
+            let opening = Opening {
+                shown: shows,
+                place,
+                instead,
+                width,
+                again,
+                by: None,
+            };
+            let pane = model::open(list, opening, seed)?;
             if new && grouped == Some(true) {
-                model::group_pane(list, pane)?;
+                model::group_pane(list, pane, seed)?;
             }
             Ok((pane, new))
         })
@@ -625,17 +645,21 @@ impl Workspaces {
 
     async fn close(&self, call: Call, one: OnePane) -> Result<Done, Refusal> {
         let pane = one.pane;
-        done(&call, "closed", pane, Say::Whole, move |list, _| {
-            Ok(model::close(list, pane)?)
+        done(&call, "closed", pane, Say::Whole, move |list, _, seed| {
+            Ok(model::close(list, pane, seed)?)
         })
         .await
     }
 
     async fn update(&self, call: Call, update: Update) -> Result<Done, Refusal> {
         let Update { pane, args } = update;
-        done(&call, "updated", pane, Say::Args(pane), move |list, _| {
-            Ok(model::update(list, pane, args)?)
-        })
+        done(
+            &call,
+            "updated",
+            pane,
+            Say::Args(pane),
+            move |list, _, _| Ok(model::update(list, pane, args)?),
+        )
         .await
     }
 
@@ -645,8 +669,8 @@ impl Workspaces {
             place,
             grouped,
         } = moving;
-        done(&call, "moved", pane, Say::Whole, move |list, _| {
-            Ok(model::move_pane(list, pane, &place, grouped)?)
+        done(&call, "moved", pane, Say::Whole, move |list, _, seed| {
+            Ok(model::move_pane(list, pane, &place, grouped, seed)?)
         })
         .await
     }
@@ -657,15 +681,15 @@ impl Workspaces {
             workspace,
             index,
         } = moving;
-        done(&call, "moved", column, Say::Whole, move |list, _| {
-            Ok(model::move_column(list, column, workspace, index)?)
+        done(&call, "moved", column, Say::Whole, move |list, _, seed| {
+            Ok(model::move_column(list, column, workspace, index, seed)?)
         })
         .await
     }
 
     async fn move_workspace(&self, call: Call, moving: MoveWorkspace) -> Result<Done, Refusal> {
         let MoveWorkspace { workspace, index } = moving;
-        done(&call, "moved", workspace, Say::Whole, move |list, _| {
+        done(&call, "moved", workspace, Say::Whole, move |list, _, _| {
             Ok(model::move_workspace(list, workspace, index)?)
         })
         .await
@@ -673,7 +697,7 @@ impl Workspaces {
 
     async fn size(&self, call: Call, size: Size) -> Result<Done, Refusal> {
         let Size { column, width } = size;
-        done(&call, "sized", column, Say::Whole, move |list, _| {
+        done(&call, "sized", column, Say::Whole, move |list, _, _| {
             Ok(model::size(list, column, width)?)
         })
         .await
@@ -681,7 +705,7 @@ impl Workspaces {
 
     async fn height(&self, call: Call, height: Height) -> Result<Done, Refusal> {
         let Height { pane, height } = height;
-        done(&call, "heightened", pane, Say::Whole, move |list, _| {
+        done(&call, "heightened", pane, Say::Whole, move |list, _, _| {
             Ok(model::height(list, pane, height)?)
         })
         .await
@@ -689,7 +713,7 @@ impl Workspaces {
 
     async fn even(&self, call: Call, one: OneColumn) -> Result<Done, Refusal> {
         let column = one.column;
-        done(&call, "evened", column, Say::Whole, move |list, _| {
+        done(&call, "evened", column, Say::Whole, move |list, _, _| {
             Ok(model::even(list, column)?)
         })
         .await
@@ -697,7 +721,7 @@ impl Workspaces {
 
     async fn maximize(&self, call: Call, maximize: Maximize) -> Result<Done, Refusal> {
         let Maximize { column, full } = maximize;
-        done(&call, "maximized", column, Say::Whole, move |list, _| {
+        done(&call, "maximized", column, Say::Whole, move |list, _, _| {
             Ok(model::maximize(list, column, full)?)
         })
         .await
@@ -705,7 +729,7 @@ impl Workspaces {
 
     async fn display(&self, call: Call, show: ShowAs) -> Result<Done, Refusal> {
         let ShowAs { column, display } = show;
-        done(&call, "displayed", column, Say::Whole, move |list, _| {
+        done(&call, "displayed", column, Say::Whole, move |list, _, _| {
             Ok(model::display(list, column, display)?)
         })
         .await
@@ -713,15 +737,19 @@ impl Workspaces {
 
     async fn group(&self, call: Call, one: OneColumn) -> Result<Done, Refusal> {
         let column = one.column;
-        done(&call, "grouped", column, Say::Whole, move |list, _| {
-            Ok(model::group(list, column)?)
-        })
+        done(
+            &call,
+            "grouped",
+            column,
+            Say::Whole,
+            move |list, _, seed| Ok(model::group(list, column, seed)?),
+        )
         .await
     }
 
     async fn regroup(&self, call: Call, regroup: Regroup) -> Result<Done, Refusal> {
         let Regroup { column, toward } = regroup;
-        done(&call, "regrouped", column, Say::Whole, move |list, _| {
+        done(&call, "regrouped", column, Say::Whole, move |list, _, _| {
             Ok(model::regroup(list, column, toward)?)
         })
         .await
@@ -733,22 +761,22 @@ impl Workspaces {
             workspace,
             index,
         } = moving;
-        done(&call, "moved", column, Say::Whole, move |list, _| {
-            Ok(model::move_group(list, column, workspace, index)?)
+        done(&call, "moved", column, Say::Whole, move |list, _, seed| {
+            Ok(model::move_group(list, column, workspace, index, seed)?)
         })
         .await
     }
 
     async fn fill(&self, call: Call, fill: Fill) -> Result<Done, Refusal> {
         let Fill { column, fill } = fill;
-        done(&call, "filled", column, Say::Whole, move |list, _| {
+        done(&call, "filled", column, Say::Whole, move |list, _, _| {
             Ok(model::fill(list, column, fill)?)
         })
         .await
     }
 
     async fn tidy(&self, call: Call, tidy: Tidy) -> Result<Done, Refusal> {
-        change(&call, "tidied", None, Say::Whole, move |list, _| {
+        change(&call, "tidied", None, Say::Whole, move |list, _, _| {
             model::tidy(list, tidy.keep);
             Ok(())
         })
@@ -757,7 +785,7 @@ impl Workspaces {
     }
 
     async fn take(&self, call: Call, take: Take) -> Result<Done, Refusal> {
-        change(&call, "taken", None, Say::Whole, move |list, tx| {
+        change(&call, "taken", None, Say::Whole, move |list, tx, seed| {
             let taken: bool = tx.sql().query_row(
                 "SELECT taken FROM workspaces_arrangement WHERE one = 1",
                 [],
@@ -773,7 +801,7 @@ impl Workspaces {
                 "UPDATE workspaces_arrangement SET taken = 1 WHERE one = 1",
                 [],
             )?;
-            Ok(model::take(list, take.workspaces)?)
+            Ok(model::take(list, take.workspaces, seed)?)
         })
         .await
         .map(|((), at)| Done { at })
@@ -829,12 +857,17 @@ impl Workspaces {
             args: open.args,
         };
         let beside = open.beside;
-        let ((pane, new), at) = change(&call, "opened", None, Say::Whole, move |list, _| {
+        let ((pane, new), at) = change(&call, "opened", None, Say::Whole, move |list, _, seed| {
             let place = beside.map(|b| b.place(list, wall)).transpose()?;
             if let Some(shown) = model::showing_asked(list, &shows) {
                 return Ok((shown.id, false));
             }
-            let pane = model::open(list, shows, place, None, None, false, Some(me))?;
+            let opening = Opening {
+                place,
+                by: Some(me),
+                ..Opening::of(shows)
+            };
+            let pane = model::open(list, opening, seed)?;
             Ok((pane, true))
         })
         .await?;
@@ -844,10 +877,10 @@ impl Workspaces {
     async fn move_own(&self, call: Call, moving: MoveOwn) -> Result<Done, Refusal> {
         let (wall, me) = walled(&call)?;
         let MoveOwn { pane, beside } = moving;
-        done(&call, "moved", pane, Say::Whole, move |list, _| {
+        done(&call, "moved", pane, Say::Whole, move |list, _, seed| {
             own(list, wall, me, pane)?;
             let place = beside.place(list, wall)?;
-            Ok(model::move_pane(list, pane, &place, None)?)
+            Ok(model::move_pane(list, pane, &place, None, seed)?)
         })
         .await
     }
@@ -855,9 +888,9 @@ impl Workspaces {
     async fn close_own(&self, call: Call, one: OnePane) -> Result<Done, Refusal> {
         let (wall, me) = walled(&call)?;
         let pane = one.pane;
-        done(&call, "closed", pane, Say::Whole, move |list, _| {
+        done(&call, "closed", pane, Say::Whole, move |list, _, seed| {
             own(list, wall, me, pane)?;
-            Ok(model::close(list, pane)?)
+            Ok(model::close(list, pane, seed)?)
         })
         .await
     }
@@ -926,7 +959,7 @@ async fn done(
     kind: &'static str,
     subject: impl ToString,
     say: Say,
-    how: impl FnOnce(&mut Arrangement, &mut Tx<'_>) -> Result<(), Error> + Send + 'static,
+    how: impl FnOnce(&mut Arrangement, &mut Tx<'_>, &Seed) -> Result<(), Error> + Send + 'static,
 ) -> Result<Done, Refusal> {
     let subject = Some(subject.to_string());
     let ((), at) = change(call, kind, subject, say, how).await?;
@@ -935,22 +968,25 @@ async fn done(
 
 /// Runs a command on the arrangement, and keeps and says it when it
 /// changed, with where its event stands in the log; one no change touched
-/// says nothing.
+/// says nothing. What it makes takes IDs derived from its command's ID,
+/// and one whose IDs the workspaces hold already ran.
 async fn change<T>(
     call: &Call,
     kind: &'static str,
     subject: Option<String>,
     say: Say,
-    how: impl FnOnce(&mut Arrangement, &mut Tx<'_>) -> Result<T, Error> + Send + 'static,
+    how: impl FnOnce(&mut Arrangement, &mut Tx<'_>, &Seed) -> Result<T, Error> + Send + 'static,
 ) -> Result<(T, Option<i64>), Refusal>
 where
     T: Serialize + DeserializeOwned + Send + 'static,
 {
     let author = call.participant();
+    let seed = Seed::of(&call.command_id()?.to_string());
     call.command(move |tx| {
         let before = load(tx.sql())?;
+        seed.unused(&before)?;
         let mut list = before.clone();
-        let answer = how(&mut list, tx)?;
+        let answer = how(&mut list, tx, &seed)?;
         if list == before {
             return Ok((answer, None));
         }
