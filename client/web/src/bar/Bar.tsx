@@ -20,15 +20,21 @@ import {
   useState,
 } from "react"
 import type { Problem, Workspaces } from "@banda/contract/look"
-import { useCalls, useItems, workingIn } from "../calls/stores"
+import {
+  attentionOf,
+  useCalling,
+  useCalls,
+  useItems,
+  workingIn,
+} from "../calls/stores"
 import { useLookBar, useLookProblems } from "../look"
 import type { InBar } from "../tiling/model"
 import type { ProjectSummary } from "@banda/contract"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 
-/** A workspace as the bar shows it: a Project's by its badge, with a dot
- * while one of that Project's Threads calls (ADR 0065, decision 9). */
-export type BarWorkspace = InBar & { owner?: ProjectSummary; calls?: boolean }
+/** A workspace as the bar shows it: a Project's by its badge (ADR 0065,
+ * decision 9). */
+export type BarWorkspace = InBar & { owner?: ProjectSummary }
 import { BarMotion } from "./motion"
 import { type Layout, moved, same, written } from "./arrange"
 import { PARTS, type Part, WORKSPACES } from "./placed"
@@ -86,7 +92,7 @@ export function Bar({
   const keyFor = useKeyLabel()
   // What the modules' work calls the Person for, for the mark to show,
   // and how many Threads work now, which a restart into an update stops.
-  const attention = useCalls((calls) => calls.attention)
+  const attention = useCalls(attentionOf)
   const working = useItems(workingIn)
   const mark = loudest([attention.mark, markOf(status)])
   const { waiting } = attention
@@ -362,7 +368,9 @@ function widthOf(style: Workspaces, here: boolean): number {
 /**
  * The workspaces, as `[bar] workspaces` says: numbers, the one on screen
  * marked, or dots, the one on screen drawn long. They come, go and mark
- * the one on screen on the look's `workspace` move, with the screen.
+ * the one on screen on the look's `workspace` move, with the screen. A
+ * Project's has a dot while one of its Threads calls, which it reads from
+ * the Window's stores (ADR 0065, decision 9).
  */
 function WorkspaceList({
   workspaces,
@@ -375,6 +383,7 @@ function WorkspaceList({
 }) {
   const keyFor = useKeyLabel()
   const style = useLookBar().workspaces
+  const calling = useCalling()
   const nav = useRef<HTMLElement>(null)
   const mark = useRef<HTMLSpanElement>(null)
   const motion = useRef<BarMotion>(null)
@@ -449,7 +458,7 @@ function WorkspaceList({
                 {/* A Project's workspace shows its Project, with a dot while
                     one of its Threads calls (ADR 0065, decision 9). */}
                 {w.owner ? <ProjectSign project={w.owner} /> : number}
-                {w.calls && (
+                {w.project && calling.includes(w.project) && (
                   <span
                     aria-hidden
                     className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-attention"

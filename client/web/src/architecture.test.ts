@@ -186,7 +186,7 @@ test("a string that no longer names an App leaves the list", () => {
  * lowers it; the room lets PRs in flight that each cut a few lines leave
  * it alone.
  */
-const WINDOW_LINES = 1369
+const WINDOW_LINES = 1343
 const SLACK = 20
 
 test("the Window's root keeps under its ceiling, and the ceiling follows it down", () => {
@@ -216,8 +216,8 @@ const MEMOIZED = [
   "web/src/window/Drawer.tsx: export const Drawer = memo(",
   'web/src/bar/Widgets.tsx: "sidebar.counts": memo(Counts)',
   'web/src/bar/Widgets.tsx: "workspaces.aside": memo(',
-  "web/src/bar/Widgets.tsx: const Widget = memoOf(",
-  "web/src/registry.tsx: kind: { ...kind, Pane: memoOf(kind.Pane) }",
+  "web/src/registry.tsx: { widget: { ...widget, Widget: memo(widget.Widget) }, module }",
+  "web/src/registry.tsx: { kind: { ...kind, Pane: memo(kind.Pane) }, module }",
 ]
 
 test("the parts the Window draws on every move stay memoized", () => {

@@ -5,10 +5,9 @@ import type { WidgetProps } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { type ComponentType, memo, type ReactNode, useMemo } from "react"
 import { useLookBar, useLookSettings } from "../look"
-import { memoOf, runs, widgets } from "../registry"
+import { runs, widgets } from "../registry"
 import { AsidePill } from "../safe/AsidePill"
-import type { Entry } from "../tiling/model"
-import { Counts } from "./Counts"
+import { type Ahead, Counts } from "./Counts"
 import type { Layout } from "./arrange"
 import { type Known, PARTS, type Part, placed, WORKSPACES } from "./placed"
 
@@ -22,9 +21,9 @@ export type Drawn = { id: string; node: ReactNode }
 export type OwnProps = WidgetProps & {
   /** Whether the sidebar shows. */
   sidebarShown: boolean
-  /** The Pane in focus, whose Thread, an Agent's, the counts name while
-   * the sidebar is hidden (ADR 0065, decision 9). */
-  ahead?: Entry
+  /** The thing the Pane in focus shows, whose Thread, an Agent's, the
+   * counts name while the sidebar is hidden (ADR 0065, decision 9). */
+  ahead?: Ahead
   /** Opens a Pane as a row of the sidebar does. */
   onOpen: (project: ProjectId, pane: PaneState) => void
   /** The workspaces set aside, while they are (ADR 0039, decision 2). */
@@ -68,10 +67,10 @@ export function useWidgets(
   for (const part of PARTS) {
     drawn[part] = parts[part].map((id) => {
       if (id === WORKSPACES) return { id, node: null }
-      const Own = OWN[id]
-      if (Object.hasOwn(OWN, id) && Own) return { id, node: <Own {...props} /> }
+      const Own = Object.hasOwn(OWN, id) ? OWN[id] : undefined
+      if (Own) return { id, node: <Own {...props} /> }
       // A module's widget is given only what a module's is.
-      const Widget = memoOf(widgets.get(id)!.widget.Widget)
+      const { Widget } = widgets.get(id)!.widget
       const node = (
         <Widget
           engine={engine}

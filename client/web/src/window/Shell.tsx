@@ -18,7 +18,7 @@ import { clock, problem } from "@banda/ui/lib/words"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openProjects, updateProject } from "@banda/ui/lib/projects"
-import { sameEach, useStore } from "@banda/ui/lib/store"
+import { useStore } from "@banda/ui/lib/store"
 import { asleep, IN_PROGRAM, type Listed, type PaneState } from "@banda/ui/pane"
 import { DEFAULT_KEYS, type Mod } from "@banda/contract/look"
 import type { Action, Thing } from "@banda/ui/module"
@@ -38,10 +38,10 @@ import { PARTS } from "../bar/placed"
 import { Watches } from "../bar/Watches"
 import { besideOf, isShowing, nextCall, sightOf } from "../calls/sight"
 import {
-  callingIn,
   followCalls,
   listedIn,
   newStores,
+  nowOf,
   StoresContext,
   watchLists,
   workingIn,
@@ -97,7 +97,7 @@ import { attachTo, focusedOn } from "./attach"
 import { useNarrow } from "./narrow"
 import { floorOf, type Reveal, shownOf } from "../tiling/layout"
 import type { Change } from "../tiling/arrange"
-import type { Listing } from "../tiling/listing"
+import type { Shows } from "../tiling/shows"
 import { useTiling } from "../tiling/useTiling"
 import {
   current,
@@ -150,6 +150,7 @@ import {
   updating,
   type Shell as Parts,
   type SnoozeAsked,
+  windowApiOf,
 } from "./actions"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { holdsAlone, withMore } from "@banda/ui/lib/keys"
@@ -229,10 +230,6 @@ export function Shell({
   // A Project whose folder is missing lists nothing and starts nothing
   // until the Person locates it (ADR 0026, decision 6).
   const open = useMemo(() => openProjects(projects), [projects])
-  const openNow = useRef(open)
-  useEffect(() => {
-    openNow.current = open
-  }, [open])
   // The Tiling: the engine's arrangement, the view of it and the queue
   // its changes go through (ADR 0087).
   const machine = useMachine(engine)
@@ -288,10 +285,7 @@ export function Shell({
   const sightHeard = useRef(new Set<() => void>())
   const notify = useLookNotify()
   const sound = useLookSound()
-  const lookNow = useRef({ notify, sound })
-  useEffect(() => {
-    lookNow.current = { notify, sound }
-  }, [notify, sound])
+  const told = useMemo(() => ({ notify, sound }), [notify, sound])
   const front = useInFront()
   useEffect(() => keepSidebar(sidebar), [sidebar])
   // A Pane an Agent opened is marked until the Person looks at it: has
@@ -329,19 +323,15 @@ export function Shell({
   // sleeps calls no one, and calls again as it wakes.
   const [stores] = useState(newStores)
   useEffect(() => followCalls(stores), [stores])
-  const snoozes = useSnoozesAt(useStore(stores.calls, (calls) => calls.now))
-  // What the Tiling reads of them, the same for the Window's life.
-  const [listing] = useState((): Listing => ({
+  const snoozes = useSnoozesAt(useStore(stores.calls, nowOf))
+  // What the Tiling reads of them, the same for the Window's life. The
+  // calls follow every change of the items, so it hears them alone.
+  const [shows] = useState((): Shows => ({
     listed: (entry) => listedIn(stores.items.get(), entry, showsOf),
     called: (entry) =>
       stores.calls.get().list.find((call) => isShowing(entry, call, showsOf))
         ?.chime,
-    subscribe: (listener) => {
-      const stops = [stores.items, stores.calls].map((one) =>
-        one.subscribe(listener)
-      )
-      return () => stops.forEach((stop) => stop())
-    },
+    subscribe: stores.calls.subscribe,
   }))
   // Alt+C's column to the middle, and a Thread picked, from the Inbox,
   // the bar or a call, to the left (ADR 0065, decision 8): once each.
@@ -359,21 +349,6 @@ export function Shell({
       picking((w) => answering(w, thing, homeOf(thing.pane))),
     [picking]
   )
-  // Alt+U: the next call below the Thread in front, as the sidebar lists
-  // them (ADR 0079, decision 4).
-  const heard = useRef({ snoozes, projects })
-  useEffect(() => {
-    heard.current = { snoozes, projects }
-  }, [snoozes, projects])
-  const answer = useCallback(() => {
-    const { snoozes, projects } = heard.current
-    const order = sidebarOrder(stores.items.get(), projects, snoozes)
-    const entry = focused(drawnNow())
-    const thing = entry && showsOf(entry.pane)
-    const here = entry && thing ? `${entry.project}:${thing}` : undefined
-    const call = nextCall(stores.calls.get().list, order, here)
-    if (call) goToCall(call)
-  }, [goToCall, drawnNow, stores])
   useEffect(() => {
     for (const listener of sightHeard.current) listener()
   }, [workspaces, front])
@@ -600,11 +575,6 @@ export function Shell({
       ? zoom
       : undefined
   if (zoom !== undefined && zoomed === undefined) setZoom(undefined)
-  // Under a zoom no other Tile shows, for where the Person looks.
-  const zoomedNow = useRef(false)
-  useEffect(() => {
-    zoomedNow.current = zoomed !== undefined
-  }, [zoomed])
   const sidebarShown = (narrow ? over : sidebar) && !zoomed
   const hideOver = useCallback(() => setOver(false), [])
   // Each Alt+C brings the focused column to the middle, once.
@@ -791,7 +761,8 @@ export function Shell({
         look,
         shown: () => shownOf(current(state), look),
         away: awayNow.current,
-        zoomed: zoomedNow.current,
+        // Under a zoom no other Tile shows.
+        zoomed: zoomed !== undefined,
       })
     },
     watchSight: (listener) => {
@@ -799,8 +770,8 @@ export function Shell({
       return () => sightHeard.current.delete(listener)
     },
     goTo: goToCall,
-    look: () => lookNow.current,
-    projects: () => openNow.current,
+    look: () => told,
+    projects: () => open,
     toggleSidebar,
     showSidebar,
     toggleOverview,
@@ -808,7 +779,16 @@ export function Shell({
     zoom: toggleZoom,
     popOut: togglePopOut,
     center: toCenter,
-    answer,
+    // Alt+U: the next call below the Thread in front, as the sidebar lists
+    // them (ADR 0079, decision 4).
+    answer: () => {
+      const order = sidebarOrder(stores.items.get(), projects, snoozes)
+      const entry = focused(drawnNow())
+      const thing = entry && showsOf(entry.pane)
+      const here = entry && thing ? `${entry.project}:${thing}` : undefined
+      const call = nextCall(stores.calls.get().list, order, here)
+      if (call) goToCall(call)
+    },
     archive,
     snooze,
     wake,
@@ -881,6 +861,8 @@ export function Shell({
   }, [stores, parts])
   // A new Problem of Banda's own tells too, silently (ADR 0039).
   useProblemNews(engine, notify, parts.run)
+  // What the modules are given of it: the API alone.
+  const [api] = useState(() => windowApiOf(parts))
   // Each module that runs starts once, with the window as it is when it
   // asks (ADR 0022): the browser opens a Pane for an Agent's tab.
   const running = known
@@ -890,9 +872,9 @@ export function Shell({
   useEffect(() => {
     const stops = known
       .filter((module) => running.split(",").includes(module.id))
-      .flatMap((module) => module.start?.(parts) ?? [])
+      .flatMap((module) => module.start?.(api) ?? [])
     return () => stops.forEach((stop) => stop())
-  }, [running, parts])
+  }, [running, api])
   // The keys run the actions, before any Pane hears them. A dialog keeps
   // its keys, as the Banda menu its New Thread key, but for the menu's own.
   useEffect(() => {
@@ -994,15 +976,26 @@ export function Shell({
     flowWas.current = flow
   }, [flow, change])
   // The bar's widgets, the window's own and the modules', where the
-  // look's `[bar]` puts them (ADR 0024); the Pane in front, whose Agent's
-  // Thread the bar names with the sidebar hidden (ADR 0065, decision 9).
+  // look's `[bar]` puts them (ADR 0024); the thing the Pane in front
+  // shows, whose Agent's Thread the bar names with the sidebar hidden (ADR
+  // 0065, decision 9), the same object while it stays in front.
+  const aheadEntry = focused(workspaces)
+  const aheadProject = aheadEntry?.project
+  const aheadThing = aheadEntry && showsOf(aheadEntry.pane)
+  const ahead = useMemo(
+    () =>
+      aheadProject && aheadThing
+        ? { project: aheadProject, thing: aheadThing }
+        : undefined,
+    [aheadProject, aheadThing]
+  )
   const bar = useWidgets(modules, {
     engine,
     projects,
     project: here,
-    window: parts,
+    window: api,
     sidebarShown,
-    ahead: focused(workspaces),
+    ahead,
     onOpen: pickPane,
     aside,
   })
@@ -1136,25 +1129,13 @@ export function Shell({
     [projects]
   )
 
-  // The bar's workspaces: a Project's by its name, with a dot while one of
-  // its Threads calls (ADR 0065, decision 9).
-  const calls = useStore(
-    stores.items,
-    (lists) => callingIn(lists, snoozes.away),
-    sameEach
-  )
+  // The bar's workspaces: a Project's by its name (ADR 0065, decision 9).
   const barWorkspaces = useMemo(
     () =>
       inBar(workspaces).map((w) =>
-        w.project
-          ? {
-              ...w,
-              owner: projectOf(w.project),
-              calls: calls.includes(w.project),
-            }
-          : w
+        w.project ? { ...w, owner: projectOf(w.project) } : w
       ),
-    [workspaces, calls, projectOf]
+    [workspaces, projectOf]
   )
 
   return (
@@ -1168,20 +1149,12 @@ export function Shell({
           wake={wakeThread}
         >
           <div className="flex h-svh flex-col bg-desk text-foreground">
-            <Watches
-              engine={engine}
-              modules={modules}
-              projects={open}
-              stores={stores}
-            />
+            <Watches engine={engine} modules={modules} projects={open} />
             <Bar
               status={status}
               workspaces={barWorkspaces}
               map={
-                <WorkspaceMap
-                  workspace={current(workspaces)}
-                  listing={listing}
-                />
+                <WorkspaceMap workspace={current(workspaces)} shows={shows} />
               }
               current={workspaces.current}
               sidebar={narrow ? over : sidebar}
@@ -1267,11 +1240,12 @@ export function Shell({
                     engine={engine}
                     modules={modules}
                     projectOf={projectOf}
-                    listing={listing}
+                    shows={shows}
                     marked={marked}
                     away={away}
                     zoomed={zoomed}
                     reveal={reveal}
+                    inset={sidebarShown && !narrow ? sidebarWidth : 0}
                     frame={frame}
                     onStep={stepBy}
                     onGo={goTo}
@@ -1336,7 +1310,7 @@ export function Shell({
                     height={drawerLook.height}
                     engine={engine}
                     modules={modules}
-                    listing={listing}
+                    shows={shows}
                     projectOf={projectOf}
                     frame={frame}
                     onLift={liftDrawer}
@@ -1351,7 +1325,7 @@ export function Shell({
                     onExited={leftOverview}
                     workspaces={workspaces}
                     projectOf={projectOf}
-                    listing={listing}
+                    shows={shows}
                     frame={frame}
                     onPick={(entry) => change((w) => focusEntry(w, entry))}
                     onArrow={(direction) => change((w) => across(w, direction))}

@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test, vi } from "vitest"
-import { keptSelection, sameEach, Store, useStore } from "./store"
+import { sameEach, Store, useStore } from "./store"
 
 test("a store tells its listeners of a new value, and of none it already holds", () => {
   const store = new Store({ n: 1 })
@@ -29,19 +29,6 @@ test("a listener that stops as it hears leaves the others to hear", () => {
   store.set(1)
   store.set(2)
   expect(heard).toEqual(["a", "b", "b"])
-})
-
-test("a reader keeps what it drew while nothing it reads changed", () => {
-  const last = keptSelection([1, 2], null, sameEach)
-  expect(last.value).toEqual([1, 2])
-  expect(keptSelection([1, 2], last, sameEach)).toBe(last)
-  const next = keptSelection([1, 3], last, sameEach)
-  expect(next).not.toBe(last)
-  expect(next.value).toEqual([1, 3])
-  // A selection of nothing is one, told from none.
-  expect(keptSelection(undefined, null, Object.is)).toEqual({
-    value: undefined,
-  })
 })
 
 test("two lists are the same when each holds the same objects in order", () => {

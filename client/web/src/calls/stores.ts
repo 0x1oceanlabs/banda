@@ -7,10 +7,10 @@
  * pair for each Window; keyed by host from W0. Pure but for React's
  * context, so plain tests cover it.
  */
-import { createContext, useContext } from "react"
+import { createContext, useCallback, useContext } from "react"
 import type { ProjectId } from "@banda/contract"
 import { waits, works } from "@banda/ui/components/banda-mark"
-import { Store, useStore } from "@banda/ui/lib/store"
+import { sameEach, Store, useStore } from "@banda/ui/lib/store"
 import {
   type Attention,
   type Call,
@@ -20,7 +20,12 @@ import {
   type PaneState,
   QUIET,
 } from "@banda/ui/pane"
-import { nextWake, wakeAfter } from "../sidebar/snoozed"
+import {
+  nextWake,
+  type Snoozes,
+  useSnoozesAt,
+  wakeAfter,
+} from "../sidebar/snoozed"
 
 /** What calls the Person now. */
 export type Calls = {
@@ -71,14 +76,14 @@ export function keptLists(was: Lists, now: Lists): Lists {
     const project = key as ProjectId
     const before = was[project]
     const byId = new Map(before?.map((one) => [one.id, one]))
-    let all = before?.length === listed.length
+    let unchanged = before?.length === listed.length
     const each = listed.map((one, i) => {
       const old = byId.get(one.id)
       const keep = old && sameData(old, one) ? old : one
-      if (keep !== before?.[i]) all = false
+      if (keep !== before?.[i]) unchanged = false
       return keep
     })
-    kept[project] = before && all ? before : each
+    kept[project] = before && unchanged ? before : each
     if (kept[project] !== before) same = false
   }
   return same ? was : kept
@@ -102,7 +107,9 @@ export function takeAttention({ calls }: Stores, attention: Attention): void {
 /**
  * Keeps the calls following the items and the snooze clock: worked out
  * again as the lists change, and as the next snooze wakes by its time,
- * and only then. Returns how to stop.
+ * and only then. The calls are set anew after every change of the items,
+ * so what reads both may listen to the calls alone, and hears once, with
+ * both new. Returns how to stop.
  */
 export function followCalls({ items, calls }: Stores): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -195,5 +202,29 @@ export function useCalls<S>(
   return useStore(useContext(StoresContext).calls, select, equal)
 }
 
-/** The whole of what it is given: what reads every list selects. */
-export const all = <T>(value: T): T => value
+const every = (lists: Lists) => lists
+
+/** What every App lists now, drawn again as any list changes. */
+export function useLists(): Lists {
+  return useItems(every)
+}
+
+/** The bar's Mark: what calls the Person, and how many things wait. */
+export const attentionOf = (calls: Calls) => calls.attention
+
+/** The snooze clock. */
+export const nowOf = (calls: Calls) => calls.now
+
+/** The snoozes, read by the calls' clock, which moves as the next one
+ * wakes by its time. */
+export function useSnoozesNow(): Snoozes {
+  return useSnoozesAt(useCalls(nowOf))
+}
+
+/** The Projects one of whose Threads calls the Person now, unless it is
+ * put away: the bar's dots, drawn again only as they change. */
+export function useCalling(): ProjectId[] {
+  const { away } = useSnoozesNow()
+  const select = useCallback((lists: Lists) => callingIn(lists, away), [away])
+  return useItems(select, sameEach)
+}

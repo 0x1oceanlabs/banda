@@ -1,7 +1,13 @@
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test } from "vitest"
 import { entries, open, start } from "../tiling/model"
-import { closingShown, opening, updating } from "./actions"
+import {
+  closingShown,
+  opening,
+  type Shell,
+  updating,
+  windowApiOf,
+} from "./actions"
 
 const thread = (id: string): PaneState => ({
   kind: "agents.thread",
@@ -61,4 +67,17 @@ test("opened to update, a Pane shown as its kind names it takes the new args, an
   expect(updating(state, "project-b", diff("staged"))).toMatchObject({
     command: { method: "workspaces.open" },
   })
+})
+
+test("a module is given the Window's API alone, as it is when asked", () => {
+  let home = "a"
+  const shell = new Proxy({} as Shell, {
+    get: (_, key) => (key === "home" ? home : () => String(key)),
+  })
+  const api = windowApiOf(shell)
+  for (const own of ["change", "quit", "route", "ownKeys", "toggleSidebar"])
+    expect(Object.keys(api)).not.toContain(own)
+  expect(api.run("thread.new")).toBe("run")
+  home = "b"
+  expect(api.home).toBe("b")
 })

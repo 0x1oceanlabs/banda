@@ -28,7 +28,7 @@ import {
 } from "./layout"
 import { groupState } from "@banda/ui/components/banda-mark"
 import { agentsOf } from "./groups"
-import { type Listing, useShown } from "./listing"
+import { type Shows, useShows } from "./shows"
 import { type Frame, PaneFrame } from "./PaneFrame"
 
 import { Tabs } from "./Tabs"
@@ -57,7 +57,7 @@ const VIEW_STEP = 48
  * middle button: sideways the Strip follows the pointer, and lands as a
  * swipe does; up or down, the workspaces step once.
  *
- * It is drawn again only as its own props change, or what `listing` says
+ * It is drawn again only as its own props change, or what `shows` says
  * of its Panes (ADR 0088, decision 7).
  */
 export const Strip = memo(function Strip({
@@ -67,7 +67,7 @@ export const Strip = memo(function Strip({
   engine,
   modules,
   projectOf,
-  listing,
+  shows,
   marked,
   away,
   zoomed,
@@ -88,7 +88,7 @@ export const Strip = memo(function Strip({
   modules: readonly string[]
   projectOf: (project: ProjectId) => ProjectSummary | undefined
   /** What its Panes show, as their Apps list it, and how each calls. */
-  listing: Listing
+  shows: Shows
   /** An Agent opened it, and the Person has not looked at it yet. */
   marked: (entry: Entry) => boolean
   /** The Panes in windows of their own, which stand-ins keep the places of. */
@@ -99,6 +99,10 @@ export const Strip = memo(function Strip({
    * middle of the screen, once. */
   /** A column to show once, as asked: Alt+C's, or a Thread picked. */
   reveal?: Reveal
+  /** How far the sidebar reaches over its left, in rem, which pads it
+   * (`--sidebar-inset`): as it changes, the Strip is drawn again, and its
+   * columns slide to where the padding puts them, as on any move. */
+  inset: number
   frame: Frame
   /** The mod and the middle button dragged up or down step once. */
   onStep: (by: 1 | -1) => void
@@ -112,7 +116,7 @@ export const Strip = memo(function Strip({
   const groups = useLookGroups()
   const columns = drawnColumns(workspace, look)
   const focusedGroup = workspace.columns[workspace.focus]?.group
-  const { listed, called } = useShown(listing, workspace)
+  const { listed, called } = useShows(shows, workspace)
   // Each Group's Agent, by the Thread in it: its state and its name.
   const agents = agentsOf(columns, listed)
   // Each Group's colour, by its Agent's state; its plate moves with it.

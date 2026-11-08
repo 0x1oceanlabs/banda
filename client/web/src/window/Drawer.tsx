@@ -4,7 +4,7 @@ import { Button } from "@banda/ui/components/button"
 import { cn } from "@banda/ui/lib/utils"
 import type { PaneState } from "@banda/ui/pane"
 import { PinIcon } from "lucide-react"
-import { type Listing, useListed } from "../tiling/listing"
+import { type Shows, useListed } from "../tiling/shows"
 import type { Entry } from "../tiling/model"
 import { type Frame, PaneFrame } from "../tiling/PaneFrame"
 
@@ -21,7 +21,7 @@ export const Drawer = memo(function Drawer({
   height,
   engine,
   modules,
-  listing,
+  shows,
   projectOf,
   frame,
   onLift,
@@ -36,7 +36,7 @@ export const Drawer = memo(function Drawer({
   engine: Engine
   modules: readonly string[]
   /** What its Pane shows, as its App lists it. */
-  listing: Listing
+  shows: Shows
   projectOf: (id: ProjectId) => ProjectSummary | undefined
   /** The workspaces' frame: what its Pane opens goes there. */
   frame: Frame
@@ -45,7 +45,7 @@ export const Drawer = memo(function Drawer({
   onChange: (pane: PaneState) => void
   onClose: () => void
 }) {
-  const listed = useListed(listing, entry)
+  const listed = useListed(shows, entry)
   const own: Frame = useMemo(
     () => ({
       // The focus is the drawer's while it shows; the workspace keeps its own.

@@ -100,28 +100,33 @@
       "measure": "focus.renders.perStep.tiles",
       "gate": "hard",
       "budget": 2,
-      "note": "the two Tiles the focus moves between (ADR 0088, decision 7)"
+      "note": "the two Tiles the focus moves between (ADR 0088, decision 7)",
+      "blocks": true
     },
     {
       "measure": "width.renders.perStep.tiles",
       "gate": "hard",
-      "budget": 0
+      "budget": 0,
+      "blocks": true
     },
     {
       "measure": "maximize.renders.perStep.tiles",
       "gate": "hard",
-      "budget": 0
+      "budget": 0,
+      "blocks": true
     },
     {
       "measure": "workspace.renders.perStep.tiles",
       "gate": "hard",
       "budget": 1,
-      "note": "the Tile in focus, as its workspace leaves the screen or comes back"
+      "note": "the Tile in focus, as its workspace leaves the screen or comes back",
+      "blocks": true
     },
     {
       "measure": "focus.renders.perStep.widgets",
       "gate": "hard",
-      "budget": 0
+      "budget": 0,
+      "blocks": true
     },
     {
       "measure": "focus.tasks.longestMs",
@@ -151,7 +156,7 @@
       "quiet.ticks.callbacksPerSecond": 0,
       "printing.draws.hidden": 45.2,
       "focus.moving.layouts": 0,
-      "workspace.moving.layouts": 0.01,
+      "workspace.moving.layouts": 0.03,
       "width.moving.layouts": 1.39,
       "width.fits": 52,
       "printing.page.trailing": 0,
@@ -164,15 +169,15 @@
       "width.moving.mainMs.p95": 4.5,
       "focus.moving.mainMs.p95": 3.6,
       "maximize.moving.mainMs.p95": 4.6,
-      "workspace.moving.mainMs.p95": 2.3,
+      "workspace.moving.mainMs.p95": 3.3,
       "overview.moving.mainMs.p95": 6.8,
       "focus.renders.perStep.tiles": 2,
       "width.renders.perStep.tiles": 0,
       "maximize.renders.perStep.tiles": 0,
       "workspace.renders.perStep.tiles": 1,
       "focus.renders.perStep.widgets": 0,
-      "focus.tasks.longestMs": 6.6,
-      "workspace.tasks.longestMs": 9.1,
+      "focus.tasks.longestMs": 10.1,
+      "workspace.tasks.longestMs": 13.7,
       "focus.longFrames.count": 0,
       "workspace.longFrames.count": 0
     },
@@ -180,7 +185,7 @@
       "quiet.ticks.callbacksPerSecond": 0,
       "printing.draws.hidden": 44.9,
       "focus.moving.layouts": 0,
-      "workspace.moving.layouts": 0.02,
+      "workspace.moving.layouts": 0.04,
       "width.moving.layouts": 1.38,
       "width.fits": 51,
       "printing.page.trailing": 0,
@@ -193,15 +198,15 @@
       "width.moving.mainMs.p95": 4.9,
       "focus.moving.mainMs.p95": 4,
       "maximize.moving.mainMs.p95": 6.4,
-      "workspace.moving.mainMs.p95": 2.8,
+      "workspace.moving.mainMs.p95": 4.1,
       "overview.moving.mainMs.p95": 7.3,
       "focus.renders.perStep.tiles": 2,
       "width.renders.perStep.tiles": 0,
       "maximize.renders.perStep.tiles": 0,
       "workspace.renders.perStep.tiles": 1,
       "focus.renders.perStep.widgets": 0,
-      "focus.tasks.longestMs": 7.1,
-      "workspace.tasks.longestMs": 11.5,
+      "focus.tasks.longestMs": 10.7,
+      "workspace.tasks.longestMs": 22.1,
       "focus.longFrames.count": 0,
       "workspace.longFrames.count": 0
     }
