@@ -710,6 +710,23 @@
       ]
     },
     {
+      "id": "menu.route",
+      "title": "Open the Banda menu at a route, as banda menu does",
+      "section": "Banda",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "route": {
+            "type": "string",
+            "description": "a route of banda menu, as actions or project.add; none for its root"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "id": "file.open",
       "title": "Open a file in Banda",
       "section": "Banda",
@@ -884,6 +901,71 @@
       "section": "Banda",
       "keys": [],
       "unlisted": true
+    },
+    {
+      "id": "projects.pin",
+      "title": "Pin a Project, so it comes first, or unpin it",
+      "section": "Banda",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project"
+          },
+          "pinned": {
+            "type": "boolean",
+            "description": "true pins it, false unpins it"
+          }
+        },
+        "required": [
+          "project",
+          "pinned"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "projects.locate",
+      "title": "Find the folder of a Project whose folder is missing",
+      "section": "Banda",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project whose folder is missing"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "projects.settings",
+      "title": "Open the settings at a Project's own",
+      "section": "Banda",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "additionalProperties": false
+      }
     },
     {
       "id": "settings.open",

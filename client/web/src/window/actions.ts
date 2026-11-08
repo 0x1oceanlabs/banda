@@ -6,6 +6,7 @@
 import type { Engine, JsonValue, ProjectId } from "@banda/contract"
 import { toast } from "@banda/ui/components/sonner"
 import { seenNamed } from "@banda/ui/hooks/use-status"
+import { updateProject } from "@banda/ui/lib/projects"
 import {
   type Action,
   type Args,
@@ -20,7 +21,7 @@ import { chipOf } from "./attach"
 import { device } from "./device"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
-import type { At } from "../menu/menu"
+import { type At, locateRoute } from "../menu/menu"
 import { modules } from "../modules"
 import {
   groupedOf,
@@ -867,6 +868,22 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     run: (shell) => shell.menu("actions"),
   },
   {
+    // The sidebar's Search and its key sheet's button: the menu opens
+    // there whatever shows, as `banda menu` opens it. Alt+Space is
+    // menu.open's, which fills Quick Look where it shows, and Alt+K
+    // closes the menu at its Actions.
+    id: "menu.route",
+    args: takes({
+      route:
+        "a route of banda menu, as actions or project.add; none for its root",
+    }),
+    section: "Banda",
+    title: "Open the Banda menu at a route, as banda menu does",
+    unlisted: true,
+    run: (shell, args) =>
+      shell.route(typeof args?.route === "string" ? args.route : ""),
+  },
+  {
     // A file a Pane's link names, as a terminal's path or a reply's
     // (ADR 0063), at its line: in Files' `files.file` (ADR 0073).
     id: "file.open",
@@ -980,6 +997,55 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     // The menu lists "Add Project" as its own branch; this opens it there.
     unlisted: true,
     run: (shell) => shell.route("project.add"),
+  },
+  // A Project's verbs, as its line in the sidebar list and its menu run
+  // them (ADR 0026, decisions 5 and 6).
+  {
+    id: "projects.pin",
+    args: takes(
+      {
+        project: "the Project",
+        pinned: { flag: "true pins it, false unpins it" },
+      },
+      ["project", "pinned"]
+    ),
+    section: "Banda",
+    title: "Pin a Project, so it comes first, or unpin it",
+    unlisted: true,
+    run: (shell, args) => {
+      const { project, pinned } = args ?? {}
+      if (typeof project !== "string" || typeof pinned !== "boolean") return
+      updateProject(shell.engine, {
+        project: project as ProjectId,
+        pinned,
+      }).catch((error: unknown) =>
+        console.error("banda: the Project was not pinned", error)
+      )
+    },
+  },
+  {
+    id: "projects.locate",
+    args: takes({ project: "the Project whose folder is missing" }, [
+      "project",
+    ]),
+    section: "Banda",
+    title: "Find the folder of a Project whose folder is missing",
+    unlisted: true,
+    run: (shell, args) => {
+      if (typeof args?.project === "string")
+        shell.route(locateRoute(args.project as ProjectId))
+    },
+  },
+  {
+    id: "projects.settings",
+    args: takes({ project: "the Project" }, ["project"]),
+    section: "Banda",
+    title: "Open the settings at a Project's own",
+    unlisted: true,
+    run: (shell, args) => {
+      if (typeof args?.project === "string")
+        shell.settings(`projects/${args.project}`)
+    },
   },
   {
     id: "settings.open",
