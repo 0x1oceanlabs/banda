@@ -9,7 +9,7 @@
  * A key still works out its change with `model.ts`, which says where a
  * Pane goes; what that puts where becomes one command, which the window
  * draws at once with the client's copy of the engine's commands
- * (`pending.ts`), until the engine's event holds it. Pure, so plain tests
+ * (`unheard.ts`), until the engine's event holds it. Pure, so plain tests
  * cover it.
  */
 import type { CommandId, Engine, Event } from "@banda/contract"
@@ -53,7 +53,7 @@ export type View = {
 
 /**
  * A Pane to focus: while the command that put it there waits for its fact
- * (`command`, `pending.ts`), or once the arrangement stands past `after`
+ * (`command`, `unheard.ts`), or once the arrangement stands past `after`
  * in the machine's log, as a window kept it before it drew its changes at
  * once, and an arrangement it moved over waits for still.
  */

@@ -715,15 +715,12 @@ test("a place that no longer makes one comes off the list", () => {
 
 /**
  * A key's change is drawn at once, before the engine answers (ADR 0088,
- * decision 11): the Tiling's controller waits on no answer, and draws
- * nothing on a clock. What a change waited for to be drawn is gone.
+ * decision 11): the Tiling's controller awaits nothing. keys.spec.ts
+ * holds the rest, as no frame begins between a key and its commit.
  */
 test("the Tiling's controller waits on no answer to draw a change", () => {
   const file = readFileSync(join(app, "web/src/tiling/useTiling.ts"), "utf8")
-  const waits = file.match(
-    /\bawait\b|\bDRAWN_WITHIN\b|\bdrawnWhen\b|\bsetTimeout\(/g
-  )
-  expect(waits).toBeNull()
+  expect(file.match(/\bawait\b/g)).toBeNull()
 })
 
 test("the copy of the arrangement's commands imports the contract alone", () => {

@@ -16,6 +16,7 @@ import { entries, focused } from "./model"
 import {
   ANSWER_WITHIN,
   answered,
+  answeredTo,
   ask,
   dropped,
   hear,
@@ -25,7 +26,7 @@ import {
   text,
   Unanswered,
   unseen,
-} from "./pending"
+} from "./unheard"
 
 const PROJECT = "a0000000-0000-4000-8000-000000000001"
 const START: Kept[] = [
@@ -92,7 +93,7 @@ describe("a key drawn before the engine answers", () => {
     }
     expect(text(seen.predicted)).toBe(text(ran(list, ...sent)))
     expect(text(keptOf(seen.state))).toBe(text(ran(list, ...sent)))
-    expect(seen.pending.map((one) => one.id)).toEqual(sent.map(([id]) => id))
+    expect(seen.unheard.map((one) => one.id)).toEqual(sent.map(([id]) => id))
     // A Pane opened is focused by the ID the engine will give it.
     const opened = ran(list, ...sent.slice(0, 4))[0].columns.at(-1)!.panes[0]
     expect(want).toBeUndefined()
@@ -106,9 +107,9 @@ describe("a key drawn before the engine answers", () => {
     const id = newId()
     const size = { method: "workspaces.size", params: { column } } as const
     const { seen } = predict(before, id, { command: size })
-    expect(seen.pending).toHaveLength(1)
+    expect(seen.unheard).toHaveLength(1)
     const after = answered(seen, id, null)
-    expect(after.pending).toEqual([])
+    expect(after.unheard).toEqual([])
     expect(after.state).toBe(seen.state)
   })
 
@@ -130,7 +131,7 @@ describe("a key drawn before the engine answers", () => {
     // Applied again over its own fact, it would step once more.
     expect(text(ran(once, [newId(), regroup]))).not.toBe(text(once))
     const heard = hear(predicted, once, 5)
-    expect(heard.pending).toEqual([])
+    expect(heard.unheard).toEqual([])
     expect(text(heard.predicted)).toBe(text(once))
     // Its answer then finds it gone, and changes nothing.
     expect(answered(heard, id, 5).predicted).toBe(heard.predicted)
@@ -149,12 +150,12 @@ describe("a key drawn before the engine answers", () => {
     const agent: [CommandId, Command] = [newId(), opening(9)]
     const theirs = ran(list, agent)
     const rebased = hear(waiting, theirs, 4)
-    expect(rebased.pending.map((one) => one.id)).toEqual([id])
+    expect(rebased.unheard.map((one) => one.id)).toEqual([id])
     expect(text(rebased.predicted)).toBe(text(ran(theirs, [id, width])))
     // Then the window's fact, answered first: as drawn, nothing draws
     // again.
     const done = hear(answered(rebased, id, 5), ran(theirs, [id, width]), 5)
-    expect(done.pending).toEqual([])
+    expect(done.unheard).toEqual([])
     expect(done.state).toBe(rebased.state)
   })
 
@@ -178,7 +179,7 @@ describe("a key drawn before the engine answers", () => {
     expect(columnsOf(seen.predicted!)[0].full).toBe(true)
     const back = dropped(seen, maximize[0])
     expect(text(back.predicted)).toBe(text(ran(list, width)))
-    expect(back.pending.map((one) => one.id)).toEqual([width[0]])
+    expect(back.unheard.map((one) => one.id)).toEqual([width[0]])
     // A Pane opened, refused, leaves what stands: its App lets it go.
     const id = newId()
     const open = predict(back, id, { command: opening(7) })
@@ -245,7 +246,7 @@ describe("a key drawn before the engine answers", () => {
     seen = answered(seen, sent[2][0], 12)
     const facts = ran(list, [newId(), opening(8)], ...sent)
     const heard = hear(seen, facts, 12)
-    expect(heard.pending).toEqual([])
+    expect(heard.unheard).toEqual([])
     expect(text(heard.predicted)).toBe(text(facts))
   })
 
@@ -271,7 +272,7 @@ describe("a key drawn before the engine answers", () => {
     expect(seen.view.want?.command).toBe(id)
     const looked = look(seen, { ...seen.view, want: undefined })
     expect(looked.view.want).toBeUndefined()
-    expect(looked.pending).toHaveLength(1)
+    expect(looked.unheard).toHaveLength(1)
   })
 
   test("args a Pane asked for are drawn until the log stands where the engine kept them", () => {
@@ -289,6 +290,21 @@ describe("a key drawn before the engine answers", () => {
     const heard = hear(kept, updated, 5)
     expect(heard.asked).toEqual({})
     expect(heard.state.list[0].columns[0].entries[0].pane.args).toEqual({
+      n: 10,
+    })
+  })
+
+  test("an args update's answer raises how far the engine answered, so one after it that changed nothing keeps its args until the first is heard", () => {
+    const { seen: before, list } = three()
+    const pane = columnsOf(list)[0].panes[0].id
+    // The first changes the args, its fact at 4; the second finds them
+    // there and is answered before that fact comes.
+    const first = answeredTo(ask(before, pane, { n: 10 }, Infinity), 4)
+    expect(first.answered).toBe(4)
+    const second = answeredTo(first, null)
+    expect(second).toBe(first)
+    const kept = ask(second, pane, { n: 10 }, second.answered)
+    expect(kept.state.list[0].columns[0].entries[0].pane.args).toEqual({
       n: 10,
     })
   })
@@ -361,7 +377,7 @@ describe.each(traces)("%s, as a window lives it", (_, trace) => {
       else seen = hear(answered(seen, step.seed, i + 1), step.after, i + 1)
       expect(text(seen.predicted), `after step ${i + 1}`).toBe(last)
     }
-    expect(seen.pending).toEqual([])
+    expect(seen.unheard).toEqual([])
   })
 
   test("drawn whole at once, then each fact heard before its answer", () => {
@@ -378,6 +394,6 @@ describe.each(traces)("%s, as a window lives it", (_, trace) => {
       before = now
       expect(text(seen.predicted), `after step ${i + 1}`).toBe(last)
     }
-    expect(seen.pending).toEqual([])
+    expect(seen.unheard).toEqual([])
   })
 })

@@ -5,7 +5,13 @@ import {
   useRef,
   useState,
 } from "react"
-import { type Engine, newId, type ProjectId } from "@banda/contract"
+import {
+  type Engine,
+  Lost,
+  newId,
+  type ProjectId,
+  Refused,
+} from "@banda/contract"
 import { Store, useStore } from "@banda/ui/lib/store"
 import type { PaneState } from "@banda/ui/pane"
 import { groupedOf, startable, widthOf } from "../registry"
@@ -13,6 +19,7 @@ import { type Change, type Plan, send, tidied, viewOf } from "./arrange"
 import { focused } from "./model"
 import {
   answered,
+  answeredTo,
   ask,
   dropped,
   hear,
@@ -21,13 +28,18 @@ import {
   type Seen,
   unseen,
   Unanswered,
-} from "./pending"
+} from "./unheard"
 import { keepView, loadView, moveOver } from "./store"
 import { useArranged } from "./useArranged"
 
-/** A change the engine refused is logged: the window draws what it says. */
+/** A change the engine refused is logged: the window draws what it says.
+ * One whose answer was lost may have run: its fact draws it, if it did. */
 function refused(error: unknown): void {
-  console.warn("The workspaces did not change:", error)
+  const lost =
+    error instanceof Lost ||
+    (error instanceof Refused && error.refusal.code === "may_have_run")
+  if (lost) console.warn("A change of the workspaces may have run:", error)
+  else console.warn("The workspaces did not change:", error)
 }
 
 const stateOf = (seen: Seen) => seen.state
@@ -39,7 +51,7 @@ const standingIn = (seen: Seen) => seen.standing
  * and the client's view of it, drawn together, and the one queue every
  * change goes through. A key's change is drawn at once, before the engine
  * answers (ADR 0088, decision 11): its command applied over the facts
- * heard and the commands sent before it (`pending.ts`), so keys pressed
+ * heard and the commands sent before it (`unheard.ts`), so keys pressed
  * faster than the engine answers land in order, each on what the one
  * before drew (roma-day.spec.ts holds it), and the commands go in that
  * order. It names no App and imports nothing of the Window. `machine`,
@@ -76,8 +88,11 @@ export function useTiling({
   const [unanswered] = useState(
     () =>
       new Unanswered((id) => {
+        // One whose fact came is drawn as the facts have it already.
+        const seen = store.get()
+        if (!seen.unheard.some((one) => one.id === id)) return
         console.warn("The engine did not answer a change of the workspaces")
-        store.set(dropped(store.get(), id))
+        store.set(dropped(seen, id))
       })
   )
   useEffect(() => {
@@ -180,8 +195,15 @@ export function useTiling({
         if (seen.asked[pane]?.args === args)
           store.set(ask(seen, pane, args, place))
       }
+      // Its answer raises how far the engine answered this window, as a
+      // key's does: an update after it that finds its args there already
+      // is kept until this one's fact is heard, so the args before it are
+      // not drawn back meanwhile.
       engine.command("workspaces.update", { pane, args }).then(
-        (done) => until(Math.max(store.get().answered, done.at ?? 0)),
+        (done) => {
+          store.set(answeredTo(store.get(), done.at))
+          until(store.get().answered)
+        },
         (error: unknown) => {
           refused(error)
           until(0)
