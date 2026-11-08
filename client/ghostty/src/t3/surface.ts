@@ -598,8 +598,15 @@ export class GhosttyTerminalSurface {
   private drawn = 0;
   /** Banda: hidden, something asked for a frame, or the cursor was drawn off as it hid. */
   private missed = false;
-  private scrollbarDirty = true;
   private scrollbarState: GhosttyScrollbar | null = null;
+  /** Banda: what the scrollbar shows, as last written; -1 where it is not yet. */
+  private readonly scrollbarShown = {
+    hidden: true,
+    maxOffset: -1,
+    offset: -1,
+    thumbHeight: -1,
+    thumbTop: -1,
+  };
   private scrollbarPointerId: number | null = null;
   private scrollbarPointerOffset = 0;
   private disposed = false;
@@ -811,7 +818,6 @@ export class GhosttyTerminalSurface {
     );
     this.synchronizeMouseTrackingState();
     this.cursorOn = true;
-    this.scrollbarDirty = true;
     this.requestRender();
   }
 
@@ -823,7 +829,6 @@ export class GhosttyTerminalSurface {
     this.synchronizeMouseTrackingState();
     this.cursorOn = true;
     this.forceFullRender = true;
-    this.scrollbarDirty = true;
     this.requestRender();
   }
 
@@ -875,7 +880,6 @@ export class GhosttyTerminalSurface {
     this.inputLeft = -1;
     this.inputTop = -1;
     this.forceFullRender = true;
-    this.scrollbarDirty = true;
     this.fit();
     this.requestRender();
   }
@@ -945,7 +949,6 @@ export class GhosttyTerminalSurface {
       // so a DPR change cannot erase a frame while synchronized output is open.
       this.pendingCanvasConfiguration = { width: pixelWidth, height: pixelHeight, ratio };
       this.forceFullRender = true;
-      this.scrollbarDirty = true;
       shouldRender = true;
     } else {
       // A resize can return to the painted size before its queued frame runs.
@@ -997,7 +1000,6 @@ export class GhosttyTerminalSurface {
     this.rows = rows;
     this.core.resize(cols, rows, this.metrics.width, this.metrics.height);
     this.forceFullRender = true;
-    this.scrollbarDirty = true;
     return true;
   }
 
@@ -1130,7 +1132,6 @@ export class GhosttyTerminalSurface {
   scrollToBottom(): void {
     this.core.scrollToBottom();
     this.forceFullRender = true;
-    this.scrollbarDirty = true;
     this.requestRender();
   }
 
@@ -1948,7 +1949,6 @@ export class GhosttyTerminalSurface {
     if (delta === 0) return;
     this.core.scroll(delta);
     this.forceFullRender = true;
-    this.scrollbarDirty = true;
     this.requestRender();
   }
 
@@ -1964,25 +1964,39 @@ export class GhosttyTerminalSurface {
     this.scrollViewport(offset - state.offset);
   }
 
-  private updateScrollbar(): void {
-    const state = this.readScrollbarState();
+  // Banda: from the scrollback this frame read and the mount's height as its
+  // fit took it, so a frame reads no layout for it; and each part written
+  // only as it changes, so a frame whose scrollback stayed writes nothing
+  // (ADR 0088, step P4).
+  private updateScrollbar(state: GhosttyScrollbar | null): void {
     const geometry =
       state === null
         ? null
-        : terminalScrollbarGeometry(
-            state,
-            Math.max(0, this.mount.clientHeight - CONTENT_PADDING * 2),
-          );
-    this.scrollbar.hidden = geometry === null;
+        : terminalScrollbarGeometry(state, Math.max(0, this.mountHeight - CONTENT_PADDING * 2));
+    const shown = this.scrollbarShown;
+    if (shown.hidden !== (geometry === null)) {
+      shown.hidden = geometry === null;
+      this.scrollbar.hidden = shown.hidden;
+    }
     if (state === null || geometry === null) return;
-    this.scrollbar.setAttribute("aria-valuemin", "0");
-    this.scrollbar.setAttribute("aria-valuemax", String(geometry.maxOffset));
-    this.scrollbar.setAttribute(
-      "aria-valuenow",
-      String(Math.max(0, Math.min(state.offset, geometry.maxOffset))),
-    );
-    this.scrollbarThumb.style.height = `${geometry.thumbHeight}px`;
-    this.scrollbarThumb.style.transform = `translateY(${geometry.thumbTop}px)`;
+    if (shown.maxOffset === -1) this.scrollbar.setAttribute("aria-valuemin", "0");
+    if (shown.maxOffset !== geometry.maxOffset) {
+      shown.maxOffset = geometry.maxOffset;
+      this.scrollbar.setAttribute("aria-valuemax", String(geometry.maxOffset));
+    }
+    const offset = Math.max(0, Math.min(state.offset, geometry.maxOffset));
+    if (shown.offset !== offset) {
+      shown.offset = offset;
+      this.scrollbar.setAttribute("aria-valuenow", String(offset));
+    }
+    if (shown.thumbHeight !== geometry.thumbHeight) {
+      shown.thumbHeight = geometry.thumbHeight;
+      this.scrollbarThumb.style.height = `${geometry.thumbHeight}px`;
+    }
+    if (shown.thumbTop !== geometry.thumbTop) {
+      shown.thumbTop = geometry.thumbTop;
+      this.scrollbarThumb.style.transform = `translateY(${geometry.thumbTop}px)`;
+    }
   }
 
   private readScrollbarState(): GhosttyScrollbar | null {
@@ -2117,10 +2131,7 @@ export class GhosttyTerminalSurface {
       this.cursorOn && this.snapshot.cursorVisible && this.snapshot.cursorY >= 0
         ? this.snapshot.cursorY
         : null;
-    if (this.scrollbarDirty) {
-      this.scrollbarDirty = false;
-      this.updateScrollbar();
-    }
+    this.updateScrollbar(scrollState);
     this.forceFullRender = false;
     this.drawn += 1;
     this.scheduleCursorBlink();
