@@ -16,6 +16,12 @@
  *   window at `reset`, as the logo's trick does.
  * - Long tasks, long animation frames and slow keys, where Chromium has
  *   them.
+ * - React's drawings of the Tiles, the Strips, the bar's widgets and the
+ *   sidebar: each time React commits one's element again. React gives an
+ *   element it commits its props, under a key of its own, only when the
+ *   component that draws it was drawn again, so the probe counts the sets
+ *   of that key. It finds the elements as it resets and as it reads where
+ *   the page stands, and counts each from then on.
  * - Where the browser's page stands against its slot. In a phase that
  *   moves, the probe reads it after every tick, with ticks of its own, and
  *   keeps how long each tick came after the last; in a still one, five
@@ -62,7 +68,12 @@ export type Reading = {
   trail: number[]
   /** The time the probe's own reads of the page took, in ms. */
   ownMs: number
+  /** React's drawings of the parts it counts, by the part. */
+  renders: Record<Drawn, number>
 }
+
+/** The parts whose drawings the probe counts. */
+export type Drawn = "tiles" | "strips" | "widgets" | "sidebar"
 
 type Probe = { reset: (moving: boolean) => void; read: () => Reading }
 
@@ -85,6 +96,7 @@ export function install(): void {
     intervals: [] as number[],
     trail: [] as number[],
     ownMs: 0,
+    renders: { tiles: 0, strips: 0, widgets: 0, sidebar: 0 },
   })
   let state = fresh()
   let inside = 0
@@ -238,6 +250,38 @@ export function install(): void {
       marks.observe(mark, { attributes: true, subtree: true })
   }
 
+  // React's drawings, by the elements the parts draw: the Tiles in the
+  // Strips, the Strips, the bar's widgets but the workspaces', whose list
+  // follows the workspaces, and the sidebar.
+  const drawn: Record<Drawn, string> = {
+    tiles: "[data-strip] section[data-tile]",
+    strips: "[data-strip]",
+    widgets: "[data-widget]:not([data-widget='workspaces.list']) > *",
+    sidebar: "aside[aria-label='Sidebar']",
+  }
+  const counted = new WeakSet<Element>()
+  const hook = () => {
+    for (const [part, selector] of Object.entries(drawn))
+      for (const element of document.querySelectorAll(selector)) {
+        if (counted.has(element)) continue
+        const key = Object.keys(element).find((name) =>
+          name.startsWith("__reactProps$")
+        )
+        if (!key) continue
+        counted.add(element)
+        let props = (element as unknown as Record<string, unknown>)[key]
+        Object.defineProperty(element, key, {
+          configurable: true,
+          enumerable: true,
+          get: () => props,
+          set: (next: unknown) => {
+            props = next
+            state.renders[part as Drawn] += 1
+          },
+        })
+      }
+  }
+
   // What Chromium reports by itself.
   new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
@@ -276,6 +320,7 @@ export function install(): void {
   // and inside the workspaces, which the Panes' layer fills.
   const sample = () => {
     const started = performance.now()
+    hook()
     const box = document.querySelector("[data-held-by]")
     const id = box?.getAttribute("data-held-by")
     const slot = id && document.querySelector(`[data-holds="${id}"]`)
@@ -323,6 +368,7 @@ export function install(): void {
   const reset = (moving: boolean) => {
     find()
     watchMarks()
+    hook()
     state = fresh()
     for (const terminal of terminals.values()) {
       terminal.draws = [0, 0]
@@ -357,6 +403,7 @@ export function install(): void {
       intervals: state.intervals,
       trail: state.trail,
       ownMs: state.ownMs,
+      renders: { ...state.renders },
     }),
   }
 }

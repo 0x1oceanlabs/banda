@@ -68,6 +68,8 @@ export function perSecondOf(
 export type Phase = {
   /** How long its acts took. */
   seconds: number
+  /** The keys it pressed; none in a still one. */
+  steps: number
   perSecond: PerSecond
   counted: Reading
   trace: Summary | null
@@ -98,7 +100,7 @@ const TOLERANCE: Record<Gate, number> = { hard: 0.1, soft: 0.2 }
 const SLACK = 0.05
 
 /** A phase's numbers, as motion.json has them. */
-function numbersOf({ seconds, perSecond, counted, trace }: Phase) {
+function numbersOf({ seconds, steps, perSecond, counted, trace }: Phase) {
   const rate = (count: number) => round(count / (counted.ms / 1000), 1)
   const sum = (pick: (t: TerminalCount) => number) =>
     counted.terminals.reduce((total, t) => total + pick(t), 0)
@@ -107,6 +109,7 @@ function numbersOf({ seconds, perSecond, counted, trace }: Phase) {
   const trail = counted.trail
   return {
     seconds: round(seconds, 1),
+    steps,
     perSecond,
     /** The probe's own reads of the page, in ms a second. */
     probeMs: rate(counted.ownMs),
@@ -124,6 +127,19 @@ function numbersOf({ seconds, perSecond, counted, trace }: Phase) {
     },
     /** The terminals' fits in the phase. */
     fits,
+    /** React's drawings of the Tiles, Strips, widgets and sidebar in the
+     * phase, and of each for each key pressed, where it pressed some. */
+    renders: {
+      ...counted.renders,
+      perStep: steps
+        ? (Object.fromEntries(
+            Object.entries(counted.renders).map(([part, count]) => [
+              part,
+              round(count / steps, 2),
+            ])
+          ) as Reading["renders"])
+        : null,
+    },
     terminals: counted.terminals.map((t) => ({
       name: t.name,
       drawsPerSecond: { shown: rate(t.draws[0]), hidden: rate(t.draws[1]) },
@@ -295,6 +311,33 @@ function summary(
         pair(n.frames?.latencyMs?.p50, n.frames?.latencyMs?.p95),
         cell(n.viz?.perSecond),
         cell(n.gpu?.msPerSecond),
+      ])
+    ),
+    "",
+    "React's drawings in the phase: of the Tiles in the Strips, the " +
+      "Strips, the bar's widgets but the workspaces' and the sidebar; and " +
+      "for each key pressed.",
+    "",
+    table(
+      [
+        "Phase",
+        "Keys",
+        "Tiles",
+        "Strips",
+        "Widgets",
+        "Sidebar",
+        "Tiles a key",
+        "Widgets a key",
+      ],
+      rows.map(([name, n]) => [
+        name,
+        n.steps || "–",
+        n.renders.tiles,
+        n.renders.strips,
+        n.renders.widgets,
+        n.renders.sidebar,
+        cell(n.renders.perStep?.tiles),
+        cell(n.renders.perStep?.widgets),
       ])
     ),
     "",
