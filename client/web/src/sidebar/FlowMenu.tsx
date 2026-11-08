@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
+import { useRun } from "@banda/ui/hooks/use-run"
 import { useFile } from "@banda/ui/lib/look"
 import {
   Columns3Icon,
@@ -18,7 +19,6 @@ import {
   type LucideIcon,
   RectangleHorizontalIcon,
 } from "lucide-react"
-import { writeSetting } from "./write-setting"
 
 const FLOWS: Record<Flow, { title: string; about: string; icon: LucideIcon }> =
   {
@@ -39,6 +39,11 @@ const FLOWS: Record<Flow, { title: string; about: string; icon: LucideIcon }> =
     },
   }
 
+/** Whether `value` names a Flow (ADR 0079), as `flow.pick` takes it. */
+export function isFlow(value: unknown): value is Flow {
+  return typeof value === "string" && Object.hasOwn(FLOWS, value)
+}
+
 /** `Alt+Shift+M` (ADR 0079): from the row to solo and back; from free to
  * solo. */
 export function nextFlow(flow: Flow): Flow {
@@ -47,9 +52,11 @@ export function nextFlow(flow: Flow): Flow {
 
 /**
  * The Flow, from the sidebar's header (ADR 0079): its icon draws the one
- * in force, and its menu writes agents.toml.
+ * in force, and its menu picks one by the Window's `flow.pick`, which
+ * writes agents.toml beside `flow.solo`, its key.
  */
 export function FlowMenu() {
+  const run = useRun()
   const flow = useFile(AGENTS_FILE).flow
   const key = useKeyLabel()("flow.solo")
   const Icon = FLOWS[flow].icon
@@ -74,9 +81,7 @@ export function FlowMenu() {
           <DropdownMenuLabel>How the Agents' windows stand</DropdownMenuLabel>
           <DropdownMenuRadioGroup
             value={flow}
-            onValueChange={(value) =>
-              writeSetting(AGENTS_FILE.name, "flow", value as Flow)
-            }
+            onValueChange={(value) => run("flow.pick", { flow: value })}
           >
             {(Object.keys(FLOWS) as Flow[]).map((value) => {
               const { title, about, icon: Each } = FLOWS[value]

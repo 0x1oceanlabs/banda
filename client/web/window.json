@@ -434,6 +434,26 @@
       ]
     },
     {
+      "id": "flow.pick",
+      "title": "Pick how the Agents' windows stand, as the sidebar's Flow menu does",
+      "section": "Workspaces",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "flow": {
+            "type": "string",
+            "description": "free, row or solo"
+          }
+        },
+        "required": [
+          "flow"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
       "id": "pane.consume-left",
       "title": "Take the Pane into the column on the left, or out of its own",
       "section": "Panes",

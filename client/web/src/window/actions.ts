@@ -34,10 +34,10 @@ import {
   windowModule,
 } from "../registry"
 import { settingsPane } from "../settings/pane"
-import { AGENTS_FILE } from "@banda/contract/agents"
+import { AGENTS_FILE, type Flow } from "@banda/contract/agents"
 import { tomlOf } from "@banda/contract/settings"
 import { fileNow } from "@banda/ui/lib/look"
-import { nextFlow } from "../sidebar/FlowMenu"
+import { isFlow, nextFlow } from "../sidebar/FlowMenu"
 import { archiving } from "../sidebar/items"
 import { makeProject } from "../titles/MakeProject"
 import { pickSnooze } from "../sidebar/Snoozing"
@@ -420,6 +420,21 @@ function present(args: Args | undefined, then: (file: string) => void) {
   })
 }
 
+/**
+ * Writes the Flow into agents.toml (ADR 0079), for its key and for the
+ * sidebar's menu; the look brings it back. What went wrong goes to the
+ * console, as it did from the menu.
+ */
+function writeFlow(shell: Shell, flow: Flow) {
+  const file = AGENTS_FILE.name
+  shell.writeSetting(file, "flow", tomlOf(flow)).then(
+    (refused) => {
+      if (refused.length > 0) console.error(`banda: ${file} refused`, refused)
+    },
+    (error: unknown) => console.error(`banda: ${file} was not written`, error)
+  )
+}
+
 /** The other machines a stop is on its way to, by their keys: a second
  * click meanwhile sends no second `banda stop`. */
 const stopping = new Set<string>()
@@ -678,12 +693,20 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     title:
       "Solo, the Agent you are at the whole screen wide, or back to the row",
     keys: [{ code: "KeyM", mod: true, shift: true }],
-    run: (shell) =>
-      void shell.writeSetting(
-        AGENTS_FILE.name,
-        "flow",
-        tomlOf(nextFlow(fileNow(AGENTS_FILE).flow))
-      ),
+    run: (shell) => writeFlow(shell, nextFlow(fileNow(AGENTS_FILE).flow)),
+  },
+  {
+    // The sidebar's Flow menu: a pick of the three, where the key only
+    // goes to solo and back.
+    id: "flow.pick",
+    args: takes({ flow: "free, row or solo" }, ["flow"]),
+    section: "Workspaces",
+    title:
+      "Pick how the Agents' windows stand, as the sidebar's Flow menu does",
+    unlisted: true,
+    run: (shell, args) => {
+      if (isFlow(args?.flow)) writeFlow(shell, args.flow)
+    },
   },
   {
     id: "pane.consume-left",
