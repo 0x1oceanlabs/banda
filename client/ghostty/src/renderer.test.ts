@@ -166,16 +166,16 @@ describe("the renderer", () => {
     // Scale, row height and origin, in CSS pixels.
     expect(rowsDrawAlike(1, 16, 4)).toBe(true)
     expect(rowsDrawAlike(2, 16.5, 4)).toBe(true)
-    expect(rowsDrawAlike(1.6, 18.125, 3.75)).toBe(true)
     // Not whole screen pixels tall, or not starting on one.
-    expect(rowsDrawAlike(1.6, 18.1, 3.75)).toBe(false)
+    expect(rowsDrawAlike(1, 16.5, 4)).toBe(false)
     expect(rowsDrawAlike(2, 16, 4.25)).toBe(false)
-    // A screen pixel that is no binary fraction of a CSS pixel.
+    // A scale that is no power of two: 1.6 as Chromium reports it.
+    expect(rowsDrawAlike(Math.fround(1.6), 29 / Math.fround(1.6), 4)).toBe(
+      false
+    )
     expect(rowsDrawAlike(1.25, 16, 4)).toBe(false)
     expect(rowsDrawAlike(1.5, 18, 4)).toBe(false)
     expect(rowsDrawAlike(3, 17, 4)).toBe(false)
-    // 4/3 is one, but a hair under it as a double.
-    expect(rowsDrawAlike(4 / 3, 15, 3.75)).toBe(false)
   })
 
   it("draws as T3's renderer did while a glyph may stand past its row", async () => {
