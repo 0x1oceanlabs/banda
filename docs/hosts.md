@@ -33,8 +33,24 @@ newest copy Banda keeps in its data folder there, as that machine's
 on a Mac; `/Applications/Banda Dev.app` on a Mac.
 With none, the host is refused until you set `banda`, the whole path or
 one from `~/`. `ssh` takes letters, digits and `. _ @ : [ ] / -`.
-Banda reads the file as it starts: restart Banda after a change. A host
-it cannot take is left out, and `window.log` says why.
+A host Banda cannot take is left out, and `window.log` says why.
+
+Banda applies the file as it changes, with no restart: a host added is
+reached, one taken out has its ssh ended (its Projects stay there), and
+one whose `ssh` or `banda` changed is reached again. A file that is not
+TOML, as one saved half-written, leaves the hosts as they were.
+
+The window changes the file through Banda's main process, never by
+itself: `hostAdd` writes a `[[hosts]]` at its end, its `name` made from
+the address when none is given, and `hostRemove` takes one out with the
+comment just above it; each keeps your other hosts and comments, and
+writes the file whole. `hostTest` is Test connection, and Add's Connect:
+it runs `uname`, `banda --version` and `banda status` there, which starts
+nothing. `hostStop` is Stop Banda: that machine's own `banda stop`; the
+host then shows stopped, and Banda starts nothing there until you start
+it, even when the host was away as you stopped it.
+`sshSuggestions` lists the Hosts of `~/.ssh/config`, with no pattern and
+none already in the file.
 
 ## What that machine needs
 
@@ -106,6 +122,7 @@ Here arc is a Linux machine, and m1pro a Mac on the same tailnet, at
    The second gets in with no question and says nothing: the key works.
    Turn passwords off only once it does: with no key that works, no one
    gets in over ssh.
+
 4. Password login off, in a file of its own:
 
    ```sh
@@ -120,6 +137,7 @@ Here arc is a Linux machine, and m1pro a Mac on the same tailnet, at
    network the Mac is on, the LAN and a café's Wi-Fi too, not only the
    tailnet: launchd holds port 22 for it, so `ListenAddress` changes
    nothing. With passwords off, only a key you put there gets in.
+
 5. Optional: ssh to the Mac only over Tailscale. One more line in the
    same file:
 
@@ -147,7 +165,7 @@ On arc:
 2. `ssh m1pro true` once by hand: it gets in with no question, and
    takes the Mac's host key if ssh has not seen it yet. Banda's ssh asks
    nothing, so it would refuse a host key it has not seen.
-3. In `~/.config/banda-dev/hosts.toml`, then restart Banda:
+3. In `~/.config/banda-dev/hosts.toml`; Banda reaches it at once:
 
    ```toml
    [[hosts]]

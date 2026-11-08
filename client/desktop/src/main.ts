@@ -15,7 +15,8 @@
  * 0028). Settings are a Pane of the page; the desktop writes their files
  * (settings.ts, ADR 0016). It updates Banda itself (update.ts, ADR 0041).
  * It reaches the engines of the machines in `hosts.toml` over ssh, and
- * hands the page their addresses too (hosts.ts, ADR 0081).
+ * hands the page their addresses too; it adds, takes out, tests and stops
+ * those machines as the page asks (hosts.ts, ADR 0081, ADR 0095).
  */
 import { existsSync } from "node:fs"
 import { userInfo } from "node:os"
@@ -410,6 +411,28 @@ async function ready(): Promise<void> {
     hosts: { current: [none, () => Hosts.use((hosts) => hosts.current)] },
     hostEngine: [text, ([name]) => Hosts.use((hosts) => hosts.address(name))],
     hostStart: [text, ([name]) => Hosts.use((hosts) => hosts.start(name))],
+    hostAdd: [
+      Schema.Tuple([
+        Schema.Struct({
+          name: Schema.optionalKey(Schema.String),
+          ssh: Schema.String,
+          banda: Schema.optionalKey(Schema.String),
+        }),
+      ]),
+      ([machine]) => Hosts.use((hosts) => hosts.add(machine)),
+    ],
+    hostRemove: [text, ([name]) => Hosts.use((hosts) => hosts.remove(name))],
+    hostTest: [
+      Schema.Tuple([Schema.String, Schema.NullOr(Schema.String)]),
+      // An empty `banda` is none, as Add's.
+      ([ssh, banda]) =>
+        Hosts.use((hosts) => hosts.test(ssh, banda || undefined)),
+    ],
+    hostStop: [
+      Schema.Tuple([Schema.String, Schema.Boolean]),
+      ([name, force]) => Hosts.use((hosts) => hosts.stop(name, force)),
+    ],
+    sshSuggestions: [none, () => Hosts.use((hosts) => hosts.suggestions)],
     look: {
       current: [
         none,

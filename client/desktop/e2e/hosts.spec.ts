@@ -10,9 +10,12 @@
  * and a toast open one there too, as `pane.pick` keeps its host. As a
  * Mac, its `uname` says Darwin, and the window finds its Banda in its
  * Application Support; its engine is this checkout's still, which serves
- * for the follower, as a Mac's does not (engine/src/control.rs). With
- * BANDA_E2E_SHOTS set to a folder, it leaves pictures of each state there
- * for the Person to see.
+ * for the follower, as a Mac's does not (engine/src/control.rs).
+ * hosts.toml applies as it changes: a machine written there by hand, or
+ * added through the bridge as the page will, shows at once, and goes as
+ * it is taken out; Test finds arc's Banda and starts nothing there, and
+ * Stop Banda stops it. With BANDA_E2E_SHOTS set to a folder, it leaves
+ * pictures of each state there for the Person to see.
  */
 import { execFileSync, spawn } from "node:child_process"
 import { once } from "node:events"
@@ -27,6 +30,7 @@ import {
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { expect, type Page, test } from "@playwright/test"
+import type { Host } from "@banda/web/host"
 import { setInFront, startWindow, type Window } from "./window"
 
 const repository = resolve(import.meta.dirname, "../../..")
@@ -515,4 +519,71 @@ test("another machine's Thread that calls opens on its engine by Alt+U and from 
   const there = page.getByRole("region", { name: "Done on arc", exact: true })
   await expect(there.getByText("You said: Done on arc")).toBeVisible()
   await expect(toast).toBeHidden()
+})
+
+/** The page's global, with the bridge on it. */
+type Paged = { banda: Host }
+
+test("hosts.toml applies as it changes: a machine added by hand or through the bridge shows at once; Test starts nothing there, Stop Banda stops it, Remove takes it out", async () => {
+  test.setTimeout(120_000)
+  arc = newArc()
+  await seed(arc)
+  window = await startWindow({
+    look: 'mode = "dark"\n',
+    sidebar: 'preset = "projects"\n',
+    env: { PATH: `${arc.bin}:${process.env.PATH}` },
+  })
+  const { page } = window
+  const file = join(window.dir, "config/hosts.toml")
+  const entry = `[[hosts]]\nname = "arc"\nssh = "arc"\nbanda = ${JSON.stringify(program)}\n`
+  const there = arcOf(page)
+  const tested = () =>
+    page.evaluate(
+      (banda) => (globalThis as unknown as Paged).banda.hostTest("arc", banda),
+      program
+    )
+  await expect(sidebarOf(page)).toBeVisible()
+
+  // Test, before arc is added: its Banda is found, and its engine, which
+  // does not run, is not started.
+  expect(await tested()).toMatchObject({
+    state: "found",
+    system: "Linux",
+    engine: null,
+  })
+  expect(JSON.parse(arc.banda("status"))).toMatchObject({ running: false })
+
+  // Written by hand: arc shows, with no restart.
+  writeFileSync(file, entry)
+  await expect(there.getByText("Bench window tests")).toBeVisible()
+  expect(await tested()).toMatchObject({
+    state: "found",
+    engine: { speaks: true },
+  })
+
+  // Stop Banda on arc: its engine stops, and the label says so.
+  expect(
+    await page.evaluate(() =>
+      (globalThis as unknown as Paged).banda.hostStop("arc", false)
+    )
+  ).toBe("stopped")
+  await expect(there.getByText("stopped", { exact: true })).toBeVisible()
+
+  // Taken out through the bridge: arc goes, and the file is empty.
+  await page.evaluate(() =>
+    (globalThis as unknown as Paged).banda.hostRemove("arc")
+  )
+  await expect(there).toHaveCount(0)
+  expect(readFileSync(file, "utf8")).toBe("")
+
+  // Added through the bridge: written, and shown at once.
+  expect(
+    await page.evaluate(
+      (banda) =>
+        (globalThis as unknown as Paged).banda.hostAdd({ ssh: "arc", banda }),
+      program
+    )
+  ).toEqual({ name: "arc", ssh: "arc", banda: program })
+  expect(readFileSync(file, "utf8")).toBe(entry)
+  await expect(there.getByText("Bench window tests")).toBeVisible()
 })

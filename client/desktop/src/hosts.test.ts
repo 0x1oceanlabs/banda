@@ -16,16 +16,24 @@ import { Effect, Fiber, Layer, Option, Stream } from "effect"
 import { afterEach, beforeEach, vi } from "vitest"
 import { channel, CHANNELS } from "./channel"
 import {
+  addedTo,
+  diffOf,
   followerArgs,
   forwardArgs,
   forwardsIn,
+  foundIn,
   Hosts,
   hostsOf,
   linesOf,
   listenersIn,
+  nameFrom,
   ownOf,
+  probeCommand,
   remoteCommand,
+  removedFrom,
   signInOf,
+  stopCommand,
+  suggestionsOf,
   type Times,
 } from "./hosts"
 import { Program } from "./program"
@@ -272,6 +280,240 @@ it("the follower's script takes each channel's names as they are, inside sh's qu
   }
 })
 
+it("a change of hosts.toml is read by name: the hosts that come, that go, and that changed their ssh or banda", () => {
+  const before = [
+    { name: "devbox", ssh: "devbox" },
+    { name: "arc", ssh: "arc", banda: "~/bin/banda" },
+    { name: "m1pro", ssh: "m1pro" },
+  ]
+  expect(diffOf(before, before)).toEqual({
+    added: [],
+    removed: [],
+    changed: [],
+  })
+  expect(
+    diffOf(before, [
+      // Moved: no change.
+      { name: "m1pro", ssh: "m1pro" },
+      { name: "devbox", ssh: "roma@devbox" },
+      { name: "arc", ssh: "arc" },
+      { name: "pi5", ssh: "pi5" },
+    ])
+  ).toEqual({ added: ["pi5"], removed: [], changed: ["devbox", "arc"] })
+  expect(diffOf(before, [before[1]!])).toEqual({
+    added: [],
+    removed: ["devbox", "m1pro"],
+    changed: [],
+  })
+})
+
+/** A hosts.toml the Person wrote, with comments of their own. */
+const WRITTEN = `# The machines this Mac shows.
+
+# arc, at home
+[[hosts]]
+name = "arc"   # the key
+ssh = "roma@arc"
+
+[[hosts]]
+name = "devbox"
+ssh = "devbox"
+banda = "~/.local/bin/banda-dev"
+
+# not a host
+[other]
+kept = true
+`
+
+it("a host added goes at the end of hosts.toml, every comment and other entry kept", () => {
+  const added = addedTo(WRITTEN, { name: "pi5", ssh: "pi5" })
+  expect(added).toEqual({
+    text: `${WRITTEN}\n[[hosts]]\nname = "pi5"\nssh = "pi5"\n`,
+  })
+  const text = (added as { text: string }).text
+  expect(hostsOf(text).hosts.map(({ name }) => name)).toEqual([
+    "arc",
+    "devbox",
+    "pi5",
+  ])
+  // To a file with none, or that is not there, it is the file.
+  expect(addedTo("", { name: "pi5", ssh: "pi5", banda: "/opt/banda" })).toEqual(
+    {
+      text: `[[hosts]]\nname = "pi5"\nssh = "pi5"\nbanda = "/opt/banda"\n`,
+    }
+  )
+  // Hosts written as a list are not a file Banda changes.
+  expect(addedTo(`hosts = []\n`, { name: "pi5", ssh: "pi5" })).toEqual({
+    why: expect.stringMatching(/cannot change safely/),
+  })
+  expect(addedTo(`[[hosts]\n`, { name: "pi5", ssh: "pi5" })).toEqual({
+    why: expect.stringMatching(/^hosts.toml: it is not TOML/),
+  })
+})
+
+it("a host taken out of hosts.toml takes its own comment with it, and leaves every other one", () => {
+  expect(removedFrom(WRITTEN, "arc")).toEqual({
+    text: `# The machines this Mac shows.
+
+[[hosts]]
+name = "devbox"
+ssh = "devbox"
+banda = "~/.local/bin/banda-dev"
+
+# not a host
+[other]
+kept = true
+`,
+  })
+  expect(removedFrom(WRITTEN, "devbox")).toEqual({
+    text: `# The machines this Mac shows.
+
+# arc, at home
+[[hosts]]
+name = "arc"   # the key
+ssh = "roma@arc"
+
+# not a host
+[other]
+kept = true
+`,
+  })
+  // The comment that starts the file is the file's.
+  const last = `# mine\n[[hosts]]\nname = "pi5"\nssh = "pi5"\n`
+  expect(removedFrom(last, "pi5")).toEqual({ text: "# mine\n" })
+  expect(removedFrom(WRITTEN, "pi5")).toEqual({
+    why: 'There is no host "pi5" in hosts.toml.',
+  })
+  // A file Banda would read otherwise after the change is left as it is.
+  const tricky = `[[hosts]]\nname = "a"\nssh = "a"\nnote = """\n[[hosts]]\n"""\n\n[[hosts]]\nname = "b"\nssh = "b"\n`
+  expect(removedFrom(tricky, "a")).toEqual({
+    why: expect.stringMatching(/cannot change safely/),
+  })
+})
+
+it("a new host's name is made from its address, past the names taken", () => {
+  const taken = [{ name: "devbox" }, { name: "box2" }]
+  expect(nameFrom("arc", taken)).toBe("arc")
+  expect(nameFrom("roma@Arc.tail1234.ts.net", taken)).toBe("arc")
+  expect(nameFrom("devbox", taken)).toBe("devbox-2")
+  expect(nameFrom("box2.lan", taken)).toBe("box2-2")
+  expect(nameFrom("local", taken)).toBe("local-2")
+  expect(nameFrom("roma@100.79.149.28", taken)).toBe("100-79-149-28")
+  expect(nameFrom("ssh://roma@[fd7a:115c::1]:2222", taken)).toBe("fd7a-115c-1")
+  expect(nameFrom("my_box", taken)).toBe("my-box")
+  expect(nameFrom("___", taken)).toBe("machine")
+})
+
+it("the suggestions are the ssh config's Hosts: no pattern, no Match, none reached already", () => {
+  const config = `
+# mine
+Host *
+  ServerAliveInterval 30
+Host devbox win11
+  HostName 192.168.1.20
+Host=pi5
+Match host foo exec "true"
+  User x
+Host !bad *.corp
+Host "quoted"
+Host "my host" "half
+Host arc  # at home
+Host devbox
+host -oProxyCommand=x
+`
+  expect(suggestionsOf(config, [{ name: "arc", ssh: "roma@arc" }])).toEqual([
+    "devbox",
+    "win11",
+    "pi5",
+    "quoted",
+  ])
+  expect(suggestionsOf("", [])).toEqual([])
+})
+
+it("Test reads what the machine is, its banda's build, and its engine while one runs, and nothing else", () => {
+  const own = { build: "def456", version: "0.1.0-dev.1" }
+  const version = "banda 0.1.0-dev.2 (build abc123)"
+  expect(foundIn(["Linux", version, `{"running":false}`], 0, own)).toEqual({
+    state: "found",
+    system: "Linux",
+    banda: { build: "abc123", version: "0.1.0-dev.2" },
+    own,
+    engine: null,
+  })
+  const running = JSON.stringify({
+    running: true,
+    protocol: 1,
+    build: "abc123",
+    version: "0.1.0-dev.2",
+    since: 1,
+    unit: "banda-dev.service",
+  })
+  expect(foundIn(["Darwin", version, running], 0, own)).toMatchObject({
+    system: "macOS",
+    engine: { build: "abc123", version: "0.1.0-dev.2", speaks: true },
+  })
+  expect(
+    foundIn(
+      ["Plan 9", version, running.replace(`"protocol":1`, `"protocol":2`)],
+      0,
+      own
+    )
+  ).toMatchObject({ system: null, engine: { speaks: false } })
+  // What is not banda's, its words or its build, is not shown.
+  expect(foundIn(["Linux", "Welcome!"], 0, own)).toEqual({
+    state: "away",
+    why: "banda there said something unexpected",
+  })
+  expect(
+    foundIn(["Linux", "banda 1.0 (build <b>)", `{"running":false}`], 0, own)
+  ).toMatchObject({ banda: { build: null, version: "1.0" } })
+  expect(foundIn(["Linux", version, "{}"], 2, own)).toEqual({
+    state: "refused",
+    why: "banda there could not say whether its engine runs (code 2)",
+  })
+})
+
+it.skipIf(process.platform === "win32")(
+  "Test runs uname, banda's --version and banda status there, through sh; Stop Banda runs banda stop",
+  () => {
+    const home = folder()
+    const banda = join(home, "bin/banda")
+    mkdirSync(dirname(banda), { recursive: true })
+    writeFileSync(
+      banda,
+      `#!/bin/sh\ncase "$1" in --version) echo "banda 0.1.0 (build abc)" ;; status) echo '{"running":false}' ;; *) echo "$0 $*" ;; esac\n`,
+      { mode: 0o755 }
+    )
+    const path = `${fakeUname(home, "Linux")}:/usr/bin:/bin`
+    const there = (command: string) =>
+      spawnSync("/bin/sh", ["-c", command], {
+        env: { HOME: home, PATH: path },
+        encoding: "utf8",
+      })
+    expect(there(probeCommand(banda)).stdout).toBe(
+      `Linux\nbanda 0.1.0 (build abc)\n{"running":false}\n`
+    )
+    expect(there(probeCommand("~/bin/banda")).stdout).toBe(
+      `Linux\nbanda 0.1.0 (build abc)\n{"running":false}\n`
+    )
+    expect(there(probeCommand("~/bin/none")).status).toBe(127)
+    expect(there(probeCommand(undefined, FINDME))).toMatchObject({
+      status: 127,
+      stdout: "",
+    })
+    expect(there(stopCommand(banda, false)).stdout).toBe(`${banda} stop\n`)
+    expect(there(stopCommand(banda, true)).stdout).toBe(
+      `${banda} stop --force\n`
+    )
+    // Neither starts an engine.
+    for (const command of [
+      probeCommand(undefined),
+      stopCommand(undefined, true),
+    ])
+      expect(command).not.toContain("start")
+  }
+)
+
 it.effect(
   "each line from ssh is read up to 4 KiB, the rest of a longer one dropped",
   () =>
@@ -367,8 +609,14 @@ type Step = {
   exit?: number
 }
 /** What the fake ssh plays: what `-G` prints, and each run of the
- * follower and of the forward; the last run plays again. */
-type Play = { config?: string; followers: Step[][]; forwards?: Step[][] }
+ * follower, of the forward and of a command there, as Test's and Stop
+ * Banda's; the last run plays again. */
+type Play = {
+  config?: string
+  followers: Step[][]
+  forwards?: Step[][]
+  commands?: Step[][]
+}
 
 /** The fake `ssh`: it notes each run's arguments, environment and pid, and
  * plays its part (`Play`). As ssh, the follower ends with code 0 as its
@@ -385,8 +633,12 @@ if (args[0] === "-G") {
   process.stdout.write(play.config ?? "hostname devbox\\nport 22\\n")
   process.exit(0)
 }
-const kind = args.includes("-N") ? "forward" : "follower"
-const runs = play[kind + "s"] ?? [[{ listen: true }]]
+const kind = args.includes("-N")
+  ? "forward"
+  : / (status|stop)\\b/.test(args.at(-1))
+    ? "command"
+    : "follower"
+const runs = play[kind + "s"] ?? [[kind === "command" ? { exit: 0 } : { listen: true }]]
 const run = fs.existsSync(at(kind)) ? Number(fs.readFileSync(at(kind), "utf8")) : 0
 fs.writeFileSync(at(kind), String(run + 1))
 if (kind === "follower") process.stdin.on("end", () => process.exit(0)).resume()
@@ -444,13 +696,21 @@ function fakeSsh(play: Play) {
     env: { PATH: `${dir}${delimiter}${process.env.PATH}` },
     /** Each run's arguments, and its environment. */
     calls,
-    /** The runs of one kind. */
-    runs: (kind: "-G" | "-N" | "follower") =>
-      calls().filter(({ args }) =>
-        kind === "follower"
-          ? args[0] !== "-G" && !args.includes("-N")
+    /** The runs of one kind, of every host or of the one at `ssh`. */
+    runs: (kind: "-G" | "-N" | "follower" | "command", ssh?: string) =>
+      calls().filter(({ args }) => {
+        if (ssh !== undefined && !args.includes(ssh)) return false
+        const command = / (status|stop)\b/.test(args.at(-1)!)
+        if (kind === "command") return args[0] !== "-G" && command
+        return kind === "follower"
+          ? args[0] !== "-G" && !args.includes("-N") && !command
           : args.includes(kind)
-      ),
+      }),
+    /** The pids of the runs that go to `ssh`, ssh -G's too. */
+    pidsOf: (ssh: string) =>
+      calls()
+        .filter(({ args }) => args.includes(ssh))
+        .map(({ pid }) => pid),
     /** Lets a step that waits for `name` go on. */
     touch: (name: string) => writeFileSync(join(dir, name), ""),
   }
@@ -475,6 +735,7 @@ const FAST: Times = {
   refused: 60_000,
   answer: 5_000,
   signin: 10_000,
+  test: 5_000,
 }
 
 const DEVBOX_TOML = `[[hosts]]\nname = "devbox"\nssh = "devbox"\nbanda = "~/.local/bin/banda-dev"\n`
@@ -742,14 +1003,14 @@ it.live(
         expect(yield* reaches((host) => host.state === "away")).toEqual({
           name: "devbox",
           state: "away",
-          why: `${channel.name} is not open on devbox`,
+          why: `${channel.name} is not open there`,
         })
         // No one asks: it comes back as Banda opens there.
         expect((yield* hosts.address("devbox")).secret).toBe("two")
         expect(fake.runs("follower")).toHaveLength(3)
         expect(seen.map((host) => host.state)).not.toContain("stopped")
         expect(logged).toContain(
-          `banda: devbox is away (${channel.name} is not open on devbox); Banda tries again in 100 ms`
+          `banda: devbox is away (${channel.name} is not open there); Banda tries again in 100 ms`
         )
       }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
     }),
@@ -781,14 +1042,16 @@ it.live(
         expect(yield* reaches((host) => host.state === "refused")).toEqual({
           name: "devbox",
           state: "refused",
-          why: "devbox runs a Banda of another build, which does not speak this one's protocol",
+          why: "Banda there is of another build, which does not speak this one's protocol",
         })
         yield* Effect.sleep(300)
         expect(fake.runs("follower")).toHaveLength(1)
         // Asking where it listens tries it again, and fails with the new
         // go's refusal, not the old one's.
         const asked = yield* Effect.flip(hosts.address("devbox"))
-        expect(asked.message).toMatch(/^devbox: devbox runs a Banda/)
+        expect(asked.message).toMatch(
+          /^devbox: Banda there is of another build/
+        )
         expect(fake.runs("follower")).toHaveLength(2)
         // So does starting it.
         yield* hosts.start("devbox")
@@ -822,14 +1085,14 @@ it.live(
         expect(yield* reaches((host) => host.state === "refused")).toEqual({
           name: "devbox",
           state: "refused",
-          why: `no ${channel.name} found on devbox; set banda in hosts.toml`,
+          why: `no ${channel.name} found there; set banda in hosts.toml`,
         })
         // Past the wait after an ssh that ends: not tried again.
         yield* Effect.sleep(400)
         expect(fake.runs("follower")).toHaveLength(1)
         const asked = yield* Effect.flip(hosts.address("devbox"))
         expect(asked.message).toBe(
-          `devbox: no ${channel.name} found on devbox; set banda in hosts.toml`
+          `devbox: no ${channel.name} found there; set banda in hosts.toml`
         )
         // The follower looked for it, as no banda is set.
         expect(fake.runs("follower")[0]!.args.at(-1)).toBe(
@@ -848,7 +1111,7 @@ it.live(
           expect(host).toEqual({
             name: "devbox",
             state: "refused",
-            why: "no ~/.local/bin/banda-dev on devbox; check banda in hosts.toml",
+            why: "no ~/.local/bin/banda-dev there; check banda in hosts.toml",
           })
         ),
         Effect.scoped,
@@ -867,7 +1130,7 @@ it.live(
         expect(yield* reaches((host) => host.state === "refused")).toEqual({
           name: "devbox",
           state: "refused",
-          why: "devbox's engine speaks protocol 2, this window 1",
+          why: "the engine there speaks protocol 2, this window 1",
         })
         expect(fake.runs("-N")).toEqual([])
       }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
@@ -971,7 +1234,7 @@ it.live(
           seen.flatMap((host) => (host.state === "away" ? [host.why] : []))
         ).toEqual([
           "ssh could not reach devbox",
-          "devbox's banda said something unexpected",
+          "banda there said something unexpected",
         ])
         expect(logged.join("\n")).not.toContain("Welcome to devbox!")
       }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
@@ -1143,7 +1406,7 @@ it.live(
         expect(
           seen.flatMap((host) => (host.state === "away" ? [host.why] : []))
         ).toEqual([
-          "devbox's banda said something unexpected",
+          "banda there said something unexpected",
           "the forward to devbox ended before it answered (code 255)",
         ])
         expect(
@@ -1193,5 +1456,325 @@ it.live("with no hosts.toml there are no hosts", () =>
       yield* Hosts.use((hosts) => hosts.current).pipe(Effect.provide(none))
     ).toEqual([])
     expect(logged).toEqual([])
+  })
+)
+
+/** The hosts' names, as they are now. */
+const names = Hosts.use((hosts) =>
+  Effect.map(hosts.current, (list) => list.map(({ name }) => name))
+)
+
+/** Waits for the hosts to be `want`, by name, in their order. */
+const named = (want: string[]) =>
+  Hosts.use((hosts) =>
+    hosts.changes.pipe(
+      Stream.filter(
+        (list) =>
+          JSON.stringify(list.map(({ name }) => name)) === JSON.stringify(want)
+      ),
+      Stream.runHead
+    )
+  )
+
+/** Whether process `pid` runs. */
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const BOX2 = `[[hosts]]\nname = "box-2"\nssh = "box2"\n`
+
+it.live(
+  "hosts.toml applies as it changes: a host that comes is reached, one whose ssh or banda changed is reached again, one that goes has its ssh ended",
+  () =>
+    Effect.gen(function* () {
+      const fake = fakeSsh({ followers: [[{ out: running("one", 1111) }]] })
+      const file = join(fake.dir, "hosts.toml")
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        yield* hosts.address("devbox")
+        const first = fake.runs("follower", "devbox")
+        expect(first).toHaveLength(1)
+        // A host comes, written as an editor writes, in steps.
+        writeFileSync(file, `${DEVBOX_TOML}\n`)
+        writeFileSync(file, `${DEVBOX_TOML}\n${BOX2}`)
+        yield* named(["devbox", "box-2"])
+        yield* hosts.address("box-2")
+        expect(fake.runs("follower", "devbox")).toHaveLength(1)
+        expect(logged).toContain(
+          `banda: ${file}: box-2 is added; Banda reaches it`
+        )
+        // devbox's banda changes: its ssh end, and it is reached anew, with
+        // its new banda.
+        const before = fake.pidsOf("devbox")
+        writeFileSync(
+          file,
+          `[[hosts]]\nname = "devbox"\nssh = "devbox"\n\n${BOX2}`
+        )
+        yield* until(() => fake.runs("follower", "devbox").length === 2)
+        expect(fake.runs("follower", "devbox")[1]!.args.at(-1)).toBe(
+          remoteCommand(undefined)
+        )
+        yield* until(() => before.every((pid) => !alive(pid)))
+        yield* Hosts.use((hosts) => hosts.address("devbox"))
+        expect(fake.runs("follower", "box2")).toHaveLength(1)
+        // devbox goes: its ssh end; box-2 is as it was.
+        const devbox = fake.pidsOf("devbox")
+        writeFileSync(file, BOX2)
+        yield* named(["box-2"])
+        yield* until(() => devbox.every((pid) => !alive(pid)))
+        expect((yield* hosts.current)[0]!.state).toBe("live")
+        expect(fake.runs("follower", "box2")).toHaveLength(1)
+        const gone = yield* Effect.flip(hosts.address("devbox"))
+        expect(gone.message).toBe('There is no host "devbox" in hosts.toml.')
+        // A file saved half-written leaves the hosts as they were.
+        writeFileSync(file, `[[hosts]\nname = `)
+        yield* until(() =>
+          logged.some((line) => line.includes("the hosts stay as they were"))
+        )
+        expect(yield* names).toEqual(["box-2"])
+        expect(fake.runs("follower", "box2")).toHaveLength(1)
+        // And no hosts.toml is no host.
+        rmSync(file)
+        yield* named([])
+      }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
+    }),
+  20_000
+)
+
+it.live(
+  "a waiter for an address hears that its host went",
+  () =>
+    Effect.gen(function* () {
+      const fake = fakeSsh({ followers: [[{ until: "never" }]] })
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        const asked = yield* Effect.forkScoped(
+          Effect.flip(hosts.address("devbox"))
+        )
+        yield* until(() => fake.runs("follower").length === 1)
+        writeFileSync(join(fake.dir, "hosts.toml"), "")
+        expect((yield* Fiber.join(asked)).message).toBe(
+          'There is no host "devbox" in hosts.toml.'
+        )
+      }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
+    }),
+  20_000
+)
+
+it.live(
+  "a host added over the bridge is written at the end of hosts.toml and reached at once; taken out, its ssh ends and the file is as it was",
+  () =>
+    Effect.gen(function* () {
+      const fake = fakeSsh({ followers: [[{ out: running("one", 1111) }]] })
+      const file = join(fake.dir, "hosts.toml")
+      const written = `# mine\n\n${DEVBOX_TOML}`
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        const added = yield* hosts.add({
+          ssh: "roma@box2.tail1234.ts.net",
+          banda: "",
+        })
+        expect(added).toEqual({
+          name: "box2",
+          ssh: "roma@box2.tail1234.ts.net",
+        })
+        expect(readFileSync(file, "utf8")).toBe(
+          `${written}\n[[hosts]]\nname = "box2"\nssh = "roma@box2.tail1234.ts.net"\n`
+        )
+        // Reached at once, not on the watch's word.
+        expect(yield* names).toEqual(["devbox", "box2"])
+        yield* hosts.address("box2")
+        // Refused: an address there already, a name taken, an option.
+        for (const [machine, why] of [
+          [{ ssh: "roma@box2.tail1234.ts.net" }, /is in hosts.toml already/],
+          [{ name: "devbox", ssh: "other" }, /"devbox" is taken/],
+          [{ name: "this", ssh: "other" }, /is Banda's own/],
+          [{ ssh: "-oProxyCommand=x" }, /`ssh` is not/],
+          [{ ssh: "x", banda: "banda; rm" }, /`banda` is not/],
+        ] as const)
+          expect((yield* Effect.flip(hosts.add(machine))).message).toMatch(why)
+        const pids = fake.pidsOf("roma@box2.tail1234.ts.net")
+        yield* hosts.remove("box2")
+        expect(readFileSync(file, "utf8")).toBe(written)
+        expect(yield* names).toEqual(["devbox"])
+        yield* until(() => pids.every((pid) => !alive(pid)))
+        expect((yield* Effect.flip(hosts.remove("box2"))).message).toBe(
+          'There is no host "box2" in hosts.toml.'
+        )
+      }).pipe(Effect.scoped, Effect.provide(hostsOn(fake, {}, written)))
+    }),
+  20_000
+)
+
+it.live(
+  "Test asks banda status there and starts nothing: what the machine is, its banda's build, and whether its engine runs",
+  () =>
+    Effect.gen(function* () {
+      const fake = fakeSsh({
+        followers: [],
+        commands: [
+          [
+            { out: "Linux" },
+            { out: "banda 0.1.0-dev.2 (build abc123)" },
+            { out: `{"running":false}` },
+            { exit: 0 },
+          ],
+          [{ err: "ssh: connect to host pi5 port 22: refused", exit: 255 }],
+          [{ err: "no Banda Local here", exit: 127 }],
+          [
+            {
+              err: "# To authenticate, visit: https://login.tailscale.com/a/1",
+            },
+            { until: "never" },
+          ],
+        ],
+      })
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        expect(yield* hosts.test("roma@pi5", undefined)).toEqual({
+          state: "found",
+          system: "Linux",
+          banda: { build: "abc123", version: "0.1.0-dev.2" },
+          own: { build: "def456", version: "0.1.0-dev.1" },
+          engine: null,
+        })
+        // ssh -G, then the probe alone: no follower, no forward.
+        expect(fake.calls().map(({ args }) => args)).toEqual([
+          ["-G", "--", "roma@pi5"],
+          [
+            ...followerArgs({ name: "pi5", ssh: "roma@pi5" }).slice(0, -1),
+            probeCommand(undefined),
+          ],
+        ])
+        expect(yield* hosts.test("pi5", "/opt/banda")).toEqual({
+          state: "away",
+          why: "ssh could not reach pi5",
+        })
+        expect(fake.runs("command").at(-1)!.args.at(-1)).toBe(
+          probeCommand("/opt/banda")
+        )
+        expect(yield* hosts.test("pi5", undefined)).toEqual({
+          state: "refused",
+          why: `no ${channel.name} found there; set banda in hosts.toml`,
+        })
+        expect(yield* hosts.test("pi5", undefined)).toEqual({
+          state: "signin",
+          url: "https://login.tailscale.com/a/1",
+        })
+        expect(
+          (yield* Effect.flip(hosts.test("-oProxyCommand=x", undefined)))
+            .message
+        ).toMatch(/`ssh` is not/)
+        expect(yield* names).toEqual([])
+      }).pipe(Effect.scoped, Effect.provide(hostsOn(fake, {}, "")))
+    }),
+  20_000
+)
+
+it.live(
+  "Stop Banda runs banda stop there: while Agents work it stops nothing unless forced, and once stopped the host shows stopped",
+  () =>
+    Effect.gen(function* () {
+      const fake = fakeSsh({
+        followers: [
+          [{ out: running("one", 1111) }, { until: "stopped" }, { exit: 0 }],
+        ],
+        commands: [
+          [
+            {
+              out: JSON.stringify({
+                error: {
+                  code: "conflict",
+                  message: "An Agent is working. Nothing was stopped",
+                },
+              }),
+              exit: 1,
+            },
+          ],
+          [{ exit: 0 }],
+        ],
+      })
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        yield* hosts.address("devbox")
+        expect(yield* hosts.stop("devbox", false)).toBe("working")
+        expect(fake.runs("command")[0]!.args.at(-1)).toBe(
+          stopCommand(DEVBOX.banda, false)
+        )
+        expect(yield* hosts.stop("devbox", true)).toBe("stopped")
+        expect(fake.runs("command")[1]!.args.at(-1)).toBe(
+          stopCommand(DEVBOX.banda, true)
+        )
+        // Its follower hears the engine stop as asked.
+        fake.touch("stopped")
+        yield* reaches((host) => host.state === "stopped")
+        expect(
+          (yield* Effect.flip(hosts.stop("nowhere", true))).message
+        ).toMatch(/no host "nowhere"/)
+      }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
+    }),
+  20_000
+)
+
+it.live(
+  "Stop Banda on a host that is away holds it stopped: no try starts its engine again until the page starts it",
+  () =>
+    Effect.gen(function* () {
+      const fake = fakeSsh({
+        // As with AllowTcpForwarding no there: the engine runs, the
+        // forward fails each time.
+        followers: [[{ out: running("one", 1111) }]],
+        forwards: [[{ exit: 1 }]],
+      })
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        yield* reaches((host) => host.state === "away")
+        expect(yield* hosts.stop("devbox", false)).toBe("stopped")
+        expect((yield* hosts.current)[0]).toEqual({
+          name: "devbox",
+          state: "stopped",
+        })
+        // Past several of the waits after an away go: no try.
+        const tries = fake.runs("follower").length
+        yield* Effect.sleep(700)
+        expect(fake.runs("follower")).toHaveLength(tries)
+        expect((yield* hosts.current)[0]!.state).toBe("stopped")
+        expect(logged).toContain(
+          "banda: devbox's engine stopped as asked; Banda starts it again when asked"
+        )
+        // Stopped again, it stays as it is.
+        expect(yield* hosts.stop("devbox", false)).toBe("stopped")
+        expect(fake.runs("follower")).toHaveLength(tries)
+        // Starting it tries again at once.
+        yield* hosts.start("devbox")
+        yield* until(() => fake.runs("follower").length > tries)
+        yield* reaches((host) => host.state === "away")
+      }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
+    }),
+  20_000
+)
+
+it.live("the suggestions leave out the machines hosts.toml reaches", () =>
+  Effect.gen(function* () {
+    const fake = fakeSsh({ followers: [[{ until: "never" }]] })
+    const config = join(fake.dir, "ssh_config")
+    writeFileSync(config, "Host devbox pi5 *\n")
+    const layer = Hosts.layer(join(fake.dir, "hosts.toml"), {
+      env: fake.env,
+      times: FAST,
+      sshConfig: config,
+    }).pipe(
+      Layer.provide(Program.layer({ program: "banda" })),
+      Layer.provide(NodeServices.layer)
+    )
+    writeFileSync(join(fake.dir, "hosts.toml"), DEVBOX_TOML)
+    expect(
+      yield* Hosts.use((hosts) => hosts.suggestions).pipe(Effect.provide(layer))
+    ).toEqual(["pi5"])
   })
 )
