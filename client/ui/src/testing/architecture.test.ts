@@ -25,6 +25,7 @@ test("the check sees each way code reads the desktop's bridge, and not what only
         `const host = window.banda`,
         `window.banda?.quit()`,
         `globalThis.banda?.popped.close(id)`,
+        `self.banda?.update.check()`,
         `const b = window["banda"]`,
         `const { banda, location } = window`,
         `const { banda: bridge } = globalThis`,
@@ -33,7 +34,7 @@ test("the check sees each way code reads the desktop's bridge, and not what only
       ].join("\n"),
       "reads.tsx"
     )
-  ).toBe(8)
+  ).toBe(9)
   expect(
     desktopReads(
       [

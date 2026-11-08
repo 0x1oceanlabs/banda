@@ -116,17 +116,19 @@ function isGlobal(node: ts.Node): boolean {
     return isGlobal(node.expression)
   return (
     ts.isIdentifier(node) &&
-    (node.text === "window" || node.text === "globalThis")
+    (node.text === "window" ||
+      node.text === "globalThis" ||
+      node.text === "self")
   )
 }
 
 /**
  * How many places `source`, the code of `file`, reads the desktop's
  * bridge (ADR 0089, decision 2): `window.banda`, `globalThis.banda`,
- * `window["banda"]` and `const { banda } = window`, with `?.` or without,
- * and with `window` cast. Read as TypeScript reads it, by the file's
- * kind, so comments and the type that declares it are not taken for a
- * place.
+ * `self.banda`, `window["banda"]` and `const { banda } = window`, with
+ * `?.` or without, and with `window` cast. Read as TypeScript reads it,
+ * by the file's kind, so comments and the type that declares it are not
+ * taken for a place.
  */
 export function desktopReads(source: string, file: string): number {
   let found = 0

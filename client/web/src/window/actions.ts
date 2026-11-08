@@ -19,8 +19,7 @@ import {
   paneOf,
   type Place,
 } from "@banda/ui/pane"
-import { type Held, RESET_KEY } from "../actions/actions"
-import type { Mod } from "@banda/contract/look"
+import { RESET_KEY } from "../actions/actions"
 import { chipOf } from "./attach"
 import { device } from "./device"
 import { showing } from "../calls/sight"
@@ -1058,19 +1057,6 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
   // The launcher's letters (ADR 0025, decision 4).
   ...windowModule.actions,
 ]
-
-/** The scopes whose keys work with the mod still held too, as the
- * launcher's letters after Alt+N, with the mod in force (`pressFor`). */
-const HELD_SCOPES: ReadonlySet<string> = new Set(
-  [...modules, windowModule]
-    .flatMap((module) => module.scopes)
-    .filter((scope) => scope.modHeld)
-    .map((scope) => scope.id)
-)
-
-export function heldBy(mod: Mod): Held {
-  return { mod, scopes: HELD_SCOPES }
-}
 
 /** Every action: the modules' (`modules.ts`), then the window's own. */
 export const ACTIONS: readonly Action<Shell>[] = [
