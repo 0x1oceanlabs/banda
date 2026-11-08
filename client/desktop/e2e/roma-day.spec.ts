@@ -18,9 +18,11 @@ import {
   fromLeft,
   layoutOf,
   ON_SCREEN,
+  pressAtOnce,
   projectId,
   sharesOf,
   startWindow,
+  TEN_KEYS,
   textOf,
   type Window,
 } from "./window"
@@ -546,35 +548,7 @@ test("ten tiling keys pressed faster than the Window draws land in order, each o
   // that one moved first. The ten go in at once, in one task of the
   // page, as the Window's keys hear them: each lands before the one
   // before is drawn, however fast the machine.
-  const keys = [
-    "Alt+KeyN",
-    "Alt+Shift+Home",
-    "Alt+ArrowRight",
-    "Alt+Shift+End",
-    "Alt+Home",
-    "Alt+KeyW",
-    "Alt+Shift+ArrowRight",
-    "Alt+Shift+ArrowRight",
-    "Alt+ArrowLeft",
-    "Alt+Shift+Home",
-  ].map((press) => {
-    const mods = press.split("+")
-    const code = mods.pop()!
-    return {
-      code,
-      key: code.startsWith("Key") ? code.slice(3).toLowerCase() : code,
-      altKey: mods.includes("Alt"),
-      shiftKey: mods.includes("Shift"),
-    }
-  })
-  await page.evaluate((keys) => {
-    const target = document.activeElement ?? document.body
-    for (const key of keys)
-      for (const type of ["keydown", "keyup"])
-        target.dispatchEvent(
-          new KeyboardEvent(type, { ...key, bubbles: true, cancelable: true })
-        )
-  }, keys)
+  await pressAtOnce(page, TEN_KEYS)
 
   await expect
     .poll(() => layoutOf(page))

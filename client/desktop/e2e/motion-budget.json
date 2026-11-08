@@ -112,49 +112,49 @@
       "measure": "width.keys.p95",
       "gate": "soft",
       "budget": 16,
-      "note": "key to drawn, ms (ADR 0088, decision 11): about 33 for a width or maximize before T-pred; keys.spec.ts gates it at 0 and 150 ms"
+      "note": "key to drawn, ms (ADR 0088, decision 11): about 33 before T-pred; keys.spec.ts records it at 0 and 150 ms late, and gates it in ms on a quiet machine only"
     },
     {
       "measure": "focus.keys.p95",
       "gate": "soft",
       "budget": 16,
-      "note": "key to drawn, ms (ADR 0088, decision 11): about 33 for a width or maximize before T-pred; keys.spec.ts gates it at 0 and 150 ms"
+      "note": "key to drawn, ms (ADR 0088, decision 11): a focus sends no command, so T-pred left it as it was; keys.spec.ts records it at 0 and 150 ms late"
     },
     {
       "measure": "maximize.keys.p95",
       "gate": "soft",
       "budget": 16,
-      "note": "key to drawn, ms (ADR 0088, decision 11): about 33 for a width or maximize before T-pred; keys.spec.ts gates it at 0 and 150 ms"
+      "note": "key to drawn, ms (ADR 0088, decision 11): about 33 before T-pred; keys.spec.ts records it at 0 and 150 ms late, and gates it in ms on a quiet machine only"
     },
     {
       "measure": "workspace.keys.p95",
       "gate": "soft",
       "budget": 16,
-      "note": "key to drawn, ms (ADR 0088, decision 11): about 33 for a width or maximize before T-pred; keys.spec.ts gates it at 0 and 150 ms"
+      "note": "key to drawn, ms (ADR 0088, decision 11): a workspace key sends no command, so T-pred left it as it was (keys.spec.ts: 12.0 before, 13.1 after, scale 1); over budget at 1.6x, #894"
     },
     {
       "measure": "width.keys.framesLate.max",
       "gate": "hard",
       "budget": 0,
-      "note": "no frame begins between a key and its commit (T-pred)"
+      "note": "no wait for the host: no frame begins between a key and its commit (T-pred)"
     },
     {
       "measure": "focus.keys.framesLate.max",
       "gate": "hard",
       "budget": 0,
-      "note": "no frame begins between a key and its commit (T-pred)"
+      "note": "no wait for the host: no frame begins between a key and its commit (T-pred)"
     },
     {
       "measure": "maximize.keys.framesLate.max",
       "gate": "hard",
       "budget": 0,
-      "note": "no frame begins between a key and its commit (T-pred)"
+      "note": "no wait for the host: no frame begins between a key and its commit (T-pred)"
     },
     {
       "measure": "workspace.keys.framesLate.max",
       "gate": "hard",
       "budget": 0,
-      "note": "no frame begins between a key and its commit (T-pred)"
+      "note": "no wait for the host: no frame begins between a key and its commit (T-pred)"
     },
     {
       "measure": "focus.renders.perStep.tiles",
