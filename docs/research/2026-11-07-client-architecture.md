@@ -573,8 +573,8 @@ The page layer stays a fixed layer (ADR 0013 d1). Its box sits inside a still cl
 | page trailing frames | 0 in every phase | 0 where measured | hard |
 | main thread per moving frame, p95 | ≤ 4 ms | workspace 12.0, overview 3.3, width 2.8 | soft |
 | longest task during a translate-only move | ≤ 8.3 ms, never a long animation frame | 29.8 ms | soft |
-| opening a Pane | mount ≤ 50 ms, no long animation frame; the animation starts after the first commit | not measured | soft |
-| key to frame p95, also at `--latency 150` | ≤ 16 ms | blocked by the drawn wait | soft, after prediction |
+| opening a Pane | mount ≤ 50 ms, no long animation frame; the animation starts after the first commit | key to drawn p95 24 ms; 12 at 150 ms late (T-pred; 43 and 197 before) | soft |
+| key to frame p95, also at `--latency 150` | ≤ 16 ms | p95 6–15 ms, no frame late, at 0 and 150 ms late (T-pred; 36–45 and 188–194 for width, maximize and move before) | hard as frames late 0; soft in ms |
 | a Tree's render p95 and size | ≤ 5 ms, ≤ 30 KB (vision V1) | — | V1 |
 
 Hard gates are counts, stable on CI. Soft gates are timings: the median of three runs, failing at 20% over the committed baseline once CI's variance is known. `client/desktop/e2e/motion-budget.json` holds the numbers. A PR may lower them; it raises one only by saying why.

@@ -109,6 +109,54 @@
       "budget": 4
     },
     {
+      "measure": "width.keys.p95",
+      "gate": "soft",
+      "budget": 16,
+      "note": "key to drawn, ms (ADR 0088, decision 11): about 33 for a width or maximize before T-pred; keys.spec.ts gates it at 0 and 150 ms"
+    },
+    {
+      "measure": "focus.keys.p95",
+      "gate": "soft",
+      "budget": 16,
+      "note": "key to drawn, ms (ADR 0088, decision 11): about 33 for a width or maximize before T-pred; keys.spec.ts gates it at 0 and 150 ms"
+    },
+    {
+      "measure": "maximize.keys.p95",
+      "gate": "soft",
+      "budget": 16,
+      "note": "key to drawn, ms (ADR 0088, decision 11): about 33 for a width or maximize before T-pred; keys.spec.ts gates it at 0 and 150 ms"
+    },
+    {
+      "measure": "workspace.keys.p95",
+      "gate": "soft",
+      "budget": 16,
+      "note": "key to drawn, ms (ADR 0088, decision 11): about 33 for a width or maximize before T-pred; keys.spec.ts gates it at 0 and 150 ms"
+    },
+    {
+      "measure": "width.keys.framesLate.max",
+      "gate": "hard",
+      "budget": 0,
+      "note": "no frame begins between a key and its commit (T-pred)"
+    },
+    {
+      "measure": "focus.keys.framesLate.max",
+      "gate": "hard",
+      "budget": 0,
+      "note": "no frame begins between a key and its commit (T-pred)"
+    },
+    {
+      "measure": "maximize.keys.framesLate.max",
+      "gate": "hard",
+      "budget": 0,
+      "note": "no frame begins between a key and its commit (T-pred)"
+    },
+    {
+      "measure": "workspace.keys.framesLate.max",
+      "gate": "hard",
+      "budget": 0,
+      "note": "no frame begins between a key and its commit (T-pred)"
+    },
+    {
       "measure": "focus.renders.perStep.tiles",
       "gate": "hard",
       "budget": 2,
@@ -185,6 +233,14 @@
       "maximize.moving.mainMs.p95": 4.6,
       "workspace.moving.mainMs.p95": 3.3,
       "overview.moving.mainMs.p95": 6.8,
+      "width.keys.p95": 5.9,
+      "focus.keys.p95": 7,
+      "maximize.keys.p95": 6.7,
+      "workspace.keys.p95": 10.5,
+      "width.keys.framesLate.max": 0,
+      "focus.keys.framesLate.max": 0,
+      "maximize.keys.framesLate.max": 0,
+      "workspace.keys.framesLate.max": 0,
       "focus.renders.perStep.tiles": 2,
       "width.renders.perStep.tiles": 0,
       "maximize.renders.perStep.tiles": 0,
@@ -216,6 +272,14 @@
       "maximize.moving.mainMs.p95": 6.4,
       "workspace.moving.mainMs.p95": 4.1,
       "overview.moving.mainMs.p95": 7.3,
+      "width.keys.p95": 7.9,
+      "focus.keys.p95": 9,
+      "maximize.keys.p95": 5.5,
+      "workspace.keys.p95": 22.5,
+      "width.keys.framesLate.max": 0,
+      "focus.keys.framesLate.max": 0,
+      "maximize.keys.framesLate.max": 0,
+      "workspace.keys.framesLate.max": 0,
       "focus.renders.perStep.tiles": 2,
       "width.renders.perStep.tiles": 0,
       "maximize.renders.perStep.tiles": 0,
