@@ -1,26 +1,22 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import type { Engine, ProjectId } from "@banda/contract"
+import type { ProjectId } from "@banda/contract"
 import {
   DropdownMenu,
   DropdownMenuContent,
 } from "@banda/ui/components/dropdown-menu"
-import { toast } from "@banda/ui/components/sonner"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
-import { cn } from "@banda/ui/lib/utils"
-import { problem } from "@banda/ui/lib/words"
-import { focusedTile, type Listed } from "@banda/ui/pane"
-import { ChevronDownIcon, SparklesIcon } from "lucide-react"
-import { ThreadRows } from "./ThreadMenu"
 import {
-  listingFor,
   type Naming,
-  renameTo,
-  startNaming,
   stopNaming,
   THINKING,
   useNaming,
   useThinking,
-} from "./titles"
+} from "@banda/ui/lib/naming"
+import { cn } from "@banda/ui/lib/utils"
+import { focusedTile, type Listed } from "@banda/ui/pane"
+import { ChevronDownIcon, SparklesIcon } from "lucide-react"
+import { itemActionOf } from "../sidebar/items"
+import { ThreadRows, useItemRun } from "./ThreadMenu"
 
 /** Why a menu closed, as Base UI says it. */
 type Reason = string | undefined
@@ -30,17 +26,16 @@ type Reason = string | undefined
  * Pane, a click opens the Thread menu under it, and the pointer over it
  * shows a quiet fill and a ▾; the first click on a Pane that is not
  * focused only focuses it, as anywhere on the header. A double click
- * opens the field in its place. The rest of the header keeps its own
- * gestures (ADR 0066, decision 4): the Pane is carried by its title too.
+ * opens the field in its place, as its App's Rename does (ADR 0087,
+ * decision 12). The rest of the header keeps its own gestures (ADR 0066,
+ * decision 4): the Pane is carried by its title too.
  */
 export function Title({
-  engine,
   project,
   listed,
   title,
   focused,
 }: {
-  engine: Engine
   project: ProjectId
   listed: Listed
   /** The title as the Pane says it now. */
@@ -62,9 +57,10 @@ export function Title({
   const before = useRef<HTMLElement | null>(null)
   const reason = useRef<Reason>(undefined)
   const next = useRef<() => void>(undefined)
-  const listing = listingFor(listed)
+  const run = useItemRun()
+  const rename = itemActionOf(listed, "rename")
   const words = thinking ? THINKING : title
-  if (!listing)
+  if (!rename)
     return (
       <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[selected=true]/tile:text-foreground">
         {title}
@@ -75,7 +71,6 @@ export function Title({
   if (naming && focused)
     return (
       <TitleField
-        engine={engine}
         project={project}
         listed={listed}
         naming={naming}
@@ -116,7 +111,7 @@ export function Title({
             // The field takes the focus, not what the menu had.
             reason.current = "outside-press"
             setOpen(false)
-            startNaming(project, listed.id, "head")
+            run(rename.id, { project, item: listed.id, from: "head" })
           }}
         >
           <span data-shimmer={thinking || undefined} className="truncate">
@@ -158,7 +153,6 @@ export function Title({
           }
         >
           <ThreadRows
-            engine={engine}
             project={project}
             listed={listed}
             where="head"
@@ -173,30 +167,31 @@ export function Title({
 }
 
 /**
- * The field that names a thing, where its title was (ADR 0077, decision
+ * The field that names an Item, where its title was (ADR 0077, decision
  * 1): its text all selected; Enter or a click elsewhere keeps it, Esc
  * leaves the old title, and an empty one gives back the title it had by
- * itself. Its ✨ puts the model's title in it, selected.
+ * itself. Its ✨ puts the model's title in it, selected. Its App's item
+ * actions rename and suggest (ADR 0087, decision 12).
  */
 export function TitleField({
-  engine,
   project,
   listed,
   naming,
   className,
 }: {
-  engine: Engine
   project: ProjectId
   listed: Listed
   naming: Naming
   className?: string
 }) {
   const keyFor = useKeyLabel()
+  const run = useItemRun()
   const input = useRef<HTMLInputElement>(null)
   const [text, setText] = useState(listed.title)
-  const [thinking, setThinking] = useState(false)
   const done = useRef(false)
-  const listing = listingFor(listed)
+  const rename = itemActionOf(listed, "rename")
+  const suggest = itemActionOf(listed, "suggest")
+  const thinking = naming.asking
   // Where the focus was, as the composer, for Enter and Esc to give it
   // back; a click elsewhere puts it where it went.
   const before = useRef<Element | null>(null)
@@ -209,7 +204,8 @@ export function TitleField({
     if (done.current) return
     done.current = true
     stopNaming()
-    renameTo(engine, project, listed, input.current?.value ?? text)
+    const title = input.current?.value ?? text
+    if (rename) run(rename.id, { project, item: listed.id, title })
     if (back) focusBack(before.current)
   }
   const cancel = () => {
@@ -217,30 +213,21 @@ export function TitleField({
     stopNaming()
     focusBack(before.current)
   }
-  const suggest = async () => {
-    if (!listing?.suggest || thinking) return
-    setThinking(true)
-    try {
-      const title = await listing.suggest(engine, project, listed.id)
-      if (done.current) return
-      setText(title)
-      requestAnimationFrame(() => {
-        input.current?.focus()
-        input.current?.select()
-      })
-    } catch (error) {
-      toast.error(problem(error))
-    } finally {
-      setThinking(false)
-    }
+  // The title the model offered, as its ✨ or `Shift+F2` asked, goes in
+  // the field, selected.
+  const { offered } = naming
+  const [took, setTook] = useState(offered)
+  if (offered !== took) {
+    setTook(offered)
+    if (offered) setText(offered.title)
   }
-  // `Shift+F2` while it is open asks as its ✨ does.
-  const asked = useRef(naming.asked)
   useEffect(() => {
-    if (naming.asked === asked.current) return
-    asked.current = naming.asked
-    void suggest()
-  })
+    if (!offered) return
+    requestAnimationFrame(() => {
+      input.current?.focus()
+      input.current?.select()
+    })
+  }, [offered])
   return (
     <span
       className={cn(
@@ -281,18 +268,18 @@ export function TitleField({
           {THINKING}
         </span>
       )}
-      {listing?.suggest && (
+      {suggest && (
         <button
           type="button"
           aria-label="Suggest a title"
-          title={keyFor("thread.suggest-title", "Suggest a title")}
+          title={keyFor(suggest.id, "Suggest a title")}
           className={cn(
             "mr-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-foreground/8 hover:text-foreground",
             thinking && "animate-pulse text-foreground"
           )}
           // The field keeps the focus, so it stays open.
           onMouseDown={(event) => event.preventDefault()}
-          onClick={() => void suggest()}
+          onClick={() => run(suggest.id, { project, item: listed.id })}
         >
           <SparklesIcon className="size-3.5" />
         </button>

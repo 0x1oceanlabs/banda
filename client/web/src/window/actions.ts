@@ -5,14 +5,8 @@
  */
 import type { Engine, JsonValue, ProjectId } from "@banda/contract"
 import { toast } from "@banda/ui/components/sonner"
-import {
-  type Action,
-  type Args,
-  type Listing,
-  takes,
-  type WindowApi,
-} from "@banda/ui/module"
-import { IN_PROGRAM, type Listed, type PaneState, paneOf } from "@banda/ui/pane"
+import { type Action, type Args, takes, type WindowApi } from "@banda/ui/module"
+import { IN_PROGRAM, type PaneState, paneOf } from "@banda/ui/pane"
 import { RESET_KEY } from "../actions/actions"
 import { chipOf } from "./attach"
 import { device } from "./device"
@@ -35,14 +29,7 @@ import { AGENTS_FILE } from "@banda/contract/agents"
 import { tomlOf } from "@banda/contract/settings"
 import { fileNow } from "@banda/ui/lib/look"
 import { nextFlow } from "../sidebar/FlowMenu"
-import {
-  askIntoField,
-  listingFor,
-  namingNow,
-  startNaming,
-  suggestTitle,
-  toggleUnread,
-} from "../titles/titles"
+import { makeProject } from "../sidebar/MakeProject"
 import {
   type Change,
   columnMoved,
@@ -161,6 +148,7 @@ export function windowApiOf(shell: Shell): WindowApi {
     beside: shell.beside,
     items: shell.items,
     run: shell.run,
+    sessionOf: shell.sessionOf,
     sight: shell.sight,
     projects: shell.projects,
     look: shell.look,
@@ -445,19 +433,6 @@ function present(args: Args | undefined, then: (file: string) => void) {
     if (there) then(file)
     else toast.warning(`No such file: ${file}`)
   })
-}
-
-/** The listed thing the focused Pane shows, where its module names it
- * (`Module.listed`); none else. */
-function lookedAt(
-  shell: Shell
-): { project: ProjectId; listed: Listed; listing: Listing } | undefined {
-  const { pane } = shell.here.get()
-  if (!pane?.subject) return undefined
-  const { project, subject } = pane
-  const listed = shell.items.get()[project]?.find((row) => row.id === subject)
-  const listing = listed && listingFor(listed)
-  return listing && { project, listed, listing }
 }
 
 /** The window's own actions, the tiling's first (ADR 0071, decision 2):
@@ -804,42 +779,19 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     keys: [{ code: "KeyS", mod: true }],
     run: (shell) => shell.archive(),
   },
-  // F2 and Shift+F2 are not the mod's (ADR 0077): keys a Thread takes
-  // only while it has the focus, which a terminal's program has else.
   {
-    id: "thread.rename",
+    // Threads' "Make a Project from it…" (ADR 0046): its dialog is the
+    // Window's, for a Project of No Project alone.
+    id: "sidebar.make-project",
+    args: takes({ project: "the No Project's Project its Thread is in" }, [
+      "project",
+    ]),
     section: "Threads",
-    title: "Rename the Thread you look at",
-    keys: [{ code: "F2" }],
-    when: (shell) => lookedAt(shell) !== undefined,
-    run: (shell) => {
-      const at = lookedAt(shell)
-      if (at) startNaming(at.project, at.listed.id, "head")
-    },
-  },
-  {
-    id: "thread.suggest-title",
-    section: "Threads",
-    title: "Suggest a title for the Thread you look at, and rename it",
-    keys: [{ code: "F2", shift: true }],
-    when: (shell) => lookedAt(shell)?.listing.suggest !== undefined,
-    run: (shell) => {
-      const at = lookedAt(shell)
-      // Another host's Thread asks its own engine, from its header's menu.
-      if (!at || shell.here.get().pane?.host) return
-      // Its field open, the title goes in the field, as its ✨ puts it.
-      if (namingNow(at.project, at.listed.id)) askIntoField()
-      else void suggestTitle(shell.engine, at.project, at.listed)
-    },
-  },
-  {
-    id: "thread.unread",
-    section: "Threads",
-    title: "Mark the Thread you look at as unread, or as read",
-    keys: [{ code: "KeyU", mod: true, shift: true }],
-    run: (shell) => {
-      const at = lookedAt(shell)
-      if (at) toggleUnread(at.listed)
+    title: "Make a Project from a Thread in No Project",
+    unlisted: true,
+    run: (shell, args) => {
+      const project = shell.projects().find((one) => one.id === args?.project)
+      if (project?.scratch) makeProject(project.id)
     },
   },
   {
@@ -1093,10 +1045,19 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
   ...windowModule.actions,
 ]
 
-/** Every action: the modules' (`modules.ts`), then the window's own. */
+/** Where the modules' item actions stand among the Window's own: after
+ * its own Thread actions, as the key sheet listed them while they were
+ * the Window's. */
+const ITEMS_AT =
+  WINDOW_ACTIONS.findIndex((action) => action.id === "sidebar.archive") + 1
+
+/** Every action: the modules' (`modules.ts`), then the window's own, with
+ * the modules' item actions among them (ADR 0087, decision 12). */
 export const ACTIONS: readonly Action<Shell>[] = [
   ...modules.flatMap((module) => module.actions),
-  ...WINDOW_ACTIONS,
+  ...WINDOW_ACTIONS.slice(0, ITEMS_AT),
+  ...modules.flatMap((module) => module.items),
+  ...WINDOW_ACTIONS.slice(ITEMS_AT),
 ]
 
 /** Runs the action `id` as its key would, with `args`. */

@@ -40,15 +40,24 @@ test("a Pane shows while the engine runs its module, or always for a module with
 })
 
 /** Ids an action kept as it moved to its module, so `keys.toml` stays
- * right (ADR 0022, decision 3). */
-const KEPT = ["thread.new"]
+ * right (ADR 0022, decision 3): Threads' item actions among them (ADR
+ * 0087, decision 12). */
+const KEPT = [
+  "thread.new",
+  "thread.rename",
+  "thread.suggest-title",
+  "thread.unread",
+]
+
+/** A module's actions, its item actions with them. */
+const allOf = (m: Module) => [...m.actions, ...m.items]
 
 test("a module's new action's id starts with its module's id", () => {
   for (const m of modules)
-    for (const action of m.actions)
+    for (const action of allOf(m))
       if (!KEPT.includes(action.id))
         expect(action.id.startsWith(`${m.id}.`)).toBe(true)
-  expect(modules.flatMap((m) => m.actions.map((a) => a.id))).toEqual(
+  expect(modules.flatMap((m) => allOf(m).map((a) => a.id))).toEqual(
     expect.arrayContaining(KEPT)
   )
 })
@@ -87,7 +96,7 @@ function actionOf(action: Action<never>) {
 function windowOf(module: Module) {
   return {
     panes: module.panes.map((pane) => pane.kind),
-    actions: module.actions.map(actionOf),
+    actions: allOf(module).map(actionOf),
     ...(module.scopes.length > 0 && { scopes: module.scopes }),
     sources: module.sources.map(({ id, label }) => ({ id, label })),
     watches: module.watches.length,

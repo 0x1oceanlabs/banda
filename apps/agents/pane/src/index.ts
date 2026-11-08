@@ -1,14 +1,13 @@
 /** The agents module's window part: its Panes, its Watch on what calls
 /** The agents module's window part: its Panes, its Watch on what calls
  * for the Person, its action, what the Banda menu finds of it (ADR 0022)
- * and how the window names its Threads (ADR 0077). */
+ * and what the Person does to a Thread it lists, its item actions (ADR
+ * 0087, decision 12). */
 import type { ProjectId } from "@banda/contract"
-import type { ThreadId } from "@banda/contract/agents"
 import {
   type Action,
   type Args,
   defineModule,
-  type Listing,
   scoped,
   takes,
   zoomActions,
@@ -21,7 +20,7 @@ import { visualPane } from "./visual/VisualPane"
 import { threadsWatch } from "./list/ThreadsWatch"
 import { askSource } from "./list/sources"
 import { NEW_THREAD } from "./thread/session"
-import { markUnread } from "./list/seen"
+import { threadItems } from "./list/items"
 import { ANSWER, RETRY, SHOW } from "./list/rows"
 
 /** An arg that is a text, or none. */
@@ -117,25 +116,6 @@ const newThread: Action = {
   },
 }
 
-/**
- * How the window names a Thread and marks it unread (ADR 0077): the
- * engine renames it, and its Harness's small model suggests the name; the
- * "seen" is this window's (ADR 0005, decision 8).
- */
-const threads: Listing = {
-  rename: async (engine, project, id, title) => {
-    const thread = id as ThreadId
-    await engine.command(
-      "agents.rename",
-      title === null ? { thread } : { thread, title },
-      project
-    )
-  },
-  suggest: (engine, project, id) =>
-    engine.command("agents.suggest_title", { thread: id as ThreadId }, project),
-  unread: markUnread,
-}
-
 /** A key of one of its scopes (ADR 0071, decision 1), `agents.<scope>.<id>`,
  * which keys.toml binds in that scope's table. */
 const own =
@@ -196,5 +176,5 @@ export const agents = defineModule({
     { id: VISUAL, title: "Visual preview" },
   ],
   sources: [askSource],
-  listed: threads,
+  items: threadItems,
 })

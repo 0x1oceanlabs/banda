@@ -1,16 +1,11 @@
 /**
- * The Thread menu (ADR 0077, decision 5): one menu of a thing a module
- * lists, the same at its title in a Pane's header and at its row in the
- * sidebar. The rows are the window's; what each does to the thing, its
- * module says (`Module.listed`).
+ * The Thread menu (ADR 0077, decision 5): one menu of an Item, the same
+ * at its title in a Pane's header and at its row in the sidebar. Its rows
+ * are the Item's item actions (ADR 0087, decision 12), those that name it
+ * first: the Window draws them and runs each by its id, and the Item's App
+ * does it.
  */
-import {
-  createContext,
-  type ReactNode,
-  useContext,
-  useMemo,
-  useState,
-} from "react"
+import { createContext, type ReactNode, useContext, useMemo } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { useAfterMenu } from "@banda/ui/components/context-menu"
 import {
@@ -20,35 +15,22 @@ import {
 } from "@banda/ui/components/dropdown-menu"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { useNow } from "@banda/ui/hooks/use-now"
+import type { Args, ItemAction, ItemRow } from "@banda/ui/module"
 import { asleep, type Listed } from "@banda/ui/pane"
-import {
-  AlarmClockIcon,
-  ArchiveIcon,
-  ArchiveRestoreIcon,
-  CircleDotIcon,
-  CircleIcon,
-  FolderPlusIcon,
-  PencilIcon,
-  SparklesIcon,
-  Undo2Icon,
-} from "lucide-react"
+import { AlarmClockIcon, ArchiveIcon, ArchiveRestoreIcon } from "lucide-react"
 import { archivable, useIsArchived } from "../sidebar/archived"
+import { itemActionsOf } from "../sidebar/items"
+import { Making } from "../sidebar/MakeProject"
 import { snoozable } from "../sidebar/snoozed"
-import { MakeProject } from "../sidebar/MakeProject"
-import {
-  listingFor,
-  previousTitle,
-  startNaming,
-  suggestTitle,
-  toggleUnread,
-} from "./titles"
+import type { Shell } from "../window/actions"
+
+/** Runs an action by its id, as its key would. */
+type Run = (action: string, args?: Args) => void
 
 /** What the Thread menu asks of the window, wherever it opens. */
 type Threads = {
   projects: readonly ProjectSummary[]
-  /** Opens "Make a Project from this Thread" for a Thread in No Project
-   * (ADR 0046). */
-  makeProject?: (project: ProjectSummary) => void
+  run: Run
   /** Archives a thing, which closes the Panes that show it, or brings it
    * back (ADR 0069). */
   archive?: (project: ProjectId, id: string, archived: boolean) => void
@@ -58,13 +40,23 @@ type Threads = {
   wake?: (project: ProjectId, id: string) => void
 }
 
-const ThreadsContext = createContext<Threads>({ projects: [] })
+const ThreadsContext = createContext<Threads>({
+  projects: [],
+  run: () => undefined,
+})
+
+/** How a part inside the Thread menus runs an item action, as the
+ * title's field renames by its App's. */
+export function useItemRun(): Run {
+  return useContext(ThreadsContext).run
+}
 
 /** Gives the Thread menus inside it the window's Projects and acts, and
  * holds the dialog that makes a Project. */
 export function ThreadMenus({
   engine,
   projects,
+  run,
   archive,
   snooze,
   wake,
@@ -72,46 +64,41 @@ export function ThreadMenus({
 }: {
   engine: Engine
   projects: readonly ProjectSummary[]
+  run: Run
   archive: (project: ProjectId, id: string, archived: boolean) => void
   snooze: (project: ProjectId, listed: Listed) => void
   wake: (project: ProjectId, id: string) => void
   children: ReactNode
 }) {
-  const [making, setMaking] = useState<ProjectSummary>()
   const threads = useMemo(
-    () => ({ projects, makeProject: setMaking, archive, snooze, wake }),
-    [projects, archive, snooze, wake]
+    () => ({ projects, run, archive, snooze, wake }),
+    [projects, run, archive, snooze, wake]
   )
   return (
     <ThreadsContext value={threads}>
       {children}
-      {making && (
-        <MakeProject
-          engine={engine}
-          project={making}
-          onClose={() => setMaking(undefined)}
-        />
-      )}
+      <Making engine={engine} projects={projects} />
     </ThreadsContext>
   )
 }
 
+/** An item action with its row for one Item. */
+type Shown = { action: ItemAction<Shell>; row: ItemRow }
+
 /**
- * The Thread menu's rows for `listed`, in its order: Rename…, Suggest a
- * title, Previous title, Mark as unread or read, Make a Project from it…,
- * Snooze… or Wake now, Archive thread. A row that does not apply is not
- * there; Snooze while the Thread asks, and Archive while it works or
- * asks, are there but off. A thing whose module names
- * nothing (`Module.listed`) has the rows from Make a Project on.
+ * The Thread menu's rows for `listed`, in its order: its App's item
+ * actions that name it (Rename…, Suggest a title, Previous title, Mark as
+ * unread or read), then the rest (Make a Project from it…), Snooze… or
+ * Wake now, Archive thread. A row that does not apply is not there;
+ * Snooze while the Thread asks, and Archive while it works or asks, are
+ * there but off.
  */
 export function ThreadRows({
-  engine,
   project,
   listed,
   where,
   later: given,
 }: {
-  engine: Engine
   project: ProjectId
   listed: Listed
   /** Where Rename… opens the field: the header, or the row. */
@@ -121,65 +108,49 @@ export function ThreadRows({
   later?: (act: () => void) => void
 }) {
   const keyFor = useKeyLabel()
-  const { projects, makeProject, archive, snooze, wake } =
-    useContext(ThreadsContext)
+  const { projects, run, archive, snooze, wake } = useContext(ThreadsContext)
   const isArchived = useIsArchived()
   // Whether it sleeps, by a clock that moves as the menu stays open.
   const now = useNow(30_000)
   const ours = useAfterMenu()
   const later = given ?? ours
-  const listing = listingFor(listed)
-  const summary = projects.find((one) => one.id === project)
   const archived = isArchived(listed)
-  const named = listing && (
-    <>
+  const at = {
+    project: projects.find((one) => one.id === project),
+    now,
+    archived,
+  }
+  const shown = itemActionsOf(listed).flatMap((action): Shown[] => {
+    const row = action.row(listed, at)
+    return row ? [{ action, row }] : []
+  })
+  const naming = shown.filter(({ action }) => action.group === "name")
+  const others = shown.filter(({ action }) => action.group === "other")
+  const drawn = ({ action, row }: Shown) => {
+    const act = () => run(action.id, { project, item: listed.id, from: where })
+    // A key of its own, or one the Person gave it.
+    const key = keyFor(action.id)
+    return (
       <DropdownMenuItem
-        onClick={() => later(() => startNaming(project, listed.id, where))}
+        key={action.id}
+        disabled={row.off}
+        onClick={() => (action.later ? later(act) : act())}
       >
-        <PencilIcon />
-        Rename…
-        <DropdownMenuShortcut>{keyFor("thread.rename")}</DropdownMenuShortcut>
+        <row.icon />
+        {row.title}
+        {key || action.keys?.length ? (
+          <DropdownMenuShortcut>{key}</DropdownMenuShortcut>
+        ) : null}
       </DropdownMenuItem>
-      {listing.suggest && (
-        <DropdownMenuItem
-          onClick={() => void suggestTitle(engine, project, listed)}
-        >
-          <SparklesIcon />
-          Suggest a title
-          <DropdownMenuShortcut>
-            {keyFor("thread.suggest-title")}
-          </DropdownMenuShortcut>
-        </DropdownMenuItem>
-      )}
-      {listed.was !== undefined && (
-        <DropdownMenuItem
-          onClick={() => previousTitle(engine, project, listed)}
-        >
-          <Undo2Icon />
-          Previous title
-        </DropdownMenuItem>
-      )}
-      {listing.unread && listed.seen !== undefined && (
-        <DropdownMenuItem onClick={() => toggleUnread(listed)}>
-          {listed.seen ? <CircleDotIcon /> : <CircleIcon />}
-          {listed.seen ? "Mark as unread" : "Mark as read"}
-          <DropdownMenuShortcut>{keyFor("thread.unread")}</DropdownMenuShortcut>
-        </DropdownMenuItem>
-      )}
-    </>
-  )
+    )
+  }
   return (
     <>
-      {named}
-      {named && ((summary?.scratch && makeProject) || snooze || archive) && (
+      {naming.map(drawn)}
+      {naming.length > 0 && (others.length > 0 || snooze || archive) && (
         <DropdownMenuSeparator />
       )}
-      {summary?.scratch && makeProject && (
-        <DropdownMenuItem onClick={() => later(() => makeProject(summary))}>
-          <FolderPlusIcon />
-          Make a Project from it…
-        </DropdownMenuItem>
-      )}
+      {others.map(drawn)}
       {wake && asleep(listed, now) ? (
         <DropdownMenuItem onClick={() => wake(project, listed.id)}>
           <AlarmClockIcon />

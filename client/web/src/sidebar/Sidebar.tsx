@@ -77,7 +77,7 @@ import { useLookSidebar } from "../look"
 import { Row } from "./Row"
 import { ThreadRows } from "../titles/ThreadMenu"
 import { TitleField } from "../titles/Title"
-import { useNaming } from "../titles/titles"
+import { useNaming } from "@banda/ui/lib/naming"
 import { device } from "../window/device"
 import { PRESET_WORDS, type Settings } from "./settings"
 import { type Held, held, hold, rowKey } from "./hold"
@@ -685,7 +685,6 @@ function ThreadRow({
         harnesses={harnesses}
         field={
           <TitleField
-            engine={engine}
             project={project}
             listed={row.listed}
             naming={naming}
@@ -700,12 +699,7 @@ function ThreadRow({
         <Row row={row} {...props} harnesses={harnesses} />
       </ContextMenuTrigger>
       <ContextMenuContent aria-label="Thread menu" className="min-w-60">
-        <ThreadRows
-          engine={engine}
-          project={project}
-          listed={row.listed}
-          where="row"
-        />
+        <ThreadRows project={project} listed={row.listed} where="row" />
       </ContextMenuContent>
     </ContextMenu>
   )

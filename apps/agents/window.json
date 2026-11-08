@@ -232,6 +232,131 @@
         }
       ],
       "scope": "visual"
+    },
+    {
+      "id": "thread.rename",
+      "title": "Rename the Thread you look at",
+      "section": "Threads",
+      "keys": [
+        {
+          "code": "F2"
+        }
+      ],
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project of the Item it acts on"
+          },
+          "item": {
+            "type": "string",
+            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+          },
+          "title": {
+            "type": "string",
+            "description": "its new title; an empty one gives back the title it had by itself"
+          },
+          "from": {
+            "type": "string",
+            "description": "where its field opens, without a title: head or row"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "thread.suggest-title",
+      "title": "Suggest a title for the Thread you look at, and rename it",
+      "section": "Threads",
+      "keys": [
+        {
+          "code": "F2",
+          "shift": true
+        }
+      ],
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project of the Item it acts on"
+          },
+          "item": {
+            "type": "string",
+            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "agents.previous-title",
+      "title": "Give the Thread you look at the title it had before",
+      "section": "Threads",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project of the Item it acts on"
+          },
+          "item": {
+            "type": "string",
+            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "thread.unread",
+      "title": "Mark the Thread you look at as unread, or as read",
+      "section": "Threads",
+      "keys": [
+        {
+          "code": "KeyU",
+          "mod": true,
+          "shift": true
+        }
+      ],
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project of the Item it acts on"
+          },
+          "item": {
+            "type": "string",
+            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "agents.make-project",
+      "title": "Make a Project from the Thread you look at, in No Project",
+      "section": "Threads",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project of the Item it acts on"
+          },
+          "item": {
+            "type": "string",
+            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+          }
+        },
+        "additionalProperties": false
+      }
     }
   ],
   "scopes": [
