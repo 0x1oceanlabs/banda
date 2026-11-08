@@ -112,8 +112,12 @@ export function useLive<S extends { at: number }>(
       if (state === "shown") frame ||= onDraw(draw)
       else timer ??= setTimeout(() => (frame ||= onDraw(draw)), HELD[state])
     }
-    // The Tile's state changed: what is held waits as the new one says.
-    const stopWatching = tile.watch(() => {
+    // The Tile's state changed: what is held waits as the new one says. A
+    // new size, which comes as often as every frame, changes nothing here.
+    let state = tile.now().state
+    const stopWatching = tile.watch((configure) => {
+      if (configure.state === state) return
+      state = configure.state
       if (due === null) return
       cancel()
       pace()
