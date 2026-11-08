@@ -43,10 +43,7 @@ fn fake_agent() -> PathBuf {
 
 /// The fence as it holds whole.
 fn holds() -> Fence {
-    Fence::Holds {
-        layers: vec![FenceLayer::Namespaces, FenceLayer::Landlock],
-        docker_group: false,
-    }
+    Fence::holds(vec![FenceLayer::Namespaces, FenceLayer::Landlock], false)
 }
 
 fn harnesses() -> Harnesses {
@@ -1920,14 +1917,8 @@ async fn started_supervised(world: &World, thread: &Value) -> Vec<Value> {
 
 #[tokio::test]
 async fn a_new_thread_starts_supervised_where_the_fence_does_not_hold_whole() {
-    let partly = Fence::Holds {
-        layers: vec![FenceLayer::Namespaces],
-        docker_group: false,
-    };
-    let docker = Fence::Holds {
-        layers: vec![FenceLayer::Namespaces, FenceLayer::Landlock],
-        docker_group: true,
-    };
+    let partly = Fence::holds(vec![FenceLayer::Namespaces], false);
+    let docker = Fence::holds(vec![FenceLayer::Namespaces, FenceLayer::Landlock], true);
     for fence in [missing(), partly, docker] {
         let root = tempfile::tempdir().unwrap();
         let world = fenced_world(root.path(), Agents::new(harnesses()), fence.clone()).await;

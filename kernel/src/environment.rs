@@ -6,8 +6,9 @@
 //! ([`KernelBuilder::environment`](crate::KernelBuilder::environment)); the
 //! platform's `banda-environments` holds them, `local` first, which runs
 //! a program on the host as Banda always has. What keeps Banda's books,
-//! git's status for one, runs on the host and executes nothing of the
-//! Project's, so it does not come here.
+//! git's status for one, executes nothing of the Project's and does not
+//! come here: it runs on the host, behind the fence where it holds
+//! ([`crate::host::books`]).
 //!
 //! Each program comes back with the handle that stops it and what it
 //! started ([`Started`]), and one on a terminal with the terminal, the

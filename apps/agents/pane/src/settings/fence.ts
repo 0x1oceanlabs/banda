@@ -6,7 +6,7 @@
  * it.
  */
 import type { Fence } from "@banda/contract"
-import { hasGaps, holdsWhole } from "@banda/ui/hooks/use-status"
+import { hasGaps, hasLinks, holdsWhole } from "@banda/ui/hooks/use-status"
 import { isMac } from "@banda/ui/lib/keys"
 import type { Args } from "@banda/ui/module"
 
@@ -24,12 +24,15 @@ export function fullAccessAbout(fence: Fence | undefined): string {
  * the fence holds whole, or before the engine said. */
 export function reasonOf(fence: Fence | undefined): string | undefined {
   if (!fence || holdsWhole(fence)) return undefined
-  if (fence.fence === "holds")
-    return !hasGaps(fence)
-      ? "You're in the docker group: through Docker, an Agent could step past the fence."
-      : fence.docker_group
+  if (fence.fence === "holds") {
+    if (hasGaps(fence))
+      return fence.docker_group
         ? "The fence has gaps, and you're in the docker group: through Docker, an Agent could step past it."
         : "The fence has gaps: this Linux lacks a part it needs."
+    if (fence.docker_group)
+      return "You're in the docker group: through Docker, an Agent could step past the fence."
+    return "Some settings the fence keeps from Agents are links, which an Agent could point elsewhere."
+  }
   switch (fence.why) {
     case "not_built":
       return "No fence yet: Banda's engine needs a restart."
@@ -52,16 +55,19 @@ export function reasonOf(fence: Fence | undefined): string | undefined {
  * and the gaps say only what, and Learn more says why. */
 export function shortReasonOf(fence: Fence | undefined): string | undefined {
   if (fence?.fence !== "holds" || holdsWhole(fence)) return reasonOf(fence)
-  if (!hasGaps(fence)) return "You're in the docker group."
-  return fence.docker_group
-    ? "The fence has gaps; you're in the docker group."
-    : "The fence has gaps."
+  if (hasGaps(fence))
+    return fence.docker_group
+      ? "The fence has gaps; you're in the docker group."
+      : "The fence has gaps."
+  if (fence.docker_group) return "You're in the docker group."
+  return "Some settings are links."
 }
 
 /** Whether the reason is a warning of the Person's own setup, the docker
- * group, rather than something missing. */
+ * group or settings kept as links, rather than something missing. */
 export function warns(fence: Fence | undefined): boolean {
-  return fence?.fence === "holds" && fence.docker_group === true
+  if (fence?.fence !== "holds") return false
+  return fence.docker_group === true || (!hasGaps(fence) && hasLinks(fence))
 }
 
 /**

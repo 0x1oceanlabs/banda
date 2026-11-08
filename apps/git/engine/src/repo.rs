@@ -192,6 +192,22 @@ impl Repo {
     }
 
     /// A config value, as `branch.main.remote`; none when it is not set.
+    /// Whether its objects are named by SHA-1, as all but a few are.
+    pub fn sha1(&self) -> bool {
+        self.sha1
+    }
+
+    /// The repository at `top`, of SHA-1 objects, whose acts run on the
+    /// host: for a test of what reads it.
+    #[cfg(test)]
+    pub fn at(top: PathBuf) -> Repo {
+        Repo {
+            top,
+            sha1: true,
+            environment: Arc::new(banda_environments::Local),
+        }
+    }
+
     pub async fn config(&self, key: &str) -> Result<Option<String>, Failure> {
         self.verified(["config", "--get", key]).await
     }

@@ -1,6 +1,6 @@
 [package]
 name = "banda-pulls"
-description = "The pulls module: the pull requests linked to a Project's Threads, read through gh, in the engine."
+description = "The pulls module: the pull requests linked to a Project's Threads, read through gh, or GitHub's API where the fence holds, in the engine."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

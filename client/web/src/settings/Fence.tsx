@@ -22,7 +22,7 @@ import {
   ItemTitle,
 } from "@banda/ui/components/item"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
-import { hasGaps, holdsWhole } from "@banda/ui/hooks/use-status"
+import { hasGaps, hasLinks, holdsWhole } from "@banda/ui/hooks/use-status"
 import { isMac } from "@banda/ui/lib/keys"
 import { cn } from "@banda/ui/lib/utils"
 import {
@@ -132,6 +132,7 @@ function shownOf(fence: Fence, quit: string): Shown {
                 step past the fence.
               </Attention>
             )}
+            <Links fence={fence} />
             <Note icon={InfoIcon}>
               Linux 6.12 or later, with Landlock on, closes the gaps.
             </Note>
@@ -150,15 +151,30 @@ function shownOf(fence: Fence, quit: string): Shown {
         layers,
         about: `On. ${INSIDE}`,
         more: (
-          <Attention>
-            You're in the docker group. Through Docker, an Agent could step past
-            the fence, so new Threads start Supervised. Leave the group, or use
-            rootless Docker, and they start Full access again.
-          </Attention>
+          <>
+            <Attention>
+              You're in the docker group. Through Docker, an Agent could step
+              past the fence, so new Threads start Supervised. Leave the group,
+              or use rootless Docker, and they start Full access again.
+            </Attention>
+            <Links fence={fence} />
+          </>
         ),
         lists: {
           kept: true,
           caveat: "Through Docker, it could still get these.",
+        },
+      }
+    if (hasLinks(fence))
+      return {
+        word: "partly",
+        layers,
+        about: `Partly. ${INSIDE} ${SUPERVISED}`,
+        more: <Links fence={fence} />,
+        lists: {
+          kept: true,
+          caveat:
+            "Through those links, it could still change Banda's settings.",
         },
       }
     return {
@@ -215,6 +231,26 @@ function shownOf(fence: Fence, quit: string): Shown {
         <Details words={fence.words} />
       )
   }
+}
+
+/** The settings the fence keeps from Agents that are links, as dotfiles
+ * kept with stow are: an Agent could point one elsewhere, so the fence
+ * holds partly while any is. None where none is. */
+function Links({ fence }: { fence: Fence & { fence: "holds" } }) {
+  if (!hasLinks(fence)) return null
+  return (
+    <Attention>
+      These settings are links, which an Agent could point elsewhere:{" "}
+      {fence.movable?.map((path, at) => (
+        <span key={path}>
+          {at > 0 && ", "}
+          <code className="font-mono break-all">{path}</code>
+        </span>
+      ))}
+      . Keep them as plain files and folders, and new Threads start Full access
+      again.
+    </Attention>
+  )
 }
 
 /** What the engine said as it could not set the fence up: for a report of

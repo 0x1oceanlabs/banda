@@ -29,6 +29,9 @@ tracing.workspace = true
 ts-rs.workspace = true
 uuid.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus.workspace = true
+
 [target.'cfg(windows)'.dependencies]
 process-wrap.workspace = true
 windows.workspace = true
@@ -37,6 +40,10 @@ windows-registry.workspace = true
 [dev-dependencies]
 tempfile.workspace = true
 tokio-tungstenite.workspace = true
+
+# A keyring on a socket of a test's own (kernel/src/gh.rs).
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+zbus = { workspace = true, features = ["p2p"] }
 
 [lints]
 workspace = true

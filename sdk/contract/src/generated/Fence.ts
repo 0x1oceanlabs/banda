@@ -11,4 +11,12 @@ export type Fence = { "fence": "holds", layers: Array<FenceLayer>,
  * This user is in the `docker` group, whose members run
  * containers as root, and so reach past the fence.
  */
-docker_group?: boolean, } | { "fence": "missing", why: FenceWhy, words: string, };
+docker_group?: boolean, 
+/**
+ * Links in what the fence keeps read-only, Banda's config and
+ * gh's, that lead through a link this user can move, or into a
+ * folder not there yet: the fence keeps what they lead to now
+ * read-only, and an Agent could lead them elsewhere, so it holds
+ * partly.
+ */
+movable?: Array<string>, } | { "fence": "missing", why: FenceWhy, words: string, };

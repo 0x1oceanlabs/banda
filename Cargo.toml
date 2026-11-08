@@ -95,6 +95,9 @@ windows = { version = "0.62.2", default-features = false, features = ["Win32_Sys
 # The user's and the system's PATH on Windows, read again before a program
 # is looked for (ADR 0090, decision 3).
 windows-registry = "0.6.1"
+# The Secret Service on the session bus, where gh keeps the Person's GitHub
+# token on Linux: read with no program run (ADR 0083, kernel/src/gh.rs).
+zbus = { version = "5.19.0", default-features = false, features = ["tokio"] }
 zip = { version = "9.4.1", default-features = false }
 
 # A released engine's panic names Banda's files and lines by itself: its

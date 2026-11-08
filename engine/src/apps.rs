@@ -46,6 +46,10 @@ pub struct HostContext<'a> {
     /// How each Thread's session reaches the engine: this program's
     /// `banda mcp` (ADR 0019).
     pub pipe: &'a Pipe,
+    /// What the fence keeps read-only from Agents, where it holds: every
+    /// Banda's config and gh's, and where the links in them lead
+    /// (`banda_environments::Fenced::kept`).
+    pub kept: &'a [std::path::PathBuf],
 }
 
 include!(concat!(env!("OUT_DIR"), "/apps.rs"));
@@ -81,11 +85,13 @@ mod build {
     }
 
     /// Banda's settings are the settings Pane's to write (ADR 0073,
-    /// decision 8); files' small pictures are kept in Banda's cache, and
-    /// freedesktop's (step F6).
+    /// decision 8), and what the fence keeps read-only no Agent writes
+    /// through Files either; files' small pictures are kept in Banda's
+    /// cache, and freedesktop's (step F6).
     pub fn files(host: &HostContext<'_>) -> Files {
         Files::new()
             .config_in(host.places.config.clone())
+            .kept_from_agents(host.kept.to_vec())
             .thumbs_in(
                 host.places.thumbnails(),
                 banda_files::thumb::shared_from_env(),
@@ -161,6 +167,7 @@ pub(crate) fn on_a_test_host<R>(with: impl FnOnce(&HostContext<'_>) -> R) -> R {
         places: &places,
         harnesses: &harnesses,
         pipe: &pipe,
+        kept: &[],
     })
 }
 

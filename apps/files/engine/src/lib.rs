@@ -24,6 +24,8 @@ pub mod model;
 pub mod settings;
 
 mod archive;
+#[cfg(target_os = "linux")]
+mod beneath;
 mod find;
 mod info;
 mod list;
@@ -71,6 +73,10 @@ pub struct Files {
     /// Banda's settings folder, where Files writes nothing (ADR 0073,
     /// decision 8).
     config: Option<PathBuf>,
+    /// What the fence keeps read-only from Agents, where Files writes
+    /// nothing an Agent asks for: every Banda's config and gh's, and where
+    /// the links in them lead (ADR 0083).
+    kept: Arc<Vec<PathBuf>>,
     /// Who wrote each file last through `files.write`, and its hash then,
     /// so a write refused can say who moved the file.
     wrote: Arc<Mutex<HashMap<PathBuf, (String, Participant)>>>,
@@ -92,6 +98,15 @@ impl Files {
     pub fn config_in(self, config: PathBuf) -> Self {
         Self {
             config: Some(config),
+            ..self
+        }
+    }
+
+    /// What the fence keeps read-only from Agents is `kept`: Files writes
+    /// nothing there that an Agent asks for, as its own shell cannot.
+    pub fn kept_from_agents(self, kept: Vec<PathBuf>) -> Self {
+        Self {
+            kept: Arc::new(kept),
             ..self
         }
     }
@@ -367,7 +382,8 @@ fn unwritten(asked: &str, why: write::Unwritten) -> Refusal {
             "{asked} is in .git, which is git's own: Files writes nothing there."
         )),
         Unwritten::Locked(Locked::Settings) => Refusal::forbidden(format!(
-            "{asked} is one of Banda's settings, which Settings changes."
+            "{asked} is one of the settings Files leaves as they are: Banda's, which Settings \
+             changes, or gh's sign-in."
         )),
         Unwritten::Locked(Locked::Denied) => {
             Refusal::forbidden(format!("{asked} may not be written."))
@@ -403,6 +419,13 @@ fn walls(call: &Call) -> Option<Vec<PathBuf>> {
     })
 }
 
+/// The Project's folder an Agent's call is kept to, resolved, which its
+/// reads and writes open their files from on Linux (`beneath`); none for
+/// the Person's.
+fn walled_in(call: &Call) -> Option<PathBuf> {
+    walls(call).and_then(|folders| folders.into_iter().next())
+}
+
 /// `work` for `call`, off the engine's threads: an Agent's on a thread
 /// the kernel keeps to its Project's folder ([`walled`]).
 async fn reaching<T: Send + 'static>(
@@ -431,18 +454,30 @@ fn started(call: &Call, work: impl FnOnce() + Send + 'static) -> Result<(), Refu
 }
 
 impl Files {
+    /// What the fence keeps read-only from `call`'s caller: from an
+    /// Agent's, [`Files::kept`]; from the Person's, nothing.
+    fn kept_from(&self, call: &Call) -> Vec<PathBuf> {
+        match call.wall() {
+            Some(_) => self.kept.to_vec(),
+            None => Vec::new(),
+        }
+    }
+
     /// Refuses `path`, as `asked`, when it is in `.git` or in Banda's
-    /// settings; and, where it would go, when it holds the settings.
-    fn fence(&self, path: &Path, asked: &str, goes: bool) -> Result<(), Refusal> {
+    /// settings, or for an Agent's `call` in what the fence keeps
+    /// read-only from it; and, where it would go, when it holds them.
+    fn fence(&self, call: &Call, path: &Path, asked: &str, goes: bool) -> Result<(), Refusal> {
         let config = self.config.as_deref();
-        if let Some(why) = write::fenced(path, config) {
+        let kept = self.kept_from(call);
+        if let Some(why) = write::fenced(path, config, &kept) {
             return Err(unwritten(asked, write::Unwritten::Locked(why)));
         }
         let holds = |config: &Path| {
             host::within(config, path)
                 || dunce::canonicalize(config).is_ok_and(|real| host::within(&real, path))
         };
-        if goes && config.is_some_and(holds) {
+        let mut settings = config.into_iter().chain(kept.iter().map(PathBuf::as_path));
+        if goes && settings.any(holds) {
             return Err(Refusal::forbidden(format!(
                 "{asked} holds Banda's settings, which stay where they are."
             )));
@@ -481,9 +516,15 @@ impl Files {
         let path = Reach::of(&call, &ask.path)?.into_path();
         let upto = ask.upto.unwrap_or(read::UPTO);
         let config = self.config.clone();
+        let kept = self.kept_from(&call);
+        let walled = walled_in(&call);
         let text = reaching(&call, move || {
-            let mut text = read::read(&path, upto)?;
-            text.locked = write::locked(&path, config.as_deref());
+            let mut text = match walled {
+                #[cfg(target_os = "linux")]
+                Some(folder) => read::read_beneath(&folder, &path, upto)?,
+                _ => read::read(&path, upto)?,
+            };
+            text.locked = write::locked(&path, config.as_deref(), &kept);
             Ok(text)
         });
         text.await?.map_err(|e| amiss(&ask.path, &e))
@@ -492,9 +533,18 @@ impl Files {
     async fn write(&self, call: Call, ask: WriteAsk) -> Result<Written, Refusal> {
         let path = Reach::of(&call, &ask.path)?.into_path();
         let config = self.config.clone();
+        let kept = self.kept_from(&call);
+        let walled = walled_in(&call);
         let saved = reaching(&call, {
             let path = path.clone();
-            move || write::write(&path, &ask.text, ask.base.as_deref(), config.as_deref())
+            move || {
+                let (text, base, config) = (&ask.text, ask.base.as_deref(), config.as_deref());
+                match walled {
+                    #[cfg(target_os = "linux")]
+                    Some(folder) => write::write_beneath(&folder, &path, text, base, config, &kept),
+                    _ => write::write(&path, text, base, config, &kept),
+                }
+            }
         });
         let saved = saved.await?.map_err(|why| unwritten(&ask.path, why))?;
         let mut wrote = self.wrote.lock().unwrap();
@@ -649,7 +699,7 @@ impl Files {
         }
         let path = Reach::of(&call, &ask.dir)?.into_path().join(&ask.name);
         let named = shown(&path);
-        self.fence(&path, &named, false)?;
+        self.fence(&call, &path, &named, false)?;
         let folder = ask.kind == Making::Folder;
         let made = reaching(&call, {
             let path = path.clone();
@@ -669,8 +719,8 @@ impl Files {
         }
         let from = entry(&call, &ask.path)?;
         let to = from.with_file_name(&ask.name);
-        self.fence(&from, &ask.path, true)?;
-        self.fence(&to, &ask.name, false)?;
+        self.fence(&call, &from, &ask.path, true)?;
+        self.fence(&call, &to, &ask.name, false)?;
         let was = (from.file_name())
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
@@ -721,13 +771,13 @@ impl Files {
     /// off the engine's threads, saying how far it is.
     async fn job(&self, call: Call, ask: MoveAsk, copy: bool) -> Result<Stream, Refusal> {
         let dir = Reach::of(&call, &ask.dir)?.into_path();
-        self.fence(&dir, &ask.dir, false)?;
+        self.fence(&call, &dir, &ask.dir, false)?;
         let mut sources = Vec::new();
         for asked in &ask.paths {
             let from = entry(&call, asked)?;
             // What a copy takes is only read.
             if !copy {
-                self.fence(&from, asked, true)?;
+                self.fence(&call, &from, asked, true)?;
             }
             sources.push((asked.clone(), from));
         }
@@ -797,7 +847,7 @@ impl Files {
         let mut paths = Vec::new();
         for asked in &ask.paths {
             let path = entry(&call, asked)?;
-            self.fence(&path, asked, true)?;
+            self.fence(&call, &path, asked, true)?;
             paths.push(path);
         }
         let put = blocking(move || {

@@ -2,7 +2,9 @@
 //! to Banda on GitHub, as an Agent drafted it (ADR 0039, decisions 1 and
 //! 3). With `gh` signed in, it is filed, or its comment on the issue that
 //! has the fingerprint; without, the window opens GitHub's page that
-//! sends it from the browser, filled in.
+//! sends it from the browser, filled in. Where the fence holds, GitHub's
+//! API files it with the Person's token, which Banda reads where `gh`
+//! keeps it, and no `gh` runs (ADR 0083).
 
 use crate::model::Fingerprint;
 use banda_kernel::Refusal;
@@ -62,10 +64,18 @@ pub fn may_send(issue: &Issue) -> Result<(), Refusal> {
     Ok(())
 }
 
-/// Files `issue` with the `gh` at `gh`; without one signed in, the page
-/// that sends it from the browser.
+/// Files `issue` with the `gh` at `gh`, or where the fence holds through
+/// GitHub's API ([`filed_api`]); without one signed in, the page that
+/// sends it from the browser.
 pub async fn send(gh: &Path, issue: &Issue) -> Sent {
-    match filed(gh, issue).await {
+    let filed = match banda_kernel::host::guarded() {
+        true => {
+            let token = banda_kernel::gh::token(banda_kernel::gh::GITHUB).await;
+            filed_api(API, token, issue).await
+        }
+        false => filed(gh, issue).await,
+    };
+    match filed {
         Some(url) => Sent { url, filed: true },
         None => Sent {
             url: page(issue),
@@ -114,6 +124,43 @@ async fn filed(gh: &Path, issue: &Issue) -> Option<String> {
         .rev()
         .find(|line| line.starts_with("https://"))?;
     out.status.success().then(|| url.trim().to_owned())
+}
+
+/// GitHub's REST API.
+const API: &str = "https://api.github.com";
+
+/// What GitHub's API at `api` answers as it files `issue`, asked with
+/// `token` over Banda's own https client: the issue's address, or the
+/// comment's; none when it could not, or with no token.
+async fn filed_api(api: &str, token: Option<String>, issue: &Issue) -> Option<String> {
+    let token = token?;
+    let (url, body) = match issue.comment_on {
+        Some(number) => (
+            format!("{api}/repos/{REPO}/issues/{number}/comments"),
+            serde_json::json!({ "body": issue.body }),
+        ),
+        None => (
+            format!("{api}/repos/{REPO}/issues"),
+            serde_json::json!({ "title": issue.title, "body": issue.body }),
+        ),
+    };
+    let client = banda_kernel::https::client().ok()?;
+    let answer = client
+        .post(url)
+        .bearer_auth(token)
+        .header("Accept", "application/vnd.github+json")
+        .header("Content-Type", "application/json")
+        .timeout(GH_WAIT)
+        .body(body.to_string())
+        .send()
+        .await
+        .ok()?;
+    if !answer.status().is_success() {
+        return None;
+    }
+    let read: serde_json::Value = serde_json::from_str(&answer.text().await.ok()?).ok()?;
+    let url = read["html_url"].as_str()?;
+    url.starts_with("https://").then(|| url.to_owned())
 }
 
 /// The most of an address a browser takes well.
@@ -197,6 +244,82 @@ mod tests {
         let long = page(&issue("t", &"й".repeat(5000), None));
         assert!(long.len() <= ADDRESS_MOST, "{}", long.len());
         assert!(long.ends_with(&encoded("…the rest: `banda problems report 3124`.")));
+    }
+
+    /// An API on a port of this machine that answers one request with
+    /// `status` and `body`, and hands back what it was asked.
+    async fn api_answering(
+        status: u16,
+        body: &'static str,
+    ) -> (String, tokio::task::JoinHandle<String>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let heard = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut asked = Vec::new();
+            let mut chunk = [0u8; 4096];
+            loop {
+                let read = stream.read(&mut chunk).await.unwrap();
+                asked.extend_from_slice(&chunk[..read]);
+                let text = String::from_utf8_lossy(&asked).into_owned();
+                if let Some((head, rest)) = text.split_once("\r\n\r\n") {
+                    let length = (head.lines())
+                        .find_map(|line| {
+                            let line = line.to_ascii_lowercase();
+                            line.strip_prefix("content-length: ").map(str::to_owned)
+                        })
+                        .and_then(|length| length.trim().parse::<usize>().ok())
+                        .unwrap_or(0);
+                    if rest.len() >= length || read == 0 {
+                        break;
+                    }
+                }
+            }
+            let answer = format!(
+                "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            stream.write_all(answer.as_bytes()).await.unwrap();
+            String::from_utf8_lossy(&asked).into_owned()
+        });
+        (url, heard)
+    }
+
+    #[tokio::test]
+    async fn github_s_api_files_the_issue_or_its_comment_with_the_persons_token() {
+        let filed = r#"{"html_url":"https://github.com/0x1oceanlabs/banda/issues/9"}"#;
+        let (api, heard) = api_answering(201, filed).await;
+        let sent = filed_api(&api, Some("t0ken".to_owned()), &issue("T", "B", None)).await;
+        assert_eq!(
+            sent.as_deref(),
+            Some("https://github.com/0x1oceanlabs/banda/issues/9")
+        );
+        let asked = heard.await.unwrap();
+        assert!(asked.starts_with("POST /repos/0x1oceanlabs/banda/issues HTTP/1.1"));
+        assert!(
+            asked
+                .to_ascii_lowercase()
+                .contains("authorization: bearer t0ken")
+        );
+        assert!(asked.contains(r#""title":"T""#) && asked.contains(r#""body":"B""#));
+        let comment =
+            r#"{"html_url":"https://github.com/0x1oceanlabs/banda/issues/3#issuecomment-1"}"#;
+        let (api, heard) = api_answering(201, comment).await;
+        let sent = filed_api(&api, Some("t".to_owned()), &issue("T", "B", Some(3))).await;
+        assert!(sent.unwrap().ends_with("#issuecomment-1"));
+        let asked = heard.await.unwrap();
+        assert!(asked.starts_with("POST /repos/0x1oceanlabs/banda/issues/3/comments "));
+        // Refused, or signed out: none, and the browser's page instead.
+        let (api, _) = api_answering(401, r#"{"message":"Bad credentials"}"#).await;
+        assert_eq!(
+            filed_api(&api, Some("t".to_owned()), &issue("T", "B", None)).await,
+            None
+        );
+        assert_eq!(
+            filed_api("http://127.0.0.1:1", None, &issue("T", "B", None)).await,
+            None
+        );
     }
 
     #[test]

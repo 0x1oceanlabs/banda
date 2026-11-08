@@ -1,6 +1,8 @@
-//! Reading pull requests from GitHub through `gh` (ADR 0076, decision 2):
-//! one GraphQL query for every pull request a Project links on one host,
-//! signed in as the Person is.
+//! Reading pull requests from GitHub (ADR 0076, decision 2): one GraphQL
+//! query for every pull request a Project links on one host, signed in as
+//! the Person is. Through `gh`; where the fence holds, which runs no `gh`
+//! an Agent could change (ADR 0083), the engine asks GitHub's API itself,
+//! with the token gh keeps ([`banda_kernel::gh`]).
 
 use crate::model::{Checks, Counted, PullRef, Review, Snapshot, State};
 use serde_json::Value;
@@ -38,14 +40,93 @@ pub struct Read {
     pub pulls: HashMap<PullRef, Snapshot>,
 }
 
-/// Reads `pulls`, all on one host, with the `gh` at `gh`, at `now`.
+/// Reads `pulls`, all on one host, with the `gh` at `gh`, at `now`; where
+/// the fence holds, from GitHub's API ([`asked_api`]).
 pub async fn read(gh: &Path, pulls: &[PullRef], now: i64) -> Result<Read, Missed> {
+    read_where(gh, pulls, now, banda_kernel::host::guarded(), api).await
+}
+
+/// [`read`], with `gh` where not `guarded`, else from the API at the
+/// address `at` names for a host.
+async fn read_where(
+    gh: &Path,
+    pulls: &[PullRef],
+    now: i64,
+    guarded: bool,
+    at: impl Fn(&str) -> String,
+) -> Result<Read, Missed> {
     let Some(host) = pulls.first().map(|pull| pull.host.clone()) else {
         return Ok(Read {
             pulls: HashMap::new(),
         });
     };
     let (query, names) = query(pulls);
+    let answer = match guarded {
+        true => asked_api(&at(&host), banda_kernel::gh::token(&host).await, &query).await?,
+        false => asked_gh(gh, &host, &query).await?,
+    };
+    Ok(parse(&answer, &names, now))
+}
+
+/// The address of `host`'s GraphQL API: github.com's own, a GitHub
+/// Enterprise Cloud's under `api.`, and a server's under `/api`.
+fn api(host: &str) -> String {
+    if host == banda_kernel::gh::GITHUB {
+        return "https://api.github.com/graphql".to_owned();
+    }
+    match host.ends_with(".ghe.com") {
+        true => format!("https://api.{host}/graphql"),
+        false => format!("https://{host}/api/graphql"),
+    }
+}
+
+/// Why GitHub could not be read, which the Person mends.
+fn person(words: &str) -> Missed {
+    Missed::Person(words.to_owned())
+}
+
+/// What the GraphQL API at `url` answers `query` with, asked with `token`.
+async fn asked_api(url: &str, token: Option<String>, query: &str) -> Result<Value, Missed> {
+    const SIGN_IN: &str = "Sign in to GitHub with `gh auth login` to see pull requests.";
+    let token = token.ok_or_else(|| person(SIGN_IN))?;
+    let client = banda_kernel::https::client().map_err(Missed::Failed)?;
+    let body = serde_json::json!({ "query": query }).to_string();
+    let asked = client
+        .post(url)
+        .bearer_auth(token)
+        .header("Content-Type", "application/json")
+        .timeout(LIMIT)
+        .body(body)
+        .send();
+    let answer = match asked.await {
+        Ok(answer) => answer,
+        Err(error) if error.is_timeout() => {
+            return Err(Missed::Failed("GitHub took too long to answer.".into()));
+        }
+        Err(error) => {
+            let cause = banda_kernel::https::cause(&error);
+            return Err(Missed::Failed(format!("GitHub could not be read: {cause}")));
+        }
+    };
+    let status = answer.status().as_u16();
+    let text = answer.text().await.unwrap_or_default();
+    let read = serde_json::from_str::<Value>(&text).ok();
+    match status {
+        200..=299 => read.ok_or_else(|| Missed::Failed("GitHub's answer was not JSON.".into())),
+        401 => Err(person(SIGN_IN)),
+        _ if text.to_ascii_lowercase().contains("rate limit") => Err(Missed::RateLimited),
+        _ => {
+            let said = read.as_ref().and_then(|read| read["message"].as_str());
+            let said = said.unwrap_or("it answered with an error").to_owned();
+            Err(Missed::Failed(format!(
+                "GitHub could not be read: {said} ({status})"
+            )))
+        }
+    }
+}
+
+/// What the `gh` at `gh` answers `query` with on `host`.
+async fn asked_gh(gh: &Path, host: &str, query: &str) -> Result<Value, Missed> {
     let missing = || {
         Missed::Person(
             "Banda reads pull requests with the GitHub CLI, gh, which is not installed.".into(),
@@ -54,7 +135,7 @@ pub async fn read(gh: &Path, pulls: &[PullRef], now: i64) -> Result<Read, Missed
     // Found on the host's PATH as it is now, as the engine finds its own.
     let mut command = banda_kernel::host::own(gh).map_err(|_| missing())?;
     command
-        .args(["api", "graphql", "--hostname", &host, "-f"])
+        .args(["api", "graphql", "--hostname", host, "-f"])
         .arg(format!("query={query}"))
         .env("GH_PROMPT_DISABLED", "1")
         .env("NO_COLOR", "1")
@@ -73,13 +154,12 @@ pub async fn read(gh: &Path, pulls: &[PullRef], now: i64) -> Result<Read, Missed
         if let Ok(answer) = serde_json::from_str::<Value>(&stdout)
             && answer.get("data").is_some_and(|data| !data.is_null())
         {
-            return Ok(parse(&answer, &names, now));
+            return Ok(answer);
         }
         return Err(missed(&stderr, &stdout));
     }
-    let answer: Value = serde_json::from_str(&stdout)
-        .map_err(|_| Missed::Failed("GitHub's answer was not JSON.".into()))?;
-    Ok(parse(&answer, &names, now))
+    serde_json::from_str(&stdout)
+        .map_err(|_| Missed::Failed("GitHub's answer was not JSON.".into()))
 }
 
 /// What `gh`'s words say went wrong.
@@ -406,5 +486,113 @@ mod tests {
             missed("dial tcp: no route", ""),
             Missed::Failed(_)
         ));
+    }
+
+    #[test]
+    fn each_host_s_api_is_where_github_serves_it() {
+        assert_eq!(api("github.com"), "https://api.github.com/graphql");
+        assert_eq!(api("acme.ghe.com"), "https://api.acme.ghe.com/graphql");
+        assert_eq!(
+            api("git.corp.example"),
+            "https://git.corp.example/api/graphql"
+        );
+    }
+
+    /// An API on a port of this machine that answers one request with
+    /// `status` and `body`, and hands back what it was asked.
+    async fn api_answering(
+        status: u16,
+        body: &'static str,
+    ) -> (String, tokio::task::JoinHandle<String>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/graphql", listener.local_addr().unwrap());
+        let heard = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut asked = Vec::new();
+            let mut chunk = [0u8; 4096];
+            // The head, then as much of the body as it says it has.
+            loop {
+                let read = stream.read(&mut chunk).await.unwrap();
+                asked.extend_from_slice(&chunk[..read]);
+                let text = String::from_utf8_lossy(&asked).into_owned();
+                if let Some((head, rest)) = text.split_once("\r\n\r\n") {
+                    let length = (head.lines())
+                        .find_map(|line| {
+                            line.to_ascii_lowercase()
+                                .strip_prefix("content-length: ")
+                                .map(str::to_owned)
+                        })
+                        .and_then(|length| length.trim().parse::<usize>().ok())
+                        .unwrap_or(0);
+                    if rest.len() >= length || read == 0 {
+                        break;
+                    }
+                }
+            }
+            let answer = format!(
+                "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            stream.write_all(answer.as_bytes()).await.unwrap();
+            String::from_utf8_lossy(&asked).into_owned()
+        });
+        (url, heard)
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn where_the_fence_holds_github_is_asked_with_gh_s_token_and_no_gh_runs() {
+        use std::os::unix::fs::PermissionsExt;
+        let folder = tempfile::tempdir().unwrap();
+        // A `gh` an Agent could have written: it leaves a mark if it runs.
+        let gh = folder.path().join("gh");
+        let ran = folder.path().join("ran");
+        let script = format!(
+            "#!/bin/sh\ntouch '{}'\necho '{{\"data\":{{}}}}'\n",
+            ran.display()
+        );
+        std::fs::write(&gh, script).unwrap();
+        std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let answer =
+            r#"{"data":{"viewer":{"login":"octo"},"r0":{"p0":{"state":"OPEN","title":"Fix"}}}}"#;
+        let (url, heard) = api_answering(200, answer).await;
+        banda_kernel::gh::keep("api.test", Some("t0ken".to_owned()));
+        let pull = PullRef {
+            host: "api.test".into(),
+            repo: "o/r".into(),
+            number: 7,
+        };
+        let read = read_where(&gh, std::slice::from_ref(&pull), 0, true, |_| url.clone()).await;
+        let read = read.unwrap();
+        assert_eq!(read.pulls[&pull].title, "Fix");
+        let asked = heard.await.unwrap();
+        assert!(
+            asked.contains("authorization: Bearer t0ken")
+                || asked.contains("Authorization: Bearer t0ken")
+        );
+        assert!(asked.contains("pullRequest(number: 7)"));
+        assert!(!ran.exists(), "no gh ran where the fence holds");
+        // Signed out: no request, and the Person's words.
+        banda_kernel::gh::keep("api.test", None);
+        let read = read_where(&gh, std::slice::from_ref(&pull), 0, true, |_| url.clone()).await;
+        assert!(matches!(read, Err(Missed::Person(_))));
+        // Where it does not hold, the Person's gh reads them, as before.
+        let read = read_where(&gh, &[pull], 0, false, |_| unreachable!()).await;
+        assert!(read.is_ok());
+        assert!(ran.exists());
+    }
+
+    #[tokio::test]
+    async fn the_api_s_refusals_are_told_apart() {
+        let (url, _) = api_answering(401, r#"{"message":"Bad credentials"}"#).await;
+        let asked = asked_api(&url, Some("t".to_owned()), "query { viewer { login } }").await;
+        assert!(matches!(asked, Err(Missed::Person(_))));
+        let (url, _) = api_answering(403, r#"{"message":"API rate limit exceeded"}"#).await;
+        let asked = asked_api(&url, Some("t".to_owned()), "query { viewer { login } }").await;
+        assert_eq!(asked, Err(Missed::RateLimited));
+        let (url, _) = api_answering(502, "{}").await;
+        let asked = asked_api(&url, Some("t".to_owned()), "query { viewer { login } }").await;
+        assert!(matches!(asked, Err(Missed::Failed(_))));
     }
 }

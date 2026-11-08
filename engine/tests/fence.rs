@@ -292,3 +292,65 @@ async fn an_ssh_agent_s_socket_in_sight_is_hidden_from_a_program_not_given_the_a
     assert_eq!(reached(true).await, "reached\nreached\n", "given the agent");
     assert_eq!(reached(false).await, "hidden\nhidden\n", "not given it");
 }
+
+/// The engine's own git, which reads what an Agent may write, starts
+/// behind the fence where it holds, with only what it is to read opened to
+/// it: whatever git runs then reaches no more than an Agent does (ADR
+/// 0083).
+#[tokio::test]
+async fn the_engine_s_own_git_starts_behind_the_fence_with_what_it_reads_opened() {
+    use banda_kernel::Fence;
+    needs_the_fence!();
+    let home = home();
+    let secret = home.path().join("secret");
+    let fetched = secret.join("p/git-fetched");
+    std::fs::create_dir_all(&fetched).unwrap();
+    std::fs::write(secret.join("token"), "t").unwrap();
+    std::fs::write(fetched.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+    let base = Spec {
+        build: own_build(),
+        hidden: vec![dunce::canonicalize(&secret).unwrap()],
+        ..Spec::default()
+    };
+    let banda = Path::new(env!("CARGO_BIN_EXE_banda"));
+    let fence = banda_environments::probe(&base, banda).await;
+    assert!(matches!(fence, Fence::Holds { .. }), "{fence:?}");
+    let environment = banda_environments::Local::fenced(base, fence).launcher(banda);
+    let books = environment.books().expect("the fence holds");
+
+    // What a filter of the repository's would run, were it named after
+    // Banda read the config.
+    let project = home.path().join("project");
+    std::fs::create_dir(&project).unwrap();
+    let script = format!("ls -A {}; cat {}/HEAD", secret.display(), fetched.display());
+    let mut sh = tokio::process::Command::new("sh");
+    sh.args(["-c", &script]).current_dir(&project);
+    let output = books(&sh, std::slice::from_ref(&fetched))
+        .unwrap()
+        .output()
+        .await
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "p\nref: refs/heads/main\n",
+        "the hidden folder, but for what it reads"
+    );
+
+    // Banda's own git, once the engine said so, goes through it, and
+    // reads the repository as it is.
+    let ran = std::process::Command::new("git")
+        .args(["init", "--quiet"])
+        .current_dir(&project)
+        .status()
+        .unwrap();
+    assert!(ran.success());
+    banda_kernel::host::fence_books(books);
+    let mut git = banda_git_cli::bookkeeping(&project, ["status", "--porcelain=v2", "--branch"])
+        .await
+        .unwrap();
+    assert_eq!(git.as_std().get_program(), banda.as_os_str());
+    let output = git.output().await.unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stdout).contains("# branch.oid (initial)"));
+}

@@ -73,8 +73,8 @@ fn starting(found: PathBuf, path: OsString) -> tokio::process::Command {
 /// them ([`guard`]).
 static GUARDED: AtomicBool = AtomicBool::new(false);
 
-/// The programs [`own`] found in no place only root changes, each said in
-/// the log once.
+/// The programs [`own`] found in no place only root changes, and so did
+/// not start, each said in the log once.
 static UNGUARDED: Mutex<BTreeSet<PathBuf>> = Mutex::new(BTreeSet::new());
 
 /// Says that the fence holds (ADR 0083): a program the engine runs for
@@ -90,52 +90,135 @@ pub fn guarded() -> bool {
     GUARDED.load(Ordering::Relaxed)
 }
 
+/// What sets a command up to start behind the fence (ADR 0083): the
+/// launcher, starting the command's program with its arguments,
+/// variables and folder, and the folders the fence hides that it reads
+/// besides opened to it.
+pub type Fencing = Box<
+    dyn Fn(&tokio::process::Command, &[PathBuf]) -> io::Result<tokio::process::Command>
+        + Send
+        + Sync,
+>;
+
+/// How the engine's own bookkeeping starts behind the fence, once the
+/// engine said [`fence_books`].
+static BOOKS: std::sync::OnceLock<Fencing> = std::sync::OnceLock::new();
+
+/// Says how a program the engine runs for its own books that reads what an
+/// Agent may write, as git reads a repository's config and attributes,
+/// starts behind the fence: whatever such a program runs then reaches no
+/// more than an Agent does. The engine says it once, as it finds that the
+/// fence holds.
+pub fn fence_books(fencing: Fencing) {
+    let _ = BOOKS.set(fencing);
+}
+
+/// Whether the engine said [`fence_books`].
+pub fn books_fenced() -> bool {
+    BOOKS.get().is_some()
+}
+
+/// `command`, behind the fence where the engine said [`fence_books`], with
+/// `reads` opened to it; else as it is.
+pub fn books(
+    command: tokio::process::Command,
+    reads: &[PathBuf],
+) -> io::Result<tokio::process::Command> {
+    match BOOKS.get() {
+        Some(fencing) => fencing(&command, reads),
+        None => Ok(command),
+    }
+}
+
 /// `program`, one the engine runs for itself on the host and no
 /// Project's, as [`command`] starts it; where the engine said [`guard`],
 /// the first of that name on the PATH that only root changes
 /// ([`only_root_changes`]), as named, so a link starts as its name says;
 /// and given the folders of the PATH only root changes alone, so what it
-/// starts by name is root's too. With none of root's, it is the first
-/// there is, given the whole PATH, and the log says so once.
+/// starts by name is root's too. With none of root's there, it does not
+/// start: one an Agent could change would run outside the fence. The log
+/// says so once for each.
 pub fn own(program: impl AsRef<Path>) -> io::Result<tokio::process::Command> {
     let path = self::path();
     match owned(program.as_ref(), &path, guarded()) {
-        Some((found, given)) => Ok(starting(found, given)),
-        None => command_on(program, path),
+        Owned::Root(found, given) => Ok(starting(found, given)),
+        Owned::Unguarded | Owned::Missing => command_on(program, path),
+        Owned::NotRoots(found) => {
+            if UNGUARDED.lock().unwrap().insert(found.clone()) {
+                tracing::warn!(
+                    program = %found.display(),
+                    "Banda does not run this program for itself while the fence holds: it is \
+                     in a place an Agent can change, and none of its name on the PATH is in a \
+                     place only root changes"
+                );
+            }
+            Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                format!(
+                    "{} is not in a place only root changes, so Banda does not run it for \
+                     itself while the fence holds.",
+                    program.as_ref().display()
+                ),
+            ))
+        }
     }
 }
 
-/// What [`own`] starts for `program` on `path`, and the PATH it gives it:
-/// none unless `guarded`, or with no `program` on `path` at all.
-pub fn owned(program: &Path, path: &OsStr, guarded: bool) -> Option<(PathBuf, OsString)> {
+/// What [`own`] finds for a program.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Owned {
+    /// Not `guarded`: found as [`command`] finds it.
+    Unguarded,
+    /// One only root changes, and the PATH of root's folders it is given.
+    Root(PathBuf, OsString),
+    /// None of root's: the first there is, which does not start.
+    NotRoots(PathBuf),
+    /// None of that name at all: it is not installed.
+    Missing,
+}
+
+/// What [`own`] starts for `program` on `path`, where `guarded`.
+pub fn owned(program: &Path, path: &OsStr, guarded: bool) -> Owned {
     if !guarded {
-        return None;
+        return Owned::Unguarded;
     }
     if let Some(found) = programs(program, path).find(|found| only_root_changes(found)) {
         let roots = std::env::split_paths(path).filter(|folder| only_root_changes(folder));
         let given = std::env::join_paths(roots).unwrap_or_default();
-        return Some((found, given));
+        return Owned::Root(found, given);
     }
-    let found = find(program, path)?;
-    if UNGUARDED.lock().unwrap().insert(found.clone()) {
-        tracing::warn!(
-            program = %found.display(),
-            "Banda runs this program for itself outside the fence, and none of its name on the \
-             PATH is in a place only root changes"
-        );
+    match find(program, path) {
+        Some(found) => Owned::NotRoots(found),
+        None => Owned::Missing,
     }
-    Some((found, path.to_owned()))
+}
+
+/// The system's own program `name`, as the PATH finds it: the first of
+/// that name that only root changes ([`only_root_changes`]); none where
+/// there is none. For a program that is always the system's, as systemd's
+/// `systemctl`, which the engine and its clients run outside the fence,
+/// whether it holds or not.
+pub fn system(name: &str) -> Option<PathBuf> {
+    system_on(name, &path())
+}
+
+/// [`system`], on `path`.
+pub fn system_on(name: &str, path: &OsStr) -> Option<PathBuf> {
+    programs(Path::new(name), path).find(|found| only_root_changes(found))
 }
 
 /// Whether only root changes `path`, as it is named and where it leads:
 /// it and each folder above it are root's, and a folder or a file is
-/// written by no one else; a link on the way is root's, in a folder only
-/// root changes, so no one else moves it.
+/// written by no one else, but a group this user is not in, as NixOS's
+/// store is by its builders' (`root:nixbld`, `1775`); a link on the way is
+/// root's, in a folder only root changes, so no one else moves it.
 #[cfg(unix)]
 pub fn only_root_changes(path: &Path) -> bool {
     use std::os::unix::fs::MetadataExt;
+    let groups = own_groups();
     let roots = |found: &std::fs::Metadata| {
-        found.uid() == 0 && (found.file_type().is_symlink() || found.mode() & 0o022 == 0)
+        let others = written_by_others(found.mode(), found.gid(), &groups);
+        found.uid() == 0 && (found.file_type().is_symlink() || !others)
     };
     let named = (path.ancestors()).all(|at| std::fs::symlink_metadata(at).is_ok_and(|f| roots(&f)));
     named
@@ -143,6 +226,42 @@ pub fn only_root_changes(path: &Path) -> bool {
         && dunce::canonicalize(path).is_ok_and(|real| {
             (real.ancestors()).all(|at| std::fs::metadata(at).is_ok_and(|f| roots(&f)))
         })
+}
+
+/// Whether a file of `mode` and the group `gid` is written by anyone but
+/// its owner and a group this user is not in (`groups`).
+#[cfg(unix)]
+fn written_by_others(mode: u32, gid: u32, groups: &BTreeSet<u32>) -> bool {
+    mode & 0o002 != 0 || (mode & 0o020 != 0 && groups.contains(&gid))
+}
+
+/// The groups this user writes as: the engine's own, and each the system's
+/// list of groups names the user in, which `sg` takes on at once.
+#[cfg(unix)]
+fn own_groups() -> BTreeSet<u32> {
+    let mut groups: BTreeSet<u32> = (rustix::process::getgroups().unwrap_or_default().iter())
+        .map(|group| group.as_raw())
+        .collect();
+    groups.insert(rustix::process::getegid().as_raw());
+    groups.insert(rustix::process::getgid().as_raw());
+    let uid = rustix::process::getuid().as_raw();
+    let passwd = std::fs::read_to_string("/etc/passwd").unwrap_or_default();
+    let mine = passwd.lines().find_map(|line| {
+        let fields: Vec<&str> = line.split(':').collect();
+        (fields.get(2)?.parse::<u32>().ok()? == uid).then(|| fields[0].to_owned())
+    });
+    if let Some(mine) = mine {
+        let group = std::fs::read_to_string("/etc/group").unwrap_or_default();
+        groups.extend(group.lines().filter_map(|line| {
+            let fields: Vec<&str> = line.split(':').collect();
+            let members = fields.get(3)?;
+            members
+                .split(',')
+                .any(|member| member.trim() == mine)
+                .then(|| fields.get(2)?.parse::<u32>().ok())?
+        }));
+    }
+    groups
 }
 
 /// No place on Windows is root's: its programs are found as [`command`]
@@ -568,6 +687,21 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn a_folder_its_group_writes_is_root_s_alone_when_this_user_is_not_in_it() {
+        let groups = BTreeSet::from([1000, 10]);
+        // NixOS's store: `root:nixbld`, 1775.
+        assert!(!written_by_others(0o41775, 30000, &groups));
+        assert!(
+            written_by_others(0o41775, 10, &groups),
+            "a group of this user's"
+        );
+        assert!(written_by_others(0o40777, 30000, &groups), "anyone's");
+        assert!(!written_by_others(0o40755, 10, &groups));
+        assert!(own_groups().contains(&rustix::process::getegid().as_raw()));
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn a_guarded_program_is_one_only_root_changes_with_none_else_on_its_path() {
         use std::os::unix::fs::PermissionsExt;
         let folder = tempfile::tempdir().unwrap();
@@ -583,17 +717,24 @@ mod tests {
         std::fs::write(&mine, "#!/bin/sh\n").unwrap();
         std::fs::set_permissions(&mine, std::fs::Permissions::from_mode(0o755)).unwrap();
         let path = std::env::join_paths([&home, &system]).unwrap();
-        assert_eq!(owned(Path::new("sh"), &path, false), None);
-        let (found, given) = owned(Path::new("sh"), &path, true).unwrap();
-        assert_eq!(found, system.join("sh"));
-        assert_eq!(given, system.as_os_str());
-        // With none of root's, the first there is.
+        assert_eq!(owned(Path::new("sh"), &path, false), Owned::Unguarded);
+        let found = owned(Path::new("sh"), &path, true);
+        assert_eq!(found, Owned::Root(system.join("sh"), system.clone().into()));
+        // With none of root's, none starts: not the first there is.
         let lone = home.join("banda-own-test");
         std::fs::write(&lone, "#!/bin/sh\n").unwrap();
         std::fs::set_permissions(&lone, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let (found, given) = owned(Path::new("banda-own-test"), &path, true).unwrap();
-        assert_eq!((found, given), (lone, path.clone()));
-        assert_eq!(owned(Path::new("banda-none-such"), &path, true), None);
+        let found = owned(Path::new("banda-own-test"), &path, true);
+        assert_eq!(found, Owned::NotRoots(lone.clone()));
+        let none = owned(Path::new("banda-none-such"), &path, true);
+        assert_eq!(none, Owned::Missing);
+        let missing = own("banda-none-such").unwrap_err();
+        assert_eq!(missing.kind(), io::ErrorKind::NotFound);
+        // Named by its path, as a test names its own `gh`, it is the same.
+        assert_eq!(owned(&lone, &path, true), Owned::NotRoots(lone));
+        // The system's own program is root's, whether guarded or not.
+        assert_eq!(system_on("sh", &path), Some(system.join("sh")));
+        assert_eq!(system_on("banda-own-test", &path), None);
     }
 
     #[cfg(unix)]

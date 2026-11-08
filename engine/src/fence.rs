@@ -58,7 +58,9 @@ fn probed(spec_fd: Option<i32>, build: Option<&str>) -> banda_fence::Probe {
             .map_err(crate::Failure::words)
             .and_then(|places| Folders::here(&places).map_err(|error| error.to_string()))
             .and_then(|folders| {
-                base(&folders, build.unwrap_or_default()).map_err(|error| error.to_string())
+                let base = base(&folders, build.unwrap_or_default());
+                base.map(|(spec, _)| spec)
+                    .map_err(|error| error.to_string())
             }),
     };
     let program = [banda_fence::LAUNCHER, "--version"].map(OsString::from);
@@ -80,13 +82,26 @@ fn probed(_spec_fd: Option<i32>, _build: Option<&str>) -> banda_fence::Probe {
 /// Harness's behind the fence where the probe over this Banda's base finds
 /// that it holds (ADR 0083, decision 1), which the log says. Where it
 /// holds, the engine's own programs are found where only root changes
-/// them ([`banda_kernel::host::guard`]). A debug build's `BANDA_FENCE=off`
-/// leaves it out, for a test that needs none; a release build ignores it.
+/// them ([`banda_kernel::host::guard`]), and its own git, which reads what
+/// an Agent writes, starts behind the fence too
+/// ([`banda_kernel::host::fence_books`]). Where the fence was set up and
+/// failed, its programs are found so all the same: what failed may be
+/// what an Agent left. A debug build's `BANDA_FENCE=off` leaves it out,
+/// for a test that needs none; a release build ignores it.
 pub async fn environment(places: &crate::places::Places) -> banda_environments::Fenced {
+    use banda_kernel::{Fence, FenceWhy};
     let environment = found(places).await;
     let fence = banda_kernel::Environment::fence(&environment);
-    if matches!(fence, banda_kernel::Fence::Holds { .. }) {
+    if let Fence::Holds { .. }
+    | Fence::Missing {
+        why: FenceWhy::SetupFailed,
+        ..
+    } = fence
+    {
         banda_kernel::host::guard();
+    }
+    if let Some(books) = environment.books() {
+        banda_kernel::host::fence_books(books);
     }
     logged(&fence);
     environment
@@ -106,11 +121,11 @@ async fn found(places: &crate::places::Places) -> banda_environments::Fenced {
             return Local::unfenced(Fence::missing(FenceWhy::SetupFailed, words));
         };
         let based = Folders::here(places).and_then(|folders| {
-            let base = base(&folders, &build)?;
+            let (base, movable) = base(&folders, &build)?;
             let agents = ssh_agents(&folders, &base);
-            Ok((base, agents))
+            Ok((base, movable, agents))
         });
-        let (base, agents) = match based {
+        let (base, movable, agents) = match based {
             Ok(based) => based,
             Err(error) => {
                 let words = format!("The fence's folders: {error}");
@@ -118,8 +133,9 @@ async fn found(places: &crate::places::Places) -> banda_environments::Fenced {
             }
         };
         let launcher = std::path::Path::new(banda_fence::LAUNCHER);
+        let movable = (movable.iter()).map(|link| link.display().to_string());
         let fence = banda_environments::probe(&base, launcher).await;
-        Local::fenced(base, fence).ssh_agents(agents)
+        Local::fenced(base, fence.with_movable(movable.collect())).ssh_agents(agents)
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -135,8 +151,18 @@ fn logged(fence: &banda_kernel::Fence) {
     use banda_kernel::Fence;
     match fence {
         Fence::Holds {
+            layers, movable, ..
+        } if !movable.is_empty() => tracing::warn!(
+            ?layers,
+            ?movable,
+            "the fence holds partly: these links in what it keeps read-only lead through one \
+             this user can move, or into no folder there is, so an Agent could lead them \
+             elsewhere; new Threads start Supervised"
+        ),
+        Fence::Holds {
             layers,
             docker_group: true,
+            ..
         } => tracing::warn!(
             ?layers,
             "the fence holds, but this user is in the docker group, which reaches past it: \
@@ -183,8 +209,9 @@ mod base {
         pub state_base: Option<PathBuf>,
         pub data_base: Option<PathBuf>,
         pub config_base: Option<PathBuf>,
-        /// The session's runtime folder, if it has one.
-        pub runtime: Option<PathBuf>,
+        /// The session's runtime folders: the one `XDG_RUNTIME_DIR` names,
+        /// and this user's in `/run/user`, where it is another.
+        pub runtime: Vec<PathBuf>,
         /// tmux's folder of this user's sockets.
         pub tmux: PathBuf,
         /// Where other programs of the session take what they are told,
@@ -201,10 +228,15 @@ mod base {
         /// Where ssh-agent makes the folder of its socket, as the start of
         /// its name: `ssh-` in `/tmp`, and in `TMPDIR`.
         pub agent_folders: Vec<PathBuf>,
+        /// gh's config folder, which holds its sign-in
+        /// ([`banda_kernel::gh::folder`]).
+        pub gh: Option<PathBuf>,
         /// Where the container and machine managers of this user take
         /// what they are told, beside the system's: Docker Desktop's,
-        /// Rancher Desktop's, Lima's and Colima's folders in the home, and
-        /// the sockets `DOCKER_HOST` and `CONTAINER_HOST` name.
+        /// Rancher Desktop's, Lima's and Colima's folders in the home, or
+        /// where `LIMA_HOME` and `COLIMA_HOME` move them; the sockets
+        /// `DOCKER_HOST` and `CONTAINER_HOST` name, and each of Docker's
+        /// contexts.
         pub managers: Vec<PathBuf>,
         /// Where a terminal takes remote control, as the start of each
         /// socket's name: kitty's, with its process's number after it.
@@ -221,10 +253,13 @@ mod base {
             let set = |name: &str| std::env::var_os(name).filter(|set| !set.is_empty());
             let tmux = PathBuf::from(set("TMUX_TMPDIR").unwrap_or_else(|| "/tmp".into()));
             // An engine started outside the session, from ssh or cron,
-            // has none named, and the session's is there all the same.
-            let runtime = (set("XDG_RUNTIME_DIR").map(PathBuf::from)).or_else(|| {
-                Some(PathBuf::from(format!("/run/user/{uid}"))).filter(|at| at.is_dir())
-            });
+            // has none named, or another, and the session's is there all
+            // the same.
+            let mut runtime: Vec<PathBuf> =
+                (set("XDG_RUNTIME_DIR").map(PathBuf::from).into_iter()).collect();
+            runtime.push(PathBuf::from(format!("/run/user/{uid}")));
+            runtime.retain(|at| at.is_dir());
+            runtime.dedup();
             let mut sessions: Vec<PathBuf> =
                 [format!("/tmp/emacs{uid}"), format!("/tmp/zellij-{uid}")]
                     .map(PathBuf::from)
@@ -246,10 +281,24 @@ mod base {
                 let under = [".docker/desktop", ".docker/run", ".rd", ".lima", ".colima"];
                 managers.extend(under.map(|folder| home.join(folder)));
             }
+            managers.extend(
+                ["LIMA_HOME", "COLIMA_HOME"]
+                    .into_iter()
+                    .filter_map(set)
+                    .map(PathBuf::from),
+            );
             for variable in ["DOCKER_HOST", "CONTAINER_HOST"] {
                 let named = set(variable).and_then(|host| unix_socket(&host.to_string_lossy()));
                 managers.extend(named);
             }
+            // Docker's contexts and kitty's config are files an Agent may
+            // write: what they name is taken as a hint, kept only where a
+            // socket is now. What would cover what the fence needs the
+            // launcher leaves out besides.
+            let docker = (set("DOCKER_CONFIG").map(PathBuf::from))
+                .or_else(|| home.as_ref().map(|home| home.join(".docker")));
+            let contexts = docker.iter().flat_map(|docker| docker_contexts(docker));
+            managers.extend(contexts.filter(|path| socket_now(path)));
             let mut agents: Vec<PathBuf> = Vec::new();
             if let Some(home) = &home {
                 agents.extend(WELL_KNOWN_AGENTS.map(|at| home.join(at)));
@@ -261,7 +310,7 @@ mod base {
             if let Some(config) = dirs::config_dir() {
                 let conf = std::fs::read_to_string(config.join("kitty/kitty.conf"));
                 let (exact, starting) = kitty_listens(&conf.unwrap_or_default(), home.as_deref());
-                managers.extend(exact);
+                managers.extend(exact.into_iter().filter(|path| socket_now(path)));
                 controls.extend(starting);
             }
             Ok(Folders {
@@ -277,11 +326,18 @@ mod base {
                 agent: set("SSH_AUTH_SOCK").map(PathBuf::from),
                 agents: agents.into_iter().filter_map(plain).collect(),
                 agent_folders: agent_folders.into_iter().filter_map(plain).collect(),
+                gh: banda_kernel::gh::folder(),
                 managers: managers.into_iter().filter_map(plain).collect(),
                 controls: controls.into_iter().filter_map(plain).collect(),
                 running: std::env::current_exe()?,
             })
         }
+    }
+
+    /// Whether `path` is a socket now, itself and not a link to one.
+    pub(super) fn socket_now(path: &Path) -> bool {
+        use std::os::unix::fs::FileTypeExt;
+        std::fs::symlink_metadata(path).is_ok_and(|found| found.file_type().is_socket())
     }
 
     /// Where the well-known SSH agents keep their sockets, in the home:
@@ -454,6 +510,22 @@ mod base {
         address.strip_prefix("unix://").map(PathBuf::from)
     }
 
+    /// The socket each of Docker's contexts in the config folder `docker`
+    /// reaches its engine on, as `docker context create` keeps it:
+    /// `contexts/meta/<hash>/meta.json`, `Endpoints.docker.Host`.
+    pub(super) fn docker_contexts(docker: &Path) -> Vec<PathBuf> {
+        /// The most contexts read.
+        const MOST: usize = 64;
+        let Ok(contexts) = std::fs::read_dir(docker.join("contexts/meta")) else {
+            return Vec::new();
+        };
+        (contexts.flatten().take(MOST))
+            .filter_map(|context| std::fs::read(context.path().join("meta.json")).ok())
+            .filter_map(|meta| serde_json::from_slice::<serde_json::Value>(&meta).ok())
+            .filter_map(|meta| unix_socket(meta["Endpoints"]["docker"]["Host"].as_str()?))
+            .collect()
+    }
+
     /// Where kitty's config says it listens for remote control, on a
     /// socket by its path: that path, and the start of the name of each
     /// socket it makes there, one for each kitty, its process's number
@@ -510,16 +582,19 @@ mod base {
     /// its Project (ADR 0083, decision 1): every Banda's state and data
     /// folders, this one's as `places` moves them too, hidden, with the
     /// running engine's own folder left to run; the session's runtime
-    /// folder and tmux's, hidden, the SSH agent's socket in them too but
+    /// folders and tmux's, hidden, the SSH agent's socket in them too but
     /// for a program given it ([`ssh_agents`]); the display's, the other
     /// sessions' and the container and machine managers' sockets, hidden
-    /// where they are; and every Banda's config, read-only.
+    /// where they are; and every Banda's config and gh's, read-only, so no
+    /// Agent signs gh in for every Project's.
     ///
     /// It makes this Banda's folders and the others' it hides that are not
-    /// there yet, `0700`, so the fence covers each where the engine will
-    /// look for it. It refuses a folder reached through a link this user
-    /// could move (see [`steady`]).
-    pub fn base(folders: &Folders, build: &str) -> io::Result<banda_fence::Spec> {
+    /// there yet, `0700`, and gh's, so the fence covers each where it will
+    /// be looked for. It refuses a folder it hides reached through a link
+    /// this user could move (see [`steady`]). What it keeps read-only that
+    /// is such a link, or leads through one, it keeps where it leads now,
+    /// and says beside the spec: an Agent could lead it elsewhere.
+    pub fn base(folders: &Folders, build: &str) -> io::Result<(banda_fence::Spec, Vec<PathBuf>)> {
         let mut hidden = Vec::new();
         for under in [&folders.state_base, &folders.data_base]
             .into_iter()
@@ -536,19 +611,29 @@ mod base {
             made(folder)?;
             *folder = kept(folder)?;
         }
-        if let Some(runtime) = &folders.runtime {
+        for runtime in &folders.runtime {
             hidden.push(kept(runtime)?);
         }
         hidden.sort();
         hidden.dedup();
 
+        let mut movable = Vec::new();
         made(&folders.config)?;
-        let mut read_only = vec![kept(&folders.config)?];
+        let mut read_only = Vec::new();
+        read_only_kept(&folders.config, &mut read_only, &mut movable)?;
         if let Some(under) = &folders.config_base {
             for folder in FOLDERS.map(|folder| under.join(folder)) {
                 if std::fs::symlink_metadata(&folder).is_ok() {
-                    read_only.push(kept(&folder)?);
+                    read_only_kept(&folder, &mut read_only, &mut movable)?;
                 }
+            }
+        }
+        let gh =
+            (folders.gh.as_ref()).filter(|gh| !hidden.iter().any(|folder| gh.starts_with(folder)));
+        if let Some(gh) = gh {
+            match made(gh) {
+                Ok(()) => read_only_kept(gh, &mut read_only, &mut movable)?,
+                Err(_) => movable.push(gh.clone()),
             }
         }
         read_only.sort();
@@ -576,8 +661,10 @@ mod base {
         .into();
         hidden_if_there.extend(folders.sessions.iter().cloned());
         hidden_if_there.extend(folders.managers.iter().cloned());
-        let read_only = linked(read_only, &hidden)?;
-        Ok(banda_fence::Spec {
+        let read_only = linked(read_only, &hidden, &mut movable)?;
+        movable.sort();
+        movable.dedup();
+        let spec = banda_fence::Spec {
             build: build.to_owned(),
             hidden,
             hidden_if_there,
@@ -589,7 +676,25 @@ mod base {
                 ..banda_fence::Holes::default()
             },
             cwd: None,
-        })
+        };
+        Ok((spec, movable))
+    }
+
+    /// Keeps `path` among `read_only` where it is ([`kept`]); where it is
+    /// a link this user could move, or one leads to it, where it leads
+    /// now, and the path among `movable`.
+    fn read_only_kept(
+        path: &Path,
+        read_only: &mut Vec<PathBuf>,
+        movable: &mut Vec<PathBuf>,
+    ) -> io::Result<()> {
+        if steady(path).is_ok() {
+            read_only.push(kept(path)?);
+            return Ok(());
+        }
+        movable.push(path.to_owned());
+        read_only.extend(dunce::canonicalize(path));
+        Ok(())
     }
 
     /// The Person's SSH agents, as a program behind the fence over `base`
@@ -655,11 +760,15 @@ mod base {
     /// a setting kept in the Person's dotfiles, linked into Banda's config,
     /// is read-only as the config is. A link to a folder brings the links in it
     /// along; one to nothing keeps the folder it would be in, where it is
-    /// there. A link that leads through one this user could move, or into
-    /// no folder there is, is refused, as the config folder that is a link
-    /// is ([`steady`]). What leads into a folder the fence hides is hidden
-    /// already.
-    fn linked(mut read_only: Vec<PathBuf>, hidden: &[PathBuf]) -> io::Result<Vec<PathBuf>> {
+    /// there. A link that leads through one this user could move
+    /// ([`steady`]), or into no folder there is, goes among `movable`: an
+    /// Agent could lead it elsewhere. What leads into a folder the fence
+    /// hides is hidden already.
+    fn linked(
+        mut read_only: Vec<PathBuf>,
+        hidden: &[PathBuf],
+        movable: &mut Vec<PathBuf>,
+    ) -> io::Result<Vec<PathBuf>> {
         /// The most entries of the config looked at for links.
         const MOST: usize = 20_000;
         let mut folders = read_only.clone();
@@ -682,21 +791,15 @@ mod base {
                 }
                 let link = entry.path();
                 let leads = led(&link)?;
-                steady(&leads)?;
-                let kept = match dunce::canonicalize(&leads) {
-                    Ok(kept) => kept,
-                    // A link to nothing yet: what is made there is in the
-                    // folder kept read-only.
-                    Err(_) => match leads.parent().map(dunce::canonicalize) {
-                        Some(Ok(parent)) => parent,
-                        _ => {
-                            return Err(io::Error::other(format!(
-                                "{} is a link into no folder there is: put the file it leads \
-                                 to in its place",
-                                link.display()
-                            )));
-                        }
-                    },
+                // A link to nothing yet: what is made there is in the
+                // folder kept read-only.
+                let kept = (dunce::canonicalize(&leads).ok())
+                    .or_else(|| dunce::canonicalize(leads.parent()?).ok());
+                if steady(&leads).is_err() || kept.is_none() {
+                    movable.push(link);
+                }
+                let Some(kept) = kept else {
+                    continue;
                 };
                 let within = |roots: &[PathBuf]| roots.iter().any(|root| kept.starts_with(root));
                 if within(&read_only) || within(hidden) {
@@ -808,12 +911,13 @@ mod tests {
             state_base: Some(state),
             data_base: Some(data),
             config_base: Some(config),
-            runtime: Some(home.join("run")),
+            runtime: vec![home.join("run")],
             tmux: home.join("tmp/tmux-1000"),
             sessions: vec![home.join("tmp/emacs1000")],
             agent: None,
             agents: Vec::new(),
             agent_folders: vec![PathBuf::from("/tmp/ssh-")],
+            gh: None,
             managers: vec![home.join(".lima")],
             controls: vec![PathBuf::from("/tmp/kitty-")],
             running,
@@ -827,9 +931,15 @@ mod tests {
         std::fs::create_dir(home.join("run")).unwrap();
         std::fs::create_dir_all(home.join(".config/banda-dev")).unwrap();
         let mut folders = folders(&home);
-        // This Banda's state, moved.
+        // This Banda's state, moved; and the session's runtime folder
+        // named elsewhere than this user's own.
         folders.state = home.join("moved/state");
-        let spec = base(&folders, "b1").unwrap();
+        std::fs::create_dir(home.join("user-run")).unwrap();
+        folders.runtime.push(home.join("user-run"));
+        // gh's config, not there yet.
+        folders.gh = Some(home.join(".config/gh"));
+        let (spec, movable) = base(&folders, "b1").unwrap();
+        assert!(movable.is_empty(), "{movable:?}");
         let under = |paths: &[&str]| -> Vec<PathBuf> {
             let mut paths: Vec<PathBuf> = paths.iter().map(|path| home.join(path)).collect();
             paths.sort();
@@ -848,16 +958,19 @@ mod tests {
                 "moved/state",
                 "run",
                 "tmp/tmux-1000",
+                "user-run",
             ])
         );
         for made in &spec.hidden {
             assert!(made.is_dir(), "{}", made.display());
         }
-        // Each Banda's config that is there, and this one's, made.
+        // Each Banda's config that is there, and this one's, made; and
+        // gh's, made, so no Agent signs gh in there for every Project's.
         assert_eq!(
             spec.read_only,
-            under(&[".config/banda-dev", ".config/banda-local"])
+            under(&[".config/banda-dev", ".config/banda-local", ".config/gh"])
         );
+        assert!(home.join(".config/gh").is_dir());
         assert_eq!(
             spec.holes.runs,
             under(&[".local/share/banda-local/engine/1.0"])
@@ -901,7 +1014,11 @@ mod tests {
         link(dotfiles.join("keys.toml"), config.join("keys.toml")).unwrap();
         let state = home.join(".local/state/banda-local");
         link(state.join("x.toml"), config.join("x.toml")).unwrap();
-        let read_only = |folders: &Folders| base(folders, "b1").unwrap().read_only;
+        let read_only = |folders: &Folders| {
+            let (spec, movable) = base(folders, "b1").unwrap();
+            assert!(movable.is_empty(), "{movable:?}");
+            spec.read_only
+        };
         assert_eq!(
             read_only(&folders),
             [
@@ -927,22 +1044,24 @@ mod tests {
             ]
         );
 
-        // Through a link this user could move: refused.
+        // Through a link this user could move: kept where it leads now,
+        // and said, as an Agent could lead it elsewhere.
         link(home.join("dotfiles"), home.join("df")).unwrap();
         link(home.join("df/banda/agents.toml"), config.join("a2.toml")).unwrap();
-        let refused = base(&folders, "b1").unwrap_err().to_string();
-        assert!(
-            refused.contains("df is a link this user can move"),
-            "{refused}"
-        );
+        let (spec, movable) = base(&folders, "b1").unwrap();
+        assert_eq!(movable, [config.join("a2.toml")]);
+        assert!(spec.read_only.contains(&dotfiles.join("agents.toml")));
         std::fs::remove_file(config.join("a2.toml")).unwrap();
 
-        // Into no folder there is: refused.
+        // Into no folder there is: said, with nothing to keep.
         link(home.join("gone/agents.toml"), config.join("a3.toml")).unwrap();
-        let refused = base(&folders, "b1").unwrap_err().to_string();
+        let (spec, movable) = base(&folders, "b1").unwrap();
+        assert_eq!(movable, [config.join("a3.toml")]);
         assert!(
-            refused.contains("a link into no folder there is"),
-            "{refused}"
+            !spec
+                .read_only
+                .iter()
+                .any(|kept| kept.starts_with(home.join("gone")))
         );
     }
 
@@ -971,7 +1090,7 @@ mod tests {
         let _listening = std::os::unix::net::UnixListener::bind(&socket).unwrap();
         let mut folders = folders(&home);
         let agents = |folders: &Folders| {
-            let base = base(folders, "b1").unwrap();
+            let (base, _) = base(folders, "b1").unwrap();
             assert!(base.holes.writes.is_empty(), "no hole of the base's");
             ssh_agents(folders, &base)
         };
@@ -1014,7 +1133,7 @@ mod tests {
             home.join("file/inside"),
         ];
         std::fs::write(home.join("file"), "").unwrap();
-        let base = base(&folders, "b1").unwrap();
+        let (base, _) = base(&folders, "b1").unwrap();
         let agents = ssh_agents(&folders, &base);
         assert_eq!(agents.hole, None);
         assert!(agents.named_in_sight);
@@ -1069,7 +1188,43 @@ mod tests {
     }
 
     #[test]
-    fn the_base_refuses_a_folder_reached_through_a_link_the_user_can_move() {
+    fn each_of_docker_s_contexts_is_found_by_the_socket_it_reaches() {
+        let t = tempfile::tempdir().unwrap();
+        let docker = t.path().join(".docker");
+        for (hash, host) in [
+            ("a1", "unix:///home/p/.colima/work/docker.sock"),
+            ("b2", "tcp://10.0.0.2:2376"),
+        ] {
+            let meta = docker.join("contexts/meta").join(hash);
+            std::fs::create_dir_all(&meta).unwrap();
+            let json =
+                format!(r#"{{"Name":"{hash}","Endpoints":{{"docker":{{"Host":"{host}"}}}}}}"#);
+            std::fs::write(meta.join("meta.json"), json).unwrap();
+        }
+        assert_eq!(
+            base::docker_contexts(&docker),
+            [PathBuf::from("/home/p/.colima/work/docker.sock")]
+        );
+        assert!(base::docker_contexts(&t.path().join("none")).is_empty());
+    }
+
+    #[test]
+    fn a_place_a_hint_names_is_kept_only_where_a_socket_is_now() {
+        let t = tempfile::tempdir().unwrap();
+        let socket = t.path().join("docker.sock");
+        let _listening = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        assert!(base::socket_now(&socket));
+        let folder = t.path().join("folder");
+        std::fs::create_dir(&folder).unwrap();
+        assert!(!base::socket_now(&folder), "a folder an Agent named");
+        let link = t.path().join("link");
+        std::os::unix::fs::symlink(&socket, &link).unwrap();
+        assert!(!base::socket_now(&link), "a link to one");
+        assert!(!base::socket_now(&t.path().join("gone")));
+    }
+
+    #[test]
+    fn a_hidden_folder_through_a_movable_link_is_refused_and_a_config_one_is_said() {
         let t = tempfile::tempdir().unwrap();
         let home = dunce::canonicalize(t.path()).unwrap();
         std::fs::create_dir(home.join("run")).unwrap();
@@ -1085,16 +1240,14 @@ mod tests {
         );
         std::fs::remove_file(home.join(".local/state")).unwrap();
 
-        // The config, itself a link.
+        // The config, itself a link: kept where it leads now, and said.
         std::fs::create_dir_all(home.join("dotfiles/banda-local")).unwrap();
         std::fs::create_dir(home.join(".config")).unwrap();
         let config = home.join(".config/banda-local");
         std::os::unix::fs::symlink(home.join("dotfiles/banda-local"), &config).unwrap();
-        let refused = base(&folders, "b1").unwrap_err().to_string();
-        assert!(
-            refused.contains(".config/banda-local is a link"),
-            "{refused}"
-        );
+        let (spec, movable) = base(&folders, "b1").unwrap();
+        assert_eq!(movable, [config]);
+        assert!(spec.read_only.contains(&home.join("dotfiles/banda-local")));
     }
 
     #[test]

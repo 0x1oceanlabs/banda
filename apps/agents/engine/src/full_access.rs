@@ -71,34 +71,30 @@ mod tests {
     use banda_kernel::{FenceLayer, FenceWhy};
 
     fn holds() -> Fence {
-        Fence::Holds {
-            layers: vec![FenceLayer::Namespaces, FenceLayer::Landlock],
-            docker_group: false,
-        }
+        Fence::holds(vec![FenceLayer::Namespaces, FenceLayer::Landlock], false)
     }
 
     fn partly() -> Fence {
-        Fence::Holds {
-            layers: vec![FenceLayer::Namespaces],
-            docker_group: false,
-        }
+        Fence::holds(vec![FenceLayer::Namespaces], false)
     }
 
     fn docker() -> Fence {
-        Fence::Holds {
-            layers: vec![FenceLayer::Namespaces, FenceLayer::Landlock],
-            docker_group: true,
-        }
+        Fence::holds(vec![FenceLayer::Namespaces, FenceLayer::Landlock], true)
     }
 
     fn missing() -> Fence {
         Fence::missing(FenceWhy::NoUserNamespaces, "no")
     }
 
+    /// Whole but for a link in Banda's config an Agent could move.
+    fn movable() -> Fence {
+        holds().with_movable(vec!["/home/p/.config/banda/agents.toml".to_owned()])
+    }
+
     #[test]
     fn a_new_thread_starts_in_full_access_only_where_the_fence_holds_whole() {
         assert_eq!(unchosen(&holds()), Mode::FullAccess);
-        for fence in [partly(), docker(), missing(), Fence::not_built()] {
+        for fence in [partly(), docker(), movable(), missing(), Fence::not_built()] {
             assert_eq!(unchosen(&fence), Mode::Supervised, "{fence:?}");
         }
     }

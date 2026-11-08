@@ -22,6 +22,14 @@ pub enum Fence {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         #[ts(optional, as = "Option<bool>")]
         docker_group: bool,
+        /// Links in what the fence keeps read-only, Banda's config and
+        /// gh's, that lead through a link this user can move, or into a
+        /// folder not there yet: the fence keeps what they lead to now
+        /// read-only, and an Agent could lead them elsewhere, so it holds
+        /// partly.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        #[ts(optional, as = "Option<Vec<String>>")]
+        movable: Vec<String>,
     },
     /// It does not hold here: why, and in words.
     Missing { why: FenceWhy, words: String },
@@ -78,12 +86,35 @@ impl Fence {
         }
     }
 
-    /// Whether it holds whole: with Landlock's scopes too, and for a user
-    /// outside the `docker` group.
+    /// The fence of an environment whose probe found that it holds with
+    /// `layers`, for a user in the `docker` group or not, and no link left
+    /// that an Agent could lead elsewhere.
+    pub fn holds(layers: Vec<FenceLayer>, docker_group: bool) -> Fence {
+        Fence::Holds {
+            layers,
+            docker_group,
+            movable: Vec::new(),
+        }
+    }
+
+    /// This fence, with `links` it keeps read-only that an Agent could
+    /// lead elsewhere ([`Fence::Holds`]'s `movable`); one that does not
+    /// hold, as it is.
+    pub fn with_movable(mut self, links: Vec<String>) -> Fence {
+        if let Fence::Holds { movable, .. } = &mut self {
+            *movable = links;
+        }
+        self
+    }
+
+    /// Whether it holds whole: with Landlock's scopes too, for a user
+    /// outside the `docker` group, and with no link it keeps read-only
+    /// that an Agent could lead elsewhere.
     pub fn holds_whole(&self) -> bool {
         matches!(
             self,
-            Fence::Holds { layers, docker_group: false } if layers.contains(&FenceLayer::Landlock)
+            Fence::Holds { layers, docker_group: false, movable }
+                if layers.contains(&FenceLayer::Landlock) && movable.is_empty()
         )
     }
 }

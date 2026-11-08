@@ -78,12 +78,30 @@ pub fn hash(bytes: &[u8]) -> String {
 
 /// The text of the file at `path`, its first `upto` bytes at most.
 pub fn read(path: &Path, upto: u64) -> std::io::Result<Text> {
-    let folder = || std::io::Error::new(std::io::ErrorKind::IsADirectory, "a folder");
     // Windows opens no folder as a file: it says access is denied.
-    let mut file = std::fs::File::open(path).map_err(|error| match path.is_dir() {
+    let file = std::fs::File::open(path).map_err(|error| match path.is_dir() {
         true => folder(),
         false => error,
     })?;
+    read_from(file, path, upto)
+}
+
+fn folder() -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::IsADirectory, "a folder")
+}
+
+/// The text of the file at `path` that an Agent's call reads, opened from
+/// its Project's `folder` through no link ([`crate::beneath`]).
+#[cfg(target_os = "linux")]
+pub fn read_beneath(folder: &Path, path: &Path, upto: u64) -> std::io::Result<Text> {
+    use rustix::fs::{Mode, OFlags};
+    let beneath = crate::beneath::Beneath::open(folder)?;
+    let opened = beneath.file(path, OFlags::RDONLY, Mode::empty())?;
+    read_from(std::fs::File::from(opened), path, upto)
+}
+
+/// [`read`], of the file at `path` opened as `file`.
+fn read_from(mut file: std::fs::File, path: &Path, upto: u64) -> std::io::Result<Text> {
     let meta = file.metadata()?;
     if meta.is_dir() {
         return Err(folder());
@@ -182,5 +200,31 @@ mod tests {
         assert_eq!(stat(&dir.path().join("gone")), None);
         let folder = stat(dir.path()).unwrap();
         assert_eq!((folder.kind, folder.mime), (Kind::Folder, None));
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod beneath_tests {
+    use super::*;
+
+    #[test]
+    fn an_agent_s_read_through_a_folder_put_in_another_s_place_reads_nothing_outside() {
+        let t = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(t.path()).unwrap();
+        let (project, other) = (root.join("project"), root.join("other"));
+        std::fs::create_dir_all(project.join("a")).unwrap();
+        std::fs::create_dir(&other).unwrap();
+        std::fs::write(project.join("a/notes.md"), "mine").unwrap();
+        std::fs::write(other.join("notes.md"), "secret").unwrap();
+        let notes = project.join("a/notes.md");
+        let text = read_beneath(&project, &notes, UPTO).unwrap();
+        assert_eq!(text.text.as_deref(), Some("mine"));
+        // The guard read `a/notes.md` as inside; then `a` becomes a link
+        // to the folder outside.
+        std::fs::rename(project.join("a"), project.join("was")).unwrap();
+        std::os::unix::fs::symlink(&other, project.join("a")).unwrap();
+        assert!(read_beneath(&project, &notes, UPTO).is_err());
+        // The Person's read follows it, as their own reads do.
+        assert_eq!(read(&notes, UPTO).unwrap().text.as_deref(), Some("secret"));
     }
 }

@@ -27,7 +27,7 @@ const MAKES: [&str; 5] = [
 
 /// Where the engine makes a process on the host for no Project's
 /// program: the file, how many places in it make one, and why.
-const ON_THE_HOST: [(&str, usize, &str); 12] = [
+const ON_THE_HOST: [(&str, usize, &str); 11] = [
     (
         "kernel/src/host.rs",
         1,
@@ -45,19 +45,21 @@ const ON_THE_HOST: [(&str, usize, &str); 12] = [
         "platform/git-cli/src/lib.rs",
         1,
         "Banda's own git bookkeeping, which runs no program a repository names (ADR 0083, \
-         decision 5); an act the Person asks for is a Program for the Project's environment",
+         decision 5), behind the fence where it holds; an act the Person asks for is a Program \
+         for the Project's environment",
     ),
     (
-        "kernel/src/foreign.rs",
+        "kernel/src/gh.rs",
         1,
-        "asks `gh` which account it is signed in to, offline, to tell whether a folder looks \
-         foreign (ADR 0084, decision 13)",
+        "reads the Person's GitHub token with their `gh` on macOS and Windows, where Banda has no \
+         fence yet; on Linux the engine reads it where gh keeps it, and runs no `gh` (ADR 0083)",
     ),
     (
         "apps/pulls/engine/src/github.rs",
         1,
-        "reads pull requests from GitHub with the Person's `gh`, whose sign-in stays on the host \
-         (ADR 0084, decision 8)",
+        "reads pull requests from GitHub with the Person's `gh`, whose sign-in stays on the host, \
+         where the fence does not hold; where it holds, it asks GitHub's API itself (ADR 0084, \
+         decision 8; ADR 0083)",
     ),
     (
         "apps/terminal/engine/src/servers.rs",
@@ -69,14 +71,8 @@ const ON_THE_HOST: [(&str, usize, &str); 12] = [
         "platform/harnesses/engine/src/carried.rs",
         1,
         "asks a Node on the host its version, for the adapters Banda carries, which run on the \
-         host (ADR 0084, decision 5)",
-    ),
-    (
-        "platform/harnesses/engine/src/github.rs",
-        1,
-        "reads the Person's GitHub token with their `gh`, for the Harnesses' programs of a \
-         Project the Person said they trust, whose `gh` cannot reach the keyring behind the fence \
-         (ADR 0083)",
+         host (ADR 0084, decision 5); where the fence holds, only a Node only root changes is \
+         asked, and the adapters run behind the fence (ADR 0083)",
     ),
     (
         "platform/harnesses/engine/src/limits/claude.rs",

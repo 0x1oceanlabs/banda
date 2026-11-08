@@ -9,8 +9,10 @@ publish.workspace = true
 
 [dependencies]
 banda-kernel = { path = "../../kernel" }
+base64.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 banda-environments = { path = "../environments" }

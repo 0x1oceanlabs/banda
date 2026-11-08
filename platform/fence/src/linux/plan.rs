@@ -47,7 +47,8 @@ pub(crate) fn plan(spec: &Spec) -> Result<Plan, String> {
     }
     let hidden = outermost(&spec.hidden);
     let covered = |path: &Path| hidden.iter().any(|root| path.starts_with(root));
-    let hidden_if_there: Vec<PathBuf> = outermost(&spec.hidden_if_there)
+    let maybe = clear(spec);
+    let hidden_if_there: Vec<PathBuf> = outermost(&maybe)
         .into_iter()
         .filter(|path| !covered(path))
         .collect();
@@ -69,8 +70,9 @@ pub(crate) fn plan(spec: &Spec) -> Result<Plan, String> {
         (&spec.holes.reads, May::Read),
         (&spec.holes.runs, May::Run),
     ];
-    let hides =
-        |path: &Path| (spec.hidden.iter().chain(&spec.hidden_if_there)).any(|root| root == path);
+    // What is hidden only maybe neither is a hole, nor holds one, nor is
+    // in one ([`clear`]).
+    let hides = |path: &Path| spec.hidden.iter().any(|root| root == path);
     let mut holes: Vec<(PathBuf, May)> = Vec::new();
     for (paths, may) in asked {
         for path in paths {
@@ -80,19 +82,12 @@ pub(crate) fn plan(spec: &Spec) -> Result<Plan, String> {
                     path.display()
                 ));
             }
-            if let Some(maybe) = (spec.hidden_if_there.iter()).find(|root| path.starts_with(root)) {
-                return Err(format!(
-                    "the hole {} is in {}, which the fence hides only when it is there",
-                    path.display(),
-                    maybe.display()
-                ));
-            }
             if !covered(path) {
                 continue;
             }
             // Every folder the spec hides, even one inside another.
-            let uncovers = (spec.hidden.iter().chain(&spec.hidden_if_there))
-                .find(|root| root.starts_with(path) && *root != path);
+            let uncovers =
+                (spec.hidden.iter()).find(|root| root.starts_with(path) && *root != path);
             if let Some(uncovered) = uncovers {
                 return Err(format!(
                     "the hole {} would show {}, which the fence hides",
@@ -124,6 +119,34 @@ pub(crate) fn plan(spec: &Spec) -> Result<Plan, String> {
         owned,
         holes,
     })
+}
+
+/// What `spec` hides when it is there, but each that would cover what the
+/// spec asks for besides, which it leaves out: one that is a hole, holds
+/// one or is in one; one that is or holds a folder it hides always, keeps
+/// read-only or gives copies in; and one that is or holds the folder the
+/// program starts in. Each is a socket's place the engine found where an
+/// Agent may write, as Docker's contexts name them: it hides nothing that
+/// is there to hide by covering what the fence needs, and fails no fence.
+fn clear(spec: &Spec) -> Vec<PathBuf> {
+    let holes = (spec.holes.writes.iter())
+        .chain(&spec.holes.reads)
+        .chain(&spec.holes.runs);
+    let holes: Vec<&PathBuf> = holes.collect();
+    let needed: Vec<&PathBuf> = (spec.hidden.iter())
+        .chain(&spec.read_only)
+        .chain(&spec.owned)
+        .chain(&spec.cwd)
+        .collect();
+    (spec.hidden_if_there.iter())
+        .filter(|path| {
+            let holes = holes
+                .iter()
+                .any(|hole| hole.starts_with(path) || path.starts_with(hole));
+            !holes && !needed.iter().any(|needed| needed.starts_with(path))
+        })
+        .cloned()
+        .collect()
 }
 
 /// `path` as the launcher takes it: absolute, with no `.` or `..` in it,
@@ -359,6 +382,37 @@ mod tests {
     }
 
     #[test]
+    fn a_place_hidden_only_maybe_that_would_cover_what_the_spec_needs_is_left_out() {
+        let spec = Spec {
+            hidden: paths(&["/run/user/1000", "/h/.local/state/banda"]),
+            hidden_if_there: paths(&[
+                "/h/.docker/run",
+                // As a context of Docker's an Agent wrote may name them.
+                "/run/user/1000/ssh/agent.sock",
+                "/run/user/1000",
+                "/run",
+                "/h/.local",
+                "/h/.config",
+                "/h/Banda/p",
+                "/h/Banda/p/x.sock",
+            ]),
+            read_only: paths(&["/h/.config/banda"]),
+            holes: Holes {
+                writes: paths(&["/run/user/1000/ssh/agent.sock"]),
+                ..Holes::default()
+            },
+            cwd: Some(PathBuf::from("/h/Banda/p")),
+            ..Spec::default()
+        };
+        let plan = plan(&spec).unwrap();
+        assert_eq!(
+            plan.hidden_if_there,
+            paths(&["/h/.docker/run", "/h/Banda/p/x.sock"])
+        );
+        assert_eq!(plan.holes.len(), 1);
+    }
+
+    #[test]
     fn holes_are_neither_one_inside_another_nor_where_the_fence_hides_only_maybe() {
         let nested = Spec {
             hidden: paths(&["/d/banda"]),
@@ -371,6 +425,8 @@ mod tests {
         };
         assert!(plan_error(&nested).contains("one inside the other"));
 
+        // What is hidden only maybe and holds a hole is left out, so the
+        // hole is in sight.
         let maybe = Spec {
             hidden_if_there: paths(&["/tmp/x"]),
             holes: Holes {
@@ -379,7 +435,8 @@ mod tests {
             },
             ..Spec::default()
         };
-        assert!(plan_error(&maybe).contains("only when it is there"));
+        let plan = plan(&maybe).unwrap();
+        assert!(plan.hidden_if_there.is_empty() && plan.holes.is_empty());
 
         let inner = Spec {
             hidden: paths(&["/d/banda", "/d/banda/inner"]),
