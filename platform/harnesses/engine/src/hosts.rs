@@ -6,9 +6,14 @@
 //! - A host starts when it is first asked for, one start at a time, in
 //!   the environment of the Project it is asked for (ADR 0084).
 //! - A host that keeps dying starts again after a growing pause.
-//! - A host with nothing to do for `idle` is let go.
+//! - A host with nothing to do for `idle` is let go, unless what its
+//!   process started still serves: a server or a trial an Agent started,
+//!   listening, which would stop with it ([`Host::serving`], ADR 0083).
 //! - A host is let go when its account changes, and every host of a
 //!   Project when the Person's trust in it changes ([`Hosts::let_go`]).
+//! - A host that started without the GitHub token its Project gets, as
+//!   `gh` signed in later, goes the next time it is asked for with nothing
+//!   to do and nothing serving, so its next start has it.
 //!   One that was starting then is let go the next time it is asked for,
 //!   so letting go never waits on a start (ADR 0040, decision 4).
 //! - A host's process runs in its own process group, or its own Job Object
@@ -94,6 +99,11 @@ pub trait Host: Send + Sync + Sized + 'static {
     fn alive(&self) -> bool;
     /// Since when it has had nothing to do, or `None` while it has.
     fn idle_since(&self) -> Option<Instant>;
+    /// Whether what its process started still serves, listening: a host
+    /// that serves is not idle, so what it started goes on.
+    fn serving(&self) -> bool {
+        false
+    }
 }
 
 pub struct Hosts<H> {
@@ -186,7 +196,10 @@ impl<H: Host> Hosts<H> {
         let stale = entry.stale.swap(false, Ordering::SeqCst);
         if let Some(host) = &slot.host {
             let current = slot.harness.as_ref() == Some(harness) && !stale;
-            if host.alive() && current {
+            let late = (slot.harness.as_ref())
+                .is_some_and(|had| had.credentials.lacks_what(&harness.credentials));
+            let quiet = host.idle_since().is_some() && !host.serving();
+            if host.alive() && current && !(late && quiet) {
                 return Ok(host.clone());
             }
             if host.alive() {
@@ -277,11 +290,10 @@ impl<H: Host> Hosts<H> {
             let Ok(mut slot) = entry.slot.try_lock() else {
                 continue;
             };
-            let idle = slot
-                .host
-                .as_ref()
-                .and_then(|host| host.idle_since())
-                .is_some_and(|since| since.elapsed() >= self.idle);
+            let idle = slot.host.as_ref().is_some_and(|host| {
+                (host.idle_since()).is_some_and(|since| since.elapsed() >= self.idle)
+                    && !host.serving()
+            });
             if idle {
                 slot.host = None;
                 slot.deaths = 0;
@@ -418,6 +430,53 @@ mod tests {
         let before = hosts.get(project, here(), &trusted).await.unwrap().0;
         let after = hosts.get(project, here(), &not).await.unwrap().0;
         assert!(after > before);
+    }
+
+    /// A host that counts its starts, held while `HELD` says so.
+    struct Quiet(usize);
+
+    static QUIET: AtomicUsize = AtomicUsize::new(0);
+    static HELD: AtomicBool = AtomicBool::new(true);
+
+    impl Host for Quiet {
+        async fn start(_: Arc<dyn Environment>, _: &Harness) -> Result<Arc<Self>, Failed> {
+            Ok(Arc::new(Quiet(QUIET.fetch_add(1, Ordering::SeqCst) + 1)))
+        }
+
+        fn alive(&self) -> bool {
+            true
+        }
+
+        fn idle_since(&self) -> Option<Instant> {
+            (!HELD.load(Ordering::SeqCst)).then(Instant::now)
+        }
+    }
+
+    #[tokio::test]
+    async fn a_host_that_started_without_its_token_goes_once_it_is_quiet() {
+        let hosts = Hosts::<Quiet>::new(Duration::from_secs(60));
+        let known = crate::Harnesses::known();
+        let without = known.find(&known.views()[0].id).unwrap();
+        let mut with = without.clone();
+        with.credentials
+            .set
+            .insert("GH_TOKEN".to_owned(), "t".to_owned());
+        let project = ProjectId::new();
+        let first = hosts.get(project, here(), &without).await.unwrap().0;
+        // Busy: it stays, as the token is no reason to stop a turn.
+        let busy = hosts.get(project, here(), &with).await.unwrap().0;
+        assert_eq!(busy, first);
+        HELD.store(false, Ordering::SeqCst);
+        let quiet = hosts.get(project, here(), &with).await.unwrap().0;
+        assert!(quiet > first, "it starts again, with the token");
+        // With it, a token read again is no reason to go.
+        let mut other = with.clone();
+        other
+            .credentials
+            .set
+            .insert("GH_TOKEN".to_owned(), "u".to_owned());
+        assert_eq!(hosts.get(project, here(), &other).await.unwrap().0, quiet);
+        assert_eq!(hosts.get(project, here(), &without).await.unwrap().0, quiet);
     }
 
     #[test]

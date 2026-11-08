@@ -51,8 +51,8 @@ pub async fn read(gh: &Path, pulls: &[PullRef], now: i64) -> Result<Read, Missed
             "Banda reads pull requests with the GitHub CLI, gh, which is not installed.".into(),
         )
     };
-    // Found on the host's PATH as it is now, as the host finds a program.
-    let mut command = banda_kernel::host::command(gh).map_err(|_| missing())?;
+    // Found on the host's PATH as it is now, as the engine finds its own.
+    let mut command = banda_kernel::host::own(gh).map_err(|_| missing())?;
     command
         .args(["api", "graphql", "--hostname", &host, "-f"])
         .arg(format!("query={query}"))

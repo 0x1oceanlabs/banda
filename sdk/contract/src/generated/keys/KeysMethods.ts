@@ -4,7 +4,10 @@ import type { Nothing } from "../Nothing";
 import type { Bind } from "./Bind";
 import type { Key } from "./Key";
 import type { Listed } from "./Listed";
+import type { RenameSetting } from "./RenameSetting";
+import type { ResetSetting } from "./ResetSetting";
 import type { SetMod } from "./SetMod";
+import type { SetSetting } from "./SetSetting";
 
 export type KeysMethods = { 
 /**
@@ -42,4 +45,25 @@ reset: CallMethod<Key, string>,
  * one or two of Alt, Ctrl and Super, as `Ctrl+Alt` where the
  * desktop holds Alt. It moves the Person's lines with it.
  */
-set_mod: CallMethod<SetMod, string>, };
+set_mod: CallMethod<SetMod, string>, 
+/**
+ * Sets a key of one of Banda's settings files, as `banda settings
+ * set` does (and does through this under your pass: behind the
+ * fence the files are read-only). It refuses what only your
+ * Person changes: which program a Harness runs and with what, how
+ * freely a new Thread's Agent acts, what Agents may do in the
+ * browser, what Banda sends, and keys, which `keys_bind` binds.
+ * Tell your Person what changed.
+ */
+settings_set: CallMethod<SetSetting, string>, 
+/**
+ * Takes a key of a settings file out, as `banda settings reset`
+ * does, with `settings_set`'s refusals.
+ */
+settings_reset: CallMethod<ResetSetting, string>, 
+/**
+ * Names a key of a settings file otherwise, in its table, as
+ * `banda settings rename` does, with `settings_set`'s refusals for
+ * the key and for what it becomes.
+ */
+settings_rename: CallMethod<RenameSetting, string>, };

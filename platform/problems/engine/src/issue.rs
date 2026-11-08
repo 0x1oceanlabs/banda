@@ -80,8 +80,8 @@ const GH_WAIT: Duration = Duration::from_secs(30);
 /// What `gh` prints as it files it: the issue's address, or the
 /// comment's; none when it could not.
 async fn filed(gh: &Path, issue: &Issue) -> Option<String> {
-    // Found on the host's PATH as it is now, as the host finds a program.
-    let mut command = banda_kernel::host::command(gh).ok()?;
+    // Found on the host's PATH as it is now, as the engine finds its own.
+    let mut command = banda_kernel::host::own(gh).ok()?;
     match issue.comment_on {
         Some(number) => command.args(["issue", "comment", &number.to_string()]),
         None => command.args(["issue", "create", "--title", &issue.title]),

@@ -179,6 +179,13 @@ pub trait Environment: Send + Sync + 'static {
     /// of a session of its own whose controlling terminal it is. It
     /// outlives its holder: it hears the hangup once the terminal closes.
     fn pty(&self, program: &Program, size: PtySize) -> io::Result<(Started, Pty)>;
+
+    /// Whether the fence around a Harness's programs holds here, as it
+    /// was found when the environment was made. One that says nothing has
+    /// none.
+    fn fence(&self) -> crate::Fence {
+        crate::Fence::not_built()
+    }
 }
 
 /// The environment of a kernel the engine gave none: it starts nothing. A

@@ -112,8 +112,8 @@ fn fenced(home: &Path, spec: &Spec, script: &str) -> Output {
     let sealed = spec.seal().unwrap();
     let mut command = banda(home);
     let args = ["-c".to_owned(), script.to_owned()];
-    command.args(banda_fence::argv(&sealed, "sh", &args));
-    banda_fence::attach(&mut command, sealed);
+    command.args(banda_fence::argv(&sealed, None, "sh", &args));
+    banda_fence::attach(&mut command, sealed, None);
     command.output().unwrap()
 }
 
@@ -191,4 +191,51 @@ fn no_spec_runs_nothing() {
         .unwrap();
     assert_eq!(said.status.code(), Some(125));
     assert!(said.stdout.is_empty(), "{said:?}");
+}
+
+/// The engine's environment starts a Harness's program behind the fence,
+/// with its holes, and a git act the Person asked for outside it, where
+/// the probe over the base finds that the fence holds (ADR 0083).
+#[tokio::test]
+async fn a_harness_s_program_starts_behind_the_fence_and_a_person_s_act_does_not() {
+    use banda_kernel::{Environment, Fence, Holes, Input, Program};
+    needs_the_fence!();
+    let home = home();
+    let secret = home.path().join("secret");
+    std::fs::create_dir(&secret).unwrap();
+    std::fs::write(secret.join("a"), "a").unwrap();
+    let base = Spec {
+        build: own_build(),
+        hidden: vec![dunce::canonicalize(&secret).unwrap()],
+        ..Spec::default()
+    };
+    let banda = Path::new(env!("CARGO_BIN_EXE_banda"));
+    let fence = banda_environments::probe(&base, banda).await;
+    assert!(matches!(fence, Fence::Holds { .. }), "{fence:?}");
+    let environment = banda_environments::Local::fenced(base, fence).launcher(banda);
+
+    let listed = format!("ls -A {}", secret.display());
+    let holes = Holes {
+        writes: vec![secret.join("sessions")],
+        ..Holes::default()
+    };
+    let harness_s = Program::harness("sh", vec!["-c".to_owned(), listed.clone()], holes);
+    let child = environment.spawn(&harness_s, Input::Null).unwrap();
+    let output = child.wait_with_output().await.unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "sessions\n",
+        "the hidden folder, but for its hole"
+    );
+
+    let act = Program::act("sh", vec!["-c".to_owned(), listed]);
+    let child = environment.spawn(&act, Input::Null).unwrap();
+    let output = child.wait_with_output().await.unwrap();
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "a\nsessions\n");
+
+    // A program that is not there: the launcher says so as it starts.
+    let missing = Program::harness("/no/such/harness", Vec::new(), Holes::default());
+    let refused = environment.spawn(&missing, Input::Null).unwrap_err();
+    assert!(refused.to_string().contains("could not start"), "{refused}");
 }

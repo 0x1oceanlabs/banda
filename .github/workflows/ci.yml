@@ -193,11 +193,13 @@ jobs:
           shared-key: linux-fence
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
-      - name: Unprivileged user namespaces, and bwrap for the test of one inside the fence
+      - name: Unprivileged user namespaces, bwrap for the test of one inside the fence, and ssh with a drop-in of root's
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends bubblewrap
+          sudo apt-get install -y --no-install-recommends bubblewrap openssh-client
+          sudo mkdir -p /etc/ssh/ssh_config.d
+          echo "ServerAliveInterval 30" | sudo tee /etc/ssh/ssh_config.d/50-banda-fence-test.conf
       - run: cargo test -p banda-fence
       - run: cargo test -p banda --test fence
 

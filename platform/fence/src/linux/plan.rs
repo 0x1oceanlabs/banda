@@ -23,6 +23,9 @@ pub(crate) struct Plan {
     pub hidden_if_there: Vec<PathBuf>,
     /// What it keeps read-only, none inside what it covers.
     pub read_only: Vec<PathBuf>,
+    /// The folders whose files it gives as copies of the user's own, none
+    /// inside what it covers.
+    pub owned: Vec<PathBuf>,
     /// The holes inside what it covers, each before any inside it.
     pub holes: Vec<(PathBuf, May)>,
 }
@@ -32,7 +35,9 @@ pub(crate) struct Plan {
 pub(crate) fn plan(spec: &Spec) -> Result<Plan, String> {
     let named = (spec.hidden.iter())
         .chain(&spec.hidden_if_there)
+        .chain(&spec.hidden_starting)
         .chain(&spec.read_only)
+        .chain(&spec.owned)
         .chain(&spec.holes.writes)
         .chain(&spec.holes.reads)
         .chain(&spec.holes.runs)
@@ -54,6 +59,10 @@ pub(crate) fn plan(spec: &Spec) -> Result<Plan, String> {
         ));
     }
     read_only.sort();
+    let owned: Vec<PathBuf> = outermost(&spec.owned)
+        .into_iter()
+        .filter(|path| !covered(path))
+        .collect();
 
     let asked = [
         (&spec.holes.writes, May::Write),
@@ -112,6 +121,7 @@ pub(crate) fn plan(spec: &Spec) -> Result<Plan, String> {
         hidden,
         hidden_if_there,
         read_only,
+        owned,
         holes,
     })
 }
@@ -276,6 +286,28 @@ mod tests {
             };
             assert!(plan_error(&spec).contains("not an absolute path"), "{odd}");
         }
+    }
+
+    #[test]
+    fn a_folder_given_as_the_users_own_copies_is_one_outside_what_is_hidden() {
+        let spec = Spec {
+            hidden: paths(&["/h/s/banda"]),
+            owned: paths(&[
+                "/etc/ssh/ssh_config.d",
+                "/h/s/banda/ssh",
+                "/etc/ssh/ssh_config.d/x",
+            ]),
+            ..Spec::default()
+        };
+        assert_eq!(
+            plan(&spec).unwrap().owned,
+            paths(&["/etc/ssh/ssh_config.d"])
+        );
+        let odd = Spec {
+            owned: paths(&["etc/ssh"]),
+            ..Spec::default()
+        };
+        assert!(plan_error(&odd).contains("not an absolute path"));
     }
 
     fn plan_error(spec: &Spec) -> String {

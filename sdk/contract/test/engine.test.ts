@@ -150,7 +150,12 @@ test("a window calls, follows and sees refusals by their code", async () => {
     project.id
   )
   await ended
-  expect(kinds).toEqual([
+  // The Harness says its slash commands as its session opens: in the
+  // turn's first offer, or in another as the turn runs, as it is quick.
+  const once = kinds.filter(
+    (kind, at) => kind !== "thread.offered" || kinds.indexOf(kind) === at
+  )
+  expect(once).toEqual([
     "thread.started",
     "message.posted",
     "turn.started",

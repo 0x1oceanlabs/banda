@@ -35,6 +35,7 @@ mod search;
 mod sheet;
 pub mod thumb;
 mod trashcan;
+mod walled;
 mod write;
 
 use banda_kernel::{
@@ -393,6 +394,42 @@ async fn blocking<T: Send + 'static>(
         .map_err(|_| Refusal::internal())
 }
 
+/// The folders an Agent's call reaches: its Project's, resolved; none
+/// for the Person's.
+fn walls(call: &Call) -> Option<Vec<PathBuf>> {
+    call.wall().map(|_| {
+        let folder = call.project().folder();
+        vec![dunce::canonicalize(&folder).unwrap_or(folder)]
+    })
+}
+
+/// `work` for `call`, off the engine's threads: an Agent's on a thread
+/// the kernel keeps to its Project's folder ([`walled`]).
+async fn reaching<T: Send + 'static>(
+    call: &Call,
+    work: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, Refusal> {
+    match walls(call) {
+        None => blocking(work).await,
+        Some(folders) => walled::run(folders, work).await.map_err(|error| {
+            tracing::warn!(%error, "an Agent's call could not be kept to its Project");
+            Refusal::internal()
+        }),
+    }
+}
+
+/// Starts `work` for `call`, which goes on as it is heard: as
+/// [`reaching`] runs it.
+fn started(call: &Call, work: impl FnOnce() + Send + 'static) -> Result<(), Refusal> {
+    match walls(call) {
+        None => {
+            tokio::task::spawn_blocking(work);
+            Ok(())
+        }
+        Some(folders) => walled::spawn(folders, work).map_err(|_| Refusal::internal()),
+    }
+}
+
 impl Files {
     /// Refuses `path`, as `asked`, when it is in `.git` or in Banda's
     /// settings; and, where it would go, when it holds the settings.
@@ -416,7 +453,7 @@ impl Files {
     async fn list(&self, call: Call, ask: ListAsk) -> Result<Listing, Refusal> {
         let reach = Reach::of(&call, &ask.dir)?;
         let dir = reach.path().to_path_buf();
-        let read = blocking({
+        let read = reaching(&call, {
             let dir = dir.clone();
             move || list::read(&dir)
         });
@@ -434,14 +471,17 @@ impl Files {
         let paths = (ask.paths.iter())
             .map(|path| Reach::of(&call, path).map(Reach::into_path))
             .collect::<Result<Vec<PathBuf>, Refusal>>()?;
-        blocking(move || paths.iter().map(|path| read::stat(path)).collect()).await
+        reaching(&call, move || {
+            paths.iter().map(|path| read::stat(path)).collect()
+        })
+        .await
     }
 
     async fn read(&self, call: Call, ask: ReadAsk) -> Result<Text, Refusal> {
         let path = Reach::of(&call, &ask.path)?.into_path();
         let upto = ask.upto.unwrap_or(read::UPTO);
         let config = self.config.clone();
-        let text = blocking(move || {
+        let text = reaching(&call, move || {
             let mut text = read::read(&path, upto)?;
             text.locked = write::locked(&path, config.as_deref());
             Ok(text)
@@ -452,7 +492,7 @@ impl Files {
     async fn write(&self, call: Call, ask: WriteAsk) -> Result<Written, Refusal> {
         let path = Reach::of(&call, &ask.path)?.into_path();
         let config = self.config.clone();
-        let saved = blocking({
+        let saved = reaching(&call, {
             let path = path.clone();
             move || write::write(&path, &ask.text, ask.base.as_deref(), config.as_deref())
         });
@@ -496,7 +536,7 @@ impl Files {
         let raised = recent::raised(&opened, &dir, now());
         let walks = self.walks.clone();
         let query = ask.query;
-        blocking(move || {
+        reaching(&call, move || {
             let walked = walks.of(&dir);
             Found {
                 dir: shown(&dir),
@@ -535,7 +575,7 @@ impl Files {
 
     async fn archive(&self, call: Call, ask: ArchiveAsk) -> Result<Archive, Refusal> {
         let path = Reach::of(&call, &ask.path)?.into_path();
-        match blocking(move || archive::read(&path)).await? {
+        match reaching(&call, move || archive::read(&path)).await? {
             Ok(archive) => Ok(archive),
             Err(archive::Unread::Io(error)) => Err(amiss(&ask.path, &error)),
             Err(archive::Unread::Bad(why)) => Err(Refusal::invalid(format!(
@@ -548,7 +588,7 @@ impl Files {
     async fn sheet(&self, call: Call, ask: SheetAsk) -> Result<Sheet, Refusal> {
         let path = Reach::of(&call, &ask.path)?.into_path();
         let named = ask.sheet.clone();
-        let read = blocking(move || sheet::read(&path, named.as_deref())).await?;
+        let read = reaching(&call, move || sheet::read(&path, named.as_deref())).await?;
         read.map_err(|why| {
             Refusal::invalid(format!("{} cannot be read as a workbook: {why}.", ask.path))
         })
@@ -611,7 +651,7 @@ impl Files {
         let named = shown(&path);
         self.fence(&path, &named, false)?;
         let folder = ask.kind == Making::Folder;
-        let made = blocking({
+        let made = reaching(&call, {
             let path = path.clone();
             move || ops::make(&path, folder)
         });
@@ -634,7 +674,7 @@ impl Files {
         let was = (from.file_name())
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let renamed = blocking({
+        let renamed = reaching(&call, {
             let (from, to) = (from.clone(), to.clone());
             move || {
                 if !ops::there(&from) {
@@ -691,7 +731,7 @@ impl Files {
             }
             sources.push((asked.clone(), from));
         }
-        let planned = blocking({
+        let planned = reaching(&call, {
             let (dir, asked_dir) = (dir.clone(), ask.dir.clone());
             let (clash, answers) = (ask.clash, ask.answers.clone());
             move || -> Result<_, Refusal> {
@@ -726,7 +766,7 @@ impl Files {
             (jobs.lock().unwrap()).insert(job.clone(), stop.clone());
         }
         let job = ask.job;
-        tokio::task::spawn_blocking(move || {
+        started(&call, move || {
             let mut tell = |piece: Job| {
                 if let Ok(piece) = serde_json::to_value(piece) {
                     let _ = say.blocking_send(piece);
@@ -742,7 +782,7 @@ impl Files {
                 jobs.lock().unwrap().remove(&job);
             }
             tell(Job::Done(done));
-        });
+        })?;
         Ok(heard)
     }
 
@@ -838,11 +878,11 @@ impl Files {
             .map_err(|why| Refusal::invalid(format!("The pattern does not read: {why}")))?;
         let limit = ask.limit.unwrap_or(search::LIMIT).clamp(1, search::MOST) as usize;
         let (say, heard) = tokio::sync::mpsc::channel(16);
-        tokio::task::spawn_blocking(move || {
+        started(&call, move || {
             search::search(&dir, &matcher, limit, &mut |piece: Searched| {
                 serde_json::to_value(piece).is_ok_and(|piece| say.blocking_send(piece).is_ok())
             });
-        });
+        })?;
         Ok(heard)
     }
 }
@@ -888,11 +928,11 @@ impl Files {
             return Err(Refusal::invalid(format!("{} is not a folder.", ask.path)));
         }
         let (say, heard) = tokio::sync::mpsc::channel(4);
-        tokio::task::spawn_blocking(move || {
+        started(&call, move || {
             info::count(&dir, &mut |counted| {
                 serde_json::to_value(counted).is_ok_and(|piece| say.blocking_send(piece).is_ok())
             });
-        });
+        })?;
         Ok(heard)
     }
 }

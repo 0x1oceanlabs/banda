@@ -350,16 +350,45 @@ The kernel holds only what every module needs, and it names no module.
   in a PID namespace whose first process mounts its own `/proc`, reaps and
   passes signals on, each signal reaching the program once. It writes
   nothing on stdout, exits as the program did (a signal `n` as `128 + n`),
-  takes the fenced tree along when it is killed, and stops with `125`
-  before running anything when a step fails. `banda fence --probe` does
+  takes the fenced tree along when its starter goes, however it went
+  (it watches the starter's process, not the thread that started it), and
+  stops with `125` before running anything when a step fails. With
+  `--status-fd` it says how the start went on a pipe of its own, which
+  closes as the program runs, so a program that is not there is an error
+  of the spawn, not an exit. `banda fence --probe` does
   all of it for real over Banda's own folders (every Banda's state and data
   hidden, every Banda's config read-only, the session's runtime folder
   hidden; a folder reached through a link the user could move refused),
   checks from inside what it covered, and prints one JSON line: `holds`
   with its layers, or `missing` and why (`no_user_namespaces`, `refused`
   by the system, `setup_failed`). The crate makes no process of its own:
-  `platform/environments` stays the one place that does. `local` does not
-  start Harnesses behind it yet.
+  `platform/environments` stays the one place that does.
+  `banda serve` builds the base and probes it once
+  (`engine/src/fence.rs`), and its `local` environment is
+  `Local::fenced`: a Harness's programs start through `banda fence` with
+  the base and their holes, the Person's terminals and acts as they are;
+  where the probe found no fence, every program starts as `local` starts
+  it. The base hides the session's runtime folder, and the other
+  sessions' and the container and machine managers' sockets where they
+  are, and leaves the SSH agent's socket in reach where `SSH_AUTH_SOCK`
+  names one of the user's in a hidden folder, reached through no link the
+  user could move. A program behind the fence gets no `BANDA_STATE`,
+  `BANDA_DATA`, `BANDA_ROOT` or `BANDA_CACHE`; a Harness's gets `GH_TOKEN`
+  only in a Project the Person said they trust (`trust_said`), and no
+  GitHub token in any other (`Credentials`, which make no other process).
+  The kernel holds what the probe found (`Fence`): `welcome` carries it,
+  `banda status` prints it, and the agents module starts a new Thread in
+  Full access only where it holds whole, with Landlock and no `docker`
+  group (`full_access.rs`); elsewhere Supervised. A Thread's Full access
+  is marked as chosen where the fence held or not, and a turn of one the
+  fence does not keep now runs Supervised and says why in
+  `thread.configured` (`supervised`). A host whose Harness's process has
+  something an Agent ran listening under it is not let go for idling. A
+  debug build's `BANDA_FENCE=off` leaves the fence out, for the
+  end-to-end tests. An Agent's `banda settings` and `banda keys bind` go
+  through the engine (`keys.settings_set`, `settings_reset`,
+  `settings_rename`), which refuses under a pass what only the Person
+  changes (`banda_settings::only_the_person`).
 - **Passes** (ADR 0083, decision 2). A module asks its `ModuleProject` for
   a new pass of an Agent (`pass(agent)`), 32 random bytes in hex; the
   agents module asks as a session opens. The kernel keeps passes in the

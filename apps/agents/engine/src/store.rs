@@ -1,6 +1,7 @@
 //! The agents module's tables. Only this module writes them, and only
 //! through these functions.
 
+use crate::full_access::Chosen;
 use crate::model::{
     Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE, LatestTurn, ListedThread,
     Offer, Opener, PlanStep, QuestionState, Settings, Snooze, ThreadId, ThreadSummary, ToolContent,
@@ -178,6 +179,12 @@ ALTER TABLE agents_threads ADD COLUMN was_title TEXT;
 -- The Harness entry, the account, each turn ran on, kept as it starts
 -- (ADR 0078, decision 2).
 ALTER TABLE agents_turns ADD COLUMN harness TEXT;
+"#,
+    r#"
+-- How a Thread's Full access was chosen (ADR 0083): 'fenced' where the
+-- fence held whole, 'unfenced' by its Person where it did not. NULL for
+-- any other mode, and for Full access from before the fence.
+ALTER TABLE agents_threads ADD COLUMN full_access TEXT;
 "#,
 ];
 
@@ -565,6 +572,42 @@ pub fn forked_from(sql: &Connection, thread: ThreadId) -> Result<Option<ThreadId
         )
         .optional()?
         .flatten())
+}
+
+/// How the Thread's Full access was chosen; none for any other mode, or
+/// for Full access from before the fence.
+pub fn full_access(sql: &Connection, thread: ThreadId) -> Result<Option<Chosen>, Error> {
+    let word: Option<String> = sql
+        .query_row(
+            "SELECT full_access FROM agents_threads WHERE id = ?1",
+            params![thread],
+            |row| row.get(0),
+        )
+        .optional()?
+        .flatten();
+    // A word this build does not know is no mark.
+    Ok(word.and_then(|word| serde_json::from_value(serde_json::Value::String(word)).ok()))
+}
+
+pub fn set_full_access(
+    sql: &Connection,
+    thread: ThreadId,
+    chosen: Option<Chosen>,
+) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_threads SET full_access = ?2 WHERE id = ?1",
+        params![thread, chosen.map(word)],
+    )?;
+    Ok(())
+}
+
+/// What `turn` runs with, changed as it starts.
+pub fn set_turn_settings(sql: &Connection, turn: TurnId, settings: &Settings) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_turns SET settings = ?2 WHERE id = ?1",
+        params![turn, json(settings)?],
+    )?;
+    Ok(())
 }
 
 pub fn set_forked_from(sql: &Connection, thread: ThreadId, from: ThreadId) -> Result<(), Error> {

@@ -727,6 +727,7 @@ fn the_trash_is_tried_in_a_throwaway_home() {
         "trash_sends_to_the_trash_and_puts_back_as_undone",
         "trash_deletes_for_good_only_there_and_an_agent_sees_its_own",
         "trash_takes_what_a_replace_replaced_and_undone_it_comes_back",
+        "trash_takes_what_an_agents_replace_replaced_though_its_move_is_kept_to_its_project",
     ] {
         assert!(said.contains(&format!("test {test} ... ok")), "{said}");
     }
@@ -886,5 +887,37 @@ async fn trash_takes_what_a_replace_replaced_and_undone_it_comes_back() {
     );
     world.undo(&done.undo).await;
     assert_eq!(world.text("in/a.txt"), "new");
+    assert_eq!(world.text("out/a.txt"), "old");
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+#[tokio::test]
+#[ignore = "run by the_trash_is_tried_in_a_throwaway_home"]
+async fn trash_takes_what_an_agents_replace_replaced_though_its_move_is_kept_to_its_project() {
+    if !throwaway() {
+        return;
+    }
+    let world = World::new().await;
+    world.write("in/a.txt", "new");
+    world.write("out/a.txt", "old");
+    let params = json!({ "paths": ["in/a.txt"], "dir": "out", "clash": "replace" });
+    let mut stream = world.stream_as_agent("files.move", params).await.unwrap();
+    let mut last = None;
+    while let Some(piece) = tokio::time::timeout(Duration::from_secs(10), stream.recv())
+        .await
+        .expect("the move said nothing within 10 s")
+    {
+        last = Some(piece);
+    }
+    let Job::Done(done) = serde_json::from_value(last.expect("no piece")).unwrap() else {
+        panic!("not done");
+    };
+    assert_eq!(done.failed, None);
+    assert_eq!(world.text("out/a.txt"), "new");
+    assert!(
+        matches!(done.undo.last(), Some(Step::Restore { .. })),
+        "{done:?}"
+    );
+    world.undo(&done.undo).await;
     assert_eq!(world.text("out/a.txt"), "old");
 }

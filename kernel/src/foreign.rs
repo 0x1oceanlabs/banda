@@ -88,7 +88,7 @@ fn home() -> Option<PathBuf> {
 /// config says, with no network: none without `gh`, signed out, or slow.
 async fn github_login() -> Option<String> {
     // A `gh` that is not installed is not found, and nothing runs.
-    let mut gh = crate::host::command("gh").ok()?;
+    let mut gh = crate::host::own("gh").ok()?;
     gh.args(["config", "get", "user", "--host", "github.com"])
         .current_dir("/")
         .env("GH_PROMPT_DISABLED", "1")

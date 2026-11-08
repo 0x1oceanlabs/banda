@@ -64,11 +64,32 @@ for arg in "$@"; do
 done
 
 # The trial's window runs while Chromium holds its profile's lock, a link
-# to <host>-<pid>.
+# to <host>-<pid>. A window started behind Banda's fence, or outside it
+# from behind, runs in another PID namespace, whose number names none
+# here: its port, on the loopback both share, says it runs.
 running() {
-  local lock
+  local lock port
   lock=$(readlink "$1/state/window/SingletonLock" 2>/dev/null) || return 1
+  port=$(head -n 1 "$1/state/window/DevToolsActivePort" 2>/dev/null) || port=
+  if [[ $port =~ ^[0-9]+$ ]] && (: <"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
+    return 0
+  fi
   kill -0 "${lock##*-}" 2>/dev/null
+}
+# Whether a window can show on this screen: behind Banda's fence an Agent
+# has no display, and runs its trial --hidden (ADR 0083).
+shown() {
+  [[ $(uname -s) == Linux ]] || return 0
+  local wayland=${WAYLAND_DISPLAY:-} x=${DISPLAY:-}
+  if [[ -n $wayland ]]; then
+    [[ $wayland == /* ]] || wayland=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/$wayland
+    [[ -S $wayland ]] && return 0
+  fi
+  [[ -n $x ]] || return 1
+  # A display on another host goes over the network.
+  [[ $x == :* ]] || return 0
+  x=${x#:}
+  [[ -S /tmp/.X11-unix/X${x%%.*} ]]
 }
 # Closes it as the Person does, so main stops the engine: a signal would
 # leave a crash behind. Then what is left of it goes with its unit.
@@ -109,6 +130,9 @@ if ((list)); then
   exit 0
 fi
 ((hidden)) && [[ $(uname -s) != Linux ]] && fail "--hidden is for Linux"
+if ! ((hidden || stop || forget)) && ! shown; then
+  fail "no screen to show the window on here, as behind Banda's fence: run with --hidden, or ask the Person to run it in a terminal Pane"
+fi
 
 # The tree: a path, a slug, or this one.
 if [[ -z $tree ]]; then

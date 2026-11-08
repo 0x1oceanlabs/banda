@@ -140,13 +140,13 @@ test("Agents show who is signed in to each Harness, and write harnesses.toml", a
   // What a new Thread starts with is agents.toml's, set from the
   // composer's own bar, and ↶ gives it back to the Harness.
   const agents = join(dir, "config/agents.toml")
-  await fake.getByRole("button", { name: "Mode: Full access" }).click()
-  await page.getByRole("menuitemradio", { name: /Supervised/ }).click()
+  await fake.getByRole("button", { name: "Mode: Supervised" }).click()
+  await page.getByRole("menuitemradio", { name: /Full access/ }).click()
   await expect
     .poll(() => textOf(agents))
-    .toContain('[start.fake]\nmode = "supervised"')
+    .toContain('[start.fake]\nmode = "full_access"')
   await expect(
-    fake.getByRole("button", { name: "Mode: Supervised" })
+    fake.getByRole("button", { name: "Mode: Full access" })
   ).toBeVisible()
   await fake.getByRole("button", { name: "Fake AI's own" }).click()
   await expect.poll(() => textOf(agents)).not.toContain("[start.fake]")

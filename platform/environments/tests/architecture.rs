@@ -16,17 +16,18 @@ use std::path::{Path, PathBuf};
 /// What makes a process, as Rust's source says it: std's, tokio's,
 /// `pty-process`'s and `async-process`'s commands, ACP's agent that
 /// starts its own, and the kernel's commands for a program on the host,
-/// `host::command` and `host::command_on`.
-const MAKES: [&str; 4] = [
+/// `host::command`, `host::command_on` and `host::own`.
+const MAKES: [&str; 5] = [
     "Command::new(",
     "Command::from(",
     "AcpAgent",
     "host::command",
+    "host::own(",
 ];
 
 /// Where the engine makes a process on the host for no Project's
 /// program: the file, how many places in it make one, and why.
-const ON_THE_HOST: [(&str, usize, &str); 11] = [
+const ON_THE_HOST: [(&str, usize, &str); 12] = [
     (
         "kernel/src/host.rs",
         1,
@@ -69,6 +70,13 @@ const ON_THE_HOST: [(&str, usize, &str); 11] = [
         1,
         "asks a Node on the host its version, for the adapters Banda carries, which run on the \
          host (ADR 0084, decision 5)",
+    ),
+    (
+        "platform/harnesses/engine/src/github.rs",
+        1,
+        "reads the Person's GitHub token with their `gh`, for the Harnesses' programs of a \
+         Project the Person said they trust, whose `gh` cannot reach the keyring behind the fence \
+         (ADR 0083)",
     ),
     (
         "platform/harnesses/engine/src/limits/claude.rs",

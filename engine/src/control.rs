@@ -11,12 +11,12 @@
 //! again. Where the engine is the window's child (`service.rs`), or its
 //! unit does not start, it serves the engine itself.
 
-use crate::client::Client;
+use crate::client::{Client, Pass};
 use crate::places::{Places, Running};
 use crate::run::{self, Before};
 use crate::service::{self, Systemd, User, Way, Why};
 use crate::{Failure, build_id, parent, serve};
-use banda_kernel::{Code, CommandId, ENGINE_VARIABLE, Refusal};
+use banda_kernel::{Code, CommandId, ENGINE_VARIABLE, PROTOCOL, Refusal};
 use serde_json::{Value, json};
 use std::fs::{File, TryLockError};
 use std::io::{BufRead, IsTerminal, Write};
@@ -171,20 +171,42 @@ async fn follow(places: &Places, (running, client): (Running, Client)) -> Result
     }
 }
 
-/// `banda status`: whether the engine runs, since when, and its build, as
-/// one JSON line. It starts nothing. An engine of another build, which
-/// this program cannot speak with, runs too.
+/// `banda status`: whether the engine runs, since when, its build, and
+/// whether the fence around its Harnesses holds as it said in its
+/// welcome, as one JSON line. It starts nothing. An engine of another
+/// build, which this program cannot speak with, runs too.
+///
+/// Under an Agent's pass it says of the engine that gave the pass, what
+/// that engine says: behind the fence the file that names where an
+/// engine runs, and since when, is hidden.
 pub async fn status(places: &Places) -> Result<(), Failure> {
-    let line = match answering(places).await {
-        Ok((running, _)) => said(&running),
-        Err(Failure::Refused(refusal)) if refusal.code == Code::Protocol => {
-            said(&places.running()?)
+    let line = if Pass::from_env()?.is_some() {
+        match tokio::time::timeout(ANSWERS_WITHIN, Client::connect(places)).await {
+            Ok(Ok(client)) => fenced(json!({ "running": true, "protocol": PROTOCOL }), &client)?,
+            Ok(Err(refused @ Failure::Refused(_))) => return Err(refused),
+            _ => json!({ "running": false }),
         }
-        Err(refused @ Failure::Refused(_)) => return Err(refused),
-        Err(_) => json!({ "running": false }),
+    } else {
+        match answering(places).await {
+            Ok((running, client)) => fenced(said(&running), &client)?,
+            Err(Failure::Refused(refusal)) if refusal.code == Code::Protocol => {
+                said(&places.running()?)
+            }
+            Err(refused @ Failure::Refused(_)) => return Err(refused),
+            Err(_) => json!({ "running": false }),
+        }
     };
     println!("{line}");
     Ok(())
+}
+
+/// `line`, with the fence as the engine said it in its welcome, never as
+/// a file says.
+fn fenced(mut line: Value, client: &Client) -> Result<Value, Failure> {
+    if let Some(fence) = client.fence() {
+        line["fence"] = serde_json::to_value(fence).map_err(Failure::broken)?;
+    }
+    Ok(line)
 }
 
 /// What `banda status` says of a running engine.
@@ -229,7 +251,7 @@ pub async fn stop(places: &Places, force: bool) -> Result<(), Failure> {
     drop(client);
     match (&running.unit, running.pid) {
         (Some(unit), _) => stop_unit(&systemd, unit)?,
-        (None, Some(pid)) => terminate(pid)?,
+        (None, Some(pid)) => terminate(&running, pid)?,
         (None, None) => {
             return Err(Failure::Broken(
                 "This engine does not say its process: stop it where it was started.".into(),
@@ -247,15 +269,16 @@ async fn stop_unanswering(places: &Places, systemd: &dyn Systemd) -> Result<(), 
     if systemd.runs(&unit) {
         return stop_unit(systemd, &unit);
     }
-    let pid = (places.running().ok())
+    let running = places.running().ok();
+    let pid = (running.as_ref())
         .and_then(|running| running.pid)
         .filter(|_| locked(places));
-    match pid {
-        Some(pid) => {
-            terminate(pid)?;
+    match (running, pid) {
+        (Some(running), Some(pid)) => {
+            terminate(&running, pid)?;
             gone(systemd, None, Some(pid)).await
         }
-        None => {
+        _ => {
             eprintln!("banda: Banda's engine is not running.");
             Ok(())
         }
@@ -374,10 +397,22 @@ fn alive(_: u32) -> bool {
     false
 }
 
-/// SIGTERM to the engine's process: it stops as it does on Quit.
+/// SIGTERM to the engine's process: it stops as it does on Quit. Only
+/// where its number names it: in the PID namespace it says it ran in, so
+/// a `banda` in another, as one behind the fence, never signals whatever
+/// has that number there.
 #[cfg(unix)]
-fn terminate(pid: u32) -> Result<(), Failure> {
+fn terminate(running: &Running, pid: u32) -> Result<(), Failure> {
     use rustix::process::{Pid, Signal, kill_process};
+    if running
+        .pid_ns
+        .is_some_and(|ns| Some(ns) != crate::places::pid_ns())
+    {
+        return Err(Failure::Broken(
+            "Banda's engine runs where this banda cannot stop it: stop it where it was started."
+                .into(),
+        ));
+    }
     let pid = i32::try_from(pid)
         .ok()
         .and_then(Pid::from_raw)
@@ -387,7 +422,7 @@ fn terminate(pid: u32) -> Result<(), Failure> {
 }
 
 #[cfg(not(unix))]
-fn terminate(_: u32) -> Result<(), Failure> {
+fn terminate(_: &Running, _: u32) -> Result<(), Failure> {
     Err(Failure::broken(
         "banda stop is not on Windows yet (ADR 0090, step 10): close the window, or stop \
          `banda serve` where it runs.",
@@ -415,6 +450,7 @@ mod tests {
             since: Some(1_794_000_000_000),
             pid: Some(42),
             unit: Some("banda-engine".into()),
+            ..Running::default()
         };
         let line = said(&running);
         assert_eq!(

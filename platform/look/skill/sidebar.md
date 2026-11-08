@@ -50,6 +50,9 @@ Banda's own:
 
 A preset of the Person's own is `~/.config/banda/sidebars/<name>.toml`,
 with the keys of `sidebar.toml` except `preset`. The view menu lists it.
+Behind Banda's fence the settings folder is read-only to you: write the
+preset in your Project, and give your Person the line that copies it
+there.
 
 Names from before ADR 0069 still read, for one stable release: the
 preset `spaces`, `by = "space"`, the table `[spaces]`, the part

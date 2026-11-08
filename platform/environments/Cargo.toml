@@ -8,8 +8,16 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+banda-fence = { path = "../fence" }
 banda-kernel = { path = "../../kernel" }
+serde_json.workspace = true
 tokio.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# A hole in the fence, made whole.
+dunce.workspace = true
+# Whether this user is in the `docker` group, as the name service says.
+nix.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 # A terminal is a PTY on Unix; Windows' ConPTY comes later (ADR 0090, step 7).

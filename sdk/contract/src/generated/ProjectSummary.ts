@@ -39,4 +39,11 @@ sign: Sign,
  * names for them; while it is not trusted, only the Person's own (ADR
  * 0083, decision 5). Only the Person changes it (`projects.trust`).
  */
-trusted: boolean, };
+trusted: boolean, 
+/**
+ * The Person said they trust it: in the trust step as they added it,
+ * or with `projects.trust` later. One trusted only as nothing marked it
+ * foreign was not said so. Its Harnesses' programs get the Person's
+ * GitHub token only then, as `GH_TOKEN` (ADR 0083).
+ */
+trust_said?: boolean, };

@@ -76,6 +76,11 @@ pub(crate) struct Manifest {
     /// manifest that does not say is trusted, as every one from before is.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub untrusted: bool,
+    /// The Person said they trust it, as they added it or later
+    /// ([`ProjectSummary::trust_said`]); one trusted only as nothing marked
+    /// it foreign was not said so.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub trust_said: bool,
 }
 
 impl Manifest {
@@ -95,6 +100,7 @@ impl Manifest {
             sign: None,
             picture: None,
             untrusted: false,
+            trust_said: false,
         }
     }
 
@@ -111,6 +117,7 @@ impl Manifest {
             missing,
             sign: Sign::of(&self.name, self.sign.as_ref(), self.picture.as_ref()),
             trusted: !self.untrusted,
+            trust_said: !self.untrusted && self.trust_said,
         }
     }
 
@@ -373,6 +380,13 @@ impl Project {
     /// Whether the Person trusts it ([`ProjectSummary::trusted`]).
     pub fn trusted(&self) -> bool {
         !self.manifest.lock().unwrap().untrusted
+    }
+
+    /// Whether the Person said they trust it
+    /// ([`ProjectSummary::trust_said`]).
+    pub fn trust_said(&self) -> bool {
+        let manifest = self.manifest.lock().unwrap();
+        !manifest.untrusted && manifest.trust_said
     }
 
     pub fn summary(&self) -> ProjectSummary {
@@ -685,6 +699,13 @@ impl ModuleProject {
     /// changes.
     pub fn trusted(&self) -> bool {
         self.project.trusted()
+    }
+
+    /// Whether the Person said they trust the Project
+    /// ([`ProjectSummary::trust_said`]): only then do its Harnesses' programs
+    /// get the Person's GitHub token (ADR 0083).
+    pub fn trust_said(&self) -> bool {
+        self.project.trust_said()
     }
 
     /// Where the Project's programs run (ADR 0084): a module starts each

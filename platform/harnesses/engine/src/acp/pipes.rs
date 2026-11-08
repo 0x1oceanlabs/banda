@@ -54,7 +54,13 @@ pub(super) struct Pipes {
     pub environment: Arc<dyn Environment>,
     pub program: Program,
     pub hears: Hears,
+    /// Where the program's number goes as it starts: the leader of its
+    /// process group.
+    pub leader: Leader,
 }
+
+/// The number of a Harness's program once it started: 0 until it has.
+pub(super) type Leader = Arc<std::sync::atomic::AtomicU32>;
 
 impl ConnectTo<Client> for Pipes {
     async fn connect_to(
@@ -65,8 +71,12 @@ impl ConnectTo<Client> for Pipes {
             environment,
             program,
             hears,
+            leader,
         } = self;
         let started = (environment.spawn(&program, Input::Piped)).map_err(internal_error)?;
+        if let Some(number) = started.id() {
+            leader.store(number, std::sync::atomic::Ordering::Relaxed);
+        }
         let mut started = Killed(started);
         let (Some(stdin), Some(stdout), Some(stderr)) = (
             started.stdin.take(),
@@ -348,6 +358,7 @@ mod tests {
                     heard.lock().unwrap().push(line.to_owned());
                 }
             }),
+            leader: Leader::default(),
         }
     }
 

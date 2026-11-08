@@ -39,6 +39,9 @@ const PASSED_ON: [i32; 6] = [
     libc::SIGUSR2,
 ];
 
+/// How often the launcher looks whether its starter is still there.
+const WATCHED_EVERY: std::time::Duration = std::time::Duration::from_secs(1);
+
 /// The host's devices a program finds in the fence's `/dev`: those that
 /// give or take bytes, and the terminal it would have.
 const DEVICES: [&str; 6] = ["null", "zero", "full", "random", "urandom", "tty"];
@@ -179,6 +182,9 @@ pub(crate) struct Fenced {
     covered: Covered,
     /// Each place kept read-only.
     read_only: Vec<PathBuf>,
+    /// The process that started the launcher, by its pidfd: the launcher
+    /// ends once it does ([`start`]).
+    pub starter: OwnedFd,
 }
 
 /// Sets the fence up around this process: everything but the PID
@@ -191,15 +197,20 @@ pub(crate) fn setup(spec: &Spec) -> Result<Fenced, Failed> {
             "Banda runs as root here, and the fence holds only around a user: start Banda as one",
         ));
     }
-    let starter = rustix::process::getppid();
-    rustix::process::set_parent_process_death_signal(Some(Signal::KILL))
-        .map_err(|error| Failed::step("tying the launcher to its starter", error))?;
-    if rustix::process::getppid() != starter {
-        return Err(Failed::setup("the launcher's starter is gone"));
+    // The launcher ends with the process that started it, not with the
+    // one thread of it that did, as a death signal would: an engine's
+    // thread may end while the engine and its programs go on.
+    let gone_already = || Failed::setup("the launcher's starter is gone");
+    let starter = rustix::process::getppid().ok_or_else(gone_already)?;
+    let starter_fd = rustix::process::pidfd_open(starter, rustix::process::PidfdFlags::empty())
+        .map_err(|error| Failed::step("watching the launcher's starter", error))?;
+    if rustix::process::getppid() != Some(starter) || gone(&starter_fd) {
+        return Err(gone_already());
     }
     sys::no_terminal().map_err(|error| Failed::step("letting go of the terminal", error))?;
     rustix::thread::clear_ambient_capability_set()
         .map_err(|error| Failed::step("dropping inherited capabilities", error))?;
+    let spec = &starting(spec);
     let plan = plan::plan(spec).map_err(Failed::setup)?;
     // As the host has it: what is there to cover, and the folders above.
     let (_, roots) = open_all(&plan)?;
@@ -220,6 +231,9 @@ pub(crate) fn setup(spec: &Spec) -> Result<Fenced, Failed> {
     // take a mount.
     let (opened, _) = open_all(&plan)?;
     covered.extend(mount(uid, gid, opened)?);
+    let (copied, kept) = copies(uid, gid, &plan.owned)?;
+    covered.extend(copied);
+    read_only.extend(kept);
     rustix::thread::set_no_new_privs(true)
         .map_err(|error| Failed::step("setting no_new_privs", error))?;
     let mut layers = vec![Layer::Namespaces];
@@ -231,7 +245,30 @@ pub(crate) fn setup(spec: &Spec) -> Result<Fenced, Failed> {
         layers,
         covered,
         read_only,
+        starter: starter_fd,
     })
+}
+
+/// `spec`, with what it hides by the start of a name ([`Spec`]'s
+/// `hidden_starting`) found as the host has it now, among what it hides
+/// when it is there. A folder this user cannot read has none.
+fn starting(spec: &Spec) -> Spec {
+    let mut spec = spec.clone();
+    for named in std::mem::take(&mut spec.hidden_starting) {
+        let (Some(folder), Some(start)) = (named.parent(), named.file_name()) else {
+            continue;
+        };
+        let Ok(entries) = std::fs::read_dir(folder) else {
+            continue;
+        };
+        let start = start.as_bytes();
+        for entry in entries.flatten() {
+            if entry.file_name().as_bytes().starts_with(start) {
+                spec.hidden_if_there.push(folder.join(entry.file_name()));
+            }
+        }
+    }
+    spec
 }
 
 /// Opens each place `plan` mounts on or from, checked as [`open`] checks
@@ -568,6 +605,56 @@ fn mount(uid: u32, gid: u32, opened: Opened) -> Result<Covered, Failed> {
     Ok(covered)
 }
 
+/// Covers each folder of `owned` that is there with one of the fence's
+/// own, read-only, that holds a copy of each file in it, links followed,
+/// as this user's, `0644`: a program that takes such a file only from
+/// root or from its own user, as ssh does, takes it inside, where root's
+/// are no one's. Says what it covered, each with the mount it was on, and
+/// what it keeps read-only.
+fn copies(uid: u32, gid: u32, owned: &[PathBuf]) -> Result<(Covered, Vec<PathBuf>), Failed> {
+    let (mut covered, mut read_only) = (Vec::new(), Vec::new());
+    for folder in owned {
+        let Some(place) = open(folder, Links::RootsOnly)? else {
+            continue;
+        };
+        if kind(&place)? != FileType::Directory {
+            continue;
+        }
+        let before = mount_of(&place)
+            .map_err(|error| Failed::step(format!("reading {}", folder.display()), error))?;
+        let attrs = LIMITED | MountAttrFlags::MOUNT_ATTR_NOEXEC;
+        let tree = tmpfs("0755", uid, gid, attrs)
+            .map_err(|error| Failed::mount(format!("making {}", folder.display()), error))?;
+        let entries = std::fs::read_dir(folder)
+            .map_err(|error| Failed::step(format!("reading {}", folder.display()), error))?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let file = std::fs::metadata(&path).is_ok_and(|found| found.is_file());
+            let Some(text) = file.then(|| std::fs::read(&path).ok()).flatten() else {
+                continue;
+            };
+            copy(&tree, &entry.file_name(), &text)
+                .map_err(|error| Failed::step(format!("copying {}", path.display()), error))?;
+        }
+        sys::mount_set(&tree, attrs | MountAttrFlags::MOUNT_ATTR_RDONLY)
+            .map_err(|error| Failed::mount(format!("keeping {}", folder.display()), error))?;
+        put(&tree, &place)
+            .map_err(|error| Failed::mount(format!("covering {}", folder.display()), error))?;
+        covered.push((folder.clone(), before));
+        read_only.push(folder.clone());
+    }
+    Ok((covered, read_only))
+}
+
+/// Writes `text` as the file `name` in the folder `tree`, this user's,
+/// `0644`.
+fn copy(tree: &OwnedFd, name: &OsStr, text: &[u8]) -> io::Result<()> {
+    let flags = OFlags::CREATE | OFlags::EXCL | OFlags::WRONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+    let made = rustix::fs::openat(tree, name, flags, Mode::from_raw_mode(0o644))?;
+    rustix::fs::fchmod(&made, Mode::from_raw_mode(0o644))?;
+    std::fs::File::from(made).write_all(text)
+}
+
 /// A copy of the mounts at `place`, and of all under it, not yet anywhere.
 fn clone(place: &OwnedFd) -> rustix::io::Result<OwnedFd> {
     let flags = OpenTreeFlags::OPEN_TREE_CLONE
@@ -674,9 +761,13 @@ fn scoped() -> bool {
 /// Starts `exec` in a PID namespace of its own, under an init that passes
 /// signals on and reaps. This process stays outside, as the one its
 /// starter holds, until the program ends; then it exits as the program
-/// did, a signal `n` as `128 + n`. It returns only when it could not.
-/// `report` hears a failure inside, instead of stderr.
-pub(crate) fn start(exec: Exec, report: Option<&OwnedFd>) -> Failed {
+/// did, a signal `n` as `128 + n`, or once `starter` ended. It returns only
+/// when it could not.
+///
+/// `report` hears a failure inside, instead of stderr. Each process lets
+/// go of it once it started the next, and the program as it starts, so
+/// its reader hears it end as the program runs.
+pub(crate) fn start(exec: Exec, starter: OwnedFd, report: &mut Option<OwnedFd>) -> Failed {
     let mut handled = PASSED_ON.to_vec();
     handled.push(libc::SIGCHLD);
     let signals = Signals::of(&handled);
@@ -695,11 +786,15 @@ pub(crate) fn start(exec: Exec, report: Option<&OwnedFd>) -> Failed {
     };
     match sys::fork() {
         Err(error) => Failed::step("starting the init", error),
-        Ok(Forked::Child) => init(exec, launcher, report, &signals),
+        Ok(Forked::Child) => {
+            drop(starter);
+            init(exec, launcher, report, &signals)
+        }
         Ok(Forked::Parent(init)) => {
             drop(launcher);
+            drop(report.take());
             quiet();
-            supervise(init, &signals, false)
+            supervise(init, &signals, Some(&starter))
         }
     }
 }
@@ -707,7 +802,7 @@ pub(crate) fn start(exec: Exec, report: Option<&OwnedFd>) -> Failed {
 /// The PID namespace's first process: it mounts the namespace's own
 /// `/proc`, starts the program, and reaps until the program ends, when it
 /// exits as the program did and the namespace goes with it.
-fn init(exec: Exec, launcher: OwnedFd, report: Option<&OwnedFd>, signals: &Signals) -> ! {
+fn init(exec: Exec, launcher: OwnedFd, report: &mut Option<OwnedFd>, signals: &Signals) -> ! {
     let tied = rustix::process::set_parent_process_death_signal(Some(Signal::KILL));
     if tied.is_err() || gone(&launcher) {
         std::process::exit(UNSET);
@@ -722,26 +817,30 @@ fn init(exec: Exec, launcher: OwnedFd, report: Option<&OwnedFd>, signals: &Signa
     );
     if let Err(error) = proc {
         tell(
-            report,
+            report.as_ref(),
             &Failed::mount("mounting the namespace's /proc", error),
         );
         std::process::exit(UNSET);
     }
     match sys::fork() {
         Err(error) => {
-            tell(report, &Failed::step("starting the program", error));
+            tell(
+                report.as_ref(),
+                &Failed::step("starting the program", error),
+            );
             std::process::exit(UNSET)
         }
-        Ok(Forked::Child) => run(exec, report),
+        Ok(Forked::Child) => run(exec, report.as_ref()),
         Ok(Forked::Parent(program)) => {
+            drop(report.take());
             quiet();
-            supervise(program, signals, true)
+            supervise(program, signals, None)
         }
     }
 }
 
 /// Whether the process `pidfd` names has ended.
-fn gone(pidfd: &OwnedFd) -> bool {
+pub(crate) fn gone(pidfd: &OwnedFd) -> bool {
     let mut polled = [rustix::event::PollFd::new(
         pidfd,
         rustix::event::PollFlags::IN,
@@ -827,18 +926,26 @@ pub(crate) fn quiet() {
 }
 
 /// Waits on `child`, passing signals of [`PASSED_ON`] on, and exits as it
-/// does. The init (`init`) reaps every process that ends under it too.
+/// does. The init (no `starter`) reaps every process that ends under it
+/// too. The launcher (watching its `starter`) exits once its starter ended,
+/// and the namespace goes with it.
 ///
 /// The program shares the launcher's process group, so a signal to the
 /// whole group reaches it once already. The launcher passes on what was
 /// sent to it, marked, but not what the kernel sent the group (a
 /// terminal's); the init passes on only what the launcher marked, never
 /// its own copy of the group's.
-fn supervise(child: Pid, signals: &Signals, init: bool) -> ! {
+fn supervise(child: Pid, signals: &Signals, starter: Option<&OwnedFd>) -> ! {
+    let init = starter.is_none();
     let waited = if init { None } else { Some(child) };
     loop {
-        let Ok(caught) = signals.wait() else {
-            std::process::exit(UNSET)
+        if starter.is_some_and(gone) {
+            std::process::exit(UNSET);
+        }
+        let caught = match signals.wait(starter.map(|_| WATCHED_EVERY)) {
+            Ok(Some(caught)) => caught,
+            Ok(None) => continue,
+            Err(_) => std::process::exit(UNSET),
         };
         if caught.number != libc::SIGCHLD {
             if init && caught.passed {

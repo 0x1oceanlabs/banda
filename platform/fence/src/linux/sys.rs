@@ -14,21 +14,37 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// Whether this process has taken its spec's fd: it owns one, once.
 static TAKEN: AtomicBool = AtomicBool::new(false);
 
+/// Whether this process has taken the fd it says how its start went on.
+static STATUS_TAKEN: AtomicBool = AtomicBool::new(false);
+
 /// The fd `number`, handed down by the process that started this one. It
 /// is taken once in a process, as it starts, before it opens any fd of its
 /// own: a second call is refused.
-#[allow(unsafe_code)]
 pub(crate) fn inherited(number: i32) -> io::Result<OwnedFd> {
+    own(number, &TAKEN, "spec")
+}
+
+/// The fd `number` the launcher says how its start went on: a pipe its
+/// starter reads to its end. It is taken once, as it starts, before the
+/// spec, so a spec it refuses is said there too.
+pub(crate) fn status(number: i32) -> io::Result<OwnedFd> {
+    own(number, &STATUS_TAKEN, "status")
+}
+
+#[allow(unsafe_code)]
+fn own(number: i32, taken: &AtomicBool, what: &str) -> io::Result<OwnedFd> {
     if number < 3 {
-        return Err(io::Error::other(format!("fd {number} is no spec's")));
+        return Err(io::Error::other(format!("fd {number} is no {what}'s")));
     }
     // It must be open before this process owns it.
     rustix::io::fcntl_getfd(
         // SAFETY: borrowed only for this one call, which reads its flags.
         unsafe { BorrowedFd::borrow_raw(number) },
     )?;
-    if TAKEN.swap(true, Ordering::SeqCst) {
-        return Err(io::Error::other("this process has taken its spec already"));
+    if taken.swap(true, Ordering::SeqCst) {
+        return Err(io::Error::other(format!(
+            "this process has taken its {what} already"
+        )));
     }
     // SAFETY: the starter named it on the command line and kept it open
     // across exec; this process takes it once, as it starts, before it
@@ -140,29 +156,43 @@ impl Signals {
         }
     }
 
-    /// The next of them that comes, as it comes.
+    /// The next of them that comes, as it comes; `None` once `within`
+    /// passed with none, when it is given.
     #[allow(unsafe_code)]
-    pub(crate) fn wait(&self) -> io::Result<Caught> {
+    pub(crate) fn wait(&self, within: Option<std::time::Duration>) -> io::Result<Option<Caught>> {
+        let within = within.map(|within| libc::timespec {
+            tv_sec: libc::time_t::try_from(within.as_secs()).unwrap_or(libc::time_t::MAX),
+            // Under a second's nanoseconds: a long holds them everywhere.
+            tv_nsec: within.subsec_nanos() as libc::c_long,
+        });
         loop {
             // SAFETY: an all-zero siginfo_t is a valid one; the call
             // overwrites it.
             let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
-            // SAFETY: reads the set, and writes the siginfo it is given.
-            let number = unsafe { libc::sigwaitinfo(&self.0, &mut info) };
+            // SAFETY: reads the set and the timeout, and writes the siginfo
+            // it is given.
+            let number = unsafe {
+                match &within {
+                    Some(within) => libc::sigtimedwait(&self.0, &mut info, within),
+                    None => libc::sigwaitinfo(&self.0, &mut info),
+                }
+            };
             if number > 0 {
                 let queued = info.si_code == libc::SI_QUEUE;
                 // SAFETY: a signal sigqueue sent carries a value, read only
                 // then.
                 let passed = queued && unsafe { info.si_value() }.sival_ptr as usize == PASSED;
-                return Ok(Caught {
+                return Ok(Some(Caught {
                     number,
                     from_kernel: info.si_code == libc::SI_KERNEL,
                     passed,
-                });
+                }));
             }
             let error = io::Error::last_os_error();
-            if error.kind() != io::ErrorKind::Interrupted {
-                return Err(error);
+            match error.raw_os_error() {
+                Some(libc::EAGAIN) => return Ok(None),
+                Some(libc::EINTR) => {}
+                _ => return Err(error),
             }
         }
     }

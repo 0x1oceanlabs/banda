@@ -117,6 +117,11 @@ pub enum EngineFrame {
         /// session of the last ended with it.
         #[serde(default)]
         boot: String,
+        /// Whether the fence around its Harnesses' programs holds (ADR
+        /// 0083, decision 1). An engine that says none has none.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        fence: Option<crate::Fence>,
     },
     Result {
         #[ts(type = "number")]
@@ -340,6 +345,7 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
             .collect(),
         machine: api.kernel.machine(),
         boot: api.kernel.boot().to_owned(),
+        fence: Some(api.kernel.fence()),
     };
     if sink.send(text(&welcome)).await.is_err() {
         return;

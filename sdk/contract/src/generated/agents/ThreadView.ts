@@ -28,4 +28,9 @@ held: boolean,
 /**
  * The Thread it was forked from (`agents.fork`), if it was.
  */
-forked_from?: ThreadId, };
+forked_from?: ThreadId, 
+/**
+ * It is in Full access its Person chose where the fence does not
+ * hold (ADR 0083): it runs so, its Agent acting as the Person.
+ */
+unfenced?: boolean, };

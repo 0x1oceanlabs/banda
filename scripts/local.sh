@@ -19,8 +19,10 @@
 # never by killing its process group or stopping its unit while it runs:
 # both stop the helpers under the main process, which then crashes.
 #
-# Where no user systemd answers (macOS, a container, CI), it runs Electron
-# as it is.
+# Where no user systemd answers (macOS, a container, CI, and behind Banda's
+# fence, which hides the session's runtime folder from an Agent's shell),
+# it runs Electron as it is: there a trial an Agent starts ends with the
+# Agent's Harness (ADR 0083; ADR 0086, Changes).
 set -euo pipefail
 
 fail() { echo "local.sh: $*" >&2; exit 2; }

@@ -20,9 +20,11 @@ Those rules hold for you too.
 - Start its window with `scripts/try.sh` or `pnpm --filter @banda/desktop
   start`, never a bare `electron .`: both go through `scripts/local.sh`,
   which on Linux runs it in a systemd user unit of its own
-  (`systemd-run --user --scope`), apart from the terminal or the Agent
-  that started it. An Agent starts it only with `scripts/try.sh --hidden
-  --detach`, which takes it out of the Agent's process group too.
+  (`systemd-run --user --scope`), apart from the terminal that started
+  it. An Agent starts it only with `scripts/try.sh --hidden --detach`,
+  which takes it out of the Agent's process group; behind Banda's fence
+  there is no user manager, so it runs inside the fence and ends with the
+  Agent's Harness.
 - Close a `pnpm start` window as you would Banda, and a trial's with
   `scripts/try.sh --stop`; SIGTERM to its main process closes either.
   Never kill its process group.

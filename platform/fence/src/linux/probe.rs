@@ -12,10 +12,11 @@ use std::ffi::OsString;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-/// What the probe's child says on its pipe, one JSON object a line.
+/// What the probe's child, or a launcher, says on its pipe, one JSON
+/// object a line.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-enum Said {
+pub(crate) enum Said {
     /// The fence is set up, with these layers.
     Held(Vec<Layer>),
     /// A step failed.
@@ -58,7 +59,7 @@ pub(crate) fn probe(spec: &Spec, program: &[OsString]) -> Probe {
         }
         Ok(Forked::Child) => {
             drop(hear);
-            probing(spec, program, &report)
+            probing(spec, program, report)
         }
         Ok(Forked::Parent(child)) => child,
     };
@@ -95,25 +96,26 @@ fn missing(why: Why, words: String) -> Probe {
 
 /// The probe's child: the launcher's steps over `spec`, with `program`,
 /// each step's end said on `report`.
-fn probing(spec: &Spec, program: &[OsString], report: &OwnedFd) -> ! {
-    let ready = sys::close_all_but(Some(report))
+fn probing(spec: &Spec, program: &[OsString], report: OwnedFd) -> ! {
+    let ready = sys::close_all_but(Some(&report))
         .map_err(|error| Failed::setup(format!("closing what the probe is not given: {error}")))
         .and_then(|()| {
             launch::quiet();
             let exec = Exec::new(program, None)?;
             let fenced = launch::setup(spec)?;
             launch::verify(&fenced)?;
-            Ok((exec, fenced.layers))
+            Ok((exec, fenced.layers, fenced.starter))
         });
-    let (exec, layers) = match ready {
+    let (exec, layers, starter) = match ready {
         Ok(ready) => ready,
         Err(failed) => {
-            said(report, &failed);
+            said(&report, &failed);
             std::process::exit(UNSET)
         }
     };
-    say(report, &Said::Held(layers));
-    let failed = launch::start(exec, Some(report));
-    said(report, &failed);
+    say(&report, &Said::Held(layers));
+    let mut report = Some(report);
+    let failed = launch::start(exec, starter, &mut report);
+    launch::tell(report.as_ref(), &failed);
     std::process::exit(UNSET)
 }

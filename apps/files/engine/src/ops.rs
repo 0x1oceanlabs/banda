@@ -325,7 +325,8 @@ pub fn run(plan: Plan, copy: bool, run: &mut Run<'_>) -> Done {
         }
     }
     done.paths.extend(went.iter().map(|(to, _)| shown(to)));
-    done.undo = undo(&went, copy, crate::trashcan::ids(&replaced, since));
+    let ids = crate::walled::outside(move || crate::trashcan::ids(&replaced, since));
+    done.undo = undo(&went, copy, ids.unwrap_or_default());
     match halt {
         Some(Halt::Stopped) => done.stopped = true,
         Some(Halt::Failed(path, error)) => {
@@ -342,7 +343,9 @@ fn make_room(item: &mut Item, replaced: &mut Vec<PathBuf>) -> Result<(), Halt> {
     if !std::mem::take(&mut item.replace) {
         return Ok(());
     }
-    match crate::trashcan::put(std::slice::from_ref(&item.to)).failed {
+    let to = item.to.clone();
+    let put = crate::walled::outside(move || crate::trashcan::put(&[to]).failed);
+    match put.unwrap_or_else(|| Some("the Trash could not be reached".to_owned())) {
         Some(why) => Err(Halt::Failed(item.to.clone(), io::Error::other(why))),
         None => {
             replaced.push(item.to.clone());
