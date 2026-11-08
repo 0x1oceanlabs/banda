@@ -185,9 +185,14 @@ export function startTelling(
   }
 
   // What the Person looks at is seen: its toast and notification go,
-  // while the call may still wait for them, as a Question does.
-  const seen = () =>
-    withdraw(lookedAt(calling, window.here.get()).map((call) => call.key))
+  // while the call may still wait for them, as a Question does. One still
+  // gathered is not told, though they look away before the moment ends,
+  // as two quick Alt+U go to it and on.
+  const seen = () => {
+    const looked = lookedAt(calling, window.here.get()).map((call) => call.key)
+    gathered = gathered.filter((call) => !looked.includes(call.key))
+    withdraw(looked)
+  }
 
   const heard = (lists: Lists) => {
     const now = callsOf(lists)
@@ -197,9 +202,9 @@ export function startTelling(
     const news = fresh.filter((call) => known.has(call.project))
     known = projects
     withdraw(gone.map((call) => call.key))
+    gathered.push(...news)
     seen()
     if (news.length === 0) return
-    gathered.push(...news)
     timer ??= setTimeout(() => void tellNews(), GATHER)
   }
 
