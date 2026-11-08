@@ -3,12 +3,10 @@ import type { Engine } from "@banda/contract"
 import { useModules } from "@banda/ui/hooks/use-status"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import type { PaneState } from "@banda/ui/pane"
-import { inScope, keysInForce, pressFor, withKeys } from "../actions/actions"
-import { scopesOf } from "@banda/ui/hooks/use-scope"
-import type { Host } from "../host"
-import { useLookKeys } from "../look"
 import { labelOf, previewers } from "../registry"
-import { ACTIONS, closing, heldBy } from "./actions"
+import { closing } from "./actions"
+import { device } from "./device"
+import { useKeys, usePoppedKeys } from "./keys"
 import type { Workspace as Kept } from "@banda/contract/workspaces"
 import { send } from "../tiling/arrange"
 import { useArranged } from "../tiling/useArranged"
@@ -24,15 +22,7 @@ import { Previewers } from "@banda/ui/lib/previewers"
  * `Alt+W` closes it, and its pop-out key, as closing this window, brings
  * it back to its place.
  */
-export function Popped({
-  engine,
-  host,
-  pane,
-}: {
-  engine: Engine
-  host: Host
-  pane: string
-}) {
+export function Popped({ engine, pane }: { engine: Engine; pane: string }) {
   const modules = useModules(engine)
   const { listed: projects } = useProjects(engine)
   const live = useArranged(engine)
@@ -52,7 +42,7 @@ export function Popped({
   if (now ? !entry || !samePane(entry, now) : entry) setEntry(now)
   // Closed, by Alt+W here or by an Agent, it takes its window with it.
   const gone = kept !== undefined && !found
-  const back = useCallback(() => host.popped.close(pane), [host, pane])
+  const back = useCallback(() => device.popped.close(pane), [pane])
   useEffect(() => {
     if (gone) back()
   }, [gone, back])
@@ -70,7 +60,7 @@ export function Popped({
     () => ({
       focus: () => undefined,
       open: (project, opened, from, place) =>
-        host.popped.ask({
+        device.popped.ask({
           open: { project, pane: opened, from, ...(place && { place }) },
         }),
       update: (_entry, { args }: PaneState) => {
@@ -88,46 +78,24 @@ export function Popped({
       },
       close,
       run: (action, args) =>
-        host.popped.ask({ run: { action, ...(args && { args }) } }),
+        device.popped.ask({ run: { action, ...(args && { args }) } }),
       arrange: () => Promise.resolve(),
       popOut: back,
     }),
-    [engine, host, pane, close, back]
+    [engine, pane, close, back]
   )
 
   // Of the window's keys, this window takes the two that are its Pane's,
-  // and its scopes' (ADR 0071), as the Composer's Enter.
-  const keys = useLookKeys()
-  const keyed = useMemo(() => withKeys(ACTIONS, keys.actions), [keys])
-  const inForce = useMemo(() => keysInForce(keys.mod, keyed), [keys, keyed])
-  useEffect(() => {
-    const own: Record<string, () => void> = {
-      "pane.close": close,
-      "pane.pop-out": back,
-    }
-    const stillHeld = heldBy(keys.mod)
-    const onKey = (event: KeyboardEvent) => {
-      if (event.isComposing) return
-      const target = event.target instanceof Element ? event.target : null
-      if (target?.closest("[data-takes-keys]")) return
-      const pressed = pressFor(keyed, event, scopesOf(target), stillHeld)
-      if (!pressed || inScope(pressed, event)) return
-      const run = own[pressed.action.id]
-      if (!run) return
-      event.preventDefault()
-      event.stopPropagation()
-      run()
-    }
-    window.addEventListener("keydown", onKey, { capture: true })
-    return () => window.removeEventListener("keydown", onKey, { capture: true })
-  }, [keyed, keys.mod, close, back])
+  // and its scopes' (keys.ts).
+  const { mod, keyed, keys } = useKeys()
+  usePoppedKeys(keyed, mod, close, back)
 
   const project =
     projects.state === "ready"
       ? projects.value.find((project) => project.id === entry?.project)
       : undefined
   return (
-    <KeysInForce.Provider value={inForce}>
+    <KeysInForce.Provider value={keys}>
       <div className="flex h-svh bg-desk text-foreground">
         {entry ? (
           // Its Pane draws a file with the modules' previewers.

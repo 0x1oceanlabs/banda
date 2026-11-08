@@ -1,8 +1,9 @@
 /**
  * What the architecture tests read (docs/architecture.md, "Checks that
  * hold the shape"): the Apps' and platform parts' folders, the source
- * files of a folder, the modules each one names, the Apps each one names
- * and what each one animates. For tests alone: it reads the disk.
+ * files of a folder, the modules each one names, the Apps each one names,
+ * where each one reads the desktop's bridge and what each one animates.
+ * For tests alone: it reads the disk.
  */
 /// <reference types="node" />
 import { existsSync, readdirSync } from "node:fs"
@@ -96,6 +97,60 @@ export function appStrings(source: string, file: string): string[] {
       found.push(node.text)
     else if (ts.isTemplateExpression(node) && named.test(node.head.text))
       found.push(`${node.head.text}…`)
+    ts.forEachChild(node, visit)
+  }
+  visit(ts.createSourceFile(file, source, ts.ScriptTarget.Latest))
+  return found
+}
+
+/** Whether `node` names the page's global object, in brackets or cast
+ * as it may be. */
+function isGlobal(node: ts.Node): boolean {
+  if (
+    ts.isParenthesizedExpression(node) ||
+    ts.isAsExpression(node) ||
+    ts.isTypeAssertionExpression(node) ||
+    ts.isNonNullExpression(node) ||
+    ts.isSatisfiesExpression(node)
+  )
+    return isGlobal(node.expression)
+  return (
+    ts.isIdentifier(node) &&
+    (node.text === "window" || node.text === "globalThis")
+  )
+}
+
+/**
+ * How many places `source`, the code of `file`, reads the desktop's
+ * bridge (ADR 0089, decision 2): `window.banda`, `globalThis.banda`,
+ * `window["banda"]` and `const { banda } = window`, with `?.` or without,
+ * and with `window` cast. Read as TypeScript reads it, by the file's
+ * kind, so comments and the type that declares it are not taken for a
+ * place.
+ */
+export function desktopReads(source: string, file: string): number {
+  let found = 0
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isPropertyAccessExpression(node) &&
+        isGlobal(node.expression) &&
+        node.name.text === "banda") ||
+      (ts.isElementAccessExpression(node) &&
+        isGlobal(node.expression) &&
+        ts.isStringLiteralLike(node.argumentExpression) &&
+        node.argumentExpression.text === "banda")
+    )
+      found++
+    else if (
+      ts.isVariableDeclaration(node) &&
+      ts.isObjectBindingPattern(node.name) &&
+      node.initializer &&
+      isGlobal(node.initializer)
+    )
+      for (const element of node.name.elements) {
+        const name = element.propertyName ?? element.name
+        if (ts.isIdentifier(name) && name.text === "banda") found++
+      }
     ts.forEachChild(node, visit)
   }
   visit(ts.createSourceFile(file, source, ts.ScriptTarget.Latest))

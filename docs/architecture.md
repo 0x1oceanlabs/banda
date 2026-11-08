@@ -1252,7 +1252,10 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   toasts), and the middle, which it gives to the Tiling
   (`client/web/src/tiling/`): the workspaces, or the overview over them
   (ADR 0005, decisions 7–9; ADR 0087). A popped-out Pane's window is the
-  Window's too (`window/Popped.tsx`). The Window may import the Tiling;
+  Window's too (`window/Popped.tsx`). The Window routes the keys
+  (`window/keys.ts`), and reaches the desktop only through its device
+  part (`window/device.ts`), which W0 makes the device port's desktop
+  adapter (ADR 0089, decision 2). The Window may import the Tiling;
   what the Tiling still imports of the Window, the architecture test
   lists, and the list only falls.
 - **The workspaces** follow niri (`client/web/src/tiling/model.ts`); every
@@ -1623,7 +1626,9 @@ images. Sweeps retain images still referenced by a fork after a rewind.
   8); and the calls part reads no page and, of the Tiling, imports only
   its model (decision 9). The parts the Window draws on every move, each
   Tile and its Pane, each Strip and the widgets, stay memoized (ADR 0088,
-  decision 7).
+  decision 7). The Window and the Tiling read `window.banda` only in
+  `window/device.ts`, and what else in the page reads it, the test lists
+  by file, a list that only falls (ADR 0089, decisions 2 and 11).
 - **Module tests** run through the module's interface: commands go in and
   events come out. Nothing past the interface is mocked.
 - **Checkpoints** (ADR 0014, decision 3). With `BANDA_CHECKPOINTS` set,

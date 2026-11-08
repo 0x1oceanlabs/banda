@@ -45,7 +45,7 @@ if (host && engine) {
   const show = () => {
     const view = popped
       ? import("./window/Popped").then(({ Popped }) => (
-          <Popped engine={engine} host={host} pane={popped} />
+          <Popped engine={engine} pane={popped} />
         ))
       : import("./App").then(({ App }) => <App engine={engine} />)
     void view.then((shown) => root.render(<StrictMode>{shown}</StrictMode>))

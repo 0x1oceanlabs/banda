@@ -2,7 +2,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test } from "vitest"
-import { MANIFEST_NAMES, imports, layoutMotion, parts } from "./architecture"
+import {
+  MANIFEST_NAMES,
+  desktopReads,
+  imports,
+  layoutMotion,
+  parts,
+} from "./architecture"
 
 test("the check sees every kind of import", () => {
   expect(
@@ -10,6 +16,35 @@ test("the check sees every kind of import", () => {
       `import a from "x"\nimport "y"\nconst z = import("z")\nexport { b } from 'w'`
     )
   ).toEqual(["x", "y", "z", "w"])
+})
+
+test("the check sees each way code reads the desktop's bridge, and not what only names it", () => {
+  expect(
+    desktopReads(
+      [
+        `const host = window.banda`,
+        `window.banda?.quit()`,
+        `globalThis.banda?.popped.close(id)`,
+        `const b = window["banda"]`,
+        `const { banda, location } = window`,
+        `const { banda: bridge } = globalThis`,
+        `const view = <Pane quit={() => window.banda?.quit()} />`,
+        `const cast = (window as unknown as { banda?: Host }).banda`,
+      ].join("\n"),
+      "reads.tsx"
+    )
+  ).toBe(8)
+  expect(
+    desktopReads(
+      [
+        `// window.banda is the desktop's`,
+        `declare global { interface Window { banda?: Host } }`,
+        `const banda = "window.banda"`,
+        `host.banda.quit()`,
+      ].join("\n"),
+      "names.ts"
+    )
+  ).toBe(0)
 })
 
 test("the check sees a Tailwind class that animates layout, each time", () => {

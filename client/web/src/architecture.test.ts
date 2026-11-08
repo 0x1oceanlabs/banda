@@ -22,6 +22,9 @@
  *   and no list sorts by it.
  * - The calls part reads no page, and of the Tiling only its model (ADR
  *   0087, decision 9).
+ * - The Window and the Tiling reach the desktop only through the Window's
+ *   device part (ADR 0089, decision 2): what else in the page reads the
+ *   desktop's bridge is listed, and the list only falls.
  * - What the Window draws on every move it makes is drawn again only as
  *   its own props change (ADR 0088, decision 7): the parts listed stay
  *   memoized, and the list only grows.
@@ -30,6 +33,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { join, relative } from "node:path"
 import {
   appStrings,
+  desktopReads,
   imports,
   layoutMotion,
   manifestIn,
@@ -137,6 +141,61 @@ test("the calls part reads no layout, and of the Tiling only its model", () => {
 })
 
 /**
+ * Where the page reads the desktop's bridge, `window.banda`, by file, with
+ * how many places (`desktopReads`). The Window and the Tiling read it only
+ * in the Window's device part (B4b), which W0 makes the device port's
+ * desktop adapter (ADR 0089, decision 2); the rest are listed here until
+ * the port takes them, and at last only `boot/desktop.ts` reads it
+ * (decision 11). None joins the list, and a place that goes leaves it.
+ */
+const DEVICE = "web/src/window/device.ts"
+const DESKTOP_READS: Record<string, number> = {
+  "web/src/actions/actions.ts": 1,
+  "web/src/bar/Update.tsx": 1,
+  "web/src/main.tsx": 1,
+  "web/src/menu/browse.ts": 1,
+  "web/src/settings/Agents.tsx": 3,
+  "web/src/settings/BrowserSites.tsx": 1,
+  "web/src/settings/General.tsx": 1,
+  "web/src/settings/Keys.tsx": 2,
+  "web/src/settings/Mod.tsx": 1,
+  "web/src/settings/ProblemsSettings.tsx": 1,
+  "web/src/settings/ProjectsSettings.tsx": 1,
+  "web/src/settings/SettingRow.tsx": 2,
+  "web/src/settings/Settings.tsx": 1,
+  "web/src/settings/ThemePicker.tsx": 1,
+  "web/src/sharing/AskToShare.tsx": 1,
+  "web/src/sidebar/Sidebar.tsx": 1,
+  "web/src/sidebar/ThemeMenu.tsx": 1,
+  "web/src/sidebar/settings.ts": 1,
+  "web/src/sidebar/write-setting.ts": 1,
+}
+
+const { [DEVICE]: device, ...reading } = Object.fromEntries(
+  sources(join(app, "web/src"), { tests: false }).flatMap((file) => {
+    const count = desktopReads(readFileSync(file, "utf8"), file)
+    return count > 0 ? [[relative(app, file), count]] : []
+  })
+)
+
+test("the Window and the Tiling read the desktop's bridge only in their device part", () => {
+  expect(device).toBeGreaterThan(0)
+  const ours = /^web\/src\/(window|tiling)\//
+  expect(Object.keys(reading).filter((file) => ours.test(file))).toEqual([])
+})
+
+test("the page reads the desktop's bridge no more than the list holds", () => {
+  for (const [file, count] of Object.entries(reading))
+    expect(count, `${file} reads window.banda`).toBeLessThanOrEqual(
+      DESKTOP_READS[file] ?? 0
+    )
+})
+
+test("a place that no longer reads it comes off the list", () => {
+  expect(reading).toEqual(DESKTOP_READS)
+})
+
+/**
  * What the Window and the Tiling still say of an App, once for each place
  * they do, by file (`appStrings`): a string that names an action or a kind
  * of the agents module's (`agents.…`) or a Thread's (`thread.…`), and that
@@ -186,7 +245,7 @@ test("a string that no longer names an App leaves the list", () => {
  * lowers it; the room lets PRs in flight that each cut a few lines leave
  * it alone.
  */
-const WINDOW_LINES = 1343
+const WINDOW_LINES = 1214
 const SLACK = 20
 
 test("the Window's root keeps under its ceiling, and the ceiling follows it down", () => {
