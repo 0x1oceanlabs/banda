@@ -66,9 +66,25 @@ export class Lost extends Error {
   }
 }
 
+/** The engine's answer to one call, whole: its `ok`, and a command's `at`. */
+type Result = Extract<EngineFrame, { type: "result" }>
+
 type Pending = {
-  resolve: (value: unknown) => void
+  resolve: (result: Result) => void
   reject: (error: Error) => void
+}
+
+/**
+ * A command's answer, and its place in the log of its scope (ADR 0082,
+ * decision 4): a seq of that log, the same as the `Event.seq` a client
+ * follows there. A view current at `at` shows what the command did. The
+ * engine says where for every command it ran, even one that wrote
+ * nothing, where it is the log's head as it answered, at or before what
+ * the client has heard. `undefined` only from an engine that says none.
+ */
+export type Answered<M extends MethodOf<"command">> = {
+  answer: Answer<M>
+  at: number | undefined
 }
 
 type Following = {
@@ -149,9 +165,19 @@ export class Engine {
     params: unknown,
     options: { project?: ProjectId; command?: CommandId }
   ): Promise<T> {
+    const result = await this.#ask(method, params, options)
+    return (result.ok ?? null) as T
+  }
+
+  /** Calls `method`, and gives the engine's answer whole. */
+  async #ask(
+    method: string,
+    params: unknown,
+    options: { project?: ProjectId; command?: CommandId }
+  ): Promise<Result> {
     await this.#opened()
     const id = this.#nextId++
-    const answer = new Promise<unknown>((resolve, reject) =>
+    const answer = new Promise<Result>((resolve, reject) =>
       this.#pending.set(id, { resolve, reject })
     )
     this.#send({
@@ -162,7 +188,7 @@ export class Engine {
       command: options.command,
       params: params as JsonValue,
     })
-    return answer as Promise<T>
+    return answer
   }
 
   /**
@@ -177,9 +203,28 @@ export class Engine {
     project?: ProjectId,
     command: CommandId = newId()
   ): Promise<Answer<M>> {
+    const { answer } = await this.commandAt(method, params, project, command)
+    return answer
+  }
+
+  /**
+   * Runs a command as {@link command} does, and gives its answer with its
+   * place in the log, `at`: a client that has heard its scope's log up to
+   * `at` has heard what the command did (ADR 0082, decision 4). A
+   * session's commands to one scope commit in the order sent, and one sent
+   * again after the connection broke goes in that order too, before any
+   * sent since, so their `at`s rise in the order sent.
+   */
+  async commandAt<M extends MethodOf<"command">>(
+    method: M,
+    params: Params<M>,
+    project?: ProjectId,
+    command: CommandId = newId()
+  ): Promise<Answered<M>> {
     for (let attempt = 1; ; attempt++) {
       try {
-        return await this.#call<Answer<M>>(method, params, { project, command })
+        const result = await this.#ask(method, params, { project, command })
+        return { answer: (result.ok ?? null) as Answer<M>, at: result.at }
       } catch (error) {
         if (!(error instanceof Lost) || attempt === ATTEMPTS) throw error
       }
@@ -372,7 +417,7 @@ export class Engine {
         if (pending) {
           this.#pending.delete(frame.id)
           if (frame.error) pending.reject(new Refused(frame.error))
-          else pending.resolve(frame.ok ?? null)
+          else pending.resolve(frame)
           break
         }
         const following = this.#following.get(frame.id)
