@@ -2,7 +2,7 @@
 // scripts/package.sh runs it once the engine, the page and main are built,
 // with the same BANDA_CHANNEL and BANDA_VERSION. On Windows also once
 // scripts/node.mjs downloaded the Node the app carries (ADR 0090, step 5).
-import { CHANNELS, DESCRIPTION } from "./src/channel.ts"
+import { CHANNELS, DESCRIPTION, REPOSITORY } from "./src/channel.ts"
 
 const channel = CHANNELS[process.env.BANDA_CHANNEL || "local"]
 if (!channel) throw new Error("BANDA_CHANNEL is stable, dev or local.")
@@ -93,10 +93,16 @@ export default {
   // Releases are published by the release workflow (step 3), not here:
   // scripts/package.sh packs with --publish never. The entry makes
   // electron-builder write the update file electron-updater reads beside
-  // the AppImage, and app-update.yml into it (ADR 0041, decision 1). A
-  // checkout's Banda Local never updates.
+  // the AppImage, and app-update.yml into it (ADR 0041, decision 1). Each
+  // app's file has its own name, as a release will hold both apps' (ADR
+  // 0092, decision 12): Banda Dev's `dev-linux.yml`, `dev-mac.yml` and
+  // `dev.yml`, Banda's `latest-…`. A checkout's Banda Local never updates.
   publish:
     channel === CHANNELS.local
       ? null
-      : { provider: "github", owner: "0x1oceanlabs", repo: "banda" },
+      : {
+          provider: "github",
+          ...REPOSITORY,
+          ...(channel === CHANNELS.dev && { channel: "dev" }),
+        },
 }

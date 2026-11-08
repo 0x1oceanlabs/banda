@@ -2,8 +2,11 @@ import { EventEmitter } from "node:events"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 const updater = vi.hoisted(() => ({ checkForUpdates: vi.fn(async () => null) }))
-vi.mock("electron-updater", () => ({ autoUpdater: updater }))
-vi.mock("electron", () => ({ app: {} }))
+vi.mock("electron-updater", () => ({
+  autoUpdater: updater,
+  Provider: class {},
+}))
+vi.mock("electron", () => ({ app: {}, powerMonitor: { on() {} } }))
 vi.mock("./channel", () => ({
   channel: { folder: "banda-dev" },
   CHANNELS: {},
@@ -14,7 +17,7 @@ import { brewUpdates } from "./update"
 
 const known = { name: "Banda Dev", have: "0.1.0-dev.157", always: true }
 const pending = () =>
-  Object.assign(new Error("Cannot find latest-mac.yml"), {
+  Object.assign(new Error("0.1.0-dev.164 has no dev-mac.yml yet"), {
     code: "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND",
   })
 let events: EventEmitter
@@ -85,4 +88,29 @@ it("reports other errors without a fast retry", async () => {
   })
   await vi.advanceTimersByTimeAsync(60_000)
   expect(updater.checkForUpdates).toHaveBeenCalledTimes(2)
+})
+
+it("stops retrying once the Mac's files are long overdue, as a pack that failed sends none", async () => {
+  const updates = brewUpdates(known, vi.fn())
+  await vi.advanceTimersByTimeAsync(60_000)
+  for (let look = 0; look < 20; look++) {
+    events.emit("error", pending())
+    await vi.advanceTimersByTimeAsync(60_000)
+  }
+  // The first look and 15 more, a minute apart; then the hourly one.
+  expect(updater.checkForUpdates).toHaveBeenCalledTimes(16)
+  updates.check()
+  events.emit("error", pending())
+  expect(updates.current()).toMatchObject({
+    state: "none",
+    missed: "The macOS release is still publishing",
+  })
+})
+
+it("drops a version out once a look finds it withdrawn (ADR 0092)", () => {
+  const updates = brewUpdates(known, vi.fn())
+  events.emit("update-available", { version: "0.1.0-dev.162" })
+  expect(updates.current()).toMatchObject({ state: "out" })
+  events.emit("update-not-available", { version: known.have })
+  expect(updates.current()).toMatchObject({ state: "none" })
 })

@@ -28,6 +28,7 @@ type Config = {
     extraResources: Resource[]
   }
   nsis: Record<string, unknown>
+  publish: { channel?: string } | null
 }
 
 /** The config, as electron-builder reads it; its file has no types. */
@@ -98,4 +99,22 @@ test("the Node Windows' app carries is pinned for each arch it is built for", as
     expect(NODE_RELEASE.sha256[`win-${arch}/node.exe`]).toMatch(
       /^[0-9a-f]{64}$/
     )
+})
+
+test("each app's update file has a name of its own, which the release workflow publishes (ADR 0092)", async () => {
+  const publish = async (channel: string) => {
+    vi.stubEnv("BANDA_CHANNEL", channel)
+    vi.resetModules()
+    return (await config()).publish
+  }
+  // Banda Dev's is dev-linux.yml, dev-mac.yml or dev.yml; Banda's keeps
+  // electron-builder's latest-…; Banda Local has none.
+  const github = { provider: "github", owner: "0x1oceanlabs", repo: "banda" }
+  expect(await publish("dev")).toEqual({ ...github, channel: "dev" })
+  expect(await publish("stable")).toEqual(github)
+  expect(await publish("local")).toBeNull()
+  const release = text(".github/workflows/release.yml")
+  expect(release).toContain("client/desktop/dist/*-linux.yml")
+  expect(release).toContain('"$MAC"/*-mac.yml')
+  expect(release).not.toMatch(/dist\/latest-(linux|mac)\.yml/)
 })

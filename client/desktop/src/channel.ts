@@ -10,6 +10,9 @@ import { isAbsolute, join } from "node:path"
 /** What Banda says it is, where an app is listed. */
 export const DESCRIPTION = "A tiling workspace for working with Agents"
 
+/** Where Banda's releases are, as GitHub names the repository. */
+export const REPOSITORY = { owner: "0x1oceanlabs", repo: "banda" } as const
+
 /**
  * Each channel's name, folder, app ID and icon (build.mjs,
  * electron-builder.config.mjs).

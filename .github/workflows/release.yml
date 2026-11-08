@@ -1,9 +1,10 @@
 # Banda's releases (ADR 0033, step 3): Banda Dev on every push to main once
 # `ci` is green on it. Each packs the AppImage with scripts/package.sh on
-# devbox and publishes it with scripts/release.mjs, beside latest-linux.yml,
-# which electron-updater reads (ADR 0041). The Mac's zip is packed on
-# GitHub's Apple silicon runner at the same time and added to the release
-# once it is out (decision 6), so Linux never waits for the Mac.
+# devbox and publishes it with scripts/release.mjs, beside dev-linux.yml
+# (dev-mac.yml for the Mac), the update file Banda Dev reads (ADR 0041; its
+# name, ADR 0092 decision 12). The Mac's zip is packed on GitHub's Apple
+# silicon runner at the same time and added to the release once it is out
+# (decision 6), so Linux never waits for the Mac.
 #
 # No Stable is built here, and a tag pushed by hand ships nothing (ADR 0092,
 # step 2): nothing here starts on a tag, and ci/job-started.sh fails every
@@ -117,6 +118,12 @@ jobs:
         env:
           BANDA_VERSION: ${{ needs.which.outputs.version }}
         run: scripts/package.sh ${{ needs.which.outputs.channel }}
+      # Each app's update file has its own name (ADR 0092, decision 12): a
+      # release without it updates no one, so a PR's run fails here too.
+      - name: the update file is there
+        env:
+          CHANNEL: ${{ needs.which.outputs.channel }}
+        run: ls "client/desktop/dist/$([[ $CHANNEL == dev ]] && echo dev || echo latest)-linux.yml"
       - name: publish
         if: needs.which.outputs.publish == 'true'
         env:
@@ -127,7 +134,7 @@ jobs:
           ${{ needs.which.outputs.version }}
           ${{ needs.which.outputs.commit }}
           client/desktop/dist/*.AppImage
-          client/desktop/dist/latest-linux.yml
+          client/desktop/dist/*-linux.yml
       - name: keep what was packed
         if: needs.which.outputs.publish != 'true'
         uses: actions/upload-artifact@v4
@@ -135,7 +142,7 @@ jobs:
           name: banda-linux-${{ github.run_number }}
           path: |
             client/desktop/dist/*.AppImage
-            client/desktop/dist/latest-linux.yml
+            client/desktop/dist/*-linux.yml
           retention-days: 3
 
   mac:
@@ -170,12 +177,16 @@ jobs:
           CSC_FOR_PULL_REQUEST: true
       - name: the app is signed
         run: codesign --verify --deep --strict --verbose=2 client/desktop/dist/mac-arm64/*.app
+      - name: the update file is there
+        env:
+          CHANNEL: ${{ needs.which.outputs.channel }}
+        run: ls "client/desktop/dist/$([[ $CHANNEL == dev ]] && echo dev || echo latest)-mac.yml"
       - uses: actions/upload-artifact@v4
         with:
           name: banda-mac-${{ github.run_number }}
           path: |
             client/desktop/dist/*.zip
-            client/desktop/dist/latest-mac.yml
+            client/desktop/dist/*-mac.yml
           retention-days: 3
 
   # On GitHub's runner, which has ssh for the tap (devbox's image has
@@ -207,7 +218,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           MAC: ${{ runner.temp }}/mac
-        run: node scripts/release.mjs add ${{ needs.which.outputs.version }} "$MAC"/*.zip "$MAC"/latest-mac.yml
+        run: node scripts/release.mjs add ${{ needs.which.outputs.version }} "$MAC"/*.zip "$MAC"/*-mac.yml
       # Pushed with the tap's deploy key, in the secret TAP_KEY: `brew
       # upgrade` finds the release (ADR 0033, decision 6).
       - name: the cask in the tap

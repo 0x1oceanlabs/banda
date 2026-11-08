@@ -22,6 +22,14 @@ function keep(to: string, bytes: Buffer): void {
   if (!existsSync(to) || !readFileSync(to).equals(bytes)) writeWhole(to, bytes)
 }
 
+/** Where the desktop looks for apps' entries and icons. */
+const dataHome = () =>
+  process.env.XDG_DATA_HOME || join(homedir(), ".local", "share")
+
+/** This Banda's entry among the desktop's apps. */
+const entryAt = () =>
+  join(dataHome(), "applications", `${channel.folder}.desktop`)
+
 /** Lists this AppImage among the desktop's apps, or the one at `image`
  * that an update moved in (ADR 0041, decision 3); it never stops the
  * start. */
@@ -29,14 +37,24 @@ export function listApp(image = process.env.APPIMAGE): void {
   const inside = process.env.APPDIR
   if (!image || !inside) return
   try {
-    const data = process.env.XDG_DATA_HOME || join(homedir(), ".local", "share")
+    const data = dataHome()
     const name = channel.folder
     const packed = readFileSync(join(inside, `${name}.desktop`), "utf8")
     const entry = Buffer.from(entryText(packed, image))
-    keep(join(data, "applications", `${name}.desktop`), entry)
+    keep(entryAt(), entry)
     const icon = `icons/hicolor/512x512/apps/${name}.png`
     keep(join(data, icon), readFileSync(join(inside, "usr/share", icon)))
   } catch (error) {
     console.warn("Banda could not list itself among the desktop's apps:", error)
+  }
+}
+
+/** The AppImage this Banda's entry starts: the last one that started, or
+ * that an update moved in; none without an entry. */
+export function listedImage(): string | undefined {
+  try {
+    return /^TryExec=(.+)$/m.exec(readFileSync(entryAt(), "utf8"))?.[1]
+  } catch {
+    return undefined
   }
 }
