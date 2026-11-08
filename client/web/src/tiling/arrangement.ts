@@ -16,6 +16,13 @@
  *   and refuses 1.0 for an index; JavaScript cannot tell them apart.
  * - An ID is text, as the engine lists it: lowercase, with hyphens. The
  *   engine reads one in braces, without hyphens or as a URN too.
+ * - serde reads params whose struct has no flattened field, such as
+ *   `OnePane`'s or a column in `take`, from an array of its fields in
+ *   order too; this one refuses them.
+ *
+ * Its readers of params follow serde's, but the traces hold only a few of
+ * the ways params can be wrong, so most of how they refuse is unchecked
+ * until T1.
  */
 import type { Code, JsonValue, MethodOf, Params } from "@banda/contract"
 import {

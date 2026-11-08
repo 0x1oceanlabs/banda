@@ -10,7 +10,7 @@
  */
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import type { Code, JsonValue } from "@banda/contract"
+import type { Code } from "@banda/contract"
 import type { Workspace } from "@banda/contract/workspaces"
 import { describe, expect, test } from "vitest"
 import { keptOf, NO_VIEW, resolve } from "./arrange"
@@ -41,56 +41,24 @@ const traces: [string, Trace][] = readdirSync(folder)
   ])
 
 /**
- * An arrangement as JSON text to compare, by its shape: a field the
- * contract leaves out may be missing or none on either side, and the keys
- * of a Pane's args are put in order, its nulls kept.
+ * `value` as JSON text with the keys of each object in order, a Pane's
+ * args too: the copy and the engine are compared by all they write, so a
+ * key one has and the other lacks, or a none the engine never writes, sets
+ * them apart.
  */
-function normalized(list: readonly Workspace[]): string {
-  return JSON.stringify(
-    list.map((workspace) =>
-      present({
-        id: workspace.id,
-        columns: workspace.columns.map((column) =>
-          present({
-            id: column.id,
-            panes: column.panes.map((pane) =>
-              present({
-                id: pane.id,
-                project: pane.project,
-                kind: pane.kind,
-                args: ordered(pane.args),
-                by: pane.by,
-                height: pane.height,
-              })
-            ),
-            width: column.width,
-            full: column.full,
-            display: column.display,
-            group: column.group,
-          })
-        ),
-        filled: workspace.filled,
-        project: workspace.project,
-      })
-    )
-  )
-}
-
-/** `fields` but those that are none. */
-function present(fields: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(fields).filter(([, value]) => value != null)
-  )
+function text(value: unknown): string {
+  return JSON.stringify(ordered(value))
 }
 
 /** `value` with the keys of each object in order. */
-function ordered(value: JsonValue): JsonValue {
+function ordered(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(ordered)
   if (typeof value !== "object" || value === null) return value
+  const object = value as Record<string, unknown>
   return Object.fromEntries(
-    Object.keys(value)
+    Object.keys(object)
       .sort()
-      .map((key) => [key, ordered(value[key])])
+      .map((key) => [key, ordered(object[key])])
   )
 }
 
@@ -125,13 +93,13 @@ describe.each(traces)("%s", (_, trace) => {
     if ("refused" in applied) {
       throw new Error(`Refused, ${applied.refused}: ${applied.message}`)
     }
-    expect(applied.answer).toEqual(step.answer)
-    expect(normalized(applied.list)).toBe(normalized(step.after))
+    expect(text(applied.answer)).toBe(text(step.answer))
+    expect(text(applied.list)).toBe(text(step.after))
   })
 
   test("the window draws each arrangement and keeps it again as it was", () => {
     for (const list of [trace.start, ...trace.steps.map((s) => s.after)]) {
-      expect(normalized(keptOf(resolve(list, NO_VIEW)))).toBe(normalized(list))
+      expect(text(keptOf(resolve(list, NO_VIEW)))).toBe(text(list))
     }
   })
 })

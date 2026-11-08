@@ -1,7 +1,8 @@
-//! The arrangement's commands, as functions of it with no store: what the
-//! module's handlers run, and what each client's copy of the model is
-//! held to (ADR 0088, decision 11). `tests/traces.rs` records what `apply`
-//! does as golden traces, and the client's copy,
+//! The arrangement's commands, as functions of it with no store, and what
+//! each client's copy of the model is held to (ADR 0088, decision 11).
+//! `apply` calls the model functions the module's handlers call, as they
+//! call them; `open` is the handler's own. `tests/traces.rs` records what
+//! `apply` does as golden traces, and the client's copy,
 //! `client/web/src/tiling/arrangement.ts`, replays them; compiled to
 //! WebAssembly (T1), `apply` is what a client calls instead.
 //!
