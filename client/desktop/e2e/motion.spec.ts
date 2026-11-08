@@ -1,8 +1,8 @@
 /**
  * How the Tiling moves, measured on the real app (ADR 0088, decision 13):
  * a Strip of three terminals and a browser Pane, the first terminal
- * printing off screen; then the window left quiet, nothing holding the
- * keyboard, a column's width stepped, the focus stepped along the Strip, a
+ * printing off screen and, for a while, the last on screen, as Agents'
+ * do; then the window left quiet, nothing holding the keyboard, a column's width stepped, the focus stepped along the Strip, a
  * column maximized, the workspaces stepped, and the overview opened and
  * closed. The browser's page shows in every phase.
  *
@@ -259,11 +259,21 @@ test("how the Tiling moves, against motion-budget.json", async () => {
 
   const terminal = (n: number) =>
     page.getByRole("region", { name: "Terminal screen" }).nth(n)
+  // The last terminal, on screen, prints too while the phase lasts: whole
+  // lines, coloured in part, so its screen scrolls as an Agent's does.
+  await page.keyboard.type(
+    `while [ ! -e ${stop} ]; do printf '\\033[1;32m%s\\033[0m %s\\n' $(date +%N) 'compiling the quick brown fox, which jumps over the lazy dog' | tee -a ${printed}; sleep 0.02; done`
+  )
+  await page.keyboard.press("Enter")
   const printedBefore = lines()
   await measure("printing", () => page.waitForTimeout(3000), { still: true })
   expect(lines() - printedBefore, "the lines printed").toBeGreaterThan(10)
+  expect(
+    phases.printing.counted.terminals[2].draws[0],
+    "printing: the last terminal's draws on screen"
+  ).toBeGreaterThan(0)
   // Quiet from here: what the window costs by itself, and its moves. The
-  // first terminal stops printing, as what it printed shows: hidden, it
+  // terminals stop printing, as what they printed shows: hidden, the first
   // draws nothing either way.
   writeFileSync(stop, "")
   await terminal(2).click()

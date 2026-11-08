@@ -363,6 +363,19 @@ function summary(
       ])
     ),
     "",
+    "Each terminal's canvas calls a second, on screen · off it: what its " +
+      "draws cost the page.",
+    "",
+    table(
+      ["Phase", ...(rows[0]?.[1].terminals.map((t) => t.name) ?? [])],
+      rows.map(([name, n]) => [
+        name,
+        ...n.terminals.map((t) =>
+          pair(t.callsPerSecond.shown, t.callsPerSecond.hidden)
+        ),
+      ])
+    ),
+    "",
     `Budgets, in ${mode} mode: a measure worse than recorded only warns.`,
     "",
     table(["Measure", "Gate", "Budget", "Recorded", "Now", "Note"], budgets),
