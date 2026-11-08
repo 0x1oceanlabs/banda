@@ -12,6 +12,7 @@ import {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 /** An element as `tileOf` reads it: in the Tile `box`, or in none. */
@@ -45,7 +46,12 @@ test("an element finds the Tile it stands in while the Tiling holds it, and else
   const tile = new TileBox()
   tile.configure("hidden")
   expect(boxOf(element)).toBeUndefined()
+  // Asked before the Tiling holds its Tile, it says so, once.
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
   expect(tileOf(element).now().state).toBe("shown")
+  expect(tileOf(element).now().state).toBe("shown")
+  expect(warn).toHaveBeenCalledTimes(1)
+  warn.mockRestore()
 
   const release = holdTile(box, tile)
   expect(boxOf(element)).toBe(tile)
@@ -84,15 +90,22 @@ test("while the window is away every Tile is hidden, and each shows again as it 
   vi.resetModules()
   const away = await import("./tile")
 
+  // A Tile the Tiling holds.
   const moving = new away.TileBox()
+  away.holdTile({} as Element, moving)
   moving.configure("moving")
   expect(moving.now().state).toBe("hidden")
   const heard: string[] = []
   moving.watch(({ state }) => heard.push(state))
 
+  // A Pane outside the Tiling is hidden too.
+  const alone = away.tileOf(inside(null))
+  expect(alone.now().state).toBe("hidden")
+
   page.visibilityState = "visible"
   changed()
   expect(heard).toEqual(["moving"])
+  expect(alone.now().state).toBe("shown")
 
   page.visibilityState = "hidden"
   changed()

@@ -164,9 +164,10 @@ export const Strip = memo(function Strip({
   useEffect(() => {
     const strip = scroller.current
     if (!strip) return
-    const watch = new ResizeObserver(() =>
+    const watch = new ResizeObserver(() => {
       reveal(strip, places(strip, now.current.columns), now.current.focus)
-    )
+      aimed(strip)
+    })
     watch.observe(strip)
     return () => watch.disconnect()
   }, [])
@@ -192,7 +193,8 @@ export const Strip = memo(function Strip({
     }
   }, [asked, live, workspace])
   // Each Tile's state, from what the Strip shows and where it is headed,
-  // once it scrolled where its focus goes (ADR 0088, decision 4).
+  // once it scrolled where its focus goes, above, so a Tile a key brings
+  // into view shows before it slides in (ADR 0088, decision 4).
   useLayoutEffect(() => {
     const strip = scroller.current
     if (!strip) return
@@ -528,8 +530,6 @@ function reveal(
   const most = Math.max(0, (all.at(-1)?.right ?? 0) - pad - inner)
   const target = Math.max(0, Math.min(most, to))
   if (target !== at) scroll.to(target, moveOf("strip"))
-  // Where it goes shows from now, before it slides in.
-  aimed(strip)
 }
 
 /**
@@ -557,6 +557,8 @@ function land(
     .sort((a, b) => Math.abs(a.i - at) - Math.abs(b.i - at))[0]?.place
   if (!picked) return
   reveal(strip, all, picked.id, focus)
+  // Where it goes shows from now, before it slides in.
+  aimed(strip)
   const entry = columnIn(strip, picked.id)?.dataset.entry
   if (picked.id !== focus && entry) frame.focus(entry)
 }

@@ -111,6 +111,8 @@ export function Workspaces({
   useEffect(() => () => place.current?.stop(), [])
   // Each Tile's state, as the workspaces stand and where they slide (ADR
   // 0088, decision 4): the workspace a key goes to shows in the key's task.
+  // A new `current` is read through `place`, which the effect above just
+  // sent there.
   const { list, current } = workspaces
   useLayoutEffect(() => {
     const moving = place.current

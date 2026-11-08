@@ -337,13 +337,18 @@ are the same on every run, so they gate already.
 - **motion.4 Obey your Tile's Configure.** Read it with `useTile(select)`
   or `tileOf(element)` (`@banda/ui/lib/tile`), never as a prop, and never
   keep your own `ResizeObserver` or `IntersectionObserver` inside a Tile.
+  Ask `tileOf` from an effect: from a layout effect of the Pane's first
+  drawing, the Tiling holds no Tile yet, and it finds one always shown.
   Hidden: draw nothing, stop timers, keep state; `useLive` holds what
   changes for a second. Moving: measure nothing, resize nothing. Fit once
   per settled size, *after* P3, which adds the size to the Configure.
-  *Check:* motion.spec fails where a terminal draws while its Tile is
-  hidden; tiles.spec.ts shows one has drawn what it printed before the
-  frame that shows it again; the architecture test lists the files that
-  configure a Tile, and finds no state of it in a Pane's props.
+  *Until* then, Banda's own Panes still measure while moving: a terminal
+  fits on each frame its size changes, and a browser's page box measures
+  its slot on each tick (the research's §8.10). *Check:* motion.spec
+  fails where a terminal draws while its Tile is hidden; tiles.spec.ts
+  shows one has drawn what it printed before the frame that shows it
+  again; the architecture test lists the files that configure a Tile, and
+  finds no state of it in a Pane's props.
 - **motion.5 No animation values in React state.** Read Here and data by
   selector; memoise; pass no inline functions or objects into a memoised
   child; act by action id. *Check:* review; motion.spec counts the

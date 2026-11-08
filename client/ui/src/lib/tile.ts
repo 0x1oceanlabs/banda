@@ -35,54 +35,59 @@ export interface Tile {
 }
 
 /** The window is away: hidden, or its screen asleep. */
-let away = false
+let away =
+  typeof document !== "undefined" && document.visibilityState === "hidden"
 
-/** The Tiles some Pane watches, which hear the window go and come back. */
-const watched = new Set<TileBox>()
-
-if (typeof document !== "undefined") {
-  away = document.visibilityState === "hidden"
-  document.addEventListener("visibilitychange", () => {
-    away = document.visibilityState === "hidden"
-    // Each brings its Configure up to date, and its Pane hears it.
-    for (const box of [...watched]) box.now()
-  })
-}
+/** The Tiles the Tiling holds, and the one outside it: each hears the
+ * window go and come back. */
+const held = new Set<TileBox>()
 
 /**
  * A Tile as the Tiling keeps it: the Tiling gives it its state
- * (`configure`), and its Pane hears each new Configure. A new one is shown.
+ * (`configure`), and its Pane hears each new Configure. A new one is
+ * shown, but while the window is away.
  */
 export class TileBox implements Tile {
+  static {
+    if (typeof document !== "undefined")
+      document.addEventListener("visibilitychange", () => {
+        away = document.visibilityState === "hidden"
+        for (const box of [...held]) box.#settle()
+      })
+  }
+
   /** What the Tiling gave it, before the window's being away. */
   #given: TileState = "shown"
-  #configure: Configure = { state: "shown", serial: 0 }
+  #configure: Configure = { state: away ? "hidden" : "shown", serial: 0 }
   readonly #heard = new Set<(configure: Configure) => void>()
 
-  /** Its Configure now, brought up to date first: each watcher hears a
-   * new one. */
-  readonly now = (): Configure => {
-    const state = away ? "hidden" : this.#given
-    if (state !== this.#configure.state) {
-      this.#configure = { state, serial: this.#configure.serial + 1 }
-      for (const heard of [...this.#heard]) heard(this.#configure)
-    }
-    return this.#configure
-  }
+  readonly now = (): Configure => this.#configure
 
   readonly watch = (heard: (configure: Configure) => void): (() => void) => {
     this.#heard.add(heard)
-    watched.add(this)
     return () => {
       this.#heard.delete(heard)
-      if (this.#heard.size === 0) watched.delete(this)
     }
+  }
+
+  /** The state the Tiling gave it last, the window away or not. */
+  get given(): TileState {
+    return this.#given
   }
 
   /** Gives the Tile `state`: its Pane hears it only if it is new. */
   configure(state: TileState): void {
     this.#given = state
-    this.now()
+    this.#settle()
+  }
+
+  /** Its Configure from what it was given and the window's being away:
+   * each watcher hears a new one. */
+  #settle(): void {
+    const state = away ? "hidden" : this.#given
+    if (state === this.#configure.state) return
+    this.#configure = { state, serial: this.#configure.serial + 1 }
+    for (const heard of [...this.#heard]) heard(this.#configure)
   }
 }
 
@@ -94,6 +99,7 @@ const boxes = new WeakMap<Element, TileBox>()
 /** The Tile of a Pane outside the Tiling: always shown, but while the
  * window is away. */
 const ALONE = new TileBox()
+held.add(ALONE)
 
 /**
  * Says `element`, a Tile's box in the page (`[data-tile]`), is `tile`'s,
@@ -103,8 +109,11 @@ const ALONE = new TileBox()
  */
 export function holdTile(element: Element, tile: TileBox): () => void {
   boxes.set(element, tile)
+  held.add(tile)
   return () => {
-    if (boxes.get(element) === tile) boxes.delete(element)
+    if (boxes.get(element) !== tile) return
+    boxes.delete(element)
+    held.delete(tile)
   }
 }
 
@@ -115,11 +124,31 @@ export function boxOf(element: Element): TileBox | undefined {
   return box ? boxes.get(box) : undefined
 }
 
-/** The Tile `element` stands in: its Pane's own element, as a terminal's
+/** The Tiles' boxes a Pane looked for before the Tiling held them. */
+const early = new WeakSet<Element>()
+
+/**
+ * The Tile `element` stands in: its Pane's own element, as a terminal's
  * screen, or the place a browser's page shows over. Outside the Tiling,
- * a Tile always shown. */
+ * a Tile always shown.
+ *
+ * Asked from a layout effect of the Pane's first drawing, before the
+ * Tiling holds its Tile, it finds none, and says so once: that Pane would
+ * draw while hidden. Ask from an effect.
+ */
 export function tileOf(element: Element): Tile {
-  return boxOf(element) ?? ALONE
+  const box = element.closest(TILE)
+  if (!box) return ALONE
+  const tile = boxes.get(box)
+  if (tile) return tile
+  if (!early.has(box)) {
+    early.add(box)
+    console.warn(
+      "tileOf: asked before the Tiling holds the Tile, so it reads as always shown. Ask from an effect, not a layout effect of the first drawing.",
+      box
+    )
+  }
+  return ALONE
 }
 
 /** The Tile a Pane is drawn in, which the Tiling gives it, for `useTile`

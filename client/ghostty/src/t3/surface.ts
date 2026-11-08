@@ -591,6 +591,8 @@ export class GhosttyTerminalSurface {
   private forceFullRender = true;
   /** Banda: the frames it drew, to tell whether a fit drew one. */
   private drawn = 0;
+  /** Banda: hidden, something asked for a frame, or the cursor was drawn off as it hid. */
+  private missed = false;
   private scrollbarDirty = true;
   private scrollbarState: GhosttyScrollbar | null = null;
   private scrollbarPointerId: number | null = null;
@@ -766,18 +768,23 @@ export class GhosttyTerminalSurface {
   setVisible(visible: boolean): void {
     if (this.disposed || this.visible === visible) return;
     this.visible = visible;
-    this.cursorOn = true;
-    this.scrollbarDirty = true;
     if (!visible) {
+      if (!this.cursorOn) this.missed = true;
+      this.cursorOn = true;
       this.cancelRender();
       this.setSelectionAutoscroll(0);
       return;
     }
     // Banda: the canvas kept what it showed, and the core the rows that
     // changed since: it draws those, now, before a frame shows it, unless
-    // the fit drew it whole (ADR 0088, decision 4).
+    // the fit drew it whole; or, if nothing changed, nothing, and its
+    // cursor blinks on (ADR 0088, decision 4).
     const drawn = this.drawn;
-    if (this.fit() && this.drawn === drawn) this.renderFrame();
+    const missed = this.missed;
+    this.missed = false;
+    if (!this.fit() || this.drawn !== drawn) return;
+    if (missed) this.renderFrame();
+    else this.scheduleCursorBlink();
   }
 
   write(data: string): void {
@@ -1966,7 +1973,11 @@ export class GhosttyTerminalSurface {
   }
 
   private requestRender(): void {
-    if (this.disposed || !this.visible || !this.hasSize) return;
+    if (this.disposed || !this.hasSize) return;
+    if (!this.visible) {
+      this.missed = true;
+      return;
+    }
     if (this.deferSynchronizedRender() || this.frame !== 0) return;
     this.frame = this.clock.ask(() => {
       this.frame = 0;
@@ -2017,7 +2028,11 @@ export class GhosttyTerminalSurface {
   }
 
   private renderFrame(): void {
-    if (this.disposed || !this.visible) return;
+    if (this.disposed) return;
+    if (!this.visible) {
+      this.missed = true;
+      return;
+    }
     if (this.frame !== 0) {
       this.clock.cancel(this.frame);
       this.frame = 0;

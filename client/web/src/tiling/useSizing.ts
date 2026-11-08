@@ -15,6 +15,7 @@ import type { Plan } from "./arrange"
 import { type ColumnMotion, columnIn, floorIn, heightAt, room } from "./layout"
 import { drawn, type Entry, heightsOf, share, type Width } from "./model"
 import type { Frame } from "./PaneFrame"
+import { aimed } from "./tiles"
 import {
   type Box,
   grabAt,
@@ -132,8 +133,11 @@ export function useSizing(
         draw: (x) => {
           const wanted = pull(from, x, x0, scale)
           if (wanted === undefined) return
+          const first = width === undefined
           width = widthFor(wanted, { steps: presets, snap, scale }, floor)
           motion.current.hand(column.id, share(width) ?? from)
+          // The Tiles it may bring in show from its first step.
+          if (first) aimed(element)
         },
         plans: () =>
           width === undefined ||
@@ -148,7 +152,10 @@ export function useSizing(
                 },
               ],
         undo: () => motion.current.hand(column.id, from),
-        settle: () => motion.current.letGo(),
+        settle: () => {
+          motion.current.letGo()
+          aimed(element)
+        },
       }
     }
 

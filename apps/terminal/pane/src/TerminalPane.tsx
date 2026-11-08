@@ -364,11 +364,9 @@ function Screen({
     const stopObeying = tile.watch(obey)
     void (async () => {
       const made = await Surface.create(element, {
-        // Read once the fonts and the WASM have loaded: a screen made
-        // hidden draws nothing until it shows.
-        get visible() {
-          return !hidden
-        },
+        // Made hidden, it takes its grid and draws nothing; it shows below,
+        // as its Tile does.
+        visible: false,
         clock: CLOCK,
         theme: themeOf(element),
         font: fontNow(),

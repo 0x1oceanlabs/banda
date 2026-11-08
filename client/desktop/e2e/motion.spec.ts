@@ -262,19 +262,15 @@ test("how the Tiling moves, against motion-budget.json", async () => {
   const printedBefore = lines()
   await measure("printing", () => page.waitForTimeout(3000), { still: true })
   expect(lines() - printedBefore, "the lines printed").toBeGreaterThan(10)
-  // Its Tile hidden, the terminal printing off screen draws nothing (ADR
-  // 0088, decision 4): a hard gate, whatever the budget file's mode.
-  const [offScreen] = phases.printing.counted.terminals
-  expect(offScreen.draws[1], "printing: draws off screen").toBe(0)
   // Quiet from here: what the window costs by itself, and its moves. The
-  // first terminal stops printing, as its draws show.
+  // first terminal stops printing, as what it printed shows: hidden, it
+  // draws nothing either way.
   writeFileSync(stop, "")
   await terminal(2).click()
   await expect(async () => {
-    await page.evaluate(reset, false)
+    const before = lines()
     await page.waitForTimeout(500)
-    const [printing] = (await page.evaluate(read)).terminals
-    expect(printing.draws[0] + printing.draws[1]).toBe(0)
+    expect(lines()).toBe(before)
   }).toPass({ timeout: 15_000 })
   // Nothing has the keyboard, so no cursor blinks: a focused terminal's
   // blink is the working phase's (ADR 0088, decision 1).

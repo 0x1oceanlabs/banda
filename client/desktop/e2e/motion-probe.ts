@@ -11,7 +11,9 @@
  *   of the clock's read phase (`afterMoves`) too.
  * - Each terminal: its draws, while its canvas shows on screen and while it
  *   does not, and its fits. A draw is one pass of drawing calls, within one
- *   task; a fit, the canvas taking a new size.
+ *   task; a fit, the canvas taking a new size. When it came on screen, as
+ *   the browser's own observer works it out in the frame that first shows
+ *   it; asked (`resetTexts`), the text it drew before.
  * - The Marks' draws: each task that changed the drawing of a Mark on the
  *   window at `reset`, as the logo's trick does.
  * - Long tasks, long animation frames and slow keys, where Chromium has
@@ -42,6 +44,12 @@ export type TerminalCount = {
   draws: [number, number]
   calls: [number, number]
   fits: number
+  /** When it came on screen, as the frame showing it was worked out; 0
+   * while it has not. */
+  came: number
+  /** Of the text it drew, kept only as `resetTexts` asks: what it drew
+   * before it came on screen, or all of it if it has not. */
+  before: string
 }
 
 /** What the probe counted since `reset`. */
@@ -79,7 +87,10 @@ export type Reading = {
 /** The parts whose drawings the probe counts. */
 export type Drawn = "tiles" | "strips" | "widgets" | "sidebar"
 
-type Probe = { reset: (moving: boolean) => void; read: () => Reading }
+type Probe = {
+  reset: (moving: boolean, texts?: boolean) => void
+  read: () => Reading
+}
 
 export function install(): void {
   const global = globalThis as unknown as { bandaMotion?: Probe }
@@ -161,11 +172,14 @@ export function install(): void {
   }
 
   // The terminals, by their canvases, named in the order first seen.
-  type Terminal = TerminalCount & {
+  type Terminal = Omit<TerminalCount, "before"> & {
     shown: boolean
     drawing: boolean
     sizing: boolean
+    texts: { at: number; text: string }[]
   }
+  // The text the terminals draw is kept only as asked.
+  let texts = false
   const terminals = new Map<HTMLCanvasElement, Terminal>()
   // A canvas that only touches the screen's edge intersects with nothing
   // showing: the second threshold says when it comes on.
@@ -173,8 +187,11 @@ export function install(): void {
     (entries) => {
       for (const entry of entries) {
         const terminal = terminals.get(entry.target as HTMLCanvasElement)
-        if (terminal)
-          terminal.shown = entry.isIntersecting && entry.intersectionRatio > 0
+        if (!terminal) continue
+        const shown = entry.isIntersecting && entry.intersectionRatio > 0
+        if (shown && !terminal.shown && terminal.came === 0)
+          terminal.came = entry.time
+        terminal.shown = shown
       }
     },
     { threshold: [0, 0.001] }
@@ -189,9 +206,11 @@ export function install(): void {
         draws: [0, 0],
         calls: [0, 0],
         fits: 0,
+        came: 0,
         shown: false,
         drawing: false,
         sizing: false,
+        texts: [],
       })
       sight.observe(canvas)
     }
@@ -223,6 +242,8 @@ export function install(): void {
           terminal.draws[side] += 1
           queueMicrotask(() => (terminal.drawing = false))
         }
+        if (texts && name === "fillText")
+          terminal.texts.push({ at: performance.now(), text: String(args[0]) })
       }
       return draw.apply(this, args)
     }
@@ -387,7 +408,8 @@ export function install(): void {
     frame(step)
   }
 
-  const reset = (moving: boolean) => {
+  const reset = (moving: boolean, keep = false) => {
+    texts = keep
     find()
     watchMarks()
     hook(document)
@@ -396,6 +418,8 @@ export function install(): void {
       terminal.draws = [0, 0]
       terminal.calls = [0, 0]
       terminal.fits = 0
+      terminal.came = 0
+      terminal.texts = []
     }
     following = moving
     last = 0
@@ -417,7 +441,17 @@ export function install(): void {
       reads: state.reads,
       marks: state.marks,
       terminals: [...terminals.values()].map(
-        ({ name, draws, calls, fits }) => ({ name, draws, calls, fits })
+        ({ name, draws, calls, fits, came, texts }) => ({
+          name,
+          draws,
+          calls,
+          fits,
+          came,
+          before: texts
+            .filter(({ at }) => came === 0 || at < came)
+            .map(({ text }) => text)
+            .join(" "),
+        })
       ),
       longTasks: state.longTasks,
       longFrames: state.longFrames,
@@ -434,6 +468,14 @@ export function install(): void {
 /** Starts counting afresh: following the ticks if `moving`. */
 export function reset(moving: boolean): void {
   ;(globalThis as unknown as { bandaMotion: Probe }).bandaMotion.reset(moving)
+}
+
+/** Starts counting afresh, still, keeping the text each terminal draws. */
+export function resetTexts(): void {
+  ;(globalThis as unknown as { bandaMotion: Probe }).bandaMotion.reset(
+    false,
+    true
+  )
 }
 
 /** What was counted since `reset`. */
