@@ -507,7 +507,7 @@ Two rules make it Unix-like: **the Tiling knows no Pane's content**, it only han
 export type TileState = "shown" | "moving" | "hidden"
 export interface Configure {
   size: { width: number; height: number }   // CSS px of the content box, as settled
-  scale: number                              // devicePixelRatio × the Pane's zoom
+  scale: number                              // devicePixelRatio, the window's zoom in it
   state: TileState
   serial: number
 }
@@ -516,6 +516,7 @@ export function useTile<T>(select: (c: Configure) => T): T
 ```
 
 - **Delivered imperatively:** the terminal and the page box read `tileOf(element).watch`; React readers use `useTile(select)`. As Pane props, every visible Pane would render twice per move. The states land first (P2); the size follows the width pick (P7).
+- **The scale leaves the Pane's zoom out** (found in P3): a terminal's font zoom and a page's zoom are the Pane's own state, which the Tiling cannot know, so `scale` is `devicePixelRatio` alone. A zoom of the Tiling's own, as the overview's (P10), joins it once something reads it.
 - **The Tiling predicts each state at a move's start** from the target layout, plus a margin, so incoming terminals do not slide in blank. An `IntersectionObserver` per Tile corrects hand scrolls. Inactive Deck tabs, Tiles under a zoom and a window that is away are hidden. The target of a jump is shown in the input task.
 - **Hidden:** draw nothing, stop timers, hold commits (at most once a second), keep state. **Moving:** measure and resize nothing; a terminal shows its retained bitmap. **Shown:** draw.
 - **No React `<Activity mode="hidden">` on Tiles:** it destroys Effects, and the terminal's streams with them (`apps/terminal/pane/src/TerminalPane.tsx:256-406`).

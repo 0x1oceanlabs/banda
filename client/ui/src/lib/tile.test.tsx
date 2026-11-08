@@ -52,10 +52,12 @@ test("an element finds the Tile it stands in while the Tiling holds it, and else
   const tile = new TileBox()
   tile.configure("hidden")
   expect(boxOf(element)).toBeUndefined()
-  // Asked before the Tiling holds its Tile, it says so, once.
+  // Asked before the Tiling holds its Tile, it says so, once, and the
+  // Pane gets a Tile of its own.
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
-  expect(tileOf(element).now().state).toBe("shown")
-  expect(tileOf(element).now().state).toBe("shown")
+  const early = tileOf(element)
+  expect(early.now().state).toBe("shown")
+  expect(tileOf(element)).toBe(early)
   expect(warn).toHaveBeenCalledTimes(1)
   warn.mockRestore()
 
@@ -251,4 +253,11 @@ test("outside the Tiling, a Pane's element is a Tile of its own, as large as it,
   expect(tile.now().size).toEqual({ width: 300, height: 200 })
   tile.watch(() => {})
   expect([...observer.seen]).toEqual([element])
+
+  // So is one asked for before the Tiling holds the Tile: it hears the
+  // size of the element it was asked with.
+  vi.spyOn(console, "warn").mockImplementation(() => {})
+  const early = inside({})
+  tiles.tileOf(early).watch(() => {})
+  expect([...observer.seen]).toEqual([element, early])
 })
