@@ -2793,6 +2793,162 @@ async fn a_missing_project_keeps_the_trust_the_person_gave_it_once_located() {
     assert!(!kernel.projects().await[0].trusted);
 }
 
+/// Every Project trusted before the fence counts as one the Person said
+/// they trust, once: the upgrade says so, and when, apart from a Person's
+/// own word; a scratch one, or one not trusted, stays as it was, and one
+/// made since follows the rule (ADR 0083, F0-3; Roma, 2026-11-08).
+#[tokio::test]
+async fn a_project_trusted_before_the_fence_is_said_trusted_once_by_the_upgrade() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, notes) = (PersonId::new(), Notes::default());
+    let kernel = open(root.path(), owner, &notes).await;
+    let mine = create(&kernel, owner, "Mine").await;
+    let gone = create(&kernel, owner, "Gone").await;
+    let foreign = root.path().join("Foreign");
+    std::fs::create_dir_all(foreign.join(".claude")).unwrap();
+    let foreign = add_folder(&kernel, owner, json!({ "folder": foreign }))
+        .await
+        .unwrap();
+    let said = add_folder(
+        &kernel,
+        owner,
+        json!({ "folder": root.path().join("Said"), "create": true, "trusted": true }),
+    )
+    .await
+    .unwrap();
+    let scratch = create_scratch(&kernel, owner, CommandId::new())
+        .await
+        .unwrap();
+    assert!(!mine.trust_said && !foreign.trusted && said.trust_said);
+    let data = root.path().join(".data/projects");
+    let manifest_of = |id: ProjectId| data.join(id.to_string()).join("project.json");
+    let read = |id: ProjectId| -> Value {
+        serde_json::from_slice(&std::fs::read(manifest_of(id)).unwrap()).unwrap()
+    };
+    assert_eq!(read(said.id)["said"]["by"], "person");
+    assert_eq!(read(mine.id)["version"], 1);
+    let_go(kernel, &root.path().join(".data"), &[]).await;
+
+    // As an engine from before the fence left them: no version, no word
+    // said. One's folder is gone meanwhile.
+    for id in [mine.id, gone.id, foreign.id, said.id, scratch.id] {
+        let mut manifest = read(id);
+        let fields = manifest.as_object_mut().unwrap();
+        for field in ["version", "trust_said", "said"] {
+            fields.remove(field);
+        }
+        std::fs::write(manifest_of(id), serde_json::to_vec(&manifest).unwrap()).unwrap();
+    }
+    // An engine from before the fence kept no word of the upgrade either.
+    std::fs::remove_file(root.path().join(".data/said-before-fence.json")).unwrap();
+    std::fs::rename(root.path().join("Gone"), root.path().join("Moved")).unwrap();
+    let before = now_ms();
+    let kernel = reopen(root.path(), owner, &notes, 5).await;
+    let listed = kernel.projects().await;
+    let said_of = |id| listed.iter().find(|one| one.id == id).unwrap().trust_said;
+    for (id, trusted_then) in [
+        (mine.id, true),
+        (gone.id, true),
+        (said.id, true),
+        (foreign.id, false),
+        (scratch.id, false),
+    ] {
+        assert_eq!(said_of(id), trusted_then, "{id}");
+        let manifest = read(id);
+        assert_eq!(manifest["version"], 1, "{id}");
+        match trusted_then {
+            true => {
+                assert_eq!(manifest["said"]["by"], "upgrade", "{id}");
+                assert!(manifest["said"]["at"].as_i64().unwrap() >= before);
+            }
+            false => assert_eq!(manifest.get("said"), None, "{id}"),
+        }
+    }
+    let upgraded = read(mine.id)["said"].clone();
+
+    // Made since, trusted only as nothing marked it foreign: not said, and
+    // the next start leaves it so, and the upgrade's word as it was.
+    let later = create(&kernel, owner, "Later").await;
+    assert!(later.trusted && !later.trust_said);
+    let_go(kernel, &root.path().join(".data"), &[]).await;
+    // Even written as an engine from before the fence writes it, as one
+    // run on the store again would: the upgrade was once, and is done.
+    let mut manifest = read(later.id);
+    manifest.as_object_mut().unwrap().remove("version");
+    std::fs::write(
+        manifest_of(later.id),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
+    let kernel = reopen(root.path(), owner, &notes, 6).await;
+    let listed = kernel.projects().await;
+    let later = listed.iter().find(|one| one.id == later.id).unwrap();
+    assert!(later.trusted && !later.trust_said, "{later:?}");
+    assert_eq!(read(mine.id)["said"], upgraded);
+    // The Person's own word, said again, is theirs.
+    let trust = json!({ "project": mine.id, "trusted": true });
+    projects(&kernel, owner, "trust", trust).await.unwrap();
+    assert_eq!(read(mine.id)["said"]["by"], "person");
+}
+
+/// A Project's data found in a folder under the root, as engines before
+/// ADR 0026 kept it, is anyone's to write there: an Agent's, or a clone's.
+/// The Project it makes is foreign, whatever it says (ADR 0083, F0-3), and
+/// it never takes a folder a Project names.
+#[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "no Banda on Windows ever kept a Project's data in its folder"
+)]
+async fn a_project_found_in_a_folder_is_foreign_and_takes_no_folder_a_project_names() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, notes) = (PersonId::new(), Notes::default());
+    let kernel = open(root.path(), owner, &notes).await;
+    let mine = create(&kernel, owner, "Mine").await;
+    let_go(kernel, &root.path().join(".data"), &[]).await;
+
+    // Written to look like one from before the fence, trusted, its id
+    // first of all, in the Project's folder and in a new one.
+    let planted = |folder: &Path, id: &str| {
+        let old = folder.join(".banda");
+        std::fs::create_dir_all(&old).unwrap();
+        let manifest = json!({
+            "id": id,
+            "name": "Mine",
+            "author": Participant::Person(owner),
+            "command": CommandId::new(),
+            "created_at": 1,
+            "sees_others": true,
+            "trust_said": true,
+        });
+        std::fs::write(old.join("project.json"), manifest.to_string()).unwrap();
+    };
+    planted(
+        &root.path().join("Mine"),
+        "00000000-0000-0000-0000-000000000000",
+    );
+    let cloned = root.path().join("Cloned");
+    planted(&cloned, "00000000-0000-0000-0000-000000000001");
+
+    let kernel = reopen(root.path(), owner, &notes, 2).await;
+    let listed = kernel.projects().await;
+    let folder_of = |name: &Path| dunce::canonicalize(name).unwrap().display().to_string();
+    let theirs = listed
+        .iter()
+        .find(|one| one.folder == folder_of(&root.path().join("Mine")))
+        .unwrap();
+    assert_eq!(theirs.id, mine.id, "the Person's Project keeps its folder");
+    assert!(root.path().join("Mine/.banda/project.json").is_file());
+    let found = listed
+        .iter()
+        .find(|one| one.folder == folder_of(&cloned))
+        .unwrap();
+    assert!(
+        !found.trusted && !found.trust_said && !found.sees_others,
+        "{found:?}"
+    );
+}
+
 /// Makes a scratch Project, for a Thread in No Project, under `command`.
 async fn create_scratch(
     kernel: &Kernel,

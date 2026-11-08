@@ -5,7 +5,7 @@
 
 use crate::carried::Carried;
 use crate::model::{AccountKind, HarnessView, LimitsLook};
-use banda_kernel::{Holes, Program, ProjectId, project_env};
+use banda_kernel::{Holes, Program, ProjectId, SSH_AGENT, project_env};
 use banda_look::Problem;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -76,8 +76,9 @@ pub struct Harness {
 
 /// The Person's credentials a Harness's process gets, and those it must
 /// not (ADR 0083): the GitHub token Banda read for a Project the Person
-/// said they trust, and in any other every GitHub token taken out of the
-/// environment it starts in. They make no other process: a process
+/// said they trust, and in any other every GitHub token and the SSH
+/// agent's socket taken out of the environment it starts in
+/// ([`Harness::set_trust_said`]). They make no other process: a process
 /// started with others goes on, so a token that changes reaches the next
 /// start, and whether the Person trusts the Project lets its processes go
 /// anyway; one started without a token the Project now gets goes once it
@@ -261,6 +262,19 @@ impl Harness {
         harness.cwd = trusted.then(|| folder.to_owned());
         harness.holes = holes;
         harness
+    }
+
+    /// What its process gets as its Project's trust is said or not
+    /// (`said`; ADR 0083, F0-3): where the Person said they trust it, their
+    /// GitHub token and their SSH agent, whose socket its environment
+    /// binds behind the fence; in any other, every GitHub token and
+    /// `SSH_AUTH_SOCK` are taken out of the environment it starts in.
+    pub async fn set_trust_said(&mut self, said: bool) {
+        self.credentials = crate::github::credentials(said).await;
+        self.holes.ssh_agent = said;
+        if !said {
+            self.credentials.unset.push(SSH_AGENT.to_owned());
+        }
     }
 }
 
@@ -1456,6 +1470,31 @@ mod tests {
                 trusted.start().holes(),
                 "{}",
                 harness.id
+            );
+        }
+    }
+
+    /// A Project the Person said they trust gives its Harness's process
+    /// their GitHub token and their SSH agent; any other, neither: not even
+    /// what the engine's own environment names (ADR 0083, F0-3).
+    #[tokio::test]
+    async fn only_a_project_said_trusted_gives_the_github_token_and_the_ssh_agent() {
+        crate::github::keep(Some("t".to_owned()));
+        let mut harness = known()[0].clone();
+        harness.set_trust_said(true).await;
+        let started = harness.start();
+        assert_eq!(started.env.get("GH_TOKEN").map(String::as_str), Some("t"));
+        assert!(started.holes().unwrap().ssh_agent);
+        assert!(started.unset.is_empty());
+
+        harness.set_trust_said(false).await;
+        let started = harness.start();
+        assert!(!started.env.contains_key("GH_TOKEN"));
+        assert!(!started.holes().unwrap().ssh_agent);
+        for variable in ["GH_TOKEN", "GITHUB_TOKEN", SSH_AGENT] {
+            assert!(
+                started.unset.iter().any(|unset| unset == variable),
+                "{variable}"
             );
         }
     }

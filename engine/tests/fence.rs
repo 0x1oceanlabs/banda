@@ -239,3 +239,56 @@ async fn a_harness_s_program_starts_behind_the_fence_and_a_person_s_act_does_not
     let refused = environment.spawn(&missing, Input::Null).unwrap_err();
     assert!(refused.to_string().contains("could not start"), "{refused}");
 }
+
+/// The SSH agent goes with trust (ADR 0083, F0-3): an agent's socket in
+/// sight, as 1Password's in the home or ssh-agent's in its folder in
+/// `/tmp`, is hidden from a Harness's program not given the agent, and
+/// left where it is for one given it.
+#[tokio::test]
+async fn an_ssh_agent_s_socket_in_sight_is_hidden_from_a_program_not_given_the_agent() {
+    use banda_kernel::{Environment, Fence, Holes, Input, Program};
+    use std::os::unix::net::UnixListener;
+    needs_the_fence!();
+    let home = home();
+    let at = dunce::canonicalize(home.path()).unwrap();
+    let socket = at.join(".1password/agent.sock");
+    let classic = at.join("tmp/ssh-x/agent.1");
+    for one in [&socket, &classic] {
+        std::fs::create_dir_all(one.parent().unwrap()).unwrap();
+    }
+    let _listening = [UnixListener::bind(&socket), UnixListener::bind(&classic)];
+    let base = Spec {
+        build: own_build(),
+        ..Spec::default()
+    };
+    let banda = Path::new(env!("CARGO_BIN_EXE_banda"));
+    let fence = banda_environments::probe(&base, banda).await;
+    assert!(matches!(fence, Fence::Holds { .. }), "{fence:?}");
+    let agents = banda_environments::SshAgents {
+        named_in_sight: true,
+        in_sight: vec![socket.clone()],
+        starting: vec![at.join("tmp/ssh-")],
+        ..Default::default()
+    };
+    let environment = banda_environments::Local::fenced(base, fence)
+        .ssh_agents(agents)
+        .launcher(banda);
+    let script = format!(
+        "for s in {} {}; do test -S $s && echo reached || echo hidden; done",
+        socket.display(),
+        classic.display()
+    );
+    let reached = async |ssh_agent: bool| {
+        let holes = Holes {
+            ssh_agent,
+            ..Holes::default()
+        };
+        let program = Program::harness("sh", vec!["-c".to_owned(), script.clone()], holes);
+        let child = environment.spawn(&program, Input::Null).unwrap();
+        let output = child.wait_with_output().await.unwrap();
+        assert!(output.status.success(), "{output:?}");
+        String::from_utf8(output.stdout).unwrap()
+    };
+    assert_eq!(reached(true).await, "reached\nreached\n", "given the agent");
+    assert_eq!(reached(false).await, "hidden\nhidden\n", "not given it");
+}

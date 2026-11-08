@@ -68,23 +68,30 @@ test("a folder that does not look foreign has nothing to say", () => {
   })
 })
 
-test("where the fence holds, only a Project the Person said they trust gives its Agents their GitHub token", () => {
+test("where the fence holds, only a Project the Person said they trust gives its Agents their GitHub token and ssh-agent", () => {
   const said = { trusted: true, trust_said: true }
   const unsaid = { trusted: true, trust_said: false }
   expect(trustAbout(said, true)).toMatch(
-    /Its Agents also get your GitHub token\.$/
+    /Its Agents also get your GitHub token and ssh-agent\.$/
   )
-  expect(trustAbout(unsaid, true)).toMatch(/once you say you trust it\.$/)
-  expect(offersSaying(unsaid, true)).toBe(true)
-  expect(offersSaying(said, true)).toBe(false)
+  expect(trustAbout(unsaid, true)).toMatch(
+    /your GitHub token and ssh-agent once you say you trust it\.$/
+  )
+  expect(offersSaying(unsaid)).toBe(true)
+  expect(offersSaying(said)).toBe(false)
   expect(trustAbout({ trusted: false }, true)).toMatch(/^Not trusted\./)
 })
 
-test("where the fence does not hold, trust says nothing of the GitHub token: the Agents act as the Person", () => {
+test("where the fence does not hold, saying trust gives the ssh-agent alone, and is offered there too: gh reaches the token itself", () => {
+  const said = { trusted: true, trust_said: true }
   const unsaid = { trusted: true, trust_said: false }
-  expect(trustAbout(unsaid, false)).toBe(
-    trustAbout({ trusted: true, trust_said: true }, false)
+  expect(trustAbout(said, false)).toMatch(
+    /Its Agents also get your ssh-agent\.$/
+  )
+  expect(trustAbout(unsaid, false)).toMatch(
+    /Its Agents get your ssh-agent once you say you trust it\.$/
   )
   expect(trustAbout(unsaid, false)).not.toMatch(/GitHub/)
-  expect(offersSaying(unsaid, false)).toBe(false)
+  expect(offersSaying(unsaid)).toBe(true)
+  expect(offersSaying({ trusted: false })).toBe(false)
 })

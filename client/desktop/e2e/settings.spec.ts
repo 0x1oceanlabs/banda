@@ -109,6 +109,11 @@ test("Agents show who is signed in to each Harness, and write harnesses.toml", a
   const file = join(dir, "config/harnesses.toml")
   const { composer } = await firstThread(page)
   await expect(composer).toBeVisible()
+  // Full access written into agents.toml by hand is no one's choice: where
+  // the fence does not hold, as here, it counts only as the Person picks
+  // it in Settings, which writes through the engine (ADR 0083).
+  const agents = join(dir, "config/agents.toml")
+  writeFileSync(agents, '[start.fake]\nmode = "full_access"\n')
   const settings = await openSettings(page)
   await settings
     .getByRole("navigation", { name: "Settings sections" })
@@ -138,8 +143,8 @@ test("Agents show who is signed in to each Harness, and write harnesses.toml", a
   await expect(fake.getByText("Not signed in.")).toBeVisible()
 
   // What a new Thread starts with is agents.toml's, set from the
-  // composer's own bar, and ↶ gives it back to the Harness.
-  const agents = join(dir, "config/agents.toml")
+  // composer's own bar, and ↶ gives it back to the Harness. The file's
+  // Full access shows as Supervised until the Person picks it here.
   await fake.getByRole("button", { name: "Mode: Supervised" }).click()
   await page.getByRole("menuitemradio", { name: /Full access/ }).click()
   await expect
@@ -204,7 +209,7 @@ test("Agents show who is signed in to each Harness, and write harnesses.toml", a
   await enter.getByRole("radio", { name: "queue" }).click()
   await expect
     .poll(() => textOf(join(dir, "config/agents.toml")))
-    .toContain('\nenter = "queue"\n')
+    .toMatch(/^enter = "queue"$/m)
   await expect(enter.getByRole("radio", { name: "queue" })).toHaveAttribute(
     "aria-checked",
     "true"

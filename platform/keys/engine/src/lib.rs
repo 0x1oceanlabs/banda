@@ -324,11 +324,45 @@ fn title_of(id: &str) -> String {
 /// The keys module, over the Person's config folder.
 pub struct KeysModule {
     config: PathBuf,
+    /// The file that keeps the modes the Person chose for each Harness's
+    /// new Threads in Settings; none in a test that gives none.
+    modes: Option<PathBuf>,
 }
 
 impl KeysModule {
     pub fn new(config: PathBuf) -> Self {
-        KeysModule { config }
+        KeysModule {
+            config,
+            modes: None,
+        }
+    }
+
+    /// Keeps in `file`, in the engine's state folder, the mode the Person
+    /// chooses for a Harness's new Threads as they set it through
+    /// `settings_set`, as the settings Pane does (ADR 0083, F0-3).
+    pub fn modes_chosen_in(self, file: PathBuf) -> Self {
+        KeysModule {
+            modes: Some(file),
+            ..self
+        }
+    }
+
+    /// Keeps what a change `by` the Person makes of a new Thread's mode
+    /// they chose, as `keep` does it in the file of those; an Agent's
+    /// change is no choice, and reaches no mode (`only_the_person`).
+    fn keep_choice(
+        &self,
+        by: Participant,
+        keep: impl FnOnce(&Path) -> std::io::Result<()>,
+    ) -> Result<(), Refusal> {
+        match (by, &self.modes) {
+            (Participant::Person(_), Some(modes)) => keep(modes).map_err(|error| {
+                Refusal::invalid(format!(
+                    "The file changed, but Banda did not keep that you chose it: {error}"
+                ))
+            }),
+            _ => Ok(()),
+        }
     }
 
     async fn list(&self, _: Call, _: Nothing) -> Result<Vec<Listed>, Refusal> {
@@ -357,6 +391,9 @@ impl KeysModule {
         let why = banda_settings::only_the_person(&file, &key, Some(&value));
         may_change(call.participant(), &file, &key, why)?;
         banda_settings::set(&self.config, &file, &key, &value).map_err(refused)?;
+        self.keep_choice(call.participant(), |modes| {
+            banda_settings::chose(modes, &file, &key, Some(&value))
+        })?;
         Ok(format!("{key} is {value} in {file} now"))
     }
 
@@ -365,6 +402,9 @@ impl KeysModule {
         let why = banda_settings::only_the_person(&file, &key, None);
         may_change(call.participant(), &file, &key, why)?;
         banda_settings::reset(&self.config, &file, &key).map_err(refused)?;
+        self.keep_choice(call.participant(), |modes| {
+            banda_settings::chose(modes, &file, &key, None)
+        })?;
         Ok(format!("{key} is as Banda has it in {file} now"))
     }
 
@@ -373,6 +413,9 @@ impl KeysModule {
         let why = banda_settings::only_the_person_renames(&file, &key, &to);
         may_change(call.participant(), &file, &key, why)?;
         banda_settings::rename(&self.config, &file, &key, &to).map_err(refused)?;
+        self.keep_choice(call.participant(), |modes| {
+            banda_settings::chose_renamed(modes, &file, &key, &to)
+        })?;
         Ok(format!("{key} is {to} in {file} now"))
     }
 }

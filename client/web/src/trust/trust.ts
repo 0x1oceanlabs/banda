@@ -97,7 +97,8 @@ export const NOTHING_YET =
 
 /** What trusting a Project also gives its Agents (ADR 0083): only a
  * Project the Person said they trust does, as they add it or later. */
-export const GITHUB_TOKEN = "Its Agents also get your GitHub token."
+export const GITHUB_AND_SSH =
+  "Its Agents also get your GitHub token and ssh-agent."
 
 /** The question's two answers, Not yet first, as Enter takes it. */
 export const ANSWERS = {
@@ -107,7 +108,7 @@ export const ANSWERS = {
   },
   trust: {
     title: "Trust",
-    about: `Its settings, hooks and MCP servers load. ${GITHUB_TOKEN}`,
+    about: `Its settings, hooks and MCP servers load. ${GITHUB_AND_SSH}`,
   },
 } as const
 
@@ -125,10 +126,16 @@ export const ISOLATED = {
     "Agents, terminals and this Project's scripts run in a container. Your files stay where they are.",
 }
 
+/** What saying they trust a Project gives its Agents (ADR 0083): where
+ * the fence holds, the Person's GitHub token and ssh-agent; elsewhere the
+ * ssh-agent, as `gh` reaches the token there itself. */
+export function givenBySaying(fenced: boolean): string {
+  return fenced ? "your GitHub token and ssh-agent" : "your ssh-agent"
+}
+
 /** What the Project's settings say of its trust: whether it is trusted,
- * and where the fence holds (`fenced`), whether the Person said so, which
- * gives its Agents their GitHub token. Elsewhere they act as the Person,
- * and `gh` reaches the token itself. */
+ * and whether the Person said so, which gives its Agents what
+ * `givenBySaying` says, fence or none (`fenced`). */
 export function trustAbout(
   project: { trusted: boolean; trust_said?: boolean },
   fenced: boolean
@@ -137,18 +144,18 @@ export function trustAbout(
     return "Not trusted. Claude Code and Codex read only your own settings here; its .claude/, .codex/ and .mcp.json wait."
   const loads =
     "Trusted. Claude Code and Codex load its own settings, hooks and MCP servers, from their next turn."
-  if (!fenced) return loads
+  const given = givenBySaying(fenced)
   return project.trust_said
-    ? `${loads} ${GITHUB_TOKEN}`
-    : "Trusted, as nothing marked it foreign: its settings, hooks and MCP servers load. Its Agents get your GitHub token once you say you trust it."
+    ? `${loads} Its Agents also get ${given}.`
+    : `Trusted, as nothing marked it foreign: its settings, hooks and MCP servers load. Its Agents get ${given} once you say you trust it.`
 }
 
-/** Whether a trusted Project's settings offer to say it is trusted: only
- * where the fence holds, as only there does saying it give its Agents
- * the GitHub token. */
-export function offersSaying(
-  project: { trusted: boolean; trust_said?: boolean },
-  fenced: boolean
-): boolean {
-  return fenced && project.trusted && !project.trust_said
+/** Whether a trusted Project's settings offer to say it is trusted: until
+ * the Person said so, fence or none, as an Agent gets their ssh-agent only
+ * then. */
+export function offersSaying(project: {
+  trusted: boolean
+  trust_said?: boolean
+}): boolean {
+  return project.trusted && !project.trust_said
 }

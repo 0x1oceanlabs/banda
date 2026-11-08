@@ -328,17 +328,19 @@ MCP frames in the gateway (V6). Decision 8 lands with the web client, ADR
   - A Thread in Full access that the fence does not keep now, from
     before the fence or chosen where it held, runs Supervised from its
     next turn, and its `thread.configured` says why. Full access the
-    Person chose where the fence did not hold, in the composer or as
-    agents.toml's `start.<id>.mode`, runs as chosen. Full access the
-    Harness moved to by itself is no one's choice.
+    Person chose where the fence did not hold, in a Thread's mode menu or
+    as a new Thread's mode in Settings → Agents, runs as chosen (Roma's
+    call 3 below). Full access the Harness moved to by itself is no one's
+    choice.
   - The fence hides the session's runtime folder, the other sessions'
-    and the container and machine managers' sockets it knows, and leaves
-    the SSH agent's socket in reach, so an Agent signs as the Person's
-    shell does. A Harness gets the Person's GitHub token, as `GH_TOKEN`,
-    only in a Project the Person said they trust (`trust_said`), and no
-    GitHub token at all in any other. A Project trusted before this, or
-    trusted only as nothing marked it foreign, is not said trusted: the
-    Person says so in its settings, or with `projects.trust`.
+    and the container and machine managers' sockets it knows. A Harness
+    gets the Person's GitHub token, as `GH_TOKEN`, and their SSH agent's
+    socket, so an Agent signs as the Person's shell does, only in a
+    Project the Person said they trust (`trust_said`), and neither in any
+    other (Roma's call 2 below). A Project trusted only as nothing marked
+    it foreign is not said trusted: the Person says so in its settings,
+    or with `projects.trust`; one trusted before the fence was said so
+    once by the upgrade (Roma's call 1 below).
   - Until B15, an Agent's `banda settings` goes through the engine (the
     keys part's `settings_set`, `settings_reset` and `settings_rename`,
     until a settings part of its own takes them), which refuses, under
@@ -355,3 +357,46 @@ MCP frames in the gateway (V6). Decision 8 lands with the web client, ADR
     Person asks for runs as their own git does.
     A program found only outside root's folders, as gh under a version
     manager, runs as found, and the engine says so once in its log.
+- Roma's calls on F0-3 (2026-11-08):
+  1. Every Project trusted before the fence counts as one whose trust
+     was said, once. The first engine with the fence marks each Project
+     that is trusted at that moment as said, by the upgrade and with when
+     (`project.json`'s `said`), so it reads apart from the Person's own
+     word; a scratch Project, in No Project, is not marked. A Project made
+     since is said only by the trust step, by `projects.add` or
+     `projects.create` with `trusted: true`, or by `projects.trust`.
+     Built so: the upgrade runs once for the store, which keeps in the
+     engine's data that it did, so a manifest from before the fence that
+     turns up later, as an older engine run on the store again writes, is
+     said by nobody. A Project found in a folder, as engines before
+     ADR 0026 kept one in `.banda/`, is foreign, whatever its manifest
+     says: not trusted, its trust not said, seeing no other Project, and
+     never in a folder a Project names already.
+  2. The SSH agent goes with trust, as the GitHub token does: only a
+     Project whose trust was said gets the hole for the agent's socket
+     and `SSH_AUTH_SOCK`. In any other the variable is unset and nothing
+     is bound. The window says so wherever it says what an Agent gets:
+     the Fence row, the trust card and the trust step.
+     Built so: behind the fence, a program given the agent keeps
+     `SSH_AUTH_SOCK` wherever the socket it names is in sight or bound,
+     and one not given it starts with every agent's socket in sight
+     hidden: the one `SSH_AUTH_SOCK` names, those the Person's ssh config
+     names as `IdentityAgent`, ssh-agent's folders in `/tmp`, and
+     1Password's, Bitwarden's and GnuPG's. What goes with trust is the
+     agent: key files in `~/.ssh` are files in the home, which the fence
+     leaves in sight as the rest of it. Where the fence does not hold, the
+     variable is all that saying trust gives, so a Project's settings
+     offer to say it there too, and say it gives the ssh-agent.
+  3. Where the fence does not hold, Full access is the Person's choice
+     (the Unfenced mark) only as they chose it in the window: a Thread's
+     mode menu, or the new-Thread mode in Settings → Agents, which
+     writes `agents.toml` through the engine as the Person, and the
+     engine keeps what they chose in its own state. A `full_access` found
+     only in `agents.toml`, written by hand or by anything else, is no
+     one's: such a Thread starts Supervised, and the mode menu says why,
+     as for any other. Where the fence holds, nothing changes.
+     Its limit: it counts only where the fence does not hold, and there
+     nothing keeps a program the Person runs from what the Person can
+     do. The engine's record keeps Full access from a hand edit of
+     `agents.toml` and from a program that writes the file, not from an
+     Agent that runs commands as the Person.

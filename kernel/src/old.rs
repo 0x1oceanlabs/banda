@@ -7,10 +7,14 @@
 //!   The first engine to see one moves that data out, into
 //!   `projects/<id>/`, and the folder keeps the work alone (ADR 0026,
 //!   decision 2).
+//! - Before the fence a Project was trusted or not, and nobody had said it
+//!   (ADR 0083, F0-3). The first engine with the fence says the trust of
+//!   each that was trusted then, once for the whole store
+//!   ([`said_before_fence`]).
 
 use crate::Error;
-use crate::project::{self, LOCK, MANIFEST, Manifest};
-use std::path::Path;
+use crate::project::{self, LOCK, MANIFEST, Manifest, Said, SaidBy};
+use std::path::{Path, PathBuf};
 
 /// The folder inside a Project that Banda kept for itself.
 const OLD: &str = ".banda";
@@ -88,19 +92,21 @@ pub(crate) fn rename_files(folder: &Path) -> Result<(), Error> {
 }
 
 /// Moves out the data of every old Project in `root`'s folders that `projects`
-/// does not hold yet. A move that fails leaves `.banda/` as it was, and
-/// the next start tries again.
+/// does not hold yet, and whose folder no Project there names. A move that
+/// fails leaves `.banda/` as it was, and the next start tries again.
 pub(crate) fn move_out(root: &Path, projects: &Path) {
     let Ok(entries) = std::fs::read_dir(root) else {
         return;
     };
     let mut folders: Vec<_> = entries.filter_map(|e| e.ok().map(|e| e.path())).collect();
     folders.sort();
+    let mut named: Option<Vec<PathBuf>> = None;
     for folder in folders {
         if !folder.join(OLD).is_dir() {
             continue;
         }
-        match move_one(&folder, projects) {
+        let named = named.get_or_insert_with(|| named_folders(projects));
+        match move_one(&folder, projects, named) {
             Ok(true) => tracing::info!(folder = %folder.display(), "a Project's data moved out"),
             Ok(false) => {}
             Err(error) => tracing::error!(
@@ -112,9 +118,26 @@ pub(crate) fn move_out(root: &Path, projects: &Path) {
     }
 }
 
+/// The folders the Projects in `projects` name.
+fn named_folders(projects: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(projects) else {
+        return Vec::new();
+    };
+    (entries.flatten())
+        .filter_map(|entry| Manifest::read(&entry.path()).ok())
+        .map(|manifest| manifest.folder)
+        .collect()
+}
+
 /// Whether it moved: `false` when `.banda/` holds no Project, or
-/// `projects` holds that one already.
-fn move_one(folder: &Path, projects: &Path) -> Result<bool, Error> {
+/// `projects` holds that one already, or one of them names its folder
+/// (`named`).
+///
+/// What a folder holds is anyone's to write, a clone's or an Agent's as
+/// much as an older Banda's, so the Project it makes is foreign until the
+/// Person trusts it (ADR 0083, F0-3): not trusted, its trust not said, and
+/// seeing no other Project, whatever its manifest says.
+fn move_one(folder: &Path, projects: &Path, named: &mut Vec<PathBuf>) -> Result<bool, Error> {
     let old = folder.join(OLD);
     // Its files are a Space's: they take their new names first.
     rename_files(&old)?;
@@ -130,7 +153,22 @@ fn move_one(folder: &Path, projects: &Path) -> Result<bool, Error> {
         );
         return Ok(false);
     }
-    manifest.folder = dunce::canonicalize(folder)?;
+    let canonical = dunce::canonicalize(folder)?;
+    if named.contains(&canonical) {
+        tracing::warn!(
+            folder = %folder.display(),
+            "a Project names this folder already; .banda/ stays"
+        );
+        return Ok(false);
+    }
+    manifest.folder = canonical.clone();
+    manifest.untrusted = true;
+    manifest.trust_said = false;
+    manifest.said = None;
+    manifest.sees_others = false;
+    manifest.scratch = false;
+    manifest.version = project::VERSION;
+    named.push(canonical);
     // An older Banda that has it open holds this lock.
     let lock = project::locked(&old.join(LOCK))?;
     // One rename on one disk; a copy across two, which takes the old
@@ -165,6 +203,64 @@ fn copy(from: &Path, to: &Path) -> std::io::Result<()> {
         }
     }
     Ok(())
+}
+
+/// The first version of a manifest from the fence on, which says whether
+/// its trust was said.
+const FENCE: u32 = 1;
+
+/// What the store keeps, in its data folder, once the upgrade that brought
+/// the fence said the trust of its Projects ([`said_before_fence`]): when.
+const UPGRADED: &str = "said-before-fence.json";
+
+/// Whether the upgrade that brought the fence is still to say the trust of
+/// the Projects in `data` (the engine's data folder): only until it did
+/// once ([`upgraded`]).
+pub(crate) fn upgrading(data: &Path) -> bool {
+    !data.join(UPGRADED).exists()
+}
+
+/// Keeps in `data` that the upgrade said the trust of its Projects, so no
+/// later start does it again.
+pub(crate) fn upgraded(data: &Path) {
+    let at = serde_json::json!({ "at": crate::now_ms() });
+    if let Err(error) = project::write_whole(&data.join(UPGRADED), at.to_string().as_bytes()) {
+        tracing::error!(%error, "the upgrade to the fence was not kept as done; the next start does it again");
+    }
+}
+
+/// Says, once, that the Person trusts a Project they trusted before the
+/// fence (Roma, 2026-11-08): while the store is [`upgrading`], a manifest
+/// from before it (`version` 0) of a trusted Project, scratch ones aside,
+/// is marked as said by this upgrade, with when, so it reads apart from
+/// one the Person said. Once the store is [`upgraded`], it is never called
+/// again: a manifest of version 0 found later, as an older engine may
+/// write, is said by nobody. One not written now stays unsaid, for the
+/// Person to say.
+pub(crate) fn said_before_fence(data: &Path, manifest: &mut Manifest) {
+    if manifest.version >= FENCE {
+        return;
+    }
+    let trusted = !manifest.untrusted && !manifest.scratch && !manifest.trust_said;
+    let upgraded = manifest.change_in(data, |manifest| {
+        if trusted {
+            manifest.trust_said = true;
+            manifest.said = Some(Said::now(SaidBy::Upgrade));
+        }
+        manifest.version = project::VERSION;
+    });
+    match upgraded {
+        Ok(()) if trusted => tracing::info!(
+            project = %manifest.id,
+            "a Project trusted before the fence is said to be trusted, once"
+        ),
+        Ok(()) => {}
+        Err(error) => tracing::error!(
+            data = %data.display(),
+            %error,
+            "a Project from before the fence was not marked; the Person says its trust"
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -216,6 +312,9 @@ mod tests {
         let moved = data.path().join(id.to_string());
         let manifest = Manifest::read(&moved).unwrap();
         assert_eq!(manifest.id, id);
+        // Foreign until the Person trusts it (ADR 0083, F0-3).
+        assert!(manifest.untrusted && !manifest.trust_said && manifest.said.is_none());
+        assert_eq!(manifest.version, project::VERSION);
         assert_eq!(
             manifest.folder,
             dunce::canonicalize(root.path().join("Work")).unwrap()

@@ -1,11 +1,12 @@
 /**
  * The Agents section (ADR 0016, decision 7): the agents module draws it;
  * this gives it the engine, a Project where there is one, the files through
- * `banda settings`, and a place for the Pane a sign-in opens, a terminal,
- * over the window. The Harnesses are the machine's (ADR 0040): they show
- * before any Project.
+ * `banda settings`, `agents.toml` through the engine, and a place for the
+ * Pane a sign-in opens, a terminal, over the window. The Harnesses are the
+ * machine's (ADR 0040): they show before any Project.
  */
-import { useState } from "react"
+import { useMemo, useState } from "react"
+import type { Engine } from "@banda/contract"
 import {
   AgentsSettings,
   FENCE_LINK,
@@ -15,6 +16,7 @@ import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
 import { Spinner } from "@banda/ui/components/spinner"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { shownProjects } from "@banda/ui/lib/projects"
+import { problem } from "@banda/ui/lib/words"
 import type { PaneState } from "@banda/ui/pane"
 import { terminal } from "@banda/terminal-pane"
 import type { SectionProps } from "./sections"
@@ -33,9 +35,28 @@ const written = (name: string): SettingsFile => ({
 })
 
 const harnesses = written("harnesses.toml")
-const agents = written("agents.toml")
+
+/** `agents.toml`, written through the engine as the Person, which keeps the
+ * mode they choose for a Harness's new Threads: only Full access chosen
+ * here counts where the fence does not hold (ADR 0083). */
+const throughEngine = (engine: Engine): SettingsFile => {
+  const name = "agents.toml"
+  const said = (asked: Promise<unknown>) =>
+    asked.then(
+      (): string[] => [],
+      (error: unknown) => problem(error).split("\n")
+    )
+  return {
+    set: (key, value) =>
+      said(engine.call("keys.settings_set", { file: name, key, value })),
+    reset: (key) =>
+      said(engine.call("keys.settings_reset", { file: name, key })),
+    reveal: written(name).reveal,
+  }
+}
 
 export function Agents({ engine, lit, run }: SectionProps) {
+  const agents = useMemo(() => throughEngine(engine), [engine])
   // Any Project offers what a new Thread starts with, and runs a terminal:
   // the first, as the window's home, once there is one.
   const { listed } = useProjects(engine)

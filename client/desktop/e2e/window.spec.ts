@@ -871,25 +871,28 @@ test("where the fence holds whole, a new Thread starts Full access, with the Per
   )
 
   // Its Project is trusted, as nothing marked it foreign: its Agents get
-  // the GitHub token only once the Person says they trust it.
+  // the GitHub token and the ssh-agent only once the Person says they
+  // trust it.
   await settings
     .getByRole("navigation", { name: "Settings sections" })
     .getByRole("button", { name: /Projects/ })
     .click()
   const trust = settings.locator('[data-key="trust"]')
   await expect(trust).toContainText(
-    "Its Agents get your GitHub token once you say you trust it."
+    "Its Agents get your GitHub token and ssh-agent once you say you trust it."
   )
   await trust.getByRole("button", { name: "Say you trust it…" }).click()
   const saying = page.getByRole("dialog", {
-    name: "Give Work's Agents your GitHub token?",
+    name: "Give Work's Agents your GitHub token and ssh-agent?",
   })
   await expect(saying).toContainText(
-    "Say you trust it, and its Agents get your GitHub token from their next turn."
+    "Say you trust it, and its Agents get your GitHub token and ssh-agent from their next turn."
   )
   await page.screenshot({ path: "test-results/fence-trust-said.png" })
   await saying.getByRole("button", { name: "Trust", exact: true }).click()
-  await expect(trust).toContainText("Its Agents also get your GitHub token.")
+  await expect(trust).toContainText(
+    "Its Agents also get your GitHub token and ssh-agent."
+  )
   await expect(
     trust.getByRole("button", { name: "Say you trust it…" })
   ).toHaveCount(0)
@@ -5025,9 +5028,10 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
   await expect(
     menu.getByRole("switch", { name: "Run it isolated" })
   ).toBeDisabled()
-  // Trust gives its Agents the Person's GitHub token too (ADR 0083).
+  // Trust gives its Agents the Person's GitHub token and ssh-agent too
+  // (ADR 0083).
   await expect(menu.getByRole("option", { name: /^Trust/ })).toContainText(
-    "Its Agents also get your GitHub token."
+    "Its Agents also get your GitHub token and ssh-agent."
   )
   await page.screenshot({ path: "test-results/31-add-project-trust.png" })
   // ⌫ goes back to the path as it was typed, and Add asks again.
@@ -5059,7 +5063,9 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
   await page.getByRole("menuitem", { name: "Trust Project…" }).click()
   const card = page.getByRole("dialog", { name: "Trust widget?" })
   await expect(card).toContainText(".claude/")
-  await expect(card).toContainText("Its Agents also get your GitHub token.")
+  await expect(card).toContainText(
+    "Its Agents also get your GitHub token and ssh-agent."
+  )
   await card.getByRole("button", { name: "Trust", exact: true }).click()
   await expect(card).toBeHidden()
   await expect.poll(trusted).toBe(true)
@@ -5091,10 +5097,10 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
   await expect.poll(trusted).toBe(false)
 
   // A Project of the Person's own folder is trusted, as nothing marked
-  // it foreign. Where no fence holds, as here, its Agents act as the
-  // Person, and its settings say nothing of the GitHub token; where the
-  // fence holds, they offer to say it is trusted (the fence holding's
-  // test).
+  // it foreign, and its Agents get the ssh-agent only once the Person says
+  // they trust it, fence or none. Where no fence holds, as here, `gh`
+  // reaches the GitHub token itself, so its settings say nothing of it;
+  // where the fence holds, they do (the fence holding's test).
   const mine = join(dir, "work", "mine")
   mkdirSync(mine, { recursive: true })
   banda("project", "add", mine)
@@ -5109,9 +5115,21 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
   await page.getByRole("menuitem", { name: "Project settings" }).click()
   const trust = page.locator('[data-key="trust"]')
   await expect(trust).toContainText(
-    "Trusted. Claude Code and Codex load its own settings, hooks and MCP servers"
+    "Trusted, as nothing marked it foreign: its settings, hooks and MCP servers load. Its Agents get your ssh-agent once you say you trust it."
   )
   await expect(trust).not.toContainText("GitHub")
+  await trust.getByRole("button", { name: "Say you trust it…" }).click()
+  const saying = page.getByRole("dialog", {
+    name: "Give mine's Agents your ssh-agent?",
+  })
+  await expect(saying).toContainText(
+    "Say you trust it, and its Agents get your ssh-agent from their next turn."
+  )
+  await saying.getByRole("button", { name: "Trust", exact: true }).click()
+  await expect(trust).toContainText(
+    "Trusted. Claude Code and Codex load its own settings, hooks and MCP servers, from their next turn. Its Agents also get your ssh-agent."
+  )
+  await expect.poll(() => listed("mine")?.trust_said).toBe(true)
   await expect(
     trust.getByRole("button", { name: "Stop trusting" })
   ).toBeVisible()

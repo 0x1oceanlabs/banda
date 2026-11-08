@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 mod person;
 mod write;
-pub use person::{only_the_person, only_the_person_renames};
+pub use person::{chose, chose_renamed, only_the_person, only_the_person_renames};
 pub use write::{rename, reset, set};
 
 /// Each module's settings files, by its ID, as its crate describes them

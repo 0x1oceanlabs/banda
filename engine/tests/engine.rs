@@ -880,6 +880,49 @@ fn an_agents_banda_acts_under_its_pass() {
     assert!(engine.wait().unwrap().success());
 }
 
+/// Where the fence does not hold, Full access for a Harness's new Threads
+/// is the Person's choice only as they set it through the engine, as
+/// Settings writes `agents.toml`: written there otherwise, by hand or by a
+/// `banda settings` that reaches no engine, it is no one's, and a new
+/// Thread starts Supervised (ADR 0083, F0-3; Roma, 2026-11-08).
+#[test]
+fn a_new_threads_full_access_is_the_persons_only_as_they_set_it_through_the_engine() {
+    let places = Places::new();
+    let (mut engine, stdin, _) =
+        places.serve_with(&[("BANDA_FENCE", "off"), ("BANDA_LOG", "error")]);
+    let work = places.ok("projects.create", None, json!({ "name": "Work" }));
+    let work = text(&work["id"]).to_owned();
+    let mode = || {
+        let defaults = places.ok("agents.defaults", Some(&work), json!({ "harness": "fake" }));
+        defaults["settings"]["mode"].clone()
+    };
+    let by_hand = [
+        "settings",
+        "set",
+        "agents.toml",
+        "start.fake.mode",
+        "full_access",
+    ];
+    let by_hand = || assert!(places.banda(&by_hand).status().unwrap().success());
+    by_hand();
+    let agents = std::fs::read_to_string(places.config.join("agents.toml")).unwrap();
+    assert!(agents.contains("mode = \"full_access\""), "{agents}");
+    assert_eq!(mode(), "supervised", "the file alone");
+
+    let set =
+        json!({ "file": "agents.toml", "key": "start.fake.mode", "value": "\"full_access\"" });
+    places.ok("keys.settings_set", None, set);
+    assert_eq!(mode(), "full_access", "chosen through the engine");
+    let reset = json!({ "file": "agents.toml", "key": "start.fake" });
+    places.ok("keys.settings_reset", None, reset);
+    assert_eq!(mode(), "supervised");
+    by_hand();
+    assert_eq!(mode(), "supervised", "taken back, then written by hand");
+
+    drop(stdin);
+    assert!(engine.wait().unwrap().success());
+}
+
 #[test]
 fn a_project_the_person_does_not_trust_loads_only_their_own_settings() {
     let places = Places::new();

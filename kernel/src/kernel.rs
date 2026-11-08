@@ -6,7 +6,7 @@ use crate::methods::{Asks, Kind, Nothing, Tool, needs_command_id};
 use crate::module::{Call, Module, Scope, Stream, Wall};
 use crate::outbox::Boot;
 use crate::passes::{self, Audience, Passes};
-use crate::project::{self, GONE, Manifest, Project, Shared, UNFINISHED};
+use crate::project::{self, GONE, Manifest, Project, Said, SaidBy, Shared, UNFINISHED};
 use crate::sign::{self, Kept, Picked, Sign, SignPick};
 use crate::store::{Answer, Begun};
 use crate::window::Window;
@@ -261,6 +261,9 @@ impl KernelBuilder {
             .filter_map(|entry| entry.ok().map(|e| e.path()))
             .collect();
         found.sort();
+        // The Projects here when the fence came: their trust is said once,
+        // for the store, and never for one found later.
+        let upgrading = crate::old::upgrading(&self.data);
         let mut folders: HashMap<PathBuf, PathBuf> = Default::default();
         for data in found {
             let name = data.file_name().unwrap_or_default().to_string_lossy();
@@ -272,7 +275,7 @@ impl KernelBuilder {
             }
             // A Space's files take their names first; left as they were, the
             // Project waits for the next start (ADR 0069, for good).
-            let manifest =
+            let mut manifest =
                 match crate::old::rename_files(&data).and_then(|()| Manifest::read(&data)) {
                     Ok(manifest) => manifest,
                     Err(error) => {
@@ -280,6 +283,9 @@ impl KernelBuilder {
                         continue;
                     }
                 };
+            if upgrading {
+                crate::old::said_before_fence(&data, &mut manifest);
+            }
             if let Some(kept) = folders.get(&manifest.folder) {
                 tracing::warn!(
                     folder = %manifest.folder.display(),
@@ -316,6 +322,9 @@ impl KernelBuilder {
                     tracing::error!(data = %data.display(), %error, "a Project did not open")
                 }
             }
+        }
+        if upgrading {
+            crate::old::upgraded(&self.data);
         }
         kernel.find_signs();
         Ok(kernel)
@@ -1115,6 +1124,7 @@ impl Kernel {
             let mut manifest = Manifest::new(&canonical, name, author, command);
             manifest.untrusted = !trusted;
             manifest.trust_said = said;
+            manifest.said = said.then(|| Said::now(SaidBy::Person));
             self.place_project(manifest).await
         }
         .await;
@@ -1236,6 +1246,7 @@ impl Kernel {
         let said = |manifest: &mut Manifest| {
             manifest.untrusted = untrusted;
             manifest.trust_said = trusted;
+            manifest.said = trusted.then(|| Said::now(SaidBy::Person));
         };
         let (summary, changed) = match entry {
             Entry::Open(open) => {

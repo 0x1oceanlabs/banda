@@ -183,9 +183,9 @@ impl Live {
             pipe.first_on_path(&mut started.env);
         }
         // The Person's GitHub token, which `gh` behind the fence cannot
-        // read from the keyring, goes only to a Project the Person said
-        // they trust (ADR 0083).
-        started.credentials = banda_harnesses::github::credentials(project.trust_said()).await;
+        // read from the keyring, and their SSH agent go only to a Project
+        // the Person said they trust (ADR 0083, F0-3).
+        started.set_trust_said(project.trust_said()).await;
         let connection = (self.hosts)
             .get(project.id(), project.environment(), &started)
             .await?;
