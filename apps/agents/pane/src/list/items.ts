@@ -3,7 +3,8 @@
  * 0087, decision 12): rename it, have its Harness's small model suggest a
  * title, give back the title it had before, mark it unread or read (ADR
  * 0077), make a Project of the No Project it is in (ADR 0046), snooze it
- * and wake it (ADR 0074). The Window draws their rows in the Thread menu,
+ * and wake it (ADR 0074), and archive it as the sidebar list asks (ADR
+ * 0096). The Window draws their rows in the Thread menu,
  * the Pane menu and the Banda menu, and runs them by id, as any action;
  * Threads does them, on the engine of the host that lists the Thread (ADR
  * 0081).
@@ -355,6 +356,43 @@ const wake: ItemAction = {
   },
 }
 
+/**
+ * Archives the Thread, or brings it back, on its host, which keeps the
+ * mark (ADR 0096): the sidebar list's Archive asks it so, with
+ * `archived`, as only Threads knows the Thread's commands, and draws its
+ * row. Archived, the Thread is put away once its host took it: one it
+ * refuses, as a Thread that began a turn there, keeps its Panes, and a
+ * toast says why. Without `archived`, nothing.
+ */
+const archive: ItemAction = {
+  id: "agents.archive-thread",
+  section: "Threads",
+  title: "Archive a Thread on its host, or bring it back",
+  unlisted: true,
+  args: {
+    ...itemArgs({
+      archived: { flag: "true archives it, false brings it back" },
+    }),
+    required: ["archived"],
+  },
+  group: "other",
+  does: "archive",
+  elsewhere: true,
+  row: () => null,
+  run: (window, args) => {
+    const at = threadAt(window, args)
+    const archived = args?.archived
+    if (!at || typeof archived !== "boolean") return
+    const thread = at.listed.id as ThreadId
+    void mark(engineOf(window, at), at.project, thread, { archived }).then(
+      (took) => {
+        if (took && archived)
+          window.run("pane.put-away", { project: at.project, item: thread })
+      }
+    )
+  },
+}
+
 /** Threads' item actions, in the order the Thread menu lists their rows. */
 export const threadItems: readonly ItemAction[] = [
   rename,
@@ -364,4 +402,5 @@ export const threadItems: readonly ItemAction[] = [
   makeProject,
   snooze,
   wake,
+  archive,
 ]

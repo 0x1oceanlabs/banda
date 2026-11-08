@@ -3,7 +3,6 @@ import type { ProjectId } from "@banda/contract"
 import type { Args } from "@banda/ui/module"
 import type { Listed, Lists } from "@banda/ui/pane"
 import type { Shell } from "../window/actions"
-import { archivedNow } from "./archived"
 import { archiving, itemActionsOf, paneRowsOf, rowsOf } from "./items"
 
 const S1 = "s1" as ProjectId
@@ -42,6 +41,7 @@ test("a Thread's item actions are Threads', then the sidebar list's Archive", ()
     "agents.make-project",
     "thread.snooze",
     "thread.wake",
+    "agents.archive-thread",
     "sidebar.archive",
   ])
 })
@@ -87,19 +87,20 @@ test("the Pane menu offers Snooze… or Wake now, and nothing that is off", () =
   expect(ids(thread({ mark: "asking" }))).toEqual([])
 })
 
-test("Archive puts a Thread away and ends its snooze by its App's wake; again, it comes back", () => {
-  const sleeping = thread({ snooze: { at: 1, until: Date.now() + 60_000 } })
-  const { shell, ran } = fake(sleeping)
-  archiving.run(shell)
+test("Archive asks the Item's App to archive it on its host, in one command; an archived one, to bring it back", () => {
   const item = { project: S1, item: "t1" }
-  expect(ran).toEqual([
-    ["thread.wake", item],
-    ["pane.put-away", item],
+  // A sleeping one too: its host ends the snooze as it archives it.
+  const sleeping = thread({ snooze: { at: 1, until: Date.now() + 60_000 } })
+  const first = fake(sleeping)
+  archiving.run(first.shell)
+  expect(first.ran).toEqual([
+    ["agents.archive-thread", { ...item, archived: true }],
   ])
-  expect(archivedNow(sleeping)).toBe(true)
-  archiving.run(shell, item)
-  expect(ran).toHaveLength(2)
-  expect(archivedNow(sleeping)).toBe(false)
+  const archived = fake(thread({ archived: true }))
+  archiving.run(archived.shell, item)
+  expect(archived.ran).toEqual([
+    ["agents.archive-thread", { ...item, archived: false }],
+  ])
 })
 
 test("a Thread at work is not archived", () => {
@@ -107,5 +108,11 @@ test("a Thread at work is not archived", () => {
   const { shell, ran } = fake(working)
   archiving.run(shell)
   expect(ran).toEqual([])
-  expect(archivedNow(working)).toBe(false)
+})
+
+test("an Item whose App has no archive of its own stays as it is", () => {
+  const file = thread({ pane: { kind: "files.file", args: {} } })
+  const { shell, ran } = fake(file)
+  archiving.run(shell)
+  expect(ran).toEqual([])
 })

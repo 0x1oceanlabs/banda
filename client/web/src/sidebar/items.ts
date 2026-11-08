@@ -14,23 +14,20 @@ import {
   itemArgs,
   itemOf,
 } from "@banda/ui/module"
-import { asleep, type Listed } from "@banda/ui/pane"
+import type { Listed } from "@banda/ui/pane"
 import { ArchiveIcon, ArchiveRestoreIcon } from "lucide-react"
 import { itemsOf } from "../registry"
 import type { StandRow } from "../tiling/PaneMenu"
 import type { Shell } from "../window/actions"
-import {
-  archivable,
-  archivedNow,
-  archive as keepArchived,
-  toggled,
-} from "./archived"
+import { archivable, archivedNow, toggled } from "./archived"
 
 /**
  * Archive thread, or Unarchive thread (ADR 0069; ADR 0008, decision 4):
- * the sidebar list's own, as the Person's mark is the window's. Archived,
- * an Item is put away: every Pane that shows it closes, on any workspace;
- * a snoozed Thread's snooze ends, by its App's wake.
+ * the sidebar list's own row and key. The Item's host keeps the mark (ADR
+ * 0096), so its App's own archive sends it there, in one command, which
+ * ends a snoozed Thread's snooze too; archived, the Item is put away once
+ * its host took it: every Pane that shows it closes, on any workspace. An
+ * Item whose App has none stays as it is.
  */
 export const archiving: ItemAction<Shell> = {
   id: "sidebar.archive",
@@ -56,11 +53,9 @@ export const archiving: ItemAction<Shell> = {
     const { project, listed } = at
     const archived = toggled(shell.items.get(), project, listed.id)
     if (archived === undefined) return
-    const item = { project, item: listed.id }
-    const wake = itemActionOf(listed, "wake")
-    if (archived && wake && asleep(listed, Date.now())) shell.run(wake.id, item)
-    keepArchived(listed.id, archived)
-    if (archived) shell.run("pane.put-away", item)
+    const owner = itemActionOf(listed, "archive")
+    if (owner && owner !== archiving)
+      shell.run(owner.id, { project, item: listed.id, archived })
   },
 }
 

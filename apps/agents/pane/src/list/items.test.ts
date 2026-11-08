@@ -338,3 +338,45 @@ test("Snooze… is off while the Thread asks, and Wake now takes its place while
   expect(wake.row(sleeping, { ...AT, now: 100 })).toBeNull()
   expect(wake.row(listed(), AT)).toBeNull()
 })
+
+test("Archive goes to the Thread's host with what the sidebar list asks, and puts the Thread away once its host took it", async () => {
+  const archive = action("agents.archive-thread")
+  expect(archive.row(listed(), AT)).toBeNull()
+  const at = { project: "s1", item: "t1" }
+  const { window, sent, ran } = fake(listed())
+  archive.run(window, { ...at, archived: true })
+  expect(sent).toEqual([["agents.archive", { thread: "t1" }]])
+  await vi.waitFor(() => expect(ran).toEqual([["pane.put-away", at]]))
+  archive.run(window, { ...at, archived: false })
+  expect(sent.at(-1)).toEqual(["agents.unarchive", { thread: "t1" }])
+  // Asked for neither, it does nothing.
+  archive.run(window, at)
+  expect(sent).toHaveLength(2)
+  await Promise.resolve()
+  expect(ran).toHaveLength(1)
+})
+
+test("an archive its host refuses keeps the Thread's Panes, and a toast says why", async () => {
+  // A host that refuses all but a rename, as one where a turn began.
+  const { window, ran } = fake(listed(), new Error("at work"))
+  action("agents.archive-thread").run(window, {
+    project: "s1",
+    item: "t1",
+    archived: true,
+  })
+  await vi.waitFor(() => expect(said.errors).toHaveLength(1))
+  expect(ran).toEqual([])
+})
+
+test("another host's Thread is archived on its own engine", () => {
+  const item = listed({
+    pane: { kind: "agents.thread", args: { host: "arc" } },
+  })
+  const { window, asked } = fake(item)
+  action("agents.archive-thread").run(window, {
+    project: "s1",
+    item: "t1",
+    archived: true,
+  })
+  expect(asked).toEqual([{ host: "arc", name: "agents.archive" }])
+})
