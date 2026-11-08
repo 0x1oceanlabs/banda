@@ -360,3 +360,27 @@ test("commands cut off by a restart go again in the order sent, and their places
     else expect(times).toBeLessThanOrEqual(1)
   }
 })
+
+test("an address with a latency, as tests give, hears the engine that much later, in order", async () => {
+  await serve()
+  const far = async () => ({ ...(await address()), latency: 200 })
+  client = new Engine(far)
+  await until(client, "open")
+  const project = await client.command("projects.create", { name: "Work" })
+  const heard: number[] = []
+  client.follow(
+    machineOf(client),
+    0,
+    { module: "workspaces" },
+    (event) => heard.push(event.seq),
+    () => {}
+  )
+  const sent = performance.now()
+  const opened = await client.commandAt("workspaces.open", {
+    project: project.id,
+    kind: "notes.page",
+    args: {},
+  })
+  expect(performance.now() - sent).toBeGreaterThanOrEqual(200)
+  await expect.poll(() => heard).toContain(opened.at)
+})

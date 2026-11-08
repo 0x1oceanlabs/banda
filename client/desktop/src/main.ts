@@ -114,6 +114,13 @@ const ORIGIN = "app://banda"
 const DEV_PAGE = app.isPackaged ? undefined : process.env.BANDA_PAGE
 /** Where the windows load the page from. */
 const PAGE = DEV_PAGE ?? `${ORIGIN}/index.html`
+/**
+ * For tests only: how many ms late the page hears what the engine says,
+ * as from a host far away (`Address.latency`). A packaged app ignores it.
+ */
+const TEST_LATENCY = app.isPackaged
+  ? 0
+  : Number(process.env.BANDA_TEST_LATENCY) || 0
 
 /** The hosts of `app://` beside Banda's own page: the files a Pane shows,
  * and the pages among them that run scripts, sandboxed (ADR 0073,
@@ -406,7 +413,18 @@ async function ready(): Promise<void> {
     }
   )
   serve(runtime, fromPage, BRIDGE, {
-    engine: [none, () => Engine.use((engine) => engine.address)],
+    engine: [
+      none,
+      () =>
+        Engine.use((engine) =>
+          TEST_LATENCY
+            ? Effect.map(engine.address, (at) => ({
+                ...at,
+                latency: TEST_LATENCY,
+              }))
+            : engine.address
+        ),
+    ],
     // The other machines' engines, through ssh (hosts.ts, ADR 0081).
     hosts: { current: [none, () => Hosts.use((hosts) => hosts.current)] },
     hostEngine: [text, ([name]) => Hosts.use((hosts) => hosts.address(name))],

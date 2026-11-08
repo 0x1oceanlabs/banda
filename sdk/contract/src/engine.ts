@@ -15,7 +15,18 @@ import type { Answer, CommandCall, MethodOf, Params } from "./methods"
 export const PROTOCOL = 1
 
 /** Where the engine listens, and the secret that names its owner. */
-export type Address = { url: string; secret: string }
+export type Address = {
+  url: string
+  secret: string
+  /**
+   * For tests only: how many ms later than it comes the client hears
+   * what the engine says, its answers, events and stream pieces, in
+   * order, as from a host far away. The desktop gives one only in a
+   * development build, as `BANDA_TEST_LATENCY` says (ADR 0088, decision
+   * 11).
+   */
+  latency?: number
+}
 
 export type Status =
   | { state: "connecting" }
@@ -351,12 +362,19 @@ export class Engine {
     }
     const socket = new WebSocket(address.url)
     this.#socket = socket
+    // What the engine says comes `latency` ms late, its close too, each
+    // in the order it came: timers of one delay run in the order set.
+    const latency = address.latency ?? 0
+    const later = (heard: () => void) =>
+      latency > 0 ? void setTimeout(heard, latency) : heard()
     socket.onopen = () =>
       this.#send({ type: "hello", protocol: PROTOCOL, token: address.secret })
-    socket.onmessage = (message) => this.#receive(String(message.data))
-    socket.onclose = () => {
-      if (this.#socket === socket) this.#drop()
-    }
+    socket.onmessage = (message) =>
+      later(() => this.#receive(String(message.data)))
+    socket.onclose = () =>
+      later(() => {
+        if (this.#socket === socket) this.#drop()
+      })
   }
 
   #send(frame: ClientFrame): void {
