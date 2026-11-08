@@ -540,6 +540,11 @@ export interface GhosttyTerminalSurfaceOptions {
    * every live thing in the window ticks on one; the browser's animation frames
    * if none. */
   readonly clock?: GhosttyClock;
+  /** Banda: the host's word that the mount has a new size, as `fit`, or the
+   * screen a new scale, as `rescale`; it returns how to stop. The window's Tile
+   * says so, whose policy says when the screen takes a size (ADR 0088, decision
+   * 5). An observer of the mount and a watch of the screen's scale if none. */
+  readonly sized?: (fit: () => void, rescale: () => void) => () => void;
 }
 
 /** Banda: asks for a tick to run `run` in, and takes one asked for back. */
@@ -691,10 +696,19 @@ export class GhosttyTerminalSurface {
     this.fontSize = terminalFontSize(options.font?.size);
     this.ligatures = options.font?.ligatures ?? true;
     this.installEvents();
-    this.watchDevicePixelRatio();
     this.reducedMotionMedia?.addEventListener("change", this.onReducedMotionChange);
     document.fonts.addEventListener("loadingdone", this.onFontsLoaded);
-    this.stopObservingResize = observeResize(mount, () => this.fit());
+    if (options.sized) {
+      this.stopObservingResize = options.sized(
+        () => {
+          this.fit();
+        },
+        () => this.rescale(),
+      );
+    } else {
+      this.watchDevicePixelRatio();
+      this.stopObservingResize = observeResize(mount, () => this.fit());
+    }
   }
 
   static async create(
@@ -1317,9 +1331,14 @@ export class GhosttyTerminalSurface {
 
   private readonly onDevicePixelRatioChange = () => {
     this.watchDevicePixelRatio();
-    // Banda: a row's height is in the screen's pixels, so a new scale measures again.
-    this.applyFontMetrics();
+    this.rescale();
   };
+
+  /** Banda: a row's height is in the screen's pixels, so a new scale measures again. */
+  private rescale(): void {
+    if (this.disposed) return;
+    this.applyFontMetrics();
+  }
 
   private watchDevicePixelRatio(): void {
     this.dprMedia?.removeEventListener("change", this.onDevicePixelRatioChange);

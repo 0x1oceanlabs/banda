@@ -1,4 +1,10 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react"
+import {
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react"
 import {
   type CommandCall,
   type Engine,
@@ -355,6 +361,7 @@ function Screen({
     const tile = tileOf(element)
     let hidden = tile.now().state === "hidden"
     const obey = ({ state }: Configure) => {
+      if (hidden === (state === "hidden")) return
       hidden = state === "hidden"
       drawn?.setVisible(!hidden)
       if (hidden || !owed.current) return
@@ -362,12 +369,28 @@ function Screen({
       if (focusedNow.current) drawn?.focus()
     }
     const stopObeying = tile.watch(obey)
+    // Its size and the screen's scale come from its Tile too, through its
+    // resize gate (decision 5): the screen fits as the Tile says, and has
+    // no observer of its own.
+    const byTile = (fit: () => void, rescale: () => void) => {
+      let { size, scale } = tile.now()
+      return tile.watch((now) => {
+        if (now.scale !== scale) {
+          ;({ size, scale } = now)
+          rescale()
+        } else if (now.size !== size) {
+          size = now.size
+          fit()
+        }
+      })
+    }
     void (async () => {
       const made = await Surface.create(element, {
         // Made hidden, it takes its grid and draws nothing; it shows below,
         // as its Tile does.
         visible: false,
         clock: CLOCK,
+        sized: byTile,
         theme: themeOf(element),
         font: fontNow(),
         cursor: cursorOf(writingNow.current),
@@ -448,6 +471,14 @@ function Screen({
     surface.current?.setCursor(cursorOf(writing))
   }, [writing])
 
+  // The footer under the screen takes its room from the screen, inside
+  // the Tile, so no Configure says so: the screen fits to what is left as
+  // the footer comes, goes or says something else, before the frame shows.
+  const said = statusOf(now, problem, shell)
+  useLayoutEffect(() => {
+    surface.current?.fit()
+  }, [said])
+
   // Its keys (ADR 0071): the zoom, which draws its font again.
   const scope = useScope(TERMINAL, zoomHandlers("terminal", by), {
     tile: true,
@@ -491,7 +522,7 @@ function Screen({
       <ZoomBadge zoom={shown} />
       <Status
         now={now}
-        problem={problem}
+        said={said}
         shell={shell}
         onAgain={() => again.current()}
       />
@@ -499,24 +530,29 @@ function Screen({
   )
 }
 
-function Status({
-  now,
-  problem,
-  shell,
-  onAgain,
-}: {
-  now: Now
-  problem: string | undefined
-  shell: boolean
-  onAgain: () => void
-}) {
-  const said = [
+/** What the footer under the screen says: none while the program runs
+ * well. */
+function statusOf(now: Now, problem: string | undefined, shell: boolean) {
+  return [
     now.is === "ended" ? endWords(now.ended, shell) : undefined,
     now.is === "gone" ? now.why : undefined,
     problem,
   ]
     .filter(Boolean)
     .join(" ")
+}
+
+function Status({
+  now,
+  said,
+  shell,
+  onAgain,
+}: {
+  now: Now
+  said: string
+  shell: boolean
+  onAgain: () => void
+}) {
   if (!said) return null
   const startable = shell && (now.is === "ended" || now.is === "gone")
   return (
