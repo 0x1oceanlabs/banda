@@ -143,6 +143,14 @@ CREATE TABLE kernel_cursors (
     PRIMARY KEY (listener, source_scope)
 );
 "#,
+    // Whether a command's change was written is kept apart from its place
+    // in the log, `seq`, which is now the last fact it wrote, or none: a
+    // client has nothing to wait to hear of one that wrote none (#880). A
+    // receipt answered before keeps its place, so a resend gets the same.
+    r#"
+ALTER TABLE kernel_receipts ADD COLUMN written INTEGER NOT NULL DEFAULT 0;
+UPDATE kernel_receipts SET written = 1 WHERE answered = 0 AND seq IS NOT NULL;
+"#,
 ];
 
 type Job = Box<dyn FnOnce(&mut Connection) + Send>;
@@ -223,6 +231,11 @@ impl Tx<'_> {
         events::append(&self.kernel(), &mut event)?;
         self.emitted.push(event);
         Ok(self.emitted.last().expect("just pushed"))
+    }
+
+    /// The place in the log of the last fact this change wrote, if any.
+    fn last_fact(&self) -> Option<i64> {
+        self.emitted.last().map(|event| event.seq)
     }
 
     /// Queues a side effect to run after commit, after every earlier effect
@@ -416,7 +429,7 @@ impl Store {
     ) -> Result<T, Refusal> {
         let written = self.write(receipt.module, move |tx| {
             let value = change(tx)?;
-            receipt.written(&tx.kernel())?;
+            receipt.written(tx)?;
             Ok(value)
         });
         Ok(written.await?)
@@ -616,9 +629,10 @@ fn publish(
     }
 }
 
-/// What a method answered: its value and, for a command, its place in
-/// the log, `at`. What the command wrote is at or before `at`, so a view
-/// current there shows it (ADR 0082, decision 4).
+/// What a method answered: its value and, for a command that wrote a fact
+/// with its change, its place in the log, `at`: the last fact it wrote, so
+/// a view current there shows it (ADR 0082, decision 4). One that wrote no
+/// fact has none: there is nothing in the log to wait to hear (#880).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Answer {
     pub value: Value,
@@ -695,7 +709,7 @@ enum Kept {
     /// No answer yet; `written` once [`Call::command`](crate::Call::command)
     /// wrote its change.
     Begun { written: bool },
-    /// Its answer, and its place in the log.
+    /// Its answer, and its place in the log: its last fact, if it wrote one.
     Answered(Result<Value, Refusal>, Option<i64>),
 }
 
@@ -753,9 +767,9 @@ impl Receipt {
     }
 
     /// Writes the receipt: begun, or answered with `ok` at its place in
-    /// the log.
-    fn insert(&self, sql: &Connection, ok: Option<(&Value, i64)>) -> Result<(), Error> {
-        let (answered, seq) = (ok.is_some(), ok.map(|(_, seq)| seq));
+    /// the log, if it has one.
+    fn insert(&self, sql: &Connection, ok: Option<(&Value, Option<i64>)>) -> Result<(), Error> {
+        let (answered, seq) = (ok.is_some(), ok.and_then(|(_, seq)| seq));
         sql.execute(
             "INSERT INTO kernel_receipts
                  (command, module, method, author_kind, author_id, params, answered, ok, seq, at)
@@ -782,7 +796,8 @@ impl Receipt {
     fn kept(&self, sql: &Connection) -> Result<Option<Kept>, Error> {
         let stored = sql
             .query_row(
-                "SELECT module, method, author_kind, author_id, params, answered, ok, refusal, seq
+                "SELECT module, method, author_kind, author_id, params, answered, ok, refusal, seq,
+                        written
                  FROM kernel_receipts WHERE command = ?1",
                 params![self.command],
                 |row| {
@@ -796,6 +811,7 @@ impl Receipt {
                         ok: row.get(6)?,
                         refusal: row.get(7)?,
                         seq: row.get(8)?,
+                        written: row.get(9)?,
                     })
                 },
             )
@@ -812,8 +828,9 @@ impl Receipt {
             return Ok(Some(Kept::Other));
         }
         if !stored.answered {
-            let written = stored.seq.is_some();
-            return Ok(Some(Kept::Begun { written }));
+            return Ok(Some(Kept::Begun {
+                written: stored.written,
+            }));
         }
         let answer = match (stored.ok, stored.refusal) {
             (Some(ok), _) => Ok(serde_json::from_str(&ok)?),
@@ -824,12 +841,13 @@ impl Receipt {
     }
 
     /// Marks, in the change's transaction, that the command's change was
-    /// written, with the log's head after it: the change's last fact if it
-    /// wrote one, or else a fact written before it.
-    fn written(&self, sql: &Connection) -> Result<(), Error> {
-        sql.execute(
-            "UPDATE kernel_receipts SET seq = ?2 WHERE command = ?1 AND answered = 0",
-            params![self.command, events::head(sql)?],
+    /// written, and its place in the log: the last fact it wrote, kept from
+    /// an earlier change of the same command when this one wrote none.
+    fn written(&self, tx: &Tx<'_>) -> Result<(), Error> {
+        tx.kernel().execute(
+            "UPDATE kernel_receipts SET written = 1, seq = COALESCE(?2, seq)
+             WHERE command = ?1 AND answered = 0",
+            params![self.command, tx.last_fact()],
         )?;
         Ok(())
     }
@@ -852,22 +870,21 @@ impl Receipt {
     }
 
     /// Keeps an answer, from now for [`KEPT`], and returns its place in the
-    /// log: where the change was written, or else the log's head now.
+    /// log: the last fact its command wrote, or none.
     fn keep(
         &self,
         sql: &Connection,
         answer: Result<&Value, &Refusal>,
     ) -> Result<Option<i64>, Error> {
-        let (ok, refusal, head) = match answer {
-            Ok(value) => (Some(value.to_string()), None, Some(events::head(sql)?)),
-            Err(refusal) => (None, Some(serde_json::to_string(refusal)?), None),
+        let (ok, refusal) = match answer {
+            Ok(value) => (Some(value.to_string()), None),
+            Err(refusal) => (None, Some(serde_json::to_string(refusal)?)),
         };
         let seq = sql.query_row(
-            "UPDATE kernel_receipts
-             SET answered = 1, ok = ?2, refusal = ?3, seq = COALESCE(seq, ?4), at = ?5
+            "UPDATE kernel_receipts SET answered = 1, ok = ?2, refusal = ?3, at = ?4
              WHERE command = ?1
              RETURNING seq",
-            params![self.command, ok, refusal, head, now_ms()],
+            params![self.command, ok, refusal, now_ms()],
             |row| row.get(0),
         );
         Ok(seq.optional()?.flatten())
@@ -886,9 +903,9 @@ impl Receipt {
     }
 
     /// Keeps, in that reaction's transaction once it wrote its change, that
-    /// its command ran, answered with nothing, at the log's head.
-    pub(crate) fn ran_now(&self, sql: &Connection) -> Result<(), Error> {
-        self.insert(sql, Some((&Value::Null, events::head(sql)?)))
+    /// its command ran, answered with nothing, at the last fact it wrote.
+    pub(crate) fn ran_now(&self, tx: &Tx<'_>) -> Result<(), Error> {
+        self.insert(&tx.kernel(), Some((&Value::Null, tx.last_fact())))
     }
 
     /// Forgets the receipt, so a resend runs.
@@ -912,6 +929,7 @@ struct Stored {
     ok: Option<String>,
     refusal: Option<String>,
     seq: Option<i64>,
+    written: bool,
 }
 
 /// Applies the steps of `ledger` that this database has not seen, each in
@@ -1148,6 +1166,16 @@ mod tests {
         added.await
     }
 
+    /// Writes a note under `receipt` as [`add`] does, with no fact.
+    async fn add_quietly(store: &Store, receipt: Receipt) -> Result<(), Refusal> {
+        let added = store.command(receipt, |tx| {
+            tx.sql()
+                .execute("INSERT INTO notes_items (text) VALUES ('quiet')", [])?;
+            Ok(())
+        });
+        added.await
+    }
+
     async fn notes(store: &Store) -> i64 {
         let count = store
             .read(|sql| Ok(sql.query_row("SELECT COUNT(*) FROM notes_items", [], |r| r.get(0))?));
@@ -1173,6 +1201,35 @@ mod tests {
             assert_eq!(again, Some(Ok(first.clone())));
         }
         assert_eq!(notes(&store).await, 1);
+    }
+
+    #[tokio::test]
+    async fn a_command_is_at_the_last_fact_it_wrote_and_nowhere_without_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store(&dir);
+        let who = author();
+
+        // Two facts, then a change of the same command with none.
+        let (two, quiet) = (CommandId::new(), CommandId::new());
+        let running = run(&store, receipt(two, "add", who)).await;
+        let second = store.command(receipt(two, "add", who), move |tx| {
+            tx.emit("added", 1, None, who, &"one")?;
+            Ok(tx.emit("added", 1, None, who, &"two")?.seq)
+        });
+        let second = second.await.unwrap();
+        add_quietly(&store, receipt(two, "add", who)).await.unwrap();
+        let settled = store.settle(running, Ok(Value::Null)).await.unwrap();
+        assert_eq!(settled.at, Some(second), "its last fact");
+
+        // A change with no fact, as the log's head is another's: none.
+        let running = run(&store, receipt(quiet, "add", who)).await;
+        add_quietly(&store, receipt(quiet, "add", who))
+            .await
+            .unwrap();
+        let settled = store.settle(running, Ok(Value::Null)).await.unwrap();
+        assert_eq!(settled.at, None, "nothing of its own to hear");
+        let again = answered(&store, receipt(quiet, "add", who)).await;
+        assert_eq!(again, Some(Ok(settled)), "a resend, none either");
     }
 
     #[tokio::test]
@@ -1220,16 +1277,64 @@ mod tests {
     async fn a_passing_refusal_after_the_change_is_written_may_have_run() {
         let dir = tempfile::tempdir().unwrap();
         let store = store(&dir);
-        let (command, who) = (CommandId::new(), author());
-        let running = run(&store, receipt(command, "add", who)).await;
-        add(&store, receipt(command, "add", who)).await.unwrap();
-        let settled = store.settle(running, Err(Refusal::internal())).await;
-        assert_eq!(settled.unwrap_err().code, Code::Internal, "its caller's");
-        for _ in 0..2 {
-            let again = answered(&store, receipt(command, "add", who)).await;
-            assert_eq!(again.unwrap().unwrap_err().code, Code::MayHaveRun);
+        let who = author();
+        // With a fact, and with none: either change was written.
+        for (count, quietly) in [(1, false), (2, true)] {
+            let command = CommandId::new();
+            let running = run(&store, receipt(command, "add", who)).await;
+            if quietly {
+                add_quietly(&store, receipt(command, "add", who))
+                    .await
+                    .unwrap();
+            } else {
+                add(&store, receipt(command, "add", who)).await.unwrap();
+            }
+            let settled = store.settle(running, Err(Refusal::internal())).await;
+            assert_eq!(settled.unwrap_err().code, Code::Internal, "its caller's");
+            for _ in 0..2 {
+                let again = answered(&store, receipt(command, "add", who)).await;
+                assert_eq!(again.unwrap().unwrap_err().code, Code::MayHaveRun);
+            }
+            assert_eq!(notes(&store).await, count, "never written again");
         }
-        assert_eq!(notes(&store).await, 1, "never written again");
+    }
+
+    #[test]
+    fn a_receipt_kept_before_the_written_mark_answers_as_it_did() {
+        let mut sql = Connection::open_in_memory().unwrap();
+        // Up to the step that adds `written`, however many come after it.
+        let step = KERNEL_MIGRATIONS
+            .iter()
+            .position(|text| text.contains("ADD COLUMN written"))
+            .expect("the step that adds `written`");
+        migrate(&mut sql, KERNEL, &KERNEL_MIGRATIONS[..step]).unwrap();
+        let who = author();
+        let (begun, done) = (CommandId::new(), CommandId::new());
+        // Each at the log's head of then, 7: begun with its change
+        // written, and answered.
+        for (command, answered, ok) in [(begun, false, None), (done, true, Some("1"))] {
+            sql.execute(
+                "INSERT INTO kernel_receipts
+                     (command, module, method, author_kind, author_id, params, answered, ok, seq, at)
+                 VALUES (?1, 'notes', 'add', ?2, ?3, ?4, ?5, ?6, 7, 0)",
+                params![
+                    command,
+                    who.kind(),
+                    who.id(),
+                    Receipt::hash(&Value::Null),
+                    answered,
+                    ok
+                ],
+            )
+            .unwrap();
+        }
+        migrate(&mut sql, KERNEL, KERNEL_MIGRATIONS).unwrap();
+        let kept = |command| receipt(command, "add", who).kept(&sql).unwrap();
+        assert!(matches!(kept(begun), Some(Kept::Begun { written: true })));
+        assert!(
+            matches!(kept(done), Some(Kept::Answered(Ok(value), Some(7))) if value == 1),
+            "a resend, the same place"
+        );
     }
 
     #[tokio::test]

@@ -87,15 +87,17 @@ type Pending = {
 
 /**
  * A command's answer, and its place in the log of its scope (ADR 0082,
- * decision 4): a seq of that log, the same as the `Event.seq` a client
- * follows there. A view current at `at` shows what the command did. The
- * engine says where for every command it ran, even one that wrote
- * nothing, where it is the log's head as it answered, at or before what
- * the client has heard. `undefined` only from an engine that says none.
+ * decision 4): the seq of the last fact it wrote, the same as the
+ * `Event.seq` a client follows there. A view current at `at` shows what
+ * the command did. `null` when it wrote no fact, as when it changed
+ * nothing: there is nothing to wait to hear, and a read sent after the
+ * answer shows what it did (#880). The fact at `at` is the command's
+ * module's own, and a follow whose filter leaves out its kind or its
+ * subject does not hear it.
  */
 export type Answered<M extends MethodOf<"command">> = {
   answer: Answer<M>
-  at: number | undefined
+  at: number | null
 }
 
 type Following = {
@@ -221,10 +223,11 @@ export class Engine {
   /**
    * Runs a command as {@link command} does, and gives its answer with its
    * place in the log, `at`: a client that has heard its scope's log up to
-   * `at` has heard what the command did (ADR 0082, decision 4). A
-   * session's commands to one scope commit in the order sent, and one sent
-   * again after the connection broke goes in that order too, before any
-   * sent since, so their `at`s rise in the order sent.
+   * `at` has heard what the command did, and a command answered with none
+   * wrote nothing there to hear (ADR 0082, decision 4). A session's
+   * commands to one scope commit in the order sent, and one sent again
+   * after the connection broke goes in that order too, before any sent
+   * since, so the `at`s of those that have one rise in the order sent.
    */
   async commandAt<M extends MethodOf<"command">>(
     method: M,
@@ -235,7 +238,10 @@ export class Engine {
     for (let attempt = 1; ; attempt++) {
       try {
         const result = await this.#ask(method, params, { project, command })
-        return { answer: (result.ok ?? null) as Answer<M>, at: result.at }
+        return {
+          answer: (result.ok ?? null) as Answer<M>,
+          at: result.at ?? null,
+        }
       } catch (error) {
         if (!(error instanceof Lost) || attempt === ATTEMPTS) throw error
       }

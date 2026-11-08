@@ -450,7 +450,7 @@ impl Listener {
                 return Ok(None);
             }
             let value = change(tx)?;
-            receipt.ran_now(&tx.kernel())?;
+            receipt.ran_now(tx)?;
             Ok(Some(value))
         });
         let written = written.await?;

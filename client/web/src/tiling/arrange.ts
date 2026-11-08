@@ -559,7 +559,10 @@ export function send(
   engine: Engine,
   command: Command,
   id?: CommandId
-): Promise<{ answer: { at: number | null; pane?: string }; at?: number }> {
+): Promise<{
+  answer: { at: number | null; pane?: string }
+  at: number | null
+}> {
   const { method, params } = command
   return engine.commandAt(method, params as never, undefined, id)
 }

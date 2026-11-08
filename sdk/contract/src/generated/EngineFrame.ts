@@ -36,9 +36,9 @@ fence?: Fence,
 named?: Named, } | { "type": "result", id: number, ok?: JsonValue, error?: Refusal, 
 /**
  * A command's place in the log of its scope (ADR 0082, decision
- * 4): the log's head as its change committed, its last fact if it
- * wrote one, or, when it wrote no change, the head as it was
- * answered. A view current there shows what it did. The same for
- * a resend; none for a refusal or a call.
+ * 4): the last fact it wrote. A view current there shows what it
+ * did. The same for a resend; none for a command that wrote no
+ * fact, which leaves nothing to wait to hear (#880), for a
+ * refusal, or for a call.
  */
 at?: number, } | { "type": "event", subscription: number, event: Event, } | { "type": "resync", subscription: number, } | { "type": "piece", stream: number, data: JsonValue, } | { "type": "ended", stream: number, } | { "type": "goodbye", reason: Refusal, };

@@ -1027,18 +1027,29 @@ async fn a_command_s_answer_carries_its_place_in_the_log() {
     assert_eq!(added.at, added.value["seq"].as_i64(), "where its event is");
     assert_eq!(add().await.unwrap(), added, "a resend, the same place");
 
-    let stamped = kernel.answer(
+    // One that wrote no fact has no place, though the log has a head: a
+    // client that hears only some facts may never hear the head (#880).
+    let stamp = CommandId::new();
+    let stamped = || {
+        kernel.answer(
+            person,
+            "notes.stamp",
+            Some(project.id),
+            Some(stamp),
+            Value::Null,
+        )
+    };
+    let first = stamped().await.unwrap();
+    assert_eq!(first.at, None, "one that wrote nothing");
+    assert_eq!(stamped().await.unwrap(), first, "a resend, no place either");
+    let purged = kernel.answer(
         person,
-        "notes.stamp",
+        "notes.purge",
         Some(project.id),
         Some(CommandId::new()),
         Value::Null,
     );
-    assert_eq!(
-        stamped.await.unwrap().at,
-        added.at,
-        "one that wrote no event: where the log stood as it ended"
-    );
+    assert_eq!(purged.await.unwrap().at, None, "a change with no fact");
     let listed = kernel.answer(person, "notes.list", Some(project.id), None, Value::Null);
     assert_eq!(listed.await.unwrap().at, None, "a call has no place");
 }
@@ -2067,6 +2078,13 @@ async fn a_session_s_commands_to_one_scope_commit_and_answer_in_the_order_sent()
     assert!(
         refused.get("at").is_none(),
         "a refusal has no place: {refused}"
+    );
+    say(&mut socket, stamping(15, &project, "stamp")).await;
+    let stamped = next(&mut socket).await;
+    assert_eq!(stamped["ok"]["stamp"], 1);
+    assert!(
+        stamped.get("at").is_none(),
+        "nor has one that wrote no fact, so a client waits for none: {stamped}"
     );
     assert_eq!(
         listed(&kernel, owner, &project).await,
