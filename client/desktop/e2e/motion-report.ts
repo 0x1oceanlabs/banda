@@ -103,6 +103,30 @@ const TOLERANCE: Record<Gate, number> = { hard: 0.1, soft: 0.2 }
  * recorded at 0 has no tolerance of its own. */
 const SLACK = 0.05
 
+/**
+ * Each key's way to the screen (motion-probe.ts): how many keys, how many
+ * of them changed nothing that showed, the ms from a key to the Tiling's
+ * commit of what it changed, and the frames that began meanwhile, of the
+ * keys that did; none where no key was pressed.
+ */
+export function keysOf(keys: Reading["keys"]) {
+  if (keys.length === 0) return null
+  const drawn = keys.filter((key) => key.ms !== null)
+  const ms = sortedOf(drawn.map((key) => key.ms!))
+  const frames = sortedOf(drawn.map((key) => key.frames))
+  return {
+    count: keys.length,
+    missed: keys.length - drawn.length,
+    p50: ms.length ? quantile(ms, 0.5) : null,
+    p95: ms.length ? quantile(ms, 0.95) : null,
+    max: ms.length ? quantile(ms, 1) : null,
+    framesLate: {
+      p95: frames.length ? quantile(frames, 0.95) : null,
+      max: frames.length ? quantile(frames, 1) : null,
+    },
+  }
+}
+
 /** A phase's numbers, as motion.json has them. */
 function numbersOf({ seconds, steps, perSecond, counted, trace }: Phase) {
   const rate = (count: number) => round(count / (counted.ms / 1000), 1)
@@ -169,6 +193,8 @@ function numbersOf({ seconds, steps, perSecond, counted, trace }: Phase) {
       count: counted.slowKeys.count,
       worstMs: round(counted.slowKeys.worstMs),
     },
+    /** From each key to the Tiling's commit of what it changed. */
+    keys: keysOf(counted.keys),
     /** The time between ticks, as the page saw them; none where the probe
      * did not follow them. */
     intervals: intervals.length
@@ -295,6 +321,8 @@ function summary(
         "Longest task ms",
         "Long frames",
         "Slow keys",
+        "Key to drawn ms p50 · p95",
+        "Frames late p95",
         "Presented · partial · dropped · late",
         "To screen ms p50 · p95",
         "viz frames",
@@ -311,6 +339,8 @@ function summary(
         cell(n.tasks.longestMs),
         cell(n.longFrames?.count),
         cell(n.slowKeys?.count),
+        pair(n.keys?.p50, n.keys?.p95),
+        cell(n.keys?.framesLate.p95),
         framesCell(n.frames),
         pair(n.frames?.latencyMs?.p50, n.frames?.latencyMs?.p95),
         cell(n.viz?.perSecond),
