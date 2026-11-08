@@ -130,3 +130,18 @@ test("the logo at rest wakes for its trick by a timer, not the clock", async () 
   vi.advanceTimersByTime(5000)
   expect(time.ticking()).toBe(false)
 })
+
+test("the logo at rest sets its timer once, however often another mark ticks", async () => {
+  const time = await motion()
+  const logo = new time.Animator(svg(), "logo")
+  logo.set({ state: "rest", playful: 30, news: false })
+  time.run(1000)
+  const timers = vi.spyOn(globalThis, "setTimeout")
+  // A Thread at work beside it ticks on, and the logo, still, with it.
+  const mark = new time.Animator(svg(), "agent")
+  mark.set({ state: "running", playful: 0, news: false })
+  expect(time.run(300)).toBe(300)
+  expect(timers).not.toHaveBeenCalled()
+  mark.dispose()
+  logo.dispose()
+})

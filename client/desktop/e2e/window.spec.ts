@@ -1574,8 +1574,9 @@ test("a line's start makes it a heading, a list, a task, a quote or a rule", asy
   const { page } = window
   const { thread, composer } = await firstThread(page)
   const items = composer.locator("[data-item]")
-  // At a Person's pace: keys sent back to back outrun the editor's news of
-  // the selection, and a line's start reads text it has not heard of.
+  // At a Person's pace, each key held 20 ms, so they come that far apart:
+  // keys sent back to back outrun the editor's news of the selection, and
+  // a line's start reads text it has not heard of (issue #728).
   const typing = { delay: 20 }
 
   await composer.pressSequentially("# Plan", typing)
@@ -1632,7 +1633,8 @@ test("a line's start makes it a heading, a list, a task, a quote or a rule", asy
   // Backspace at an item's start makes it text again.
   await composer.pressSequentially("- gone", typing)
   await composer.press("Home", typing)
-  // Keys outrun the selection's news to the editor; let it arrive.
+  // Keys outrun the selection's news to the editor; let it arrive (issue
+  // #728).
   await page.evaluate(() => new Promise((done) => setTimeout(done)))
   await composer.press("Backspace", typing)
   await expect(items).toHaveCount(0)
@@ -1686,7 +1688,8 @@ test("typed over chosen text, * styles it and ( goes round it; Shift+Tab takes a
   await composer.fill("hello")
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
-  // Keys outrun the selection's news to the editor; let it arrive.
+  // Keys outrun the selection's news to the editor; let it arrive (issue
+  // #728).
   const settle = () =>
     page.evaluate(() => new Promise((done) => setTimeout(done)))
   const choose = async (

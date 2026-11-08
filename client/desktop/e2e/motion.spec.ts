@@ -263,6 +263,9 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     await measure("quiet", () => page.waitForTimeout(3000), { still: true })
     if (phases.quiet.counted.marks === 0 || tries === 3) break
   }
+  // The clock stops while nothing moves (ADR 0088, decision 3): a hard
+  // gate, whatever the budget file's mode.
+  expect(phases.quiet.counted.callbacks, "quiet: animation frames").toBe(0)
   // The last terminal, beside the browser, has the focus for the moves.
   await terminal(2).click()
   // Through the widths short of the whole screen, and back: the browser
