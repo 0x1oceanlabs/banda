@@ -10,7 +10,13 @@
  * Pane goes; what that puts where becomes one command, and the engine's
  * event draws it. Pure, so plain tests cover it.
  */
-import type { Engine, Event, MethodOf, Params } from "@banda/contract"
+import type {
+  CommandId,
+  Engine,
+  Event,
+  MethodOf,
+  Params,
+} from "@banda/contract"
 import type {
   Arranged,
   Changed,
@@ -301,7 +307,7 @@ export function keptOf(state: Workspaces): Kept[] {
 type Named = Extract<MethodOf<"command">, `workspaces.${string}`>
 
 /** One of the module's commands, with its params. */
-type Command = {
+export type Command = {
   [M in Named]: { method: M; params: Params<M> }
 }[Named]
 
@@ -550,8 +556,15 @@ export function tidied(state: Workspaces): Command | undefined {
   }
 }
 
-/** Runs a command on this machine's workspaces, in no Project. */
-export function send(engine: Engine, command: Command): Promise<unknown> {
+/**
+ * Runs a command on this machine's workspaces, in no Project, under `id`
+ * when given: what it makes takes IDs derived from it (`seeded`).
+ */
+export function send(
+  engine: Engine,
+  command: Command,
+  id?: CommandId
+): Promise<unknown> {
   const { method, params } = command
-  return engine.command(method, params as never)
+  return engine.command(method, params as never, undefined, id)
 }
