@@ -2,10 +2,11 @@
  * What the Person does to a Thread as one of the Items Threads lists (ADR
  * 0087, decision 12): rename it, have its Harness's small model suggest a
  * title, give back the title it had before, mark it unread or read (ADR
- * 0077), and make a Project of the No Project it is in (ADR 0046). The
- * Window draws their rows in the Thread menu and runs them by id, as any
- * action; Threads does them, on the engine of the host that lists the
- * Thread (ADR 0081).
+ * 0077), make a Project of the No Project it is in (ADR 0046), snooze it
+ * and wake it (ADR 0074). The Window draws their rows in the Thread menu,
+ * the Pane menu and the Banda menu, and runs them by id, as any action;
+ * Threads does them, on the engine of the host that lists the Thread (ADR
+ * 0081).
  */
 import type { ProjectId } from "@banda/contract"
 import type { ThreadId } from "@banda/contract/agents"
@@ -19,7 +20,7 @@ import {
   think,
   thinkingNow,
 } from "@banda/ui/lib/naming"
-import { problem } from "@banda/ui/lib/words"
+import { clock, problem } from "@banda/ui/lib/words"
 import {
   type Args,
   type ItemAction,
@@ -27,8 +28,9 @@ import {
   itemOf,
   type WindowApi,
 } from "@banda/ui/module"
-import type { Listed } from "@banda/ui/pane"
+import { asleep, type Listed, snoozable } from "@banda/ui/pane"
 import {
+  AlarmClockIcon,
   CircleDotIcon,
   CircleIcon,
   FolderPlusIcon,
@@ -256,6 +258,96 @@ const makeProject: ItemAction = {
   },
 }
 
+/** Wakes the Thread now; what the engine refuses, a toast says. */
+function waking(window: WindowApi, at: At) {
+  engineOf(window, at)
+    .command("agents.wake", { thread: at.listed.id as ThreadId }, at.project)
+    .catch((error: unknown) => toast.error(problem(error)))
+}
+
+/**
+ * Snoozes the Thread till `until`, or till its turn ends with none (ADR
+ * 0074). Snoozed, it is put away as an archived one is, its Panes closed;
+ * a toast says till when, with Undo, which wakes it.
+ */
+function snoozing(window: WindowApi, at: At, until?: number, resume = false) {
+  const thread = at.listed.id as ThreadId
+  const asked = until === undefined ? { thread } : { thread, until, resume }
+  engineOf(window, at)
+    .command("agents.snooze", asked, at.project)
+    .then(
+      () => {
+        window.run("pane.put-away", { project: at.project, item: thread })
+        toast(
+          until === undefined
+            ? "Snoozed until it's done"
+            : `Snoozed until ${clock(until)}`,
+          { action: { label: "Undo", onClick: () => waking(window, at) } }
+        )
+      },
+      (error: unknown) => toast.error(problem(error))
+    )
+}
+
+/** Snooze…: till a time, or till its turn ends; asked for neither, the
+ * Window's picker asks when, and wakes one that sleeps. */
+const snooze: ItemAction = {
+  id: "thread.snooze",
+  section: "Threads",
+  title: "Snooze the Thread you look at, or wake it",
+  keys: [{ code: "KeyZ", mod: true }],
+  args: itemArgs({
+    until: { number: "when it wakes, in milliseconds since 1970" },
+    resume: { flag: "with until, its failed turn goes again then" },
+    done: { flag: "it sleeps until its turn ends" },
+  }),
+  group: "other",
+  does: "snooze",
+  offered: ["pane", "menu"],
+  // The picker takes the focus.
+  later: true,
+  elsewhere: true,
+  row: (item, at) =>
+    asleep(item, at.now)
+      ? null
+      : {
+          title: "Snooze…",
+          icon: AlarmClockIcon,
+          // One that asks is answered first.
+          ...(snoozable(item) ? {} : { off: true }),
+        },
+  run: (window, args) => {
+    const at = threadOf(window, args)
+    if (!at) return
+    const until = typeof args?.until === "number" ? args.until : undefined
+    if (until !== undefined || args?.done === true)
+      snoozing(window, at, until, args?.resume === true)
+    else
+      window.run("sidebar.snooze-picker", {
+        project: at.project,
+        item: at.listed.id,
+      })
+  },
+}
+
+/** Wake now, for a Thread that sleeps. */
+const wake: ItemAction = {
+  id: "thread.wake",
+  section: "Threads",
+  title: "Wake the snoozed Thread you look at",
+  args: itemArgs(),
+  group: "other",
+  does: "wake",
+  offered: ["pane", "menu"],
+  elsewhere: true,
+  row: (item, at) =>
+    asleep(item, at.now) ? { title: "Wake now", icon: AlarmClockIcon } : null,
+  run: (window, args) => {
+    const at = threadOf(window, args)
+    if (at) waking(window, at)
+  },
+}
+
 /** Threads' item actions, in the order the Thread menu lists their rows. */
 export const threadItems: readonly ItemAction[] = [
   rename,
@@ -263,4 +355,6 @@ export const threadItems: readonly ItemAction[] = [
   previous,
   unread,
   makeProject,
+  snooze,
+  wake,
 ]

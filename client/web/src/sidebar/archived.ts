@@ -96,6 +96,11 @@ export function useIsArchived(): (listed: Listed) => boolean {
   )
 }
 
+/** Whether a Thread is archived now, as an act asks outside React. */
+export function archivedNow(listed: Listed): boolean {
+  return isArchived(listed, says.read()[listed.id], BEFORE)
+}
+
 /** Keeps that the Person archived `id`, or brought it back, now. */
 export function archive(id: string, archived: boolean) {
   says.put(id, { archived, at: Date.now() })
@@ -113,6 +118,6 @@ export function toggled(
 ): boolean | undefined {
   const listed = lists[project]?.find((row) => row.id === thing)
   if (!listed) return undefined
-  if (isArchived(listed, says.read()[listed.id], BEFORE)) return false
+  if (archivedNow(listed)) return false
   return archivable(listed) ? true : undefined
 }

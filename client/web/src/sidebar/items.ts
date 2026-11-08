@@ -1,18 +1,73 @@
 /**
  * What the Person can do to one Item, by its item actions (ADR 0087,
  * decision 12): its App's, found by the first word of its Pane kind, in
- * their order. The Thread menu, the Pane menu, the Banda menu's Tab, the
- * title's field and the sidebar's row draw their rows, and run them as any
- * action, by id: none of them knows what an App does to its Items.
+ * their order, then the sidebar list's own, Archive. The Thread menu, the
+ * Pane menu, the Banda menu's Tab, the title's field and the snooze's
+ * picker draw their rows, and run them as any action, by id: none of them
+ * knows what an App does to its Items.
  */
-import type { ItemAction } from "@banda/ui/module"
-import type { Listed } from "@banda/ui/pane"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
+import {
+  type ItemAction,
+  type ItemAt,
+  type ItemRow,
+  itemArgs,
+  itemOf,
+} from "@banda/ui/module"
+import { asleep, type Listed } from "@banda/ui/pane"
+import { ArchiveIcon, ArchiveRestoreIcon } from "lucide-react"
 import { itemsOf } from "../registry"
+import type { StandRow } from "../tiling/PaneMenu"
 import type { Shell } from "../window/actions"
+import {
+  archivable,
+  archivedNow,
+  archive as keepArchived,
+  toggled,
+} from "./archived"
 
-/** The item actions of `listed`, its App's, in their order. */
+/**
+ * Archive thread, or Unarchive thread (ADR 0069; ADR 0008, decision 4):
+ * the sidebar list's own, as the Person's mark is the window's. Archived,
+ * an Item is put away: every Pane that shows it closes, on any workspace;
+ * a snoozed Thread's snooze ends, by its App's wake.
+ */
+export const archiving: ItemAction<Shell> = {
+  id: "sidebar.archive",
+  section: "Threads",
+  title: "Archive the Thread you look at, or bring it back",
+  keys: [{ code: "KeyS", mod: true }],
+  args: itemArgs(),
+  group: "other",
+  does: "archive",
+  offered: ["menu"],
+  row: (item, at) =>
+    at.archived
+      ? { title: "Unarchive thread", icon: ArchiveRestoreIcon }
+      : {
+          title: "Archive thread",
+          icon: ArchiveIcon,
+          // Not while it works or asks.
+          ...(archivable(item) ? {} : { off: true }),
+        },
+  run: (shell, args) => {
+    const at = itemOf(shell, args)
+    if (!at) return
+    const { project, listed } = at
+    const archived = toggled(shell.items.get(), project, listed.id)
+    if (archived === undefined) return
+    const item = { project, item: listed.id }
+    const wake = itemActionOf(listed, "wake")
+    if (archived && wake && asleep(listed, Date.now())) shell.run(wake.id, item)
+    keepArchived(listed.id, archived)
+    if (archived) shell.run("pane.put-away", item)
+  },
+}
+
+/** The item actions of `listed`: its App's, in their order, then the
+ * sidebar list's. */
 export function itemActionsOf(listed: Listed): readonly ItemAction<Shell>[] {
-  return itemsOf(listed.pane.kind)
+  return [...itemsOf(listed.pane.kind), archiving]
 }
 
 /** The item action of `listed` that does `does`, as the title's field
@@ -22,4 +77,55 @@ export function itemActionOf(
   does: NonNullable<ItemAction["does"]>
 ): ItemAction<Shell> | undefined {
   return itemActionsOf(listed).find((action) => action.does === does)
+}
+
+/** How `listed` stands for its rows, as an act reads it outside React:
+ * in `project`, archived or not, now. */
+export function itemAt(
+  listed: Listed,
+  project: ProjectSummary | undefined
+): ItemAt {
+  return { project, now: Date.now(), archived: archivedNow(listed) }
+}
+
+/** An item action with its row for one Item. */
+export type Shown = { action: ItemAction<Shell>; row: ItemRow }
+
+/** The rows of `listed` that apply `at`, in their order. */
+export function rowsOf(listed: Listed, at: ItemAt): Shown[] {
+  return itemActionsOf(listed).flatMap((action) => {
+    const row = action.row(listed, at)
+    return row ? [{ action, row }] : []
+  })
+}
+
+/** The rows of `listed` offered `where`, the Pane menu or the Banda
+ * menu's Tab: those on, as a row that is off is left out there. */
+export function offeredOf(
+  listed: Listed,
+  at: ItemAt,
+  where: "pane" | "menu"
+): Shown[] {
+  return rowsOf(listed, at).filter(
+    ({ action, row }) => action.offered?.includes(where) && !row.off
+  )
+}
+
+/** The Pane menu's rows for `listed`, the Item a Pane of `project` shows:
+ * those its item actions offer there now, each with what runs it. */
+export function paneRowsOf(
+  listed: Listed,
+  project: ProjectId,
+  projects: readonly ProjectSummary[]
+): StandRow[] {
+  const at = itemAt(
+    listed,
+    projects.find((one) => one.id === project)
+  )
+  return offeredOf(listed, at, "pane").map(({ action, row }) => ({
+    id: action.id,
+    title: row.title,
+    icon: row.icon,
+    args: { project, item: listed.id },
+  }))
 }

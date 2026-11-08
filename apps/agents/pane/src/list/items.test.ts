@@ -48,11 +48,13 @@ const listed = (more: Partial<Listed> = {}): Listed => ({
 function fake(item: Listed, title: string | Error = "") {
   const named: (string | null)[] = []
   const asked: { host: string | undefined; name: string }[] = []
+  const sent: [string, unknown][] = []
   const ran: [string, Args | undefined][] = []
   const engineOf = (host: string | undefined) =>
     ({
       command: (name: string, args: { title?: string }) => {
         asked.push({ host, name })
+        sent.push([name, args])
         if (name === "agents.rename") {
           named.push(args.title ?? null)
           return Promise.resolve()
@@ -75,7 +77,7 @@ function fake(item: Listed, title: string | Error = "") {
       ),
     run: (action: string, args?: Args) => void ran.push([action, args]),
   } as unknown as WindowApi
-  return { window, named, asked, ran, here }
+  return { window, named, asked, sent, ran, here }
 }
 
 const action = (id: string) => {
@@ -247,4 +249,77 @@ test("Threads acts on its own Items alone", () => {
     title: "x",
   })
   expect(named).toEqual([])
+})
+
+test("Snooze with a time snoozes at once, puts the Thread away, and Undo wakes it", async () => {
+  const { window, sent, ran } = fake(listed({ mark: "running" }))
+  const at = { project: "s1", item: "t1" }
+  action("thread.snooze").run(window, { ...at, until: 5_000, resume: true })
+  await vi.waitFor(() => expect(said.toasts).toHaveLength(1))
+  expect(sent).toEqual([
+    ["agents.snooze", { thread: "t1", until: 5_000, resume: true }],
+  ])
+  expect(ran).toEqual([["pane.put-away", at]])
+  expect(said.toasts[0].words).toMatch(/^Snoozed until /)
+  said.toasts[0].undo?.()
+  expect(sent.at(-1)).toEqual(["agents.wake", { thread: "t1" }])
+})
+
+test("Snooze till its turn ends sends no time", async () => {
+  const { window, sent } = fake(listed({ mark: "running" }))
+  action("thread.snooze").run(window, { project: "s1", item: "t1", done: true })
+  await vi.waitFor(() =>
+    expect(said.toasts.map((toast) => toast.words)).toEqual([
+      "Snoozed until it's done",
+    ])
+  )
+  expect(sent).toEqual([["agents.snooze", { thread: "t1" }]])
+})
+
+test("Snooze asked for no time opens the Window's picker; a Thread's Pane names it as `thread`", () => {
+  const { window, sent, ran } = fake(listed())
+  action("thread.snooze").run(window)
+  action("thread.snooze").run(window, { project: "s1", thread: "t1" })
+  expect(sent).toEqual([])
+  expect(ran).toEqual([
+    ["sidebar.snooze-picker", { project: "s1", item: "t1" }],
+    ["sidebar.snooze-picker", { project: "s1", item: "t1" }],
+  ])
+})
+
+test("Wake now wakes it; what the engine refuses, a toast says", async () => {
+  const { window, sent } = fake(listed())
+  action("thread.wake").run(window, { project: "s1", item: "t1" })
+  expect(sent).toEqual([["agents.wake", { thread: "t1" }]])
+  // An engine that refuses all but a rename.
+  const refused = fake(listed(), new Error("no"))
+  action("thread.wake").run(refused.window, { project: "s1", item: "t1" })
+  await vi.waitFor(() => expect(said.errors).toHaveLength(1))
+})
+
+test("another host's Thread is snoozed and woken on its own engine", async () => {
+  const item = listed({
+    pane: { kind: "agents.thread", args: { host: "arc" } },
+  })
+  const { window, asked } = fake(item)
+  action("thread.snooze").run(window, { project: "s1", item: "t1", until: 9 })
+  action("thread.wake").run(window, { project: "s1", item: "t1" })
+  await vi.waitFor(() => expect(said.toasts).toHaveLength(1))
+  expect(asked).toEqual([
+    { host: "arc", name: "agents.snooze" },
+    { host: "arc", name: "agents.wake" },
+  ])
+})
+
+test("Snooze… is off while the Thread asks, and Wake now takes its place while it sleeps", () => {
+  const snooze = action("thread.snooze")
+  const wake = action("thread.wake")
+  const sleeping = listed({ snooze: { at: 0, until: 100 } })
+  expect(snooze.row(listed(), AT)).toMatchObject({ title: "Snooze…" })
+  expect(snooze.row(listed(), AT)?.off).toBeUndefined()
+  expect(snooze.row(listed({ mark: "asking" }), AT)?.off).toBe(true)
+  expect(snooze.row(sleeping, AT)).toBeNull()
+  expect(wake.row(sleeping, AT)?.title).toBe("Wake now")
+  expect(wake.row(sleeping, { ...AT, now: 100 })).toBeNull()
+  expect(wake.row(listed(), AT)).toBeNull()
 })

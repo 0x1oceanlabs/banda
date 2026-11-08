@@ -298,18 +298,12 @@ test("one place answers a pick, and only the action reaches it", () => {
  * what only tests use.
  */
 const APP_STRINGS = [
-  "web/src/tiling/PaneMenu.tsx: thread.…",
-  "web/src/tiling/PaneMenu.tsx: thread.…",
   "web/src/window/Shell.tsx: AGENTS_FILE",
-  "web/src/window/Shell.tsx: agents.snooze",
-  "web/src/window/Shell.tsx: agents.wake",
   "web/src/window/Shell.tsx: thread.new",
   "web/src/window/Shell.tsx: thread.new",
   "web/src/window/Shell.tsx: thread.new",
   "web/src/window/actions.ts: AGENTS_FILE",
   "web/src/window/actions.ts: AGENTS_FILE",
-  "web/src/window/actions.ts: thread.snooze",
-  "web/src/window/actions.ts: thread.wake",
 ]
 
 const saying = ["web/src/window", "web/src/tiling"]
@@ -335,7 +329,7 @@ test("a string that no longer names an App leaves the list", () => {
  * lowers it; the room lets PRs in flight that each cut a few lines leave
  * it alone.
  */
-const WINDOW_LINES = 1196
+const WINDOW_LINES = 1057
 const SLACK = 20
 
 test("the Window's root keeps under its ceiling, and the ceiling follows it down", () => {

@@ -5,7 +5,14 @@
  */
 import type { Engine, JsonValue, ProjectId } from "@banda/contract"
 import { toast } from "@banda/ui/components/sonner"
-import { type Action, type Args, takes, type WindowApi } from "@banda/ui/module"
+import {
+  type Action,
+  type Args,
+  itemArgs,
+  itemOf,
+  takes,
+  type WindowApi,
+} from "@banda/ui/module"
 import { IN_PROGRAM, type PaneState, paneOf } from "@banda/ui/pane"
 import { RESET_KEY } from "../actions/actions"
 import { chipOf } from "./attach"
@@ -29,7 +36,9 @@ import { AGENTS_FILE } from "@banda/contract/agents"
 import { tomlOf } from "@banda/contract/settings"
 import { fileNow } from "@banda/ui/lib/look"
 import { nextFlow } from "../sidebar/FlowMenu"
+import { archiving } from "../sidebar/items"
 import { makeProject } from "../sidebar/MakeProject"
+import { pickSnooze } from "../sidebar/Snoozing"
 import {
   type Change,
   columnMoved,
@@ -100,15 +109,9 @@ export type Shell = WindowApi & {
   pick: (project: ProjectId, pane: PaneState) => void
   /** Goes to what calls the Person first (ADR 0011, decision 5). */
   answer: () => void
-  /** Archives what the Person looks at, or brings it back (ADR 0069). */
-  archive: () => void
-  /** Opens the snooze's picker for a Thread (ADR 0074), or snoozes it
-   * till `until` at once: the one `asked` names, else the one the Person
-   * looks at. */
-  snooze: (asked: SnoozeAsked) => void
-  /** Wakes a snoozed Thread: the one `asked` names, else the one the
-   * Person looks at. */
-  wake: (asked: SnoozeAsked) => void
+  /** Closes every Pane that shows `item` of `project`, on any workspace:
+   * it is put away, archived or snoozed (ADR 0069; ADR 0074). */
+  putAway: (project: ProjectId, item: string) => void
   /** Opens the Banda menu, or closes it when it is open (ADR 0017). */
   menu: (at: At) => void
   /** Has what peeks over the desk fill it, or float again (ADR 0073,
@@ -160,24 +163,6 @@ export function windowApiOf(shell: Shell): WindowApi {
 
 /** What `thread.snooze` and `thread.wake` are asked: a Thread by its
  * Project, or none for the one in focus, and a time to snooze it till. */
-export type SnoozeAsked = {
-  thread?: { project: ProjectId; id: string }
-  until?: number
-  /** With `until`, its failed turn goes again then (ADR 0074). */
-  resume?: boolean
-}
-
-function snoozeAsked(args: Args | undefined): SnoozeAsked {
-  const { project, thread, until, resume } = args ?? {}
-  return {
-    ...(typeof project === "string" && typeof thread === "string"
-      ? { thread: { project: project as ProjectId, id: thread } }
-      : {}),
-    ...(typeof until === "number" ? { until } : {}),
-    ...(resume === true ? { resume } : {}),
-  }
-}
-
 const ARROWS: Record<Direction, string> = {
   left: "ArrowLeft",
   right: "ArrowRight",
@@ -705,6 +690,25 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
       }),
   },
   {
+    // What an App asks once an Item is put away, as a Thread snoozed.
+    id: "pane.put-away",
+    args: takes(
+      {
+        project: "the Project of the Item",
+        item: "the Item's id in its Project",
+      },
+      ["project", "item"]
+    ),
+    section: "Panes",
+    title: "Close every Pane that shows an Item, on any workspace",
+    unlisted: true,
+    run: (shell, args) => {
+      const { project, item } = args ?? {}
+      if (typeof project === "string" && typeof item === "string")
+        shell.putAway(project as ProjectId, item)
+    },
+  },
+  {
     id: "pane.pop-out",
     section: "Panes",
     title: "The Pane in a window of its own, and back",
@@ -772,13 +776,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     keys: [{ code: "KeyU", mod: true }],
     run: (shell) => shell.answer(),
   },
-  {
-    id: "sidebar.archive",
-    section: "Threads",
-    title: "Archive the Thread you look at, or bring it back",
-    keys: [{ code: "KeyS", mod: true }],
-    run: (shell) => shell.archive(),
-  },
+  archiving,
   {
     // Threads' "Make a Project from it…" (ADR 0046): its dialog is the
     // Window's, for a Project of No Project alone.
@@ -795,19 +793,14 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     },
   },
   {
-    id: "thread.snooze",
+    // The snooze's picker (ADR 0074, decision 5): the sidebar list's, as
+    // a Thread's App asks it when.
+    id: "sidebar.snooze-picker",
+    args: itemArgs(),
     section: "Threads",
-    title: "Snooze the Thread you look at, or wake it",
-    keys: [{ code: "KeyZ", mod: true }],
-    // `{ until }` snoozes at once, as a usage limit's reset asks; a Pane
-    // names its own Thread with `{ project, thread }`.
-    run: (shell, args) => shell.snooze(snoozeAsked(args)),
-  },
-  {
-    id: "thread.wake",
-    section: "Threads",
-    title: "Wake the snoozed Thread you look at",
-    run: (shell, args) => shell.wake(snoozeAsked(args)),
+    title: "Pick when the Thread you look at wakes",
+    unlisted: true,
+    run: (shell, args) => pickSnooze(itemOf(shell, args)),
   },
   {
     id: "menu.open",
