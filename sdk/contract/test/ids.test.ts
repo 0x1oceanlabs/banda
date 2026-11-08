@@ -29,15 +29,15 @@ test("a name of any length is hashed whole, across SHA-1's blocks", () => {
   })
 })
 
-test("a UUID reads as Rust prints it, however it was written", () => {
+test("a UUID reads as Rust prints it, as a client writes it", () => {
   const id = "019a5b2e-3c4d-7e8f-9a0b-1c2d3e4f5a6b"
+  for (const written of [id, id.toUpperCase(), id.replaceAll("-", "")])
+    expect(canonical(written)).toBe(id)
   for (const written of [
-    id,
-    id.toUpperCase(),
-    id.replaceAll("-", ""),
+    "not an id",
     `{${id}}`,
     `urn:uuid:${id}`,
+    `${id.replaceAll("-", "").slice(0, 30)}-ab-`,
   ])
-    expect(canonical(written)).toBe(id)
-  expect(() => canonical("not an id")).toThrow()
+    expect(() => canonical(written)).toThrow()
 })
