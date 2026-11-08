@@ -4750,6 +4750,310 @@ test("a Thread is archived from its row's menu, its Pane closes, and Alt+S bring
   await expect(shelf).toBeVisible()
 })
 
+/** The window drawn again, as soon after its start as the test goes: not
+ * a start that broke (ADR 0039). */
+async function drawnAgain(page: Page) {
+  await page.evaluate(() => localStorage.removeItem("banda.starts"))
+  await page.reload()
+}
+
+/** Work's Threads as their host lists them, which every window reads
+ * (ADR 0096). */
+function hostedOf(window: Window) {
+  const work = projectId(window, "Work")
+  return () =>
+    (
+      JSON.parse(window.banda("call", "agents.threads", "--project", work))
+        .ok as {
+        threads: {
+          id: string
+          title: string
+          seen?: string
+          archived?: { at: number }
+          latest: { turn: string; state: string }
+        }[]
+      }
+    ).threads
+}
+
+/** In the page, whether the sidebar's Threads list has a row with `title`,
+ * and with `mark` on it when one is named. */
+const rowIn = (title: string, mark?: string) =>
+  `[...document.querySelectorAll('[role="group"][aria-label="Threads"] button')].some((row) => row.textContent.includes(${JSON.stringify(title)})${mark ? ` && row.querySelector('[role="img"][aria-label=${JSON.stringify(mark)}]') !== null` : ""})`
+
+/** Follows `check`, a test of the page's as `rowIn` writes one, from now:
+ * what it was at first, then each change as the page drew it, once
+ * asked. */
+async function followed(
+  page: Page,
+  check: string
+): Promise<() => Promise<boolean[]>> {
+  await page.evaluate(`(() => {
+    const now = () => ${check}
+    const was = [now()]
+    const observer = new MutationObserver(() => {
+      const is = now()
+      if (is !== was.at(-1)) was.push(is)
+    })
+    observer.observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true })
+    globalThis.__followed = { was, observer }
+  })()`)
+  return () =>
+    page.evaluate(`(() => {
+      globalThis.__followed.observer.disconnect()
+      return globalThis.__followed.was
+    })()`)
+}
+
+test("a Thread's marks are its host's: unread and read, archived and back, each holds through a reload (ADR 0096)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread).toHaveAccessibleName("hello")
+  const hosted = hostedOf(window)
+  const first = () => hosted()[0]!
+  // It ended in sight: seen, on its host.
+  await expect
+    .poll(() => {
+      const { seen, latest } = first()
+      return latest.state === "done" && seen === latest.turn
+    })
+    .toBe(true)
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const list = sidebar.getByRole("group", { name: "Threads" })
+  const row = list.getByRole("button", { name: /hello/ })
+  const done = row.getByRole("img", { name: "Done" })
+  const shelf = sidebar.getByRole("group", { name: "Archive" })
+  await expect(done).toBeHidden()
+  // Another Pane has the focus, so nothing reads the Thread again.
+  await page.keyboard.press("Alt+KeyN")
+  await expect(page.getByRole("region", { name: "New Pane" })).toHaveAttribute(
+    "data-focused",
+    "true"
+  )
+  const menu = async (item: RegExp) => {
+    await row.click({ button: "right" })
+    await page.getByRole("menuitem", { name: item }).click()
+  }
+
+  // Unread: its host holds no seen, and the window drawn anew shows it so.
+  await menu(/Mark as unread/)
+  await expect(done).toBeVisible()
+  await expect.poll(() => first().seen).toBeUndefined()
+  await drawnAgain(page)
+  await expect(done).toBeVisible()
+  expect(first().seen).toBeUndefined()
+  // Read: its host's latest turn that ended.
+  await menu(/Mark as read/)
+  await expect(done).toBeHidden()
+  await expect
+    .poll(() => {
+      const { seen, latest } = first()
+      return seen === latest.turn
+    })
+    .toBe(true)
+  await drawnAgain(page)
+  await expect(row).toBeVisible()
+  await expect(done).toBeHidden()
+
+  // Archived on its host, and still after a reload.
+  await menu(/Archive thread/)
+  await expect(shelf).toBeVisible()
+  await expect(row).toBeHidden()
+  await expect.poll(() => first().archived).toBeDefined()
+  await drawnAgain(page)
+  const header = shelf.getByRole("button", { name: /Archive/ })
+  await expect(header).toContainText("1")
+  await expect(row).toBeHidden()
+  // Back, on its host too, and still after a reload.
+  await header.click()
+  await shelf.getByRole("button", { name: /hello/ }).click({ button: "right" })
+  await page.getByRole("menuitem", { name: /Unarchive thread/ }).click()
+  await expect(row).toBeVisible()
+  await expect(shelf).toBeHidden()
+  await expect.poll(() => first().archived).toBeUndefined()
+  await drawnAgain(page)
+  await expect(row).toBeVisible()
+  await expect(shelf).toBeHidden()
+})
+
+test("from a far host, a mark shows at once and never flips back as its fact comes, and one the host refuses comes back with a toast (ADR 0096)", async () => {
+  test.setTimeout(120_000)
+  // What the engine says reaches the page 1.5 s late; what the page asks
+  // reaches it at once.
+  window = await startWindow({ latency: 1_500 })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread).toHaveAccessibleName("hello")
+  const hosted = hostedOf(window)
+  const first = () => hosted()[0]!
+  await expect
+    .poll(() => {
+      const { seen, latest } = first()
+      return latest.state === "done" && seen === latest.turn
+    })
+    .toBe(true)
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const row = sidebar
+    .getByRole("group", { name: "Threads" })
+    .getByRole("button", { name: /hello/ })
+  const done = row.getByRole("img", { name: "Done" })
+  const shelf = sidebar.getByRole("group", { name: "Archive" })
+  await expect(row.getByRole("img", { name: "Working" })).toBeHidden()
+  await expect(done).toBeHidden()
+  // Long enough for the answer and the fact to come, both late.
+  const heard = () => page.waitForTimeout(3_000)
+  // At once: well before anything the host says could have come.
+  const soon = { timeout: 1_000 }
+
+  // Unread, in the Thread in focus: Done at once, and Done it stays.
+  let was = await followed(page, rowIn("hello", "Done"))
+  await page.keyboard.press("Alt+Shift+U")
+  await expect(done).toBeVisible(soon)
+  await expect.poll(() => first().seen).toBeUndefined()
+  await heard()
+  expect(await was()).toEqual([false, true])
+  // Read again.
+  was = await followed(page, rowIn("hello", "Done"))
+  await page.keyboard.press("Alt+Shift+U")
+  await expect(done).toBeHidden(soon)
+  await expect.poll(() => first().seen).toBeDefined()
+  await heard()
+  expect(await was()).toEqual([true, false])
+
+  // Archived: off the list at once, its Pane closed once the host took
+  // it, and never back on the list.
+  was = await followed(page, rowIn("hello"))
+  await page.keyboard.press("Alt+S")
+  await expect(row).toBeHidden(soon)
+  await expect(shelf).toBeVisible()
+  await expect.poll(() => first().archived).toBeDefined()
+  await expect(thread).toBeHidden()
+  await heard()
+  expect(await was()).toEqual([true, false])
+  // Back, from its row on the shelf.
+  await shelf.getByRole("button", { name: /Archive/ }).click()
+  await shelf.getByRole("button", { name: /hello/ }).click()
+  await expect(thread).toBeVisible()
+  was = await followed(page, rowIn("hello"))
+  await page.keyboard.press("Alt+S")
+  await expect(row).toBeVisible(soon)
+  await expect.poll(() => first().archived).toBeUndefined()
+  await heard()
+  expect(await was()).toEqual([false, true])
+
+  // At work on its host, though not yet as the page heard it: the host
+  // refuses the archive, a toast says why, and the row and its Pane stay.
+  await composer.click()
+  await composer.fill("wait for it")
+  await composer.press("Enter")
+  await expect.poll(() => first().latest.state).toBe("running")
+  await page.keyboard.press("Alt+S")
+  const toasts = page.getByRole("region", { name: "Notifications" })
+  await expect(
+    toasts.getByText("This Thread is at work: archive it once its turn ends.")
+  ).toBeVisible()
+  await expect(
+    sidebar
+      .getByRole("group", { name: "Working" })
+      .getByRole("button", { name: /hello/ })
+  ).toBeVisible()
+  await expect(shelf).toBeHidden()
+  await expect(thread).toBeVisible()
+  expect(first().archived).toBeUndefined()
+  await thread.getByRole("button", { name: "Stop", exact: true }).click()
+  await expect.poll(() => first().latest.state).toBe("stopped")
+})
+
+test("the marks this window kept move to its host once, and its first list shows them moved (ADR 0096)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread).toHaveAccessibleName("hello")
+  // A Thread from outside, which this window never opened: unseen.
+  const work = projectId(window, "Work")
+  window.banda(
+    "call",
+    "agents.send",
+    "--project",
+    work,
+    "--params",
+    JSON.stringify({ harness: "fake", text: "from outside", settings: null })
+  )
+  const hosted = hostedOf(window)
+  const titled = (title: string) => hosted().find((one) => one.title === title)!
+  await expect
+    .poll(() => hosted().map(({ latest }) => latest.state))
+    .toEqual(["done", "done"])
+  const outside = titled("from outside")
+  expect(outside.seen).toBeUndefined()
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const list = sidebar.getByRole("group", { name: "Threads" })
+  const hello = list.getByRole("button", { name: /hello/ })
+  const marked = list.getByRole("button", { name: /from outside/ })
+  await expect(marked.getByRole("img", { name: "Done" })).toBeVisible()
+
+  // The old keys, as a window before ADR 0096 kept them: the outside
+  // Thread seen, hello archived; and no move gone yet.
+  await page.evaluate(
+    ({ seen, archived }) => {
+      localStorage.setItem("banda.agents.seen", JSON.stringify(seen))
+      localStorage.setItem("banda.sidebar.archived", JSON.stringify(archived))
+      localStorage.removeItem("banda.marks.moved")
+    },
+    {
+      seen: { [outside.id]: outside.latest.turn },
+      archived: {
+        [titled("hello").id]: { archived: true, at: Date.now() },
+      },
+    }
+  )
+  // From the window's first drawing on, whether the sidebar ever lists
+  // hello, or the outside Thread as Done: what the host had before.
+  await page.addInitScript(`(() => {
+    const was = (globalThis.__before = { hello: false, done: false })
+    new MutationObserver(() => {
+      was.hello ||= ${rowIn("hello")}
+      was.done ||= ${rowIn("from outside", "Done")}
+    }).observe(document, { subtree: true, childList: true, attributes: true })
+  })()`)
+  await drawnAgain(page)
+
+  const shelf = sidebar.getByRole("group", { name: "Archive" })
+  const header = shelf.getByRole("button", { name: /Archive/ })
+  await expect(header).toContainText("1")
+  await expect(marked).toBeVisible()
+  await expect(marked.getByRole("img", { name: "Done" })).toBeHidden()
+  expect(await page.evaluate("globalThis.__before")).toEqual({
+    hello: false,
+    done: false,
+  })
+  // On the host, which every window reads; the Project moved, once.
+  expect(titled("hello").archived).toBeDefined()
+  expect(titled("from outside").seen).toBe(outside.latest.turn)
+  const moved = await page.evaluate(() =>
+    localStorage.getItem("banda.marks.moved")
+  )
+  expect(JSON.parse(moved!)).toEqual([work])
+
+  // Brought back, it stays back at the next start: the old keys, there
+  // still, move nothing again.
+  await header.click()
+  await shelf.getByRole("button", { name: /hello/ }).click({ button: "right" })
+  await page.getByRole("menuitem", { name: /Unarchive thread/ }).click()
+  await expect(hello).toBeVisible()
+  await expect.poll(() => titled("hello").archived).toBeUndefined()
+  await drawnAgain(page)
+  await expect(hello).toBeVisible()
+  expect(titled("hello").archived).toBeUndefined()
+})
+
 test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts one with the words", async () => {
   window = await startWindow()
   const { page } = window
