@@ -4,6 +4,7 @@ import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { Engine } from "@banda/contract"
 import "@banda/ui/globals.css"
+import { HostsContext, KeptHosts } from "./calls/hosts"
 import { poppedOf } from "./host"
 import { moveEnterKey } from "./enter-key"
 import { followAccent } from "./accent"
@@ -12,6 +13,7 @@ import { followLook } from "./look"
 import { keepProblem, watchProblems } from "./problems/keep"
 import { type Broke, BrokeCard } from "./safe/Broke"
 import { OFFER_AFTER, starting } from "./safe/starts"
+import { device } from "./window/device"
 
 const host = window.banda
 // The look the desktop reads (ADR 0007), else the system's light or dark.
@@ -44,9 +46,17 @@ if (host && engine) {
   const popped = poppedOf(location.hash)
   const show = () => {
     const view = popped
-      ? import("./window/Popped").then(({ Popped }) => (
-          <Popped engine={engine} pane={popped} />
-        ))
+      ? import("./window/Popped").then(({ Popped }) => {
+          // A Pane on another host reaches it from here too (ADR 0081),
+          // for the window's life.
+          const hosts = new KeptHosts(device.hosts)
+          hosts.follow()
+          return (
+            <HostsContext value={hosts}>
+              <Popped engine={engine} pane={popped} />
+            </HostsContext>
+          )
+        })
       : import("./App").then(({ App }) => <App engine={engine} />)
     void view.then((shown) => root.render(<StrictMode>{shown}</StrictMode>))
   }

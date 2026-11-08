@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useContext, useEffect, useMemo, useState } from "react"
 import type { Engine } from "@banda/contract"
 import { useModules } from "@banda/ui/hooks/use-status"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import type { PaneState } from "@banda/ui/pane"
+import { HostsContext, useOurs } from "../calls/hosts"
 import { labelOf, previewers } from "../registry"
 import { closing } from "./actions"
 import { device } from "./device"
@@ -25,6 +26,8 @@ import { Previewers } from "@banda/ui/lib/previewers"
 export function Popped({ engine, pane }: { engine: Engine; pane: string }) {
   const modules = useModules(engine)
   const { listed: projects } = useProjects(engine)
+  // This machine's Projects win an ID a host has too, as in the window.
+  useOurs(useContext(HostsContext), projects)
   const live = useArranged(engine)
   const kept = live.state === "ready" ? live.view : undefined
   // Its args as it asked for them, drawn until the engine's event is.

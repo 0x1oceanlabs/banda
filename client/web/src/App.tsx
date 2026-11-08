@@ -5,7 +5,7 @@ import { useProjects } from "@banda/ui/hooks/use-projects"
 import { Previewers } from "@banda/ui/lib/previewers"
 import { useMachine, useModules, useStatus } from "@banda/ui/hooks/use-status"
 import { shownProjects } from "@banda/ui/lib/projects"
-import { HostsContext, KeptHosts } from "./calls/hosts"
+import { HostsContext, KeptHosts, useOurs } from "./calls/hosts"
 import { previewers } from "./registry"
 import { device } from "./window/device"
 import { Shell } from "./window/Shell"
@@ -24,9 +24,7 @@ export function App({ engine }: { engine: Engine }) {
   const { listed, put } = useProjects(engine)
   const [hosts] = useState(() => new KeptHosts(device.hosts))
   useEffect(() => hosts.follow(), [hosts])
-  useEffect(() => {
-    if (listed.state === "ready") hosts.ours(listed.value)
-  }, [hosts, listed])
+  useOurs(hosts, listed)
 
   if (listed.state === "loading") {
     return (

@@ -1,9 +1,10 @@
 /**
  * What every part of a Thread reads, from its Thread and not through props
- * (ADR 0091, decision 4): its Project, the Thread, the engine, the image
- * reader, and the acts. It holds only what does not change while the
- * Thread is drawn, so it re-renders nothing: the acts keep one identity
- * and call the latest the Thread gave.
+ * (ADR 0091, decision 4): its Project, the Thread, the engine, the other
+ * host its Project is on, the image reader, and the acts. It holds only
+ * what does not change while the Thread is drawn, so it re-renders
+ * nothing: the acts keep one identity and call the latest the Thread
+ * gave.
  */
 import {
   createContext,
@@ -44,6 +45,10 @@ export type ThreadAround = {
   engine: Engine
   project: ProjectId
   thread: string
+  /** The other host of `hosts.toml` its Project is on (ADR 0081): what
+   * this machine would draw from its Project, as a Visual, is not there
+   * yet. None for this machine's. */
+  host?: string
   reader: ImageReader
   acts: ThreadActs
 }
@@ -63,6 +68,7 @@ export function ThreadAroundProvider({
   engine,
   project,
   thread,
+  host,
   reader,
   acts,
   children,
@@ -88,8 +94,8 @@ export function ThreadAroundProvider({
     [snoozes]
   )
   const around = useMemo(
-    () => ({ engine, project, thread, reader, acts: stable }),
-    [engine, project, thread, reader, stable]
+    () => ({ engine, project, thread, host, reader, acts: stable }),
+    [engine, project, thread, host, reader, stable]
   )
   return <Around.Provider value={around}>{children}</Around.Provider>
 }

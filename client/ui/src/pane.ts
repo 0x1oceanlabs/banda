@@ -73,6 +73,28 @@ export function within(tile: Element, element: Element | null): boolean {
 export type PaneState = { kind: string; args: { [key: string]: JsonValue } }
 
 /**
+ * The other host of `hosts.toml` whose Project a Pane shows, by its name,
+ * as its args keep it under `host` (ADR 0081, decision 4): the arrangement
+ * keeps it, so the Pane comes back there after a restart. None for this
+ * machine's. It stands in for the client's Placement (ADR 0082) until
+ * there is one.
+ */
+export function paneHost(pane: PaneState): string | undefined {
+  const host = pane.args.host
+  return typeof host === "string" && host !== "" ? host : undefined
+}
+
+/** `pane` as a Pane of host `host`'s Project keeps it; of this machine's,
+ * `host` none, with no host. */
+export function withHost(pane: PaneState, host: string | undefined): PaneState {
+  if (paneHost(pane) === host) return pane
+  const args = { ...pane.args }
+  if (host === undefined) delete args.host
+  else args.host = host
+  return { ...pane, args }
+}
+
+/**
  * Where a Pane opens, from the Pane that opens it: in a new column to its
  * right, below it in its column, instead of it in its place, or in its
  * Group, in the Deck right of it, as what a Thread opens goes; or last on
@@ -166,6 +188,11 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
    * an Agent's Thread does, so the Panes its Agent opens join a Group
    * already there (ADR 0065, decision 7). */
   grouped?: true
+  /** It opens for a Project of another host of `hosts.toml` too, on that
+   * host's engine, which it reaches only through the API, as a Thread
+   * does (ADR 0081, decision 4). Another kind there says it is not on
+   * that host yet: it would reach this machine's files. */
+  elsewhere?: true
   /**
    * False when the Pane draws its own header, as the browser's row of tabs
    * and address: the frame then draws none (`PaneHeader` draws one).

@@ -59,14 +59,15 @@ import { Transcript } from "./Transcript"
 import { useWriters } from "./writers"
 import { ThreadAroundProvider, type ThreadActs } from "./context"
 
-/** Opens a web link in Banda's browser, or outside it (ADR 0051). */
+/** Opens a web link in Banda's browser, or outside it (ADR 0051): always
+ * outside where no window runs the browser for it (`run` none). */
 export function linkOpener(
   run: PaneProps<ThreadArgs>["run"],
   project: ProjectId
 ) {
   return (address: string, outside: boolean) => {
-    if (outside) window.open(address, "_blank", "noopener,noreferrer")
-    else run?.("browser.open", { address, project })
+    if (outside || !run) window.open(address, "_blank", "noopener,noreferrer")
+    else run("browser.open", { address, project })
   }
 }
 
@@ -85,7 +86,10 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   const harnesses = useHarnesses(engine)
   const unplaced = project === machine
   const fence = useFence(engine)
-  const { thread } = args
+  // Another host's (ADR 0081): what would reach this machine's files, or
+  // ask its Person there, stays off.
+  const { thread, host } = args
+  const here = host === undefined
   const {
     live,
     state,
@@ -135,7 +139,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   // What a right click found, for the Thread's menu (ADR 0063, decision 3).
   const [menu, setMenu] = useState<MenuAt | null>(null)
   // Where the paths in its replies lead (ADR 0063, decision 2).
-  const files = useThreadFiles(project, state?.items, run)
+  const files = useThreadFiles(here ? project : null, state?.items, run)
   const root = useRef<HTMLDivElement>(null)
   const composer = useRef<ComposerHandle>(null)
   const findField = useRef<HTMLInputElement>(null)
@@ -231,16 +235,22 @@ export function Thread(props: PaneProps<ThreadArgs>) {
       run &&
       ((until, resume) =>
         run("thread.snooze", { project, thread, until, resume })),
-    signIn: (turn) => (
-      <SignIn
-        engine={engine}
-        project={project}
-        harness={harness}
-        turn={turn.id}
-        open={open}
-        onSignedIn={() => retry(turn)}
-      />
-    ),
+    signIn: (turn) =>
+      here ? (
+        <SignIn
+          engine={engine}
+          project={project}
+          harness={harness}
+          turn={turn.id}
+          open={open}
+          onSignedIn={() => retry(turn)}
+        />
+      ) : (
+        // Its terminal would run there, where no one sees it.
+        <p className="text-xs text-muted-foreground">
+          Sign in to {short} on {host}, then try again.
+        </p>
+      ),
   }
 
   return (
@@ -275,14 +285,15 @@ export function Thread(props: PaneProps<ThreadArgs>) {
           setDropping(false)
       }}
       // Files' rows are named, before the composer's text takes them as
-      // text; files from another app are kept, as below.
+      // text; files from another app are kept, as below. Another host's
+      // Thread takes no path of this machine's.
       onDropCapture={(event) => {
         const paths = droppedPaths(event.dataTransfer)
         if (!paths) return
         event.preventDefault()
         event.stopPropagation()
         setDropping(false)
-        void point(paths)
+        if (here) void point(paths)
       }}
       onDrop={(event) => {
         if (!event.dataTransfer.types.includes("Files")) return
@@ -314,7 +325,8 @@ export function Thread(props: PaneProps<ThreadArgs>) {
             area={area}
             onQuote={(quote) => composer.current?.quote(quote)}
           />
-          {!unplaced && (
+          {/* Another host's details open what is not there yet. */}
+          {!unplaced && here && (
             <ThreadDetails
               engine={engine}
               project={project}
@@ -367,6 +379,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
                 engine={engine}
                 project={project}
                 thread={thread}
+                host={host}
                 reader={reader}
                 acts={acts}
               >
@@ -395,8 +408,11 @@ export function Thread(props: PaneProps<ThreadArgs>) {
               setFind({ query: words, at: 0 })
               findField.current?.select()
             },
-            search: run && ((words) => run("browser.open", { words, project })),
-            open: linkOpener(run, project),
+            search:
+              here && run
+                ? (words) => run("browser.open", { words, project })
+                : undefined,
+            open: linkOpener(here ? run : undefined, project),
             copyImage: run && ((x, y) => run("edit.copy-image", { x, y })),
             file: files ?? undefined,
             attach: (path) => run?.("file.attach", { file: path }),

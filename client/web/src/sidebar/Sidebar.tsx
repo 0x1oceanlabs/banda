@@ -671,6 +671,8 @@ function ThreadRow({
         row={row}
         settings={props.settings}
         inProject={props.inProject}
+        current={props.current}
+        onOpen={props.onOpen}
         named={named}
         away={away}
       />
@@ -1079,21 +1081,26 @@ function HostLines({
 }
 
 /**
- * Another host's Thread (ADR 0081): shown as this machine's are, but not
- * opened, and with no menu or snooze, as each would go to this machine's
- * engine. Where no label above names its host, the row does; away, it
- * dims and its timer stands.
+ * Another host's Thread (ADR 0081): shown as this machine's are, and a
+ * click opens it there, as its listed Pane names its host; with no menu
+ * or snooze yet, as the row's would go to this machine's engine. Where no
+ * label above names its host, the row does; away, it dims and its timer
+ * stands.
  */
 function ElsewhereRow({
   row,
   settings,
   inProject,
+  current,
+  onOpen,
   named,
   away,
 }: {
   row: Arranged
   settings: Settings
   inProject: boolean
+  current: boolean
+  onOpen: () => void
   /** A label above names its host. */
   named: boolean
   away?: number
@@ -1103,8 +1110,8 @@ function ElsewhereRow({
       row={row}
       settings={settings}
       inProject={inProject}
-      current={false}
-      onOpen={NOTHING}
+      current={current}
+      onOpen={onOpen}
       host={named ? undefined : row.host}
       stillAt={away}
     />
@@ -1115,5 +1122,3 @@ function ElsewhereRow({
     drawn
   )
 }
-
-const NOTHING = () => {}

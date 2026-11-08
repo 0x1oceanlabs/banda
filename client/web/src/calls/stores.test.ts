@@ -230,3 +230,16 @@ test("the calls hold the loudest of every host's, and how many wait in all", () 
   expect(stores.calls.get().attention).toEqual({ mark: "rest", waiting: 0 })
   expect(heard).toHaveBeenCalledTimes(4)
 })
+
+test("a host's Listed opens its Pane on that host, with no answer for this machine's engine", () => {
+  const stores = newStores(0)
+  const answers = [{ label: "Allow", action: "agents.answer", args: {} }]
+  takeLists(stores, { [p]: [thread("a", { answers })] })
+  takeLists(stores, { [r]: [thread("b", { answers })] }, "arc")
+  const [here] = stores.items.get()[p]!
+  const [there] = stores.items.get()[r]!
+  expect(here!.pane.args).toEqual({ thread: "a" })
+  expect(here!.answers).toEqual(answers)
+  expect(there!.pane.args).toEqual({ thread: "b", host: "arc" })
+  expect(there!.answers).toBeUndefined()
+})

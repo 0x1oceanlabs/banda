@@ -10,7 +10,9 @@ import type { ProjectId } from "@banda/contract"
 import { type Here, HereContext, type HereStore } from "@banda/ui/here"
 import { inFront } from "@banda/ui/hooks/use-in-front"
 import { sameData, Store } from "@banda/ui/lib/store"
-import { type ReactNode, useEffect, useState } from "react"
+import { paneHost } from "@banda/ui/pane"
+import { type ReactNode, useContext, useEffect, useState } from "react"
+import { HostsContext, type KeptHosts } from "../calls/hosts"
 import type { Shows } from "../calls/sight"
 import { type Stores, StoresContext } from "../calls/stores"
 import { current, focused, projectIn, type Workspaces } from "../tiling/model"
@@ -27,16 +29,19 @@ export type Around = {
 }
 
 /** Here, from the workspaces as the Tiling drew them and what is
- * `around` them. While the Tiling reads the arrangement, no workspace is
- * on screen. */
+ * `around` them, with the host the Pane in focus is on as `hostOf` says
+ * (`KeptHosts.hostOf`), as its frame gives it its engine. While the
+ * Tiling reads the arrangement, no workspace is on screen. */
 export function hereOf(
   state: Workspaces,
   { sidebar, front, home }: Around,
-  shows: Shows
+  shows: Shows,
+  hostOf: KeptHosts["hostOf"] = (_, named) => named
 ): Here {
   const workspace = current(state)
   const entry = focused(state)
   const subject = entry && shows(entry.pane)
+  const host = entry && hostOf(entry.project, paneHost(entry.pane))
   return {
     front,
     sidebar,
@@ -51,6 +56,7 @@ export function hereOf(
           id: entry.id,
           project: entry.project,
           ...(subject && { subject }),
+          ...(host && { host }),
         }
       : null,
     project: projectIn(state) ?? home,
@@ -126,18 +132,22 @@ export function useKeptHere(
   around: Omit<Around, "front">,
   shows: Shows
 ): KeptHere {
-  const now = useSteady({ ...around, drawn, shows })
+  const hosts = useContext(HostsContext)
+  const now = useSteady({ ...around, drawn, shows, hosts })
   const [here] = useState(
     () =>
       new KeptHere(() =>
         hereOf(
           now.drawn(),
           { sidebar: now.sidebar, front: inFront(), home: now.home },
-          now.shows
+          now.shows,
+          (project, named) => now.hosts.hostOf(project, named)
         )
       )
   )
   useEffect(() => here.tell())
+  // The hosts change with no drawing of the Window: they tell it so.
+  useEffect(() => hosts.subscribe(() => here.tell()), [hosts, here])
   return here
 }
 

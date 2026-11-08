@@ -19,10 +19,17 @@ export type Here = {
   /** The workspace on screen, with its Project where it is a Project's
    * (ADR 0065); none where no Tiling is. */
   workspace: { id: string; project?: ProjectId } | null
-  /** The Pane in focus, its Project, and the one thing it shows, by the
-   * id its App lists it with (`PaneKind.shows`): a Thread's for a Thread.
-   * None while no Pane has the focus. */
-  pane: { id: string; project: ProjectId; subject?: string } | null
+  /** The Pane in focus, its Project, the one thing it shows, by the id
+   * its App lists it with (`PaneKind.shows`): a Thread's for a Thread,
+   * and the other host of `hosts.toml` its Project is on, the one whose
+   * engine its frame gives it (ADR 0081): an act that would go to this
+   * machine's engine stays off there. None while no Pane has the focus. */
+  pane: {
+    id: string
+    project: ProjectId
+    subject?: string
+    host?: string
+  } | null
   /** The Project the Person is in: the Pane's, else the workspace's,
    * else the Window's home, where a new Thread starts. */
   project: ProjectId

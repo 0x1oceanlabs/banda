@@ -2,16 +2,19 @@ import { useCallback } from "react"
 import { MarkdownMedia } from "@banda/ui/components/markdown-media"
 import { agentsHost } from "../desktop"
 
-/** Resolves paths in this Thread's Project through Banda's own bridge. */
+/** Resolves paths in this Thread's Project through Banda's own bridge;
+ * none for a Project of another host's (`project` null), whose paths are
+ * not this machine's. */
 export function ThreadMedia({
   project,
   children,
 }: {
-  project: string
+  project: string | null
   children: React.ReactNode
 }) {
   const resolve = useCallback(
     (path: string) => {
+      if (project === null) return Promise.resolve(null)
       // Markdown escapes spaces and Unicode in destinations once.
       let decoded: string
       try {

@@ -45,6 +45,27 @@ test("Here is the Pane in focus, its Project and the thing it shows", () => {
   expect(hereOf(beside, around, shows).project).toBe(B)
 })
 
+test("a Pane of another host's Project names that host on Here", () => {
+  // As its args keep it (ADR 0081): an act that would go to this
+  // machine's engine reads it and stays off.
+  const there = { ...thread("t2"), args: { thread: "t2", host: "arc" } }
+  const state = open(start(), B, there)
+  expect(hereOf(state, around, shows).pane).toEqual({
+    id: focused(state)!.id,
+    project: B,
+    subject: "t2",
+    host: "arc",
+  })
+  // The host its frame reaches it on, as the Window's hosts say: one
+  // that lists its Project where its args name none, and none where this
+  // machine's Project wins a clash.
+  const listed = open(start(), B, thread("t3"))
+  expect(hereOf(listed, around, shows, () => "arc").pane?.host).toBe("arc")
+  expect(hereOf(state, around, shows, () => undefined).pane).not.toHaveProperty(
+    "host"
+  )
+})
+
 test("on a workspace with no Pane, the Project is the workspace's, else home", () => {
   // As when the Person archives a Project's last Thread: New Thread
   // starts there, not in home (ADR 0087, decision 4).

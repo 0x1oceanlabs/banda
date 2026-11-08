@@ -31,8 +31,10 @@ import {
   type Label,
   type Listed,
   type PaneProps,
+  paneHost,
   type PaneState,
   type Place,
+  withHost,
   within,
 } from "@banda/ui/pane"
 import type { Args } from "@banda/ui/module"
@@ -51,6 +53,7 @@ import {
   sayLabel,
   useLabel,
 } from "../registry"
+import { reachWords, runsElsewhere, useReach } from "../calls/hosts"
 import { sayComposer } from "../window/attach"
 import { heightAt } from "./layout"
 import { ThreadMark } from "@banda/ui/components/banda-mark"
@@ -129,21 +132,31 @@ type Handle = Pick<
   "open" | "update" | "close" | "label" | "composer"
 >
 
-/** The handle of the Pane of kind `kind` at `entry` in `project`. */
+/** The handle of the Pane of kind `kind` at `entry` in `project`, a
+ * Project of another host's when `host` names one (ADR 0081): what it
+ * opens, in any Project, and its own args keep that host, as it knows only
+ * that host's Projects, and it takes nothing this machine attaches, as
+ * that names this machine's files. */
 function handleOf(
   frame: Frame,
   entry: string,
   project: ProjectId,
-  kind: string
+  kind: string,
+  host: string | undefined
 ): Handle {
+  const there = (pane: PaneState) =>
+    host === undefined ? pane : withHost(pane, host)
   return {
     open: (pane, place, other) =>
-      frame.open(other ?? project, pane, entry, place),
-    update: (args) => frame.update(entry, { kind, args }),
+      frame.open(other ?? project, there(pane), entry, place),
+    update: (args) => frame.update(entry, there({ kind, args })),
     close: () => frame.close(entry),
     label: (label) => sayLabel(entry, label),
     // Its composer, the same between draws, so the Pane says it once.
-    composer: (take) => sayComposer(entry, project, take),
+    composer:
+      host === undefined
+        ? (take) => sayComposer(entry, project, take)
+        : undefined,
   }
 }
 
@@ -209,11 +222,38 @@ export const PaneFrame = memo(function PaneFrame({
   const shown = kind && kindRuns(entry.pane.kind, modules) ? kind : undefined
   const element = useRef<HTMLElement>(null)
   const { title, detail, edits, Icon } = labelOf(entry.pane, useLabel(entry.id))
+  // A Project of another host's is that host's engine's (ADR 0081): only
+  // a kind that opens there does, on it; another says it is not there yet.
+  const named = paneHost(entry.pane)
+  const reach = useReach(engine, entry.project, named)
+  const there = reach.host
+  const words = there === undefined ? undefined : reachWords(there, reach.shown)
   const handle = useMemo(
-    () => handleOf(frame, entry.id, entry.project, entry.pane.kind),
-    [frame, entry.id, entry.project, entry.pane.kind]
+    () => handleOf(frame, entry.id, entry.project, entry.pane.kind, there),
+    [frame, entry.id, entry.project, entry.pane.kind, there]
   )
   const { close } = handle
+  // What it runs of the Window's, there only what reaches neither this
+  // machine's files nor its engine's Projects.
+  const run = useMemo(
+    () =>
+      there === undefined
+        ? frame.run
+        : (action: string, args?: Args) => {
+            if (runsElsewhere(action)) frame.run(action, args)
+          },
+    [frame, there]
+  )
+  // It with the host it is on in its args: its Pane reads that at once,
+  // as Here does, and the args keep it, so it comes back there after a
+  // restart. One opened where its host went unsaid takes it, and one this
+  // machine's Project took back, as it wins a clash, lets it go.
+  const onHost = useMemo(() => withHost(entry.pane, there), [entry.pane, there])
+  useEffect(() => {
+    if (onHost !== entry.pane) frame.update(entry.id, onHost)
+  }, [frame, entry.id, entry.pane, onHost])
+  const summary =
+    project ?? reach.shown?.projects.find((one) => one.id === entry.project)
   const details = useMemo(() => detailsOf(modules), [modules])
   // Its Tile, which the Tiling configures and its Pane reads (ADR 0088,
   // decision 4): the same for as long as it is drawn, so no Configure
@@ -347,17 +387,17 @@ export const PaneFrame = memo(function PaneFrame({
                         listed.mark === "rest" ? "opacity-40" : undefined
                       }
                     />
-                    {project && (
+                    {summary && (
                       <ProjectName
-                        project={project}
+                        project={summary}
                         className="shrink-0 text-muted-foreground"
                       />
                     )}
                   </>
                 )}
-                {listed ? (
+                {listed && reach.engine ? (
                   <Title
-                    engine={engine}
+                    engine={reach.engine}
                     project={entry.project}
                     listed={listed}
                     title={title}
@@ -376,9 +416,9 @@ export const PaneFrame = memo(function PaneFrame({
                     {detail}
                   </span>
                 )}
-                {mixed && !listed && project && (
+                {mixed && !listed && summary && (
                   <ProjectName
-                    project={project}
+                    project={summary}
                     className="shrink-0 gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground"
                   />
                 )}
@@ -395,7 +435,7 @@ export const PaneFrame = memo(function PaneFrame({
                 )}
               </PaneHeader>
             )}
-            <div className="min-h-0 flex-1">
+            <div className="relative min-h-0 flex-1">
               {away ? (
                 <button
                   type="button"
@@ -406,17 +446,21 @@ export const PaneFrame = memo(function PaneFrame({
                   <SquareArrowOutUpRightIcon className="size-5" />
                   In its own window
                 </button>
+              ) : there !== undefined && !kind?.elsewhere ? (
+                <Elsewhere>Not on {there} yet</Elsewhere>
+              ) : !reach.engine ? (
+                <Elsewhere>{words}</Elsewhere>
               ) : shown ? (
                 <Broken close={close}>
                   <TileContext value={tile}>
                     <shown.Pane
-                      engine={engine}
+                      engine={reach.engine}
                       project={entry.project}
-                      args={entry.pane.args}
+                      args={onHost.args}
                       focused={focused}
                       selected={selected}
                       {...handle}
-                      run={frame.run}
+                      run={run}
                     />
                   </TileContext>
                 </Broken>
@@ -427,6 +471,16 @@ export const PaneFrame = memo(function PaneFrame({
                     : "This window does not know this kind of Pane."}
                 </p>
               )}
+              {/* Its host out of reach, it shows what it showed, and
+                  catches up once that host is back. */}
+              {!away && reach.engine && words && (
+                <p
+                  role="status"
+                  className="pointer-events-none absolute top-2 left-1/2 z-10 -translate-x-1/2 rounded-full border bg-tile px-2.5 py-0.5 text-xs whitespace-nowrap text-muted-foreground shadow-sm"
+                >
+                  {words}
+                </p>
+              )}
             </div>
           </DetailsRows>
         </HeaderSlot>
@@ -434,6 +488,16 @@ export const PaneFrame = memo(function PaneFrame({
     </section>
   )
 })
+
+/** Why a Pane on another host shows nothing: it is not there yet, or that
+ * host is not known yet. */
+function Elsewhere({ children }: { children: ReactNode }) {
+  return (
+    <p className="flex size-full items-center justify-center p-4 text-center text-sm text-muted-foreground">
+      {children}
+    </p>
+  )
+}
 
 /** The Pane menu's rows, with where the Pane stands as the menu opens. */
 function Rows({
