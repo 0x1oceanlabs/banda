@@ -44,6 +44,8 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-account-own: var(--account-own);
+  --color-account-claude: var(--account-claude);
   --color-account-1: var(--account-1);
   --color-account-2: var(--account-2);
   --color-account-3: var(--account-3);
@@ -135,13 +137,19 @@
   --chart-3: #ca8a04;
   --chart-4: #c026d3;
   --chart-5: #0891b2;
-  /* Each Harness account's colour, in the order of harnesses.toml (ADR
-     0055, decision 4): a categorical palette checked for colour-blind
-     reading. A sixth account takes the first again. */
-  --account-1: #2a78d6;
-  --account-2: #6250d6;
-  --account-3: #1baf7a;
-  --account-4: #e87ba4;
+  /* An account's emblem's colour (ADR 0093, decision 3): its Harness's
+     own, Claude's orange behind Claude's icons and the text's behind the
+     others, then violet, rose, green and graphite. Every two of one
+     Harness stay apart in normal sight and the three colour-blindnesses,
+     and each is at least 3.4:1 on the sidebar
+     (docs/research/2026-11-08-account-icon-colours.md). The fifth is the
+     Usage Pane's, which still colours the accounts by place (ADR 0055). */
+  --account-own: var(--foreground);
+  --account-claude: #c96442;
+  --account-1: #8557c8;
+  --account-2: #ad3272;
+  --account-3: #189a69;
+  --account-4: #424242;
   --account-5: #eda100;
   /* The system's accent, which the window sets on a Mac or Windows (ADR
      0075, decision 6); Apple's blue elsewhere. The macos theme's accent. */
@@ -191,10 +199,12 @@
   --chart-3: #facc15;
   --chart-4: #e879f9;
   --chart-5: #22d3ee;
-  --account-1: #3987e5;
-  --account-2: #9085e9;
-  --account-3: #1baf7a;
-  --account-4: #d55181;
+  --account-own: var(--foreground);
+  --account-claude: #d97757;
+  --account-1: #a072e6;
+  --account-2: #c54987;
+  --account-3: #15b77c;
+  --account-4: #b7b7b7;
   --account-5: #c98500;
   --system-accent: #0a84ff;
   --sidebar: #202024;

@@ -4,7 +4,7 @@ import {
   toneOf,
   waits,
 } from "@banda/ui/components/banda-mark"
-import { HarnessLogo } from "@banda/ui/components/harness-logo"
+import { Emblem, emblemOf, type EmblemOf } from "@banda/ui/components/emblem"
 import { ProjectName, ProjectSign } from "@banda/ui/components/project-sign"
 import { AlarmClockIcon } from "lucide-react"
 import { Fragment, type ReactNode } from "react"
@@ -30,6 +30,8 @@ export const LAYOUTS: Readonly<Record<number, Part[][]>> = {
   3: [["mark", "project", "~", "status"], ["title"], ["note", "~", "harness"]],
 }
 
+const NO_HARNESSES: readonly EmblemOf[] = []
+
 /** One row of the sidebar, its parts laid out as the settings say. */
 export function Row({
   row,
@@ -41,6 +43,7 @@ export function Row({
   field,
   host,
   stillAt,
+  harnesses = NO_HARNESSES,
 }: {
   row: Arranged
   settings: Settings
@@ -59,6 +62,8 @@ export function Row({
   host?: string
   /** When its host went away: its timer stands as it was then. */
   stillAt?: number
+  /** The Harness list its emblem is read from; none, the Harness's own. */
+  harnesses?: readonly EmblemOf[]
 }) {
   const { lines, hide, layout } = settings.row
   const parts = (layout ?? LAYOUTS[lines] ?? LAYOUTS[3]).map((line) =>
@@ -95,6 +100,7 @@ export function Row({
                     wide={!one}
                     host={host}
                     stillAt={stillAt}
+                    harnesses={harnesses}
                   />
                 )
               )}
@@ -120,12 +126,14 @@ function Piece({
   wide,
   host,
   stillAt,
+  harnesses,
 }: {
   part: Part
   row: Arranged
   wide: boolean
   host?: string
   stillAt?: number
+  harnesses: readonly EmblemOf[]
 }) {
   const { listed, project } = row
   // Nothing waits in it and nothing works: it steps back.
@@ -166,10 +174,17 @@ function Piece({
         </>
       )
     case "harness": {
-      // Claude's or Codex's logo, as T3 Code shows them; another Harness
-      // by its name.
+      // Its account's emblem, and in a row of more lines its name (ADR
+      // 0093, decision 1).
       const name = listed.by ?? listed.harness
-      return name ? <HarnessLogo id={listed.harness} name={name} /> : null
+      if (!listed.harness || !name) return null
+      return (
+        <Emblem
+          of={emblemOf(harnesses, listed.harness, name)}
+          named={wide}
+          nameClassName="max-w-28 text-xs text-muted-foreground"
+        />
+      )
     }
     case "status":
       if (row.state === "snoozed") return <Sleeps listed={listed} />

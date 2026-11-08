@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@banda/ui/components/dialog"
-import { HarnessLogo } from "@banda/ui/components/harness-logo"
+import { Emblem, emblemOf } from "@banda/ui/components/emblem"
 import { Markdown } from "@banda/ui/components/markdown"
 import { Message, MessageContent } from "@banda/ui/components/message"
 import { cn } from "@banda/ui/lib/utils"
@@ -257,13 +257,7 @@ export function Writer({
       )}
       onClick={gone ? undefined : () => onOpen(thread)}
     >
-      {!gone && (
-        <HarnessLogo
-          id={thread.harness}
-          name={thread.harness}
-          fallback={null}
-        />
-      )}
+      {!gone && <Emblem of={emblemOf([], thread.harness)} />}
       {says}
       <span className="truncate text-foreground">
         {gone ? "another Thread" : thread.title || "New Thread"}

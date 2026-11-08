@@ -36,6 +36,7 @@ import { trustProject } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
 import { clock, problem } from "@banda/ui/lib/words"
 import { useNow } from "@banda/ui/hooks/use-now"
+import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
 import type { Listed, PaneState } from "@banda/ui/pane"
 import {
   HostsContext,
@@ -663,6 +664,7 @@ function ThreadRow({
 }) {
   const project = row.project.id
   const naming = useNaming(project, row.listed.id, "row")
+  const harnesses = useHarnesses(engine)
   if (row.host !== undefined)
     return (
       <ElsewhereRow
@@ -678,6 +680,7 @@ function ThreadRow({
       <Row
         row={row}
         {...props}
+        harnesses={harnesses}
         field={
           <TitleField
             engine={engine}
@@ -692,7 +695,7 @@ function ThreadRow({
   return (
     <ContextMenu>
       <ContextMenuTrigger>
-        <Row row={row} {...props} />
+        <Row row={row} {...props} harnesses={harnesses} />
       </ContextMenuTrigger>
       <ContextMenuContent aria-label="Thread menu" className="min-w-60">
         <ThreadRows
