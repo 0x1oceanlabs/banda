@@ -17,6 +17,7 @@ import {
   paneOf,
   type PaneState,
 } from "@banda/ui/pane"
+import { archiveHolds } from "./list"
 import { markOf } from "./marks"
 import { threadPane } from "../ThreadPane"
 
@@ -103,11 +104,7 @@ export function listedOf(
       : undefined
   // Archived while it may be and nothing happened in it since, both by
   // its host's times (ADR 0096, decision 4).
-  const archived =
-    thread.archived !== undefined &&
-    thread.updated_at <= thread.archived.at &&
-    !works(mark) &&
-    mark !== "asking"
+  const archived = archiveHolds(thread) && !works(mark) && mark !== "asking"
   return {
     id: thread.id,
     title: thread.title || "New Thread",

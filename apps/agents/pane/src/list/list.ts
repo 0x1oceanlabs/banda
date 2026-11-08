@@ -208,6 +208,12 @@ function applied(state: ThreadList, event: Event): ThreadList {
   }
 }
 
+/** Whether `thread`'s archive holds, as its host's rule has it: nothing
+ * happened in it since, by the host's own times (ADR 0096, decisions 4
+ * and 7). */
+export const archiveHolds = ({ archived, updated_at }: ListedThread) =>
+  archived !== undefined && updated_at <= archived.at
+
 /** `thread` with no `mark`: the same Thread when it had none. */
 export function without(
   thread: ListedThread,
