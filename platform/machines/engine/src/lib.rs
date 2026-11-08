@@ -159,6 +159,9 @@ impl Module for Machines {
         if let Err(error) = std::fs::create_dir_all(&config) {
             tracing::warn!(%error, "the config folder was not made: the machine's name is not followed");
         }
+        // Resolved, as the system names what changed by the real path: on
+        // macOS a folder under /var is heard as one under /private/var.
+        let config = dunce::canonicalize(&config).unwrap_or(config);
         let mut watch = match project.watch([config]) {
             Ok(watch) => watch,
             Err(error) => {
