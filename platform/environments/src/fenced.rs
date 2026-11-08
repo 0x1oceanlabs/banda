@@ -7,11 +7,20 @@
 //!
 //! The engine finds whether the fence holds once, as it starts, from the
 //! probe over its own base ([`probe`]), and says so in its `welcome`.
+//!
+//! The SSH agent goes with trust (ADR 0083, F0-3): a program reaches the
+//! one `SSH_AUTH_SOCK` names only when its holes say so
+//! ([`Holes::ssh_agent`](banda_kernel::Holes)), as a Harness's in a Project
+//! whose trust the Person said does. Any other starts without the
+//! variable, and with every agent's socket the engine found hidden
+//! ([`SshAgents`]).
 
 use crate::local::Local;
 use banda_kernel::{Environment, Fence, Input, Program, Pty, PtySize, Started};
 #[cfg(target_os = "linux")]
 use banda_kernel::{FenceLayer, FenceWhy};
+#[cfg(target_os = "linux")]
+use banda_kernel::{Holes, SSH_AGENT};
 use std::io;
 #[cfg(target_os = "linux")]
 use std::path::Path;
@@ -44,9 +53,37 @@ pub struct Fenced {
     /// Linux yet.
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     base: Option<Arc<banda_fence::Spec>>,
+    /// The Person's SSH agents, as the engine found them
+    /// ([`Fenced::ssh_agents`]).
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    agents: SshAgents,
     fence: Fence,
     /// The `banda` that is the launcher: the engine's own running program.
     launcher: PathBuf,
+}
+
+/// The Person's SSH agents, as the engine finds them as it starts (ADR
+/// 0083, F0-3): a program given the agent reaches the one `SSH_AUTH_SOCK`
+/// names, and one not given it has each socket here hidden, as the
+/// program starts.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SshAgents {
+    /// The socket `SSH_AUTH_SOCK` names, where it is in a folder the base
+    /// hides, as the session's runtime folder: a program given the agent
+    /// reaches it through a hole of its own.
+    pub hole: Option<PathBuf>,
+    /// Whether the socket `SSH_AUTH_SOCK` names is in sight behind the
+    /// fence, in no folder the base hides: a program given the agent keeps
+    /// the variable with no hole.
+    pub named_in_sight: bool,
+    /// Every agent's socket in sight: the one `SSH_AUTH_SOCK` names, those
+    /// the Person's ssh config names, and where the well-known agents keep
+    /// theirs. Hidden from a program not given the agent.
+    pub in_sight: Vec<PathBuf>,
+    /// The starts of the names of the folders ssh-agent makes its sockets
+    /// in, as `/tmp/ssh-`: those folders are hidden from a program not
+    /// given the agent.
+    pub starting: Vec<PathBuf>,
 }
 
 impl Local {
@@ -57,6 +94,7 @@ impl Local {
         let holds = cfg!(target_os = "linux") && matches!(fence, Fence::Holds { .. });
         Fenced {
             base: holds.then(|| Arc::new(base)),
+            agents: SshAgents::default(),
             fence,
             launcher: launcher(),
         }
@@ -67,6 +105,7 @@ impl Local {
     pub fn unfenced(fence: Fence) -> Fenced {
         Fenced {
             base: None,
+            agents: SshAgents::default(),
             fence,
             launcher: launcher(),
         }
@@ -89,20 +128,43 @@ impl Fenced {
         self
     }
 
+    /// The Person's SSH agents `agents`, which the base's caller found
+    /// and checked (ADR 0083, F0-3).
+    pub fn ssh_agents(mut self, agents: SshAgents) -> Self {
+        self.agents = agents;
+        self
+    }
+
+    /// The hole to the SSH agent's socket a program with `holes` reaches
+    /// through: only one they give the agent, while the socket is there.
+    #[cfg(target_os = "linux")]
+    fn agent_for(&self, holes: &Holes) -> Option<&Path> {
+        (self.agents.hole.as_deref()).filter(|socket| holes.ssh_agent && socket.exists())
+    }
+
+    /// Whether a program with `holes` keeps `SSH_AUTH_SOCK`: only one they
+    /// give the agent, where the socket it names is in sight or bound.
+    #[cfg(target_os = "linux")]
+    fn keeps_agent(&self, holes: &Holes) -> bool {
+        holes.ssh_agent && (self.agents.named_in_sight || self.agent_for(holes).is_some())
+    }
+
     /// The spec a program with `holes` starts behind: the base, with those
     /// holes (each made where it is not there yet, as a folder of the
-    /// Person's alone) and the base's own holes that are there now, and the
-    /// program's folder.
+    /// Person's alone) and the program's folder; with the hole to the SSH
+    /// agent's socket where they give it the agent, else with every
+    /// agent's socket in sight hidden.
     #[cfg(target_os = "linux")]
     fn spec(
+        &self,
         base: &banda_fence::Spec,
         program: &Program,
-        holes: &banda_kernel::Holes,
+        holes: &Holes,
     ) -> io::Result<banda_fence::Spec> {
         let mut spec = base.clone();
-        // A socket of the base's, as the SSH agent's, may be gone since.
-        spec.holes.writes.retain(|hole| hole.exists());
-        spec.holes.reads.retain(|hole| hole.exists());
+        spec.holes
+            .writes
+            .extend(self.agent_for(holes).map(Path::to_owned));
         for (from, into) in [
             (&holes.writes, &mut spec.holes.writes),
             (&holes.reads, &mut spec.holes.reads),
@@ -113,23 +175,38 @@ impl Fenced {
             }
         }
         spec.cwd = program.cwd.clone();
+        if !holes.ssh_agent {
+            // None that holds a hole or the program's folder, which the
+            // fence would refuse to hide.
+            let holds = |socket: &PathBuf| {
+                (spec.holes.writes.iter())
+                    .chain(&spec.holes.reads)
+                    .chain(&spec.holes.runs)
+                    .chain(&spec.cwd)
+                    .any(|inside| inside.starts_with(socket))
+            };
+            let sockets = self.agents.in_sight.iter().filter(|socket| !holds(socket));
+            spec.hidden_if_there.extend(sockets.cloned());
+            (spec.hidden_starting).extend(self.agents.starting.iter().cloned());
+        }
         Ok(spec)
     }
 
     /// The launcher, set to start `program` behind the fence, and the end
     /// of the pipe it says on whether the program started. It starts as
     /// [`Local`] starts a program, without the engine's own folders
-    /// ([`ENGINES_OWN`]).
+    /// ([`ENGINES_OWN`]), and without `SSH_AUTH_SOCK` where it does not
+    /// reach the SSH agent ([`Fenced::keeps_agent`]).
     #[cfg(target_os = "linux")]
     fn launching(
         &self,
         base: &banda_fence::Spec,
         program: &Program,
-        holes: &banda_kernel::Holes,
+        holes: &Holes,
         input: Input,
     ) -> io::Result<(tokio::process::Command, banda_fence::Hears)> {
         use std::process::Stdio;
-        let sealed = Fenced::spec(base, program, holes)?.seal()?;
+        let sealed = self.spec(base, program, holes)?.seal()?;
         let (hears, tells) = banda_fence::status()?;
         let mut command = std::process::Command::new(&self.launcher);
         command.args(banda_fence::argv(
@@ -142,6 +219,9 @@ impl Fenced {
         let mut command = tokio::process::Command::from(command);
         for name in program.unset.iter().map(String::as_str).chain(ENGINES_OWN) {
             command.env_remove(name);
+        }
+        if !self.keeps_agent(holes) {
+            command.env_remove(SSH_AGENT);
         }
         command
             .envs(&program.env)
@@ -159,7 +239,7 @@ impl Fenced {
         &self,
         base: &banda_fence::Spec,
         program: &Program,
-        holes: &banda_kernel::Holes,
+        holes: &Holes,
         input: Input,
     ) -> io::Result<Started> {
         let (command, hears) = self.launching(base, program, holes, input)?;
@@ -304,33 +384,100 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[test]
-    fn a_harness_s_holes_are_made_and_the_base_s_gone_ones_left_out() {
+    fn a_harness_s_holes_are_made_with_its_folder() {
         let t = tempfile::tempdir().unwrap();
         let home = dunce::canonicalize(t.path()).unwrap();
-        let socket = home.join("agent.sock");
         let base = banda_fence::Spec {
             build: "b".to_owned(),
-            holes: banda_fence::Holes {
-                writes: vec![socket.clone()],
-                ..banda_fence::Holes::default()
-            },
             ..banda_fence::Spec::default()
         };
         let sessions = home.join("data/projects/p/claude");
-        let holes = banda_kernel::Holes {
+        let holes = Holes {
             writes: vec![sessions.clone()],
-            reads: Vec::new(),
+            ..Holes::default()
         };
         let mut program = Program::harness("claude", Vec::new(), holes.clone());
         program.cwd = Some(home.clone());
-        let spec = Fenced::spec(&base, &program, &holes).unwrap();
+        let fenced = Local::fenced(base.clone(), holds());
+        let spec = fenced.spec(&base, &program, &holes).unwrap();
         assert_eq!(spec.holes.writes, std::slice::from_ref(&sessions));
         assert!(sessions.is_dir());
         assert_eq!(spec.cwd.as_deref(), Some(home.as_path()));
+    }
 
-        std::fs::write(&socket, "").unwrap();
-        let spec = Fenced::spec(&base, &program, &holes).unwrap();
-        assert_eq!(spec.holes.writes, [socket, sessions]);
+    /// The SSH agent goes only to a program whose holes give it, as a
+    /// Harness's in a Project whose trust the Person said (ADR 0083,
+    /// F0-3): any other gets no hole for its socket, no `SSH_AUTH_SOCK`,
+    /// and every agent's socket in sight hidden.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn only_a_program_given_the_ssh_agent_reaches_its_socket() {
+        let t = tempfile::tempdir().unwrap();
+        let home = dunce::canonicalize(t.path()).unwrap();
+        let socket = home.join("agent.sock");
+        let elsewhere = home.join(".1password/agent.sock");
+        let base = banda_fence::Spec {
+            build: "b".to_owned(),
+            ..banda_fence::Spec::default()
+        };
+        let given = Holes {
+            ssh_agent: true,
+            ..Holes::default()
+        };
+        // (holes made, variable unset, hidden, hidden by the start of a name)
+        let reaches = |agents: &SshAgents, holes: &Holes| {
+            let fenced = Local::fenced(base.clone(), holds())
+                .ssh_agents(agents.clone())
+                .launcher("/opt/banda");
+            let program = Program::harness("claude", Vec::new(), holes.clone());
+            let (command, _hears) = fenced
+                .launching(&base, &program, holes, Input::Null)
+                .unwrap();
+            let unset = (command.as_std().get_envs())
+                .any(|(name, value)| name == SSH_AGENT && value.is_none());
+            let spec = fenced.spec(&base, &program, holes).unwrap();
+            (
+                spec.holes.writes,
+                unset,
+                spec.hidden_if_there,
+                spec.hidden_starting,
+            )
+        };
+        let starting = vec![PathBuf::from("/tmp/ssh-")];
+
+        // In a folder the fence hides: a hole, while the socket is there.
+        let hidden = SshAgents {
+            hole: Some(socket.clone()),
+            in_sight: vec![elsewhere.clone()],
+            starting: starting.clone(),
+            ..SshAgents::default()
+        };
+        assert_eq!(reaches(&hidden, &given), (vec![], true, vec![], vec![]));
+        let _listening = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        assert_eq!(
+            reaches(&hidden, &given),
+            (vec![socket.clone()], false, vec![], vec![])
+        );
+        assert_eq!(
+            reaches(&hidden, &Holes::default()),
+            (vec![], true, vec![elsewhere.clone()], starting.clone()),
+            "not given"
+        );
+
+        // In sight: no hole, the variable kept where it is given, the socket
+        // hidden where it is not.
+        let in_sight = SshAgents {
+            named_in_sight: true,
+            in_sight: vec![socket.clone(), elsewhere.clone()],
+            starting: starting.clone(),
+            ..SshAgents::default()
+        };
+        assert_eq!(reaches(&in_sight, &given), (vec![], false, vec![], vec![]));
+        assert_eq!(
+            reaches(&in_sight, &Holes::default()),
+            (vec![], true, vec![socket, elsewhere], starting),
+            "not given"
+        );
     }
 
     #[cfg(target_os = "linux")]

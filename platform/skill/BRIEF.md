@@ -28,11 +28,12 @@ to look again.
 
 ## GitHub in a Project not trusted
 
-When gh says your Person's GitHub token is invalid, or git asks for a
-GitHub password, your Project has no GitHub token: behind Banda's fence
-an Agent gets one only in a Project its Person said they trust. Never
-run `gh auth login` or `gh auth logout` for it, and never tell your
-Person their sign-in is broken: ask them to trust the Project in Banda.
+When gh says your Person's GitHub token is invalid, git asks for a
+GitHub password, or ssh says `Permission denied (publickey)`, your
+Project has no GitHub token or SSH agent: an Agent gets them only in a
+Project its Person said they trust. Never run `gh auth login` or `gh
+auth logout` for it, and never tell your Person their sign-in is broken:
+ask them to trust the Project in Banda.
 
 ## The Banda skill
 

@@ -171,7 +171,9 @@ The kernel holds only what every module needs, and it names no module.
   folder holds the work alone. One engine at a time opens a Project: it holds
   a lock on `projects/<id>/project.lock` while the Project is open. Projects from
   before ADR 0026 move their `.banda/` there the first time an engine
-  starts. The kernel's own methods manage them: `projects.create` makes a
+  starts, each as a foreign Project, not trusted, and only to a folder no
+  Project names (ADR 0083, F0-3): what a folder holds is anyone's to
+  write. The kernel's own methods manage them: `projects.create` makes a
   new folder, `projects.add` adds any folder (resolved, so one folder is one
   Project), `projects.browse` lists folders as a path is typed,
   `projects.update` renames, pins or archives, and `projects.remove` forgets
@@ -200,7 +202,16 @@ The kernel holds only what every module needs, and it names no module.
   already is a Project keeps its own trust, unless the call says. A
   Project not trusted wears a grey dashed circle at its sign's corner, and
   the Person trusts it later from its menu in the sidebar or its
-  settings, on a card that lists what will load.
+  settings, on a card that lists what will load. Whether the Person said
+  they trust it is `trust_said`: in the trust step as they added it, by
+  `projects.add` or `projects.create` with `trusted: true`, or by
+  `projects.trust`; its `project.json` keeps who said it and when
+  (`said`). The first engine with the fence said it once, as the upgrade,
+  of every Project trusted then but a scratch one, by the manifest's
+  `version` (`old::said_before_fence`; ADR 0083, F0-3), and keeps in its
+  data folder that it did (`said-before-fence.json`): no later start says
+  it of any. Only a Project whose trust was said gives its Harnesses the
+  Person's GitHub token and SSH agent.
   `projects.foreign { folder }` says whether a folder looks foreign and
   why, and which Project it already is, for Add Project to ask (ADR 0084,
   decision 13); a folder not made yet is looked at as it will be. It
@@ -370,19 +381,32 @@ The kernel holds only what every module needs, and it names no module.
   where the probe found no fence, every program starts as `local` starts
   it. The base hides the session's runtime folder, and the other
   sessions' and the container and machine managers' sockets where they
-  are, and leaves the SSH agent's socket in reach where `SSH_AUTH_SOCK`
-  names one of the user's in a hidden folder, reached through no link the
-  user could move. A program behind the fence gets no `BANDA_STATE`,
+  are. The SSH agents are no part of the base (`fence::ssh_agents`,
+  `SshAgents`): a program whose `Holes` say `ssh_agent` reaches the one
+  `SSH_AUTH_SOCK` names, through a hole where it is the user's socket in
+  a hidden folder, reached through no link the user could move, and as it
+  is where it is in sight, and keeps the variable then. Any other loses
+  `SSH_AUTH_SOCK`, and starts with every agent's socket in sight hidden:
+  that one, those the Person's ssh config names as `IdentityAgent`, the
+  well-known agents' (1Password's folder, Bitwarden's, GnuPG's), and
+  ssh-agent's folders (`/tmp/ssh-*`). A program behind the fence gets no `BANDA_STATE`,
   `BANDA_DATA`, `BANDA_ROOT` or `BANDA_CACHE`; a Harness's gets `GH_TOKEN`
-  only in a Project the Person said they trust (`trust_said`), and no
-  GitHub token in any other (`Credentials`, which make no other process).
+  and the SSH agent only in a Project the Person said they trust
+  (`trust_said`, `Harness::set_trust_said`), and no GitHub token or
+  `SSH_AUTH_SOCK` in any other, fence or none (`Credentials`, which make
+  no other process).
   The kernel holds what the probe found (`Fence`): `welcome` carries it,
   `banda status` prints it, and the agents module starts a new Thread in
   Full access only where it holds whole, with Landlock and no `docker`
   group (`full_access.rs`); elsewhere Supervised. A Thread's Full access
   is marked as chosen where the fence held or not, and a turn of one the
   fence does not keep now runs Supervised and says why in
-  `thread.configured` (`supervised`). A host whose Harness's process has
+  `thread.configured` (`supervised`). Full access in `agents.toml`'s
+  `start.<id>.mode` counts only as the Person chose it in Settings →
+  Agents, which writes the file through the engine (`keys.settings_set`),
+  where the engine keeps their choice in its state (`modes-chosen.json`,
+  `chosen_modes.rs`); found only in the file, it is no one's, and a new
+  Thread starts as the fence has it. A host whose Harness's process has
   something an Agent ran listening under it is not let go for idling. A
   debug build's `BANDA_FENCE=off` leaves the fence out, for the
   end-to-end tests. An Agent's `banda settings` and `banda keys bind` go
@@ -829,7 +853,8 @@ If Chat is removed, Agents still works through its own Thread.
     moves its adapter; the window shows what is wrong in the file as in
     the look's. What a new Thread on each starts with, its mode, plan and
     options, as the composer's bar shows them (`agents.defaults`), is
-    `agents.toml`'s `[start.<id>]`, set from the same bar in the settings:
+    `agents.toml`'s `[start.<id>]`, set from the same bar in the settings,
+    which writes it through the engine as the Person (ADR 0083):
     `harnesses.toml` says only how the Harnesses start (ADR 0040).
 - **The Harness's notices**, such as warnings, join the Thread as lines of
   their own.

@@ -21,8 +21,8 @@ mod local;
 mod pty;
 mod recorded;
 
-pub use fenced::Fenced;
 #[cfg(target_os = "linux")]
 pub use fenced::probe;
+pub use fenced::{Fenced, SshAgents};
 pub use local::Local;
 pub use recorded::{Asked, Asks, How, Recorded};

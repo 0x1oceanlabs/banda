@@ -287,6 +287,13 @@ impl Places {
         self.state.join("passes.sqlite3")
     }
 
+    /// The modes the Person chose for each Harness's new Threads in
+    /// Settings, which only Full access the Person chose there counts by
+    /// where the fence does not hold (ADR 0083, F0-3).
+    pub fn modes_chosen(&self) -> PathBuf {
+        self.state.join(banda_agents::chosen_modes::FILE)
+    }
+
     /// The Person who owns this machine's Projects, made on first use.
     pub fn owner(&self) -> std::io::Result<PersonId> {
         let path = self.state.join(OWNER);

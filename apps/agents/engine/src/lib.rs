@@ -27,6 +27,7 @@ mod acp;
 mod aside;
 mod between;
 mod changes;
+pub mod chosen_modes;
 mod drive;
 mod effects;
 mod full_access;
@@ -97,6 +98,10 @@ pub struct Agents {
     /// The folder of its settings files, `~/.config/banda`; none in a
     /// test that gives none.
     config: Option<PathBuf>,
+    /// The file that keeps the modes the Person chose for each Harness's
+    /// new Threads in Settings ([`chosen_modes`]); none in a test that
+    /// gives none, where none was chosen.
+    modes: Option<PathBuf>,
     live: Arc<Live>,
     idle: Duration,
     quiet: Duration,
@@ -173,6 +178,7 @@ impl Agents {
         Self {
             harnesses,
             config: None,
+            modes: None,
             live: Arc::new(Live::new(IDLE, between::QUIET, None)),
             idle: IDLE,
             quiet: between::QUIET,
@@ -185,6 +191,16 @@ impl Agents {
     pub fn config_in(self, config: PathBuf) -> Self {
         Self {
             config: Some(config),
+            ..self
+        }
+    }
+
+    /// Reads the modes the Person chose for each Harness's new Threads in
+    /// Settings from `file`, in the engine's state folder
+    /// ([`chosen_modes`]).
+    pub fn modes_chosen_in(self, file: PathBuf) -> Self {
+        Self {
+            modes: Some(file),
             ..self
         }
     }
@@ -217,13 +233,21 @@ impl Agents {
 
     /// What a new Thread on Harness entry `id` starts with, when Threads
     /// may start with it.
+    /// Full access in `agents.toml` counts only as the Person chose it in
+    /// Settings (ADR 0083, F0-3): one the file says by itself is no one's
+    /// choice, and the fence's default holds.
     fn new_start(&self, id: &str) -> Result<sending::Start, Refusal> {
         self.harness(id)?;
         let file = self
             .config
             .as_ref()
             .map(|c| c.join(sending::AgentsSettings::NAME));
-        Ok(file.map_or_else(Default::default, |file| sending::start(&file, id)))
+        let mut start = file.map_or_else(Default::default, |file| sending::start(&file, id));
+        let chosen = (self.modes.as_deref()).and_then(|modes| chosen_modes::chosen(modes, id));
+        if start.mode == Some(model::Mode::FullAccess) && chosen != start.mode {
+            start.mode = None;
+        }
+        Ok(start)
     }
 
     /// Where a message goes, or who writes (`agents.write`): a Thread,

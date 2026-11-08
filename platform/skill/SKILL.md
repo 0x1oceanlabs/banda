@@ -112,10 +112,9 @@ MCP servers its folder names, only the Person's own. Add Project asks them
 about a folder that looks foreign; later they trust it with "Trust
 Project…" in the Project's menu, or in its settings. Only in a Project
 they said they trust (`trust_said` in `banda call projects.list`) does
-your shell get their GitHub token, as `GH_TOKEN`, so `gh` and `git push`
-over https work behind the fence. In one trusted only as nothing marked
-it foreign, as every Project from before the fence, it has none: ask your
-Person to run `banda call projects.trust '{"project":"<id>","trusted":true}'`
+your shell get their GitHub token, as `GH_TOKEN`, and their SSH agent, so
+`gh` and `git push` work behind the fence. In one trusted only as nothing
+marked it foreign, it has neither: ask your Person to run `banda call projects.trust '{"project":"<id>","trusted":true}'`
 in a terminal Pane, or to stop trusting it and trust it again in its
 settings.
 A Project whose folder is gone is listed `missing`, and every call into it
@@ -145,19 +144,21 @@ engine restarts (each update of Banda does), after 30 minutes with no
 turn unless what you started listens, and when your Person trusts or
 stops trusting the Project, once the turn ends.
 
-The SSH agent stays in reach, so `git push` over ssh signs as your
-Person does. For anything else out of reach, give your Person the
-command to run in a terminal Pane, which runs outside the fence.
+In a Project your Person said they trust, the SSH agent stays in reach,
+so `git push` over ssh signs as they do. For anything else out of reach,
+give your Person the command to run in a terminal Pane, which runs
+outside the fence.
 `banda status` says whether the fence holds; where it does not, as on
 macOS and Windows, a new Thread starts Supervised.
 
 ## GitHub in a Project not trusted
 
-When gh says your Person's GitHub token is invalid, or git asks for a
-GitHub password, your Project has no GitHub token: behind Banda's fence
-an Agent gets one only in a Project its Person said they trust. Never
-run `gh auth login` or `gh auth logout` for it, and never tell your
-Person their sign-in is broken: ask them to trust the Project in Banda.
+When gh says your Person's GitHub token is invalid, git asks for a
+GitHub password, or ssh says `Permission denied (publickey)`, your
+Project has no GitHub token or SSH agent: an Agent gets them only in a
+Project its Person said they trust. Never run `gh auth login` or `gh
+auth logout` for it, and never tell your Person their sign-in is broken:
+ask them to trust the Project in Banda.
 
 ## Driving the browser's tabs
 

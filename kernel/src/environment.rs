@@ -106,7 +106,15 @@ pub struct Holes {
     pub writes: Vec<PathBuf>,
     /// Folders it only reads, as the files its Project keeps for messages.
     pub reads: Vec<PathBuf>,
+    /// Whether it reaches the Person's SSH agent, through a hole for the
+    /// agent's socket where the session has one: only a Harness's process
+    /// in a Project whose trust the Person said (ADR 0083, F0-3). Without
+    /// it no socket is bound, and [`SSH_AGENT`] is unset.
+    pub ssh_agent: bool,
 }
+
+/// The variable that names the SSH agent's socket.
+pub const SSH_AGENT: &str = "SSH_AUTH_SOCK";
 
 impl Program {
     /// A Harness's process, `program` with `args`, to start behind the
@@ -223,6 +231,7 @@ mod tests {
         let holes = Holes {
             writes: vec![PathBuf::from("/data/sessions/claude")],
             reads: vec![PathBuf::from("/data/files")],
+            ssh_agent: true,
         };
         let made = [
             Program::harness("adapter", vec![], holes.clone()),

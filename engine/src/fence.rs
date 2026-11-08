@@ -105,8 +105,13 @@ async fn found(places: &crate::places::Places) -> banda_environments::Fenced {
             let words = "This banda has no build id, so it starts no fence.";
             return Local::unfenced(Fence::missing(FenceWhy::SetupFailed, words));
         };
-        let base = match Folders::here(places).and_then(|folders| base(&folders, &build)) {
-            Ok(base) => base,
+        let based = Folders::here(places).and_then(|folders| {
+            let base = base(&folders, &build)?;
+            let agents = ssh_agents(&folders, &base);
+            Ok((base, agents))
+        });
+        let (base, agents) = match based {
+            Ok(based) => based,
             Err(error) => {
                 let words = format!("The fence's folders: {error}");
                 return Local::unfenced(Fence::missing(FenceWhy::SetupFailed, words));
@@ -114,7 +119,7 @@ async fn found(places: &crate::places::Places) -> banda_environments::Fenced {
         };
         let launcher = std::path::Path::new(banda_fence::LAUNCHER);
         let fence = banda_environments::probe(&base, launcher).await;
-        Local::fenced(base, fence)
+        Local::fenced(base, fence).ssh_agents(agents)
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -153,7 +158,7 @@ fn logged(fence: &banda_kernel::Fence) {
 }
 
 #[cfg(target_os = "linux")]
-pub use base::{Folders, base};
+pub use base::{Folders, base, ssh_agents};
 
 #[cfg(target_os = "linux")]
 mod base {
@@ -164,7 +169,8 @@ mod base {
     use std::path::{Path, PathBuf};
 
     /// Where this Banda's folders are, and every Banda's, and the
-    /// session's, and its SSH agent's socket: all [`base`] reads.
+    /// session's, and its SSH agents' sockets: all [`base`] and
+    /// [`ssh_agents`] read.
     #[derive(Clone, Debug)]
     pub struct Folders {
         /// This Banda's state, data and config, as its places have them,
@@ -188,6 +194,13 @@ mod base {
         pub sessions: Vec<PathBuf>,
         /// The SSH agent's socket, as `SSH_AUTH_SOCK` names it.
         pub agent: Option<PathBuf>,
+        /// Where else the Person's SSH agents keep their sockets: those
+        /// their ssh config names as `IdentityAgent`, and the well-known
+        /// agents' own, 1Password's folder, Bitwarden's and GnuPG's.
+        pub agents: Vec<PathBuf>,
+        /// Where ssh-agent makes the folder of its socket, as the start of
+        /// its name: `ssh-` in `/tmp`, and in `TMPDIR`.
+        pub agent_folders: Vec<PathBuf>,
         /// Where the container and machine managers of this user take
         /// what they are told, beside the system's: Docker Desktop's,
         /// Rancher Desktop's, Lima's and Colima's folders in the home, and
@@ -237,6 +250,13 @@ mod base {
                 let named = set(variable).and_then(|host| unix_socket(&host.to_string_lossy()));
                 managers.extend(named);
             }
+            let mut agents: Vec<PathBuf> = Vec::new();
+            if let Some(home) = &home {
+                agents.extend(WELL_KNOWN_AGENTS.map(|at| home.join(at)));
+                agents.extend(identity_agents(home));
+            }
+            let mut agent_folders = vec![PathBuf::from("/tmp/ssh-")];
+            agent_folders.extend(set("TMPDIR").map(|tmp| PathBuf::from(tmp).join("ssh-")));
             let mut controls = vec![PathBuf::from("/tmp/kitty-")];
             if let Some(config) = dirs::config_dir() {
                 let conf = std::fs::read_to_string(config.join("kitty/kitty.conf"));
@@ -255,11 +275,178 @@ mod base {
                 tmux: tmux.join(format!("tmux-{uid}")),
                 sessions,
                 agent: set("SSH_AUTH_SOCK").map(PathBuf::from),
+                agents: agents.into_iter().filter_map(plain).collect(),
+                agent_folders: agent_folders.into_iter().filter_map(plain).collect(),
                 managers: managers.into_iter().filter_map(plain).collect(),
                 controls: controls.into_iter().filter_map(plain).collect(),
                 running: std::env::current_exe()?,
             })
         }
+    }
+
+    /// Where the well-known SSH agents keep their sockets, in the home:
+    /// 1Password's folder, which holds its socket alone, Bitwarden's
+    /// socket, as installed and as a Flatpak, and GnuPG's, where the
+    /// session has no runtime folder.
+    const WELL_KNOWN_AGENTS: [&str; 4] = [
+        ".1password",
+        ".bitwarden-ssh-agent.sock",
+        ".var/app/com.bitwarden.desktop/data/.bitwarden-ssh-agent.sock",
+        ".gnupg/S.gpg-agent.ssh",
+    ];
+
+    /// The most files of the Person's ssh config read for agents.
+    const SSH_CONFIGS: usize = 32;
+
+    /// Where the Person's ssh config, `~/.ssh/config` and the files it
+    /// includes, tells ssh to find an agent: each `IdentityAgent` that
+    /// names a socket by its path, or by a variable other than
+    /// `SSH_AUTH_SOCK`.
+    pub(super) fn identity_agents(home: &Path) -> Vec<PathBuf> {
+        let ssh = home.join(".ssh");
+        let (mut files, mut found, mut read) = (vec![ssh.join("config")], Vec::new(), 0);
+        while let Some(file) = files.pop() {
+            read += 1;
+            if read > SSH_CONFIGS {
+                break;
+            }
+            let Ok(text) = std::fs::read_to_string(&file) else {
+                continue;
+            };
+            for (key, value) in ssh_options(&text) {
+                if key.eq_ignore_ascii_case("IdentityAgent") {
+                    found.extend(agent_named(value, home));
+                } else if key.eq_ignore_ascii_case("Include") {
+                    for pattern in value.split_whitespace() {
+                        files.extend(included(pattern, home, &ssh));
+                    }
+                }
+            }
+        }
+        found
+    }
+
+    /// Each option `text` sets, as ssh reads its config: a keyword, then
+    /// its value after spaces or an `=`, a line each; `#` starts a comment.
+    fn ssh_options(text: &str) -> impl Iterator<Item = (&str, &str)> {
+        text.lines().filter_map(|line| {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                return None;
+            }
+            let end = line.find(|c: char| c.is_whitespace() || c == '=')?;
+            let (key, rest) = line.split_at(end);
+            let rest = rest.trim_start();
+            Some((key, rest.strip_prefix('=').unwrap_or(rest).trim()))
+        })
+    }
+
+    /// The socket an `IdentityAgent` value names: none for `none`, or for
+    /// `SSH_AUTH_SOCK`, which [`Folders::agent`] is.
+    fn agent_named(value: &str, home: &Path) -> Option<PathBuf> {
+        let value = value.trim_matches('"');
+        if value.eq_ignore_ascii_case("none") {
+            return None;
+        }
+        // A variable's name alone: the socket is where it says.
+        let variable = (value.strip_prefix('$')).or((value == "SSH_AUTH_SOCK").then_some(value));
+        if let Some(name) = variable.filter(|name| !name.starts_with('{')) {
+            return (name != "SSH_AUTH_SOCK")
+                .then(|| std::env::var_os(name))
+                .flatten()
+                .map(PathBuf::from)
+                .filter(|path| path.is_absolute());
+        }
+        expanded(value, home)
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute())
+    }
+
+    /// The files an `Include` pattern names: in `~/.ssh` when it is not
+    /// absolute, by a `*` or `?` in its last part.
+    fn included(pattern: &str, home: &Path, ssh: &Path) -> Vec<PathBuf> {
+        let Some(pattern) = expanded(pattern.trim_matches('"'), home) else {
+            return Vec::new();
+        };
+        let path = ssh.join(pattern);
+        let (Some(folder), Some(name)) = (path.parent(), path.file_name()) else {
+            return Vec::new();
+        };
+        let name = name.to_string_lossy();
+        if !name.contains(['*', '?']) {
+            return vec![path.clone()];
+        }
+        if folder.to_string_lossy().contains(['*', '?']) {
+            return Vec::new();
+        }
+        let Ok(entries) = std::fs::read_dir(folder) else {
+            return Vec::new();
+        };
+        let mut found: Vec<PathBuf> = (entries.flatten())
+            .filter(|entry| {
+                let file = entry.file_name();
+                let file = file.to_string_lossy();
+                (name.starts_with('.') || !file.starts_with('.')) && matches(&name, &file)
+            })
+            .map(|entry| entry.path())
+            .collect();
+        found.sort();
+        found
+    }
+
+    /// Whether `name` matches `pattern`, its `*` any run of characters and
+    /// its `?` any one.
+    pub(super) fn matches(pattern: &str, name: &str) -> bool {
+        let (pattern, name): (Vec<char>, Vec<char>) =
+            (pattern.chars().collect(), name.chars().collect());
+        let (mut p, mut n, mut star, mut from) = (0, 0, None, 0);
+        while n < name.len() {
+            if p < pattern.len() && (pattern[p] == '?' || pattern[p] == name[n]) {
+                (p, n) = (p + 1, n + 1);
+            } else if p < pattern.len() && pattern[p] == '*' {
+                (star, from, p) = (Some(p), n, p + 1);
+            } else if let Some(at) = star {
+                (p, from) = (at + 1, from + 1);
+                n = from;
+            } else {
+                return false;
+            }
+        }
+        pattern[p..].iter().all(|c| *c == '*')
+    }
+
+    /// `value` as ssh expands a path in its config: `~` and `%d` the home,
+    /// `%u` the user, `%i` their number, `%%` a `%`, `${NAME}` the
+    /// variable's value; none with another token, or a variable not set.
+    pub(super) fn expanded(value: &str, home: &Path) -> Option<String> {
+        let home = home.to_str()?;
+        let mut out = String::new();
+        let rest = match value.strip_prefix('~') {
+            Some(rest) if rest.is_empty() || rest.starts_with('/') => {
+                out.push_str(home);
+                rest
+            }
+            _ => value,
+        };
+        let mut chars = rest.chars();
+        while let Some(c) = chars.next() {
+            match c {
+                '%' => match chars.next()? {
+                    'd' => out.push_str(home),
+                    'u' => out.push_str(&std::env::var("USER").ok()?),
+                    'i' => out.push_str(&rustix::process::getuid().as_raw().to_string()),
+                    '%' => out.push('%'),
+                    _ => return None,
+                },
+                '$' if chars.as_str().starts_with('{') => {
+                    let (name, after) = chars.as_str()[1..].split_once('}')?;
+                    out.push_str(&std::env::var(name).ok()?);
+                    chars = after.chars();
+                }
+                c => out.push(c),
+            }
+        }
+        Some(out)
     }
 
     /// The socket a `unix://` address names, as `DOCKER_HOST` does.
@@ -323,10 +510,10 @@ mod base {
     /// its Project (ADR 0083, decision 1): every Banda's state and data
     /// folders, this one's as `places` moves them too, hidden, with the
     /// running engine's own folder left to run; the session's runtime
-    /// folder and tmux's, hidden, with the SSH agent's socket in them left
-    /// to sign with ([`agent_socket`]); the display's, the other sessions'
-    /// and the container and machine managers' sockets, hidden where they
-    /// are; and every Banda's config, read-only.
+    /// folder and tmux's, hidden, the SSH agent's socket in them too but
+    /// for a program given it ([`ssh_agents`]); the display's, the other
+    /// sessions' and the container and machine managers' sockets, hidden
+    /// where they are; and every Banda's config, read-only.
     ///
     /// It makes this Banda's folders and the others' it hides that are not
     /// there yet, `0700`, so the fence covers each where the engine will
@@ -374,7 +561,6 @@ mod base {
             .filter(|folder| folder.starts_with(&engines) && *folder != engines)
             .map(PathBuf::from);
 
-        let agent = (folders.agent.as_deref()).and_then(|named| agent_socket(named, &hidden));
         let mut hidden_if_there: Vec<PathBuf> = [
             "/tmp/.X11-unix",
             "/run/docker.sock",
@@ -400,20 +586,57 @@ mod base {
             owned: vec![PathBuf::from("/etc/ssh/ssh_config.d")],
             holes: banda_fence::Holes {
                 runs: runs.into_iter().collect(),
-                writes: agent.into_iter().collect(),
                 ..banda_fence::Holes::default()
             },
             cwd: None,
         })
     }
 
-    /// The hole for the SSH agent's socket `named`, where it is one in a
-    /// folder the fence hides (`hidden`), as the session's runtime folder:
-    /// an Agent signs with the Person's keys as their own shell does, and
-    /// the folder's other sockets, as the keyring's, stay out of reach. It
-    /// must be this user's socket, reached through no link this user could
-    /// move, which could lead the hole to another. A socket gone by the
-    /// time a program starts is left out then.
+    /// The Person's SSH agents, as a program behind the fence over `base`
+    /// would find them (ADR 0083, F0-3). A program given the agent, a
+    /// Harness's in a Project whose trust the Person said, reaches the one
+    /// `SSH_AUTH_SOCK` names: through a hole where it is in a folder `base`
+    /// hides, as the session's runtime folder, so the folder's other
+    /// sockets, as the keyring's, stay out of reach; as it is where it is
+    /// in sight. One not given it has every agent's socket in sight
+    /// hidden, the one `SSH_AUTH_SOCK` names and those of [`Folders::agents`]
+    /// and [`Folders::agent_folders`], where each is when it starts.
+    pub fn ssh_agents(
+        folders: &Folders,
+        base: &banda_fence::Spec,
+    ) -> banda_environments::SshAgents {
+        let hidden = |path: &Path| base.hidden.iter().any(|folder| path.starts_with(folder));
+        // Where each is, its links followed, where it is there yet.
+        let at = |named: &Path| dunce::canonicalize(named).unwrap_or_else(|_| named.to_owned());
+        let named = folders.agent.as_deref().filter(|named| named.is_absolute());
+        let mut in_sight: Vec<PathBuf> = (named.into_iter())
+            .chain(folders.agents.iter().map(PathBuf::as_path))
+            .map(at)
+            .filter_map(plain)
+            .filter(|socket| !hidden(socket) && shaped(socket))
+            .collect();
+        in_sight.sort();
+        in_sight.dedup();
+        banda_environments::SshAgents {
+            hole: named.and_then(|named| agent_socket(named, &base.hidden)),
+            named_in_sight: named.is_some_and(|named| !hidden(&at(named))),
+            in_sight,
+            starting: folders.agent_folders.clone(),
+        }
+    }
+
+    /// Whether the fence can cover `path` when it is there: the nearest of
+    /// the folders above it that is there is a folder.
+    fn shaped(path: &Path) -> bool {
+        (path.ancestors().skip(1))
+            .find(|above| std::fs::symlink_metadata(above).is_ok())
+            .is_none_or(Path::is_dir)
+    }
+
+    /// The socket `named`, where it is one in `hidden`. It must be this
+    /// user's socket, reached through no link this user could move, which
+    /// could lead the hole to another. A socket gone by the time a program
+    /// starts is left out then.
     fn agent_socket(named: &Path, hidden: &[PathBuf]) -> Option<PathBuf> {
         use std::os::unix::fs::FileTypeExt;
         if !named.is_absolute() || steady(named).is_err() {
@@ -589,6 +812,8 @@ mod tests {
             tmux: home.join("tmp/tmux-1000"),
             sessions: vec![home.join("tmp/emacs1000")],
             agent: None,
+            agents: Vec::new(),
+            agent_folders: vec![PathBuf::from("/tmp/ssh-")],
             managers: vec![home.join(".lima")],
             controls: vec![PathBuf::from("/tmp/kitty-")],
             running,
@@ -745,22 +970,94 @@ mod tests {
         let socket = home.join("run/ssh");
         let _listening = std::os::unix::net::UnixListener::bind(&socket).unwrap();
         let mut folders = folders(&home);
-        let holes = |folders: &Folders| base(folders, "b1").unwrap().holes.writes;
+        let agents = |folders: &Folders| {
+            let base = base(folders, "b1").unwrap();
+            assert!(base.holes.writes.is_empty(), "no hole of the base's");
+            ssh_agents(folders, &base)
+        };
+        let hole = |folders: &Folders| agents(folders).hole;
 
         folders.agent = Some(socket.clone());
-        assert_eq!(holes(&folders), std::slice::from_ref(&socket));
+        assert_eq!(hole(&folders), Some(socket.clone()));
+        assert!(!agents(&folders).named_in_sight);
+        assert!(agents(&folders).in_sight.is_empty(), "hidden already");
         // Through a link this user could move elsewhere: none.
         std::os::unix::fs::symlink(&socket, home.join("agent.sock")).unwrap();
         folders.agent = Some(home.join("agent.sock"));
-        assert!(holes(&folders).is_empty());
-        // A folder, or a socket the fence does not hide: none.
+        assert_eq!(hole(&folders), None);
+        assert!(!agents(&folders).named_in_sight);
+        // A folder the fence hides: none.
         std::fs::create_dir(home.join("run/keyring")).unwrap();
         folders.agent = Some(home.join("run/keyring"));
-        assert!(holes(&folders).is_empty());
-        let outside = home.join("outside.sock");
+        assert_eq!(hole(&folders), None);
+    }
+
+    /// An agent's socket the fence does not hide, as ssh-agent's in
+    /// `/tmp` or 1Password's in the home, is in sight: a program given
+    /// the agent keeps the variable, and one not given it has the socket
+    /// hidden, with the others' (ADR 0083, F0-3).
+    #[test]
+    fn an_agent_s_socket_in_sight_is_kept_from_a_program_not_given_it() {
+        let t = tempfile::tempdir().unwrap();
+        let home = dunce::canonicalize(t.path()).unwrap();
+        std::fs::create_dir(home.join("run")).unwrap();
+        let outside = home.join("tmp/ssh-x/agent.1");
+        std::fs::create_dir_all(outside.parent().unwrap()).unwrap();
         let _there = std::os::unix::net::UnixListener::bind(&outside).unwrap();
-        folders.agent = Some(outside);
-        assert!(holes(&folders).is_empty());
+        // Named through a link: where it leads is what is hidden.
+        std::os::unix::fs::symlink(&outside, home.join("agent.sock")).unwrap();
+        let mut folders = folders(&home);
+        folders.agent = Some(home.join("agent.sock"));
+        folders.agents = vec![
+            home.join(".1password"),
+            home.join("run/gnupg/S.gpg-agent.ssh"),
+            home.join("file/inside"),
+        ];
+        std::fs::write(home.join("file"), "").unwrap();
+        let base = base(&folders, "b1").unwrap();
+        let agents = ssh_agents(&folders, &base);
+        assert_eq!(agents.hole, None);
+        assert!(agents.named_in_sight);
+        // One in a folder hidden already, or under a file, is left out.
+        assert_eq!(agents.in_sight, [home.join(".1password"), outside]);
+        assert_eq!(agents.starting, [PathBuf::from("/tmp/ssh-")]);
+    }
+
+    #[test]
+    fn the_ssh_config_s_agents_are_found_where_it_and_what_it_includes_name_them() {
+        let t = tempfile::tempdir().unwrap();
+        let home = dunce::canonicalize(t.path()).unwrap();
+        std::fs::create_dir_all(home.join(".ssh/config.d")).unwrap();
+        std::fs::write(
+            home.join(".ssh/config"),
+            "# mine\nInclude config.d/*.conf ~/more\nHost *\n  IdentityAgent ~/.1password/agent.sock\nHost a\n  identityagent=\"%d/a b.sock\"\nHost b\n  IdentityAgent none\nHost c\n  IdentityAgent SSH_AUTH_SOCK\nHost d\n  IdentityAgent $SSH_AUTH_SOCK\nHost e\n  IdentityAgent %h.sock\n",
+        )
+        .unwrap();
+        std::fs::write(
+            home.join(".ssh/config.d/one.conf"),
+            "IdentityAgent = /tmp/one.sock\n",
+        )
+        .unwrap();
+        std::fs::write(
+            home.join(".ssh/config.d/two.txt"),
+            "IdentityAgent /tmp/two.sock\n",
+        )
+        .unwrap();
+        std::fs::write(home.join("more"), "IdentityAgent ${HOME}/more.sock\n").unwrap();
+        let mut found = base::identity_agents(&home);
+        found.sort();
+        let mut wanted = vec![
+            home.join(".1password/agent.sock"),
+            home.join("a b.sock"),
+            PathBuf::from("/tmp/one.sock"),
+        ];
+        if let Ok(own) = std::env::var("HOME") {
+            wanted.push(PathBuf::from(own).join("more.sock"));
+        }
+        wanted.sort();
+        assert_eq!(found, wanted);
+        assert!(base::matches("*.conf", "one.conf") && !base::matches("*.conf", "two.txt"));
+        assert!(base::matches("a?c*", "abcdef") && !base::matches("a?c", "ac"));
     }
 
     #[test]

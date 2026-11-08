@@ -81,8 +81,8 @@ function Project({ engine, lit }: Props) {
   const [removing, setRemoving] = useState<Removing>()
   // The Project whose trust a card by its button asks about.
   const [trusting, setTrusting] = useState<Trusting>()
-  // Where it holds, only trust the Person said gives a Project's Agents
-  // their GitHub token (ADR 0083).
+  // Only trust the Person said gives a Project's Agents their ssh-agent,
+  // and where the fence holds their GitHub token (ADR 0083).
   const fenced = useFence(engine)?.fence === "holds"
 
   if (listed.state === "loading") return <Spinner />
@@ -93,9 +93,10 @@ function Project({ engine, lit }: Props) {
   if (!project)
     return <p className="text-sm text-muted-foreground">No Projects yet.</p>
 
-  // Trusted only as nothing marked it foreign, as every Project was before
-  // the fence: saying so here gives its Agents the GitHub token (ADR 0083).
-  const saying = offersSaying(project, fenced)
+  // Trusted only as nothing marked it foreign, as a Project of the
+  // Person's own folder is: saying so here gives its Agents the ssh-agent,
+  // and the GitHub token where the fence holds (ADR 0083).
+  const saying = offersSaying(project)
   const change = (how: Omit<UpdateProject, "project">) =>
     void act(() => updateProject(engine, { project: project.id, ...how }))
   // The Threads that go with it are the agents module's.

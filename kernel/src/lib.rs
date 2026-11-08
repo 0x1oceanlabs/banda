@@ -67,7 +67,7 @@ mod window;
 
 pub use access::{Caller, Right};
 pub use cursors::{Ack, Listener};
-pub use environment::{Environment, Holes, Input, Program, Whose};
+pub use environment::{Environment, Holes, Input, Program, SSH_AGENT, Whose};
 pub use error::{Code, Error, Refusal};
 pub use events::{Event, EventFilter};
 pub use fence::{Fence, FenceLayer, FenceWhy};

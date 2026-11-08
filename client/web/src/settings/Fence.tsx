@@ -52,7 +52,10 @@ const GETS: [LucideIcon, string][] = [
   [FolderIcon, "Your files"],
   [TerminalIcon, "Your programs"],
   [GlobeIcon, "The network"],
-  [KeyRoundIcon, "Your ssh-agent: it can git push and ssh as you"],
+  [
+    KeyRoundIcon,
+    "Your ssh-agent, in Projects you said you trust: it can git push and ssh as you",
+  ],
   [
     GitBranchIcon,
     "Your GitHub token (from gh), in Projects you said you trust",

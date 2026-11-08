@@ -11,15 +11,15 @@ Behind the fence, an Agent in Full access works with your rights, not Banda's.
 | Your files | Banda's own data and keys |
 | Your programs | Acting as you in Banda |
 | The network | Your keyring |
-| Your ssh-agent: it can `git push` and `ssh` as you | Your screen and clipboard |
+| Your ssh-agent, in Projects you said you trust: it can `git push` and `ssh` as you | Your screen and clipboard |
 | Your GitHub token (from `gh`), in Projects you said you trust | Becoming root (`sudo`) |
 | | Desktop notifications (Banda still sends its own) |
 
-Behind the fence, a Project gives its Agents your GitHub token only once you say you trust it: in the question Banda asks as you add a folder that looks foreign, or in the Project's settings, with **Trust…**, or **Say you trust it…** for one already trusted. A Project added from a folder of your own is trusted, but its Agents get the token only once you say so. Where there is no fence, `gh` reaches your token itself, as it does in your Terminals.
+Behind the fence, a Project gives its Agents your GitHub token and your ssh-agent only once you say you trust it: in the question Banda asks as you add a folder that looks foreign, or in the Project's settings, with **Trust…**, or **Say you trust it…** for one already trusted. A Project added from a folder of your own, or made by its name, is trusted, but its Agents get them only once you say so. Every Project you trusted before Banda had the fence counts as said: Banda said it for you once, as it upgraded. In a Project you have not said you trust, an Agent's programs start without `GH_TOKEN` and `SSH_AUTH_SOCK`, fence or none, and behind the fence without the ssh-agents' sockets Banda knows of: the one `SSH_AUTH_SOCK` names, those your ssh config names as `IdentityAgent`, ssh-agent's in `/tmp`, and 1Password's, Bitwarden's and GnuPG's. What goes with trust is the agent: key files in `~/.ssh` are your files, as the table says. Where there is no fence, `gh` reaches your token itself, as it does in your Terminals, so saying you trust a Project gives its Agents your ssh-agent alone, and its settings offer it there too.
 
 ## Where it does not hold whole
 
-Then a new Thread starts **Supervised**, which asks before it changes anything, unless you set its Harness's mode for new Threads in Settings → Agents. You may still pick Full access, and the mode menu says what it means there: the Agent is you, in Banda too. A Thread in Full access from where the fence held starts its next turn Supervised, and says so.
+Then a new Thread starts **Supervised**, which asks before it changes anything, unless you set its Harness's mode for new Threads in Settings → Agents. You may still pick Full access, and the mode menu says what it means there: the Agent is you, in Banda too. Full access counts as yours only as you pick it there or in a Thread's mode menu: `full_access` written into `agents.toml` by hand, or by anything else, does not, and a new Thread starts Supervised all the same. A Thread in Full access from where the fence held starts its next turn Supervised, and says so.
 
 | Settings says | Why | What to do |
 |---|---|---|

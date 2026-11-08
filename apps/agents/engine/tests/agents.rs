@@ -5,7 +5,7 @@ use banda_agents::model::{
     Body, Choice, Exit, Failure, ItemId, Mode, OptionValue, QuestionState, Settings, StepState,
     ThreadList, ThreadView, ToolContent, ToolStatus, TurnId, TurnState, Wake,
 };
-use banda_agents::{Agents, Pipe};
+use banda_agents::{Agents, Pipe, chosen_modes};
 #[cfg(unix)]
 use banda_environments::How;
 use banda_environments::{Asks, Local, Recorded};
@@ -1950,18 +1950,50 @@ async fn a_new_thread_starts_supervised_where_the_fence_does_not_hold_whole() {
     }
 }
 
+/// Full access in `agents.toml` is the Person's choice only as they chose
+/// it in Settings, which the engine keeps: one the file says by itself,
+/// written by hand or by anything else, is no one's, and where the fence
+/// does not hold a new Thread starts Supervised. Where it holds, nothing
+/// changes (ADR 0083, F0-3; Roma, 2026-11-08).
 #[tokio::test]
-async fn full_access_in_agents_toml_is_the_persons_choice_where_the_fence_does_not_hold() {
-    let root = tempfile::tempdir().unwrap();
+async fn full_access_in_agents_toml_is_the_persons_choice_only_as_they_chose_it_in_settings() {
     let start = "[start.fake]\nmode = \"full_access\"\n";
-    std::fs::write(root.path().join("agents.toml"), start).unwrap();
-    let agents = Agents::new(harnesses()).config_in(root.path().to_owned());
-    let world = fenced_world(root.path(), agents, missing()).await;
+    let agents = |root: &Path| {
+        std::fs::write(root.join("agents.toml"), start).unwrap();
+        let modes = root.join("state").join(chosen_modes::FILE);
+        let agents = Agents::new(harnesses()).config_in(root.to_owned());
+        (agents.modes_chosen_in(modes.clone()), modes)
+    };
+    let root = tempfile::tempdir().unwrap();
+    let (unfenced, modes) = agents(root.path());
+    let world = fenced_world(root.path(), unfenced, missing()).await;
+    // Only the file says it.
+    assert_eq!(world.defaults().await["settings"]["mode"], "supervised");
+    let (_, view) = world.finish(None, "which settings").await;
+    assert_eq!(view.settings.mode, Mode::Supervised);
+    assert!(!view.unfenced);
+    assert!(last_reply(&view).starts_with("message: Mode default"));
+
+    // Chosen in Settings: it runs as chosen.
+    chosen_modes::choose(&modes, "fake", Some(Mode::FullAccess)).unwrap();
     assert_eq!(world.defaults().await["settings"]["mode"], "full_access");
     let (_, view) = world.finish(None, "which settings").await;
     assert_eq!(view.settings.mode, Mode::FullAccess);
     assert!(view.unfenced);
     assert!(last_reply(&view).starts_with("message: Mode bypassPermissions"));
+
+    // Another chosen there since, and the file's Full access is no one's.
+    chosen_modes::choose(&modes, "fake", Some(Mode::Supervised)).unwrap();
+    assert_eq!(world.defaults().await["settings"]["mode"], "supervised");
+
+    // Where the fence holds, the file's goes as it is.
+    let root = tempfile::tempdir().unwrap();
+    let (fenced, _) = agents(root.path());
+    let world = fenced_world(root.path(), fenced, holds()).await;
+    assert_eq!(world.defaults().await["settings"]["mode"], "full_access");
+    let (_, view) = world.finish(None, "which settings").await;
+    assert_eq!(view.settings.mode, Mode::FullAccess);
+    assert!(!view.unfenced);
 }
 
 #[test]
@@ -1997,10 +2029,10 @@ fn full_access_the_fence_no_longer_keeps_starts_supervised_and_says_why() {
     );
 }
 
-/// The Person's GitHub token goes to a Harness's programs only in a
-/// Project the Person said they trust (ADR 0083).
+/// The Person's GitHub token and their SSH agent go to a Harness's
+/// programs only in a Project the Person said they trust (ADR 0083, F0-3).
 #[tokio::test]
-async fn only_a_project_the_person_said_they_trust_gets_their_github_token() {
+async fn only_a_project_the_person_said_they_trust_gets_their_github_token_and_ssh_agent() {
     banda_harnesses::github::keep(Some("t0ken".to_owned()));
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
@@ -2035,6 +2067,24 @@ async fn only_a_project_the_person_said_they_trust_gets_their_github_token() {
     };
     assert_eq!(token_of(world.project), [None]);
     assert_eq!(token_of(said.project), [Some("t0ken".to_owned())]);
+    // The SSH agent: its socket bound behind the fence, and its variable
+    // kept, only where trust was said.
+    let agent_of = |project: ProjectId| -> Vec<(bool, bool)> {
+        (started.iter())
+            .filter(|asked| asked.program.env.get("BANDA_PROJECT") == Some(&project.to_string()))
+            .map(|asked| {
+                let bound = asked.program.holes().is_some_and(|holes| holes.ssh_agent);
+                let unset = asked
+                    .program
+                    .unset
+                    .iter()
+                    .any(|name| name == "SSH_AUTH_SOCK");
+                (bound, unset)
+            })
+            .collect()
+    };
+    assert_eq!(agent_of(world.project), [(false, true)]);
+    assert_eq!(agent_of(said.project), [(true, false)]);
 }
 
 #[tokio::test]

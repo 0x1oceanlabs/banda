@@ -15,12 +15,14 @@ import {
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useRead } from "@banda/ui/hooks/use-read"
+import { useFence } from "@banda/ui/hooks/use-status"
 import { trustProject } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
 import { FolderIcon, GitBranchIcon, PlugIcon } from "lucide-react"
 import {
   askedOf,
-  GITHUB_TOKEN,
+  GITHUB_AND_SSH,
+  givenBySaying,
   NOTHING_YET,
   UNSEEN,
   type Waiting,
@@ -69,13 +71,13 @@ export function Waits({ waits }: { waits: readonly Waiting[] }) {
   )
 }
 
-/** That trusting a Project gives its Agents the Person's GitHub token
- * (ADR 0083), under what else waits for it. */
+/** That trusting a Project gives its Agents the Person's GitHub token and
+ * ssh-agent (ADR 0083), under what else waits for it. */
 function TokenLine() {
   return (
     <p className="flex items-center gap-2 text-xs text-muted-foreground">
       <GitBranchIcon className="size-3.5 shrink-0" />
-      {GITHUB_TOKEN}
+      {GITHUB_AND_SSH}
     </p>
   )
 }
@@ -85,11 +87,12 @@ export type Trusting = { project: ProjectId; anchor: Element }
 
 /**
  * The card that trusts a Project after it was added: what its Harnesses
- * will load, that its Agents get the Person's GitHub token, and Trust. A
- * Project trusted only as nothing marked it foreign is said to be trusted
- * here, and the card names it by what that does: it gives its Agents the
- * token. Only this click trusts it; Cancel, Esc or a click elsewhere
- * leaves it as it is.
+ * will load, that its Agents get the Person's GitHub token and ssh-agent,
+ * and Trust. A Project trusted only as nothing marked it foreign is said to
+ * be trusted here, and the card names it by what that does: it gives its
+ * Agents both, or the ssh-agent alone where the fence does not hold. Only
+ * this click trusts it; Cancel, Esc or a click elsewhere leaves it as it
+ * is.
  */
 export function TrustCard({
   engine,
@@ -148,6 +151,7 @@ function Card({
     )
   )
   const { busy, problem, act } = useAct()
+  const given = givenBySaying(useFence(engine)?.fence === "holds")
   const trust = async () => {
     if (await act(() => trustProject(engine, project.id, true))) onClose()
   }
@@ -155,16 +159,15 @@ function Card({
     <>
       <div className="flex items-center gap-2">
         <ProjectSign project={project} />
-        <PopoverTitle className="min-w-0 truncate">
+        <PopoverTitle className="min-w-0 break-words">
           {project.trusted
-            ? `Give ${project.name}'s Agents your GitHub token?`
+            ? `Give ${project.name}'s Agents ${given}?`
             : `Trust ${project.name}?`}
         </PopoverTitle>
       </div>
       {project.trusted ? (
         <PopoverDescription>
-          Say you trust it, and its Agents get your GitHub token from their next
-          turn.
+          Say you trust it, and its Agents get {given} from their next turn.
         </PopoverDescription>
       ) : (
         <>

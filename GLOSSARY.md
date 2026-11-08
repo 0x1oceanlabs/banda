@@ -476,7 +476,9 @@ its Harnesses load only the Person's own settings, not the settings, hooks
 and MCP servers its folder names. Unsaid, a Project is trusted; one added
 from a folder that looks foreign is not (ADR 0083, ADR 0084). Only a
 Project the Person said they trust, as they added it or later
-(`trust_said`), gives its Agents the Person's GitHub token.
+(`trust_said`), gives its Agents the Person's GitHub token and SSH agent;
+every Project trusted before the fence was said so once, as Banda
+upgraded.
 
 **Foreign**:
 A folder that looks like code the Person did not write: cloned from a URL,

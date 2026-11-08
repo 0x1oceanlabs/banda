@@ -5,6 +5,9 @@
 //! Banda asks the Person to agree (B15); and every line of `keys.toml`,
 //! which binds a key as `banda keys bind` checks it.
 
+use banda_agents::chosen_modes;
+use banda_agents::model::Mode;
+use std::path::Path;
 use toml_edit::Key;
 
 /// The keys of a `[[harness]]` entry that change what runs, or where the
@@ -66,6 +69,71 @@ fn only_the_person_at(name: &str, parts: &[&str], value: Option<&str>) -> Option
         ("sharing.toml", _) => Some(SHARING_WORDS),
         _ => None,
     }
+}
+
+/// Keeps what the Person chose as a Harness's new Threads' mode, in
+/// `record` ([`chosen_modes`]), as they change `key` of the file called
+/// `name` to `value`, or take it out (none), through the engine, as the
+/// settings Pane does (ADR 0083, F0-3). `start.<id>.mode` set is that mode
+/// chosen; taken out, or its table taken out, the choice is taken back, and
+/// the whole `[start]` changed takes back every one. Only the Person's own
+/// changes come here: an Agent's are no choice.
+pub fn chose(record: &Path, name: &str, key: &str, value: Option<&str>) -> std::io::Result<()> {
+    let Ok(parts) = Key::parse(key) else {
+        return Ok(());
+    };
+    let parts: Vec<&str> = parts.iter().map(Key::get).collect();
+    let value = value.map(|value| {
+        (value.parse::<toml_edit::Value>()).unwrap_or_else(|_| toml_edit::Value::from(value))
+    });
+    // As `set` takes the text: a TOML value, or else the text as a string.
+    let mode_of = |value: Option<&toml_edit::Value>| {
+        let text = value.and_then(toml_edit::Value::as_str)?;
+        serde_json::from_value::<Mode>(serde_json::Value::from(text)).ok()
+    };
+    match (name, parts.as_slice(), &value) {
+        ("agents.toml", ["start"], _) => chosen_modes::forget(record),
+        ("agents.toml", ["start", harness], None) => chosen_modes::choose(record, harness, None),
+        ("agents.toml", ["start", harness], Some(table)) => {
+            let set = (table.as_inline_table()).and_then(|table| table.get("mode"));
+            match set {
+                Some(mode) => chosen_modes::choose(record, harness, mode_of(Some(mode))),
+                None => Ok(()),
+            }
+        }
+        ("agents.toml", ["start", harness, "mode"], value) => {
+            chosen_modes::choose(record, harness, mode_of(value.as_ref()))
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Takes back what the Person chose as a Harness's new Threads' mode, in
+/// `record`, as they rename `key` of the file called `name` to `to`: a mode
+/// that comes, or goes, by another name is no choice of theirs in Settings.
+pub fn chose_renamed(record: &Path, name: &str, key: &str, to: &str) -> std::io::Result<()> {
+    let Ok(mut parts) = Key::parse(key) else {
+        return Ok(());
+    };
+    let from: Vec<String> = parts.iter().map(|part| part.get().to_owned()).collect();
+    parts.pop();
+    let mut renamed: Vec<String> = parts.iter().map(|part| part.get().to_owned()).collect();
+    renamed.push(to.to_owned());
+    for parts in [from, renamed] {
+        let parts: Vec<&str> = parts.iter().map(String::as_str).collect();
+        // Taken out under either name.
+        chose(record, name, &dotted(&parts), None)?;
+    }
+    Ok(())
+}
+
+/// `parts` as one key, each quoted where it needs it.
+fn dotted(parts: &[&str]) -> String {
+    let keys: Vec<String> = parts
+        .iter()
+        .map(|part| Key::new(*part).to_string())
+        .collect();
+    keys.join(".")
 }
 
 const NO_KEY: &str = "That is not a key as Banda's settings write them, as tile.border.";
@@ -148,6 +216,52 @@ mod tests {
         ] {
             assert_eq!(only_the_person(name, key, value), None, "{name} {key}");
         }
+    }
+
+    /// What the Person sets as a Harness's new Threads' mode through the
+    /// engine is kept as their choice, and taken back as it goes (ADR
+    /// 0083, F0-3).
+    #[test]
+    fn the_person_s_new_thread_mode_is_kept_as_chosen_and_taken_back_as_it_goes() {
+        let folder = tempfile::tempdir().unwrap();
+        let record = folder.path().join(chosen_modes::FILE);
+        let chosen = |harness| chosen_modes::chosen(&record, harness);
+        let set = |key: &str, value: &str| chose(&record, "agents.toml", key, Some(value)).unwrap();
+        let reset = |key: &str| chose(&record, "agents.toml", key, None).unwrap();
+
+        set("start.claude.mode", "\"full_access\"");
+        set("start.'codex'.\"mode\"", "auto");
+        assert_eq!(chosen("claude"), Some(Mode::FullAccess));
+        assert_eq!(
+            chosen("codex"),
+            Some(Mode::Auto),
+            "as `set` reads bare text"
+        );
+        // What is not a mode's key, or not agents.toml's, chooses nothing.
+        set("start.claude.model", "\"opus\"");
+        chose(&record, "look.toml", "start.claude.mode", Some("\"auto\"")).unwrap();
+        set("start.claude", "{ model = \"opus\" }");
+        assert_eq!(chosen("claude"), Some(Mode::FullAccess));
+        set("start.claude", "{ mode = \"supervised\" }");
+        assert_eq!(chosen("claude"), Some(Mode::Supervised));
+        set("start.claude.mode", "\"fast\"");
+        assert_eq!(chosen("claude"), None, "no mode Banda has");
+
+        set("start.claude.mode", "\"full_access\"");
+        reset("start.claude");
+        assert_eq!(chosen("claude"), None);
+        set("start.claude.mode", "\"full_access\"");
+        reset("start.claude.mode");
+        assert_eq!(chosen("claude"), None);
+        reset("start");
+        assert_eq!(chosen("codex"), None);
+
+        // A mode that comes or goes by another name.
+        set("start.claude.mode", "\"full_access\"");
+        set("start.codex.mode", "\"full_access\"");
+        chose_renamed(&record, "agents.toml", "start.claude.mode", "later").unwrap();
+        chose_renamed(&record, "agents.toml", "start.codex.effort", "mode").unwrap();
+        assert_eq!((chosen("claude"), chosen("codex")), (None, None));
     }
 
     #[test]

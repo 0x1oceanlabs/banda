@@ -109,12 +109,12 @@ outside your Harness:
 
 | Behind the fence | What happens, and what to do |
 |---|---|
-| The session's runtime folder | Empty: no `systemctl --user`, `notify-send`, `hyprctl`, `wl-copy`, keyring, gpg agent (signed commits) or rootless Docker. The SSH agent stays, so `git push` over ssh works |
+| The session's runtime folder | Empty: no `systemctl --user`, `notify-send`, `hyprctl`, `wl-copy`, keyring, gpg agent (signed commits) or rootless Docker. The SSH agent stays only in a Project Roma said they trust, so `git push` over ssh works there |
 | The display | None: a window runs headless (`try.sh --hidden`, the end-to-end tests) |
 | `sudo`, `newuidmap`, `fusermount` | Refused, so AppImages (`APPIMAGE_EXTRACT_AND_RUN=1`) and sshfs too |
 | `/dev` | null, zero, full, random, urandom, tty, pts and shm only: no GPU, `kvm`, `fuse`, `tun` or sound |
 | Other processes | Only your Harness's are seen or signalled |
-| `gh`, `git push` over https | Only in a Project Roma said they trust, with their token as `GH_TOKEN`: in another, ask Roma to trust it again |
+| `gh`, `git push` | Only in a Project Roma said they trust, with their token as `GH_TOKEN` and their SSH agent: in another, ask Roma to trust it again |
 | `~/.config/banda*` | Read-only: `banda settings` and `banda keys bind` go through the engine |
 | pnpm's store | Its links cross a mount the fence makes: on btrfs or XFS an install clones its files, on ext4 it copies them. Ask Roma before moving the store with `pnpm config set store-dir`, which moves Roma's too |
 | What you start in the background | Ends with your Harness: a dev server, a trial, `gh run watch`, a long build or a wait loop. Your Harness ends as the engine restarts (each Banda Dev update does), after 30 minutes with no turn unless what you started listens, and when Roma trusts or stops trusting the Project, once the turn ends |

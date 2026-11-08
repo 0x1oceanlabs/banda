@@ -81,6 +81,45 @@ pub(crate) struct Manifest {
     /// it foreign was not said so.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub trust_said: bool,
+    /// Who said it, and when, where it is said: the Person, or the upgrade
+    /// that brought the fence, for a Project trusted before it. None where
+    /// it was said before this was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub said: Option<Said>,
+    /// Which [`VERSION`] wrote it: none in a manifest from before the fence,
+    /// whose trust the upgrade says once ([`crate::old::said_before_fence`]).
+    #[serde(default)]
+    pub version: u32,
+}
+
+/// The version of the manifests this engine writes: 1 from the fence on
+/// (ADR 0083, F0-3).
+pub(crate) const VERSION: u32 = 1;
+
+/// Who said the Person trusts a Project, and when ([`Manifest::said`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Said {
+    pub by: SaidBy,
+    /// When, in ms since the epoch.
+    pub at: i64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum SaidBy {
+    /// The Person: in the trust step as they added it, or with
+    /// `projects.trust`.
+    Person,
+    /// The upgrade that brought the fence, once, for a Project that was
+    /// trusted then (Roma, 2026-11-08).
+    Upgrade,
+}
+
+impl Said {
+    /// Said by `by`, now.
+    pub fn now(by: SaidBy) -> Said {
+        Said { by, at: now_ms() }
+    }
 }
 
 impl Manifest {
@@ -101,6 +140,8 @@ impl Manifest {
             picture: None,
             untrusted: false,
             trust_said: false,
+            said: None,
+            version: VERSION,
         }
     }
 

@@ -72,6 +72,7 @@ mod build {
     pub fn agents(host: &HostContext<'_>) -> Agents {
         Agents::new(host.harnesses.clone())
             .config_in(host.places.config.clone())
+            .modes_chosen_in(host.places.modes_chosen())
             .piped(host.pipe.clone())
     }
 
@@ -107,9 +108,11 @@ mod build {
         HarnessesModule::new(host.harnesses.clone())
     }
 
-    /// Banda's keys, which an Agent binds for its Person (ADR 0071).
+    /// Banda's keys, which an Agent binds for its Person (ADR 0071), and
+    /// the settings an Agent changes through the engine, where the mode a
+    /// Person sets for new Threads is kept as theirs (ADR 0083).
     pub fn keys(host: &HostContext<'_>) -> KeysModule {
-        KeysModule::new(host.places.config.clone())
+        KeysModule::new(host.places.config.clone()).modes_chosen_in(host.places.modes_chosen())
     }
 
     /// What broke in Banda (ADR 0039), and, from a checkout's build, the
