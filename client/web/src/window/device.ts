@@ -52,6 +52,10 @@ export const device = {
           console.error(`banda: ${name} was not started`, error)
         })
     },
+    /** Stops Banda on host `name`, as the Person asks. */
+    stop: (name: string, force: boolean): Promise<"stopped" | "working"> =>
+      desktop()?.hostStop(name, force) ??
+      Promise.reject(new Error("Only Banda's app reaches other machines.")),
   },
   /** Panes in windows of their own (ADR 0025, decision 9): main keeps
    * which, and opens and closes their windows. */

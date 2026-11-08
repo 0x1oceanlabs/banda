@@ -5,6 +5,7 @@
  */
 import type { Engine, JsonValue, ProjectId } from "@banda/contract"
 import { toast } from "@banda/ui/components/sonner"
+import { seenNamed } from "@banda/ui/hooks/use-status"
 import {
   type Action,
   type Args,
@@ -416,6 +417,43 @@ function present(args: Args | undefined, then: (file: string) => void) {
     if (there) then(file)
     else toast.warning(`No such file: ${file}`)
   })
+}
+
+/** The other machines a stop is on its way to, by their keys: a second
+ * click meanwhile sends no second `banda stop`. */
+const stopping = new Set<string>()
+
+/**
+ * Stops Banda on another machine, by its key in `hosts.toml` (ADR 0095,
+ * decision 6): its own `banda stop` there. While its Agents work, nothing
+ * stops; a toast asks once whether to stop them too. One stop at a time
+ * goes to each, and one toast says of it.
+ */
+function stopHost(host: string, force = false) {
+  if (stopping.has(host)) return
+  stopping.add(host)
+  const { name } = seenNamed(host)
+  const id = `hosts.stop:${host}`
+  device.hosts
+    .stop(host, force)
+    .then(
+      (said) => {
+        if (said === "working")
+          toast(`Agents work on ${name}`, {
+            id,
+            description: "Stopping Banda there stops them too.",
+            action: {
+              label: "Stop anyway",
+              onClick: () => stopHost(host, true),
+            },
+          })
+      },
+      (error: unknown) => {
+        console.error(`banda: Banda on ${host} was not stopped`, error)
+        toast.error(`Banda on ${name} was not stopped. Try again.`, { id })
+      }
+    )
+    .finally(() => stopping.delete(host))
 }
 
 /** The window's own actions, the tiling's first (ADR 0071, decision 2):
@@ -952,6 +990,20 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     // A Problem's toast opens it there: its `link` (ADR 0039).
     run: (shell, args) =>
       shell.settings(typeof args?.link === "string" ? args.link : undefined),
+  },
+  {
+    // Another machine's label, its ⋯ (ADR 0095, decision 6).
+    id: "hosts.stop",
+    args: takes({ name: "the machine's key in hosts.toml" }, ["name"]),
+    // It stops Banda there, and with it its Agents: the Person's alone,
+    // as `banda stop` is.
+    runsAsPerson: true,
+    section: "Banda",
+    title: "Stop Banda on another machine",
+    unlisted: true,
+    run: (_, args) => {
+      if (typeof args?.name === "string") stopHost(args.name)
+    },
   },
   {
     id: "problems.look-into",

@@ -3,12 +3,14 @@ import {
   Fragment,
   type ReactElement,
   type ReactNode,
+  useCallback,
   useContext,
   useMemo,
   useRef,
   useState,
 } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import { MachineMark } from "@banda/ui/components/machine-icon"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import { BandaMark, MARK_WORDS } from "@banda/ui/components/banda-mark"
 import { Button } from "@banda/ui/components/button"
@@ -33,6 +35,7 @@ import { Kbd } from "@banda/ui/components/kbd"
 import { ScrollArea } from "@banda/ui/components/scroll-area"
 import { toast } from "@banda/ui/components/sonner"
 import { trustProject } from "@banda/ui/lib/projects"
+import { sameData } from "@banda/ui/lib/store"
 import { cn } from "@banda/ui/lib/utils"
 import { clock, problem } from "@banda/ui/lib/words"
 import { useNow } from "@banda/ui/hooks/use-now"
@@ -41,9 +44,11 @@ import { type Listed, type PaneState, snoozable } from "@banda/ui/pane"
 import {
   HostsContext,
   holds,
+  namedIn,
   otherBuild,
   type Shown,
   useHosts,
+  useHostsBy,
 } from "../calls/hosts"
 import { useLists, useSnoozesNow } from "../calls/stores"
 import {
@@ -51,8 +56,10 @@ import {
   BadgeCheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  ChevronUpIcon,
   CircleDashedIcon,
   CopyIcon,
+  EllipsisIcon,
   FileCogIcon,
   FolderPlusIcon,
   FolderSearchIcon,
@@ -61,6 +68,7 @@ import {
   PinIcon,
   PinOffIcon,
   PlayIcon,
+  PowerIcon,
   SearchIcon,
   SettingsIcon,
   SquarePenIcon,
@@ -176,6 +184,8 @@ export function Sidebar({
   const [only, setOnly] = useState<ProjectId>()
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set())
   const [more, setMore] = useState<ReadonlySet<string>>(new Set())
+  // The other machines the Person folded, by their keys.
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
   // Another preset starts afresh: no filter, nothing folded by hand.
   const [arrangedBy, setArrangedBy] = useState(preset)
   if (arrangedBy !== preset) {
@@ -183,6 +193,7 @@ export function Sidebar({
     setOnly(undefined)
     setToggled(new Set())
     setMore(new Set())
+    setFolded(new Set())
   }
   // The Threads the Person archived (ADR 0069), and those that sleep or
   // woke (ADR 0074).
@@ -278,9 +289,16 @@ export function Sidebar({
       awayOf={awayOf}
     />
   )
-  // Another host's label, with what it holds below it.
+  // Another host's label, with what it holds below it unless folded:
+  // `held` only when it holds something, as there is nothing to fold else.
   const part = (host: Shown, held?: ReactNode) => (
-    <HostPart key={host.name} host={host} onStart={onStart}>
+    <HostPart
+      key={host.name}
+      host={host}
+      onStart={onStart}
+      folded={folded.has(host.name)}
+      onFold={() => setFolded((set) => flip(set, host.name))}
+    >
       {held}
     </HostPart>
   )
@@ -359,17 +377,17 @@ export function Sidebar({
               onNewThread={onNewThread}
               withMenu={withMenu}
             >
-              {hosts.map((host) =>
-                part(
-                  host,
-                  <HostLines
-                    lines={arranged.projects!.filter(
-                      (line) => line.host === host.name
-                    )}
-                    settings={settings}
-                  />
+              {hosts.map((host) => {
+                const lines = arranged.projects!.filter(
+                  (line) => line.host === host.name
                 )
-              )}
+                return part(
+                  host,
+                  lines.length > 0 && (
+                    <HostLines lines={lines} settings={settings} />
+                  )
+                )
+              })}
             </ProjectsList>
           )}
           {nothing ? (
@@ -383,15 +401,15 @@ export function Sidebar({
               label; grouped otherwise, its rows are among this machine's,
               and its label shows only what is not as usual. */}
           {byProject
-            ? hosts.map((host) =>
-                part(
-                  host,
-                  !nothing &&
-                    arranged.sections
-                      .filter((section) => section.host === host.name)
-                      .map(drawn)
+            ? hosts.map((host) => {
+                const held = arranged.sections.filter(
+                  (section) => section.host === host.name
                 )
-              )
+                return part(
+                  host,
+                  !nothing && held.length > 0 && held.map(drawn)
+                )
+              })
             : !arranged.projects &&
               hosts.filter(saysSomething).map((host) => part(host))}
         </div>
@@ -654,7 +672,7 @@ function ThreadRow({
   named,
   away,
   ...props
-}: Omit<ComponentProps<typeof Row>, "field" | "host" | "stillAt"> & {
+}: Omit<ComponentProps<typeof Row>, "field" | "machine" | "stillAt"> & {
   engine: Engine
   /** A label above names its host, when it is another host's. */
   named: boolean
@@ -921,36 +939,94 @@ function saysSomething(host: Shown): boolean {
 
 /**
  * Another host of `hosts.toml` (ADR 0081, decision 4): its quiet label,
- * as the list of Projects' own, what is not as usual in words on its
- * right, and what it holds below. Away, what it holds dims.
+ * its icon and the name it says it has (ADR 0095, decision 6), what is
+ * not as usual in words on its right, and what it holds below, unless the
+ * Person folded it. Away, what it holds dims. Its ⋯ folds it, opens the
+ * settings, and stops Banda there while Banda answers there, by the
+ * Window's actions.
  */
 function HostPart({
   host,
   onStart,
+  folded,
+  onFold,
   children,
 }: {
   host: Shown
   onStart: (host: string) => void
+  folded: boolean
+  onFold: () => void
   children?: ReactNode
 }) {
+  const run = useItemRun()
   const other = otherBuild(host.state)
+  const { name } = host.named
   return (
-    <div role="group" aria-label={host.name} className="flex flex-col">
-      <div className="flex min-h-8 items-center gap-1.5 px-2 pt-3.5 pb-0.5 text-xs whitespace-nowrap text-muted-foreground">
-        <h3 className="min-w-0 truncate">{host.name}</h3>
+    <div role="group" aria-label={name} className="flex flex-col">
+      <div className="group/label relative flex min-h-8 items-center gap-1.5 px-2 pt-3.5 pb-0.5 text-xs whitespace-nowrap text-muted-foreground">
+        <h3 className="flex min-w-0">
+          <MachineMark named={host.named} form="full" />
+        </h3>
         <span className="ml-auto flex min-w-0 items-center gap-1.5 tabular-nums">
           <HostWords host={host} onStart={onStart} />
         </span>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`${name} menu`}
+                title={name}
+                // Out of sight until the pointer is over the label, and
+                // still reached by Tab, which shows it.
+                className="sr-only -my-1 -mr-1.5 group-hover/label:not-sr-only focus-visible:not-sr-only data-popup-open:not-sr-only pointer-coarse:not-sr-only"
+              />
+            }
+          >
+            <EllipsisIcon />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-auto min-w-48">
+            {/* A label with nothing under it, as the Inbox's or a
+                stopped machine's, has nothing to fold. */}
+            {children && (
+              <DropdownMenuItem onClick={onFold}>
+                {folded ? <ChevronDownIcon /> : <ChevronUpIcon />}
+                {folded ? `Unfold ${name}` : `Fold ${name}`}
+              </DropdownMenuItem>
+            )}
+            {/* At the settings' top, until they have a Machines section
+                (ADR 0095, plan step 5). */}
+            <DropdownMenuItem onClick={() => run("settings.open")}>
+              <SettingsIcon />
+              Machine settings
+            </DropdownMenuItem>
+            {/* Only while Banda answers there: away, connecting or
+                waiting for Tailscale sign-in, ssh would not reach it. */}
+            {(host.state.state === "live" ||
+              host.state.state === "refused") && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => run("hosts.stop", { name: host.name })}
+                >
+                  <PowerIcon />
+                  Stop Banda on {name}
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-      {other && (
+      {other && !folded && (
         <p
           className="px-2 pb-1 text-xs text-muted-foreground tabular-nums"
-          title={`${host.name} runs another build of Banda than this window`}
+          title={`${name} runs another build of Banda than this window`}
         >
           {other}
         </p>
       )}
-      {children && (
+      {children && !folded && (
         <div
           className={cn(
             "flex flex-col gap-1",
@@ -1098,6 +1174,13 @@ function ElsewhereRow({
   named: boolean
   away?: number
 }) {
+  const { host } = row
+  const machineOf = useCallback(
+    (hosts: readonly Shown[]) =>
+      named || host === undefined ? undefined : namedIn(hosts, host),
+    [named, host]
+  )
+  const machine = useHostsBy(machineOf, sameData)
   const drawn = (
     <Row
       row={row}
@@ -1105,7 +1188,7 @@ function ElsewhereRow({
       inProject={inProject}
       current={current}
       onOpen={onOpen}
-      host={named ? undefined : row.host}
+      machine={machine}
       stillAt={away}
     />
   )

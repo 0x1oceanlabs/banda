@@ -2,8 +2,8 @@ import { useCallback, useContext, useEffect, useMemo, useState } from "react"
 import type { Engine } from "@banda/contract"
 import { useModules } from "@banda/ui/hooks/use-status"
 import { useProjects } from "@banda/ui/hooks/use-projects"
-import type { PaneState } from "@banda/ui/pane"
-import { HostsContext, useOurs } from "../calls/hosts"
+import { paneHost, type PaneState } from "@banda/ui/pane"
+import { HostsContext, useNamedOf, useOurs } from "../calls/hosts"
 import { labelOf, previewers } from "../registry"
 import { closing } from "./actions"
 import { device } from "./device"
@@ -50,9 +50,13 @@ export function Popped({ engine, pane }: { engine: Engine; pane: string }) {
     if (gone) back()
   }, [gone, back])
   const title = entry ? labelOf(entry.pane).title : ""
+  // The system's title names another machine, as its header does (ADR
+  // 0095, decision 8), and it has no icon there.
+  const machine = useNamedOf(entry?.project, entry && paneHost(entry.pane))
   useEffect(() => {
-    document.title = title ? `${title} — Banda` : "Banda"
-  }, [title])
+    const named = title && machine ? `${title} · ${machine.name}` : title
+    document.title = named ? `${named} — Banda` : "Banda"
+  }, [title, machine])
 
   const close = useCallback(() => {
     send(engine, closing(pane).command).catch((error: unknown) =>

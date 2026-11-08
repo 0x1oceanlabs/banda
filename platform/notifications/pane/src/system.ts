@@ -8,9 +8,10 @@ import {
   MARK_WORDS,
   stillMark,
 } from "@banda/ui/components/banda-mark"
+import { seenNamed } from "@banda/ui/hooks/use-status"
 import type { Chime } from "@banda/ui/sound"
 import type { Notify } from "@banda/contract/look"
-import type { Call } from "@banda/ui/pane"
+import { type Call, paneHost } from "@banda/ui/pane"
 import type { Desktop, Notice } from "./desktop"
 import type { Told } from "./told"
 import { loudestChime } from "./sound"
@@ -35,13 +36,24 @@ export function noticeOf(
   project?: string
 ): Notice {
   const said = MARK_WORDS[call.chime]
+  const where = whereOf(call, project)
   return {
     key: call.key,
-    title: project ? `${call.title} · ${project}` : call.title,
+    title: where ? `${call.title} · ${where}` : call.title,
     body: detail && call.detail ? `${said} · ${call.detail}` : said,
     answer: ANSWER[call.chime],
     lasts: call.chime !== "done",
   }
+}
+
+/** Where a call's thing is, after its title: its Project, by `project`,
+ * and on another machine that machine, by the name it says it has, in
+ * words, as a notice draws no icon (ADR 0095, decision 8). */
+function whereOf(call: Call, project?: string): string | undefined {
+  const host = paneHost(call.pane)
+  if (host === undefined) return project
+  const { name } = seenNamed(host)
+  return project ? `${project} on ${name}` : name
 }
 
 /** The action that goes to a call's thing: `{ project, about, pane }`. */

@@ -14,8 +14,10 @@
  * hosts.toml applies as it changes: a machine written there by hand, or
  * added through the bridge as the page will, shows at once, and goes as
  * it is taken out; Test finds arc's Banda and starts nothing there, and
- * Stop Banda stops it. With BANDA_E2E_SHOTS set to a folder, it leaves
- * pictures of each state there for the Person to see.
+ * Stop Banda stops it. arc names itself in its machine.toml (ADR 0095),
+ * as this checkout's engine says in its welcome: "arc", a server. With
+ * BANDA_E2E_SHOTS set to a folder, it leaves pictures of each state there
+ * for the Person to see.
  */
 import { execFileSync, spawn } from "node:child_process"
 import { once } from "node:events"
@@ -124,6 +126,7 @@ function newArc({ mac = false } = {}): Arc {
     `[[harness]]\nid = "fake"\nname = "Fake AI"\ncommand = ${JSON.stringify(agent)}\n`
   )
   writeFileSync(at("config/sharing.toml"), "problems = false\n")
+  writeFileSync(at("config/machine.toml"), 'name = "arc"\nicon = "server"\n')
   const folders = {
     BANDA_ROOT: at("root"),
     BANDA_DATA: at("data"),
@@ -304,10 +307,12 @@ test("another machine's Threads show under its name, below this one's; stopped t
   const sidebar = sidebarOf(page)
   await expect(sidebar.getByText("Sidebar for arc")).toBeVisible()
 
-  // Live: arc's label, nothing beside it, and its Project and Threads
-  // under it.
+  // Live: arc's label, its icon and the name it says it has, nothing
+  // beside it, and its Project and Threads under it.
   const there = arcOf(page)
-  await expect(there.getByRole("heading", { name: "arc" })).toBeVisible()
+  const label = there.getByRole("heading", { name: "arc" })
+  await expect(label).toBeVisible()
+  await expect(label.locator('[data-machine-icon="server"]')).toBeVisible()
   await expect(
     there.getByRole("group", { name: "banda", exact: true })
   ).toBeVisible()
@@ -323,6 +328,46 @@ test("another machine's Threads show under its name, below this one's; stopped t
   await there.getByText("Bench window tests").click({ button: "right" })
   await expect(page.getByRole("menu", { name: "Thread menu" })).toHaveCount(0)
   await page.keyboard.press("Escape")
+  // Its label's ⋯ folds it, opens the settings and stops Banda there. It
+  // shows under the pointer, or as Tab reaches it: headless, nothing
+  // hovers.
+  const more = there.getByRole("button", { name: "arc menu" })
+  await more.focus()
+  await page.keyboard.press("Enter")
+  const labelMenu = page.getByRole("menu")
+  await expect(
+    labelMenu.getByRole("menuitem", { name: "Machine settings" })
+  ).toBeVisible()
+  await expect(
+    labelMenu.getByRole("menuitem", { name: "Stop Banda on arc" })
+  ).toBeVisible()
+  await shot(page, "label-menu")
+  await labelMenu.getByRole("menuitem", { name: "Fold arc" }).click()
+  await expect(there.getByText("Bench window tests")).toHaveCount(0)
+  await more.focus()
+  await page.keyboard.press("Enter")
+  await page.getByRole("menuitem", { name: "Unfold arc" }).click()
+  await expect(there.getByText("Bench window tests")).toBeVisible()
+
+  // The Banda menu finds arc by its name, and names it on its Threads.
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  await page.keyboard.press("Alt+Space")
+  await menu.getByRole("combobox", { name: "Search" }).fill("arc")
+  const machines = menu
+    .getByRole("group", { name: "Machines" })
+    .getByRole("option")
+  await expect(machines).toHaveCount(1)
+  await expect(machines).toContainText("Machine settings")
+  await shot(page, "menu-machine")
+  await menu.getByRole("combobox", { name: "Search" }).fill("bench")
+  await expect(
+    menu
+      .getByRole("option")
+      .filter({ hasText: "Bench window tests" })
+      .locator('[data-machine-icon="server"]')
+  ).toBeVisible()
+  await shot(page, "menu-thread")
+  await page.keyboard.press("Escape")
 
   // The Inbox: no label for a live host, and its rows among this
   // machine's, each with its host's name.
@@ -330,12 +375,12 @@ test("another machine's Threads show under its name, below this one's; stopped t
   await expect(arcOf(page)).toHaveCount(0)
   const tags = sidebar.getByTitle("Its Agent works on arc")
   await expect(tags).toHaveCount(2)
-  await expect(
-    sidebar
-      .getByRole("button")
-      .filter({ hasText: "Bench window tests" })
-      .getByTitle("Its Agent works on arc")
-  ).toHaveText("arc")
+  const mark = sidebar
+    .getByRole("button")
+    .filter({ hasText: "Bench window tests" })
+    .getByTitle("Its Agent works on arc")
+  await expect(mark).toHaveText("arc")
+  await expect(mark.locator('[data-machine-icon="server"]')).toBeVisible()
   await expect(
     sidebar
       .getByRole("button")
@@ -354,6 +399,16 @@ test("another machine's Threads show under its name, below this one's; stopped t
   arc.cut()
   await expect(there.getByText(/^away/)).toBeVisible()
   await expect(there.getByText("Bench window tests")).toBeVisible()
+  // Away, ssh would not reach it: its ⋯ has no Stop.
+  await more.focus()
+  await page.keyboard.press("Enter")
+  await expect(page.getByRole("menuitem", { name: "Fold arc" })).toBeVisible()
+  await expect(
+    page.getByRole("menuitem", { name: "Stop Banda on arc" })
+  ).toHaveCount(0)
+  await page.keyboard.press("Escape")
+  await expect(page.getByRole("menu")).toHaveCount(0)
+  await more.blur()
   if (shots) {
     // As the Person would see it a minute on.
     await expect(there.getByText("away · 1 min")).toBeVisible({
@@ -365,15 +420,64 @@ test("another machine's Threads show under its name, below this one's; stopped t
   await expect(there.getByText(/^away/)).toHaveCount(0, { timeout: 60_000 })
   await expect(there.getByText("Bench window tests")).toBeVisible()
 
-  // Stopped there as asked: it says so, its rows go, and Start brings it
-  // back.
-  arc.banda("stop", "--force")
+  // Stopped there from its label's ⋯: an Agent works there, so a toast
+  // asks first, and Stop anyway stops it too. Stopped, it says so, its
+  // rows go, and Start brings it back. arc's engine started again as the
+  // link came back, so its Agent is given a turn that waits.
+  send(arc, banda, "Hold arc, wait")
+  await expect(
+    there.getByRole("button").filter({ hasText: "Hold arc, wait" })
+  ).toContainText(/\d:\d\d/)
+  await more.focus()
+  await page.keyboard.press("Enter")
+  await page.getByRole("menuitem", { name: "Stop Banda on arc" }).click()
+  const asks = page
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+    .filter({ hasText: "Agents work on arc" })
+  await expect(asks).toBeVisible()
+  await expect(there.getByText("stopped", { exact: true })).toHaveCount(0)
+  if (shots) {
+    // The toasts spread under the pointer, once the menu has gone.
+    await expect(page.getByRole("menu")).toHaveCount(0)
+    await asks.hover({ force: true })
+    await page.waitForTimeout(1_000)
+    await page.screenshot({ path: join(shots, "stop-asks.png") })
+  }
+  await asks.getByRole("button", { name: "Stop anyway" }).click()
   await expect(there.getByText("stopped", { exact: true })).toBeVisible()
+  // Stopped, its ⋯ has no Stop, and no Fold: nothing is under it.
+  await more.focus()
+  await page.keyboard.press("Enter")
+  await expect(
+    page.getByRole("menuitem", { name: "Machine settings" })
+  ).toBeVisible()
+  await expect(
+    page.getByRole("menuitem", { name: "Stop Banda on arc" })
+  ).toHaveCount(0)
+  await expect(page.getByRole("menuitem", { name: /^Fold/ })).toHaveCount(0)
+  await page.keyboard.press("Escape")
+  // Closed, the menu gives ⋯ the focus back; the picture has none.
+  await expect(page.getByRole("menu")).toHaveCount(0)
+  await more.blur()
   await expect(there.getByText("Bench window tests")).toHaveCount(0)
   await shot(page, "pr2-4-stopped")
   await there.getByRole("button", { name: "Start" }).click()
   await expect(there.getByText("Bench window tests")).toBeVisible()
   await expect(there.getByText("stopped", { exact: true })).toHaveCount(0)
+
+  // Renamed there, by hand in its machine.toml: the label says it at once.
+  writeFileSync(
+    join(arc.dir, "config/machine.toml"),
+    'name = "Studio"\nicon = "tower"\n'
+  )
+  const studio = sidebar.getByRole("group", { name: "Studio", exact: true })
+  await expect(
+    studio
+      .getByRole("heading", { name: "Studio" })
+      .locator('[data-machine-icon="tower"]')
+  ).toBeVisible()
+  await expect(studio.getByText("Bench window tests")).toBeVisible()
 })
 
 test("another machine's Thread opens from the sidebar on its engine, waits while arc is away and catches up; other Panes are not on arc yet", async () => {
@@ -393,6 +497,10 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
     exact: true,
   })
   await expect(thread.getByText("You said: Bench window tests")).toBeVisible()
+  // Its header names arc after its Project.
+  await expect(
+    thread.locator('[data-machine-icon="server"]').first()
+  ).toBeVisible()
   // It writes there: arc's Agent answers.
   const composer = thread.getByRole("textbox", { name: "Message to Fake AI" })
   await composer.fill("hi")
@@ -442,6 +550,11 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   await page.keyboard.press("Alt+KeyN")
   const other = page.getByRole("region", { name: "New Pane" })
   await expect(other.getByText("Not on arc yet")).toBeVisible()
+  await expect(
+    other
+      .locator("p", { hasText: "Not on arc yet" })
+      .locator('[data-machine-icon="server"]')
+  ).toBeVisible()
   await expect(other.getByRole("button", { name: "Terminal" })).toHaveCount(0)
   await shot(page, "pr3-3-not-on-arc")
 

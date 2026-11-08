@@ -80,7 +80,8 @@ export type Note = { version: string; text: string }
  * refused, and tried again every ten minutes or when the page asks. `why`
  * is the window's words, never what the other machine said, and names no
  * machine: the page puts the machine's name before it (ADR 0095, decision
- * 2).
+ * 2). `name` is its key in `hosts.toml`, this device's own: the name and
+ * icon the window draws are what the machine says on its own engine.
  */
 export type HostState = { name: string } & (
   | { state: "connecting" }

@@ -8,6 +8,7 @@ import {
   HostsContext,
   type HostsDevice,
   KeptHosts,
+  namedIn,
   otherBuild,
   type Reach,
   reachWords,
@@ -48,6 +49,8 @@ const live: HostState = {
 }
 const away: HostState = { name: "arc", state: "away", why: "ssh ended" }
 const connecting: HostState = { name: "arc", state: "connecting" }
+/** arc before its first welcome on this device: its key. */
+const unnamed = { name: "arc", icon: "desktop" }
 
 /** A desktop whose hosts the test tells, and whose engines it answers. */
 function desktop() {
@@ -68,7 +71,12 @@ function desktop() {
 
 test("a host that goes away stays away through the tries after, its rows standing as they were", () => {
   const first = shownOf(undefined, connecting, 0)
-  expect(first).toEqual({ name: "arc", state: connecting, projects: [] })
+  expect(first).toEqual({
+    name: "arc",
+    named: unnamed,
+    state: connecting,
+    projects: [],
+  })
   const listed = [project("r1")]
   const lost = shownOf(
     { ...shownOf(first, live, 1), projects: listed },
@@ -85,6 +93,7 @@ test("a host that goes away stays away through the tries after, its rows standin
   // Live again, it keeps its Projects until its engine lists them anew.
   expect(shownOf(lost, live, 30)).toEqual({
     name: "arc",
+    named: unnamed,
     state: live,
     projects: listed,
   })
@@ -96,6 +105,7 @@ test("a host that goes away stays away through the tries after, its rows standin
   ] satisfies HostState[])
     expect(shownOf(lost, now, 40)).toEqual({
       name: "arc",
+      named: unnamed,
       state: now,
       projects: [],
     })
@@ -156,21 +166,28 @@ test("a host's Projects are its engine's, none archived, and never one shown bef
   })
 })
 
-/** A WebSocket that only notes where it was opened to, and closes when
- * the test says. */
+/** A WebSocket that only notes where it was opened to and what was sent
+ * on it, and closes when the test says. */
 class Socket {
   static opened: Socket[] = []
   onopen?: () => void
   onmessage?: (message: { data: string }) => void
   onclose?: () => void
   readonly url: string
+  readonly sent: { type: string; id: number; method?: string }[] = []
   constructor(url: string) {
     this.url = url
     Socket.opened.push(this)
   }
-  send() {}
+  send(frame: string) {
+    this.sent.push(JSON.parse(frame))
+  }
   close() {
     this.onclose?.()
+  }
+  /** Says `frame` to the page. */
+  say(frame: object) {
+    this.onmessage?.({ data: JSON.stringify(frame) })
   }
 }
 
@@ -330,7 +347,7 @@ test("a pick of another host's Thread opens it on that host, never on this machi
   expect(on("x", mine)).toBe(mine)
 })
 
-test("a Pane says why it cannot reach its host in the window's own words", () => {
+test("a Pane says why it cannot reach its host in the window's own words, by the name the host says it has", () => {
   const words = (state: HostState) =>
     reachWords("arc", shownOf(undefined, state, 0))
   expect(words(connecting)).toBe("Connecting to arc")
@@ -343,6 +360,19 @@ test("a Pane says why it cannot reach its host in the window's own words", () =>
   expect(words({ name: "arc", state: "refused", why: "an older window" })).toBe(
     "arc: an older window"
   )
+  // Named, it goes by that name, not by its key.
+  const studio = (state: HostState) =>
+    reachWords("arc", {
+      ...shownOf(undefined, state, 0),
+      named: { name: "Studio", icon: "desktop" },
+    })
+  expect(studio(away)).toBe("Studio is away")
+  expect(studio({ name: "arc", state: "stopped" })).toBe(
+    "Banda is stopped on Studio"
+  )
+  expect(
+    studio({ name: "arc", state: "refused", why: "an older window" })
+  ).toBe("Studio: an older window")
 })
 
 test("a Pane on another host runs none of the Window's actions on this machine's files, and its Items' on that host's alone", () => {
@@ -397,4 +427,59 @@ test("a Pane on another host runs none of the Window's actions on this machine's
   )
   waiting("thread.snooze")
   expect(ran).toHaveLength(4)
+})
+
+test("a host goes by the name and icon its engine says, cleaned, from its welcome and each change after; before, by its key", async () => {
+  vi.useFakeTimers()
+  vi.stubGlobal("WebSocket", Socket)
+  Socket.opened = []
+  const { device, tell } = desktop()
+  const hosts = new KeptHosts(device)
+  hosts.follow()
+  // Its own key here, apart from arc's in the tests before.
+  const mini: HostState = { ...live, name: "mini" }
+  tell([mini])
+  expect(hosts.get()[0]!.named).toEqual({ name: "mini", icon: "desktop" })
+  expect(namedIn(hosts.get(), "mini")).toEqual({
+    name: "mini",
+    icon: "desktop",
+  })
+
+  const engine = hosts.engine("mini")
+  await vi.advanceTimersByTimeAsync(0)
+  const socket = Socket.opened[0]!
+  socket.onopen?.()
+  const named = { name: "Studio\u202E\u200B", icon: "server" }
+  socket.say({ type: "welcome", engine: "e", modules: [], boot: "b", named })
+  expect(hosts.get()[0]!.named).toEqual({ name: "Studio", icon: "server" })
+  // Renamed there, it says so on its stream, which names no Project.
+  const stream = socket.sent.find((frame) => frame.method === "machine.named")
+  expect(stream).toMatchObject({ type: "stream" })
+  expect(stream).not.toHaveProperty("project")
+  socket.say({
+    type: "piece",
+    stream: stream!.id,
+    data: { name: "Mac mini", icon: "watch" },
+  })
+  const renamed = hosts.get()[0]!
+  expect(renamed.named).toEqual({ name: "Mac mini", icon: "desktop" })
+  // The same again draws nothing anew.
+  socket.say({
+    type: "piece",
+    stream: stream!.id,
+    data: { name: "Mac mini", icon: "desktop" },
+  })
+  expect(hosts.get()[0]).toBe(renamed)
+  // Away, and through the tries after, it keeps its name.
+  tell([{ ...away, name: "mini" }])
+  tell([{ ...connecting, name: "mini" }])
+  expect(hosts.get()[0]!.named.name).toBe("Mac mini")
+  expect(reachWords("mini", hosts.get()[0])).toBe("Mac mini is away")
+  // A window made after, as a popped one, has the last name seen here.
+  const later = new KeptHosts(desktop().device)
+  expect(namedIn(later.get(), "mini")).toEqual({
+    name: "Mac mini",
+    icon: "desktop",
+  })
+  engine.close()
 })
