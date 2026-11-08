@@ -1,8 +1,7 @@
-import { showDetails } from "@banda/ui/components/thread-details"
 import type { Args, WindowApi } from "@banda/ui/module"
 import { afterEach, expect, test } from "vitest"
 import { run } from "./chain"
-import { keepWindow, toldOf } from "./ended"
+import { keepWindow, showDetails, toldOf } from "./ended"
 import { fakeEngine } from "./testing"
 
 /** A window that keeps what is told. */

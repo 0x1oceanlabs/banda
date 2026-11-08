@@ -1,5 +1,4 @@
 /** The agents module's window part: its Panes, its Watch on what calls
-/** The agents module's window part: its Panes, its Watch on what calls
  * for the Person, its action, what the Banda menu finds of it (ADR 0022)
  * and what the Person does to a Thread it lists, its item actions (ADR
  * 0087, decision 12). */
@@ -12,6 +11,7 @@ import {
   takes,
   zoomActions,
 } from "@banda/ui/module"
+import { actOnTile } from "@banda/ui/hooks/use-scope"
 import type { Key } from "@banda/ui/lib/keys"
 import { COMPOSER, THREAD, VISUAL } from "./scopes"
 import { paneOf } from "@banda/ui/pane"
@@ -118,6 +118,22 @@ const newThread: Action = {
   },
 }
 
+/** T3 Code's Ctrl+Shift+B: the Thread's details card shown, or hidden;
+ * with `part`, shown with that part of its rows open, as git's Switch
+ * branch asks for its picker (ADR 0034, decision 4). The Thread in focus
+ * takes it, or else the focused Pane's, when that is a Thread. */
+const details: Action = {
+  id: "agents.thread.details",
+  title: "Show or hide the Thread's details",
+  section: "Thread",
+  scope: THREAD,
+  keys: [{ code: "KeyB", primary: true, shift: true }],
+  args: takes({
+    part: "a part of its rows to open, as git's branch picker, git.branch",
+  }),
+  run: (_, args) => void actOnTile(THREAD, "agents.thread.details", args),
+}
+
 /** A key of one of its scopes (ADR 0071, decision 1), `agents.<scope>.<id>`,
  * which keys.toml binds in that scope's table. */
 const own =
@@ -164,11 +180,7 @@ export const agents = defineModule({
     composer("plan", "Plan mode on or off", { code: "Tab", shift: true }),
     // Its zoom sizes its words (ADR 0063, decision 5).
     ...zoomActions(THREAD, "agents.thread", "the Thread", "Thread"),
-    thread("details", "Show or hide the Thread's details", {
-      code: "KeyB",
-      primary: true,
-      shift: true,
-    }),
+    details,
     thread("find", "Find in the Thread", { code: "KeyF", primary: true }),
     ...zoomActions(VISUAL, "agents.visual", "the Visual", "Visual preview"),
   ],

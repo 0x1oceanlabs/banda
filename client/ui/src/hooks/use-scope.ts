@@ -56,6 +56,24 @@ export function actInScope(
   return acted.defaultPrevented
 }
 
+/**
+ * Runs action `id` of `scope` as `actInScope` does, else on the focused
+ * Pane's tile when it is the scope's: as an action that is not the
+ * scope's asks for it, from wherever the focus is, as git's Switch branch
+ * the focused Thread's card. Whether it was taken.
+ */
+export function actOnTile(scope: string, id: string, args?: Args): boolean {
+  if (actInScope(scope, id, args)) return true
+  const tile = focusedTile()
+  if (tile?.dataset.scope !== scope) return false
+  const acted = new CustomEvent<Acted>(ACTED, {
+    detail: { id, args },
+    cancelable: true,
+  })
+  tile.dispatchEvent(acted)
+  return acted.defaultPrevented
+}
+
 /** A scope's handler for one of its actions: whether it took it. With
  * the key's press when a key ran it, none from the Banda menu. */
 export type Handler = (args?: Args, event?: KeyboardEvent) => boolean

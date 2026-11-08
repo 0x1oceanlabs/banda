@@ -1,7 +1,6 @@
 /** The git module's window part (ADR 0034): the Diff, the rows of a
  * Thread's details card, and its two keys, as T3 Code's. */
 import { type Action, defineModule } from "@banda/ui/module"
-import { askDetails } from "@banda/ui/components/thread-details"
 import { PICKER } from "./BranchPicker"
 import { diffOn, gitDetails } from "./Details"
 import { diffPane } from "./DiffPane"
@@ -21,13 +20,14 @@ const toggleDiff: Action = {
 }
 
 /** T3 Code's Mod+Shift+G: the branch picker of the focused Thread's
- * card, the card shown first. */
+ * card, the card shown first, as Threads' details action opens a part of
+ * its rows. */
 const switchBranch: Action = {
   id: "git.branch",
   title: "Switch branch",
   section: "Git",
   keys: [{ code: "KeyG", mod: true, shift: true }],
-  run: () => askDetails(PICKER),
+  run: (window) => window.run("agents.thread.details", { part: PICKER }),
 }
 
 export const git = defineModule({

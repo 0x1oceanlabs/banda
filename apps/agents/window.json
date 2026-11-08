@@ -182,7 +182,17 @@
           "shift": true
         }
       ],
-      "scope": "thread"
+      "scope": "thread",
+      "args": {
+        "type": "object",
+        "properties": {
+          "part": {
+            "type": "string",
+            "description": "a part of its rows to open, as git's branch picker, git.branch"
+          }
+        },
+        "additionalProperties": false
+      }
     },
     {
       "id": "agents.thread.find",

@@ -199,14 +199,30 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   useEffect(() => {
     detailsWanted.current = detailsShown
   }, [detailsShown])
+  // The part of its rows an App asked the card to open, as git's Switch
+  // branch its picker, till that part is drawn and opened; hidden, the
+  // card forgets it.
+  const [opening, setOpening] = useState<string | null>(null)
+  const [wasShown, setWasShown] = useState(detailsShown)
+  if (wasShown !== detailsShown) {
+    setWasShown(detailsShown)
+    if (!detailsShown) setOpening(null)
+  }
   // Its keys (ADR 0071, decision 1): its zoom, which sizes its words, its
   // details, and Ctrl+F (⌘F) to find in it, as in T3 Code.
   const scope = useScope(
     THREAD,
     {
       ...zoomHandlers("agents.thread", zoom.by),
-      "agents.thread.details": () => {
-        detailsWanted.current = !detailsWanted.current
+      "agents.thread.details": (args) => {
+        const part = typeof args?.part === "string" ? args.part : null
+        if (part === null) detailsWanted.current = !detailsWanted.current
+        // A part to open shows the card, where this Thread draws one.
+        else if (unplaced || !here) return false
+        else {
+          detailsWanted.current = true
+          setOpening(part)
+        }
         setDetailsShown(detailsWanted.current)
         return true
       },
@@ -335,7 +351,8 @@ export function Thread(props: PaneProps<ThreadArgs>) {
               thread={thread}
               harness={harness ? { id: harness, name: short } : null}
               open={open}
-              focused={focused}
+              opening={opening}
+              opened={() => setOpening(null)}
               wide={wide}
               shown={detailsShown}
               onShown={setDetailsShown}
