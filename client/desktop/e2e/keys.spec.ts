@@ -18,6 +18,7 @@
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import { availableParallelism, loadavg } from "node:os"
 import { join } from "node:path"
 import { expect, type Page, test } from "@playwright/test"
 import { install, read, reset, type Reading } from "./motion-probe"
@@ -119,6 +120,16 @@ async function apart(page: Page, window: Window): Promise<string[]> {
     }
   }
   return found
+}
+
+/** A page titled Page, served here; its address. */
+async function pageSite(): Promise<string> {
+  site = createServer((_, response) => {
+    response.writeHead(200, { "content-type": "text/html" })
+    response.end("<title>Page</title><h1>Page</h1>")
+  })
+  await new Promise<void>((done) => site!.listen(0, "127.0.0.1", done))
+  return `http://127.0.0.1:${(site.address() as AddressInfo).port}/`
 }
 
 /** A Strip of three terminals and a browser Pane on a page of `address`,
@@ -250,12 +261,7 @@ for (const latency of [0, 150]) {
   test.describe(`with the engine ${latency} ms away`, () => {
     test("each tiling key is drawn, and what is drawn is the engine's", async () => {
       test.setTimeout(180_000)
-      site = createServer((_, response) => {
-        response.writeHead(200, { "content-type": "text/html" })
-        response.end("<title>Page</title><h1>Page</h1>")
-      })
-      await new Promise<void>((done) => site!.listen(0, "127.0.0.1", done))
-      const address = `http://127.0.0.1:${(site.address() as AddressInfo).port}/`
+      const address = await pageSite()
       window = await startWindow({ latency })
       const { page } = window
       await strip(page, address)
@@ -295,6 +301,35 @@ for (const latency of [0, 150]) {
       expect(each("workspace").tiles, "workspace: Tiles drawn").toBe(
         steps("workspace")
       )
+      // Each key is drawn before the frame after it begins, the engine
+      // near or far (decision 11): no frame begins between a key and its
+      // commit, a count however busy the machine is.
+      const tiling = ["width", "maximize", "focus", "workspace", "move"]
+      for (const phase of tiling) {
+        const keys = keysOf(measured[phase].keys)!
+        expect(keys.missed, `${phase}: keys not drawn`).toBe(0)
+        expect(keys.framesLate.max, `${phase}: frames late`).toBe(0)
+      }
+      // A Pane opened is drawn too.
+      const open = keysOf(
+        measured["open and close"].keys.filter((k) => k.code === "KeyN")
+      )!
+      expect(open.missed, "open: keys not drawn").toBe(0)
+      // And in ms: the tiling keys within 16, all of them together, so one
+      // key the machine held up does not fail it, as a phase of four
+      // would; a Pane opened within a mount's budget, 50. A machine busier
+      // than half its cores times itself, not the window: there the ms
+      // are only told, as the plan's §8.11 has them, a soft gate.
+      const all = keysOf(tiling.flatMap((phase) => measured[phase].keys))!
+      const busy = loadavg()[0] / availableParallelism()
+      if (busy <= 0.5) {
+        expect(all.p95, "tiling keys: key to drawn p95").toBeLessThanOrEqual(16)
+        expect(open.p95, "open: key to drawn p95").toBeLessThanOrEqual(50)
+      } else
+        test.info().annotations.push({
+          type: "busy",
+          description: `load ${busy.toFixed(2)} a core, not gated: tiling keys p95 ${all.p95} ms, open p95 ${open.p95} ms`,
+        })
     })
 
     test("ten tiling keys pressed faster than the Window draws land in order, as the engine has them", async () => {

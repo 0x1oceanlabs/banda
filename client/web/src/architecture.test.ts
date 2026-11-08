@@ -713,6 +713,19 @@ test("a place that no longer makes one comes off the list", () => {
   expect(making).toEqual(MAKING_IDS)
 })
 
+/**
+ * A key's change is drawn at once, before the engine answers (ADR 0088,
+ * decision 11): the Tiling's controller waits on no answer, and draws
+ * nothing on a clock. What a change waited for to be drawn is gone.
+ */
+test("the Tiling's controller waits on no answer to draw a change", () => {
+  const file = readFileSync(join(app, "web/src/tiling/useTiling.ts"), "utf8")
+  const waits = file.match(
+    /\bawait\b|\bDRAWN_WITHIN\b|\bdrawnWhen\b|\bsetTimeout\(/g
+  )
+  expect(waits).toBeNull()
+})
+
 test("the copy of the arrangement's commands imports the contract alone", () => {
   const file = join(app, "web/src/tiling/arrangement.ts")
   const others = imports(readFileSync(file, "utf8")).filter(
