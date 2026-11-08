@@ -190,6 +190,18 @@ test("Quick Look shows the row picked over the desk on Space, follows ↓ in the
     "export const b"
   )
   await expect(page.locator("[data-column]")).toHaveCount(columns + 1)
+
+  // While it shows, the sidebar's Search opens the Banda menu: only the
+  // menu's key fills the desk.
+  await row("a.ts").click()
+  await page.keyboard.press("Space")
+  await expect(peek).toHaveAttribute("aria-label", "Quick Look: a.ts")
+  await page
+    .getByRole("complementary", { name: "Sidebar" })
+    .getByRole("button", { name: /Search/ })
+    .click()
+  await expect(page.getByRole("dialog", { name: "Banda menu" })).toBeVisible()
+  await expect(peek).not.toHaveAttribute("data-fill")
 })
 
 test("a PDF draws its first page from ranges of the file host, and Ctrl+F finds a word in it", async () => {
