@@ -18,7 +18,7 @@ import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openProjects, updateProject } from "@banda/ui/lib/projects"
 import { useStore } from "@banda/ui/lib/store"
-import { asleep, type PaneState } from "@banda/ui/pane"
+import type { PaneState } from "@banda/ui/pane"
 import { Bar } from "../bar/Bar"
 import { WorkspaceMap } from "../bar/Map"
 import { tomlOf } from "@banda/contract/settings"
@@ -73,7 +73,8 @@ import { Edge } from "../sidebar/Edge"
 import { Sidebar } from "../sidebar/Sidebar"
 import { SnoozePicker } from "../sidebar/Snoozing"
 import { QuitDialog } from "./Quit"
-import { useSeeWoke, useSnoozesAt, wokeAt, wokeTold } from "../sidebar/snoozed"
+import { useSeeWoke, useSnoozesAt } from "../sidebar/snoozed"
+import { useWokeNote } from "../calls/woke"
 import { paneRowsOf } from "../sidebar/items"
 import { attachTo, focusedOn } from "./attach"
 import { Kept, useKeptHere } from "./here"
@@ -594,34 +595,8 @@ export function Shell({
       to.take(Array.isArray(chips) ? chips : [chips])
     },
   })
-  // A Thread that woke by itself is told of once (ADR 0074, decision 7):
-  // one that calls, by its call; one that does not, here. Looked at as the
-  // calls follow the lists and the snooze clock.
-  useEffect(() => {
-    let sleeping = new Set<string>()
-    const look = () => {
-      const was = sleeping
-      const lists = stores.items.get()
-      const { now, list } = stores.calls.get()
-      const calls = new Set(list.map((call) => call.key))
-      sleeping = new Set()
-      for (const [project, listed] of Object.entries(lists))
-        for (const one of listed) {
-          if (!one.snooze) continue
-          const key = `${project}:${one.id}`
-          const slept = `${key}@${one.snooze.at}`
-          if (asleep(one, now)) sleeping.add(slept)
-          else if (
-            was.has(slept) &&
-            !calls.has(key) &&
-            wokeAt(one, now) !== undefined
-          )
-            parts.run("notifications.tell", wokeTold(project as ProjectId, one))
-        }
-    }
-    look()
-    return stores.calls.subscribe(look)
-  }, [stores, parts])
+  // A Thread that woke by itself is told of once (ADR 0074, decision 7).
+  useWokeNote(stores, parts.run)
   // A new Problem of Banda's own tells too, silently (ADR 0039).
   useProblemNews(engine, notify, parts.run)
   // What the modules are given of it: the API alone.

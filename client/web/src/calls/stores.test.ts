@@ -1,7 +1,7 @@
 import type { ProjectId } from "@banda/contract"
 import type { Listed, Lists } from "@banda/ui/pane"
 import { afterEach, expect, test, vi } from "vitest"
-import { wokeTold } from "../sidebar/snoozed"
+import { wokeTold } from "./woke"
 import {
   callingIn,
   dropHost,
