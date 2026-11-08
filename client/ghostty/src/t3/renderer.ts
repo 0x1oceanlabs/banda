@@ -406,20 +406,52 @@ function moveDrawn(drawn: Drawn, rows: number): void {
 }
 
 /**
+ * Banda: whether T3's drawing of a row is the same pixels on every row, so a
+ * row's pixels are its own and move with it (ADR 0088, step P4). The
+ * drawing is in CSS pixels and rounds its edges onto screen pixels. That
+ * rounds alike on every row only where every edge it rounds is exact, a
+ * binary fraction: where a screen pixel is a whole number of 1024ths of a
+ * CSS pixel, at a scale of 1, 1.6 or 2, and the rows' height and origin are
+ * whole screen pixels. At 1.25 or 1.5 an edge half way between two screen
+ * pixels rounds up on one row and down on another, a half block a pixel
+ * taller there, and an edge on a screen pixel's lands a hair past it, so a
+ * cursor's outline or a clear leaves 1 in 255 on the row beside it until
+ * that row is drawn again. The pixel fuzz finds both
+ * (`tools/pixel-fuzz`).
+ */
+export function rowsDrawAlike(ratio: number, height: number, originY: number): boolean {
+  const perPixel = 1024 / ratio;
+  return (
+    Number.isInteger(perPixel) &&
+    // Read as a double, a scale such as 1.6 is a hair over what it is, so an
+    // edge half way between two screen pixels rounds up on every row. Where
+    // it is a hair under, that holds only while the hair is small enough,
+    // so those are left out, 4/3 among them. Compared exactly, as integers.
+    BigInt(ratio * 2 ** 64) * BigInt(perPixel) >= 1024n << 64n &&
+    Number.isInteger(height * 1024) &&
+    Number.isInteger(originY * 1024) &&
+    Number.isInteger(height * ratio) &&
+    Number.isInteger(originY * ratio)
+  );
+}
+
+/**
  * Banda: draws a terminal's snapshots on its canvas, and keeps what each of
  * the canvas's rows shows, so a frame draws only the rows that differ from
  * it, and a screen that scrolled moves its pixels by the rows it scrolled
  * and draws only the rows that came in (ADR 0088, step P4).
  *
- * That holds because a row's pixels are those of its cells, its cursor and
- * its part of a hovered link, alone, at any scale: its text is clipped to
- * it, every other glyph and line stays in its cell, and a row starts on a
- * screen pixel's edge and is whole ones tall. So a row equal to the one
- * drawn, or to one drawn some rows away and moved here, needs no drawing.
- * A diagonal's ends stand a little past its row (`drawsPastRow`), and so may
- * the glyph a block cursor draws: while the canvas may show one, it draws as
- * T3's renderer did, the rows libghostty-vt marks dirty and the cursor's,
- * until a frame draws every row and none is left.
+ * That holds where a row's pixels are those of its cells, its cursor and
+ * its part of a hovered link, alone, and the same on every row
+ * (`rowsDrawAlike`): its text is clipped to it, every other glyph and line
+ * stays in its cell, and a row starts on a screen pixel's edge and is whole
+ * ones tall. So a row equal to the one drawn, or to one drawn some rows
+ * away and moved here, needs no drawing. A diagonal's ends stand a little
+ * past its row (`drawsPastRow`), and so may the glyph a block cursor draws:
+ * while the canvas may show one, it draws as T3's renderer did, the rows
+ * libghostty-vt marks dirty and the cursor's, until a frame draws every row
+ * and none is left. At a scale where rows do not draw alike it always
+ * draws as T3's did, so its pixels are T3's there too.
  */
 export class GhosttyRenderer {
   private drawn: Drawn | null = null;
@@ -429,6 +461,8 @@ export class GhosttyRenderer {
   private bleeding = false;
   /** The padding above and below the rows may show one; only a full frame clears it. */
   private stained = false;
+  /** Rows draw alike at this scale, row height and origin (`rowsDrawAlike`). */
+  private alike = false;
 
   /** The canvas was cleared, or shows what this did not draw. */
   forget(): void {
@@ -473,8 +507,9 @@ export class GhosttyRenderer {
     let drawn = this.drawn;
     if (drawn === null || drawn.key !== key) {
       drawn = this.drawn = drawnOf(key, grid.cols, grid.rows);
+      this.alike = rowsDrawAlike(frame.ratio, frame.metrics.height, frame.originY);
       this.drawEvery(frame, drawn, cursor, bleeds);
-    } else if (this.bleeding || bleeds) {
+    } else if (!this.alike || this.bleeding || bleeds) {
       if (options.forceFull) this.drawEvery(frame, drawn, cursor, bleeds);
       else this.drawAsT3(frame, drawn, cursor, bleeds);
     } else {
