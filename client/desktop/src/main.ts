@@ -409,6 +409,7 @@ async function ready(): Promise<void> {
     // The other machines' engines, through ssh (hosts.ts, ADR 0081).
     hosts: { current: [none, () => Hosts.use((hosts) => hosts.current)] },
     hostEngine: [text, ([name]) => Hosts.use((hosts) => hosts.address(name))],
+    hostStart: [text, ([name]) => Hosts.use((hosts) => hosts.start(name))],
     look: {
       current: [
         none,

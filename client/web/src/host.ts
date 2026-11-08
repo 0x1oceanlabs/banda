@@ -76,9 +76,9 @@ export type Note = { version: string; text: string }
  * decision 4; `hosts.toml`): starting; waiting for the Person to sign in
  * to Tailscale at `url`; live, with its build and this window's own
  * (`own`), which may differ; away, and tried again soon; stopped as asked
- * there, and tried again later or when its address is asked for; or
- * refused, and not tried again. `why` is the window's words, never what
- * the other machine said.
+ * there, and started again only when the page asks (`hostStart`); or
+ * refused, and tried again every ten minutes or when the page asks. `why`
+ * is the window's words, never what the other machine said.
  */
 export type HostState = { name: string } & (
   | { state: "connecting" }
@@ -150,9 +150,12 @@ export const BRIDGE = bridge({
     listen: push<HostState[]>(),
   },
   /** Where host `name`'s engine listens, through the window's forward:
-   * it waits while the host connects, and fails for one refused or not
-   * in `hosts.toml`. */
+   * it waits while the host connects or is stopped, tries a refused one
+   * again, and fails for one refused or not in `hosts.toml`. */
   hostEngine: invoke<[name: string], Address>(),
+  /** Starts host `name` again when its engine is stopped there or it is
+   * refused; fails for one not in `hosts.toml`. */
+  hostStart: invoke<[name: string]>(),
   /** `banda look --follow --with-parent`, as the desktop hears it. */
   look: {
     /** The last look; none before the first. */

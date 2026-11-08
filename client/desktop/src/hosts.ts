@@ -18,11 +18,14 @@
  * problems ever reach these engines, so what one of them asks of a window
  * stays on its machine.
  *
- * What the other machine says is not trusted: its stderr is logged cut
- * short, a few lines a minute, and the page gets only the window's own
- * words, and Tailscale's sign-in link once checked. An engine that stops
- * there as asked leaves this Banda running. Quitting Banda ends both ssh;
- * the engine there runs on, as that machine's service.
+ * What the other machine says is not trusted: each line it prints is
+ * read only up to 4 KiB, its stderr is logged cut short, a few lines a
+ * minute, and the page gets only the window's own words, and Tailscale's
+ * sign-in link once checked. An engine that stops there as asked leaves
+ * this Banda running, and is started again only when the page asks. A
+ * refused host is tried again every ten minutes, or when the page asks.
+ * Quitting Banda ends both ssh; the engine there runs on, as that
+ * machine's service.
  */
 import { createConnection, createServer, type AddressInfo } from "node:net"
 import { readdirSync, readFileSync, readlinkSync } from "node:fs"
@@ -36,6 +39,7 @@ import {
   Context,
   Deferred,
   Effect,
+  Fiber,
   Layer,
   Option,
   Schema,
@@ -44,16 +48,16 @@ import {
 } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { channel } from "./channel"
-import { command, lines } from "./child"
+import { command } from "./child"
 import { Program, versionOf } from "./program"
 
 /** One host of `hosts.toml`: its name in Banda, where ssh goes, and the
- * `banda` it runs there. The shape stays for `banda --host` (ADR 0081,
- * decision 13). */
+ * `banda` it runs there, or none to find this build's own there. The
+ * shape stays for `banda --host` (ADR 0081, decision 13). */
 type Entry = {
   readonly name: string
   readonly ssh: string
-  readonly banda: string
+  readonly banda?: string
 }
 
 /** A host's name: plain, and none of the names Banda keeps for its own. */
@@ -68,12 +72,9 @@ const DESTINATION = /^(?!-)[A-Za-z0-9._@:[\]/-]+$/
 const BANDA = /^(?:\/|~\/)[A-Za-z0-9._/~-]+$/
 
 /** The good hosts of `hosts.toml`'s `text`, and why each other one is
- * refused. A host with no `banda` runs this build's own there:
- * `banda-dev` for Banda Dev, found on that machine's PATH. */
-export function hostsOf(
-  text: string,
-  banda: string = channel.folder
-): { hosts: Entry[]; refused: string[] } {
+ * refused. A host with no `banda` runs this build's own there, as the
+ * follower finds it (`remoteCommand`). */
+export function hostsOf(text: string): { hosts: Entry[]; refused: string[] } {
   let table: Record<string, unknown>
   try {
     table = parse(text)
@@ -91,8 +92,8 @@ export function hostsOf(
     const why = refusalOf(entry, hosts)
     if (why) refused.push(`host ${at + 1}: ${why}; it is left out`)
     else {
-      const { name, ssh, banda: there } = entry as Record<string, string>
-      hosts.push({ name, ssh, banda: there ?? banda })
+      const { name, ssh, banda } = entry as Record<string, string>
+      hosts.push({ name, ssh, banda })
     }
   })
   return { hosts, refused }
@@ -158,12 +159,36 @@ const PLAIN_SSH = [
   "ControlMaster=no",
 ]
 
+/** What a shell exits with when it finds no program to run. */
+const NOT_FOUND = 127
+
+/** This build's names, which the follower looks for there: its program
+ * on PATH and its data folder (`banda-dev`), and its app (`Banda Dev`). */
+type Own = { readonly folder: string; readonly name: string }
+
 /** What the follower runs there, through `sh` whatever the login shell
  * is: `banda start --with-parent`, with the session's runtime folder set
  * when ssh set none, so systemd's user manager answers. `banda` is plain
- * (`BANDA`), so it goes in as it is, and `~/` is home there. */
-export const remoteCommand = (banda: string) =>
-  `sh -c 'exec env XDG_RUNTIME_DIR="\${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" ${banda} start --with-parent'`
+ * (`BANDA`), so it goes in as it is, and `~/` is home there. With no
+ * `banda`, it runs the first of this build's own it finds: on PATH, the
+ * newest copy an AppImage keeps in its data folder (program.ts), or
+ * macOS's app; with none, it exits 127. `own`'s names are channel.ts's,
+ * in letters, digits, spaces and -. */
+export const remoteCommand = (
+  banda: string | undefined,
+  own: Own = channel
+) => {
+  const start = `exec env XDG_RUNTIME_DIR="\${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"`
+  if (banda !== undefined)
+    return `sh -c '${start} ${banda} start --with-parent'`
+  const found = [
+    `b=$(command -v ${own.folder}) || b=$(ls -1d "\${XDG_DATA_HOME:-$HOME/.local/share}"/${own.folder}/engine/*/banda 2>/dev/null | sort -V | tail -n 1)`,
+    `[ -x "$b" ] || b="/Applications/${own.name}.app/Contents/Resources/banda"`,
+    `[ -x "$b" ] || { echo "no ${own.name} here" >&2; exit ${NOT_FOUND}; }`,
+    `${start} "$b" start --with-parent`,
+  ]
+  return `sh -c '${found.join("; ")}'`
+}
 
 /** The follower's arguments: no forward of the config's either. */
 export const followerArgs = (host: Entry) => [
@@ -200,6 +225,10 @@ export const forwardsIn = (said: string) =>
       ["localforward", "remoteforward", "dynamicforward"].includes(key)
     )
 
+/** A line ssh printed as the forward could not listen on this machine's
+ * port: another program holds it. */
+const NO_LISTEN = /^bind \[127\.0\.0\.1\]:\d+: |cannot listen to port: \d+$/
+
 /** Tailscale's sign-in link in a line ssh printed, as Tailscale SSH's
  * check mode prints it and waits; no other link, nor one inside another. */
 export function signInOf(line: string): string | undefined {
@@ -215,6 +244,49 @@ export function signInOf(line: string): string | undefined {
     !url.password
     ? found
     : undefined
+}
+
+/** How many bytes of a line from ssh are read; the rest of a longer line
+ * is dropped, so the other machine cannot make the window keep a line
+ * with no end. */
+const LINE_BYTES = 4096
+
+/** `bytes` line by line, each cut at `most` bytes, as `Stream.splitLines`
+ * would split them with no end to a line. */
+export const linesOf = <E, R>(
+  bytes: Stream.Stream<Uint8Array, E, R>,
+  most = LINE_BYTES
+) => {
+  const decoder = new TextDecoder()
+  const text = (parts: Uint8Array[]) =>
+    decoder.decode(Buffer.concat(parts)).replace(/\r$/, "")
+  return bytes.pipe(
+    Stream.mapAccum(
+      () => ({ parts: [] as Uint8Array[], size: 0 }),
+      (line, chunk) => {
+        const said: string[] = []
+        let from = 0
+        while (from <= chunk.length) {
+          const end = chunk.indexOf(10, from)
+          const piece = chunk.subarray(from, end < 0 ? chunk.length : end)
+          const room = most - line.size
+          if (room > 0 && piece.length > 0) {
+            // A copy: a view keeps its whole chunk, so many short pieces
+            // of long chunks would hold far more than `most` bytes.
+            line.parts.push(new Uint8Array(piece.subarray(0, room)))
+            line.size += Math.min(room, piece.length)
+          }
+          if (end < 0) break
+          said.push(text(line.parts))
+          line.parts = []
+          line.size = 0
+          from = end + 1
+        }
+        return [line, said] as const
+      },
+      { onHalt: (line) => (line.size > 0 ? [text(line.parts)] : []) }
+    )
+  )
 }
 
 /** A line from the other machine as the log takes it: no control
@@ -266,8 +338,8 @@ export type Times = {
    * and is the first again after a host was live. */
   first: number
   longest: number
-  /** After the engine there stopped as asked. */
-  stopped: number
+  /** After the host was refused, before it is tried again. */
+  refused: number
   /** For the first line, and for the forward to answer. */
   answer: number
   /** For the Person to sign in to Tailscale, from its link. */
@@ -277,7 +349,7 @@ export type Times = {
 const TIMES: Times = {
   first: 2_000,
   longest: 60_000,
-  stopped: 5 * 60_000,
+  refused: 10 * 60_000,
   answer: 60_000,
   signin: 10 * 60_000,
 }
@@ -292,11 +364,15 @@ const LINES_A_MINUTE = 20
 type Without<T> = T extends unknown ? Omit<T, "name"> : never
 type Link = Without<HostState>
 
-/** A host as main keeps it: its state, and its address while live. */
+/** A host as main keeps it: its state, its address while live, which go
+ * at it this is, and what starts the next go at once while it is
+ * stopped or refused. */
 type Kept = {
   readonly name: string
   readonly link: Link
   readonly address?: Address
+  readonly go: number
+  readonly next?: Deferred.Deferred<void>
 }
 
 /** How one go at a host ended, and whether it was live meanwhile. */
@@ -323,9 +399,13 @@ export class Hosts extends Context.Service<
     /** The hosts, now and each time one changes. */
     readonly changes: Stream.Stream<HostState[]>
     /** Where host `name`'s engine listens, through the forward: it waits
-     * while the host connects, and asks again at once for one stopped
-     * there; it fails for one refused, or not in `hosts.toml`. */
+     * while the host connects, and while its engine is stopped there, and
+     * tries a refused one again at once; it fails for one refused, or not
+     * in `hosts.toml`. */
     readonly address: (name: string) => Effect.Effect<Address, Refused>
+    /** Starts host `name` again at once when its engine is stopped there
+     * or it is refused; it fails for one not in `hosts.toml`. */
+    readonly start: (name: string) => Effect.Effect<void, Refused>
   }
 >()("banda/Hosts") {
   /** The hosts of `file`, each run by ssh from `env`'s PATH, or the
@@ -342,7 +422,11 @@ export class Hosts extends Context.Service<
         for (const why of refused)
           yield* Console.error(`banda: ${file}: ${why}`)
         const all = yield* SubscriptionRef.make<readonly Kept[]>(
-          hosts.map(({ name }) => ({ name, link: { state: "connecting" } }))
+          hosts.map(({ name }) => ({
+            name,
+            link: { state: "connecting" },
+            go: 0,
+          }))
         )
         const own = yield* Effect.cached(
           program.path.pipe(
@@ -355,40 +439,56 @@ export class Hosts extends Context.Service<
             )
           )
         )
-        /** What ends the wait of each host stopped there: asking. */
-        const resting = new Map<string, Deferred.Deferred<void>>()
         const run = { spawner, env, times, own }
         for (const host of hosts) {
-          const set = (link: Link, address?: Address) =>
+          const change = (to: (one: Kept) => Kept) =>
             SubscriptionRef.update(all, (list) =>
-              list.map((one) =>
-                one.name === host.name ? { name: one.name, link, address } : one
-              )
+              list.map((one) => (one.name === host.name ? to(one) : one))
             )
-          yield* Effect.forkScoped(keep(host, set, resting, run))
+          const tell: Tell = {
+            set: (link, address) =>
+              change((one) => ({ ...one, link, address })),
+            begin: (next) =>
+              change((one) => ({
+                name: one.name,
+                link: { state: "connecting" },
+                go: one.go + 1,
+                next,
+              })),
+          }
+          yield* Effect.forkScoped(keep(host, tell, run))
         }
         const seen = (list: readonly Kept[]): HostState[] =>
           list.map(({ name, link }) => ({ name, ...link }))
+        /** Host `name` as it is now, and its next go started at once when
+         * it waits in one of `states`. */
+        const wake = (name: string, states: Link["state"][]) =>
+          Effect.gen(function* () {
+            const kept = (yield* SubscriptionRef.get(all)).find(
+              (one) => one.name === name
+            )
+            if (!kept)
+              return yield* new Refused({
+                message: `There is no host ${JSON.stringify(name)} in hosts.toml.`,
+              })
+            if (kept.next && states.includes(kept.link.state))
+              yield* Deferred.succeed(kept.next, undefined)
+            return kept
+          })
         return {
           current: Effect.map(SubscriptionRef.get(all), seen),
           changes: SubscriptionRef.changes(all).pipe(Stream.map(seen)),
           address: (name: string) =>
             Effect.gen(function* () {
-              const kept = (yield* SubscriptionRef.get(all)).find(
-                (one) => one.name === name
-              )
-              if (!kept)
-                return yield* new Refused({
-                  message: `There is no host ${JSON.stringify(name)} in hosts.toml.`,
-                })
-              const rest = resting.get(name)
-              if (rest && kept.link.state === "stopped")
-                yield* Deferred.succeed(rest, undefined)
+              const kept = yield* wake(name, ["refused"])
+              // A refusal from the go that was asked past does not count.
+              const past = kept.link.state === "refused" ? kept.go : -1
               const found = yield* SubscriptionRef.changes(all).pipe(
                 Stream.map((list) => list.find((one) => one.name === name)),
                 Stream.filter(
                   (one) =>
-                    one?.address !== undefined || one?.link.state === "refused"
+                    one?.address !== undefined ||
+                    (one?.link.state === "refused" && one.go > past)
                 ),
                 Stream.runHead
               )
@@ -398,9 +498,18 @@ export class Hosts extends Context.Service<
                 message: `${name}: ${one?.link.state === "refused" ? one.link.why : "it is gone"}`,
               })
             }),
+          start: (name: string) =>
+            Effect.asVoid(wake(name, ["stopped", "refused"])),
         }
       })
     )
+}
+
+/** How a go tells the host's state: `set` it, or `begin` a go, which
+ * `next` ends the wait before. */
+type Tell = {
+  readonly set: (link: Link, address?: Address) => Effect.Effect<void>
+  readonly begin: (next: Deferred.Deferred<void>) => Effect.Effect<void>
 }
 
 type Run = {
@@ -411,24 +520,21 @@ type Run = {
 }
 
 /** Keeps `host` reached for good: a go, and after one that ended, another
- * once the wait its end calls for is over. A refused host is left. */
-const keep = (
-  host: Entry,
-  set: (link: Link, address?: Address) => Effect.Effect<void>,
-  resting: Map<string, Deferred.Deferred<void>>,
-  run: Run
-) =>
+ * once the wait its end calls for is over. A host stopped there waits for
+ * the page to ask (`start`): Banda never starts an engine the Person
+ * stopped. A refused one is tried again after a long wait, or as the page
+ * asks. */
+const keep = (host: Entry, { set, begin }: Tell, run: Run) =>
   Effect.gen(function* () {
     const { times } = run
     const told = new Set<string>()
     const said = heard(host.name)
     let wait = times.first
     while (true) {
-      yield* set({ state: "connecting" })
       // Made before the go, so it is there as soon as the host shows
-      // stopped.
-      const asked = yield* Deferred.make<void>()
-      resting.set(host.name, asked)
+      // stopped or refused.
+      const next = yield* Deferred.make<void>()
+      yield* begin(next)
       const ended = yield* Effect.scoped(
         once(host, set, said, told, run).pipe(
           // Said before the scope closes, as it ends the follower; a live
@@ -437,17 +543,21 @@ const keep = (
         )
       )
       if (ended.state === "refused") {
-        yield* Console.error(`banda: ${host.name} is refused: ${ended.why}`)
-        return
+        yield* Console.error(
+          `banda: ${host.name} is refused: ${ended.why}; Banda tries again in ${times.refused} ms, or when asked`
+        )
+        yield* Effect.raceFirst(
+          Effect.sleep(times.refused),
+          Deferred.await(next)
+        )
+        wait = times.first
+        continue
       }
       if (ended.state === "stopped") {
         yield* Console.error(
-          `banda: ${host.name}'s engine stopped as asked; Banda tries again in ${times.stopped} ms, or when asked`
+          `banda: ${host.name}'s engine stopped as asked; Banda starts it again when asked`
         )
-        yield* Effect.raceFirst(
-          Effect.sleep(times.stopped),
-          Deferred.await(asked)
-        )
+        yield* Deferred.await(next)
         wait = times.first
         continue
       }
@@ -477,15 +587,15 @@ const once = (
     const kept: { secret?: string } = {}
     /** Logs `child`'s stderr, and takes Tailscale's sign-in link from it
      * while `asks` says ssh is not in yet: what comes after is the other
-     * machine's. */
+     * machine's. Each line goes to `also` too. Its fiber ends with the
+     * stderr. */
     const watch = (
       child: ChildProcessSpawner.ChildProcessHandle,
-      asks: () => boolean
+      asks: () => boolean,
+      also: (line: string) => void = () => {}
     ) =>
       Effect.forkScoped(
-        child.stderr.pipe(
-          Stream.decodeText,
-          Stream.splitLines,
+        linesOf(child.stderr).pipe(
           Stream.runForEach((line) =>
             Effect.gen(function* () {
               const url = asks() ? signInOf(line) : undefined
@@ -493,6 +603,7 @@ const once = (
                 signin ??= yield* Clock.currentTimeMillis
                 yield* set({ state: "signin", url })
               }
+              also(line)
               yield* said(line, kept.secret)
             })
           ),
@@ -534,7 +645,7 @@ const once = (
     yield* watch(follower, () => !Deferred.isDoneUnsafe(first))
     // Every line is read, so the pipe never fills; the first is the one.
     yield* Effect.forkScoped(
-      lines(follower).pipe(
+      linesOf(follower.stdout).pipe(
         Stream.runForEach((line) => Deferred.succeed(first, Option.some(line))),
         Effect.ignore,
         Effect.ensuring(Deferred.succeed(first, Option.none()))
@@ -570,12 +681,20 @@ const once = (
           const from = yield* freePort
           const forward = yield* ssh(forwardArgs(host, from, port))
           let listening = false
-          yield* watch(forward, () => !listening)
+          /** Whether ssh said it could not listen on the port. */
+          let taken = false
+          const reading = yield* watch(
+            forward,
+            () => !listening,
+            (line) => {
+              if (!listening && NO_LISTEN.test(line)) taken = true
+            }
+          )
           const answered = yield* Effect.raceAll([
             answers(host, from, Number(forward.pid), run).pipe(
               Effect.as("answers" as const)
             ),
-            exited(forward).pipe(Effect.as("forward" as const)),
+            exited(forward).pipe(Effect.map((code) => ({ forward: code }))),
             exited(follower).pipe(Effect.map((code) => endOf(host, code))),
             late.pipe(
               Effect.as(
@@ -583,7 +702,17 @@ const once = (
               )
             ),
           ])
-          if (answered === "forward") return "again"
+          if (answered !== "answers" && "forward" in answered) {
+            // What it said as it ended is all read first.
+            yield* Fiber.join(reading).pipe(Effect.timeoutOption("1 second"))
+            // Only a port another program holds is a reason for another;
+            // else the host waits as after any end.
+            return taken
+              ? "again"
+              : away(
+                  `the forward to ${host.ssh} ended before it answered (code ${answered.forward})`
+                )
+          }
           if (answered !== "answers") return answered
           listening = true
           const now = { build: buildOf(build), version: versionNamed(version) }
@@ -622,7 +751,7 @@ const once = (
       if (tries === PORT_TRIES)
         return away(`the forward to ${host.ssh} could not listen`)
       yield* Console.error(
-        `banda: the forward to ${host.ssh} ended before it answered; it tries another port`
+        `banda: the forward to ${host.ssh} could not listen on its port; it tries another`
       )
     }
   }).pipe(
@@ -634,12 +763,19 @@ const once = (
   )
 
 /** How the follower's end leaves the host: code 0 is its engine stopped
- * as asked, 255 ssh's own failure, none a signal. */
+ * as asked, 255 ssh's own failure, 127 no `banda` there, none a signal. */
 function endOf(host: Entry, code: number): Ended {
   if (code === 0) return { state: "stopped" }
   if (code === KILLED) return away(`ssh to ${host.ssh} was killed`)
   if (code === 255) return away(`ssh could not reach ${host.ssh}`)
-  if (code === 127) return away(`${host.banda} did not run on ${host.ssh}`)
+  if (code === NOT_FOUND)
+    return {
+      state: "refused",
+      why:
+        host.banda === undefined
+          ? `no ${channel.name} found on ${host.name}; set banda in hosts.toml`
+          : `no ${host.banda} on ${host.name}; check banda in hosts.toml`,
+    }
   return away(`the link to ${host.ssh} ended (code ${code})`)
 }
 
