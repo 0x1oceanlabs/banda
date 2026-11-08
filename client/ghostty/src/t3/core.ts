@@ -63,6 +63,16 @@ const RAW_CELL_DATA = {
   wide: 3,
 } as const;
 
+// GhosttyStyleColorTag, in style.h: a style that names no colour.
+const GHOSTTY_STYLE_COLOR_NONE = 0;
+
+// Banda: FNV-1a over a row's cells, for `GhosttyGrid.hashes`.
+const FNV_OFFSET = 0x811c9dc5;
+function hashCell(hash: number, ...values: number[]): number {
+  for (const value of values) hash = Math.imul(hash ^ value, 0x01000193) >>> 0;
+  return hash;
+}
+
 export const GHOSTTY_CELL_WIDE = {
   narrow: 0,
   wide: 1,
@@ -84,40 +94,103 @@ export interface GhosttyTheme {
   readonly selectionBackground?: string;
 }
 
-export interface GhosttyCell {
-  readonly text: string;
-  readonly wide: number;
-  readonly foreground: GhosttyColor;
-  readonly background: GhosttyColor;
-  readonly bold: boolean;
-  readonly italic: boolean;
-  readonly invisible: boolean;
-  readonly strikethrough: boolean;
-  readonly overline: boolean;
-  readonly underline: boolean;
-  readonly selected: boolean;
-}
+/**
+ * Banda: a cell's style, as bits of `GhosttyGrid.styles`, with its width
+ * (GHOSTTY_CELL_WIDE) in the bits from `wideShift` (ADR 0088, step P4).
+ */
+export const GHOSTTY_CELL = {
+  bold: 1,
+  italic: 2,
+  invisible: 4,
+  strikethrough: 8,
+  overline: 16,
+  underline: 32,
+  selected: 64,
+  /** Its text is more than one codepoint: `graphemes` holds all of it. */
+  grapheme: 128,
+  wideShift: 8,
+} as const;
 
-export interface GhosttyRow {
-  readonly cells: readonly GhosttyCell[];
-  readonly text: string;
-  readonly isWrapContinuation: boolean;
-  readonly wrapsToNext: boolean;
+/** Banda: a row's marks, as bits of `GhosttyGrid.lines`. */
+export const GHOSTTY_LINE = {
+  wrapContinuation: 1,
+  wrapsToNext: 2,
+  /** A glyph in it is drawn past its row's edges (`drawsPastRow`). */
+  bleeds: 4,
+} as const;
+
+/**
+ * Banda: the screen as typed arrays, one slot a cell, row after row, as the
+ * renderer reads it: no object a cell (ADR 0088, step P4). The core fills
+ * the rows libghostty-vt marks dirty, in place; the others keep what they
+ * held. A colour is 0xRRGGBB, resolved.
+ */
+export interface GhosttyGrid {
+  readonly cols: number;
+  readonly rows: number;
+  /** A cell's first codepoint; 0 where it has no text. */
+  readonly codes: Uint32Array;
+  readonly foregrounds: Uint32Array;
+  readonly backgrounds: Uint32Array;
+  /** A cell's GHOSTTY_CELL bits and width. */
+  readonly styles: Uint16Array;
+  /** The whole text of a cell marked `grapheme`; stale elsewhere. */
+  readonly graphemes: (string | undefined)[];
+  /** A row's GHOSTTY_LINE bits. */
+  readonly lines: Uint8Array;
+  /** A hash of a row's cells, to find a row that moved: equal rows hash
+   * the same, though rows that hash the same need not be equal. */
+  readonly hashes: Uint32Array;
 }
 
 export interface GhosttySnapshot {
   readonly cols: number;
   readonly rows: number;
-  readonly foreground: GhosttyColor;
-  readonly background: GhosttyColor;
-  readonly cursor: GhosttyColor;
+  /** Banda: 0xRRGGBB, as the grid's colours. */
+  readonly foreground: number;
+  readonly background: number;
+  readonly cursor: number;
   readonly cursorX: number;
   readonly cursorY: number;
   readonly cursorVisible: boolean;
   readonly cursorBlinking: boolean;
   readonly cursorStyle: number;
   readonly dirtyRows: ReadonlySet<number>;
-  readonly rowData: readonly GhosttyRow[];
+  readonly grid: GhosttyGrid;
+}
+
+/** Banda: a cell's width, GHOSTTY_CELL_WIDE's, as the grid holds it. */
+export function ghosttyCellWide(grid: GhosttyGrid, index: number): number {
+  return grid.styles[index]! >> GHOSTTY_CELL.wideShift;
+}
+
+/** Banda: a cell's text, as the grid holds it; "" where it has none. */
+export function ghosttyCellTextAt(grid: GhosttyGrid, index: number): string {
+  const code = grid.codes[index]!;
+  if (code === 0) return "";
+  if ((grid.styles[index]! & GHOSTTY_CELL.grapheme) !== 0) return grid.graphemes[index]!;
+  return String.fromCodePoint(code);
+}
+
+/** Banda: whether the glyph of `code` is drawn past its row's edges: the
+ * diagonals, whose strokes stand out a little at their ends. */
+export function drawsPastRow(code: number): boolean {
+  return code >= 0x2571 && code <= 0x2573;
+}
+
+function emptyGrid(cols: number, rows: number, foreground: number, background: number): GhosttyGrid {
+  const cells = cols * rows;
+  return {
+    cols,
+    rows,
+    codes: new Uint32Array(cells),
+    foregrounds: new Uint32Array(cells).fill(foreground),
+    backgrounds: new Uint32Array(cells).fill(background),
+    styles: new Uint16Array(cells),
+    graphemes: new Array<string | undefined>(cells),
+    lines: new Uint8Array(rows),
+    hashes: new Uint32Array(rows),
+  };
 }
 
 export interface GhosttySelectionRange {
@@ -163,17 +236,11 @@ export interface GhosttyMouseInput {
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
 
-function blend(foreground: GhosttyColor, background: GhosttyColor): GhosttyColor {
-  const channel = (front: number, back: number) => Math.floor((front * 155 + back * 100) / 255);
-  return {
-    r: channel(foreground.r, background.r),
-    g: channel(foreground.g, background.g),
-    b: channel(foreground.b, background.b),
-  };
-}
-
-function sameColor(left: GhosttyColor, right: GhosttyColor): boolean {
-  return left.r === right.r && left.g === right.g && left.b === right.b;
+// Banda: of colours as 0xRRGGBB.
+function blend(foreground: number, background: number): number {
+  const channel = (shift: number) =>
+    Math.floor((((foreground >> shift) & 0xff) * 155 + ((background >> shift) & 0xff) * 100) / 255);
+  return (channel(16) << 16) | (channel(8) << 8) | channel(0);
 }
 
 /** Bounds String.fromCodePoint arguments for cells with enormous combining-mark sequences. */
@@ -230,7 +297,7 @@ export class GhosttyTerminalCore {
   private style = 0;
   private cellQuery = 0;
   private scrollbar = 0;
-  private rows: GhosttyRow[] = [];
+  private grid: GhosttyGrid | null = null;
   private disposed = false;
   private keyboardLayoutMap: GhosttyKeyboardLayoutMap | undefined;
 
@@ -378,7 +445,7 @@ export class GhosttyTerminalCore {
     this.runtime.call("ghostty_terminal_reset", this.terminal);
     // RIS restores the built-in steady cursor; reapply the embedder default before replay.
     this.applyDefaultCursor();
-    this.rows = [];
+    this.grid = null;
     if (data.length === 0) return;
     const writer = this.ptyWriter;
     if (this.ptyWriterId !== 0) {
@@ -841,8 +908,8 @@ export class GhosttyTerminalCore {
     const cols = this.getU16(RENDER_DATA.cols);
     const rowCount = this.getU16(RENDER_DATA.rows);
     const dirty = this.getU32(RENDER_DATA.dirty);
-    const foreground = this.getColor(RENDER_DATA.foreground, { r: 229, g: 231, b: 235 });
-    const background = this.getColor(RENDER_DATA.background, { r: 0, g: 0, b: 0 });
+    const foreground = this.getColor(RENDER_DATA.foreground, 0xe5e7eb);
+    const background = this.getColor(RENDER_DATA.background, 0x000000);
     const cursorHasValue = this.getBool(RENDER_DATA.cursorHasValue);
     const cursor = cursorHasValue ? this.getColor(RENDER_DATA.cursor, foreground) : foreground;
     const cursorInViewport = this.getBool(RENDER_DATA.cursorInViewport);
@@ -850,14 +917,10 @@ export class GhosttyTerminalCore {
     const cursorX = cursorInViewport ? this.getU16(RENDER_DATA.cursorX) : -1;
     const cursorY = cursorInViewport ? this.getU16(RENDER_DATA.cursorY) : -1;
 
-    if (this.rows.length !== rowCount || this.rows.some((row) => row.cells.length !== cols)) {
-      this.rows = Array.from({ length: rowCount }, () => ({
-        cells: Array.from({ length: cols }, () => this.emptyCell(foreground, background)),
-        text: "",
-        isWrapContinuation: false,
-        wrapsToNext: false,
-      }));
+    if (this.grid?.cols !== cols || this.grid.rows !== rowCount) {
+      this.grid = emptyGrid(cols, rowCount, foreground, background);
     }
+    const grid = this.grid;
 
     const dirtyRows = new Set<number>();
     if (dirty !== 0) {
@@ -878,7 +941,7 @@ export class GhosttyTerminalCore {
       ) {
         const rowDirty = dirty === 2 || this.getRowBool(iterator, ROW_DATA.dirty);
         if (rowDirty) {
-          this.rows[rowIndex] = this.readRow(iterator, cols, foreground, background);
+          this.readRow(iterator, grid, rowIndex, foreground, background);
           dirtyRows.add(rowIndex);
           this.runtime.memoryBytes()[this.scratch] = 0;
           this.runtime.call("ghostty_render_state_row_set", iterator, 0, this.scratch);
@@ -901,7 +964,7 @@ export class GhosttyTerminalCore {
       cursorBlinking: this.getBool(RENDER_DATA.cursorBlinking),
       cursorStyle: this.getU32(RENDER_DATA.cursorStyle),
       dirtyRows,
-      rowData: this.rows,
+      grid,
     };
   }
 
@@ -1026,12 +1089,18 @@ export class GhosttyTerminalCore {
     return encoded;
   }
 
+  // Banda: into the grid's arrays at `row`, no object a cell (ADR 0088,
+  // step P4): T3's values, read with fewer calls. A cell with no background
+  // of its own stops the query before its foreground, which T3 then asked
+  // for alone; where its style names no foreground, it has the default one,
+  // so that call is made only for a foreground the style names.
   private readRow(
     iterator: number,
-    cols: number,
-    defaultForeground: GhosttyColor,
-    defaultBackground: GhosttyColor,
-  ): GhosttyRow {
+    grid: GhosttyGrid,
+    row: number,
+    defaultForeground: number,
+    defaultBackground: number,
+  ): void {
     this.assertSuccess(
       "ghostty_render_state_row_get(raw)",
       this.runtime.call("ghostty_render_state_row_get", iterator, ROW_DATA.raw, this.scratch),
@@ -1061,33 +1130,56 @@ export class GhosttyTerminalCore {
     );
     const cellsIterator = this.runtime.readPointer(this.rowCellsSlot);
     const { size: styleSize, fields: styleFields } = this.runtime.layout("GhosttyStyle");
+    const field = (name: string) => this.style + styleFields[name]!.offset;
+    const sizeAt = field("size");
+    const foregroundTagAt =
+      field("fg_color") + this.runtime.layout("GhosttyStyleColor").fields.tag!.offset;
+    const [boldAt, italicAt, faintAt, inverseAt, invisibleAt, strikethroughAt, overlineAt] = [
+      "bold",
+      "italic",
+      "faint",
+      "inverse",
+      "invisible",
+      "strikethrough",
+      "overline",
+    ].map(field) as [number, number, number, number, number, number, number];
+    const underlineAt = field("underline");
+    const query = this.cellQuery;
     const cellsNext = this.runtime.fn("ghostty_render_state_row_cells_next");
     const cellsGetMulti = this.runtime.fn("ghostty_render_state_row_cells_get_multi");
-    const cells: GhosttyCell[] = [];
-    while (cells.length < cols && cellsNext(cellsIterator) !== 0) {
+    const { cols, codes, foregrounds, backgrounds, styles, graphemes } = grid;
+    const first = row * cols;
+    let lines =
+      (isWrapContinuation ? GHOSTTY_LINE.wrapContinuation : 0) |
+      (wrapsToNext ? GHOSTTY_LINE.wrapsToNext : 0);
+    let hash = FNV_OFFSET;
+    let column = 0;
+    let previousText = false;
+    while (column < cols && cellsNext(cellsIterator) !== 0) {
       this.runtime.memoryBytes().fill(0, this.style, this.style + styleSize);
-      this.runtime.setField(this.style, "GhosttyStyle", "size", styleSize);
+      this.runtime.memoryDataView().setUint32(sizeAt, styleSize, true);
       const result = cellsGetMulti(
         cellsIterator,
         5,
-        this.cellQuery + CELL_QUERY.keys,
-        this.cellQuery + CELL_QUERY.values,
-        this.cellQuery + CELL_QUERY.written,
+        query + CELL_QUERY.keys,
+        query + CELL_QUERY.values,
+        query + CELL_QUERY.written,
       );
-      const queryView = this.runtime.memoryDataView();
-      const written = queryView.getUint32(this.cellQuery + CELL_QUERY.written, true);
+      let view = this.runtime.memoryDataView();
+      const written = view.getUint32(query + CELL_QUERY.written, true);
       if (written < 3) this.assertSuccess("ghostty_render_state_row_cells_get_multi", result);
-      const graphemeLength = queryView.getUint32(this.cellQuery + CELL_QUERY.graphemesLength, true);
-      const selected = queryView.getUint8(this.cellQuery + CELL_QUERY.selected) !== 0;
+      const graphemeLength = view.getUint32(query + CELL_QUERY.graphemesLength, true);
+      const selected = view.getUint8(query + CELL_QUERY.selected) !== 0;
       let background =
-        written >= 4 ? this.readColor(this.cellQuery + CELL_QUERY.background) : defaultBackground;
+        written >= 4 ? this.readColor(query + CELL_QUERY.background) : defaultBackground;
       let foreground =
         written === 5
-          ? this.readColor(this.cellQuery + CELL_QUERY.foreground)
-          : written === 3
+          ? this.readColor(query + CELL_QUERY.foreground)
+          : written === 3 && view.getUint32(foregroundTagAt, true) !== GHOSTTY_STYLE_COLOR_NONE
             ? this.getCellColor(cellsIterator, CELL_DATA.foreground, defaultForeground)
             : defaultForeground;
-      let text = "";
+      let code = 0;
+      let grapheme: string | undefined;
       if (graphemeLength > 0) {
         const bufferSize = graphemeLength * 4;
         if (bufferSize > this.graphemeCapacity) {
@@ -1106,12 +1198,17 @@ export class GhosttyTerminalCore {
           ) === GHOSTTY_SUCCESS
         ) {
           // Byte allocations need not be 4-byte aligned; use DataView instead of Uint32Array.
-          text = ghosttyCellText(this.runtime.memoryDataView(), graphemeLength, this.graphemes);
+          view = this.runtime.memoryDataView();
+          if (graphemeLength === 1) code = view.getUint32(this.graphemes, true);
+          else {
+            grapheme = ghosttyCellText(view, graphemeLength, this.graphemes);
+            code = grapheme.codePointAt(0)!;
+          }
         }
       }
       let wide = 0;
       // A wrap spacer in the final column can follow a spacer tail.
-      if (text.length === 0 && (cells.at(-1)?.text.length || cells.length === cols - 1)) {
+      if (code === 0 && (previousText || column === cols - 1)) {
         this.assertSuccess(
           "ghostty_render_state_row_cells_get(raw)",
           this.runtime.call(
@@ -1130,37 +1227,40 @@ export class GhosttyTerminalCore {
         wide = this.runtime.memoryDataView().getUint32(this.scratch + 8, true);
       }
       // Read the style after allocation and ABI calls, which can grow WASM memory.
-      const styleView = this.runtime.memoryDataView();
-      if (styleView.getUint8(this.style + styleFields.inverse!.offset) !== 0) {
-        [foreground, background] = [background, foreground];
-      }
-      if (styleView.getUint8(this.style + styleFields.faint!.offset) !== 0) {
-        foreground = blend(foreground, background);
-      }
-      cells.push({
-        text,
-        wide,
-        foreground,
-        background,
-        bold: styleView.getUint8(this.style + styleFields.bold!.offset) !== 0,
-        italic: styleView.getUint8(this.style + styleFields.italic!.offset) !== 0,
-        invisible: styleView.getUint8(this.style + styleFields.invisible!.offset) !== 0,
-        strikethrough: styleView.getUint8(this.style + styleFields.strikethrough!.offset) !== 0,
-        overline: styleView.getUint8(this.style + styleFields.overline!.offset) !== 0,
-        underline: styleView.getInt32(this.style + styleFields.underline!.offset, true) !== 0,
-        selected,
-      });
+      view = this.runtime.memoryDataView();
+      if (view.getUint8(inverseAt) !== 0) [foreground, background] = [background, foreground];
+      if (view.getUint8(faintAt) !== 0) foreground = blend(foreground, background);
+      const style =
+        (view.getUint8(boldAt) !== 0 ? GHOSTTY_CELL.bold : 0) |
+        (view.getUint8(italicAt) !== 0 ? GHOSTTY_CELL.italic : 0) |
+        (view.getUint8(invisibleAt) !== 0 ? GHOSTTY_CELL.invisible : 0) |
+        (view.getUint8(strikethroughAt) !== 0 ? GHOSTTY_CELL.strikethrough : 0) |
+        (view.getUint8(overlineAt) !== 0 ? GHOSTTY_CELL.overline : 0) |
+        (view.getInt32(underlineAt, true) !== 0 ? GHOSTTY_CELL.underline : 0) |
+        (selected ? GHOSTTY_CELL.selected : 0) |
+        (grapheme === undefined ? 0 : GHOSTTY_CELL.grapheme) |
+        (wide << GHOSTTY_CELL.wideShift);
+      const index = first + column;
+      codes[index] = code;
+      foregrounds[index] = foreground;
+      backgrounds[index] = background;
+      styles[index] = style;
+      if (grapheme !== undefined) graphemes[index] = grapheme;
+      else if (drawsPastRow(code)) lines |= GHOSTTY_LINE.bleeds;
+      hash = hashCell(hash, code, style, foreground, background);
+      previousText = code !== 0;
+      column += 1;
     }
-    while (cells.length < cols) cells.push(this.emptyCell(defaultForeground, defaultBackground));
-    return {
-      cells,
-      text: cells
-        .map((cell) => cell.text || " ")
-        .join("")
-        .trimEnd(),
-      isWrapContinuation,
-      wrapsToNext,
-    };
+    for (; column < cols; column += 1) {
+      const index = first + column;
+      codes[index] = 0;
+      foregrounds[index] = defaultForeground;
+      backgrounds[index] = defaultBackground;
+      styles[index] = 0;
+      hash = hashCell(hash, 0, 0, defaultForeground, defaultBackground);
+    }
+    grid.lines[row] = lines;
+    grid.hashes[row] = hash;
   }
 
   private gridRef(col: number, row: number, tag: 1 | 2 = 1): number {
@@ -1278,7 +1378,7 @@ export class GhosttyTerminalCore {
     return this.runtime.memoryBytes()[this.scratch] !== 0;
   }
 
-  private getColor(data: number, fallback: GhosttyColor): GhosttyColor {
+  private getColor(data: number, fallback: number): number {
     this.runtime.memoryBytes().fill(0, this.scratch, this.scratch + 3);
     const result = this.runtime.call(
       "ghostty_render_state_get",
@@ -1297,7 +1397,7 @@ export class GhosttyTerminalCore {
     );
   }
 
-  private getCellColor(iterator: number, data: number, fallback: GhosttyColor): GhosttyColor {
+  private getCellColor(iterator: number, data: number, fallback: number): number {
     this.runtime.memoryBytes().fill(0, this.scratch, this.scratch + 3);
     const result = this.runtime.call(
       "ghostty_render_state_row_cells_get",
@@ -1308,29 +1408,9 @@ export class GhosttyTerminalCore {
     return result === GHOSTTY_SUCCESS ? this.readColor(this.scratch) : fallback;
   }
 
-  private readColor(pointer: number): GhosttyColor {
+  private readColor(pointer: number): number {
     const view = this.runtime.memoryDataView();
-    return {
-      r: view.getUint8(pointer),
-      g: view.getUint8(pointer + 1),
-      b: view.getUint8(pointer + 2),
-    };
-  }
-
-  private emptyCell(foreground: GhosttyColor, background: GhosttyColor): GhosttyCell {
-    return {
-      text: "",
-      wide: 0,
-      foreground,
-      background,
-      bold: false,
-      italic: false,
-      invisible: false,
-      strikethrough: false,
-      overline: false,
-      underline: false,
-      selected: false,
-    };
+    return (view.getUint8(pointer) << 16) | (view.getUint8(pointer + 1) << 8) | view.getUint8(pointer + 2);
   }
 
   private assertSuccess(operation: string, result: number): void {
@@ -1342,6 +1422,3 @@ export class GhosttyTerminalCore {
   }
 }
 
-export function ghosttyColorsEqual(left: GhosttyColor, right: GhosttyColor): boolean {
-  return sameColor(left, right);
-}
