@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type { Engine, Fence, ProjectId, Status } from "@banda/contract"
 import {
   MACHINE_NAMED,
@@ -113,6 +113,20 @@ const SEEN = kept<Named>(
  */
 export function seenNamed(key: string): Named {
   return cleanNamed(SEEN.read()[key], key)
+}
+
+/**
+ * Machine `key` as this device last saw it (`seenNamed`), drawn again as
+ * it is seen anew; none for no key, as this machine's own Panes have. It
+ * opens no stream: the window follows each machine it reaches
+ * (`followNamed`), and this hears what that keeps.
+ */
+export function useSeenNamed(key: string | undefined): Named | undefined {
+  const said = SEEN.use()[key ?? ""]
+  return useMemo(
+    () => (key === undefined ? undefined : cleanNamed(said, key)),
+    [said, key]
+  )
 }
 
 /**

@@ -21,6 +21,7 @@ import {
 } from "@banda/ui/components/prompt-editor"
 import { RingMeter } from "@banda/ui/components/ring-meter"
 import { quoted } from "@banda/ui/lib/prompt"
+import { cn } from "@banda/ui/lib/utils"
 import { Spinner } from "@banda/ui/components/spinner"
 import {
   ArrowUpIcon,
@@ -67,13 +68,17 @@ import { COMPOSER } from "../scopes"
  * messages, after the last one that waits, which ↑ opens to edit; and
  * what is written waits as the Thread's draft. Comments on files' lines an
  * App puts in it wait above the text, each to take out, and go after the
- * text as the Agent reads them (ADR 0034, decision 9).
+ * text as the Agent reads them (ADR 0034, decision 9). On another
+ * machine's Thread it names that machine, and while it cannot reach it,
+ * Send waits and says why; what is written stays (ADR 0095, decision 7).
  */
 export function Composer({
   name,
   thread,
   history,
   placeholder,
+  machine,
+  held,
   plan,
   focused,
   busy,
@@ -105,6 +110,12 @@ export function Composer({
   /** What the empty box says, instead of asking to write to `name` or,
    * while a turn runs, to steer it. */
   placeholder?: string
+  /** The machine it writes to, by its name, when it is another machine's
+   * Thread; none for this machine's. */
+  machine?: string
+  /** Why Send waits, while the machine cannot be reached: Enter and the
+   * button send nothing, and what is written stays. */
+  held?: string
   /** Whether plan mode is on, where the Harness has one: Shift+Tab
    * switches it. */
   plan?: boolean
@@ -316,7 +327,12 @@ export function Composer({
   const written = trimmed > 0 || images.adding.length > 0
   // How far past the longest message a Harness takes it is, if it is.
   const over = trimmed - LONGEST
-  const ready = written && over <= 0 && !busy && !images.busy
+  const ready = sendable({
+    written,
+    over,
+    busy: busy || images.busy,
+    held,
+  })
   const send = async (steer: boolean) => {
     if (!ready) return
     // A message that is only `/plan` or `/default` switches plan mode.
@@ -400,7 +416,8 @@ export function Composer({
                 ref={field}
                 value={text}
                 placeholder={
-                  placeholder ?? says(name, steering, skills.length > 0)
+                  placeholder ??
+                  says(name, steering, skills.length > 0, machine)
                 }
                 skills={skillNames}
                 attributes={{
@@ -478,9 +495,13 @@ export function Composer({
               type="submit"
               size="icon-sm"
               // With nothing to send it is not faded but quiet (ADR 0031).
-              className="ml-1 rounded-full hover:bg-primary/90 disabled:bg-foreground/10 disabled:text-muted-foreground disabled:opacity-100"
+              // Held, it still takes the pointer, so its tooltip says why.
+              className={cn(
+                "ml-1 rounded-full hover:bg-primary/90 disabled:bg-foreground/10 disabled:text-muted-foreground disabled:opacity-100",
+                held !== undefined && "disabled:pointer-events-auto"
+              )}
               aria-label={look.label}
-              title={look.title?.(name, enter)}
+              title={held ?? look.title?.(name, enter)}
               disabled={!ready}
               onClick={(event) => {
                 // Ctrl (⌘ on a Mac) does the other thing, as with Enter.
@@ -591,6 +612,26 @@ function long(text: string): boolean {
 
 /** The longest message a Harness takes, as in T3 Code. */
 const LONGEST = 120_000
+
+/**
+ * Whether Enter and Send send the message now: something is `written`, no
+ * longer than a Harness takes (`over` it by none), with nothing on its way
+ * (`busy`); never while Send is `held`, when the machine it goes to cannot
+ * be reached, and the message waits as the draft.
+ */
+export function sendable({
+  written,
+  over,
+  busy,
+  held,
+}: {
+  written: boolean
+  over: number
+  busy: boolean
+  held?: string
+}): boolean {
+  return written && over <= 0 && !busy && held === undefined
+}
 
 /** What the primary button does with a message, and says so. */
 const PRIMARY: Record<
