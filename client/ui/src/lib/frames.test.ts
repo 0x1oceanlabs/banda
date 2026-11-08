@@ -42,14 +42,15 @@ test("the clock asks for a tick only when something does, and stops once nothing
   expect(time.asked()).toBe(0)
 })
 
-test("a tick runs the moves, then what reads after them, then the followers", async () => {
+test("a tick runs the moves, then what reads after them, then the followers, then what draws", async () => {
   const time = await clock()
   const ran: string[] = []
+  time.onDraw(() => ran.push("draws"))
   time.followMoves(() => ran.push("follows"))
   time.afterMoves(() => ran.push("reads"))
   time.onMove(() => ran.push("moves"))
   time.tick()
-  expect(ran).toEqual(["moves", "reads", "follows"])
+  expect(ran).toEqual(["moves", "reads", "follows", "draws"])
 })
 
 test("a follower runs in a tick something moved in, and asks for none", async () => {
@@ -131,25 +132,72 @@ test("a follower that runs first runs before the others, and they follow what it
   expect(time.asked()).toBe(0)
 })
 
-test("what is taken back runs not", async () => {
+test("a jump told once the last followers know whether they run is the next tick's", async () => {
+  const time = await clock()
+  const ran: string[] = []
+  time.followMoves(() => ran.push("page"))
+  let jumps = 1
+  const other = time.followMoves(() => {
+    ran.push("other")
+    if (jumps-- > 0) time.moved()
+  })
+  // Asked alone, it jumps: the page has not run, and runs in the next.
+  other.again()
+  time.tick()
+  expect(ran).toEqual(["other"])
+  expect(time.asked()).toBe(1)
+  time.tick()
+  expect(ran).toEqual(["other", "page", "other"])
+  expect(time.asked()).toBe(0)
+})
+
+test("what is taken back runs not, even in the tick it was to run in", async () => {
   const time = await clock()
   let ran = 0
   time.cancelFrame(time.onMove(() => (ran += 1)))
   time.cancelFrame(time.afterMoves(() => (ran += 1)))
+  time.cancelFrame(time.onDraw(() => (ran += 1)))
   time.tick()
   expect(ran).toBe(0)
   expect(time.asked()).toBe(0)
+  // A move takes back what was to read after it, and to draw.
+  const read = time.afterMoves(() => (ran += 1))
+  const draw = time.onDraw(() => (ran += 1))
+  time.onMove(() => {
+    time.cancelFrame(read)
+    time.cancelFrame(draw)
+  })
+  time.tick()
+  expect(ran).toBe(0)
 })
 
-test("a step that throws leaves the clock running", async () => {
+test("a run that throws is reported, and every other run of its tick runs", async () => {
   const time = await clock()
-  time.onMove(() => {
-    throw new Error("a broken step")
-  })
-  expect(() => time.tick()).toThrow("a broken step")
-  let ran = 0
-  time.afterMoves(() => (ran += 1))
+  const reported: unknown[] = []
+  vi.stubGlobal("reportError", (error: unknown) => reported.push(error))
+  const broken = (what: string) => () => {
+    throw new Error(what)
+  }
+  const ran: string[] = []
+  time.followMoves(broken("a broken overview"), { first: true })
+  time.followMoves(() => ran.push("follows"))
+  time.onMove(broken("a broken step"))
+  time.onMove(() => ran.push("moves"))
+  time.afterMoves(broken("a broken screen"))
+  time.afterMoves(() => ran.push("reads"))
+  time.onDraw(broken("a broken mark"))
+  time.onDraw(() => ran.push("draws"))
+  time.tick()
+  expect(ran).toEqual(["moves", "reads", "follows", "draws"])
+  expect(reported.map((error) => (error as Error).message)).toEqual([
+    "a broken step",
+    "a broken screen",
+    "a broken overview",
+    "a broken mark",
+  ])
+  // What asks next is heard.
+  time.onDraw(() => ran.push("again"))
   expect(time.asked()).toBe(1)
   time.tick()
-  expect(ran).toBe(1)
+  expect(ran.at(-1)).toBe("again")
 })

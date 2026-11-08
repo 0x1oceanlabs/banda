@@ -103,21 +103,28 @@ test("a Person browses in a Pane that keeps its page wherever it moves", async (
   await expect(bar).toHaveValue(address.replace("http://", ""))
   await expect.poll(() => inPages(app, "document.title")).toEqual(["Alpha"])
 
-  // The page lies over its slot, inside the tile.
-  const slot = alpha.locator("[data-holds]")
+  // The page lies over its slot, inside the tile: the one browser's, found
+  // by no role, as the overview hides its tile's from them.
+  const slot = page.locator("[data-holds]")
   const held = page.locator("[data-held-by]")
-  // Both are read each time: the tile may still be moving as it opens.
-  await expect
-    .poll(async () => {
-      const [box, under] = await Promise.all([
-        held.boundingBox(),
-        slot.boundingBox(),
-      ])
-      return box && under
-        ? Math.abs(box.x - under.x) + Math.abs(box.y - under.y)
-        : -1
-    })
-    .toBeLessThan(1)
+  /** The page lies over its slot, in place and size. Both are read each
+   * time: the tile may still be moving, as when it opens. */
+  const over = () =>
+    expect
+      .poll(async () => {
+        const [box, under] = await Promise.all([
+          held.boundingBox(),
+          slot.boundingBox(),
+        ])
+        return box && under
+          ? Math.abs(box.x - under.x) +
+              Math.abs(box.y - under.y) +
+              Math.abs(box.width - under.width) +
+              Math.abs(box.height - under.height)
+          : Infinity
+      })
+      .toBeLessThan(1)
+  await over()
 
   // It goes and comes back.
   await inPages(app, "document.querySelector('a').click()")
@@ -138,6 +145,41 @@ test("a Person browses in a Pane that keeps its page wherever it moves", async (
   await bar.press("Escape")
   await pressInPage(app, "Left", ["alt"])
   await expect(draft).toHaveAttribute("data-focused", "true")
+
+  // The page follows its slot wherever the window puts it, as no move of
+  // the Tiling does: the sidebar hides and shows, the window takes
+  // another size, the overview opens and closes.
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const left = async () => (await slot.boundingBox())?.x
+  const docked = await left()
+  await page.keyboard.press("Alt+KeyA")
+  await expect(sidebar).toBeHidden()
+  await expect.poll(left).not.toBe(docked)
+  await over()
+  await page.keyboard.press("Alt+KeyA")
+  await expect(sidebar).toBeVisible()
+  await over()
+  const size = async (width: number, height: number) => {
+    await app.evaluate(
+      ({ BrowserWindow }, [width, height]) =>
+        BrowserWindow.getAllWindows()[0]!.setContentSize(width, height),
+      [width, height]
+    )
+    await page.setViewportSize({ width, height })
+  }
+  await size(1000, 700)
+  await over()
+  await size(1280, 800)
+  await over()
+  const overview = page.getByRole("dialog", { name: "Overview" })
+  await page.keyboard.press("Alt+KeyO")
+  await expect(overview).toBeFocused()
+  await over()
+  await page.keyboard.press("Escape")
+  await expect(overview).toBeHidden()
+  await over()
+  await expect(draft).toHaveAttribute("data-focused", "true")
+
   await page.keyboard.press("Alt+ArrowRight")
   await expect(alpha).toHaveAttribute("data-focused", "true")
   await expect.poll(() => inPages(app, "document.hasFocus()")).toEqual([true])

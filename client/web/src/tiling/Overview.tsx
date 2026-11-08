@@ -20,7 +20,8 @@ import { labelOf, useSaid } from "../registry"
 import { workspaceTo } from "./arrange"
 import { ThreadMark } from "@banda/ui/components/banda-mark"
 import { moveOf, useLookColumns, useLookOverview } from "../look"
-import { followMoves, moved, Moving } from "../motion"
+import { Moving } from "../motion"
+import { followMoves, moved } from "@banda/ui/lib/frames"
 import { fit, ROW } from "./fit"
 import {
   drawnColumns,

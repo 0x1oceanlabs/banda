@@ -5,13 +5,7 @@
  * as niri's do.
  */
 import type { Move, Spring } from "@banda/contract/look"
-import {
-  afterMoves,
-  cancelFrame,
-  followMoves,
-  moved,
-  onMove,
-} from "@banda/ui/lib/frames"
+import { cancelFrame, moved, onMove } from "@banda/ui/lib/frames"
 
 /** Where a value is and how fast it goes, per second. */
 export interface State {
@@ -83,10 +77,6 @@ export interface Clock {
    * browser's page, catches up. */
   moved?: () => void
 }
-
-/** Takes back what `afterMoves` asked for. */
-export const cancelAfterMoves = cancelFrame
-export { afterMoves, followMoves, moved }
 
 const BROWSER: Clock = {
   frame: onMove,

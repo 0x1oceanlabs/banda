@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from "react"
-import { afterMoves } from "../lib/frames"
+import { onDraw } from "../lib/frames"
 import { cn } from "../lib/utils"
 import type { Listed } from "../pane"
 
@@ -665,9 +665,10 @@ function mix(a: Pose, b: Pose, m: number): Pose {
 
 const f = (n: number) => n.toFixed(2)
 
-// Every mark draws on the window's clock, after the moves (ADR 0088,
-// decision 3): one that moves asks for the next tick, and one at rest, out
-// of sight or still asks for none, so the clock stops while no mark moves.
+// Every mark draws on the window's clock, last in its tick (ADR 0088,
+// decision 3), so what reads the layout there reads before it: one that
+// moves asks for the next tick, and one at rest, out of sight or still
+// asks for none, so the clock stops while no mark moves.
 const marks = new Set<Animator>()
 let asked = 0
 function tick(now: number) {
@@ -679,7 +680,7 @@ function tick(now: number) {
 
 /** The marks draw in the next tick. */
 function wake() {
-  asked ||= afterMoves(tick)
+  asked ||= onDraw(tick)
 }
 
 let pointer: [number, number] | null = null
@@ -878,8 +879,10 @@ export class Animator {
   private fromAt = -Infinity
   private blend = 0.35
   private next = Infinity
-  /** What wakes the logo at rest at `next`, as the clock does not. */
+  /** What wakes the logo at rest at `next`, as the clock does not; and
+   * the `next` it was set for. */
   private timer: ReturnType<typeof setTimeout> | undefined
+  private timerAt = Infinity
   private last: Pose = { ...BASE, eyes: 0 }
   private settled = false
   private readonly context: Context = {
@@ -1045,12 +1048,21 @@ export class Animator {
     return this.settled ? this.sleep() : true
   }
 
-  /** At rest: no tick until the logo wakes at `next`, by a timer. */
+  /** At rest: no tick until the logo wakes at `next`, by a timer, set
+   * once for each `next`, however often other marks tick meanwhile. */
   private sleep(): false {
+    if (this.timer !== undefined && this.timerAt === this.next) return false
     clearTimeout(this.timer)
+    this.timer = undefined
+    this.timerAt = this.next
     if (this.next !== Infinity)
       this.timer = setTimeout(
-        wake,
+        () => {
+          // A tick's time is when its frame began, which may come before
+          // the timer: woken short of `next`, it sleeps again.
+          this.timer = undefined
+          wake()
+        },
         Math.max(0, this.next * 1000 - performance.now())
       )
     return false
