@@ -5627,6 +5627,14 @@ impl World {
     async fn changed(&self, thread: &Value) -> i64 {
         self.listed(thread).await.thread.updated_at
     }
+
+    /// When each Thread last changed, as the list says.
+    async fn every_changed(&self) -> BTreeMap<String, i64> {
+        let list = self.threads().await.threads;
+        let each = list.iter();
+        let each = each.map(|t| (t.thread.id.to_string(), t.thread.updated_at));
+        each.collect()
+    }
 }
 
 /// Waits into the next millisecond, so what happens next is later than
@@ -5817,13 +5825,7 @@ async fn a_window_moves_the_archives_it_kept_to_the_host_once() {
         .snooze(person, &sleeps, Some(in_an_hour()))
         .await
         .unwrap();
-    let changed: BTreeMap<String, i64> = {
-        let list = world.threads().await.threads;
-        let each = list
-            .iter()
-            .map(|t| (t.thread.id.to_string(), t.thread.updated_at));
-        each.collect()
-    };
+    let changed = world.every_changed().await;
     let nowhere = json!(banda_agents::model::ThreadId::new());
     // By ID only: the host stamps the moment (ADR 0096, decision 7).
     let marks = json!({ "archived": [
@@ -5855,10 +5857,7 @@ async fn a_window_moves_the_archives_it_kept_to_the_host_once() {
     assert!(listed.is_archived());
     assert_eq!(world.listed(&marked).await.archived.unwrap().at, marked_at);
     assert_eq!(world.listed(&sleeps).await.archived, None);
-    for listed in world.threads().await.threads {
-        let id = listed.thread.id.to_string();
-        assert_eq!(listed.thread.updated_at, changed[&id], "nothing moved");
-    }
+    assert_eq!(world.every_changed().await, changed, "nothing moved");
 
     // One fact, of no one Thread, says marks moved; the list reads again.
     let moved = world.facts("marks.moved").await;
@@ -5920,11 +5919,317 @@ async fn an_import_too_big_or_with_marks_this_host_does_not_know_is_refused() {
     let moved = world.call(person, "agents.import_marks", marks).await;
     assert_eq!(moved.unwrap(), json!({ "count": 1 }));
 
-    // A newer window's seen is refused, not dropped unread (ADR 0096,
-    // decision 8), so that window keeps it to send again.
+    // As many seen marks again, which a window keeps fewer of.
+    let seen = (0..=10_000).map(|_| {
+        let thread = banda_agents::model::ThreadId::new().to_string();
+        (thread, json!(TurnId::new()))
+    });
+    let marks = json!({ "seen": seen.collect::<serde_json::Map<_, _>>() });
+    let refused = world.call(person, "agents.import_marks", marks).await;
+    assert_eq!(refused.unwrap_err().code, Code::Invalid);
+
+    // A newer window's marks are refused, not dropped unread (ADR 0096,
+    // decision 8), so that window keeps them to send again.
     let (other, _) = world.finish(None, "hi there").await;
-    let marks = json!({ "archived": [other], "seen": {} });
+    let marks = json!({ "archived": [other], "pinned": [] });
     let refused = world.call(person, "agents.import_marks", marks).await;
     assert_eq!(refused.unwrap_err().code, Code::Invalid);
     assert_eq!(world.listed(&other).await.archived, None);
+}
+
+impl World {
+    /// `who` marks `thread` read: `turn` seen, or without it, its latest
+    /// that ended.
+    async fn read(
+        &self,
+        who: Participant,
+        thread: &Value,
+        turn: Option<&Value>,
+    ) -> Result<Value, banda_kernel::Refusal> {
+        let mut ask = json!({ "thread": thread });
+        if let Some(turn) = turn {
+            ask["turn"] = turn.clone();
+        }
+        self.call(who, "agents.read", ask).await
+    }
+
+    /// `who` marks `thread` unread.
+    async fn unread(
+        &self,
+        who: Participant,
+        thread: &Value,
+    ) -> Result<Value, banda_kernel::Refusal> {
+        self.call(who, "agents.unread", json!({ "thread": thread }))
+            .await
+    }
+
+    /// The turn of `thread` its Person saw last, as the list says.
+    async fn seen(&self, thread: &Value) -> Option<Value> {
+        self.listed(thread).await.seen.map(|turn| json!(turn))
+    }
+
+    /// The turn at `index` of `thread`, the first first.
+    async fn turn_at(&self, thread: &Value, index: usize) -> Value {
+        json!(self.thread(thread).await.turns[index].id)
+    }
+
+    /// A window moves the marks it kept: `seen`, each Thread's turn, and
+    /// `archived`. Says how many moved.
+    async fn import(&self, seen: &[(&Value, &Value)], archived: &[&Value]) -> Value {
+        let seen = seen.iter().map(|(thread, turn)| {
+            let thread = thread.as_str().unwrap().to_owned();
+            (thread, (*turn).clone())
+        });
+        let seen = seen.collect::<serde_json::Map<_, _>>();
+        let marks = json!({ "seen": seen, "archived": archived });
+        let moved = self.call(self.person(), "agents.import_marks", marks);
+        moved.await.unwrap()["count"].clone()
+    }
+}
+
+#[tokio::test]
+async fn a_person_marks_a_thread_read_forward_only_and_nothing_moves_in_the_list() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let person = world.person();
+    let (thread, _) = world.finish(None, "hello").await;
+    let (_, view) = world.finish(Some(&thread), "hello again").await;
+    let (first, second) = (json!(view.turns[0].id), json!(view.turns[1].id));
+    let (other, _) = world.finish(None, "hi there").await;
+    let changed = world.changed(&thread).await;
+    let order = |list: ThreadList| list.threads.iter().map(|t| t.thread.id).collect::<Vec<_>>();
+    let before = order(world.threads().await);
+    assert_eq!(world.seen(&thread).await, None, "none seen yet");
+
+    world.read(person, &thread, Some(&first)).await.unwrap();
+    assert_eq!(world.seen(&thread).await, Some(first.clone()));
+    let seen = world.facts("thread.seen").await;
+    assert_eq!(seen.len(), 1);
+    assert_eq!(seen[0].payload, json!({ "thread": thread, "turn": first }));
+    assert_eq!(seen[0].author, person);
+    world.read(person, &thread, Some(&second)).await.unwrap();
+    assert_eq!(world.seen(&thread).await, Some(second.clone()));
+
+    // The turn it holds, an older one, one of another Thread and one that
+    // is no turn at all change nothing, and nothing is written.
+    let elsewhere = world.turn_at(&other, 0).await;
+    let nowhere = json!(TurnId::new());
+    for turn in [&second, &first, &elsewhere, &nowhere] {
+        world.read(person, &thread, Some(turn)).await.unwrap();
+    }
+    assert_eq!(world.seen(&thread).await, Some(second.clone()));
+    assert_eq!(world.seen(&other).await, None);
+    assert_eq!(world.facts("thread.seen").await.len(), 2);
+    assert_eq!(
+        world.changed(&thread).await,
+        changed,
+        "a mark moves nothing"
+    );
+    assert_eq!(order(world.threads().await), before);
+
+    // An Agent reads it in its `threads`, as the window does.
+    let agent = agent_of(&view);
+    let listed = world.call(agent, "agents.threads", json!({})).await;
+    let listed = listed.unwrap();
+    let theirs = listed["threads"].as_array().unwrap();
+    let theirs = theirs.iter().find(|t| t["id"] == thread).unwrap();
+    assert_eq!(theirs["seen"], second);
+
+    // Only a Person marks a Thread read or unread.
+    let refused = world.read(agent, &thread, None).await.unwrap_err();
+    assert_eq!(refused.code, Code::Forbidden, "{refused:?}");
+    let refused = world.unread(agent, &thread).await.unwrap_err();
+    assert_eq!(refused.code, Code::Forbidden, "{refused:?}");
+    assert_eq!(world.seen(&thread).await, Some(second.clone()));
+    let no_thread = json!(banda_agents::model::ThreadId::new());
+    let refused = world.read(person, &no_thread, None).await.unwrap_err();
+    assert_eq!(refused.code, Code::NotFound);
+    let refused = world.unread(person, &no_thread).await.unwrap_err();
+    assert_eq!(refused.code, Code::NotFound);
+
+    // Unread, it has none; unread again, nothing is written.
+    world.unread(person, &thread).await.unwrap();
+    assert_eq!(world.seen(&thread).await, None);
+    let unseen = world.facts("thread.unseen").await;
+    assert_eq!(unseen.len(), 1);
+    assert_eq!(unseen[0].payload, json!({ "thread": thread }));
+    world.unread(person, &thread).await.unwrap();
+    assert_eq!(world.facts("thread.unseen").await.len(), 1);
+    assert_eq!(world.changed(&thread).await, changed);
+
+    // Read with no turn, its latest that ended is seen.
+    world.read(person, &thread, None).await.unwrap();
+    assert_eq!(world.seen(&thread).await, Some(second));
+    assert_eq!(order(world.threads().await), before);
+}
+
+#[tokio::test]
+async fn a_turn_that_has_not_ended_is_never_seen() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let person = world.person();
+    let works = world.send(None, "wait for me").await;
+    let thread = &works["thread"];
+    world
+        .until(thread, |v| {
+            state(v, &works["turn"]) == Some(TurnState::Running)
+        })
+        .await;
+    world
+        .read(person, thread, Some(&works["turn"]))
+        .await
+        .unwrap();
+    // Read with no turn, it has none that ended to see.
+    world.read(person, thread, None).await.unwrap();
+    assert_eq!(world.seen(thread).await, None);
+    assert!(world.facts("thread.seen").await.is_empty());
+
+    // With a later turn running, read with no turn sees the latest that
+    // ended, not the running one.
+    let (ended, _) = world.finish(None, "hello").await;
+    let first = world.turn_at(&ended, 0).await;
+    world.waiting(Some(&ended)).await;
+    world.read(person, &ended, None).await.unwrap();
+    assert_eq!(world.seen(&ended).await, Some(first));
+}
+
+#[tokio::test]
+async fn a_rewind_that_takes_the_seen_turn_out_clears_it() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let person = world.person();
+    let (thread, _) = world.finish(None, "remember apples").await;
+    world.finish(Some(&thread), "remember pears").await;
+    let (apples, pears) = (
+        world.turn_at(&thread, 0).await,
+        world.turn_at(&thread, 1).await,
+    );
+    let rewind = |turn: &Value| world.call(person, "agents.rewind", json!({ "turn": turn }));
+
+    // A rewind after the seen turn leaves it seen.
+    world.read(person, &thread, Some(&apples)).await.unwrap();
+    rewind(&pears).await.unwrap();
+    assert_eq!(world.seen(&thread).await, Some(apples.clone()));
+
+    // One that takes it out, with every turn after, clears it.
+    world.finish(Some(&thread), "remember plums").await;
+    world.finish(Some(&thread), "remember figs").await;
+    let (plums, figs) = (
+        world.turn_at(&thread, 1).await,
+        world.turn_at(&thread, 2).await,
+    );
+    world.read(person, &thread, None).await.unwrap();
+    assert_eq!(world.seen(&thread).await, Some(figs));
+    rewind(&plums).await.unwrap();
+    assert_eq!(world.seen(&thread).await, None);
+    // A list reads itself again after a rewind: no fact of its own.
+    assert!(world.facts("thread.unseen").await.is_empty());
+    // It moves again from none.
+    world.read(person, &thread, Some(&apples)).await.unwrap();
+    assert_eq!(world.seen(&thread).await, Some(apples));
+}
+
+#[tokio::test]
+async fn a_window_moves_the_turns_it_saw_to_the_host_forward_only() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let person = world.person();
+    let (fresh, _) = world.finish(None, "hello").await;
+    world.finish(Some(&fresh), "hello again").await;
+    let (first, second) = (
+        world.turn_at(&fresh, 0).await,
+        world.turn_at(&fresh, 1).await,
+    );
+    let (ahead, view) = world.finish(None, "hi").await;
+    world.finish(Some(&ahead), "hi again").await;
+    let behind = world.turn_at(&ahead, 0).await;
+    world.read(person, &ahead, None).await.unwrap();
+    let theirs = world.seen(&ahead).await;
+    let (stranger, _) = world.finish(None, "who are you").await;
+    // Its "Waiting." is in before the list is taken, so no reply moves it.
+    let works = world.waiting(None).await;
+    let nowhere = json!(banda_agents::model::ThreadId::new());
+    let changed = world.every_changed().await;
+    let seen = [
+        // Moved: the host saw none.
+        (&fresh, &first),
+        // The host's later seen stays.
+        (&ahead, &behind),
+        // Another Thread's turn.
+        (&stranger, &first),
+        // A turn that has not ended.
+        (&works["thread"], &works["turn"]),
+        // A Thread the host does not know.
+        (&nowhere, &first),
+    ];
+
+    // Only a Person moves them.
+    let marks = json!({ "seen": { fresh.as_str().unwrap(): first } });
+    let refused = world.call(agent_of(&view), "agents.import_marks", marks);
+    assert_eq!(refused.await.unwrap_err().code, Code::Forbidden);
+    assert_eq!(world.seen(&fresh).await, None);
+
+    assert_eq!(world.import(&seen, &[]).await, json!(1));
+    assert_eq!(world.seen(&fresh).await, Some(first));
+    assert_eq!(world.seen(&ahead).await, theirs);
+    assert_eq!(world.seen(&stranger).await, None);
+    assert_eq!(world.seen(&works["thread"]).await, None);
+    assert_eq!(world.every_changed().await, changed, "nothing moved");
+    // One fact says marks moved; none says each Thread was seen.
+    assert_eq!(world.facts("marks.moved").await.len(), 1);
+    assert_eq!(world.facts("thread.seen").await.len(), 1, "the one by hand");
+
+    // Moved again, a later turn moves it on, with an archive in the same
+    // move.
+    assert_eq!(
+        world.import(&[(&fresh, &second)], &[&ahead]).await,
+        json!(2)
+    );
+    assert_eq!(world.seen(&fresh).await, Some(second));
+    assert!(world.listed(&ahead).await.is_archived());
+    assert_eq!(world.facts("marks.moved").await.len(), 2);
+}
+
+#[tokio::test]
+async fn a_window_that_moves_its_marks_again_undoes_nothing_its_person_chose() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let person = world.person();
+    let (taken, _) = world.finish(None, "hello").await;
+    let (kept, _) = world.finish(None, "hi there").await;
+    let (taken_turn, kept_turn) = (
+        world.turn_at(&taken, 0).await,
+        world.turn_at(&kept, 0).await,
+    );
+    let seen = [(&taken, &taken_turn), (&kept, &kept_turn)];
+    assert_eq!(world.import(&seen, &[&taken, &kept]).await, json!(4));
+
+    // The Person takes both marks off one Thread on another machine; the
+    // window moves its marks again, as one whose flag was lost (#853).
+    world.unread(person, &taken).await.unwrap();
+    world.archive(person, &taken, false).await.unwrap();
+    assert_eq!(world.import(&seen, &[&taken, &kept]).await, json!(0));
+    let listed = world.listed(&taken).await;
+    assert_eq!((listed.seen, listed.archived), (None, None));
+    let listed = world.listed(&kept).await;
+    assert_eq!(listed.seen.map(|turn| json!(turn)), Some(kept_turn));
+    assert!(listed.is_archived());
+    assert_eq!(world.facts("marks.moved").await.len(), 1);
+
+    // So it is for marks taken off before the window first moved them.
+    let (first, _) = world.finish(None, "good morning").await;
+    let first_turn = world.turn_at(&first, 0).await;
+    world.read(person, &first, None).await.unwrap();
+    world.unread(person, &first).await.unwrap();
+    world.archive(person, &first, true).await.unwrap();
+    world.archive(person, &first, false).await.unwrap();
+    assert_eq!(
+        world.import(&[(&first, &first_turn)], &[&first]).await,
+        json!(0)
+    );
+    let listed = world.listed(&first).await;
+    assert_eq!((listed.seen, listed.archived), (None, None));
+    // What the Person marks by hand after holds as ever.
+    world.read(person, &first, None).await.unwrap();
+    assert_eq!(world.seen(&first).await, Some(first_turn));
 }

@@ -5,6 +5,7 @@ import type { Asking } from "./Asking";
 import type { LatestTurn } from "./LatestTurn";
 import type { Snooze } from "./Snooze";
 import type { ThreadId } from "./ThreadId";
+import type { TurnId } from "./TurnId";
 
 /**
  * A Thread as a list shows it: what it is, and where its work stands. A
@@ -33,6 +34,12 @@ message?: string,
  * Its latest snooze (ADR 0074), asleep or woken.
  */
 snooze?: Snooze, 
+/**
+ * The latest of its turns that ended which its Person saw (ADR
+ * 0096). It moves forward only; none until they see one, and none
+ * again once they mark it unread or a rewind takes that turn out.
+ */
+seen?: TurnId, 
 /**
  * When its Person archived it (ADR 0096), unless they brought it
  * back or snoozed it since. It is archived only while it neither

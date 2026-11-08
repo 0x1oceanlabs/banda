@@ -69,7 +69,7 @@ use full_access::Chosen;
 use images::Images;
 use issues::{AnswerIssue, DraftIssue};
 use live::Live;
-use marks::{ImportMarks, Imported};
+use marks::{ImportMarks, Imported, ReadAsk};
 use model::{
     Body, Fact, Fit, Image, ImageId, Item, ItemId, Offer, Opener, Settings, ThreadId, ThreadList,
     ThreadSummary, ThreadView, TurnId, TurnState, VERSION, VisualId,
@@ -419,6 +419,17 @@ banda_kernel::methods! {
         /// as when what you waited on came early. One awake stays so. A
         /// Person wakes any Thread (ADR 0074).
         command wake(WakeAsk) -> (), Write, tool "wake";
+        /// Marks a Thread read for its Person (ADR 0096): `turn`, or
+        /// without it the latest that ended, is the last they saw, so it
+        /// calls them no more. Seen moves forward only: a turn not of this
+        /// Thread, one that has not ended, or one older than the mark
+        /// changes nothing. The list says it, as `seen`. Only a Person
+        /// marks a Thread.
+        command read(ReadAsk) -> (), Write;
+        /// Marks a Thread unread for its Person: what it said last calls
+        /// them again. One with nothing seen stays as it is. Only a Person
+        /// does.
+        command unread(OneThread) -> (), Write;
         /// Archives a Thread for its Person (ADR 0096): it leaves their
         /// list until something new happens in it, and wakes if it sleeps.
         /// A Thread at work, or one that asks, is refused. The list says
@@ -428,10 +439,12 @@ banda_kernel::methods! {
         /// archived stays as it is. Only a Person does.
         command unarchive(OneThread) -> (), Write;
         /// Moves the marks a window kept of this Project's Threads to
-        /// their host, once: the Threads it showed archived, by ID, each
-        /// archived from now. A Thread the host does not know or has
-        /// archived, one at work, one that asks and one asleep are left
-        /// as they are. Only a Person moves them.
+        /// their host, once, by ID: the turn of each it saw last, which
+        /// moves seen forward only, and the Threads it showed archived,
+        /// each archived from now. A Thread the host does not know or has
+        /// archived, one at work, one that asks and one asleep keep their
+        /// archive, and one its Person took a mark off keeps both. Only a
+        /// Person moves them.
         command import_marks(ImportMarks) -> Imported, Write;
         /// Renames a Thread: one line of up to 120 characters. Without a
         /// title, or with a blank one, its first message's title comes
@@ -1116,6 +1129,17 @@ impl Agents {
     async fn wake(&self, call: Call, WakeAsk { thread }: WakeAsk) -> Result<(), Refusal> {
         let author = call.participant();
         call.command(move |tx| snoozes::wake(tx, author, thread))
+            .await
+    }
+
+    async fn read(&self, call: Call, ask: ReadAsk) -> Result<(), Refusal> {
+        let author = marks::person(&call)?;
+        call.command(move |tx| marks::read(tx, author, ask)).await
+    }
+
+    async fn unread(&self, call: Call, OneThread { thread }: OneThread) -> Result<(), Refusal> {
+        let author = marks::person(&call)?;
+        call.command(move |tx| marks::unread(tx, author, thread))
             .await
     }
 
