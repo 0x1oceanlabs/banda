@@ -32,7 +32,7 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
-import { expect, type Page, test } from "@playwright/test"
+import { expect, type Locator, type Page, test } from "@playwright/test"
 import type { Host } from "@banda/web/host"
 import { headerShows, setInFront, startWindow, type Window } from "./window"
 
@@ -762,4 +762,230 @@ test("hosts.toml applies as it changes: a machine added by hand or through the b
         .then(String, (error: Error) => error.message)
     )
   ).toMatch(/arc is in hosts.toml already/)
+})
+
+/** A picture of Settings → Machines for the Person, when they asked for
+ * them, named `step5-…`, as the mock's (ADR 0095, plan step 5). */
+async function settingsShot(page: Page, name: string) {
+  if (!shots) return
+  // Once the Tiling has moved to the settings.
+  await page.mouse.move(1270, 790)
+  await page.waitForTimeout(1_500)
+  await page.screenshot({ path: join(shots, `step5-${name}.png`) })
+}
+
+/** Scrolls the settings' own scroller, and nothing around it, so all of
+ * `target` shows: an element's own scrolling into view would move the
+ * Tiling sideways too. */
+async function settingsScrolledTo(target: Locator) {
+  await target.evaluate((element) => {
+    for (let at = element.parentElement; at; at = at.parentElement) {
+      const { overflowY } = getComputedStyle(at)
+      if (overflowY !== "auto" && overflowY !== "scroll") continue
+      const view = at.getBoundingClientRect()
+      const { top, bottom } = element.getBoundingClientRect()
+      if (bottom > view.bottom) at.scrollTop += bottom - view.bottom + 16
+      else if (top < view.top) at.scrollTop -= view.top - top + 16
+      return
+    }
+  })
+}
+
+test("Settings → Machines: this machine names itself, arc is renamed on arc, tested, away, removed, and added again, numbered past a name and an icon shown", async () => {
+  test.setTimeout(shots ? 300_000 : 180_000)
+  arc = newArc()
+  await seed(arc)
+  // Banda's own, as a Person's PATH would have it there: Add's Connect
+  // and the follower find it with no `banda` in hosts.toml.
+  writeFileSync(
+    join(arc.bin, "banda-local"),
+    `#!/bin/sh\nexec ${quoted(program)} "$@"\n`,
+    { mode: 0o755 }
+  )
+  window = await startWindow({
+    look: 'mode = "dark"\n',
+    sidebar: 'preset = "projects"\n',
+    files: {
+      "config/hosts.toml": `[[hosts]]\nname = "arc"\nssh = "arc"\nbanda = ${JSON.stringify(program)}\n`,
+      "config/machine.toml": 'name = "m1pro"\nicon = "laptop"\n',
+    },
+    env: { PATH: `${arc.bin}:${process.env.PATH}` },
+  })
+  const { app, page } = window
+  // The Hosts of an ssh config, whatever the machine's own says.
+  await app.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler("sshSuggestions")
+    ipcMain.handle("sshSuggestions", () => ["arc", "devbox", "pi5"])
+  })
+  const hostsFile = join(window.dir, "config/hosts.toml")
+  const ours = join(window.dir, "config/machine.toml")
+  const arcs = join(arc.dir, "config/machine.toml")
+  await expect(arcOf(page).getByText("Bench window tests")).toBeVisible()
+
+  // This machine: its name, its icon and what it is, Banda's build too.
+  await page.keyboard.press("Alt+Comma")
+  const settings = page.getByRole("region", { name: "Settings", exact: true })
+  await settings
+    .getByRole("navigation", { name: "Settings sections" })
+    .getByRole("button", { name: /Machines/ })
+    .click()
+  // The pictures take the settings as wide as their column goes, as the
+  // mock draws them.
+  if (shots) await page.keyboard.press("Alt+KeyF")
+  const here = settings.getByRole("group", { name: "This machine" })
+  await expect(
+    here.getByRole("textbox", { name: "This machine's name" })
+  ).toHaveValue("m1pro")
+  await expect(here.locator('[data-machine-icon="laptop"]')).toBeVisible()
+  await expect(here).toContainText(/Banda \S/)
+  await settingsShot(page, "1-this-machine")
+
+  // The Banda menu's Machine settings opens arc's row, where Test finds
+  // arc, its system and its own name.
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  await page.keyboard.press("Alt+Space")
+  await menu.getByRole("combobox", { name: "Search" }).fill("arc")
+  await menu
+    .getByRole("group", { name: "Machines" })
+    .getByRole("option")
+    .click()
+  const row = settings.locator('[data-key="arc"]')
+  await expect(row.getByRole("button", { expanded: true })).toBeVisible()
+  await expect(row.getByRole("textbox", { name: "arc's address" })).toHaveValue(
+    "arc"
+  )
+  await expect(row.getByRole("textbox", { name: "Banda on arc" })).toHaveValue(
+    program
+  )
+  await expect(row).toContainText("same as here")
+  await expect(
+    row.getByRole("button", { name: "Stop Banda on arc" })
+  ).toBeVisible()
+  await row.getByRole("button", { name: "Test connection" }).click()
+  await expect(row.getByRole("status")).toContainText(/^Found arc · \S/)
+  // The menu gave the focus back to the Pane that had it before, and the
+  // Tiling shows that one: back to the settings by the keys, as the
+  // Person would.
+  if (shots) {
+    await page.keyboard.press("Alt+ArrowLeft")
+    await page.keyboard.press("Alt+ArrowRight")
+    await settingsScrolledTo(row.getByRole("status"))
+  }
+  await settingsShot(page, "2-other")
+
+  // Renamed on arc: its machine.toml has it, and the sidebar's label
+  // follows. m1pro's laptop is greyed, and still taken.
+  await row.getByRole("button", { name: "Edit" }).click()
+  const icons = page.getByRole("radiogroup", { name: "Machine icon" })
+  const icon = (name: string) =>
+    icons.getByRole("radio", { name: `A ${name}`, exact: true })
+  await expect(icon("laptop")).toHaveAttribute("data-taken", "true")
+  await expect(icon("server")).toBeChecked()
+  await settingsShot(page, "3-picker")
+  const name = page.getByRole("textbox", { name: "Machine name" })
+  await name.fill("Studio")
+  await name.press("Enter")
+  await icon("tower").click()
+  await expect
+    .poll(() => readFileSync(arcs, "utf8"))
+    .toMatch(/name = "Studio"\nicon = "tower"/)
+  const studio = sidebarOf(page).getByRole("group", {
+    name: "Studio",
+    exact: true,
+  })
+  await expect(
+    studio.getByRole("heading").locator('[data-machine-icon="tower"]')
+  ).toBeVisible()
+  // And back, for what follows.
+  await name.fill("arc")
+  await name.press("Enter")
+  await icon("server").click()
+  await expect
+    .poll(() => readFileSync(arcs, "utf8"))
+    .toMatch(/name = "arc"\nicon = "server"/)
+  await page.keyboard.press("Escape")
+  await expect(arcOf(page)).toBeVisible()
+
+  // Away, it is renamed only once it is back.
+  arc.down(true)
+  arc.cut()
+  await expect(row.getByRole("button", { expanded: true })).toContainText(
+    "away"
+  )
+  await expect(row.getByRole("button", { name: "Edit" })).toBeDisabled()
+  await expect(row).toContainText("Rename arc when it is back.")
+  await expect(
+    row.getByRole("button", { name: "Stop Banda on arc" })
+  ).toHaveCount(0)
+  await settingsShot(page, "4-away")
+  arc.down(false)
+  await expect(row.getByRole("button", { expanded: true })).toContainText(
+    "live · same build",
+    { timeout: 60_000 }
+  )
+
+  // Renamed by hand on arc, as two VMs both "Cloud": the window follows.
+  writeFileSync(arcs, 'name = "Cloud"\nicon = "server"\n')
+  const cloud = sidebarOf(page).getByRole("group", {
+    name: "Cloud",
+    exact: true,
+  })
+  await expect(cloud.getByText("Bench window tests")).toBeVisible()
+
+  // Remove… asks first; its Projects stay there.
+  await row.getByRole("button", { name: "Remove…" }).click()
+  const removing = page.getByRole("dialog", { name: "Remove Cloud?" })
+  await expect(removing).toContainText("Its Projects stay on Cloud.")
+  await settingsShot(page, "6-remove")
+  await removing.getByRole("button", { name: "Remove Cloud" }).click()
+  await expect(row).toHaveCount(0)
+  await expect(cloud).toHaveCount(0)
+  expect(readFileSync(hostsFile, "utf8")).toBe("")
+
+  // This machine renamed and drawn as a server, on its own machine.toml.
+  const ourName = here.getByRole("textbox", { name: "This machine's name" })
+  await ourName.fill("Cloud")
+  await ourName.press("Enter")
+  await here.getByRole("button", { name: "Change this machine's icon" }).click()
+  await icon("server").click()
+  await expect
+    .poll(() => readFileSync(ours, "utf8"))
+    .toMatch(/name = "Cloud"\nicon = "server"/)
+  await page.keyboard.press("Escape")
+
+  // Add a machine: a chip of the ssh config connects, and finds it, with
+  // what Add will write there.
+  const adding = settings.getByRole("group", { name: "From ~/.ssh/config" })
+  await expect(adding.getByRole("button")).toHaveText(["arc", "devbox", "pi5"])
+  await adding.getByRole("button", { name: "arc" }).click()
+  const found = settings.getByRole("status").filter({ hasText: "Found" })
+  await expect(found).toContainText(/Found Cloud · \S/)
+  await expect(found).toContainText(
+    "Cloud is taken, so Add names the new machine Cloud 2 and writes that on it."
+  )
+  await expect(found).toContainText(
+    "Cloud has the server icon, so Add gives the new machine the tower."
+  )
+  await settingsShot(page, "5-add")
+  await found.getByRole("button", { name: "Add" }).click()
+
+  // Listed, numbered and moved on, on arc itself, and the Person is told.
+  await expect
+    .poll(() => readFileSync(hostsFile, "utf8"))
+    .toBe('[[hosts]]\nname = "arc"\nssh = "arc"\n')
+  await expect
+    .poll(() => readFileSync(arcs, "utf8"))
+    .toMatch(/name = "Cloud 2"\nicon = "tower"/)
+  // Its row opens, as the link still names arc.
+  const header = row.getByRole("button", { expanded: true })
+  await expect(header).toContainText("Cloud 2")
+  await expect(header.locator('[data-machine-icon="tower"]')).toBeVisible()
+  await expect(settings).toContainText(
+    "Added Cloud 2. Written on it: the name Cloud 2 and the tower icon. Change it in its row."
+  )
+  await expect(
+    sidebarOf(page)
+      .getByRole("group", { name: "Cloud 2", exact: true })
+      .getByText("Bench window tests")
+  ).toBeVisible()
 })

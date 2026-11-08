@@ -82,8 +82,18 @@ export type Note = { version: string; text: string }
  * machine: the page puts the machine's name before it (ADR 0095, decision
  * 2). `name` is its key in `hosts.toml`, this device's own: the name and
  * icon the window draws are what the machine says on its own engine.
+ * `ssh` and `banda` are its entry there, as Settings → Machines shows and
+ * changes them (`hostSet`).
  */
-export type HostState = { name: string } & (
+export type HostState = {
+  name: string
+  /** Where ssh goes, as `hosts.toml` says it. Main always says it; it is
+   * optional only so a state the page makes up, as its tests do, may
+   * leave it out. */
+  ssh?: string
+  /** The `banda` it runs there; none to find this build's own there. */
+  banda?: string
+} & (
   | { state: "connecting" }
   | { state: "signin"; url: string }
   | {

@@ -27,6 +27,7 @@ import {
   GlobeIcon,
   KeyboardIcon,
   type LucideIcon,
+  MonitorSmartphoneIcon,
   PaletteIcon,
   PanelLeftIcon,
   SettingsIcon,
@@ -37,6 +38,7 @@ import { Agents } from "./Agents"
 import { BrowserSites } from "./BrowserSites"
 import { General } from "./General"
 import { Keys } from "./Keys"
+import { MachinesSettings } from "./MachinesSettings"
 import { ProblemsSettings } from "./ProblemsSettings"
 import { PlaySound, PresetPicker } from "./rows"
 import { SharingSettings } from "./SharingSettings"
@@ -111,6 +113,17 @@ export const SECTIONS: Section[] = [
     about:
       "The folders you and your Agents work in. Banda's engine keeps them, not a file.",
     Body: ProjectsSettings,
+  },
+  {
+    // ADR 0095, decision 9: this machine's machine.toml, which its engine
+    // writes, and the other machines of hosts.toml, which main does.
+    id: "machines",
+    title: "Machines",
+    icon: MonitorSmartphoneIcon,
+    files: [{ name: "machine.toml" }],
+    about:
+      "Where your Projects and Agents run. Each machine names itself, and every window shows that name.",
+    Body: MachinesSettings,
   },
   {
     id: "appearance",

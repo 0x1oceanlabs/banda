@@ -8,10 +8,17 @@
  * its own, each part does nothing, and what answers says so.
  */
 import type { Address } from "@banda/contract"
-import type { Host, HostState, PoppedAsk } from "../host"
+import type { Host, HostEntry, HostState, HostTest, PoppedAsk } from "../host"
 
 /** The desktop's bridge as each part is used; none without the desktop. */
 const desktop = (): Host | undefined => window.banda
+
+/** Why a host's part does nothing without the desktop, in the Person's
+ * words, which Settings shows as they are. */
+export const ELSEWHERE = "Only Banda's app reaches other machines."
+
+/** What a host's part answers without the desktop. */
+const elsewhere = () => Promise.reject(new Error(ELSEWHERE))
 
 export const device = {
   /** The other machines of `hosts.toml`, as the desktop reaches them over
@@ -42,8 +49,7 @@ export const device = {
     /** Where host `name`'s engine listens: asked of the desktop each time,
      * and kept nowhere in the page. */
     engine: (name: string): Promise<Address> =>
-      desktop()?.hostEngine(name) ??
-      Promise.reject(new Error("Only Banda's app reaches other machines.")),
+      desktop()?.hostEngine(name) ?? elsewhere(),
     /** Starts host `name`'s engine again there, as the Person asks. */
     start: (name: string): void => {
       desktop()
@@ -54,8 +60,28 @@ export const device = {
     },
     /** Stops Banda on host `name`, as the Person asks. */
     stop: (name: string, force: boolean): Promise<"stopped" | "working"> =>
-      desktop()?.hostStop(name, force) ??
-      Promise.reject(new Error("Only Banda's app reaches other machines.")),
+      desktop()?.hostStop(name, force) ?? elsewhere(),
+    /** Adds the machine at `ssh` to `hosts.toml`, as Settings' Add does:
+     * its key made from the address; the entry written. */
+    add: (machine: { ssh: string; banda?: string }): Promise<HostEntry> =>
+      desktop()?.hostAdd(machine) ?? elsewhere(),
+    /** Changes host `name`'s address or its `banda` in `hosts.toml`; an
+     * empty `banda` is none. The entry written. */
+    set: (
+      name: string,
+      change: { ssh?: string; banda?: string }
+    ): Promise<HostEntry> => desktop()?.hostSet(name, change) ?? elsewhere(),
+    /** Takes host `name` out of `hosts.toml`; its Projects stay there. */
+    remove: (name: string): Promise<void> =>
+      desktop()?.hostRemove(name) ?? elsewhere(),
+    /** What is at `ssh`, with `banda` or this build's own, starting
+     * nothing there: Test connection, and Add's Connect. */
+    test: (ssh: string, banda: string | null): Promise<HostTest> =>
+      desktop()?.hostTest(ssh, banda) ?? elsewhere(),
+    /** The Hosts of `~/.ssh/config` to suggest for Add; none without the
+     * desktop. */
+    suggestions: (): Promise<string[]> =>
+      desktop()?.sshSuggestions() ?? Promise.resolve([]),
   },
   /** Panes in windows of their own (ADR 0025, decision 9): main keeps
    * which, and opens and closes their windows. */

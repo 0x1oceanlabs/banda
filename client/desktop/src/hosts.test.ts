@@ -894,6 +894,8 @@ const FAST: Times = {
 }
 
 const DEVBOX_TOML = `[[hosts]]\nname = "devbox"\nssh = "devbox"\nbanda = "~/.local/bin/banda-dev"\n`
+/** devbox's entry in DEVBOX_TOML, as its state carries it to the page. */
+const DEVBOX_AT = { ssh: "devbox", banda: "~/.local/bin/banda-dev" }
 
 /** The hosts of `toml`, their ssh `fake`, this window's banda of build
  * `def456`. */
@@ -997,6 +999,7 @@ it.live(
         expect(fake.runs("-N")).toHaveLength(1)
         expect((yield* hosts.current)[0]).toEqual({
           name: "devbox",
+          ...DEVBOX_AT,
           state: "connecting",
         })
         expect(
@@ -1012,6 +1015,7 @@ it.live(
         expect(yield* listens(port)).toBe(true)
         expect((yield* hosts.current)[0]).toEqual({
           name: "devbox",
+          ...DEVBOX_AT,
           state: "live",
           build: "abc123",
           version: "0.1.0-dev.2",
@@ -1064,6 +1068,7 @@ it.live(
         const left = yield* reaches((host) => host.state === "away")
         expect(left).toEqual({
           name: "devbox",
+          ...DEVBOX_AT,
           state: "away",
           why: "the link to devbox ended (code 1)",
         })
@@ -1084,6 +1089,7 @@ it.live(
         fake.touch("drop")
         expect(yield* reaches((host) => host.state === "away")).toEqual({
           name: "devbox",
+          ...DEVBOX_AT,
           state: "away",
           why: "the forward to devbox ended (code 255)",
         })
@@ -1157,6 +1163,7 @@ it.live(
         fake.touch("quit")
         expect(yield* reaches((host) => host.state === "away")).toEqual({
           name: "devbox",
+          ...DEVBOX_AT,
           state: "away",
           why: `${channel.name} is not open there`,
         })
@@ -1196,6 +1203,7 @@ it.live(
         const hosts = yield* Hosts
         expect(yield* reaches((host) => host.state === "refused")).toEqual({
           name: "devbox",
+          ...DEVBOX_AT,
           state: "refused",
           why: "Banda there is of another build, which does not speak this one's protocol",
         })
@@ -1239,6 +1247,7 @@ it.live(
         const hosts = yield* Hosts
         expect(yield* reaches((host) => host.state === "refused")).toEqual({
           name: "devbox",
+          ssh: "devbox",
           state: "refused",
           why: `no ${channel.name} found there; set banda in hosts.toml`,
         })
@@ -1265,6 +1274,7 @@ it.live(
         Effect.map((host) =>
           expect(host).toEqual({
             name: "devbox",
+            ...DEVBOX_AT,
             state: "refused",
             why: "no ~/.local/bin/banda-dev there; check banda in hosts.toml",
           })
@@ -1284,6 +1294,7 @@ it.live(
       yield* Effect.gen(function* () {
         expect(yield* reaches((host) => host.state === "refused")).toEqual({
           name: "devbox",
+          ...DEVBOX_AT,
           state: "refused",
           why: "the engine there speaks protocol 2, this window 1",
         })
@@ -1341,6 +1352,7 @@ it.live(
         const seen = yield* watched
         expect(yield* reaches((host) => host.state === "signin")).toEqual({
           name: "devbox",
+          ...DEVBOX_AT,
           state: "signin",
           url: "https://login.tailscale.com/a/3c",
         })
@@ -1362,6 +1374,7 @@ it.live(
         ).toEqual([
           {
             name: "devbox",
+            ...DEVBOX_AT,
             state: "signin",
             url: "https://login.tailscale.com/a/3c",
           },
@@ -1741,8 +1754,18 @@ it.live(
         expect(readFileSync(file, "utf8")).toBe(
           `${written}\n[[hosts]]\nname = "box2"\nssh = "roma@box2.tail1234.ts.net"\n`
         )
-        // Reached at once, not on the watch's word.
+        // Reached at once, not on the watch's word, each with its entry.
         expect(yield* names).toEqual(["devbox", "box2"])
+        expect(
+          (yield* hosts.current).map(({ name, ssh, banda }) => ({
+            name,
+            ssh,
+            banda,
+          }))
+        ).toEqual([
+          { name: "devbox", ...DEVBOX_AT },
+          { name: "box2", ssh: "roma@box2.tail1234.ts.net", banda: undefined },
+        ])
         yield* hosts.address("box2")
         // Refused: a machine there already, at this address or another; a
         // name taken; an option.
@@ -1790,6 +1813,10 @@ it.live(
         expect(readFileSync(file, "utf8")).toBe(
           `# mine\n\n[[hosts]]\nname = "devbox"\nssh = "roma@devbox"  # home\n`
         )
+        // The page sees its new entry, the banda gone with the empty one.
+        const changed = (yield* hosts.current)[0]!
+        expect(changed).toMatchObject({ name: "devbox", ssh: "roma@devbox" })
+        expect(changed).not.toHaveProperty("banda")
         // Reached again at once, at the new address, the old ssh ended.
         expect((yield* hosts.address("devbox")).secret).toBe("two")
         expect(fake.runs("follower", "roma@devbox")).toHaveLength(1)
@@ -1939,6 +1966,7 @@ it.live(
         expect(yield* hosts.stop("devbox", false)).toBe("stopped")
         expect((yield* hosts.current)[0]).toEqual({
           name: "devbox",
+          ...DEVBOX_AT,
           state: "stopped",
         })
         // Past several of the waits after an away go: no try.

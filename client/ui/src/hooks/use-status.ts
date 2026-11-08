@@ -74,26 +74,36 @@ const isIcon = (icon: unknown): icon is MachineIcon =>
 const NAME_MOST = 16
 
 /**
+ * Text a machine says of itself, as the page draws it (ADR 0095, decision
+ * 2): control and format characters (bidi controls, zero-width spaces and
+ * joiners) and line and paragraph separators go, and it is cut at `most`
+ * characters; empty where it is no text.
+ */
+export function cleanText(said: unknown, most: number): string {
+  return typeof said === "string"
+    ? [...said.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, "")]
+        .slice(0, most)
+        .join("")
+        .trim()
+    : ""
+}
+
+/**
  * What another machine said it is called and drawn by, as the page draws
  * it (ADR 0095, decision 2): the first text a machine writes of itself
- * that the page shows, so it is cleaned before anything draws it. Control
- * and format characters (bidi controls, zero-width spaces and joiners) and
- * line and paragraph separators go, the name is cut at 16 characters, a name left empty is `key`, the
- * machine's key in `hosts.toml`, and an icon not of the ten is `desktop`.
- * Drawn as text, never as markup.
+ * that the page shows, so it is cleaned before anything draws it
+ * (`cleanText`), the name cut at 16 characters. A name left empty is
+ * `key`, the machine's key in `hosts.toml`, and an icon not of the ten is
+ * `desktop`. Drawn as text, never as markup.
  */
 export function cleanNamed(said: unknown, key: string): Named {
   const { name, icon } = (
     typeof said === "object" && said !== null ? said : {}
   ) as { name?: unknown; icon?: unknown }
-  const text =
-    typeof name === "string"
-      ? [...name.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, "")]
-          .slice(0, NAME_MOST)
-          .join("")
-          .trim()
-      : ""
-  return { name: text || key, icon: isIcon(icon) ? icon : "desktop" }
+  return {
+    name: cleanText(name, NAME_MOST) || key,
+    icon: isIcon(icon) ? icon : "desktop",
+  }
 }
 
 /** The last name and icon this device saw of each other machine, by its
@@ -139,12 +149,18 @@ export function followNamed(
   key: string,
   take: (named: Named) => void
 ): () => void {
-  const said = (named: unknown) => {
+  return heardNamed(engine, (named) => {
     const now = cleanNamed(named, key)
     const was = SEEN.read()[key]
     if (was?.name !== now.name || was?.icon !== now.icon) SEEN.put(key, now)
     take(now)
-  }
+  })
+}
+
+/** Hands `said` what `engine` says its machine is called and drawn by,
+ * as it says it, not yet cleaned: from each welcome, and each piece of
+ * `machine.named`. Returns how to stop. */
+function heardNamed(engine: Engine, said: (named: unknown) => void) {
   const watching = engine.watch((status) => {
     if (status.state === "open" && status.named) said(status.named)
   })
@@ -163,6 +179,42 @@ export function followNamed(
     watching()
     hearing()
   }
+}
+
+/** Forgets the name and icon this device last saw of machine `key`, as
+ * it is taken out of `hosts.toml`: added again, it shows as its key until
+ * its first welcome, as a machine new here does. */
+export function forgetNamed(key: string): void {
+  SEEN.drop(key)
+}
+
+/**
+ * Hands `take` this machine's name and icon, as `engine`, its own, says
+ * them in its welcome and on `machine.named` as they change, cleaned as
+ * another machine's are. Nothing is kept on the device: this machine is
+ * never away from its own window. Returns how to stop.
+ */
+export function followThisNamed(
+  engine: Engine,
+  take: (named: Named) => void
+): () => void {
+  return heardNamed(engine, (said) => take(cleanNamed(said, "")))
+}
+
+/** This machine's name and icon (`followThisNamed`); none until its
+ * engine first says them. Settings → Machines draws it. */
+export function useNamed(engine: Engine): Named | undefined {
+  const [named, setNamed] = useState<Named>()
+  useEffect(
+    () =>
+      followThisNamed(engine, (now) =>
+        setNamed((was) =>
+          was?.name === now.name && was.icon === now.icon ? was : now
+        )
+      ),
+    [engine]
+  )
+  return named
 }
 
 /** The fence of an engine that says none: one from before the fence,

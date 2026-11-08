@@ -232,8 +232,8 @@ export const BandaMenu = memo(function BandaMenu({
 })
 
 /** The other machines whose names fit `query`, as a source's rows under
- * "Machines" (ADR 0095, decision 8): choosing one opens the settings,
- * where a machine's own come later. None when none fits. */
+ * "Machines" (ADR 0095, decision 8): choosing one opens its row in
+ * Settings → Machines. None when none fits. */
 function machinesFound(
   hosts: readonly Shown[],
   query: string
@@ -252,7 +252,7 @@ function machinesFound(
           className="text-muted-foreground"
         />
       ),
-      run: (api) => api.run("settings.open"),
+      run: (api) => api.run("settings.open", { link: `machines/${name}` }),
     }))
   return rows.length > 0
     ? { id: "machines", label: "Machines", rows }

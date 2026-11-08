@@ -939,15 +939,17 @@ const PORT_TRIES = 3
 /** How many lines from ssh the log takes from a host in a minute. */
 const LINES_A_MINUTE = 20
 
-/** A host's state without its name, as the page sees it. */
-type Without<T> = T extends unknown ? Omit<T, "name"> : never
+/** A host's state without its entry, as the page sees it. */
+type Without<T> = T extends unknown ? Omit<T, "name" | "ssh" | "banda"> : never
 type Link = Without<HostState>
 
-/** A host as main keeps it: its state, its address while live, which go
- * at it this is, and what starts the next go at once while it is
- * stopped or refused. */
+/** A host as main keeps it: its entry, which the page's Settings show
+ * and change, its state, its address while live, which go at it this is,
+ * and what starts the next go at once while it is stopped or refused. */
 type Kept = {
   readonly name: string
+  readonly ssh: string
+  readonly banda?: string
   readonly link: Link
   readonly address?: Address
   readonly go: number
@@ -973,7 +975,7 @@ const linkOf = (ended: Ended): Link =>
 export class Hosts extends Context.Service<
   Hosts,
   {
-    /** Each host of `hosts.toml`, as it is now. */
+    /** Each host of `hosts.toml`, as it is now, with its entry there. */
     readonly current: Effect.Effect<HostState[]>
     /** The hosts, now and each time one changes. */
     readonly changes: Stream.Stream<HostState[]>
@@ -1082,6 +1084,8 @@ export class Hosts extends Context.Service<
               begin: (next, link = { state: "connecting" }) =>
                 change((one) => ({
                   name: one.name,
+                  ssh: one.ssh,
+                  banda: one.banda,
                   link,
                   go: one.go + 1,
                   next,
@@ -1128,11 +1132,17 @@ export class Hosts extends Context.Service<
             )
             for (const name of ended) reached.delete(name)
             yield* SubscriptionRef.update(all, (before) =>
-              hosts.map(({ name }): Kept => {
+              hosts.map(({ name, ssh, banda }): Kept => {
                 const was = before.find((one) => one.name === name)
                 return was && reached.has(name)
                   ? was
-                  : { name, link: { state: "connecting" }, go: was?.go ?? 0 }
+                  : {
+                      name,
+                      ssh,
+                      banda,
+                      link: { state: "connecting" },
+                      go: was?.go ?? 0,
+                    }
               })
             )
             for (const host of hosts)
@@ -1200,7 +1210,12 @@ export class Hosts extends Context.Service<
           )
 
         const seen = (list: readonly Kept[]): HostState[] =>
-          list.map(({ name, link }) => ({ name, ...link }))
+          list.map(({ name, ssh, banda, link }) => ({
+            name,
+            ssh,
+            ...(banda !== undefined && { banda }),
+            ...link,
+          }))
         /** Host `name` as it is now, and its next go started at once when
          * it waits in one of `states`. */
         const wake = (name: string, states: Link["state"][]) =>
