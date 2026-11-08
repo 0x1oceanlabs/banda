@@ -9,6 +9,7 @@ import type { ModuleFile } from "./look"
 import { VERSION } from "./generated/agents/VERSION"
 
 export type { Agents } from "./generated/agents/Agents"
+export type { Archived } from "./generated/agents/Archived"
 export type { Enter } from "./generated/agents/Enter"
 export type { Flow } from "./generated/agents/Flow"
 export type { Body } from "./generated/agents/Body"
@@ -30,6 +31,8 @@ export type { HarnessOption } from "./generated/agents/HarnessOption"
 export type { Image } from "./generated/agents/Image"
 export type { ImageData } from "./generated/agents/ImageData"
 export type { ImageId } from "./generated/agents/ImageId"
+export type { ImportMarks } from "./generated/agents/ImportMarks"
+export type { Imported } from "./generated/agents/Imported"
 export type { Input } from "./generated/agents/Input"
 export type { Item } from "./generated/agents/Item"
 export type { ItemId } from "./generated/agents/ItemId"
@@ -93,6 +96,9 @@ const KINDS: ReadonlySet<string> = new Set(
     "thread.held": true,
     "thread.snoozed": true,
     "thread.woke": true,
+    "thread.archived": true,
+    "thread.unarchived": true,
+    "marks.moved": true,
     "thread.rewound": true,
     "thread.renamed": true,
     "thread.switched": true,

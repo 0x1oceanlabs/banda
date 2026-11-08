@@ -35,6 +35,7 @@ mod images;
 mod issues;
 mod kept;
 mod live;
+mod marks;
 pub mod model;
 mod notes;
 mod notices;
@@ -68,6 +69,7 @@ use full_access::Chosen;
 use images::Images;
 use issues::{AnswerIssue, DraftIssue};
 use live::Live;
+use marks::{ImportMarks, Imported};
 use model::{
     Body, Fact, Fit, Image, ImageId, Item, ItemId, Offer, Opener, Settings, ThreadId, ThreadList,
     ThreadSummary, ThreadView, TurnId, TurnState, VERSION, VisualId,
@@ -417,6 +419,20 @@ banda_kernel::methods! {
         /// as when what you waited on came early. One awake stays so. A
         /// Person wakes any Thread (ADR 0074).
         command wake(WakeAsk) -> (), Write, tool "wake";
+        /// Archives a Thread for its Person (ADR 0096): it leaves their
+        /// list until something new happens in it, and wakes if it sleeps.
+        /// A Thread at work, or one that asks, is refused. The list says
+        /// when, as `archived`. Only a Person archives a Thread.
+        command archive(OneThread) -> (), Write;
+        /// Brings an archived Thread back to its Person's list. One not
+        /// archived stays as it is. Only a Person does.
+        command unarchive(OneThread) -> (), Write;
+        /// Moves the marks a window kept of this Project's Threads to
+        /// their host, once: the Threads it showed archived, by ID, each
+        /// archived from now. A Thread the host does not know or has
+        /// archived, one at work, one that asks and one asleep are left
+        /// as they are. Only a Person moves them.
+        command import_marks(ImportMarks) -> Imported, Write;
         /// Renames a Thread: one line of up to 120 characters. Without a
         /// title, or with a blank one, its first message's title comes
         /// back. Only a Person renames a Thread (ADR 0077).
@@ -745,11 +761,28 @@ fn plain(error: impl Display) -> String {
 /// Writes one of the module's facts about `thread`, and wakes the Thread
 /// if it sleeps and the fact calls its Person (ADR 0074).
 fn emit(tx: &mut Tx<'_>, author: Participant, thread: ThreadId, fact: &Fact) -> Result<(), Error> {
+    write_fact(tx, author, Some(thread), fact)?;
+    snoozes::heard(tx, author, thread, fact)
+}
+
+/// Writes one of the module's facts about the Project's Threads together:
+/// no one Thread is its subject.
+fn emit_in_project(tx: &mut Tx<'_>, author: Participant, fact: &Fact) -> Result<(), Error> {
+    write_fact(tx, author, None, fact)
+}
+
+fn write_fact(
+    tx: &mut Tx<'_>,
+    author: Participant,
+    thread: Option<ThreadId>,
+    fact: &Fact,
+) -> Result<(), Error> {
     let mut both = serde_json::to_value(fact)?;
     let kind = both["kind"].as_str().unwrap_or_default().to_owned();
     let payload = both["payload"].take();
-    tx.emit(&kind, VERSION, Some(&thread.to_string()), author, &payload)?;
-    snoozes::heard(tx, author, thread, fact)
+    let subject = thread.map(|thread| thread.to_string());
+    tx.emit(&kind, VERSION, subject.as_deref(), author, &payload)?;
+    Ok(())
 }
 
 /// The handlers of the module's methods, one each (ADR 0014).
@@ -1084,6 +1117,23 @@ impl Agents {
         let author = call.participant();
         call.command(move |tx| snoozes::wake(tx, author, thread))
             .await
+    }
+
+    async fn archive(&self, call: Call, OneThread { thread }: OneThread) -> Result<(), Refusal> {
+        let author = marks::person(&call)?;
+        call.command(move |tx| marks::archive(tx, author, thread))
+            .await
+    }
+
+    async fn unarchive(&self, call: Call, OneThread { thread }: OneThread) -> Result<(), Refusal> {
+        let author = marks::person(&call)?;
+        call.command(move |tx| marks::unarchive(tx, author, thread))
+            .await
+    }
+
+    async fn import_marks(&self, call: Call, ask: ImportMarks) -> Result<Imported, Refusal> {
+        let author = marks::person(&call)?;
+        call.command(move |tx| marks::import(tx, author, ask)).await
     }
 
     async fn rename(&self, call: Call, Rename { thread, title }: Rename) -> Result<(), Refusal> {

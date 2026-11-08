@@ -5495,14 +5495,9 @@ impl World {
     /// The payloads of `thread`'s facts of `kind`, the first first.
     #[cfg(unix)]
     async fn events_of(&self, thread: &Value, kind: &str) -> Vec<Value> {
-        let filter = EventFilter {
-            module: Some("agents".to_owned()),
-            subject: thread.as_str().map(str::to_owned),
-            kinds: Some(vec![kind.to_owned()]),
-        };
-        let project = self.kernel.project(self.project).await.unwrap();
-        let events = project.events_after(0, filter, usize::MAX).await.unwrap();
-        events.into_iter().map(|event| event.payload).collect()
+        let events = self.facts(kind).await.into_iter();
+        let of = events.filter(|event| event.subject.as_deref() == thread.as_str());
+        of.map(|event| event.payload).collect()
     }
 }
 
@@ -5598,4 +5593,338 @@ async fn an_agent_leaves_its_persons_snooze_that_goes_on_alone() {
     let again = json!({ "after": "5m" });
     world.call(agent, "agents.snooze", again).await.unwrap();
     assert_eq!(world.snooze_of(thread).await.unwrap().by, agent);
+}
+
+impl World {
+    /// `who` archives `thread`, or brings it back.
+    async fn archive(
+        &self,
+        who: Participant,
+        thread: &Value,
+        archived: bool,
+    ) -> Result<Value, banda_kernel::Refusal> {
+        let method = if archived {
+            "agents.archive"
+        } else {
+            "agents.unarchive"
+        };
+        self.call(who, method, json!({ "thread": thread })).await
+    }
+
+    /// The Project's facts of `kind`, of any Thread or of none, the first
+    /// first.
+    async fn facts(&self, kind: &str) -> Vec<banda_kernel::Event> {
+        let filter = EventFilter {
+            module: Some("agents".to_owned()),
+            subject: None,
+            kinds: Some(vec![kind.to_owned()]),
+        };
+        let project = self.kernel.project(self.project).await.unwrap();
+        project.events_after(0, filter, usize::MAX).await.unwrap()
+    }
+
+    /// When `thread` last changed, as the list says.
+    async fn changed(&self, thread: &Value) -> i64 {
+        self.listed(thread).await.thread.updated_at
+    }
+}
+
+/// Waits into the next millisecond, so what happens next is later than
+/// what happened before by the engine's clock.
+async fn a_moment() {
+    tokio::time::sleep(Duration::from_millis(2)).await;
+}
+
+#[tokio::test]
+async fn a_person_archives_a_thread_and_brings_it_back_and_nothing_moves_in_the_list() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, view) = world.finish(None, "hello").await;
+    let (later, _) = world.finish(None, "hi there").await;
+    let person = world.person();
+    let changed = world.changed(&thread).await;
+    let order = |list: ThreadList| list.threads.iter().map(|t| t.thread.id).collect::<Vec<_>>();
+    let before = order(world.threads().await);
+
+    world.archive(person, &thread, true).await.unwrap();
+    let listed = world.listed(&thread).await;
+    let at = listed.archived.expect("the list says it is archived").at;
+    assert!(at >= changed);
+    assert!(listed.is_archived());
+    assert_eq!(listed.thread.updated_at, changed, "a mark moves nothing");
+    assert_eq!(order(world.threads().await), before);
+    let archived = world.facts("thread.archived").await;
+    assert_eq!(archived.len(), 1);
+    // Its `at` is the event's own, the host's time.
+    assert_eq!(archived[0].payload, json!({ "thread": thread }));
+    assert_eq!((archived[0].at, archived[0].author), (at, person));
+    assert!(!world.listed(&later).await.is_archived());
+    // An Agent reads it in its `threads`, as the window does.
+    let agent = agent_of(&view);
+    let seen = world
+        .call(agent, "agents.threads", json!({}))
+        .await
+        .unwrap();
+    let theirs = seen["threads"].as_array().unwrap();
+    let theirs = theirs.iter().find(|t| t["id"] == thread).unwrap();
+    assert_eq!(theirs["archived"], json!({ "at": at }));
+
+    // Archived already, with nothing new since, it writes nothing.
+    world.archive(person, &thread, true).await.unwrap();
+    assert_eq!(world.listed(&thread).await.archived.unwrap().at, at);
+    assert_eq!(world.facts("thread.archived").await.len(), 1);
+
+    // Only a Person archives a Thread or brings it back.
+    for archived in [true, false] {
+        let refused = world.archive(agent, &thread, archived).await.unwrap_err();
+        assert_eq!(refused.code, Code::Forbidden, "{refused:?}");
+    }
+    assert!(world.listed(&thread).await.is_archived());
+    let nowhere = json!(banda_agents::model::ThreadId::new());
+    let refused = world.archive(person, &nowhere, true).await.unwrap_err();
+    assert_eq!(refused.code, Code::NotFound);
+
+    world.archive(person, &thread, false).await.unwrap();
+    let listed = world.listed(&thread).await;
+    assert_eq!((listed.archived, listed.is_archived()), (None, false));
+    assert_eq!(listed.thread.updated_at, changed);
+    let back = world.facts("thread.unarchived").await;
+    assert_eq!(back.len(), 1);
+    assert_eq!(back[0].payload, json!({ "thread": thread }));
+    // Back already, it stays so, and nothing is written.
+    world.archive(person, &thread, false).await.unwrap();
+    assert_eq!(world.facts("thread.unarchived").await.len(), 1);
+    assert_eq!(order(world.threads().await), before);
+}
+
+#[tokio::test]
+async fn a_thread_at_work_or_that_asks_cannot_be_archived() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let person = world.person();
+    let asks = world.send(None, "please ask first").await;
+    world.until(&asks["thread"], asking).await;
+    let refused = world.archive(person, &asks["thread"], true).await;
+    assert_eq!(refused.unwrap_err().code, Code::Conflict);
+
+    let works = world.send(None, "wait for me").await;
+    let thread = &works["thread"];
+    world
+        .until(thread, |v| {
+            state(v, &works["turn"]) == Some(TurnState::Running)
+        })
+        .await;
+    let refused = world.archive(person, thread, true).await;
+    assert_eq!(refused.unwrap_err().code, Code::Conflict);
+    assert!(world.listed(thread).await.archived.is_none());
+    assert!(world.facts("thread.archived").await.is_empty());
+}
+
+#[tokio::test]
+async fn archiving_wakes_a_snoozed_thread_and_a_snooze_takes_it_out_of_archive() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, view) = world.finish(None, "hello").await;
+    let person = world.person();
+    world
+        .snooze(person, &thread, Some(in_an_hour()))
+        .await
+        .unwrap();
+    world.archive(person, &thread, true).await.unwrap();
+    assert_eq!(world.woke(&thread).await, Some(Wake::Woken));
+    assert!(world.listed(&thread).await.is_archived());
+    // It woke, then was archived, in the one command.
+    let woke = world.facts("thread.woke").await;
+    let archived = world.facts("thread.archived").await;
+    assert_eq!(woke[0].seq + 1, archived[0].seq);
+
+    // Snoozed again, it leaves Archive, whoever snoozes it.
+    world
+        .snooze(person, &thread, Some(in_an_hour()))
+        .await
+        .unwrap();
+    let listed = world.listed(&thread).await;
+    assert_eq!(listed.archived, None);
+    assert_eq!(world.woke(&thread).await, None, "it sleeps");
+    let back = world.facts("thread.unarchived").await;
+    assert_eq!((back.len(), back[0].author), (1, person));
+    world.archive(person, &thread, true).await.unwrap();
+    let agent = agent_of(&view);
+    world
+        .snooze(agent, &thread, Some(in_an_hour()))
+        .await
+        .unwrap();
+    assert_eq!(world.listed(&thread).await.archived, None);
+    let back = world.facts("thread.unarchived").await;
+    assert_eq!((back.len(), back[1].author), (2, agent));
+    // A snooze of a Thread not archived writes no such fact.
+    world
+        .snooze(person, &thread, Some(in_an_hour()))
+        .await
+        .unwrap();
+    assert_eq!(world.facts("thread.unarchived").await.len(), 2);
+}
+
+#[tokio::test]
+async fn anything_new_after_the_archive_brings_the_thread_back() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, _) = world.finish(None, "remember apples").await;
+    let person = world.person();
+    world.archive(person, &thread, true).await.unwrap();
+    let at = world.listed(&thread).await.archived.unwrap().at;
+
+    // A new turn: the mark stays, but no longer holds.
+    a_moment().await;
+    let (_, view) = world.finish(Some(&thread), "remember pears").await;
+    let listed = world.listed(&thread).await;
+    assert_eq!(listed.archived.map(|a| a.at), Some(at));
+    assert!(listed.thread.updated_at > at);
+    assert!(!listed.is_archived());
+
+    // Archived again, it is archived from now.
+    world.archive(person, &thread, true).await.unwrap();
+    let listed = world.listed(&thread).await;
+    assert!(listed.archived.unwrap().at > at && listed.is_archived());
+    assert_eq!(world.facts("thread.archived").await.len(), 2);
+
+    // Taken back to before a message, it changes nothing a list orders
+    // by, so it stays archived; the message sent again brings it back.
+    let pears = view.turns[1].id;
+    world
+        .call(person, "agents.rewind", json!({ "turn": pears }))
+        .await
+        .unwrap();
+    assert!(world.listed(&thread).await.is_archived());
+    a_moment().await;
+    let sent = world.send(Some(&thread), "remember plums").await;
+    assert!(!world.listed(&thread).await.is_archived());
+    world.ended(&sent).await;
+    assert!(!world.listed(&thread).await.is_archived());
+}
+
+#[tokio::test]
+async fn a_window_moves_the_archives_it_kept_to_the_host_once() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let person = world.person();
+    let (kept, view) = world.finish(None, "hello").await;
+    let (marked, _) = world.finish(None, "hello again").await;
+    let (sleeps, _) = world.finish(None, "good night").await;
+    world.archive(person, &marked, true).await.unwrap();
+    let marked_at = world.listed(&marked).await.archived.unwrap().at;
+    world
+        .snooze(person, &sleeps, Some(in_an_hour()))
+        .await
+        .unwrap();
+    let changed: BTreeMap<String, i64> = {
+        let list = world.threads().await.threads;
+        let each = list
+            .iter()
+            .map(|t| (t.thread.id.to_string(), t.thread.updated_at));
+        each.collect()
+    };
+    let nowhere = json!(banda_agents::model::ThreadId::new());
+    // By ID only: the host stamps the moment (ADR 0096, decision 7).
+    let marks = json!({ "archived": [
+        // Moved, archived from now.
+        kept,
+        // The host's own mark stays.
+        marked,
+        // A Thread it does not know.
+        nowhere,
+        // One that sleeps.
+        sleeps,
+        // The same one twice.
+        kept,
+    ] });
+
+    // Only a Person moves them.
+    let agent = agent_of(&view);
+    let call = |who| world.call(who, "agents.import_marks", marks.clone());
+    assert_eq!(call(agent).await.unwrap_err().code, Code::Forbidden);
+    assert_eq!(world.listed(&kept).await.archived, None);
+
+    a_moment().await;
+    let before = banda_kernel::now_ms();
+    assert_eq!(call(person).await.unwrap(), json!({ "count": 1 }));
+    let after = banda_kernel::now_ms();
+    let listed = world.listed(&kept).await;
+    let at = listed.archived.unwrap().at;
+    assert!((before..=after).contains(&at), "{at}");
+    assert!(listed.is_archived());
+    assert_eq!(world.listed(&marked).await.archived.unwrap().at, marked_at);
+    assert_eq!(world.listed(&sleeps).await.archived, None);
+    for listed in world.threads().await.threads {
+        let id = listed.thread.id.to_string();
+        assert_eq!(listed.thread.updated_at, changed[&id], "nothing moved");
+    }
+
+    // One fact, of no one Thread, says marks moved; the list reads again.
+    let moved = world.facts("marks.moved").await;
+    assert_eq!(moved.len(), 1);
+    assert_eq!(
+        (&moved[0].payload, &moved[0].subject, moved[0].at),
+        (&json!({}), &None, at)
+    );
+    assert_eq!(
+        world.facts("thread.archived").await.len(),
+        1,
+        "the one by hand"
+    );
+
+    // Moved again, nothing moves, and nothing is said.
+    assert_eq!(call(person).await.unwrap(), json!({ "count": 0 }));
+    let nothing = world.call(person, "agents.import_marks", json!({})).await;
+    assert_eq!(nothing.unwrap(), json!({ "count": 0 }));
+    assert_eq!(world.facts("marks.moved").await.len(), 1);
+}
+
+#[tokio::test]
+async fn an_import_leaves_a_thread_at_work_or_that_asks() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let person = world.person();
+    let asks = world.send(None, "please ask first").await;
+    world.until(&asks["thread"], asking).await;
+    let works = world.send(None, "wait for me").await;
+    world
+        .until(&works["thread"], |v| {
+            state(v, &works["turn"]) == Some(TurnState::Running)
+        })
+        .await;
+
+    let marks = json!({ "archived": [asks["thread"], works["thread"]] });
+    let moved = world.call(person, "agents.import_marks", marks).await;
+    assert_eq!(moved.unwrap(), json!({ "count": 0 }));
+    assert_eq!(world.listed(&asks["thread"]).await.archived, None);
+    assert_eq!(world.listed(&works["thread"]).await.archived, None);
+    assert!(world.facts("marks.moved").await.is_empty());
+}
+
+#[tokio::test]
+async fn an_import_too_big_or_with_marks_this_host_does_not_know_is_refused() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let person = world.person();
+    let (thread, _) = world.finish(None, "hello").await;
+
+    // At most 10,000 marks at once, as many as a window kept.
+    let mut many = vec![thread.clone()];
+    many.extend((0..10_000).map(|_| json!(banda_agents::model::ThreadId::new())));
+    let marks = json!({ "archived": many });
+    let refused = world.call(person, "agents.import_marks", marks).await;
+    assert_eq!(refused.unwrap_err().code, Code::Invalid);
+    many.pop();
+    let marks = json!({ "archived": many });
+    let moved = world.call(person, "agents.import_marks", marks).await;
+    assert_eq!(moved.unwrap(), json!({ "count": 1 }));
+
+    // A newer window's seen is refused, not dropped unread (ADR 0096,
+    // decision 8), so that window keeps it to send again.
+    let (other, _) = world.finish(None, "hi there").await;
+    let marks = json!({ "archived": [other], "seen": {} });
+    let refused = world.call(person, "agents.import_marks", marks).await;
+    assert_eq!(refused.unwrap_err().code, Code::Invalid);
+    assert_eq!(world.listed(&other).await.archived, None);
 }

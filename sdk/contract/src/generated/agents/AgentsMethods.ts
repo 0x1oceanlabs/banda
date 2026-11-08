@@ -14,6 +14,8 @@ import type { Edit } from "./Edit";
 import type { Forked } from "./Forked";
 import type { Image } from "./Image";
 import type { ImageData } from "./ImageData";
+import type { ImportMarks } from "./ImportMarks";
+import type { Imported } from "./Imported";
 import type { Keep } from "./Keep";
 import type { Kept } from "./Kept";
 import type { Notify } from "./Notify";
@@ -228,6 +230,26 @@ snooze: CommandMethod<SnoozeAsk, null>,
  * Person wakes any Thread (ADR 0074).
  */
 wake: CommandMethod<WakeAsk, null>, 
+/**
+ * Archives a Thread for its Person (ADR 0096): it leaves their
+ * list until something new happens in it, and wakes if it sleeps.
+ * A Thread at work, or one that asks, is refused. The list says
+ * when, as `archived`. Only a Person archives a Thread.
+ */
+archive: CommandMethod<OneThread, null>, 
+/**
+ * Brings an archived Thread back to its Person's list. One not
+ * archived stays as it is. Only a Person does.
+ */
+unarchive: CommandMethod<OneThread, null>, 
+/**
+ * Moves the marks a window kept of this Project's Threads to
+ * their host, once: the Threads it showed archived, by ID, each
+ * archived from now. A Thread the host does not know or has
+ * archived, one at work, one that asks and one asleep are left
+ * as they are. Only a Person moves them.
+ */
+import_marks: CommandMethod<ImportMarks, Imported>, 
 /**
  * Renames a Thread: one line of up to 120 characters. Without a
  * title, or with a blank one, its first message's title comes
