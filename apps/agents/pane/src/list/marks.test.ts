@@ -19,29 +19,29 @@ const ended = (state: TurnView["state"]) =>
   thread({ latest: { turn: "u1", state, began: 1 } })
 
 test("a Thread asks, works, fails, finishes or rests", () => {
-  expect(markOf(thread(), {})).toBe("rest")
-  expect(markOf(ended("running"), {})).toBe("running")
-  expect(markOf(ended("done"), {})).toBe("done")
-  expect(markOf(ended("failed"), {})).toBe("failed")
-  expect(markOf(ended("interrupted"), {})).toBe("failed")
-  expect(markOf(ended("stopped"), {})).toBe("rest")
+  expect(markOf(thread())).toBe("rest")
+  expect(markOf(ended("running"))).toBe("running")
+  expect(markOf(ended("done"))).toBe("done")
+  expect(markOf(ended("failed"))).toBe("failed")
+  expect(markOf(ended("interrupted"))).toBe("failed")
+  expect(markOf(ended("stopped"))).toBe("rest")
   const asking = thread({
     latest: { turn: "u1", state: "running", began: 1 },
     asking: [{ item: "q1", title: "Which?" }],
   })
-  expect(markOf(asking, {})).toBe("asking")
+  expect(markOf(asking)).toBe("asking")
 })
 
-test("a turn the Person saw end settles; a Question still asks", () => {
-  const seen = { t1: "u1" }
-  expect(markOf(ended("done"), seen)).toBe("rest")
-  expect(markOf(ended("failed"), seen)).toBe("rest")
-  expect(markOf(ended("done"), { t1: "u0" })).toBe("done")
+test("a turn its host keeps seen settles; a Question still asks", () => {
+  const seen = (state: TurnView["state"], turn = "u1") => ({
+    ...ended(state),
+    seen: turn,
+  })
+  expect(markOf(seen("done"))).toBe("rest")
+  expect(markOf(seen("failed"))).toBe("rest")
+  expect(markOf(seen("done", "u0"))).toBe("done")
   expect(
-    markOf(
-      thread({ ...ended("done"), asking: [{ item: "q1", title: "Which?" }] }),
-      seen
-    )
+    markOf({ ...seen("done"), asking: [{ item: "q1", title: "Which?" }] })
   ).toBe("asking")
 })
 
@@ -52,12 +52,12 @@ test("a Project calls with its loudest Thread, and counts who waits", () => {
     { ...ended("done"), id: "t3" },
     { ...thread({ asking: [{ item: "q", title: "Which?" }] }), id: "t4" },
   ]
-  expect(attentionOf(threads, {})).toEqual({ mark: "failed", waiting: 2 })
-  expect(attentionOf(threads, { t2: "u1" })).toEqual({
-    mark: "asking",
-    waiting: 1,
-  })
-  expect(attentionOf([], {})).toEqual({ mark: "rest", waiting: 0 })
+  expect(attentionOf(threads)).toEqual({ mark: "failed", waiting: 2 })
+  const seen = threads.map((one) =>
+    one.id === "t2" ? { ...one, seen: "u1" } : one
+  )
+  expect(attentionOf(seen)).toEqual({ mark: "asking", waiting: 1 })
+  expect(attentionOf([])).toEqual({ mark: "rest", waiting: 0 })
 })
 
 test("the turn a Person sees settled is the latest that began and ended", () => {

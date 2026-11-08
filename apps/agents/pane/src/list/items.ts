@@ -38,7 +38,7 @@ import {
   SparklesIcon,
   Undo2Icon,
 } from "lucide-react"
-import { markUnread } from "./seen"
+import { mark } from "./sent"
 
 /** A Thread as an item action finds it: its Project, and how the lists
  * hold it. */
@@ -217,8 +217,9 @@ const previous: ItemAction = {
 
 /** Takes back the Person's "seen" of what the Thread last finished, which
  * then calls them again, or gives it (ADR 0077, decision 6); nothing for a
- * Thread with nothing finished to see. The seen mark stays Threads' until
- * the platform keeps it by what is new (E8a). */
+ * Thread with nothing finished to see. The Thread's host keeps the mark,
+ * so it goes there (ADR 0096); a Pane that shows the Thread leaves it as
+ * it is until the Person leaves the Thread and comes back. */
 const unread: ItemAction = {
   id: "thread.unread",
   section: "Threads",
@@ -226,6 +227,7 @@ const unread: ItemAction = {
   keys: [{ code: "KeyU", mod: true, shift: true }],
   args: itemArgs(),
   group: "name",
+  elsewhere: true,
   row: (item) =>
     item.seen === undefined
       ? null
@@ -234,7 +236,11 @@ const unread: ItemAction = {
         : { title: "Mark as read", icon: CircleIcon },
   run: (window, args) => {
     const at = threadAt(window, args)
-    if (at?.listed.seen !== undefined) markUnread(at.listed.id, at.listed.seen)
+    if (at?.listed.seen === undefined) return
+    const thread = at.listed.id as ThreadId
+    // Read: the latest turn that ended, as its host knows it.
+    const seen = at.listed.seen ? null : "latest"
+    void mark(engineOf(window, at), at.project, thread, { seen })
   },
 }
 

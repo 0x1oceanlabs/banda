@@ -21,12 +21,8 @@ vi.mock("@banda/ui/components/sonner", () => ({
     { error: (words: string) => said.errors.push(words) }
   ),
 }))
-const unread = vi.hoisted(() => [] as [string, boolean][])
-vi.mock("./seen", () => ({
-  markUnread: (id: string, on: boolean) => unread.push([id, on]),
-}))
-
 const { threadItems, suggestTitle } = await import("./items")
+const { sendingTo } = await import("./sent")
 
 const S1 = "s1" as ProjectId
 
@@ -50,20 +46,35 @@ function fake(item: Listed, title: string | Error = "") {
   const asked: { host: string | undefined; name: string }[] = []
   const sent: [string, unknown][] = []
   const ran: [string, Args | undefined][] = []
-  const engineOf = (host: string | undefined) =>
-    ({
-      command: (name: string, args: { title?: string }) => {
-        asked.push({ host, name })
-        sent.push([name, args])
-        if (name === "agents.rename") {
-          named.push(args.title ?? null)
-          return Promise.resolve()
-        }
-        return title instanceof Error
-          ? Promise.reject(title)
-          : Promise.resolve(title)
-      },
-    }) as unknown as Engine
+  const command = (host: string | undefined) => {
+    return (name: string, args: { title?: string }) => {
+      asked.push({ host, name })
+      sent.push([name, args])
+      if (name === "agents.rename") {
+        named.push(args.title ?? null)
+        return Promise.resolve()
+      }
+      return title instanceof Error
+        ? Promise.reject(title)
+        : Promise.resolve(title)
+    }
+  }
+  // One engine for each host, as the Window keeps them.
+  const engines = new Map<string | undefined, Engine>()
+  const engineOf = (host: string | undefined) => {
+    const kept = engines.get(host)
+    if (kept) return kept
+    const asks = command(host)
+    const engine = {
+      status: { state: "open" },
+      watch: () => () => undefined,
+      command: asks,
+      commandAt: (name: string, args: { title?: string }) =>
+        asks(name, args).then((answer) => ({ answer, at: 3 })),
+    } as unknown as Engine
+    engines.set(host, engine)
+    return engine
+  }
   const lists: Lists = { [S1]: [item] }
   const here = {
     pane: { id: "e1", project: S1, subject: item.id },
@@ -77,7 +88,7 @@ function fake(item: Listed, title: string | Error = "") {
       ),
     run: (action: string, args?: Args) => void ran.push([action, args]),
   } as unknown as WindowApi
-  return { window, named, asked, sent, ran, here }
+  return { window, named, asked, sent, ran, here, engineOf }
 }
 
 const action = (id: string) => {
@@ -91,7 +102,6 @@ const AT = { now: 0, archived: false }
 beforeEach(() => {
   said.toasts = []
   said.errors = []
-  unread.length = 0
   stopNaming()
 })
 
@@ -203,19 +213,34 @@ test("Previous title gives back the one before; a Thread never renamed has no ro
   expect(named).toEqual(["Before"])
 })
 
-test("Mark as unread works both ways, and only on a Thread with a finished turn", () => {
+test("Mark as unread works both ways, on the Thread's host, and only on a Thread with a finished turn", () => {
   const mark = action("thread.unread")
-  for (const seen of [true, false, undefined]) {
-    const { window } = fake(listed({ seen }))
-    mark.run(window, { project: "s1", item: "t1" })
-  }
-  expect(unread).toEqual([
-    ["t1", true],
-    ["t1", false],
+  const at = { project: "s1", item: "t1" }
+  const sent = [true, false, undefined].flatMap((seen) => {
+    const one = fake(listed({ seen }))
+    mark.run(one.window, at)
+    return one.sent
+  })
+  expect(sent).toEqual([
+    ["agents.unread", { thread: "t1" }],
+    // Read: the latest turn that ended, as the host knows it.
+    ["agents.read", { thread: "t1" }],
   ])
   expect(mark.row(listed({ seen: true }), AT)?.title).toBe("Mark as unread")
   expect(mark.row(listed({ seen: false }), AT)?.title).toBe("Mark as read")
   expect(mark.row(listed(), AT)).toBeNull()
+
+  // Another host's Thread is marked on its engine, never on this one's.
+  const arc = fake(
+    listed({
+      seen: true,
+      pane: { kind: "agents.thread", args: { host: "arc" } },
+    })
+  )
+  mark.run(arc.window, at)
+  expect(arc.asked).toEqual([{ host: "arc", name: "agents.unread" }])
+  expect(sendingTo(arc.engineOf("arc")).t1?.seen?.to).toBeNull()
+  expect(sendingTo(arc.engineOf(undefined))).toEqual({})
 })
 
 test("Make a Project is a row of a Thread in No Project alone, and the Window's dialog does it", () => {

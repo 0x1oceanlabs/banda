@@ -9,19 +9,17 @@ import { loudest, type MarkState } from "@banda/ui/components/banda-mark"
 import type { Attention } from "@banda/ui/pane"
 
 /**
- * The turn of a Thread its Person has seen since it ended, by Thread: what
- * settles a turn that finished or failed. A Question asks until it is
- * answered, seen or not.
+ * A Thread's mark: the loudest thing about it the Person has not seen. A
+ * turn that finished or failed settles once its host keeps it seen, the
+ * latest that ended the Person saw (ADR 0096); a Question asks until it
+ * is answered, seen or not.
  */
-export type Seen = Readonly<Record<string, TurnId>>
-
-/** A Thread's mark: the loudest thing about it the Person has not seen. */
-export function markOf(thread: ListedThread, seen: Seen): MarkState {
+export function markOf(thread: ListedThread): MarkState {
   if (thread.asking.length > 0) return "asking"
   const { latest } = thread
   if (!latest) return "rest"
   if (latest.state === "running") return "running"
-  if (seen[thread.id] === latest.turn) return "rest"
+  if (thread.seen === latest.turn) return "rest"
   switch (latest.state) {
     case "done":
       return "done"
@@ -41,11 +39,8 @@ export function needsPerson(mark: MarkState): boolean {
 }
 
 /** What a Project's Threads call their Person for, all together. */
-export function attentionOf(
-  threads: readonly ListedThread[],
-  seen: Seen
-): Attention {
-  const marks = threads.map((thread) => markOf(thread, seen))
+export function attentionOf(threads: readonly ListedThread[]): Attention {
+  const marks = threads.map(markOf)
   return { mark: loudest(marks), waiting: marks.filter(needsPerson).length }
 }
 

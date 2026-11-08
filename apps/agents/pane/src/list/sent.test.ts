@@ -2,6 +2,8 @@ import type { Engine, ProjectId, Status } from "@banda/contract"
 import type { ListedThread, ThreadList } from "@banda/contract/agents"
 import { beforeEach, expect, test, vi } from "vitest"
 import { applyThreads } from "./list"
+import { attentionOf } from "./marks"
+import { listedOf } from "./rows"
 import { event, person } from "../testing"
 
 const said = vi.hoisted(() => ({ errors: [] as string[] }))
@@ -342,4 +344,34 @@ test("settling what holds nothing new changes nothing", () => {
   settle(engine, list(99, thread()))
   settle(engine, list(99, thread({ id: "t2" })))
   expect(sendingTo(engine)).toBe(before)
+})
+
+test("the bar's Mark, the waiting count and the rows follow what was sent, as the Watch reports them", () => {
+  const { engine } = engineIn()
+  const failed = thread({
+    id: "t2",
+    latest: { turn: "u2", state: "failed", began: 4 },
+    seen: "u2",
+  })
+  const threads = [thread({ seen: "u1" }), failed]
+  const report = () => {
+    const now = shown(threads, sendingTo(engine))
+    return {
+      ...attentionOf(now),
+      marks: now.map((one) => listedOf(one, "Fake AI").mark),
+    }
+  }
+  expect(report()).toEqual({
+    mark: "rest",
+    waiting: 0,
+    marks: ["rest", "rest"],
+  })
+  // Marked unread: done again, and the failed one calls for the Person.
+  void mark(engine, PROJECT, "t1", { seen: null })
+  void mark(engine, PROJECT, "t2", { seen: null })
+  expect(report()).toEqual({
+    mark: "failed",
+    waiting: 1,
+    marks: ["done", "failed"],
+  })
 })

@@ -2,15 +2,14 @@ import type { Engine, ProjectId } from "@banda/contract"
 import type { ThreadId, TurnId } from "@banda/contract/agents"
 import { beforeEach, expect, test, vi } from "vitest"
 import { presence } from "./presence"
-import { seeWhenPresent } from "./session"
 
-/** What this window's storage was told the Person saw. */
-const marked = vi.hoisted((): [string, string][] => [])
-
-vi.mock("../list/seen", async (original) => ({
-  ...(await original<typeof import("../list/seen")>()),
-  markSeen: (thread: string, turn: string) => void marked.push([thread, turn]),
+const said = vi.hoisted(() => ({ errors: [] as string[] }))
+vi.mock("@banda/ui/components/sonner", () => ({
+  toast: { error: (words: string) => void said.errors.push(words) },
 }))
+
+const { seeWhenPresent } = await import("./session")
+const { sendingTo } = await import("../list/sent")
 
 const PROJECT = "0196f000-0000-7000-8000-000000000021" as ProjectId
 const THREAD = "0196f000-0000-7000-8000-000000000001" as ThreadId
@@ -21,41 +20,43 @@ function engineIn(state: string, refuses = false) {
   const sent: unknown[][] = []
   const engine = {
     status: { state },
-    command: async (...asked: unknown[]) => {
-      sent.push(asked)
+    watch: () => () => undefined,
+    commandAt: async (method: string, params: unknown, project: string) => {
+      sent.push([method, params, project])
       if (refuses) throw new Error("unknown method")
-      return null
+      return { answer: null, at: 7 }
     },
   } as unknown as Engine
   return { engine, sent }
 }
 
-beforeEach(() => void marked.splice(0))
+beforeEach(() => void (said.errors = []))
 
-test("the mark goes to the Pane's own engine, in its Project, and stays here too", () => {
+test("the mark goes to the Pane's own engine, in its Project, and shows at once", () => {
   const { engine, sent } = engineIn("open")
   seeWhenPresent(engine, PROJECT, THREAD, TURN)
   expect(sent).toEqual([
     ["agents.read", { thread: THREAD, turn: TURN }, PROJECT],
   ])
-  expect(marked).toEqual([[THREAD, TURN]])
+  expect(sendingTo(engine)[THREAD]?.seen?.to).toBe(TURN)
 })
 
-test("a host away is not sent the mark to keep for later; this window keeps it", () => {
+test("a host away is not sent the mark to keep for later, and none shows", () => {
   for (const state of ["connecting", "lost", "refused"]) {
     const { engine, sent } = engineIn(state)
     seeWhenPresent(engine, PROJECT, THREAD, TURN)
     expect(sent).toEqual([])
+    expect(sendingTo(engine)).toEqual({})
   }
-  expect(marked).toHaveLength(3)
+  expect(said.errors).toEqual([])
 })
 
 test("a host that refuses it, as an older one, says nothing", async () => {
   const { engine, sent } = engineIn("open", true)
   seeWhenPresent(engine, PROJECT, THREAD, TURN)
-  // An unhandled refusal would fail the run.
-  await Promise.resolve()
+  await vi.waitFor(() => expect(sendingTo(engine)).toEqual({}))
   expect(sent).toHaveLength(1)
+  expect(said.errors).toEqual([])
 })
 
 test("nothing is marked until the Person is there, and nothing once called off", () => {
@@ -66,7 +67,6 @@ test("nothing is marked until the Person is there, and nothing once called off",
   expect(first.sent).toEqual([])
   target.dispatchEvent(new Event("keydown"))
   expect(first.sent).toHaveLength(1)
-  expect(marked).toHaveLength(1)
 
   // The Pane lost the focus before the Person came back.
   const away = new EventTarget()
@@ -81,5 +81,5 @@ test("nothing is marked until the Person is there, and nothing once called off",
   off()
   away.dispatchEvent(new Event("keydown"))
   expect(second.sent).toEqual([])
-  expect(marked).toHaveLength(1)
+  expect(sendingTo(second.engine)).toEqual({})
 })

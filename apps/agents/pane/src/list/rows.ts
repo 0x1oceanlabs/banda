@@ -15,7 +15,7 @@ import {
   paneOf,
   type PaneState,
 } from "@banda/ui/pane"
-import { markOf, type Seen } from "./marks"
+import { markOf } from "./marks"
 import { threadPane } from "../ThreadPane"
 
 /** What a failed turn says when its Harness gave no reason. */
@@ -75,11 +75,10 @@ function choicesOf(choices: readonly Choice[]): Choice[] {
 
 export function listedOf(
   thread: ListedThread,
-  seen: Seen,
   harness: string,
   project?: ProjectId
 ): Listed {
-  const mark = markOf(thread, seen)
+  const mark = markOf(thread)
   const { latest } = thread
   const calls =
     mark === "asking"
@@ -95,10 +94,10 @@ export function listedOf(
   const said = line && line !== thread.title ? line : undefined
   // A finished turn that calls when unseen: "Mark as unread" makes it call
   // again (ADR 0077, decision 6).
-  const unseen = markOf({ ...thread, asking: [] }, {})
+  const unseen = markOf({ ...thread, asking: [], seen: undefined })
   const seenNow =
     latest && (unseen === "done" || unseen === "failed")
-      ? seen[thread.id] === latest.turn
+      ? thread.seen === latest.turn
       : undefined
   return {
     id: thread.id,

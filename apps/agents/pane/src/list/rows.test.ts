@@ -15,7 +15,6 @@ const thread = (more: Partial<ListedThread> = {}): ListedThread => ({
 test("a quiet Thread lists its title, Harness, Agent and what it was asked", () => {
   const listed = listedOf(
     thread({ message: "fix the form\nand more" }),
-    {},
     "Claude"
   )
   expect(listed).toMatchObject({
@@ -38,7 +37,7 @@ test("a Thread that asks says what it asks", () => {
     latest: { turn: "u1", state: "running", began: 3 },
     asking: [{ item: "q1", title: "Run npm test?" }],
   })
-  expect(listedOf(asking, {}, "Claude")).toMatchObject({
+  expect(listedOf(asking, "Claude")).toMatchObject({
     mark: "asking",
     calls: "Run npm test?",
     began: 3,
@@ -48,52 +47,50 @@ test("a Thread that asks says what it asks", () => {
 test("a failed Thread says why, or that it failed", () => {
   const failed = (reason?: string) =>
     thread({ latest: { turn: "u1", state: "failed", began: 3, reason } })
-  expect(listedOf(failed("Sign in to Codex"), {}, "").calls).toBe(
+  expect(listedOf(failed("Sign in to Codex"), "").calls).toBe(
     "Sign in to Codex"
   )
-  expect(listedOf(failed(), {}, "").calls).toBe(FAILED)
-  expect(listedOf(failed(), { t1: "u1" }, "").calls).toBeUndefined()
+  expect(listedOf(failed(), "").calls).toBe(FAILED)
+  expect(listedOf({ ...failed(), seen: "u1" }, "").calls).toBeUndefined()
 })
 
 test("a done Thread says what its Agent told of its turn, once it is unseen", () => {
   const done = (note?: string) =>
     thread({ latest: { turn: "u1", state: "done", began: 3, note } })
-  expect(listedOf(done("PR #470 is open"), {}, "")).toMatchObject({
+  expect(listedOf(done("PR #470 is open"), "")).toMatchObject({
     mark: "done",
     calls: "PR #470 is open",
   })
-  expect(listedOf(done(), {}, "").calls).toBeUndefined()
+  expect(listedOf(done(), "").calls).toBeUndefined()
   expect(
-    listedOf(done("PR #470 is open"), { t1: "u1" }, "").calls
+    listedOf({ ...done("PR #470 is open"), seen: "u1" }, "").calls
   ).toBeUndefined()
 })
 
 test("what it was asked shows only when it says more than the title", () => {
-  expect(listedOf(thread({ message: "Hello" }), {}, "").said).toBeUndefined()
+  expect(listedOf(thread({ message: "Hello" }), "").said).toBeUndefined()
 })
 
 test("a new Thread with no title yet is a New Thread", () => {
-  expect(listedOf(thread({ title: "" }), {}, "").title).toBe("New Thread")
+  expect(listedOf(thread({ title: "" }), "").title).toBe("New Thread")
 })
 
 test("a Thread whose turn finished says whether its Person saw it, for Mark as unread", () => {
   const ended = (state: "done" | "failed" | "stopped") =>
     thread({ latest: { turn: "u1", state, began: 3 } })
-  expect(listedOf(ended("done"), {}, "").seen).toBe(false)
-  expect(listedOf(ended("done"), { t1: "u1" }, "").seen).toBe(true)
-  expect(listedOf(ended("failed"), { t1: "u1" }, "").seen).toBe(true)
+  expect(listedOf(ended("done"), "").seen).toBe(false)
+  expect(listedOf({ ...ended("done"), seen: "u1" }, "").seen).toBe(true)
+  expect(listedOf({ ...ended("failed"), seen: "u1" }, "").seen).toBe(true)
   // Stopped by the Person, running, or not begun: nothing to see.
-  expect(listedOf(ended("stopped"), {}, "").seen).toBeUndefined()
+  expect(listedOf(ended("stopped"), "").seen).toBeUndefined()
   const running = thread({ latest: { turn: "u1", state: "running", began: 3 } })
-  expect(listedOf(running, {}, "").seen).toBeUndefined()
-  expect(listedOf(thread(), {}, "").seen).toBeUndefined()
+  expect(listedOf(running, "").seen).toBeUndefined()
+  expect(listedOf(thread(), "").seen).toBeUndefined()
 })
 
 test("a renamed Thread lists the title it had before", () => {
-  expect(listedOf(thread({ was: "hello there" }), {}, "").was).toBe(
-    "hello there"
-  )
-  expect(listedOf(thread(), {}, "").was).toBeUndefined()
+  expect(listedOf(thread({ was: "hello there" }), "").was).toBe("hello there")
+  expect(listedOf(thread(), "").was).toBeUndefined()
 })
 
 test("a toast answers a Question by its choices, and a failed turn by trying again or signing in", () => {
@@ -106,7 +103,7 @@ test("a toast answers a Question by its choices, and a failed turn by trying aga
     latest: { turn: "u1", state: "running", began: 3 },
     asking: [{ item: "q1", title: "Run npm test?", choices }],
   })
-  expect(listedOf(asking, {}, "", "p").answers).toEqual([
+  expect(listedOf(asking, "", "p").answers).toEqual([
     {
       label: "Allow",
       action: ANSWER,
@@ -123,7 +120,7 @@ test("a toast answers a Question by its choices, and a failed turn by trying aga
     latest: { turn: "u1", state: "running", began: 3 },
     asking: [{ item: "q1", title: "Which?" }],
   })
-  expect(listedOf(form, {}, "", "p").answers).toBeUndefined()
+  expect(listedOf(form, "", "p").answers).toBeUndefined()
 
   const failed = (failure?: { class: "sign_in" }) =>
     thread({
@@ -134,12 +131,12 @@ test("a toast answers a Question by its choices, and a failed turn by trying aga
         ...(failure && { failure }),
       },
     })
-  expect(listedOf(failed(), {}, "", "p").answers).toEqual([
+  expect(listedOf(failed(), "", "p").answers).toEqual([
     { label: "Try again", action: RETRY, args: { project: "p", turn: "u1" } },
   ])
-  expect(
-    listedOf(failed({ class: "sign_in" }), {}, "", "p").answers
-  ).toMatchObject([{ label: "Sign in", action: SHOW }])
+  expect(listedOf(failed({ class: "sign_in" }), "", "p").answers).toMatchObject(
+    [{ label: "Sign in", action: SHOW }]
+  )
   // Seen, it calls no more.
-  expect(listedOf(failed(), { t1: "u1" }, "", "p").answers).toBeUndefined()
+  expect(listedOf({ ...failed(), seen: "u1" }, "", "p").answers).toBeUndefined()
 })

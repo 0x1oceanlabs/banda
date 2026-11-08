@@ -165,7 +165,7 @@ test("the frozen rule archives what the window's showed archived, and no more", 
               }
   const live = ({ thread, old }: (typeof cases)[number]) =>
     wasArchived(
-      listedOf(thread, old.seen, "fake"),
+      listedOf({ ...thread, seen: old.seen[thread.id] }, "fake"),
       old.says[thread.id],
       old.before
     )
