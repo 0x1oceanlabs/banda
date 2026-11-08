@@ -7,7 +7,9 @@ import type { Columns } from "@banda/contract/look"
 import { cn } from "@banda/ui/lib/utils"
 import type { Listed } from "@banda/ui/pane"
 import { type GroupState, groupState } from "@banda/ui/components/banda-mark"
+import { useLookColumns } from "../look"
 import { agentsOf } from "../tiling/groups"
+import { type Listing, useShown } from "../tiling/listing"
 import { type Entry, share, widthIn, type Workspace } from "../tiling/model"
 
 /** A column of the map: its share of the screen, its Group, if any, and
@@ -41,7 +43,17 @@ export function mapOf(
 /** How wide the whole screen is drawn, in rem. */
 const SCREEN = 2.5
 
-export function WorkspaceMap({ columns }: { columns: readonly MapColumn[] }) {
+/** The map of `workspace`, its Groups' states as `listing` says them,
+ * drawn again only as those change. */
+export function WorkspaceMap({
+  workspace,
+  listing,
+}: {
+  workspace: Workspace
+  listing: Listing
+}) {
+  const { listed } = useShown(listing, workspace)
+  const columns = mapOf(workspace, useLookColumns(), listed)
   if (columns.length < 2 || !columns.some((c) => c.group !== undefined)) {
     return null
   }

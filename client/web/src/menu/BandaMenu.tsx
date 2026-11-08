@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -50,7 +51,8 @@ import {
   SearchIcon,
 } from "lucide-react"
 import { KEYS_FILE, writeBind } from "../actions/actions"
-import type { Listed, Lists } from "@banda/ui/pane"
+import type { Listed } from "@banda/ui/pane"
+import { all, useItems } from "../calls/stores"
 import { useLookSidebar } from "../look"
 import { runs, sources as allSources } from "../registry"
 import type { Shell } from "../window/actions"
@@ -96,9 +98,10 @@ import { useKeyOf } from "@banda/ui/hooks/use-key-of"
  * The Banda menu (ADR 0017): one window in the middle that finds and runs
  * everything, opened by Alt+Space at its root, by Alt+K at its Actions,
  * or by `banda menu` at a route. It goes into branches itself; what else
- * is chosen, the window runs.
+ * is chosen, the window runs. Drawn again only as its own props change:
+ * what the Apps list it reads only while open.
  */
-export function BandaMenu({
+export const BandaMenu = memo(function BandaMenu({
   opening,
   onClose,
   onChoose,
@@ -106,7 +109,6 @@ export function BandaMenu({
   engine,
   modules,
   project,
-  lists,
   asleep,
   projects,
   actions,
@@ -124,7 +126,6 @@ export function BandaMenu({
   modules: readonly string[]
   /** The Project the Person is in, where the sources look. */
   project: ProjectId
-  lists: Lists
   /** Whether a Thread sleeps now (ADR 0074), by the window's clock. */
   asleep: (listed: Listed) => boolean
   projects: readonly ProjectSummary[]
@@ -203,7 +204,6 @@ export function BandaMenu({
               key={opening.n}
               engine={engine}
               opening={opening}
-              lists={lists}
               asleep={asleep}
               projects={projects}
               actions={actions}
@@ -225,7 +225,7 @@ export function BandaMenu({
       </Dialog>
     </>
   )
-}
+})
 
 /** One source, finding for the menu; what it found leaves with it. */
 function Finder({
@@ -258,7 +258,6 @@ const NOWHERE: Looking = { words: "" }
 function Menu({
   engine,
   opening,
-  lists,
   asleep,
   projects,
   actions,
@@ -271,7 +270,6 @@ function Menu({
 }: {
   engine: Engine
   opening: Opening
-  lists: Lists
   asleep: (listed: Listed) => boolean
   projects: readonly ProjectSummary[]
   actions: readonly Action<Shell>[]
@@ -284,6 +282,7 @@ function Menu({
   onChoose: (row: Exclude<Choice, Branch | Own>) => void
   onAdded: (project: ProjectSummary) => void
 }) {
+  const lists = useItems(all)
   // New Thread's key in force starts one with the words.
   const ask = useKeyOf()("thread.new")
   const { preset, presets } = useLookSidebar()

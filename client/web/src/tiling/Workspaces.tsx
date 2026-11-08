@@ -1,18 +1,13 @@
 import { cn } from "@banda/ui/lib/utils"
 import { useEffect, useLayoutEffect, useRef } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
-import {
-  holderOf,
-  type Listed,
-  PANE_LAYER,
-  type PaneState,
-} from "@banda/ui/pane"
+import { holderOf, PANE_LAYER, type PaneState } from "@banda/ui/pane"
 import { moveOf } from "../look"
 import { Moving } from "../motion"
-import type { Chime } from "@banda/ui/sound"
 import type { Entry, Workspaces as State } from "./model"
 import type { Frame } from "./PaneFrame"
 import type { Reveal } from "./layout"
+import type { Listing } from "./listing"
 import { Strip } from "./Strip"
 import { useModHeld } from "./held"
 import { pixels, Swipe } from "./swipe"
@@ -35,12 +30,11 @@ export function Workspaces({
   engine,
   modules,
   projectOf,
-  called,
+  listing,
   marked,
   away,
   zoomed,
   reveal,
-  listed,
   frame,
   onStep,
   onGo,
@@ -55,8 +49,8 @@ export function Workspaces({
   engine: Engine
   modules: readonly string[]
   projectOf: (project: ProjectId) => ProjectSummary | undefined
-  /** How the Thread a Pane shows calls the Person, if it does. */
-  called: (entry: Entry) => Chime | undefined
+  /** What the Panes show, as their Apps list it, and how each calls. */
+  listing: Listing
   /** An Agent opened it, and the Person has not looked at it yet. */
   marked: (entry: Entry) => boolean
   /** The Panes in windows of their own, which stand-ins keep the places of. */
@@ -65,8 +59,6 @@ export function Workspaces({
   zoomed: string | undefined
   /** A column to show once, as asked: Alt+C's, or a Thread picked. */
   reveal?: Reveal
-  /** The listed thing a Pane shows, as its module lists it. */
-  listed: (entry: Entry) => Listed | undefined
   frame: Frame
   /** A swipe up or down with the mod held steps once, however long it is. */
   onStep: (by: 1 | -1) => void
@@ -218,12 +210,11 @@ export function Workspaces({
               engine={engine}
               modules={modules}
               projectOf={projectOf}
-              called={called}
+              listing={listing}
               marked={marked}
               away={away}
               zoomed={zoomed}
               reveal={reveal}
-              listed={listed}
               frame={frame}
               onStep={onStep}
               onStart={onStart}

@@ -13,23 +13,15 @@ import {
   type ProjectSummary,
   type Status,
 } from "@banda/contract"
-import { waits, works } from "@banda/ui/components/banda-mark"
 import { Toaster, toast } from "@banda/ui/components/sonner"
 import { clock, problem } from "@banda/ui/lib/words"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openProjects, updateProject } from "@banda/ui/lib/projects"
-import {
-  asleep,
-  callsOf,
-  IN_PROGRAM,
-  type Listed,
-  type Lists,
-  type PaneState,
-  QUIET,
-} from "@banda/ui/pane"
+import { sameEach, useStore } from "@banda/ui/lib/store"
+import { asleep, IN_PROGRAM, type Listed, type PaneState } from "@banda/ui/pane"
 import { DEFAULT_KEYS, type Mod } from "@banda/contract/look"
-import type { Action, Args, Thing, WindowApi } from "@banda/ui/module"
+import type { Action, Thing } from "@banda/ui/module"
 import {
   actionFor,
   inScope,
@@ -38,13 +30,22 @@ import {
   withKeys,
 } from "../actions/actions"
 import { Bar } from "../bar/Bar"
-import { mapOf } from "../bar/Map"
+import { WorkspaceMap } from "../bar/Map"
 import { tomlOf } from "@banda/contract/settings"
 import { useWidgets } from "../bar/Widgets"
 import type { Layout } from "../bar/arrange"
 import { PARTS } from "../bar/placed"
 import { Watches } from "../bar/Watches"
 import { besideOf, isShowing, nextCall, sightOf } from "../calls/sight"
+import {
+  callingIn,
+  followCalls,
+  listedIn,
+  newStores,
+  StoresContext,
+  watchLists,
+  workingIn,
+} from "../calls/stores"
 import { sidebarOrder } from "../sidebar/order"
 import { WELL, wentWell } from "../safe/starts"
 import { useProblemNews } from "../problems/news"
@@ -87,7 +88,7 @@ import { QuitDialog } from "./Quit"
 import {
   seeWoke,
   snoozeAct,
-  useSnoozes,
+  useSnoozesAt,
   wokeAt,
   wokeTold,
 } from "../sidebar/snoozed"
@@ -96,6 +97,7 @@ import { attachTo, focusedOn } from "./attach"
 import { useNarrow } from "./narrow"
 import { floorOf, type Reveal, shownOf } from "../tiling/layout"
 import type { Change } from "../tiling/arrange"
+import type { Listing } from "../tiling/listing"
 import { useTiling } from "../tiling/useTiling"
 import {
   current,
@@ -153,6 +155,7 @@ import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { holdsAlone, withMore } from "@banda/ui/lib/keys"
 import { ThreadMenus } from "../titles/ThreadMenu"
 import { scopesOf } from "@banda/ui/hooks/use-scope"
+import { useSteady } from "./steady"
 
 /** What takes an Esc before Quick Look's tile: a menu, a dialog or a
  * list of suggestions over it. */
@@ -206,21 +209,6 @@ const menuSources = sources.map(({ source }) => source)
 
 /** The presses the window made to hand a key on, which it leaves alone. */
 const HANDED = new WeakSet<Event>()
-
-/** How many of what the modules list work now: the Agents at work. */
-function workingIn(lists: Lists): number {
-  return Object.values(lists)
-    .flat()
-    .filter((listed) => works(listed.mark)).length
-}
-
-/** What a Pane shows, as its module lists it in `lists`. */
-function listedIn(lists: Lists, entry: Entry): Listed | undefined {
-  const thing = showsOf(entry.pane)
-  return thing
-    ? lists[entry.project]?.find((row) => row.id === thing)
-    : undefined
-}
 
 export function Shell({
   engine,
@@ -289,8 +277,6 @@ export function Shell({
   )
   const overview = overviewState !== "closed"
   const [menu, setMenu] = useState<Opening | null>(null)
-  const [attention, setAttention] = useState(QUIET)
-  const [lists, setLists] = useState<Lists>({})
 
   // The Panes that had the focus, for where an App's attach goes.
   const focusedId = focused(workspaces)?.id
@@ -335,30 +321,34 @@ export function Shell({
     before.current = workspaces
   }, [engine, workspaces])
 
-  // What calls the Person, for the Marks, the rings and Alt+U; the
-  // notifications module tells of it (ADR 0056, decision 1).
-  // Snoozes, read by a clock that moves as the next one wakes (ADR 0074):
-  // a Thread that sleeps calls no one, and calls again as it wakes.
-  const snoozes = useSnoozes(lists)
-  const calling = useMemo(
-    () => callsOf(lists, snoozes.now),
-    [lists, snoozes.now]
-  )
+  // What the Apps list and what calls the Person, for the Marks, the
+  // rings and Alt+U, kept outside React: a list that changes draws again
+  // only what reads it (ADR 0088, decision 7). The notifications module
+  // tells of what calls (ADR 0056, decision 1). Snoozes are read by a
+  // clock that moves as the next one wakes (ADR 0074): a Thread that
+  // sleeps calls no one, and calls again as it wakes.
+  const [stores] = useState(newStores)
+  useEffect(() => followCalls(stores), [stores])
+  const snoozes = useSnoozesAt(useStore(stores.calls, (calls) => calls.now))
+  // What the Tiling reads of them, the same for the Window's life.
+  const [listing] = useState((): Listing => ({
+    listed: (entry) => listedIn(stores.items.get(), entry, showsOf),
+    called: (entry) =>
+      stores.calls.get().list.find((call) => isShowing(entry, call, showsOf))
+        ?.chime,
+    subscribe: (listener) => {
+      const stops = [stores.items, stores.calls].map((one) =>
+        one.subscribe(listener)
+      )
+      return () => stops.forEach((stop) => stop())
+    },
+  }))
   // Alt+C's column to the middle, and a Thread picked, from the Inbox,
   // the bar or a call, to the left (ADR 0065, decision 8): once each.
   const [reveal, setReveal] = useState<Reveal>()
   const picked = useCallback((entry: string | void) => {
     if (entry) setReveal({ entry, how: "left" })
   }, [])
-  // What the modules list now, for what reads it later.
-  const listsNow = useRef(lists)
-  // Who hears the lists change: a module, as the browser for its tabs.
-  const listsHeard = useRef(new Set<() => void>())
-  // They hear it as a snooze ends too: what calls has changed.
-  useEffect(() => {
-    listsNow.current = lists
-    for (const listener of listsHeard.current) listener()
-  }, [lists, snoozes.now])
   // A Thread picked comes to the left, once its Pane is drawn.
   const picking = useCallback(
     (how: Change) => void changing(how).then(picked),
@@ -371,19 +361,19 @@ export function Shell({
   )
   // Alt+U: the next call below the Thread in front, as the sidebar lists
   // them (ADR 0079, decision 4).
-  const heard = useRef({ calling, snoozes, projects })
+  const heard = useRef({ snoozes, projects })
   useEffect(() => {
-    heard.current = { calling, snoozes, projects }
-  }, [calling, snoozes, projects])
+    heard.current = { snoozes, projects }
+  }, [snoozes, projects])
   const answer = useCallback(() => {
-    const { calling, snoozes, projects } = heard.current
-    const order = sidebarOrder(listsNow.current, projects, snoozes)
+    const { snoozes, projects } = heard.current
+    const order = sidebarOrder(stores.items.get(), projects, snoozes)
     const entry = focused(drawnNow())
     const thing = entry && showsOf(entry.pane)
     const here = entry && thing ? `${entry.project}:${thing}` : undefined
-    const call = nextCall(calling, order, here)
+    const call = nextCall(stores.calls.get().list, order, here)
     if (call) goToCall(call)
-  }, [goToCall, drawnNow])
+  }, [goToCall, drawnNow, stores])
   useEffect(() => {
     for (const listener of sightHeard.current) listener()
   }, [workspaces, front])
@@ -404,8 +394,11 @@ export function Shell({
     },
     [change, drawnNow]
   )
-  const listedOf = (project: ProjectId, thing: string): Listed | undefined =>
-    listsNow.current[project]?.find((listed) => listed.id === thing)
+  const listedOf = useCallback(
+    (project: ProjectId, thing: string): Listed | undefined =>
+      stores.items.get()[project]?.find((listed) => listed.id === thing),
+    [stores]
+  )
   // A snooze is the engine's (ADR 0074). Snoozed, a Thread is put away as
   // an archived one is, its Panes closed, and it leaves Archive; Undo
   // wakes it.
@@ -454,14 +447,14 @@ export function Shell({
       keepArchived(thing, archived)
       if (archived) closeShown(project, thing)
     },
-    [closeShown, wakeThread]
+    [closeShown, wakeThread, listedOf]
   )
   const toggleArchived = useCallback(
     (project: ProjectId, thing: string) => {
-      const archived = toggled(listsNow.current, project, thing)
+      const archived = toggled(stores.items.get(), project, thing)
       if (archived !== undefined) archiveThread(project, thing, archived)
     },
-    [archiveThread]
+    [archiveThread, stores]
   )
   const archive = useCallback(() => {
     const entry = focused(drawnNow())
@@ -474,19 +467,26 @@ export function Shell({
     const thing = entry && showsOf(entry.pane)
     const listed = entry && thing ? listedOf(entry.project, thing) : undefined
     return entry && listed ? { project: entry.project, listed } : undefined
-  }, [drawnNow])
+  }, [drawnNow, listedOf])
   // A Thread that woke stops saying so once its Person looks at it.
   useEffect(() => {
-    const looked = threadInFocus()
-    if (looked) seeWoke(looked.listed)
-  }, [threadInFocus, workspaces, lists])
+    const see = () => {
+      const looked = threadInFocus()
+      if (looked) seeWoke(looked.listed)
+    }
+    see()
+    return stores.items.subscribe(see)
+  }, [threadInFocus, workspaces, stores])
   /** What the Pane menu offers for the Thread a Pane shows: to snooze it,
    * to wake it, or nothing. */
-  const snoozeIn = useCallback((entry: Entry | undefined) => {
-    const thing = entry && showsOf(entry.pane)
-    const listed = entry && thing ? listedOf(entry.project, thing) : undefined
-    return listed && snoozeAct(listed, asleep(listed, Date.now()))
-  }, [])
+  const snoozeIn = useCallback(
+    (entry: Entry | undefined) => {
+      const thing = entry && showsOf(entry.pane)
+      const listed = entry && thing ? listedOf(entry.project, thing) : undefined
+      return listed && snoozeAct(listed, asleep(listed, Date.now()))
+    },
+    [listedOf]
+  )
   // The Thread menu's Snooze…: the picker for its Thread.
   const openSnooze = useCallback(
     (project: ProjectId, listed: Listed) => setSnoozing({ project, listed }),
@@ -500,7 +500,7 @@ export function Shell({
       const listed = listedOf(thread.project, thread.id)
       return listed && { project: thread.project, listed }
     },
-    [threadInFocus]
+    [threadInFocus, listedOf]
   )
   const snooze = useCallback(
     (asked: SnoozeAsked) => {
@@ -663,6 +663,20 @@ export function Shell({
       }),
     [change]
   )
+  // A swipe up or down with the mod held steps once; a first Pane
+  // started on an empty workspace opens there, in its Project, whatever
+  // its kind's home.
+  const stepBy = useCallback(
+    (by: 1 | -1) => change((w) => step(w, by)),
+    [change]
+  )
+  const startHere = useCallback(
+    (pane: PaneState) =>
+      change((w) =>
+        opening(w, projectIn(w) ?? home, pane, { place: "right", again: true })
+      ),
+    [change, home]
+  )
   // Alt+Space or Alt+K again, or the other of them, closes the menu.
   const toggleMenu = useCallback(
     (at: At) => setMenu((open) => (open ? null : openingAt(at))),
@@ -707,226 +721,178 @@ export function Shell({
     settings("keys")
   }, [settings])
   const quit = useCallback(() => {
-    const working = workingIn(listsNow.current)
+    const working = workingIn(stores.items.get())
     if (working === 0) window.banda?.quit()
     else setQuitting(working)
-  }, [])
+  }, [stores])
 
-  const parts: Parts = useMemo(() => {
-    const parts: Parts = {
-      change,
-      home,
-      open: (pane, project, { beside, again = true, update, ...how } = {}) => {
-        // The Pane that peeks, opened in the workspace, peeks no more.
-        const peeked = peekNow.current
-        if (
-          peeked &&
-          samePane(
-            { project: project ?? peeked.project, pane },
-            peeked,
-            identityOf
-          )
-        )
-          setPeek(null)
-        change((w) => {
-          const at = beside
-            ? besideOf(w, listsNow.current, beside, showsOf)
-            : null
-          // Not again: the one shown, as its kind names it, keeps what it
-          // shows, or takes these args when asked to update it.
-          return (again || !update ? opening : updating)(
-            w,
-            project ?? at?.project ?? projectIn(w) ?? home,
-            pane,
-            {
-              ...how,
-              ...(at?.from ? { from: at.from } : {}),
-              // What an Agent opens goes into its Thread's Group; an
-              // Agent's Thread, to its Project's workspace.
-              place: at?.from ? "group" : homeOf(pane),
-              ...(again ? { again } : { keep: true }),
-            }
-          )
-        })
-      },
-      focused: () => {
-        const entry = focused(drawnNow())
-        if (!entry) return null
-        const shows = showsOf(entry.pane)
-        return {
-          project: entry.project,
-          pane: entry.pane,
-          ...(shows ? { shows } : {}),
-        }
-      },
-      beside: (agent) => {
-        const at = besideOf(drawnNow(), listsNow.current, agent, showsOf)
-        return at && { project: at.project, right: at.from ? at.right : null }
-      },
-      lists: () => listsNow.current,
-      watchLists: (listener) => {
-        listsHeard.current.add(listener)
-        return () => listsHeard.current.delete(listener)
-      },
-      sight: (thing) => {
-        if (!thing) return inFront() ? "in-window" : "away"
-        const state = drawnNow()
-        const look = columnsOf()
-        // What shows is measured as it is asked, only for a Tile on the
-        // workspace on screen (ADR 0087, decision 9).
-        return sightOf(state, thing, inFront(), showsOf, {
-          look,
-          shown: () => shownOf(current(state), look),
-          away: awayNow.current,
-          zoomed: zoomedNow.current,
-        })
-      },
-      watchSight: (listener) => {
-        sightHeard.current.add(listener)
-        return () => sightHeard.current.delete(listener)
-      },
-      goTo: goToCall,
-      look: () => lookNow.current,
-      projects: () => openNow.current,
-      toggleSidebar,
-      showSidebar,
-      toggleOverview,
-      drawer: () => toggleDrawer(parts),
-      zoom: toggleZoom,
-      popOut: togglePopOut,
-      center: toCenter,
-      answer,
-      archive,
-      snooze,
-      wake,
-      menu: toggleMenu,
-      fillPeek,
-      peek: (pane, project) =>
-        setPeek((was) =>
-          pane
-            ? {
-                pane,
-                project:
-                  project ?? projectIn(drawnNow()) ?? partsNow.current.home,
-                fill: was?.fill ?? false,
-              }
-            : null
-        ),
-      route,
-      ownKeys,
-      settings,
-      quit,
-      lookInto: (fingerprint) =>
-        void lookingInto(engine, fingerprint)
-          .then((thread) => runAction(parts, "thread.new", thread))
-          .catch(() => undefined),
-      run: (action, args) => runAction(parts, action, args),
-      engine,
-      writeSetting: (file, key, value) =>
-        window.banda?.settings.set(file, key, value) ??
-        Promise.resolve(["Only Banda's app writes the settings."]),
-      attach: (chips) => {
-        const at = focused(drawnNow())
-        const to = attachTo(at ? { id: at.id, project: at.project } : null)
-        if (!to) {
-          // One toast, however many files were added at once.
-          toast.warning("No Thread in this Project to add it to.", {
-            id: "attach",
-          })
-          return
-        }
-        change((w) => focusEntry(w, to.entry))
-        to.take(Array.isArray(chips) ? chips : [chips])
-      },
-    }
-    return parts
-  }, [
+  // The action context (ADR 0088, decision 7): made afresh with each
+  // drawing, and held steady, so the keys' listener, the Tiles' frame and
+  // the widgets that hold it are never made again.
+  const parts = useSteady<Parts>({
     change,
     home,
-    goToCall,
+    open: (pane, project, { beside, again = true, update, ...how } = {}) => {
+      // The Pane that peeks, opened in the workspace, peeks no more.
+      const peeked = peekNow.current
+      if (
+        peeked &&
+        samePane(
+          { project: project ?? peeked.project, pane },
+          peeked,
+          identityOf
+        )
+      )
+        setPeek(null)
+      change((w) => {
+        const at = beside
+          ? besideOf(w, stores.items.get(), beside, showsOf)
+          : null
+        // Not again: the one shown, as its kind names it, keeps what it
+        // shows, or takes these args when asked to update it.
+        return (again || !update ? opening : updating)(
+          w,
+          project ?? at?.project ?? projectIn(w) ?? home,
+          pane,
+          {
+            ...how,
+            ...(at?.from ? { from: at.from } : {}),
+            // What an Agent opens goes into its Thread's Group; an
+            // Agent's Thread, to its Project's workspace.
+            place: at?.from ? "group" : homeOf(pane),
+            ...(again ? { again } : { keep: true }),
+          }
+        )
+      })
+    },
+    focused: () => {
+      const entry = focused(drawnNow())
+      if (!entry) return null
+      const shows = showsOf(entry.pane)
+      return {
+        project: entry.project,
+        pane: entry.pane,
+        ...(shows ? { shows } : {}),
+      }
+    },
+    beside: (agent) => {
+      const at = besideOf(drawnNow(), stores.items.get(), agent, showsOf)
+      return at && { project: at.project, right: at.from ? at.right : null }
+    },
+    lists: () => stores.items.get(),
+    watchLists: (listener) => watchLists(stores, listener),
+    sight: (thing) => {
+      if (!thing) return inFront() ? "in-window" : "away"
+      const state = drawnNow()
+      const look = columnsOf()
+      // What shows is measured as it is asked, only for a Tile on the
+      // workspace on screen (ADR 0087, decision 9).
+      return sightOf(state, thing, inFront(), showsOf, {
+        look,
+        shown: () => shownOf(current(state), look),
+        away: awayNow.current,
+        zoomed: zoomedNow.current,
+      })
+    },
+    watchSight: (listener) => {
+      sightHeard.current.add(listener)
+      return () => sightHeard.current.delete(listener)
+    },
+    goTo: goToCall,
+    look: () => lookNow.current,
+    projects: () => openNow.current,
     toggleSidebar,
     showSidebar,
     toggleOverview,
-    toggleDrawer,
-    toggleZoom,
-    togglePopOut,
-    toCenter,
+    drawer: () => toggleDrawer(parts),
+    zoom: toggleZoom,
+    popOut: togglePopOut,
+    center: toCenter,
     answer,
     archive,
     snooze,
     wake,
-    toggleMenu,
+    menu: toggleMenu,
     fillPeek,
+    peek: (pane, project) =>
+      setPeek((was) =>
+        pane
+          ? {
+              pane,
+              project: project ?? projectIn(drawnNow()) ?? home,
+              fill: was?.fill ?? false,
+            }
+          : null
+      ),
     route,
     ownKeys,
     settings,
     quit,
+    lookInto: (fingerprint) =>
+      void lookingInto(engine, fingerprint)
+        .then((thread) => runAction(parts, "thread.new", thread))
+        .catch(() => undefined),
+    run: (action, args) => runAction(parts, action, args),
     engine,
-    drawnNow,
-  ])
+    writeSetting: (file, key, value) =>
+      window.banda?.settings.set(file, key, value) ??
+      Promise.resolve(["Only Banda's app writes the settings."]),
+    attach: (chips) => {
+      const at = focused(drawnNow())
+      const to = attachTo(at ? { id: at.id, project: at.project } : null)
+      if (!to) {
+        // One toast, however many files were added at once.
+        toast.warning("No Thread in this Project to add it to.", {
+          id: "attach",
+        })
+        return
+      }
+      change((w) => focusEntry(w, to.entry))
+      to.take(Array.isArray(chips) ? chips : [chips])
+    },
+  })
+  // A Thread that woke by itself is told of once (ADR 0074, decision 7):
+  // one that calls, by its call; one that does not, here. Looked at as the
+  // calls follow the lists and the snooze clock.
+  useEffect(() => {
+    let sleeping = new Set<string>()
+    const look = () => {
+      const was = sleeping
+      const lists = stores.items.get()
+      const { now, list } = stores.calls.get()
+      const calls = new Set(list.map((call) => call.key))
+      sleeping = new Set()
+      for (const [project, listed] of Object.entries(lists))
+        for (const one of listed) {
+          if (!one.snooze) continue
+          const key = `${project}:${one.id}`
+          const slept = `${key}@${one.snooze.at}`
+          if (asleep(one, now)) sleeping.add(slept)
+          else if (
+            was.has(slept) &&
+            !calls.has(key) &&
+            wokeAt(one, now) !== undefined
+          )
+            parts.run("notifications.tell", wokeTold(project as ProjectId, one))
+        }
+    }
+    look()
+    return stores.calls.subscribe(look)
+  }, [stores, parts])
+  // A new Problem of Banda's own tells too, silently (ADR 0039).
+  useProblemNews(engine, notify, parts.run)
   // Each module that runs starts once, with the window as it is when it
   // asks (ADR 0022): the browser opens a Pane for an Agent's tab.
-  const partsNow = useRef(parts)
-  useEffect(() => {
-    partsNow.current = parts
-  }, [parts])
-  // A Thread that woke by itself is told of once (ADR 0074, decision 7):
-  // one that calls, by its call; one that does not, here.
-  const sleeping = useRef(new Set<string>())
-  useEffect(() => {
-    const was = sleeping.current
-    const calls = new Set(calling.map((call) => call.key))
-    sleeping.current = new Set()
-    for (const [project, listed] of Object.entries(lists))
-      for (const one of listed) {
-        if (!one.snooze) continue
-        const key = `${project}:${one.id}`
-        const slept = `${key}@${one.snooze.at}`
-        if (asleep(one, snoozes.now)) sleeping.current.add(slept)
-        else if (
-          was.has(slept) &&
-          !calls.has(key) &&
-          wokeAt(one, snoozes.now) !== undefined
-        )
-          parts.run("notifications.tell", wokeTold(project as ProjectId, one))
-      }
-  }, [lists, calling, snoozes.now, parts])
-  // A new Problem of Banda's own tells too, silently (ADR 0039).
-  const run = useCallback(
-    (action: string, args: Args) => partsNow.current.run(action, args),
-    []
-  )
-  useProblemNews(engine, notify, run)
   const running = known
     .filter((module) => runs(module, modules))
     .map((module) => module.id)
     .join()
   useEffect(() => {
-    const api: WindowApi = {
-      engine: partsNow.current.engine,
-      get home() {
-        return partsNow.current.home
-      },
-      open: (...how) => partsNow.current.open(...how),
-      focused: () => partsNow.current.focused(),
-      beside: (agent) => partsNow.current.beside(agent),
-      lists: () => partsNow.current.lists(),
-      watchLists: (listener) => partsNow.current.watchLists(listener),
-      run: (...how) => partsNow.current.run(...how),
-      sight: (thing) => partsNow.current.sight(thing),
-      watchSight: (listener) => partsNow.current.watchSight(listener),
-      goTo: (thing) => partsNow.current.goTo(thing),
-      look: () => partsNow.current.look(),
-      projects: () => partsNow.current.projects(),
-      writeSetting: (...how) => partsNow.current.writeSetting(...how),
-      attach: (chips) => partsNow.current.attach(chips),
-      peek: (pane, project) => partsNow.current.peek(pane, project),
-    }
     const stops = known
       .filter((module) => running.split(",").includes(module.id))
-      .flatMap((module) => module.start?.(api) ?? [])
+      .flatMap((module) => module.start?.(parts) ?? [])
     return () => stops.forEach((stop) => stop())
-  }, [running])
+  }, [running, parts])
   // The keys run the actions, before any Pane hears them. A dialog keeps
   // its keys, as the Banda menu its New Thread key, but for the menu's own.
   useEffect(() => {
@@ -1002,9 +968,6 @@ export function Shell({
   // The Project the Person is in: where the menu's New Thread starts, on
   // an empty Project workspace too.
   const here = projectIn(workspaces) ?? home
-  // The bar's widgets, the window's own and the modules', where the
-  // look's `[bar]` puts them (ADR 0024).
-  const listed = useCallback((entry: Entry) => listedIn(lists, entry), [lists])
   // Solo (ADR 0079, decision 2): when the focus comes to another Agent,
   // its Group fills the screen. Only a move of the focus asks, so Alt+M
   // still gives the room back by hand. From solo to the row, the room
@@ -1017,29 +980,29 @@ export function Shell({
       : undefined
   useEffect(() => {
     if (!soloAt) return
-    const lists = listsNow.current
+    const lists = stores.items.get()
     change((w) =>
-      soloing(w, (entry) => listedIn(lists, entry)?.agent !== undefined)
+      soloing(
+        w,
+        (entry) => listedIn(lists, entry, showsOf)?.agent !== undefined
+      )
     )
-  }, [soloAt, change])
+  }, [soloAt, change, stores])
   const flowWas = useRef(flow)
   useEffect(() => {
     if (flowWas.current === "solo" && flow !== "solo") change(unsoloing)
     flowWas.current = flow
   }, [flow, change])
-  // The Agent's Thread in front, which the bar names with the sidebar
-  // hidden (ADR 0065, decision 9).
-  const ahead = focused(workspaces)
-  const aheadRow = ahead && listed(ahead)
-  const agentAhead = aheadRow?.agent !== undefined ? aheadRow : undefined
+  // The bar's widgets, the window's own and the modules', where the
+  // look's `[bar]` puts them (ADR 0024); the Pane in front, whose Agent's
+  // Thread the bar names with the sidebar hidden (ADR 0065, decision 9).
   const bar = useWidgets(modules, {
     engine,
     projects,
     project: here,
     window: parts,
-    lists,
     sidebarShown,
-    current: agentAhead,
+    ahead: focused(workspaces),
     onOpen: pickPane,
     aside,
   })
@@ -1069,6 +1032,19 @@ export function Shell({
       )
     },
     [bar.listed, parts]
+  )
+  // A Project the menu added, as the engine answered it: the list may not
+  // know it yet. The menu offers no scratch Space's.
+  const added = useCallback(
+    (project: ProjectSummary) => {
+      onCreated(project)
+      startThread(project.id)
+    },
+    [onCreated, startThread]
+  )
+  const menuProjects = useMemo(
+    () => projects.filter((project) => !project.scratch),
+    [projects]
   )
   const choose = useCallback(
     (row: Exclude<Choice, Branch | Own>) => {
@@ -1155,11 +1131,6 @@ export function Shell({
       }),
     [frame, parts]
   )
-  const called = useCallback(
-    (entry: Entry) =>
-      calling.find((call) => isShowing(entry, call, showsOf))?.chime,
-    [calling]
-  )
   const projectOf = useCallback(
     (id: ProjectId) => projects.find((project) => project.id === id),
     [projects]
@@ -1167,6 +1138,11 @@ export function Shell({
 
   // The bar's workspaces: a Project's by its name, with a dot while one of
   // its Threads calls (ADR 0065, decision 9).
+  const calls = useStore(
+    stores.items,
+    (lists) => callingIn(lists, snoozes.away),
+    sameEach
+  )
   const barWorkspaces = useMemo(
     () =>
       inBar(workspaces).map((w) =>
@@ -1174,228 +1150,220 @@ export function Shell({
           ? {
               ...w,
               owner: projectOf(w.project),
-              calls: (lists[w.project] ?? []).some(
-                (row) => waits(row.mark) && !snoozes.away(row)
-              ),
+              calls: calls.includes(w.project),
             }
           : w
       ),
-    [workspaces, lists, projects, snoozes]
+    [workspaces, calls, projectOf]
   )
 
   return (
     <KeysInForce.Provider value={keys}>
-      <ThreadMenus
-        engine={engine}
-        projects={projects}
-        archive={archiveThread}
-        snooze={openSnooze}
-        wake={wakeThread}
-      >
-        <div className="flex h-svh flex-col bg-desk text-foreground">
-          <Watches
-            engine={engine}
-            modules={modules}
-            projects={open}
-            onChange={setAttention}
-            onLists={setLists}
-          />
-          <Bar
-            status={status}
-            attention={attention}
-            workspaces={barWorkspaces}
-            map={mapOf(current(workspaces), lookColumns, listed)}
-            current={workspaces.current}
-            sidebar={narrow ? over : sidebar}
-            onSidebar={toggleSidebar}
-            problems={bar.problems}
-            widgets={bar.parts}
-            listed={bar.listed}
-            onArrange={arrangeBar}
-            working={workingIn(lists)}
-            onPick={(index) =>
-              index === workspaces.current
-                ? toggleOverview()
-                : change((w) => go(w, index))
-            }
-          />
-          <div
-            className="relative flex min-h-0 flex-1"
-            data-sidebar-shown={(sidebarShown && !narrow) || undefined}
-          >
-            {sidebarShown && (
-              <Sidebar
-                engine={engine}
-                over={narrow}
-                onDismiss={narrow ? hideOver : undefined}
-                onMenu={() => setMenu(openingAt("root"))}
-                onSettings={() => settings()}
-                onKeys={() => setMenu(openingAt("actions"))}
-                hiding={hiding}
-                projects={projects}
-                lists={lists}
-                home={home}
-                isCurrent={(project, pane) => {
-                  const entry = focused(workspaces)
-                  return (
-                    entry !== undefined &&
-                    samePane(entry, { project, pane }, identityOf)
-                  )
-                }}
-                onOpen={pickPane}
-                onNewThread={newThreadIn}
-                onNoProject={() => machine && startThread(machine)}
-                onSnooze={(project, listed, anchor) =>
-                  setSnoozing({
-                    project,
-                    listed,
-                    ...(anchor ? { anchor } : {}),
-                  })
-                }
-                onWake={wakeThread}
-                onAddProject={() => parts.run("project.add")}
-                onPin={(project, pinned) =>
-                  updateProject(engine, { project, pinned }).catch(
-                    (error: unknown) =>
-                      console.error("banda: the Project was not pinned", error)
-                  )
-                }
-                onProjectSettings={(project) => settings(`projects/${project}`)}
-                onLocate={(project) => route(locateRoute(project))}
-              />
-            )}
-            {sidebarShown && !narrow && (
-              <Edge
-                width={sidebarWidth}
-                columnMin={columnMin}
-                onWidth={setSidebarWidth}
-                onHide={hideSidebar}
-                onHiding={setHiding}
-              />
-            )}
-            <main
-              className="relative min-h-0 min-w-0 flex-1"
-              // A click beside the sidebar over the Strip hides it.
-              onPointerDown={narrow && sidebarShown ? hideOver : undefined}
-            >
-              {ready && (
-                <Workspaces
-                  workspaces={workspaces}
-                  covered={overview || drawerShown}
-                  overview={overview}
-                  engine={engine}
-                  modules={modules}
-                  projectOf={projectOf}
-                  called={called}
-                  marked={marked}
-                  away={away}
-                  zoomed={zoomed}
-                  reveal={reveal}
-                  listed={listed}
-                  frame={frame}
-                  onStep={(by) => change((w) => step(w, by))}
-                  onGo={goTo}
-                  onStart={(pane) =>
-                    // Started on this workspace, it opens here, in its
-                    // Project, whatever its kind's home.
-                    change((w) =>
-                      opening(w, projectIn(w) ?? home, pane, {
-                        place: "right",
-                        again: true,
-                      })
-                    )
-                  }
+      <StoresContext.Provider value={stores}>
+        <ThreadMenus
+          engine={engine}
+          projects={projects}
+          archive={archiveThread}
+          snooze={openSnooze}
+          wake={wakeThread}
+        >
+          <div className="flex h-svh flex-col bg-desk text-foreground">
+            <Watches
+              engine={engine}
+              modules={modules}
+              projects={open}
+              stores={stores}
+            />
+            <Bar
+              status={status}
+              workspaces={barWorkspaces}
+              map={
+                <WorkspaceMap
+                  workspace={current(workspaces)}
+                  listing={listing}
                 />
-              )}
-              {peek && (
-                <Peek
-                  peek={peek}
+              }
+              current={workspaces.current}
+              sidebar={narrow ? over : sidebar}
+              onSidebar={toggleSidebar}
+              problems={bar.problems}
+              widgets={bar.parts}
+              listed={bar.listed}
+              onArrange={arrangeBar}
+              onPick={(index) =>
+                index === workspaces.current
+                  ? toggleOverview()
+                  : change((w) => go(w, index))
+              }
+            />
+            <div
+              className="relative flex min-h-0 flex-1"
+              data-sidebar-shown={(sidebarShown && !narrow) || undefined}
+            >
+              {sidebarShown && (
+                <Sidebar
                   engine={engine}
-                  modules={modules}
-                  run={parts.run}
-                  open={(project, pane, place) =>
-                    change((w) => opening(w, project, pane, { place }))
-                  }
-                  onUpdate={(pane) => setPeek((was) => was && { ...was, pane })}
-                  onOpen={() =>
-                    parts.open(peek.pane, peek.project, {
-                      again: false,
-                      update: true,
+                  over={narrow}
+                  onDismiss={narrow ? hideOver : undefined}
+                  onMenu={() => setMenu(openingAt("root"))}
+                  onSettings={() => settings()}
+                  onKeys={() => setMenu(openingAt("actions"))}
+                  hiding={hiding}
+                  projects={projects}
+                  home={home}
+                  isCurrent={(project, pane) => {
+                    const entry = focused(workspaces)
+                    return (
+                      entry !== undefined &&
+                      samePane(entry, { project, pane }, identityOf)
+                    )
+                  }}
+                  onOpen={pickPane}
+                  onNewThread={newThreadIn}
+                  onNoProject={() => machine && startThread(machine)}
+                  onSnooze={(project, listed, anchor) =>
+                    setSnoozing({
+                      project,
+                      listed,
+                      ...(anchor ? { anchor } : {}),
                     })
                   }
-                  onFill={fillPeek}
-                  onClose={closePeek}
+                  onWake={wakeThread}
+                  onAddProject={() => parts.run("project.add")}
+                  onPin={(project, pinned) =>
+                    updateProject(engine, { project, pinned }).catch(
+                      (error: unknown) =>
+                        console.error(
+                          "banda: the Project was not pinned",
+                          error
+                        )
+                    )
+                  }
+                  onProjectSettings={(project) =>
+                    settings(`projects/${project}`)
+                  }
+                  onLocate={(project) => route(locateRoute(project))}
                 />
               )}
-              <Toaster />
-              <SnoozePicker
-                target={snoozing}
-                onClose={() => setSnoozing(undefined)}
-                onSnooze={(target, until) =>
-                  snoozeThread(target.project, target.listed, until)
-                }
-                onWake={(target) =>
-                  wakeThread(target.project, target.listed.id)
-                }
-              />
-              <QuitDialog
-                working={quitting}
-                onQuit={() => window.banda?.quit()}
-                onClose={() => setQuitting(null)}
-              />
-              <BandaMenu
-                opening={menu}
-                onClose={closeMenu}
-                onChoose={choose}
-                onAdded={(project) => {
-                  // As the engine answered it: the list may not know it yet.
-                  onCreated(project)
-                  startThread(project.id)
-                }}
-                engine={engine}
-                modules={modules}
-                project={here}
-                lists={lists}
-                asleep={snoozes.asleep}
-                projects={projects.filter((project) => !project.scratch)}
-                actions={keyed}
-                binds={inForce.binds}
-              />
-              {drawer && dropped && (
-                <Drawer
-                  entry={drawer}
-                  shown={drawerShown}
-                  height={drawerLook.height}
+              {sidebarShown && !narrow && (
+                <Edge
+                  width={sidebarWidth}
+                  columnMin={columnMin}
+                  onWidth={setSidebarWidth}
+                  onHide={hideSidebar}
+                  onHiding={setHiding}
+                />
+              )}
+              <main
+                className="relative min-h-0 min-w-0 flex-1"
+                // A click beside the sidebar over the Strip hides it.
+                onPointerDown={narrow && sidebarShown ? hideOver : undefined}
+              >
+                {ready && (
+                  <Workspaces
+                    workspaces={workspaces}
+                    covered={overview || drawerShown}
+                    overview={overview}
+                    engine={engine}
+                    modules={modules}
+                    projectOf={projectOf}
+                    listing={listing}
+                    marked={marked}
+                    away={away}
+                    zoomed={zoomed}
+                    reveal={reveal}
+                    frame={frame}
+                    onStep={stepBy}
+                    onGo={goTo}
+                    onStart={startHere}
+                  />
+                )}
+                {peek && (
+                  <Peek
+                    peek={peek}
+                    engine={engine}
+                    modules={modules}
+                    run={parts.run}
+                    open={(project, pane, place) =>
+                      change((w) => opening(w, project, pane, { place }))
+                    }
+                    onUpdate={(pane) =>
+                      setPeek((was) => was && { ...was, pane })
+                    }
+                    onOpen={() =>
+                      parts.open(peek.pane, peek.project, {
+                        again: false,
+                        update: true,
+                      })
+                    }
+                    onFill={fillPeek}
+                    onClose={closePeek}
+                  />
+                )}
+                <Toaster />
+                <SnoozePicker
+                  target={snoozing}
+                  onClose={() => setSnoozing(undefined)}
+                  onSnooze={(target, until) =>
+                    snoozeThread(target.project, target.listed, until)
+                  }
+                  onWake={(target) =>
+                    wakeThread(target.project, target.listed.id)
+                  }
+                />
+                <QuitDialog
+                  working={quitting}
+                  onQuit={() => window.banda?.quit()}
+                  onClose={() => setQuitting(null)}
+                />
+                <BandaMenu
+                  opening={menu}
+                  onClose={closeMenu}
+                  onChoose={choose}
+                  onAdded={added}
                   engine={engine}
                   modules={modules}
-                  listed={listed(drawer)}
-                  projectOf={projectOf}
-                  frame={frame}
-                  onLift={liftDrawer}
-                  onPin={pinDrawer}
-                  onChange={changeDrawer}
-                  onClose={closeDrawer}
+                  project={here}
+                  asleep={snoozes.asleep}
+                  projects={menuProjects}
+                  actions={keyed}
+                  binds={inForce.binds}
                 />
-              )}
-              {overview && (
-                <Overview
-                  open={overviewState === "open"}
-                  onExited={leftOverview}
-                  workspaces={workspaces}
-                  projectOf={projectOf}
-                  listed={listed}
-                  called={called}
-                  frame={frame}
-                  onPick={(entry) => change((w) => focusEntry(w, entry))}
-                  onArrow={(direction) => change((w) => across(w, direction))}
-                  onGo={goTo}
-                  onClose={closeOverview}
-                />
-              )}
-            </main>
+                {drawer && dropped && (
+                  <Drawer
+                    entry={drawer}
+                    shown={drawerShown}
+                    height={drawerLook.height}
+                    engine={engine}
+                    modules={modules}
+                    listing={listing}
+                    projectOf={projectOf}
+                    frame={frame}
+                    onLift={liftDrawer}
+                    onPin={pinDrawer}
+                    onChange={changeDrawer}
+                    onClose={closeDrawer}
+                  />
+                )}
+                {overview && (
+                  <Overview
+                    open={overviewState === "open"}
+                    onExited={leftOverview}
+                    workspaces={workspaces}
+                    projectOf={projectOf}
+                    listing={listing}
+                    frame={frame}
+                    onPick={(entry) => change((w) => focusEntry(w, entry))}
+                    onArrow={(direction) => change((w) => across(w, direction))}
+                    onGo={goTo}
+                    onClose={closeOverview}
+                  />
+                )}
+              </main>
+            </div>
           </div>
-        </div>
-      </ThreadMenus>
+        </ThreadMenus>
+      </StoresContext.Provider>
     </KeysInForce.Provider>
   )
 }

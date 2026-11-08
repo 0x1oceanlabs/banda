@@ -1,7 +1,7 @@
 import {
   Component,
+  memo,
   type ReactNode,
-  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -29,6 +29,7 @@ import { DetailsRows } from "@banda/ui/components/thread-details"
 import {
   type Label,
   type Listed,
+  type PaneProps,
   type PaneState,
   type Place,
   within,
@@ -46,7 +47,7 @@ import {
   kindRuns,
   labelOf,
   sayLabel,
-  useSaid,
+  useLabel,
 } from "../registry"
 import { sayComposer } from "../window/attach"
 import { heightAt } from "./layout"
@@ -119,14 +120,41 @@ function Edits({ edits }: { edits: Label["edits"] }) {
   return null
 }
 
+/** What a Tile hands its Pane to act on its place: the same functions for
+ * as long as it stands for the same Pane (ADR 0088, decision 7). */
+type Handle = Pick<
+  PaneProps<PaneState["args"]>,
+  "open" | "update" | "close" | "label" | "composer"
+>
+
+/** The handle of the Pane of kind `kind` at `entry` in `project`. */
+function handleOf(
+  frame: Frame,
+  entry: string,
+  project: ProjectId,
+  kind: string
+): Handle {
+  return {
+    open: (pane, place, other) =>
+      frame.open(other ?? project, pane, entry, place),
+    update: (args) => frame.update(entry, { kind, args }),
+    close: () => frame.close(entry),
+    label: (label) => sayLabel(entry, label),
+    // Its composer, the same between draws, so the Pane says it once.
+    composer: (take) => sayComposer(entry, project, take),
+  }
+}
+
 /**
  * One tile: a header with the Pane's icon and title, and its Project when the
  * workspace mixes Projects, unless the Pane draws its own; under it, the Pane
  * itself. A Pane that shows a listed thing, as a Thread, has its mark in the
  * icon's place and its Project before the title (ADR 0031). A Deck's
- * bar of names sits over its tile, outside it (`Tabs`).
+ * bar of names sits over its tile, outside it (`Tabs`). It is drawn again
+ * only as its own props change, so a key that moves the focus draws the
+ * two tiles it moves between (ADR 0088, decision 7).
  */
-export function PaneFrame({
+export const PaneFrame = memo(function PaneFrame({
   entry,
   engine,
   modules,
@@ -178,21 +206,16 @@ export function PaneFrame({
   const kind = kindOf(entry.pane.kind)
   const shown = kind && kindRuns(entry.pane.kind, modules) ? kind : undefined
   const element = useRef<HTMLElement>(null)
-  const { title, detail, edits, Icon } = labelOf(
-    entry.pane,
-    useSaid().get(entry.id)
+  const { title, detail, edits, Icon } = labelOf(entry.pane, useLabel(entry.id))
+  const handle = useMemo(
+    () => handleOf(frame, entry.id, entry.project, entry.pane.kind),
+    [frame, entry.id, entry.project, entry.pane.kind]
   )
-  const close = () => frame.close(entry.id)
+  const { close } = handle
   const details = useMemo(() => detailsOf(modules), [modules])
 
   // What the Pane said it shows goes with it.
   useEffect(() => () => sayLabel(entry.id, null), [entry.id])
-  // Its composer, the same between draws, so the Pane says it once.
-  const composer = useCallback(
-    (take: Parameters<typeof sayComposer>[2]) =>
-      sayComposer(entry.id, entry.project, take),
-    [entry.id, entry.project]
-  )
 
   // As it is drawn focused, not a frame later: a key pressed meanwhile
   // would go to the tile that had the focus.
@@ -377,21 +400,8 @@ export function PaneFrame({
                     args={entry.pane.args}
                     focused={focused}
                     selected={selected}
-                    open={(pane, place, project) =>
-                      frame.open(
-                        project ?? entry.project,
-                        pane,
-                        entry.id,
-                        place
-                      )
-                    }
-                    update={(args) =>
-                      frame.update(entry.id, { kind: entry.pane.kind, args })
-                    }
-                    close={close}
-                    label={(label) => sayLabel(entry.id, label)}
+                    {...handle}
                     run={frame.run}
-                    composer={composer}
                   />
                 </Broken>
               ) : (
@@ -407,7 +417,7 @@ export function PaneFrame({
       </TileHeader>
     </section>
   )
-}
+})
 
 /** The Pane menu's rows, with where the Pane stands as the menu opens. */
 function Rows({

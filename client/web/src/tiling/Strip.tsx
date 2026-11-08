@@ -1,12 +1,11 @@
 import { cn } from "@banda/ui/lib/utils"
 import { GripHorizontalIcon } from "lucide-react"
-import { Component, useEffect, useLayoutEffect, useRef } from "react"
+import { Component, memo, useEffect, useLayoutEffect, useRef } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import type { Center } from "@banda/contract/look"
-import type { Listed, PaneState } from "@banda/ui/pane"
+import type { PaneState } from "@banda/ui/pane"
 import { columnsOf, moveOf, useLookColumns, useLookGroups } from "../look"
 import { Choices } from "../registry"
-import type { Chime } from "@banda/ui/sound"
 import {
   type Entry,
   groupAttributes,
@@ -29,6 +28,7 @@ import {
 } from "./layout"
 import { groupState } from "@banda/ui/components/banda-mark"
 import { agentsOf } from "./groups"
+import { type Listing, useShown } from "./listing"
 import { type Frame, PaneFrame } from "./PaneFrame"
 
 import { Tabs } from "./Tabs"
@@ -56,20 +56,22 @@ const VIEW_STEP = 48
  * the mod and the middle button drag the view, as niri's `Mod` and the
  * middle button: sideways the Strip follows the pointer, and lands as a
  * swipe does; up or down, the workspaces step once.
+ *
+ * It is drawn again only as its own props change, or what `listing` says
+ * of its Panes (ADR 0088, decision 7).
  */
-export function Strip({
+export const Strip = memo(function Strip({
   workspace,
   live,
   selected,
   engine,
   modules,
   projectOf,
-  called,
+  listing,
   marked,
   away,
   zoomed,
   reveal: asked,
-  listed,
   frame,
   onStep,
   onStart,
@@ -85,8 +87,8 @@ export function Strip({
   engine: Engine
   modules: readonly string[]
   projectOf: (project: ProjectId) => ProjectSummary | undefined
-  /** How the Thread a Pane shows calls the Person, if it does. */
-  called: (entry: Entry) => Chime | undefined
+  /** What its Panes show, as their Apps list it, and how each calls. */
+  listing: Listing
   /** An Agent opened it, and the Person has not looked at it yet. */
   marked: (entry: Entry) => boolean
   /** The Panes in windows of their own, which stand-ins keep the places of. */
@@ -97,8 +99,6 @@ export function Strip({
    * middle of the screen, once. */
   /** A column to show once, as asked: Alt+C's, or a Thread picked. */
   reveal?: Reveal
-  /** The listed thing a Pane shows, as its module lists it. */
-  listed: (entry: Entry) => Listed | undefined
   frame: Frame
   /** The mod and the middle button dragged up or down step once. */
   onStep: (by: 1 | -1) => void
@@ -112,6 +112,7 @@ export function Strip({
   const groups = useLookGroups()
   const columns = drawnColumns(workspace, look)
   const focusedGroup = workspace.columns[workspace.focus]?.group
+  const { listed, called } = useShown(listing, workspace)
   // Each Group's Agent, by the Thread in it: its state and its name.
   const agents = agentsOf(columns, listed)
   // Each Group's colour, by its Agent's state; its plate moves with it.
@@ -405,7 +406,7 @@ export function Strip({
       })}
     </div>
   )
-}
+})
 
 /**
  * A Group's handle (ADR 0065, decision 6): on its top edge, it shows

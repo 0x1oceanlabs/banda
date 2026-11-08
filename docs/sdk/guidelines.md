@@ -298,6 +298,7 @@ neither (borders.5, device.5).
 | layouts per moving frame, a move that only translates | 0 |
 | layouts per moving frame, a column's width | 0 after P7, if the width pick is B or C (ADR 0088 d5) |
 | animation frames a second while quiet | 0 |
+| Tiles React draws again for a focus step | 2 |
 | draws by a hidden Pane | 0 |
 | a key to its frame, p95, also at `--latency 150` | ≤ 16 ms |
 | a Tree | render ≤ 5 ms at p95, ≤ 30 KB |
@@ -333,8 +334,10 @@ CI's variance is known.
   (motion gates, P2).
 - **motion.5 No animation values in React state.** Read Here and data by
   selector; memoise; pass no inline functions or objects into a memoised
-  child; act by action id. *Check:* review; the render counter gates the
-  Window's own parts.
+  child; act by action id. *Check:* review; motion.spec counts the
+  Tiles, Strips, widgets and sidebar React draws again for each key, and
+  the window's architecture test holds the Window's memo boundaries
+  (each Tile and its Pane, each Strip, the widgets).
 - **motion.6 Keep heavy work off the main thread.** Over 4 ms goes to a
   worker or is cut into pieces; lists over about 200 rows are windowed;
   fast output comes as a stream. *Check:* review.
@@ -444,7 +447,8 @@ the App strings in the Window and the Tiling, and a line ceiling on the
 Window's root (`client/web/src/window/Shell.tsx`); and two rules: a
 mark's rank is read only to pick the loudest, on the lines listed
 (decision 8), and the calls part reads no page and, of the Tiling,
-imports only its model (decision 9).
+imports only its model (decision 9). Of ADR 0088, the parts the Window
+draws on every move stay memoized (decision 7).
 
 **Planned,** each an allowlist whose count only falls:
 

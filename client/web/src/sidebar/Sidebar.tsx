@@ -33,7 +33,8 @@ import { toast } from "@banda/ui/components/sonner"
 import { trustProject } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
 import { clock, problem } from "@banda/ui/lib/words"
-import type { Listed, Lists, PaneState } from "@banda/ui/pane"
+import type { Listed, PaneState } from "@banda/ui/pane"
+import { all, useItems } from "../calls/stores"
 import {
   AlarmClockIcon,
   BadgeCheckIcon,
@@ -105,7 +106,6 @@ export function Sidebar({
   onDismiss?: () => void
   engine: Engine
   projects: ProjectSummary[]
-  lists: Lists
   /** The Project a new Thread from the header starts in. */
   home: ProjectId
   /** Whether a Pane is the one that has the focus. */
@@ -140,7 +140,9 @@ export function Sidebar({
   onLocate: (project: ProjectId) => void
 }) {
   const keyFor = useKeyLabel()
-  const { projects, lists, home, isCurrent, onPin } = props
+  const { projects, home, isCurrent, onPin } = props
+  // What every module lists, from the Window's items.
+  const lists = useItems(all)
   const done =
     <A extends unknown[]>(act: (...args: A) => void) =>
     (...args: A) => {

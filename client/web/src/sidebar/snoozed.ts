@@ -60,6 +60,12 @@ export function nextWake(lists: Lists, now: number): number | undefined {
 /** The longest a browser's timer waits, about 24 days. */
 const LONGEST = 2 ** 31 - 1
 
+/** How long a timer waits for the snooze that wakes at `next`: a little
+ * past it, so it has woken by then. */
+export function wakeAfter(next: number): number {
+  return Math.min(Math.max(0, next - Date.now()) + 50, LONGEST)
+}
+
 /** What the sidebar knows of snoozes now, kept current. */
 export type Snoozes = {
   /** The clock they are read by: it moves as the next one wakes. */
@@ -84,10 +90,15 @@ export function useSnoozes(lists: Lists): Snoozes {
   const next = nextWake(lists, now)
   useEffect(() => {
     if (next === undefined) return
-    const wait = Math.min(Math.max(0, next - Date.now()) + 50, LONGEST)
-    const timer = setTimeout(() => setNow(Date.now()), wait)
+    const timer = setTimeout(() => setNow(Date.now()), wakeAfter(next))
     return () => clearTimeout(timer)
   }, [next])
+  return useSnoozesAt(now)
+}
+
+/** The snoozes read against `now`, as the calls store keeps its clock
+ * (`followCalls`). */
+export function useSnoozesAt(now: number): Snoozes {
   const acked = seen.use()
   const archived = useIsArchived()
   return useMemo(
