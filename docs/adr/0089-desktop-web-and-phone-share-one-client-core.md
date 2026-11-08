@@ -97,6 +97,9 @@ desktop, web and the PWA now.
    looked at have one interface in the core. Its adapter is localStorage
    until E8 makes them a Person document on the home host (vision
    decision 13); then a mark made while home is away waits on the device.
+   _Changed on 2026-11-08, by ADR 0096:_ a Thread's seen and archived come
+   from its host, in its list, and go there as commands; one made while
+   that host is away fails, and nothing waits on the device.
    Device storage keeps only conveniences: the view, widths, an unsent
    draft, recent toasts.
 

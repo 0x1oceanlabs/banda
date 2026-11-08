@@ -53,7 +53,7 @@ The layers and places of 0062 stay. The **kernel** holds scopes and stores, the 
 1. **Every record has one writer, and the writer is a scope.** *Decided: decision 4.*
    - **Project:** moves between hosts on command.
    - **Host:** this machine's programs, accounts, installed code and settings. It never moves.
-   - **Person:** a few versioned documents (the arrangement, keys, sidebar, themes, notify, seen marks; intent defaults later, §4.4). They live **only** on the home host. Clients cache them. No other host keeps a copy. They move by export and import.
+   - **Person:** a few versioned documents (the arrangement, keys, sidebar, themes, notify, seen marks; intent defaults later, §4.4). They live **only** on the home host. Clients cache them. No other host keeps a copy. They move by export and import. _Changed on 2026-11-08 by ADR 0096 (decision 13): seen marks are not among them; they are Thread data in the Project, on its host._
    - Today's machine scope (`kernel/src/module.rs:19-27`), a fake Project at `state/machine`, splits into Host and Person.
 2. **Code runs only where its author is trusted; everything else crosses the wire as data.** *Decided: decisions 1 and 2.* Banda's client release runs on devices. An App's code runs on its host. HTML that a spec or an origin already walls in (MCP Apps, sites) runs in the device's browser sandbox.
 3. **There are four kinds of message: query, command, fact, stream.** An intent is a verb bound late to one of them. A device request is a command sent to a device. `cancel` is the only signal.
@@ -77,7 +77,7 @@ The layers and places of 0062 stay. The **kernel** holds scopes and stores, the 
 > | [10](#11-decisions-for-roma) | A generic Task | later; the Turn stays the unit of work; `task@1` reserved |
 > | [11](#11-decisions-for-roma) | Isolation timing | any time after the fence; v1 = a Linux container on the `shared` network |
 > | [12](#11-decisions-for-roma) | Where the web client's code comes from | the home host's signed binary; a hash-published build once Banda Cloud exists |
-> | [13](#11-decisions-for-roma) | Seen marks | Person data on the home host, joined by the client |
+> | [13](#11-decisions-for-roma) | Seen marks | Thread data in the Project, on its host (changed 2026-11-08 by ADR 0096; was: Person data on the home host) |
 > | [14](#11-decisions-for-roma) | Agents and the Person's tabs | the F1 wall now; per-Project profiles later |
 > | [15](#11-decisions-for-roma) | The phone in v1 | the PWA, over a tailnet or a LAN with a certificate; a native app later |
 > | [16](#11-decisions-for-roma) | `agents` → `threads` (T0) | rename the id before facts are published |
@@ -708,7 +708,7 @@ One concern per PR; `scripts/check.sh` green after each; a move is a pure `git m
 | E4 | Settings through the API, each file by its owner | M-L | B2, E3 | E5, W1 `[W][H]` |
 | E5 | The look from the API: the Person's theme files come from the home host; resolved on the host for v1 (`look.follow{device facts}`), on the device (WASM or TS) later. `banda look --follow` in Electron main (`app/desktop/src/look.ts:1-5`) stays only for the device's overlay | M | E4 | W1 `[W][H]` |
 | E6 | Two small moves: `pane.left@1` emitted on the host (`Shell.tsx:425-433` and `TerminalPane.tsx:96-101` go); `problems.record` from clients (today problems tails `window.log`) | S + S | — | `[W][H]` |
-| E8 | Seen marks as a Person document; calls on the host; `calls.inbox`; Watches deleted | L | A2, A5, B7 | E9, H6 `[W][H]` |
+| E8 | Seen marks as a Person document; calls on the host; `calls.inbox`; Watches deleted. _ADR 0096 (decision 13): seen is the Thread's, on its host, and the host's calls read it there_ | L | A2, A5, B7 | E9, H6 `[W][H]` |
 | E9 | Who is told decided on the host; Web Push | M | E8, E3 | W3 `[W]` |
 | E10 | The commit run on the host; `chain.ts` deleted | M | B10 | — |
 | E11 | `files.activity` on the host: the Threads-and-git join that `files/pane/src/live.ts` does in the client today | S-M | B10 | `[W][H]` |
@@ -852,6 +852,7 @@ Roma accepted every recommendation below on 2026-11-06. The options stay as the 
     - **Decided (Roma, 2026-11-06): (a)**; archive and snooze follow their own ADRs (0069, 0074).
     - The consequence: a Thread's mark depends on `seen` (`markOf(thread, seen)`, `modules/agents/pane/src/marks.ts:19-24`). With seen marks only on the home host, host B's calls projection works without them: it raises and clears calls from its own facts (asking, done, failed), and the client joins the seen marks to draw each mark. Host B's push, and its withdrawal of a push, rely on device presence, not on seen.
     - Changes: ADR 0081 d12's list of Person files.
+    - _Changed on 2026-11-08 by ADR 0096 (Roma): **(b)**._ Seen and archive are Thread data in the Project, on its host, beside the snooze, and move with it. A host's calls projection (E8) reads its own seen, so its push and its withdrawal go by seen, and the client joins nothing. This also changes the seen marks in rule 1's Person documents, in §4.6, in E8's row, in the "When home is away" line of §11's decision 4 and in the note on ADR 0081 d12 below: seen is not Person data.
 14. **Agents and the Person's tabs.**
     - Options: (a) keep ADR 0029 d1 (which tabs an Agent may drive) and ADR 0013 d2 (one browser profile) as they stand; (b) the F1 wall now: Agents see only tabs they opened or were lent, Agent-opened addresses load in `persist:agents-<project>`, an Agent reaches a tab only through a per-tab socket handed out by pass; per-Project profiles (`persist:project-<id>`) later.
     - **Decided (Roma, 2026-11-06): (b).** It reverses (a), which Roma had decided himself.

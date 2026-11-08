@@ -86,6 +86,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    - **What it does.** A click on a Thread goes to the workspace that shows it and focuses its Pane. If no workspace shows it, it opens in the current one as a new column. Each Space offers a new Thread in it. The palette searches the same Threads.
    - **Its own module, with its own data.** The agents module owns Threads and publishes what happens in them. The sidebar turns those events into "needs you", "done", "working" and "idle", and keeps the Person's own marks: seen, pinned, settled and snoozed. No other module reads those marks.
      - _Changed on 2026-11-06, by ADR 0074._ Snoozed is kept by the agents module, on the Thread, so every window, machine and Agent sees it. The other marks stay the sidebar's.
+     - _Changed on 2026-11-08, by ADR 0096._ Seen and archived are kept there too, on the Thread by its host, beside the snooze.
    - **Where it sits.** It is docked at the window's left edge, outside the Strip, so it never scrolls away. `Alt+A` and the bar's button show and hide it. Like any Pane, it can pop out into its own window (decision 5).
    - **Calls for the Person.** When an Agent needs the Person and the window is not in front, a system notification says so, and clicking it goes there.
 

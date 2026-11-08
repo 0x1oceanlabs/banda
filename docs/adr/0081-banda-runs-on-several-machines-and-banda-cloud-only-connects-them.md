@@ -139,6 +139,9 @@ What stands in the way today:
     decision 2: the host's `machine.toml` gives its name and icon;
     `hosts.toml` is a device's, and its `name` is that device's key for an
     ssh entry, not the name a window shows._
+    _Amended 2026-11-08 by [ADR 0096](0096-seen-and-archive-are-thread-data-on-its-host.md):
+    the Person's files do not hold seen marks, as ADR 0082 had them; seen
+    and archive are the Thread's, in its Project on its host._
 
 13. **The CLI names its host**: `banda hosts add | list | use | pair`,
     `banda --host server …`, as kubectl's contexts. An Agent's `banda`

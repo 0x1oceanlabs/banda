@@ -25,6 +25,7 @@ On 2026-11-01 Roma asked how system notifications and those in the window should
      | has the desktop's Do Not Disturb on           | nothing but the Marks                                  |
 
    - "Looks at" means the Thread's Pane has the focus and the window is in front, as for the sound (ADR 0009, decision 3) and for "seen". A Thread whose Pane has the focus while the window is behind another one is not seen: it calls.
+     _Changed on 2026-11-08, by ADR 0096, decision 3: the seen mark, which every machine reads, also needs a key, pointer or wheel input in that window within the last minute. What a window says stays as here._
    - "On screen" means its Pane is on the current workspace. _Changed by ADR 0087, decision 9: it means at least half of its Tile shows inside the Strip's clip, so in Solo only the filled Group's Tiles do, as that Group takes the whole clip, and under a zoom only the zoomed Pane. A Pane in a window of its own counts as before. So an Agent that finishes scrolled out of view, or behind the Solo Group, gets its toast._
    - Nothing is said twice: a toast never repeats a system notification, and the sound plays once for both.
 

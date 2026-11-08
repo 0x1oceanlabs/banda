@@ -64,6 +64,8 @@ defaults and stay his to change.
      decision 8, gave them all to the sidebar. Seen, pinned and archived
      stay there for now. Archive moves to the engine in its own step,
      later.
+     _Changed on 2026-11-08, by ADR 0096:_ archive moves in its step 1a
+     and seen in its step 1b, both onto the Thread beside the snooze.
    - The commands: `agents.snooze {thread, until | done}` and
      `agents.wake {thread}`, both `Write`. A snooze whose time has passed
      is refused, and so is a snooze of a Thread that asks.
