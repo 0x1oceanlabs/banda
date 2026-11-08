@@ -165,3 +165,40 @@ test("pane.pick takes a Project and a Pane, as an Item carries it, and only it r
   runAction(shell, "pane.pick", { project: "project-a" })
   expect(pick.mock.calls).toEqual([["project-a", pane]])
 })
+
+test("a Project's verbs and the menu at a route do what the sidebar's buttons did, by their ids", () => {
+  const route = vi.fn()
+  const settings = vi.fn()
+  const command = vi.fn(() => Promise.resolve({}))
+  const shell = { route, settings, engine: { command } } as unknown as Shell
+
+  // The Search opens the menu at its root, the key sheet's button at its
+  // Actions (`openingOf`), as `banda menu` does.
+  runAction(shell, "menu.route")
+  runAction(shell, "menu.route", { route: "actions" })
+  // A missing Project's folder is found in the menu; its settings are its
+  // own.
+  runAction(shell, "projects.locate", { project: "p1" })
+  runAction(shell, "projects.settings", { project: "p1" })
+  expect(route.mock.calls).toEqual([[""], ["actions"], ["project.locate.p1"]])
+  expect(settings.mock.calls).toEqual([["projects/p1"]])
+
+  // A pin goes to the engine as the Project's update, and only with a
+  // Project and whether it is pinned.
+  runAction(shell, "projects.pin", { project: "p1", pinned: true })
+  runAction(shell, "projects.pin", { project: "p1", pinned: false })
+  const halves: (Args | undefined)[] = [
+    undefined,
+    { project: "p1" },
+    { pinned: true },
+  ]
+  for (const args of halves) runAction(shell, "projects.pin", args)
+  runAction(shell, "projects.locate")
+  runAction(shell, "projects.settings", { project: 1 })
+  expect(command.mock.calls).toEqual([
+    ["projects.update", { project: "p1", pinned: true }],
+    ["projects.update", { project: "p1", pinned: false }],
+  ])
+  expect(route).toHaveBeenCalledTimes(3)
+  expect(settings).toHaveBeenCalledTimes(1)
+})
