@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef } from "react"
+import { afterMoves } from "../lib/frames"
 import { cn } from "../lib/utils"
 import type { Listed } from "../pane"
 
@@ -664,12 +665,21 @@ function mix(a: Pose, b: Pose, m: number): Pose {
 
 const f = (n: number) => n.toFixed(2)
 
-// One clock for every mark on the page.
+// Every mark draws on the window's clock, after the moves (ADR 0088,
+// decision 3): one that moves asks for the next tick, and one at rest, out
+// of sight or still asks for none, so the clock stops while no mark moves.
 const marks = new Set<Animator>()
-let frame = 0
+let asked = 0
 function tick(now: number) {
-  for (const mark of marks) mark.frame(now / 1000)
-  frame = marks.size ? requestAnimationFrame(tick) : 0
+  asked = 0
+  let moving = false
+  for (const mark of marks) if (mark.frame(now / 1000)) moving = true
+  if (moving) wake()
+}
+
+/** The marks draw in the next tick. */
+function wake() {
+  asked ||= afterMoves(tick)
 }
 
 let pointer: [number, number] | null = null
@@ -842,7 +852,9 @@ export function stillMark(state: MarkState, colors: MarkColors): string {
   ].join("")
 }
 
-class Animator {
+/** One mark's motion, as `BandaMark` drives it: it writes the SVG's
+ * attributes on the window's clock. */
+export class Animator {
   private readonly svg: SVGSVGElement
   private readonly logo: boolean
   private readonly hat: SVGGElement
@@ -866,6 +878,8 @@ class Animator {
   private fromAt = -Infinity
   private blend = 0.35
   private next = Infinity
+  /** What wakes the logo at rest at `next`, as the clock does not. */
+  private timer: ReturnType<typeof setTimeout> | undefined
   private last: Pose = { ...BASE, eyes: 0 }
   private settled = false
   private readonly context: Context = {
@@ -885,20 +899,27 @@ class Animator {
     this.zz = [...svg.querySelectorAll<SVGTextElement>("[data-zz] text")]
     this.seen = new IntersectionObserver(([entry]) => {
       this.visible = entry?.isIntersecting ?? true
+      if (this.visible) wake()
     })
     this.seen.observe(svg)
     svg.addEventListener("pointerenter", this.enter)
     svg.addEventListener("pointerleave", this.leave)
-    if (marks.size === 0)
+    if (marks.size === 0) {
       addEventListener("pointermove", onPointer, { passive: true })
+      lessMotion?.addEventListener("change", wake)
+    }
     marks.add(this)
-    if (!frame) frame = requestAnimationFrame(tick)
+    wake()
     this.paint(this.last, 0)
   }
 
   dispose() {
     marks.delete(this)
-    if (marks.size === 0) removeEventListener("pointermove", onPointer)
+    if (marks.size === 0) {
+      removeEventListener("pointermove", onPointer)
+      lessMotion?.removeEventListener("change", wake)
+    }
+    clearTimeout(this.timer)
     this.seen.disconnect()
     this.svg.removeEventListener("pointerenter", this.enter)
     this.svg.removeEventListener("pointerleave", this.leave)
@@ -916,6 +937,7 @@ class Animator {
     const now = performance.now() / 1000
     this.playful = playful
     const shown = this.logo && state === "idle" ? "rest" : state
+    wake()
     if (shown === this.state && this.began) {
       this.settled = false
       return
@@ -970,6 +992,7 @@ class Animator {
     this.hovered = true
     this.go(LOOK, performance.now() / 1000, 0.3)
     this.next = Infinity
+    wake()
   }
 
   private readonly leave = () => {
@@ -977,20 +1000,23 @@ class Animator {
     this.hovered = false
     if (this.state !== "rest") return
     this.play(Math.random() < 0.5 ? "flip" : "morph", performance.now() / 1000)
+    wake()
   }
 
   private still() {
     return lessMotion?.matches ?? false
   }
 
-  frame(time: number) {
-    if (!this.visible) return
+  /** Draws the mark at `time`, in seconds: whether it moves on, and
+   * wants the next tick. */
+  frame(time: number): boolean {
+    if (!this.visible) return false
     if (this.still()) {
       if (!this.settled) {
         this.paint(STILL[this.state], time)
         this.settled = true
       }
-      return
+      return false
     }
     if (this.state === "rest" && !this.hovered && time >= this.next) {
       if (this.motion === REST) {
@@ -1007,7 +1033,7 @@ class Animator {
       }
     }
     if (this.motion === REST && time - this.fromAt > this.blend && this.settled)
-      return
+      return this.sleep()
 
     this.context.look = this.looking()
     let pose = this.motion(time - this.began, time, this.context)
@@ -1016,6 +1042,18 @@ class Animator {
     if (time < this.leap) pose = jumped(pose, hop(time, this.leap - LEAP, LEAP))
     this.paint(pose, time)
     this.settled = this.motion === REST && m >= 1 && time >= this.leap
+    return this.settled ? this.sleep() : true
+  }
+
+  /** At rest: no tick until the logo wakes at `next`, by a timer. */
+  private sleep(): false {
+    clearTimeout(this.timer)
+    if (this.next !== Infinity)
+      this.timer = setTimeout(
+        wake,
+        Math.max(0, this.next * 1000 - performance.now())
+      )
+    return false
   }
 
   /** Where the eyes turn to follow the pointer, when they should. */

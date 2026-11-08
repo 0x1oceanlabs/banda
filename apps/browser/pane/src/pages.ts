@@ -4,14 +4,16 @@
  * Electron destroys a `<webview>` that moves in the DOM, and a Pane is
  * drawn again whenever it moves to another column or workspace. So every
  * page lives in the window's layer, which never moves, and follows the
- * slot its Pane draws: on every frame it takes the slot's place and size,
- * is cut to what the workspace shows of it, rounds the tile's corners and
- * darkens as the tile does. A page whose slot is gone waits out of sight
- * until its Pane comes back, or leaves every workspace.
+ * slot its Pane draws: it takes the slot's place and size, is cut to what
+ * the workspace shows of it, rounds the tile's corners and darkens as the
+ * tile does. It does so on the window's clock, in each tick the Tiling
+ * moves in, and once after whatever else may put its slot elsewhere; at
+ * rest it costs nothing (ADR 0088, decision 3). A page whose slot is gone
+ * waits out of sight until its Pane comes back, or leaves every workspace.
  */
 import type { Dialog } from "@banda/contract/browser"
 import type { ProjectId } from "@banda/contract"
-import { afterMoves } from "@banda/ui/lib/frames"
+import { followMoves } from "@banda/ui/lib/frames"
 import { HELD_BY, paneLayer } from "@banda/ui/pane"
 import type { ZoomStep } from "@banda/ui/lib/zoom"
 import {
@@ -159,18 +161,28 @@ export class Page {
     if (this.slot?.element !== element) {
       this.clips = ancestorsOf(element, this.box.parentElement!)
       this.radius = cornerOf(element)
+      if (this.slot) sizes?.unobserve(this.slot.element)
+      sizes?.observe(element)
     }
     this.slot = { element, selected }
-    follow()
+    following.again()
   }
 
   /** The slot is gone: the page waits out of sight. */
   release(element: HTMLElement): void {
-    if (this.slot?.element === element) this.slot = null
+    if (this.slot?.element !== element) return
+    this.slot = null
+    sizes?.unobserve(element)
+    following.again()
   }
 
   get shown(): boolean {
     return this.slot !== null
+  }
+
+  /** Whether `node` holds the slot it shows over, as a box round it. */
+  within(node: Node): boolean {
+    return this.slot !== null && node.contains(this.slot.element)
   }
 
   focus(): void {
@@ -227,6 +239,7 @@ export class Page {
 
   destroy(): void {
     if (this.contents !== null) byContents.delete(this.contents)
+    if (this.slot) sizes?.unobserve(this.slot.element)
     this.box.remove()
   }
 
@@ -331,6 +344,8 @@ export class Page {
     )
     if (same) return
     this.state = { ...now, ...change }
+    // A page that failed or crashed shows nothing, and one loaded again shows.
+    if ("crashed" in change || "failed" in change) following.again()
     changed()
   }
 
@@ -430,21 +445,65 @@ function cornerOf(slot: HTMLElement): number {
 }
 
 const pages = new Map<string, Page>()
-let frame = 0
 
 /**
- * Every page follows its slot on each frame, while some page shows: a
- * Pane that shows one starts it again.
+ * Every page takes its slot's place: all measure, then all draw, so the
+ * tick lays out once. While a box round a slot animates, it goes on in
+ * the next tick.
  */
-function follow(): void {
-  if (frame) return
-  const step = () => {
-    const all = [...pages.values()]
-    const places = all.map((page) => page.measure())
-    all.forEach((page, i) => page.draw(places[i]))
-    frame = all.some((page) => page.shown) ? afterMoves(step) : 0
+function step(): void {
+  const all = [...pages.values()]
+  const places = all.map((page) => page.measure())
+  const going = animating()
+  all.forEach((page, i) => page.draw(places[i]))
+  if (going) following.again()
+}
+
+/** The pages follow their slots in every tick the window moves in, last
+ * in it, after the overview has drawn the workspaces. */
+const following = followMoves(step)
+
+/** What else puts a slot elsewhere, once the first page is made. */
+let sizes: ResizeObserver | undefined
+
+/**
+ * Besides the Tiling's moves, a slot goes elsewhere when it or the window
+ * changes size, when what holds it scrolls, and when a box round it
+ * animates, as the Drawer sliding in and Quick Look opening do. A change
+ * of size is heard after layout and before paint, so the page goes with
+ * its slot in the same frame.
+ */
+function watch(layer: HTMLElement): void {
+  if (sizes) return
+  sizes = new ResizeObserver(step)
+  sizes.observe(layer)
+  const around = (event: Event) => {
+    const target = event.target
+    if (
+      target instanceof Node &&
+      [...pages.values()].some((page) => page.within(target))
+    )
+      following.again()
   }
-  frame = afterMoves(step)
+  const quietly = { capture: true, passive: true }
+  addEventListener("scroll", around, quietly)
+  addEventListener("transitionrun", around, quietly)
+  addEventListener("animationstart", around, quietly)
+}
+
+/** Whether a box round a shown slot animates: then the page follows it
+ * on each tick until it is done. */
+function animating(): boolean {
+  const all = [...pages.values()].filter((page) => page.shown)
+  if (!all.length) return false
+  return document.getAnimations().some((animation) => {
+    const target = (animation.effect as KeyframeEffect | null)?.target
+    return (
+      animation.playState === "running" &&
+      !!target &&
+      all.some((page) => page.within(target))
+    )
+  })
 }
 
 /**
@@ -461,6 +520,7 @@ export function pageOf(
   if (found) return found
   const layer = paneLayer()
   if (!layer || !("banda" in window)) return null
+  watch(layer)
   const page = new Page(id, url, layer, agents)
   pages.set(id, page)
   changed()

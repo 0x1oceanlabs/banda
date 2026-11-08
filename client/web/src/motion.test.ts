@@ -139,3 +139,20 @@ test("off jumps, and a hand stops it where it is", () => {
   shown = 80 // the hand moved it
   expect(moving.value).toBe(80)
 })
+
+test("a jump tells the clock, so what follows the moves catches up; a step does not", () => {
+  let jumps = 0
+  const time = { ...clock(), moved: () => (jumps += 1) }
+  let shown = 0
+  const moving = new Moving(
+    (v) => (shown = v),
+    () => shown,
+    time
+  )
+  moving.to(50, { kind: "off" })
+  expect(jumps).toBe(1)
+  moving.to(500, { kind: "spring", ...niri })
+  time.run(200)
+  expect(shown).toBe(500)
+  expect(jumps).toBe(1)
+})

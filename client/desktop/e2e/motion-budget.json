@@ -121,7 +121,7 @@
   ],
   "recorded": {
     "1": {
-      "quiet.ticks.callbacksPerSecond": 122.1,
+      "quiet.ticks.callbacksPerSecond": 0,
       "printing.draws.hidden": 45.2,
       "focus.moving.layouts": 0,
       "workspace.moving.layouts": 0.03,
@@ -145,7 +145,7 @@
       "workspace.longFrames.count": 0
     },
     "1.6": {
-      "quiet.ticks.callbacksPerSecond": 122.2,
+      "quiet.ticks.callbacksPerSecond": 0,
       "printing.draws.hidden": 44.9,
       "focus.moving.layouts": 0,
       "workspace.moving.layouts": 0.04,

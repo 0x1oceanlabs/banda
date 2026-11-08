@@ -536,7 +536,22 @@ export interface GhosttyTerminalSurfaceOptions {
   /** Banda: called only when the program does not take the right click, which
    * then has its default prevented; the host's menu opens or not on that. */
   readonly onContextMenu?: (event: MouseEvent) => void;
+  /** Banda: the host's clock, which asks for the tick a frame is drawn in, so
+   * every live thing in the window ticks on one; the browser's animation frames
+   * if none. */
+  readonly clock?: GhosttyClock;
 }
+
+/** Banda: asks for a tick to run `run` in, and takes one asked for back. */
+export interface GhosttyClock {
+  readonly ask: (run: () => void) => number;
+  readonly cancel: (id: number) => void;
+}
+
+const ANIMATION_FRAMES: GhosttyClock = {
+  ask: (run) => window.requestAnimationFrame(run),
+  cancel: (id) => window.cancelAnimationFrame(id),
+};
 
 export class GhosttyTerminalSurface {
   readonly canvas: HTMLCanvasElement;
@@ -553,6 +568,7 @@ export class GhosttyTerminalSurface {
   private readonly context: CanvasRenderingContext2D;
   private readonly core: GhosttyTerminalCore;
   private readonly options: GhosttyTerminalSurfaceOptions;
+  private readonly clock: GhosttyClock;
   private visible: boolean;
   private hasSize = false;
   private metrics: GhosttyCellMetrics;
@@ -663,6 +679,7 @@ export class GhosttyTerminalSurface {
     this.mouseAnyEventTracking = core.isMouseAnyEventTracking();
     this.metrics = metrics;
     this.options = options;
+    this.clock = options.clock ?? ANIMATION_FRAMES;
     this.visible = options.visible ?? true;
     this.theme = options.theme;
     this.fontFamily = fontFamily;
@@ -1934,7 +1951,7 @@ export class GhosttyTerminalSurface {
   private requestRender(): void {
     if (this.disposed || !this.visible || !this.hasSize) return;
     if (this.deferSynchronizedRender() || this.frame !== 0) return;
-    this.frame = window.requestAnimationFrame(() => {
+    this.frame = this.clock.ask(() => {
       this.frame = 0;
       this.renderFrame();
     });
@@ -1943,7 +1960,7 @@ export class GhosttyTerminalSurface {
   private cancelRender(): void {
     this.cancelSynchronizedRenderTimer();
     if (this.frame !== 0) {
-      window.cancelAnimationFrame(this.frame);
+      this.clock.cancel(this.frame);
       this.frame = 0;
     }
     if (this.cursorTimer !== null) {
@@ -1965,7 +1982,7 @@ export class GhosttyTerminalSurface {
     }
     // A frame queued before the opening marker would now consume partial rows.
     if (this.frame !== 0) {
-      window.cancelAnimationFrame(this.frame);
+      this.clock.cancel(this.frame);
       this.frame = 0;
     }
     if (this.cursorTimer !== null) {
@@ -1985,7 +2002,7 @@ export class GhosttyTerminalSurface {
   private renderFrame(): void {
     if (this.disposed || !this.visible) return;
     if (this.frame !== 0) {
-      window.cancelAnimationFrame(this.frame);
+      this.clock.cancel(this.frame);
       this.frame = 0;
     }
     if (this.mount.clientWidth === 0 || this.mount.clientHeight === 0) {

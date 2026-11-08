@@ -12,6 +12,8 @@
  * - Each terminal: its draws, while its canvas shows on screen and while it
  *   does not, and its fits. A draw is one pass of drawing calls, within one
  *   task; a fit, the canvas taking a new size.
+ * - The Marks' draws: each task that changed the drawing of a Mark on the
+ *   window at `reset`, as the logo's trick does.
  * - Long tasks, long animation frames and slow keys, where Chromium has
  *   them.
  * - Where the browser's page stands against its slot. In a phase that
@@ -45,6 +47,8 @@ export type Reading = {
   /** Reads of layout (sizes, places, rects) inside those callbacks. */
   reads: number
   terminals: TerminalCount[]
+  /** The tasks that changed a Mark's drawing. */
+  marks: number
   longTasks: { count: number; worstMs: number }
   /** None where Chromium has no long animation frames. */
   longFrames: { count: number; worstMs: number; blockingMs: number } | null
@@ -74,6 +78,7 @@ export function install(): void {
     callbacks: 0,
     ticks: 0,
     reads: 0,
+    marks: 0,
     longTasks: { count: 0, worstMs: 0 },
     longFrames: hasLongFrames ? { count: 0, worstMs: 0, blockingMs: 0 } : null,
     slowKeys: hasKeys ? { count: 0, worstMs: 0 } : null,
@@ -225,6 +230,14 @@ export function install(): void {
     })
   }
 
+  // The Marks, watched from `reset`: one callback is one task's changes.
+  const marks = new MutationObserver(() => (state.marks += 1))
+  const watchMarks = () => {
+    marks.disconnect()
+    for (const mark of document.querySelectorAll('[data-slot="banda-mark"]'))
+      marks.observe(mark, { attributes: true, subtree: true })
+  }
+
   // What Chromium reports by itself.
   new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
@@ -309,6 +322,7 @@ export function install(): void {
 
   const reset = (moving: boolean) => {
     find()
+    watchMarks()
     state = fresh()
     for (const terminal of terminals.values()) {
       terminal.draws = [0, 0]
@@ -333,6 +347,7 @@ export function install(): void {
       callbacks: state.callbacks,
       ticks: state.ticks,
       reads: state.reads,
+      marks: state.marks,
       terminals: [...terminals.values()].map(
         ({ name, draws, calls, fits }) => ({ name, draws, calls, fits })
       ),

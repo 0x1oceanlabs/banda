@@ -11,6 +11,7 @@ export {
   GhosttyTerminalSurface as Surface,
   type GhosttyTerminalSurfaceOptions as SurfaceOptions,
   type GhosttyTerminalFont as Font,
+  type GhosttyClock as Clock,
 } from "./t3/surface"
 /** Whether `platform`, as `navigator.platform` names it, is Apple's. */
 export { isMacPlatform } from "./t3/lib/shared"

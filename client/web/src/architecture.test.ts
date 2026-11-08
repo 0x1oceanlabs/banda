@@ -14,6 +14,9 @@
  *   falls.
  * - Nothing more animates a size or a place (ADR 0088, decision 2): the
  *   cases of today are listed, and the list only falls.
+ * - The window ticks on one clock, which stops while nothing moves (ADR
+ *   0088, decision 3): what still asks the browser for a frame of its own
+ *   is listed, and the list only falls.
  * - What calls has one order, the sidebar's (ADR 0087, decision 8): a
  *   mark's rank is read only to pick the loudest, on the lines listed,
  *   and no list sorts by it.
@@ -275,6 +278,66 @@ test("nothing more animates a size or a place: only what does today", () => {
 
 test("a case that no longer animates one leaves the list", () => {
   expect(beyond(LAYOUT_MOTION, moving)).toEqual([])
+})
+
+/** The window's clock (`frames.ts`): it alone asks the browser for the
+ * ticks that what moves runs in. */
+const CLOCK = "client/ui/src/lib/frames.ts"
+
+/**
+ * What asks the browser for an animation frame of its own instead of a
+ * tick of the clock (ADR 0088, decision 3), by its file, with the places
+ * it does: a step taken once, as a focus put after a frame, or a loop that
+ * runs only while a hand drags. A loop that runs while nothing moves
+ * keeps the clock from stopping, so none is added; a place that joins the
+ * clock comes off, and the list only falls.
+ */
+const OWN_FRAMES: Record<string, number> = {
+  "apps/agents/pane/src/thread/Find.tsx": 1,
+  "apps/agents/pane/src/thread/Quote.tsx": 1,
+  "apps/browser/pane/src/BrowserPane.tsx": 1,
+  "apps/browser/pane/src/Lend.tsx": 1,
+  "apps/files/pane/src/FilePane.tsx": 2,
+  "apps/files/pane/src/TreePane.tsx": 8,
+  "apps/files/pane/src/ViewParts.tsx": 1,
+  "apps/files/pane/src/thumbs.ts": 1,
+  "apps/files/pane/src/views/edit.tsx": 1,
+  "apps/files/pane/src/views/hex.tsx": 1,
+  "apps/files/pane/src/views/pdf.tsx": 1,
+  "apps/git/pane/src/DiffPane.tsx": 1,
+  "apps/git/pane/src/folds.ts": 1,
+  // The browser's own frames, for a host that hands it no clock.
+  "client/ghostty/src/t3/surface.ts": 1,
+  "client/ui/src/components/code-file.tsx": 4,
+  "client/ui/src/components/file-tree.tsx": 3,
+  "client/ui/src/components/line-comment.tsx": 1,
+  "client/ui/src/hooks/use-live.ts": 1,
+  "client/web/src/sidebar/Edge.tsx": 1,
+  "client/web/src/tiling/reorder.ts": 1,
+  "client/web/src/tiling/useMoving.ts": 2,
+  "client/web/src/titles/Title.tsx": 2,
+}
+
+const asking = Object.fromEntries(
+  drawing.flatMap((file) => {
+    const found = readFileSync(file, "utf8").match(
+      /\brequestAnimationFrame\s*\(/g
+    )
+    return found ? [[relative(root, file), found.length]] : []
+  })
+)
+const { [CLOCK]: clock, ...own } = asking
+
+test("nothing more asks for a frame of its own than the list holds, but the clock", () => {
+  expect(clock).toBe(1)
+  for (const [file, count] of Object.entries(own))
+    expect(count, `${file} asks for a frame itself`).toBeLessThanOrEqual(
+      OWN_FRAMES[file] ?? 0
+    )
+})
+
+test("a place that joins the clock comes off the list", () => {
+  expect(own).toEqual(OWN_FRAMES)
 })
 
 /**

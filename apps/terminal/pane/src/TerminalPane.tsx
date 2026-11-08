@@ -14,8 +14,9 @@ import {
   type TerminalId,
   type Title,
 } from "@banda/contract/terminal"
-import { Surface } from "@banda/ghostty"
+import { type Clock, Surface } from "@banda/ghostty"
 import { Button } from "@banda/ui/components/button"
+import { afterMoves, cancelFrame } from "@banda/ui/lib/frames"
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -37,6 +38,10 @@ import { zoomOf } from "@banda/ui/lib/zoom"
 
 /** How long a size holds before the shell hears it, in ms. */
 const SETTLE = 120
+
+/** The screen draws on the window's clock, after the moves, once a tick
+ * at most and only when it changed (ADR 0088, decision 3). */
+const CLOCK: Clock = { ask: afterMoves, cancel: cancelFrame }
 
 /**
  * A terminal: the Person's shell in the Project's folder, or a program
@@ -338,6 +343,7 @@ function Screen({
     const fontNow = () => fontOf(element, writingNow.current, zoomOf(terminal))
     void (async () => {
       const made = await Surface.create(element, {
+        clock: CLOCK,
         theme: themeOf(element),
         font: fontNow(),
         cursor: cursorOf(writingNow.current),
