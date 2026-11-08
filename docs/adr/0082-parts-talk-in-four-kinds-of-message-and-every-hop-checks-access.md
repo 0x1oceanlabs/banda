@@ -150,9 +150,8 @@ Roma, 2026-11-06, among the vision's decisions:
    - The answer carries `at`, the place in the log of what the command
      wrote. A control the Person changed stays pending until an update at
      or past `at` arrives. `at` is a seq of the log of the command's
-     scope: the log's head as its change committed, its last fact if it
-     wrote one, or, for a command that wrote no change, the head as it
-     was answered. A refusal carries none. (Amended in A8.)
+     scope: the last fact it wrote. One that wrote no fact, and a
+     refusal, carry none. (Amended in A8; by #880.)
    - Commands from one session to one scope commit in the order sent. The
      router keeps one queue for each session and scope; on a transport
      with several streams, commands share one ordered stream. So a client

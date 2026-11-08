@@ -303,11 +303,19 @@ test("a command is answered with its place in the log, as the event it wrote sta
   // Sent again, the same answer at the same place.
   const again = await client.commandAt("workspaces.open", notes, undefined, id)
   expect(again).toEqual(opened)
-  // Shown already, it writes nothing: the module says none, and the
-  // engine the log's head as it answered, which a client has heard.
-  const shown = await client.commandAt("workspaces.open", notes)
+  // Shown already, it writes nothing: the module says none, and so does
+  // the engine, so a client waits to hear nothing (#880), sent again too.
+  const once = newId()
+  const shown = await client.commandAt(
+    "workspaces.open",
+    notes,
+    undefined,
+    once
+  )
   expect(shown.answer).toMatchObject({ pane: opened.answer.pane, at: null })
-  expect(shown.at).toBeGreaterThanOrEqual(opened.at!)
+  expect(shown.at).toBeNull()
+  const shownAgain = client.commandAt("workspaces.open", notes, undefined, once)
+  expect(await shownAgain).toEqual(shown)
   // A refusal has no place: it rejects, as `command` does.
   const unfit = client.commandAt("workspaces.close", { pane: newId() })
   await expect(unfit).rejects.toMatchObject({ refusal: { code: "not_found" } })

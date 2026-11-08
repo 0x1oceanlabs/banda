@@ -508,10 +508,10 @@ command (with its ID)
     the receipt is kept (below): the command never runs twice. So Files'
     writes and renames, which act on the disk before anything is written,
     are safe to resend.
-  - The answer carries `at`, a seq of its scope's log: the log's head as
-    its change committed, its last fact if it wrote one, or, when it wrote
-    no change, the head as it was answered. A resend gets the same; a
-    refusal has none.
+  - The answer carries `at`, a seq of its scope's log: the last fact it
+    wrote. A resend gets the same; a command that wrote no fact, as one
+    that changed nothing, has none, so a client waits to hear nothing
+    (#880); a refusal has none.
   - The writer syncs with `synchronous = NORMAL`, so receipts hold across
     a crash of the engine. A power cut may lose the last ones, and with
     them the `may_have_run` of a disk change made just before.

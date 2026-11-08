@@ -720,14 +720,16 @@ impl Kernel {
     ///   answer is, as the handler may have acted outside the store before
     ///   it ended.
     /// - `at` is a seq of the log of the scope the command ran in: the
-    ///   log's head as its change committed, its last fact if it wrote
-    ///   one; or, for a command that wrote no change, the log's head as
-    ///   its answer was kept. A view current at `at` shows what the
-    ///   command did. A refusal carries none: what a run wrote before it
-    ///   was refused comes through the log alone. A resend gets the same
-    ///   `at`. The router runs a session's commands to one scope in the
-    ///   order sent ([`api`](crate::api)), so their `at`s go in that order
-    ///   too, but for one that runs on ([`Module::runs_on`]) or hung.
+    ///   last fact it wrote with its change ([`Call::command`]). A view
+    ///   current at `at` shows what the command did. One that wrote no
+    ///   fact carries none, though it may have changed what it keeps: a
+    ///   client has nothing in the log to wait to hear, and a read sent
+    ///   after the answer shows what it did (#880). A refusal carries none
+    ///   either: what a run wrote before it was refused comes through the
+    ///   log alone. A resend gets the same `at`. The router runs a
+    ///   session's commands to one scope in the order sent
+    ///   ([`api`](crate::api)), so their `at`s go in that order too, but
+    ///   for one that runs on ([`Module::runs_on`]) or hung.
     /// - A receipt is kept thirty days past its last write, as its command
     ///   began or was answered, and while its command runs, however long.
     ///   A resend comes within seven days of the first send, so each finds
