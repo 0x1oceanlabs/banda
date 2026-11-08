@@ -57,6 +57,9 @@ from the first. Roma chose to declare in code what is code, and to keep
        `[needs]`, empty until what an App needs is built. The engine's
        build scans every manifest into one list of Apps, and refuses one
        that is wrong. The file becomes `app.toml`.
+     - _Since 2026-11-08, ADR 0062's step B1 (b):_ the file is `app.toml`
+       (`apps/<id>/app.toml`, `platform/<id>/app.toml`), the window's own
+       part's too (`client/web/app.toml`).
    - Its skill topics stay in its `skill/` folder, found as ADR 0012 has
      it.
    - **`banda modules` prints the three as one JSON per module**: what a

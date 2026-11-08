@@ -392,7 +392,7 @@ export type Widget = {
 
 export type Module = {
   /**
-   * The module's one id: its engine module's name, its `module.toml`'s
+   * The module's one id: its engine module's name, its `app.toml`'s
    * id, and the first word of its Panes' kinds (ADR 0022, decision 5).
    */
   id: string

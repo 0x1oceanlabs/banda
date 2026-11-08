@@ -35,10 +35,13 @@ fn main() {
     apps();
 }
 
-/// The file an App or a platform part declares itself in (ADR 0022). It
-/// becomes `app.toml` (ADR 0062, decision 11) in one move with the
-/// window's tests, which find the folders by this name too.
-const MANIFEST: &str = "module.toml";
+/// The file an App or a platform part declares itself in (ADR 0022),
+/// `app.toml` (ADR 0062, decision 11), which was `module.toml`. The
+/// window's tests find the folders by this name alone too
+/// (`MANIFEST_NAMES` in @banda/ui/testing/architecture). The window's own
+/// part declares itself in `client/web/app.toml` too, though it is
+/// neither an App nor a platform part (ADR 0087, decision 1).
+const MANIFEST: &str = "app.toml";
 
 /// The major of the App API this engine hosts (ADR 0062, decision 11;
 /// ADR 0082, decision 14): each manifest names the one it is written to,

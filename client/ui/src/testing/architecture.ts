@@ -11,10 +11,11 @@ import ts from "typescript"
 
 /**
  * The names of the file an App or a platform part declares itself in
- * beside its code, its manifest (ADR 0022): `app.toml`, and `module.toml`
- * until the rename (ADR 0062, decision 11), which takes it off this list.
+ * beside its code, its manifest (ADR 0022): `app.toml` alone, since every
+ * `module.toml` became one (ADR 0062, decision 11), so a folder left with
+ * the old name is no part.
  */
-export const MANIFEST_NAMES = ["app.toml", "module.toml"] as const
+export const MANIFEST_NAMES = ["app.toml"] as const
 
 /** The manifest in `folder`, by its path; none when it has none. */
 export function manifestIn(folder: string): string | undefined {

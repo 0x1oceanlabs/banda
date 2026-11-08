@@ -20,7 +20,7 @@ fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
-/// Each module's folder, with its `module.toml`: an App's under `apps/`,
+/// Each module's folder, with its `app.toml`: an App's under `apps/`,
 /// the platform's under `platform/` (ADR 0062, decision 11). Finding none
 /// fails, so a manifest renamed cannot leave these tests checking nothing.
 fn modules() -> Vec<PathBuf> {
@@ -30,11 +30,11 @@ fn modules() -> Vec<PathBuf> {
         .flatten()
         .filter_map(|e| e.ok())
         .map(|e| e.path())
-        .filter(|path| path.join("module.toml").exists())
+        .filter(|path| path.join("app.toml").exists())
         .collect();
     assert!(
         !found.is_empty(),
-        "no folder of apps/ or platform/ has a module.toml"
+        "no folder of apps/ or platform/ has an app.toml"
     );
     found
 }

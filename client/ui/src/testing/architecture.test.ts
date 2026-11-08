@@ -44,7 +44,7 @@ test("the check sees keyframes by what their steps set", () => {
   ).toEqual(["@keyframes grow"])
 })
 
-test("a part is found by each name of its manifest, finding none throws, and so does one id twice", () => {
+test("a part is found by each name of its manifest, not by the old module.toml, finding none throws, and so does one id twice", () => {
   const root = mkdtempSync(join(tmpdir(), "banda-parts-"))
   const folder = (path: string, manifest?: string) => {
     mkdirSync(join(root, path), { recursive: true })
@@ -55,6 +55,7 @@ test("a part is found by each name of its manifest, finding none throws, and so 
     expect(MANIFEST_NAMES).toContain("app.toml")
     folder("apps")
     folder("platform/look")
+    folder("apps/old", "module.toml")
     expect(() => parts(root)).toThrow(/no folder of apps\/ or platform\//)
     const named = MANIFEST_NAMES.map(
       (name, at) => [`p${at}`, folder(`apps/p${at}`, name)] as const

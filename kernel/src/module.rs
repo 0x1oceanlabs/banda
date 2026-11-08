@@ -41,7 +41,7 @@ pub trait Module: Send + Sync + 'static {
     fn name(&self) -> &'static str;
 
     /// The prefixes its tables kept from an id it had before, as its
-    /// `module.toml` declares them (`legacy-prefixes`): its SQL reaches
+    /// `app.toml` declares them (`legacy-prefixes`): its SQL reaches
     /// `<prefix>_*` too. A module whose id changes keeps its tables'
     /// names, for data at rest is never renamed (ADR 0085, decision 12).
     /// Lowercase letters, none another module's name.
