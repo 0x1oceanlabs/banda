@@ -20,7 +20,6 @@ import { useMachine } from "@banda/ui/hooks/use-status"
 import { openProjects, updateProject } from "@banda/ui/lib/projects"
 import { useStore } from "@banda/ui/lib/store"
 import { asleep, type Listed, type PaneState } from "@banda/ui/pane"
-import type { Thing } from "@banda/ui/module"
 import { Bar } from "../bar/Bar"
 import { WorkspaceMap } from "../bar/Map"
 import { tomlOf } from "@banda/contract/settings"
@@ -87,7 +86,6 @@ import { attachTo, focusedOn } from "./attach"
 import { Kept, useKeptHere } from "./here"
 import { useNarrow } from "./narrow"
 import { floorOf, type Reveal, shownOf } from "../tiling/layout"
-import type { Change } from "../tiling/arrange"
 import type { Shows } from "../tiling/shows"
 import { useTiling } from "../tiling/useTiling"
 import {
@@ -129,11 +127,11 @@ import {
 } from "../tiling/store"
 import { Workspaces } from "../tiling/Workspaces"
 import {
-  answering,
   bringing,
   closing,
   closingShown,
   opening,
+  picking,
   runAction,
   settingsAt,
   updating,
@@ -276,22 +274,9 @@ export function Shell({
         ?.chime,
     subscribe: stores.calls.subscribe,
   }))
-  // Alt+C's column to the middle, and a Thread picked, from the Inbox,
-  // the bar or a call, to the left (ADR 0065, decision 8): once each.
+  // Alt+C's column to the middle, and a Pane picked, from a row, a call
+  // or Alt+U, to the left (ADR 0065, decision 8): once each.
   const [reveal, setReveal] = useState<Reveal>()
-  const picked = useCallback((entry: string | void) => {
-    if (entry) setReveal({ entry, how: "left" })
-  }, [])
-  // A Thread picked comes to the left, once its Pane is drawn.
-  const picking = useCallback(
-    (how: Change) => void changing(how).then(picked),
-    [changing, picked]
-  )
-  const goToCall = useCallback(
-    (thing: Thing & { pane: PaneState }) =>
-      picking((w) => answering(w, thing, homeOf(thing.pane))),
-    [picking]
-  )
   // `banda menu ROUTE` opens the menu there (ADR 0017, decision 7).
   const projectsNow = useRef(projects)
   useEffect(() => {
@@ -667,7 +652,12 @@ export function Shell({
         zoomed: zoomed !== undefined,
       })
     },
-    goTo: goToCall,
+    // The one answer to `pane.pick` (ADR 0087, decision 7): the Tiling
+    // goes to the Pane, or opens it, and it comes to the left once drawn.
+    pick: (project, pane) =>
+      void changing((w) => picking(w, project, pane)).then((entry) => {
+        if (entry) setReveal({ entry, how: "left" })
+      }),
     look: () => told,
     projects: () => open,
     toggleSidebar,
@@ -678,13 +668,14 @@ export function Shell({
     popOut: togglePopOut,
     center: toCenter,
     // Alt+U: the next call below the Thread in front, as the sidebar lists
-    // them (ADR 0079, decision 4).
+    // them (ADR 0079, decision 4), picked.
     answer: () => {
       const order = sidebarOrder(stores.items.get(), projects, snoozes)
       const { pane } = here.get()
       const at = pane?.subject ? `${pane.project}:${pane.subject}` : undefined
       const call = nextCall(stores.calls.get().list, order, at)
-      if (call) goToCall(call)
+      if (call)
+        parts.run("pane.pick", { project: call.project, pane: call.pane })
     },
     archive,
     snooze,
@@ -772,8 +763,9 @@ export function Shell({
   }, [running, api])
   // The keys run the actions, before any Pane hears them (keys.ts).
   useKeyRouter(parts, keyed, mod)
-  // A row of the sidebar or the menu opens its Pane, where a workspace
-  // shows it or in a new column; a Project gets a new Thread.
+  // A row of the menu opens its Pane, where a workspace shows it or in a
+  // new column; one of the sidebar or the counts list goes to it, as
+  // `pane.pick` does; a Project gets a new Thread.
   const openPane = useCallback(
     (project: ProjectId, pane: PaneState) =>
       change((w) => opening(w, project, pane, { place: "right" })),
@@ -781,8 +773,8 @@ export function Shell({
   )
   const pickPane = useCallback(
     (project: ProjectId, pane: PaneState) =>
-      picking((w) => opening(w, project, pane, { place: homeOf(pane) })),
-    [picking]
+      parts.run("pane.pick", { project, pane }),
+    [parts]
   )
   // Pinned, the drawer's Thread is a column of the workspace on screen.
   const pinDrawer = useCallback(() => {

@@ -34,9 +34,10 @@ import { type Button, clicked, type Told } from "./told"
 export type Teller = {
   /** Tells what a module told, where the Person will notice it. */
   told: (told: Told) => Promise<void>
-  /** Goes to a thing that calls, as its toast's button does: its toast
-   * and its notification go. */
-  goTo: (thing: Thing & { pane: PaneState }) => void
+  /** Goes to a thing that calls, as its toast's button does, by the
+   * Window's `pane.pick` (ADR 0087, decision 7): its toast and its
+   * notification go. */
+  answer: (thing: Thing & { pane: PaneState }) => void
   stop: () => void
 }
 
@@ -134,7 +135,7 @@ export function startTelling(
     toastTold(joinedOf(joined, detail), press)
   }
   const answer = (thing: Thing & { pane: PaneState }) => {
-    window.goTo(thing)
+    window.run("pane.pick", { project: thing.project, pane: thing.pane })
     withdraw([`${thing.project}:${thing.about}`])
   }
 
@@ -220,7 +221,7 @@ export function startTelling(
   ]
   return {
     told,
-    goTo: answer,
+    answer,
     stop: () => {
       clearTimeout(timer)
       for (const stop of stops) stop()

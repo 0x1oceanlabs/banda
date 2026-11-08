@@ -3,7 +3,7 @@
  * 10): the modules' own and the window's (ADR 0022, decision 3). The keys,
  * the Banda menu, its key sheet and `keys.toml` read the same list.
  */
-import type { Engine, ProjectId } from "@banda/contract"
+import type { Engine, JsonValue, ProjectId } from "@banda/contract"
 import { toast } from "@banda/ui/components/sonner"
 import {
   type Action,
@@ -12,13 +12,7 @@ import {
   takes,
   type WindowApi,
 } from "@banda/ui/module"
-import {
-  IN_PROGRAM,
-  type Listed,
-  type PaneState,
-  paneOf,
-  type Place,
-} from "@banda/ui/pane"
+import { IN_PROGRAM, type Listed, type PaneState, paneOf } from "@banda/ui/pane"
 import { RESET_KEY } from "../actions/actions"
 import { chipOf } from "./attach"
 import { device } from "./device"
@@ -28,6 +22,7 @@ import type { At } from "../menu/menu"
 import { modules } from "../modules"
 import {
   groupedOf,
+  homeOf,
   identityOf,
   launcher,
   minOf,
@@ -111,6 +106,11 @@ export type Shell = WindowApi & {
   popOut: () => void
   /** Brings the focused column to the middle of the screen, once. */
   center: () => void
+  /** Goes to the Pane `pane.pick` asks for, the one way to go to an
+   * Agent (ADR 0087, decision 7): where a workspace shows it, else where
+   * it opens (`picking`), and brings it to the left once drawn (ADR 0065,
+   * decision 8). Only that action calls it. */
+  pick: (project: ProjectId, pane: PaneState) => void
   /** Goes to what calls the Person first (ADR 0011, decision 5). */
   answer: () => void
   /** Archives what the Person looks at, or brings it back (ADR 0069). */
@@ -162,7 +162,6 @@ export function windowApiOf(shell: Shell): WindowApi {
     items: shell.items,
     run: shell.run,
     sight: shell.sight,
-    goTo: shell.goTo,
     projects: shell.projects,
     look: shell.look,
     writeSetting: shell.writeSetting,
@@ -350,18 +349,42 @@ export function bringing(
 }
 
 /**
- * Goes to a thing that calls: to the Pane that shows it, on any
- * workspace, or to a new column that does.
+ * Goes to the Pane picked (`pane.pick`, ADR 0087, decision 7): to the one
+ * a workspace shows, on any workspace, by the thing it shows (`shows`),
+ * else by what makes it that Pane; else opens it where the Flow says
+ * (`homeOf`): right of the Pane in front, or last on its Project's
+ * workspace (ADR 0065, decision 8).
  */
-export function answering(
+export function picking(
   workspaces: Workspaces,
-  thing: { project: ProjectId; about: string; pane: PaneState },
-  place: Place = "right"
+  project: ProjectId,
+  pane: PaneState
 ): Step {
-  const entry = showing(workspaces, thing, showsOf)
+  const about = showsOf(pane)
+  const entry =
+    about === null
+      ? undefined
+      : showing(workspaces, { project, about }, showsOf)
   return entry
     ? focusEntry(workspaces, entry.id)
-    : opening(workspaces, thing.project, thing.pane, { place })
+    : opening(workspaces, project, pane, { place: homeOf(pane) })
+}
+
+/** What `pane.pick` is asked: a Project, and the Pane to open in it, its
+ * kind and args, as an Item carries it; none when its args are not that. */
+export function pickOf(
+  args: Args | undefined
+): { project: ProjectId; pane: PaneState } | undefined {
+  const { project, pane } = args ?? {}
+  if (typeof project !== "string" || !isArgs(pane)) return undefined
+  const { kind, args: shown } = pane
+  if (typeof kind !== "string" || !isArgs(shown)) return undefined
+  return { project: project as ProjectId, pane: { kind, args: shown } }
+}
+
+/** Whether `value` is an object of JSON values, as a Pane's args are. */
+function isArgs(value: JsonValue | undefined): value is Args {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
 /**
@@ -753,6 +776,19 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     section: "Workspaces",
     title: "A new workspace: the empty one at the bottom",
     run: (shell) => shell.change(fresh),
+  },
+  {
+    // The one way to go to an Agent (ADR 0087, decision 7): a sidebar
+    // row, a row of the counts list, a toast's button and Alt+U run it,
+    // with the Pane as an Item carries it.
+    id: "pane.pick",
+    section: "Panes",
+    title: "Go to a Pane where a workspace shows it, or open it",
+    unlisted: true,
+    run: (shell, args) => {
+      const picked = pickOf(args)
+      if (picked) shell.pick(picked.project, picked.pane)
+    },
   },
   {
     id: "calls.answer",

@@ -1,9 +1,14 @@
+import type { Args } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
-import { expect, test } from "vitest"
-import { entries, open, start } from "../tiling/model"
+import { expect, test, vi } from "vitest"
+import { homeOf } from "../registry"
+import { entries, focused, open, start, type Workspaces } from "../tiling/model"
 import {
   closingShown,
   opening,
+  picking,
+  pickOf,
+  runAction,
   type Shell,
   updating,
   windowApiOf,
@@ -80,4 +85,78 @@ test("a module is given the Window's API alone, as it is when asked", () => {
   expect(api.run("thread.new")).toBe("run")
   home = "b"
   expect(api.home).toBe("b")
+})
+
+test("a pick goes to the Pane that shows its thing, on any workspace, else opens it where its kind's home is", () => {
+  const right = { place: "right" } as const
+  let state = start()
+  state = open(state, "project-a", thread("t1"), right)
+  // Its args since grew, as a Thread whose details card the Person hid.
+  const hid = { kind: "agents.thread", args: { thread: "t2", details: false } }
+  state = open(state, "project-a", hid, right)
+  state = open(state, "project-b", thread("t3"), right)
+  const [first, second] = entries(state)
+  const focus = (project: string, pane: PaneState) =>
+    focused(picking(state, project, pane) as Workspaces)?.id
+
+  expect(focus("project-a", thread("t1"))).toBe(first!.id)
+  // The thing it shows, whatever else its args say: no second Pane.
+  expect(focus("project-a", thread("t2"))).toBe(second!.id)
+  // Shown in another Project only: it opens, where its kind's home is,
+  // with the args it was picked with.
+  const t3 = thread("t3")
+  expect(picking(state, "project-a", t3)).toMatchObject({
+    command: {
+      method: "workspaces.open",
+      params: { project: "project-a", kind: "agents.thread", args: t3.args },
+    },
+  })
+  expect(picking(start(), "project-a", t3)).toMatchObject({
+    command: {
+      params: {
+        place:
+          homeOf(t3) === "project"
+            ? { to: "project", project: "project-a" }
+            : "right",
+      },
+    },
+  })
+  // A kind that names no thing: the Pane that is the same one, as its
+  // kind names it.
+  const usage = { kind: "harnesses.usage", args: {} }
+  const used = open(
+    open(state, "project-a", usage, right),
+    "project-a",
+    t3,
+    right
+  )
+  const shown = entries(used).find((entry) => entry.pane.kind === usage.kind)
+  expect(focused(picking(used, "project-a", usage) as Workspaces)?.id).toBe(
+    shown!.id
+  )
+})
+
+test("pane.pick takes a Project and a Pane, as an Item carries it, and only it reaches the Window's answer", () => {
+  const pane = thread("t1")
+  expect(pickOf({ project: "project-a", pane })).toEqual({
+    project: "project-a",
+    pane,
+  })
+  const wrong: (Args | undefined)[] = [
+    undefined,
+    {},
+    { project: "project-a" },
+    { project: 1, pane },
+    { project: "project-a", pane: "t1" },
+    { project: "project-a", pane: { kind: "agents.thread" } },
+    { project: "project-a", pane: { kind: 1, args: {} } },
+    { project: "project-a", pane: { kind: "agents.thread", args: [] } },
+  ]
+  for (const args of wrong) expect(pickOf(args)).toBeUndefined()
+
+  const pick = vi.fn()
+  const shell = { pick } as unknown as Shell
+  runAction(shell, "pane.pick", { project: "project-a", pane })
+  runAction(shell, "pane.pick", { project: "project-a" })
+  expect(pick.mock.calls).toEqual([["project-a", pane]])
 })

@@ -569,6 +569,13 @@
       "keys": []
     },
     {
+      "id": "pane.pick",
+      "title": "Go to a Pane where a workspace shows it, or open it",
+      "section": "Panes",
+      "keys": [],
+      "unlisted": true
+    },
+    {
       "id": "calls.answer",
       "title": "Go to what calls you",
       "section": "Threads",
