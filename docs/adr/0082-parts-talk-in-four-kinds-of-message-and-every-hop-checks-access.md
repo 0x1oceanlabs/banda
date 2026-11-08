@@ -13,6 +13,13 @@ docs/research/2026-11-06-architecture-vision.md (§1, §4) and its designs in
 docs/research/2026-11-06-architecture-vision/ (`borders.md` and the three
 critiques)._
 
+_Changed on 2026-11-08, by [ADR 0096](0096-seen-and-archive-are-thread-data-on-its-host.md):
+the vision's decision 13 is (b) now. Seen marks are Thread data in the
+Project, on its host, beside the snooze. Where this ADR puts them in the
+Person's documents (decisions 1, 15 and 16, plan step 11, and its note on
+ADR 0081 decision 12), read the Thread instead: the client joins none, and
+none waits on the device while home is away._
+
 ADR 0062 makes Banda a kernel, a platform and Apps built on one SDK.
 ADR 0081 runs Banda on several machines: hosts run the work, and clients
 show it and ask for changes. Neither says how the parts talk to each

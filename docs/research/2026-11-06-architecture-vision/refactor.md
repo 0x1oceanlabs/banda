@@ -410,6 +410,7 @@ None of these change behaviour, unless noted.
 
 **E7 · The Person's marks live on the host** · M · deps B13
 - `seen.ts:12`, `archived.ts:18, 78` and `snoozed.ts:35` become threads commands, stored in the Project (borders, open question 1: Roma confirms Project versus Person).
+  _Answered on 2026-11-08 by ADR 0096: the Project. Seen and archive go first; `snoozed.ts:35` (woke-seen) stays per window for now._
 - localStorage marks are imported once.
 
 **E8 · Calls on the host** · M-L · deps E7, B7, A5 · 0081 step 7

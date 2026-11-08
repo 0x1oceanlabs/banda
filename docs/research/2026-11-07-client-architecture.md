@@ -314,7 +314,7 @@ A grammar, a Rust parser and a TypeScript evaluator would serve two closures tha
 **Two kinds of program, joined by two languages.**
 
 - **The Threads App** is an ordinary SDK App: its Panes (`agents.thread`, the Visual), `item@1` for each Thread and `call@1`, written in the same transaction as the change behind them; its item actions (rename, suggest a title, previous title, make a Project, snooze, wake); its actions (`thread.new`, `agents.composer.*`); its Sources (New Thread, Ask); its `thread.details` Slot and its `pane.header` row; its settings.
-- **The sidebar list** (platform) owns the items projection, the list in the Sidebar, the counts widget, the one order, and the Person's archive.
+- **The sidebar list** (platform) owns the items projection, the list in the Sidebar, the counts widget, the one order, and the Person's archive. _Changed on 2026-11-08 by ADR 0096: a Thread's archive and seen are the Thread's, kept by its host; the sidebar list reads them from the list and sends the agents module's commands._
 - **The platform's calls** own the Inbox and `calls.answer`; the notifications part tells the Person as ADR 0056 has it, until E9 moves who is told into `platform/calls` (§3).
 - **`pane.pick`** is the one way to go to an Agent. The Window answers it and hands it to the Tiling, or on a phone to its stack of screens (§6.2).
 
@@ -351,6 +351,8 @@ Today two orders exist. The bar's list sorts loudest first (`client/web/src/bar/
 | the Flow switch | `FlowMenu.tsx:78` writes `agents.toml` | the Tiling's `flow.pick` |
 | the Drawer's New Thread | `Shell.tsx:703-746` catches `open` | the intent `thread.new@1{place: "drawer"}` (the action `thread.new` until B8) |
 | Thread rows in the Banda menu | `client/web/src/menu/menu.ts:29-38`, `:62-70` | a Threads Source |
+
+_Changed on 2026-11-08 by ADR 0096:_ for a Thread, mark unread or read and archive call its host: `thread.unread` sends `agents.read` or `agents.unread`, and `sidebar.archive` sends `agents.archive` or `agents.unarchive`. The mark is the Thread's, not the Person's.
 
 The Thread Pane reads its own Thread through its own queries and the `threads.live` stream, never through the items store.
 
@@ -440,7 +442,7 @@ interface Device {
 
 ### 7.3 Stores keyed by host
 
-Every client store is keyed by host from its birth, so H5 and H6 do not rewrite them. They replace singletons that assume one engine (`client/ui/src/lib/signs.ts:14`, `client/ui/src/lib/projects.ts:74`, `client/ui/src/lib/look.ts:10`, `client/web/src/main.tsx:21`). The Person's marks (seen, archived, looked at) sit behind one store, on localStorage until E8 makes them a Person document (vision decision 13). Device storage then keeps only conveniences: the view, widths, drafts, recent toasts.
+Every client store is keyed by host from its birth, so H5 and H6 do not rewrite them. They replace singletons that assume one engine (`client/ui/src/lib/signs.ts:14`, `client/ui/src/lib/projects.ts:74`, `client/ui/src/lib/look.ts:10`, `client/web/src/main.tsx:21`). The Person's marks (seen, archived, looked at) sit behind one store, on localStorage until E8 makes them a Person document (vision decision 13). _Changed on 2026-11-08 by ADR 0096: a Thread's seen and archived come from its host, in its list, not from this store._ Device storage then keeps only conveniences: the view, widths, drafts, recent toasts.
 
 ### 7.4 Forms
 
@@ -634,7 +636,7 @@ A separate compositor process; a WebGPU layer over the DOM; a native window tool
 | B4h | Actions by owner | the tiling's actions to `platform/workspaces/window.json`, and `client/web/window.json` keeps the Window's own (ADR 0071 d2); device-only actions hide without their capability; the Window ≤ 400 lines | S-M | B4d, T-b | — | web client |
 | **Wave 5: items and marks (with M4)** | | | | | | |
 | B7a | Item | `Listed` splits into the Item (with `news`) and the owner's extras; nobody reads `lists()` | M | B4e, T-a | — | E8b |
-| E8a | Marks store | archived, seen (by `news`), looked at; localStorage until E8 | S | B4e | — | E8b |
+| E8a | Marks store | archived, seen (by `news`), looked at; localStorage until E8. _ADR 0096: a Thread's archived and seen come from its host (its step 2b)_ | S | B4e | — | E8b |
 | E8b | Inbox from the host | the Watches go; the stores follow `calls.inbox` and `item@1` | M | E8 host, B7a, E8a | — | phone Inbox, push |
 | B8c | Intents | the Pane openings and action runs of §5.3; handles for module globals | M | B8 host | — | M6 |
 | **Wave 6: a key is drawn at once** | | | | | | |

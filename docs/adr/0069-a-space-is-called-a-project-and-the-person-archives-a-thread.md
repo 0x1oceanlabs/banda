@@ -112,6 +112,10 @@ defaults and stay his to change.
      three days had archived is archived by the Person's hand, written
      once. Nothing comes back into the list just because the rule is
      gone.
+   - _Changed on 2026-11-08, by ADR 0096._ The archive is kept on the
+     Thread by its host. Each machine's window sends what its cutoff
+     archives to the host once, as archives of their own, and the
+     window's cutoff goes.
 
 6. **A Project's own Archive keeps its word** (ADR 0026). It hides the
    Project from the pickers and keeps everything. It never comes back by

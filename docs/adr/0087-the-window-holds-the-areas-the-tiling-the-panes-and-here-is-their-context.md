@@ -270,6 +270,10 @@ for Apps from elsewhere waits for the Tree renderer.
       ADR 0077 d6). The seen mark keeps, per Address, the `news` the
       Person saw; the Item is unread while they differ. Mark as unread
       drops the mark; Mark as read sets it.
+      _Changed on 2026-11-08, by ADR 0096:_ a Thread's seen and archive
+      marks are the Thread's, kept by its host. For a Thread, the
+      platform's read, unread, archive and unarchive call `agents.read`,
+      `agents.unread`, `agents.archive` and `agents.unarchive` there.
     - The Thread menu keeps its rows and their order
       (`client/web/src/titles/ThreadMenu.tsx:100-105`): the owner's naming
       rows, mark as unread, the owner's other rows, archive last.
@@ -371,6 +375,8 @@ A step that changes pixels shows Roma a before and after first.
   archived are the Person's marks (vision decision 13). A click on a
   Thread still goes where it shows, or opens it: `pane.pick` (decision
   7).
+  _Changed on 2026-11-08, by ADR 0096:_ a Thread's seen and archived are
+  not the Person's marks but the Thread's, kept by its host.
 - **ADR 0011, decision 1:** "On screen" means at least half of the
   Pane's Tile shows inside the Strip's clip, and in Solo only the filled
   Group; no longer "its Pane is on the current workspace" (decision 9).

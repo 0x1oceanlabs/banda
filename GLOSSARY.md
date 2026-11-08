@@ -365,9 +365,9 @@ _Avoid_: machine scope (it split into Host and Person).
 
 **Person document**:
 One of the Person's few versioned files on the home host: the
-arrangement, keys, the sidebar, themes, `[notify]`, seen marks, Web Apps'
-manifests. Each is read whole, and clients cache it; no other host keeps
-one (ADR 0082).
+arrangement, keys, the sidebar, themes, `[notify]`, Web Apps' manifests.
+Each is read whole, and clients cache it; no other host keeps one (ADR
+0082). Seen marks are not among them: they are the Thread's (ADR 0096).
 _Avoid_: sync, replica.
 
 **Query**:
@@ -779,8 +779,10 @@ _Avoid_: panel; Inbox (that is the merged Calls).
 **Archive**:
 Where the Threads the Person put away wait, folded at the sidebar's
 bottom. Only the Person archives a Thread; anything new in it brings it
-back to the list (ADR 0069). A Project is archived too, which hides it
-from the pickers until the Person brings it back (ADR 0026).
+back to the list (ADR 0069). The Thread's host keeps the mark, beside the
+snooze, so a Thread archived on one machine is archived on all (ADR
+0096). A Project is archived too, which hides it from the pickers until
+the Person brings it back (ADR 0026).
 _Avoid_: settled (its name before ADR 0069).
 
 **Snooze**:
@@ -790,6 +792,14 @@ wakes it early, and a Thread that asks cannot be snoozed. The engine keeps
 it, so every window, machine and Agent sees it; an Agent may snooze its
 own Thread (ADR 0074).
 _Avoid_: remind, later.
+
+**Seen**:
+The Person's mark that they saw how a Thread's latest turn ended: that
+turn's ID, never a time. A finished or failed turn calls until it is
+seen. The Thread's host keeps it, beside the snooze, so every window and
+machine agrees; a window marks it only while the Person is there, and
+"Mark as unread" takes it back. Only the Person marks it (ADR 0096).
+_Avoid_: read (the menu's word for the action, not the mark).
 
 **Banda skill**:
 What an Agent needs to know to work in Banda and to change it for its
