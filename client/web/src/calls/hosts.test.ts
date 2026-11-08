@@ -1,4 +1,5 @@
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import type { Args } from "@banda/ui/module"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, expect, test, vi } from "vitest"
@@ -344,14 +345,56 @@ test("a Pane says why it cannot reach its host in the window's own words", () =>
   )
 })
 
-test("a Pane on another host runs none of the Window's actions on this machine's files", () => {
-  expect(runsElsewhere("edit.paste")).toBe(true)
-  expect(runsElsewhere("thread.snooze")).toBe(true)
+test("a Pane on another host runs none of the Window's actions on this machine's files, and its Items' on that host's alone", () => {
+  const { device, tell } = desktop()
+  const hosts = new KeptHosts(device)
+  hosts.follow()
+  tell([live])
+  hosts.ours([project("mine")])
+  hosts.projects("arc", [
+    project("mine"),
+    project("r1"),
+    project("s9", { scratch: true }),
+  ])
+  const ran: [string, Args | undefined][] = []
+  const arc = () => hosts.get().find((one) => one.name === "arc")
+  const own = { project: "r1" as ProjectId, item: "t1" }
+  const run = runsElsewhere(
+    (action, args) => void ran.push([action, args]),
+    new Set(["thread.snooze"]),
+    arc,
+    own
+  )
+  run("edit.paste")
   for (const action of [
     "terminal.run",
     "file.open",
     "file.attach",
     "browser.open",
   ])
-    expect(runsElsewhere(action)).toBe(false)
+    run(action, {})
+  // Its own Thread, as its Pane names it, or the one it shows.
+  run("thread.snooze", { project: "r1", item: "t1", until: 5 })
+  run("thread.snooze")
+  // Its Thread in No Project there, one of that host's Projects.
+  run("thread.snooze", { project: "s9", thread: "t2" })
+  // This machine's Project, which wins the ID both have: nothing.
+  run("thread.snooze", { project: "mine", item: "t9" })
+  // One no host shows, as a Thread not placed yet there: nothing.
+  run("thread.snooze", { project: "machine", item: "t3" })
+  expect(ran).toEqual([
+    ["edit.paste", undefined],
+    ["thread.snooze", { project: "r1", item: "t1", until: 5 }],
+    ["thread.snooze", { project: "r1", item: "t1" }],
+    ["thread.snooze", { project: "s9", thread: "t2", item: "t2" }],
+  ])
+  // Before the Window knows that host, nothing either.
+  const waiting = runsElsewhere(
+    (action, args) => void ran.push([action, args]),
+    new Set(["thread.snooze"]),
+    () => undefined,
+    own
+  )
+  waiting("thread.snooze")
+  expect(ran).toHaveLength(4)
 })
