@@ -6,7 +6,10 @@
  * ssh does, so main's check that ssh holds the port holds. arc's label
  * shows below this machine's Projects, with its Projects and Threads;
  * stopped there, it says so, and Start brings it back. Its Thread opens
- * from the sidebar on arc's engine, and waits while arc is away. With
+ * from the sidebar on arc's engine, and waits while arc is away. As a Mac,
+ * its `uname` says Darwin, and the window finds its Banda in its
+ * Application Support; its engine is this checkout's still, which serves
+ * for the follower, as a Mac's does not (engine/src/control.rs). With
  * BANDA_E2E_SHOTS set to a folder, it leaves pictures of each state there
  * for the Person to see.
  */
@@ -21,7 +24,7 @@ import {
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
-import { join, resolve } from "node:path"
+import { dirname, join, resolve } from "node:path"
 import { expect, type Page, test } from "@playwright/test"
 import { setInFront, startWindow, type Window } from "./window"
 
@@ -100,8 +103,13 @@ type Arc = {
   close: () => void
 }
 
-/** The machine "arc": its own folders, the fake agent its Harness. */
-function newArc(): Arc {
+/** Where a Mac keeps Banda Local's copy of `banda`, from its home. */
+const MAC_COPY = "Library/Application Support/banda-local/engine/0.1.0/banda"
+
+/** The machine "arc": its own folders, the fake agent its Harness. As a
+ * `mac`, its `uname` says Darwin, and its Banda is a copy in its home's
+ * Application Support that notes each run in `ran` there. */
+function newArc({ mac = false } = {}): Arc {
   const dir = mkdtempSync(join(tmpdir(), "banda-arc-"))
   const at = (path: string) => join(dir, path)
   mkdirSync(at("config"), { recursive: true })
@@ -118,7 +126,24 @@ function newArc(): Arc {
     BANDA_CONFIG: at("config"),
     BANDA_CACHE: at("cache"),
   }
-  writeFileSync(at("bin/ssh"), fakeSsh(folders), { mode: 0o755 })
+  // What a program run over ssh there has, besides arc's folders.
+  const remote: Record<string, string> = { ...folders }
+  if (mac) {
+    mkdirSync(at("mac"))
+    writeFileSync(at("mac/uname"), "#!/bin/sh\necho Darwin\n", { mode: 0o755 })
+    const copy = at(`home/${MAC_COPY}`)
+    mkdirSync(dirname(copy), { recursive: true })
+    // The engine runs on this machine's PATH, not the one with arc's uname.
+    writeFileSync(
+      copy,
+      `#!/bin/sh\necho "$0" >> "$HOME/ran"\nPATH=${quoted(process.env.PATH ?? "")} exec ${quoted(program)} "$@"\n`,
+      { mode: 0o755 }
+    )
+    // Only arc's uname, and no banda-local of this machine's on its PATH.
+    remote.HOME = at("home")
+    remote.PATH = `${at("mac")}:/usr/bin:/bin`
+  }
+  writeFileSync(at("bin/ssh"), fakeSsh(remote), { mode: 0o755 })
   writeFileSync(at("bin/forward.cjs"), FORWARD)
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -206,14 +231,15 @@ const keptOf = (arc: Arc, project: string, thread: string) =>
 const states = (arc: Arc, project: string) =>
   threadsOf(arc, project).map((thread) => [thread.title, thread.latest?.state])
 
-/** The window, its hosts.toml naming arc, and the fake ssh first on its
+/** The window, its hosts.toml naming arc with `banda`, or with none
+ * (`null`) for the window to find it there, and the fake ssh first on its
  * PATH. */
-const withArc = (arc: Arc) =>
+const withArc = (arc: Arc, banda: string | null = program) =>
   startWindow({
     look: 'mode = "dark"\n',
     sidebar: 'preset = "projects"\n',
     files: {
-      "config/hosts.toml": `[[hosts]]\nname = "arc"\nssh = "arc"\nbanda = ${JSON.stringify(program)}\n`,
+      "config/hosts.toml": `[[hosts]]\nname = "arc"\nssh = "arc"\n${banda ? `banda = ${JSON.stringify(banda)}\n` : ""}`,
     },
     env: { PATH: `${arc.bin}:${process.env.PATH}` },
   })
@@ -405,4 +431,16 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   await expect(other.getByText("Not on arc yet")).toBeVisible()
   await expect(other.getByRole("button", { name: "Terminal" })).toHaveCount(0)
   await shot(page, "pr3-3-not-on-arc")
+})
+
+test("a Mac there, with no banda in hosts.toml: the window finds its Banda in the Mac's Application Support", async () => {
+  arc = newArc({ mac: true })
+  await seed(arc)
+  window = await withArc(arc, null)
+  const there = arcOf(window.page)
+  await expect(there.getByText("Bench window tests")).toBeVisible()
+  // It ran the copy a Mac keeps, as arc's uname said Darwin.
+  expect(readFileSync(join(arc.dir, "home/ran"), "utf8")).toBe(
+    `${join(arc.dir, "home", MAC_COPY)}\n`
+  )
 })

@@ -32,7 +32,9 @@
 //! When the engine refuses (the call, the hello or the follow), the CLI
 //! prints `{"error": {"code", "message"}}` and exits 1. When no engine
 //! answers, or the program cannot do its part, it says so on stderr and
-//! exits 2.
+//! exits 2. `banda start --with-parent` run over ssh for another machine's
+//! window exits 75 while no Banda is open here, where it starts none
+//! (`control.rs`).
 
 mod apps;
 mod build_id;
@@ -92,7 +94,9 @@ enum Command {
         /// For a window: prints where the engine listens on the first
         /// line, and follows it until stdin closes, which leaves it
         /// running, or until it stops. Where the engine is the window's
-        /// child, this serves it, and stops it when stdin closes.
+        /// child, this serves it, and stops it when stdin closes; but on
+        /// macOS for another machine's window, over ssh, it only follows
+        /// the one Banda's window runs.
         #[arg(long)]
         with_parent: bool,
     },
@@ -412,6 +416,10 @@ pub enum Failure {
     /// No engine answers, or this program could not do its part: plain
     /// words on stderr, exit 2.
     Broken(String),
+    /// Nothing to do yet, for a caller that tries again later: plain words
+    /// on stderr, exit 75, sysexits' `EX_TEMPFAIL`. Only `banda start
+    /// --with-parent` over ssh says it, while no Banda is open here.
+    Later(String),
 }
 
 impl Failure {
@@ -423,7 +431,7 @@ impl Failure {
     pub fn words(self) -> String {
         match self {
             Failure::Refused(refusal) => refusal.message,
-            Failure::Broken(words) => words,
+            Failure::Broken(words) | Failure::Later(words) => words,
         }
     }
 
@@ -446,6 +454,10 @@ impl Failure {
             Failure::Broken(words) => {
                 eprintln!("banda: {words}");
                 ExitCode::from(2)
+            }
+            Failure::Later(words) => {
+                eprintln!("banda: {words}");
+                ExitCode::from(75)
             }
         }
     }
@@ -479,11 +491,15 @@ fn main() -> ExitCode {
         Command::Start { .. } => Some(service::way_here(&service::User)),
         _ => None,
     };
+    // Whether `start` only follows the engine, for another machine's
+    // window over ssh.
+    let only = way.is_some_and(control::follows_only_here);
     // The engine keeps its panics and its log (ADR 0039, decision 1): as
-    // `banda serve`, and as the window's child.
+    // `banda serve`, and as the window's child; not where `start` only
+    // follows it.
     let serving = match (&cli.command, way) {
-        (Command::Serve { .. }, _)
-        | (Command::Start { with_parent: true }, Some(service::Way::Child(_))) => {
+        (Command::Serve { .. }, _) => Places::from_env().ok(),
+        (Command::Start { with_parent: true }, Some(service::Way::Child(_))) if !only => {
             Places::from_env().ok()
         }
         _ => None,
@@ -497,7 +513,7 @@ fn main() -> ExitCode {
         // It needs no places: its variables say where the engine is.
         (Command::Mcp, _) => runtime().and_then(|runtime| runtime.block_on(mcp::serve())),
         (Command::Start { with_parent }, Some(way)) => Places::from_env()
-            .and_then(|places| runtime()?.block_on(control::start(places, with_parent, way))),
+            .and_then(|places| runtime()?.block_on(control::start(places, with_parent, way, only))),
         (command, _) => {
             Places::from_env().and_then(|places| runtime()?.block_on(run(command, places)))
         }

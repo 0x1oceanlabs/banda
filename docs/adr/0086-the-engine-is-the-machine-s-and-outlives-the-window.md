@@ -267,6 +267,13 @@ Another machine (decision 8) is ADR 0081's plan, after step 3.
   engine does not let a Harness go for idling while a process under it
   listens, as a trial or a server it started does. A Person's terminal
   starts its windows in a unit of their own, as before.
+- Decision 1 on macOS, until step 7 (2026-11-08, Roma): another
+  machine's window sees a Mac's engine over ssh only while Banda is open
+  there. The `banda start --with-parent` it runs there says so
+  (`BANDA_OVER_SSH`), and on a Mac it starts no engine: one would stop
+  as the link drops, with its Agents, and lack the Mac's PATH. While no
+  Banda is open there it exits 75, and that window shows the Mac away
+  and tries again (`docs/hosts.md`).
 - The draft in PR #460, decision 6: the engine's own `hello` with a
   "generation" gives way to ADR 0082's `challenge`, `hello` with a
   range, and `welcome`.
