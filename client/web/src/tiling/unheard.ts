@@ -52,7 +52,7 @@ import {
 } from "./model"
 
 /** A command sent whose fact is not heard yet. */
-export type Pending = {
+export type Unheard = {
   id: CommandId
   command: Command
   /** Where its event stands in the log, once the engine said. */
@@ -67,8 +67,8 @@ export type Seen = {
   /** Where in the machine's log `heard` stands. */
   heardAt: number
   /** The commands sent whose facts are not heard yet, in the order sent. */
-  pending: readonly Pending[]
-  /** `heard` with each command of `pending` applied, in order. */
+  unheard: readonly Unheard[]
+  /** `heard` with each command of `unheard` applied, in order. */
   predicted: Kept[] | null
   /** Args Panes asked for, drawn over `predicted` until the log shows
    * them. */
@@ -99,7 +99,7 @@ export function unseen(view: View): Seen {
   return {
     heard: null,
     heardAt: 0,
-    pending: [],
+    unheard: [],
     predicted: null,
     asked: {},
     answered: 0,
@@ -126,8 +126,8 @@ export function predict(
   id: CommandId,
   plan: Planned
 ): { seen: Seen; want?: string; opens?: string } {
-  const pending = [...seen.pending, { id, command: plan.command }]
-  const applied = seen.predicted && applyOne(seen.predicted, pending.at(-1)!)
+  const unheard = [...seen.unheard, { id, command: plan.command }]
+  const applied = seen.predicted && applyOne(seen.predicted, unheard.at(-1)!)
   const predicted = applied ? applied.list : seen.predicted
   const want =
     plan.focus === false ? undefined : (plan.want ?? applied?.answer.pane)
@@ -135,7 +135,7 @@ export function predict(
     ? { ...seen.view, want: { pane: want, command: id } }
     : seen.view
   const opens = applied?.answer.pane
-  return { seen: drawn({ ...seen, pending, predicted, view }), want, opens }
+  return { seen: drawn({ ...seen, unheard, predicted, view }), want, opens }
 }
 
 /**
@@ -145,14 +145,20 @@ export function predict(
  */
 export function answered(seen: Seen, id: CommandId, at: number | null): Seen {
   const highest = Math.max(seen.answered, at ?? 0)
-  const i = seen.pending.findIndex((one) => one.id === id)
-  if (i < 0)
-    return highest === seen.answered ? seen : { ...seen, answered: highest }
-  const pending =
+  const i = seen.unheard.findIndex((one) => one.id === id)
+  if (i < 0) return answeredTo(seen, at)
+  const unheard =
     at === null
-      ? seen.pending.filter((_, j) => j !== i)
-      : seen.pending.map((one, j) => (j === i ? { ...one, at } : one))
-  return settled({ ...seen, pending, answered: highest })
+      ? seen.unheard.filter((_, j) => j !== i)
+      : seen.unheard.map((one, j) => (j === i ? { ...one, at } : one))
+  return settled({ ...seen, unheard, answered: highest })
+}
+
+/** The engine answered this window as far as `at` in the log, or changed
+ * nothing: a Pane's args, which go outside the queue. */
+export function answeredTo(seen: Seen, at: number | null): Seen {
+  const highest = Math.max(seen.answered, at ?? 0)
+  return highest === seen.answered ? seen : { ...seen, answered: highest }
 }
 
 /**
@@ -162,9 +168,9 @@ export function answered(seen: Seen, id: CommandId, at: number | null): Seen {
  * opened leaves `standing` with it.
  */
 export function dropped(seen: Seen, id: CommandId): Seen {
-  if (!seen.pending.some((one) => one.id === id)) return seen
-  const pending = seen.pending.filter((one) => one.id !== id)
-  return settled({ ...seen, pending })
+  if (!seen.unheard.some((one) => one.id === id)) return seen
+  const unheard = seen.unheard.filter((one) => one.id !== id)
+  return settled({ ...seen, unheard })
 }
 
 /**
@@ -180,24 +186,25 @@ export function hear(seen: Seen, heard: Kept[], at: number): Seen {
   // longest: commands that undo each other, as a column maximized and
   // then not, come back to the facts before them, and taking the first's
   // fact for all would draw without the others until their facts come.
+  // With none unheard there is nothing to look for.
   let held = 0
-  const now = seen.heard && text(heard)
-  if (seen.heard && now !== text(seen.heard)) {
+  const now = seen.heard && seen.unheard.length > 0 && text(heard)
+  if (seen.heard && now && now !== text(seen.heard)) {
     let list = seen.heard
-    for (const [i, one] of seen.pending.entries()) {
+    for (const [i, one] of seen.unheard.entries()) {
       list = applyOne(list, one)?.list ?? list
       if (text(list) !== now) continue
       held = i + 1
       break
     }
   }
-  const pending = held ? seen.pending.slice(held) : seen.pending
+  const unheard = held ? seen.unheard.slice(held) : seen.unheard
   const heardState = resolve(
     heard,
     NO_VIEW,
     seen.heard ? seen.heardState : undefined
   )
-  return settled({ ...seen, heard, heardAt: at, pending, heardState })
+  return settled({ ...seen, heard, heardAt: at, unheard, heardState })
 }
 
 /** The view alone changed: the same facts and commands, drawn as `view`
@@ -221,20 +228,20 @@ export function ask(
  * applied over the facts, and drawn. */
 function settled(seen: Seen): Seen {
   let last = -1
-  for (const [i, one] of seen.pending.entries())
+  for (const [i, one] of seen.unheard.entries())
     if (one.at !== undefined && one.at <= seen.heardAt) last = i
-  const pending = last < 0 ? seen.pending : seen.pending.slice(last + 1)
+  const unheard = last < 0 ? seen.unheard : seen.unheard.slice(last + 1)
   const predicted =
     seen.heard &&
-    pending.reduce<Kept[]>(
+    unheard.reduce<Kept[]>(
       (list, one) => applyOne(list, one)?.list ?? list,
       seen.heard
     )
-  return drawn({ ...seen, pending, predicted })
+  return drawn({ ...seen, unheard, predicted })
 }
 
 /** `one` applied to `list`; none when the copy refuses it. */
-function applyOne(list: Kept[], one: Pending) {
+function applyOne(list: Kept[], one: Unheard) {
   const applied = apply(list, one.command, one.id)
   return "refused" in applied ? undefined : applied
 }
@@ -259,7 +266,7 @@ function drawn(seen: Seen): Seen {
  * `after` and it is drawn. */
 function wanted(want: Want, state: Workspaces, seen: Seen): boolean {
   if (want.command !== undefined)
-    return seen.pending.some((one) => one.id === want.command)
+    return seen.unheard.some((one) => one.id === want.command)
   const shown = entries(state).some((entry) => entry.id === want.pane)
   return seen.heardAt < (want.after ?? 0) || !shown
 }
