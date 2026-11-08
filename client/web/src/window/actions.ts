@@ -22,6 +22,7 @@ import {
 import { type Held, RESET_KEY } from "../actions/actions"
 import type { Mod } from "@banda/contract/look"
 import { chipOf } from "./attach"
+import { device } from "./device"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
 import type { At } from "../menu/menu"
@@ -420,7 +421,7 @@ const FILE = "the file's absolute path"
 function present(args: Args | undefined, then: (file: string) => void) {
   const file = args?.file
   if (typeof file !== "string") return
-  void window.banda?.files.exists(file).then((there) => {
+  void device.files.exists(file)?.then((there) => {
     if (there) then(file)
     else toast.warning(`No such file: ${file}`)
   })
@@ -887,8 +888,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     section: "Banda",
     title: "Open a file in its app",
     unlisted: true,
-    run: (_, args) =>
-      present(args, (file) => window.banda?.files.outside(file)),
+    run: (_, args) => present(args, device.files.outside),
   },
   {
     // Files' "Add to chat" and a reply's "Add to message": the file named
@@ -921,7 +921,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     section: "Banda",
     title: "Show a file in its folder",
     unlisted: true,
-    run: (_, args) => present(args, (file) => window.banda?.files.show(file)),
+    run: (_, args) => present(args, device.files.show),
   },
   {
     // The menu's Paste, as a terminal's: the focused field takes it.
@@ -929,7 +929,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     section: "Banda",
     title: "Paste",
     unlisted: true,
-    run: () => window.banda?.edit.paste(),
+    run: () => device.edit.paste(),
   },
   {
     // The composer menu's "Paste as plain text".
@@ -937,7 +937,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     section: "Banda",
     title: "Paste as plain text",
     unlisted: true,
-    run: () => window.banda?.edit.pastePlain(),
+    run: () => device.edit.pastePlain(),
   },
   {
     // A Thread menu's "Copy image": the image at a point of the page.
@@ -954,7 +954,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     unlisted: true,
     run: (_, args) => {
       if (typeof args?.x === "number" && typeof args.y === "number")
-        window.banda?.edit.copyImageAt(args.x, args.y)
+        device.edit.copyImageAt(args.x, args.y)
     },
   },
   {
@@ -992,7 +992,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     id: "update.check",
     section: "Banda",
     title: "Check for updates",
-    run: () => window.banda?.update.check(),
+    run: () => device.update.check(),
   },
   {
     id: "update.restart",
@@ -1001,7 +1001,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     // The bar's update runs it; with no version ready it does nothing
     // (ADR 0041, decision 2).
     unlisted: true,
-    run: () => window.banda?.update.restart(),
+    run: () => device.update.restart(),
   },
   {
     id: "banda.quit",

@@ -19,16 +19,8 @@ import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openProjects, updateProject } from "@banda/ui/lib/projects"
 import { useStore } from "@banda/ui/lib/store"
-import { asleep, IN_PROGRAM, type Listed, type PaneState } from "@banda/ui/pane"
-import { DEFAULT_KEYS, type Mod } from "@banda/contract/look"
-import type { Action, Thing } from "@banda/ui/module"
-import {
-  actionFor,
-  inScope,
-  keysInForce,
-  pressFor,
-  withKeys,
-} from "../actions/actions"
+import { asleep, type Listed, type PaneState } from "@banda/ui/pane"
+import type { Thing } from "@banda/ui/module"
 import { Bar } from "../bar/Bar"
 import { WorkspaceMap } from "../bar/Map"
 import { tomlOf } from "@banda/contract/settings"
@@ -66,7 +58,6 @@ import {
   columnsOf,
   useLookColumns,
   useLookDrawer,
-  useLookKeys,
   useLookNotify,
   useLookSound,
 } from "../look"
@@ -138,8 +129,6 @@ import {
 } from "../tiling/store"
 import { Workspaces } from "../tiling/Workspaces"
 import {
-  ACTIONS,
-  heldBy,
   answering,
   bringing,
   closing,
@@ -153,14 +142,13 @@ import {
   windowApiOf,
 } from "./actions"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
-import { holdsAlone, withMore } from "@banda/ui/lib/keys"
 import { ThreadMenus } from "../titles/ThreadMenu"
-import { scopesOf } from "@banda/ui/hooks/use-scope"
+import { device } from "./device"
+import { useKeyRouter, useKeys, usePeekEsc } from "./keys"
 import { useSteady } from "./steady"
 
-/** What takes an Esc before Quick Look's tile: a menu, a dialog or a
- * list of suggestions over it. */
-const OVER_PEEK = "[role=menu], [role=dialog], [role=listbox]"
+/** The modules' sources, as a route names one for the menu to show alone. */
+const menuSources = sources.map(({ source }) => source)
 
 /**
  * The window (ADR 0005): the bar on top, the sidebar docked on the left,
@@ -169,48 +157,6 @@ const OVER_PEEK = "[role=menu], [role=dialog], [role=listbox]"
  * Person for, tells them of each call where they will notice it, and runs
  * the actions that change them.
  */
-/**
- * One key more added to a key the window takes hands that key to a
- * program (ADR 0005, decision 10; ADR 0068, decision 3): with Alt the
- * mod, Ctrl+Alt+W reaches a shell as Alt+W. The program reads the press
- * without the key more, as if Banda took nothing, so it comes in whatever
- * form the program asked its terminal for.
- */
-function handOn(
-  event: KeyboardEvent,
-  target: Element | null,
-  actions: readonly Action<Parts>[],
-  mod: Mod,
-  handing: Mod | undefined
-): void {
-  if (!handing || !holdsAlone(event, handing)) return
-  if (!target?.closest(IN_PROGRAM)) return
-  const plain = {
-    key: event.key,
-    code: event.code,
-    altKey: mod.alt,
-    shiftKey: event.shiftKey,
-    ctrlKey: mod.ctrl,
-    metaKey: mod.super,
-  }
-  if (!actionFor(actions, plain)) return
-  event.preventDefault()
-  event.stopPropagation()
-  const handed = new KeyboardEvent("keydown", {
-    ...plain,
-    bubbles: true,
-    cancelable: true,
-  })
-  HANDED.add(handed)
-  target.dispatchEvent(handed)
-}
-
-/** The modules' sources, as a route names one for the menu to show alone. */
-const menuSources = sources.map(({ source }) => source)
-
-/** The presses the window made to hand a key on, which it leaves alone. */
-const HANDED = new WeakSet<Event>()
-
 export function Shell({
   engine,
   status,
@@ -555,18 +501,7 @@ export function Shell({
     setPeek((was) => was && { ...was, fill: !was.fill })
     return true
   }, [])
-  const peeking = peek !== null
-  useEffect(() => {
-    if (!peeking) return
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target instanceof Element ? event.target : null
-      if (event.key !== "Escape" || target?.closest(OVER_PEEK)) return
-      event.preventDefault()
-      setPeek(null)
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [peeking])
+  usePeekEsc(peek !== null, closePeek)
   // The Pane zoomed over the whole window, while it keeps the focus: the
   // focus elsewhere, or the overview, brings it back (ADR 0025, decision 4).
   const [zoom, setZoom] = useState<string>()
@@ -601,27 +536,17 @@ export function Shell({
   useEffect(() => {
     awayNow.current = away
   }, [away])
-  useEffect(() => {
-    const popped = window.banda?.popped
-    if (!popped) return
-    let on = true
-    void popped.current().then((ids) => on && setAway(new Set(ids)))
-    const stop = popped.listen((ids) => setAway(new Set(ids)))
-    return () => {
-      on = false
-      stop()
-    }
-  }, [])
+  useEffect(() => device.popped.follow(setAway), [])
   // Its window opens as big as its tile.
   const popOut = useCallback((entry: string) => {
     const tile = document.querySelector(`[data-tile="${CSS.escape(entry)}"]`)
     const size = tile?.getBoundingClientRect()
-    window.banda?.popped.open(entry, size?.width ?? 0, size?.height ?? 0)
+    device.popped.open(entry, size?.width ?? 0, size?.height ?? 0)
   }, [])
   const togglePopOut = useCallback(() => {
     const entry = focused(drawnNow())?.id
     if (!entry) return
-    if (awayNow.current.has(entry)) window.banda?.popped.close(entry)
+    if (awayNow.current.has(entry)) device.popped.close(entry)
     else popOut(entry)
   }, [popOut, drawnNow])
   // Goes to workspace `id`, as its number does.
@@ -654,22 +579,8 @@ export function Shell({
   )
   const closeMenu = useCallback(() => setMenu(null), [])
 
-  // The actions, with the Person's keys over their own (keys.toml), but
-  // after the reset chord: then their own, until the file changes.
-  const lookKeys = useLookKeys()
-  const said = JSON.stringify([lookKeys.mod, lookKeys.binds])
-  const [shipped, setShipped] = useState<string>()
-  // After the reset chord, Banda's own: Alt, and no line of the Person's.
-  const inForce = shipped === said ? DEFAULT_KEYS : lookKeys
-  const { mod } = inForce
-  // The keys in force, as the look makes them (ADR 0071, decision 4).
-  const keyed = useMemo(() => withKeys(ACTIONS, inForce.actions), [inForce])
-  // The keys in force, for what names them (ADR 0068, decision 4).
-  const keys = useMemo(() => keysInForce(mod, keyed), [mod, keyed])
-  const saidNow = useRef(said)
-  useEffect(() => {
-    saidNow.current = said
-  }, [said])
+  // The actions with the keys in force (keys.ts).
+  const { mod, binds, keyed, keys, own } = useKeys()
   // The settings Pane (ADR 0016), in the Project the Person is in.
   const settings = useCallback(
     (link?: string) => change((w) => settingsAt(w, projectIn(w) ?? home, link)),
@@ -685,14 +596,14 @@ export function Shell({
     },
     [settings]
   )
-  useEffect(() => window.banda?.menu.listen(route), [route])
+  useEffect(() => device.menu.listen(route), [route])
   const ownKeys = useCallback(() => {
-    setShipped(saidNow.current)
+    own()
     settings("keys")
-  }, [settings])
+  }, [own, settings])
   const quit = useCallback(() => {
     const working = workingIn(stores.items.get())
-    if (working === 0) window.banda?.quit()
+    if (working === 0) device.quit()
     else setQuitting(working)
   }, [stores])
 
@@ -814,9 +725,7 @@ export function Shell({
         .catch(() => undefined),
     run: (action, args) => runAction(parts, action, args),
     engine,
-    writeSetting: (file, key, value) =>
-      window.banda?.settings.set(file, key, value) ??
-      Promise.resolve(["Only Banda's app writes the settings."]),
+    writeSetting: device.settings.set,
     attach: (chips) => {
       const at = focused(drawnNow())
       const to = attachTo(at ? { id: at.id, project: at.project } : null)
@@ -875,46 +784,8 @@ export function Shell({
       .flatMap((module) => module.start?.(api) ?? [])
     return () => stops.forEach((stop) => stop())
   }, [running, api])
-  // The keys run the actions, before any Pane hears them. A dialog keeps
-  // its keys, as the Banda menu its New Thread key, but for the menu's own.
-  useEffect(() => {
-    // One key more and a key Banda takes hand that key to a program.
-    const handing = withMore(mod)
-    // The launcher's letters still work with the mod held from Alt+N.
-    const stillHeld = heldBy(mod)
-    const onKey = (event: KeyboardEvent) => {
-      // A press the window handed on is the program's, and one an input
-      // method is composing with is the field's.
-      if (HANDED.has(event) || event.isComposing) return
-      const target = event.target instanceof Element ? event.target : null
-      // A field that takes a key to bind takes every key.
-      if (target?.closest("[data-takes-keys]")) return
-      const pressed = pressFor(keyed, event, scopesOf(target), stillHeld)
-      if (!pressed) return handOn(event, target, keyed, mod, handing)
-      if (inScope(pressed, event)) return
-      const { action } = pressed
-      // A key that is not its action's now is the Pane's, as F2 a
-      // terminal's program's while no Thread has the focus.
-      if (action.when && !action.when(parts)) return
-      // A dialog that takes the window's keys, as the overview, has only
-      // the plain ones of its own.
-      const inDialog =
-        target?.closest("[role=dialog]:not([data-window-keys])") != null
-      if (inDialog && !action.overDialogs) return
-      // A terminal leaves alone a key that was taken.
-      event.preventDefault()
-      event.stopPropagation()
-      // Held, it runs what it says it runs then, as an arrow that stops
-      // at an edge.
-      const held = event.repeat ? action.whenHeld : undefined
-      const running = held
-        ? (keyed.find((one) => one.id === held) ?? action)
-        : action
-      running.run(parts, pressed.args)
-    }
-    window.addEventListener("keydown", onKey, { capture: true })
-    return () => window.removeEventListener("keydown", onKey, { capture: true })
-  }, [parts, keyed, mod])
+  // The keys run the actions, before any Pane hears them (keys.ts).
+  useKeyRouter(parts, keyed, mod)
   // A row of the sidebar or the menu opens its Pane, where a workspace
   // shows it or in a new column; a Project gets a new Thread.
   const openPane = useCallback(
@@ -1114,7 +985,7 @@ export function Shell({
   // What a Pane in its own window asks, the window does, as for its own.
   useEffect(
     () =>
-      window.banda?.popped.asked((asked) => {
+      device.popped.asked((asked) => {
         if ("open" in asked) {
           const { project, pane, from, place } = asked.open
           frame.open(project, pane, from, place)
@@ -1287,7 +1158,7 @@ export function Shell({
                 />
                 <QuitDialog
                   working={quitting}
-                  onQuit={() => window.banda?.quit()}
+                  onQuit={device.quit}
                   onClose={() => setQuitting(null)}
                 />
                 <BandaMenu
@@ -1301,7 +1172,7 @@ export function Shell({
                   asleep={snoozes.asleep}
                   projects={menuProjects}
                   actions={keyed}
-                  binds={inForce.binds}
+                  binds={binds}
                 />
                 {drawer && dropped && (
                   <Drawer
