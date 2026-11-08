@@ -11,8 +11,7 @@ export function newId(): string {
   }
   bytes[6] = (bytes[6] & 0x0f) | 0x70
   bytes[8] = (bytes[8] & 0x3f) | 0x80
-  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+  return textOf(bytes)
 }
 
 /**
@@ -33,18 +32,19 @@ export function uuidV5(namespace: string, name: string): string {
 }
 
 /**
- * A UUID as Rust prints it, lowercase and with hyphens, from any text the
- * engine reads as one: with hyphens or without, in braces, or as a URN.
+ * A UUID as Rust prints it, lowercase and with hyphens, from one written
+ * with hyphens or without, in either case: the forms a client sends. Any
+ * other is refused rather than read as some other ID.
  */
 export function canonical(id: string): string {
   return textOf(bytesOf(id))
 }
 
+const HYPHENATED =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 function bytesOf(id: string): Uint8Array {
-  const hex = id
-    .replace(/^urn:uuid:/i, "")
-    .replace(/^\{(.*)\}$/, "$1")
-    .replaceAll("-", "")
+  const hex = HYPHENATED.test(id) ? id.replaceAll("-", "") : id
   if (!/^[0-9a-f]{32}$/i.test(hex)) throw new Error(`"${id}" is no UUID.`)
   return Uint8Array.from({ length: 16 }, (_, i) =>
     parseInt(hex.slice(i * 2, i * 2 + 2), 16)

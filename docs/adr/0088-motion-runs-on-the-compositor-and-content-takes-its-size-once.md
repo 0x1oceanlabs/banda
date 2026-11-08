@@ -199,17 +199,17 @@ settles.
     stands: one Rust model, its authority on the home host, the same
     crate in WebAssembly in each client, intent commands, an overlay. The
     order changes:
-    - Every intent that creates something carries the ids it creates,
-      made by the client, and the host refuses a duplicate. Today the
-      model makes them (`platform/workspaces/engine/src/model.rs:233`,
-      `:343`, `:365`), so a predicted Pane would come back with another
-      id and remount. Placements are the exception: `workspaces.place`
-      carries the `show.requested@1` event, and the Pane's id is derived
-      from it, so several clients place it once (ADR 0082 d15). Each is
-      derived from the command's CommandId by what it names (`Seed`,
-      `platform/workspaces/engine/src/model.rs`), so the command carries
-      them in its ID and a command sent again names the same. (Amended in
-      T-ids.)
+    - Every intent that creates something names the ids it creates
+      through its CommandId: each is derived from it by what it names
+      (`Seed`, `platform/workspaces/engine/src/model.rs`), so the client
+      knows them before the answer and a command sent again names the
+      same, and the host refuses a command whose ids it holds. A
+      placement derives them from its `show.requested@1` event instead
+      (`workspaces.place`), so several clients place it once (ADR 0082
+      d15). (Amended in T-ids: at first the client was to make each id
+      and carry it in the intent, as the model then made them itself and
+      a predicted Pane would have come back with another id and
+      remounted.)
     - A parity test replays golden traces from the Rust model through the
       TypeScript one.
     - Then the client draws its prediction at once, sends intents in

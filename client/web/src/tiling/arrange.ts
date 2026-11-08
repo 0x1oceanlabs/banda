@@ -307,7 +307,7 @@ export function keptOf(state: Workspaces): Kept[] {
 type Named = Extract<MethodOf<"command">, `workspaces.${string}`>
 
 /** One of the module's commands, with its params. */
-export type Command = {
+type Command = {
   [M in Named]: { method: M; params: Params<M> }
 }[Named]
 

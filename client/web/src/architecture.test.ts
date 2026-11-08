@@ -559,13 +559,13 @@ test("a mark's rank is read only to pick the loudest, where the list holds", () 
 })
 
 /**
- * Where the Tiling makes an ID of its own (`newId`), by file. What a
- * change makes takes IDs derived from its command's ID (ADR 0088,
- * decision 11), so these are all there are: `model.ts`'s, for what the
- * view works out, which reach the engine only in the arrangement of the
- * very first start, sent once; `store.ts`'s, for that arrangement's Group;
- * and `useTiling.ts`'s, each change's command ID. None joins the list, and
- * the counts only fall.
+ * Where the Tiling makes an ID of its own (`newId`, or the browser's
+ * `randomUUID`), by file. What a change makes takes IDs derived from its
+ * command's ID (ADR 0088, decision 11), so these are all there are:
+ * `model.ts`'s, for what the view works out, which reach the engine only
+ * in the arrangement of the very first start, sent once; `store.ts`'s, for
+ * that arrangement's Group; and `useTiling.ts`'s, each change's command
+ * ID. None joins the list, and the counts only fall.
  */
 const MAKING_IDS: Record<string, number> = {
   "web/src/tiling/model.ts": 5,
@@ -575,7 +575,7 @@ const MAKING_IDS: Record<string, number> = {
 
 const making = Object.fromEntries(
   sources(join(app, "web/src/tiling"), { tests: false }).flatMap((file) => {
-    const found = readFileSync(file, "utf8").match(/\bnewId\(/g)
+    const found = readFileSync(file, "utf8").match(/\bnewId\(|\brandomUUID\(/g)
     return found ? [[relative(app, file), found.length]] : []
   })
 )
