@@ -42,7 +42,14 @@ import {
   withAsked,
 } from "./arrange"
 import { apply, type Command } from "./arrangement"
-import { entries, type Workspaces } from "./model"
+import { sameData, sameEach } from "@banda/ui/lib/store"
+import {
+  type Column,
+  type Entry,
+  entries,
+  type Workspace,
+  type Workspaces,
+} from "./model"
 
 /** A command sent whose fact is not heard yet. */
 export type Pending = {
@@ -111,13 +118,14 @@ type Planned = { command: Command; want?: string; focus?: false }
 /**
  * `plan` sent under `id`, drawn at once: its command applied over what is
  * drawn now. A command the copy refuses draws nothing, and waits for the
- * engine's answer all the same. Gives the Pane it focuses, if any.
+ * engine's answer all the same. Gives the Pane it focuses, if any, and the
+ * one it opens, by the ID the engine gives it too.
  */
 export function predict(
   seen: Seen,
   id: CommandId,
   plan: Planned
-): { seen: Seen; want?: string } {
+): { seen: Seen; want?: string; opens?: string } {
   const pending = [...seen.pending, { id, command: plan.command }]
   const applied = seen.predicted && applyOne(seen.predicted, pending.at(-1)!)
   const predicted = applied ? applied.list : seen.predicted
@@ -126,7 +134,8 @@ export function predict(
   const view = want
     ? { ...seen.view, want: { pane: want, command: id } }
     : seen.view
-  return { seen: drawn({ ...seen, pending, predicted, view }), want }
+  const opens = applied?.answer.pane
+  return { seen: drawn({ ...seen, pending, predicted, view }), want, opens }
 }
 
 /**
@@ -255,20 +264,39 @@ function wanted(want: Want, state: Workspaces, seen: Seen): boolean {
   return seen.heardAt < (want.after ?? 0) || !shown
 }
 
-/** The engine's Panes and the window's, for what follows which leave;
+/** The engine's Panes, and after them those the window draws otherwise,
+ * for what follows which leave: each once. A Pane drawn with args it
+ * asked for stands as it is drawn too, as its App runs it so: a terminal
+ * that took its ID before the engine heard of it keeps its program.
  * `before` while it holds the same. */
 function standingOf(
   heard: Workspaces,
   state: Workspaces,
   before: Workspaces
 ): Workspaces {
-  const list = [...heard.list, ...state.list]
-  if (
-    before.list.length === list.length &&
-    list.every((workspace, i) => workspace === before.list[i])
-  )
-    return before
+  const engine = new Map(entries(heard).map((entry) => [entry.id, entry]))
+  const drawn = entries(state).filter((entry) => {
+    const there = engine.get(entry.id)
+    return (
+      !there ||
+      there.project !== entry.project ||
+      !sameData(there.pane, entry.pane)
+    )
+  })
+  const list = drawn.length
+    ? [...heard.list, { id: "", columns: [column(drawn)], focus: 0 }]
+    : heard.list
+  const last = before.list.at(-1)
+  const was = last?.id === "" ? last.columns[0]?.entries : undefined
+  const same = (workspace: Workspace, i: number) =>
+    workspace === before.list[i] ||
+    (i === heard.list.length && was !== undefined && sameEach(drawn, was))
+  if (before.list.length === list.length && list.every(same)) return before
   return { list, current: 0 }
+}
+
+function column(drawn: Entry[]): Column {
+  return { id: "", entries: drawn, active: 0 }
 }
 
 function sameView(a: View, b: View): boolean {

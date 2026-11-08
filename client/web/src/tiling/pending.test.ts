@@ -12,7 +12,7 @@ import type { Workspace as Kept } from "@banda/contract/workspaces"
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { keptOf, NO_VIEW } from "./arrange"
 import { apply, type Command } from "./arrangement"
-import { focused } from "./model"
+import { entries, focused } from "./model"
 import {
   ANSWER_WITHIN,
   answered,
@@ -187,10 +187,45 @@ describe("a key drawn before the engine answers", () => {
       seen.standing.list.flatMap((w) =>
         w.columns.flatMap((c) => c.entries.map((e) => e.id))
       )
-    expect(ids(open.seen)).toContain(pane)
+    // Each Pane stands once, the engine's and the window's alike.
+    expect(ids(open.seen).sort()).toEqual(
+      [...entries(open.seen.heardState).map((e) => e.id), pane].sort()
+    )
     const refused = dropped(open.seen, id)
     expect(ids(refused)).not.toContain(pane)
     expect(refused.view.want).toBeUndefined()
+  })
+
+  test("a Pane that asked for its args before the engine had it stands as drawn until the engine has them", () => {
+    const { seen: before, list } = three()
+    const id = newId()
+    const open = opening(9)
+    const { seen: opened, want: pane } = predict(before, id, { command: open })
+    // Its App gives it an ID of its own, as a terminal does, at once.
+    const asked = ask(opened, pane!, { n: 9, terminal: "t" }, Infinity)
+    const standing = (seen: Seen) =>
+      entries(seen.standing).filter((entry) => entry.id === pane)
+    // The open's fact has the args it opened with: the args asked for
+    // stand still, so what follows which leave lets go of nothing.
+    const heard = hear(answered(asked, id, 4), ran(list, [id, open]), 4)
+    expect(standing(heard).map((entry) => entry.pane.args)).toEqual([
+      { n: 9 },
+      { n: 9, terminal: "t" },
+    ])
+    // Once the engine has them, it stands once.
+    const kept = ran(list, [id, open]).map((workspace) => ({
+      ...workspace,
+      columns: workspace.columns.map((column) => ({
+        ...column,
+        panes: column.panes.map((one) =>
+          one.id === pane ? { ...one, args: { n: 9, terminal: "t" } } : one
+        ),
+      })),
+    }))
+    const updated = hear(ask(heard, pane!, { n: 9, terminal: "t" }, 5), kept, 5)
+    expect(standing(updated).map((entry) => entry.pane.args)).toEqual([
+      { n: 9, terminal: "t" },
+    ])
   })
 
   test("a later command's fact takes those before it out too, as they commit in the order sent", () => {
@@ -225,10 +260,8 @@ describe("a key drawn before the engine answers", () => {
     const heard = hear(answered(seen, id, 4), ran(list, [id, width]), 4)
     expect(heard.state).toBe(seen.state)
     expect(heard.view).toBe(seen.view)
-    expect(heard.standing.list).toEqual([
-      ...heard.heardState.list,
-      ...heard.state.list,
-    ])
+    // What stands is what the engine has: the window draws nothing else.
+    expect(heard.standing.list).toBe(heard.heardState.list)
   })
 
   test("the view alone changes what is looked at, and cancels the Pane a command wanted", () => {

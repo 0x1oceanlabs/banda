@@ -167,11 +167,11 @@ export function Shell({
   // A Project whose folder is missing lists nothing and starts nothing
   // until the Person locates it (ADR 0026, decision 6).
   const open = useMemo(() => openProjects(projects), [projects])
-  // The Tiling: the engine's arrangement, the view of it and the queue
-  // its changes go through (ADR 0087).
+  // The Tiling: the engine's arrangement, its view and its queue (ADR 0087).
   const machine = useMachine(engine)
-  const { ready, aside, workspaces, drawnNow, changing, change, update } =
-    useTiling({ engine, machine, modules, home })
+  const tiling = useTiling({ engine, machine, modules, home })
+  const { ready, aside, workspaces, standing, drawnNow, changing } = tiling
+  const { change, update } = tiling
   // A start that drew its workspaces and stayed up went well (ADR 0039).
   useEffect(() => {
     if (!ready) return
@@ -240,14 +240,14 @@ export function Shell({
   )
 
   // A Pane that leaves every workspace lets its module let go, as a
-  // terminal stops its program; one moved elsewhere has not left.
+  // terminal stops its program; one moved, or drawn still, has not left.
   const engineOf = useEngineOf(engine)
-  const before = useRef(workspaces)
+  const before = useRef(standing)
   useEffect(() => {
-    for (const entry of left(before.current, workspaces, identityOf))
+    for (const entry of left(before.current, standing, identityOf))
       closedOf(engineOf(entry.project, entry.pane), entry)
-    before.current = workspaces
-  }, [engineOf, workspaces])
+    before.current = standing
+  }, [engineOf, standing])
 
   // What the Apps list and what calls the Person, for the Marks, the
   // rings and Alt+U, kept outside React: a list that changes draws again
