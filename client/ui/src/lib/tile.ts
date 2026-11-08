@@ -6,7 +6,9 @@
  * React, `useTile(select)`, drawn again only as what it selects changes.
  *
  * - **Hidden:** draw nothing, stop timers, hold commits (at most once a
- *   second), keep state, and keep the size the Configure gives.
+ *   second), keep state, and still take the size the Configure gives, as
+ *   a terminal its grid, so its program hears it. A Tile not drawn at
+ *   all, as a Deck's behind another tab, gives 0 × 0, no size to take.
  * - **Moving:** measure and resize nothing; draw what changes.
  * - **Shown:** draw.
  *
@@ -35,7 +37,8 @@ export type Configure = {
   readonly state: TileState
   /** The size its Pane takes, in CSS pixels: of the box the Pane is drawn
    * in, as laid out, once the resize gate lets it through; 0 × 0 till it
-   * is first laid out. The same object for as long as it stays the same. */
+   * is first laid out, and while the Tile is not drawn at all. The same
+   * object for as long as it stays the same. */
   readonly size: Size
   /** The screen's pixels to a CSS pixel, the window's own zoom counted
    * in. A Pane that zooms what it draws, as a terminal its font, keeps its
@@ -62,9 +65,12 @@ type Gate = (state: TileState) => boolean
 /**
  * "Every frame": a Tile's Pane takes each size in the frame it was laid
  * out in, as it did before the gate, so nothing changes till the Person's
- * pick replaces it as the policy, here and only here (the client's plan,
- * P7): "at settle", a size taken once its move lands, or at most every
- * 100 ms while a hand drags and once as it lets go.
+ * pick replaces it as the policy here (the client's plan, P7): "at
+ * settle", a size taken once its move lands, or at most every 100 ms
+ * while a hand drags and once as it lets go. Those wait for a time or a
+ * move's end, which a yes or no on the state cannot say, and need the
+ * terminal and the page to fit to the size delivered rather than their
+ * own box's: P7 changes those too.
  */
 const everyFrame: Gate = () => true
 
@@ -248,7 +254,8 @@ const alone = new WeakMap<Element, Tile>()
  * The Tile of a Pane outside the Tiling that asks with `element`: shown
  * but while the window is away, and as large as `element`. It is observed,
  * and hears the window and the screen, while it is watched, as nothing
- * says when it goes; asked then, it says what it is now.
+ * says when it goes. Asked while not watched, its state and scale are
+ * now's, and its size the last one heard while watched: 0 × 0 if never.
  */
 function aloneOf(element: Element): Tile {
   const known = alone.get(element)
@@ -289,8 +296,9 @@ function aloneOf(element: Element): Tile {
  * a Tile of its own, as large as `element`.
  *
  * Asked from a layout effect of the Pane's first drawing, before the
- * Tiling holds its Tile, it finds none, and says so once: that Pane would
- * draw while hidden, and never hear its size. Ask from an effect.
+ * Tiling holds its Tile, it finds none, and says so once: that Pane gets
+ * a Tile of its own, as one outside the Tiling does, so it would draw
+ * while hidden, and hear the size of `element` alone. Ask from an effect.
  */
 export function tileOf(element: Element): Tile {
   const box = element.closest(TILE)
@@ -304,7 +312,7 @@ export function tileOf(element: Element): Tile {
       box
     )
   }
-  return ALONE
+  return aloneOf(element)
 }
 
 /** The Tile a Pane is drawn in, which the Tiling gives it, for `useTile`

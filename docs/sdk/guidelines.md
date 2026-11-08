@@ -342,7 +342,9 @@ are the same on every run, so they gate already.
   Hidden: draw nothing, stop timers, keep state; `useLive` holds what
   changes for a second. Moving: measure nothing, resize nothing. Size
   what you draw as the Configure's `size` and `scale` change, the resize
-  gate's (P3); what your Pane lays out inside its Tile, as a footer, you
+  gate's (P3), read through `tileOf(element).watch`: never select them
+  with `useTile`, which would draw your Pane again in each frame of a
+  width move. What your Pane lays out inside its Tile, as a footer, you
   fit to yourself as it changes. Fit once per settled size *after* P7:
   *until* then the gate's policy is "every frame", so a terminal still
   fits on each frame its size changes, and a browser's page box measures
