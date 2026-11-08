@@ -33,7 +33,7 @@ import { settledTurn } from "../list/marks"
 import { useImageReader } from "../entries/parts/MessageImages"
 import { base64Of, dataUrl } from "../composer/images"
 import type { QueueActions } from "./Queue"
-import { markSeen } from "../list/seen"
+import { mark } from "../list/sent"
 import { type WhenPresent, whenPresent } from "./presence"
 import {
   asked,
@@ -88,12 +88,11 @@ const IMPLEMENT = "Implement the plan."
  * 0096, decision 3). Gives back how to call that off.
  *
  * The mark goes to the Thread's host, `engine`, which every window and
- * machine reads, but only while that host is there: a call made while it
- * is away waits and goes once it is back, maybe after the Person marked
- * the Thread unread on another machine, so none is made then (decision
- * 8). A refusal, as an older host's, says nothing. This window's storage
- * keeps the mark as well until the window reads the host's, in step 2b,
- * which takes that write out.
+ * machine reads, and shows at once (`mark`). It is sent only while that
+ * host is there: one sent while it is away would land once it is back,
+ * maybe after the Person marked the Thread unread on another machine
+ * (decision 8). It fails quietly, as an older host's refusal: the window
+ * marked it by itself.
  */
 export function seeWhenPresent(
   engine: Engine,
@@ -102,13 +101,9 @@ export function seeWhenPresent(
   turn: TurnId,
   when: WhenPresent = whenPresent
 ): () => void {
-  return when(() => {
-    markSeen(thread, turn)
-    if (engine.status.state !== "open") return
-    void engine
-      .command("agents.read", { thread, turn }, project)
-      .catch(() => undefined)
-  })
+  return when(
+    () => void mark(engine, project, thread, { seen: turn }, { quiet: true })
+  )
 }
 
 /** The Thread a Pane with `args` shows, and what its Person may do there. */

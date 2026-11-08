@@ -6,13 +6,14 @@ import { threadsSource } from "./list"
 import { move } from "./marks-moved"
 import { attentionOf } from "./marks"
 import { listedOf } from "./rows"
-import { heardEnded, useSeen } from "./seen"
+import { settle, shown, useSending } from "./sent"
 
 /**
  * What a Project's Threads call their Person for, for the bar's mark, and
  * each Thread as the sidebar lists it, which the window also tells its
  * Person of (ADR 0011): one list for all, followed whether the sidebar
- * shows or not, so they never disagree.
+ * shows or not, so they never disagree. Its marks are its host's, with
+ * what the Person sent there shown until the list hears it (ADR 0096).
  */
 export const threadsWatch: Watch = {
   Watch: ThreadsWatch,
@@ -28,28 +29,32 @@ function ThreadsWatch({ engine, project, report }: WatchProps) {
   }, [engine, project])
   const live = useLive(engine, project, source)
   const harnesses = useHarnesses(engine)
-  const seen = useSeen()
-  const threads = live.state === "ready" ? live.view.threads : undefined
-
+  const sending = useSending(engine)
+  const list = live.state === "ready" ? live.view : undefined
   useEffect(() => {
-    if (threads) heardEnded(threads)
-  }, [threads])
+    if (list) settle(engine, list)
+  }, [engine, list, sending])
+  // The same Threads while nothing sent shows on them, so no row is
+  // listed again as a mark of another Project's comes and goes.
+  const threads = useMemo(
+    () => list && shown(list.threads, sending),
+    [list, sending]
+  )
   const listed = useMemo(
     () =>
       threads?.map((thread) =>
         listedOf(
           thread,
-          seen,
           thread.harness && harnessName(harnesses, thread.harness),
           project
         )
       ),
-    [threads, seen, harnesses, project]
+    [threads, harnesses, project]
   )
   // It reports once it read its list: what calls then already was.
   useEffect(() => {
     if (!threads || !listed) return
-    report({ ...attentionOf(threads, seen), listed })
-  }, [report, threads, seen, listed])
+    report({ ...attentionOf(threads), listed })
+  }, [report, threads, listed])
   return null
 }
