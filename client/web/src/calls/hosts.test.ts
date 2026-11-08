@@ -427,6 +427,14 @@ test("a Pane on another host runs none of the Window's actions on this machine's
   )
   waiting("thread.snooze")
   expect(ran).toHaveLength(4)
+
+  // The Window's own Archive goes to that host's Items alone, as an App's
+  // do (ADR 0096): its own Thread, never one of this machine's.
+  ran.length = 0
+  run("sidebar.archive")
+  run("sidebar.archive", { project: "mine", item: "t9" })
+  run("sidebar.snooze-picker")
+  expect(ran).toEqual([["sidebar.archive", { project: "r1", item: "t1" }]])
 })
 
 test("a host goes by the name and icon its engine says, cleaned, from its welcome and each change after; before, by its key", async () => {

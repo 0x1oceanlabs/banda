@@ -268,6 +268,14 @@ Each step is its own PR.
      go; Shell's archive and `Alt+S` become one command; `RUNS_ELSEWHERE`
      gains `thread.unread` and `sidebar.archive`; `marks-moved` runs once,
      from the agents module's `index.ts` after the first list load.
+     _As built:_ a Pane on another host reaches `thread.unread` and
+     `sidebar.archive` as it reaches an App's item actions, each on an
+     Item of its own host alone (`ownItem`), not through `RUNS_ELSEWHERE`,
+     which would take any Item; `sidebar.archive` sends the Thread's App's
+     own `agents.archive-thread`, which puts the Thread away once its host
+     took it. The move starts with the module's `start`, and each Threads
+     list's first read waits for it, a few seconds at most, so no first
+     list shows the Archive's Threads in the list before the move.
 3. **Rollout.** Both machines get a build with 1a to 2b, then each
    machine's window starts once, which moves its marks.
 

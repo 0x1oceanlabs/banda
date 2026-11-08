@@ -290,6 +290,10 @@ export type Listed = {
    * calls them, true once seen, which "Mark as unread" takes back (ADR
    * 0077, decision 6). None while it has nothing finished to see. */
   seen?: boolean
+  /** The Person archived it, as its host keeps the mark (ADR 0096): it
+   * neither works nor asks, and nothing happened in it since. Archive's
+   * shelf holds it. */
+  archived?: true
   /** What a click on it opens. */
   pane: PaneState
   /** Its latest snooze (ADR 0074): the sidebar puts it away while it

@@ -920,7 +920,7 @@ test("no page code but Threads' names a Thread's verb", () => {
   ])
   const verb = (what: string) =>
     (what.startsWith("thread.") && !others.has(what)) ||
-    /^agents\.(?:previous-title|make-project)$/.test(what)
+    /^agents\.(?:previous-title|make-project|archive-thread)$/.test(what)
   const listing = /[{,]\s*(?:type\s+)?Listing\s*[,}]/
   const naming = pageFiles
     .filter((file) => !file.startsWith(threads))

@@ -364,10 +364,15 @@ const RUNS_ELSEWHERE: ReadonlySet<string> = new Set([
   "settings.open",
 ])
 
+/** The Window's own item actions a Pane on another host runs: Archive,
+ * which the Item's App sends to its host (ADR 0096). Each goes to an Item
+ * of that host's alone, as an App's do. */
+const ITEMS_ELSEWHERE: ReadonlySet<string> = new Set(["sidebar.archive"])
+
 /** What a Pane on host `there` runs of the Window's: those above, and the
  * item actions `items` its Apps say go to their Item's host (ADR 0087,
- * decision 12), as a Thread's snooze, each to an Item of that host's
- * alone (`ownItem`); none of the rest. */
+ * decision 12), as a Thread's snooze, and the Window's own that do, each
+ * to an Item of that host's alone (`ownItem`); none of the rest. */
 export function runOnHost(
   run: (action: string, args?: Args) => void,
   items: ReadonlySet<string>,
@@ -376,7 +381,7 @@ export function runOnHost(
 ): (action: string, args?: Args) => void {
   return (action, args) => {
     if (RUNS_ELSEWHERE.has(action)) return run(action, args)
-    if (!items.has(action)) return
+    if (!items.has(action) && !ITEMS_ELSEWHERE.has(action)) return
     const asked = ownItem(shownNow(), own, args)
     if (asked) run(action, asked)
   }

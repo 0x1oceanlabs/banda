@@ -2,12 +2,14 @@
  * Each Thread as the sidebar lists it (ADR 0008): its title and the one
  * before it, its mark, what calls its Person (a Question, why it failed,
  * or what its Agent told it of its turn, ADR 0057), whether they saw how
- * it ended, what it was last asked, its Agent, and the Pane a click opens.
+ * it ended and whether they archived it, what it was last asked, its
+ * Agent, and the Pane a click opens.
  * The window arranges the rows; this says only what each one is. Pure, so
  * plain tests cover it.
  */
 import type { ProjectId } from "@banda/contract"
 import type { Choice, ListedThread, Snooze } from "@banda/contract/agents"
+import { works } from "@banda/ui/components/banda-mark"
 import {
   type Answering,
   type Listed,
@@ -99,6 +101,13 @@ export function listedOf(
     latest && (unseen === "done" || unseen === "failed")
       ? thread.seen === latest.turn
       : undefined
+  // Archived while it may be and nothing happened in it since, both by
+  // its host's times (ADR 0096, decision 4).
+  const archived =
+    thread.archived !== undefined &&
+    thread.updated_at <= thread.archived.at &&
+    !works(mark) &&
+    mark !== "asking"
   return {
     id: thread.id,
     title: thread.title || "New Thread",
@@ -113,6 +122,7 @@ export function listedOf(
     agent: thread.agent,
     ...(thread.was !== undefined ? { was: thread.was } : {}),
     ...(seenNow !== undefined ? { seen: seenNow } : {}),
+    ...(archived ? { archived: true as const } : {}),
     pane: threadPaneOf(thread),
     ...(thread.snooze ? { snooze: snoozeOf(thread.snooze) } : {}),
   }
