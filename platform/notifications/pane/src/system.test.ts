@@ -61,6 +61,22 @@ test("with more than one Project, a call's notice and toast name its Project", (
   expect(toldOfCall(heard("Tests", "done"), true).project).toBeUndefined()
 })
 
+test("a call on another machine names that machine in words, after its Project, by the name it says it has", () => {
+  const there = (title: string): Call => ({
+    ...heard(title, "asking"),
+    pane: { kind: "agents.thread", args: { thread: title, host: "arc" } },
+  })
+  // Before its first welcome here, by its key.
+  expect(noticeOf(there("Bench"), true, "banda").title).toBe(
+    "Bench · banda on arc"
+  )
+  expect(noticeOf(there("Bench"), true).title).toBe("Bench · arc")
+  // A notice draws no icon; this machine's calls name none.
+  expect(noticeOf(heard("Tests", "done"), true, "banda").title).toBe(
+    "Tests · banda"
+  )
+})
+
 test("what answers a call there and then are its toast's buttons; a click opens it", () => {
   const allow = {
     label: "Allow",

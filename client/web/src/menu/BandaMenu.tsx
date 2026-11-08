@@ -11,6 +11,7 @@ import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import type { Bind } from "@banda/contract/look"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import { MARK_WORDS, waits } from "@banda/ui/components/banda-mark"
+import { MachineIcon, MachineMark } from "@banda/ui/components/machine-icon"
 import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
 import { Kbd, KbdGroup } from "@banda/ui/components/kbd"
 import { Switch } from "@banda/ui/components/switch"
@@ -52,6 +53,8 @@ import {
   SearchIcon,
 } from "lucide-react"
 import { KEYS_FILE, writeBind } from "../actions/actions"
+import { paneHost } from "@banda/ui/pane"
+import { namedIn, type Shown, useHosts } from "../calls/hosts"
 import { useLists } from "../calls/stores"
 import { useLookSidebar } from "../look"
 import { runs, sources as allSources } from "../registry"
@@ -228,6 +231,34 @@ export const BandaMenu = memo(function BandaMenu({
   )
 })
 
+/** The other machines whose names fit `query`, as a source's rows under
+ * "Machines" (ADR 0095, decision 8): choosing one opens the settings,
+ * where a machine's own come later. None when none fits. */
+function machinesFound(
+  hosts: readonly Shown[],
+  query: string
+): Found | undefined {
+  const words = query.toLowerCase()
+  const rows: MenuRow[] = hosts
+    .filter(({ named }) => named.name.toLowerCase().includes(words))
+    .map(({ name, named }) => ({
+      id: `machines.${name}`,
+      title: named.name,
+      detail: "Machine settings",
+      icon: (
+        <MachineIcon
+          icon={named.icon}
+          size={14}
+          className="text-muted-foreground"
+        />
+      ),
+      run: (api) => api.run("settings.open"),
+    }))
+  return rows.length > 0
+    ? { id: "machines", label: "Machines", rows }
+    : undefined
+}
+
 /** One source, finding for the menu; what it found leaves with it. */
 function Finder({
   source,
@@ -287,6 +318,7 @@ function Menu({
   onAdded: (project: ProjectSummary) => void
 }) {
   const lists = useLists()
+  const hosts = useHosts()
   // New Thread's key in force starts one with the words.
   const ask = useKeyOf()("thread.new")
   const { preset, presets } = useLookSidebar()
@@ -319,6 +351,11 @@ function Menu({
   useEffect(() => () => onLooking(NOWHERE), [onLooking])
   // The path field's folders, from the engine, as the path is typed.
   const browsed = useBrowsed(engine, isPathField(inside) ? words : undefined)
+  // The other machines whose names fit the words, at the root.
+  const machines = useMemo(
+    () => (atRoot && query ? machinesFound(hosts, query) : undefined),
+    [atRoot, query, hosts]
+  )
   const sources: Sources = useMemo(
     () => ({
       lists,
@@ -328,7 +365,7 @@ function Menu({
       archived,
       now: snoozeNow,
       items: itemActionsOf,
-      found,
+      found: machines ? [...found, machines] : found,
       weight: (id) => weightOf(uses[id], now),
       browsed,
     }),
@@ -341,6 +378,7 @@ function Menu({
       archived,
       snoozeNow,
       found,
+      machines,
       uses,
       now,
       browsed,
@@ -643,6 +681,7 @@ function Menu({
                 <RowView
                   row={row}
                   sources={sources}
+                  hosts={hosts}
                   inside={inside}
                   binds={binds}
                 />
@@ -745,11 +784,14 @@ function ActList({
 function RowView({
   row,
   sources,
+  hosts,
   inside,
   binds,
 }: {
   row: Choice
   sources: Sources
+  /** The other machines, which name another machine's Threads. */
+  hosts: readonly Shown[]
   /** The Person's keys, which a row outlines. */
   binds: readonly Bind[]
   /** The branch the menu is in: a Project's rows leave out its name. */
@@ -758,18 +800,33 @@ function RowView({
   switch (row.kind) {
     case "thread": {
       const { listed } = row
+      // Another machine's names its Project and then that machine (ADR
+      // 0095, decision 8): "banda ▭ arc · waits".
+      const host = paneHost(listed.pane)
+      const there = host === undefined ? undefined : namedIn(hosts, host)
+      const listing =
+        host === undefined
+          ? sources.projects
+          : hosts.find((one) => one.name === host)?.projects
       const project =
         inside?.kind === "project"
           ? undefined
-          : sources.projects.find((one) => one.id === row.project)
+          : listing?.find((one) => one.id === row.project)
+      const waiting = waits(listed.mark) && MARK_WORDS[listed.mark]
       return (
         <>
           <ThreadMark listed={listed} />
           <span className="min-w-0 flex-1 truncate">{listed.title}</span>
           <Detail>
-            {[project?.name, waits(listed.mark) && MARK_WORDS[listed.mark]]
-              .filter(Boolean)
-              .join(" · ")}
+            {there ? (
+              <span className="flex items-center gap-1">
+                {project && <span>{project.name}</span>}
+                <MachineMark named={there} form="compact" />
+                {waiting && <span>· {waiting}</span>}
+              </span>
+            ) : (
+              [project?.name, waiting].filter(Boolean).join(" · ")
+            )}
           </Detail>
         </>
       )

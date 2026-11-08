@@ -4,7 +4,9 @@ import {
   toneOf,
   waits,
 } from "@banda/ui/components/banda-mark"
+import type { Named } from "@banda/contract/machines"
 import { Emblem, emblemOf, type EmblemOf } from "@banda/ui/components/emblem"
+import { MachineMark } from "@banda/ui/components/machine-icon"
 import { ProjectName, ProjectSign } from "@banda/ui/components/project-sign"
 import { AlarmClockIcon } from "lucide-react"
 import { Fragment, type ReactNode } from "react"
@@ -32,6 +34,10 @@ export const LAYOUTS: Readonly<Record<number, Part[][]>> = {
 
 const NO_HARNESSES: readonly EmblemOf[] = []
 
+/** What a row draws: its parts, and another machine's mark where its
+ * Project is hidden. */
+type Drawn = Part | "machine"
+
 /** One row of the sidebar, its parts laid out as the settings say. */
 export function Row({
   row,
@@ -41,7 +47,7 @@ export function Row({
   onOpen,
   action,
   field,
-  host,
+  machine,
   stillAt,
   harnesses = NO_HARNESSES,
 }: {
@@ -57,9 +63,9 @@ export function Row({
   /** The field that names it, in its title's place (ADR 0077): the row
    * is then no button. */
   field?: ReactNode
-  /** The other host its Agent works on, named beside its Project where
-   * no label above names it (ADR 0081). */
-  host?: string
+  /** The other machine its Agent works on, after its Project, where no
+   * label above names it (ADR 0095, decision 5); this machine never. */
+  machine?: Named
   /** When its host went away: its timer stands as it was then. */
   stillAt?: number
   /** The Harness list its emblem is read from; none, the Harness's own. */
@@ -67,9 +73,13 @@ export function Row({
 }) {
   const { lines, hide, layout } = settings.row
   const parts = (layout ?? LAYOUTS[lines] ?? LAYOUTS[3]).map((line) =>
-    line.filter(
-      (part) => !hide.includes(part) && !(part === "project" && inProject)
-    )
+    line.flatMap((part): Drawn[] => {
+      if (part === "project" && inProject) return []
+      // A row that hides its Project still says where its Thread runs.
+      if (hide.includes(part))
+        return part === "project" && machine ? ["machine"] : []
+      return [part]
+    })
   )
   const one = parts.length === 1
   const Element = field ? "div" : "button"
@@ -98,7 +108,7 @@ export function Row({
                     part={part}
                     row={row}
                     wide={!one}
-                    host={host}
+                    machine={machine}
                     stillAt={stillAt}
                     harnesses={harnesses}
                   />
@@ -124,14 +134,14 @@ function Piece({
   part,
   row,
   wide,
-  host,
+  machine,
   stillAt,
   harnesses,
 }: {
-  part: Part
+  part: Drawn
   row: Arranged
   wide: boolean
-  host?: string
+  machine?: Named
   stillAt?: number
   harnesses: readonly EmblemOf[]
 }) {
@@ -152,7 +162,8 @@ function Piece({
       return <Title row={row} quiet={quiet} />
     case "project":
       // A row with room shows the Project's sign and name; a row of one
-      // line, its sign (ADR 0070, decision 5). Another host's names it.
+      // line, its sign (ADR 0070, decision 5). Another machine's, then
+      // that machine.
       return (
         <>
           {wide ? (
@@ -163,16 +174,11 @@ function Piece({
           ) : (
             <ProjectSign project={project} size={14} />
           )}
-          {host && (
-            <span
-              className="shrink-0 rounded-sm border px-1 text-[10px] leading-3.5 text-muted-foreground"
-              title={`Its Agent works on ${host}`}
-            >
-              {host}
-            </span>
-          )}
+          <Machine machine={machine} wide={wide} />
         </>
       )
+    case "machine":
+      return <Machine machine={machine} wide={wide} />
     case "harness": {
       // Its account's emblem, and in a row of more lines its name (ADR
       // 0093, decision 1).
@@ -209,6 +215,19 @@ function Piece({
       )
     }
   }
+}
+
+/** Another machine on a row (ADR 0095, decision 5): its icon and name,
+ * small and muted, with no border; its icon alone on a row of one line. */
+function Machine({ machine, wide }: { machine?: Named; wide: boolean }) {
+  if (!machine) return null
+  return (
+    <MachineMark
+      named={machine}
+      form={wide ? "compact" : "icon"}
+      title={`Its Agent works on ${machine.name}`}
+    />
+  )
 }
 
 /** The row's title; while a model writes one, it shimmers (ADR 0077,

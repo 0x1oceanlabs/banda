@@ -907,6 +907,27 @@
       }
     },
     {
+      "id": "hosts.stop",
+      "title": "Stop Banda on another machine",
+      "section": "Banda",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "the machine's key in hosts.toml"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "runsAsPerson": true
+    },
+    {
       "id": "problems.look-into",
       "title": "Look into a Problem",
       "section": "Banda",

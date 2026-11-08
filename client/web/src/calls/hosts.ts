@@ -13,10 +13,18 @@ import {
   type ProjectId,
   type ProjectSummary,
 } from "@banda/contract"
+import type { Named } from "@banda/contract/machines"
 import type { Read } from "@banda/ui/hooks/use-read"
+import { followNamed, seenNamed } from "@banda/ui/hooks/use-status"
 import type { Args } from "@banda/ui/module"
 import { shownProjects } from "@banda/ui/lib/projects"
-import { type Readable, sameEach, Store, useStore } from "@banda/ui/lib/store"
+import {
+  type Readable,
+  sameData,
+  sameEach,
+  Store,
+  useStore,
+} from "@banda/ui/lib/store"
 import { paneHost, type PaneState, withHost } from "@banda/ui/pane"
 import { createContext, useCallback, useContext, useEffect } from "react"
 import type { HostState } from "../host"
@@ -33,7 +41,12 @@ export type HostsDevice = {
 
 /** A host as the Window shows it. */
 export type Shown = {
+  /** Its key in `hosts.toml`, which the Person sees only until its first
+   * welcome. */
   name: string
+  /** What it says it is called and drawn by, cleaned (ADR 0095, decision
+   * 2); as this device last saw it while it says nothing. */
+  named: Named
   /** What the desktop says of it, but away through the tries after a
    * loss, until it is live again or says otherwise. */
   state: HostState
@@ -64,21 +77,18 @@ export function shownOf(
   at: number
 ): Shown {
   const kept = was?.projects ?? NONE
+  const { name } = now
+  const named = was?.named ?? seenNamed(name)
   switch (now.state) {
     case "live":
-      return { name: now.name, state: now, projects: kept }
+      return { name, named, state: now, projects: kept }
     case "away":
-      return {
-        name: now.name,
-        state: now,
-        away: was?.away ?? at,
-        projects: kept,
-      }
+      return { name, named, state: now, away: was?.away ?? at, projects: kept }
     case "connecting":
       if (was?.away !== undefined) return was
-      return { name: now.name, state: now, projects: NONE }
+      return { name, named, state: now, projects: NONE }
     default:
-      return { name: now.name, state: now, projects: NONE }
+      return { name, named, state: now, projects: NONE }
   }
 }
 
@@ -161,7 +171,8 @@ export class KeptHosts implements Readable<readonly Shown[]> {
    * Host `name`'s engine: one for the Window's life, made as it is first
    * asked for. It asks the desktop where that engine listens on each
    * connect, once the host is live, so a refused host is not tried again
-   * by it, and a restarted engine is found where it listens now.
+   * by it, and a restarted engine is found where it listens now. What the
+   * host says it is called and drawn by, the Window shows from then on.
    */
   engine(name: string): Engine {
     let engine = this.#engines.get(name)
@@ -171,6 +182,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
         return this.#device.engine(name)
       })
       this.#engines.set(name, engine)
+      followNamed(engine, name, (named) => this.#named(name, named))
     }
     return engine
   }
@@ -192,6 +204,17 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   /** Starts host `name`'s engine again there. */
   start(name: string): void {
     this.#device.start(name)
+  }
+
+  /** Takes what host `name` says it is called and drawn by now. */
+  #named(name: string, named: Named): void {
+    this.#shown.set(
+      this.get().map((one) =>
+        one.name !== name || sameData(one.named, named)
+          ? one
+          : { ...one, named }
+      )
+    )
   }
 
   /** Waits until host `name` is live. */
@@ -298,13 +321,21 @@ export function hostOfPane(
     ?.name
 }
 
-/** What a Pane on host `name` says while it cannot reach it, as the
- * Window shows that host (`shown`); none while it is live. Not known
- * yet, as before the desktop first tells the hosts, it waits. */
+/** Host `host`'s name and icon, as the Window shows `hosts`; as this
+ * device last saw it, while the Window does not show it yet. */
+export function namedIn(hosts: readonly Shown[], host: string): Named {
+  return hosts.find((one) => one.name === host)?.named ?? seenNamed(host)
+}
+
+/** What a Pane on host `host` says while it cannot reach it, as the
+ * Window shows that host (`shown`), by the name it says it has; none
+ * while it is live. Not known yet, as before the desktop first tells the
+ * hosts, it waits. */
 export function reachWords(
-  name: string,
+  host: string,
   shown: Shown | undefined
 ): string | undefined {
+  const { name } = shown?.named ?? seenNamed(host)
   if (!shown) return `Waiting for ${name}`
   const { state } = shown
   switch (state.state) {
@@ -404,6 +435,25 @@ export function useReach(
   const shown = useStore(kept, select)
   if (host === undefined) return { engine }
   return { host, shown, engine: shown && kept.engine(host) }
+}
+
+/** The other host a Pane of `project` is on, whose args name host
+ * `named`, by its name and icon; none for this machine's, or with no
+ * Pane yet. Drawn again only as they change. */
+export function useNamedOf(
+  project: ProjectId | undefined,
+  named: string | undefined
+): Named | undefined {
+  const kept = useContext(HostsContext)
+  const select = useCallback(
+    (hosts: readonly Shown[]) => {
+      const host =
+        project === undefined ? undefined : kept.hostOf(project, named)
+      return host === undefined ? undefined : namedIn(hosts, host)
+    },
+    [kept, project, named]
+  )
+  return useStore(kept, select, sameData)
 }
 
 /** The engine of a Project, or of `pane` of it, which may name its host

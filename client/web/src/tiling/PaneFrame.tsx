@@ -10,6 +10,9 @@ import {
 } from "react"
 import { ProjectName } from "@banda/ui/components/project-sign"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import type { Named } from "@banda/contract/machines"
+import { MachineIcon, MachineMark } from "@banda/ui/components/machine-icon"
+import { seenNamed } from "@banda/ui/hooks/use-status"
 import { Button } from "@banda/ui/components/button"
 import {
   DropdownMenu,
@@ -230,6 +233,10 @@ export const PaneFrame = memo(function PaneFrame({
   const reach = useReach(engine, entry.project, named)
   const there = reach.host
   const words = there === undefined ? undefined : reachWords(there, reach.shown)
+  // Where the Person writes to another machine, it is named (ADR 0095,
+  // decision 7).
+  const machine =
+    there === undefined ? undefined : (reach.shown?.named ?? seenNamed(there))
   const handle = useMemo(
     () => handleOf(frame, entry.id, entry.project, entry.pane.kind, there),
     [frame, entry.id, entry.project, entry.pane.kind, there]
@@ -399,6 +406,7 @@ export const PaneFrame = memo(function PaneFrame({
                         className="shrink-0 text-muted-foreground"
                       />
                     )}
+                    {machine && <MachineMark named={machine} form="full" />}
                   </>
                 )}
                 {listed && reach.engine ? (
@@ -427,6 +435,9 @@ export const PaneFrame = memo(function PaneFrame({
                     className="shrink-0 gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground"
                   />
                 )}
+                {machine && !listed && (
+                  <MachineMark named={machine} form="full" />
+                )}
                 {zoomed && (
                   <button
                     type="button"
@@ -451,10 +462,12 @@ export const PaneFrame = memo(function PaneFrame({
                   <SquareArrowOutUpRightIcon className="size-5" />
                   In its own window
                 </button>
-              ) : there !== undefined && !kind?.elsewhere ? (
-                <Elsewhere>Not on {there} yet</Elsewhere>
+              ) : machine && !kind?.elsewhere ? (
+                <Elsewhere machine={machine}>
+                  Not on {machine.name} yet
+                </Elsewhere>
               ) : !reach.engine ? (
-                <Elsewhere>{words}</Elsewhere>
+                <Elsewhere machine={machine}>{words}</Elsewhere>
               ) : shown ? (
                 <Broken close={close}>
                   <TileContext value={tile}>
@@ -494,11 +507,18 @@ export const PaneFrame = memo(function PaneFrame({
   )
 })
 
-/** Why a Pane on another host shows nothing: it is not there yet, or that
- * host is not known yet. */
-function Elsewhere({ children }: { children: ReactNode }) {
+/** Why a Pane on another host shows nothing, under that host's icon: it
+ * is not there yet, or that host is not known yet. */
+function Elsewhere({
+  machine,
+  children,
+}: {
+  machine: Named | undefined
+  children: ReactNode
+}) {
   return (
-    <p className="flex size-full items-center justify-center p-4 text-center text-sm text-muted-foreground">
+    <p className="flex size-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-muted-foreground">
+      {machine && <MachineIcon icon={machine.icon} size={20} />}
       {children}
     </p>
   )
