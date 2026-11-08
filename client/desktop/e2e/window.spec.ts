@@ -4134,14 +4134,24 @@ test("[sound] in look.toml chooses the sounds: off is silence", async () => {
   expect(await notes()).toBe(0)
 })
 
-/** Sends `text` in `composer`'s Thread, then goes to the empty workspace below. */
+/**
+ * Sends `text` in `composer`'s Thread, then goes to the empty workspace
+ * below at once, before the Agent can call: one that asks by itself does
+ * so a tenth of a second after its turn. Its Pane is not waited on to show
+ * the Thread's name, which waits a little while its workspace still moves
+ * (ADR 0088, decision 4); the sidebar lists it once it started.
+ */
 async function sendAndGoBelow(page: Page, composer: Locator, text: string) {
   await composer.fill(text)
   await composer.press("Enter")
   const thread = composer.locator("xpath=ancestor::section[1]")
-  await expect(thread).not.toHaveAccessibleName("New Thread")
   await page.keyboard.press("Alt+PageDown")
   await expect(thread).toBeHidden()
+  await expect(
+    page
+      .getByRole("complementary", { name: "Sidebar" })
+      .getByRole("button", { name: text })
+  ).toBeVisible()
 }
 
 test("the overview shows how each Thread is, rings the one that calls, and draws an empty workspace slim", async () => {

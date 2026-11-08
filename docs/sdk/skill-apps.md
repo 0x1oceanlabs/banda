@@ -130,8 +130,9 @@ reads `window.here.get()` as it runs.
 - `motion.1` Animate only `transform`, `translate`, `scale`, `opacity`.
 - `motion.2` Never read layout in a tick that writes it.
 - `motion.3` No animation-frame loop of your own; use the shared clock.
-- `motion.4` Obey your Tile's Configure: hidden draws nothing, moving
-  measures and resizes nothing, one fit per settled size (after P2).
+- `motion.4` Obey your Tile's Configure (`useTile`, `tileOf`): hidden
+  draws nothing, moving measures and resizes nothing, one fit per settled
+  size (after P3).
 - `motion.5` No animation values in React state; select, memoise, act by
   action id.
 - `motion.6` Work over 4 ms off the main thread; long lists windowed.

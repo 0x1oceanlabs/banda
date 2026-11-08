@@ -11,6 +11,7 @@ import type { Shows } from "./shows"
 import { Strip } from "./Strip"
 import { useModHeld } from "./held"
 import { pixels, Swipe } from "./swipe"
+import { stacked } from "./tiles"
 import { type Carrying, inStrip, useMoving } from "./useMoving"
 import { useHoldsMod } from "@banda/ui/hooks/use-key-of"
 
@@ -108,6 +109,19 @@ export function Workspaces({
     }
   })
   useEffect(() => () => place.current?.stop(), [])
+  // Each Tile's state, as the workspaces stand and where they slide (ADR
+  // 0088, decision 4): the workspace a key goes to shows in the key's task.
+  const { list, current } = workspaces
+  useLayoutEffect(() => {
+    const moving = place.current
+    if (!moving) return
+    stacked({
+      order: list.map((workspace) => workspace.id),
+      place: moving,
+      overview,
+    })
+  }, [list, current, overview])
+  useLayoutEffect(() => () => stacked(undefined), [])
   // A page in the layer takes the keys as an iframe does, with no focus
   // event of its own: the focus leaves for it, or the window blurs as it
   // takes it. The tile that holds the page takes the focus then and there.
@@ -171,10 +185,12 @@ export function Workspaces({
     // Clipped, not hidden: the stack moves by transforms only, and nothing
     // scrolled into view in a Pane may slide the next workspace in. Its own
     // stacking context keeps the layer under the overview and the toasts.
+    // An area of the window: what changes in it lays out and paints nothing
+    // outside it (ADR 0088, decision 8).
     <div
       ref={root}
       data-overview={overview || undefined}
-      className="relative isolate h-full min-h-0 overflow-clip"
+      className="relative isolate h-full min-h-0 overflow-clip [contain:layout_paint_style]"
     >
       {overview && (
         <div

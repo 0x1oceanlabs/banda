@@ -1,9 +1,10 @@
-import { memo, useMemo } from "react"
+import { memo, useLayoutEffect, useMemo, useRef } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import { cn } from "@banda/ui/lib/utils"
 import type { PaneState } from "@banda/ui/pane"
 import { PinIcon } from "lucide-react"
+import { boxOf } from "@banda/ui/lib/tile"
 import { type Shows, useListed } from "../tiling/shows"
 import type { Entry } from "../tiling/model"
 import { type Frame, PaneFrame } from "../tiling/PaneFrame"
@@ -61,6 +62,33 @@ export const Drawer = memo(function Drawer({
     }),
     [frame, onChange, onClose]
   )
+  // Lifted, its Tile is hidden once it slid away; dropped, it shows at
+  // once, before it slides in (ADR 0088, decision 4).
+  const dialog = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const element = dialog.current
+    const tile = element?.querySelector("[data-tile]")
+    const box = tile && boxOf(tile)
+    if (!element || !box) return
+    if (shown) {
+      box.configure("shown")
+      return
+    }
+    // Asking for its transitions has its slide start, unless motion is off.
+    if (element.getAnimations().length === 0) {
+      box.configure("hidden")
+      return
+    }
+    const slid = (event: Event) => {
+      if (event.target === element) box.configure("hidden")
+    }
+    element.addEventListener("transitionend", slid)
+    element.addEventListener("transitioncancel", slid)
+    return () => {
+      element.removeEventListener("transitionend", slid)
+      element.removeEventListener("transitioncancel", slid)
+    }
+  }, [shown])
   const pin = useMemo(
     () => (
       <Button
@@ -89,6 +117,7 @@ export const Drawer = memo(function Drawer({
       {/* A dialog over the workspace: the window's keys that work its
           Panes wait until it is lifted. */}
       <div
+        ref={dialog}
         role="dialog"
         aria-label="Drawer"
         inert={!shown}

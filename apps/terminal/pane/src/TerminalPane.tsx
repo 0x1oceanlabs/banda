@@ -17,6 +17,7 @@ import {
 import { type Clock, Surface } from "@banda/ghostty"
 import { Button } from "@banda/ui/components/button"
 import { afterMoves, cancelFrame } from "@banda/ui/lib/frames"
+import { type Configure, tileOf } from "@banda/ui/lib/tile"
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -215,6 +216,9 @@ function Screen({
   const mount = useRef<HTMLDivElement>(null)
   const surface = useRef<Surface | null>(null)
   const focusedNow = useRef(focused)
+  // A focus given while its Tile was hidden, which a hidden screen takes
+  // not: it takes it as it shows.
+  const owed = useRef(false)
   const again = useRef<() => void>(() => {})
   const [now, setNow] = useState<Now>({ is: "starting" })
   const [problem, setProblem] = useState<string>()
@@ -233,6 +237,9 @@ function Screen({
 
   useEffect(() => {
     focusedNow.current = focused
+    const element = mount.current
+    owed.current =
+      focused && !!element && tileOf(element).now().state === "hidden"
     if (focused) surface.current?.focus()
   }, [focused])
 
@@ -341,8 +348,27 @@ function Screen({
     let sized = false
     let settling: ReturnType<typeof setTimeout> | undefined
     const fontNow = () => fontOf(element, writingNow.current, zoomOf(terminal))
+    // Its Tile's state (ADR 0088, decision 4): hidden, the screen draws
+    // nothing and stops its cursor's blink, and the program runs on;
+    // shown again, it draws what it missed at once, and takes a focus
+    // given meanwhile.
+    const tile = tileOf(element)
+    let hidden = tile.now().state === "hidden"
+    const obey = ({ state }: Configure) => {
+      hidden = state === "hidden"
+      drawn?.setVisible(!hidden)
+      if (hidden || !owed.current) return
+      owed.current = false
+      if (focusedNow.current) drawn?.focus()
+    }
+    const stopObeying = tile.watch(obey)
     void (async () => {
       const made = await Surface.create(element, {
+        // Read once the fonts and the WASM have loaded: a screen made
+        // hidden draws nothing until it shows.
+        get visible() {
+          return !hidden
+        },
         clock: CLOCK,
         theme: themeOf(element),
         font: fontNow(),
@@ -386,6 +412,7 @@ function Screen({
       if (left) return made.dispose()
       drawn = made
       surface.current = made
+      made.setVisible(!hidden)
       if (focusedNow.current) made.focus()
       if (shell) void start().then(follow, fail)
       else follow()
@@ -406,6 +433,7 @@ function Screen({
       clearTimeout(settling)
       stop()
       stopWatchingTheme()
+      stopObeying()
       drawn?.dispose()
       surface.current = null
     }
@@ -442,7 +470,9 @@ function Screen({
               aria-label="Terminal screen"
               data-state={now.is}
               {...PROGRAM_KEYS}
-              className="relative min-h-0 flex-1 overflow-hidden [--app-scrollbar-width:8px]"
+              // Its size is its Tile's, and nothing it draws reaches past
+              // it (ADR 0088, decision 8).
+              className="relative min-h-0 flex-1 overflow-hidden [contain:strict] [--app-scrollbar-width:8px]"
             />
           }
         />

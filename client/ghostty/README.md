@@ -45,7 +45,12 @@ Import paths, so the files find each other here, and the tests import
 - `linkTextAt` names the link at a point, for the terminal's menu;
 - the surface takes a `clock`, the host's, to ask for the tick it draws
   in: the window's, so the screen ticks with all else that moves (ADR
-  0088, decision 3).
+  0088, decision 3);
+- hidden (`setVisible(false)`), the surface still takes its grid as its
+  mount's size changes, and tells the PTY, but neither sizes its canvas
+  nor draws: a terminal whose Tile is hidden keeps the size it would have
+  shown; shown again, it draws at once the rows that changed meanwhile,
+  over what its canvas kept, not the whole screen (ADR 0088, decision 4).
 
 T3's tests of its own terminal drawer are not brought: they test T3's
 transport, not the adapter.
