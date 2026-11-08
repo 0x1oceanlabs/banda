@@ -96,6 +96,7 @@ const newThread: Action = {
     project: "the Project it starts in",
     ask: "what to write to its Agent first",
     harness: "the Harness it starts on",
+    place: "drawer: it opens in the drawer, in place of what the drawer held",
   }),
   // Its `ask` goes to the new Thread's Agent at once.
   runsAsPerson: ["ask"],
@@ -103,7 +104,7 @@ const newThread: Action = {
   section: "Threads",
   keys: [{ code: "Enter", mod: true }],
   run: (window, args = {}) => {
-    const { project, ask, harness } = args
+    const { project, ask, harness, place } = args
     const thread = paneOf(threadPane, {
       ...NEW_THREAD,
       ...(typeof ask === "string" && ask && { ask }),
@@ -111,7 +112,8 @@ const newThread: Action = {
     })
     window.open(
       thread,
-      typeof project === "string" ? (project as ProjectId) : window.home
+      typeof project === "string" ? (project as ProjectId) : window.home,
+      place === "drawer" ? { place } : undefined
     )
   },
 }
