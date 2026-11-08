@@ -63,6 +63,10 @@ export type ThreadArgs = {
   scratch?: ProjectId
   /** Kept with the draft so creation can be replayed after a reload. */
   scratchCommand?: string
+  /** The other host of `hosts.toml` whose Project it is in, by its name
+   * (`paneHost`, ADR 0081): the window gives the Pane that host's
+   * engine, and what reaches this machine's files stays off. */
+  host?: string
 }
 
 /** A Thread not yet started, on this computer's first Harness. */

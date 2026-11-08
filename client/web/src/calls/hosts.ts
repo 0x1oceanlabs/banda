@@ -13,9 +13,11 @@ import {
   type ProjectId,
   type ProjectSummary,
 } from "@banda/contract"
+import type { Read } from "@banda/ui/hooks/use-read"
 import { shownProjects } from "@banda/ui/lib/projects"
 import { type Readable, sameEach, Store, useStore } from "@banda/ui/lib/store"
-import { createContext, useContext } from "react"
+import { paneHost, type PaneState } from "@banda/ui/pane"
+import { createContext, useCallback, useContext, useEffect } from "react"
 import type { HostState } from "../host"
 
 /** How the Window reaches the desktop's hosts: `device.hosts`. */
@@ -172,13 +174,10 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     return engine
   }
 
-  /** The engine of the host that has `project`; none for one of this
-   * machine's, or one no host shows. */
-  engineOf(project: ProjectId): Engine | undefined {
-    const host = this.get().find((one) =>
-      one.projects.some((each) => each.id === project)
-    )
-    return host && this.engine(host.name)
+  /** The host a Pane of `project` is on, whose args name host `named`
+   * (`hostOfPane`); none for this machine's. */
+  hostOf(project: ProjectId, named: string | undefined): string | undefined {
+    return hostOfPane(this.get(), this.#ours, project, named)
   }
 
   /** Starts host `name`'s engine again there. */
@@ -270,3 +269,125 @@ const all = (hosts: readonly Shown[]) => hosts
 
 /** The hosts as the Window shows them, drawn again as any changes. */
 export const useHosts = (): readonly Shown[] => useHostsBy(all)
+
+/**
+ * The host a Pane of `project` is on: none when this machine has the
+ * Project, as it wins an ID a host has too; else host `named`, as the
+ * Pane's args keep it (`paneHost`), known yet or not, so the Pane waits
+ * for it after a restart; else the host that lists the Project, for a
+ * Pane opened where its host went unsaid.
+ */
+export function hostOfPane(
+  hosts: readonly Shown[],
+  ours: ReadonlySet<ProjectId>,
+  project: ProjectId,
+  named: string | undefined
+): string | undefined {
+  if (ours.has(project)) return undefined
+  if (named !== undefined) return named
+  return hosts.find((host) => host.projects.some((one) => one.id === project))
+    ?.name
+}
+
+/** What a Pane on host `name` says while it cannot reach it, as the
+ * Window shows that host (`shown`); none while it is live. Not known
+ * yet, as before the desktop first tells the hosts, it waits. */
+export function reachWords(
+  name: string,
+  shown: Shown | undefined
+): string | undefined {
+  if (!shown) return `Waiting for ${name}`
+  const { state } = shown
+  switch (state.state) {
+    case "live":
+      return undefined
+    case "away":
+      return `${name} is away`
+    case "connecting":
+      return `Connecting to ${name}`
+    case "signin":
+      return `Sign in to Tailscale to reach ${name}`
+    case "stopped":
+      return `Banda is stopped on ${name}`
+    case "refused":
+      return `${name}: ${state.why}`
+  }
+}
+
+/** The Window's actions a Pane on another host runs: the page's own
+ * paste and copy, the settings, and a Thread's snooze, which goes to its
+ * host's engine (`useEngineOf`). None reaches this machine's files or its
+ * engine's Projects. */
+const RUNS_ELSEWHERE: ReadonlySet<string> = new Set([
+  "edit.paste",
+  "edit.paste-plain",
+  "edit.copy-image",
+  "settings.open",
+  "thread.snooze",
+  "thread.wake",
+])
+
+/** Whether a Pane on another host runs `action` of the Window's. */
+export const runsElsewhere = (action: string): boolean =>
+  RUNS_ELSEWHERE.has(action)
+
+/** Where a Pane reaches its engine: this machine's; or another host's,
+ * by its name, with what the Window knows of that host yet, and its
+ * engine once it knows it. */
+export type Reach =
+  | { host?: undefined; shown?: undefined; engine: Engine }
+  | { host: string; shown: Shown | undefined; engine: Engine | undefined }
+
+/**
+ * Where a Pane of `project`, whose args name host `named`, reaches its
+ * engine (ADR 0081, decision 4): `engine`, this machine's, for its own
+ * Projects; else its host's. Drawn again only as the host it is on, or
+ * what the Window knows of that host, changes.
+ */
+export function useReach(
+  engine: Engine,
+  project: ProjectId,
+  named: string | undefined
+): Reach {
+  const kept = useContext(HostsContext)
+  const on = useCallback(
+    () => kept.hostOf(project, named),
+    [kept, project, named]
+  )
+  const host = useStore(kept, on)
+  const select = useCallback(
+    (hosts: readonly Shown[]) =>
+      host === undefined ? undefined : hosts.find((one) => one.name === host),
+    [host]
+  )
+  const shown = useStore(kept, select)
+  if (host === undefined) return { engine }
+  return { host, shown, engine: shown && kept.engine(host) }
+}
+
+/** The engine of a Project, or of `pane` of it, which may name its host
+ * (`hostOfPane`): its host's, never this machine's in its place, else
+ * this machine's `engine`; the same function while those stay. */
+export function useEngineOf(
+  engine: Engine
+): (project: ProjectId, pane?: PaneState) => Engine {
+  const kept = useContext(HostsContext)
+  return useCallback(
+    (project: ProjectId, pane?: PaneState) => {
+      const host = kept.hostOf(project, pane && paneHost(pane))
+      return host === undefined ? engine : kept.engine(host)
+    },
+    [kept, engine]
+  )
+}
+
+/** Tells `hosts` this machine's Projects, as `listed` reads them, which
+ * win an ID a host has too (`KeptHosts.ours`). */
+export function useOurs(
+  hosts: KeptHosts,
+  listed: Read<ProjectSummary[]>
+): void {
+  useEffect(() => {
+    if (listed.state === "ready") hosts.ours(listed.value)
+  }, [hosts, listed])
+}

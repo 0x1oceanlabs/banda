@@ -18,17 +18,18 @@ type Run = NonNullable<PaneProps<ThreadArgs>["run"]>
 
 /**
  * The paths of a Thread in `project`, for its Markdown and its menu; none
- * where no window looks at files. `items` say where its tools worked;
- * `run` opens a file.
+ * where no window looks at files, nor for a Project of another host's
+ * (`project` null), whose paths are not this machine's. `items` say where
+ * its tools worked; `run` opens a file.
  */
 export function useThreadFiles(
-  project: string,
+  project: string | null,
   items: readonly Item[] | undefined,
   run: Run | undefined
 ): ThreadFiles | null {
   const files = useMemo(() => {
     const bridge = agentsHost()
-    return bridge ? new ThreadFiles(bridge, project) : null
+    return bridge && project !== null ? new ThreadFiles(bridge, project) : null
   }, [project])
   useLayoutEffect(() => files?.follow(items ?? [], run), [files, items, run])
   return files

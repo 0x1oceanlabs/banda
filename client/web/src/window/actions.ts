@@ -789,7 +789,8 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     when: (shell) => lookedAt(shell)?.listing.suggest !== undefined,
     run: (shell) => {
       const at = lookedAt(shell)
-      if (!at) return
+      // Another host's Thread asks its own engine, from its header's menu.
+      if (!at || shell.here.get().pane?.host) return
       // Its field open, the title goes in the field, as its ✨ puts it.
       if (namingNow(at.project, at.listed.id)) askIntoField()
       else void suggestTitle(shell.engine, at.project, at.listed)

@@ -5,7 +5,8 @@
  * on this machine, on arc's own folders, and forwards the port itself, as
  * ssh does, so main's check that ssh holds the port holds. arc's label
  * shows below this machine's Projects, with its Projects and Threads;
- * stopped there, it says so, and Start brings it back. With
+ * stopped there, it says so, and Start brings it back. Its Thread opens
+ * from the sidebar on arc's engine, and waits while arc is away. With
  * BANDA_E2E_SHOTS set to a folder, it leaves pictures of each state there
  * for the Person to see.
  */
@@ -180,13 +181,42 @@ function send(arc: Arc, project: string, text: string) {
   )
 }
 
-/** arc's Threads in `project`, each its title and how its turn stands. */
-function states(arc: Arc, project: string) {
+/** arc's Threads in `project`, as its engine lists them. */
+function threadsOf(arc: Arc, project: string) {
   const { ok } = JSON.parse(
     arc.banda("call", "agents.threads", "--project", project)
-  ) as { ok: { threads: { title: string; latest?: { state: string } }[] } }
-  return ok.threads.map((thread) => [thread.title, thread.latest?.state])
+  ) as {
+    ok: { threads: { id: string; title: string; latest?: { state: string } }[] }
+  }
+  return ok.threads
 }
+
+/** What arc's engine keeps of Thread `thread` in `project`, as JSON. */
+const keptOf = (arc: Arc, project: string, thread: string) =>
+  arc.banda(
+    "call",
+    "agents.thread",
+    "--project",
+    project,
+    "--params",
+    JSON.stringify({ thread })
+  )
+
+/** arc's Threads in `project`, each its title and how its turn stands. */
+const states = (arc: Arc, project: string) =>
+  threadsOf(arc, project).map((thread) => [thread.title, thread.latest?.state])
+
+/** The window, its hosts.toml naming arc, and the fake ssh first on its
+ * PATH. */
+const withArc = (arc: Arc) =>
+  startWindow({
+    look: 'mode = "dark"\n',
+    sidebar: 'preset = "projects"\n',
+    files: {
+      "config/hosts.toml": `[[hosts]]\nname = "arc"\nssh = "arc"\nbanda = ${JSON.stringify(program)}\n`,
+    },
+    env: { PATH: `${arc.bin}:${process.env.PATH}` },
+  })
 
 const sidebarOf = (page: Page) =>
   page.getByRole("complementary", { name: "Sidebar" })
@@ -222,21 +252,14 @@ async function shot(page: Page, name: string) {
     page.getByRole("region", { name: "Notifications" }).getByRole("listitem")
   ).toHaveCount(0, { timeout: 30_000 })
   await page.waitForTimeout(3_000)
-  await page.screenshot({ path: join(shots, `pr2-${name}.png`) })
+  await page.screenshot({ path: join(shots, `${name}.png`) })
 }
 
 test("another machine's Threads show under its name, below this one's; stopped there, Start brings it back", async () => {
   test.setTimeout(shots ? 300_000 : 120_000)
   arc = newArc()
   const banda = await seed(arc)
-  window = await startWindow({
-    look: 'mode = "dark"\n',
-    sidebar: 'preset = "projects"\n',
-    files: {
-      "config/hosts.toml": `[[hosts]]\nname = "arc"\nssh = "arc"\nbanda = ${JSON.stringify(program)}\n`,
-    },
-    env: { PATH: `${arc.bin}:${process.env.PATH}` },
-  })
+  window = await withArc(arc)
   const { page } = window
   await work(window)
   const sidebar = sidebarOf(page)
@@ -256,17 +279,11 @@ test("another machine's Threads show under its name, below this one's; stopped t
   await expect(
     there.getByRole("button").filter({ hasText: "Hosts over ssh, wait" })
   ).toContainText(/\d:\d\d/)
-  await shot(page, "1-projects-live")
-  // Its rows open nothing yet, and have no menu.
-  const tiles = await page.locator("section[data-tile]").count()
-  await there.getByText("Bench window tests").click()
+  await shot(page, "pr2-1-projects-live")
+  // Its rows have no menu yet.
   await there.getByText("Bench window tests").click({ button: "right" })
   await expect(page.getByRole("menu", { name: "Thread menu" })).toHaveCount(0)
   await page.keyboard.press("Escape")
-  await expect(
-    page.getByRole("region", { name: "Bench window tests", exact: true })
-  ).toHaveCount(0)
-  await expect(page.locator("section[data-tile]")).toHaveCount(tiles)
 
   // The Inbox: no label for a live host, and its rows among this
   // machine's, each with its host's name.
@@ -286,7 +303,7 @@ test("another machine's Threads show under its name, below this one's; stopped t
       .filter({ hasText: "Sidebar for arc" })
       .getByTitle("Its Agent works on arc")
   ).toHaveCount(0)
-  await shot(page, "2-inbox-live")
+  await shot(page, "pr2-2-inbox-live")
 
   // The link drops and arc cannot be reached: away, its rows still there.
   writeFileSync(
@@ -303,7 +320,7 @@ test("another machine's Threads show under its name, below this one's; stopped t
     await expect(there.getByText("away · 1 min")).toBeVisible({
       timeout: 90_000,
     })
-    await shot(page, "3-away")
+    await shot(page, "pr2-3-away")
   }
   arc.down(false)
   await expect(there.getByText(/^away/)).toHaveCount(0, { timeout: 60_000 })
@@ -314,8 +331,78 @@ test("another machine's Threads show under its name, below this one's; stopped t
   arc.banda("stop", "--force")
   await expect(there.getByText("stopped", { exact: true })).toBeVisible()
   await expect(there.getByText("Bench window tests")).toHaveCount(0)
-  await shot(page, "4-stopped")
+  await shot(page, "pr2-4-stopped")
   await there.getByRole("button", { name: "Start" }).click()
   await expect(there.getByText("Bench window tests")).toBeVisible()
   await expect(there.getByText("stopped", { exact: true })).toHaveCount(0)
+})
+
+test("another machine's Thread opens from the sidebar on its engine, waits while arc is away and catches up; other Panes are not on arc yet", async () => {
+  test.setTimeout(shots ? 300_000 : 120_000)
+  arc = newArc()
+  const banda = await seed(arc)
+  window = await withArc(arc)
+  const { page } = window
+  await work(window)
+  await expect(sidebarOf(page).getByText("Sidebar for arc")).toBeVisible()
+
+  // A click opens it as a Thread of this machine's opens, read live from
+  // arc's engine.
+  await arcOf(page).getByText("Bench window tests").click()
+  const thread = page.getByRole("region", {
+    name: "Bench window tests",
+    exact: true,
+  })
+  await expect(thread.getByText("You said: Bench window tests")).toBeVisible()
+  // It writes there: arc's Agent answers.
+  const composer = thread.getByRole("textbox", { name: "Message to Fake AI" })
+  await composer.fill("hi")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hi")).toBeVisible()
+  await expect
+    .poll(() => states(arc!, banda))
+    .toEqual([["Bench window tests", "done"]])
+  // A turn that goes on stops from here.
+  await composer.fill("wait for it")
+  await composer.press("Enter")
+  await expect(thread.getByText("Waiting.")).toBeVisible()
+  await thread.getByRole("button", { name: "Stop", exact: true }).click()
+  await expect
+    .poll(() => states(arc!, banda))
+    .toEqual([["Bench window tests", "stopped"]])
+  await shot(page, "pr3-1-remote-thread")
+
+  // The link drops, and arc's engine ends with it: the Pane says so,
+  // and its Thread stays as it was. As arc is back, it reads it again and
+  // writes there.
+  arc.down(true)
+  arc.cut()
+  const away = page.getByRole("status").filter({ hasText: "arc is away" })
+  await expect(away).toBeVisible()
+  await expect(thread.getByText("You said: hi")).toBeVisible()
+  await shot(page, "pr3-2-away")
+  arc.down(false)
+  await expect(away).toHaveCount(0, { timeout: 60_000 })
+  await composer.fill("back again")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: back again")).toBeVisible()
+  // arc's Agent answered it there, in the same Thread.
+  await expect
+    .poll(() => states(arc!, banda))
+    .toEqual([["Bench window tests", "done"]])
+  const [only] = threadsOf(arc!, banda)
+  expect(keptOf(arc!, banda, only!.id)).toContain("You said: back again")
+  // The window's arrangement keeps the Pane on arc: drawn anew, as after
+  // a restart, it opens there again.
+  await page.reload()
+  await expect(thread.getByText("You said: back again")).toBeVisible()
+  await thread.getByRole("textbox", { name: "Message to Fake AI" }).focus()
+
+  // Any other Pane for arc's Project waits for a later step: none reads
+  // this machine's files for it.
+  await page.keyboard.press("Alt+KeyN")
+  const other = page.getByRole("region", { name: "New Pane" })
+  await expect(other.getByText("Not on arc yet")).toBeVisible()
+  await expect(other.getByRole("button", { name: "Terminal" })).toHaveCount(0)
+  await shot(page, "pr3-3-not-on-arc")
 })

@@ -28,6 +28,7 @@ import {
   type Lists,
   type PaneState,
   QUIET,
+  withHost,
 } from "@banda/ui/pane"
 import {
   nextWake,
@@ -118,14 +119,34 @@ function mergedLists(hosts: ReadonlyMap<string, Said>): Lists {
 }
 
 /** Takes what host `host`'s Watches list now: the items hold it with
- * every other host's. */
+ * every other host's, another host's as the Window opens it there
+ * (`onHost`). */
 export function takeLists(
   { items, hosts }: Stores,
   lists: Lists,
   host = HERE
 ): void {
-  hosts.set(host, { attention: hosts.get(host)?.attention ?? QUIET, lists })
+  const placed = host === HERE ? lists : onHost(lists, host)
+  hosts.set(host, {
+    attention: hosts.get(host)?.attention ?? QUIET,
+    lists: placed,
+  })
   items.set(keptLists(items.get(), mergedLists(hosts)))
+}
+
+/** What host `host` lists, as the Window opens it (ADR 0081): each
+ * Pane on that host (`withHost`), so a row, a call or the Banda menu opens
+ * it there, and no toast's answer, as its action goes to this machine's
+ * engine. */
+function onHost(lists: Lists, host: string): Lists {
+  const placed: Record<ProjectId, readonly Listed[]> = {}
+  for (const [project, listed] of Object.entries(lists))
+    placed[project as ProjectId] = listed.map((one) => {
+      const there: Listed = { ...one, pane: withHost(one.pane, host) }
+      delete there.answers
+      return there
+    })
+  return placed
 }
 
 /** Takes what host `host`'s Watches say calls the Person: the calls hold

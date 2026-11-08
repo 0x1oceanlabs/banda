@@ -1,7 +1,20 @@
-import type { ProjectId, ProjectSummary } from "@banda/contract"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import { createElement } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, expect, test, vi } from "vitest"
 import type { HostState } from "../host"
-import { type HostsDevice, KeptHosts, otherBuild, shownOf } from "./hosts"
+import {
+  HostsContext,
+  type HostsDevice,
+  KeptHosts,
+  otherBuild,
+  type Reach,
+  reachWords,
+  runsElsewhere,
+  shownOf,
+  useEngineOf,
+  useReach,
+} from "./hosts"
 
 afterEach(() => {
   vi.useRealTimers()
@@ -119,9 +132,9 @@ test("a host's Projects are its engine's, none archived, and never one shown bef
   hosts.projects("devbox", [project("r1"), project("d1")])
   expect(warned).toHaveBeenCalledTimes(2)
 
-  expect(hosts.engineOf("r1" as ProjectId)).toBe(hosts.engine("arc"))
-  expect(hosts.engineOf("d1" as ProjectId)).toBe(hosts.engine("devbox"))
-  expect(hosts.engineOf("mine" as ProjectId)).toBeUndefined()
+  expect(hosts.hostOf("r1" as ProjectId, undefined)).toBe("arc")
+  expect(hosts.hostOf("d1" as ProjectId, undefined)).toBe("devbox")
+  expect(hosts.hostOf("mine" as ProjectId, undefined)).toBeUndefined()
 
   // A host that stops shows none, and lists none until it is live again:
   // the one after it shows what it no longer does.
@@ -220,4 +233,99 @@ test("an engine that said goodbye is made anew as its host is live again", async
   await vi.advanceTimersByTimeAsync(0)
   expect(Socket.opened).toHaveLength(2)
   anew.close()
+})
+
+test("a Pane reaches the engine of the host its args name, else of the host listing its Project; this machine's wins a clash", async () => {
+  vi.useFakeTimers()
+  vi.stubGlobal("WebSocket", Socket)
+  Socket.opened = []
+  const { device, tell } = desktop()
+  const hosts = new KeptHosts(device)
+  hosts.follow()
+  const here = { here: true } as unknown as Engine
+  /** What a Pane of `project`, its args naming host `named`, reaches. */
+  const reach = (project: string, named?: string) => {
+    let got: Reach | undefined
+    const Pane = () => {
+      got = useReach(here, project as ProjectId, named)
+      return null
+    }
+    renderToStaticMarkup(
+      createElement(HostsContext, { value: hosts }, createElement(Pane))
+    )
+    return got!
+  }
+
+  // Before the desktop tells its hosts, as after a restart: it waits.
+  expect(reach("r1", "arc")).toEqual({
+    host: "arc",
+    shown: undefined,
+    engine: undefined,
+  })
+  expect(reachWords("arc", undefined)).toBe("Waiting for arc")
+
+  tell([live])
+  hosts.ours([project("mine")])
+  hosts.projects("arc", [project("mine"), project("r1")])
+  const arc = hosts.engine("arc")
+  const named = reach("r1", "arc")
+  expect(named.host).toBe("arc")
+  expect(named.engine).toBe(arc)
+  expect(reachWords("arc", named.shown)).toBeUndefined()
+  // Its host unsaid, the one that lists the Project.
+  expect(reach("r1").engine).toBe(arc)
+  // A clash: this machine's Project, on its own engine, whatever the args.
+  expect(reach("mine", "arc")).toEqual({ engine: here })
+  expect(reach("x")).toEqual({ engine: here })
+  expect(hosts.hostOf("mine" as ProjectId, "arc")).toBeUndefined()
+
+  // Away, the Pane keeps its engine, which catches up as the host returns.
+  tell([away])
+  const gone = reach("r1", "arc")
+  expect(gone.engine).toBe(arc)
+  expect(reachWords("arc", gone.shown)).toBe("arc is away")
+
+  let engineOf: ReturnType<typeof useEngineOf> | undefined
+  const Shell = () => {
+    engineOf = useEngineOf(here)
+    return null
+  }
+  renderToStaticMarkup(
+    createElement(HostsContext, { value: hosts }, createElement(Shell))
+  )
+  expect(engineOf!("r1" as ProjectId)).toBe(arc)
+  expect(engineOf!("mine" as ProjectId)).toBe(here)
+  // A Pane goes by the host its args name, never this machine's engine
+  // in its place, but for a clash.
+  const on = (host: string) => ({ kind: "agents.thread", args: { host } })
+  expect(engineOf!("gone" as ProjectId, on("arc"))).toBe(arc)
+  expect(engineOf!("mine" as ProjectId, on("arc"))).toBe(here)
+  arc.close()
+})
+
+test("a Pane says why it cannot reach its host in the window's own words", () => {
+  const words = (state: HostState) =>
+    reachWords("arc", shownOf(undefined, state, 0))
+  expect(words(connecting)).toBe("Connecting to arc")
+  expect(words({ name: "arc", state: "signin", url: "https://x" })).toBe(
+    "Sign in to Tailscale to reach arc"
+  )
+  expect(words({ name: "arc", state: "stopped" })).toBe(
+    "Banda is stopped on arc"
+  )
+  expect(words({ name: "arc", state: "refused", why: "an older window" })).toBe(
+    "arc: an older window"
+  )
+})
+
+test("a Pane on another host runs none of the Window's actions on this machine's files", () => {
+  expect(runsElsewhere("edit.paste")).toBe(true)
+  expect(runsElsewhere("thread.snooze")).toBe(true)
+  for (const action of [
+    "terminal.run",
+    "file.open",
+    "file.attach",
+    "browser.open",
+  ])
+    expect(runsElsewhere(action)).toBe(false)
 })

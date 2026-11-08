@@ -28,6 +28,7 @@ import { useWidgets } from "../bar/Widgets"
 import type { Layout } from "../bar/arrange"
 import { PARTS } from "../bar/placed"
 import { Watches } from "../bar/Watches"
+import { useEngineOf } from "../calls/hosts"
 import { besideOf, isShowing, nextCall, sightOf } from "../calls/sight"
 import {
   followCalls,
@@ -249,13 +250,13 @@ export function Shell({
 
   // A Pane that leaves every workspace lets its module let go, as a
   // terminal stops its program; one moved elsewhere has not left.
+  const engineOf = useEngineOf(engine)
   const before = useRef(workspaces)
   useEffect(() => {
-    for (const entry of left(before.current, workspaces, identityOf)) {
-      closedOf(engine, entry)
-    }
+    for (const entry of left(before.current, workspaces, identityOf))
+      closedOf(engineOf(entry.project, entry.pane), entry)
     before.current = workspaces
-  }, [engine, workspaces])
+  }, [engineOf, workspaces])
 
   // What the Apps list and what calls the Person, for the Marks, the
   // rings and Alt+U, kept outside React: a list that changes draws again
@@ -313,26 +314,26 @@ export function Shell({
       stores.items.get()[project]?.find((listed) => listed.id === thing),
     [stores]
   )
-  // A snooze is the engine's (ADR 0074). Snoozed, a Thread is put away as
-  // an archived one is, its Panes closed, and it leaves Archive; Undo
-  // wakes it.
+  // A snooze is kept by its host (ADR 0074). Snoozed, a Thread is put away
+  // as an archived one is, its Panes closed, and leaves Archive; Undo wakes it.
   const [snoozing, setSnoozing] = useState<Snoozing>()
   // How many Agents worked as the Person asked to quit, while Banda asks
   // whether to stop them (ADR 0086, decision 3).
   const [quitting, setQuitting] = useState<number | null>(null)
   const wakeThread = useCallback(
     (project: ProjectId, thing: string) => {
-      engine
+      engineOf(project)
         .command("agents.wake", { thread: thing }, project)
         .catch((error: unknown) => toast.error(problem(error)))
     },
-    [engine]
+    [engineOf]
   )
   const snoozeThread = useCallback(
     (project: ProjectId, listed: Listed, until?: number, resume = false) => {
       const thread = listed.id
       const asked = until === undefined ? { thread } : { thread, until, resume }
-      engine.command("agents.snooze", asked, project).then(
+      const there = engineOf(project)
+      there.command("agents.snooze", asked, project).then(
         () => {
           closeShown(project, thread)
           toast(
@@ -350,7 +351,7 @@ export function Shell({
         (error: unknown) => toast.error(problem(error))
       )
     },
-    [engine, closeShown, wakeThread]
+    [engineOf, closeShown, wakeThread]
   )
   const archiveThread = useCallback(
     (project: ProjectId, thing: string, archived: boolean) => {
@@ -406,8 +407,7 @@ export function Shell({
     (project: ProjectId, listed: Listed) => setSnoozing({ project, listed }),
     []
   )
-  // Alt+Z: the picker for the Thread the Person looks at.
-  /** The Thread `asked` names, else the one in focus. */
+  /** For Alt+Z's picker: the Thread `asked` names, else the one in focus. */
   const threadAsked = useCallback(
     ({ thread }: SnoozeAsked): Snoozing | undefined => {
       if (!thread) return threadInFocus()

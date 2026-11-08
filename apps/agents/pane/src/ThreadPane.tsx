@@ -27,22 +27,31 @@ export const threadPane = definePane<ThreadArgs>({
   home: () => fileNow(AGENTS_FILE).flow !== "free",
   // A Group from its opening, for what its Agent opens (ADR 0065).
   grouped: true,
+  // Another host's Thread opens too, on that host's engine (ADR 0081).
+  elsewhere: true,
   Pane: ThreadPane,
 })
 
 function ThreadPane(props: PaneProps<ThreadArgs>) {
   const project = props.args.scratch ?? props.project
   const { run } = props
+  // On another host (ADR 0081), nothing reaches this machine's files: no
+  // Run and no media from its paths, and a link opens in the system's
+  // browser, as Banda's is not there yet.
+  const here = props.args.host === undefined
   // A reply's Run (ADR 0063, decision 6), kept as it is while the Thread
   // streams, so its code blocks draw again only when it changes.
   const runLine = useMemo(
-    () => run && ((line: string) => run("terminal.run", { line, project })),
-    [run, project]
+    () =>
+      here && run
+        ? (line: string) => run("terminal.run", { line, project })
+        : null,
+    [here, run, project]
   )
   return (
-    <ThreadMedia project={project}>
-      <MarkdownLinks open={linkOpener(run, project)}>
-        <MarkdownShell run={runLine ?? null}>
+    <ThreadMedia project={here ? project : null}>
+      <MarkdownLinks open={linkOpener(here ? run : undefined, project)}>
+        <MarkdownShell run={runLine}>
           <Thread {...props} project={project} />
         </MarkdownShell>
       </MarkdownLinks>
