@@ -25,6 +25,15 @@
  *   of that key. It finds the elements as it resets and as React adds
  *   them, and counts each from then on; it says how many it found, so a
  *   probe that finds none never reads as a part drawn no more.
+ * - Each key's way to the screen: how long after the key the Tiling
+ *   committed what it changed, and how many frames began meanwhile. A
+ *   MutationObserver watches the workspaces' root, its whole subtree, so
+ *   a workspace's `aria-hidden` and a column's width count as they
+ *   commit; what the ticks' callbacks write, the springs' motion, is
+ *   taken out after each callback, so it never reads as a commit.
+ *   Committed before the next frame begins, a key is drawn in it: so the
+ *   time is to the commit, not to the frame, which a key that lands at a
+ *   random point of a frame waits for even at its best.
  * - Where the browser's page stands against its slot. In a phase that
  *   moves, the probe reads it after every tick, with ticks of its own, and
  *   keeps how long each tick came after the last; in a still one, five
@@ -72,6 +81,10 @@ export type Reading = {
   /** While the probe follows the ticks: the time between each and the one
    * before, in ms. */
   intervals: number[]
+  /** Each key pressed: how long after it the Tiling committed what it
+   * changed, in ms, and how many frames began meanwhile; `ms` is null for
+   * one that changed nothing within two seconds, or before the next key. */
+  keys: { code: string; ms: number | null; frames: number }[]
   /** For each read that found the browser's slot showing: how far its page
    * stood from it, in px; -1 if the page was put away. */
   trail: number[]
@@ -109,6 +122,7 @@ export function install(): void {
     longFrames: hasLongFrames ? { count: 0, worstMs: 0, blockingMs: 0 } : null,
     slowKeys: hasKeys ? { count: 0, worstMs: 0 } : null,
     intervals: [] as number[],
+    keys: [] as Reading["keys"],
     trail: [] as number[],
     ownMs: 0,
     renders: { tiles: 0, strips: 0, widgets: 0, sidebar: 0 },
@@ -131,6 +145,8 @@ export function install(): void {
         callback(now)
       } finally {
         inside -= 1
+        // What a tick wrote is motion, not a key's commit.
+        commits.takeRecords()
       }
     })
 
@@ -266,6 +282,63 @@ export function install(): void {
       },
     })
   }
+
+  // Each key, from its event's time to the first commit in the
+  // workspaces after it, counting the frames that began meanwhile with
+  // ticks of the probe's own, which ask for none once it is drawn.
+  type Waiting = { code: string; at: number; frames: number }
+  let waiting: Waiting[] = []
+  const LONGEST = 120
+  // The Window's own listener may hear a key before the probe's does, and
+  // commit before it: the last commit's time tells it then.
+  let committed = -1
+  const commits = new MutationObserver(() => {
+    const now = performance.now()
+    committed = now
+    for (const key of waiting)
+      state.keys.push({ code: key.code, ms: now - key.at, frames: key.frames })
+    waiting = []
+  })
+  const watchCommits = () => {
+    commits.disconnect()
+    const root = document.querySelector("[data-stack]")?.parentElement
+    if (root)
+      commits.observe(root, {
+        attributes: true,
+        childList: true,
+        subtree: true,
+      })
+  }
+  const count = (key: Waiting) => () => {
+    if (!waiting.includes(key)) return
+    key.frames += 1
+    if (key.frames < LONGEST) frame(count(key))
+    else {
+      waiting = waiting.filter((one) => one !== key)
+      state.keys.push({ code: key.code, ms: null, frames: key.frames })
+    }
+  }
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.repeat || /^(Alt|Control|Shift|Meta)/.test(event.code)) return
+      // One not drawn before the next key changed nothing it could see.
+      for (const key of waiting)
+        state.keys.push({ code: key.code, ms: null, frames: key.frames })
+      waiting = []
+      // Committed already, as the Window heard it first.
+      const at = event.timeStamp
+      if (commits.takeRecords().length > 0) committed = performance.now()
+      if (committed >= at) {
+        state.keys.push({ code: event.code, ms: committed - at, frames: 0 })
+        return
+      }
+      const key = { code: event.code, at, frames: 0 }
+      waiting = [key]
+      frame(count(key))
+    },
+    { capture: true }
+  )
 
   // The Marks, watched from `reset`: one callback is one task's changes.
   const marks = new MutationObserver(() => (state.marks += 1))
@@ -412,6 +485,8 @@ export function install(): void {
     texts = keep
     find()
     watchMarks()
+    watchCommits()
+    waiting = []
     hook(document)
     state = fresh()
     for (const terminal of terminals.values()) {
@@ -457,6 +532,7 @@ export function install(): void {
       longFrames: state.longFrames,
       slowKeys: state.slowKeys,
       intervals: state.intervals,
+      keys: state.keys,
       trail: state.trail,
       ownMs: state.ownMs,
       renders: { ...state.renders },
