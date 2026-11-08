@@ -51,7 +51,10 @@
  *   decision 12): no page code but Threads' names a Thread's verb, no
  *   module global asks a Thread's card to show, the Window asks an App's
  *   engine part by name only where listed, and an App runs another App's
- *   action by its id only where listed, each list only falling.
+ *   action by its id only where listed, each list only falling. So do the
+ *   lists of what stands in for intents and Window stores meanwhile: an
+ *   App writing the title field's store, the Window finding an item
+ *   action by what it does, and the Window's module-level stores.
  */
 import { existsSync, readFileSync } from "node:fs"
 import { join, relative } from "node:path"
@@ -740,12 +743,22 @@ const APPS = new Set(
  */
 test("no page code but Threads' names a Thread's verb", () => {
   const threads = join(root, "apps/agents/pane/src")
-  const verbs =
-    /["'`](?:thread\.(?:rename|suggest-title|unread|snooze|wake)|agents\.(?:previous-title|make-project))["'`]|[{,]\s*(?:type\s+)?Listing\s*[,}]/
+  // What others may name of a Thread's: New Thread, an intent with B8, and
+  // the facts they hear. Any other `thread.…`, a template's too, is a verb.
+  const others = new Set(["thread.new", "thread.started", "thread.rewound"])
+  const verb = (what: string) =>
+    (what.startsWith("thread.") && !others.has(what)) ||
+    /^agents\.(?:previous-title|make-project)$/.test(what)
+  const listing = /[{,]\s*(?:type\s+)?Listing\s*[,}]/
   const naming = pageFiles
     .filter((file) => !file.startsWith(threads))
-    .filter((file) => verbs.test(readFileSync(file, "utf8")))
-    .map((file) => relative(root, file))
+    .flatMap((file) => {
+      const text = readFileSync(file, "utf8")
+      return [
+        ...appStrings(text, file).filter(verb),
+        ...(listing.test(text) ? ["Listing"] : []),
+      ].map((what) => `${relative(root, file)}: ${what}`)
+    })
   expect(naming).toEqual([])
 })
 
@@ -822,4 +835,71 @@ test("an App runs another App's action by its id no more than the list holds", (
     )
   })
   expect(runs.sort()).toEqual(APP_RUNS)
+})
+
+/**
+ * Where an App writes the title field's store, a module global in
+ * `@banda/ui` the Window's title and row read (#861): Threads asks for the
+ * field by the Window's actions once the store is the Window's again. None
+ * joins the list, and one that goes leaves it.
+ */
+const NAMING_STORE = ["apps/agents/pane/src/list/items.ts"]
+
+test("an App reaches the title field's store no more than the list holds", () => {
+  const reaching = pageFiles
+    .filter((file) => file.startsWith(join(root, "apps")))
+    .filter((file) =>
+      imports(readFileSync(file, "utf8")).includes("@banda/ui/lib/naming")
+    )
+    .map((file) => relative(root, file))
+  expect(reaching).toEqual(NAMING_STORE)
+})
+
+/**
+ * Where the Window finds an item action by what it does
+ * (`ItemAction.does`), by file, once for each place: a stand-in for the
+ * intents of B8 (#862). None joins the list, and one that goes leaves it.
+ */
+const BY_DOES = [
+  "web/src/menu/menu.ts: action.does",
+  "web/src/sidebar/Sidebar.tsx: itemActionOf",
+  "web/src/sidebar/Sidebar.tsx: itemActionOf",
+  "web/src/sidebar/Snoozing.tsx: itemActionOf",
+  "web/src/sidebar/Snoozing.tsx: itemActionOf",
+  "web/src/sidebar/items.ts: action.does",
+  "web/src/sidebar/items.ts: itemActionOf",
+  "web/src/titles/Title.tsx: itemActionOf",
+  "web/src/titles/Title.tsx: itemActionOf",
+  "web/src/titles/Title.tsx: itemActionOf",
+]
+
+test("the Window finds an item action by what it does no more than the list holds", () => {
+  const finding = /(?<!function )\bitemActionOf(?=\()|\baction\.does\b/g
+  const places = sources(join(app, "web/src"), { tests: false }).flatMap(
+    (file) =>
+      (readFileSync(file, "utf8").match(finding) ?? []).map(
+        (what) => `${relative(app, file)}: ${what}`
+      )
+  )
+  expect(places.sort()).toEqual(BY_DOES)
+})
+
+/**
+ * The Window's stores kept in a module, not one per Window (#863): what
+ * an unlisted action sets and a part of the Window draws. None joins the
+ * list, and one that goes leaves it.
+ */
+const MODULE_STORES = [
+  "web/src/sidebar/MakeProject.tsx: making",
+  "web/src/sidebar/Snoozing.tsx: picking",
+]
+
+test("the Window keeps no more stores in a module than the list holds", () => {
+  const store = /^(?:export )?const (\w+) = new Store\b/gm
+  const kept = sources(join(app, "web/src"), { tests: false }).flatMap((file) =>
+    [...readFileSync(file, "utf8").matchAll(store)].map(
+      ([, name]) => `${relative(app, file)}: ${name}`
+    )
+  )
+  expect(kept.sort()).toEqual(MODULE_STORES)
 })
