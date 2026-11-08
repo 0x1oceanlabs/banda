@@ -14,7 +14,7 @@ import { useNow } from "@banda/ui/hooks/use-now"
 import type { Listed } from "@banda/ui/pane"
 import type { Row as Arranged } from "./arrange"
 import type { Part, Settings } from "./settings"
-import { THINKING, useThinking } from "../titles/titles"
+import { THINKING, useThinking } from "@banda/ui/lib/naming"
 
 /**
  * The built-in layouts (ADR 0008, decision 4). The line with the title is

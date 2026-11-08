@@ -13,7 +13,7 @@ import {
   type AnyPaneKind,
   type Args as ActionArgs,
   defineModule,
-  type Listing,
+  type ItemAction,
   type Module,
   type Previewer,
   type Scope,
@@ -154,12 +154,21 @@ export function detailsOf(engineModules: readonly string[]): Details[] {
     .flatMap((module) => module.threadDetails)
 }
 
-/** How the window names and marks a thing the module of `kind` lists,
- * found by the kind's first word (ADR 0022, decision 5; ADR 0077). */
-export function listingOf(kind: string): Listing | undefined {
+/** The item actions of the module that lists Items of Pane kind `kind`,
+ * found by the kind's first word (ADR 0022, decision 5; ADR 0087,
+ * decision 12), in its order. */
+export function itemsOf(kind: string): readonly ItemAction[] {
   const id = kind.split(".", 1)[0]
-  return all.find((module) => module.id === id)?.listed
+  return all.find((module) => module.id === id)?.items ?? []
 }
+
+/** The item actions a Pane on another host runs too, by their ids: each
+ * goes to its Item's host (`ItemAction.elsewhere`, ADR 0081). */
+export const ELSEWHERE: ReadonlySet<string> = new Set(
+  all.flatMap((module) =>
+    module.items.filter((action) => action.elsewhere).map(({ id }) => id)
+  )
+)
 
 export function kindOf(kind: string): AnyPaneKind | undefined {
   return byKind.get(kind)?.kind

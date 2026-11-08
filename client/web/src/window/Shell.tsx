@@ -706,6 +706,7 @@ export function Shell({
         .catch(() => undefined),
     run: (action, args) => runAction(parts, action, args),
     engine,
+    sessionOf: engineOf,
     writeSetting: device.settings.set,
     attach: (chips) => {
       const at = focused(drawnNow())
@@ -996,6 +997,7 @@ export function Shell({
         <ThreadMenus
           engine={engine}
           projects={projects}
+          run={parts.run}
           archive={archiveThread}
           snooze={openSnooze}
           wake={wakeThread}

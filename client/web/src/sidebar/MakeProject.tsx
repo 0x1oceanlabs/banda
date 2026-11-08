@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { Engine, ProjectSummary } from "@banda/contract"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import { Input } from "@banda/ui/components/input"
 import {
@@ -12,6 +12,38 @@ import {
 } from "@banda/ui/components/dialog"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { updateProject } from "@banda/ui/lib/projects"
+import { Store, useStore } from "@banda/ui/lib/store"
+
+/** The No Project's Project the dialog makes a Project of, while it is
+ * open. */
+const making = new Store<ProjectId | undefined>(undefined)
+const now = (project: ProjectId | undefined) => project
+
+/** Opens "Make a Project from this Thread" for `project`, a Thread's own
+ * in No Project (ADR 0046), as Threads' item action asks it. */
+export function makeProject(project: ProjectId) {
+  making.set(project)
+}
+
+/** The dialog, while it is asked for one of `projects`. */
+export function Making({
+  engine,
+  projects,
+}: {
+  engine: Engine
+  projects: readonly ProjectSummary[]
+}) {
+  const asked = useStore(making, now)
+  const project = projects.find((one) => one.id === asked)
+  if (!project) return null
+  return (
+    <MakeProject
+      engine={engine}
+      project={project}
+      onClose={() => making.set(undefined)}
+    />
+  )
+}
 
 /** Promotion keeps the Project's identity, its Thread and its history. */
 export function MakeProject({

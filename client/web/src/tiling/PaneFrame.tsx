@@ -397,7 +397,6 @@ export const PaneFrame = memo(function PaneFrame({
                 )}
                 {listed && reach.engine ? (
                   <Title
-                    engine={reach.engine}
                     project={entry.project}
                     listed={listed}
                     title={title}

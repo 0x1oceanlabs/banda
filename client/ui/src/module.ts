@@ -17,7 +17,7 @@ import type { Key } from "./lib/keys"
 import type { Readable } from "./lib/store"
 import { ZOOM_KEYS, zoomId } from "./lib/zoom"
 import type { Notify } from "@banda/contract/look"
-import type { Lists, PaneKind, PaneState, Watch } from "./pane"
+import type { Listed, Lists, PaneKind, PaneState, Watch } from "./pane"
 import type { SoundSettings } from "./sound/settings"
 import { actInScope } from "./hooks/use-scope"
 
@@ -122,6 +122,12 @@ export type WindowApi = {
    * would: how one module asks another for what it does, and how it goes
    * to a Pane, by the Window's `pane.pick` (ADR 0087, decision 7). */
   run: (action: string, args?: Args) => void
+  /** The engine a Project is on, or `pane` of it, which may name its host
+   * (ADR 0081): its host's, never this machine's in its place, else this
+   * machine's. The hosts router's answer for an App's own commands, as an
+   * item action's on an Item another host lists; H5's `sessionOf`, given
+   * the Pane until the router knows every host's Projects. */
+  sessionOf: (project: ProjectId, pane?: PaneState) => Engine
   /** Where the Person looks for `thing` (ADR 0056, decision 1), as the
    * calls part works it out (`sightOf`): from Here and what the Tiles of
    * the workspace on screen show, measured as it is asked (ADR 0087,
@@ -288,25 +294,91 @@ export function takes(
 }
 
 /**
- * How the window acts on a thing a module lists (ADR 0077, decision 5):
- * the Thread menu, at its title and at its row, is the window's, and the
- * thing is the module's. The window finds the module by the first word of
- * the thing's Pane kind (ADR 0022, decision 5).
+ * An action that takes one Item (ADR 0087, decision 12), as renaming or
+ * snoozing a Thread: its App's, or Banda's own, as archiving it. Its args
+ * name the Item by its `project` and its id, `item`; with none, it takes
+ * the one the Pane in focus shows (`itemOf`). The Thread menu lists the
+ * row of each that applies, the App's first, at a Thread's title and at
+ * its row; the Pane menu and the Banda menu's Tab list those offered
+ * there. Its owner is found by the first word of its Item's Pane kind
+ * (ADR 0022, decision 5).
  */
-export type Listing = {
-  /** Names the thing `title`; with none, gives back the title it had by
-   * itself, as a Thread's first message's. Refused, it says why. */
-  rename: (
-    engine: Engine,
-    project: ProjectId,
-    id: string,
-    title: string | null
-  ) => Promise<void>
-  /** A title for it, from what it says lately; renames nothing. */
-  suggest?: (engine: Engine, project: ProjectId, id: string) => Promise<string>
-  /** Takes back the Person's "seen" of what it last finished, or with
-   * `false` gives it again (`Listed.seen`). */
-  unread?: (id: string, unread: boolean) => void
+export type ItemAction<Context = WindowApi> = Action<Context> & {
+  /** Where the Thread menu lists it: with the rows that name the Item, or
+   * after them. */
+  group: "name" | "other"
+  /** Its row for `item`, as it stands `at`; none where it does not apply
+   * now. */
+  row: (item: Listed, at: ItemAt) => ItemRow | null
+  /** What Banda's own parts ask it for, as the title's field asks to
+   * rename, and the snooze's picker to snooze: a stand-in for the intents
+   * that take its place with B8. */
+  does?: "rename" | "suggest" | "snooze" | "wake" | "archive"
+  /** Where else its row is: the Pane menu, the Banda menu's Tab. Those
+   * leave out a row that is off. */
+  offered?: readonly ("pane" | "menu")[]
+  /** It runs once the menu has gone, as what takes the focus must: a
+   * field, a picker. */
+  later?: true
+  /** A Pane on another host runs it too (ADR 0081): it goes to its Item's
+   * host. */
+  elsewhere?: true
+  /** Its args name the Item: `project` and `item`, then its own. */
+  args: ArgsSchema
+}
+
+/** How an item action shows in a menu, for one Item. */
+export type ItemRow = {
+  title: string
+  icon: ComponentType<{ className?: string }>
+  /** There, but off, as Snooze for a Thread that asks. */
+  off?: true
+}
+
+/** What the Window knows of an Item besides what its App lists, as a menu
+ * shows its rows. */
+export type ItemAt = {
+  /** Its Project, where this machine has it. */
+  project?: ProjectSummary
+  /** The clock the menu reads it by. */
+  now: number
+  /** The Person archived it (ADR 0069). */
+  archived: boolean
+}
+
+/** What an item action takes: its Item, as `itemOf` reads it, and
+ * `more` of its own. */
+export function itemArgs(
+  more: { [name: string]: string | { number: string } } = {}
+): ArgsSchema {
+  return takes({
+    project: "the Project of the Item it acts on",
+    item: "the Item's id in its Project, as a Thread's; none for the one in focus",
+    ...more,
+  })
+}
+
+/**
+ * The Item `args` name, as a list holds it: by its `project` and its id,
+ * `item`, or `thread` as a Thread's Pane named it before item actions;
+ * with no id, the one the Pane in focus shows (Here). None when no list
+ * holds it.
+ */
+export function itemOf(
+  window: Pick<WindowApi, "here" | "items">,
+  args?: Args
+): { project: ProjectId; listed: Listed } | undefined {
+  const named = args?.item ?? args?.thread
+  const { pane } = window.here.get()
+  const at =
+    typeof named !== "string"
+      ? pane?.subject && { project: pane.project, id: pane.subject }
+      : typeof args?.project === "string"
+        ? { project: args.project as ProjectId, id: named }
+        : undefined
+  if (!at) return undefined
+  const listed = window.items.get()[at.project]?.find((one) => one.id === at.id)
+  return listed && { project: at.project, listed }
 }
 
 /** One thing `Tab` lists for a row of the Banda menu. Its `key` there,
@@ -422,9 +494,10 @@ export type Module = {
   /** How it draws kinds of file, wherever a file is shown (ADR 0073,
    * decision 6). */
   previewers: readonly Previewer[]
-  /** How the window renames, suggests a title for and marks unread a
-   * thing it lists; none where it lists nothing so. */
-  listed?: Listing
+  /** What the Person can do to one of the Items it lists (ADR 0087,
+   * decision 12): its rows in the Thread menu, the Pane menu and the
+   * Banda menu, in their order; actions all the same, by a key too. */
+  items: readonly ItemAction[]
   /**
    * Runs once the window is up, with what a module may ask of it; what
    * it returns runs when the window goes. How a module that hears the
@@ -446,7 +519,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
   bar?: readonly Widget[]
   threadDetails?: readonly Details[]
   previewers?: readonly Previewer[]
-  listed?: Listing
+  items?: readonly ItemAction[]
   start?: (window: WindowApi) => () => void
 }): Module {
   return {
@@ -462,7 +535,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
     bar: module.bar ?? [],
     threadDetails: module.threadDetails ?? [],
     previewers: module.previewers ?? [],
-    listed: module.listed,
+    items: module.items ?? [],
     start: module.start,
   }
 }
