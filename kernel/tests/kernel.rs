@@ -18,11 +18,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio_tungstenite::tungstenite::Message;
 
-/// Notes: `add` writes a note and queues `publish`, keyed by one feed.
-/// `stamp` is a command that acts outside the store and writes nothing
-/// there, as a file's rename does; `post` writes a note, then answers
-/// other than its change; `touch` is a call that acts and keeps no
-/// receipt.
+/// Notes: `add` writes a note and queues `publish`, keyed by one feed,
+/// after the wait it is given, as a slow change takes. `stamp` is a
+/// command that acts outside the store and writes nothing there, as a
+/// file's rename does; `linger` is a `stamp` that runs on past one write,
+/// as a sign-in does; `post` writes a note, then answers other than its
+/// change; `touch` is a call that acts and keeps no receipt.
 #[derive(Clone, Default)]
 struct Notes {
     published: Arc<Mutex<Vec<String>>>,
@@ -51,6 +52,9 @@ struct Notes {
 #[derive(Deserialize)]
 struct Add {
     text: String,
+    /// How many milliseconds it waits before it writes.
+    #[serde(default)]
+    wait: u64,
 }
 
 #[async_trait::async_trait]
@@ -73,7 +77,7 @@ impl Module for Notes {
 
     fn right(&self, method: &str) -> Option<Right> {
         match method {
-            "add" | "stamp" | "post" | "touch" => Some(Right::Write),
+            "add" | "stamp" | "linger" | "post" | "touch" => Some(Right::Write),
             "list" => Some(Right::Read),
             "purge" => Some(Right::Manage),
             "count" => Some(Right::Read),
@@ -85,11 +89,15 @@ impl Module for Notes {
 
     fn kind(&self, method: &str) -> Option<Kind> {
         match method {
-            "add" | "purge" | "stamp" | "post" => Some(Kind::Command),
+            "add" | "purge" | "stamp" | "linger" | "post" => Some(Kind::Command),
             "list" | "pass" | "show" | "touch" => Some(Kind::Call),
             "count" => Some(Kind::Stream),
             _ => None,
         }
+    }
+
+    fn runs_on(&self, method: &str) -> bool {
+        method == "linger"
     }
 
     /// `count` says the numbers up to `to`, then ends.
@@ -112,7 +120,8 @@ impl Module for Notes {
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
         match method {
             "add" => {
-                let Add { text } = decode(params)?;
+                let Add { text, wait } = decode(params)?;
+                tokio::time::sleep(Duration::from_millis(wait)).await;
                 let author = call.participant();
                 call.command(move |tx| {
                     tx.sql()
@@ -131,7 +140,7 @@ impl Module for Notes {
             }
             // Acts, and writes nothing in the store: the kernel keeps its
             // receipt all the same.
-            "stamp" => {
+            "stamp" | "linger" => {
                 self.stamp_began.notify_one();
                 let _held = self.stamp_held.read().await;
                 let stamp = self.stamped.fetch_add(1, Ordering::SeqCst) + 1;
@@ -1964,6 +1973,192 @@ async fn the_api_refuses_strangers_and_follows_events_without_gaps() {
         .await
         .unwrap();
     assert_eq!(next(&mut socket).await["error"]["code"], "invalid");
+}
+
+async fn say(socket: &mut Socket, frame: Value) {
+    socket.send(Message::text(frame.to_string())).await.unwrap();
+}
+
+/// The frame that adds a note in `project` under `command`, after `wait`
+/// milliseconds.
+fn adding(id: u64, project: &ProjectSummary, command: CommandId, text: &str, wait: u64) -> Value {
+    json!({
+        "type": "call", "id": id, "method": "notes.add", "project": project.id,
+        "command": command, "params": { "text": text, "wait": wait }
+    })
+}
+
+/// The frame that stamps in `project` by `method`: `stamp`, or `linger`,
+/// which runs on.
+fn stamping(id: u64, project: &ProjectSummary, method: &str) -> Value {
+    json!({
+        "type": "call", "id": id, "method": format!("notes.{method}"), "project": project.id,
+        "command": CommandId::new()
+    })
+}
+
+async fn listed(kernel: &Kernel, owner: PersonId, project: &ProjectSummary) -> Value {
+    let person = Participant::Person(owner);
+    let list = kernel.call(person, "notes.list", Some(project.id), None, Value::Null);
+    list.await.unwrap()["items"].clone()
+}
+
+#[tokio::test]
+async fn a_session_s_commands_to_one_scope_commit_and_answer_in_the_order_sent() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let project = create(&kernel, owner, "Work").await;
+    let address = serve(&kernel, owner).await;
+    let hello = json!({ "type": "hello", "protocol": 1, "token": "secret" });
+    let (mut socket, _) = connect(address, hello).await;
+    let follow = json!({ "type": "subscribe", "id": 1, "project": project.id, "after": 0, "filter": { "module": "notes" } });
+    say(&mut socket, follow).await;
+    assert_eq!(next(&mut socket).await["ok"]["subscription"], 1);
+
+    // Sent together, the first the slowest: run as they came, each would
+    // commit after those sent after it.
+    let commands = [CommandId::new(), CommandId::new(), CommandId::new()];
+    let sent = [("one", 300), ("two", 0), ("three", 100)];
+    for (id, (command, (text, wait))) in (10..).zip(commands.iter().zip(sent)) {
+        say(&mut socket, adding(id, &project, *command, text, wait)).await;
+    }
+    let (mut answers, mut heard) = (Vec::new(), Vec::new());
+    while answers.len() < 3 || heard.len() < 3 {
+        let frame = next(&mut socket).await;
+        match frame["type"].as_str() {
+            Some("result") => answers.push(frame),
+            Some("event") => heard.push(frame["event"].clone()),
+            _ => panic!("no such frame here: {frame}"),
+        }
+    }
+    let ids: Vec<_> = answers.iter().map(|answer| answer["id"].clone()).collect();
+    assert_eq!(ids, [10, 11, 12], "answered in the order sent");
+    let texts: Vec<_> = heard.iter().map(|e| e["payload"]["text"].clone()).collect();
+    assert_eq!(
+        texts,
+        ["one", "two", "three"],
+        "committed in the order sent"
+    );
+    for (answer, event) in answers.iter().zip(&heard) {
+        assert_eq!(
+            answer["at"], event["seq"],
+            "at the fact it wrote: a client that heard the log up to `at` heard what it did"
+        );
+    }
+
+    say(&mut socket, adding(13, &project, commands[1], "two", 0)).await;
+    let again = next(&mut socket).await;
+    assert_eq!(again["id"], 13);
+    assert_eq!(
+        (&again["ok"], &again["at"]),
+        (&answers[1]["ok"], &answers[1]["at"]),
+        "a resend, the same answer at the same place"
+    );
+
+    let unfit = json!({
+        "type": "call", "id": 14, "method": "notes.add", "project": project.id,
+        "command": CommandId::new(), "params": {}
+    });
+    say(&mut socket, unfit).await;
+    let refused = next(&mut socket).await;
+    assert_eq!(refused["error"]["code"], "invalid");
+    assert!(
+        refused.get("at").is_none(),
+        "a refusal has no place: {refused}"
+    );
+    assert_eq!(
+        listed(&kernel, owner, &project).await,
+        json!(["one", "two", "three"]),
+        "the resend wrote nothing again"
+    );
+}
+
+#[tokio::test]
+async fn a_command_that_runs_holds_up_its_own_queue_alone() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let (a, b) = (
+        create(&kernel, owner, "A").await,
+        create(&kernel, owner, "B").await,
+    );
+    let address = serve(&kernel, owner).await;
+    let hello = json!({ "type": "hello", "protocol": 1, "token": "secret" });
+    let (mut socket, _) = connect(address, hello.clone()).await;
+    let (mut other, _) = connect(address, hello).await;
+
+    let held = notes.stamp_held.write().await;
+    say(&mut socket, stamping(1, &a, "stamp")).await;
+    notes.stamp_began.notified().await;
+    say(
+        &mut socket,
+        adding(2, &a, CommandId::new(), "after the stamp", 0),
+    )
+    .await;
+    say(&mut socket, adding(3, &b, CommandId::new(), "in B", 0)).await;
+    assert_eq!(
+        next(&mut socket).await["id"],
+        3,
+        "another scope's queue goes on"
+    );
+    let list = json!({ "type": "call", "id": 4, "method": "notes.list", "project": a.id });
+    say(&mut socket, list).await;
+    assert_eq!(next(&mut socket).await["id"], 4, "a call waits in no queue");
+    say(
+        &mut other,
+        adding(1, &a, CommandId::new(), "from elsewhere", 0),
+    )
+    .await;
+    assert_eq!(
+        next(&mut other).await["id"],
+        1,
+        "another session's queue goes on"
+    );
+    let waits = tokio::time::timeout(Duration::from_millis(100), socket.next()).await;
+    assert!(waits.is_err(), "the stamp's own queue waits for it");
+
+    drop(held);
+    assert_eq!(next(&mut socket).await["id"], 1);
+    assert_eq!(
+        next(&mut socket).await["id"],
+        2,
+        "then the one after it runs"
+    );
+    assert_eq!(
+        listed(&kernel, owner, &a).await,
+        json!(["from elsewhere", "after the stamp"])
+    );
+}
+
+#[tokio::test]
+async fn a_command_that_runs_on_waits_in_no_queue() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let project = create(&kernel, owner, "Work").await;
+    let address = serve(&kernel, owner).await;
+    let hello = json!({ "type": "hello", "protocol": 1, "token": "secret" });
+    let (mut socket, _) = connect(address, hello).await;
+
+    let held = notes.stamp_held.write().await;
+    say(&mut socket, stamping(1, &project, "linger")).await;
+    notes.stamp_began.notified().await;
+    say(
+        &mut socket,
+        adding(2, &project, CommandId::new(), "next", 0),
+    )
+    .await;
+    assert_eq!(
+        next(&mut socket).await["id"],
+        2,
+        "the next goes on while it runs"
+    );
+    drop(held);
+    assert_eq!(next(&mut socket).await["id"], 1);
 }
 
 #[tokio::test]

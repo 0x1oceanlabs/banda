@@ -166,6 +166,11 @@ impl Module for Problems {
         Self::method_kind(method)
     }
 
+    /// An issue waits for GitHub to take it.
+    fn runs_on(&self, method: &str) -> bool {
+        method == "send_issue"
+    }
+
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
         self.dispatch(call, method, params).await
     }

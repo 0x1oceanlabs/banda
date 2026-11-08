@@ -109,6 +109,11 @@ impl Module for Pulls {
         Self::method_kind(method)
     }
 
+    /// A link, once written, waits for GitHub's list of pull requests.
+    fn runs_on(&self, method: &str) -> bool {
+        method == "link"
+    }
+
     fn tools(&self) -> Vec<banda_kernel::Tool> {
         Self::method_tools(self.name())
     }

@@ -46,6 +46,14 @@ pub struct Kernel {
     tools: Vec<Tool>,
 }
 
+/// One of a session's queues of commands, by the scope they run in
+/// ([`Kernel::queue`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum Queue {
+    Machine,
+    Project(ProjectId),
+}
+
 /// Every Project the engine knows. The machine's own scope holds them too,
 /// so a module of the machine can count them (ADR 0040, decision 3).
 pub(crate) type Projects = Arc<RwLock<BTreeMap<ProjectId, Entry>>>;
@@ -584,6 +592,12 @@ fn picked(data: &Path, pick: SignPick) -> Result<(Picked, Option<Kept>), Refusal
     })
 }
 
+/// A method of the kernel's own `projects.*` without its prefix, or of
+/// `spaces.*`, their name before ADR 0069 (grace).
+fn own_method(method: &str) -> Option<&str> {
+    (method.strip_prefix("projects.")).or_else(|| method.strip_prefix("spaces."))
+}
+
 fn no_method(method: &str) -> Refusal {
     Refusal::invalid(format!("There is no method \"{method}\"."))
 }
@@ -666,9 +680,15 @@ impl Kernel {
     ///   it unanswered. A resend then gets `may_have_run`, kept as any
     ///   answer is, as the handler may have acted outside the store before
     ///   it ended.
-    /// - `at` is the log's head once the command's change was written, or
-    ///   once its answer was kept when it wrote none. A resend gets the
-    ///   same `at`.
+    /// - `at` is a seq of the log of the scope the command ran in: the
+    ///   log's head as its change committed, its last fact if it wrote
+    ///   one; or, for a command that wrote no change, the log's head as
+    ///   its answer was kept. A view current at `at` shows what the
+    ///   command did. A refusal carries none: what a run wrote before it
+    ///   was refused comes through the log alone. A resend gets the same
+    ///   `at`. The router runs a session's commands to one scope in the
+    ///   order sent ([`api`](crate::api)), so their `at`s go in that order
+    ///   too, but for one that runs on ([`Module::runs_on`]) or hung.
     /// - A receipt is kept thirty days past its last write, as its command
     ///   began or was answered, and while its command runs, however long.
     ///   A resend comes within seven days of the first send, so each finds
@@ -697,9 +717,7 @@ impl Kernel {
             access::decide(&participant, right, self.owner)?;
             return self.window.call(participant, own, params).await.map(plain);
         }
-        // `spaces.*` is their name before ADR 0069 (grace).
-        if let Some(own) =
-            (method.strip_prefix("projects.")).or_else(|| method.strip_prefix("spaces."))
+        if let Some(own) = own_method(method)
             && let Some(right) = Self::method_right(own)
         {
             access::within(only, project.or(only))?;
@@ -738,6 +756,40 @@ impl Kernel {
             Err(refusal) => Err(refusal),
         };
         project.store().settle(running, answer).await
+    }
+
+    /// The queue the router keeps a call from one session in, so the
+    /// session's commands to one scope commit in the order sent (ADR 0082,
+    /// decision 4): a command's scope, this machine's or a Project's. The
+    /// kernel's own `projects.*` are this machine's. `None` for a call or a
+    /// stream, which runs as it arrives, as does a command that runs on
+    /// ([`Module::runs_on`]). `None` too for what will be refused: a
+    /// method there is not, or a Project there is not or outside the
+    /// caller's pass, so a client makes no queue, which lasts as long as
+    /// its connection, for a Project of its choosing.
+    pub(crate) fn queue(
+        &self,
+        caller: Caller,
+        method: &str,
+        project: Option<ProjectId>,
+    ) -> Option<Queue> {
+        if let Some(own) = own_method(method)
+            && let Some(kind) = Self::method_kind(own)
+        {
+            return (kind == Kind::Command).then_some(Queue::Machine);
+        }
+        let (module, rest, _) = self.method(method).ok()?;
+        if module.kind(rest)? != Kind::Command || module.runs_on(rest) {
+            return None;
+        }
+        if module.scope() == Scope::Machine {
+            return Some(Queue::Machine);
+        }
+        let id = project.or(caller.only)?;
+        // While the list of Projects changes, a Project goes unchecked.
+        let known = (self.projects.try_read()).map_or(true, |all| all.contains_key(&id));
+        let within = caller.only.is_none_or(|only| only == id);
+        (known && within).then_some(Queue::Project(id))
     }
 
     /// Opens a module's stream in a Project, or this machine's for a module
