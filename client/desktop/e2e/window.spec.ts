@@ -1614,6 +1614,10 @@ test("the composer walks earlier messages, keeps a draft and edits what waits", 
   await thread.getByRole("button", { name: "Stop" }).click()
 })
 
+/** How far below the top of `view` the top of `of` is, in px. */
+const topIn = async (view: Locator, of: Locator) =>
+  (await of.boundingBox())!.y - (await view.boundingBox())!.y
+
 test("a sent message moves near the top, the end says what waits, and a Thread keeps its place", async () => {
   window = await startWindow()
   const { page } = window
@@ -1631,9 +1635,7 @@ test("a sent message moves near the top, the end says what waits, and a Thread k
   await composer.press("Enter")
   await expect(thread.getByText("Waiting.")).toBeVisible()
   const sent = log.getByText("wait here", { exact: true })
-  const top = async () =>
-    (await sent.boundingBox())!.y - (await view.boundingBox())!.y
-  await expect.poll(top).toBeLessThan(120)
+  await expect.poll(() => topIn(view, sent)).toBeLessThan(120)
 
   // Scrolled up, the button to the end says what waits there.
   for (const word of ["a", "b"]) {
@@ -1691,6 +1693,90 @@ test("scrolled up and back down by hand, the Thread's button to the end goes awa
     )
     .toBeLessThan(1)
   await expect(toEnd).toHaveAttribute("data-active", "false")
+})
+
+/** Sends `pages` in the Thread `composer` writes to: the Fake AI works on
+ * until the function it returns is called, then replies with `count`
+ * paragraphs, `page 0 of 30` on. */
+async function pages(window: Window, composer: Locator, count = 30) {
+  await composer.fill(`pages ${count}`)
+  await composer.press("Enter")
+  await expect(composer).toHaveText("")
+  return () => writeFileSync(join(window.dir, "root", "Work", "go"), "")
+}
+
+test("back from another workspace, a Thread opens at the start of what came, and what fits does not jump", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  const log = thread.getByRole("log")
+  const view = thread.getByRole("region", { name: "Thread with Fake AI" })
+  for (const word of ["one", "two", "three"]) {
+    await composer.fill(word)
+    await composer.press("Enter")
+    await expect(thread.getByText(`You said: ${word}`)).toBeVisible()
+  }
+  const away = page.locator('[data-stack][aria-label="Workspace 1"]')
+  const leave = async () => {
+    await page.keyboard.press("Alt+PageDown")
+    await expect(away).toHaveAttribute("inert", "")
+    // An event of the Thread's within moments of the move takes the window
+    // back to its workspace (#872): what comes, comes once it settled.
+    await page.waitForTimeout(1000)
+  }
+
+  // A long reply that came while away opens at its start, near the top,
+  // the line before it peeking; not at its end.
+  const go = await pages(window, composer)
+  await leave()
+  go()
+  // Away, it is out of reach: found by its words alone.
+  await expect(page.getByText("page 29 of 30")).toBeAttached()
+  await page.keyboard.press("Alt+PageUp")
+  const start = log.getByText("page 0 of 30", { exact: true })
+  await expect(start).toBeInViewport()
+  await expect.poll(() => topIn(view, start)).toBeLessThan(120)
+  await expect(log.getByText("page 29 of 30")).not.toBeInViewport()
+  await page.screenshot({ path: "test-results/18b-back-from-away.png" })
+  // Its button to the end takes the Person on.
+  const toEnd = thread.locator('[data-slot="message-scroller-button"]')
+  await expect(toEnd).toHaveAttribute("data-active", "true")
+  await toEnd.click()
+  await expect(toEnd).toHaveAttribute("data-active", "false")
+
+  // A short one shows whole, below what was there: nothing jumps.
+  const short = await pages(window, composer, 2)
+  await leave()
+  short()
+  await expect(page.getByText("page 1 of 2")).toBeAttached()
+  await page.keyboard.press("Alt+PageUp")
+  await expect(log.getByText("page 1 of 2")).toBeInViewport()
+  await expect(log.getByText("pages 2", { exact: true })).toBeInViewport()
+})
+
+test("opened again in its Pane, a Thread left at its end opens at the start of what came", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  const log = thread.getByRole("log")
+  const view = thread.getByRole("region", { name: "Thread with Fake AI" })
+  await composer.fill("one")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: one")).toBeVisible()
+
+  const go = await pages(window, composer)
+  await thread.getByRole("button", { name: "Close one" }).click()
+  await expect(log).toHaveCount(0)
+  go()
+  const row = page
+    .getByRole("complementary", { name: "Sidebar" })
+    .getByRole("button", { name: /one/ })
+  await expect(row.getByRole("img", { name: "Done" })).toBeVisible()
+  await row.click()
+  const start = log.getByText("page 0 of 30", { exact: true })
+  await expect(start).toBeInViewport()
+  await expect.poll(() => topIn(view, start)).toBeLessThan(120)
+  await expect(log.getByText("page 29 of 30")).not.toBeInViewport()
 })
 
 test("Ctrl+F finds in the Thread and opens what folds it, and the minimap goes to a message", async () => {

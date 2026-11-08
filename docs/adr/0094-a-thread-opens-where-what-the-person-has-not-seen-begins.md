@@ -103,10 +103,13 @@ still counts as seen, for now (see "Open").
 ## Steps
 
 1. Rules 1 and 2: done (#786, #809), each with its window test.
-2. Rule 3: the Thread notes the last line it showed as it goes out of
-   sight, and on its return places the first line after it near the top.
-   A window test covers each kind of away: another workspace, beside the
-   screen, another Thread in the Pane. One PR.
+2. Rule 3: the Thread notes how many messages it showed as it goes out
+   of sight, and on its return places the first one after them near the
+   top (`ScrollPlace`). Window tests cover another workspace and another
+   Thread in the Pane; beside the screen is the same hidden Tile as
+   another workspace. "Scrolled up" is the Person's own move (a wheel, a
+   touch, a key, the scrollbar, the minimap), not a distance from the end:
+   a message just sent is on its way to the top for a moment.
 3. Rule 4: nothing to build; the arrow stays.
 
 ## Open
@@ -114,6 +117,12 @@ still counts as seen, for now (see "Open").
 - **A window in the background.** The Person may be in another program
   while the window shows the Thread. Rule 1 counts that as seen. If it
   turns out to frustrate, the window's focus can join "seen" later.
+- **What came, by message.** A reply the Person saw begin and that went
+  on while they were away is one message: they come back at its end, as
+  the scroller follows it. Placing by line, inside a message, may come
+  later.
+- **An Overlay over the Thread.** Its Tile still shows, so the Thread
+  counts it as seen for now.
 - **A long run of an Agent.** A turn of many tool calls is long to read
   from the top. A way to jump from the button straight to the reply's last
   message may come later, once rule 3 is lived with.
