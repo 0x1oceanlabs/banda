@@ -6,8 +6,9 @@
 //!    Project ([`crate::access::within`]), and calls there when it names
 //!    none. A wrong version or an unknown token gets
 //!    `goodbye`. `welcome` lists the engine's modules, so a window shows
-//!    only what the engine has (ADR 0002, decision 8), and the ID this
-//!    machine's modules are followed by (ADR 0025).
+//!    only what the engine has (ADR 0002, decision 8), the ID this
+//!    machine's modules are followed by (ADR 0025), and what this host is
+//!    called and drawn by, `named` (ADR 0095).
 //! 2. `call` runs a method and gets one `result` with the same `id`; a
 //!    command's carries its place in the log, `at` (ADR 0082, decision 4).
 //!    A connection's commands to one scope, this machine's or a Project's,
@@ -34,7 +35,9 @@
 //!    module ended it. Heard again after a reconnect, it starts again.
 //!    `unsubscribe` stops a stream as it stops a subscription. A stream
 //!    of this machine's names no Project: `window.requests`, where the window
-//!    hears what modules ask it (ADR 0029), or a module of the machine's.
+//!    hears what modules ask it (ADR 0029), `machine.named`, what this host
+//!    is called and drawn by and then each change of it (ADR 0095), or a
+//!    module of the machine's.
 //!
 //! Unknown fields are ignored on both sides, so either side can be newer.
 
@@ -110,8 +113,8 @@ pub enum ClientFrame {
     Stream {
         #[ts(type = "number")]
         id: u64,
-        /// None for a stream of this machine's: `window.requests`, or a
-        /// module of the machine's.
+        /// None for a stream of this machine's: `window.requests`,
+        /// `machine.named`, or a module of the machine's.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         project: Option<ProjectId>,
@@ -144,6 +147,18 @@ pub enum EngineFrame {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         fence: Option<crate::Fence>,
+        /// What this host is called and drawn by, as every window shows
+        /// it; `machine.named` streams each change (ADR 0095). An engine
+        /// that says none names itself nothing. A client older than the
+        /// engine draws an icon it has not as `desktop`, so a new icon is
+        /// additive too.
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            deserialize_with = "crate::named::lenient"
+        )]
+        #[ts(optional)]
+        named: Option<crate::Named>,
     },
     Result {
         #[ts(type = "number")]
@@ -371,6 +386,7 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
         machine: api.kernel.machine(),
         boot: api.kernel.boot().to_owned(),
         fence: Some(api.kernel.fence()),
+        named: api.kernel.named(),
     };
     if sink.send(text(&welcome)).await.is_err() {
         return;
@@ -637,5 +653,29 @@ mod tests {
         assert!(same_secret("abc", "abc"));
         assert!(!same_secret("abc", "abd"));
         assert!(!same_secret("abc", "abcd"));
+    }
+
+    /// A newer engine's icon, or a `named` this build cannot read, keeps
+    /// no client from connecting: `banda mcp` reads this welcome.
+    #[test]
+    fn a_welcome_with_an_icon_this_build_has_not_still_reads() {
+        let named = |said: &str| {
+            let welcome =
+                format!(r#"{{"type":"welcome","protocol":1,"engine":"e","modules":[]{said}}}"#);
+            match serde_json::from_str::<EngineFrame>(&welcome) {
+                Ok(EngineFrame::Welcome { named, .. }) => named,
+                other => panic!("{said}: {other:?}"),
+            }
+        };
+        let watch = named(r#","named":{"name":"wrist","icon":"watch"}"#).unwrap();
+        assert_eq!(
+            (watch.name.as_str(), watch.icon),
+            ("wrist", crate::MachineIcon::Desktop)
+        );
+        let tower = named(r#","named":{"name":"studio","icon":"tower"}"#).unwrap();
+        assert_eq!(tower.icon, crate::MachineIcon::Tower);
+        assert_eq!(named(r#","named":{"icon":7}"#), None);
+        assert_eq!(named(r#","named":null"#), None);
+        assert_eq!(named(""), None);
     }
 }

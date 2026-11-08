@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "machine.toml",
+  "description": "This machine's name and icon, as every window shows it beside its\nProjects and Threads. Each key is optional: Banda finds what is left\nout.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "description": "Its name, up to 16 characters. Left out or empty: its hostname, or\na word for a hostname the system made up.",
+      "type": "string",
+      "maxLength": 16
+    },
+    "icon": {
+      "description": "Its icon. Left out: what Banda finds the machine is, as a laptop by\nits battery.",
+      "$ref": "#/$defs/MachineIcon"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "MachineIcon": {
+      "description": "The icons a host may take, each one of Lucide's, drawn in the text's\ncolour (ADR 0095, decision 1). None of them is drawn like an account's\nemblem (ADR 0093), and no colour sets one machine apart: colour is the\naccount's.",
+      "oneOf": [
+        {
+          "description": "A laptop: Lucide's `laptop`.",
+          "type": "string",
+          "const": "laptop"
+        },
+        {
+          "description": "A desktop, a Mac mini, an iMac: `monitor`.",
+          "type": "string",
+          "const": "desktop"
+        },
+        {
+          "description": "A tower: `pc-case`.",
+          "type": "string",
+          "const": "tower"
+        },
+        {
+          "description": "A server: `server`.",
+          "type": "string",
+          "const": "server"
+        },
+        {
+          "description": "A database's server: `database`.",
+          "type": "string",
+          "const": "database"
+        },
+        {
+          "description": "A NAS: `hard-drive`.",
+          "type": "string",
+          "const": "storage"
+        },
+        {
+          "description": "A router, a Raspberry Pi: `router`.",
+          "type": "string",
+          "const": "router"
+        },
+        {
+          "description": "A VM, a cloud host: `monitor-cloud`.",
+          "type": "string",
+          "const": "vm"
+        },
+        {
+          "description": "A phone: `smartphone`.",
+          "type": "string",
+          "const": "phone"
+        },
+        {
+          "description": "A tablet: `tablet`.",
+          "type": "string",
+          "const": "tablet"
+        }
+      ]
+    }
+  }
+}

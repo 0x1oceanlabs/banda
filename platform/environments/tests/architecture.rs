@@ -27,7 +27,7 @@ const MAKES: [&str; 5] = [
 
 /// Where the engine makes a process on the host for no Project's
 /// program: the file, how many places in it make one, and why.
-const ON_THE_HOST: [(&str, usize, &str); 11] = [
+const ON_THE_HOST: [(&str, usize, &str); 12] = [
     (
         "kernel/src/host.rs",
         1,
@@ -78,6 +78,12 @@ const ON_THE_HOST: [(&str, usize, &str); 11] = [
         "platform/harnesses/engine/src/limits/claude.rs",
         1,
         "reads Claude Code's sign-in from the macOS Keychain, for an account's limits (ADR 0043)",
+    ),
+    (
+        "platform/machines/engine/src/found.rs",
+        1,
+        "asks the host what it is, once as the engine starts, for the machine's own name and \
+         icon: `systemd-detect-virt` on Linux, `scutil`, `pmset` and `sysctl` on macOS",
     ),
     (
         "platform/problems/engine/src/issue.rs",

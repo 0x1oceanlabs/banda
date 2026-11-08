@@ -28,6 +28,8 @@ export type { Foreign } from "./generated/Foreign"
 export type { ForeignWhy } from "./generated/ForeignWhy"
 export type { UpdateProject } from "./generated/UpdateProject"
 export type { JsonValue } from "./generated/serde_json/JsonValue"
+export type { MachineIcon } from "./generated/MachineIcon"
+export type { Named } from "./generated/Named"
 export type { WindowAnswer } from "./generated/WindowAnswer"
 export type { WindowRequest } from "./generated/WindowRequest"
 export {

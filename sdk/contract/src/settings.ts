@@ -8,6 +8,7 @@ import browser from "./generated/schema/browser.schema.json"
 import files from "./generated/schema/files.schema.json"
 import harnesses from "./generated/schema/harnesses.schema.json"
 import look from "./generated/schema/look.schema.json"
+import machine from "./generated/schema/machine.schema.json"
 import sharing from "./generated/schema/sharing.schema.json"
 import sidebar from "./generated/schema/sidebar.schema.json"
 import terminal from "./generated/schema/terminal.schema.json"
@@ -44,6 +45,7 @@ export const SCHEMAS: { [file: string]: Schema } = {
   "sharing.toml": sharing as Schema,
   "terminal.toml": terminal as Schema,
   "files.toml": files as Schema,
+  "machine.toml": machine as Schema,
 }
 
 /** One value a key may take, and what it means. */

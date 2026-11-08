@@ -9,6 +9,7 @@ import type { PullsMethods } from "./pulls/PullsMethods"
 import type { TerminalMethods } from "./terminal/TerminalMethods"
 import type { HarnessesMethods } from "./harnesses/HarnessesMethods"
 import type { KeysMethods } from "./keys/KeysMethods"
+import type { MachinesMethods } from "./machines/MachinesMethods"
 import type { ProblemsMethods } from "./problems/ProblemsMethods"
 import type { SharingMethods } from "./sharing/SharingMethods"
 import type { WorkspacesMethods } from "./workspaces/WorkspacesMethods"
@@ -30,6 +31,7 @@ export type Methods = Prefixed<"projects", ProjectsMethods> &
   Prefixed<"terminal", TerminalMethods> &
   Prefixed<"harnesses", HarnessesMethods> &
   Prefixed<"keys", KeysMethods> &
+  Prefixed<"machines", MachinesMethods> &
   Prefixed<"problems", ProblemsMethods> &
   Prefixed<"sharing", SharingMethods> &
   Prefixed<"workspaces", WorkspacesMethods>

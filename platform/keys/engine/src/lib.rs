@@ -459,8 +459,8 @@ banda_kernel::methods! {
         /// fence the files are read-only). It refuses what only your
         /// Person changes: which program a Harness runs and with what, how
         /// freely a new Thread's Agent acts, what Agents may do in the
-        /// browser, what Banda sends, and keys, which `keys_bind` binds.
-        /// Tell your Person what changed.
+        /// browser, what Banda sends, this machine's name and icon, and
+        /// keys, which `keys_bind` binds. Tell your Person what changed.
         call settings_set(SetSetting) -> String, Write, tool "settings_set";
         /// Takes a key of a settings file out, as `banda settings reset`
         /// does, with `settings_set`'s refusals.

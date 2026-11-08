@@ -10,13 +10,13 @@ use crate::project::{self, GONE, Manifest, Project, Said, SaidBy, Shared, UNFINI
 use crate::sign::{self, Kept, Picked, Sign, SignPick};
 use crate::store::{Answer, Begun};
 use crate::window::Window;
-use crate::{AgentId, CommandId, Error, Participant, PersonId, ProjectId, Refusal};
+use crate::{AgentId, CommandId, Error, Named, Participant, PersonId, ProjectId, Refusal};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, mpsc, watch};
 use ts_rs::TS;
 
 /// The Projects of this machine and the modules that serve them.
@@ -44,6 +44,9 @@ pub struct Kernel {
     environment: Arc<dyn Environment>,
     /// The tools of the modules in Projects, made once as it opens.
     tools: Vec<Tool>,
+    /// What this host is called and drawn by, as it is now; none when the
+    /// engine names it nothing.
+    named: Option<watch::Receiver<Named>>,
 }
 
 /// One of a session's queues of commands, by the scope they run in
@@ -153,6 +156,7 @@ pub struct KernelBuilder {
     environment: Arc<dyn Environment>,
     passes: Option<PathBuf>,
     pass_term: std::time::Duration,
+    named: Option<watch::Receiver<Named>>,
 }
 
 impl KernelBuilder {
@@ -186,6 +190,14 @@ impl KernelBuilder {
     /// held it, instead of an hour ([`passes::TERM`]).
     pub fn pass_term(mut self, term: std::time::Duration) -> Self {
         self.pass_term = term;
+        self
+    }
+
+    /// What this host is called and drawn by, as it is each time a client
+    /// says `hello` or hears `machine.named`: the module that names it
+    /// keeps it current.
+    pub fn named(mut self, named: watch::Receiver<Named>) -> Self {
+        self.named = Some(named);
         self
     }
 
@@ -264,6 +276,7 @@ impl KernelBuilder {
             passes,
             window,
             environment: self.environment,
+            named: self.named,
         });
         let mut found: Vec<PathBuf> = std::fs::read_dir(&kernel.projects_data)?
             .filter_map(|entry| entry.ok().map(|e| e.path()))
@@ -598,6 +611,31 @@ fn own_method(method: &str) -> Option<&str> {
     (method.strip_prefix("projects.")).or_else(|| method.strip_prefix("spaces."))
 }
 
+/// The stream of what this host is called and drawn by (ADR 0095,
+/// decision 2): a stream of the machine's, as `window.requests` is, so it
+/// is there whatever modules run.
+const NAMED: &str = "machine.named";
+
+/// What `named` is now, then again each time it changes, until the one
+/// who hears it stops.
+fn named_stream(mut named: watch::Receiver<Named>) -> Stream {
+    let (send, hear) = mpsc::channel(1);
+    tokio::spawn(async move {
+        loop {
+            let now = serde_json::to_value(&*named.borrow_and_update());
+            let Ok(now) = now else { break };
+            if send.send(now).await.is_err() {
+                break;
+            }
+            tokio::select! {
+                changed = named.changed() => if changed.is_err() { break },
+                () = send.closed() => break,
+            }
+        }
+    });
+    hear
+}
+
 fn no_method(method: &str) -> Refusal {
     Refusal::invalid(format!("There is no method \"{method}\"."))
 }
@@ -621,6 +659,7 @@ impl Kernel {
             environment: Arc::new(Nowhere),
             passes: None,
             pass_term: passes::TERM,
+            named: None,
         }
     }
 
@@ -794,7 +833,7 @@ impl Kernel {
 
     /// Opens a module's stream in a Project, or this machine's for a module
     /// of the machine, which names none, once the access decision allows
-    /// it. `window.requests` names none either.
+    /// it. `window.requests` and `machine.named` name none either.
     pub async fn stream(
         &self,
         caller: impl Into<Caller>,
@@ -808,6 +847,12 @@ impl Kernel {
         {
             access::decide(&participant, right, self.owner)?;
             return self.window.stream(participant, own, params).await;
+        }
+        if method == NAMED
+            && let Some(named) = &self.named
+        {
+            access::decide(&participant, Right::Read, self.owner)?;
+            return Ok(named_stream(named.clone()));
         }
         let (module, rest, right) = self.method(method)?;
         let (project, wall) = self.place(&**module, method, project, only).await?;
@@ -877,6 +922,12 @@ impl Kernel {
     /// Projects' programs run, as their environment found it (ADR 0083).
     pub fn fence(&self) -> crate::Fence {
         self.environment.fence()
+    }
+
+    /// What this host is called and drawn by now; none when the engine
+    /// names it nothing.
+    pub fn named(&self) -> Option<Named> {
+        (self.named.as_ref()).map(|named| named.borrow().clone())
     }
 
     /// Where a method of `module` runs. A module of the machine runs in

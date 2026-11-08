@@ -17,6 +17,7 @@ use banda_harnesses::{Harnesses, HarnessesModule};
 use banda_kernel::methods::MethodTable;
 use banda_kernel::{KernelBuilder, Method};
 use banda_keys::KeysModule;
+use banda_machines::{Machine, Machines};
 use banda_problems::Problems;
 use banda_pulls::Pulls;
 use banda_sharing::{Never, Sharing};
@@ -50,6 +51,9 @@ pub struct HostContext<'a> {
     /// Banda's config and gh's, and where the links in them lead
     /// (`banda_environments::Fenced::kept`).
     pub kept: &'a [std::path::PathBuf],
+    /// What this machine is called and drawn by, which the machines
+    /// module keeps current and the engine's `welcome` says.
+    pub machine: &'a Machine,
 }
 
 include!(concat!(env!("OUT_DIR"), "/apps.rs"));
@@ -121,6 +125,12 @@ mod build {
         KeysModule::new(host.places.config.clone()).modes_chosen_in(host.places.modes_chosen())
     }
 
+    /// This machine's name and icon, which the settings' `set` writes in
+    /// machine.toml (ADR 0095).
+    pub fn machines(host: &HostContext<'_>) -> Machines {
+        Machines::new(host.machine.clone())
+    }
+
     /// What broke in Banda (ADR 0039), and, from a checkout's build, the
     /// checkout an Agent fixes it in.
     pub fn problems(host: &HostContext<'_>) -> Problems {
@@ -163,11 +173,17 @@ pub(crate) fn on_a_test_host<R>(with: impl FnOnce(&HostContext<'_>) -> R) -> R {
         program: folder.path().join("banda"),
         engine: "ws://127.0.0.1:1/ws".to_owned(),
     };
+    let named = banda_kernel::Named {
+        name: "test".to_owned(),
+        icon: banda_kernel::MachineIcon::Desktop,
+    };
+    let machine = Machine::new(&places.config, named);
     with(&HostContext {
         places: &places,
         harnesses: &harnesses,
         pipe: &pipe,
         kept: &[],
+        machine: &machine,
     })
 }
 

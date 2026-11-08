@@ -18,13 +18,14 @@ pub use write::{rename, reset, set};
 
 /// Each module's settings files, by its ID, as its crate describes them
 /// (ADR 0016, decision 3): what its `app.toml` says it owns.
-pub const MODULES: [(&str, &[SettingsFile]); 6] = [
+pub const MODULES: [(&str, &[SettingsFile]); 7] = [
     ("agents", &banda_agents::SETTINGS),
     ("harnesses", &banda_harnesses::SETTINGS),
     ("browser", &banda_browser::SETTINGS),
     ("sharing", &banda_sharing::SETTINGS),
     ("terminal", &banda_terminal::SETTINGS),
     ("files", &banda_files::SETTINGS),
+    ("machines", &banda_machines::SETTINGS),
 ];
 
 /// Every settings file: the look's, which it reads itself, then the

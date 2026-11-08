@@ -15,6 +15,8 @@
 //!   arrangement from `sidebar.toml` and the browser's from
 //!   `browser.toml`; `--follow` prints it again on each change. It needs
 //!   no engine: the look is this machine's.
+//! - `banda machine` prints what this machine is called and drawn by, its
+//!   name and icon, as its engine says them to every window.
 //! - `banda --version` prints the version and the build id, by which the
 //!   window checks its own copy of this program (ADR 0086, decision 2).
 //! - `banda skill` prints the Banda skill, what an Agent needs to know to
@@ -130,6 +132,14 @@ enum Command {
     Project {
         #[command(subcommand)]
         what: ProjectCommand,
+    },
+    /// Prints what this machine is called and drawn by, as every window
+    /// shows it: its name, a tab, and its icon. machine.toml in
+    /// ~/.config/banda names it; Settings → Machines writes that.
+    Machine {
+        /// One JSON object instead: {"name", "icon"}.
+        #[arg(long)]
+        json: bool,
     },
     /// Snoozes a Thread, or wakes it (ADR 0074): snoozed, it leaves its
     /// Person's list until then.
@@ -657,6 +667,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             print_call(&places, "projects.add", None, CommandId::new(), params).await
         }
         Command::Files { path, project } => files::open(&places, path, project).await,
+        Command::Machine { json } => machine(&places, json).await,
         Command::Thread { what } => {
             let (method, project, params) = match what {
                 ThreadCommand::Snooze {
@@ -724,6 +735,25 @@ async fn print_call(
         .call(method, project, command, params)
         .await?;
     println!("{}", json!({ "ok": answer }));
+    Ok(())
+}
+
+/// `banda machine`: what the engine said, as it said welcome, its machine
+/// is called and drawn by. An Agent's `banda` hears it too.
+async fn machine(places: &Places, json: bool) -> Result<(), Failure> {
+    let client = Client::connect(places).await?;
+    let Some(named) = client.named() else {
+        return Err(Failure::broken(
+            "This engine names its machine nothing: it is older than this banda.",
+        ));
+    };
+    let said = json!(named);
+    if json {
+        println!("{said}");
+    } else {
+        let icon = said["icon"].as_str().unwrap_or_default();
+        println!("{}\t{icon}", named.name);
+    }
     Ok(())
 }
 

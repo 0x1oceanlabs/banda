@@ -4,6 +4,7 @@ import type { EngineFrame } from "./generated/EngineFrame"
 import type { Event } from "./generated/Event"
 import type { EventFilter } from "./generated/EventFilter"
 import type { Fence } from "./generated/Fence"
+import type { Named } from "./generated/Named"
 import type { Refusal } from "./generated/Refusal"
 import type { ProjectId } from "./generated/ProjectId"
 import type { JsonValue } from "./generated/serde_json/JsonValue"
@@ -32,6 +33,11 @@ export type Status =
        * decision 1): what a new Thread's mode follows. None from an engine
        * that has none. */
       fence?: Fence
+      /** What this machine is called and drawn by, as every window shows
+       * it (ADR 0095); the stream `MACHINE_NAMED` says it again as it
+       * changes. None from an engine that names it nothing. The page
+       * cleans it before it draws it (ADR 0095, decision 2). */
+      named?: Named
     }
   /** The connection broke; the client tries again after `retryIn` ms. */
   | { state: "lost"; retryIn: number }
@@ -350,6 +356,7 @@ export class Engine {
           ...(frame.machine && { machine: frame.machine }),
           boot: frame.boot,
           ...(frame.fence && { fence: frame.fence }),
+          ...(frame.named && { named: frame.named }),
         })
         for (const [id, following] of this.#following) {
           this.#subscribe(id, following)
