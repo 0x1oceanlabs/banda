@@ -47,6 +47,11 @@
  * - The client's copy of the arrangement's commands is a leaf, as the
  *   crate compiled to WebAssembly that takes its place will be (ADR 0088,
  *   decision 11): it imports the contract alone.
+ * - What the Person does to an Item is its App's item actions (ADR 0087,
+ *   decision 12): no page code but Threads' names a Thread's verb, no
+ *   module global asks a Thread's card to show, the Window asks an App's
+ *   engine part by name only where listed, and an App runs another App's
+ *   action by its id only where listed, each list only falling.
  */
 import { existsSync, readFileSync } from "node:fs"
 import { join, relative } from "node:path"
@@ -60,6 +65,7 @@ import {
   sources,
 } from "@banda/ui/testing/architecture"
 import { expect, test } from "vitest"
+import { modules } from "./modules"
 
 const app = join(import.meta.dirname, "../..")
 const root = join(app, "..")
@@ -710,4 +716,110 @@ test("the copy of the arrangement's commands imports the contract alone", () => 
     (name) => name !== "@banda/contract" && !name.startsWith("@banda/contract/")
   )
   expect(others).toEqual([])
+})
+
+/** Every page part's code: the Window's, `@banda/ui`'s and each module's
+ * Pane part's; not what only tests use. */
+const pageFiles = pageCode.flatMap((folder) =>
+  sources(folder, { tests: false })
+)
+
+/** The Apps, by their ids: the modules in `apps/` (ADR 0062, decision 11),
+ * not the platform's. */
+const APPS = new Set(
+  [...folders]
+    .filter(([, folder]) => folder.startsWith(join(root, "apps")))
+    .map(([id]) => id)
+)
+
+/**
+ * A Thread's verbs are Threads' item actions (ADR 0087, decision 12): no
+ * page code but Threads' names one by its id, as the Window did, and none
+ * imports the `Listing` a module gave the Window before them. The Window
+ * finds an Item's by what each does, and runs it by the id it gives.
+ */
+test("no page code but Threads' names a Thread's verb", () => {
+  const threads = join(root, "apps/agents/pane/src")
+  const verbs =
+    /["'`](?:thread\.(?:rename|suggest-title|unread|snooze|wake)|agents\.(?:previous-title|make-project))["'`]|[{,]\s*(?:type\s+)?Listing\s*[,}]/
+  const naming = pageFiles
+    .filter((file) => !file.startsWith(threads))
+    .filter((file) => verbs.test(readFileSync(file, "utf8")))
+    .map((file) => relative(root, file))
+  expect(naming).toEqual([])
+})
+
+/**
+ * No module global asks the focused Thread's card to show, or says which
+ * cards are drawn (ADR 0087, decision 12): Threads' own action opens a
+ * part of its rows, as git's Switch branch runs it, and git keeps what it
+ * draws.
+ */
+test("@banda/ui holds no global of a Thread's details card", () => {
+  const globals = /\b(?:askDetails|hearAsks|showDetails|detailsShown)\b/
+  const holding = sources(join(app, "ui/src"), { tests: false })
+    .filter((file) => globals.test(readFileSync(file, "utf8")))
+    .map((file) => relative(root, file))
+  expect(holding).toEqual([])
+})
+
+/**
+ * Where the Window still asks an App's engine part by a method's name
+ * (`engine.call`, `engine.command`), by file, once for each place: the
+ * App's own parts ask theirs. None joins the list, and one that goes
+ * leaves it.
+ */
+const APP_METHODS = ["web/src/settings/ProjectsSettings.tsx: agents.threads"]
+
+test("the Window asks an App's engine part by name no more than the list holds", () => {
+  const method = /\.(?:command|call)\(\s*["'`]([a-z]+)\.([\w.-]+)["'`]/g
+  const asking = sources(join(app, "web/src"), { tests: false }).flatMap(
+    (file) =>
+      [...readFileSync(file, "utf8").matchAll(method)]
+        .filter(([, of]) => APPS.has(of))
+        .map(([, of, name]) => `${relative(app, file)}: ${of}.${name}`)
+  )
+  expect(asking).toEqual(APP_METHODS)
+})
+
+/**
+ * Where an App runs another App's action by its id (`run`), by file, once
+ * for each place: an intent takes its place (B8). The Window's actions and
+ * the platform's are not another App's. None joins the list, and one
+ * that goes leaves it.
+ */
+const APP_RUNS = [
+  "apps/agents/pane/src/ThreadPane.tsx: terminal.run",
+  "apps/agents/pane/src/thread/Thread.tsx: browser.open",
+  "apps/agents/pane/src/thread/Thread.tsx: browser.open",
+  "apps/files/pane/src/views/markdown.tsx: browser.open",
+  "apps/git/pane/src/index.ts: agents.thread.details",
+  "apps/terminal/pane/src/Servers.tsx: browser.open",
+  "apps/terminal/pane/src/TerminalPane.tsx: browser.open",
+]
+
+test("an App runs another App's action by its id no more than the list holds", () => {
+  const owner = new Map(
+    modules.flatMap((module) =>
+      [...module.actions, ...module.items].map((action) => [
+        action.id,
+        module.id,
+      ])
+    )
+  )
+  const running = /\brun(?:\?\.)?\(\s*["'`]([\w.-]+)["'`]/g
+  const runs = [...APPS].flatMap((id) => {
+    const folder = join(folders.get(id)!, "pane/src")
+    if (!existsSync(folder)) return []
+    return sources(folder, { tests: false }).flatMap((file) =>
+      [...readFileSync(file, "utf8").matchAll(running)]
+        .map(([, action]) => action)
+        .filter((action) => {
+          const of = owner.get(action)
+          return of !== undefined && of !== id && APPS.has(of)
+        })
+        .map((action) => `${relative(root, file)}: ${action}`)
+    )
+  })
+  expect(runs.sort()).toEqual(APP_RUNS)
 })

@@ -161,8 +161,6 @@ export function windowApiOf(shell: Shell): WindowApi {
   }
 }
 
-/** What `thread.snooze` and `thread.wake` are asked: a Thread by its
- * Project, or none for the one in focus, and a time to snooze it till. */
 const ARROWS: Record<Direction, string> = {
   left: "ArrowLeft",
   right: "ArrowRight",
