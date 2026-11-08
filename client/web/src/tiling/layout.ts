@@ -397,8 +397,10 @@ export class ColumnMotion {
     this.#tiles = tiles
   }
 
-  /** A column grows, shrinks or slides to its place now. */
+  /** A column grows, shrinks or slides to its place now, or a hand sizes
+   * one. */
   get moving(): boolean {
+    if (this.#held !== undefined) return true
     for (const moved of this.#columns.values())
       if (moved.size.moving || moved.slide.moving) return true
     return false

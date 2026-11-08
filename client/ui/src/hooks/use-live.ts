@@ -41,7 +41,8 @@ const AGAIN = 500
 
 /** How long what changed waits to be drawn, by its Tile's state (ADR
  * 0088, decision 4): while it shows, the next tick of the clock; while it
- * moves, about a tenth of a second; while it is hidden, a second. */
+ * moves, about a tenth of a second; while it is hidden, a second; each
+ * then in the next tick, of which a window away runs none. */
 const HELD: Record<Exclude<TileState, "shown">, number> = {
   moving: 100,
   hidden: 1000,
@@ -109,7 +110,7 @@ export function useLive<S extends { at: number }>(
     const pace = () => {
       const { state } = tile.now()
       if (state === "shown") frame ||= onDraw(draw)
-      else timer ??= setTimeout(draw, HELD[state])
+      else timer ??= setTimeout(() => (frame ||= onDraw(draw)), HELD[state])
     }
     // The Tile's state changed: what is held waits as the new one says.
     const stopWatching = tile.watch(() => {
@@ -155,6 +156,9 @@ export function useLive<S extends { at: number }>(
         },
         (refusal) => {
           if (stale()) return
+          // What waits to be drawn is older than the refusal.
+          cancel()
+          due = null
           if (refusal) hold({ state: "refused", refusal })
           else void start()
         }

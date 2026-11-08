@@ -50,7 +50,8 @@ Import paths, so the files find each other here, and the tests import
   mount's size changes, and tells the PTY, but neither sizes its canvas
   nor draws: a terminal whose Tile is hidden keeps the size it would have
   shown; shown again, it draws at once the rows that changed meanwhile,
-  over what its canvas kept, not the whole screen (ADR 0088, decision 4).
+  over what its canvas kept, not the whole screen, and nothing if nothing
+  changed (ADR 0088, decision 4).
 
 T3's tests of its own terminal drawer are not brought: they test T3's
 transport, not the adapter.
