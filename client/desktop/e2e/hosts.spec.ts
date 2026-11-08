@@ -224,8 +224,10 @@ function threadsOf(arc: Arc, project: string) {
       threads: {
         id: string
         title: string
-        latest?: { state: string }
+        latest?: { state: string; turn: string }
         snooze?: { until?: number }
+        seen?: string
+        archived?: { at: number }
       }[]
     }
   }
@@ -617,6 +619,61 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   expect(ok.threads.map(({ title, snooze }) => [title, snooze])).toEqual([
     ["Sidebar for arc", undefined],
   ])
+})
+
+test("another machine's Thread is seen, marked unread and archived on its engine, from its Pane, and never on this one's (ADR 0096)", async () => {
+  arc = newArc()
+  const banda = await seed(arc)
+  window = await withArc(arc)
+  const { page } = window
+  const local = await work(window)
+  await expect(sidebarOf(page).getByText("Sidebar for arc")).toBeVisible()
+  const bench = () => threadsOf(arc!, banda)[0]!
+  expect(bench().seen).toBeUndefined()
+  const row = arcOf(page)
+    .getByRole("button")
+    .filter({ hasText: "Bench window tests" })
+  const done = row.getByRole("img", { name: "Done" })
+  await expect(done).toBeVisible()
+
+  // Opened, it is seen there, as its Person looks at it.
+  await row.click()
+  const thread = page.getByRole("region", {
+    name: "Bench window tests",
+    exact: true,
+  })
+  await expect(thread.getByText("You said: Bench window tests")).toBeVisible()
+  await expect.poll(() => bench().seen).toBe(bench().latest!.turn)
+  await expect(done).toBeHidden()
+
+  // Mark as unread, from its Pane's menu: on arc's engine.
+  await thread
+    .locator("header")
+    .getByRole("button", { name: "Bench window tests", exact: true })
+    .click()
+  await page.getByRole("menuitem", { name: /Mark as unread/ }).click()
+  await expect(done).toBeVisible()
+  await expect.poll(() => bench().seen).toBeUndefined()
+  // Alt+S archives it there, and its Pane closes once arc took it.
+  await thread.getByRole("textbox", { name: "Message to Fake AI" }).focus()
+  await page.keyboard.press("Alt+S")
+  await expect(thread).toBeHidden()
+  await expect.poll(() => bench().archived).toBeDefined()
+  // This machine's engine was sent none of it: its Thread is as it was,
+  // and no toast says it knows no such Thread.
+  const { ok } = JSON.parse(
+    window.banda("call", "agents.threads", "--project", local)
+  ) as {
+    ok: { threads: { title: string; seen?: string; archived?: object }[] }
+  }
+  expect(
+    ok.threads.map(({ title, seen, archived }) => [title, seen, archived])
+  ).toEqual([["Sidebar for arc", undefined, undefined]])
+  await expect(
+    page
+      .getByRole("region", { name: "Notifications" })
+      .getByText("There is no such Thread.")
+  ).toHaveCount(0)
 })
 
 test("a Mac there, with no banda in hosts.toml: the window finds its Banda in the Mac's Application Support", async () => {
