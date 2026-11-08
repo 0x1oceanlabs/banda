@@ -1,8 +1,8 @@
 /**
  * General (ADR 0016, decision 8): Banda itself, the engine the window
- * reaches, and where the settings files are.
+ * reaches, its fence around the Harnesses (ADR 0083), and where the
+ * settings files are.
  */
-import type { Engine } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import { Card } from "@banda/ui/components/card"
 import {
@@ -12,14 +12,17 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@banda/ui/components/item"
-import { useStatus } from "@banda/ui/hooks/use-status"
+import { useFence, useStatus } from "@banda/ui/hooks/use-status"
 import { FolderOpenIcon } from "lucide-react"
 import { useLookConfig } from "../look"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
+import { FenceRow } from "./Fence"
+import type { SectionProps } from "./sections"
 
-export function General({ engine }: { engine: Engine }) {
+export function General({ engine, lit, run }: SectionProps) {
   const settingsKey = useKeyLabel()("settings.open")
   const status = useStatus(engine)
+  const fence = useFence(engine)
   const folder = useLookConfig()
   return (
     <Card className="gap-0 divide-y py-0">
@@ -34,6 +37,13 @@ export function General({ engine }: { engine: Engine }) {
           {status.state === "open" ? status.engine : status.state}
         </ItemActions>
       </Item>
+      {fence && (
+        <FenceRow
+          fence={fence}
+          lit={lit === "fence"}
+          onAgents={run && (() => run("settings.open", { link: "agents" }))}
+        />
+      )}
       <Item className="rounded-none px-4">
         <ItemContent>
           <ItemTitle>Settings folder</ItemTitle>

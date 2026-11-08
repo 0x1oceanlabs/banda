@@ -22,6 +22,7 @@ import {
   fromLeft,
   GLASS,
   layoutOf,
+  markFullAccess,
   newProject,
   sendAndLeave,
   sharesOf,
@@ -793,6 +794,213 @@ test("a Person chooses the model and the mode under the message box", async () =
   await expect(planMode).toBeHidden()
   await page.mouse.move(0, 0)
   await page.screenshot({ path: "test-results/7-after-the-plan.png" })
+})
+
+/** The settings Pane in `page`, and its Fence row. */
+const fenceRow = (page: Page) =>
+  page
+    .getByRole("region", { name: "Settings", exact: true })
+    .locator('[data-key="fence"]')
+
+test("where the fence does not hold, Full access says the Agent is you, and Learn more leads to why (ADR 0083)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread } = await firstThread(page)
+  await thread.getByRole("button", { name: "Mode: Supervised" }).click()
+  await expect(
+    page.getByRole("menuitemradio", { name: /^Supervised/ })
+  ).toHaveAttribute("aria-checked", "true")
+  await expect(
+    page.getByRole("menuitemradio", { name: /Full access/ })
+  ).toContainText("Never asks. This Agent is you, in Banda too.")
+  // Under the modes, the one reason, which leads to the Fence row.
+  const why = page.getByRole("menuitem", { name: /turned off for testing/ })
+  await expect(why).toHaveText(
+    "No fence: turned off for testing (BANDA_FENCE=off). Learn more"
+  )
+  await page.screenshot({ path: "test-results/fence-missing-menu.png" })
+  await why.click()
+  const row = fenceRow(page)
+  await expect(row).toBeVisible()
+  await expect(row).toContainText(
+    "Off. It is turned off for testing (BANDA_FENCE=off). New Threads start Supervised, unless you set another mode for them."
+  )
+  await expect(row).toContainText("In Full access, an Agent is you")
+  // What an Agent gets behind the fence is for where it holds.
+  await expect(row.getByRole("list", { name: "An Agent gets" })).toHaveCount(0)
+})
+
+test("where the fence holds whole, a new Thread starts Full access, with the Person's rights and not Banda's (ADR 0083)", async () => {
+  window = await startWindow({ env: { BANDA_FENCE: "" } })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  const { fence } = JSON.parse(window.banda("status")) as {
+    fence?: { fence: string; layers?: string[]; docker_group?: boolean }
+  }
+  test.skip(
+    fence?.fence !== "holds" ||
+      !fence.layers?.includes("landlock") ||
+      fence.docker_group === true,
+    `the fence does not hold whole here: ${JSON.stringify(fence)}`
+  )
+  await thread.getByRole("button", { name: "Mode: Full access" }).click()
+  await expect(
+    page.getByRole("menuitemradio", { name: /Full access/ })
+  ).toContainText("Never asks, and works with your rights, not Banda's.")
+  await expect(page.getByRole("menuitem")).toHaveCount(0)
+  await page.screenshot({ path: "test-results/fence-holds-menu.png" })
+  await page.keyboard.press("Escape")
+  await composer.fill("which settings")
+  await composer.press("Enter")
+  await expect(
+    thread.getByText("Mode bypassPermissions, model fast, brief false")
+  ).toBeVisible()
+
+  await page.keyboard.press("Alt+Comma")
+  const settings = page.getByRole("region", { name: "Settings", exact: true })
+  await settings
+    .getByRole("navigation", { name: "Settings sections" })
+    .getByRole("button", { name: /General/ })
+    .click()
+  const row = fenceRow(page)
+  await expect(row).toContainText(
+    "New Threads start Full access, unless you set another mode for them."
+  )
+  await expect(row.getByRole("list", { name: "It never gets" })).toContainText(
+    "Banda's own data and keys"
+  )
+
+  // Its Project is trusted, as nothing marked it foreign: its Agents get
+  // the GitHub token only once the Person says they trust it.
+  await settings
+    .getByRole("navigation", { name: "Settings sections" })
+    .getByRole("button", { name: /Projects/ })
+    .click()
+  const trust = settings.locator('[data-key="trust"]')
+  await expect(trust).toContainText(
+    "Its Agents get your GitHub token once you say you trust it."
+  )
+  await trust.getByRole("button", { name: "Say you trust it…" }).click()
+  const saying = page.getByRole("dialog", {
+    name: "Give Work's Agents your GitHub token?",
+  })
+  await expect(saying).toContainText(
+    "Say you trust it, and its Agents get your GitHub token from their next turn."
+  )
+  await page.screenshot({ path: "test-results/fence-trust-said.png" })
+  await saying.getByRole("button", { name: "Trust", exact: true }).click()
+  await expect(trust).toContainText("Its Agents also get your GitHub token.")
+  await expect(
+    trust.getByRole("button", { name: "Say you trust it…" })
+  ).toHaveCount(0)
+  await expect(
+    trust.getByRole("button", { name: "Stop trusting" })
+  ).toBeVisible()
+})
+
+test("Threads Banda keeps Supervised: one notice on the machine for those from before the fence, a line in one whose Full access was chosen (ADR 0083)", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const { thread, composer } = await firstThread(page)
+  const toastIn = (region: string) =>
+    page
+      .getByRole("region", { name: region, exact: true })
+      .locator("[data-sonner-toast]")
+      .filter({ hasText: "Threads now start Supervised" })
+  const notice = toastIn("Notifications")
+  const line = thread
+    .getByRole("group", { name: "Mode" })
+    .filter({ hasText: "Started Supervised" })
+  let asked = 0
+  /** The window drawn again, as soon after its start as the test goes:
+   * not a start that broke (ADR 0039). */
+  const reload = async () => {
+    await page.evaluate(() => localStorage.removeItem("banda.starts"))
+    await page.reload()
+  }
+  /** Full access as the Person picks it, then marked as `mark`, and a
+   * turn: it runs Supervised. */
+  const kept = async (mark: "fenced" | null) => {
+    await thread.getByRole("button", { name: /^Mode: / }).click()
+    await page.getByRole("menuitemradio", { name: /Full access/ }).click()
+    await expect(
+      thread.getByRole("button", { name: "Mode: Full access" })
+    ).toBeVisible()
+    markFullAccess(dir, mark)
+    asked += 1
+    await composer.fill(`which settings ${asked}`)
+    await composer.press("Enter")
+    await expect(
+      thread.getByText("Mode default, model fast, brief false")
+    ).toHaveCount(asked)
+    await expect(
+      thread.getByRole("button", { name: "Mode: Supervised" })
+    ).toBeVisible()
+  }
+
+  // The Thread is made by its first message; Full access chosen in it
+  // later is marked as the fence stands then.
+  await composer.fill("start")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: start")).toBeVisible()
+
+  // Full access from before the fence was nobody's choice: one notice,
+  // which the notifications module tells, says Threads now start
+  // Supervised, and leads to why.
+  await kept(null)
+  await expect(notice).toContainText(
+    "No fence: turned off for testing (BANDA_FENCE=off)."
+  )
+  await expect(line).toHaveCount(0)
+  await page.screenshot({ path: "test-results/fence-notice.png" })
+  // The bell shows it again, with its Learn more (ADR 0048).
+  await page.getByRole("button", { name: "The last notifications" }).click()
+  const again = toastIn("Shown again")
+  await expect(again).toContainText(
+    "No fence: turned off for testing (BANDA_FENCE=off)."
+  )
+  await expect(notice).toHaveCount(0)
+  await again.getByRole("button", { name: "Learn more" }).click()
+  await expect(fenceRow(page)).toBeVisible()
+  await expect(again).toHaveCount(0)
+  // Once on this machine, not once a Thread: a turn kept so again says
+  // nothing, in the time a notice would take to show; nor as the window
+  // opens again.
+  // A toast lasts longer than the wait, so it is counted once, not
+  // waited for to go.
+  await kept(null)
+  await page.waitForTimeout(1000)
+  expect(await notice.count()).toBe(0)
+  await reload()
+  await expect(thread.getByText(/^Mode default/)).toHaveCount(asked)
+  await kept(null)
+  await page.waitForTimeout(1000)
+  expect(await notice.count()).toBe(0)
+
+  // Full access chosen where the fence held: the Thread says so itself,
+  // until its next turn ends.
+  await kept("fenced")
+  await expect(line).toContainText(
+    "Started SupervisedNo fence: turned off for testing (BANDA_FENCE=off)."
+  )
+  await page.screenshot({ path: "test-results/fence-line.png" })
+  await reload()
+  await expect(line).toBeVisible()
+  await composer.fill("next")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: next")).toBeVisible()
+  await expect(line).toHaveCount(0)
+  await reload()
+  await expect(thread.getByText("You said: next")).toBeVisible()
+  await expect(line).toHaveCount(0)
+  // Or until Dismiss, which a reload keeps.
+  await kept("fenced")
+  await line.getByRole("button", { name: "Dismiss" }).click()
+  await expect(line).toHaveCount(0)
+  await reload()
+  await expect(thread.getByText(/^Mode default/)).toHaveCount(asked)
+  await expect(line).toHaveCount(0)
+  await expect(notice).toHaveCount(0)
 })
 
 test("a new Thread's Harness is chosen with its model", async () => {
@@ -4786,12 +4994,13 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
   writeFileSync(join(widget, ".mcp.json"), "{}\n")
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   const search = menu.getByRole("combobox", { name: "Search" })
-  const trusted = () =>
+  const listed = (name: string) =>
     (
       JSON.parse(banda("call", "projects.list")) as {
-        ok: { name: string; trusted: boolean }[]
+        ok: { name: string; trusted: boolean; trust_said?: boolean }[]
       }
-    ).ok.find((one) => one.name === "widget")?.trusted
+    ).ok.find((one) => one.name === name)
+  const trusted = () => listed("widget")?.trusted
 
   // Add on a folder that holds what a Harness loads asks first, in the
   // menu: what waits, Not yet then Trust, and isolation greyed for now.
@@ -4816,6 +5025,10 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
   await expect(
     menu.getByRole("switch", { name: "Run it isolated" })
   ).toBeDisabled()
+  // Trust gives its Agents the Person's GitHub token too (ADR 0083).
+  await expect(menu.getByRole("option", { name: /^Trust/ })).toContainText(
+    "Its Agents also get your GitHub token."
+  )
   await page.screenshot({ path: "test-results/31-add-project-trust.png" })
   // ⌫ goes back to the path as it was typed, and Add asks again.
   await search.press("Backspace")
@@ -4846,9 +5059,11 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
   await page.getByRole("menuitem", { name: "Trust Project…" }).click()
   const card = page.getByRole("dialog", { name: "Trust widget?" })
   await expect(card).toContainText(".claude/")
+  await expect(card).toContainText("Its Agents also get your GitHub token.")
   await card.getByRole("button", { name: "Trust", exact: true }).click()
   await expect(card).toBeHidden()
   await expect.poll(trusted).toBe(true)
+  expect(listed("widget")?.trust_said).toBe(true)
   await expect(page.locator("[data-untrusted]")).toHaveCount(0)
   await expect(row).toHaveAccessibleName("widget")
 
@@ -4870,9 +5085,39 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
   await expect(
     settings.getByRole("switch", { name: "Isolated" })
   ).toBeDisabled()
+  await expect(settings.getByRole("button", { name: "Trust…" })).toBeHidden()
   await settings.getByRole("button", { name: "Stop trusting" }).click()
   await expect(settings.getByRole("button", { name: "Trust…" })).toBeVisible()
   await expect.poll(trusted).toBe(false)
+
+  // A Project of the Person's own folder is trusted, as nothing marked
+  // it foreign. Where no fence holds, as here, its Agents act as the
+  // Person, and its settings say nothing of the GitHub token; where the
+  // fence holds, they offer to say it is trusted (the fence holding's
+  // test).
+  const mine = join(dir, "work", "mine")
+  mkdirSync(mine, { recursive: true })
+  banda("project", "add", mine)
+  expect(listed("mine")?.trusted).toBe(true)
+  expect(listed("mine")?.trust_said).toBeFalsy()
+  await setInFront(page, false)
+  await setInFront(page, true)
+  await sidebar
+    .getByRole("group", { name: "Projects" })
+    .getByRole("button", { name: "mine", exact: true })
+    .click({ button: "right" })
+  await page.getByRole("menuitem", { name: "Project settings" }).click()
+  const trust = page.locator('[data-key="trust"]')
+  await expect(trust).toContainText(
+    "Trusted. Claude Code and Codex load its own settings, hooks and MCP servers"
+  )
+  await expect(trust).not.toContainText("GitHub")
+  await expect(
+    trust.getByRole("button", { name: "Stop trusting" })
+  ).toBeVisible()
+  await expect(
+    trust.getByRole("button", { name: /Trust…|trust it…/ })
+  ).toHaveCount(0)
 })
 
 test("Open in Files adds the folder picked in the system's picker, opened where the path points", async () => {
@@ -5793,6 +6038,31 @@ test("No Project creates a folder only on the first message", async () => {
   await expect(
     page.getByRole("complementary", { name: "Sidebar" })
   ).toContainText("scratch hello")
+})
+
+test("a No Project Thread starts in the mode the engine gives its Harness there, not the Pane's (ADR 0083)", async () => {
+  // Other AI's new Threads start Auto, as agents.toml says; a No Project
+  // draft shows no mode, so the Person chose none, and the engine's goes.
+  window = await startWindow({
+    other: true,
+    files: { "config/agents.toml": '[start.other]\nmode = "auto"\n' },
+  })
+  const { page } = window
+  const draft = page.getByRole("region", { name: "New Thread" })
+  await expect(
+    draft.getByRole("textbox", { name: "Message to Fake AI" })
+  ).toBeVisible()
+  await expect(draft.getByRole("button", { name: /^Mode:/ })).toHaveCount(0)
+  await draft.getByRole("button", { name: "Model: Fake AI" }).click()
+  await page
+    .getByRole("listbox", { name: "Model" })
+    .getByRole("option", { name: "Other AI" })
+    .click()
+  const toOther = draft.getByRole("textbox", { name: "Message to Other AI" })
+  await toOther.fill("which settings")
+  await toOther.press("Enter")
+  await expect(page.getByText(/^Mode auto, model fast/)).toBeVisible()
+  await expect(page.getByRole("button", { name: "Mode: Auto" })).toBeVisible()
 })
 
 test("No Project keeps its first attachment and message in one folder", async () => {

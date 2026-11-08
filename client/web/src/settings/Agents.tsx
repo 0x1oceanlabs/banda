@@ -6,14 +6,18 @@
  * before any Project.
  */
 import { useState } from "react"
-import { AgentsSettings, type SettingsFile } from "@banda/agents-pane/settings"
-import type { Engine } from "@banda/contract"
+import {
+  AgentsSettings,
+  FENCE_LINK,
+  type SettingsFile,
+} from "@banda/agents-pane/settings"
 import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
 import { Spinner } from "@banda/ui/components/spinner"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { shownProjects } from "@banda/ui/lib/projects"
 import type { PaneState } from "@banda/ui/pane"
 import { terminal } from "@banda/terminal-pane"
+import type { SectionProps } from "./sections"
 
 /** The Panes a sign-in opens: a terminal. Not the whole registry, which
  * would load every module's Panes into this window. */
@@ -31,7 +35,7 @@ const written = (name: string): SettingsFile => ({
 const harnesses = written("harnesses.toml")
 const agents = written("agents.toml")
 
-export function Agents({ engine, lit }: { engine: Engine; lit?: string }) {
+export function Agents({ engine, lit, run }: SectionProps) {
   // Any Project offers what a new Thread starts with, and runs a terminal:
   // the first, as the window's home, once there is one.
   const { listed } = useProjects(engine)
@@ -52,6 +56,7 @@ export function Agents({ engine, lit }: { engine: Engine; lit?: string }) {
         harnesses={harnesses}
         agents={agents}
         lit={lit}
+        onFence={() => run?.("settings.open", { link: FENCE_LINK })}
       />
       <Dialog
         open={kind !== undefined}

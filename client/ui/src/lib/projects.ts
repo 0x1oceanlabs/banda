@@ -55,6 +55,7 @@ export function sameProjects(
         one.missing === b[n].missing &&
         one.scratch === b[n].scratch &&
         one.trusted === b[n].trusted &&
+        one.trust_said === b[n].trust_said &&
         sameSign(one.sign, b[n].sign)
     )
   )

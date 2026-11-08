@@ -41,6 +41,7 @@ import { Switch } from "@banda/ui/components/switch"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useInFront } from "@banda/ui/hooks/use-in-front"
 import { useRead } from "@banda/ui/hooks/use-read"
+import { useFence } from "@banda/ui/hooks/use-status"
 import { useWrite } from "@banda/ui/hooks/use-write"
 import { cn } from "@banda/ui/lib/utils"
 import { problem } from "@banda/ui/lib/words"
@@ -56,6 +57,9 @@ import { useAccount } from "../harnesses"
 import { commandLine, wordsOf } from "../thread/sign-in"
 import { type Open, Problem, Warning, Ways } from "../thread/SignIn"
 import { SettingsBar } from "./ThreadSettings"
+
+/** Where the window's settings say why a new Thread starts Supervised. */
+export { FENCE_LINK } from "./fence"
 
 /**
  * A settings file, as the settings Pane writes it (ADR 0016): through
@@ -81,6 +85,9 @@ type Props = {
   harnesses: SettingsFile
   /** What a new Thread on each Harness starts with is here. */
   agents: SettingsFile
+  /** Opens Settings → General at the Fence row, which says why a new
+   * Thread starts Supervised (ADR 0083). */
+  onFence: () => void
 }
 
 /**
@@ -304,6 +311,7 @@ function NewThreads({
   project,
   harness,
   agents,
+  onFence,
   write,
 }: HarnessProps & {
   project: ProjectId
@@ -321,6 +329,7 @@ function NewThreads({
       [engine, project, harness.id, writes, front]
     )
   )
+  const fence = useFence(engine)
   // What it was shows while it is asked again.
   const [shown, setShown] = useState<Defaults>()
   if (read.state === "ready" && read.value !== shown) setShown(read.value)
@@ -344,6 +353,7 @@ function NewThreads({
         offer={offer}
         disabled={false}
         onChange={onChange}
+        fence={{ fence, onLearn: onFence }}
       />
       <Button
         variant="ghost"

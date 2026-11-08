@@ -28,6 +28,7 @@ import { Spinner } from "@banda/ui/components/spinner"
 import { Switch } from "@banda/ui/components/switch"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useProjects } from "@banda/ui/hooks/use-projects"
+import { useFence } from "@banda/ui/hooks/use-status"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import {
   findSign,
@@ -48,7 +49,7 @@ import { AsideRow } from "../safe/AsidePill"
 import { Field, Group, RowFrame, Rows } from "./SettingRow"
 import { SignField, signAbout } from "./SignField"
 import { Soon, TrustCard, type Trusting } from "../trust/TrustCard"
-import { ISOLATED, trustAbout } from "../trust/trust"
+import { ISOLATED, offersSaying, trustAbout } from "../trust/trust"
 
 /** The Project a removal asks about, and how many Threads go with it, if
  * the agents module said. */
@@ -80,6 +81,9 @@ function Project({ engine, lit }: Props) {
   const [removing, setRemoving] = useState<Removing>()
   // The Project whose trust a card by its button asks about.
   const [trusting, setTrusting] = useState<Trusting>()
+  // Where it holds, only trust the Person said gives a Project's Agents
+  // their GitHub token (ADR 0083).
+  const fenced = useFence(engine)?.fence === "holds"
 
   if (listed.state === "loading") return <Spinner />
   if (listed.state === "refused")
@@ -89,6 +93,9 @@ function Project({ engine, lit }: Props) {
   if (!project)
     return <p className="text-sm text-muted-foreground">No Projects yet.</p>
 
+  // Trusted only as nothing marked it foreign, as every Project was before
+  // the fence: saying so here gives its Agents the GitHub token (ADR 0083).
+  const saying = offersSaying(project, fenced)
   const change = (how: Omit<UpdateProject, "project">) =>
     void act(() => updateProject(engine, { project: project.id, ...how }))
   // The Threads that go with it are the agents module's.
@@ -206,34 +213,37 @@ function Project({ engine, lit }: Props) {
                   Trust
                 </span>
               }
-              about={trustAbout(project.trusted)}
+              about={trustAbout(project, fenced)}
             >
-              {project.trusted ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() =>
-                    void act(() => trustProject(engine, project.id, false))
-                  }
-                >
-                  Stop trusting
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={(event) =>
-                    setTrusting({
-                      project: project.id,
-                      anchor: event.currentTarget,
-                    })
-                  }
-                >
-                  Trust…
-                </Button>
-              )}
+              <span className="flex items-center gap-1.5">
+                {(!project.trusted || saying) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={(event) =>
+                      setTrusting({
+                        project: project.id,
+                        anchor: event.currentTarget,
+                      })
+                    }
+                  >
+                    {project.trusted ? "Say you trust it…" : "Trust…"}
+                  </Button>
+                )}
+                {project.trusted && (
+                  <Button
+                    size="sm"
+                    variant={saying ? "ghost" : "outline"}
+                    disabled={busy}
+                    onClick={() =>
+                      void act(() => trustProject(engine, project.id, false))
+                    }
+                  >
+                    Stop trusting
+                  </Button>
+                )}
+              </span>
             </RowFrame>
             <RowFrame
               dataKey="isolated"

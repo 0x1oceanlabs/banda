@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { askedOf } from "./trust"
+import { askedOf, offersSaying, trustAbout } from "./trust"
 
 test("a clone from another's GitHub says where it came from, and lists what its Harnesses would load", () => {
   expect(
@@ -66,4 +66,25 @@ test("a folder that does not look foreign has nothing to say", () => {
     waits: [],
     cloned: false,
   })
+})
+
+test("where the fence holds, only a Project the Person said they trust gives its Agents their GitHub token", () => {
+  const said = { trusted: true, trust_said: true }
+  const unsaid = { trusted: true, trust_said: false }
+  expect(trustAbout(said, true)).toMatch(
+    /Its Agents also get your GitHub token\.$/
+  )
+  expect(trustAbout(unsaid, true)).toMatch(/once you say you trust it\.$/)
+  expect(offersSaying(unsaid, true)).toBe(true)
+  expect(offersSaying(said, true)).toBe(false)
+  expect(trustAbout({ trusted: false }, true)).toMatch(/^Not trusted\./)
+})
+
+test("where the fence does not hold, trust says nothing of the GitHub token: the Agents act as the Person", () => {
+  const unsaid = { trusted: true, trust_said: false }
+  expect(trustAbout(unsaid, false)).toBe(
+    trustAbout({ trusted: true, trust_said: true }, false)
+  )
+  expect(trustAbout(unsaid, false)).not.toMatch(/GitHub/)
+  expect(offersSaying(unsaid, false)).toBe(false)
 })

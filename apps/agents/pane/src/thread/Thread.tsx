@@ -48,7 +48,9 @@ import { pickedOf } from "../composer/picker"
 import { ModeMenu } from "../settings/ThreadSettings"
 import { SignIn, Warning } from "./SignIn"
 import { SnoozeLine } from "./Snoozed"
-import { useMachine } from "@banda/ui/hooks/use-status"
+import { SupervisedLine, useHeardSupervised } from "./Supervised"
+import { FENCE_LINK } from "../settings/fence"
+import { holdsWhole, useFence, useMachine } from "@banda/ui/hooks/use-status"
 import { NewThreadBar } from "../composer/NewThread"
 import { type ThreadArgs, useThreadSession, zoomKey } from "./session"
 import { threadPane } from "../ThreadPane"
@@ -80,6 +82,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   } = props
   const machine = useMachine(engine)
   const unplaced = project === machine
+  const fence = useFence(engine)
   const { thread } = args
   const {
     live,
@@ -119,6 +122,10 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     editLast,
   } = useThreadSession(props)
   const picked = useMemo(() => pickedOf(offer.options), [offer.options])
+  // Learn more, wherever the fence is spoken of: Settings → General, at
+  // the Fence row (ADR 0083).
+  const learn = () => run?.("settings.open", { link: FENCE_LINK })
+  useHeardSupervised(thread, machine, state?.supervised, run)
   const [dropping, setDropping] = useState(false)
   // What the Person looks for in the Thread, while the find bar is open.
   const [find, setFind] = useState<{ query: string; at: number }>()
@@ -329,7 +336,17 @@ export function Thread(props: PaneProps<ThreadArgs>) {
             />
           )}
           {thread === null ? (
-            <Start harness={harness} name={name} />
+            <Start
+              harness={harness}
+              name={name}
+              // Full access never asks; a No Space draft's mode is the
+              // engine's, which is Full access where the fence holds
+              // whole (ADR 0083).
+              asks={
+                settings?.mode !== "full_access" &&
+                !(unplaced && holdsWhole(fence))
+              }
+            />
           ) : live.state === "loading" ? (
             <Centered>
               <Spinner />
@@ -401,6 +418,14 @@ export function Thread(props: PaneProps<ThreadArgs>) {
             onWake={() => run("thread.wake", { project, thread })}
           />
         )}
+        {thread && state && (
+          <SupervisedLine
+            thread={thread}
+            mode={settings?.mode}
+            turns={state.turns}
+            onLearn={learn}
+          />
+        )}
         {problem && (
           <p role="alert" className="px-1 text-xs text-destructive">
             {problem}
@@ -465,6 +490,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
                   options={picked.rest}
                   disabled={acting}
                   onChange={configure}
+                  fence={{ fence, onLearn: learn }}
                 />
               )}
               <ModelPicker
@@ -511,8 +537,16 @@ function Centered({ children }: { children: React.ReactNode }) {
 }
 
 /** A Thread not yet started: whom it writes to, by the Harness's logo,
- * and one quiet line (ADR 0058). */
-function Start({ harness, name }: { harness: string; name: string }) {
+ * and one quiet line (ADR 0058), where its mode asks at all. */
+function Start({
+  harness,
+  name,
+  asks,
+}: {
+  harness: string
+  name: string
+  asks: boolean
+}) {
   return (
     <Empty className="h-full">
       <EmptyHeader className="gap-1">
@@ -525,9 +559,11 @@ function Start({ harness, name }: { harness: string; name: string }) {
           />
         </EmptyMedia>
         <EmptyTitle>Write to {name}</EmptyTitle>
-        <EmptyDescription>
-          It asks you before anything that needs your yes.
-        </EmptyDescription>
+        {asks && (
+          <EmptyDescription>
+            It asks you before anything that needs your yes.
+          </EmptyDescription>
+        )}
       </EmptyHeader>
     </Empty>
   )
