@@ -51,7 +51,12 @@ Import paths, so the files find each other here, and the tests import
   nor draws: a terminal whose Tile is hidden keeps the size it would have
   shown; shown again, it draws at once the rows that changed meanwhile,
   over what its canvas kept, not the whole screen, and nothing if nothing
-  changed (ADR 0088, decision 4).
+  changed (ADR 0088, decision 4);
+- the surface takes `sized`, the host's word that its mount has a new
+  size or the screen a new scale, instead of its own `observeResize` of
+  the mount and watch of the screen's scale: the window's Tile says so,
+  through its resize gate, without React's `flushSync` (ADR 0088, decision
+  5). T3's observer stays for a host that says nothing.
 
 T3's tests of its own terminal drawer are not brought: they test T3's
 transport, not the adapter.
