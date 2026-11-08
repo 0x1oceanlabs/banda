@@ -595,6 +595,32 @@ test("a Pane's props carry no state of its Tile: it reads it", () => {
 })
 
 /**
+ * What draws on a terminal's canvas (ADR 0088, step P4): its renderer,
+ * with the glyphs it draws itself. The renderer keeps what each row of
+ * the canvas shows, and draws only the rows that differ from it, or moves
+ * them as the screen scrolls: anything else drawn there would stay on
+ * screen, or be moved with them, until the row changed.
+ */
+const TERMINAL_DRAWING = [
+  "client/ghostty/src/glyphs.ts",
+  "client/ghostty/src/t3/renderer.ts",
+]
+
+test("only the terminal's renderer draws on its canvas", () => {
+  const terminal = join(app, "ghostty/src")
+  const drawingThere = drawing
+    .filter((file) => file.startsWith(terminal))
+    .filter((file) =>
+      /\.(?:fillText|strokeText|fillRect|strokeRect|clearRect|drawImage|putImageData)\(/.test(
+        readFileSync(file, "utf8")
+      )
+    )
+    .map((file) => relative(root, file))
+    .sort()
+  expect(drawingThere).toEqual(TERMINAL_DRAWING)
+})
+
+/**
  * A mark's rank (`MARK_ORDER`) is read only to pick the loudest of a few:
  * each line that reads it is listed here, by its file. What calls has one
  * order, the Person's sidebar arrangement, which the sidebar list, the
