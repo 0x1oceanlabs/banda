@@ -133,8 +133,8 @@ test("what fills the Slots is what the modules that run put there, in their orde
   const ids = (modules: string[]) => {
     const slots = slotsOf(modules)
     return {
-      header: slots["pane.header"].map(({ id }) => id),
-      details: slots["thread.details"].map(({ id }) => id),
+      header: (slots["pane.header"] ?? []).map(({ id }) => id),
+      details: (slots["thread.details"] ?? []).map(({ id }) => id),
     }
   }
   expect(ids([])).toEqual({ header: ["window.machine"], details: [] })

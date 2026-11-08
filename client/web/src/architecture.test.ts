@@ -59,7 +59,8 @@
  *   Slot's owner reads who fills it in one place, the Window alone gives
  *   them, and a Pane's header and its tile in the Overview draw no
  *   Thread's Mark of the Tiling's own: Threads fills the Slot with it, and
- *   what the Tiling still reads of an Item's Mark is listed, only falling.
+ *   what the Tiling still takes of Banda's mark or reads of an Item's Mark
+ *   is listed, only falling.
  */
 import { existsSync, readFileSync } from "node:fs"
 import { join, relative } from "node:path"
@@ -161,6 +162,37 @@ test("nothing in the Tiling draws a Thread's Mark", () => {
     .filter((file) => /\bThreadMark\b/.test(readFileSync(file, "utf8")))
     .map((file) => relative(app, file))
   expect(drawingMarks).toEqual([])
+})
+
+/**
+ * What the Tiling still takes of Banda's mark, by file and name: a Deck's
+ * segment draws the mark of a Thread that calls (`Tabs.tsx`, #942), and a
+ * Group's plate takes its Agent's state, which T-a reads by the Group's
+ * owner. None joins the list, and one that goes leaves it.
+ */
+const TILING_BANDA_MARK = [
+  "web/src/tiling/Strip.tsx: groupState",
+  "web/src/tiling/Tabs.tsx: BandaMark",
+  "web/src/tiling/Tabs.tsx: MARK_WORDS",
+  "web/src/tiling/plates.ts: GroupState",
+  "web/src/tiling/usePlates.ts: GroupState",
+]
+
+test("the Tiling takes no more of Banda's mark than the list holds", () => {
+  const taking = sources(join(app, "web/src/tiling")).flatMap((file) =>
+    [
+      ...readFileSync(file, "utf8").matchAll(
+        /\bimport\s+(?:type\s+)?\{([^}]*)\}\s*from\s*"@banda\/ui\/components\/banda-mark"/g
+      ),
+    ].flatMap(([, names]) =>
+      names
+        .split(",")
+        .map((name) => name.replace(/^\s*type\s+/, "").trim())
+        .filter(Boolean)
+        .map((name) => `${relative(app, file)}: ${name}`)
+    )
+  )
+  expect(taking.sort()).toEqual(TILING_BANDA_MARK)
 })
 
 /**
@@ -982,6 +1014,21 @@ test("each Slot is read in one place, and only the Window gives what fills them"
   )
   expect(Object.fromEntries(read)).toEqual(SLOT_READERS)
   expect(read).toHaveLength(Object.keys(SLOT_READERS).length)
+  // Nor by `useSlot` under another name; and what fills them all is
+  // built only where the Window gives it.
+  const naming = (word: RegExp) =>
+    pageFiles
+      .filter((file) => word.test(readFileSync(file, "utf8")))
+      .map((file) => relative(root, file))
+      .sort()
+  expect(naming(/\buseSlot\b/)).toEqual(
+    [...Object.values(SLOT_READERS), "client/ui/src/slots.ts"].sort()
+  )
+  expect(naming(/\bslotsOf\b/)).toEqual([
+    "client/web/src/App.tsx",
+    "client/web/src/registry.tsx",
+    "client/web/src/window/Popped.tsx",
+  ])
   const giving = pageFiles
     .filter((file) => /<Slots\s+value=/.test(readFileSync(file, "utf8")))
     .map((file) => relative(root, file))
