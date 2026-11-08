@@ -27,7 +27,7 @@ import { useWidgets } from "../bar/Widgets"
 import type { Layout } from "../bar/arrange"
 import { PARTS } from "../bar/placed"
 import { Watches } from "../bar/Watches"
-import { useEngineOf } from "../calls/hosts"
+import { useEngineOf, usePaneOn } from "../calls/hosts"
 import { besideOf, isShowing, nextCall, sightOf } from "../calls/sight"
 import {
   followCalls,
@@ -277,6 +277,8 @@ export function Shell({
   // Alt+C's column to the middle, and a Pane picked, from a row, a call
   // or Alt+U, to the left (ADR 0065, decision 8): once each.
   const [reveal, setReveal] = useState<Reveal>()
+  // A Pane picked opens on the host its Project is on (ADR 0081).
+  const paneOn = usePaneOn()
   // `banda menu ROUTE` opens the menu there (ADR 0017, decision 7).
   const projectsNow = useRef(projects)
   useEffect(() => {
@@ -655,9 +657,11 @@ export function Shell({
     // The one answer to `pane.pick` (ADR 0087, decision 7): the Tiling
     // goes to the Pane, or opens it, and it comes to the left once drawn.
     pick: (project, pane) =>
-      void changing((w) => picking(w, project, pane)).then((entry) => {
-        if (entry) setReveal({ entry, how: "left" })
-      }),
+      void changing((w) => picking(w, project, paneOn(project, pane))).then(
+        (entry) => {
+          if (entry) setReveal({ entry, how: "left" })
+        }
+      ),
     look: () => told,
     projects: () => open,
     toggleSidebar,

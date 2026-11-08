@@ -303,6 +303,32 @@ test("a Pane reaches the engine of the host its args name, else of the host list
   arc.close()
 })
 
+test("a pick of another host's Thread opens it on that host, never on this machine's engine with its Project", () => {
+  const { device, tell } = desktop()
+  const hosts = new KeptHosts(device)
+  hosts.follow()
+  tell([live])
+  hosts.ours([project("mine")])
+  hosts.projects("arc", [project("mine"), project("r1")])
+  const thread = (more: { host?: string } = {}) => ({
+    kind: "agents.thread",
+    args: { thread: "t1", ...more },
+  })
+  const on = (project: string, pane: ReturnType<typeof thread>) =>
+    hosts.paneOn(project as ProjectId, pane)
+
+  // As the lists carry it from that host: kept as it is.
+  const there = thread({ host: "arc" })
+  expect(on("r1", there)).toBe(there)
+  // Its host unsaid: the host that lists its Project.
+  expect(on("r1", thread())).toEqual(there)
+  // This machine's Project, which wins a clash: on this machine.
+  expect(on("mine", thread({ host: "arc" }))).toEqual(thread())
+  // A Project no host lists: this machine's, as it is.
+  const mine = thread()
+  expect(on("x", mine)).toBe(mine)
+})
+
 test("a Pane says why it cannot reach its host in the window's own words", () => {
   const words = (state: HostState) =>
     reachWords("arc", shownOf(undefined, state, 0))

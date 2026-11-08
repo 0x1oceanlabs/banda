@@ -3,9 +3,9 @@
 Banda can reach the engine of another machine you reach over ssh, such as
 a devbox, beside this one's (ADR 0081, decision 4: the `ssh` route). The
 sidebar shows its Projects and Threads under its name, below this
-machine's, and its state in words while it is not live. A click opens its
-Thread on its engine: you read it and write to it there, as to one of
-this machine's. What would reach this machine's files waits for a later
+machine's, and its state in words while it is not live. Its row, the
+bar's counts, a toast, `Alt+U` and the Banda menu open its Thread on its
+engine: you read it and write to it there, as to one of this machine's. What would reach this machine's files waits for a later
 step: other Panes for its Projects say "Not on <name> yet"; in its
 replies a path or an image opens nothing, a code block has no Run, and a
 Visual shows only its title.
