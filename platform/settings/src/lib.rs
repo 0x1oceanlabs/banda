@@ -357,6 +357,10 @@ mod every_key {
         "look.toml:desk.wallpaper-dark",
         // None: the drawer's Thread starts on this computer's first Harness.
         "look.toml:drawer.harness",
+        // None: a new Thread starts on the first account on, with no
+        // fallback (ADR 0093, decision 7).
+        "agents.toml:start.account",
+        "agents.toml:start.fallback",
         // None: the file's own keys, with no preset under them.
         "sidebar.toml:preset",
         // None: the look's `[font]` mono, and three quarters of its size.

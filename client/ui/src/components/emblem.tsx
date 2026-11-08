@@ -155,25 +155,22 @@ export function Emblem({
   const box = cn("size-3.5 shrink-0", className)
   const Neutral = of.icon ? NEUTRAL[of.icon] : undefined
   const own = of.icon ? OWN[of.icon] : undefined
+  // Named, the icon only decorates the name: a screen reader hears it once.
+  const label = named
+    ? ({ "aria-hidden": true } as const)
+    : ({ role: "img", "aria-label": of.name } as const)
   const icon = Neutral ? (
-    <Neutral
-      role="img"
-      aria-label={of.name}
-      className={box}
-      style={style}
-      strokeWidth={2.25}
-    />
+    <Neutral {...label} className={box} style={style} strokeWidth={2.25} />
   ) : (
     <svg
-      role="img"
-      aria-label={of.name}
+      {...label}
       viewBox={own ? own.viewBox : "0 0 16 16"}
       fill="currentColor"
       overflow="visible"
       className={box}
       style={style}
     >
-      <title>{of.name}</title>
+      {!named && <title>{of.name}</title>}
       {own ? (
         own.body
       ) : (

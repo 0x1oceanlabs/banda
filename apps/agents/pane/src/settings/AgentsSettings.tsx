@@ -1,6 +1,10 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
-import type { Defaults, Settings } from "@banda/contract/agents"
+import {
+  AGENTS_FILE,
+  type Defaults,
+  type Settings,
+} from "@banda/contract/agents"
 import type { Account, HarnessView } from "@banda/contract/harnesses"
 import { tomlOf } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
@@ -28,6 +32,13 @@ import {
   FieldLabel,
 } from "@banda/ui/components/field"
 import { Emblem } from "@banda/ui/components/emblem"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@banda/ui/components/select"
 import { Input } from "@banda/ui/components/input"
 import {
   Item,
@@ -43,6 +54,7 @@ import { useInFront } from "@banda/ui/hooks/use-in-front"
 import { useRead } from "@banda/ui/hooks/use-read"
 import { useFence } from "@banda/ui/hooks/use-status"
 import { useWrite } from "@banda/ui/hooks/use-write"
+import { useFile } from "@banda/ui/lib/look"
 import { cn } from "@banda/ui/lib/utils"
 import { problem } from "@banda/ui/lib/words"
 import {
@@ -54,6 +66,7 @@ import {
   Undo2Icon,
 } from "lucide-react"
 import { useAccount } from "../harnesses"
+import { startsOnWords, useStartsOn } from "../starts-on"
 import { commandLine, wordsOf } from "../thread/sign-in"
 import { type Open, Problem, Warning, Ways } from "../thread/SignIn"
 import { SettingsBar } from "./ThreadSettings"
@@ -126,6 +139,9 @@ export function AgentsSettings({
     <div className="flex flex-col gap-4">
       {list === undefined && <Spinner />}
       {list && "refused" in list && <Problem>{list.refused}</Problem>}
+      {Array.isArray(list) && list.some((one) => one.enabled) && (
+        <StartAccounts engine={engine} list={list} file={props.agents} />
+      )}
       {Array.isArray(list) &&
         list.map((harness) => (
           <HarnessCard
@@ -140,6 +156,115 @@ export function AgentsSettings({
         <AddHarness file={props.harnesses} taken={list} onAdded={readList} />
       )}
     </div>
+  )
+}
+
+/** None: the select's value for no fallback. */
+const NO_FALLBACK = "none"
+
+/**
+ * Where a new Thread starts (ADR 0093, decision 7): the default account,
+ * and the fallback it starts on while the default is out, of any Harness;
+ * `agents.toml`'s `start.account` and `start.fallback`. Under them, where
+ * new Threads start now, while the default is out.
+ */
+function StartAccounts({
+  engine,
+  list,
+  file,
+}: {
+  engine: Engine
+  list: readonly HarnessView[]
+  file: SettingsFile
+}) {
+  const { refused, write } = useWrite()
+  const { fallback } = useFile(AGENTS_FILE)
+  const starts = useStartsOn(engine)
+  const on = list.filter((one) => one.enabled)
+  const now = starts && startsOnWords(starts, list)
+  const pick = (key: string, id: string | undefined) =>
+    write(id === undefined ? file.reset(key) : file.set(key, tomlOf(id)))
+  const fallbackNow = on.some((one) => one.id === fallback)
+    ? fallback!
+    : NO_FALLBACK
+  return (
+    <Card size="sm" role="group" aria-label="New Threads">
+      <CardHeader>
+        <CardTitle>New Threads</CardTitle>
+        <CardDescription>
+          Which account a new Thread starts on. A Thread that runs stays on its
+          account: when it is out, its card offers the fallback.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col divide-y border-t">
+        <Row title="Default" about="Where a new Thread starts.">
+          <AccountSelect
+            label="Default account"
+            value={starts?.default ?? on[0]!.id}
+            accounts={on}
+            onChange={(id) => pick("start.account", id)}
+          />
+        </Row>
+        <Row
+          title="Fallback"
+          about="Where a new Thread starts while the default is out of its limits, if it has room. It may be another Harness's."
+        >
+          <AccountSelect
+            label="Fallback account"
+            value={fallbackNow}
+            accounts={on.filter((one) => one.id !== starts?.default)}
+            none="None"
+            onChange={(id) =>
+              pick("start.fallback", id === NO_FALLBACK ? undefined : id)
+            }
+          />
+        </Row>
+        {now && (
+          <p role="status" className="py-2 text-xs text-warning">
+            {now}
+          </p>
+        )}
+        {refused.map((message) => (
+          <Problem key={message}>{message}</Problem>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
+/** A choice of one of `accounts`, each by its emblem and name; with
+ * `none`, of none of them too. */
+function AccountSelect({
+  label,
+  value,
+  accounts,
+  none,
+  onChange,
+}: {
+  label: string
+  value: string
+  accounts: readonly HarnessView[]
+  none?: string
+  onChange: (id: string) => void
+}) {
+  const named = (id: string) => {
+    const one = accounts.find((account) => account.id === id)
+    return one ? <Emblem of={one} named /> : none
+  }
+  return (
+    <Select value={value} onValueChange={(id) => onChange(id as string)}>
+      <SelectTrigger aria-label={label} className="min-w-44">
+        <SelectValue>{named}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {none && <SelectItem value={NO_FALLBACK}>{none}</SelectItem>}
+        {accounts.map((one) => (
+          <SelectItem key={one.id} value={one.id}>
+            <Emblem of={one} named />
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 

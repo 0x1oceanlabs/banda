@@ -26,6 +26,7 @@ import { type Attaching, useAttachments } from "../composer/Attachments"
 import type { Values } from "../asking/form"
 import type { HarnessView } from "@banda/contract/harnesses"
 import { harnessName, harnessShort, useHarnesses } from "../harnesses"
+import { useStartsOn } from "../starts-on"
 import { useThread } from "./live-thread"
 import { settledTurn } from "../list/marks"
 import { useImageReader } from "../entries/parts/MessageImages"
@@ -125,11 +126,14 @@ export function useThreadSession({
   const acting = useAct()
   const reader = useImageReader(engine, project)
   const harnesses = useHarnesses(engine)
-  // A new Thread starts on a Harness that is on.
+  // A new Thread starts on a Harness that is on: the one the Person put
+  // it on, else the default, or the fallback while the default is out
+  // (ADR 0093, decision 7).
   const offered = useMemo(() => harnesses.filter((h) => h.enabled), [harnesses])
+  const startsOn = useStartsOn(engine)
   const harness =
     thread === null
-      ? args.harness || offered[0]?.id || ""
+      ? args.harness || startsOn?.id || offered[0]?.id || ""
       : (state?.harness ?? args.harness)
   const name = harnessName(harnesses, harness) || "the Agent"
   const short = harnessShort(harnesses, harness) || name

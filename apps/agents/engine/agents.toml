@@ -3,6 +3,13 @@
 # key is optional: what you leave out is Banda's default, written below.
 # Check a change with: banda settings check
 
+# [start]
+# The account a new Thread starts on, by its entry's ID in harnesses.toml,
+# and the one it starts on while that one is out of its limits, of any
+# Harness (ADR 0093). By default the first one on, and no fallback.
+# account = "claude"
+# fallback = "personal"
+
 # What a new Thread on a Harness starts with, by the Harness's ID. The
 # Agents section sets it from the composer's bar; what it leaves out, the
 # Harness chooses.
