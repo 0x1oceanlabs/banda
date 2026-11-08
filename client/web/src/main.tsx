@@ -44,7 +44,7 @@ if (host && engine) {
   const popped = poppedOf(location.hash)
   const show = () => {
     const view = popped
-      ? import("./workspaces/Popped").then(({ Popped }) => (
+      ? import("./window/Popped").then(({ Popped }) => (
           <Popped engine={engine} host={host} pane={popped} />
         ))
       : import("./App").then(({ App }) => <App engine={engine} />)

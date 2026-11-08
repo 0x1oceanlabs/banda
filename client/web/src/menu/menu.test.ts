@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import type { ProjectSummary } from "@banda/contract"
 import type { Listed } from "@banda/ui/pane"
 import type { Action, MenuAct, MenuRow } from "@banda/ui/module"
-import type { Shell } from "../shell/actions"
+import type { Shell } from "../window/actions"
 import {
   actsOf,
   back,

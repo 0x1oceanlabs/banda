@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { ACTIONS } from "../shell/actions"
+import { ACTIONS } from "../window/actions"
 import { keyText, matches } from "@banda/ui/lib/keys"
 import type { Mod } from "@banda/contract/look"
 import { actionFor, movesOf, pressFor, RESET_KEY, withKeys } from "./actions"

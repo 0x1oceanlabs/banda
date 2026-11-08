@@ -10,7 +10,7 @@ import {
   start,
   widthIn,
   type Workspaces,
-} from "../workspaces/model"
+} from "../tiling/model"
 import {
   besideOf,
   nextCall,

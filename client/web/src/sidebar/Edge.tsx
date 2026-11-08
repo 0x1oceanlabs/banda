@@ -3,7 +3,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   useState,
 } from "react"
-import { remInPx } from "../workspaces/layout"
+import { remInPx } from "../tiling/layout"
 import { dragged, HIDES, MIN, WIDTH, widest } from "./width"
 
 /**

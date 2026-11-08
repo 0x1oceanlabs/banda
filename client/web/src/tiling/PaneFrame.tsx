@@ -48,7 +48,7 @@ import {
   sayLabel,
   useSaid,
 } from "../registry"
-import { sayComposer } from "../shell/attach"
+import { sayComposer } from "../window/attach"
 import { heightAt } from "./layout"
 import { ThreadMark } from "@banda/ui/components/banda-mark"
 import type { Plan } from "./arrange"

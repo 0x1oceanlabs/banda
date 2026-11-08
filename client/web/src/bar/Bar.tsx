@@ -21,7 +21,7 @@ import {
 } from "react"
 import type { Problem, Workspaces } from "@banda/contract/look"
 import { useLookBar, useLookProblems } from "../look"
-import type { InBar } from "../workspaces/model"
+import type { InBar } from "../tiling/model"
 import type { ProjectSummary } from "@banda/contract"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 
