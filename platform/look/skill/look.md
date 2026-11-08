@@ -21,7 +21,9 @@ Every key, with its default:
   it wants, a `banda.toml` with the keys of `look.toml`.
 - `banda look themes` lists every theme there is, one JSON line each.
 - To make one, copy a theme's folder into `~/.config/banda/themes/<name>/`
-  and set `theme = "<name>"`.
+  and set `theme = "<name>"`. Behind Banda's fence the settings folder is
+  read-only to you: make the folder in your Project, and give your Person
+  the line that copies it there.
 
 ## Asked for, and what to set
 

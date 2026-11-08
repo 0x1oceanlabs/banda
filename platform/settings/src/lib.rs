@@ -11,7 +11,9 @@ use banda_look::theme::Places;
 use banda_look::{Problem, SettingsFile};
 use std::path::{Path, PathBuf};
 
+mod person;
 mod write;
+pub use person::{only_the_person, only_the_person_renames};
 pub use write::{rename, reset, set};
 
 /// Each module's settings files, by its ID, as its crate describes them

@@ -11,6 +11,7 @@ mod output;
 
 use crate::acp::ToolPart;
 use crate::acp::{Answer, Running, Said, ToolChange};
+use crate::full_access::Chosen;
 use crate::live::TurnRun;
 use crate::model::{
     Body, Fact, Item, ItemId, Mode, Offer, PlanStep, Settings, ThreadId, ToolKind, ToolStatus,
@@ -95,7 +96,9 @@ pub fn used(
 
 /// The Harness started or left its plan by itself, as Claude Code does
 /// when a plan is accepted: the Thread's settings follow, and its mode
-/// only if the Harness moved that too.
+/// only if the Harness moved that too. Full access the Harness moved to is
+/// no Person's choice (ADR 0083): the fence keeps it, or the next turn
+/// runs Supervised.
 fn switched(
     tx: &mut Tx<'_>,
     agent: Participant,
@@ -114,12 +117,20 @@ fn switched(
     if settings == before {
         return Ok(());
     }
+    if settings.mode != before.mode {
+        let chosen = (settings.mode == Mode::FullAccess).then_some(Chosen::Fenced);
+        store::set_full_access(tx.sql(), thread, chosen)?;
+    }
     store::set_settings(tx.sql(), thread, &settings)?;
     emit(
         tx,
         agent,
         thread,
-        &Fact::ThreadConfigured { thread, settings },
+        &Fact::ThreadConfigured {
+            thread,
+            settings,
+            supervised: None,
+        },
     )
 }
 

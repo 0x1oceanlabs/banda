@@ -234,6 +234,10 @@ fn a_script_drives_an_agent_through_the_engine_a_window_started() {
     }
     follow.kill().unwrap();
     follow.wait().unwrap();
+    // The Harness says its slash commands as its session opens: in the
+    // turn's first offer, or in another as the turn runs, as it is quick.
+    let mut offered = false;
+    kinds.retain(|kind| kind != "thread.offered" || !std::mem::replace(&mut offered, true));
     assert_eq!(
         kinds,
         [
@@ -549,6 +553,9 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "keys_free",
                 "keys_reset",
                 "keys_mod",
+                "settings_set",
+                "settings_reset",
+                "settings_rename",
                 "problems",
                 "problem"
             ][..],
@@ -806,6 +813,58 @@ fn an_agents_banda_acts_under_its_pass() {
         .unwrap();
     assert_eq!(nowhere.status.code(), Some(2), "{nowhere:?}");
     assert!(String::from_utf8_lossy(&nowhere.stderr).contains("where BANDA_ENGINE says"));
+
+    // A change to Banda's settings under the pass goes to its engine, which
+    // writes what an Agent may change and refuses what only the Person
+    // does (ADR 0083): behind the fence the files are read-only.
+    let border = places.as_agent(
+        session,
+        &["settings", "set", "look.toml", "tile.border", "3"],
+    );
+    assert!(border.status.success(), "{border:?}");
+    let look = std::fs::read_to_string(places.config.join("look.toml")).unwrap();
+    assert!(look.contains("border = 3"), "{look}");
+    let full = [
+        "settings",
+        "set",
+        "agents.toml",
+        "start.fake.mode",
+        "full_access",
+    ];
+    let refused = places.as_agent(session, &full);
+    assert!(!refused.status.success(), "{refused:?}");
+    let said = String::from_utf8_lossy(&refused.stdout) + String::from_utf8_lossy(&refused.stderr);
+    assert!(said.contains("Only your Person"), "{said}");
+    // Nor by another name, set first and renamed to it.
+    let other = [
+        "settings",
+        "set",
+        "agents.toml",
+        "start.fake.later",
+        "full_access",
+    ];
+    assert!(places.as_agent(session, &other).status.success());
+    let renamed = [
+        "settings",
+        "rename",
+        "agents.toml",
+        "start.fake.later",
+        "mode",
+    ];
+    let refused = places.as_agent(session, &renamed);
+    assert!(!refused.status.success(), "{refused:?}");
+    let agents = std::fs::read_to_string(places.config.join("agents.toml")).unwrap_or_default();
+    assert!(agents.contains("\nlater = \"full_access\""), "{agents}");
+    assert!(!agents.contains("\nmode ="), "{agents}");
+    // Its own pass's status: the engine that gave it, and its fence.
+    let status = places.as_agent(session, &["status"]);
+    let status: serde_json::Value = serde_json::from_slice(&status.stdout).unwrap();
+    assert_eq!(status["running"], true, "{status}");
+    assert!(status["fence"]["fence"].is_string(), "{status}");
+    let bound = places.as_agent(session, &["keys", "bind", "Alt+M", "column.maximize"]);
+    assert!(bound.status.success(), "{bound:?}");
+    let keys = std::fs::read_to_string(places.config.join("keys.toml")).unwrap();
+    assert!(keys.contains("column.maximize"), "{keys}");
 
     // A pass with no engine named is no pass: the owner's secret, as before.
     let owner = places
@@ -1087,6 +1146,9 @@ fn banda_status_says_whether_the_engine_runs_and_banda_stop_quits_it() {
     assert!(now["version"].is_string(), "{now}");
     assert!(now.get("unit").is_none(), "a test's engine runs in no unit");
     assert!(now.get("secret").is_none());
+    // Whether the fence holds, as the engine said in its welcome.
+    let fence = now["fence"]["fence"].as_str().unwrap_or_default();
+    assert!(["holds", "missing"].contains(&fence), "{now}");
 
     // While an Agent works, Quit asks first; with no terminal to ask in,
     // it refuses and says how to stop it anyway.

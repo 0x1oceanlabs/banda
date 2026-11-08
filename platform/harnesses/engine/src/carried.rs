@@ -94,14 +94,21 @@ impl Carried {
     /// The adapters and the Node on this host, as the engine's environment
     /// and `here` say; none when either is missing.
     pub fn find(here: &Here) -> Option<Carried> {
-        Self::find_in(here, |name| match name {
+        let var = |name: &str| match name {
             // The host's, which on Windows the registry adds to.
             "PATH" => Some(banda_kernel::host::path()),
             name => std::env::var_os(name),
-        })
+        };
+        Self::find_in(here, var, banda_kernel::host::guarded())
     }
 
-    fn find_in(here: &Here, var: impl Fn(&str) -> Option<OsString>) -> Option<Carried> {
+    /// As [`Carried::find`], with the engine's variables `var`; `guarded`
+    /// where the fence holds ([`banda_kernel::host::guard`]).
+    fn find_in(
+        here: &Here,
+        var: impl Fn(&str) -> Option<OsString>,
+        guarded: bool,
+    ) -> Option<Carried> {
         let var = |name: &str| var(name).filter(|value| !value.is_empty());
         let beside = |name: &str| here.program.parent().map(|folder| folder.join(name));
         let adapters = match var(ADAPTERS_VARIABLE) {
@@ -134,7 +141,7 @@ impl Carried {
                             .or_else(|| written(beside(ELECTRON)?))
                             .map(electron)
                     })
-                    .or_else(|| node_on(var("PATH")).map(node))?
+                    .or_else(|| node_on(var("PATH"), guarded).map(node))?
             }
         };
         Some(Carried { adapters, node })
@@ -185,11 +192,20 @@ fn written(record: PathBuf) -> Option<PathBuf> {
 
 /// The first program named `node` in the folders of `path` that is at
 /// least [`NODE_MINIMUM`], `node.exe` on Windows: an older one is passed
-/// over, and the log says which and why.
-fn node_on(path: Option<OsString>) -> Option<PathBuf> {
+/// over, and the log says which and why. Where `guarded`, a Node not of
+/// root's is not run here, outside the fence, to say its version, but
+/// taken as it is; the adapters run on it behind the fence.
+fn node_on(path: Option<OsString>, guarded: bool) -> Option<PathBuf> {
     banda_kernel::host::programs(Path::new("node"), &path?)
         .filter(|node| node.extension().is_none_or(|extension| extension.eq_ignore_ascii_case("exe")))
         .find(|candidate| {
+            if guarded && !banda_kernel::host::only_root_changes(candidate) {
+                tracing::info!(
+                    node = %candidate.display(),
+                    "this node is not asked its version: it is not root's, and runs only behind the fence"
+                );
+                return true;
+            }
             let said = version_of(candidate);
             let fits = (said.as_deref().and_then(major)).is_some_and(|major| major >= NODE_MINIMUM);
             if !fits {
@@ -264,7 +280,7 @@ mod tests {
         let vars: HashMap<&str, OsString> = (vars.iter())
             .map(|(name, value)| (*name, value.as_os_str().to_owned()))
             .collect();
-        Carried::find_in(here, |name| vars.get(name).cloned())
+        Carried::find_in(here, |name| vars.get(name).cloned(), false)
     }
 
     #[test]
@@ -462,6 +478,31 @@ mod tests {
     }
 
     #[test]
+    fn where_the_fence_holds_a_node_not_of_roots_is_taken_and_never_run() {
+        let root = tempfile::tempdir().unwrap();
+        let banda = program(&root.path().join("data/engine/1.2.3/banda"));
+        std::fs::create_dir(root.path().join("data/engine/1.2.3/adapters")).unwrap();
+        let here = Here {
+            program: &banda,
+            app: "banda",
+            checkout: false,
+        };
+        // A node that says it is too old, and leaves a mark when it runs.
+        let bin = root.path().join("bin");
+        let ran = root.path().join("ran");
+        let node = bin.join("node");
+        program_saying(&node, "v10.0.0");
+        let script = format!("#!/bin/sh\ntouch '{}'\necho v10.0.0\n", ran.display());
+        std::fs::write(&node, script).unwrap();
+        let vars = |name: &str| (name == "PATH").then(|| bin.as_os_str().to_owned());
+        let carried = Carried::find_in(&here, vars, true).unwrap();
+        assert_eq!(carried.node.program, node);
+        assert!(!ran.exists(), "never run outside the fence");
+        assert_eq!(Carried::find_in(&here, vars, false), None);
+        assert!(ran.exists());
+    }
+
+    #[test]
     fn a_released_build_has_no_checkout_to_look_in() {
         let target = Path::new("/src/banda/target/debug/banda");
         let here = Here {
@@ -496,7 +537,7 @@ mod windows_tests {
             checkout: false,
         };
         let path = root.path().join("bin").into_os_string();
-        let found = Carried::find_in(&here, |name| (name == "PATH").then(|| path.clone()));
+        let found = Carried::find_in(&here, |name| (name == "PATH").then(|| path.clone()), false);
         assert_eq!(
             found.map(|carried| carried.node),
             Some(Node {

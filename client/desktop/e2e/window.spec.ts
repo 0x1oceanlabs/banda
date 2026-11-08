@@ -728,12 +728,14 @@ test("a Person chooses the model and the mode under the message box", async () =
   const model = (name: string) =>
     thread.getByRole("button", { name: `Model: ${name}` })
 
-  await expect(mode("Full access")).toBeVisible()
+  // Where the fence does not hold, as here, a new Thread starts
+  // Supervised (ADR 0083).
+  await expect(mode("Supervised")).toBeVisible()
   await expect(thread.getByRole("button", { name: /^Model:/ })).toBeHidden()
   await composer.fill("which settings")
   await composer.press("Enter")
   await expect(
-    thread.getByText("Mode bypassPermissions, model fast, brief false")
+    thread.getByText("Mode default, model fast, brief false")
   ).toBeVisible()
 
   // The Harness offered its options with its first turn. The picker
@@ -755,9 +757,10 @@ test("a Person chooses the model and the mode under the message box", async () =
   await page.screenshot({ path: "test-results/6-effort.png" })
   await page.keyboard.press("Escape")
 
-  await mode("Full access").click()
-  await page.getByRole("menuitemradio", { name: /Supervised/ }).click()
+  // Full access the Person chose runs so, fence or none.
   await mode("Supervised").click()
+  await page.getByRole("menuitemradio", { name: /Full access/ }).click()
+  await mode("Full access").click()
   const brief = page.getByRole("menuitemcheckbox", { name: "Brief" })
   await brief.click()
   await expect(brief).toHaveAttribute("aria-checked", "true")
@@ -766,7 +769,7 @@ test("a Person chooses the model and the mode under the message box", async () =
   await composer.fill("which settings now")
   await composer.press("Enter")
   await expect(
-    thread.getByText("Mode default, model smart, brief true")
+    thread.getByText("Mode bypassPermissions, model smart, brief true")
   ).toBeVisible()
   await composer.fill("which effort")
   await composer.press("Enter")
@@ -828,9 +831,7 @@ test("a new Thread's Harness is chosen with its model", async () => {
   const message = next.getByRole("textbox", { name: "Message to Other AI" })
   await message.fill("which settings")
   await message.press("Enter")
-  await expect(
-    page.getByText(/Mode bypassPermissions, model smart/)
-  ).toBeVisible()
+  await expect(page.getByText(/Mode default, model smart/)).toBeVisible()
 })
 
 test("a Person fills in the form an Agent asks with", async () => {

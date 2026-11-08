@@ -135,15 +135,18 @@ pub struct Start {
 
 impl Start {
     /// What a new Thread starts with: the Harness's own values for what
-    /// it `offer`s, with this over them. An option the Harness does not
-    /// offer, or a value it has not, is left out. Before it offered
-    /// anything, this goes as written, and the Harness says what it does
-    /// not take.
-    pub fn over(&self, offer: Option<&Offer>) -> Settings {
-        let mut settings = Settings::default();
+    /// it `offer`s, with this over them, and `unchosen` for its mode when
+    /// this names none, as the fence has it (ADR 0083). An option the
+    /// Harness does not offer, or a value it has not, is left out. Before
+    /// it offered anything, this goes as written, and the Harness says
+    /// what it does not take.
+    pub fn over(&self, offer: Option<&Offer>, unchosen: Mode) -> Settings {
+        let mut settings = Settings {
+            mode: self.mode.unwrap_or(unchosen),
+            ..Settings::default()
+        };
         let Some(offer) = offer else {
             settings.options = self.options.clone();
-            settings.mode = self.mode.unwrap_or_default();
             settings.plan = self.plan.unwrap_or_default();
             return settings;
         };
@@ -151,9 +154,6 @@ impl Start {
             let value = self.options.get(&option.id).filter(|v| option.takes(v));
             let value = value.unwrap_or(&option.value);
             settings.options.insert(option.id.clone(), value.clone());
-        }
-        if let Some(mode) = self.mode {
-            settings.mode = mode;
         }
         if let Some(plan) = self.plan.filter(|_| offer.plans) {
             settings.plan = plan;

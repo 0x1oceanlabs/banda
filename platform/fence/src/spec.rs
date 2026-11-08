@@ -31,9 +31,25 @@ pub struct Spec {
     /// cannot enter is refused. No hole opens in one.
     #[serde(default)]
     pub hidden_if_there: Vec<PathBuf>,
+    /// What the fence covers as it does what it hides only when it is
+    /// there, found as it starts: each entry of a folder whose name starts
+    /// with the last part of one of these, as `/tmp/kitty-` names every
+    /// kitty's socket of remote control, each with its own process's
+    /// number after it.
+    #[serde(default)]
+    pub hidden_starting: Vec<PathBuf>,
     /// Folders the program sees and cannot change, as Banda's config.
     #[serde(default)]
     pub read_only: Vec<PathBuf>,
+    /// Folders of root's whose files a program takes only from root or
+    /// from its own user, as ssh takes the drop-ins in
+    /// `/etc/ssh/ssh_config.d`. The fence's user namespace maps no root,
+    /// so inside it root's files are no one's: the program finds each of
+    /// these folders' files as a copy of its own user's, `0644`, its links
+    /// followed, in a folder it cannot change. One not there is passed
+    /// over, and so is a file the user cannot read.
+    #[serde(default)]
+    pub owned: Vec<PathBuf>,
     /// The holes in what it hides.
     #[serde(default)]
     pub holes: Holes,
@@ -140,7 +156,9 @@ mod tests {
             build: "abc".to_owned(),
             hidden: vec![PathBuf::from("/home/p/.local/state/banda")],
             hidden_if_there: vec![PathBuf::from("/tmp/.X11-unix")],
+            hidden_starting: vec![PathBuf::from("/tmp/kitty-")],
             read_only: vec![PathBuf::from("/home/p/.config/banda")],
+            owned: vec![PathBuf::from("/etc/ssh/ssh_config.d")],
             holes: Holes {
                 writes: vec![PathBuf::from("/d/projects/a/sessions/claude")],
                 reads: vec![PathBuf::from("/d/projects/a/files")],

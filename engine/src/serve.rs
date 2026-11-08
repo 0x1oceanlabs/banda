@@ -19,7 +19,6 @@ use crate::run::{self, Before, Left, Run};
 use crate::service;
 use crate::{Failure, build_id, parent};
 use banda_agents::Pipe;
-use banda_environments::Local;
 use banda_harnesses::Harnesses;
 use banda_harnesses::carried::{Carried, Here};
 use banda_kernel::api::{self, OwnerSecret};
@@ -70,10 +69,13 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
     banda_git_cli::no_hooks_in(&places.state.join("no-hooks")).map_err(Failure::broken)?;
     let program = std::env::current_exe().map_err(Failure::broken)?;
     let harnesses = Harnesses::load(&places.harnesses()).map_err(Failure::broken)?;
-    harnesses.carry(carried(&program));
     let listener = listen(port, last_port).await?;
     let port = listener.local_addr().map_err(Failure::broken)?.port();
     let run = Run::began(&places, port);
+    // Whether the fence holds here, found once (ADR 0083), before the
+    // engine runs any program of its own on the host.
+    let environment = crate::fence::environment(&places).await;
+    harnesses.carry(carried(&program));
     // Heard from here on: a TERM as the engine opens, or as soon as it
     // says where it listens, stops it as any other does, not by the
     // signal's default.
@@ -91,6 +93,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         since: Some(banda_kernel::now_ms()),
         pid: Some(std::process::id()),
         unit: own_unit(),
+        pid_ns: crate::places::pid_ns(),
     };
     // Every Thread's session reaches the engine through this program's
     // `banda mcp` (ADR 0019).
@@ -101,8 +104,9 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
     let builder = Kernel::builder(&places.root, &places.data, owner)
         .machine(places.machine())
         // Every Project's programs run on this host, as the Person's own
-        // do (ADR 0084).
-        .environment(Local)
+        // do (ADR 0084), a Harness's behind the fence where it holds (ADR
+        // 0083).
+        .environment(environment)
         .passes(places.passes());
     // Every engine part in the list of Apps (ADR 0062, decision 11).
     let host = HostContext {

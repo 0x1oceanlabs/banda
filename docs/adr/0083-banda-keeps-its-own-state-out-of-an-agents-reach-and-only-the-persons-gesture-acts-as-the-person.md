@@ -319,3 +319,39 @@ MCP frames in the gateway (V6). Decision 8 lands with the web client, ADR
   is published (decision 8).
 - ADR 0081's plan: the fence before step 2; no listener beyond loopback
   (step 5) before the fence, B14, F1 and F2 (decision 7).
+- Decisions 1 and 2, as F0-3a built them (2026-11-08):
+  - The fence holds whole where its probe over this Banda's base finds
+    user, mount and PID namespaces and Landlock's scopes both, for a user
+    outside the `docker` group. Only there is Full access a new Thread's
+    default; elsewhere it starts Supervised, and the engine says why.
+    macOS and Windows start Supervised until the fence comes there (F0-5).
+  - A Thread in Full access that the fence does not keep now, from
+    before the fence or chosen where it held, runs Supervised from its
+    next turn, and its `thread.configured` says why. Full access the
+    Person chose where the fence did not hold, in the composer or as
+    agents.toml's `start.<id>.mode`, runs as chosen. Full access the
+    Harness moved to by itself is no one's choice.
+  - The fence hides the session's runtime folder, the other sessions'
+    and the container and machine managers' sockets it knows, and leaves
+    the SSH agent's socket in reach, so an Agent signs as the Person's
+    shell does. A Harness gets the Person's GitHub token, as `GH_TOKEN`,
+    only in a Project the Person said they trust (`trust_said`), and no
+    GitHub token at all in any other. A Project trusted before this, or
+    trusted only as nothing marked it foreign, is not said trusted: the
+    Person says so in its settings, or with `projects.trust`.
+  - Until B15, an Agent's `banda settings` goes through the engine (the
+    keys part's `settings_set`, `settings_reset` and `settings_rename`,
+    until a settings part of its own takes them), which refuses, under
+    an Agent's pass, which Harnesses there are and what each runs, a new
+    Thread's `mode`, what Agents may do in the browser, and what Banda
+    sends: those stay the Person's to set. A key renamed is checked as
+    what it becomes too.
+  - Where the fence holds, the engine runs its own programs on the host
+    (git, gh, and what the look asks of the system) as root installed
+    them, with only root's folders on their PATH, and its bookkeeping
+    git takes no program or credential helper from the Person's git
+    config in their home, and reads no `~/.ssh/config`: Banda's own
+    fetch of a remote that needs those fails quietly, and a pull the
+    Person asks for runs as their own git does.
+    A program found only outside root's folders, as gh under a version
+    manager, runs as found, and the engine says so once in its log.

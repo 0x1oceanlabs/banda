@@ -166,6 +166,9 @@ export async function startWindow({
     // Nor the desktop's wallpaper (ADR 0030).
     XDG_CURRENT_DESKTOP: "",
     BANDA_LOG: "warn",
+    // A new Thread's mode follows the fence (ADR 0083): off here, so it
+    // starts Supervised on every machine the tests run on.
+    BANDA_FENCE: "off",
     BANDA_BLOCK_LIST: join(dir, "blocker.txt"),
     // Notices go to a list the tests read, never to the Person's screen.
     BANDA_DESKTOP: "recorded",

@@ -125,10 +125,11 @@ fn quoted(name: &str) -> String {
     format!("\"{}\"", name.trim_matches(['"', '\'']).replace('"', ""))
 }
 
-/// The system's font for a generic name, as `fc-match` says: the first of
-/// its names. `None` without fontconfig.
+/// The system's font for a generic name, as the system's `fc-match` says
+/// ([`crate::theme::system_program`]): the first of its names. `None`
+/// without fontconfig.
 pub fn fc_match(generic: &str, fontconfig: &Path) -> Option<String> {
-    let out = Command::new("fc-match")
+    let out = Command::new(crate::theme::system_program("fc-match")?)
         .arg(generic)
         .args(["-f", "%{family}"])
         .env("XDG_CONFIG_HOME", fontconfig.parent()?)

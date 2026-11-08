@@ -30,17 +30,40 @@ pub fn main() -> ExitCode {
         Some("probe") => probe(&args[2..]),
         Some("inside") => inside(&args[2..]),
         Some("session") => session(&args[2..]),
+        Some("starter") => starter(&args[2..]),
         _ => run_tests(&args[1..]),
     }
 }
 
 // The launcher and the probe, as `banda fence` runs them.
 
-/// `fence --spec-fd N -- program args…`
+/// `fence --spec-fd N [--status-fd M] -- program args…`
 fn launcher(args: &[OsString]) -> ExitCode {
-    let (fd, rest) = spec_fd(args);
+    let (fd, mut rest) = spec_fd(args);
+    let mut status = None;
+    if rest[0] == "--status-fd" {
+        status = Some(rest[1].to_str().unwrap().parse().unwrap());
+        rest = &rest[2..];
+    }
     assert_eq!(rest[0], "--");
-    banda_fence::launch(fd, &rest[1..], BUILD)
+    banda_fence::launch(fd, status, &rest[1..], BUILD)
+}
+
+/// `starter program args…`: starts the program, the launcher, says its
+/// number, and ends once its stdin does, leaving the launcher be: never
+/// waited for here, as the starter that went.
+#[allow(clippy::zombie_processes)]
+fn starter(args: &[OsString]) -> ExitCode {
+    let launcher = Command::new(&args[0])
+        .args(&args[1..])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .spawn()
+        .unwrap();
+    println!("{}", launcher.id());
+    std::io::stdout().flush().unwrap();
+    let _ = std::io::stdin().read_to_end(&mut Vec::new());
+    ExitCode::SUCCESS
 }
 
 /// `probe --spec-fd N`: what the probe finds over that spec, as one line,
@@ -388,7 +411,7 @@ fn launcher_args(sealed: &banda_fence::Sealed, program: &[OsString]) -> Vec<OsSt
     let args: Vec<String> = (program[1..].iter())
         .map(|arg| arg.to_str().unwrap().to_owned())
         .collect();
-    banda_fence::argv(sealed, program[0].to_str().unwrap(), &args)
+    banda_fence::argv(sealed, None, program[0].to_str().unwrap(), &args)
 }
 
 /// The launcher, set to fence `program` as `spec` says.
@@ -396,7 +419,7 @@ fn launcher_of(spec: &Spec, program: &[OsString]) -> Command {
     let sealed = spec.seal().unwrap();
     let mut command = Command::new(me());
     command.args(launcher_args(&sealed, program));
-    banda_fence::attach(&mut command, sealed);
+    banda_fence::attach(&mut command, sealed, None);
     command
 }
 
@@ -436,7 +459,7 @@ fn probed(spec: &Spec) -> Probe {
     let sealed = spec.seal().unwrap();
     let mut command = Command::new(me());
     command.args(["probe", "--spec-fd", &sealed.number().to_string()]);
-    banda_fence::attach(&mut command, sealed);
+    banda_fence::attach(&mut command, sealed, None);
     let output = command.output().unwrap();
     let stdout = String::from_utf8(output.stdout).unwrap();
     let lines: Vec<&str> = stdout.lines().collect();
@@ -814,6 +837,112 @@ fn the_fenced_tree_dies_with_the_launcher() -> Ran {
     Ran::Passed
 }
 
+fn the_launcher_ends_with_its_starter_not_with_the_thread_that_started_it() -> Ran {
+    needs_the_fence!();
+    // Started from a thread that ends at once: it goes on.
+    let program = sh("echo started; exec sleep 600");
+    let mut launcher = std::thread::spawn(move || {
+        launcher_of(&spec(), &program)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap()
+    })
+    .join()
+    .unwrap();
+    let mut started = String::new();
+    BufReader::new(launcher.stdout.take().unwrap())
+        .read_line(&mut started)
+        .unwrap();
+    assert_eq!(started, "started\n");
+    std::thread::sleep(Duration::from_millis(1500));
+    assert!(
+        launcher.try_wait().unwrap().is_none(),
+        "the launcher ended with the thread that started it"
+    );
+    launcher.kill().unwrap();
+    launcher.wait().unwrap();
+
+    // Started by a process that ends: it ends, and its tree with it.
+    let sealed = spec().seal().unwrap();
+    let mut command = Command::new(me());
+    command.arg("starter").arg(me());
+    command.args(launcher_args(&sealed, &sh("exec sleep 600")));
+    banda_fence::attach(&mut command, sealed, None);
+    let mut starter = command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut number = String::new();
+    BufReader::new(starter.stdout.take().unwrap())
+        .read_line(&mut number)
+        .unwrap();
+    let leader: u32 = number.trim().parse().unwrap();
+    let tree = wait_for(|| Some(descendants(leader)).filter(|found| found.len() >= 2));
+    let tree = tree.expect("the fenced tree under the launcher");
+    drop(starter.stdin.take());
+    starter.wait().unwrap();
+    let everyone: Vec<u32> = tree.into_iter().chain([leader]).collect();
+    let gone = wait_for(|| {
+        everyone
+            .iter()
+            .all(|&process| !alive(process))
+            .then_some(())
+    });
+    assert!(
+        gone.is_some(),
+        "{everyone:?} outlived the launcher's starter"
+    );
+    Ran::Passed
+}
+
+fn the_status_pipe_ends_as_the_program_runs_or_says_why_it_did_not() -> Ran {
+    let started = |spec: &Spec, program: &[OsString]| {
+        let sealed = spec.seal().unwrap();
+        let (hears, tells) = banda_fence::status().unwrap();
+        let args: Vec<String> = (program[1..].iter())
+            .map(|arg| arg.to_str().unwrap().to_owned())
+            .collect();
+        let mut command = Command::new(me());
+        command.args(banda_fence::argv(
+            &sealed,
+            Some(&tells),
+            program[0].to_str().unwrap(),
+            &args,
+        ));
+        banda_fence::attach(&mut command, sealed, Some(tells));
+        let mut child = command
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        drop(command);
+        let heard = hears.started(Duration::from_secs(10));
+        let _ = child.kill();
+        let output = child.wait_with_output().unwrap();
+        (heard, String::from_utf8_lossy(&output.stderr).into_owned())
+    };
+    // Refused before any namespace: said on the pipe, not on stderr.
+    let other = Spec {
+        build: "another".to_owned(),
+        ..spec()
+    };
+    let (heard, stderr) = started(&other, &sh("exit 0"));
+    let words = heard.unwrap_err().to_string();
+    assert!(words.contains("another build of banda"), "{words}");
+    assert!(stderr.is_empty(), "{stderr}");
+    needs_the_fence!();
+    let (heard, _) = started(&spec(), &sh("exec sleep 600"));
+    assert!(heard.is_ok(), "{heard:?}");
+    let missing = vec![OsString::from("/no/such/program")];
+    let (heard, _) = started(&spec(), &missing);
+    let words = heard.unwrap_err().to_string();
+    assert!(words.contains("could not start"), "{words}");
+    Ran::Passed
+}
+
 fn a_signal_to_the_launcher_reaches_the_program() -> Ran {
     needs_the_fence!();
     let script = "trap 'echo heard; exit 0' TERM; echo ready; while :; do sleep 0.05; done";
@@ -887,7 +1016,7 @@ fn a_signal_reaches_the_program_once_from_the_launcher_or_a_terminal() -> Ran {
     let mut command = Command::new(me());
     command.arg("session").arg(name.to_str().unwrap()).arg(me());
     command.args(launcher_args(&sealed, &me_inside(&["count", "INT", "500"])));
-    banda_fence::attach(&mut command, sealed);
+    banda_fence::attach(&mut command, sealed, None);
     let interrupted = counted(command, |_| {
         rustix::io::write(&terminal, b"\x03").unwrap();
     });
@@ -1168,6 +1297,110 @@ fn a_hidden_socket_is_out_of_reach_but_through_a_hole() -> Ran {
     Ran::Passed
 }
 
+fn a_socket_named_by_the_start_of_its_name_is_out_of_reach() -> Ran {
+    needs_the_fence!();
+    let t = tempfile::tempdir().unwrap();
+    let names = ["kitty-1", "kitty-22", "kittyless", "other"];
+    let sockets = names.map(|name| t.path().join(name));
+    let bind = std::os::unix::net::UnixListener::bind;
+    let _listening = sockets.clone().map(|socket| bind(socket).unwrap());
+    let spec = Spec {
+        hidden_starting: vec![t.path().join("kitty-")],
+        ..spec()
+    };
+    let actions: Vec<String> = (sockets.iter())
+        .flat_map(|socket| ["connect".to_owned(), path(socket).to_owned()])
+        .collect();
+    let actions: Vec<&str> = actions.iter().map(String::as_str).collect();
+    let lines = said(&spec, &me_inside(&actions));
+    let reached: Vec<bool> = lines.iter().map(|line| line.ends_with(": ok")).collect();
+    assert_eq!(reached, [false, false, true, true], "{lines:?}");
+    Ran::Passed
+}
+
+fn a_folder_of_roots_is_given_as_the_users_own_copies() -> Ran {
+    needs_the_fence!();
+    let t = tempfile::tempdir().unwrap();
+    let (drop_ins, elsewhere) = (t.path().join("ssh_config.d"), t.path().join("elsewhere"));
+    std::fs::create_dir(&drop_ins).unwrap();
+    std::fs::create_dir(&elsewhere).unwrap();
+    std::fs::write(
+        drop_ins.join("20-keepalive.conf"),
+        "ServerAliveInterval 30\n",
+    )
+    .unwrap();
+    std::fs::write(elsewhere.join("proxy.conf"), "Host *.host\n").unwrap();
+    let linked = drop_ins.join("20-proxy.conf");
+    std::os::unix::fs::symlink(elsewhere.join("proxy.conf"), &linked).unwrap();
+    std::fs::create_dir(drop_ins.join("folder")).unwrap();
+    let spec = Spec {
+        owned: vec![drop_ins.clone(), t.path().join("not-there")],
+        ..spec()
+    };
+    let (kept, new) = (
+        drop_ins.join("20-keepalive.conf"),
+        drop_ins.join("new.conf"),
+    );
+    let actions = [
+        "list",
+        path(&drop_ins),
+        "read",
+        path(&linked),
+        "stat",
+        path(&linked),
+        "stat",
+        path(&kept),
+        "write",
+        path(&kept),
+        "write",
+        path(&new),
+    ];
+    let lines = said(&spec, &me_inside(&actions));
+    let me = rustix::process::getuid().as_raw();
+    assert_eq!(
+        lines,
+        [
+            format!("list {}: 20-keepalive.conf 20-proxy.conf", path(&drop_ins)),
+            format!("read {}: Host *.host", path(&linked)),
+            format!("stat {}: 644 {me}", path(&linked)),
+            format!("stat {}: 644 {me}", path(&kept)),
+            format!("write {}: errno {}", path(&kept), libc::EROFS),
+            format!("write {}: errno {}", path(&new), libc::EROFS),
+        ]
+    );
+    Ran::Passed
+}
+
+/// ssh takes a drop-in of `/etc/ssh/ssh_config.d` only from root or from
+/// its user: behind the fence, where root's files are no one's, it reads
+/// each as its user's own copy.
+fn ssh_reads_the_systems_drop_ins_behind_the_fence() -> Ran {
+    needs_the_fence!();
+    use std::os::unix::fs::MetadataExt;
+    let drop_ins = Path::new("/etc/ssh/ssh_config.d");
+    let roots = std::fs::read_dir(drop_ins).into_iter().flatten().flatten();
+    let has_roots = roots.into_iter().any(|entry| {
+        (std::fs::metadata(entry.path())).is_ok_and(|found| found.is_file() && found.uid() == 0)
+    });
+    let ssh = ["/usr/bin/ssh", "/bin/ssh"]
+        .into_iter()
+        .find(|ssh| Path::new(ssh).exists());
+    let Some(ssh) = ssh.filter(|_| has_roots) else {
+        return Ran::Skipped(
+            "no ssh here, or no drop-in of root's in /etc/ssh/ssh_config.d".to_owned(),
+        );
+    };
+    let spec = Spec {
+        owned: vec![drop_ins.to_path_buf()],
+        ..spec()
+    };
+    let asked = [ssh.into(), "-G".into(), "localhost".into()];
+    let output = fenced(&spec, &asked);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{:?}: {stderr}", output.status);
+    Ran::Passed
+}
+
 fn namespaces_and_a_fence_nest_inside() -> Ran {
     needs_the_fence!();
     let t = tempfile::tempdir().unwrap();
@@ -1339,6 +1572,8 @@ const TESTS: &[Test] = tests![
     the_landlock_layer_holds_where_the_kernel_has_it,
     the_init_and_the_program_hold_only_their_streams,
     the_fenced_tree_dies_with_the_launcher,
+    the_launcher_ends_with_its_starter_not_with_the_thread_that_started_it,
+    the_status_pipe_ends_as_the_program_runs_or_says_why_it_did_not,
     a_signal_to_the_launcher_reaches_the_program,
     a_signal_reaches_the_program_once_from_the_launcher_or_a_terminal,
     a_program_ended_by_a_signal_ends_the_launcher_with_128_and_its_number,
@@ -1347,6 +1582,9 @@ const TESTS: &[Test] = tests![
     the_program_starts_in_its_folder_and_never_in_a_hidden_one,
     the_folders_above_a_hidden_one_stay_where_they_are,
     a_hidden_socket_is_out_of_reach_but_through_a_hole,
+    a_socket_named_by_the_start_of_its_name_is_out_of_reach,
+    a_folder_of_roots_is_given_as_the_users_own_copies,
+    ssh_reads_the_systems_drop_ins_behind_the_fence,
     namespaces_and_a_fence_nest_inside,
     bwrap_works_inside,
     a_landlock_sandbox_works_inside,

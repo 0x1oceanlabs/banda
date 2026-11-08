@@ -315,10 +315,13 @@ dependencies = [
 name = "banda-environments"
 version = "0.1.0"
 dependencies = [
+ "banda-fence",
  "banda-kernel",
  "dunce",
+ "nix",
  "pty-process",
  "rustix",
+ "serde_json",
  "tempfile",
  "tokio",
 ]
@@ -366,6 +369,7 @@ dependencies = [
  "image",
  "infer",
  "kamadak-exif",
+ "landlock",
  "md-5",
  "mime_guess",
  "nix",
@@ -496,6 +500,7 @@ dependencies = [
 name = "banda-look"
 version = "0.1.0"
 dependencies = [
+ "banda-kernel",
  "dunce",
  "schemars 1.2.3",
  "serde",

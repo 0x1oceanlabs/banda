@@ -199,9 +199,9 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 
 ## Keys (`keys`)
 
-Banda's keys (ADR 0071): every action with its keys in force, and the lines of keys.toml that bind them, written as `banda settings set` writes after the look's checks. `banda keys` is its command; an Agent has its methods as tools.
+Banda's keys (ADR 0071): every action with its keys in force, and the lines of keys.toml that bind them, written as `banda settings set` writes after the look's checks. `banda keys` is its command; an Agent has its methods as tools. It writes the rest of Banda's settings for an Agent too, whose files are read-only behind the fence, and refuses what only the Person changes (ADR 0083).
 
-Its methods, `banda call keys.<method>`: `list`, `bind`, `free`, `reset`, `set_mod`.
+Its methods, `banda call keys.<method>`: `list`, `bind`, `free`, `reset`, `set_mod`, `settings_set`, `settings_reset`, `settings_rename`.
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 
@@ -210,6 +210,9 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 - `keys_free`: Frees a key, in keys.toml: it goes to the Pane, as Alt+F to a shell, and the action that had it keeps its other keys.
 - `keys_reset`: Takes the Person's line of a key out of keys.toml, so Banda's own key is back.
 - `keys_mod`: Sets the mod, held for every Banda key and the mouse's moves: one or two of Alt, Ctrl and Super, as `Ctrl+Alt` where the desktop holds Alt. It moves the Person's lines with it.
+- `settings_set`: Sets a key of one of Banda's settings files, as `banda settings set` does (and does through this under your pass: behind the fence the files are read-only). It refuses what only your Person changes: which program a Harness runs and with what, how freely a new Thread's Agent acts, what Agents may do in the browser, what Banda sends, and keys, which `keys_bind` binds. Tell your Person what changed.
+- `settings_reset`: Takes a key of a settings file out, as `banda settings reset` does, with `settings_set`'s refusals.
+- `settings_rename`: Names a key of a settings file otherwise, in its table, as `banda settings rename` does, with `settings_set`'s refusals for the key and for what it becomes.
 
 ## Notifications (`notifications`)
 

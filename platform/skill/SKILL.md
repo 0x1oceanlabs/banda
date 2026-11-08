@@ -34,18 +34,24 @@ Banda is changed through text files, the same way the Person changes it.
    `banda settings set look.toml tile.border 3`, or take it out with
    `banda settings reset <file> <key>`: they keep every comment and other
    key, and refuse a value the file would not take. A Harness is named by
-   its ID: `banda settings set harnesses.toml harness.codex.enabled false`;
-   `harness.<id>` set to an inline table adds a whole entry, and reset
-   takes it out. An entry for `claude` or `codex` takes what it leaves
-   out from Banda, the adapter's version too, so write only what changes. What
-   a new Thread on a Harness starts with is its `start` table:
-   `banda settings set harnesses.toml harness.claude.start.model '"opus"'`,
-   and `mode`, `plan` or any option the composer offers. `banda settings rename <file> <key> <to>` gives a key
-   another name where it is, as a line of keys.toml another key:
-   `banda settings rename keys.toml 'binds."Alt+J"' Alt+Q`. For more than a key,
-   run one for each; never edit a file they take by hand. A new file of
-   the Person's own that they do not take, a sidebar preset or a theme,
-   you write whole. Every key is optional: set only what changes.
+   its ID: `banda settings set harnesses.toml harness.codex.enabled false`.
+   What a new Thread on a Harness starts with is agents.toml's `start`
+   table: `banda settings set agents.toml start.claude.model '"opus"'`,
+   and `plan` or any option the composer offers. `banda settings rename
+   <file> <key> <to>` gives a key another name in its table. For more
+   than a key, run one for each. They go through the engine, as the
+   `settings_set`, `settings_reset` and `settings_rename` tools do: the
+   settings folder is read-only to your programs, so never edit a file
+   there by hand. The engine refuses, with the line to give your Person,
+   what only they change: which Harnesses there are and what each runs
+   (a `harness.<id>` entry whole, and its `id`, `command`, `args`, `env`,
+   `cli`, `of`, `carried` and `record`), the `mode` a new Thread starts
+   in, what Agents may do in the browser (browser.toml's `[agents]`), and
+   what Banda sends (sharing.toml). A key is bound with `banda keys
+   bind`, as the topic `keys` says. A new file of the Person's own that
+   no command writes, a sidebar preset or a theme, you write in your
+   Project, and give your Person the line that copies it into their
+   settings folder. Every key is optional: set only what changes.
 3. Check it: `banda settings check`, or `banda settings check <file>` for
    a new file, prints `path:line:column: problem`
    for each mistake, and nothing when all is well. `banda settings schema
@@ -74,7 +80,9 @@ field, `project.add.new` at a new Project's name);
 `banda menu views` at the sidebar's presets; `banda menu
 settings.<section>.<row>` opens the settings Pane there. Other words
 open it with them typed in, as a search. It exits 2 when the window is
-not open.
+not open, and always behind Banda's fence (see below), which keeps the
+window out of your reach: tell your Person where to go instead, as
+Alt+Space, then the route's words.
 
 ## Banda's engine
 
@@ -82,7 +90,8 @@ Banda's engine keeps the Projects and runs the Agents. On Linux it is a
 service of the Person's session: closing the window leaves it and every
 Agent running, and the next window, or any `banda` command, finds it, or
 starts it when it does not run. `banda status` prints whether it runs,
-since when, and its build. Quitting Banda is the Person's: `banda stop`,
+since when, its build, and whether its fence holds; under your pass it
+says so of the engine that gave it. Quitting Banda is the Person's: `banda stop`,
 Quit Banda in the window and Ctrl+Q (outside a terminal Pane) stop the
 engine and every Agent's turn, and `banda stop` refuses under your pass.
 
@@ -101,10 +110,54 @@ So is its trust, `trusted` in `banda call projects.list`: while the Person
 does not trust a Project, your Harness loads none of the settings, hooks or
 MCP servers its folder names, only the Person's own. Add Project asks them
 about a folder that looks foreign; later they trust it with "Trust
-Project…" in the Project's menu, or in its settings.
+Project…" in the Project's menu, or in its settings. Only in a Project
+they said they trust (`trust_said` in `banda call projects.list`) does
+your shell get their GitHub token, as `GH_TOKEN`, so `gh` and `git push`
+over https work behind the fence. In one trusted only as nothing marked
+it foreign, as every Project from before the fence, it has none: ask your
+Person to run `banda call projects.trust '{"project":"<id>","trusted":true}'`
+in a terminal Pane, or to stop trusting it and trust it again in its
+settings.
 A Project whose folder is gone is listed `missing`, and every call into it
 is refused until the Person locates the folder: `banda menu
 project.locate.<id>` opens "Locate folder" for them.
+
+## Behind the fence
+
+On Linux your Harness, and every program you run, runs behind Banda's
+fence where it holds (ADR 0083): Banda's own state and data are hidden,
+its settings read-only, and you see only your Harness's processes. What
+your Person has outside it is out of your reach too:
+
+- the session's runtime folder, and with it the user's systemd
+  (`systemctl --user`), the desktop's notices (`notify-send`), the
+  compositor (`hyprctl`, `wl-copy`), the keyring, gpg's agent (signed
+  commits), and a rootless Docker or Podman; the display, so a window
+  runs only headless (`try.sh --hidden`);
+- what needs another user's rights: `sudo`, `newuidmap`, `fusermount`,
+  and so AppImages (`APPIMAGE_EXTRACT_AND_RUN=1` runs one) and sshfs;
+- devices but the plain ones: no GPU, `kvm`, `fuse`, `tun` or sound;
+- Banda's window: `banda menu` and `banda files` reach none.
+
+What you start ends with your Harness, in the background too: a dev
+server, a trial, `gh run watch`, a long build. Your Harness ends as the
+engine restarts (each update of Banda does), after 30 minutes with no
+turn unless what you started listens, and when your Person trusts or
+stops trusting the Project, once the turn ends.
+
+The SSH agent stays in reach, so `git push` over ssh signs as your
+Person does. For anything else out of reach, give your Person the
+command to run in a terminal Pane, which runs outside the fence.
+`banda status` says whether the fence holds; where it does not, as on
+macOS and Windows, a new Thread starts Supervised.
+
+## GitHub in a Project not trusted
+
+When gh says your Person's GitHub token is invalid, or git asks for a
+GitHub password, your Project has no GitHub token: behind Banda's fence
+an Agent gets one only in a Project its Person said they trust. Never
+run `gh auth login` or `gh auth logout` for it, and never tell your
+Person their sign-in is broken: ask them to trust the Project in Banda.
 
 ## Driving the browser's tabs
 
@@ -138,11 +191,13 @@ to look again.
 
 In a checkout of Banda, start its window with `scripts/try.sh --detach`
 (with `--hidden` on Linux) and close it with `scripts/try.sh --stop`, as
-its `AGENTS.md` says. `--detach` runs it in a session of its own, and on
-Linux in a systemd unit of its own, apart from yours, so it does not
-crash when your process group or your unit stops (ADR 0086). Never start
-it with a bare `electron .` or `pnpm start`, and never stop it by killing
-its process group: send its main process SIGTERM.
+its `AGENTS.md` says. `--detach` runs it in a session of its own, apart
+from your process group, so it does not crash when your Turn's processes
+stop (ADR 0086). Where your Harness runs behind Banda's fence, as on
+Linux, the trial lives inside it: it ends when your Harness stops, and
+your Harness is not let go for idling while the trial listens. Never
+start it with a bare `electron .` or `pnpm start`, and never stop it by
+killing its process group: send its main process SIGTERM.
 
 ## Where things live
 

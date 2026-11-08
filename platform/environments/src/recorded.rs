@@ -2,7 +2,7 @@
 //! then has another start it: for a test, to see that a module started a
 //! program through its Project's environment, and which.
 
-use banda_kernel::{Environment, Input, Program, Pty, PtySize, Started};
+use banda_kernel::{Environment, Fence, Input, Program, Pty, PtySize, Started};
 use std::io;
 use std::sync::{Arc, Mutex};
 
@@ -47,6 +47,8 @@ impl Asks {
 pub struct Recorded<E> {
     starts: E,
     asks: Asks,
+    /// What it says of the fence, for a test, in place of `E`'s.
+    fence: Option<Fence>,
 }
 
 impl<E: Environment> Recorded<E> {
@@ -54,7 +56,16 @@ impl<E: Environment> Recorded<E> {
         Recorded {
             starts,
             asks: Asks::default(),
+            fence: None,
         }
+    }
+
+    /// Says `fence` of the fence, whatever `E` says: for a test of what
+    /// follows from it, as a new Thread's mode. What starts is as `E`
+    /// starts it.
+    pub fn saying(mut self, fence: Fence) -> Self {
+        self.fence = Some(fence);
+        self
     }
 
     /// What it was asked, now and later.
@@ -77,5 +88,9 @@ impl<E: Environment> Environment for Recorded<E> {
     fn pty(&self, program: &Program, size: PtySize) -> io::Result<(Started, Pty)> {
         self.write(How::Pty, program);
         self.starts.pty(program, size)
+    }
+
+    fn fence(&self) -> Fence {
+        (self.fence.clone()).unwrap_or_else(|| self.starts.fence())
     }
 }

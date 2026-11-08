@@ -29,6 +29,7 @@ mod between;
 mod changes;
 mod drive;
 mod effects;
+mod full_access;
 mod images;
 mod issues;
 mod kept;
@@ -55,13 +56,14 @@ use acp::Connection;
 use banda_harnesses::hosts::IDLE;
 use banda_harnesses::{Harness, Harnesses};
 use banda_kernel::{
-    AgentId, Call, Effect, Error, Holes, Kind, Module, ModuleProject, Nothing, OnRestart, Outcome,
-    Participant, Pass, Picture, Program, Refusal, Right, Settled, Tool, Tx, pass_env,
+    AgentId, Call, Effect, Error, Fence, Holes, Kind, Module, ModuleProject, Nothing, OnRestart,
+    Outcome, Participant, Pass, Picture, Program, Refusal, Right, Settled, Tool, Tx, pass_env,
 };
 use banda_look::OneFile as _;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use changes::{ChangesAsk, TurnChanges};
+use full_access::Chosen;
 use images::Images;
 use issues::{AnswerIssue, DraftIssue};
 use live::Live;
@@ -748,15 +750,19 @@ impl Agents {
                 let mut turns = store::turns(sql, thread)?;
                 let held = store::held(sql, thread)?;
                 rules::can(&mut turns, &store::openers(sql, thread)?, held);
+                let settings = store::settings(sql, thread)?;
+                let unfenced = settings.mode == model::Mode::FullAccess
+                    && store::full_access(sql, thread)? == Some(Chosen::Unfenced);
                 Ok(Some(ThreadView {
                     at: 0,
                     items,
                     turns,
-                    settings: store::settings(sql, thread)?,
+                    settings,
                     offer: store::offer(sql, thread)?,
                     usage: store::usage(sql, thread)?,
                     held,
                     forked_from: store::forked_from(sql, thread)?,
+                    unfenced,
                     thread: summary,
                 }))
             })
@@ -818,9 +824,10 @@ impl Agents {
             // As a new Thread on it starts.
             Target::New(harness, start) => {
                 let on = harness.clone();
+                let fence = call.project().environment().fence();
                 let (settings, _) = call
                     .project()
-                    .read(move |sql| fresh(sql, &on, &start))
+                    .read(move |sql| fresh(sql, &on, &start, &fence))
                     .await?;
                 (harness, settings)
             }
@@ -857,10 +864,11 @@ impl Agents {
         OneHarness { harness }: OneHarness,
     ) -> Result<Defaults, Refusal> {
         let start = self.new_start(&harness)?;
+        let fence = call.project().environment().fence();
         // What the composer shows is what the new Thread gets.
         let (at, (settings, offer)) = call
             .project()
-            .view(move |sql| fresh(sql, &harness, &start))
+            .view(move |sql| fresh(sql, &harness, &start, &fence))
             .await?;
         Ok(Defaults {
             at,
@@ -885,6 +893,7 @@ impl Agents {
             rules::message::may_choose(author)?;
         }
         let message = Message { text, images };
+        let fence = call.project().environment().fence();
         call.command(move |tx| {
             // An Agent writes from its Thread, which waits for the answer.
             let by = match author {
@@ -894,7 +903,7 @@ impl Agents {
                 }
                 Participant::Person(_) => None,
             };
-            send(tx, author, target, message, settings, steer, by)
+            send(tx, author, target, message, settings, steer, by, &fence)
         })
         .await
     }
@@ -930,10 +939,11 @@ impl Agents {
         Configure { thread, settings }: Configure,
     ) -> Result<(), Refusal> {
         let author = call.participant();
+        let fence = call.project().environment().fence();
         call.command(move |tx| {
             store::thread(tx.sql(), thread)?
                 .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
-            configure(tx, author, thread, settings)
+            configure(tx, author, thread, settings, &fence, None)
         })
         .await
     }
@@ -1318,23 +1328,50 @@ impl Module for Agents {
     }
 }
 
-/// Changes a Thread's settings, if they differ. Its next turn runs with them.
+/// Changes a Thread's settings, if they differ. Its next turn runs with
+/// them. A mode that changes is marked as chosen with `fence` as it is
+/// (ADR 0083); `why` says why Banda changed it, when Banda did.
 fn configure(
     tx: &mut Tx<'_>,
     author: Participant,
     thread: ThreadId,
     settings: Settings,
+    fence: &Fence,
+    why: Option<model::WhySupervised>,
 ) -> Result<(), Error> {
-    if store::settings(tx.sql(), thread)? == settings {
+    let before = store::settings(tx.sql(), thread)?;
+    if before == settings {
         return Ok(());
     }
+    if before.mode != settings.mode {
+        let chosen = full_access::chosen(settings.mode, fence);
+        store::set_full_access(tx.sql(), thread, chosen)?;
+    }
     store::set_settings(tx.sql(), thread, &settings)?;
-    emit(
-        tx,
-        author,
+    let configured = Fact::ThreadConfigured {
         thread,
-        &Fact::ThreadConfigured { thread, settings },
-    )
+        settings,
+        supervised: why,
+    };
+    emit(tx, author, thread, &configured)
+}
+
+/// Keeps a Thread in Full access Supervised from its turn that starts
+/// now, as `why` says (ADR 0083): `fence` does not keep its Full access
+/// now. Its `thread.configured` says why, for the window to say.
+fn supervised(
+    tx: &mut Tx<'_>,
+    author: Participant,
+    thread: ThreadId,
+    fence: &Fence,
+    why: model::WhySupervised,
+) -> Result<(), Error> {
+    let mut settings = store::settings(tx.sql(), thread)?;
+    if settings.mode != model::Mode::FullAccess {
+        return Ok(());
+    }
+    settings.mode = model::Mode::Supervised;
+    configure(tx, author, thread, settings, fence, Some(why))
 }
 
 /// The bytes of `data`, which a call sends in base64, of `what`.
@@ -1451,9 +1488,10 @@ fn fresh(
     sql: &rusqlite::Connection,
     harness: &str,
     start: &sending::Start,
+    fence: &Fence,
 ) -> Result<(Settings, Offer), Error> {
     let offer = store::latest_offer(sql, harness)?;
-    let settings = start.over(offer.as_ref());
+    let settings = start.over(offer.as_ref(), full_access::unchosen(fence));
     Ok((settings, offer.unwrap_or_default()))
 }
 
@@ -1463,7 +1501,10 @@ fn fresh(
 /// `settings`; an existing one changes to them, if they are given. `by`
 /// says how another Thread's Agent wrote it, and from which Thread: then
 /// the rules of ADR 0019 (decision 4) say whether it may. Only a Person's
-/// word joins the turn that runs or lets a held queue go on.
+/// word joins the turn that runs or lets a held queue go on. `fence` is the
+/// fence as it stands, which a new Thread's mode follows and a mode chosen
+/// is marked with (ADR 0083).
+#[allow(clippy::too_many_arguments)]
 fn send(
     tx: &mut Tx<'_>,
     author: Participant,
@@ -1472,6 +1513,7 @@ fn send(
     settings: Option<Settings>,
     steer: bool,
     by: Option<(Opener, ThreadId)>,
+    fence: &Fence,
 ) -> Result<Sent, Error> {
     let now = tx.now();
     let opener = by.map_or(Opener::Person, |(opener, _)| opener);
@@ -1491,7 +1533,7 @@ fn send(
                 rules::to_thread::may_write(from, id, &title, asks, &waiting)?;
             }
             if let Some(settings) = settings {
-                configure(tx, author, id, settings)?;
+                configure(tx, author, id, settings, fence, None)?;
             }
             (id, agent)
         }
@@ -1500,9 +1542,10 @@ fn send(
             // No one chose: as the composer would have shown it.
             let settings = match settings {
                 Some(settings) => settings,
-                None => fresh(tx.sql(), &harness, &start)?.0,
+                None => fresh(tx.sql(), &harness, &start, fence)?.0,
             };
-            start_thread(tx, author, harness, title, &settings)?
+            let chosen = full_access::chosen(settings.mode, fence);
+            start_thread(tx, author, harness, title, &settings, chosen)?
         }
     };
     let running = match steer && by_person {
@@ -1600,7 +1643,10 @@ fn fork(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Forked, Er
     let evidence: acp::Evidence = store::evidence(tx.sql(), from)?.ok_or_else(cannot)?;
     let settings = store::settings(tx.sql(), from)?;
     let title = format!("{} fork", source.title);
-    let (thread, agent) = start_thread(tx, author, source.harness, title.clone(), &settings)?;
+    // As its Thread's mode was chosen, so is the fork's.
+    let chosen = store::full_access(tx.sql(), from)?;
+    let (thread, agent) =
+        start_thread(tx, author, source.harness, title.clone(), &settings, chosen)?;
     store::set_forked_from(tx.sql(), thread, from)?;
     store::copy_turns(tx.sql(), (from, found.agent), turn, (thread, agent))?;
     store::set_offer(tx.sql(), thread, &store::offer(tx.sql(), from)?)?;
@@ -1634,13 +1680,15 @@ fn rewind(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<(), Erro
     Ok(())
 }
 
-/// A new Thread on `harness`, and its own Agent, the only one.
+/// A new Thread on `harness`, and its own Agent, the only one: in
+/// `settings`, its Full access marked as `chosen` (ADR 0083).
 fn start_thread(
     tx: &mut Tx<'_>,
     author: Participant,
     harness: String,
     title: String,
     settings: &Settings,
+    chosen: Option<Chosen>,
 ) -> Result<(ThreadId, AgentId), Error> {
     let summary = ThreadSummary {
         id: ThreadId::new(),
@@ -1651,6 +1699,7 @@ fn start_thread(
     };
     let agent = AgentId::new();
     store::insert_thread(tx.sql(), &summary, agent, author, settings)?;
+    store::set_full_access(tx.sql(), summary.id, chosen)?;
     let fact = Fact::ThreadStarted {
         thread: summary.id,
         title: summary.title,

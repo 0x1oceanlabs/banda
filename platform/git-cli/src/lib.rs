@@ -33,6 +33,8 @@
 //!   value (`git check-attr`).
 //! - A fetch takes the Person's own ssh command and credential helpers,
 //!   never the repository's, so one that needs the repository's fails.
+//!   Where the fence holds, it takes only the system's, and ssh reads no
+//!   config of the Person's (ADR 0083, F0-3a).
 //!
 //! An act the Person asked for, as a commit, a push, a pull or a switch,
 //! runs as their own git does: hooks, filters, signing and all.
@@ -276,7 +278,8 @@ where
     let listed = tokio::time::timeout(READING, configured(dir))
         .await
         .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "git's config took too long"))??;
-    let config = overrides(&listed, std::env::var_os("GIT_SSH").as_deref())?;
+    let git_ssh = std::env::var_os("GIT_SSH");
+    let config = overrides(&listed, git_ssh.as_deref(), banda_kernel::host::guarded())?;
     let mut git = own(dir)?;
     git.env("GIT_CONFIG_COUNT", config.len().to_string());
     for (at, (key, value)) in config.into_iter().enumerate() {
@@ -358,10 +361,10 @@ pub fn remove_stale_lock(lock: &Path, started: SystemTime) -> bool {
 }
 
 /// git in `dir` as every git starts: as [`EVERY`] says, taking nothing
-/// [`ELSEWHERE`], found as the host finds a program and stopped once its
-/// caller lets go of it ([`banda_kernel::host::command`]).
+/// [`ELSEWHERE`], found as the host finds the engine's own programs, and
+/// stopped once its caller lets go of it ([`banda_kernel::host::own`]).
 fn base(dir: &Path) -> io::Result<Command> {
-    let mut git = banda_kernel::host::command("git")?;
+    let mut git = banda_kernel::host::own("git")?;
     git.current_dir(dir).envs(EVERY);
     for name in ELSEWHERE {
         git.env_remove(name);
@@ -465,16 +468,23 @@ async fn configured(dir: &Path) -> io::Result<Vec<u8>> {
 
 /// What a bookkeeping git is configured with, as `GIT_CONFIG_KEY_<n>` and
 /// `GIT_CONFIG_VALUE_<n>` take it, after the config [`configured`] read;
-/// `git_ssh` is the engine's `GIT_SSH`.
+/// `git_ssh` is the engine's `GIT_SSH`. `guarded` says that the fence
+/// holds ([`banda_kernel::host::guard`]): then the home's config is not
+/// taken as the Person's own, no more than the repository's.
 ///
 /// First [`ALWAYS`], and every hook event off. Then the Person's own
-/// network: their ssh command, from their config (system or global), else
-/// `GIT_SSH`'s program, else `ssh` (their `GIT_SSH_COMMAND` wins over it
-/// as it is); and their credential helpers alone. Then what the config
-/// names: every filter driver blanked, which need not run; every diff
-/// driver's text conversion and command blanked, so a git that would run
-/// one fails instead; and every hook off.
-fn overrides(listed: &[u8], git_ssh: Option<&OsStr>) -> io::Result<Vec<(Vec<u8>, Vec<u8>)>> {
+/// network: their ssh command, from their config (system, or global where
+/// not `guarded`), else `GIT_SSH`'s program, else `ssh` (their
+/// `GIT_SSH_COMMAND` wins over it as it is), which reads no config in the
+/// home where `guarded`; and their credential helpers alone. Then what
+/// the config names: every filter driver blanked, which need not run;
+/// every diff driver's text conversion and command blanked, so a git that
+/// would run one fails instead; and every hook off.
+fn overrides(
+    listed: &[u8],
+    git_ssh: Option<&OsStr>,
+    guarded: bool,
+) -> io::Result<Vec<(Vec<u8>, Vec<u8>)>> {
     let (mut filters, mut diffs, mut hooks) = (BTreeSet::new(), BTreeSet::new(), BTreeSet::new());
     let mut persons_ssh: Option<&[u8]> = None;
     let mut persons_helpers: Vec<(&[u8], &[u8])> = Vec::new();
@@ -486,7 +496,7 @@ fn overrides(listed: &[u8], git_ssh: Option<&OsStr>) -> io::Result<Vec<(Vec<u8>,
             Some(at) => (&entry[..at], &entry[at + 1..]),
             None => (entry, &b""[..]),
         };
-        let persons = scope == b"system" || scope == b"global";
+        let persons = scope == b"system" || (scope == b"global" && !guarded);
         let first = key.iter().position(|b| *b == b'.').ok_or_else(unreadable)?;
         let last = key.iter().rposition(|b| *b == b'.').unwrap_or(first);
         let (section, variable) = (&key[..first], &key[last + 1..]);
@@ -525,6 +535,7 @@ fn overrides(listed: &[u8], git_ssh: Option<&OsStr>) -> io::Result<Vec<(Vec<u8>,
     let ssh = match (persons_ssh, git_ssh) {
         (Some(command), _) => command.to_vec(),
         (None, Some(program)) if !program.is_empty() => quoted(program.as_encoded_bytes()),
+        (None, _) if guarded => b"ssh -F none".to_vec(),
         (None, _) => b"ssh".to_vec(),
     };
     set(&[b"core.sshCommand"], &ssh);
@@ -647,7 +658,7 @@ mod tests {
 
     #[test]
     fn with_nothing_named_what_always_holds_is_set_and_the_network_is_the_persons() {
-        let config = overrides(&listing(&[]), None).unwrap();
+        let config = overrides(&listing(&[]), None, false).unwrap();
         let text = |bytes: &[u8]| String::from_utf8(bytes.to_vec()).unwrap();
         let keys: Vec<String> = config.iter().map(|(key, _)| text(key)).collect();
         assert!(keys.contains(&"core.hooksPath".to_owned()));
@@ -662,11 +673,11 @@ mod tests {
 
     #[test]
     fn a_git_that_took_no_config_from_its_environment_starts_none() {
-        assert!(overrides(b"", None).is_err());
+        assert!(overrides(b"", None, false).is_err());
         let older = b"local\0filter.x.clean\n./clean\0";
-        assert!(overrides(older, None).is_err());
+        assert!(overrides(older, None, false).is_err());
         // The Person's own of that name is no probe.
-        assert!(overrides(b"global\0banda.probe\ntrue\0", None).is_err());
+        assert!(overrides(b"global\0banda.probe\ntrue\0", None, false).is_err());
     }
 
     #[test]
@@ -682,7 +693,7 @@ mod tests {
             ("worktree", "hook.lint.event", "reference-transaction"),
             ("local", "hook.a.b.command", "./b"),
         ]);
-        let config = overrides(&listed, None).unwrap();
+        let config = overrides(&listed, None, false).unwrap();
         assert_eq!(
             set(&config)[2..],
             pairs(&[
@@ -718,7 +729,7 @@ mod tests {
             ("local", "credential.helper", "./steal"),
             ("local", "core.sshcommand", "./ssh"),
         ]);
-        let config = overrides(&listed, Some(OsStr::new("/usr/bin/plink"))).unwrap();
+        let config = overrides(&listed, Some(OsStr::new("/usr/bin/plink")), false).unwrap();
         assert_eq!(
             set(&config),
             pairs(&[
@@ -732,7 +743,7 @@ mod tests {
         // With none in the Person's config, the program of their GIT_SSH,
         // which the repository's would win over.
         let listed = listing(&[("local", "core.sshcommand", "./ssh")]);
-        let config = overrides(&listed, Some(OsStr::new("/opt/my ssh/it's"))).unwrap();
+        let config = overrides(&listed, Some(OsStr::new("/opt/my ssh/it's")), false).unwrap();
         assert_eq!(
             set(&config)[0],
             pairs(&[("core.sshCommand", r"'/opt/my ssh/it'\''s'")])[0]
@@ -740,11 +751,41 @@ mod tests {
     }
 
     #[test]
+    fn where_the_fence_holds_the_homes_config_names_no_program_of_the_network() {
+        let listed = listing(&[
+            ("global", "credential.https://github.com.helper", "!gh auth"),
+            ("global", "core.sshcommand", "ssh -i ~/.ssh/work"),
+            ("system", "credential.helper", "libsecret"),
+        ]);
+        let config = overrides(&listed, None, true).unwrap();
+        assert_eq!(
+            set(&config),
+            pairs(&[
+                ("core.sshCommand", "ssh -F none"),
+                ("credential.helper", ""),
+                ("credential.helper", "libsecret"),
+            ])
+        );
+        // The system's ssh command, and the engine's GIT_SSH, still hold.
+        let listed = listing(&[("system", "core.sshcommand", "ssh -i /etc/k")]);
+        let config = overrides(&listed, None, true).unwrap();
+        assert_eq!(
+            set(&config)[0],
+            pairs(&[("core.sshCommand", "ssh -i /etc/k")])[0]
+        );
+        let config = overrides(&listing(&[]), Some(OsStr::new("/usr/bin/plink")), true).unwrap();
+        assert_eq!(
+            set(&config)[0],
+            pairs(&[("core.sshCommand", "'/usr/bin/plink'")])[0]
+        );
+    }
+
+    #[test]
     fn a_listing_cut_short_is_refused() {
         let cut = [listing(&[]), b"local\0".to_vec()].concat();
-        assert!(overrides(&cut, None).is_err());
+        assert!(overrides(&cut, None, false).is_err());
         let dotless = [listing(&[]), b"local\0nodot\nx\0".to_vec()].concat();
-        assert!(overrides(&dotless, None).is_err());
+        assert!(overrides(&dotless, None, false).is_err());
     }
 
     #[tokio::test]

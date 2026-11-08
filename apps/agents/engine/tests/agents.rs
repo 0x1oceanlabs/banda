@@ -13,7 +13,8 @@ use banda_harnesses::{Cli, Harness, Harnesses, HarnessesModule, account_changed}
 #[cfg(unix)]
 use banda_kernel::Whose;
 use banda_kernel::{
-    AgentId, Caller, Code, CommandId, EventFilter, Holes, Kernel, Participant, PersonId, ProjectId,
+    AgentId, Caller, Code, CommandId, EventFilter, Fence, FenceLayer, FenceWhy, Holes, Kernel,
+    Participant, PersonId, ProjectId,
 };
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -38,6 +39,14 @@ fn fake_agent() -> PathBuf {
             profile.join("banda-fake-agent")
         })
         .clone()
+}
+
+/// The fence as it holds whole.
+fn holds() -> Fence {
+    Fence::Holds {
+        layers: vec![FenceLayer::Namespaces, FenceLayer::Landlock],
+        docker_group: false,
+    }
 }
 
 fn harnesses() -> Harnesses {
@@ -71,6 +80,7 @@ fn fake_with(env: &[(&str, &str)]) -> Harness {
         record: None,
         cwd: None,
         holes: Holes::default(),
+        credentials: Default::default(),
     }
 }
 
@@ -137,7 +147,19 @@ impl World {
     /// As [`World::open_with`], and what its environment, the host's, is
     /// asked to start.
     async fn open_asked(root: &Path, owner: PersonId, agents: Agents) -> (Arc<Kernel>, Asks) {
-        let environment = Recorded::new(Local);
+        World::open_fenced(root, owner, agents, holds()).await
+    }
+
+    /// As [`World::open_asked`], its environment saying `fence` of the
+    /// fence: these tests' own say it holds whole, as it does where Banda
+    /// lets a new Thread start in Full access (ADR 0083).
+    async fn open_fenced(
+        root: &Path,
+        owner: PersonId,
+        agents: Agents,
+        fence: Fence,
+    ) -> (Arc<Kernel>, Asks) {
+        let environment = Recorded::new(Local).saying(fence);
         let asks = environment.asks();
         let kernel = Kernel::builder(root, root.join(".data"), owner)
             .machine(root.join(".machine"))
@@ -435,7 +457,11 @@ async fn a_message_gets_the_agents_reply() {
     let events = (project.events_after(0, Default::default(), 100).await).unwrap();
     let started = events.iter().find(|e| e.kind == "turn.started").unwrap();
     assert_eq!(started.payload["harness"], "fake", "the fact says it too");
-    let kinds: Vec<String> = events.into_iter().map(|e| e.kind).collect();
+    let mut kinds: Vec<String> = events.into_iter().map(|e| e.kind).collect();
+    // The Harness says its slash commands as its session opens: in the
+    // turn's first offer, or in another later, as it is quick.
+    let mut offered = false;
+    kinds.retain(|kind| kind != "thread.offered" || !std::mem::replace(&mut offered, true));
     assert_eq!(
         kinds,
         [
@@ -794,6 +820,35 @@ fn across_a_restart<T>(
     first.shutdown_timeout(Duration::from_secs(5));
     runtime().block_on(async {
         let kernel = World::open_with(root, owner, agents()).await;
+        let world = World {
+            kernel,
+            owner,
+            project,
+            harness,
+        };
+        after(&world, kept).await;
+    });
+}
+
+/// As [`across_a_restart`], the engine's fence `fences.0` before and
+/// `fences.1` after.
+fn across_a_restart_fenced<T>(
+    root: &Path,
+    agents: impl Fn() -> Agents,
+    fences: (Fence, Fence),
+    before: impl AsyncFnOnce(&World) -> T,
+    after: impl AsyncFnOnce(&World, T),
+) {
+    let runtime = || tokio::runtime::Runtime::new().unwrap();
+    let first = runtime();
+    let (owner, project, harness, kept) = first.block_on(async {
+        let world = fenced_world(root, agents(), fences.0).await;
+        let kept = before(&world).await;
+        (world.owner, world.project, world.harness.clone(), kept)
+    });
+    first.shutdown_timeout(Duration::from_secs(5));
+    runtime().block_on(async {
+        let (kernel, _) = World::open_fenced(root, owner, agents(), fences.1).await;
         let world = World {
             kernel,
             owner,
@@ -1387,6 +1442,7 @@ fn with_cli_since(program: &str, minimum: Option<&str>) -> Agents {
         record: None,
         cwd: None,
         holes: Holes::default(),
+        credentials: Default::default(),
     }]))
 }
 
@@ -1830,6 +1886,155 @@ async fn a_new_thread_starts_as_agents_toml_says_for_its_harness() {
     assert_eq!(defaults["settings"]["mode"], "auto");
     assert_eq!(defaults["settings"]["options"]["model"], "smart");
     assert!(defaults["settings"]["options"].get("nothing").is_none());
+}
+
+/// A fence that does not hold, as on a system that gives no namespaces.
+fn missing() -> Fence {
+    Fence::missing(
+        FenceWhy::NoUserNamespaces,
+        "This system gives no namespaces.",
+    )
+}
+
+/// A Project of an engine whose fence is `fence`.
+async fn fenced_world(root: &Path, agents: Agents, fence: Fence) -> World {
+    let owner = PersonId::new();
+    let (kernel, _) = World::open_fenced(root, owner, agents, fence).await;
+    World::in_a_project(kernel, owner, "fake").await
+}
+
+/// What `thread.configured` said why of each time Banda started the
+/// Thread Supervised.
+async fn started_supervised(world: &World, thread: &Value) -> Vec<Value> {
+    let filter = EventFilter {
+        module: Some("agents".to_owned()),
+        subject: thread.as_str().map(str::to_owned),
+        kinds: Some(vec!["thread.configured".to_owned()]),
+    };
+    let project = world.kernel.project(world.project).await.unwrap();
+    let events = project.events_after(0, filter, usize::MAX).await.unwrap();
+    (events.into_iter())
+        .filter_map(|event| event.payload.get("supervised").cloned())
+        .collect()
+}
+
+#[tokio::test]
+async fn a_new_thread_starts_supervised_where_the_fence_does_not_hold_whole() {
+    let partly = Fence::Holds {
+        layers: vec![FenceLayer::Namespaces],
+        docker_group: false,
+    };
+    let docker = Fence::Holds {
+        layers: vec![FenceLayer::Namespaces, FenceLayer::Landlock],
+        docker_group: true,
+    };
+    for fence in [missing(), partly, docker] {
+        let root = tempfile::tempdir().unwrap();
+        let world = fenced_world(root.path(), Agents::new(harnesses()), fence.clone()).await;
+        let defaults = world.defaults().await;
+        assert_eq!(defaults["settings"]["mode"], "supervised", "{fence:?}");
+        let (thread, view) = world.finish(None, "which settings").await;
+        assert_eq!(view.settings.mode, Mode::Supervised, "{fence:?}");
+        assert!(last_reply(&view).starts_with("message: Mode default"));
+        assert!(!view.unfenced);
+
+        // The Person chooses Full access, knowing: it runs so.
+        world
+            .configure(&thread, json!({ "mode": "full_access" }))
+            .await;
+        let (_, view) = world.finish(Some(&thread), "which settings").await;
+        assert!(view.unfenced, "{fence:?}");
+        assert_eq!(view.settings.mode, Mode::FullAccess);
+        assert!(last_reply(&view).starts_with("message: Mode bypassPermissions"));
+        assert!(started_supervised(&world, &thread).await.is_empty());
+    }
+}
+
+#[tokio::test]
+async fn full_access_in_agents_toml_is_the_persons_choice_where_the_fence_does_not_hold() {
+    let root = tempfile::tempdir().unwrap();
+    let start = "[start.fake]\nmode = \"full_access\"\n";
+    std::fs::write(root.path().join("agents.toml"), start).unwrap();
+    let agents = Agents::new(harnesses()).config_in(root.path().to_owned());
+    let world = fenced_world(root.path(), agents, missing()).await;
+    assert_eq!(world.defaults().await["settings"]["mode"], "full_access");
+    let (_, view) = world.finish(None, "which settings").await;
+    assert_eq!(view.settings.mode, Mode::FullAccess);
+    assert!(view.unfenced);
+    assert!(last_reply(&view).starts_with("message: Mode bypassPermissions"));
+}
+
+#[test]
+fn full_access_the_fence_no_longer_keeps_starts_supervised_and_says_why() {
+    let root = tempfile::tempdir().unwrap();
+    across_a_restart_fenced(
+        root.path(),
+        || Agents::new(harnesses()),
+        (holds(), missing()),
+        async |world| {
+            let (thread, view) = world.finish(None, "which settings").await;
+            assert_eq!(view.settings.mode, Mode::FullAccess, "where it holds");
+            assert!(!view.unfenced);
+            thread
+        },
+        async |world, thread| {
+            let (_, view) = world.finish(Some(&thread), "which settings").await;
+            assert!(last_reply(&view).starts_with("message: Mode default"));
+            assert_eq!(view.settings.mode, Mode::Supervised, "and stays so");
+            let why = started_supervised(world, &thread).await;
+            let fence = serde_json::to_value(missing()).unwrap();
+            assert_eq!(why, [json!({ "before": false, "fence": fence })]);
+
+            // Chosen again, knowing the fence does not hold: as chosen.
+            world
+                .configure(&thread, json!({ "mode": "full_access" }))
+                .await;
+            let (_, view) = world.finish(Some(&thread), "which settings").await;
+            assert!(last_reply(&view).starts_with("message: Mode bypassPermissions"));
+            assert!(view.unfenced);
+            assert_eq!(started_supervised(world, &thread).await.len(), 1);
+        },
+    );
+}
+
+/// The Person's GitHub token goes to a Harness's programs only in a
+/// Project the Person said they trust (ADR 0083).
+#[tokio::test]
+async fn only_a_project_the_person_said_they_trust_gets_their_github_token() {
+    banda_harnesses::github::keep(Some("t0ken".to_owned()));
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let (kernel, asks) = World::open_asked(root.path(), owner, Agents::new(harnesses())).await;
+    // Trusted as nothing marked it foreign, which is not said.
+    let world = World::in_a_project(kernel, owner, "fake").await;
+    world.finish(None, "hello").await;
+    let said = (world.kernel)
+        .call(
+            world.person(),
+            "projects.create",
+            None,
+            Some(CommandId::new()),
+            json!({ "name": "Said", "trusted": true }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(said["trust_said"], true);
+    let said = World {
+        kernel: world.kernel.clone(),
+        owner,
+        project: serde_json::from_value(said["id"].clone()).unwrap(),
+        harness: world.harness.clone(),
+    };
+    said.finish(None, "hello").await;
+    let started = asks.of("banda-fake-agent");
+    let token_of = |project: ProjectId| -> Vec<Option<String>> {
+        (started.iter())
+            .filter(|asked| asked.program.env.get("BANDA_PROJECT") == Some(&project.to_string()))
+            .map(|asked| asked.program.env.get("GH_TOKEN").cloned())
+            .collect()
+    };
+    assert_eq!(token_of(world.project), [None]);
+    assert_eq!(token_of(said.project), [Some("t0ken".to_owned())]);
 }
 
 #[tokio::test]
@@ -3029,6 +3234,7 @@ async fn the_real_harnesses_say_what_they_run_and_who_is_signed_in() {
         record: None,
         cwd: None,
         holes: Holes::default(),
+        credentials: Default::default(),
     };
     let harnesses = Harnesses::new([vec![fake], real.to_vec()].concat());
     let root = tempfile::tempdir().unwrap();
@@ -5109,6 +5315,7 @@ fn two_claude_accounts(cli: &Path) -> Agents {
         record: None,
         cwd: None,
         holes: Holes::default(),
+        credentials: Default::default(),
     };
     let claude = || {
         Some(Cli {
@@ -5213,6 +5420,7 @@ async fn a_threads_process_runs_the_carried_adapter_on_the_node_found_with_the_p
         record: None,
         cwd: None,
         holes: Holes::default(),
+        credentials: Default::default(),
     };
     let harnesses = Harnesses::new(vec![claude]);
     harnesses.carry(Some(Carried {

@@ -48,5 +48,8 @@ zip.workspace = true
 [target.'cfg(unix)'.dependencies]
 nix.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock.workspace = true
+
 [lints]
 workspace = true

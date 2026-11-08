@@ -12,10 +12,12 @@
 //! of its own ([`hide`]), so a Ctrl+C in a console where someone runs
 //! `banda serve` by hand reaches the engine alone.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::{Component, Path, PathBuf, Prefix};
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[cfg(windows)]
 mod windows;
@@ -55,10 +57,99 @@ pub fn command_on(
         let missing = format!("{} is not on PATH.", program.display());
         io::Error::new(io::ErrorKind::NotFound, missing)
     })?;
+    Ok(starting(found, path))
+}
+
+/// The command that starts `found` with the PATH `path`, killed once let
+/// go of, in the engine's hidden console ([`hide`]).
+fn starting(found: PathBuf, path: OsString) -> tokio::process::Command {
     let mut command = tokio::process::Command::new(found);
     command.env("PATH", path).kill_on_drop(true);
     hide(command.as_std_mut());
-    Ok(command)
+    command
+}
+
+/// Whether the engine's own programs are found only where root changes
+/// them ([`guard`]).
+static GUARDED: AtomicBool = AtomicBool::new(false);
+
+/// The programs [`own`] found in no place only root changes, each said in
+/// the log once.
+static UNGUARDED: Mutex<BTreeSet<PathBuf>> = Mutex::new(BTreeSet::new());
+
+/// Says that the fence holds (ADR 0083): a program the engine runs for
+/// itself on the host ([`own`]) is found then only where only root
+/// changes it, when there is one. The engine says it once, as it finds
+/// that the fence holds.
+pub fn guard() {
+    GUARDED.store(true, Ordering::Relaxed);
+}
+
+/// Whether the engine said [`guard`].
+pub fn guarded() -> bool {
+    GUARDED.load(Ordering::Relaxed)
+}
+
+/// `program`, one the engine runs for itself on the host and no
+/// Project's, as [`command`] starts it; where the engine said [`guard`],
+/// the first of that name on the PATH that only root changes
+/// ([`only_root_changes`]), as named, so a link starts as its name says;
+/// and given the folders of the PATH only root changes alone, so what it
+/// starts by name is root's too. With none of root's, it is the first
+/// there is, given the whole PATH, and the log says so once.
+pub fn own(program: impl AsRef<Path>) -> io::Result<tokio::process::Command> {
+    let path = self::path();
+    match owned(program.as_ref(), &path, guarded()) {
+        Some((found, given)) => Ok(starting(found, given)),
+        None => command_on(program, path),
+    }
+}
+
+/// What [`own`] starts for `program` on `path`, and the PATH it gives it:
+/// none unless `guarded`, or with no `program` on `path` at all.
+pub fn owned(program: &Path, path: &OsStr, guarded: bool) -> Option<(PathBuf, OsString)> {
+    if !guarded {
+        return None;
+    }
+    if let Some(found) = programs(program, path).find(|found| only_root_changes(found)) {
+        let roots = std::env::split_paths(path).filter(|folder| only_root_changes(folder));
+        let given = std::env::join_paths(roots).unwrap_or_default();
+        return Some((found, given));
+    }
+    let found = find(program, path)?;
+    if UNGUARDED.lock().unwrap().insert(found.clone()) {
+        tracing::warn!(
+            program = %found.display(),
+            "Banda runs this program for itself outside the fence, and none of its name on the \
+             PATH is in a place only root changes"
+        );
+    }
+    Some((found, path.to_owned()))
+}
+
+/// Whether only root changes `path`, as it is named and where it leads:
+/// it and each folder above it are root's, and a folder or a file is
+/// written by no one else; a link on the way is root's, in a folder only
+/// root changes, so no one else moves it.
+#[cfg(unix)]
+pub fn only_root_changes(path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let roots = |found: &std::fs::Metadata| {
+        found.uid() == 0 && (found.file_type().is_symlink() || found.mode() & 0o022 == 0)
+    };
+    let named = (path.ancestors()).all(|at| std::fs::symlink_metadata(at).is_ok_and(|f| roots(&f)));
+    named
+        && path.is_absolute()
+        && dunce::canonicalize(path).is_ok_and(|real| {
+            (real.ancestors()).all(|at| std::fs::metadata(at).is_ok_and(|f| roots(&f)))
+        })
+}
+
+/// No place on Windows is root's: its programs are found as [`command`]
+/// finds them, where Banda has no fence yet.
+#[cfg(not(unix))]
+pub fn only_root_changes(_: &Path) -> bool {
+    false
 }
 
 /// The PATH the engine finds programs on, and gives the programs it starts
@@ -450,6 +541,59 @@ mod tests {
         assert_eq!(find("tool", &path), Some(second.join("tool")));
         assert_eq!(find(first.join("tool"), &path), None, "no exec bit");
         assert_eq!(find("gone", &path), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn only_root_changes_a_program_of_root_s_as_it_is_named() {
+        use std::os::unix::fs::PermissionsExt;
+        assert!(only_root_changes(Path::new("/usr")));
+        assert!(!only_root_changes(Path::new("usr")));
+        assert!(!only_root_changes(Path::new("/tmp")), "anyone writes it");
+        let folder = tempfile::tempdir().unwrap();
+        let mine = folder.path().join("gh");
+        std::fs::write(&mine, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&mine, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(!only_root_changes(&mine));
+        // A link of this user's to a program of root's, as a version
+        // manager's shim: this user moves it, and it starts as another.
+        let sh = ["/usr/bin/sh", "/bin/sh"]
+            .map(Path::new)
+            .into_iter()
+            .find(|sh| only_root_changes(sh));
+        let shim = folder.path().join("shim");
+        std::os::unix::fs::symlink(sh.unwrap(), &shim).unwrap();
+        assert!(!only_root_changes(&shim));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_guarded_program_is_one_only_root_changes_with_none_else_on_its_path() {
+        use std::os::unix::fs::PermissionsExt;
+        let folder = tempfile::tempdir().unwrap();
+        let home = folder.path().join("bin");
+        std::fs::create_dir(&home).unwrap();
+        let sh = ["/usr/bin", "/bin"].map(PathBuf::from).into_iter();
+        let system = sh
+            .clone()
+            .find(|bin| only_root_changes(&bin.join("sh")))
+            .unwrap();
+        // One of the same name first on the PATH, in a folder of the user's.
+        let mine = home.join("sh");
+        std::fs::write(&mine, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&mine, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let path = std::env::join_paths([&home, &system]).unwrap();
+        assert_eq!(owned(Path::new("sh"), &path, false), None);
+        let (found, given) = owned(Path::new("sh"), &path, true).unwrap();
+        assert_eq!(found, system.join("sh"));
+        assert_eq!(given, system.as_os_str());
+        // With none of root's, the first there is.
+        let lone = home.join("banda-own-test");
+        std::fs::write(&lone, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&lone, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let (found, given) = owned(Path::new("banda-own-test"), &path, true).unwrap();
+        assert_eq!((found, given), (lone, path.clone()));
+        assert_eq!(owned(Path::new("banda-none-such"), &path, true), None);
     }
 
     #[cfg(unix)]

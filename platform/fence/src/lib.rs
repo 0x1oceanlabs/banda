@@ -47,7 +47,7 @@ pub use spec::{Holes, Spec};
 mod linux;
 
 #[cfg(target_os = "linux")]
-pub use linux::{LAUNCHER, argv, attach, launch, probe, take};
+pub use linux::{Hears, LAUNCHER, Tells, argv, attach, launch, probe, status, take};
 #[cfg(target_os = "linux")]
 pub use spec::Sealed;
 
@@ -97,6 +97,7 @@ pub enum Why {
 #[cfg(not(target_os = "linux"))]
 pub fn launch(
     _spec_fd: i32,
+    _status_fd: Option<i32>,
     _program: &[std::ffi::OsString],
     _own_build: &str,
 ) -> std::process::ExitCode {
@@ -129,6 +130,7 @@ mod tests {
         let fd = sealed.number().to_string();
         let said = argv(
             &sealed,
+            None,
             "claude",
             &["--resume".to_owned(), "a b".to_owned()],
         );
@@ -144,6 +146,10 @@ mod tests {
                 "a b"
             ]
         );
+        let (_hears, tells) = status().unwrap();
+        let said = argv(&sealed, Some(&tells), "claude", &[]);
+        assert_eq!(said[3], "--status-fd");
+        assert_eq!(said[5], "--");
     }
 
     #[test]

@@ -10,14 +10,16 @@ use banda_kernel::{Code, Refusal};
 pub mod acp;
 pub mod carried;
 pub mod cli;
+pub mod github;
 pub mod hosts;
 mod limits;
 mod list;
 pub mod model;
 mod module;
 mod record;
+mod serving;
 
-pub use list::{Cli, FILE, Harness, Harnesses, LimitsSettings};
+pub use list::{Cli, Credentials, FILE, Harness, Harnesses, LimitsSettings};
 pub use module::{HarnessesModule, LimitsNow, SETTINGS, account_changed};
 
 pub mod usage;

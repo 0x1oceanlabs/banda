@@ -50,8 +50,16 @@ fn tell(at: &Path, message: &Value) -> Result<(), Failure> {
 fn knock(socket: &Path, message: &Value) -> Result<String, Failure> {
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::net::UnixStream;
-    let mut stream = UnixStream::connect(socket)
-        .map_err(|_| Failure::Broken("Banda's window is not open.".into()))?;
+    let mut stream = UnixStream::connect(socket).map_err(|_| {
+        // Behind the fence an Agent's `banda` reaches no window (ADR 0083).
+        let under_a_pass = std::env::var_os(banda_kernel::ENGINE_VARIABLE).is_some();
+        Failure::Broken(match under_a_pass {
+            true => "Banda's window is not open, or out of an Agent's reach behind the fence: \
+                     tell your Person where to go in it."
+                .into(),
+            false => "Banda's window is not open.".into(),
+        })
+    })?;
     stream
         .set_read_timeout(Some(ANSWER))
         .map_err(Failure::broken)?;

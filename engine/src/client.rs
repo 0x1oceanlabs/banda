@@ -71,6 +71,9 @@ impl Pass {
 pub struct Client {
     socket: Socket,
     next_id: u64,
+    /// What the engine said of its fence as it said welcome; none from an
+    /// engine from before the fence.
+    fence: Option<banda_kernel::Fence>,
 }
 
 impl Client {
@@ -113,7 +116,11 @@ impl Client {
         let (socket, _) = tokio_tungstenite::connect_async(url)
             .await
             .map_err(|_| Failure::broken(nowhere))?;
-        let mut client = Client { socket, next_id: 1 };
+        let mut client = Client {
+            socket,
+            next_id: 1,
+            fence: None,
+        };
         client
             .send(&ClientFrame::Hello {
                 protocol: PROTOCOL,
@@ -121,10 +128,19 @@ impl Client {
             })
             .await?;
         match client.receive().await? {
-            EngineFrame::Welcome { .. } => Ok(client),
+            EngineFrame::Welcome { fence, .. } => {
+                client.fence = fence;
+                Ok(client)
+            }
             EngineFrame::Goodbye { reason } => Err(Failure::Refused(reason)),
             _ => Err(Failure::broken("The engine did not say welcome.")),
         }
+    }
+
+    /// Whether the fence around the engine's Harnesses holds, as it said
+    /// in its welcome.
+    pub fn fence(&self) -> Option<&banda_kernel::Fence> {
+        self.fence.as_ref()
     }
 
     /// Returns once the engine closed the connection, or it broke.

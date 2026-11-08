@@ -67,6 +67,23 @@ pub struct Running {
     /// serve` in a shell, even one inside that unit (`service::own_unit`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unit: Option<String>,
+    /// The PID namespace its process runs in, by its inode: its `pid`
+    /// names it only there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid_ns: Option<u64>,
+}
+
+/// The PID namespace this process runs in, by its inode.
+pub fn pid_ns() -> Option<u64> {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::metadata("/proc/self/ns/pid")
+            .ok()
+            .map(|found| found.ino())
+    }
+    #[cfg(not(target_os = "linux"))]
+    None
 }
 
 impl Running {

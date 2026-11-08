@@ -132,3 +132,21 @@ test("a subscription follows on after a reconnect from the last event it heard",
   expect(heard).toEqual([5, 6, 7])
   engine.close()
 })
+
+test("the status says whether the engine's fence holds, as its welcome does", async () => {
+  const engine = new Engine(address)
+  await flush()
+  const socket = Socket.made[0]
+  socket.onopen?.()
+  const fence = { fence: "holds", layers: ["namespaces", "landlock"] }
+  socket.say({ type: "welcome", engine: "test", modules: [], boot: "b", fence })
+  expect(engine.status).toMatchObject({ state: "open", fence })
+  engine.close()
+
+  const older = new Engine(address)
+  await flush()
+  Socket.made[1].welcome()
+  expect(older.status.state).toBe("open")
+  expect(older.status).not.toHaveProperty("fence")
+  older.close()
+})

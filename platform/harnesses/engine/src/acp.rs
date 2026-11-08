@@ -58,6 +58,8 @@ pub struct Process {
     /// Who it last said is signed in.
     account: watch::Receiver<Option<AuthStatus>>,
     driver: JoinHandle<()>,
+    /// Its program's number, once it started.
+    leader: pipes::Leader,
 }
 
 impl Drop for Process {
@@ -102,7 +104,9 @@ impl Process {
             None => None,
         };
         let id = harness.id.clone();
+        let leader = pipes::Leader::default();
         let process = Pipes {
+            leader: leader.clone(),
             environment: environment.clone(),
             program: harness.start(),
             hears: Arc::new(move |line, said| {
@@ -161,6 +165,7 @@ impl Process {
             environment,
             account,
             driver,
+            leader,
         };
         Ok((process, answer))
     }
@@ -183,6 +188,15 @@ impl Process {
     /// Whether the process still answers.
     pub fn alive(&self) -> bool {
         !self.driver.is_finished() && !self.cx.is_incoming_closed()
+    }
+
+    /// Whether what an Agent ran under its program still serves,
+    /// listening (`serving.rs`).
+    pub fn serving(&self) -> bool {
+        match self.leader.load(std::sync::atomic::Ordering::Relaxed) {
+            0 => false,
+            leader => self.alive() && crate::serving::serves(leader),
+        }
     }
 
     /// Why the Person's CLI it runs is old, as the latest look at it

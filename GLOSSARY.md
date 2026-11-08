@@ -474,7 +474,9 @@ back, the tab closes or the session ends (ADR 0083).
 A Project flag only the Person changes. While a Project is not trusted,
 its Harnesses load only the Person's own settings, not the settings, hooks
 and MCP servers its folder names. Unsaid, a Project is trusted; one added
-from a folder that looks foreign is not (ADR 0083, ADR 0084).
+from a folder that looks foreign is not (ADR 0083, ADR 0084). Only a
+Project the Person said they trust, as they added it or later
+(`trust_said`), gives its Agents the Person's GitHub token.
 
 **Foreign**:
 A folder that looks like code the Person did not write: cloned from a URL,
@@ -501,7 +503,9 @@ A Project's bound: what acts for a Project reaches only that Project (ADR
 **Full access**:
 The mode where an Agent has the Person's files, programs and network,
 never Banda's state or keys. It is the default only where the fence
-holds; elsewhere the default is Supervised (ADR 0083).
+holds whole, with Landlock's scopes and for a user outside the `docker`
+group; elsewhere the default is Supervised, and Full access the Person
+chooses there acts as them (ADR 0083).
 
 ## Isolation
 

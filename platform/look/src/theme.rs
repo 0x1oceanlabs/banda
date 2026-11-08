@@ -116,11 +116,7 @@ impl Places {
             gsettings: match var("BANDA_GSETTINGS") {
                 Some(set) if set.as_os_str().is_empty() => None,
                 Some(set) => Some(set),
-                None => std::env::var_os("PATH").and_then(|path| {
-                    std::env::split_paths(&path)
-                        .map(|folder| folder.join("gsettings"))
-                        .find(|program| program.is_file())
-                }),
+                None => system_program("gsettings"),
             },
             config_home: Some(config_home),
             material: Material::PLATFORM,
@@ -355,4 +351,44 @@ fn read_folder(
         settings,
         banda_toml,
     })
+}
+
+/// The system's program `name`, as the PATH finds it: on Linux one only
+/// root changes ([`banda_kernel::host::only_root_changes`]), as the look
+/// runs it outside the fence.
+pub fn system_program(name: &str) -> Option<PathBuf> {
+    system_program_on(name, &std::env::var_os("PATH")?)
+}
+
+/// [`system_program`], on `path`.
+fn system_program_on(name: &str, path: &std::ffi::OsStr) -> Option<PathBuf> {
+    std::env::split_paths(path)
+        .map(|folder| folder.join(name))
+        .filter(|program| program.is_file())
+        .find(|program| {
+            !cfg!(target_os = "linux") || banda_kernel::host::only_root_changes(program)
+        })
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_looks_programs_are_the_systems_never_one_in_the_home() {
+        use std::os::unix::fs::PermissionsExt;
+        let folder = tempfile::tempdir().unwrap();
+        let mine = folder.path().join("sh");
+        std::fs::write(&mine, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&mine, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let system = ["/usr/bin", "/bin"].map(PathBuf::from).into_iter();
+        let system = system
+            .clone()
+            .find(|bin| banda_kernel::host::only_root_changes(&bin.join("sh")))
+            .unwrap();
+        let path = std::env::join_paths([folder.path(), &system]).unwrap();
+        assert_eq!(system_program_on("sh", &path), Some(system.join("sh")));
+        let path = std::env::join_paths([folder.path()]).unwrap();
+        assert_eq!(system_program_on("sh", &path), None);
+    }
 }

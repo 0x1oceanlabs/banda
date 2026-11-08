@@ -185,6 +185,9 @@ pub async fn start(
     if let Err(error) = after_questions(live, &project, start.turn).await {
         return Outcome::Retry(error.to_string());
     }
+    let fence = project.environment().fence();
+    // Banda keeps a Thread Supervised for its Person, not its Agent.
+    let banda = Participant::Person(project.owner());
     let begun = project
         .write(move |tx| {
             let Some(turn) = store::turn(tx.sql(), start.turn)? else {
@@ -213,7 +216,15 @@ pub async fn start(
                 text: String::new(),
                 images: Vec::new(),
             });
-            let settings = store::turn_settings(tx.sql(), &turn)?;
+            let mut settings = store::turn_settings(tx.sql(), &turn)?;
+            // Full access the fence does not keep now runs Supervised,
+            // unless its Person chose it so (ADR 0083).
+            let chosen = store::full_access(tx.sql(), turn.thread)?;
+            if let Some(why) = crate::full_access::runs_supervised(settings.mode, chosen, &fence) {
+                settings.mode = crate::model::Mode::Supervised;
+                store::set_turn_settings(tx.sql(), turn.id, &settings)?;
+                crate::supervised(tx, banda, turn.thread, &fence, why)?;
+            }
             Ok(Some((turn, message, settings)))
         })
         .await;

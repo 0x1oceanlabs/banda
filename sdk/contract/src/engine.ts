@@ -3,6 +3,7 @@ import type { CommandId } from "./generated/CommandId"
 import type { EngineFrame } from "./generated/EngineFrame"
 import type { Event } from "./generated/Event"
 import type { EventFilter } from "./generated/EventFilter"
+import type { Fence } from "./generated/Fence"
 import type { Refusal } from "./generated/Refusal"
 import type { ProjectId } from "./generated/ProjectId"
 import type { JsonValue } from "./generated/serde_json/JsonValue"
@@ -27,6 +28,10 @@ export type Status =
       /** This boot of the engine: another once it restarted, which ended
        * every session of the last. */
       boot: string
+      /** Whether the fence around its Harnesses' programs holds (ADR 0083,
+       * decision 1): what a new Thread's mode follows. None from an engine
+       * that has none. */
+      fence?: Fence
     }
   /** The connection broke; the client tries again after `retryIn` ms. */
   | { state: "lost"; retryIn: number }
@@ -344,6 +349,7 @@ export class Engine {
           modules: frame.modules,
           ...(frame.machine && { machine: frame.machine }),
           boot: frame.boot,
+          ...(frame.fence && { fence: frame.fence }),
         })
         for (const [id, following] of this.#following) {
           this.#subscribe(id, following)

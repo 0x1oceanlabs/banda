@@ -40,7 +40,7 @@ export type ThreadState = {
 
 /** What a Thread runs with when nobody chose otherwise, as the engine has it. */
 export const DEFAULT_SETTINGS: Settings = {
-  mode: "full_access",
+  mode: "supervised",
   plan: false,
   options: {},
 }

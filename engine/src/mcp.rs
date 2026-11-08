@@ -399,6 +399,7 @@ mod tests {
                     modules: vec![],
                     machine: None,
                     boot: "a boot".into(),
+                    fence: None,
                 };
                 socket.send(say(welcome)).await.unwrap();
                 while let Some(Ok(Message::Text(text))) = socket.next().await {

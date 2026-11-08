@@ -127,6 +127,13 @@ pub struct ProjectSummary {
     /// names for them; while it is not trusted, only the Person's own (ADR
     /// 0083, decision 5). Only the Person changes it (`projects.trust`).
     pub trusted: bool,
+    /// The Person said they trust it: in the trust step as they added it,
+    /// or with `projects.trust` later. One trusted only as nothing marked it
+    /// foreign was not said so. Its Harnesses' programs get the Person's
+    /// GitHub token only then, as `GH_TOKEN` (ADR 0083).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(optional, as = "Option<bool>")]
+    pub trust_said: bool,
 }
 
 pub struct KernelBuilder {
@@ -805,6 +812,12 @@ impl Kernel {
         self.boot.id()
     }
 
+    /// Whether the fence around a Harness's programs holds where the
+    /// Projects' programs run, as their environment found it (ADR 0083).
+    pub fn fence(&self) -> crate::Fence {
+        self.environment.fence()
+    }
+
     /// Where a method of `module` runs. A module of the machine runs in
     /// this machine's scope, and its method names no Project, or the
     /// machine's own ID, as a stream does. Any other runs in the Project it
@@ -1079,7 +1092,9 @@ impl Kernel {
             };
             if let Some(already) = already {
                 return match trusted {
-                    Some(trusted) if trusted != already.trusted => {
+                    Some(trusted)
+                        if trusted != already.trusted || trusted != already.trust_said =>
+                    {
                         self.trusting(already.id, trusted).await
                     }
                     _ => Ok(already),
@@ -1092,12 +1107,14 @@ impl Kernel {
                 (None, None) => "/",
             };
             let name = Project::name_of(name)?;
+            let said = trusted == Some(true);
             let trusted = match trusted {
                 Some(trusted) => trusted,
                 None => !foreign::look(&canonical).await.foreign,
             };
             let mut manifest = Manifest::new(&canonical, name, author, command);
             manifest.untrusted = !trusted;
+            manifest.trust_said = said;
             self.place_project(manifest).await
         }
         .await;
@@ -1215,14 +1232,19 @@ impl Kernel {
         if untrusted && entry.scratch() {
             return Err(Refusal::invalid(SCRATCH_TRUSTED));
         }
+        // Trusting it is saying so; not trusting it unsays it.
+        let said = |manifest: &mut Manifest| {
+            manifest.untrusted = untrusted;
+            manifest.trust_said = trusted;
+        };
         let (summary, changed) = match entry {
             Entry::Open(open) => {
-                let changed = open.trusted() != trusted;
-                let summary = open.change(|manifest| manifest.untrusted = untrusted)?;
+                let changed = open.trust_said() != trusted || open.trusted() != trusted;
+                let summary = open.change(said)?;
                 (summary, changed.then(|| open.clone()))
             }
             Entry::Missing { data, manifest } => {
-                manifest.change_in(data, |manifest| manifest.untrusted = untrusted)?;
+                manifest.change_in(data, said)?;
                 (manifest.summary(true), None)
             }
         };

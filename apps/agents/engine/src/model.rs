@@ -757,6 +757,24 @@ pub struct ThreadView {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub forked_from: Option<ThreadId>,
+    /// It is in Full access its Person chose where the fence does not
+    /// hold (ADR 0083): it runs so, its Agent acting as the Person.
+    #[ts(optional, as = "Option<bool>")]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub unfenced: bool,
+}
+
+/// Why Banda started a turn of a Thread in Full access Supervised, and
+/// keeps the Thread so (ADR 0083): the fence does not hold here now, and
+/// its Person did not choose Full access knowing that.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct WhySupervised {
+    /// Its Full access was from before the fence: the window says so once
+    /// on a machine, not for each Thread.
+    pub before: bool,
+    /// The fence as the engine found it.
+    pub fence: banda_kernel::Fence,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1008,11 +1026,15 @@ pub enum Fact {
         harness: String,
         was: String,
     },
-    /// The Thread's settings changed, by a Person or by the Harness.
+    /// The Thread's settings changed, by a Person or by the Harness; or
+    /// by Banda, which started it Supervised, as `supervised` says why.
     #[serde(rename = "thread.configured")]
     ThreadConfigured {
         thread: ThreadId,
         settings: Settings,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        supervised: Option<WhySupervised>,
     },
     /// The Harness offers this in the Thread now.
     #[serde(rename = "thread.offered")]

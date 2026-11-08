@@ -14,7 +14,7 @@ use crate::effects::{START, STOP, TurnEffect};
 use crate::model::{Fact, ItemId, Opener, Settings, ThreadId, TurnId, TurnState};
 use crate::rules::{self, Ending, Event, Step, Then, TurnFacts};
 use crate::{emit, questions, store};
-use banda_kernel::{AgentId, Error, Participant, Refusal, Tx};
+use banda_kernel::{AgentId, Error, Fence, Participant, Refusal, Tx};
 use rusqlite::Connection;
 
 /// The kind of [`Fact::TurnEnded`]: what waits for a turn to be written
@@ -223,7 +223,18 @@ fn end(
             crate::Target::Thread(asking),
         );
         let by = Some((Opener::Answered, turn.thread));
-        crate::send(tx, agent, target, message, None, false, by)?;
+        // It writes to a Thread that is there, so no new Thread's mode
+        // follows the fence.
+        crate::send(
+            tx,
+            agent,
+            target,
+            message,
+            None,
+            false,
+            by,
+            &Fence::not_built(),
+        )?;
     }
     Ok(())
 }

@@ -174,6 +174,46 @@ fn may_bind(by: Participant, bind: &Bind) -> Result<(), Refusal> {
     )))
 }
 
+/// A key of a settings file to set, as `banda settings set` takes it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
+#[ts(export, export_to = "keys/")]
+pub struct SetSetting {
+    /// The file's name, as `look.toml`.
+    pub file: String,
+    /// The key, dotted, as `tile.border`.
+    pub key: String,
+    /// A TOML value, or else the text as a string.
+    pub value: String,
+}
+
+/// A key of a settings file to take out, so its default is back.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
+#[ts(export, export_to = "keys/")]
+pub struct ResetSetting {
+    pub file: String,
+    pub key: String,
+}
+
+/// A key of a settings file to name otherwise, its value kept.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
+#[ts(export, export_to = "keys/")]
+pub struct RenameSetting {
+    pub file: String,
+    pub key: String,
+    pub to: String,
+}
+
+/// Whether `by` may change `key` of the file `name` as `why` says, which
+/// says why only the Person may (ADR 0083): the Person changes any key.
+fn may_change(by: Participant, name: &str, key: &str, why: Option<&str>) -> Result<(), Refusal> {
+    match (by, why) {
+        (Participant::Agent(_), Some(why)) => {
+            Err(Refusal::forbidden(format!("{name}: {key}: {why}")))
+        }
+        _ => Ok(()),
+    }
+}
+
 /// Frees `key` in its scope's table, so it goes to the Pane.
 pub fn free(config: &Path, key: &Key) -> Result<String, Vec<Problem>> {
     let text = named(config, &key.key)?;
@@ -311,6 +351,30 @@ impl KeysModule {
     async fn set_mod(&self, _: Call, set: SetMod) -> Result<String, Refusal> {
         set_mod(&self.config, &set).map_err(refused)
     }
+
+    async fn settings_set(&self, call: Call, set: SetSetting) -> Result<String, Refusal> {
+        let SetSetting { file, key, value } = set;
+        let why = banda_settings::only_the_person(&file, &key, Some(&value));
+        may_change(call.participant(), &file, &key, why)?;
+        banda_settings::set(&self.config, &file, &key, &value).map_err(refused)?;
+        Ok(format!("{key} is {value} in {file} now"))
+    }
+
+    async fn settings_reset(&self, call: Call, reset: ResetSetting) -> Result<String, Refusal> {
+        let ResetSetting { file, key } = reset;
+        let why = banda_settings::only_the_person(&file, &key, None);
+        may_change(call.participant(), &file, &key, why)?;
+        banda_settings::reset(&self.config, &file, &key).map_err(refused)?;
+        Ok(format!("{key} is as Banda has it in {file} now"))
+    }
+
+    async fn settings_rename(&self, call: Call, rename: RenameSetting) -> Result<String, Refusal> {
+        let RenameSetting { file, key, to } = rename;
+        let why = banda_settings::only_the_person_renames(&file, &key, &to);
+        may_change(call.participant(), &file, &key, why)?;
+        banda_settings::rename(&self.config, &file, &key, &to).map_err(refused)?;
+        Ok(format!("{key} is {to} in {file} now"))
+    }
 }
 
 /// A refusal of a change, with what was wrong, line by line.
@@ -347,6 +411,21 @@ banda_kernel::methods! {
         /// one or two of Alt, Ctrl and Super, as `Ctrl+Alt` where the
         /// desktop holds Alt. It moves the Person's lines with it.
         call set_mod(SetMod) -> String, Write, tool "keys_mod";
+        /// Sets a key of one of Banda's settings files, as `banda settings
+        /// set` does (and does through this under your pass: behind the
+        /// fence the files are read-only). It refuses what only your
+        /// Person changes: which program a Harness runs and with what, how
+        /// freely a new Thread's Agent acts, what Agents may do in the
+        /// browser, what Banda sends, and keys, which `keys_bind` binds.
+        /// Tell your Person what changed.
+        call settings_set(SetSetting) -> String, Write, tool "settings_set";
+        /// Takes a key of a settings file out, as `banda settings reset`
+        /// does, with `settings_set`'s refusals.
+        call settings_reset(ResetSetting) -> String, Write, tool "settings_reset";
+        /// Names a key of a settings file otherwise, in its table, as
+        /// `banda settings rename` does, with `settings_set`'s refusals for
+        /// the key and for what it becomes.
+        call settings_rename(RenameSetting) -> String, Write, tool "settings_rename";
     }
 }
 

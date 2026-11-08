@@ -70,6 +70,50 @@ pub struct Harness {
     /// The holes its process has in the fence (ADR 0083, decision 1): its
     /// Project's, as [`Harness::in_project`] says; none for the machine's.
     pub holes: Holes,
+    /// The Person's credentials its process gets, and those it must not.
+    pub credentials: Credentials,
+}
+
+/// The Person's credentials a Harness's process gets, and those it must
+/// not (ADR 0083): the GitHub token Banda read for a Project the Person
+/// said they trust, and in any other every GitHub token taken out of the
+/// environment it starts in. They make no other process: a process
+/// started with others goes on, so a token that changes reaches the next
+/// start, and whether the Person trusts the Project lets its processes go
+/// anyway; one started without a token the Project now gets goes once it
+/// is quiet ([`Credentials::lacks_what`]). Its `Debug` shows no value.
+#[derive(Clone, Default)]
+pub struct Credentials {
+    /// The variables it gets.
+    pub set: BTreeMap<String, String>,
+    /// The variables it starts without.
+    pub unset: Vec<String>,
+}
+
+impl PartialEq for Credentials {
+    /// Any are as good as any other: they make no other process.
+    fn eq(&self, _: &Credentials) -> bool {
+        true
+    }
+}
+
+impl Eq for Credentials {}
+
+impl Credentials {
+    /// Whether these lack a variable `now` sets: a host started with these
+    /// goes once it is quiet, so its next start has it.
+    pub fn lacks_what(&self, now: &Credentials) -> bool {
+        now.set.keys().any(|name| !self.set.contains_key(name))
+    }
+}
+
+impl std::fmt::Debug for Credentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Credentials")
+            .field("set", &self.set.keys().collect::<Vec<_>>())
+            .field("unset", &self.unset)
+            .finish()
+    }
 }
 
 /// A CLI the Person installed, which an adapter runs in place of a copy
@@ -104,12 +148,23 @@ impl Harness {
         program
     }
 
-    /// How its process starts: its `command` and `args`, with its `env`,
-    /// in its `cwd`: a Harness's, to start behind the fence with its
-    /// `holes` in it.
+    /// How its process starts: its `command` and `args`, with its `env`
+    /// and its `credentials`, in its `cwd`: a Harness's, to start behind
+    /// the fence with its `holes` in it. Codex's shells get the credentials
+    /// as they get a pass ([`Harness::in_project`]).
     pub fn start(&self) -> Program {
+        use crate::limits::Kind;
         let mut program = Program::harness(&self.command, self.args.clone(), self.holes.clone());
         program.env = self.env.clone();
+        let set = &self.credentials.set;
+        program.env.extend(set.clone());
+        if Kind::of(self) == Some(Kind::Codex)
+            && !set.is_empty()
+            && let Some(config) = codex_config(self.env.get(CODEX_CONFIG).map(String::as_str), set)
+        {
+            program.env.insert(CODEX_CONFIG.to_owned(), config);
+        }
+        program.unset = self.credentials.unset.clone();
         program.cwd = self.cwd.clone();
         program
     }
@@ -549,6 +604,7 @@ impl HarnessEntry {
             record: None,
             cwd: None,
             holes: Holes::default(),
+            credentials: Credentials::default(),
         })
     }
 }
@@ -799,6 +855,7 @@ fn known() -> Vec<Harness> {
                 record: None,
                 cwd: None,
                 holes: Holes::default(),
+                credentials: Credentials::default(),
             }
         })
         .collect()

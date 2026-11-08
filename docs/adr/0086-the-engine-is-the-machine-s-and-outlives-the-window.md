@@ -258,6 +258,15 @@ Another machine (decision 8) is ADR 0081's plan, after step 3.
   only once it has opened every Project, with their migrations. The
   session's display and ssh agent come from the starter where the user
   manager lacks them, as some desktops do not hand them to it.
+- Decision 7, behind the fence (ADR 0083, 2026-11-07): a Thread's
+  Harness runs behind the fence on Linux, which hides the session's
+  runtime folder, the user manager's bus in it too. An Agent's
+  `scripts/local.sh` finds no user systemd there and runs the window as
+  it is: a trial an Agent starts lives inside the fence, apart from its
+  process group still (`--detach`), and ends when its Harness does. The
+  engine does not let a Harness go for idling while a process under it
+  listens, as a trial or a server it started does. A Person's terminal
+  starts its windows in a unit of their own, as before.
 - The draft in PR #460, decision 6: the engine's own `hello` with a
   "generation" gives way to ADR 0082's `challenge`, `hello` with a
   range, and `welcome`.

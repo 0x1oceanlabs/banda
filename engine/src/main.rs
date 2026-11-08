@@ -241,6 +241,10 @@ enum Command {
         /// The sealed memfd that holds the spec.
         #[arg(long)]
         spec_fd: Option<i32>,
+        /// A pipe to say on whether the program started: it ends with
+        /// nothing said once it runs.
+        #[arg(long)]
+        status_fd: Option<i32>,
         /// The program, by its path or name, and its arguments.
         #[arg(last = true)]
         program: Vec<OsString>,
@@ -455,8 +459,9 @@ fn main() -> ExitCode {
         Command::Fence {
             probe,
             spec_fd,
+            status_fd,
             program,
-        } => return fence::run(probe, spec_fd, program),
+        } => return fence::run(probe, spec_fd, status_fd, program),
         Command::Look {
             what,
             follow,
@@ -758,8 +763,54 @@ fn look_places() -> Result<banda_look::theme::Places, Failure> {
     Places::from_env().map(|places| banda_look::theme::Places::from_env(places.config))
 }
 
-/// `banda settings`: no engine, only the files (ADR 0016).
+/// Under an Agent's pass, a change to Banda's settings goes to the engine
+/// that gave it, which writes it as this would, and refuses what only the
+/// Person changes (ADR 0083): behind the fence, the files are read-only.
+/// `None` with no pass, when this writes the files itself.
+fn through_the_engine(method: &str, params: Value) -> Option<ExitCode> {
+    let pass = match client::Pass::from_env() {
+        Ok(Some(pass)) => pass,
+        Ok(None) => return None,
+        Err(failure) => return Some(failure.exit()),
+    };
+    let asked = async {
+        let mut client = Client::connect_as(&pass).await?;
+        client.call(method, None, CommandId::new(), params).await
+    };
+    let done = tokio::runtime::Runtime::new()
+        .map_err(Failure::broken)
+        .and_then(|runtime| runtime.block_on(asked));
+    Some(match done {
+        Ok(said) => {
+            if let Some(said) = said.as_str() {
+                println!("{said}");
+            }
+            ExitCode::SUCCESS
+        }
+        Err(failure) => failure.exit(),
+    })
+}
+
+/// `banda settings`: no engine, only the files (ADR 0016); but a change
+/// under an Agent's pass, which its engine makes.
 fn settings(what: SettingsCommand) -> ExitCode {
+    let asked = match &what {
+        SettingsCommand::Set { file, key, value } => Some((
+            "keys.settings_set",
+            json!({ "file": file, "key": key, "value": value }),
+        )),
+        SettingsCommand::Reset { file, key } => {
+            Some(("keys.settings_reset", json!({ "file": file, "key": key })))
+        }
+        SettingsCommand::Rename { file, key, to } => Some((
+            "keys.settings_rename",
+            json!({ "file": file, "key": key, "to": to }),
+        )),
+        _ => None,
+    };
+    if let Some(done) = asked.and_then(|(method, params)| through_the_engine(method, params)) {
+        return done;
+    }
     let places = match look_places() {
         Ok(places) => places,
         Err(failure) => return failure.exit(),
@@ -798,9 +849,32 @@ fn settings(what: SettingsCommand) -> ExitCode {
     }
 }
 
-/// `banda keys`: no engine, only the files, as `banda settings`.
+/// `banda keys`: no engine, only the files, as `banda settings`; but a
+/// change under an Agent's pass, which its engine makes.
 fn keys(what: Option<KeysCommand>, json: bool) -> ExitCode {
     use banda_keys::{Bind, Key, SetMod};
+    let asked = match &what {
+        Some(KeysCommand::Bind {
+            key,
+            action,
+            args,
+            scope,
+        }) => Some((
+            "keys.bind",
+            json!({ "key": key, "action": action, "args": args, "scope": scope }),
+        )),
+        Some(KeysCommand::Free { key, scope }) => {
+            Some(("keys.free", json!({ "key": key, "scope": scope })))
+        }
+        Some(KeysCommand::Reset { key, scope }) => {
+            Some(("keys.reset", json!({ "key": key, "scope": scope })))
+        }
+        Some(KeysCommand::Mod { keys }) => Some(("keys.set_mod", json!({ "keys": keys }))),
+        None => None,
+    };
+    if let Some(done) = asked.and_then(|(method, params)| through_the_engine(method, params)) {
+        return done;
+    }
     let places = match look_places() {
         Ok(places) => places,
         Err(failure) => return failure.exit(),

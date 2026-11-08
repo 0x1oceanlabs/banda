@@ -144,6 +144,11 @@ impl Host for Connection {
         }
         self.activity.idle_since()
     }
+
+    /// Whether a server or a trial an Agent started here still listens.
+    fn serving(&self) -> bool {
+        self.process.serving()
+    }
 }
 
 impl Connection {

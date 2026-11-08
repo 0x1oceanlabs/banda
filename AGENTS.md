@@ -82,19 +82,45 @@ crashes it nor leaves part of it in yours
 ([ADR 0086](docs/adr/0086-the-engine-is-the-machine-s-and-outlives-the-window.md),
 decision 7). That unit does not take it out of your process group:
 `--detach` does, with a session of its own, so start yours only with
-`try.sh --hidden --detach`. `pnpm --filter @banda/desktop start` and
-`try.sh` without `--detach` are for a Person's terminal: in your shell,
-the window crashes when your Turn's processes are killed. The end-to-end
-tests' windows are apart already, and close once the tests have gone,
-however they went. Never start one with a bare `electron .`, and never
-stop one by killing its process group or its unit while it runs:
-`try.sh --stop` closes it as the Person does, and SIGTERM to its main
-process does too.
+`try.sh --hidden --detach`. Behind Banda's fence (below) there is no
+user manager: the window runs as it is, inside the fence, and ends when
+your Harness does, which Banda does not let go for idling while the
+trial listens. `pnpm --filter @banda/desktop start` and `try.sh` without
+`--detach` are for a Person's terminal: in your shell, the window
+crashes when your Turn's processes are killed. The end-to-end tests'
+windows are apart already, and close once the tests have gone, however
+they went. Never start one with a bare `electron .`, and never stop one
+by killing its process group or its unit while it runs: `try.sh --stop`
+closes it as the Person does, and SIGTERM to its main process does too.
 
 The trial's own `banda` is its `bin/banda`, with `BANDA_STATE` set to its
 `state`. In an Agent's shell, `banda` acts under the Agent's pass for the
 engine the Agent runs in, and refuses a `BANDA_STATE` that names another:
 call the trial's engine under `env -u BANDA_TOKEN -u BANDA_ENGINE`.
+
+## Behind the fence
+
+On Linux a Thread's Harness, and all you run, runs behind Banda's fence
+where it holds
+([ADR 0083](docs/adr/0083-banda-keeps-its-own-state-out-of-an-agents-reach-and-only-the-persons-gesture-acts-as-the-person.md)):
+`banda status` says whether it does. Banda's own state and data are
+hidden there, every Banda's settings read-only, and so is what Roma has
+outside your Harness:
+
+| Behind the fence | What happens, and what to do |
+|---|---|
+| The session's runtime folder | Empty: no `systemctl --user`, `notify-send`, `hyprctl`, `wl-copy`, keyring, gpg agent (signed commits) or rootless Docker. The SSH agent stays, so `git push` over ssh works |
+| The display | None: a window runs headless (`try.sh --hidden`, the end-to-end tests) |
+| `sudo`, `newuidmap`, `fusermount` | Refused, so AppImages (`APPIMAGE_EXTRACT_AND_RUN=1`) and sshfs too |
+| `/dev` | null, zero, full, random, urandom, tty, pts and shm only: no GPU, `kvm`, `fuse`, `tun` or sound |
+| Other processes | Only your Harness's are seen or signalled |
+| `gh`, `git push` over https | Only in a Project Roma said they trust, with their token as `GH_TOKEN`: in another, ask Roma to trust it again |
+| `~/.config/banda*` | Read-only: `banda settings` and `banda keys bind` go through the engine |
+| pnpm's store | Its links cross a mount the fence makes: on btrfs or XFS an install clones its files, on ext4 it copies them. Ask Roma before moving the store with `pnpm config set store-dir`, which moves Roma's too |
+| What you start in the background | Ends with your Harness: a dev server, a trial, `gh run watch`, a long build or a wait loop. Your Harness ends as the engine restarts (each Banda Dev update does), after 30 minutes with no turn unless what you started listens, and when Roma trusts or stops trusting the Project, once the turn ends |
+
+For anything out of reach, give Roma the command to run in a terminal
+Pane, which runs outside the fence.
 
 ## Effect in the window's main process
 
