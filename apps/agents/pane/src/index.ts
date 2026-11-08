@@ -1,7 +1,8 @@
 /** The agents module's window part: its Panes, its Watch on what calls
- * for the Person, its action, what the Banda menu finds of it (ADR 0022)
- * and what the Person does to a Thread it lists, its item actions (ADR
- * 0087, decision 12). */
+ * for the Person, its action, what the Banda menu finds of it (ADR 0022),
+ * what the Person does to a Thread it lists, its item actions (ADR 0087,
+ * decision 12), and what it puts in a Slot: a Thread's Mark in its Pane's
+ * header (ADR 0062, decision 17). */
 import type { ProjectId } from "@banda/contract"
 import {
   type Action,
@@ -21,6 +22,7 @@ import { threadsWatch } from "./list/ThreadsWatch"
 import { askSource } from "./list/sources"
 import { NEW_THREAD } from "./thread/session"
 import { threadItems } from "./list/items"
+import { threadHeader } from "./list/header"
 import { ANSWER, RETRY, SHOW } from "./list/rows"
 
 /** An arg that is a text, or none. */
@@ -191,4 +193,5 @@ export const agents = defineModule({
   ],
   sources: [askSource],
   items: threadItems,
+  slots: [threadHeader],
 })
