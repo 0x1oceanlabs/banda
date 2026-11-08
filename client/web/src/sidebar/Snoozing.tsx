@@ -15,6 +15,7 @@ import {
   SuggestionDescription,
   SuggestionList,
 } from "@banda/ui/components/suggestions"
+import { useRun } from "@banda/ui/hooks/use-run"
 import { Store, useStore } from "@banda/ui/lib/store"
 import { clock, left } from "@banda/ui/lib/words"
 import type { Args } from "@banda/ui/module"
@@ -59,12 +60,9 @@ const TOP = {
 }
 
 /** The picker, open for the Thread `pickSnooze` asked for: what is picked
- * runs its App's snooze, or its wake, by `run`. */
-export function SnoozePicker({
-  run,
-}: {
-  run: (action: string, args?: Args) => void
-}) {
+ * runs its App's snooze, or its wake, by the Window's `run`. */
+export function SnoozePicker() {
+  const run = useRun()
   const target = useStore(picking, now)
   const onClose = () => pickSnooze(undefined)
   // Its App's, by what each does: the picker names none of its actions.

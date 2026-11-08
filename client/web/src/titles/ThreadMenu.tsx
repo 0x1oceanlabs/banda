@@ -15,43 +15,30 @@ import {
 } from "@banda/ui/components/dropdown-menu"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { useNow } from "@banda/ui/hooks/use-now"
-import type { Args } from "@banda/ui/module"
+import { useRun } from "@banda/ui/hooks/use-run"
 import type { Listed } from "@banda/ui/pane"
 import { useIsArchived } from "../sidebar/archived"
 import { rowsOf, type Shown } from "../sidebar/items"
 import { Making } from "../sidebar/MakeProject"
 
-/** Runs an action by its id, as its key would. */
-type Run = (action: string, args?: Args) => void
+/** What the Thread menu asks of the window, wherever it opens; it runs
+ * its rows by the Window's `run` (`useRun`). */
+type Threads = { projects: readonly ProjectSummary[] }
 
-/** What the Thread menu asks of the window, wherever it opens. */
-type Threads = { projects: readonly ProjectSummary[]; run: Run }
+const ThreadsContext = createContext<Threads>({ projects: [] })
 
-const ThreadsContext = createContext<Threads>({
-  projects: [],
-  run: () => undefined,
-})
-
-/** How a part inside the Thread menus runs an item action, as the
- * title's field renames by its App's. */
-export function useItemRun(): Run {
-  return useContext(ThreadsContext).run
-}
-
-/** Gives the Thread menus inside it the window's Projects and its `run`,
- * and holds the dialog that makes a Project. */
+/** Gives the Thread menus inside it the window's Projects, and holds the
+ * dialog that makes a Project. */
 export function ThreadMenus({
   engine,
   projects,
-  run,
   children,
 }: {
   engine: Engine
   projects: readonly ProjectSummary[]
-  run: Run
   children: ReactNode
 }) {
-  const threads = useMemo(() => ({ projects, run }), [projects, run])
+  const threads = useMemo(() => ({ projects }), [projects])
   return (
     <ThreadsContext value={threads}>
       {children}
@@ -83,7 +70,8 @@ export function ThreadRows({
   later?: (act: () => void) => void
 }) {
   const keyFor = useKeyLabel()
-  const { projects, run } = useContext(ThreadsContext)
+  const { projects } = useContext(ThreadsContext)
+  const run = useRun()
   const isArchived = useIsArchived()
   // Whether it sleeps, by a clock that moves as the menu stays open.
   const now = useNow(30_000)

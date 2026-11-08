@@ -845,8 +845,8 @@ export function Shell({
 
   return (
     <KeysInForce.Provider value={keys}>
-      <Kept stores={stores} here={here}>
-        <ThreadMenus engine={engine} projects={projects} run={parts.run}>
+      <Kept stores={stores} here={here} run={parts.run}>
+        <ThreadMenus engine={engine} projects={projects}>
           <div className="flex h-svh flex-col bg-desk text-foreground">
             <Watches engine={engine} modules={modules} projects={open} />
             <Bar
@@ -966,7 +966,7 @@ export function Shell({
                   />
                 )}
                 <Toaster />
-                <SnoozePicker run={parts.run} />
+                <SnoozePicker />
                 <QuitDialog
                   working={quitting}
                   onQuit={device.quit}
