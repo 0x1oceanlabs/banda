@@ -5,6 +5,7 @@ import {
   DropdownMenuContent,
 } from "@banda/ui/components/dropdown-menu"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
+import { useRun } from "@banda/ui/hooks/use-run"
 import {
   type Naming,
   stopNaming,
@@ -16,7 +17,7 @@ import { cn } from "@banda/ui/lib/utils"
 import { focusedTile, type Listed } from "@banda/ui/pane"
 import { ChevronDownIcon, SparklesIcon } from "lucide-react"
 import { itemActionOf } from "../sidebar/items"
-import { ThreadRows, useItemRun } from "./ThreadMenu"
+import { ThreadRows } from "./ThreadMenu"
 
 /** Why a menu closed, as Base UI says it. */
 type Reason = string | undefined
@@ -57,7 +58,7 @@ export function Title({
   const before = useRef<HTMLElement | null>(null)
   const reason = useRef<Reason>(undefined)
   const next = useRef<() => void>(undefined)
-  const run = useItemRun()
+  const run = useRun()
   const rename = itemActionOf(listed, "rename")
   const words = thinking ? THINKING : title
   if (!rename)
@@ -185,7 +186,7 @@ export function TitleField({
   className?: string
 }) {
   const keyFor = useKeyLabel()
-  const run = useItemRun()
+  const run = useRun()
   const input = useRef<HTMLInputElement>(null)
   const [text, setText] = useState(listed.title)
   const done = useRef(false)

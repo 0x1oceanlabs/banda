@@ -9,6 +9,7 @@
 import type { ProjectId } from "@banda/contract"
 import { type Here, HereContext, type HereStore } from "@banda/ui/here"
 import { inFront } from "@banda/ui/hooks/use-in-front"
+import { type Run, RunContext } from "@banda/ui/hooks/use-run"
 import { sameData, Store } from "@banda/ui/lib/store"
 import { paneHost } from "@banda/ui/pane"
 import { type ReactNode, useContext, useEffect, useState } from "react"
@@ -152,19 +153,24 @@ export function useKeptHere(
 }
 
 /** What the Window keeps outside React, for all it draws to read by
- * selector: the items and the calls (ADR 0088, decision 7), and Here. */
+ * selector: the items and the calls (ADR 0088, decision 7), and Here;
+ * and its `run`, steady, by which what it draws runs an action by id. */
 export function Kept({
   stores,
   here,
+  run,
   children,
 }: {
   stores: Stores
   here: HereStore
+  run: Run
   children: ReactNode
 }) {
   return (
     <StoresContext value={stores}>
-      <HereContext value={here}>{children}</HereContext>
+      <HereContext value={here}>
+        <RunContext value={run}>{children}</RunContext>
+      </HereContext>
     </StoresContext>
   )
 }

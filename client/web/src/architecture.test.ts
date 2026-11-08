@@ -33,9 +33,9 @@
  *   device part (ADR 0089, decision 2): what else in the page reads the
  *   desktop's bridge is listed, and the list only falls.
  * - Only the Window keeps Here (ADR 0087, decision 4): one place gives it
- *   to what the Window draws. Where the Person looks is the calls part's
- *   to work out: only the files listed ask the Window, and the list only
- *   falls.
+ *   to what the Window draws, and only the Window gives the `run` its parts
+ *   run an action by. Where the Person looks is the calls part's to work
+ *   out: only the files listed ask the Window, and the list only falls.
  * - One action goes to an Agent, `pane.pick` (ADR 0087, decision 7): the
  *   Window answers it in one place, and gives no App another way.
  * - What the Window draws on every move it makes is drawn again only as
@@ -319,6 +319,25 @@ test("only the Window gives Here to what it draws", () => {
     )
     .map((file) => relative(root, file))
   expect(giving).toEqual(["client/web/src/window/here.tsx"])
+})
+
+/**
+ * What the Window draws runs an action by its id with the Window's own
+ * `run` (`useRun`, ADR 0087, decision 11): only the Window gives it, as it
+ * gives Here, so a part that runs one acts with the Here of the click and
+ * borrows no other part's hook. A popped-out Pane's window may give its
+ * own: it is the Window's too.
+ */
+test("only the Window gives run to what it draws", () => {
+  const giving = drawing
+    .filter((file) =>
+      /<RunContext\b|RunContext\.Provider/.test(readFileSync(file, "utf8"))
+    )
+    .map((file) => relative(root, file))
+  expect(giving).toContain("client/web/src/window/here.tsx")
+  expect(
+    giving.filter((file) => !file.startsWith("client/web/src/window/"))
+  ).toEqual([])
 })
 
 /**

@@ -40,6 +40,7 @@ import { cn } from "@banda/ui/lib/utils"
 import { clock, problem } from "@banda/ui/lib/words"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
+import { useRun } from "@banda/ui/hooks/use-run"
 import { type Listed, type PaneState, snoozable } from "@banda/ui/pane"
 import {
   HostsContext,
@@ -83,7 +84,7 @@ import {
 } from "./arrange"
 import { useLookSidebar } from "../look"
 import { Row } from "./Row"
-import { ThreadRows, useItemRun } from "../titles/ThreadMenu"
+import { ThreadRows } from "../titles/ThreadMenu"
 import { TitleField } from "../titles/Title"
 import { useNaming } from "@banda/ui/lib/naming"
 import { device } from "../window/device"
@@ -541,7 +542,7 @@ function SectionView({
   awayOf: (host: string) => number | undefined
 }) {
   const keyFor = useKeyLabel()
-  const run = useItemRun()
+  const run = useRun()
   // A row's Snooze and Wake are its Thread's App's (ADR 0087, decision 12).
   const wake = ({ project, listed }: Arranged) => {
     const action = itemActionOf(listed, "wake")
@@ -958,7 +959,7 @@ function HostPart({
   onFold: () => void
   children?: ReactNode
 }) {
-  const run = useItemRun()
+  const run = useRun()
   const other = otherBuild(host.state)
   const { name } = host.named
   return (
