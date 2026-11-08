@@ -1,16 +1,20 @@
+import { useEffect, useState } from "react"
 import type { Engine } from "@banda/contract"
 import { Spinner } from "@banda/ui/components/spinner"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { Previewers } from "@banda/ui/lib/previewers"
 import { useMachine, useModules, useStatus } from "@banda/ui/hooks/use-status"
 import { shownProjects } from "@banda/ui/lib/projects"
+import { HostsContext, KeptHosts } from "./calls/hosts"
 import { previewers } from "./registry"
+import { device } from "./window/device"
 import { Shell } from "./window/Shell"
 import { AskToShare } from "./sharing/AskToShare"
 
 /**
  * The page: the engine's Projects, then the window. With no Project, a new
  * Thread is held on the machine until its first message or attachment.
+ * The other machines of `hosts.toml` show below this one's (ADR 0081).
  */
 export function App({ engine }: { engine: Engine }) {
   const status = useStatus(engine)
@@ -18,6 +22,11 @@ export function App({ engine }: { engine: Engine }) {
   const modules = useModules(engine)
   // A Project added here shows at once, as the engine answered it.
   const { listed, put } = useProjects(engine)
+  const [hosts] = useState(() => new KeptHosts(device.hosts))
+  useEffect(() => hosts.follow(), [hosts])
+  useEffect(() => {
+    if (listed.state === "ready") hosts.ours(listed.value)
+  }, [hosts, listed])
 
   if (listed.state === "loading") {
     return (
@@ -44,14 +53,16 @@ export function App({ engine }: { engine: Engine }) {
   // Every Pane draws a file with the modules' previewers (ADR 0073).
   return (
     <Previewers value={previewers}>
-      <Shell
-        engine={engine}
-        status={status}
-        modules={modules}
-        projects={projects}
-        home={home?.id ?? machine}
-        onCreated={put}
-      />
+      <HostsContext value={hosts}>
+        <Shell
+          engine={engine}
+          status={status}
+          modules={modules}
+          projects={projects}
+          home={home?.id ?? machine}
+          onCreated={put}
+        />
+      </HostsContext>
       {projects.length > 0 && <AskToShare engine={engine} />}
     </Previewers>
   )

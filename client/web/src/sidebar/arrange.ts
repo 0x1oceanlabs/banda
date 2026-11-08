@@ -2,6 +2,12 @@
  * The sidebar's one rule (ADR 0008): every Project's list, the Projects and
  * the settings in; the sections and their rows out. The sidebar only draws
  * what it returns. Pure, so plain tests cover every preset and key.
+ *
+ * The other machines of `hosts.toml` come after this one's (ADR 0081,
+ * decision 4): grouped by Project, each host's sections follow this
+ * machine's, under its name; grouped otherwise, their rows join this
+ * machine's, each with its host's name. With no other host, nothing
+ * changes.
  */
 import { NO_PROJECT } from "@banda/ui/lib/projects"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
@@ -15,12 +21,20 @@ import type { Listed } from "@banda/ui/pane"
 import type { Settings, State } from "./settings"
 
 /** One row: what a module listed, the Project it is in, where it stands,
- * and when it woke from a snooze while its Person has not seen it. */
+ * when it woke from a snooze while its Person has not seen it, and the
+ * other host its Project is on. */
 export type Row = {
   project: ProjectSummary
   listed: Listed
   state: State
   woke?: number
+  host?: string
+}
+
+/** Another host's Projects, by its name, in `hosts.toml`'s order. */
+export type Elsewhere = {
+  name: string
+  projects: readonly ProjectSummary[]
 }
 
 /** What the Person's marks say of a row now: archived, asleep, woke. */
@@ -37,6 +51,8 @@ export type Section = {
   label: string
   /** The Project a section of `group.by = "project"` holds. */
   project?: ProjectSummary
+  /** The other host whose Project it holds, below this machine's. */
+  host?: string
   rows: Row[]
   folded: boolean
   /** When the first of a snoozed shelf's rows wakes. */
@@ -46,12 +62,13 @@ export type Section = {
   waiting: number
 }
 
-/** One line of the list of Projects. */
+/** One line of the list of Projects, and the other host it is on. */
 export type ProjectLine = {
   project: ProjectSummary
   mark: MarkState
   waiting: number
   count: number
+  host?: string
 }
 
 export type Arranged = {
@@ -103,6 +120,8 @@ function wakesAt(row: Row): number {
  * @param toggled the sections the Person folded or opened, against what
  * the settings start with
  * @param marks what the Person's marks say of each row now
+ * @param elsewhere the other hosts' Projects, whose lists are in `lists`
+ * too
  */
 export function arrange(
   lists: Readonly<Record<ProjectId, readonly Listed[]>>,
@@ -110,19 +129,41 @@ export function arrange(
   settings: Settings,
   only?: ProjectId,
   toggled: ReadonlySet<string> = new Set(),
-  marks: Marks = {}
+  marks: Marks = {},
+  elsewhere: readonly Elsewhere[] = []
 ): Arranged {
-  const named = projects.filter((project) => !project.scratch)
-  const all: Row[] = projects.flatMap((project) =>
-    (lists[project.id] ?? []).map((listed) => {
-      const state = stateOf(listed, marks)
-      const woke = marks.woke?.(listed)
-      return { project, listed, state, ...(woke === undefined ? {} : { woke }) }
-    })
+  const namedIn = (held: readonly ProjectSummary[]) =>
+    held.filter((project) => !project.scratch)
+  const rowsOf = (held: readonly ProjectSummary[], host?: string): Row[] =>
+    held.flatMap((project) =>
+      (lists[project.id] ?? []).map((listed) => {
+        const state = stateOf(listed, marks)
+        const woke = marks.woke?.(listed)
+        return {
+          project,
+          listed,
+          state,
+          ...(woke === undefined ? {} : { woke }),
+          ...(host === undefined ? {} : { host }),
+        }
+      })
+    )
+  const named = namedIn(projects)
+  const all = rowsOf(projects)
+  const others = elsewhere.map((host) => ({
+    ...host,
+    all: rowsOf(host.projects, host.name),
+  }))
+  const shown = (held: Row[]) =>
+    held
+      .filter((row) => only === undefined || row.project.id === only)
+      .sort(order(settings.sort.by))
+  // Grouped by Project, each host's rows stay in its own sections.
+  const rows = shown(
+    settings.group.by === "project"
+      ? all
+      : [...all, ...others.flatMap((host) => host.all)]
   )
-  const rows = all
-    .filter((row) => only === undefined || row.project.id === only)
-    .sort(order(settings.sort.by))
   const folds = (key: string, name = key) =>
     (settings.group.folded.includes(name) ||
       settings.group.folded.includes(key)) !== toggled.has(key)
@@ -150,34 +191,65 @@ export function arrange(
       ? sections
       : sections.filter((section) => section.rows.length > 0)
 
+  /** The sections of `held`'s Projects, `all` their rows, keyed after
+   * `host` for another host's. */
+  const byProject = (
+    all: Row[],
+    held: readonly ProjectSummary[],
+    host?: string
+  ): Section[] => {
+    const rows = shown(all)
+    const key = (id: string) => (host === undefined ? id : `${host}/${id}`)
+    const sections = [
+      ...orderProjects(all, namedIn(held), settings).map((project) =>
+        section(
+          key(project.id),
+          project.name,
+          rows.filter((row) => row.project.id === project.id),
+          project,
+          project.name
+        )
+      ),
+      ...(rows.some((row) => row.project.scratch)
+        ? [
+            section(
+              key("no-project"),
+              NO_PROJECT,
+              rows.filter((row) => row.project.scratch)
+            ),
+          ]
+        : []),
+    ]
+    return kept(
+      host === undefined
+        ? sections
+        : sections.map((section) => ({ ...section, host }))
+    )
+  }
+
   const listed = settings.projects.list
-    ? { projects: projectLines(all, named, settings) }
+    ? {
+        projects: [
+          ...projectLines(all, named, settings),
+          ...others.flatMap((host) =>
+            projectLines(host.all, namedIn(host.projects), settings).map(
+              (line) => ({ ...line, host: host.name })
+            )
+          ),
+        ],
+      }
     : {}
 
   switch (settings.group.by) {
     case "project":
       return {
         ...listed,
-        sections: kept([
-          ...orderProjects(all, named, settings).map((project) =>
-            section(
-              project.id,
-              project.name,
-              rows.filter((row) => row.project.id === project.id),
-              project,
-              project.name
-            )
+        sections: [
+          ...byProject(all, projects),
+          ...others.flatMap((host) =>
+            byProject(host.all, host.projects, host.name)
           ),
-          ...(rows.some((row) => row.project.scratch)
-            ? [
-                section(
-                  "no-project",
-                  NO_PROJECT,
-                  rows.filter((row) => row.project.scratch)
-                ),
-              ]
-            : []),
-        ]),
+        ],
         shelves: [],
       }
     case "none":

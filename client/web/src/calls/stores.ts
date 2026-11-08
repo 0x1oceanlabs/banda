@@ -4,12 +4,15 @@
  * list now, and the calls, what calls the Person. The Watches feed them,
  * until `item@1` and `call@1` do (E8b), so a list that changes draws again
  * only what reads the part of it that changed, never the whole Window. One
- * pair for each Window; keyed by host from W0. Pure but for React's
- * context, so plain tests cover it.
+ * pair for each Window. Each host's Watches say what it lists apart, this
+ * machine's and each other's in `hosts.toml` (ADR 0081, decision 4): the
+ * stores keep what each said last, and hold all of it merged, so a reader
+ * hears each change once. Pure but for React's context, so plain tests
+ * cover it.
  */
 import { createContext, useCallback, useContext } from "react"
 import type { ProjectId } from "@banda/contract"
-import { waits, works } from "@banda/ui/components/banda-mark"
+import { loudest, waits, works } from "@banda/ui/components/banda-mark"
 import {
   type Readable,
   sameData,
@@ -46,12 +49,26 @@ export type Calls = {
   list: readonly Call[]
 }
 
-export type Stores = { items: Store<Lists>; calls: Store<Calls> }
+export type Stores = {
+  items: Store<Lists>
+  calls: Store<Calls>
+  /** What each host's Watches said last, by its name, this machine's as
+   * `HERE`: `items` and the calls' attention merge them. */
+  hosts: Map<string, Said>
+}
+
+/** What one host's Watches say: what it lists, and what calls. */
+type Said = { lists: Lists; attention: Attention }
+
+/** This machine, as the stores name the host of what it lists: a name
+ * `hosts.toml` keeps for Banda's own. */
+export const HERE = "this"
 
 export function newStores(now = Date.now()): Stores {
   return {
     items: new Store<Lists>({}),
     calls: new Store<Calls>({ attention: QUIET, now, list: [] }),
+    hosts: new Map(),
   }
 }
 
@@ -81,20 +98,68 @@ export function keptLists(was: Lists, now: Lists): Lists {
   return same ? was : kept
 }
 
-/** Takes what the Watches list now. */
-export function takeLists({ items }: Stores, lists: Lists): void {
-  items.set(keptLists(items.get(), lists))
+/** What each host said, this machine's first. */
+function inOrder(hosts: ReadonlyMap<string, Said>): Said[] {
+  const here = hosts.get(HERE)
+  return [
+    ...(here ? [here] : []),
+    ...[...hosts].filter(([name]) => name !== HERE).map(([, said]) => said),
+  ]
 }
 
-/** Takes what the Watches say calls the Person, when it is new. */
-export function takeAttention({ calls }: Stores, attention: Attention): void {
-  const was = calls.get()
-  if (
-    was.attention.mark !== attention.mark ||
-    was.attention.waiting !== attention.waiting
-  )
-    calls.set({ ...was, attention })
+/** Every host's lists as one: a Project's of the first host that lists
+ * it, this machine's before any other. */
+function mergedLists(hosts: ReadonlyMap<string, Said>): Lists {
+  const all: Record<ProjectId, readonly Listed[]> = {}
+  for (const { lists } of inOrder(hosts))
+    for (const [project, listed] of Object.entries(lists))
+      all[project as ProjectId] ??= listed
+  return all
 }
+
+/** Takes what host `host`'s Watches list now: the items hold it with
+ * every other host's. */
+export function takeLists(
+  { items, hosts }: Stores,
+  lists: Lists,
+  host = HERE
+): void {
+  hosts.set(host, { attention: hosts.get(host)?.attention ?? QUIET, lists })
+  items.set(keptLists(items.get(), mergedLists(hosts)))
+}
+
+/** Takes what host `host`'s Watches say calls the Person: the calls hold
+ * the loudest of every host's, when it is new. */
+export function takeAttention(
+  { calls, hosts }: Stores,
+  attention: Attention,
+  host = HERE
+): void {
+  hosts.set(host, { lists: hosts.get(host)?.lists ?? {}, attention })
+  const all = inOrder(hosts).map((said) => said.attention)
+  const mark = loudest(all.map((one) => one.mark))
+  const waiting = all.reduce((sum, one) => sum + one.waiting, 0)
+  const was = calls.get()
+  if (was.attention.mark !== mark || was.attention.waiting !== waiting)
+    calls.set({ ...was, attention: { mark, waiting } })
+}
+
+/** Lets go of what host `host` listed and called for, as the Window no
+ * longer shows its rows. */
+export function dropHost(stores: Stores, host: string): void {
+  if (host === HERE || !stores.hosts.has(host)) return
+  takeLists(stores, {}, host)
+  takeAttention(stores, QUIET, host)
+  stores.hosts.delete(host)
+}
+
+/** What this machine lists, without the other hosts': what Quit and a
+ * restart stop. */
+export function ownLists({ hosts }: Stores): Lists {
+  return hosts.get(HERE)?.lists ?? NO_LISTS
+}
+
+const NO_LISTS: Lists = {}
 
 /**
  * Keeps the calls following the items and the snooze clock: worked out
@@ -164,6 +229,12 @@ export function workingIn(lists: Lists): number {
     .filter((listed) => works(listed.mark)).length
 }
 
+/** How many Agents work on this machine now: those Quit and a restart
+ * stop, and no other host's. */
+export function workingHere(stores: Stores): number {
+  return workingIn(ownLists(stores))
+}
+
 /** The Projects one of whose Threads calls the Person, unless it is put
  * away: those whose workspace the bar marks with a dot (ADR 0065,
  * decision 9). */
@@ -201,6 +272,13 @@ const every = (lists: Lists) => lists
 /** What every App lists now, drawn again as any list changes. */
 export function useLists(): Lists {
   return useItems(every)
+}
+
+/** How many Agents work on this machine now, drawn again as it changes. */
+export function useWorkingHere(): number {
+  const stores = useContext(StoresContext)
+  const select = useCallback(() => workingHere(stores), [stores])
+  return useStore(stores.items, select)
 }
 
 /** The bar's Mark: what calls the Person, and how many things wait. */

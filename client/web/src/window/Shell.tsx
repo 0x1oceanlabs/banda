@@ -35,7 +35,7 @@ import {
   listedIn,
   newStores,
   nowOf,
-  workingIn,
+  workingHere,
 } from "../calls/stores"
 import { sidebarOrder } from "../sidebar/order"
 import { WELL, wentWell } from "../safe/starts"
@@ -599,7 +599,7 @@ export function Shell({
     settings("keys")
   }, [own, settings])
   const quit = useCallback(() => {
-    const working = workingIn(stores.items.get())
+    const working = workingHere(stores)
     if (working === 0) device.quit()
     else setQuitting(working)
   }, [stores])
