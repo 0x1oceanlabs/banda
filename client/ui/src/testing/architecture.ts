@@ -2,7 +2,8 @@
  * What the architecture tests read (docs/architecture.md, "Checks that
  * hold the shape"): the Apps' and platform parts' folders, the source
  * files of a folder, the modules each one names, the Apps each one names,
- * where each one reads the desktop's bridge and what each one animates.
+ * where each one reads the desktop's bridge, what each one animates and
+ * the code its components take as props.
  * For tests alone: it reads the disk.
  */
 /// <reference types="node" />
@@ -204,5 +205,75 @@ export function layoutMotion(source: string): string[] {
     )
       found.push(`@keyframes ${start[1]}`)
   }
+  return found
+}
+
+/**
+ * The props of each component of `source`, the code of `file`, that are
+ * code rather than data (ADR 0087, B4e), by the component's name: those
+ * whose type is a function, also when optional or behind a type alias or
+ * an interface of the file. A component is a function whose name starts
+ * with a capital, declared or held by a `const`. What its props' type
+ * takes from elsewhere, as `Omit<ComponentProps<typeof Row>, …>` takes
+ * Row's, is not read here: read the file that declares it.
+ */
+export function functionProps(
+  source: string,
+  file: string
+): Record<string, string[]> {
+  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest)
+  const declared = new Map<string, ts.Node>()
+  for (const node of tree.statements)
+    if (ts.isTypeAliasDeclaration(node)) declared.set(node.name.text, node.type)
+    else if (ts.isInterfaceDeclaration(node)) declared.set(node.name.text, node)
+  // What a type stands for, through the file's aliases, once each.
+  const resolved = (type: ts.Node, seen: Set<string>): ts.Node => {
+    if (ts.isParenthesizedTypeNode(type)) return resolved(type.type, seen)
+    if (ts.isTypeReferenceNode(type) && ts.isIdentifier(type.typeName)) {
+      const name = type.typeName.text
+      const target = declared.get(name)
+      if (target && !seen.has(name))
+        return resolved(target, new Set([...seen, name]))
+    }
+    return type
+  }
+  const isFunction = (type: ts.Node): boolean => {
+    const node = resolved(type, new Set())
+    if (ts.isFunctionTypeNode(node)) return true
+    return ts.isUnionTypeNode(node) && node.types.some(isFunction)
+  }
+  const members = (type: ts.Node): string[] => {
+    const node = resolved(type, new Set())
+    if (ts.isIntersectionTypeNode(node)) return node.types.flatMap(members)
+    if (!ts.isTypeLiteralNode(node) && !ts.isInterfaceDeclaration(node))
+      return []
+    return node.members.flatMap((member) => {
+      if (!member.name || !ts.isIdentifier(member.name)) return []
+      if (ts.isMethodSignature(member)) return [member.name.text]
+      return ts.isPropertySignature(member) &&
+        member.type &&
+        isFunction(member.type)
+        ? [member.name.text]
+        : []
+    })
+  }
+  const found: Record<string, string[]> = {}
+  const component = (name: string, fn: ts.SignatureDeclaration) => {
+    if (!/^[A-Z]/.test(name)) return
+    const type = fn.parameters[0]?.type
+    found[name] = type ? members(type) : []
+  }
+  for (const node of tree.statements)
+    if (ts.isFunctionDeclaration(node) && node.name)
+      component(node.name.text, node)
+    else if (ts.isVariableStatement(node))
+      for (const held of node.declarationList.declarations)
+        if (
+          ts.isIdentifier(held.name) &&
+          held.initializer &&
+          (ts.isArrowFunction(held.initializer) ||
+            ts.isFunctionExpression(held.initializer))
+        )
+          component(held.name.text, held.initializer)
   return found
 }

@@ -5,6 +5,7 @@ import { expect, test } from "vitest"
 import {
   MANIFEST_NAMES,
   desktopReads,
+  functionProps,
   imports,
   layoutMotion,
   parts,
@@ -46,6 +47,27 @@ test("the check sees each way code reads the desktop's bridge, and not what only
       "names.ts"
     )
   ).toBe(0)
+})
+
+test("the check sees a component's props that are code, through the file's aliases, and not its data", () => {
+  const source = [
+    `type Pick = (id: string) => void`,
+    `type Shown = { label: string }`,
+    `interface Folding { onFold(): void; folded: boolean }`,
+    `export function List({ onPick, label }: { onPick: Pick; label: string; done?: (() => void) | undefined }) {}`,
+    `function Header(props: Shown & Folding & { onMore: () => void }) {}`,
+    `const Item = ({ row }: { row: Shown; mark: Pick | undefined }) => null`,
+    `const Row = (props: Omit<ComponentProps<typeof Other>, "x">) => null`,
+    `function lower({ onOpen }: { onOpen: () => void }) {}`,
+    `function Empty() {}`,
+  ].join("\n")
+  expect(functionProps(source, "list.tsx")).toEqual({
+    List: ["onPick", "done"],
+    Header: ["onFold", "onMore"],
+    Item: ["mark"],
+    Row: [],
+    Empty: [],
+  })
 })
 
 test("the check sees a Tailwind class that animates layout, each time", () => {

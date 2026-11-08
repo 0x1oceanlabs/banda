@@ -15,6 +15,7 @@ import { cn } from "@banda/ui/lib/utils"
 import { useNow } from "@banda/ui/hooks/use-now"
 import type { Listed } from "@banda/ui/pane"
 import type { Row as Arranged } from "./arrange"
+import { useOpenRow } from "./open"
 import type { Part, Settings } from "./settings"
 import { THINKING, useThinking } from "@banda/ui/lib/naming"
 
@@ -38,13 +39,13 @@ const NO_HARNESSES: readonly EmblemOf[] = []
  * Project is hidden. */
 type Drawn = Part | "machine"
 
-/** One row of the sidebar, its parts laid out as the settings say. */
+/** One row of the sidebar, its parts laid out as the settings say; a
+ * click opens the Pane it stands for, by `pane.pick`. */
 export function Row({
   row,
   settings,
   inProject,
   current,
-  onOpen,
   action,
   field,
   machine,
@@ -56,7 +57,6 @@ export function Row({
   /** It sits under its Project's header, which already names the Project. */
   inProject: boolean
   current: boolean
-  onOpen: () => void
   /** A button that shows while the pointer is over the row: its snooze's
    * clock, or Wake (ADR 0074). */
   action?: ReactNode
@@ -72,6 +72,7 @@ export function Row({
   harnesses?: readonly EmblemOf[]
 }) {
   const { lines, hide, layout } = settings.row
+  const onOpen = useOpenRow(row)
   const parts = (layout ?? LAYOUTS[lines] ?? LAYOUTS[3]).map((line) =>
     line.flatMap((part): Drawn[] => {
       if (part === "project" && inProject) return []

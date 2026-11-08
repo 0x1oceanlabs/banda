@@ -9,9 +9,12 @@
  *   (decision 6); one that no longer does leaves the list.
  * - The Window holds the areas and the Tiling the Panes (ADR 0087,
  *   decisions 1 and 5): the Tiling imports no more of the Window than it
- *   does today, neither names an App more than it does today, and the
- *   Window's root keeps under a line ceiling, 400 at last. Each count only
- *   falls.
+ *   does today, neither they nor the sidebar list names an App more than
+ *   it does today, and the Window's root keeps under a line ceiling, 400
+ *   at last. Each count only falls. The sidebar list does what the Person
+ *   asks by the actions' ids: what it still takes as code is listed, no
+ *   Project's or Thread's verb, and it pins no Project and writes no
+ *   `agents.toml` itself.
  * - Nothing more animates a size or a place (ADR 0088, decision 2): the
  *   cases of today are listed, and the list only falls.
  * - The window ticks on one clock, which stops while nothing moves (ADR
@@ -67,6 +70,7 @@ import { join, relative } from "node:path"
 import {
   appStrings,
   desktopReads,
+  functionProps,
   imports,
   layoutMotion,
   manifestIn,
@@ -341,6 +345,68 @@ test("only the Window gives run to what it draws", () => {
 })
 
 /**
+ * What the sidebar list's components take as code, not data, by file and
+ * component (`functionProps`, ADR 0087, B4e). The rest it does by the
+ * actions' ids, as their keys would (`useRun`): opening a Pane, a New
+ * Thread, the menu, the settings and a Project's verbs. What stays is the
+ * Window's area (`onDismiss`), which Pane has the focus (`isCurrent`,
+ * #827), the list's own folding and filter, a Project's menu around its
+ * row (`withMenu`), and the trust card the Sidebar anchors by a row (ADR
+ * 0083, decision 5), until trust is an action too (#947). Row's file is
+ * read too, as ThreadRow takes its props from it. Each list only falls,
+ * and none holds a Project's or a Thread's verb.
+ */
+const SIDEBAR_CODE: Record<string, Record<string, string[]>> = {
+  "web/src/sidebar/Row.tsx": {},
+  "web/src/sidebar/Sidebar.tsx": {
+    Sidebar: ["onDismiss", "isCurrent"],
+    SectionView: ["isCurrent", "onToggle", "onMore", "withMenu"],
+    ProjectsList: ["onPick", "withMenu"],
+    ProjectMenu: ["onTrust", "onStopTrusting"],
+    TrustItem: ["onTrust", "onStopTrusting"],
+    HostPart: ["onFold"],
+  },
+}
+
+/** The verbs the sidebar list ran by props until B4e, and a Thread's. */
+const VERBS =
+  /^on(?:Open|NewThread|NoProject|AddProject|Pin|Locate|ProjectSettings|Menu|Settings|Keys|Start|Snooze|Wake|Archive|Rename)$/
+
+test("the sidebar list takes no more code than the list holds, and no Project's or Thread's verb", () => {
+  const taken = Object.fromEntries(
+    Object.keys(SIDEBAR_CODE).map((file) => {
+      const props = functionProps(readFileSync(join(app, file), "utf8"), file)
+      // A component that takes no code is left out.
+      const some = Object.entries(props).filter(([, names]) => names.length > 0)
+      return [file, Object.fromEntries(some)]
+    })
+  )
+  const verbs = Object.values(taken)
+    .flatMap((byComponent) => Object.values(byComponent).flat())
+    .filter((name) => VERBS.test(name))
+  expect(verbs).toEqual([])
+  expect(taken).toEqual(SIDEBAR_CODE)
+})
+
+/**
+ * A Project's pin is the Window's `projects.pin`, and the Flow the Person
+ * picks is to be `flow.pick`, beside `flow.solo` (ADR 0087, B4e): the
+ * sidebar list pins no Project itself, and only the files listed still
+ * write `agents.toml`. The list only falls.
+ */
+test("the sidebar list pins no Project and writes no agents.toml", () => {
+  const writing =
+    /\bupdateProject\b|(?:writeSetting|settings\.set)\(\s*(?:AGENTS_FILE|["'`]agents\.toml)/
+  const files = sources(join(app, "web/src/sidebar"), { tests: false })
+  expect(files).toContain(join(app, "web/src/sidebar/Sidebar.tsx"))
+  expect(
+    files
+      .filter((file) => writing.test(readFileSync(file, "utf8")))
+      .map((file) => relative(app, file))
+  ).toEqual(["web/src/sidebar/FlowMenu.tsx", "web/src/sidebar/MakeProject.tsx"])
+})
+
+/**
  * Where the Person looks for a thing is the calls part's to work out
  * (`sightOf`, ADR 0087, decision 9), and the rest of where they are Here
  * says (decision 4). Only the notifications part still asks the Window
@@ -386,15 +452,19 @@ test("one place answers a pick, and only the action reaches it", () => {
 })
 
 /**
- * What the Window and the Tiling still say of an App, once for each place
- * they do, by file (`appStrings`): a string that names an action or a kind
- * of the agents module's (`agents.…`) or a Thread's (`thread.…`), and that
- * module's settings file (`AGENTS_FILE`). Neither names an App (ADR 0087,
- * decision 1); these go with the Thread verbs (B4d), the Flow (B4e, T-b)
- * and intents (B8c). None joins the list, and one that goes leaves it. Not
- * what only tests use.
+ * What the Window, the Tiling and the sidebar list still say of an App,
+ * once for each place they do, by file (`appStrings`): a string that names
+ * an action or a kind of the agents module's (`agents.…`) or a Thread's
+ * (`thread.…`), and that module's settings file (`AGENTS_FILE`). None of
+ * them names an App (ADR 0087, decision 1); these go with the Flow (T-b)
+ * and intents (B8c), and the sidebar's New Thread with them, as the key
+ * starts one. None joins the list, and one that goes leaves it. Not what
+ * only tests use.
  */
 const APP_STRINGS = [
+  "web/src/sidebar/FlowMenu.tsx: AGENTS_FILE",
+  "web/src/sidebar/FlowMenu.tsx: AGENTS_FILE",
+  "web/src/sidebar/open.ts: thread.new",
   "web/src/window/Shell.tsx: AGENTS_FILE",
   "web/src/window/Shell.tsx: thread.new",
   "web/src/window/Shell.tsx: thread.new",
@@ -403,7 +473,7 @@ const APP_STRINGS = [
   "web/src/window/actions.ts: AGENTS_FILE",
 ]
 
-const saying = ["web/src/window", "web/src/tiling"]
+const saying = ["web/src/window", "web/src/tiling", "web/src/sidebar"]
   .flatMap((folder) => sources(join(app, folder), { tests: false }))
   .flatMap((file) =>
     appStrings(readFileSync(file, "utf8"), file).map(
@@ -411,7 +481,7 @@ const saying = ["web/src/window", "web/src/tiling"]
     )
   )
 
-test("the Window and the Tiling name an App no more than the list holds", () => {
+test("the Window, the Tiling and the sidebar list name an App no more than the list holds", () => {
   expect(beyond(saying, APP_STRINGS)).toEqual([])
 })
 
@@ -426,7 +496,7 @@ test("a string that no longer names an App leaves the list", () => {
  * lowers it; the room lets PRs in flight that each cut a few lines leave
  * it alone.
  */
-const WINDOW_LINES = 1024
+const WINDOW_LINES = 1005
 const SLACK = 20
 
 test("the Window's root keeps under its ceiling, and the ceiling follows it down", () => {
