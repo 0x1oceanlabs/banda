@@ -31,11 +31,10 @@ import { Watches } from "../bar/Watches"
 import { besideOf, isShowing, nextCall, sightOf } from "../calls/sight"
 import {
   followCalls,
+  itemsOf,
   listedIn,
   newStores,
   nowOf,
-  StoresContext,
-  watchLists,
   workingIn,
 } from "../calls/stores"
 import { sidebarOrder } from "../sidebar/order"
@@ -84,6 +83,7 @@ import {
 } from "../sidebar/snoozed"
 import { archive as keepArchived, toggled } from "../sidebar/archived"
 import { attachTo, focusedOn } from "./attach"
+import { Kept, useKeptHere } from "./here"
 import { useNarrow } from "./narrow"
 import { floorOf, type Reveal, shownOf } from "../tiling/layout"
 import type { Change } from "../tiling/arrange"
@@ -225,9 +225,6 @@ export function Shell({
   useEffect(() => {
     if (focusedId) focusedOn(focusedId)
   }, [focusedId])
-  // Where the Person looks, which the notifications module asks to tell
-  // of what calls (ADR 0056, decision 1), and who hears it change.
-  const sightHeard = useRef(new Set<() => void>())
   const notify = useLookNotify()
   const sound = useLookSound()
   const told = useMemo(() => ({ notify, sound }), [notify, sound])
@@ -294,9 +291,6 @@ export function Shell({
       picking((w) => answering(w, thing, homeOf(thing.pane))),
     [picking]
   )
-  useEffect(() => {
-    for (const listener of sightHeard.current) listener()
-  }, [workspaces, front])
   // `banda menu ROUTE` opens the menu there (ADR 0017, decision 7).
   const projectsNow = useRef(projects)
   useEffect(() => {
@@ -510,6 +504,10 @@ export function Shell({
       : undefined
   if (zoom !== undefined && zoomed === undefined) setZoom(undefined)
   const sidebarShown = (narrow ? over : sidebar) && !zoomed
+  // Where the Person is (ADR 0087, decision 4), and what the Apps list,
+  // as the Apps' code reads them.
+  const here = useKeptHere(drawnNow, { sidebar: sidebarShown, home }, showsOf)
+  const [items] = useState(() => itemsOf(stores))
   const hideOver = useCallback(() => setOver(false), [])
   // Each Alt+C brings the focused column to the middle, once.
   const toCenter = useCallback(() => {
@@ -612,7 +610,11 @@ export function Shell({
   const parts = useSteady<Parts>({
     change,
     home,
-    open: (pane, project, { beside, again = true, update, ...how } = {}) => {
+    open: (
+      pane,
+      project,
+      { beside, again = true, update, toggle, ...how } = {}
+    ) => {
       // The Pane that peeks, opened in the workspace, peeks no more.
       const peeked = peekNow.current
       if (
@@ -628,39 +630,29 @@ export function Shell({
         const at = beside
           ? besideOf(w, stores.items.get(), beside, showsOf)
           : null
+        const into = project ?? at?.project ?? projectIn(w) ?? home
+        // Toggled, the one in focus closes when it is this one.
+        const entry = toggle && focused(w)
+        if (entry && samePane(entry, { project: into, pane }, identityOf))
+          return closing(entry.id)
         // Not again: the one shown, as its kind names it, keeps what it
         // shows, or takes these args when asked to update it.
-        return (again || !update ? opening : updating)(
-          w,
-          project ?? at?.project ?? projectIn(w) ?? home,
-          pane,
-          {
-            ...how,
-            ...(at?.from ? { from: at.from } : {}),
-            // What an Agent opens goes into its Thread's Group; an
-            // Agent's Thread, to its Project's workspace.
-            place: at?.from ? "group" : homeOf(pane),
-            ...(again ? { again } : { keep: true }),
-          }
-        )
+        return (again || !update ? opening : updating)(w, into, pane, {
+          ...how,
+          ...(at?.from ? { from: at.from } : {}),
+          // What an Agent opens goes into its Thread's Group; an
+          // Agent's Thread, to its Project's workspace.
+          place: at?.from ? "group" : homeOf(pane),
+          ...(again ? { again } : { keep: true }),
+        })
       })
     },
-    focused: () => {
-      const entry = focused(drawnNow())
-      if (!entry) return null
-      const shows = showsOf(entry.pane)
-      return {
-        project: entry.project,
-        pane: entry.pane,
-        ...(shows ? { shows } : {}),
-      }
-    },
+    here,
     beside: (agent) => {
       const at = besideOf(drawnNow(), stores.items.get(), agent, showsOf)
       return at && { project: at.project, right: at.from ? at.right : null }
     },
-    lists: () => stores.items.get(),
-    watchLists: (listener) => watchLists(stores, listener),
+    items,
     sight: (thing) => {
       if (!thing) return inFront() ? "in-window" : "away"
       const state = drawnNow()
@@ -674,10 +666,6 @@ export function Shell({
         // Under a zoom no other Tile shows.
         zoomed: zoomed !== undefined,
       })
-    },
-    watchSight: (listener) => {
-      sightHeard.current.add(listener)
-      return () => sightHeard.current.delete(listener)
     },
     goTo: goToCall,
     look: () => told,
@@ -693,10 +681,9 @@ export function Shell({
     // them (ADR 0079, decision 4).
     answer: () => {
       const order = sidebarOrder(stores.items.get(), projects, snoozes)
-      const entry = focused(drawnNow())
-      const thing = entry && showsOf(entry.pane)
-      const here = entry && thing ? `${entry.project}:${thing}` : undefined
-      const call = nextCall(stores.calls.get().list, order, here)
+      const { pane } = here.get()
+      const at = pane?.subject ? `${pane.project}:${pane.subject}` : undefined
+      const call = nextCall(stores.calls.get().list, order, at)
       if (call) goToCall(call)
     },
     archive,
@@ -817,9 +804,6 @@ export function Shell({
         : startThread(project, ask),
     [startThread, route]
   )
-  // The Project the Person is in: where the menu's New Thread starts, on
-  // an empty Project workspace too.
-  const here = projectIn(workspaces) ?? home
   // Solo (ADR 0079, decision 2): when the focus comes to another Agent,
   // its Group fills the screen. Only a move of the focus asks, so Alt+M
   // still gives the room back by hand. From solo to the row, the room
@@ -862,7 +846,6 @@ export function Shell({
   const bar = useWidgets(modules, {
     engine,
     projects,
-    project: here,
     window: api,
     sidebarShown,
     ahead,
@@ -919,7 +902,10 @@ export function Shell({
         case "action":
           return row.action.run(parts)
         case "ask":
-          return newThreadIn(row.project ?? here, row.words || undefined)
+          return newThreadIn(
+            row.project ?? here.get().project,
+            row.words || undefined
+          )
         case "archive":
           return toggleArchived(row.project, row.listed.id)
         case "snooze":
@@ -1010,7 +996,7 @@ export function Shell({
 
   return (
     <KeysInForce.Provider value={keys}>
-      <StoresContext.Provider value={stores}>
+      <Kept stores={stores} here={here}>
         <ThreadMenus
           engine={engine}
           projects={projects}
@@ -1167,7 +1153,6 @@ export function Shell({
                   onAdded={added}
                   engine={engine}
                   modules={modules}
-                  project={here}
                   asleep={snoozes.asleep}
                   projects={menuProjects}
                   actions={keyed}
@@ -1207,7 +1192,7 @@ export function Shell({
             </div>
           </div>
         </ThreadMenus>
-      </StoresContext.Provider>
+      </Kept>
     </KeysInForce.Provider>
   )
 }

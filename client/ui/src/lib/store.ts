@@ -6,7 +6,15 @@
  */
 import { useCallback, useState, useSyncExternalStore } from "react"
 
-export class Store<T> {
+/** A value kept outside React, as its readers see it: what it is now, and
+ * who hears it change. Only its owner sets it. */
+export type Readable<T> = {
+  readonly get: () => T
+  /** Calls `listener` on each change; returns how to stop. */
+  readonly subscribe: (listener: () => void) => () => void
+}
+
+export class Store<T> implements Readable<T> {
   #value: T
   readonly #heard = new Set<() => void>()
 
@@ -36,6 +44,21 @@ export class Store<T> {
 /** Whether two lists hold the same things, each the same object. */
 export function sameEach<T>(a: readonly T[], b: readonly T[]): boolean {
   return a.length === b.length && a.every((one, i) => Object.is(one, b[i]))
+}
+
+/** Whether two values of plain data, as a Listed or Here is, say the
+ * same. */
+export function sameData(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true
+  if (typeof a !== "object" || typeof b !== "object" || !a || !b) return false
+  if (Array.isArray(a) !== Array.isArray(b)) return false
+  const keys = Object.keys(a)
+  if (keys.length !== Object.keys(b).length) return false
+  const one = a as Record<string, unknown>
+  const other = b as Record<string, unknown>
+  return keys.every(
+    (key) => Object.hasOwn(other, key) && sameData(one[key], other[key])
+  )
 }
 
 /** What one reader drew last, which it keeps while `equal` finds what
@@ -76,7 +99,7 @@ export function useSelected<S>(
 /** `select` of what `store` holds, drawn again only as that changes. A
  * `select` made once, not at each drawing, spares React a read. */
 export function useStore<T, S>(
-  store: Store<T>,
+  store: Readable<T>,
   select: (value: T) => S,
   equal?: (a: S, b: S) => boolean
 ): S {

@@ -8,17 +8,16 @@ import { diffPane } from "./DiffPane"
 import { keepWindow } from "./ended"
 
 /** T3 Code's Mod+D: the focused Pane's Project's Diff beside it, the one
- * shown if there is; on the Diff, it closes. */
+ * shown if there is; on the Diff, it closes. Its Project is left to the
+ * change, which finds the focused Pane where the last change left it, as
+ * Mod+D pressed right after Alt+→. */
 const toggleDiff: Action = {
   id: "git.diff",
   title: "Show the Diff, or hide it",
   section: "Git",
   keys: [{ code: "KeyD", mod: true }],
-  run: (window) => {
-    const at = window.focused()
-    if (at?.pane.kind === diffPane.kind) return window.run("pane.close")
-    window.open(diffOn(), at?.project, { again: false })
-  },
+  run: (window) =>
+    window.open(diffOn(), undefined, { again: false, toggle: true }),
 }
 
 /** T3 Code's Mod+Shift+G: the branch picker of the focused Thread's

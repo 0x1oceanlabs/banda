@@ -13,8 +13,8 @@ import { useHarnesses } from "../harnesses"
  * in a Project gone into, a new Thread there. */
 export const askSource: Source = { id: "agents.ask", label: "", Find: FindAsk }
 
-function FindAsk({ words, here, found }: FindProps) {
-  const { engine, project, entered } = here
+function FindAsk({ words, at, found }: FindProps) {
+  const { engine, project, entered } = at
   const all = useHarnesses(engine)
   const rows = useMemo((): MenuRow[] => {
     if (!entered && !words) return []

@@ -186,11 +186,7 @@ export function startTelling(
   // What the Person looks at is seen: its toast and notification go,
   // while the call may still wait for them, as a Question does.
   const seen = () =>
-    withdraw(
-      lookedAt(calling, window.focused(), (call) => window.sight(call)).map(
-        (call) => call.key
-      )
-    )
+    withdraw(lookedAt(calling, window.here.get()).map((call) => call.key))
 
   const heard = (lists: Lists) => {
     const now = callsOf(lists)
@@ -206,11 +202,12 @@ export function startTelling(
     timer ??= setTimeout(() => void tellNews(), GATHER)
   }
 
-  heard(window.lists())
+  heard(window.items.get())
   const stops = [
     clickToasts(),
-    window.watchLists(() => heard(window.lists())),
-    window.watchSight(seen),
+    window.items.subscribe(() => heard(window.items.get())),
+    // Where the Person is changes what they look at.
+    window.here.subscribe(seen),
     // A click on a notice brings the window to the front and goes there;
     // the notice of many shows the sidebar, which lists them all.
     desktop?.listen((key) => {

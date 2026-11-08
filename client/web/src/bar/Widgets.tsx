@@ -63,7 +63,7 @@ export function useWidgets(
     return placed(bar, known, settings)
   }, [bar, running, settings])
   const drawn = {} as Record<Part, Drawn[]>
-  const { engine, projects, project, window } = props
+  const { engine, projects, window } = props
   for (const part of PARTS) {
     drawn[part] = parts[part].map((id) => {
       if (id === WORKSPACES) return { id, node: null }
@@ -72,12 +72,7 @@ export function useWidgets(
       // A module's widget is given only what a module's is.
       const { Widget } = widgets.get(id)!.widget
       const node = (
-        <Widget
-          engine={engine}
-          projects={projects}
-          project={project}
-          window={window}
-        />
+        <Widget engine={engine} projects={projects} window={window} />
       )
       return { id, node }
     })

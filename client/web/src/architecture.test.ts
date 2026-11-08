@@ -25,6 +25,10 @@
  * - The Window and the Tiling reach the desktop only through the Window's
  *   device part (ADR 0089, decision 2): what else in the page reads the
  *   desktop's bridge is listed, and the list only falls.
+ * - Only the Window keeps Here (ADR 0087, decision 4): one place gives it
+ *   to what the Window draws. Where the Person looks is the calls part's
+ *   to work out: only the files listed ask the Window, and the list only
+ *   falls.
  * - What the Window draws on every move it makes is drawn again only as
  *   its own props change (ADR 0088, decision 7): the parts listed stay
  *   memoized, and the list only grows.
@@ -211,6 +215,37 @@ test("a place that no longer reads it comes off the list", () => {
 })
 
 /**
+ * Only the Window writes Here (ADR 0087, decision 4): one file gives it to
+ * what the Window draws, and nothing else gives one, so a widget or a part
+ * reads where the Person is only from the Window's.
+ */
+test("only the Window gives Here to what it draws", () => {
+  const giving = drawing
+    .filter((file) =>
+      /<HereContext\b|HereContext\.Provider/.test(readFileSync(file, "utf8"))
+    )
+    .map((file) => relative(root, file))
+  expect(giving).toEqual(["client/web/src/window/here.tsx"])
+})
+
+/**
+ * Where the Person looks for a thing is the calls part's to work out
+ * (`sightOf`, ADR 0087, decision 9), and the rest of where they are Here
+ * says (decision 4). Only the notifications part still asks the Window
+ * (`WindowApi.sight`), as it needs the Tiles measured to tell the Person,
+ * until who is told moves to the host (E9). A file that asks is listed
+ * here; one that stops leaves the list, and none joins it.
+ */
+const ASKING_SIGHT = ["platform/notifications/pane/src/teller.ts"]
+
+test("only the files listed ask the Window where the Person looks", () => {
+  const asking = drawing
+    .filter((file) => /\.sight\(/.test(readFileSync(file, "utf8")))
+    .map((file) => relative(root, file))
+  expect(asking).toEqual(ASKING_SIGHT)
+})
+
+/**
  * What the Window and the Tiling still say of an App, once for each place
  * they do, by file (`appStrings`): a string that names an action or a kind
  * of the agents module's (`agents.…`) or a Thread's (`thread.…`), and that
@@ -260,7 +295,7 @@ test("a string that no longer names an App leaves the list", () => {
  * lowers it; the room lets PRs in flight that each cut a few lines leave
  * it alone.
  */
-const WINDOW_LINES = 1213
+const WINDOW_LINES = 1198
 const SLACK = 20
 
 test("the Window's root keeps under its ceiling, and the ceiling follows it down", () => {

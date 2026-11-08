@@ -157,13 +157,11 @@ export function windowApiOf(shell: Shell): WindowApi {
       return shell.home
     },
     open: shell.open,
-    focused: shell.focused,
+    here: shell.here,
     beside: shell.beside,
-    lists: shell.lists,
-    watchLists: shell.watchLists,
+    items: shell.items,
     run: shell.run,
     sight: shell.sight,
-    watchSight: shell.watchSight,
     goTo: shell.goTo,
     projects: shell.projects,
     look: shell.look,
@@ -431,12 +429,12 @@ function present(args: Args | undefined, then: (file: string) => void) {
 function lookedAt(
   shell: Shell
 ): { project: ProjectId; listed: Listed; listing: Listing } | undefined {
-  const here = shell.focused()
-  const thing = here && showsOf(here.pane)
-  if (!here || !thing) return undefined
-  const listed = shell.lists()[here.project]?.find((row) => row.id === thing)
+  const { pane } = shell.here.get()
+  if (!pane?.subject) return undefined
+  const { project, subject } = pane
+  const listed = shell.items.get()[project]?.find((row) => row.id === subject)
   const listing = listed && listingFor(listed)
-  return listing && { project: here.project, listed, listing }
+  return listing && { project, listed, listing }
 }
 
 /** The window's own actions, the tiling's first (ADR 0071, decision 2):

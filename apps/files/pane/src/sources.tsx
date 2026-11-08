@@ -31,11 +31,11 @@ export const filesSource: Source = {
   Find: FindFiles,
 }
 
-function FindFiles({ words: typed, here, found }: FindProps) {
-  const { engine, project, folder, entered } = here
+function FindFiles({ words: typed, at, found }: FindProps) {
+  const { engine, project, folder, entered, only } = at
   // `main.rs:42` finds `main.rs`, and opens it at line 42.
   const { path: words, line = null } = named(typed)
-  const alone = here.only === filesSource.id
+  const alone = only === filesSource.id
   const look = !entered && (words !== "" || alone) && folder !== undefined
   // The paths found last stay while the next are asked for.
   const [paths, setPaths] = useState<string[]>()
