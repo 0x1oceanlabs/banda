@@ -328,9 +328,9 @@ test("only the Window gives Here to what it draws", () => {
 /**
  * What the Window draws runs an action by its id with the Window's own
  * `run` (`useRun`, ADR 0087, decision 11): only the Window gives it, as it
- * gives Here, so a part that runs one acts with the Here of the click and
- * borrows no other part's hook. A popped-out Pane's window may give its
- * own: it is the Window's too.
+ * gives Here, so a part that runs one acts with the Window's Here as it
+ * runs and borrows no other part's hook. A popped-out Pane's window may
+ * give its own: it is the Window's too.
  */
 test("only the Window gives run to what it draws", () => {
   const giving = drawing

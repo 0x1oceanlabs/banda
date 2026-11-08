@@ -435,7 +435,7 @@
     },
     {
       "id": "flow.pick",
-      "title": "Pick how the Agents' windows stand, as the sidebar's Flow menu does",
+      "title": "Pick how the Agents' windows stand: free, row or solo",
       "section": "Workspaces",
       "keys": [],
       "unlisted": true,
@@ -730,8 +730,8 @@
       ]
     },
     {
-      "id": "menu.route",
-      "title": "Open the Banda menu at a route, as banda menu does",
+      "id": "menu.at",
+      "title": "Open the Banda menu at a route",
       "section": "Banda",
       "keys": [],
       "unlisted": true,
@@ -949,7 +949,7 @@
     },
     {
       "id": "projects.locate",
-      "title": "Find the folder of a Project whose folder is missing",
+      "title": "Open the Banda menu to find a missing Project's folder",
       "section": "Banda",
       "keys": [],
       "unlisted": true,

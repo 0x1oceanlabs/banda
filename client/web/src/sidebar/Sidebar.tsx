@@ -145,7 +145,8 @@ export function Sidebar({
   /** This machine's No Project, where its section's New Thread starts;
    * none until the engine names it. */
   machine?: ProjectId
-  /** Whether a Pane is the one that has the focus (#827). */
+  /** Whether a Pane is the one that has the focus, by all its args, as
+   * before; `Here.pane` says it by what it shows, which is #827's fix. */
   isCurrent: (project: ProjectId, pane: PaneState) => boolean
 }) {
   const keyFor = useKeyLabel()
@@ -298,7 +299,7 @@ export function Sidebar({
         <div className="flex items-center gap-0.5 px-2 pt-2 pb-1">
           <button
             type="button"
-            onClick={() => open("menu.route")}
+            onClick={() => open("menu.at")}
             className="mr-1 flex h-7 min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md border bg-background/60 px-2 text-[13px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           >
             <SearchIcon className="size-3.5 shrink-0" />
@@ -406,7 +407,7 @@ export function Sidebar({
             className="text-muted-foreground"
             aria-label="Every action and its key"
             title={keyFor("menu.keys", "Every action and its key")}
-            onClick={() => open("menu.route", { route: "actions" })}
+            onClick={() => open("menu.at", { route: "actions" })}
           >
             <KeyboardIcon />
           </Button>
