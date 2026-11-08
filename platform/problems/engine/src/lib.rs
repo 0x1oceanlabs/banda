@@ -78,7 +78,7 @@ impl Problems {
     /// can fix a Problem (ADR 0039, decision 3): not a released Banda's,
     /// whose build's folder is another machine's.
     pub fn from_checkout(mut self) -> Self {
-        self.checkout = panics::root().and_then(|root| root.canonicalize().ok());
+        self.checkout = panics::root().and_then(|root| dunce::canonicalize(root).ok());
         self
     }
 }

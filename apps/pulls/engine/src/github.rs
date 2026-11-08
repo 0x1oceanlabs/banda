@@ -46,21 +46,22 @@ pub async fn read(gh: &Path, pulls: &[PullRef], now: i64) -> Result<Read, Missed
         });
     };
     let (query, names) = query(pulls);
-    let mut command = tokio::process::Command::new(gh);
+    let missing = || {
+        Missed::Person(
+            "Banda reads pull requests with the GitHub CLI, gh, which is not installed.".into(),
+        )
+    };
+    // Found on the host's PATH as it is now, as the host finds a program.
+    let mut command = banda_kernel::host::command(gh).map_err(|_| missing())?;
     command
         .args(["api", "graphql", "--hostname", &host, "-f"])
         .arg(format!("query={query}"))
         .env("GH_PROMPT_DISABLED", "1")
         .env("NO_COLOR", "1")
-        .stdin(std::process::Stdio::null())
-        .kill_on_drop(true);
+        .stdin(std::process::Stdio::null());
     let output = match tokio::time::timeout(LIMIT, command.output()).await {
         Err(_) => return Err(Missed::Failed("GitHub took too long to answer.".into())),
-        Ok(Err(error)) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Err(Missed::Person(
-                "Banda reads pull requests with the GitHub CLI, gh, which is not installed.".into(),
-            ));
-        }
+        Ok(Err(error)) if error.kind() == std::io::ErrorKind::NotFound => return Err(missing()),
         Ok(Err(error)) => return Err(Missed::Failed(format!("gh did not run: {error}"))),
         Ok(Ok(output)) => output,
     };

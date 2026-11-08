@@ -6,7 +6,9 @@
 //! its Project, reaches only inside the Project's folder: the path is
 //! read as the system reads it, links and `..` followed, and refused when
 //! it lands outside. A path that is not there yet, as one about to be
-//! written, is read through the nearest folder above it that is.
+//! written, is read through the nearest folder above it that is, and none
+//! of the names after it is one the host refuses: Windows would read
+//! `.git.` or `.git::$DATA` as `.git` (ADR 0090, decision 3).
 
 use crate::{Call, Refusal};
 use std::ffi::OsString;
@@ -30,12 +32,10 @@ impl Reach {
     /// it inside `folder`, as an Agent's call is.
     pub fn resolve(folder: &Path, asked: impl AsRef<Path>, walled: bool) -> Result<Reach, Refusal> {
         let asked = asked.as_ref();
-        let folder = folder
-            .canonicalize()
-            .unwrap_or_else(|_| folder.to_path_buf());
+        let folder = dunce::canonicalize(folder).unwrap_or_else(|_| folder.to_path_buf());
         let joined = folder.join(asked);
         let path = real(&joined, walled).map_err(|why| why.refusal(asked))?;
-        let inside = path.starts_with(&folder);
+        let inside = crate::host::within(&path, &folder);
         if walled && !inside {
             return Err(Refusal::forbidden(format!(
                 "An Agent reaches only its Project's folder, and {} is outside it.",
@@ -66,6 +66,8 @@ enum Amiss {
     Missing,
     /// A link that leads nowhere, which an Agent may not write through.
     Dangling,
+    /// A name not there yet that the host refuses, and why.
+    Refused(&'static str),
 }
 
 impl Amiss {
@@ -76,19 +78,20 @@ impl Amiss {
                 Refusal::not_found(format!("{asked} goes through a folder that is not there."))
             }
             Amiss::Dangling => Refusal::forbidden(format!("{asked} is a link that leads nowhere.")),
+            Amiss::Refused(why) => Refusal::invalid(format!("{asked}: {why}")),
         }
     }
 }
 
 /// `path`, absolute, as the system reads it: the nearest part of it that
 /// is there, its links and `..` followed, and the names after it that are
-/// not there yet.
+/// not there yet, none the host refuses ([`crate::host::refused_name`]).
 fn real(path: &Path, walled: bool) -> Result<PathBuf, Amiss> {
     let mut missing: Vec<OsString> = Vec::new();
     let mut at = path;
     loop {
         if at.symlink_metadata().is_ok() {
-            match at.canonicalize() {
+            match dunce::canonicalize(at) {
                 Ok(found) => {
                     return Ok(missing
                         .iter()
@@ -103,6 +106,9 @@ fn real(path: &Path, walled: bool) -> Result<PathBuf, Amiss> {
         let (Some(parent), Some(name)) = (at.parent(), at.file_name()) else {
             return Err(Amiss::Missing);
         };
+        if let Some(why) = name.to_str().and_then(crate::host::refused_name) {
+            return Err(Amiss::Refused(why));
+        }
         missing.push(name.to_owned());
         at = parent;
     }
@@ -116,7 +122,7 @@ mod tests {
     /// A Project's folder, `work`, beside a folder outside it, `other`.
     fn places() -> (tempfile::TempDir, PathBuf, PathBuf) {
         let root = tempfile::tempdir().unwrap();
-        let base = root.path().canonicalize().unwrap();
+        let base = dunce::canonicalize(root.path()).unwrap();
         let (work, other) = (base.join("work"), base.join("other"));
         std::fs::create_dir_all(work.join("src")).unwrap();
         std::fs::create_dir_all(&other).unwrap();
@@ -134,6 +140,16 @@ mod tests {
         let reach = Reach::resolve(&work, "", true).unwrap();
         assert_eq!(reach.path(), work);
         assert!(reach.inside());
+    }
+
+    #[test]
+    fn a_name_not_there_yet_that_the_host_refuses_is_refused() {
+        let (_root, work, _) = places();
+        for name in ["new.", "trailing ", "a?b", ".git::$DATA"] {
+            let reached = Reach::resolve(&work, Path::new(name).join("x"), false);
+            let refused = reached.err().map(|refused| refused.code);
+            assert_eq!(refused, cfg!(windows).then_some(Code::Invalid), "{name}");
+        }
     }
 
     #[test]

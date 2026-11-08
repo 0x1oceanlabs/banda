@@ -137,17 +137,22 @@ pub(crate) fn root() -> Option<&'static Path> {
     Path::new(env!("CARGO_MANIFEST_DIR")).ancestors().nth(3)
 }
 
-/// A source file from the repository's root, as every machine names it.
-/// A backtrace names one under the working folder from there, `./…`.
+/// A source file from the repository's root, as every machine names it:
+/// with `/` between its names, on Windows too. A backtrace names one under
+/// the working folder from there, `./…`.
 fn relative(file: &str) -> String {
     let file = Path::new(file);
     let whole = match file.strip_prefix(".") {
         Ok(under) => std::env::current_dir().map(|here| here.join(under)).ok(),
         Err(_) => Some(file.to_owned()),
     };
+    let named = |under: &Path| {
+        let names: Vec<_> = under.iter().map(|name| name.to_string_lossy()).collect();
+        names.join("/")
+    };
     root()
         .zip(whole)
-        .and_then(|(root, whole)| Some(whole.strip_prefix(root).ok()?.display().to_string()))
+        .and_then(|(root, whole)| Some(named(whole.strip_prefix(root).ok()?)))
         .unwrap_or_else(|| file.display().to_string())
 }
 
@@ -180,10 +185,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "Windows names a source file with backslashes: ADR 0090's step 3"
-    )]
     fn a_file_under_the_working_folder_is_named_from_the_repository_root() {
         // Tests run in the crate's folder.
         assert_eq!(

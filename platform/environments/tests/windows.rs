@@ -1,7 +1,8 @@
 //! The `local` environment on Windows (ADR 0090): a program runs on pipes,
-//! is killed once let go of, and its handle stops it, alone until each is
-//! born in a Job Object (step 3). No program starts on a terminal until
-//! ConPTY (step 7), and it says so.
+//! is killed once let go of, and its handle stops it, with its Job Object.
+//! It is found as the host finds one, a `.cmd` by its name too, on the
+//! PATH it names or the host's, and one not found does not start. No
+//! program starts on a terminal until ConPTY (step 7), and it says so.
 #![cfg(windows)]
 
 use banda_environments::Local;
@@ -89,4 +90,46 @@ async fn no_program_starts_on_a_terminal_yet_and_it_says_so() {
         "{refused}"
     );
     assert!(!marked.exists(), "it did not run");
+}
+
+#[tokio::test]
+async fn a_program_not_on_path_does_not_start_and_says_so() {
+    let missing = Program::act("banda-no-such-program", Vec::new());
+    let refused = Local.spawn(&missing, Input::Null).unwrap_err();
+    assert_eq!(refused.kind(), std::io::ErrorKind::NotFound);
+    assert!(refused.to_string().contains("is not on PATH"), "{refused}");
+}
+
+#[tokio::test]
+async fn a_cmd_is_found_by_its_name_on_the_path_the_program_names() {
+    let folder = tempfile::tempdir().unwrap();
+    let script = "@echo off\r\necho hello %1\r\n";
+    std::fs::write(folder.path().join("hello.cmd"), script).unwrap();
+    let mut program = Program::act("hello", vec!["there".to_owned()]);
+    let path = folder.path().display().to_string();
+    program.env.insert("Path".to_owned(), path);
+    let started = Local.spawn(&program, Input::Null).unwrap();
+    let ended = timeout(SOON, started.wait_with_output()).await.unwrap();
+    let ended = ended.unwrap();
+    assert!(ended.status.success());
+    assert_eq!(String::from_utf8_lossy(&ended.stdout).trim(), "hello there");
+}
+
+#[tokio::test]
+async fn a_program_gets_the_host_s_path_unless_it_takes_it_away() {
+    let said = |unset: bool| async move {
+        let mut program = cmd("echo %PATH%");
+        if unset {
+            program.unset.push("PATH".to_owned());
+        }
+        let started = Local.spawn(&program, Input::Null).unwrap();
+        let ended = timeout(SOON, started.wait_with_output()).await.unwrap();
+        String::from_utf8_lossy(&ended.unwrap().stdout)
+            .trim()
+            .to_lowercase()
+    };
+    let path = said(false).await;
+    assert!(path.contains("system32"), "{path}");
+    // Found on the host's PATH all the same, and run with none.
+    assert_eq!(said(true).await, "%path%");
 }

@@ -155,10 +155,6 @@ fn text(value: &Value) -> &str {
 }
 
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "the build id read from Windows' PE comes with ADR 0090's step 3"
-)]
 fn a_script_drives_an_agent_through_the_engine_a_window_started() {
     let places = Places::new();
     let (mut engine, stdin, running) = places.serve();
@@ -166,14 +162,17 @@ fn a_script_drives_an_agent_through_the_engine_a_window_started() {
     assert_eq!(running["secret"].as_str().unwrap().len(), 64);
     // It names its build, as `banda --version` does after a version that
     // can name a folder: the window checks its copy of `banda` by that
-    // line (ADR 0086, decision 2). An ELF's SHA-1 build id, or a Mach-O's
-    // UUID.
+    // line (ADR 0086, decision 2). An ELF's SHA-1 build id, a Mach-O's
+    // UUID, or a PE's GUID and its age, which the linker counts from 1.
     let build = text(&running["build"]);
-    assert_eq!(
-        build.len(),
-        if cfg!(target_os = "macos") { 32 } else { 40 },
-        "{build}"
-    );
+    let length = if cfg!(target_os = "macos") {
+        32..=32
+    } else if cfg!(windows) {
+        33..=40
+    } else {
+        40..=40
+    };
+    assert!(length.contains(&build.len()), "{build}");
     assert!(
         build.bytes().all(|byte| byte.is_ascii_hexdigit()),
         "{build}"
@@ -335,7 +334,7 @@ fn carried_adapters() -> PathBuf {
             .expect("node runs");
         assert!(built.success(), "the adapters build: run `pnpm install`");
     }
-    dist.canonicalize().unwrap()
+    dunce::canonicalize(dist).unwrap()
 }
 
 /// The first `node` on this test's PATH.
@@ -347,8 +346,7 @@ fn node() -> PathBuf {
         .expect("a node on PATH")
 }
 
-// Its Claude Code is a `sh` script, and Windows finds `node.exe` from ADR
-// 0090's step 3.
+// Its Claude Code is a `sh` script.
 #[cfg(unix)]
 #[test]
 fn an_engine_no_window_started_runs_claude_codes_adapter_with_its_shim_on_the_hosts_node() {
@@ -377,7 +375,7 @@ fn an_engine_no_window_started_runs_claude_codes_adapter_with_its_shim_on_the_ho
     assert_eq!(command.len(), 2, "{command:?}");
     assert_eq!(command[0], node());
     assert_eq!(
-        command[1].canonicalize().unwrap(),
+        dunce::canonicalize(&command[1]).unwrap(),
         adapters.join("claude-agent-acp.mjs")
     );
     let env = claude["env"].as_array().unwrap();

@@ -11,8 +11,9 @@
 //!   stop (TERM) and a kill (KILL) reach what it started too. One on a
 //!   terminal hears a hangup (HUP) before the request, as when its
 //!   terminal closes.
-//! - Windows has neither groups nor signals: there both kill the program
-//!   alone, as tokio does, until ADR 0090's step 3 gives each a Job Object.
+//! - On Windows a program is born in a Job Object of its own, which a kill
+//!   ends with all in it. Windows has no TERM: a program on pipes is asked
+//!   to stop by its holder closing its stdin, so asked here it is killed.
 
 #[cfg(unix)]
 mod unix;
@@ -38,8 +39,9 @@ type Pipes = (Option<ChildStdin>, Option<ChildStdout>, Option<ChildStderr>);
 
 /// A program an environment started, and the handle that stops it and what
 /// it started. Its pipes are taken from it, as a child's are. Let go of, a
-/// program started on pipes is killed, alone: what it started is killed
-/// only by [`Started::kill`]. One on a terminal outlives it.
+/// program started on pipes is killed: alone on Unix, where what it started
+/// is killed only by [`Started::kill`], and with its Job Object on Windows.
+/// One on a terminal outlives it.
 #[derive(Debug)]
 pub struct Started {
     process: Process,
@@ -53,7 +55,8 @@ pub struct Started {
 
 impl Started {
     /// Starts `command` on the host, as the engine's own child: on Unix it
-    /// leads a process group of its own. It is killed once let go of.
+    /// leads a process group of its own, and on Windows it is born in a Job
+    /// Object of its own. It is killed once let go of.
     pub fn spawn(command: Command) -> io::Result<Started> {
         Ok(Started::of(Process::spawn(command)?))
     }
@@ -102,8 +105,9 @@ impl Started {
     }
 
     /// Asks it and what it started to stop, while it runs: TERM to its
-    /// group on Unix, with HUP before it on a terminal. On Windows it is
-    /// killed, alone, until ADR 0090's step 3.
+    /// group on Unix, with HUP before it on a terminal. On Windows, which
+    /// has no TERM, its Job Object ends: a Harness's adapter is asked by
+    /// its stdin closing, which its holder closes.
     pub fn ask_to_stop(&mut self) {
         self.process.ask_to_stop();
     }
@@ -112,7 +116,7 @@ impl Started {
     /// `npx`, may have ended while what it started holds its pipes. On
     /// Unix that is KILL to its group, whose number is another's only once
     /// all of it ended, so a holder kills soon after it ended or not at
-    /// all. On Windows it is killed, alone, until ADR 0090's step 3.
+    /// all. On Windows its Job Object ends, with all in it.
     pub fn kill(&mut self) {
         self.process.kill();
     }

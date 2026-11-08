@@ -1063,10 +1063,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "its places are Unix paths: Windows' come with ADR 0090's step 3"
-    )]
     fn a_carried_adapter_runs_on_the_node_the_engine_found() {
         use crate::carried::Node;
         let electron = Carried {
@@ -1079,8 +1075,13 @@ mod tests {
         let list = Harnesses::new(known());
         list.carry(Some(electron));
         let start = list.find("claude").unwrap().start();
+        // An adapter's path is joined as the host joins one.
+        let adapter = |folder: &str, name: &str| Path::new(folder).join(name).display().to_string();
         assert_eq!(start.program, "/app/banda");
-        assert_eq!(start.args, ["/app/resources/adapters/claude-agent-acp.mjs"]);
+        assert_eq!(
+            start.args,
+            [adapter("/app/resources/adapters", "claude-agent-acp.mjs")]
+        );
         assert_eq!(start.env["ELECTRON_RUN_AS_NODE"], "1");
         let node = Carried {
             node: Node {
@@ -1095,7 +1096,7 @@ mod tests {
             (start.program.as_str(), start.args.as_slice()),
             (
                 "/usr/bin/node",
-                ["/srv/banda/adapters/codex-acp.mjs".to_owned()].as_slice()
+                [adapter("/srv/banda/adapters", "codex-acp.mjs")].as_slice()
             )
         );
         assert!(
@@ -1403,10 +1404,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "its places are Unix paths: Windows' come with ADR 0090's step 3"
-    )]
     fn claude_s_sessions_go_in_the_project_s_folder() {
         let project = ProjectId::new();
         let data = Path::new("/state/projects/p");
@@ -1419,13 +1416,14 @@ mod tests {
             harness.in_project(project, data, work(), kept.clone(), &BTreeMap::new(), true)
         };
         let claude = in_project(&list[0]);
+        // Joined as the host joins a path.
+        let sessions = data.join("sessions").join("claude");
         assert_eq!(
             claude.env[SESSIONS_VARIABLE],
-            "/state/projects/p/sessions/claude"
+            sessions.display().to_string()
         );
         // Its process writes them behind the fence, and reads what it was
         // given to.
-        let sessions = PathBuf::from("/state/projects/p/sessions/claude");
         let started = claude.start();
         let holes = started.holes().unwrap();
         assert_eq!(

@@ -1,5 +1,5 @@
 # The Rust tests on GitHub's Windows runner (ADR 0090, decision 9): on every
-# push to main, on a PR that touches Windows code, and by hand:
+# push to main, on a PR that touches a crate with Windows code, and by hand:
 #
 #   gh workflow run windows --ref <branch>
 #
@@ -8,7 +8,8 @@
 # builds its tests for Windows. A test that needs `sh`, the exec bit or
 # another thing of Unix is `cfg(unix)`, with the reason beside it.
 #
-# Each run keeps the engine it built, banda.exe, to try on a Windows machine.
+# Each run keeps the engine it built, banda.exe, to try on a Windows machine,
+# and its banda.pdb, which names its lines in a backtrace.
 name: windows
 
 on:
@@ -20,9 +21,19 @@ on:
       - .github/workflows/windows.yml
       - platform/windows/**
       - "**/windows.rs"
+      # The crates with Windows' own branches in other files too:
+      # cfg(windows) and cfg(not(unix)).
+      - kernel/src/**
+      - engine/src/**
+      - platform/environments/src/**
+      - platform/git-cli/src/**
+      - platform/harnesses/engine/src/**
+      - apps/agents/engine/src/**
+      - apps/files/engine/src/**
+      - apps/git/engine/src/**
+      - apps/terminal/engine/src/**
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: windows-${{ github.ref }}
@@ -30,8 +41,6 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  # As on devbox (ci/Dockerfile): no test reads the debug info.
-  CARGO_PROFILE_DEV_DEBUG: 0
 
 jobs:
   test:
@@ -42,25 +51,35 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: windows-2025
     timeout-minutes: 60
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
       - run: rustup toolchain install
       # The dependencies main's last run built, a failed one's too: a PR's
       # run reads them and saves none, so no PR leaves anything for the
       # next run to build on.
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: windows-test
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
       # Every test binary runs, so a red run shows all that fails.
       - run: cargo test --workspace --no-fail-fast
-      # Built for the engine's own tests: a debug build, unsigned.
+      # Built for the engine's own tests: a debug build, unsigned. Its
+      # line tables are kept, as Cargo.toml's dev profile keeps them, unlike
+      # devbox's (ci/Dockerfile): a PE gets its CodeView record, and with it
+      # its build id, only when it is linked with its PDB (ADR 0090,
+      # decision 3).
       - name: banda.exe
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: banda-windows-x64
-          path: target/debug/banda.exe
+          path: |
+            target/debug/banda.exe
+            target/debug/banda.pdb
           if-no-files-found: warn
           retention-days: 30

@@ -34,7 +34,8 @@ Ubuntu runner ([`ci/README.md`](ci/README.md)); the `ci` status sums them
 up. A call only Unix has goes behind `cfg(unix)`,
 with Windows code beside it or a refusal that says it is not on Windows
 yet (ADR 0090); `scripts/check.sh windows` checks that here, with
-cargo-xwin and clang. Merge with
+cargo-xwin and clang. A path is made whole with `dunce::canonicalize`,
+never std's, which `clippy.toml` refuses. Merge with
 `gh pr merge --auto --rebase` and go on: the PR merges itself once `ci` is
 green. A red `ci` is yours to fix, on the PR or, after a merge, on `main`.
 That is for Roma's PRs and yours. A PR with someone else's commits, taken

@@ -1016,7 +1016,7 @@ impl Kernel {
     ) -> Result<ProjectSummary, Refusal> {
         let name = Project::plain_name(name)?;
         let folder = self.root.join(name);
-        if let Ok(canonical) = std::fs::canonicalize(&folder) {
+        if let Ok(canonical) = dunce::canonicalize(&folder) {
             return match self.at(&canonical).await {
                 Some(Entry::Open(made)) if made.command() == command => Ok(made.summary()),
                 _ => Err(Refusal::conflict(format!(
@@ -1111,7 +1111,9 @@ impl Kernel {
     /// missing it.
     async fn at(&self, folder: &Path) -> Option<Entry> {
         let projects = self.projects.read().await;
-        projects.values().find(|s| s.folder() == folder).cloned()
+        (projects.values())
+            .find(|s| crate::host::same(&s.folder(), folder))
+            .cloned()
     }
 
     /// Makes the data of a new Project, whose folder exists, opens it and
@@ -1291,7 +1293,7 @@ impl Kernel {
         } else {
             None
         };
-        let relocating = target.as_ref().filter(|target| **target != old);
+        let relocating = (target.as_ref()).filter(|target| !crate::host::same(target, &old));
         if let Some(target) = relocating {
             if !was {
                 return Err(Refusal::invalid(
@@ -1308,6 +1310,9 @@ impl Kernel {
                 .ok_or_else(|| Refusal::conflict("Locate the missing folder before moving it."))?;
             for module in project.modules() {
                 module.can_move(project.module(module.name())).await?;
+            }
+            for module in project.modules() {
+                module.moving(project.module(module.name())).await;
             }
         }
         // A picked picture is kept before the manifest names it.
@@ -1364,13 +1369,6 @@ impl Kernel {
                 .map(|()| manifest.summary(true)),
         };
         drop(projects);
-        if let Some(project) = opened.as_ref()
-            && project.folder() != old
-        {
-            for module in project.modules() {
-                module.moved(project.module(module.name())).await;
-            }
-        }
         let summary = result?;
         if find_again {
             self.find_sign_now(summary).await
@@ -1437,7 +1435,7 @@ impl Kernel {
             // Nothing of it is open: its data goes now.
             Entry::Missing { data, .. } => {
                 let away = put_away(&data, gone);
-                tokio::task::spawn_blocking(move || std::fs::remove_dir_all(away));
+                tokio::task::spawn_blocking(move || crate::host::remove_all(&away));
                 return Ok(());
             }
         };
@@ -1458,7 +1456,7 @@ fn no_project() -> Refusal {
 /// Moves a removed Project's `data` out of the engine's sight, to `gone`;
 /// answers where it is now, in place if it would not move.
 fn put_away(data: &Path, gone: PathBuf) -> PathBuf {
-    match std::fs::rename(data, &gone) {
+    match crate::host::rename(data, &gone) {
         Ok(()) => gone,
         Err(error) => {
             let shown = data.display();
@@ -1470,7 +1468,7 @@ fn put_away(data: &Path, gone: PathBuf) -> PathBuf {
 
 /// The folder at `folder`, resolved: refused when there is none.
 fn folder_found(folder: &Path) -> Result<PathBuf, Refusal> {
-    let canonical = match std::fs::canonicalize(folder) {
+    let canonical = match dunce::canonicalize(folder) {
         Ok(canonical) => canonical,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             let there = format!("There is no folder {}.", folder.display());

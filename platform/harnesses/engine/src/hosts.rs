@@ -11,8 +11,9 @@
 //!   Project when the Person's trust in it changes ([`Hosts::let_go`]).
 //!   One that was starting then is let go the next time it is asked for,
 //!   so letting go never waits on a start (ADR 0040, decision 4).
-//! - A host's process runs in its own process group, which is killed when
-//!   the host is dropped; an engine that dies closes the host's stdin.
+//! - A host's process runs in its own process group, or its own Job Object
+//!   on Windows, which is killed when the host is dropped; an engine that
+//!   dies closes the host's stdin, and on Windows ends its Job Object.
 
 use crate::{Failed, Harness};
 use banda_kernel::{Environment, ProjectId};

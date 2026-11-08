@@ -77,11 +77,10 @@ jobs:
           shared-key: windows-release
           save-if: ${{ github.ref == 'refs/heads/main' }}
       # Banda Dev, as a Dev is (ADR 0033), with the workspace's version
-      # marked local and this run's number: the engine's --version tells no
-      # two builds apart on Windows yet (its build id comes in step 3), and
-      # the window keeps one copy of the engine per version. A -local
-      # version sorts after each -dev one of the same: the updater (step 6)
-      # offers no Dev over it.
+      # marked local and this run's number, so no two runs share one: the
+      # window keeps one copy of the engine per version. A -local version
+      # sorts after each -dev one of the same: the updater (step 6) offers
+      # no Dev over it.
       - id: version
         run: echo "version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)-local.$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
       - id: pack

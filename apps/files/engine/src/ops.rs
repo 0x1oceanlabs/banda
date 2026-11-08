@@ -12,6 +12,7 @@
 
 use crate::model::{Clash, Clashing, Done, Job, Step};
 use crate::shown;
+use banda_kernel::host;
 use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsString;
 use std::fs::{File, Metadata, OpenOptions};
@@ -25,16 +26,17 @@ const CHUNK: usize = 1 << 20;
 const EVERY: Duration = Duration::from_millis(100);
 
 /// Why a name cannot name a file, if it cannot: empty, `.` or `..`, or
-/// with a `/` or a NUL in it.
+/// with a `/` or a NUL in it; on Windows, one Windows refuses too, as
+/// `CON`, `a:b` or a name that ends in a dot (ADR 0090, decision 3).
 pub fn misnamed(name: &str) -> Option<&'static str> {
     if name.trim().is_empty() {
         Some("A name cannot be empty.")
     } else if name == "." || name == ".." {
         Some("A name cannot be . or ..")
-    } else if name.contains(['/', '\0']) || (cfg!(windows) && name.contains('\\')) {
+    } else if name.contains(['/', '\0']) {
         Some("A name cannot hold a / .")
     } else {
-        None
+        host::refused_name(name)
     }
 }
 
@@ -84,9 +86,8 @@ pub fn same_but_case(from: &Path, to: &Path) -> bool {
     };
     a != b
         && a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
-        && from
-            .canonicalize()
-            .is_ok_and(|real| to.canonicalize().is_ok_and(|other| other == real))
+        && dunce::canonicalize(from)
+            .is_ok_and(|real| dunce::canonicalize(to).is_ok_and(|other| other == real))
 }
 
 /// The next free name for `name` in `dir`, taking none of `taken` either:
@@ -559,6 +560,10 @@ mod tests {
         assert!(misnamed(".env").is_none());
         for bad in ["", "  ", ".", "..", "a/b", "a\0b"] {
             assert!(misnamed(bad).is_some(), "{bad:?}");
+        }
+        // What Windows refuses, and only there.
+        for windows in ["a\\b", "CON", "nul.txt", "a:b", "what?", "end."] {
+            assert_eq!(misnamed(windows).is_some(), cfg!(windows), "{windows:?}");
         }
     }
 }

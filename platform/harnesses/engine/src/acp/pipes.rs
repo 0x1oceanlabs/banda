@@ -6,9 +6,9 @@
 //!
 //! The program is killed with what it started ([`Started::kill`]) as it
 //! ends, so a launcher such as `npx` leaves nothing behind, and as the
-//! connection is dropped, so what it started stops too. On Windows that
-//! kills the program alone, until it is born in a Job Object (ADR 0090,
-//! step 3).
+//! connection is dropped, so what it started stops too: its process group
+//! on Unix, its Job Object on Windows (ADR 0090, decision 3). Before that,
+//! its stdin closes as the connection ends, which an adapter stops on.
 //!
 //! It keeps the transport of ACP's own `AcpAgent` as of
 //! agent-client-protocol 3.6: its grace periods, its "Process exited

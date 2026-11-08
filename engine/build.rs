@@ -77,10 +77,9 @@ struct Part {
 /// engine serves, in its order. A manifest that says something wrong of
 /// its folder stops the build.
 fn apps() {
-    let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
-        .join("..")
-        .canonicalize()
-        .unwrap();
+    let root =
+        dunce::canonicalize(PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join(".."))
+            .unwrap();
     let mut parts: Vec<Part> = Vec::new();
     for (bucket, kind) in [("apps", "app"), ("platform", "platform")] {
         let dir = root.join(bucket);

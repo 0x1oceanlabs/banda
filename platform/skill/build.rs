@@ -8,10 +8,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 fn main() {
-    let crate_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
-        .canonicalize()
-        .unwrap();
-    let root = crate_dir.join("../..").canonicalize().unwrap();
+    let crate_dir =
+        dunce::canonicalize(PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())).unwrap();
+    let root = dunce::canonicalize(crate_dir.join("../..")).unwrap();
     let mut pages = Vec::new();
     for parent in [root.clone(), root.join("apps"), root.join("platform")] {
         println!("cargo:rerun-if-changed={}", parent.display());
@@ -21,7 +20,7 @@ fn main() {
         for entry in entries.flatten() {
             let folder = entry.path().join("skill");
             // This crate is `platform/skill`, not a part's pages.
-            if !folder.is_dir() || folder.canonicalize().unwrap() == crate_dir {
+            if !folder.is_dir() || dunce::canonicalize(&folder).unwrap() == crate_dir {
                 continue;
             }
             println!("cargo:rerun-if-changed={}", folder.display());

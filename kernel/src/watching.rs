@@ -96,6 +96,42 @@ pub fn watch(dirs: impl IntoIterator<Item = PathBuf>) -> std::io::Result<Watch> 
     Ok(watcher.watch(dirs))
 }
 
+/// Lets go of the system's watch of `folder` and of each folder under it,
+/// as it is about to move: Windows moves no folder a watch holds, and
+/// elsewhere one would go on under the old name. Whoever watched one still
+/// does, till it moved ([`Released::moved`]).
+pub(crate) fn let_go_under(folder: &Path) -> Released {
+    let dirs = WATCHER.get().map(|watcher| watcher.unwatch_under(folder));
+    Released {
+        dirs: dirs.unwrap_or_default(),
+    }
+}
+
+/// The folders [`let_go_under`] let go of. Dropped before they moved, as
+/// when a move fails, each still heard is watched again.
+pub(crate) struct Released {
+    dirs: Vec<PathBuf>,
+}
+
+impl Released {
+    /// They moved: whoever watched one hears to read it again, where it is
+    /// gone, and watches it no more.
+    pub(crate) fn moved(mut self) {
+        let dirs = std::mem::take(&mut self.dirs);
+        if let Some(watcher) = WATCHER.get() {
+            watcher.moved(&dirs);
+        }
+    }
+}
+
+impl Drop for Released {
+    fn drop(&mut self) {
+        if let Some(watcher) = WATCHER.get().filter(|_| !self.dirs.is_empty()) {
+            watcher.stayed(&self.dirs);
+        }
+    }
+}
+
 /// The engine's one watcher.
 static WATCHER: OnceLock<Watcher> = OnceLock::new();
 
@@ -204,6 +240,47 @@ impl Watcher {
     }
 }
 
+impl Watcher {
+    /// The folders watched under `folder`, their system's watches let go
+    /// of, which their hearers keep.
+    fn unwatch_under(&self, folder: &Path) -> Vec<PathBuf> {
+        let mut system = held(&self.system);
+        let hearers = held(&self.hearers);
+        let under: Vec<PathBuf> = (hearers.counts.keys())
+            .filter(|dir| crate::host::within(dir, folder))
+            .cloned()
+            .collect();
+        for dir in &under {
+            let _ = system.unwatch(dir);
+        }
+        under
+    }
+
+    fn moved(&self, dirs: &[PathBuf]) {
+        let mut hearers = held(&self.hearers);
+        for dir in dirs {
+            hearers.counts.remove(dir);
+        }
+        for hearer in hearers.by_id.values_mut() {
+            let lost: Vec<PathBuf> = hearer.dirs.extract_if(|dir| dirs.contains(dir)).collect();
+            if !lost.is_empty() {
+                let _ = hearer.say.send(Changed::Again(lost));
+            }
+        }
+    }
+
+    /// `dirs` stayed: each still heard is watched again.
+    fn stayed(&self, dirs: &[PathBuf]) {
+        let mut system = held(&self.system);
+        let hearers = held(&self.hearers);
+        for dir in dirs.iter().filter(|dir| hearers.counts.contains_key(*dir)) {
+            if let Err(error) = system.watch(dir, RecursiveMode::NonRecursive) {
+                tracing::debug!(dir = %dir.display(), %error, "not watched again");
+            }
+        }
+    }
+}
+
 /// Tells each hearer what changed in its folders.
 fn tell(hearers: &Hearers, result: DebounceEventResult) {
     let mut changed: HashSet<&Path> = HashSet::new();
@@ -275,7 +352,7 @@ mod tests {
     #[tokio::test]
     async fn a_new_file_is_heard_in_its_folder_and_only_there() {
         let root = tempfile::tempdir().unwrap();
-        let base = root.path().canonicalize().unwrap();
+        let base = dunce::canonicalize(root.path()).unwrap();
         let (one, two) = (base.join("one"), base.join("two"));
         std::fs::create_dir_all(&one).unwrap();
         std::fs::create_dir_all(&two).unwrap();
@@ -300,7 +377,7 @@ mod tests {
     #[tokio::test]
     async fn two_watches_of_one_folder_each_hear_and_one_let_go_leaves_the_other() {
         let root = tempfile::tempdir().unwrap();
-        let dir = root.path().canonicalize().unwrap();
+        let dir = dunce::canonicalize(root.path()).unwrap();
         let first = watch([dir.clone()]).unwrap();
         let mut second = watch([dir.clone()]).unwrap();
         drop(first);
@@ -311,7 +388,7 @@ mod tests {
     #[tokio::test]
     async fn changes_close_together_come_as_one() {
         let root = tempfile::tempdir().unwrap();
-        let dir = root.path().canonicalize().unwrap();
+        let dir = dunce::canonicalize(root.path()).unwrap();
         let mut watch = watch([dir.clone()]).unwrap();
         for n in 0..20 {
             std::fs::write(dir.join(format!("{n}.txt")), "x").unwrap();
@@ -326,6 +403,32 @@ mod tests {
             more += 1;
         }
         assert!(more < 19, "{more} more pieces for 20 changes");
+    }
+
+    #[tokio::test]
+    async fn a_folder_about_to_move_is_let_go_of_and_its_hearers_read_it_again() {
+        let root = tempfile::tempdir().unwrap();
+        let base = dunce::canonicalize(root.path()).unwrap();
+        let (moving, beside) = (base.join("moving"), base.join("beside"));
+        let inside = moving.join("src");
+        std::fs::create_dir_all(&inside).unwrap();
+        std::fs::create_dir_all(&beside).unwrap();
+        let mut watch = watch([moving.clone(), inside.clone(), beside.clone()]).unwrap();
+        // It would not move: it is heard again.
+        drop(let_go_under(&moving));
+        std::fs::write(inside.join("stayed.txt"), "x").unwrap();
+        assert_eq!(heard(&mut watch).await, Changed::Dirs(vec![inside.clone()]));
+        let released = let_go_under(&moving);
+        std::fs::rename(&moving, base.join("moved")).unwrap();
+        released.moved();
+        let Changed::Again(mut again) = heard(&mut watch).await else {
+            panic!("not told to read again");
+        };
+        again.sort();
+        assert_eq!(again, [moving.clone(), inside]);
+        // The folder beside it is still heard.
+        std::fs::write(beside.join("new.txt"), "x").unwrap();
+        assert_eq!(heard(&mut watch).await, Changed::Dirs(vec![beside]));
     }
 
     #[test]

@@ -133,7 +133,7 @@ impl Passes {
                     "the passes' store did not open: it is put aside, and the Agents' sessions \
                      from before reach Banda no more"
                 );
-                std::fs::rename(path, &aside)?;
+                crate::host::rename(path, &aside)?;
                 for kept in ["-wal", "-shm"] {
                     let mut file = path.as_os_str().to_owned();
                     file.push(kept);

@@ -417,13 +417,13 @@ fn read(path: &Path, file: &SettingsFile) -> std::io::Result<String> {
 /// a file beside it, then over it. A link is followed, so the Person's
 /// dotfiles keep it.
 fn write(path: &Path, text: &str) -> std::io::Result<()> {
-    let target = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let target = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let folder = target.parent().map_or_else(PathBuf::new, Path::to_path_buf);
     std::fs::create_dir_all(&folder)?;
     let name = target.file_name().unwrap_or_default().to_string_lossy();
     let beside = folder.join(format!(".{name}.{}.new", std::process::id()));
     std::fs::write(&beside, text)?;
-    std::fs::rename(&beside, &target).inspect_err(|_| {
+    banda_kernel::host::rename(&beside, &target).inspect_err(|_| {
         let _ = std::fs::remove_file(&beside);
     })
 }

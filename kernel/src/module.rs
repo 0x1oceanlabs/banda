@@ -95,9 +95,11 @@ pub trait Module: Send + Sync + 'static {
         Ok(())
     }
 
-    /// The folder changed. Let go of idle processes whose working directory
-    /// was the old folder; future work reads the Project's new folder.
-    async fn moved(&self, _project: ModuleProject) {}
+    /// The folder is about to move, as every module let it
+    /// ([`Module::can_move`]). Let go of idle processes that work in it:
+    /// Windows moves no folder a process works in (ADR 0090, decision 3).
+    /// No call runs till it moved, and work after reads the new folder.
+    async fn moving(&self, _project: ModuleProject) {}
 
     /// The Person trusted the Project, or took its trust back (ADR 0083,
     /// decision 5). A module lets go of what started under the other, so

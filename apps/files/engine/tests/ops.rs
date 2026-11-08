@@ -53,8 +53,11 @@ impl World {
         serde_json::from_value(self.command(method, params).await.unwrap()).unwrap()
     }
 
+    /// `path`, named with `/`, in the Project's folder as Files names it:
+    /// joined part by part, so on Windows with `\` between them.
     fn path(&self, path: &str) -> String {
-        self.folder.join(path).to_string_lossy().into_owned()
+        let whole = (path.split('/')).fold(self.folder.clone(), |at, part| at.join(part));
+        whole.to_string_lossy().into_owned()
     }
 
     fn has(&self, path: &str) -> bool {

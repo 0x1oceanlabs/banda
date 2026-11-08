@@ -122,7 +122,7 @@ impl Machine {
         write(&picture, "a picture");
         let _ = fs::remove_file(link);
         std::os::unix::fs::symlink(&picture, link).unwrap();
-        fs::canonicalize(picture).unwrap()
+        dunce::canonicalize(picture).unwrap()
     }
 }
 
@@ -764,7 +764,7 @@ fn a_linux_desktop_gives_its_wallpaper() {
     let picture = |name: &str| {
         let path = home.join("Pictures").join(name);
         write(&path, "a picture");
-        fs::canonicalize(path).unwrap().display().to_string()
+        dunce::canonicalize(path).unwrap().display().to_string()
     };
     // No desktop Banda knows: the desk is solid, quietly.
     assert_eq!(from(&machine), None);

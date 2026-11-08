@@ -145,24 +145,23 @@ impl Pipe {
         Some((variables, pass))
     }
 
-    /// `env`'s PATH, or the engine's, with the folder of this `banda`
+    /// `env`'s PATH, or the host's, with the folder of this `banda`
     /// first: a session's `banda keys` and `banda settings` are this
-    /// Banda's (ADR 0071, decision 5).
+    /// Banda's (ADR 0071, decision 5). On Windows `env`'s may be `Path`.
     fn first_on_path(&self, env: &mut std::collections::BTreeMap<String, String>) {
         let Some(folder) = self.program.parent() else {
             return;
         };
-        let rest = env
-            .get("PATH")
-            .map(std::ffi::OsString::from)
-            .or_else(|| std::env::var_os("PATH"))
-            .unwrap_or_default();
+        let named = banda_kernel::host::named(env, "PATH").cloned();
+        let rest = (named.as_ref())
+            .and_then(|name| env.get(name))
+            .map_or_else(banda_kernel::host::path, std::ffi::OsString::from);
         let paths = std::iter::once(folder.to_owned()).chain(std::env::split_paths(&rest));
         if let Some(path) = std::env::join_paths(paths)
             .ok()
             .and_then(|p| p.into_string().ok())
         {
-            env.insert("PATH".to_owned(), path);
+            env.insert(named.unwrap_or_else(|| "PATH".to_owned()), path);
         }
     }
 }
@@ -1291,7 +1290,7 @@ impl Module for Agents {
         Ok(())
     }
 
-    async fn moved(&self, project: ModuleProject) {
+    async fn moving(&self, project: ModuleProject) {
         self.live.close(project.id()).await;
     }
 
@@ -1762,11 +1761,21 @@ mod tests {
         // PATH's folders are apart by `;` on Windows.
         let apart = if cfg!(windows) { ';' } else { ':' };
         let path = format!("/usr/bin{apart}/bin");
-        let mut env = BTreeMap::from([("PATH".to_owned(), path)]);
+        let mut env = BTreeMap::from([("PATH".to_owned(), path.clone())]);
         pipe.first_on_path(&mut env);
         assert_eq!(
             env["PATH"],
             format!("/opt/banda/bin{apart}/usr/bin{apart}/bin")
         );
+        // Windows' names of variables ignore case: there `Path` is PATH.
+        let mut env = BTreeMap::from([("Path".to_owned(), path)]);
+        pipe.first_on_path(&mut env);
+        let first = format!("/opt/banda/bin{apart}");
+        if cfg!(windows) {
+            assert_eq!(env.keys().collect::<Vec<_>>(), ["Path"]);
+            assert_eq!(env["Path"], format!("{first}/usr/bin{apart}/bin"));
+        } else {
+            assert!(env["PATH"].starts_with(&first), "the host's, after it");
+        }
     }
 }

@@ -12,7 +12,6 @@ use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
-use tokio::process::Command;
 use ts_rs::TS;
 
 /// Banda's repository on GitHub.
@@ -81,7 +80,8 @@ const GH_WAIT: Duration = Duration::from_secs(30);
 /// What `gh` prints as it files it: the issue's address, or the
 /// comment's; none when it could not.
 async fn filed(gh: &Path, issue: &Issue) -> Option<String> {
-    let mut command = Command::new(gh);
+    // Found on the host's PATH as it is now, as the host finds a program.
+    let mut command = banda_kernel::host::command(gh).ok()?;
     match issue.comment_on {
         Some(number) => command.args(["issue", "comment", &number.to_string()]),
         None => command.args(["issue", "create", "--title", &issue.title]),
@@ -90,8 +90,7 @@ async fn filed(gh: &Path, issue: &Issue) -> Option<String> {
         .args(["--repo", REPO, "--body-file", "-"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .kill_on_drop(true);
+        .stderr(Stdio::null());
     let mut child = command.spawn().ok()?;
     let mut stdin = child.stdin.take()?;
     let body = issue.body.clone();

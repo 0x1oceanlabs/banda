@@ -29,6 +29,9 @@
 //!   whether its caller may reach it. [`ModuleProject::watch`] watches
 //!   folders (ADR 0073, decision 14).
 //! - [`https`] is the one client for the requests the engine makes itself.
+//! - [`host`] is the host system's ways where the engine needs them alike:
+//!   the PATH a program is found on, how paths compare, the names Windows
+//!   refuses, a file renamed into place (ADR 0090, decision 3).
 //! - [`Environment`] is the port every program a Project runs starts
 //!   through ([`ModuleProject::environment`], ADR 0084). It hands back
 //!   the handle that stops what it started ([`Started`]), and a
@@ -42,6 +45,7 @@ mod environment;
 mod error;
 mod events;
 mod foreign;
+pub mod host;
 pub mod https;
 mod ids;
 mod kernel;

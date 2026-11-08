@@ -81,21 +81,20 @@ pub(crate) async fn look(folder: &Path) -> Foreign {
 }
 
 fn home() -> Option<PathBuf> {
-    dirs::home_dir().and_then(|home| std::fs::canonicalize(home).ok())
+    dirs::home_dir().and_then(|home| dunce::canonicalize(home).ok())
 }
 
 /// The GitHub account `gh` is signed in to on this computer, as its own
 /// config says, with no network: none without `gh`, signed out, or slow.
 async fn github_login() -> Option<String> {
-    let mut gh = tokio::process::Command::new("gh");
+    // A `gh` that is not installed is not found, and nothing runs.
+    let mut gh = crate::host::command("gh").ok()?;
     gh.args(["config", "get", "user", "--host", "github.com"])
         .current_dir("/")
         .env("GH_PROMPT_DISABLED", "1")
         .env("GH_NO_UPDATE_NOTIFIER", "1")
         .stdin(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .kill_on_drop(true);
-    // A `gh` that is not installed fails to start, and runs nothing.
+        .stderr(std::process::Stdio::null());
     let output = tokio::time::timeout(GH_LIMIT, gh.output())
         .await
         .ok()?

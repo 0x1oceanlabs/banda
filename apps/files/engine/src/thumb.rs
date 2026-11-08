@@ -440,9 +440,7 @@ fn put(folder: &Path, name: &str, bytes: &[u8]) -> std::io::Result<()> {
     making.create(folder)?;
     let mut file = tempfile::NamedTempFile::new_in(folder)?;
     file.write_all(bytes)?;
-    file.persist(folder.join(name))
-        .map_err(|failed| failed.error)?;
-    Ok(())
+    crate::write::persisted(file, &folder.join(name), true)
 }
 
 /// The pictures in `cache`, each with its size and when it was used last.

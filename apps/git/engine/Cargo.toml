@@ -11,6 +11,7 @@ publish.workspace = true
 async-trait.workspace = true
 banda-git-cli = { path = "../../../platform/git-cli" }
 banda-kernel = { path = "../../../kernel" }
+dunce.workspace = true
 futures.workspace = true
 serde.workspace = true
 serde_json.workspace = true

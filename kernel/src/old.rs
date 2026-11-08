@@ -130,7 +130,7 @@ fn move_one(folder: &Path, projects: &Path) -> Result<bool, Error> {
         );
         return Ok(false);
     }
-    manifest.folder = std::fs::canonicalize(folder)?;
+    manifest.folder = dunce::canonicalize(folder)?;
     // An older Banda that has it open holds this lock.
     let lock = project::locked(&old.join(LOCK))?;
     // One rename on one disk; a copy across two, which takes the old
@@ -218,7 +218,7 @@ mod tests {
         assert_eq!(manifest.id, id);
         assert_eq!(
             manifest.folder,
-            std::fs::canonicalize(root.path().join("Work")).unwrap()
+            dunce::canonicalize(root.path().join("Work")).unwrap()
         );
         assert_eq!(
             std::fs::read(moved.join("kept/1/notes.md")).unwrap(),

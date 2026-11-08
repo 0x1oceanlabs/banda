@@ -242,6 +242,7 @@ dependencies = [
  "banda-fence",
  "banda-files",
  "banda-git",
+ "banda-git-cli",
  "banda-harnesses",
  "banda-kernel",
  "banda-keys",
@@ -255,6 +256,7 @@ dependencies = [
  "banda-workspaces",
  "clap",
  "dirs",
+ "dunce",
  "futures",
  "rustix",
  "serde",
@@ -314,6 +316,7 @@ name = "banda-environments"
 version = "0.1.0"
 dependencies = [
  "banda-kernel",
+ "dunce",
  "pty-process",
  "rustix",
  "tempfile",
@@ -353,6 +356,7 @@ dependencies = [
  "base64 0.22.1",
  "calamine",
  "dirs",
+ "dunce",
  "fast_image_resize",
  "flate2",
  "grep-matcher",
@@ -392,6 +396,7 @@ dependencies = [
  "banda-environments",
  "banda-git-cli",
  "banda-kernel",
+ "dunce",
  "futures",
  "serde",
  "serde_json",
@@ -421,6 +426,7 @@ dependencies = [
  "banda-kernel",
  "banda-look",
  "dirs",
+ "dunce",
  "futures",
  "icu_normalizer",
  "nix",
@@ -447,9 +453,11 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "dirs",
+ "dunce",
  "futures",
  "getrandom 0.4.3",
  "notify-debouncer-full",
+ "process-wrap",
  "reqwest",
  "rusqlite",
  "rustix",
@@ -464,6 +472,8 @@ dependencies = [
  "tracing",
  "ts-rs",
  "uuid",
+ "windows",
+ "windows-registry",
 ]
 
 [[package]]
@@ -486,6 +496,7 @@ dependencies = [
 name = "banda-look"
 version = "0.1.0"
 dependencies = [
+ "dunce",
  "schemars 1.2.3",
  "serde",
  "serde_json",
@@ -502,6 +513,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "banda-kernel",
+ "dunce",
  "percent-encoding",
  "rusqlite",
  "schemars 1.2.3",
@@ -538,9 +550,11 @@ dependencies = [
  "banda-browser",
  "banda-files",
  "banda-harnesses",
+ "banda-kernel",
  "banda-look",
  "banda-sharing",
  "banda-terminal",
+ "dunce",
  "schemars 1.2.3",
  "serde_json",
  "tempfile",
@@ -573,6 +587,7 @@ dependencies = [
 name = "banda-skill"
 version = "0.1.0"
 dependencies = [
+ "dunce",
  "tempfile",
 ]
 
@@ -1121,6 +1136,12 @@ checksum = "d4b8a88685455ed29a21542a33abd9cb6510b6b129abadabdcef0f4c55bc8f61"
 dependencies = [
  "litrs",
 ]
+
+[[package]]
+name = "dunce"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "dyn-clone"
@@ -2520,6 +2541,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "process-wrap"
+version = "10.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f21b97672d2dc848e7b25701ab4535618b92f4861c13cc3f7f7bed52ad3c8da"
+dependencies = [
+ "futures",
+ "indexmap 2.14.2",
+ "nix",
+ "tokio",
+ "windows",
 ]
 
 [[package]]

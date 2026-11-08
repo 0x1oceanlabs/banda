@@ -2484,7 +2484,7 @@ async fn any_folder_is_added_as_a_project_and_one_folder_is_one_project() {
     let added = add_folder(&kernel, owner, json!({ "folder": app }))
         .await
         .unwrap();
-    let app = std::fs::canonicalize(&app).unwrap();
+    let app = dunce::canonicalize(&app).unwrap();
     assert_eq!(added.name, "app", "a Project is named after its folder");
     assert_eq!(added.folder, app.display().to_string());
     assert!((!added.pinned) && (!added.archived));
@@ -2817,7 +2817,7 @@ async fn a_scratch_project_is_a_new_folder_with_no_name() {
         (true, ""),
         "no name is asked"
     );
-    let scratch = root.path().join("scratch").canonicalize().unwrap();
+    let scratch = dunce::canonicalize(root.path().join("scratch")).unwrap();
     assert_eq!(Path::new(&made.folder).parent(), Some(scratch.as_path()));
     let again = create_scratch(&kernel, owner, command).await.unwrap();
     assert_eq!(again, made, "the same command gets the same Project");
@@ -2991,7 +2991,7 @@ async fn a_project_whose_folder_went_waits_to_be_located_where_it_is_now() {
     let located: ProjectSummary =
         serde_json::from_value(locate(project.id, "Moved").await.unwrap()).unwrap();
     assert!(!located.missing && located.pinned);
-    let moved = std::fs::canonicalize(root.path().join("Moved")).unwrap();
+    let moved = dunce::canonicalize(root.path().join("Moved")).unwrap();
     assert_eq!(located.folder, moved.display().to_string());
     let notes_of = |kernel: Arc<Kernel>| async move {
         let listed = kernel
@@ -3477,10 +3477,6 @@ async fn a_reaction_across_scopes_is_written_once_though_its_ack_was_lost() {
 }
 
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "a folder named by its verbatim prefix or its short name: dunce comes with ADR 0090's step 3"
-)]
 async fn promotion_moves_files_and_keeps_the_open_project_and_log() {
     let root = tempfile::tempdir().unwrap();
     let (owner, notes) = (PersonId::new(), Notes::default());
@@ -3490,7 +3486,9 @@ async fn promotion_moves_files_and_keeps_the_open_project_and_log() {
         .unwrap();
     let held = kernel.project(made.id).await.unwrap();
     std::fs::write(held.folder().join("work.txt"), "keep me").unwrap();
-    let destination = root.path().join("Promoted");
+    // As the system names it, as the kernel keeps a folder: on Windows
+    // the temporary folder's name may be a short one.
+    let destination = dunce::canonicalize(root.path()).unwrap().join("Promoted");
     let params =
         json!({"project": made.id, "scratch": false, "name": "Promoted", "folder": destination});
     let promoted: ProjectSummary = serde_json::from_value(

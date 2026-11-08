@@ -45,7 +45,7 @@ impl World {
         .unwrap();
         let project: ProjectId = serde_json::from_value(made["id"].clone()).unwrap();
         let folder = kernel.project(project).await.unwrap().folder();
-        let folder = folder.canonicalize().unwrap();
+        let folder = dunce::canonicalize(folder).unwrap();
         World {
             kernel,
             owner,
@@ -78,7 +78,9 @@ impl World {
 
     /// A folder beside the Project's, outside it.
     pub fn outside(&self) -> PathBuf {
-        let outside = self.root.path().canonicalize().unwrap().join("outside");
+        let outside = dunce::canonicalize(self.root.path())
+            .unwrap()
+            .join("outside");
         std::fs::create_dir_all(&outside).unwrap();
         std::fs::write(outside.join("secret.txt"), "secret").unwrap();
         outside

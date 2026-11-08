@@ -14,13 +14,25 @@
 use std::path::{Path, PathBuf};
 
 /// What makes a process, as Rust's source says it: std's, tokio's,
-/// `pty-process`'s and `async-process`'s commands, and ACP's agent that
-/// starts its own.
-const MAKES: [&str; 3] = ["Command::new(", "Command::from(", "AcpAgent"];
+/// `pty-process`'s and `async-process`'s commands, ACP's agent that
+/// starts its own, and the kernel's commands for a program on the host,
+/// `host::command` and `host::command_on`.
+const MAKES: [&str; 4] = [
+    "Command::new(",
+    "Command::from(",
+    "AcpAgent",
+    "host::command",
+];
 
 /// Where the engine makes a process on the host for no Project's
 /// program: the file, how many places in it make one, and why.
-const ON_THE_HOST: [(&str, usize, &str); 10] = [
+const ON_THE_HOST: [(&str, usize, &str); 11] = [
+    (
+        "kernel/src/host.rs",
+        1,
+        "the command each place named here starts a program it finds on the host's PATH with \
+         (ADR 0090, decision 3)",
+    ),
     (
         "engine/src/service.rs",
         2,
