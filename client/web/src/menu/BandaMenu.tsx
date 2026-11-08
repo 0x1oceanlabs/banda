@@ -52,7 +52,6 @@ import {
   SearchIcon,
 } from "lucide-react"
 import { KEYS_FILE, writeBind } from "../actions/actions"
-import type { Listed } from "@banda/ui/pane"
 import { useLists } from "../calls/stores"
 import { useLookSidebar } from "../look"
 import { runs, sources as allSources } from "../registry"
@@ -60,6 +59,7 @@ import type { Shell } from "../window/actions"
 import { ThreadMark } from "@banda/ui/components/banda-mark"
 import { PRESET_WORDS } from "../sidebar/settings"
 import { useIsArchived } from "../sidebar/archived"
+import { itemActionsOf } from "../sidebar/items"
 import {
   type Act,
   actsOf,
@@ -110,7 +110,7 @@ export const BandaMenu = memo(function BandaMenu({
   onAdded,
   engine,
   modules,
-  asleep,
+  snoozeNow,
   projects,
   actions,
   binds,
@@ -125,8 +125,8 @@ export const BandaMenu = memo(function BandaMenu({
   engine: Engine
   /** The modules the engine runs: the sources of the others find nothing. */
   modules: readonly string[]
-  /** Whether a Thread sleeps now (ADR 0074), by the window's clock. */
-  asleep: (listed: Listed) => boolean
+  /** The clock a Thread's snooze is read by (ADR 0074): the window's. */
+  snoozeNow: number
   projects: readonly ProjectSummary[]
   actions: readonly Action<Shell>[]
   /** The Person's keys in force, from keys.toml. */
@@ -205,7 +205,7 @@ export const BandaMenu = memo(function BandaMenu({
               key={opening.n}
               engine={engine}
               opening={opening}
-              asleep={asleep}
+              snoozeNow={snoozeNow}
               projects={projects}
               actions={actions}
               binds={binds}
@@ -262,7 +262,7 @@ const NOWHERE: Looking = { words: "" }
 function Menu({
   engine,
   opening,
-  asleep,
+  snoozeNow,
   projects,
   actions,
   binds,
@@ -274,7 +274,7 @@ function Menu({
 }: {
   engine: Engine
   opening: Opening
-  asleep: (listed: Listed) => boolean
+  snoozeNow: number
   projects: readonly ProjectSummary[]
   actions: readonly Action<Shell>[]
   /** The Person's keys in force, from keys.toml. */
@@ -326,7 +326,8 @@ function Menu({
       actions,
       presets: { names: presets.map((one) => one.name), current: preset },
       archived,
-      asleep,
+      now: snoozeNow,
+      items: itemActionsOf,
       found,
       weight: (id) => weightOf(uses[id], now),
       browsed,
@@ -338,7 +339,7 @@ function Menu({
       presets,
       preset,
       archived,
-      asleep,
+      snoozeNow,
       found,
       uses,
       now,
@@ -900,9 +901,7 @@ function RowView({
       )
     }
     case "ask":
-    case "archive":
-    case "snooze":
-    case "wake":
+    case "item":
     case "bind":
     case "free":
       return null

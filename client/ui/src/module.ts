@@ -266,16 +266,24 @@ export function zoomActions(
 export type ArgsSchema = {
   type: "object"
   properties: {
-    [name: string]: { type: "string" | "number"; description: string }
+    [name: string]: {
+      type: "string" | "number" | "boolean"
+      description: string
+    }
   }
   required?: readonly string[]
   additionalProperties: false
 }
 
+/** What one arg is: a string, by what it says; else a number, or a flag,
+ * true or false. */
+type Takes = string | { number: string } | { flag: string }
+
 /** An action's args (ADR 0071, decision 2): each by its name and what it
- * is, a string unless it says it is a number; `required` it must have. */
+ * is, a string unless it says it is a number or a flag; `required` it
+ * must have. */
 export function takes(
-  properties: { [name: string]: string | { number: string } },
+  properties: { [name: string]: Takes },
   required?: readonly string[]
 ): ArgsSchema {
   return {
@@ -285,7 +293,9 @@ export function takes(
         name,
         typeof about === "string"
           ? { type: "string", description: about }
-          : { type: "number", description: about.number },
+          : "number" in about
+            ? { type: "number", description: about.number }
+            : { type: "boolean", description: about.flag },
       ])
     ),
     ...(required && { required }),
@@ -348,9 +358,7 @@ export type ItemAt = {
 
 /** What an item action takes: its Item, as `itemOf` reads it, and
  * `more` of its own. */
-export function itemArgs(
-  more: { [name: string]: string | { number: string } } = {}
-): ArgsSchema {
+export function itemArgs(more: { [name: string]: Takes } = {}): ArgsSchema {
   return takes({
     project: "the Project of the Item it acts on",
     item: "the Item's id in its Project, as a Thread's; none for the one in focus",

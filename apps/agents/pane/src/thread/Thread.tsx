@@ -236,7 +236,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     snooze:
       run &&
       ((until, resume) =>
-        run("thread.snooze", { project, thread, until, resume })),
+        run("thread.snooze", { project, item: thread, until, resume })),
     signIn: (turn) =>
       here ? (
         <SignIn
@@ -436,7 +436,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
             thread={thread}
             snooze={writers.own?.snooze}
             turns={state?.turns ?? []}
-            onWake={() => run("thread.wake", { project, thread })}
+            onWake={() => run("thread.wake", { project, item: thread })}
           />
         )}
         {thread && state && (

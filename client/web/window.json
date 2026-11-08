@@ -489,6 +489,31 @@
       ]
     },
     {
+      "id": "pane.put-away",
+      "title": "Close every Pane that shows an Item, on any workspace",
+      "section": "Panes",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project of the Item"
+          },
+          "item": {
+            "type": "string",
+            "description": "the Item's id in its Project"
+          }
+        },
+        "required": [
+          "project",
+          "item"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
       "id": "pane.pop-out",
       "title": "The Pane in a window of its own, and back",
       "section": "Panes",
@@ -595,7 +620,21 @@
           "code": "KeyS",
           "mod": true
         }
-      ]
+      ],
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project of the Item it acts on"
+          },
+          "item": {
+            "type": "string",
+            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+          }
+        },
+        "additionalProperties": false
+      }
     },
     {
       "id": "sidebar.make-project",
@@ -618,21 +657,25 @@
       }
     },
     {
-      "id": "thread.snooze",
-      "title": "Snooze the Thread you look at, or wake it",
+      "id": "sidebar.snooze-picker",
+      "title": "Pick when the Thread you look at wakes",
       "section": "Threads",
-      "keys": [
-        {
-          "code": "KeyZ",
-          "mod": true
-        }
-      ]
-    },
-    {
-      "id": "thread.wake",
-      "title": "Wake the snoozed Thread you look at",
-      "section": "Threads",
-      "keys": []
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project of the Item it acts on"
+          },
+          "item": {
+            "type": "string",
+            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+          }
+        },
+        "additionalProperties": false
+      }
     },
     {
       "id": "menu.open",

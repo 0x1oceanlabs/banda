@@ -47,6 +47,8 @@ const KEPT = [
   "thread.rename",
   "thread.suggest-title",
   "thread.unread",
+  "thread.snooze",
+  "thread.wake",
 ]
 
 /** A module's actions, its item actions with them. */

@@ -37,7 +37,7 @@ import { cn } from "@banda/ui/lib/utils"
 import { clock, problem } from "@banda/ui/lib/words"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
-import type { Listed, PaneState } from "@banda/ui/pane"
+import { type Listed, type PaneState, snoozable } from "@banda/ui/pane"
 import {
   HostsContext,
   holds,
@@ -75,14 +75,16 @@ import {
 } from "./arrange"
 import { useLookSidebar } from "../look"
 import { Row } from "./Row"
-import { ThreadRows } from "../titles/ThreadMenu"
+import { ThreadRows, useItemRun } from "../titles/ThreadMenu"
 import { TitleField } from "../titles/Title"
 import { useNaming } from "@banda/ui/lib/naming"
 import { device } from "../window/device"
 import { PRESET_WORDS, type Settings } from "./settings"
 import { type Held, held, hold, rowKey } from "./hold"
 import { useIsArchived } from "./archived"
-import { seeWoke, snoozable } from "./snoozed"
+import { seeWoke } from "./snoozed"
+import { itemActionOf } from "./items"
+import { pickSnooze } from "./Snoozing"
 import { FlowMenu } from "./FlowMenu"
 import { ThemeMenu } from "./ThemeMenu"
 import { TrustCard, type Trusting } from "../trust/TrustCard"
@@ -139,11 +141,6 @@ export function Sidebar({
   onOpen: (project: ProjectId, pane: PaneState) => void
   onNewThread: (project: ProjectId) => void
   onNoProject: () => void
-  /** Opens the snooze's picker for a row's Thread, by `anchor` if it is
-   * given (ADR 0074). */
-  onSnooze: (project: ProjectId, listed: Listed, anchor?: Element) => void
-  /** Wakes a row's snoozed Thread now. */
-  onWake: (project: ProjectId, thing: string) => void
   /** Opens "Add Project" in the Banda menu (ADR 0026). */
   onAddProject: () => void
   /** Pins the Project, so it comes first, or unpins it (ADR 0026). */
@@ -274,10 +271,6 @@ export function Sidebar({
       onToggle={() => setToggled((set) => flip(set, section.key))}
       onMore={() => setMore((set) => flip(set, section.key))}
       onOpen={onOpen}
-      onSnooze={(row, anchor) =>
-        props.onSnooze(row.project.id, row.listed, anchor)
-      }
-      onWake={(row) => props.onWake(row.project.id, row.listed.id)}
       onNoProject={onNoProject}
       engine={props.engine}
       onNewThread={onNewThread}
@@ -509,8 +502,6 @@ function SectionView({
   onToggle,
   onMore,
   onOpen,
-  onSnooze,
-  onWake,
   engine,
   onNoProject,
   onNewThread,
@@ -524,8 +515,6 @@ function SectionView({
   onToggle: () => void
   onMore: () => void
   onOpen: (project: ProjectId, pane: PaneState) => void
-  onSnooze: (row: Arranged, anchor?: Element) => void
-  onWake: (row: Arranged) => void
   engine: Engine
   onNoProject: () => void
   onNewThread: (project: ProjectId) => void
@@ -533,7 +522,15 @@ function SectionView({
   /** When another host went away, while it is. */
   awayOf: (host: string) => number | undefined
 }) {
-  const snoozeKey = useKeyLabel()("thread.snooze")
+  const keyFor = useKeyLabel()
+  const run = useItemRun()
+  // A row's Snooze and Wake are its Thread's App's (ADR 0087, decision 12).
+  const wake = ({ project, listed }: Arranged) => {
+    const action = itemActionOf(listed, "wake")
+    if (action) run(action.id, { project: project.id, item: listed.id })
+  }
+  const snoozeKey = (listed: Listed) =>
+    keyFor(itemActionOf(listed, "snooze")?.id ?? "")
   const { limit } = settings.group
   const rows = limit > 0 && !more ? section.rows.slice(0, limit) : section.rows
   const hidden = section.rows.length - rows.length
@@ -606,7 +603,7 @@ function SectionView({
               away={row.host === undefined ? undefined : awayOf(row.host)}
               action={
                 row.state === "snoozed" ? (
-                  <Button variant="ghost" size="xs" onClick={() => onWake(row)}>
+                  <Button variant="ghost" size="xs" onClick={() => wake(row)}>
                     <AlarmClockIcon />
                     Wake
                   </Button>
@@ -615,13 +612,15 @@ function SectionView({
                     variant="ghost"
                     size="icon-xs"
                     aria-label="Snooze"
-                    title={`Snooze ${snoozeKey}`}
-                    onClick={(event) =>
-                      onSnooze(
-                        row,
-                        event.currentTarget.closest("[data-row]") ?? undefined
-                      )
-                    }
+                    title={`Snooze ${snoozeKey(row.listed)}`}
+                    onClick={(event) => {
+                      const anchor = event.currentTarget.closest("[data-row]")
+                      pickSnooze({
+                        project: row.project.id,
+                        listed: row.listed,
+                        ...(anchor ? { anchor } : {}),
+                      })
+                    }}
                   >
                     <AlarmClockIcon />
                   </Button>

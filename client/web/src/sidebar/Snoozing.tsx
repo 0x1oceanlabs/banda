@@ -2,7 +2,9 @@
  * The snooze's picker (ADR 0074, decision 5): one wherever a snooze
  * starts, by the row's clock, from a menu or with Alt+Z. A time typed in
  * its field, a preset, "When it's done" for a Thread at work, or Wake now
- * for one that sleeps; ↑ ↓ and Enter pick.
+ * for one that sleeps; ↑ ↓ and Enter pick. It is the sidebar list's, and
+ * what is picked, the Thread's App does, by its item actions (ADR 0087,
+ * decision 12).
  */
 import type { ProjectId } from "@banda/contract"
 import { works } from "@banda/ui/components/banda-mark"
@@ -13,16 +15,28 @@ import {
   SuggestionDescription,
   SuggestionList,
 } from "@banda/ui/components/suggestions"
+import { Store, useStore } from "@banda/ui/lib/store"
 import { clock, left } from "@banda/ui/lib/words"
+import type { Args } from "@banda/ui/module"
+import { asleep, type Listed, snoozable } from "@banda/ui/pane"
 import { AlarmClockIcon, ArrowRightIcon, LoaderIcon } from "lucide-react"
 import { type ReactNode, useId, useMemo, useState } from "react"
-import { asleep, type Listed } from "@banda/ui/pane"
 import { useLookSidebar } from "../look"
-import { snoozable } from "./snoozed"
+import { itemActionOf } from "./items"
 import { presets, whenOf } from "./snooze-time"
 
 /** A Thread whose snooze is being picked, and what the picker stands by. */
 export type Snoozing = { project: ProjectId; listed: Listed; anchor?: Element }
+
+/** The Thread the picker is open for; none while it is closed. */
+const picking = new Store<Snoozing | undefined>(undefined)
+const now = (target: Snoozing | undefined) => target
+
+/** Opens the picker for a Thread, by its row where `anchor` is given;
+ * none closes it. */
+export function pickSnooze(target: Snoozing | undefined): void {
+  picking.set(target)
+}
 
 /** One line of the picker, and what picking it does. */
 type Choice = {
@@ -44,18 +58,25 @@ const TOP = {
     }),
 }
 
+/** The picker, open for the Thread `pickSnooze` asked for: what is picked
+ * runs its App's snooze, or its wake, by `run`. */
 export function SnoozePicker({
-  target,
-  onClose,
-  onSnooze,
-  onWake,
+  run,
 }: {
-  target: Snoozing | undefined
-  onClose: () => void
-  /** Snoozes until `until`, or, without it, until its turn ends. */
-  onSnooze: (target: Snoozing, until?: number) => void
-  onWake: (target: Snoozing) => void
+  run: (action: string, args?: Args) => void
 }) {
+  const target = useStore(picking, now)
+  const onClose = () => pickSnooze(undefined)
+  // Its App's, by what each does: the picker names none of its actions.
+  const onSnooze = ({ project, listed }: Snoozing, until?: number) => {
+    const action = itemActionOf(listed, "snooze")
+    const when: Args = until === undefined ? { done: true } : { until }
+    if (action) run(action.id, { project, item: listed.id, ...when })
+  }
+  const onWake = ({ project, listed }: Snoozing) => {
+    const action = itemActionOf(listed, "wake")
+    if (action) run(action.id, { project, item: listed.id })
+  }
   return (
     <Popover
       open={target !== undefined}

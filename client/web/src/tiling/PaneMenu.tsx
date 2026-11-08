@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { type ComponentType, useState } from "react"
 import { createPortal } from "react-dom"
 import type { Args } from "@banda/ui/module"
 import { useAfterMenu } from "@banda/ui/components/context-menu"
@@ -11,7 +11,6 @@ import {
 } from "@banda/ui/components/dropdown-menu"
 import { cn } from "@banda/ui/lib/utils"
 import {
-  AlarmClockIcon,
   AppWindowIcon,
   ArrowLeftToLineIcon,
   ArrowRightToLineIcon,
@@ -24,7 +23,6 @@ import {
   ScanIcon,
   SquareArrowDownLeftIcon,
   XIcon,
-  type LucideIcon,
 } from "lucide-react"
 import { drawn, share, type Width } from "./model"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
@@ -55,9 +53,17 @@ export type Stand = {
   heights: readonly Width[]
   /** The share its column is never drawn narrower than, by its `min`. */
   floor: number
-  /** It shows a Thread that can be snoozed, or one that sleeps (ADR
-   * 0074). */
-  snooze?: "snooze" | "wake"
+  /** What its Item's item actions offer here, as Snooze… or Wake now for
+   * a Thread (ADR 0087, decision 12): each row, and what runs it. */
+  items: readonly StandRow[]
+}
+
+/** A row of an item action the Pane menu offers, and its id and args. */
+export type StandRow = {
+  id: string
+  title: string
+  icon: ComponentType<{ className?: string }>
+  args: Args
 }
 
 /** What the menu asks of the window. */
@@ -233,17 +239,16 @@ export function PaneMenu({
           act={() => run("pane.pop-out")}
         />
       )}
-      {stand.snooze && (
-        <>
-          <DropdownMenuSeparator />
-          <Row
-            icon={AlarmClockIcon}
-            words={stand.snooze === "wake" ? "Wake now" : "Snooze…"}
-            keys={keyOf(`thread.${stand.snooze}`)}
-            act={() => run(`thread.${stand.snooze}`)}
-          />
-        </>
-      )}
+      {stand.items.length > 0 && <DropdownMenuSeparator />}
+      {stand.items.map((item) => (
+        <Row
+          key={item.id}
+          icon={item.icon}
+          words={item.title}
+          keys={keyOf(item.id)}
+          act={() => run(item.id, item.args)}
+        />
+      ))}
       <DropdownMenuSeparator />
       <Row
         icon={XIcon}
@@ -347,7 +352,7 @@ function Row({
   disabled,
   act,
 }: {
-  icon: LucideIcon
+  icon: ComponentType<{ className?: string }>
   words: string
   keys?: string
   disabled?: boolean

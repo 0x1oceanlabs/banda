@@ -14,12 +14,11 @@ import {
   type Status,
 } from "@banda/contract"
 import { Toaster, toast } from "@banda/ui/components/sonner"
-import { clock, problem } from "@banda/ui/lib/words"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openProjects, updateProject } from "@banda/ui/lib/projects"
 import { useStore } from "@banda/ui/lib/store"
-import { asleep, type Listed, type PaneState } from "@banda/ui/pane"
+import { asleep, type PaneState } from "@banda/ui/pane"
 import { Bar } from "../bar/Bar"
 import { WorkspaceMap } from "../bar/Map"
 import { tomlOf } from "@banda/contract/settings"
@@ -72,16 +71,10 @@ import {
 } from "../registry"
 import { Edge } from "../sidebar/Edge"
 import { Sidebar } from "../sidebar/Sidebar"
-import { SnoozePicker, type Snoozing } from "../sidebar/Snoozing"
+import { SnoozePicker } from "../sidebar/Snoozing"
 import { QuitDialog } from "./Quit"
-import {
-  seeWoke,
-  snoozeAct,
-  useSnoozesAt,
-  wokeAt,
-  wokeTold,
-} from "../sidebar/snoozed"
-import { archive as keepArchived, toggled } from "../sidebar/archived"
+import { useSeeWoke, useSnoozesAt, wokeAt, wokeTold } from "../sidebar/snoozed"
+import { paneRowsOf } from "../sidebar/items"
 import { attachTo, focusedOn } from "./attach"
 import { Kept, useKeptHere } from "./here"
 import { useNarrow } from "./narrow"
@@ -136,7 +129,6 @@ import {
   settingsAt,
   updating,
   type Shell as Parts,
-  type SnoozeAsked,
   windowApiOf,
 } from "./actions"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
@@ -296,129 +288,9 @@ export function Shell({
     },
     [change, drawnNow]
   )
-  const listedOf = useCallback(
-    (project: ProjectId, thing: string): Listed | undefined =>
-      stores.items.get()[project]?.find((listed) => listed.id === thing),
-    [stores]
-  )
-  // A snooze is kept by its host (ADR 0074). Snoozed, a Thread is put away
-  // as an archived one is, its Panes closed, and leaves Archive; Undo wakes it.
-  const [snoozing, setSnoozing] = useState<Snoozing>()
   // How many Agents worked as the Person asked to quit, while Banda asks
   // whether to stop them (ADR 0086, decision 3).
   const [quitting, setQuitting] = useState<number | null>(null)
-  const wakeThread = useCallback(
-    (project: ProjectId, thing: string) => {
-      engineOf(project)
-        .command("agents.wake", { thread: thing }, project)
-        .catch((error: unknown) => toast.error(problem(error)))
-    },
-    [engineOf]
-  )
-  const snoozeThread = useCallback(
-    (project: ProjectId, listed: Listed, until?: number, resume = false) => {
-      const thread = listed.id
-      const asked = until === undefined ? { thread } : { thread, until, resume }
-      const there = engineOf(project)
-      there.command("agents.snooze", asked, project).then(
-        () => {
-          closeShown(project, thread)
-          toast(
-            until === undefined
-              ? "Snoozed until it's done"
-              : `Snoozed until ${clock(until)}`,
-            {
-              action: {
-                label: "Undo",
-                onClick: () => wakeThread(project, thread),
-              },
-            }
-          )
-        },
-        (error: unknown) => toast.error(problem(error))
-      )
-    },
-    [engineOf, closeShown, wakeThread]
-  )
-  const archiveThread = useCallback(
-    (project: ProjectId, thing: string, archived: boolean) => {
-      // Archived, a snoozed Thread's snooze ends.
-      const listed = listedOf(project, thing)
-      if (archived && listed && asleep(listed, Date.now()))
-        wakeThread(project, thing)
-      keepArchived(thing, archived)
-      if (archived) closeShown(project, thing)
-    },
-    [closeShown, wakeThread, listedOf]
-  )
-  const toggleArchived = useCallback(
-    (project: ProjectId, thing: string) => {
-      const archived = toggled(stores.items.get(), project, thing)
-      if (archived !== undefined) archiveThread(project, thing, archived)
-    },
-    [archiveThread, stores]
-  )
-  const archive = useCallback(() => {
-    const entry = focused(drawnNow())
-    const thing = entry && showsOf(entry.pane)
-    if (entry && thing) toggleArchived(entry.project, thing)
-  }, [toggleArchived, drawnNow])
-  /** The Thread of the Pane in focus, as its Project lists it. */
-  const threadInFocus = useCallback((): Snoozing | undefined => {
-    const entry = focused(drawnNow())
-    const thing = entry && showsOf(entry.pane)
-    const listed = entry && thing ? listedOf(entry.project, thing) : undefined
-    return entry && listed ? { project: entry.project, listed } : undefined
-  }, [drawnNow, listedOf])
-  // A Thread that woke stops saying so once its Person looks at it.
-  useEffect(() => {
-    const see = () => {
-      const looked = threadInFocus()
-      if (looked) seeWoke(looked.listed)
-    }
-    see()
-    return stores.items.subscribe(see)
-  }, [threadInFocus, workspaces, stores])
-  /** What the Pane menu offers for the Thread a Pane shows: to snooze it,
-   * to wake it, or nothing. */
-  const snoozeIn = useCallback(
-    (entry: Entry | undefined) => {
-      const thing = entry && showsOf(entry.pane)
-      const listed = entry && thing ? listedOf(entry.project, thing) : undefined
-      return listed && snoozeAct(listed, asleep(listed, Date.now()))
-    },
-    [listedOf]
-  )
-  // The Thread menu's Snooze…: the picker for its Thread.
-  const openSnooze = useCallback(
-    (project: ProjectId, listed: Listed) => setSnoozing({ project, listed }),
-    []
-  )
-  /** For Alt+Z's picker: the Thread `asked` names, else the one in focus. */
-  const threadAsked = useCallback(
-    ({ thread }: SnoozeAsked): Snoozing | undefined => {
-      if (!thread) return threadInFocus()
-      const listed = listedOf(thread.project, thread.id)
-      return listed && { project: thread.project, listed }
-    },
-    [threadInFocus, listedOf]
-  )
-  const snooze = useCallback(
-    (asked: SnoozeAsked) => {
-      const target = threadAsked(asked)
-      if (target && asked.until !== undefined)
-        snoozeThread(target.project, target.listed, asked.until, asked.resume)
-      else setSnoozing(target)
-    },
-    [threadAsked, snoozeThread]
-  )
-  const wake = useCallback(
-    (asked: SnoozeAsked) => {
-      const target = threadAsked(asked)
-      if (target) wakeThread(target.project, target.listed.id)
-    },
-    [threadAsked, wakeThread]
-  )
   const toggleOverview = useCallback(
     () => setOverview((was) => (was === "open" ? "closing" : "open")),
     []
@@ -494,6 +366,8 @@ export function Shell({
   // Where the Person is (ADR 0087, decision 4), and what the Apps list,
   // as the Apps' code reads them.
   const here = useKeptHere(drawnNow, { sidebar: sidebarShown, home }, showsOf)
+  // A Thread that woke stops saying so once its Person looks at it.
+  useSeeWoke(here, stores.items)
   const [items] = useState(() => itemsOf(stores))
   const hideOver = useCallback(() => setOver(false), [])
   // Each Alt+C brings the focused column to the middle, once.
@@ -681,9 +555,7 @@ export function Shell({
       if (call)
         parts.run("pane.pick", { project: call.project, pane: call.pane })
     },
-    archive,
-    snooze,
-    wake,
+    putAway: closeShown,
     menu: toggleMenu,
     fillPeek,
     peek: (pane, project) =>
@@ -903,19 +775,18 @@ export function Shell({
             row.project ?? here.get().project,
             row.words || undefined
           )
-        case "archive":
-          return toggleArchived(row.project, row.listed.id)
-        case "snooze":
-          return setSnoozing({ project: row.project, listed: row.listed })
-        case "wake":
-          return wakeThread(row.project, row.listed.id)
+        case "item":
+          return parts.run(row.action, {
+            project: row.project,
+            item: row.listed.id,
+          })
         case "preset":
           return device.sidebar.preset(row.name)
         case "found":
           return row.row.run(parts)
       }
     },
-    [change, openPane, newThreadIn, parts, here, toggleArchived, wakeThread]
+    [change, openPane, newThreadIn, parts, here]
   )
 
   const frame: Frame = useMemo(
@@ -944,6 +815,8 @@ export function Shell({
         const column = workspace?.columns[spot.column]
         if (!workspace || !column) return undefined
         const look = columnsOf()
+        const shown = column.entries[spot.entry]
+        const listed = shown && shows.listed(shown)
         return {
           width: share(widthIn(workspace, column, look)) ?? 0.5,
           full: column.full === true,
@@ -958,11 +831,14 @@ export function Shell({
           presets: look.presets,
           heights: look.heights,
           floor: floorOf(workspace.id, minOf(column, look.min)),
-          snooze: snoozeIn(column.entries[spot.entry]),
+          // What its Item's item actions offer here (ADR 0087, decision 12).
+          items: listed
+            ? paneRowsOf(listed, shown.project, parts.projects())
+            : [],
         }
       },
     }),
-    [change, update, parts, popOut, snoozeIn, drawnNow]
+    [change, update, parts, popOut, shows, drawnNow]
   )
   // What a Pane in its own window asks, the window does, as for its own.
   useEffect(
@@ -994,14 +870,7 @@ export function Shell({
   return (
     <KeysInForce.Provider value={keys}>
       <Kept stores={stores} here={here}>
-        <ThreadMenus
-          engine={engine}
-          projects={projects}
-          run={parts.run}
-          archive={archiveThread}
-          snooze={openSnooze}
-          wake={wakeThread}
-        >
+        <ThreadMenus engine={engine} projects={projects} run={parts.run}>
           <div className="flex h-svh flex-col bg-desk text-foreground">
             <Watches engine={engine} modules={modules} projects={open} />
             <Bar
@@ -1048,14 +917,6 @@ export function Shell({
                   onOpen={pickPane}
                   onNewThread={newThreadIn}
                   onNoProject={() => machine && startThread(machine)}
-                  onSnooze={(project, listed, anchor) =>
-                    setSnoozing({
-                      project,
-                      listed,
-                      ...(anchor ? { anchor } : {}),
-                    })
-                  }
-                  onWake={wakeThread}
                   onAddProject={() => parts.run("project.add")}
                   onPin={(project, pinned) =>
                     updateProject(engine, { project, pinned }).catch(
@@ -1129,16 +990,7 @@ export function Shell({
                   />
                 )}
                 <Toaster />
-                <SnoozePicker
-                  target={snoozing}
-                  onClose={() => setSnoozing(undefined)}
-                  onSnooze={(target, until) =>
-                    snoozeThread(target.project, target.listed, until)
-                  }
-                  onWake={(target) =>
-                    wakeThread(target.project, target.listed.id)
-                  }
-                />
+                <SnoozePicker run={parts.run} />
                 <QuitDialog
                   working={quitting}
                   onQuit={device.quit}
@@ -1151,7 +1003,7 @@ export function Shell({
                   onAdded={added}
                   engine={engine}
                   modules={modules}
-                  asleep={snoozes.asleep}
+                  snoozeNow={snoozes.now}
                   projects={menuProjects}
                   actions={keyed}
                   binds={binds}

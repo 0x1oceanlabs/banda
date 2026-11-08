@@ -357,6 +357,63 @@
         },
         "additionalProperties": false
       }
+    },
+    {
+      "id": "thread.snooze",
+      "title": "Snooze the Thread you look at, or wake it",
+      "section": "Threads",
+      "keys": [
+        {
+          "code": "KeyZ",
+          "mod": true
+        }
+      ],
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project of the Item it acts on"
+          },
+          "item": {
+            "type": "string",
+            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+          },
+          "until": {
+            "type": "number",
+            "description": "when it wakes, in milliseconds since 1970"
+          },
+          "resume": {
+            "type": "boolean",
+            "description": "with until, its failed turn goes again then"
+          },
+          "done": {
+            "type": "boolean",
+            "description": "it sleeps until its turn ends"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "thread.wake",
+      "title": "Wake the snoozed Thread you look at",
+      "section": "Threads",
+      "keys": [],
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project of the Item it acts on"
+          },
+          "item": {
+            "type": "string",
+            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+          }
+        },
+        "additionalProperties": false
+      }
     }
   ],
   "scopes": [

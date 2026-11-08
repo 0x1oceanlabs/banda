@@ -3,6 +3,7 @@ import type { ProjectSummary } from "@banda/contract"
 import type { Listed } from "@banda/ui/pane"
 import type { Action, MenuAct, MenuRow } from "@banda/ui/module"
 import type { Shell } from "../window/actions"
+import { itemActionsOf } from "../sidebar/items"
 import {
   actsOf,
   back,
@@ -59,7 +60,8 @@ const sources: Sources = {
   actions,
   presets: { names: ["inbox", "projects", "places"], current: "inbox" },
   archived: (listed) => listed.id === "t3",
-  asleep: () => false,
+  now: 10,
+  items: itemActionsOf,
   found: [],
   weight: () => 0,
 }
@@ -115,11 +117,8 @@ function nameOf(row: Choice): string {
         .join(" ")
     case "preset":
       return row.current ? `${row.name} ✓` : row.name
-    case "archive":
-      return `archive ${row.listed.id}`
-    case "snooze":
-    case "wake":
-      return `${row.kind} ${row.listed.id}`
+    case "item":
+      return `${row.action} ${row.listed.id}`
     case "found":
       return row.row.title
     case "family":
@@ -362,11 +361,25 @@ describe("its branches and acts", () => {
       "Archive thread",
     ])
     expect(actsOf(t3, sources).at(-1)?.title).toBe("Unarchive thread")
-    const asleep = {
-      ...sources,
-      asleep: (listed: Listed) => listed.id === "t2",
+    if (t2.kind !== "thread") throw new Error("not a Thread")
+    const sleeping = {
+      ...t2,
+      listed: { ...t2.listed, snooze: { at: 1, until: 20 } },
     }
-    expect(actsOf(t2, asleep)[2].title, "one that sleeps").toBe("Wake now")
+    const [, , wake] = actsOf(sleeping, sources)
+    expect(wake.title, "one that sleeps").toBe("Wake now")
+    // Its App's item action runs it, counted as before item actions.
+    expect(wake.row).toMatchObject({
+      kind: "item",
+      id: "wake:t2",
+      action: "thread.wake",
+      project: "s1",
+    })
+    const asks = { ...t2, listed: { ...t2.listed, mark: "asking" as const } }
+    expect(
+      actsOf(asks, sources).map((act) => act.title),
+      "one that asks is answered first"
+    ).toEqual(["Open", "Open beside"])
   })
 
   test("Tab on New Thread lists what its source says: each Harness", () => {

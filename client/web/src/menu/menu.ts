@@ -16,10 +16,8 @@ import type {
 import { waits } from "@banda/ui/components/banda-mark"
 import { type Key, keyLabel, keyText } from "@banda/ui/lib/keys"
 import type { Listed, Lists } from "@banda/ui/pane"
-import type { Action, MenuRow } from "@banda/ui/module"
+import type { Action, ItemAction, MenuRow } from "@banda/ui/module"
 import type { Shell } from "../window/actions"
-import { archivable } from "../sidebar/archived"
-import { snoozeAct } from "../sidebar/snoozed"
 import { type Answer, ANSWERS } from "../trust/trust"
 
 /** Where the menu opens: its root, or its Actions, as the key sheet. */
@@ -58,13 +56,12 @@ export type Choice =
   | { kind: "found"; id: string; row: MenuRow }
   /** Arranges the sidebar by a preset (ADR 0008). */
   | { kind: "preset"; id: string; name: string; current: boolean }
-  /** Archives a Thread, or brings it back (ADR 0069). */
-  | { kind: "archive"; id: string; project: ProjectId; listed: Listed }
-  /** Opens the snooze's picker for a Thread, or wakes one that sleeps
-   * (ADR 0074). */
+  /** Runs one of a Thread's item actions on it, by its id (ADR 0087,
+   * decision 12): Snooze…, Wake now, Archive thread. */
   | {
-      kind: "snooze" | "wake"
+      kind: "item"
       id: string
+      action: string
       project: ProjectId
       listed: Listed
     }
@@ -360,8 +357,11 @@ export type Sources = {
   presets: { names: readonly string[]; current: string }
   /** Whether a Thread is archived now. */
   archived: (listed: Listed) => boolean
-  /** Whether a Thread sleeps now (ADR 0074). */
-  asleep: (listed: Listed) => boolean
+  /** The clock a Thread's snooze is read by (ADR 0074). */
+  now: number
+  /** A Thread's item actions, its App's and the sidebar list's (ADR
+   * 0087, decision 12): Tab lists the rows each offers the menu. */
+  items: (listed: Listed) => readonly ItemAction<Shell>[]
   /** What the modules' sources found for the words, in the modules'
    * order, each under its source's heading. */
   found: readonly Found[]
@@ -603,36 +603,34 @@ const BESIDE: Key = { code: "Enter", shift: true }
 
 /** What can be done with `row`, the first as `Enter` does it. */
 export function actsOf(row: Choice, sources: Sources): Act[] {
-  const { archived, asleep } = sources
   switch (row.kind) {
     case "thread": {
-      const acts: Act[] = [
+      const { project, listed } = row
+      const at = {
+        project: sources.projects.find((one) => one.id === project),
+        now: sources.now,
+        archived: sources.archived(listed),
+      }
+      // Each row an item action offers the menu, and is on now.
+      const items = sources.items(listed).flatMap((action): Act[] => {
+        const shown = action.offered?.includes("menu") && action.row(listed, at)
+        if (!shown || shown.off) return []
+        // Counted as chosen by what it does, as before item actions.
+        const id = `${action.does ?? action.id}:${listed.id}`
+        const act: Choice = {
+          kind: "item",
+          id,
+          action: action.id,
+          project,
+          listed,
+        }
+        return [{ title: shown.title, row: act }]
+      })
+      return [
         { title: "Open", key: OPEN, row },
         { title: "Open beside", key: BESIDE, row: { ...row, beside: true } },
+        ...items,
       ]
-      const snooze = snoozeAct(row.listed, asleep(row.listed))
-      if (snooze)
-        acts.push({
-          title: snooze === "wake" ? "Wake now" : "Snooze…",
-          row: {
-            kind: snooze,
-            id: `${snooze}:${row.listed.id}`,
-            project: row.project,
-            listed: row.listed,
-          },
-        })
-      const now = archived(row.listed)
-      if (now || archivable(row.listed))
-        acts.push({
-          title: now ? "Unarchive thread" : "Archive thread",
-          row: {
-            kind: "archive",
-            id: `archive:${row.listed.id}`,
-            project: row.project,
-            listed: row.listed,
-          },
-        })
-      return acts
     }
     case "project":
       return [

@@ -4,26 +4,14 @@
  * clock, and whether its Person has seen it wake is this window's mark, as
  * "seen" is (ADR 0005, decision 8).
  */
-import { useMemo } from "react"
+import { useEffect, useMemo } from "react"
 import { kept } from "@banda/ui/lib/kept"
 import type { ProjectId } from "@banda/contract"
+import type { HereStore } from "@banda/ui/here"
+import type { Readable } from "@banda/ui/lib/store"
 import type { Args } from "@banda/ui/module"
 import { asleep, type Listed, type Lists, wokeOf } from "@banda/ui/pane"
 import { useIsArchived } from "./archived"
-
-/** Whether the Person may snooze `listed`: it does not ask. */
-export function snoozable(listed: Listed): boolean {
-  return listed.mark !== "asking"
-}
-
-/** What a menu offers for `listed`: waking it while it sleeps, snoozing
- * it when it may be, or nothing. */
-export function snoozeAct(
-  listed: Listed,
-  sleeps: boolean
-): "snooze" | "wake" | undefined {
-  return sleeps ? "wake" : snoozable(listed) ? "snooze" : undefined
-}
 
 /** When `listed` woke from its snooze by itself, at `now`, if it did. */
 export function wokeAt(listed: Listed, now: number): number | undefined {
@@ -43,6 +31,25 @@ export function seeWoke(listed: Listed) {
   const at = listed.snooze?.at
   if (at === undefined || wokeAt(listed, Date.now()) === undefined) return
   if (seen.read()[listed.id] !== at) seen.put(listed.id, at)
+}
+
+/** Sees the waking of the Thread the Pane in focus shows, as Here says
+ * it: now, as the focus moves, and as it wakes while looked at. */
+export function useSeeWoke(here: HereStore, items: Readable<Lists>): void {
+  useEffect(() => {
+    const see = () => {
+      const { pane } = here.get()
+      const listed =
+        pane?.subject &&
+        items.get()[pane.project]?.find((one) => one.id === pane.subject)
+      if (listed) seeWoke(listed)
+    }
+    see()
+    const stops = [here.subscribe(see), items.subscribe(see)]
+    return () => {
+      for (const stop of stops) stop()
+    }
+  }, [here, items])
 }
 
 /** When the first Thread of `lists` that sleeps at `now` wakes by its

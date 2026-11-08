@@ -385,6 +385,11 @@ export function asleep(listed: Listed, now: number): boolean {
   return sleeps(listed.snooze, now)
 }
 
+/** Whether the Person may snooze `listed`: it does not ask (ADR 0074). */
+export function snoozable(listed: Listed): boolean {
+  return listed.mark !== "asking"
+}
+
 /** The things in the lists that call their Person now. One snoozed calls
  * no one while it sleeps (ADR 0074). */
 export function callsOf(lists: Lists, now = Date.now()): Call[] {
