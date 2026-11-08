@@ -6,7 +6,7 @@ use banda_kernel::{
     AgentId, Caller, Code, CommandId, Kernel, Participant, PersonId, ProjectId, Refusal,
 };
 use banda_workspaces::Workspaces;
-use banda_workspaces::model::{ColumnId, PaneId, WorkspaceId};
+use banda_workspaces::model::{ColumnId, PaneId, Seed, WorkspaceId};
 use serde_json::{Value, json};
 use std::path::Path;
 use std::sync::Arc;
@@ -28,10 +28,19 @@ impl Machine {
     }
 
     async fn command(&self, method: &str, params: Value) -> Result<Value, Refusal> {
+        self.command_as(CommandId::new(), method, params).await
+    }
+
+    /// A command the Person sends under the ID `command`.
+    async fn command_as(
+        &self,
+        command: CommandId,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, Refusal> {
         let person = Participant::Person(self.owner);
-        let command = Some(CommandId::new());
         self.kernel
-            .call(person, method, None, command, params)
+            .call(person, method, None, Some(command), params)
             .await
     }
 
@@ -43,13 +52,25 @@ impl Machine {
         method: &str,
         params: Value,
     ) -> Result<Value, Refusal> {
+        self.agent_as(CommandId::new(), agent, project, method, params)
+            .await
+    }
+
+    /// As `agent`, under the ID `command`.
+    async fn agent_as(
+        &self,
+        command: CommandId,
+        agent: AgentId,
+        project: ProjectId,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, Refusal> {
         let caller = Caller {
             participant: Participant::Agent(agent),
             only: Some(project),
         };
-        let command = Some(CommandId::new());
         self.kernel
-            .call(caller, method, None, command, params)
+            .call(caller, method, None, Some(command), params)
             .await
     }
 
@@ -590,4 +611,145 @@ async fn a_pane_opened_grouped_is_a_group_from_its_opening_only() {
     machine.command("workspaces.regroup", out).await.unwrap();
     machine.command("workspaces.open", open).await.unwrap();
     assert_eq!(column(&machine.list().await)["group"], Value::Null);
+}
+
+/// The seed of the command sent under `command`.
+fn seed(command: CommandId) -> Seed {
+    Seed::of(&command.to_string())
+}
+
+#[tokio::test]
+async fn a_panes_id_comes_from_the_command_that_opens_it() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let work = machine.project("Work").await;
+    let page = json!({ "project": work, "kind": "browser.browser", "args": { "url": "a" } });
+
+    // The window's: the Pane, and the empty workspace under it.
+    let first = CommandId::new();
+    let opened = machine
+        .command_as(first, "workspaces.open", page.clone())
+        .await
+        .unwrap();
+    assert_eq!(opened["pane"], json!(seed(first).pane()));
+    let arranged = machine.list().await;
+    assert_eq!(arranged["workspaces"][1]["id"], json!(seed(first).bottom()));
+    // Opened again, under another command, it is another Pane.
+    let again = CommandId::new();
+    let mut twice = page;
+    twice["again"] = json!(true);
+    let other = machine
+        .command_as(again, "workspaces.open", twice)
+        .await
+        .unwrap();
+    assert_eq!(other["pane"], json!(seed(again).pane()));
+    assert_ne!(other["pane"], opened["pane"]);
+
+    // An Agent's, as its tool sends it.
+    let agent = AgentId::new();
+    let asked = CommandId::new();
+    let thread = json!({ "thread": uuid::Uuid::now_v7() });
+    let by_agent = machine
+        .agent_as(
+            asked,
+            agent,
+            work,
+            "workspaces.open_pane",
+            json!({ "kind": "agents.thread", "args": thread }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(by_agent["pane"], json!(seed(asked).pane()));
+}
+
+#[tokio::test]
+async fn a_command_sent_again_answers_as_the_first_and_makes_nothing_twice() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let open = json!({
+        "project": ProjectId::new(),
+        "kind": "terminal.terminal",
+        "args": {},
+        "again": true,
+    });
+    let command = CommandId::new();
+    let first = machine
+        .command_as(command, "workspaces.open", open.clone())
+        .await
+        .unwrap();
+    let arranged = machine.list().await;
+    let again = machine
+        .command_as(command, "workspaces.open", open)
+        .await
+        .unwrap();
+    assert_eq!(again, first);
+    assert_eq!(machine.list().await, arranged);
+    assert_eq!(panes(&arranged["workspaces"]).len(), 1);
+    assert_eq!(machine.events().await.len(), 1);
+}
+
+#[tokio::test]
+async fn a_command_whose_ids_are_taken_is_refused_and_changes_nothing() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let project = ProjectId::new();
+    // Past its receipt, what a command made is still on the workspaces:
+    // here a window's arrangement holds it.
+    let command = CommandId::new();
+    let window = json!({ "workspaces": [{
+        "id": WorkspaceId::new(),
+        "columns": [{ "id": ColumnId::new(), "panes": [
+            { "id": seed(command).pane(), "project": project, "kind": "a.a", "args": {} }
+        ] }]
+    }] });
+    machine.command("workspaces.take", window).await.unwrap();
+    let arranged = machine.list().await;
+    let said = machine.events().await.len();
+
+    let open = json!({ "project": project, "kind": "b.b", "args": {} });
+    let refused = machine
+        .command_as(command, "workspaces.open", open)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Conflict);
+    assert_eq!(machine.list().await, arranged);
+    assert_eq!(machine.events().await.len(), said);
+}
+
+#[tokio::test]
+async fn ids_kept_before_go_on_working() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let project = ProjectId::new();
+    // IDs made before they came from commands: UUIDv7s.
+    let (workspace, column) = (WorkspaceId::new(), ColumnId::new());
+    let (one, two) = (PaneId::new(), PaneId::new());
+    let pane = |id: PaneId, n: u32| json!({ "id": id, "project": project, "kind": "a.a", "args": { "n": n } });
+    let window = json!({ "workspaces": [{
+        "id": workspace,
+        "columns": [{ "id": column, "panes": [pane(one, 1), pane(two, 2)] }]
+    }] });
+    machine.command("workspaces.take", window).await.unwrap();
+
+    // A Pane moves by its ID, a column takes a width by its, and the
+    // Pane that moved out, in a column of a derived ID, closes by its.
+    let right = json!({ "pane": two, "place": { "to": "beside", "pane": one, "side": "right" } });
+    machine
+        .command("workspaces.move_pane", right)
+        .await
+        .unwrap();
+    let size = json!({ "column": column, "width": "1/3" });
+    machine.command("workspaces.size", size).await.unwrap();
+    machine
+        .command("workspaces.close", json!({ "pane": two }))
+        .await
+        .unwrap();
+    let arranged = machine.list().await;
+    let kept = &arranged["workspaces"][0];
+    assert_eq!(kept["id"], json!(workspace));
+    assert_eq!(kept["columns"][0]["id"], json!(column));
+    assert_eq!(kept["columns"][0]["width"], "1/3");
+    let shown = panes(&arranged["workspaces"]);
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0]["id"], json!(one));
 }

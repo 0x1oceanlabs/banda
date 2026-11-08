@@ -205,7 +205,11 @@ settles.
       `:343`, `:365`), so a predicted Pane would come back with another
       id and remount. Placements are the exception: `workspaces.place`
       carries the `show.requested@1` event, and the Pane's id is derived
-      from it, so several clients place it once (ADR 0082 d15).
+      from it, so several clients place it once (ADR 0082 d15). Each is
+      derived from the command's CommandId by what it names (`Seed`,
+      `platform/workspaces/engine/src/model.rs`), so the command carries
+      them in its ID and a command sent again names the same. (Amended in
+      T-ids.)
     - A parity test replays golden traces from the Rust model through the
       TypeScript one.
     - Then the client draws its prediction at once, sends intents in

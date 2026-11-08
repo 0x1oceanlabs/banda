@@ -17,7 +17,9 @@
 //!
 //! Every change is a function of the arrangement, so plain tests cover the
 //! rules. A refused change may leave it half done: the module keeps it
-//! only when the change is done.
+//! only when the change is done. Every ID a change makes comes from its
+//! command's `Seed`, so the client that sends it knows the IDs before the
+//! answer.
 
 use banda_kernel::{AgentId, ProjectId, Refusal, Wall};
 use banda_look::columns::{Display, share};
@@ -25,6 +27,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
+use uuid::Uuid;
 
 banda_kernel::id!(
     /// A workspace's ID.
@@ -46,6 +49,87 @@ banda_kernel::id!(
 
 /// The workspaces from the top down.
 pub type Arrangement = Vec<Workspace>;
+
+/// The namespace of the IDs a seed names: any UUID, fixed for good, as a
+/// derived ID must come out the same in every version and on every client.
+const MADE: Uuid = Uuid::from_u128(0x63bd_d961_aad0_4575_bfc1_5f1d_3529_69ad);
+
+/// Where the IDs of what one command makes come from (ADR 0088, decision
+/// 11). A command's seed is its CommandId, a placement's its event's ID
+/// (ADR 0082, decision 15), so the client that sends it knows them before
+/// the answer, two clients never make the same, and several clients that
+/// place one event make one Pane. Each ID is named by what it is, which a
+/// command makes at most once of each: an ID does not move when the
+/// command makes more or less than its client foresaw. The same as
+/// `seeded` in `@banda/contract/workspaces`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Seed(Uuid);
+
+impl Seed {
+    /// The seed of a command or an event, by its ID as text: lowercase,
+    /// with hyphens, as a UUID prints.
+    pub fn of(id: &str) -> Seed {
+        Seed(Uuid::new_v5(&MADE, id.as_bytes()))
+    }
+
+    fn made(&self, what: &str) -> Uuid {
+        Uuid::new_v5(&self.0, what.as_bytes())
+    }
+
+    /// The new Pane's.
+    pub fn pane(&self) -> PaneId {
+        PaneId(self.made("pane"))
+    }
+
+    /// The new column's: the new Pane's, or the one a Pane takes as it
+    /// leaves a stack.
+    pub fn column(&self) -> ColumnId {
+        ColumnId(self.made("column"))
+    }
+
+    /// The new Group's.
+    pub fn group(&self) -> GroupId {
+        GroupId(self.made("group"))
+    }
+
+    /// The workspace a Pane dropped between two makes.
+    pub fn workspace(&self) -> WorkspaceId {
+        WorkspaceId(self.made("workspace"))
+    }
+
+    /// The new empty workspace under the last.
+    pub fn bottom(&self) -> WorkspaceId {
+        WorkspaceId(self.made("bottom"))
+    }
+
+    /// Refuses a seed whose IDs the workspaces hold: its command ran
+    /// before, past the receipt that would have answered it, and what it
+    /// made is still there.
+    pub fn unused(&self, list: &Arrangement) -> Result<(), Refusal> {
+        let made = [
+            self.pane().0,
+            self.column().0,
+            self.group().0,
+            self.workspace().0,
+            self.bottom().0,
+        ];
+        let held = |id: Uuid| made.contains(&id);
+        let ran = list.iter().any(|workspace| {
+            held(workspace.id.0)
+                || workspace.columns.iter().any(|column| {
+                    held(column.id.0)
+                        || column.group.is_some_and(|group| held(group.0))
+                        || column.panes.iter().any(|pane| held(pane.id.0))
+                })
+        });
+        if ran {
+            return Err(Refusal::conflict(
+                "This command ran before: the workspaces hold what it made.",
+            ));
+        }
+        Ok(())
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export_to = "workspaces/")]
@@ -225,12 +309,17 @@ pub enum Side {
 
 /// The first arrangement: one empty workspace.
 pub fn start() -> Arrangement {
-    vec![blank()]
+    vec![blank(WorkspaceId::new())]
 }
 
-fn blank() -> Workspace {
+/// An arrangement of one empty workspace, as a command makes it.
+pub fn start_from(seed: &Seed) -> Arrangement {
+    vec![blank(seed.bottom())]
+}
+
+fn blank(id: WorkspaceId) -> Workspace {
     Workspace {
-        id: WorkspaceId::new(),
+        id,
         columns: Vec::new(),
         filled: None,
         project: None,
@@ -314,21 +403,50 @@ pub fn showing_asked<'a>(list: &'a Arrangement, asked: &Shown) -> Option<&'a Pan
     })
 }
 
+/// A Pane to open: what it shows, and how.
+pub struct Opening {
+    pub shown: Shown,
+    /// Where it goes; left out, as `open` says.
+    pub place: Option<Place>,
+    /// The Pane it shows in place of, which leaves.
+    pub instead: Option<PaneId>,
+    /// A new column's width; left out, the look's.
+    pub width: Option<String>,
+    /// A new Pane even when one shows the same.
+    pub again: bool,
+    /// The Agent that opens a new one.
+    pub by: Option<AgentId>,
+}
+
+impl Opening {
+    /// `shown`, opened with nothing else said.
+    pub fn of(shown: Shown) -> Opening {
+        Opening {
+            shown,
+            place: None,
+            instead: None,
+            width: None,
+            again: false,
+            by: None,
+        }
+    }
+}
+
 /// Shows a Pane at `place`, or `instead` of another, which leaves; and
 /// names it. One the workspaces show already stays where it is, and is
 /// named, unless it opens `again` or `instead`. Left with neither, it
 /// opens as a column on the right of the top workspace that shows a Pane
 /// of its Project, or else on the empty one at the bottom. `width` is a new
 /// column's; `by`, the Agent that opens a new one.
-pub fn open(
-    list: &mut Arrangement,
-    shown: Shown,
-    place: Option<Place>,
-    instead: Option<PaneId>,
-    width: Option<String>,
-    again: bool,
-    by: Option<AgentId>,
-) -> Result<PaneId, Refusal> {
+pub fn open(list: &mut Arrangement, opening: Opening, seed: &Seed) -> Result<PaneId, Refusal> {
+    let Opening {
+        shown,
+        place,
+        instead,
+        width,
+        again,
+        by,
+    } = opening;
     check_shown(&shown)?;
     check_width(width.as_deref())?;
     if place.is_some() && instead.is_some() {
@@ -340,7 +458,7 @@ pub fn open(
         return Ok(pane.id);
     }
     let pane = Pane {
-        id: PaneId::new(),
+        id: seed.pane(),
         shows: shown,
         by,
         height: None,
@@ -354,15 +472,21 @@ pub fn open(
             workspace: list[showing_project(list, pane.shows.project, |_| true)].id,
             index: usize::MAX,
         });
-        put(list, new_column(pane, width), &place, None)?;
+        put(
+            list,
+            new_column(pane, width, seed.column()),
+            &place,
+            None,
+            seed,
+        )?;
     }
-    normalize(list);
+    normalize(list, seed);
     Ok(id)
 }
 
-fn new_column(pane: Pane, width: Option<String>) -> Column {
+fn new_column(pane: Pane, width: Option<String>, id: ColumnId) -> Column {
     Column {
-        id: ColumnId::new(),
+        id,
         panes: vec![pane],
         width,
         full: false,
@@ -381,6 +505,7 @@ fn put(
     column: Column,
     place: &Place,
     grouped: Option<bool>,
+    seed: &Seed,
 ) -> Result<(), Refusal> {
     match *place {
         Place::Column { workspace, index } => {
@@ -415,7 +540,7 @@ fn put(
             }
         }
         Place::Workspace { index } => {
-            let mut workspace = blank();
+            let mut workspace = blank(seed.workspace());
             workspace.columns.push(column);
             list.insert(above_empty(list, index), workspace);
         }
@@ -436,12 +561,13 @@ fn put(
                     index: usize::MAX,
                 },
                 None,
+                seed,
             )?;
         }
         Place::Group { pane } => {
             let at = spot(list, pane)?;
             let columns = &mut list[at.workspace].columns;
-            let group = *columns[at.column].group.get_or_insert_with(GroupId::new);
+            let group = *columns[at.column].group.get_or_insert_with(|| seed.group());
             let next = at.column + 1;
             match columns.get_mut(next).filter(|c| c.group == Some(group)) {
                 Some(deck) => deck.panes.extend(column.panes),
@@ -472,10 +598,10 @@ fn showing_project(
 }
 
 /// Closes a Pane. Its column goes when it was the last there.
-pub fn close(list: &mut Arrangement, pane: PaneId) -> Result<(), Refusal> {
+pub fn close(list: &mut Arrangement, pane: PaneId, seed: &Seed) -> Result<(), Refusal> {
     let at = spot(list, pane)?;
     list[at.workspace].columns[at.column].panes.remove(at.pane);
-    normalize(list);
+    normalize(list, seed);
     Ok(())
 }
 
@@ -506,6 +632,7 @@ pub fn move_pane(
     pane: PaneId,
     place: &Place,
     grouped: Option<bool>,
+    seed: &Seed,
 ) -> Result<(), Refusal> {
     if matches!(*place, Place::Beside { pane: other, .. } if other == pane) {
         return Err(Refusal::invalid("A Pane moves beside another, not itself."));
@@ -540,11 +667,11 @@ pub fn move_pane(
         let group = own.group.filter(|_| beside);
         Column {
             group,
-            ..new_column(moving, None)
+            ..new_column(moving, None, seed.column())
         }
     };
-    put(list, column, place, grouped)?;
-    normalize(list);
+    put(list, column, place, grouped, seed)?;
+    normalize(list, seed);
     Ok(())
 }
 
@@ -562,11 +689,18 @@ pub fn move_column(
     column: ColumnId,
     workspace: WorkspaceId,
     index: usize,
+    seed: &Seed,
 ) -> Result<(), Refusal> {
     let (w, c) = column_at(list, column)?;
     let moving = list[w].columns.remove(c);
-    put(list, moving, &Place::Column { workspace, index }, None)?;
-    normalize(list);
+    put(
+        list,
+        moving,
+        &Place::Column { workspace, index },
+        None,
+        seed,
+    )?;
+    normalize(list, seed);
     Ok(())
 }
 
@@ -709,18 +843,18 @@ fn inside(columns: &[Column], at: usize) -> bool {
 
 /// Starts a Group of a column alone, as `Alt+G`, for others to join; one
 /// in a Group stays in it.
-pub fn group(list: &mut Arrangement, column: ColumnId) -> Result<(), Refusal> {
+pub fn group(list: &mut Arrangement, column: ColumnId, seed: &Seed) -> Result<(), Refusal> {
     column_mut(list, column)?
         .group
-        .get_or_insert_with(GroupId::new);
+        .get_or_insert_with(|| seed.group());
     Ok(())
 }
 
 /// Starts a Group of the column that shows `pane`, as `group` does: as a
 /// Thread opens (ADR 0065, decision 7).
-pub fn group_pane(list: &mut Arrangement, pane: PaneId) -> Result<(), Refusal> {
+pub fn group_pane(list: &mut Arrangement, pane: PaneId, seed: &Seed) -> Result<(), Refusal> {
     let at = spot(list, pane)?;
-    group(list, list[at.workspace].columns[at.column].id)
+    group(list, list[at.workspace].columns[at.column].id, seed)
 }
 
 /// A column in a Group leaves it `toward` that side, past its Group's
@@ -762,10 +896,11 @@ pub fn move_group(
     column: ColumnId,
     workspace: WorkspaceId,
     index: usize,
+    seed: &Seed,
 ) -> Result<(), Refusal> {
     let (w, c) = column_at(list, column)?;
     let Some(group) = list[w].columns[c].group else {
-        return move_column(list, column, workspace, index);
+        return move_column(list, column, workspace, index, seed);
     };
     let to = workspace_at(list, workspace)?;
     let group_run = run(&list[w].columns, c);
@@ -780,7 +915,7 @@ pub fn move_group(
         at = run(columns, at).end;
     }
     columns.splice(at..at, moving);
-    normalize(list);
+    normalize(list, seed);
     Ok(())
 }
 
@@ -802,9 +937,9 @@ pub fn tidy(list: &mut Arrangement, keep: Option<WorkspaceId>) {
     list.retain(|w| !w.columns.is_empty() || Some(w.id) == keep || Some(w.id) == last);
 }
 
-/// Puts a window's arrangement over the engine's (ADR 0025, decision 2).
-/// A Pane shown twice is kept the first time.
-pub fn take(list: &mut Arrangement, taken: Arrangement) -> Result<(), Refusal> {
+/// Puts a window's arrangement over the engine's (ADR 0025, decision 2),
+/// with the IDs it holds. A Pane shown twice is kept the first time.
+pub fn take(list: &mut Arrangement, taken: Arrangement, seed: &Seed) -> Result<(), Refusal> {
     let mut all: Arrangement = taken;
     all.append(list);
     let mut seen: Vec<Shown> = Vec::new();
@@ -837,7 +972,7 @@ pub fn take(list: &mut Arrangement, taken: Arrangement) -> Result<(), Refusal> {
             ));
         }
     }
-    normalize(&mut all);
+    normalize(&mut all, seed);
     // Of the empty workspaces, only the last stays.
     tidy(&mut all, None);
     *list = all;
@@ -853,7 +988,7 @@ fn above_empty(list: &Arrangement, index: usize) -> usize {
 /// Keeps the rules: a column with no Pane goes, the last workspace is an
 /// empty one, and a Group's columns stand side by side on one workspace:
 /// a column of a Group that stands apart from the rest of it leaves it.
-fn normalize(list: &mut Arrangement) {
+fn normalize(list: &mut Arrangement, seed: &Seed) {
     let mut groups = std::collections::HashSet::new();
     for workspace in list.iter_mut() {
         workspace.columns.retain(|c| !c.panes.is_empty());
@@ -874,7 +1009,7 @@ fn normalize(list: &mut Arrangement) {
         }
     }
     if list.last().is_none_or(|w| !w.columns.is_empty()) {
-        list.push(blank());
+        list.push(blank(seed.bottom()));
     }
 }
 
@@ -915,6 +1050,11 @@ fn check_share(value: Option<&str>, what: &str, of: &str) -> Result<(), Refusal>
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// A new command's seed.
+    fn seed() -> Seed {
+        Seed::of(&Uuid::now_v7().to_string())
+    }
 
     #[test]
     fn a_turn_s_changes_kept_from_before_open_as_the_diff_on_that_turn() {
@@ -982,7 +1122,15 @@ mod tests {
     const EMPTY: Vec<Vec<u64>> = Vec::new();
 
     fn opened(list: &mut Arrangement, shown: Shown, place: Option<Place>) -> PaneId {
-        open(list, shown, place, None, None, false, None).unwrap()
+        open(
+            list,
+            Opening {
+                place,
+                ..Opening::of(shown)
+            },
+            &seed(),
+        )
+        .unwrap()
     }
 
     fn beside(pane: PaneId, side: Side) -> Option<Place> {
@@ -1009,7 +1157,14 @@ mod tests {
         assert_eq!(height_of(&list, one), None);
 
         // Moved to a column of its own, it leaves its height behind.
-        move_pane(&mut list, three, &beside(one, Side::Right).unwrap(), None).unwrap();
+        move_pane(
+            &mut list,
+            three,
+            &beside(one, Side::Right).unwrap(),
+            None,
+            &seed(),
+        )
+        .unwrap();
         assert_eq!(height_of(&list, three), None);
         let column = list[0].columns[0].id;
         even(&mut list, column).unwrap();
@@ -1077,12 +1232,11 @@ mod tests {
         );
         open(
             &mut list,
-            shown(work, "a.a", 6),
-            None,
-            Some(one),
-            None,
-            false,
-            None,
+            Opening {
+                instead: Some(one),
+                ..Opening::of(shown(work, "a.a", 6))
+            },
+            &seed(),
         )
         .unwrap();
         assert_eq!(
@@ -1091,12 +1245,12 @@ mod tests {
         );
         let both = open(
             &mut list,
-            shown(work, "a.a", 7),
-            beside(one, Side::Left),
-            Some(one),
-            None,
-            false,
-            None,
+            Opening {
+                place: beside(one, Side::Left),
+                instead: Some(one),
+                ..Opening::of(shown(work, "a.a", 7))
+            },
+            &seed(),
         );
         assert!(both.is_err());
     }
@@ -1109,12 +1263,11 @@ mod tests {
         assert_eq!(opened(&mut list, shown(work, "a.a", 1), None), one);
         let two = open(
             &mut list,
-            shown(work, "a.a", 1),
-            None,
-            None,
-            None,
-            true,
-            None,
+            Opening {
+                again: true,
+                ..Opening::of(shown(work, "a.a", 1))
+            },
+            &seed(),
         )
         .unwrap();
         assert_ne!(two, one);
@@ -1127,44 +1280,31 @@ mod tests {
         let work = ProjectId::new();
         open(
             &mut list,
-            shown(work, "a.a", 1),
-            None,
-            None,
-            Some("1/3".into()),
-            false,
-            None,
+            Opening {
+                width: Some("1/3".into()),
+                ..Opening::of(shown(work, "a.a", 1))
+            },
+            &seed(),
         )
         .unwrap();
         assert_eq!(list[0].columns[0].width.as_deref(), Some("1/3"));
         for bad in ["0", "3/2", "half", "1/0"] {
             let refused = open(
                 &mut list,
-                shown(work, "a.a", 2),
-                None,
-                None,
-                Some(bad.into()),
-                false,
-                None,
+                Opening {
+                    width: Some(bad.into()),
+                    ..Opening::of(shown(work, "a.a", 2))
+                },
+                &seed(),
             );
             assert!(refused.is_err(), "{bad}");
         }
-        assert!(
-            open(
-                &mut list,
-                shown(work, "a", 2),
-                None,
-                None,
-                None,
-                false,
-                None
-            )
-            .is_err()
-        );
+        assert!(open(&mut list, Opening::of(shown(work, "a", 2)), &seed()).is_err());
         let listed = Shown {
             args: json!([1]),
             ..shown(work, "a.a", 2)
         };
-        assert!(open(&mut list, listed, None, None, None, false, None).is_err());
+        assert!(open(&mut list, Opening::of(listed), &seed()).is_err());
     }
 
     #[test]
@@ -1173,9 +1313,9 @@ mod tests {
         let work = ProjectId::new();
         let one = opened(&mut list, shown(work, "a.a", 1), None);
         let two = opened(&mut list, shown(work, "a.a", 2), beside(one, Side::Right));
-        close(&mut list, one).unwrap();
+        close(&mut list, one, &seed()).unwrap();
         assert_eq!(layout(&list), [vec![vec![2]], vec![]]);
-        close(&mut list, two).unwrap();
+        close(&mut list, two, &seed()).unwrap();
         // It stays while the Person looks at it; only the window knows.
         assert_eq!(layout(&list), [EMPTY, EMPTY]);
         let looked_at = list[0].id;
@@ -1186,7 +1326,7 @@ mod tests {
         // The last stays.
         tidy(&mut list, None);
         assert_eq!(list.len(), 1);
-        assert!(close(&mut list, two).is_err());
+        assert!(close(&mut list, two, &seed()).is_err());
     }
 
     #[test]
@@ -1199,7 +1339,14 @@ mod tests {
         let first = list[0].columns[0].id;
         size(&mut list, first, Some("1/3".into())).unwrap();
         // Alone: the column goes along, with its width.
-        move_pane(&mut list, one, &beside(three, Side::Right).unwrap(), None).unwrap();
+        move_pane(
+            &mut list,
+            one,
+            &beside(three, Side::Right).unwrap(),
+            None,
+            &seed(),
+        )
+        .unwrap();
         assert_eq!(layout(&list), [vec![vec![2, 3], vec![1]], vec![]]);
         assert_eq!(list[0].columns[1].id, first);
         assert_eq!(list[0].columns[1].width.as_deref(), Some("1/3"));
@@ -1213,15 +1360,30 @@ mod tests {
                 index: 0,
             },
             None,
+            &seed(),
         )
         .unwrap();
         assert_eq!(layout(&list), [vec![vec![3], vec![2], vec![1]], vec![]]);
         // Into a column's stack, at an index.
         let column = list[0].columns[1].id;
-        move_pane(&mut list, one, &Place::Stack { column, index: 0 }, None).unwrap();
+        move_pane(
+            &mut list,
+            one,
+            &Place::Stack { column, index: 0 },
+            None,
+            &seed(),
+        )
+        .unwrap();
         assert_eq!(layout(&list), [vec![vec![3], vec![1, 2]], vec![]]);
         // Down its own stack: counted as if it had left.
-        move_pane(&mut list, one, &Place::Stack { column, index: 1 }, None).unwrap();
+        move_pane(
+            &mut list,
+            one,
+            &Place::Stack { column, index: 1 },
+            None,
+            &seed(),
+        )
+        .unwrap();
         assert_eq!(layout(&list), [vec![vec![3], vec![2, 1]], vec![]]);
         // Alone, into its own column: it stays.
         let alone = list[0].columns[0].id;
@@ -1233,10 +1395,20 @@ mod tests {
                 index: 5,
             },
             None,
+            &seed(),
         )
         .unwrap();
         assert_eq!(layout(&list), [vec![vec![3], vec![2, 1]], vec![]]);
-        assert!(move_pane(&mut list, one, &beside(one, Side::Right).unwrap(), None).is_err());
+        assert!(
+            move_pane(
+                &mut list,
+                one,
+                &beside(one, Side::Right).unwrap(),
+                None,
+                &seed()
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -1249,7 +1421,7 @@ mod tests {
             workspace: list[1].id,
             index: usize::MAX,
         };
-        move_pane(&mut list, one, &bottom, None).unwrap();
+        move_pane(&mut list, one, &bottom, None, &seed()).unwrap();
         assert_eq!(layout(&list), [vec![vec![2]], vec![vec![1]], vec![]]);
     }
 
@@ -1263,17 +1435,38 @@ mod tests {
         let first = list[0].columns[0].id;
         size(&mut list, first, Some("1/3".into())).unwrap();
         // Alone: its column goes along, with its width.
-        move_pane(&mut list, one, &Place::Workspace { index: 0 }, None).unwrap();
+        move_pane(
+            &mut list,
+            one,
+            &Place::Workspace { index: 0 },
+            None,
+            &seed(),
+        )
+        .unwrap();
         assert_eq!(layout(&list), [vec![vec![1]], vec![vec![2, 3]], vec![]]);
         assert_eq!(list[0].columns[0].width.as_deref(), Some("1/3"));
         // From a stack, between two.
-        move_pane(&mut list, three, &Place::Workspace { index: 1 }, None).unwrap();
+        move_pane(
+            &mut list,
+            three,
+            &Place::Workspace { index: 1 },
+            None,
+            &seed(),
+        )
+        .unwrap();
         assert_eq!(
             layout(&list),
             [vec![vec![1]], vec![vec![3]], vec![vec![2]], vec![]]
         );
         // Past the last: over the empty one at the bottom, which stays.
-        move_pane(&mut list, one, &Place::Workspace { index: 9 }, None).unwrap();
+        move_pane(
+            &mut list,
+            one,
+            &Place::Workspace { index: 9 },
+            None,
+            &seed(),
+        )
+        .unwrap();
         assert_eq!(
             layout(&list),
             [EMPTY, vec![vec![3]], vec![vec![2]], vec![vec![1]], vec![]]
@@ -1288,10 +1481,10 @@ mod tests {
         opened(&mut list, shown(work, "a.a", 2), beside(one, Side::Right));
         opened(&mut list, shown(work, "a.a", 3), beside(one, Side::Below));
         let (first, workspace) = (list[0].columns[0].id, list[0].id);
-        move_column(&mut list, first, workspace, 1).unwrap();
+        move_column(&mut list, first, workspace, 1, &seed()).unwrap();
         assert_eq!(layout(&list), [vec![vec![2], vec![1, 3]], vec![]]);
         let bottom = list[1].id;
-        move_column(&mut list, first, bottom, 0).unwrap();
+        move_column(&mut list, first, bottom, 0, &seed()).unwrap();
         assert_eq!(layout(&list), [vec![vec![2]], vec![vec![1, 3]], vec![]]);
     }
 
@@ -1354,9 +1547,9 @@ mod tests {
     #[test]
     fn a_group_starts_alone_then_columns_join_it_and_leave_it_either_way() {
         let (mut list, c) = row(4);
-        group(&mut list, c[1]).unwrap();
+        group(&mut list, c[1], &seed()).unwrap();
         // Again, it stays in the one it is in.
-        group(&mut list, c[1]).unwrap();
+        group(&mut list, c[1], &seed()).unwrap();
         assert_eq!(grouping(&list)[0], [0, 1, 0, 0]);
         regroup(&mut list, c[2], Toward::Left).unwrap();
         regroup(&mut list, c[0], Toward::Right).unwrap();
@@ -1376,20 +1569,20 @@ mod tests {
     fn a_group_moves_whole_and_never_into_another() {
         let (mut list, c) = row(5);
         let here = list[0].id;
-        group(&mut list, c[0]).unwrap();
+        group(&mut list, c[0], &seed()).unwrap();
         regroup(&mut list, c[1], Toward::Left).unwrap();
-        group(&mut list, c[3]).unwrap();
+        group(&mut list, c[3], &seed()).unwrap();
         regroup(&mut list, c[4], Toward::Left).unwrap();
         // Past the column after it.
-        move_group(&mut list, c[1], here, 1).unwrap();
+        move_group(&mut list, c[1], here, 1, &seed()).unwrap();
         assert_eq!(layout(&list)[0], [[3], [1], [2], [4], [5]]);
         // Into the other Group's middle is past it.
-        move_group(&mut list, c[0], here, 2).unwrap();
+        move_group(&mut list, c[0], here, 2, &seed()).unwrap();
         assert_eq!(layout(&list)[0], [[3], [4], [5], [1], [2]]);
         assert_eq!(grouping(&list)[0], [0, 1, 1, 2, 2]);
         // To another workspace, all of it.
         let below = list[1].id;
-        move_group(&mut list, c[4], below, 0).unwrap();
+        move_group(&mut list, c[4], below, 0, &seed()).unwrap();
         assert_eq!(
             layout(&list),
             [
@@ -1404,13 +1597,13 @@ mod tests {
     fn a_column_put_inside_a_group_joins_it_and_one_moved_away_leaves() {
         let (mut list, c) = row(4);
         let here = list[0].id;
-        group(&mut list, c[0]).unwrap();
+        group(&mut list, c[0], &seed()).unwrap();
         regroup(&mut list, c[1], Toward::Left).unwrap();
         regroup(&mut list, c[2], Toward::Left).unwrap();
         // Moved inside, it stays; moved past the Group's edge, it leaves.
-        move_column(&mut list, c[2], here, 0).unwrap();
+        move_column(&mut list, c[2], here, 0, &seed()).unwrap();
         assert_eq!(grouping(&list)[0], [1, 1, 1, 0]);
-        move_column(&mut list, c[0], here, 3).unwrap();
+        move_column(&mut list, c[0], here, 3, &seed()).unwrap();
         assert_eq!(layout(&list)[0], [[3], [2], [4], [1]]);
         assert_eq!(grouping(&list)[0], [1, 1, 0, 0]);
         // Between two of a Group's columns, a new one joins it.
@@ -1436,21 +1629,22 @@ mod tests {
                 index: 2,
             },
             None,
+            &seed(),
         )
         .unwrap();
         assert_eq!(grouping(&list)[0], [1, 1, 1, 1, 0, 0]);
         // A Group alone keeps a column that moves on its own.
         let (mut list, c) = row(2);
         let here = list[0].id;
-        group(&mut list, c[0]).unwrap();
-        move_column(&mut list, c[0], here, 1).unwrap();
+        group(&mut list, c[0], &seed()).unwrap();
+        move_column(&mut list, c[0], here, 1, &seed()).unwrap();
         assert_eq!(grouping(&list)[0], [0, 1]);
     }
 
     #[test]
     fn at_a_groups_end_the_mouse_says_inside_it_or_out() {
         let (mut list, c) = row(4);
-        group(&mut list, c[0]).unwrap();
+        group(&mut list, c[0], &seed()).unwrap();
         regroup(&mut list, c[1], Toward::Left).unwrap();
         let pane = |list: &Arrangement, n: usize| list[0].columns[n].panes[0].id;
         let (last, lone) = (pane(&list, 1), pane(&list, 3));
@@ -1458,11 +1652,11 @@ mod tests {
             pane: last,
             side: Side::Right,
         };
-        move_pane(&mut list, lone, &right, None).unwrap();
+        move_pane(&mut list, lone, &right, None, &seed()).unwrap();
         assert_eq!(grouping(&list)[0], [1, 1, 0, 0]);
-        move_pane(&mut list, lone, &right, Some(true)).unwrap();
+        move_pane(&mut list, lone, &right, Some(true), &seed()).unwrap();
         assert_eq!(grouping(&list)[0], [1, 1, 1, 0]);
-        move_pane(&mut list, lone, &right, Some(false)).unwrap();
+        move_pane(&mut list, lone, &right, Some(false), &seed()).unwrap();
         assert_eq!(grouping(&list)[0], [1, 1, 0, 0]);
         // Between two of its columns, it is in the Group whatever it says.
         let first = pane(&list, 0);
@@ -1470,7 +1664,7 @@ mod tests {
             pane: first,
             side: Side::Right,
         };
-        move_pane(&mut list, lone, &between, Some(false)).unwrap();
+        move_pane(&mut list, lone, &between, Some(false), &seed()).unwrap();
         assert_eq!(grouping(&list)[0], [1, 1, 1, 0]);
     }
 
@@ -1498,7 +1692,7 @@ mod tests {
         assert_eq!(other[0].project, Some(work));
         // Emptied, it is no Project's place: the Project takes the empty one.
         let two = list[1].columns[0].panes[0].id;
-        close(&mut list, two).unwrap();
+        close(&mut list, two, &seed()).unwrap();
         tidy(&mut list, None);
         opened(&mut list, shown(home, "agents.thread", 4), on(home));
         assert_eq!(
@@ -1532,7 +1726,7 @@ mod tests {
             diff
         );
         let lone = list[0].columns[2].panes[0].id;
-        move_pane(&mut list, lone, &group, None).unwrap();
+        move_pane(&mut list, lone, &group, None, &seed()).unwrap();
         assert_eq!(layout(&list)[0], [vec![1], vec![3, 4, 2]]);
     }
 
@@ -1542,7 +1736,7 @@ mod tests {
         let work = ProjectId::new();
         let thread = |list: &mut Arrangement, n, place| {
             let pane = opened(list, shown(work, "agents.thread", n), place);
-            group_pane(list, pane).unwrap();
+            group_pane(list, pane, &seed()).unwrap();
             pane
         };
         let first = thread(&mut list, 1, Some(Place::Project { project: work }));
@@ -1568,8 +1762,22 @@ mod tests {
         regroup(&mut list, column, Toward::Right).unwrap();
         let three = list[0].columns[2].panes[0].id;
         assert_eq!(grouping(&list)[0], [1, 1, 0, 2]);
-        move_pane(&mut list, three, &Place::Project { project: work }, None).unwrap();
-        move_pane(&mut list, three, &Place::Workspace { index: 0 }, None).unwrap();
+        move_pane(
+            &mut list,
+            three,
+            &Place::Project { project: work },
+            None,
+            &seed(),
+        )
+        .unwrap();
+        move_pane(
+            &mut list,
+            three,
+            &Place::Workspace { index: 0 },
+            None,
+            &seed(),
+        )
+        .unwrap();
         assert_eq!(grouping(&list)[0], [0]);
         assert_eq!(layout(&list)[1], [vec![1], vec![2], vec![4]]);
         assert_eq!(list[1].columns[2].panes[0].id, fourth);
@@ -1579,14 +1787,14 @@ mod tests {
     fn a_group_fills_the_screen_until_a_width_is_given() {
         let (mut list, c) = row(3);
         assert!(fill(&mut list, c[0], true).is_err());
-        group(&mut list, c[0]).unwrap();
+        group(&mut list, c[0], &seed()).unwrap();
         regroup(&mut list, c[1], Toward::Left).unwrap();
         fill(&mut list, c[1], true).unwrap();
         let group = list[0].columns[0].group;
         assert_eq!(list[0].filled, group);
         // It goes with the Group to another workspace.
         let below = list[1].id;
-        move_group(&mut list, c[0], below, 0).unwrap();
+        move_group(&mut list, c[0], below, 0, &seed()).unwrap();
         assert_eq!((list[0].filled, list[1].filled), (None, group));
         // A width given ends it.
         size(&mut list, c[0], Some("1/3".into())).unwrap();
@@ -1601,7 +1809,7 @@ mod tests {
             column.group = Some(g);
         }
         list[0].columns[1].group = None;
-        normalize(&mut list);
+        normalize(&mut list, &seed());
         assert_eq!(grouping(&list)[0], [1, 0, 0]);
     }
 
@@ -1651,12 +1859,11 @@ mod tests {
         let agent = AgentId::new();
         let c = open(
             &mut list,
-            shown(mine, "a.a", 3),
-            None,
-            None,
-            None,
-            false,
-            Some(agent),
+            Opening {
+                by: Some(agent),
+                ..Opening::of(shown(mine, "a.a", 3))
+            },
+            &seed(),
         );
         assert_eq!(seen(&list, walled, c.unwrap()).unwrap().by, Some(agent));
     }
@@ -1702,7 +1909,7 @@ mod tests {
         let mut list = start();
         opened(&mut list, shown(work, "a.a", 2), None);
         opened(&mut list, shown(work, "a.a", 3), None);
-        take(&mut list, window.clone()).unwrap();
+        take(&mut list, window.clone(), &seed()).unwrap();
         // The second showings go, their columns with them, and of the
         // empty workspaces only the last stays.
         assert_eq!(layout(&list), [vec![vec![1, 2]], vec![vec![3]], vec![]]);
@@ -1714,6 +1921,130 @@ mod tests {
             column(vec![pane(2)]),
         ])];
         same[0].columns[1].id = same[0].columns[0].id;
-        assert!(take(&mut list, same).is_err());
+        assert!(take(&mut list, same, &seed()).is_err());
+    }
+
+    #[test]
+    fn a_seed_names_what_a_command_makes_the_same_for_good() {
+        // Fixed for good: a client works them out before the engine
+        // answers, as `seeded` in the contract does, and a command sent
+        // again names the same.
+        let command = "019a5b2e-3c4d-7e8f-9a0b-1c2d3e4f5a6b";
+        let made = |seed: Seed| {
+            [
+                seed.pane().to_string(),
+                seed.column().to_string(),
+                seed.group().to_string(),
+                seed.workspace().to_string(),
+                seed.bottom().to_string(),
+            ]
+        };
+        assert_eq!(
+            made(Seed::of(command)),
+            [
+                "c49cdec1-36c4-59c6-9215-554a09037c79",
+                "ef9bdcfe-a6cb-52bc-8e8e-ecf20571e3d3",
+                "261add3f-07a6-510a-b069-095879867c1b",
+                "5a8a51cf-67bf-5625-9d42-0e39763337a4",
+                "f0119e3e-3c94-5e7c-bb09-0c2d2d63349f",
+            ]
+        );
+        // Another command's are others.
+        let other = made(Seed::of("019a5b2e-3c4d-7e8f-9a0b-1c2d3e4f5a6c"));
+        assert!(other.iter().all(|id| !made(Seed::of(command)).contains(id)));
+    }
+
+    #[test]
+    fn what_a_command_makes_takes_its_seeds_ids() {
+        let work = ProjectId::new();
+        let group_of = |list: &Arrangement, pane| {
+            let at = spot(list, pane).unwrap();
+            list[at.workspace].columns[at.column].group
+        };
+        // A Pane opened, its column, and the empty workspace under it.
+        let mut list = start();
+        let first = seed();
+        let one = open(&mut list, Opening::of(shown(work, "a.a", 1)), &first).unwrap();
+        assert_eq!(one, first.pane());
+        assert_eq!(list[0].columns[0].id, first.column());
+        assert_eq!(list[1].id, first.bottom());
+        // A Pane that leaves a stack takes a new column.
+        let two = opened(&mut list, shown(work, "a.a", 2), beside(one, Side::Below));
+        let out = seed();
+        let right = beside(one, Side::Right).unwrap();
+        move_pane(&mut list, two, &right, None, &out).unwrap();
+        assert_eq!(list[0].columns[1].id, out.column());
+        // Dropped between workspaces, it makes one there; alone, it keeps
+        // its column.
+        let between = seed();
+        let top = Place::Workspace { index: 0 };
+        move_pane(&mut list, two, &top, None, &between).unwrap();
+        assert_eq!(list[0].id, between.workspace());
+        assert_eq!(list[0].columns[0].id, out.column());
+        // Into a Pane's Group, the Group its column starts.
+        let into = seed();
+        let three = Opening {
+            place: Some(Place::Group { pane: one }),
+            ..Opening::of(shown(work, "a.a", 3))
+        };
+        assert_eq!(open(&mut list, three, &into).unwrap(), into.pane());
+        assert_eq!(group_of(&list, one), Some(into.group()));
+        // Alt+G, and a Thread that opens as a Group.
+        let alone = list[0].columns[0].id;
+        let grouping = seed();
+        group(&mut list, alone, &grouping).unwrap();
+        assert_eq!(list[0].columns[0].group, Some(grouping.group()));
+        let thread = seed();
+        let four = open(
+            &mut list,
+            Opening::of(shown(work, "agents.thread", 4)),
+            &thread,
+        )
+        .unwrap();
+        group_pane(&mut list, four, &thread).unwrap();
+        assert_eq!(group_of(&list, four), Some(thread.group()));
+        // A column moved onto the empty workspace: a new one under it.
+        let bottom = list.last().unwrap().id;
+        let down = seed();
+        move_column(&mut list, alone, bottom, 0, &down).unwrap();
+        assert_eq!(list.last().unwrap().id, down.bottom());
+        // Workspaces brought back end in one with Panes: a new one under
+        // them.
+        let mut aside: Arrangement = (list.iter())
+            .filter(|w| !w.columns.is_empty())
+            .cloned()
+            .collect();
+        let back = seed();
+        take(&mut aside, start(), &back).unwrap();
+        assert_eq!(aside.last().unwrap().id, back.bottom());
+    }
+
+    #[test]
+    fn a_command_whose_ids_the_workspaces_hold_ran_before() {
+        let ran_before = |seed: Seed, list: &Arrangement| {
+            let refused = seed.unused(list).unwrap_err();
+            assert_eq!(refused.code, banda_kernel::Code::Conflict);
+        };
+        let mut list = start();
+        let opening = seed();
+        opening.unused(&list).unwrap();
+        let one = open(
+            &mut list,
+            Opening::of(shown(ProjectId::new(), "a.a", 1)),
+            &opening,
+        )
+        .unwrap();
+        ran_before(opening, &list);
+        // What it made is found wherever it is: a Group, a workspace.
+        let column = list[0].columns[0].id;
+        let grouping = seed();
+        group(&mut list, column, &grouping).unwrap();
+        ran_before(grouping, &list);
+        let moving = seed();
+        let top = Place::Workspace { index: 0 };
+        move_pane(&mut list, one, &top, None, &moving).unwrap();
+        ran_before(moving, &list);
+        // Another command's are free.
+        seed().unused(&list).unwrap();
     }
 }
