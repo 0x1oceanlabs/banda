@@ -71,7 +71,7 @@ impl Repositories {
 
     /// The one of a folder that is no repository yet.
     pub(crate) fn of_folder(&self, folder: &Path) -> Writes {
-        match folder.canonicalize() {
+        match dunce::canonicalize(folder) {
             Ok(top) => self.of(&top),
             Err(_) => self.of(folder),
         }

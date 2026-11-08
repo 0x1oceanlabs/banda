@@ -13,12 +13,21 @@
 //! a build from a checkout in `banda-local` ([`FOLDER`], ADR 0033). The root is theirs together. `BANDA_ROOT`, `BANDA_DATA`,
 //! `BANDA_STATE`, `BANDA_CONFIG` and `BANDA_CACHE` move each one, so a
 //! test or a trial window runs beside the real engine.
+//!
+//! On Windows the four are folders of Banda's folder in `%LOCALAPPDATA%`,
+//! `data`, `state`, `config` and `cache`, and none is in Roaming, which a
+//! company's roaming profile copies to other machines. The root is
+//! `%USERPROFILE%\Banda`. A variable moves a place there only within the
+//! Person's profile (`places/windows.rs`, ADR 0090, decision 3).
 
 use crate::Failure;
 use banda_kernel::{PersonId, api};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+
+#[cfg(windows)]
+mod windows;
 
 /// The engine listens on this machine only.
 pub const HOST: &str = "127.0.0.1";
@@ -119,24 +128,48 @@ pub const VARIABLES: [&str; 5] = [
 /// Whether `BANDA_STATE` names the state's place, as a test or a trial
 /// names its own engine's.
 pub fn state_named() -> bool {
-    std::env::var_os(STATE).is_some_and(|set| !set.is_empty())
+    named(STATE).is_some()
 }
 
 /// What the state's place is under when no variable moves it.
+#[cfg(not(windows))]
 pub fn state_base() -> Option<PathBuf> {
     dirs::state_dir().or_else(dirs::data_local_dir)
 }
 
 /// The state's place when no variable moves it.
 pub fn default_state() -> Option<PathBuf> {
-    state_base().map(|base| base.join(FOLDER))
+    let [_, state, ..] = defaults();
+    state
 }
 
-fn place(variable: &str, default: Option<PathBuf>, under: &str) -> Result<PathBuf, Failure> {
-    if let Some(set) = std::env::var_os(variable).filter(|v| !v.is_empty()) {
-        return Ok(PathBuf::from(set));
-    }
-    default.map(|base| base.join(under)).ok_or_else(|| {
+/// The data, state, config and cache places when no variable moves them:
+/// Banda's folder in each of the system's own, as XDG names them on Linux;
+/// on Windows a folder of each in Banda's folder in `%LOCALAPPDATA%`.
+fn defaults() -> [Option<PathBuf>; 4] {
+    #[cfg(windows)]
+    return dirs::data_local_dir().map_or_else(Default::default, |local| {
+        windows::defaults_in(&local, FOLDER).map(Some)
+    });
+    #[cfg(not(windows))]
+    [
+        dirs::data_dir(),
+        state_base(),
+        dirs::config_dir(),
+        dirs::cache_dir(),
+    ]
+    .map(|base| base.map(|base| base.join(FOLDER)))
+}
+
+/// The variable `variable`'s place, when it is set.
+fn named(variable: &str) -> Option<PathBuf> {
+    std::env::var_os(variable)
+        .filter(|set| !set.is_empty())
+        .map(PathBuf::from)
+}
+
+fn place(variable: &str, default: Option<PathBuf>) -> Result<PathBuf, Failure> {
+    named(variable).or(default).ok_or_else(|| {
         Failure::broken(format!(
             "Set {variable}: this system has no default place for it."
         ))
@@ -146,13 +179,17 @@ fn place(variable: &str, default: Option<PathBuf>, under: &str) -> Result<PathBu
 impl Places {
     pub fn from_env() -> Result<Places, Failure> {
         let [root, data, state, config, cache] = VARIABLES;
-        Ok(Places {
-            root: place(root, dirs::home_dir(), "Banda")?,
-            data: place(data, dirs::data_dir(), FOLDER)?,
-            state: place(state, state_base(), FOLDER)?,
-            config: place(config, dirs::config_dir(), FOLDER)?,
-            cache: place(cache, dirs::cache_dir(), FOLDER)?,
-        })
+        let [data_at, state_at, config_at, cache_at] = defaults();
+        let places = Places {
+            root: place(root, dirs::home_dir().map(|home| home.join("Banda")))?,
+            data: place(data, data_at)?,
+            state: place(state, state_at)?,
+            config: place(config, config_at)?,
+            cache: place(cache, cache_at)?,
+        };
+        #[cfg(windows)]
+        windows::in_the_profile(&places, |variable| named(variable).is_some())?;
+        Ok(places)
     }
 
     /// Every place under `base`, by its name: for tests.
@@ -284,5 +321,6 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let mut file = options.open(&temporary)?;
     file.write_all(bytes)?;
     file.sync_all()?;
-    std::fs::rename(temporary, path)
+    drop(file);
+    banda_kernel::host::rename(&temporary, path)
 }

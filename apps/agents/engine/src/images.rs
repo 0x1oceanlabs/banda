@@ -117,7 +117,7 @@ pub async fn write_whole(path: PathBuf, bytes: Vec<u8>) -> io::Result<()> {
         }
         let part = path.with_extension("part");
         std::fs::write(&part, bytes)?;
-        std::fs::rename(part, path)
+        banda_kernel::host::rename(&part, &path)
     })
     .await
 }

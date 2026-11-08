@@ -43,13 +43,13 @@
 //! that points it at another repository, as when the engine runs inside
 //! a git hook.
 
-use banda_kernel::Program;
+use banda_kernel::{Program, Started};
 use std::collections::BTreeSet;
 use std::ffi::{OsStr, OsString};
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use tokio::process::Command;
 
 /// What git would take from the engine's environment that points it at
@@ -139,16 +139,16 @@ const EVENTS: [&str; 28] = [
 ];
 
 /// What every bookkeeping git is configured with, whatever the
-/// repository says, besides its hook events: no hooks folder, as there is
-/// none at `/dev/null/<name>` on Linux or macOS; no file system monitor,
-/// by an empty value, as a git before 2.36 runs the program `false` names; no
+/// repository says, besides its hook events and its hooks folder
+/// ([`no_hooks`]): no file system monitor, by an empty value, as a git
+/// before 2.36 runs the program `false` names; no
 /// signature checked as a log reads; no external diff, which a diff asked
 /// for git's own patch skips and any other fails on; a submodule's change
 /// as its commits, not its diff, which runs in the submodule; no command
 /// that lists an alternate's refs; no submodule fetched, as each has
-/// config of its own; and no gc nor maintenance after it.
+/// config of its own; no gc nor maintenance after it; and [`LONG_PATHS`].
 const ALWAYS: [(&str, &str); 9] = [
-    ("core.hooksPath", "/dev/null"),
+    LONG_PATHS,
     ("core.fsmonitor", ""),
     ("log.showSignature", "false"),
     ("diff.external", ""),
@@ -158,6 +158,61 @@ const ALWAYS: [(&str, &str); 9] = [
     ("gc.auto", "0"),
     ("maintenance.auto", "false"),
 ];
+
+/// Paths longer than Windows' old limit of 260, as a deep `node_modules`
+/// has: Git for Windows takes none without it, and every other git ignores
+/// it. An act gets it on Windows alone.
+const LONG_PATHS: (&str, &str) = ("core.longpaths", "true");
+
+/// The hooks folder of a bookkeeping git, where it finds none: on Linux
+/// and macOS `/dev/null`, where no folder can be. Git for Windows reads
+/// that as `\dev\null` on the current drive, which anyone may make, so
+/// there it is an empty folder of Banda's own: the one the engine named as
+/// it started ([`no_hooks_in`]), in its state; else `banda-no-hooks` in
+/// the temporary folder, emptied as it is first named (ADR 0090, decision
+/// 3).
+#[cfg(not(windows))]
+fn no_hooks() -> io::Result<Vec<u8>> {
+    Ok(b"/dev/null".to_vec())
+}
+
+#[cfg(windows)]
+fn no_hooks() -> io::Result<Vec<u8>> {
+    let folder = match NO_HOOKS.get() {
+        Some(folder) => folder,
+        None => {
+            let folder = std::env::temp_dir().join("banda-no-hooks");
+            emptied(&folder)?;
+            NO_HOOKS.get_or_init(|| folder)
+        }
+    };
+    let text = folder.to_str().map(|text| text.as_bytes().to_vec());
+    text.ok_or_else(unreadable)
+}
+
+/// The empty folder [`no_hooks`] names on Windows.
+#[cfg(windows)]
+static NO_HOOKS: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Makes `folder` the hooks folder of every bookkeeping git on Windows,
+/// made there and emptied: the engine names one in its state as it
+/// starts, before any git.
+#[cfg(windows)]
+pub fn no_hooks_in(folder: &Path) -> io::Result<()> {
+    emptied(folder)?;
+    let _ = NO_HOOKS.set(folder.to_owned());
+    Ok(())
+}
+
+/// Makes `folder`, empty.
+#[cfg(windows)]
+fn emptied(folder: &Path) -> io::Result<()> {
+    match std::fs::remove_dir_all(folder) {
+        Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
+        _ => {}
+    }
+    std::fs::create_dir_all(folder)
+}
 
 /// What the config is read for first, by git's lowercase names: every
 /// filter driver, diff driver's text conversion and command, and hook it
@@ -191,6 +246,15 @@ where
         .map(|&(name, value)| (name.to_owned(), value.to_owned()))
         .collect();
     program.unset = ELSEWHERE.map(str::to_owned).to_vec();
+    #[cfg(windows)]
+    program.env.extend(
+        [
+            ("GIT_CONFIG_COUNT", "1"),
+            ("GIT_CONFIG_KEY_0", LONG_PATHS.0),
+            ("GIT_CONFIG_VALUE_0", LONG_PATHS.1),
+        ]
+        .map(|(name, value)| (name.to_owned(), value.to_owned())),
+    );
     program.cwd = Some(dir.to_owned());
     program
 }
@@ -213,7 +277,7 @@ where
         .await
         .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "git's config took too long"))??;
     let config = overrides(&listed, std::env::var_os("GIT_SSH").as_deref())?;
-    let mut git = own(dir);
+    let mut git = own(dir)?;
     git.env("GIT_CONFIG_COUNT", config.len().to_string());
     for (at, (key, value)) in config.into_iter().enumerate() {
         git.env(format!("GIT_CONFIG_KEY_{at}"), os(key)?)
@@ -235,22 +299,81 @@ where
     Ok(git)
 }
 
+/// The lock file git takes on the index as it changes it, for the
+/// repository `dir` is in, or on `index` when one is named
+/// (`GIT_INDEX_FILE`, from `dir`): `index.lock` beside it. None when `dir`
+/// is in no repository.
+pub fn index_lock(dir: &Path, index: Option<&Path>) -> Option<PathBuf> {
+    let index = match index {
+        Some(index) => dir.join(index),
+        None => git_dir(dir)?.join("index"),
+    };
+    let mut lock = index.into_os_string();
+    lock.push(".lock");
+    Some(lock.into())
+}
+
+/// The folder git keeps the repository `dir` is in: the nearest `.git`
+/// folder, or the folder the nearest `.git` file names, as a worktree's
+/// and a submodule's do.
+fn git_dir(dir: &Path) -> Option<PathBuf> {
+    for folder in dir.ancestors() {
+        let dot = folder.join(".git");
+        let Ok(meta) = std::fs::metadata(&dot) else {
+            continue;
+        };
+        if meta.is_dir() {
+            return Some(dot);
+        }
+        let text = std::fs::read_to_string(&dot).ok()?;
+        let named = text.lines().next()?.strip_prefix("gitdir:")?.trim();
+        return Some(folder.join(named));
+    }
+    None
+}
+
+/// How much earlier than a git's start its lock may say it was made: the
+/// disk's clock ticks more coarsely than the engine's.
+const TICK: Duration = Duration::from_millis(100);
+
+/// Removes `lock` ([`index_lock`]), which a git that was killed left
+/// behind, if it is there and was made since `started`, as that git
+/// started: a lock older than it is another git's. On Windows git is
+/// killed, never asked to stop first, so it never takes its lock away
+/// itself (ADR 0090, decision 3). When it was made is the later of its
+/// creation and its last write: NTFS gives a file made where one was just
+/// removed the creation time of the one before. A lock still held, by the
+/// real git behind Git for Windows' launcher as its Job Object ends, or
+/// by an antivirus reading it, is tried again for a few seconds
+/// ([`banda_kernel::host::remove_left`]). Says whether it removed it.
+pub fn remove_stale_lock(lock: &Path, started: SystemTime) -> bool {
+    let made = std::fs::symlink_metadata(lock).and_then(|meta| {
+        let modified = meta.modified()?;
+        Ok(meta
+            .created()
+            .map_or(modified, |created| created.max(modified)))
+    });
+    let since = started.checked_sub(TICK).unwrap_or(started);
+    made.is_ok_and(|made| made >= since) && banda_kernel::host::remove_left(lock).is_ok()
+}
+
 /// git in `dir` as every git starts: as [`EVERY`] says, taking nothing
-/// [`ELSEWHERE`], and stopped once its caller lets go of it.
-fn base(dir: &Path) -> Command {
-    let mut git = Command::new("git");
-    git.current_dir(dir).envs(EVERY).kill_on_drop(true);
+/// [`ELSEWHERE`], found as the host finds a program and stopped once its
+/// caller lets go of it ([`banda_kernel::host::command`]).
+fn base(dir: &Path) -> io::Result<Command> {
+    let mut git = banda_kernel::host::command("git")?;
+    git.current_dir(dir).envs(EVERY);
     for name in ELSEWHERE {
         git.env_remove(name);
     }
-    git
+    Ok(git)
 }
 
 /// git in `dir` as every bookkeeping git starts, before its config.
-fn own(dir: &Path) -> Command {
-    let mut git = base(dir);
+fn own(dir: &Path) -> io::Result<Command> {
+    let mut git = base(dir)?;
     git.arg("--no-pager").envs(UNASKED);
-    git
+    Ok(git)
 }
 
 /// Whether git takes `GIT_NO_LAZY_FETCH`, as it says by starting no other
@@ -286,16 +409,16 @@ async fn starts_no_lazy_fetch() -> io::Result<bool> {
          [remote \"none\"]\n\turl = ./none\n",
     )?;
     let trace = folder.path().join("trace");
-    own(folder.path())
+    let mut probe = own(folder.path())?;
+    probe
         .arg("--git-dir")
         .arg(&repo)
         .args(["cat-file", "-e", LACKED])
         .env("GIT_TRACE2_EVENT", &trace)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await?;
+        .stderr(Stdio::null());
+    Started::spawn(probe)?.wait().await?;
     let traced = std::fs::read_to_string(&trace)?;
     Ok(!traced.is_empty() && !traced.contains("\"child_start\""))
 }
@@ -318,14 +441,15 @@ fn subcommand(args: &[OsString]) -> Option<usize> {
 /// The config of `dir` that [`NAMING`] matches, as `git config
 /// --show-scope -z` lists it.
 async fn configured(dir: &Path) -> io::Result<Vec<u8>> {
-    let read = own(dir)
-        .env("GIT_CONFIG_COUNT", "1")
+    let mut read = own(dir)?;
+    read.env("GIT_CONFIG_COUNT", "1")
         .env("GIT_CONFIG_KEY_0", PROBE)
         .env("GIT_CONFIG_VALUE_0", "true")
         .args(["config", "--show-scope", "-z", "--get-regexp", NAMING])
         .stdin(Stdio::null())
-        .output()
-        .await?;
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let read = Started::spawn(read)?.wait_with_output().await?;
     match read.status.code() {
         // 1: none is set, as only a git that took no probe says.
         Some(0 | 1) => Ok(read.stdout),
@@ -391,6 +515,7 @@ fn overrides(listed: &[u8], git_ssh: Option<&OsStr>) -> io::Result<Vec<(Vec<u8>,
     }
     let mut config: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
     let mut set = |parts: &[&[u8]], value: &[u8]| config.push((parts.concat(), value.to_vec()));
+    set(&[b"core.hooksPath"], &no_hooks()?);
     for (key, value) in ALWAYS {
         set(&[key.as_bytes()], value.as_bytes());
     }
@@ -473,10 +598,46 @@ mod tests {
     /// The settings past what always holds, as text.
     fn set(config: &[(Vec<u8>, Vec<u8>)]) -> Vec<(String, String)> {
         let text = |bytes: &[u8]| String::from_utf8(bytes.to_vec()).unwrap();
-        config[ALWAYS.len() + EVENTS.len()..]
+        // The hooks folder, what always holds, and every hook event.
+        config[1 + ALWAYS.len() + EVENTS.len()..]
             .iter()
             .map(|(key, value)| (text(key), text(value)))
             .collect()
+    }
+
+    #[test]
+    fn the_index_lock_is_beside_the_index_of_the_repository_or_the_one_named() {
+        let folder = tempfile::tempdir().unwrap();
+        let (repository, inner) = (folder.path().join("r"), folder.path().join("r/src/deep"));
+        std::fs::create_dir_all(repository.join(".git")).unwrap();
+        std::fs::create_dir_all(&inner).unwrap();
+        let lock = repository.join(".git").join("index.lock");
+        assert_eq!(index_lock(&inner, None), Some(lock));
+        // A worktree's `.git` is a file naming its own folder.
+        let tree = folder.path().join("tree");
+        std::fs::create_dir_all(&tree).unwrap();
+        let own = repository.join(".git/worktrees/tree");
+        let named = format!("gitdir: {}\n", own.display());
+        std::fs::write(tree.join(".git"), named).unwrap();
+        assert_eq!(index_lock(&tree, None), Some(own.join("index.lock")));
+        // One named, from the folder.
+        let named = index_lock(&inner, Some(Path::new("next.index")));
+        assert_eq!(named, Some(inner.join("next.index.lock")));
+        assert_eq!(index_lock(folder.path(), None), None, "in no repository");
+    }
+
+    #[test]
+    fn only_a_lock_made_since_the_git_started_is_removed() {
+        let folder = tempfile::tempdir().unwrap();
+        let lock = folder.path().join("index.lock");
+        std::fs::write(&lock, "").unwrap();
+        let later = SystemTime::now() + Duration::from_secs(60);
+        assert!(!remove_stale_lock(&lock, later), "another's, from before");
+        assert!(lock.exists());
+        let before = SystemTime::now() - Duration::from_secs(60);
+        assert!(remove_stale_lock(&lock, before));
+        assert!(!lock.exists());
+        assert!(!remove_stale_lock(&lock, before), "gone already");
     }
 
     fn pairs(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
@@ -626,13 +787,20 @@ mod tests {
 
     #[test]
     fn every_git_takes_nothing_from_the_engine_that_points_it_elsewhere() {
-        let own = base(Path::new("."));
+        let own = base(Path::new(".")).unwrap();
         let asked = asked(Path::new("."), ["status"]);
         for name in ELSEWHERE {
             let named = own.as_std().get_envs().find(|(key, _)| *key == name);
             assert_eq!(named, Some((OsStr::new(name), None)), "{name}");
             assert!(asked.unset.iter().any(|unset| unset == name), "{name}");
-            assert!(!asked.env.contains_key(name), "{name}");
+            // On Windows an act's own config, `core.longpaths`, goes in
+            // the place of what the engine's said.
+            let own_config = cfg!(windows) && name == "GIT_CONFIG_COUNT";
+            assert_eq!(asked.env.contains_key(name), own_config, "{name}");
+        }
+        if cfg!(windows) {
+            assert_eq!(asked.env["GIT_CONFIG_KEY_0"], LONG_PATHS.0);
+            assert_eq!(asked.env["GIT_CONFIG_VALUE_0"], LONG_PATHS.1);
         }
         for (name, value) in EVERY {
             let named = own.as_std().get_envs().find(|(key, _)| *key == name);

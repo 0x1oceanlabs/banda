@@ -11,6 +11,11 @@ use banda_kernel::{Environment, Input, Program, Pty, PtySize, Started, Whose};
 use std::io;
 use std::process::Stdio;
 
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+use windows::command;
+
 /// Runs a Project's programs on the host.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Local;
@@ -23,7 +28,7 @@ impl Environment for Local {
                 "on pipes: a terminal's program starts on a terminal",
             ));
         }
-        let mut command = tokio::process::Command::new(&program.program);
+        let mut command = command(program)?;
         command.args(&program.args);
         if let Some(cwd) = &program.cwd {
             command.current_dir(cwd);
@@ -49,6 +54,14 @@ impl Environment for Local {
         }
         crate::pty::start(program, size)
     }
+}
+
+/// The command that starts `program`, by its name: Unix finds it on the
+/// PATH it is given. Windows' own search would look on past PATH, so there
+/// it is found first (`local/windows.rs`).
+#[cfg(not(windows))]
+fn command(program: &Program) -> io::Result<tokio::process::Command> {
+    Ok(tokio::process::Command::new(&program.program))
 }
 
 /// Why `program` did not start where it was asked to.

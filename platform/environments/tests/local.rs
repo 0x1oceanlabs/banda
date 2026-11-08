@@ -57,7 +57,7 @@ async fn a_program_runs_in_its_folder_with_what_it_changes_and_a_group_of_its_ow
     stdin.write_all(b"typed\n").await.unwrap();
     let mut said = String::new();
     stdout.into_inner().read_to_string(&mut said).await.unwrap();
-    let folder = std::fs::canonicalize(folder.path()).unwrap();
+    let folder = dunce::canonicalize(folder.path()).unwrap();
     assert_eq!(said, format!("{}\nyes\nnone\ntyped\n", folder.display()));
     assert!(child.wait().await.unwrap().success());
 }
@@ -108,7 +108,7 @@ async fn a_program_on_a_terminal_leads_its_session_there() {
     assert_eq!(getsid(Some(pid)).unwrap(), pid, "it leads its session");
     assert_eq!(started.id(), u32::try_from(pid.as_raw_pid()).ok());
     assert_eq!(pty.control.front(), started.id(), "it is in front");
-    let folder = std::fs::canonicalize(folder.path()).unwrap();
+    let folder = dunce::canonicalize(folder.path()).unwrap();
     assert_eq!(lines[1], folder.display().to_string());
     assert_eq!(lines[2], "yes");
     assert_eq!(lines[3], "24 80");

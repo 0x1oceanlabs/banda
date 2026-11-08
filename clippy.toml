@@ -1,0 +1,7 @@
+# A path made whole by std's canonicalize starts with `\\?\` on Windows,
+# which reaches what the window shows, `engine.json` and `cmd.exe`, and
+# which no path the Person typed starts with (ADR 0090, decision 3).
+disallowed-methods = [
+  { path = "std::fs::canonicalize", reason = "dunce::canonicalize: no \\\\?\\ on Windows (ADR 0090)" },
+  { path = "std::path::Path::canonicalize", reason = "dunce::canonicalize: no \\\\?\\ on Windows (ADR 0090)" },
+]

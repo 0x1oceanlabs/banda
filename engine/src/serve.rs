@@ -63,6 +63,11 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
     }
     open_files();
     let owner = places.owner().map_err(Failure::broken)?;
+    // Banda's own git finds no hooks in an empty folder of its state on
+    // Windows, never in `\dev\null` on the current drive (ADR 0090,
+    // decision 3).
+    #[cfg(windows)]
+    banda_git_cli::no_hooks_in(&places.state.join("no-hooks")).map_err(Failure::broken)?;
     let program = std::env::current_exe().map_err(Failure::broken)?;
     let harnesses = Harnesses::load(&places.harnesses()).map_err(Failure::broken)?;
     harnesses.carry(carried(&program));
@@ -237,9 +242,7 @@ async fn stopped(with_parent: bool, mut term: Term) {
 fn carried(program: &Path) -> Option<Carried> {
     // Where it is, through any link it was started by, as macOS names
     // it: the app's resources or the engine's own copy.
-    let program = program
-        .canonicalize()
-        .unwrap_or_else(|_| program.to_owned());
+    let program = dunce::canonicalize(program).unwrap_or_else(|_| program.to_owned());
     let here = Here {
         program: &program,
         app: FOLDER,

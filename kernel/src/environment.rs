@@ -22,8 +22,8 @@
 //! is, and nowhere else, so a program has holes exactly when it is one to
 //! fence.
 //!
-//! On Windows (ADR 0090) stopping a program stops it alone, until each
-//! is born in a Job Object (step 3), and no program starts on a terminal,
+//! On Windows (ADR 0090) each program is born in a Job Object, which
+//! stopping it ends with all in it, and no program starts on a terminal,
 //! until ConPTY (step 7).
 
 use crate::{Pty, PtySize, Started};

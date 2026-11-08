@@ -38,7 +38,7 @@ mod trashcan;
 mod write;
 
 use banda_kernel::{
-    Call, Changed, Code, Kind, Module, Nothing, Participant, Reach, Refusal, Right, Stream,
+    Call, Changed, Code, Kind, Module, Nothing, Participant, Reach, Refusal, Right, Stream, host,
 };
 use model::{
     Archive, ArchiveAsk, CancelAsk, Counted, Done, FindAsk, Found, Info, InfoAsk, ItemsAsk, Job,
@@ -273,6 +273,9 @@ fn amiss(asked: &str, error: &std::io::Error) -> Refusal {
 /// A refusal for why what is at `asked` was not changed.
 fn unchanged(asked: &str, error: &std::io::Error) -> Refusal {
     use std::io::ErrorKind::*;
+    if let Some(why) = windows_refused(asked, error) {
+        return why;
+    }
     match error.kind() {
         AlreadyExists | DirectoryNotEmpty => {
             Refusal::conflict(format!("{asked} is already there."))
@@ -285,8 +288,32 @@ fn unchanged(asked: &str, error: &std::io::Error) -> Refusal {
     }
 }
 
+/// Why Windows refused to change what is at `asked`, where Unix would
+/// not have, in plain words (ADR 0090, decision 3): a link, which Windows
+/// makes only in Developer Mode or for an admin
+/// (`ERROR_PRIVILEGE_NOT_HELD`); a file another program has open
+/// (`ERROR_SHARING_VIOLATION`, `ERROR_LOCK_VIOLATION`); a folder a program
+/// works in, which Windows will not move nor remove.
+fn windows_refused(asked: &str, error: &std::io::Error) -> Option<Refusal> {
+    let why = match error.raw_os_error().filter(|_| cfg!(windows))? {
+        1314 => format!(
+            "Windows makes a link such as {asked} only in Developer Mode, or for an \
+             administrator: turn Developer Mode on in Windows' settings, then try again."
+        ),
+        32 | 33 => format!(
+            "Another program has {asked} open, and Windows will not change it until that \
+             program lets it go."
+        ),
+        _ => return None,
+    };
+    Some(Refusal::conflict(why))
+}
+
 /// What is at `asked` itself, not where its link leads: its folder goes
-/// through the guard, then its name.
+/// through the guard, then its name. On Windows a name it refuses is
+/// refused here too, as `.git.` opens `.git`; and an entry there is named
+/// as the system names it, as `GIT~1`, a short name, is `.git`, so the
+/// fence sees what the name opens.
 fn entry(call: &Call, asked: &str) -> Result<PathBuf, Refusal> {
     let path = Path::new(asked);
     let (Some(name), Some(folder)) = (path.file_name(), path.parent()) else {
@@ -294,7 +321,27 @@ fn entry(call: &Call, asked: &str) -> Result<PathBuf, Refusal> {
             "{asked} names no file nor folder."
         )));
     };
-    Ok(Reach::of(call, folder)?.into_path().join(name))
+    if let Some(why) = host::refused_name(&name.to_string_lossy()) {
+        return Err(Refusal::invalid(format!("{asked}: {why}")));
+    }
+    Ok(long_named(Reach::of(call, folder)?.into_path().join(name)))
+}
+
+/// `path`, when it is there and no link, with the name Windows keeps for
+/// it, not a short one it was asked by; as it is elsewhere.
+fn long_named(path: PathBuf) -> PathBuf {
+    let plain = |path: &Path| std::fs::symlink_metadata(path).is_ok_and(|meta| !meta.is_symlink());
+    if !cfg!(windows) || !plain(&path) {
+        return path;
+    }
+    match dunce::canonicalize(&path)
+        .ok()
+        .as_deref()
+        .and_then(Path::file_name)
+    {
+        Some(name) => path.with_file_name(name),
+        None => path,
+    }
 }
 
 /// Whether a path is one `call` may take from the Trash or put there:
@@ -302,12 +349,12 @@ fn entry(call: &Call, asked: &str) -> Result<PathBuf, Refusal> {
 fn reached(call: &Call) -> impl Fn(&Path) -> bool + Send + 'static {
     let walled = call.wall().map(|_| {
         let folder = call.project().folder();
-        folder.canonicalize().unwrap_or(folder)
+        dunce::canonicalize(&folder).unwrap_or(folder)
     });
     move |path: &Path| {
         walled
             .as_ref()
-            .is_none_or(|folder| path.starts_with(folder))
+            .is_none_or(|folder| host::within(path, folder))
     }
 }
 
@@ -355,10 +402,8 @@ impl Files {
             return Err(unwritten(asked, write::Unwritten::Locked(why)));
         }
         let holds = |config: &Path| {
-            config.starts_with(path)
-                || config
-                    .canonicalize()
-                    .is_ok_and(|real| real.starts_with(path))
+            host::within(config, path)
+                || dunce::canonicalize(config).is_ok_and(|real| host::within(&real, path))
         };
         if goes && config.is_some_and(holds) {
             return Err(Refusal::forbidden(format!(
@@ -659,7 +704,7 @@ impl Files {
                     if !ops::there(from) {
                         return Err(Refusal::not_found(format!("{asked} is not there.")));
                     }
-                    if !from.is_symlink() && from.is_dir() && dir.starts_with(from) {
+                    if !from.is_symlink() && from.is_dir() && host::within(&dir, from) {
                         return Err(Refusal::invalid(format!("{asked} cannot go into itself.")));
                     }
                 }

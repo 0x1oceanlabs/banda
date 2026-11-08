@@ -25,7 +25,7 @@
 //! Without the adapters or a Node, Banda's entries start as they did
 //! before Banda carried the adapters, through `npx`.
 
-use crate::cli::runnable;
+use banda_kernel::host::runnable;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -94,7 +94,11 @@ impl Carried {
     /// The adapters and the Node on this host, as the engine's environment
     /// and `here` say; none when either is missing.
     pub fn find(here: &Here) -> Option<Carried> {
-        Self::find_in(here, |name| std::env::var_os(name))
+        Self::find_in(here, |name| match name {
+            // The host's, which on Windows the registry adds to.
+            "PATH" => Some(banda_kernel::host::path()),
+            name => std::env::var_os(name),
+        })
     }
 
     fn find_in(here: &Here, var: impl Fn(&str) -> Option<OsString>) -> Option<Carried> {
@@ -141,7 +145,7 @@ impl Carried {
 /// checkout this crate was built in.
 fn checkout() -> PathBuf {
     let dist = Path::new(env!("CARGO_MANIFEST_DIR")).join("../adapters/dist");
-    dist.canonicalize().unwrap_or(dist)
+    dunce::canonicalize(&dist).unwrap_or(dist)
 }
 
 /// The packed app's own Electron, when the engine's program is in its
@@ -180,12 +184,11 @@ fn written(record: PathBuf) -> Option<PathBuf> {
 }
 
 /// The first program named `node` in the folders of `path` that is at
-/// least [`NODE_MINIMUM`]: an older one is passed over, and the log says
-/// which and why.
+/// least [`NODE_MINIMUM`], `node.exe` on Windows: an older one is passed
+/// over, and the log says which and why.
 fn node_on(path: Option<OsString>) -> Option<PathBuf> {
-    std::env::split_paths(&path?)
-        .map(|folder| folder.join("node"))
-        .filter(|candidate| runnable(candidate))
+    banda_kernel::host::programs(Path::new("node"), &path?)
+        .filter(|node| node.extension().is_none_or(|extension| extension.eq_ignore_ascii_case("exe")))
         .find(|candidate| {
             let said = version_of(candidate);
             let fits = (said.as_deref().and_then(major)).is_some_and(|major| major >= NODE_MINIMUM);
@@ -207,6 +210,7 @@ fn version_of(node: &Path) -> Option<String> {
         .arg("--version")
         .stdin(Stdio::null())
         .stderr(Stdio::null());
+    banda_kernel::host::hide(&mut asked);
     for _ in 0..3 {
         match asked.output() {
             // A program written a moment ago may still be open in a process
@@ -231,8 +235,7 @@ fn major(version: &str) -> Option<u32> {
     digits.split('.').next()?.parse().ok()
 }
 
-// Their programs are `sh` scripts that run by their exec bit; Windows
-// finds `node.exe` and the `.cmd`s from ADR 0090's step 3.
+// Their programs are `sh` scripts that run by their exec bit.
 #[cfg(unix)]
 #[cfg(test)]
 mod tests {

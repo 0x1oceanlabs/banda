@@ -836,7 +836,7 @@ fn wallpapers(
         followed.push(path.clone());
         let unseen =
             |why: String| Problem::whole(look_file, format!("{key}: {why}, so the desk is solid"));
-        let found = std::fs::canonicalize(&path).ok();
+        let found = dunce::canonicalize(&path).ok();
         let meta = found
             .as_ref()
             .and_then(|found| std::fs::metadata(found).ok())
@@ -1086,7 +1086,7 @@ fn targets(links: &[PathBuf]) -> Vec<Option<(PathBuf, u64, Option<std::time::Sys
     links
         .iter()
         .map(|link| {
-            let target = std::fs::canonicalize(link).ok()?;
+            let target = dunce::canonicalize(link).ok()?;
             let meta = std::fs::metadata(&target).ok()?;
             Some((target, meta.len(), meta.modified().ok()))
         })

@@ -1,0 +1,10 @@
+{
+  "local": "C:\\Users\\Ro\\AppData\\Local",
+  "folder": "banda-dev",
+  "places": {
+    "data": "C:\\Users\\Ro\\AppData\\Local\\banda-dev\\data",
+    "state": "C:\\Users\\Ro\\AppData\\Local\\banda-dev\\state",
+    "config": "C:\\Users\\Ro\\AppData\\Local\\banda-dev\\config",
+    "cache": "C:\\Users\\Ro\\AppData\\Local\\banda-dev\\cache"
+  }
+}

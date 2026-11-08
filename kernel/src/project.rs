@@ -156,7 +156,7 @@ pub(crate) fn write_whole(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let mut aside = path.as_os_str().to_owned();
     aside.push(UNFINISHED);
     std::fs::write(&aside, bytes)?;
-    std::fs::rename(&aside, path)
+    crate::host::rename(Path::new(&aside), path)
 }
 
 /// What a module of the machine counts in every Project's log: see
@@ -203,7 +203,7 @@ pub(crate) fn place(
         std::fs::create_dir_all(&unfinished)?;
         fill(&unfinished)?;
         manifest.write(&unfinished)?;
-        std::fs::rename(&unfinished, &data)?;
+        crate::host::rename(&unfinished, &data)?;
         Ok::<_, Error>(())
     })();
     if let Err(error) = placed {
@@ -258,13 +258,18 @@ impl Project {
         Ok(name)
     }
 
-    /// The name as a Project's folder takes it.
+    /// The name as a Project's folder takes it; on Windows, not one that
+    /// Windows refuses for a folder.
     pub(crate) fn plain_name(name: &str) -> Result<&str, Refusal> {
-        crate::plain_name(name).ok_or_else(|| {
+        let plain = crate::plain_name(name).ok_or_else(|| {
             Refusal::invalid(
                 "A Project's name is 1 to 64 characters, with no slashes and no leading dot.",
             )
-        })
+        })?;
+        match crate::host::refused_name(plain) {
+            Some(why) => Err(Refusal::invalid(why)),
+            None => Ok(plain),
+        }
     }
 
     /// `data` is the Project's `projects/<id>/`, and `manifest` the one there,
@@ -450,28 +455,20 @@ impl Project {
         let file = std::fs::File::create(&pending)?;
         serde_json::to_writer(&file, &next)?;
         file.sync_all()?;
-        std::fs::rename(pending, &journal)?;
-        #[cfg(unix)]
-        let moved = rustix::fs::renameat_with(
-            rustix::fs::CWD,
-            &manifest.folder,
-            rustix::fs::CWD,
-            target,
-            rustix::fs::RenameFlags::NOREPLACE,
-        );
-        // Windows' rename takes the place of a file that is there, so it
-        // looks first; a rename that never does comes with ADR 0090's step 3.
-        #[cfg(not(unix))]
-        let moved = match std::fs::symlink_metadata(target) {
-            Ok(_) => Err(std::io::Error::from(std::io::ErrorKind::AlreadyExists)),
-            Err(_) => std::fs::rename(&manifest.folder, target),
-        };
-        if let Err(error) = moved {
+        drop(file);
+        crate::host::rename(&pending, &journal)?;
+        // No watch holds the folder as it moves: Windows moves no folder
+        // that one holds, and elsewhere one would hear it by its old name.
+        let released = crate::watching::let_go_under(&manifest.folder);
+        if let Err(error) = crate::host::move_folder(&manifest.folder, target) {
+            // It stayed, and is watched again.
+            drop(released);
             std::fs::remove_file(&journal)?;
             return Err(
                 Refusal::conflict(format!("The folder could not be moved: {error}")).into(),
             );
         }
+        released.moved();
         // The journal is authoritative if writing project.json fails. Keep the
         // live path correct too; a retry must never create another Project.
         *manifest = next;
@@ -572,7 +569,7 @@ impl Drop for Project {
         self.store.outbox_signal().notify_one();
         if let Some(data) = self.removed.get_mut().unwrap().take() {
             let delete = move || {
-                if let Err(error) = std::fs::remove_dir_all(&data) {
+                if let Err(error) = crate::host::remove_all(&data) {
                     let data = data.display();
                     tracing::warn!(%data, %error, "a removed Project's data was not deleted");
                 }

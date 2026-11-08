@@ -12,8 +12,10 @@
 
 use crate::model::Locked;
 use crate::read::hash;
+use banda_kernel::host;
 use std::io::Write;
 use std::path::Path;
+use tempfile::NamedTempFile;
 
 /// What became of a write.
 #[derive(Debug, PartialEq, Eq)]
@@ -57,7 +59,7 @@ pub fn locked(path: &Path, config: Option<&Path>) -> Option<Locked> {
         access.is_err_and(|error| error != rustix::io::Errno::NOENT)
     };
     // Windows says who may write in access lists, which only a try asks
-    // (ADR 0090, step 3); its read-only mark it says plainly.
+    // (ADR 0090, decision 10); its read-only mark it says plainly.
     #[cfg(not(unix))]
     let denied = |path: &Path| {
         std::fs::metadata(path).is_ok_and(|meta| meta.is_file() && meta.permissions().readonly())
@@ -68,7 +70,8 @@ pub fn locked(path: &Path, config: Option<&Path>) -> Option<Locked> {
 /// Why Files leaves `path` as it is whoever may write it: it is in
 /// `.git`, or in Banda's settings folder `config`, or is one of them.
 pub fn fenced(path: &Path, config: Option<&Path>) -> Option<Locked> {
-    if path.components().any(|part| part.as_os_str() == ".git") {
+    let git = |part: std::path::Component| host::same_name(part.as_os_str(), ".git".as_ref());
+    if path.components().any(git) {
         return Some(Locked::Git);
     }
     config
@@ -79,10 +82,8 @@ pub fn fenced(path: &Path, config: Option<&Path>) -> Option<Locked> {
 /// Whether `path` is in `folder`, as it is named or as the system reads
 /// it, its links followed.
 fn inside(path: &Path, folder: &Path) -> bool {
-    path.starts_with(folder)
-        || folder
-            .canonicalize()
-            .is_ok_and(|real| path.starts_with(real))
+    host::within(path, folder)
+        || dunce::canonicalize(folder).is_ok_and(|real| host::within(path, &real))
 }
 
 /// Writes `text` at `path` when the file there is still at `base`, the
@@ -99,6 +100,10 @@ pub fn write(
     }
     let was = match std::fs::symlink_metadata(path) {
         Ok(meta) if meta.is_symlink() => return Err(Unwritten::Link),
+        // Read as a file, a folder fails as Windows says it may not be.
+        Ok(meta) if meta.is_dir() => {
+            return Err(std::io::Error::from(std::io::ErrorKind::IsADirectory).into());
+        }
         Ok(meta) => Some((meta, hash(&std::fs::read(path)?))),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
         Err(error) => return Err(error.into()),
@@ -136,22 +141,40 @@ pub fn write(
     new.write_all(text.as_bytes())?;
     new.as_file().sync_all()?;
     match was {
-        Some(_) => {
-            new.persist(path).map_err(|e| e.error)?;
-        }
+        Some(_) => persisted(new, path, true)?,
         // Only where nothing came meanwhile; what came is what is there.
-        None => match new.persist_noclobber(path) {
-            Ok(_) => {}
-            Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => {
+        None => match persisted(new, path, false) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                 return Ok(Saved::Moved {
                     hash: Some(hash(&std::fs::read(path)?)),
                 });
             }
-            Err(e) => return Err(e.error.into()),
+            Err(error) => return Err(error.into()),
         },
     }
     Ok(Saved::Holds {
         hash: now,
         wrote: true,
+    })
+}
+
+/// Puts `new` in place as `path`: over the file there when `over`, else
+/// only where none is, a few times while another program holds either
+/// ([`host::tried`]).
+pub(crate) fn persisted(new: NamedTempFile, path: &Path, over: bool) -> std::io::Result<()> {
+    let mut held = Some(new);
+    host::tried(|| {
+        let new = held
+            .take()
+            .expect("tried again only once it was given back");
+        let put = match over {
+            true => new.persist(path),
+            false => new.persist_noclobber(path),
+        };
+        put.map(drop).map_err(|failed| {
+            held = Some(failed.file);
+            failed.error
+        })
     })
 }

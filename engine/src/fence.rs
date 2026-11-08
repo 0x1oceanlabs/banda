@@ -211,8 +211,8 @@ mod base {
     fn kept(path: &Path) -> io::Result<PathBuf> {
         steady(path)?;
         match (path.parent(), path.file_name()) {
-            (Some(parent), Some(name)) => Ok(std::fs::canonicalize(parent)?.join(name)),
-            _ => std::fs::canonicalize(path),
+            (Some(parent), Some(name)) => Ok(dunce::canonicalize(parent)?.join(name)),
+            _ => dunce::canonicalize(path),
         }
     }
 
@@ -275,7 +275,7 @@ mod tests {
     #[test]
     fn the_base_hides_every_bandas_folders_and_the_sessions_and_keeps_config_read_only() {
         let t = tempfile::tempdir().unwrap();
-        let home = std::fs::canonicalize(t.path()).unwrap();
+        let home = dunce::canonicalize(t.path()).unwrap();
         std::fs::create_dir(home.join("run")).unwrap();
         std::fs::create_dir_all(home.join(".config/banda-dev")).unwrap();
         let mut folders = folders(&home);
@@ -324,7 +324,7 @@ mod tests {
     #[test]
     fn the_base_refuses_a_folder_reached_through_a_link_the_user_can_move() {
         let t = tempfile::tempdir().unwrap();
-        let home = std::fs::canonicalize(t.path()).unwrap();
+        let home = dunce::canonicalize(t.path()).unwrap();
         std::fs::create_dir(home.join("run")).unwrap();
         let folders = folders(&home);
 

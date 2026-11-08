@@ -869,10 +869,6 @@ async fn an_idle_harness_is_let_go_and_its_threads_resume() {
 /// a Thread's session's own, new each time it opens, which its request
 /// hands Claude Code's adapter for the session's shell.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "on Windows the engine did not know a shell's pass once in four runs: ADR 0090's step 3 has the Harness tests on Windows"
-)]
 async fn an_agents_shell_gets_a_pass_walled_to_its_project() {
     let root = tempfile::tempdir().unwrap();
     let shells = root.path().join("shells.json");
@@ -3293,7 +3289,7 @@ impl World {
 #[tokio::test]
 #[cfg_attr(
     windows,
-    ignore = "the fake agent names files with /: Windows' paths come with ADR 0090's step 3"
+    ignore = "the recording the fake agent replays was made on Linux: it moves the recorded folder to this one, and the rest of each path keeps its /, as no Harness on Windows says it"
 )]
 async fn claude_code_asks_before_it_edits_and_shows_the_change() {
     let root = tempfile::tempdir().unwrap();
@@ -3341,7 +3337,7 @@ async fn claude_code_asks_before_it_edits_and_shows_the_change() {
 #[tokio::test]
 #[cfg_attr(
     windows,
-    ignore = "the fake agent names files with /: Windows' paths come with ADR 0090's step 3"
+    ignore = "the recording the fake agent replays was made on Linux: it moves the recorded folder to this one, and the rest of each path keeps its /, as no Harness on Windows says it"
 )]
 async fn codex_asks_before_it_runs_a_command_and_shows_what_its_commands_print() {
     let root = tempfile::tempdir().unwrap();
@@ -3607,7 +3603,7 @@ impl World {
 #[tokio::test]
 #[cfg_attr(
     windows,
-    ignore = "a page names its local images by Unix paths: Windows' come with ADR 0090's step 3"
+    ignore = "a page names its local images by Unix paths: Windows' come with ADR 0090's paths in the page (decision 7)"
 )]
 async fn an_agent_shows_its_person_a_visual_in_its_own_turn() {
     let root = tempfile::tempdir().unwrap();
@@ -3934,10 +3930,6 @@ async fn an_agent_writes_neither_over_a_persons_question_nor_into_another_projec
 }
 
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "on Windows the data stayed past 5 s once in three runs: stopping by the Job Object and removing with a few tries come with ADR 0090's step 3"
-)]
 async fn a_removed_project_stops_its_turns_before_its_data_goes() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;

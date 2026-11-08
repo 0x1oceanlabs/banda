@@ -78,13 +78,15 @@ pub fn hash(bytes: &[u8]) -> String {
 
 /// The text of the file at `path`, its first `upto` bytes at most.
 pub fn read(path: &Path, upto: u64) -> std::io::Result<Text> {
-    let mut file = std::fs::File::open(path)?;
+    let folder = || std::io::Error::new(std::io::ErrorKind::IsADirectory, "a folder");
+    // Windows opens no folder as a file: it says access is denied.
+    let mut file = std::fs::File::open(path).map_err(|error| match path.is_dir() {
+        true => folder(),
+        false => error,
+    })?;
     let meta = file.metadata()?;
     if meta.is_dir() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::IsADirectory,
-            "a folder",
-        ));
+        return Err(folder());
     }
     let upto = upto.min(MOST);
     let mut bytes = Vec::new();

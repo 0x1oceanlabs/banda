@@ -53,7 +53,7 @@ fn sources(harnesses: &[Harness]) -> Vec<Source> {
                 .or_else(|| std::env::var_os(variable).map(PathBuf::from))
                 .or_else(|| home.map(|home| home.join(default)))?;
             let root = config.join(folder);
-            let root = root.canonicalize().unwrap_or(root);
+            let root = dunce::canonicalize(&root).unwrap_or(root);
             let id = format!("{prefix}:{}", root.display());
             if !seen.insert(id.clone()) {
                 return None;

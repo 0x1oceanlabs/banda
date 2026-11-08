@@ -15,6 +15,7 @@ banda-kernel = { path = "../../../kernel" }
 banda-look = { path = "../../../platform/look" }
 calamine.workspace = true
 dirs.workspace = true
+dunce.workspace = true
 fast_image_resize.workspace = true
 flate2.workspace = true
 grep-matcher.workspace = true

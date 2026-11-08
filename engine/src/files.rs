@@ -51,7 +51,7 @@ fn shown(path: PathBuf) -> Result<(PathBuf, Option<String>), Failure> {
             .join(rest),
         Err(_) => path,
     };
-    let whole = std::fs::canonicalize(&path).map_err(|_| {
+    let whole = dunce::canonicalize(&path).map_err(|_| {
         Failure::Refused(Refusal::not_found(format!(
             "{} is not there.",
             path.display()
@@ -76,9 +76,9 @@ fn pick(projects: &[ProjectSummary], dir: &Path) -> Option<ProjectId> {
     let shown = || projects.iter().filter(|p| !p.archived && !p.scratch);
     // As the system names it, as `dir` is, where it is there.
     let real =
-        |p: &ProjectSummary| std::fs::canonicalize(&p.folder).unwrap_or(p.folder.clone().into());
+        |p: &ProjectSummary| dunce::canonicalize(&p.folder).unwrap_or(p.folder.clone().into());
     let holding = shown()
-        .filter(|p| dir.starts_with(real(p)))
+        .filter(|p| banda_kernel::host::within(dir, &real(p)))
         .max_by_key(|p| real(p).as_os_str().len());
     holding
         .or_else(|| shown().find(|p| p.pinned))
@@ -124,7 +124,7 @@ mod tests {
     #[test]
     fn a_file_shows_its_folder_with_it_picked() {
         let root = tempfile::tempdir().unwrap();
-        let folder = root.path().canonicalize().unwrap();
+        let folder = dunce::canonicalize(root.path()).unwrap();
         std::fs::write(folder.join("a.md"), "").unwrap();
         assert_eq!(shown(folder.clone()).ok(), Some((folder.clone(), None)));
         assert_eq!(

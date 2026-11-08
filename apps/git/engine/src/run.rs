@@ -11,17 +11,19 @@
 //! lock, so a status read beside the Person's own git never takes
 //! `.git/index.lock`, and asks nothing. At most eight run at once; each
 //! is stopped after 30 seconds, or [`LONG`] for an act, with SIGTERM first
-//! so it takes its lock files away; its output is cut at a cap, which it
-//! says. What git writes on stderr can hold a remote's credentials, so it
-//! goes to the engine's log only, and a caller hears a [`Reason`]; a line
-//! a caller follows has its credentials taken out ([`redact`]).
+//! so it takes its lock files away, or on Windows killed, the index lock
+//! of an act that takes one taken away after it ([`Left`]); its output is
+//! cut at a cap, which it says. What git writes on stderr can hold a
+//! remote's credentials, so it goes to the engine's log only, and a caller
+//! hears a [`Reason`]; a line a caller follows has its credentials taken
+//! out ([`redact`]).
 
 use banda_kernel::{Environment, Input, Program, Refusal, Started};
 use std::ffi::{OsStr, OsString};
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{Semaphore, mpsc};
 
@@ -361,9 +363,10 @@ where
         Failure(Reason::Other)
     };
     let feeds = opts.stdin.is_some();
+    let left = (cfg!(windows) && opts.asked.is_some() && takes_index(&args))
+        .then(|| Left::of(folder, opts.index));
     // Stopped through its handle either way, which stops the hooks it runs
-    // too, on Unix: on Windows git alone, until ADR 0090's step 3. `opts`'s
-    // index and variables go over git's own, last.
+    // too. `opts`'s index and variables go over git's own, last.
     let mut started = match opts.asked {
         Some(environment) => {
             let act = program(folder, &args, &opts).map_err(did_not_start)?;
@@ -395,6 +398,7 @@ where
     let mut running = Running {
         started: Some(started),
         ended: false,
+        left,
     };
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let ran = async {
@@ -480,6 +484,8 @@ struct Running {
     /// Taken only as it is stopped.
     started: Option<Started>,
     ended: bool,
+    /// What an act killed on Windows leaves behind; none elsewhere.
+    left: Option<Left>,
 }
 
 impl Running {
@@ -490,21 +496,30 @@ impl Running {
     async fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
         let exited = self.started().wait().await;
         self.ended = exited.is_ok();
+        if self.ended
+            && let Some(left) = self.left.take_if(|left| left.killed)
+        {
+            left.cleared().await;
+        }
         exited
     }
 
     /// Asks it and its hooks to stop: SIGTERM on Unix, on which git takes
-    /// its lock files away, as `index.lock`. On Windows git alone is
-    /// killed, until ADR 0090's step 3: what it ran goes on, and a lock it
-    /// held may stay.
+    /// its lock files away, as `index.lock`. Windows has no signals: there
+    /// it is killed with all it ran, and leaves its lock behind ([`Left`]).
     fn terminate(&mut self) {
+        if let Some(left) = &mut self.left {
+            left.killed = true;
+        }
         self.started().ask_to_stop();
     }
 
-    /// Stops it and its hooks, and waits till it has.
+    /// Stops it and its hooks, and waits till it has. A git that ended
+    /// by itself took its own lock away: one there now is another's.
     async fn stop(mut self) {
+        let left = self.left.take().filter(|_| !self.ended);
         if let Some(started) = self.started.take() {
-            stopped(started).await;
+            stopped(started, left).await;
         }
     }
 }
@@ -519,15 +534,104 @@ impl Drop for Running {
         }
         // With no runtime to stop it in, it is killed as it is let go of.
         if let Ok(runtime) = tokio::runtime::Handle::try_current() {
-            drop(runtime.spawn(stopped(started)));
+            drop(runtime.spawn(stopped(started, self.left.take())));
         }
     }
 }
 
 /// Stops a git and its hooks: asked first, killed if it has not ended
-/// soon after.
-async fn stopped(mut started: Started) {
+/// soon after. On Windows it is killed at once, and its lock is taken
+/// away after it ([`Left`]).
+async fn stopped(mut started: Started, left: Option<Left>) {
     let _ = started.stop(STOPPING).await;
+    if let Some(left) = left {
+        left.cleared().await;
+    }
+}
+
+/// Whether git `args` may take the repository's index lock: an act that
+/// changes the index, or the work tree through it. A push, a config or an
+/// init takes none, so one killed leaves no lock of its own, and any lock
+/// there is another git's.
+fn takes_index(args: &[OsString]) -> bool {
+    const TAKING: [&str; 15] = [
+        "add",
+        "checkout",
+        "cherry-pick",
+        "commit",
+        "merge",
+        "mv",
+        "pull",
+        "rebase",
+        "reset",
+        "restore",
+        "revert",
+        "rm",
+        "stash",
+        "switch",
+        "update-index",
+    ];
+    // The command is the first that is no option, past each `-c`'s value.
+    let mut rest = args.iter();
+    let mut command = None;
+    while let Some(arg) = rest.next() {
+        match arg.as_encoded_bytes() {
+            b"-c" => {
+                rest.next();
+            }
+            option if option.starts_with(b"-") => {}
+            _ => {
+                command = arg.to_str();
+                break;
+            }
+        }
+    }
+    match command {
+        // `apply` changes the index only when told to.
+        Some("apply") => rest.any(|arg| arg == "--cached" || arg == "--index"),
+        Some(command) => TAKING.contains(&command),
+        None => false,
+    }
+}
+
+/// The index lock an act takes, which one killed on Windows leaves behind
+/// (ADR 0090, decision 3): removed once it ended, if it is still there and
+/// was made since it started, tried for a few seconds while the rest of
+/// its Job Object ends. Only for an act that takes the lock
+/// ([`takes_index`]). Banda's own git takes none on the repository's
+/// index: it takes no optional lock, and writes a scratch index of its
+/// own.
+#[derive(Debug)]
+struct Left {
+    folder: PathBuf,
+    index: Option<PathBuf>,
+    started: SystemTime,
+    /// It was killed, never asked to stop.
+    killed: bool,
+}
+
+impl Left {
+    /// What an act about to start in `folder`, on `index` when one is
+    /// named, may leave behind.
+    fn of(folder: &Path, index: Option<&Path>) -> Left {
+        Left {
+            folder: folder.to_owned(),
+            index: index.map(Path::to_owned),
+            started: SystemTime::now(),
+            killed: false,
+        }
+    }
+
+    /// Removes its lock, once the git that was killed ended.
+    async fn cleared(self) {
+        let removed = tokio::task::spawn_blocking(move || {
+            let lock = banda_git_cli::index_lock(&self.folder, self.index.as_deref())?;
+            banda_git_cli::remove_stale_lock(&lock, self.started).then_some(lock)
+        });
+        if let Ok(Some(lock)) = removed.await {
+            tracing::info!(lock = %lock.display(), "a killed git's lock was removed");
+        }
+    }
 }
 
 /// Up to `cap` bytes of `from` into `kept`, read to its end; each line
@@ -711,6 +815,30 @@ mod tests {
         assert_eq!(asked.last_line().as_deref(), Some("checked"));
         let own = git(folder.path(), COMMIT, Opts::default()).await.unwrap();
         assert!(own.success && own.quiet());
+    }
+
+    #[test]
+    fn only_an_act_that_changes_the_index_may_leave_its_lock() {
+        let takes = |args: &[&str]| {
+            let args: Vec<OsString> = args.iter().map(OsString::from).collect();
+            takes_index(&args)
+        };
+        assert!(takes(&["commit", "--quiet", "--file=-"]));
+        assert!(takes(&["--literal-pathspecs", "add", "--all"]));
+        assert!(takes(&["-c", "core.preloadIndex=false", "add"]));
+        assert!(takes(&["checkout", "--quiet", "-b", "topic", "--"]));
+        assert!(takes(&["apply", "--unidiff-zero", "--cached"]));
+        assert!(!takes(&["apply", "--unidiff-zero", "--reverse"]));
+        assert!(!takes(&[
+            "push",
+            "--quiet",
+            "--",
+            "origin",
+            "HEAD:refs/heads/a"
+        ]));
+        assert!(!takes(&["config", "branch.a.remote", "origin"]));
+        assert!(!takes(&["init", "--quiet"]));
+        assert!(!takes(&["-c", "commit", "status"]));
     }
 
     #[test]

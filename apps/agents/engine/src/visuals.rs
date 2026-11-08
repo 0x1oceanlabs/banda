@@ -243,7 +243,7 @@ mod tests {
     #[test]
     #[cfg_attr(
         windows,
-        ignore = "a page names its local images by Unix paths: Windows' come with ADR 0090's step 3"
+        ignore = "a page names its local images by Unix paths: Windows' come with ADR 0090's paths in the page (decision 7)"
     )]
     fn local_images_go_in_within_their_limits() {
         let folder = tempfile::tempdir().unwrap();

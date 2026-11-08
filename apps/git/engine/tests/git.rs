@@ -1315,7 +1315,7 @@ async fn an_act_runs_in_the_projects_environment_and_a_read_on_the_host() {
         .await;
     let asked = world.asks.all();
     assert!(!asked.is_empty());
-    let folder = std::fs::canonicalize(&world.folder).unwrap();
+    let folder = dunce::canonicalize(&world.folder).unwrap();
     for asked in &asked {
         assert_eq!(asked.how, How::Spawn);
         assert_eq!(asked.program.program, "git");
@@ -1325,7 +1325,7 @@ async fn an_act_runs_in_the_projects_environment_and_a_read_on_the_host() {
             .program
             .cwd
             .as_ref()
-            .map(|cwd| std::fs::canonicalize(cwd).unwrap());
+            .map(|cwd| dunce::canonicalize(cwd).unwrap());
         assert_eq!(cwd, Some(folder.clone()));
         assert_eq!(asked.program.env["LC_ALL"], "C");
         assert!(asked.program.unset.iter().any(|name| name == "GIT_DIR"));

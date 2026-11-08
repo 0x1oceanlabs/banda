@@ -303,10 +303,13 @@ The kernel holds only what every module needs, and it names no module.
   a terminal (`pty`), where it leads a session of its own. Either hands
   back the kernel's `Started`, the handle that asks it and what it started
   to stop and kills them (ADR 0090, decision 3): TERM and KILL to its
-  group on Unix, with HUP first on a terminal; the program alone on
-  Windows, until Job Objects. A terminal comes back as the port's own
-  `Pty`: what the program prints, what is typed, its size and what runs
-  in front. A module signals none of the programs it started: the git
+  group on Unix, with HUP first on a terminal; on Windows, where each is
+  born in a Job Object that none of it may leave, both end the Job
+  Object, and a Harness's adapter is asked by its stdin closing. On
+  Windows `local` starts only a program it found itself, on the host's
+  PATH as it is now (below), so Windows' own search never reaches
+  `WindowsApps`. A terminal comes back as the port's own `Pty`: what the
+  program prints, what is typed, its size and what runs in front. A module signals none of the programs it started: the git
   module's bookkeeping git starts as a `Started` too. The engine gives
   the kernel its adapter: `local`, the platform's `banda-environments`,
   which runs the program on the host as Banda always has; a kernel given
@@ -655,9 +658,15 @@ If Chat is removed, Agents still works through its own Thread.
   - An entry may name the Person's own CLI the adapter runs (`[harness.cli]`
     with `program` and `variable`): `claude` through
     `CLAUDE_CODE_EXECUTABLE`, `codex` through `CODEX_PATH` (ADR 0003,
-    decision 3). Each start finds it on PATH and asks its version; a CLI
-    that is not installed stops the start, so no bundled copy runs in its
-    place.
+    decision 3). Each start finds it on the host's PATH as it is now, to
+    which Windows adds the user's and the system's from the registry, so
+    one installed while the engine runs is found (ADR 0090, decision 3).
+    On Windows the vendors' own folders come first (Claude Code's
+    installer puts `claude.exe` on no PATH), a program itself comes before
+    a `.cmd`, a program under `WindowsApps` is never one, and a `claude`
+    that does not say "(Claude Code)" is passed over. It asks its version;
+    a CLI that is not installed stops the start, so no bundled copy runs
+    in its place.
   - Its `minimum` is the oldest version the adapter supports, the one it
     was built for: Claude Code 2.1.312, Codex 0.165.0. An older CLI runs,
     and the settings Pane's Agents and the Threads warn. Checking the Harness again

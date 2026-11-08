@@ -566,7 +566,7 @@ impl Rolling {
     }
 
     fn roll(&mut self) -> std::io::Result<()> {
-        std::fs::rename(&self.path, self.path.with_extension("1.log"))?;
+        banda_kernel::host::rename(&self.path, &self.path.with_extension("1.log"))?;
         self.file = banda_problems::append_private(&self.path)?;
         self.size = 0;
         Ok(())

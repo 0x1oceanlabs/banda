@@ -338,8 +338,8 @@ async fn blob(repo: &Repo, named: String) -> Result<Side, Failure> {
 /// The file in the work tree: a plain file inside the repository only.
 fn on_disk(repo: &Repo, path: &str) -> Side {
     let file = repo.top.join(path);
-    let inside = match (file.canonicalize(), repo.top.canonicalize()) {
-        (Ok(file), Ok(top)) => file.starts_with(top),
+    let inside = match (dunce::canonicalize(&file), dunce::canonicalize(&repo.top)) {
+        (Ok(file), Ok(top)) => banda_kernel::host::within(&file, &top),
         _ => false,
     };
     let Ok(about) = std::fs::symlink_metadata(&file) else {
