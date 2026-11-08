@@ -11,6 +11,7 @@ overrides:
 
 patchedDependencies:
   '@agentclientprotocol/codex-acp@2.5.0': f1188fd563fe76c0b83fc855cd26aaab68fb10b884ba54ee3726cfef327d9de1
+  '@shadcn/react@0.3.1': 781066c670311e144da37ea3d42ccfd2a4d23475b8367b9e7d69efb30c4b7088
 
 importers:
 
@@ -448,7 +449,7 @@ importers:
         version: 1.0.0-beta.6(@pierre/theme@2.0.0)(@shikijs/themes@4.5.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(shiki@4.5.0)
       '@shadcn/react':
         specifier: ^0.3.1
-        version: 0.3.1(@types/react@19.3.0)(react@19.3.1)
+        version: 0.3.1(patch_hash=781066c670311e144da37ea3d42ccfd2a4d23475b8367b9e7d69efb30c4b7088)(@types/react@19.3.0)(react@19.3.1)
       '@streamdown/code':
         specifier: ^2.0.0
         version: 2.0.0(react@19.3.1)
@@ -6336,7 +6337,7 @@ snapshots:
 
   '@sec-ant/readable-stream@0.4.1': {}
 
-  '@shadcn/react@0.3.1(@types/react@19.3.0)(react@19.3.1)':
+  '@shadcn/react@0.3.1(patch_hash=781066c670311e144da37ea3d42ccfd2a4d23475b8367b9e7d69efb30c4b7088)(@types/react@19.3.0)(react@19.3.1)':
     optionalDependencies:
       '@types/react': 19.3.0
       react: 19.3.1
