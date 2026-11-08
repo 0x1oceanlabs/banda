@@ -220,7 +220,14 @@ settles.
     - Then the client draws its prediction at once, sends intents in
       order with a CommandId, and reconciles by `at` (ADR 0082 d4, A8).
       The wait for the host to draw (`Shell.tsx:198`, `:438-492`) goes.
-      A refusal animates back by retargeting with velocity.
+      A refusal animates back by retargeting with velocity. (Amended in
+      T-pred: not by `at` alone. A command answered as one that wrote
+      nothing leaves the prediction at once, and those before a command
+      heard leave with it, as they commit in the order sent. One whose
+      fact comes before its answer leaves by what the fact says: the
+      fewest commands at the head that, applied to the facts before,
+      give the facts now; #879 would have the event name its command
+      instead.)
     - The WebAssembly model (T1) then deletes the TypeScript one, keeping
       the arrangement in its own memory; the overlay (T2) follows.
 
