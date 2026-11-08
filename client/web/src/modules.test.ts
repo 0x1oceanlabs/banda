@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { ProjectId } from "@banda/contract"
 import type { Action, Module } from "@banda/ui/module"
+import { parts } from "@banda/ui/testing/architecture"
 import { expect, test } from "vitest"
 import { modules } from "./modules"
 import { WINDOW_ACTIONS } from "./window/actions"
@@ -113,12 +114,11 @@ test("the window's own actions, the tiling's, are written for the engine as a mo
   ).toBe(false)
 })
 
-test("each module's window part is written beside its module.toml, for banda modules (ADR 0022, decision 1)", () => {
+test("each module's window part is written beside its manifest, for banda modules (ADR 0022, decision 1)", () => {
+  const folders = parts(join(import.meta.dirname, "../../.."))
   const stale: string[] = []
   for (const module of modules) {
-    const folder = ["apps", "platform"]
-      .map((bucket) => join(import.meta.dirname, "../../..", bucket, module.id))
-      .find((folder) => existsSync(join(folder, "module.toml")))
+    const folder = folders.get(module.id)
     expect(folder, module.id).toBeDefined()
     if (folder && written(join(folder, "window.json"), windowOf(module)))
       stale.push(module.id)

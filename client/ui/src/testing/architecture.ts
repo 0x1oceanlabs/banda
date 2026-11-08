@@ -1,13 +1,53 @@
 /**
  * What the architecture tests read (docs/architecture.md, "Checks that
- * hold the shape"): the source files of a folder, the modules each one
- * names, the Apps each one names and what each one animates. For tests
- * alone: it reads the disk.
+ * hold the shape"): the Apps' and platform parts' folders, the source
+ * files of a folder, the modules each one names, the Apps each one names
+ * and what each one animates. For tests alone: it reads the disk.
  */
 /// <reference types="node" />
-import { readdirSync } from "node:fs"
+import { existsSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import ts from "typescript"
+
+/**
+ * The names of the file an App or a platform part declares itself in
+ * beside its code, its manifest (ADR 0022): `app.toml`, and `module.toml`
+ * until the rename (ADR 0062, decision 11), which takes it off this list.
+ */
+export const MANIFEST_NAMES = ["app.toml", "module.toml"] as const
+
+/** The manifest in `folder`, by its path; none when it has none. */
+export function manifestIn(folder: string): string | undefined {
+  return MANIFEST_NAMES.map((name) => join(folder, name)).find((file) =>
+    existsSync(file)
+  )
+}
+
+/**
+ * Each App's and platform part's folder, by its id, its folder's name:
+ * those of `apps/` and `platform/` under the repository's `root` with a
+ * manifest (ADR 0062, decision 11). Finding none throws, as the kernel's
+ * architecture test does, so a manifest renamed cannot leave the tests
+ * that read the list checking nothing; one id in both throws, as the
+ * engine's build does.
+ */
+export function parts(root: string): Map<string, string> {
+  const found = new Map<string, string>()
+  for (const bucket of ["apps", "platform"])
+    for (const id of readdirSync(join(root, bucket))) {
+      const folder = join(root, bucket, id)
+      if (!manifestIn(folder)) continue
+      const other = found.get(id)
+      if (other)
+        throw new Error(`two folders are the part ${id}: ${other}, ${folder}`)
+      found.set(id, folder)
+    }
+  if (found.size === 0)
+    throw new Error(
+      `no folder of apps/ or platform/ in ${root} has a manifest, ${MANIFEST_NAMES.join(" or ")}`
+    )
+  return found
+}
 
 /** Every `.ts` and `.tsx` file under `folder`, and `.css` with `styles`;
  * without tests when `tests` is false. */

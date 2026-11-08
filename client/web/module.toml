@@ -2,6 +2,8 @@
 # its actions, the tiling's first, its code declares; client/web's tests copy
 # them into window.json beside this file. When the window is split into
 # parts with names of their own, each takes its actions from here.
+# It has no kind, api or [needs], which an App or a platform part declares:
+# the Window is neither, but a client's program (ADR 0087, decision 1).
 id = "window"
 name = "Window"
 about = "The window's own actions: the tiling of columns, Panes and workspaces, the sidebar, the Banda menu and the settings."

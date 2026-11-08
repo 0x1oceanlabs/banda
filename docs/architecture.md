@@ -1598,13 +1598,15 @@ images. Sweeps retain images still referenced by a fork after a rewind.
   `Program` is named there too, with whose it makes and why (ADR 0083,
   decision 1). In the window (`client/web/src/architecture.test.ts`),
   only `modules.ts` and the bridge's table name a module's package, and
-  nothing more animates a size or a place (ADR 0088). Of ADR 0087's
-  checks, three ratchets that only fall hold what the Tiling imports of
-  the Window, the App strings in the Window and the Tiling, and a line
-  ceiling on the Window's root (decisions 1 and 5); a mark's rank is read
-  only to pick the loudest, on the lines listed (decision 8); and the
-  calls part reads no page and, of the Tiling, imports only its model
-  (decision 9).
+  nothing more animates a size or a place (ADR 0088). Its tests find the
+  Apps' and platform parts' folders through `parts`
+  (`@banda/ui/testing/architecture`), which fails when it finds none. Of
+  ADR 0087's checks, three ratchets that only fall hold what the Tiling
+  imports of the Window, the App strings in the Window and the Tiling,
+  and a line ceiling on the Window's root (decisions 1 and 5); a mark's
+  rank is read only to pick the loudest, on the lines listed (decision
+  8); and the calls part reads no page and, of the Tiling, imports only
+  its model (decision 9).
 - **Module tests** run through the module's interface: commands go in and
   events come out. Nothing past the interface is mocked.
 - **Checkpoints** (ADR 0014, decision 3). With `BANDA_CHECKPOINTS` set,

@@ -5,7 +5,7 @@
  *   names one, in the page and in the desktop's main process, and every
  *   registry is built from it; the bridge's table takes in each module's
  *   part of it (ADR 0028). The files listed here still reach a module's
- *   package, each by an unstable mark its module's `module.toml` names
+ *   package, each by an unstable mark its module's manifest names
  *   (decision 6); one that no longer does leaves the list.
  * - The Window holds the areas and the Tiling the Panes (ADR 0087,
  *   decisions 1 and 5): the Tiling imports no more of the Window than it
@@ -20,12 +20,14 @@
  * - The calls part reads no page, and of the Tiling only its model (ADR
  *   0087, decision 9).
  */
-import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { join, relative } from "node:path"
 import {
   appStrings,
   imports,
   layoutMotion,
+  manifestIn,
+  parts,
   sources,
 } from "@banda/ui/testing/architecture"
 import { expect, test } from "vitest"
@@ -34,14 +36,8 @@ const app = join(import.meta.dirname, "../..")
 const root = join(app, "..")
 
 /** Each module's folder, by its id: an App's in apps/, the platform's in
- * platform/ (ADR 0062, decision 11), with its `module.toml`. */
-const folders = new Map(
-  ["apps", "platform"].flatMap((bucket) =>
-    readdirSync(join(root, bucket))
-      .map((module) => [module, join(root, bucket, module)] as const)
-      .filter(([, folder]) => existsSync(join(folder, "module.toml")))
-  )
-)
+ * platform/ (ADR 0062, decision 11), with its manifest. */
+const folders = parts(root)
 
 /** The modules' window parts, the page's and main's, by their packages'
  * names. */
@@ -56,7 +52,7 @@ const reachesModule = (name: string) =>
   packages.some((pkg) => name === pkg || name.startsWith(`${pkg}/`))
 
 /** Each file that still reaches a module, and the mark that says why:
- * `<module>.<mark>`, from `[unstable]` in its module's `module.toml`. */
+ * `<module>.<mark>`, from `[unstable]` in its module's manifest. */
 const STILL: Record<string, string> = {
   "web/src/settings/Agents.tsx": "agents.settings-section",
   "desktop/src/preload.ts": "browser.desktop-preload",
@@ -197,11 +193,12 @@ test("the Window's root keeps under its ceiling, and the ceiling follows it down
   ).toBeLessThanOrEqual(SLACK)
 })
 
-/** The `[unstable]` marks a module's `module.toml` names. */
+/** The `[unstable]` marks a module's manifest names. */
 function marksOf(module: string): string[] {
   const folder = folders.get(module)
-  if (!folder) return []
-  const text = readFileSync(join(folder, "module.toml"), "utf8")
+  const manifest = folder && manifestIn(folder)
+  if (!manifest) return []
+  const text = readFileSync(manifest, "utf8")
   const table = text.split(/^\[unstable\]$/m)[1] ?? ""
   return [...table.matchAll(/^([a-z-]+) = /gm)].map((found) => found[1])
 }

@@ -1,5 +1,8 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { expect, test } from "vitest"
-import { imports, layoutMotion } from "./architecture"
+import { MANIFEST_NAMES, imports, layoutMotion, parts } from "./architecture"
 
 test("the check sees every kind of import", () => {
   expect(
@@ -39,4 +42,27 @@ test("the check sees keyframes by what their steps set", () => {
         `@keyframes fade { from { opacity: 0; translate: 0 4px } to { opacity: 1 } }`
     )
   ).toEqual(["@keyframes grow"])
+})
+
+test("a part is found by each name of its manifest, finding none throws, and so does one id twice", () => {
+  const root = mkdtempSync(join(tmpdir(), "banda-parts-"))
+  const folder = (path: string, manifest?: string) => {
+    mkdirSync(join(root, path), { recursive: true })
+    if (manifest) writeFileSync(join(root, path, manifest), "")
+    return join(root, path)
+  }
+  try {
+    expect(MANIFEST_NAMES).toContain("app.toml")
+    folder("apps")
+    folder("platform/look")
+    expect(() => parts(root)).toThrow(/no folder of apps\/ or platform\//)
+    const named = MANIFEST_NAMES.map(
+      (name, at) => [`p${at}`, folder(`apps/p${at}`, name)] as const
+    )
+    expect([...parts(root)]).toEqual(named)
+    folder("platform/p0", MANIFEST_NAMES[0])
+    expect(() => parts(root)).toThrow(/two folders are the part p0/)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
