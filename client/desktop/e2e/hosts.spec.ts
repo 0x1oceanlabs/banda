@@ -475,7 +475,8 @@ test("another machine's Thread that calls opens on its engine by Alt+U and from 
   await expect(bench.getByText("You said: Bench window tests")).toBeVisible()
 
   // One there that finishes out of sight tells with a toast, whose button
-  // opens it there too.
+  // opens it there too. Where the focus ends is not said: the toasts give
+  // it back to the Pane that had it, drawn beside (#831).
   send(arc, banda, "Done on arc")
   const toast = page
     .getByRole("region", { name: "Notifications" })
@@ -483,7 +484,6 @@ test("another machine's Thread that calls opens on its engine by Alt+U and from 
     .filter({ hasText: "Done on arc" })
   await toast.getByRole("button", { name: "Open" }).click()
   const there = page.getByRole("region", { name: "Done on arc", exact: true })
-  await expect(there).toHaveAttribute("data-focused", "true")
   await expect(there.getByText("You said: Done on arc")).toBeVisible()
   await expect(toast).toBeHidden()
 })
