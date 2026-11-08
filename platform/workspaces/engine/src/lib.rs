@@ -22,16 +22,18 @@
 //! sent again makes nothing twice: its receipt answers it, and past the
 //! receipt the workspaces refuse it while they hold what it made.
 
+pub mod commands;
 pub mod model;
 
 use banda_kernel::{
     AgentId, Call, Error, Kind, Module, ModuleProject, Nothing, Refusal, Right, Scope, Tool, Tx,
     Wall,
 };
-use banda_look::columns::Display;
-use model::{
-    Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Side, Sight, Toward, WorkspaceId,
+pub use commands::{
+    Fill, Height, Maximize, MoveColumn, MovePane, MoveWorkspace, OneColumn, OnePane, Open, Regroup,
+    ShowAs, Size, Take, Tidy, Update,
 };
+use model::{Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Side, Sight, WorkspaceId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
@@ -343,38 +345,6 @@ pub enum Changed {
     },
 }
 
-#[derive(Deserialize, TS)]
-#[ts(export_to = "workspaces/")]
-pub struct Open {
-    #[serde(flatten)]
-    #[ts(flatten)]
-    pub shows: Shown,
-    /// Left out, a column on the right of the top workspace that shows a
-    /// Pane of its Project, or of the empty one at the bottom.
-    #[serde(default)]
-    #[ts(optional)]
-    pub place: Option<Place>,
-    /// The Pane it shows in place of, which leaves.
-    #[serde(default)]
-    #[ts(optional)]
-    pub instead: Option<PaneId>,
-    /// A new column's width; left out, the look's.
-    #[serde(default)]
-    #[ts(optional)]
-    pub width: Option<String>,
-    /// A new Pane even when one shows the same: a New Thread, a New Pane,
-    /// as a browser's new window.
-    #[serde(default)]
-    #[ts(optional)]
-    pub again: Option<bool>,
-    /// A new Pane's column is in a Group from the start: the one the place
-    /// puts it in, else a Group of its own, as a Thread opens, so what its
-    /// Agent opens joins a Group already there (ADR 0065, decision 7).
-    #[serde(default)]
-    #[ts(optional)]
-    pub grouped: Option<bool>,
-}
-
 #[derive(Serialize, Deserialize, TS)]
 #[ts(export_to = "workspaces/")]
 pub struct Opened {
@@ -396,124 +366,6 @@ pub struct Opened {
 pub struct Done {
     #[ts(type = "number | null")]
     pub at: Option<i64>,
-}
-
-#[derive(Deserialize, TS, JsonSchema)]
-#[ts(export_to = "workspaces/")]
-pub struct OnePane {
-    /// The Pane's ID, as `panes` lists it.
-    pub pane: PaneId,
-}
-
-#[derive(Deserialize, TS)]
-#[ts(export_to = "workspaces/")]
-pub struct Update {
-    pub pane: PaneId,
-    pub args: Value,
-}
-
-#[derive(Deserialize, TS)]
-#[ts(export_to = "workspaces/")]
-pub struct MovePane {
-    pub pane: PaneId,
-    pub place: Place,
-    /// Beside a Pane at a Group's end, a column of its own lands inside
-    /// that Pane's Group (`true`) or outside it (`false`), as the mouse
-    /// let it go (ADR 0065, decision 5). Left out, as the place says.
-    #[serde(default)]
-    #[ts(optional)]
-    pub grouped: Option<bool>,
-}
-
-#[derive(Deserialize, TS)]
-#[ts(export_to = "workspaces/")]
-pub struct MoveColumn {
-    pub column: ColumnId,
-    pub workspace: WorkspaceId,
-    /// From the left, counted as if it had left its place; past the last,
-    /// the last.
-    pub index: usize,
-}
-
-#[derive(Deserialize, TS)]
-#[ts(export_to = "workspaces/")]
-pub struct MoveWorkspace {
-    pub workspace: WorkspaceId,
-    /// From the top, counted as if it had left its place; past the last,
-    /// the last above the empty one.
-    pub index: usize,
-}
-
-#[derive(Deserialize, TS)]
-#[ts(export_to = "workspaces/")]
-pub struct Size {
-    pub column: ColumnId,
-    /// A share of the screen, such as `"1/2"`; left out, the look's.
-    #[serde(default)]
-    #[ts(optional)]
-    pub width: Option<String>,
-}
-
-#[derive(Deserialize, TS)]
-#[ts(export_to = "workspaces/")]
-pub struct Height {
-    pub pane: PaneId,
-    /// A share of its column's height, such as `"1/3"`; left out, even.
-    #[serde(default)]
-    #[ts(optional)]
-    pub height: Option<String>,
-}
-
-#[derive(Deserialize, TS)]
-#[ts(export_to = "workspaces/")]
-pub struct OneColumn {
-    pub column: ColumnId,
-}
-
-#[derive(Deserialize, TS)]
-#[ts(export_to = "workspaces/")]
-pub struct Maximize {
-    pub column: ColumnId,
-    pub full: bool,
-}
-
-#[derive(Deserialize, TS)]
-#[ts(export_to = "workspaces/")]
-pub struct ShowAs {
-    pub column: ColumnId,
-    /// Left out, as the look says.
-    #[serde(default)]
-    #[ts(optional)]
-    pub display: Option<Display>,
-}
-
-#[derive(Deserialize, TS)]
-#[ts(export_to = "workspaces/")]
-pub struct Regroup {
-    pub column: ColumnId,
-    pub toward: Toward,
-}
-
-#[derive(Deserialize, TS)]
-#[ts(export_to = "workspaces/")]
-pub struct Fill {
-    pub column: ColumnId,
-    pub fill: bool,
-}
-
-#[derive(Deserialize, TS)]
-#[ts(export_to = "workspaces/")]
-pub struct Tidy {
-    /// The workspace the Person looks at, which stays even empty.
-    #[serde(default)]
-    #[ts(optional)]
-    pub keep: Option<WorkspaceId>,
-}
-
-#[derive(Deserialize, TS)]
-#[ts(export_to = "workspaces/")]
-pub struct Take {
-    pub workspaces: Arrangement,
 }
 
 #[async_trait::async_trait]
@@ -615,29 +467,7 @@ impl Workspaces {
 
     async fn open(&self, call: Call, open: Open) -> Result<Opened, Refusal> {
         let ((pane, new), at) = change(&call, "opened", None, Say::Whole, move |list, _, seed| {
-            let again = open.again == Some(true) || open.instead.is_some();
-            let new = again || model::showing(list, &open.shows).is_none();
-            let Open {
-                shows,
-                place,
-                instead,
-                width,
-                grouped,
-                ..
-            } = open;
-            let opening = Opening {
-                shown: shows,
-                place,
-                instead,
-                width,
-                again,
-                by: None,
-            };
-            let pane = model::open(list, opening, seed)?;
-            if new && grouped == Some(true) {
-                model::group_pane(list, pane, seed)?;
-            }
-            Ok((pane, new))
+            Ok(commands::open(list, open, seed)?)
         })
         .await?;
         Ok(Opened { pane, new, at })
