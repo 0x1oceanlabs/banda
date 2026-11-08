@@ -19,7 +19,7 @@ import { useRun } from "@banda/ui/hooks/use-run"
 import type { Listed } from "@banda/ui/pane"
 import { useIsArchived } from "../sidebar/archived"
 import { rowsOf, type Shown } from "../sidebar/items"
-import { Making } from "../sidebar/MakeProject"
+import { Making } from "./MakeProject"
 
 /** What the Thread menu asks of the window, wherever it opens; it runs
  * its rows by the Window's `run` (`useRun`). */

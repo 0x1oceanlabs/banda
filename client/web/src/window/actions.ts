@@ -39,7 +39,7 @@ import { tomlOf } from "@banda/contract/settings"
 import { fileNow } from "@banda/ui/lib/look"
 import { nextFlow } from "../sidebar/FlowMenu"
 import { archiving } from "../sidebar/items"
-import { makeProject } from "../sidebar/MakeProject"
+import { makeProject } from "../titles/MakeProject"
 import { pickSnooze } from "../sidebar/Snoozing"
 import {
   type Change,
