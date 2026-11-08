@@ -26,6 +26,7 @@ import type { OneTurn } from "./OneTurn";
 import type { OneVisual } from "./OneVisual";
 import type { PreviewVisual } from "./PreviewVisual";
 import type { Previewed } from "./Previewed";
+import type { ReadAsk } from "./ReadAsk";
 import type { Rename } from "./Rename";
 import type { Send } from "./Send";
 import type { Sent } from "./Sent";
@@ -231,6 +232,21 @@ snooze: CommandMethod<SnoozeAsk, null>,
  */
 wake: CommandMethod<WakeAsk, null>, 
 /**
+ * Marks a Thread read for its Person (ADR 0096): `turn`, or
+ * without it the latest that ended, is the last they saw, so it
+ * calls them no more. Seen moves forward only: a turn not of this
+ * Thread, one that has not ended, or one older than the mark
+ * changes nothing. The list says it, as `seen`. Only a Person
+ * marks a Thread.
+ */
+read: CommandMethod<ReadAsk, null>, 
+/**
+ * Marks a Thread unread for its Person: what it said last calls
+ * them again. One with nothing seen stays as it is. Only a Person
+ * does.
+ */
+unread: CommandMethod<OneThread, null>, 
+/**
  * Archives a Thread for its Person (ADR 0096): it leaves their
  * list until something new happens in it, and wakes if it sleeps.
  * A Thread at work, or one that asks, is refused. The list says
@@ -244,10 +260,12 @@ archive: CommandMethod<OneThread, null>,
 unarchive: CommandMethod<OneThread, null>, 
 /**
  * Moves the marks a window kept of this Project's Threads to
- * their host, once: the Threads it showed archived, by ID, each
- * archived from now. A Thread the host does not know or has
- * archived, one at work, one that asks and one asleep are left
- * as they are. Only a Person moves them.
+ * their host, once, by ID: the turn of each it saw last, which
+ * moves seen forward only, and the Threads it showed archived,
+ * each archived from now. A Thread the host does not know or has
+ * archived, one at work, one that asks and one asleep keep their
+ * archive, and one its Person took a mark off keeps both. Only a
+ * Person moves them.
  */
 import_marks: CommandMethod<ImportMarks, Imported>, 
 /**

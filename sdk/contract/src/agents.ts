@@ -46,6 +46,7 @@ export type { OptionValue } from "./generated/agents/OptionValue"
 export type { Output } from "./generated/agents/Output"
 export type { PlanStep } from "./generated/agents/PlanStep"
 export type { QuestionState } from "./generated/agents/QuestionState"
+export type { ReadAsk } from "./generated/agents/ReadAsk"
 export type { Sent } from "./generated/agents/Sent"
 export type { Settings } from "./generated/agents/Settings"
 export type { Skill } from "./generated/agents/Skill"
@@ -96,6 +97,8 @@ const KINDS: ReadonlySet<string> = new Set(
     "thread.held": true,
     "thread.snoozed": true,
     "thread.woke": true,
+    "thread.seen": true,
+    "thread.unseen": true,
     "thread.archived": true,
     "thread.unarchived": true,
     "marks.moved": true,

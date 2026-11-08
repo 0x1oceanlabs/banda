@@ -811,6 +811,12 @@ pub struct ListedThread {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub snooze: Option<Snooze>,
+    /// The latest of its turns that ended which its Person saw (ADR
+    /// 0096). It moves forward only; none until they see one, and none
+    /// again once they mark it unread or a rewind takes that turn out.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seen: Option<TurnId>,
     /// When its Person archived it (ADR 0096), unless they brought it
     /// back or snoozed it since. It is archived only while it neither
     /// works nor asks and nothing happened in it after: `updated_at <=
@@ -1034,9 +1040,18 @@ pub enum Fact {
     /// nothing.
     #[serde(rename = "thread.woke")]
     ThreadWoke { thread: ThreadId, by: Wake },
+    /// The Person saw `turn`, which ended, settled (ADR 0096): it is the
+    /// Thread's `seen` now. Like each of the Person's marks below, it
+    /// moves the Thread nowhere in a list.
+    #[serde(rename = "thread.seen")]
+    ThreadSeen { thread: ThreadId, turn: TurnId },
+    /// The Person marked the Thread unread: it has no `seen`, so its
+    /// latest turn calls them again.
+    #[serde(rename = "thread.unseen")]
+    ThreadUnseen { thread: ThreadId },
     /// The Person archived the Thread (ADR 0096): it is put away until
     /// something new happens in it. Its `archived.at` is the event's own
-    /// `at`. Like the two below, it moves the Thread nowhere in a list.
+    /// `at`.
     #[serde(rename = "thread.archived")]
     ThreadArchived { thread: ThreadId },
     /// The Thread left Archive: its Person brought it back, or a snooze

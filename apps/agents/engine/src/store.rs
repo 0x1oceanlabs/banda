@@ -191,6 +191,14 @@ ALTER TABLE agents_threads ADD COLUMN full_access TEXT;
 -- keeps it beside the snooze, as each window kept it before.
 ALTER TABLE agents_threads ADD COLUMN archived TEXT;
 "#,
+    r#"
+-- The latest ended turn of the Thread its Person saw (ADR 0096), beside
+-- the archive; a rewind that takes that turn out clears it.
+ALTER TABLE agents_threads ADD COLUMN seen TEXT;
+-- When its Person last took a mark off the Thread by hand, unread or
+-- unarchived: a window's old marks moved after leave it as they chose.
+ALTER TABLE agents_threads ADD COLUMN cleared_at INTEGER;
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -347,6 +355,50 @@ pub fn set_archived(
     sql.execute(
         "UPDATE agents_threads SET archived = ?2 WHERE id = ?1",
         params![thread, archived.as_ref().map(json).transpose()?],
+    )?;
+    Ok(())
+}
+
+/// The latest ended turn of the Thread its Person saw (ADR 0096).
+pub fn seen(sql: &Connection, thread: ThreadId) -> Result<Option<TurnId>, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT seen FROM agents_threads WHERE id = ?1",
+            params![thread],
+            |row| row.get(0),
+        )
+        .optional()?
+        .flatten())
+}
+
+/// Marks the turn of the Thread its Person saw, or with none, that they
+/// saw none. Its `updated_at` stays: a mark moves it nowhere in a list.
+pub fn set_seen(sql: &Connection, thread: ThreadId, turn: Option<TurnId>) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_threads SET seen = ?2 WHERE id = ?1",
+        params![thread, turn],
+    )?;
+    Ok(())
+}
+
+/// Whether its Person took a mark off the Thread by hand: what a window
+/// kept of it before is theirs no longer (#853).
+pub fn cleared(sql: &Connection, thread: ThreadId) -> Result<bool, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT cleared_at IS NOT NULL FROM agents_threads WHERE id = ?1",
+            params![thread],
+            |row| row.get(0),
+        )
+        .optional()?
+        .unwrap_or(false))
+}
+
+/// Keeps that its Person took a mark off the Thread by hand, at `at`.
+pub fn set_cleared(sql: &Connection, thread: ThreadId, at: i64) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_threads SET cleared_at = ?2 WHERE id = ?1",
+        params![thread, at],
     )?;
     Ok(())
 }
@@ -655,23 +707,24 @@ pub fn threads(sql: &Connection) -> Result<Vec<ListedThread>, Error> {
     // The Person's marks come with each row, not by a query of their own.
     let mut statement = sql.prepare(
         "SELECT id, COALESCE(harness, ''), title, updated_at, was_title, agent, snooze,
-                archived
+                seen, archived
          FROM agents_threads ORDER BY updated_at DESC, id DESC",
     )?;
     let rows = statement.query_map([], |row| {
-        let marks = (maybe_column(row, 6)?, maybe_column(row, 7)?);
+        let marks = (maybe_column(row, 6)?, row.get(7)?, maybe_column(row, 8)?);
         Ok((read_thread(row)?, row.get(5)?, marks))
     })?;
     let summaries = rows.collect::<rusqlite::Result<Vec<_>>>()?;
     summaries
         .into_iter()
-        .map(|(thread, agent, (snooze, archived))| {
+        .map(|(thread, agent, (snooze, seen, archived))| {
             Ok(ListedThread {
                 agent,
                 latest: last_begun(sql, thread.id)?,
                 asking: asking(sql, thread.id)?,
                 message: latest_message(sql, thread.id)?,
                 snooze,
+                seen,
                 archived,
                 thread,
             })
@@ -835,6 +888,39 @@ pub fn set_turn(
         ],
     )?;
     Ok(())
+}
+
+/// The states of a turn that has not ended, or never began: one that
+/// waits, or that a Person took back. A Person sees any other settled.
+fn unended() -> [String; 3] {
+    [TurnState::Queued, TurnState::Running, TurnState::Withdrawn].map(word)
+}
+
+/// Where `turn` stands among `thread`'s turns, if it is one of them and
+/// it ended: what a Person's seen may name (ADR 0096, decision 2).
+pub fn ended_turn(sql: &Connection, thread: ThreadId, turn: TurnId) -> Result<Option<i64>, Error> {
+    let [queued, running, withdrawn] = unended();
+    Ok(sql
+        .query_row(
+            "SELECT rowid FROM agents_turns
+             WHERE id = ?2 AND thread = ?1 AND state NOT IN (?3, ?4, ?5)",
+            params![thread, turn, queued, running, withdrawn],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
+/// The Thread's latest turn that ended, if one did.
+pub fn latest_ended(sql: &Connection, thread: ThreadId) -> Result<Option<TurnId>, Error> {
+    let [queued, running, withdrawn] = unended();
+    Ok(sql
+        .query_row(
+            "SELECT id FROM agents_turns WHERE thread = ?1 AND state NOT IN (?2, ?3, ?4)
+             ORDER BY rowid DESC LIMIT 1",
+            params![thread, queued, running, withdrawn],
+            |row| row.get(0),
+        )
+        .optional()?)
 }
 
 /// The Thread's latest turn that began, and where it stands: one that
@@ -1145,6 +1231,11 @@ pub fn rewind(sql: &Connection, thread: ThreadId, turn: TurnId, now: i64) -> Res
     )?;
     sql.execute(
         &format!("DELETE FROM agents_items WHERE id IN ({items})"),
+        params![thread, turn],
+    )?;
+    // A seen that named one of them names none (ADR 0096, decision 2).
+    sql.execute(
+        &format!("UPDATE agents_threads SET seen = NULL WHERE id = ?1 AND seen IN ({LATER})"),
         params![thread, turn],
     )?;
     sql.execute(
