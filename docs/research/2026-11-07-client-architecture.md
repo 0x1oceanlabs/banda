@@ -622,7 +622,7 @@ A separate compositor process; a WebGPU layer over the DOM; a native window tool
 | P1 | Idle | the Mark, the page follow, the overview, terminals on one clock | S-M | P0 | — | quiet rAF = 0 |
 | P2 | Tile states | `tileOf`, `useTile`, `setVisible`, the page box, `useLive` holds; predicted states; containment | M | P0, B4a, C1c | — | hidden draws = 0 |
 | P3 | Resize gate | one `ResizeObserver` per Tile, policy "every frame" | S | P2 | — | P7 |
-| P4 | Terminal Canvas2D | scrollbar, typed snapshot, blit scroll | M | P2 | — | printing −50% |
+| P4 | Terminal Canvas2D | scrollbar, typed snapshot, blit scroll | M | P2 | — | printing −50%: not met, see below |
 | **Wave 4: Threads leave the Window; the Tiling names no App** | | | | | | |
 | B4d | Thread verbs | item actions replace `Listing`; §6.4; `askDetails` becomes Threads' action `agents.thread.details` | M | B4c | — | B4e, B4i |
 | B4e | The sidebar list | its twenty props, fourteen of them functions (`client/web/src/sidebar/Sidebar.tsx:93-140`), become store reads, item actions and `projects.*` actions for a Project's verbs (`onPin`, `onLocate`, `onProjectSettings`, `onAddProject`); `flow.pick` | M | B4d | — | W4 |
@@ -659,6 +659,8 @@ A separate compositor process; a WebGPU layer over the DOM; a native window tool
 | W4 | Phone form | §7.5 | M | W1, B4e–B4g | ◆ | M8 |
 | **Later** | | | | | | |
 | V-s | Level 1 | Widgets and Panes as Trees; `app.toml` sections; `when` as data; App Panels; phone fields; the skill topic `apps` ships | — | V2, V4 | — | Apps from elsewhere |
+
+**P4, as it landed (2026-11-08).** In the printing phase at a scale of 1, one ABBA pair against main measured the main thread's Task time 28% lower (266 → 193 ms/s), its Script 44% lower (118 → 66 ms/s) and the on-screen terminal's canvas calls 95% lower (3992 → 198 a second); the implementer's two pairs, on an older main, had −22%, −35% and −95%. The −50% gate is not met. What is left is mostly a new terminal's scrollbar, laid out again on every printed line until its thumb reaches its floor (#793), the canvas's own commit each frame, and every row read again after each scroll (#794). At 1.6, Roma's scale, and at every scale but 1 and 2, the renderer draws as T3's did, since there T3's rounding differs from row to row and moved rows would not be main's pixels: only the scrollbar and the snapshot win there (Task −8%, Script −14%). Drawing rows in screen pixels would win there too, and changes pixels, so it waits for Roma (#787). P11 stays only if needed: WebGL2 would not remove the scrollbar's DOM cost.
 
 **Parallel tracks.** Wave 1 needs nothing. Wave 3 runs beside Wave 4. T-ids and T-par need nothing from Wave 4. Wave 5 and B8c wait for host steps.
 
