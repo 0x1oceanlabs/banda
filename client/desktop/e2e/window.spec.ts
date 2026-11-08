@@ -5450,10 +5450,19 @@ test("a Project whose folder is gone shows as missing, and Locate folder opens i
     .getByRole("button", { name: /^old/ })
   await expect(old).toContainText("Missing")
 
-  // Its row opens "Locate folder" where the folder was.
-  await old.click()
+  // Its menu's Locate folder, in New Thread's place, opens "Locate
+  // folder" where the folder was.
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   const search = menu.getByRole("combobox", { name: "Search" })
+  await old.click({ button: "right" })
+  await expect(page.getByRole("menuitem", { name: "New Thread" })).toBeHidden()
+  await page.getByRole("menuitem", { name: "Locate folder" }).click()
+  await expect(search).toHaveValue("/nonexistent/")
+  await page.keyboard.press("Escape")
+  await expect(menu).toBeHidden()
+
+  // So does its row.
+  await old.click()
   await expect(search).toHaveValue("/nonexistent/")
   await search.fill(moved)
   await expect(menu.getByRole("option").first()).toHaveText(/^Locate/)
@@ -5641,6 +5650,173 @@ test("a narrow window hides the sidebar, and Alt+A shows it over the Strip", asy
   await resize(1280)
   await expect(sidebar).toBeVisible()
   await expect.poll(left).toBeGreaterThan(200)
+})
+
+test("the sidebar over the Strip goes once it opened a menu, a Thread or the settings, and stays as its Flow is picked", async () => {
+  window = await startWindow()
+  const { app, dir, page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]?.setContentSize(700, 800)
+  )
+  await page.setViewportSize({ width: 700, height: 800 })
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await expect(sidebar).toBeHidden()
+  // Alt+A, from the Thread once a menu closed: the closed menu keeps the
+  // focus, and the keys there are its own (#946).
+  const box = page
+    .getByRole("region", { name: "hello" })
+    .getByRole("textbox", { name: "Message to Fake AI" })
+  const over = async (from?: Locator) => {
+    await from?.click()
+    await page.keyboard.press("Alt+A")
+    await expect(sidebar).toBeVisible()
+  }
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+
+  // Search: the Banda menu, at its root.
+  await over()
+  await sidebar.getByRole("button", { name: /Search/ }).click()
+  await expect(
+    menu.getByRole("group", { name: "Recent Threads" })
+  ).toBeVisible()
+  await expect(sidebar).toBeHidden()
+  await page.keyboard.press("Escape")
+  await expect(menu).toBeHidden()
+
+  // The key sheet: the menu at its Actions.
+  await over(box)
+  await sidebar
+    .getByRole("button", { name: "Every action and its key" })
+    .click()
+  await expect(menu.getByRole("group", { name: "Banda" })).toBeVisible()
+  await expect(sidebar).toBeHidden()
+  await page.keyboard.press("Escape")
+  await expect(menu).toBeHidden()
+
+  // The Flow is picked where it is: agents.toml takes it, and the sidebar
+  // stays.
+  await over(box)
+  const flow = sidebar.getByRole("button", { name: /^Flow: / })
+  await flow.click()
+  await page.getByRole("menuitemradio", { name: /^Free/ }).click()
+  await page.keyboard.press("Escape")
+  await expect(flow).toHaveAccessibleName("Flow: Free")
+  await expect
+    .poll(() => read(join(dir, "config/agents.toml")))
+    .toContain('flow = "free"')
+  await expect(sidebar).toBeVisible()
+
+  // New Thread: a new Thread in Work, in focus.
+  await sidebar.getByRole("button", { name: "New Thread", exact: true }).click()
+  await expect(sidebar).toBeHidden()
+  await expect(
+    page
+      .getByRole("region", { name: "New Thread" })
+      .and(page.locator('[data-focused="true"]'))
+      .getByRole("button", { name: "Project: Work" })
+  ).toBeVisible()
+
+  // The gear: the settings.
+  await over()
+  await sidebar.getByRole("button", { name: "Settings" }).click()
+  await expect(sidebar).toBeHidden()
+  await expect(
+    page.getByRole("region", { name: "Settings", exact: true })
+  ).toBeVisible()
+})
+
+test("the sidebar's New Thread buttons and a Project's menu start a Thread where each stands, and the row in focus is marked", async () => {
+  window = await startWindow()
+  const { page } = window
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const focused = page
+    .getByRole("region", { name: "New Thread" })
+    .and(page.locator('[data-focused="true"]'))
+  // Each starts a new Thread in its Project, in focus; then the pointer
+  // leaves the sidebar, whose rows held still under it (ADR 0065,
+  // decision 8), and what came meanwhile moves in.
+  const startsIn = async (project: string) => {
+    await expect(
+      focused.getByRole("button", { name: `Project: ${project}` })
+    ).toBeVisible()
+    const area = (await sidebar.boundingBox())!
+    await page.mouse.move(area.x + area.width + 200, area.y + area.height / 2)
+    await expect(
+      sidebar.getByRole("button", { name: /updates?$/ })
+    ).toHaveCount(0)
+  }
+  // A Thread in No Project, the first screen's; then one in Work, which
+  // is home.
+  const box = page.getByRole("textbox", { name: "Message to Fake AI" })
+  await box.fill("scratch hello")
+  await box.press("Enter")
+  await expect(page.getByText("You said: scratch hello")).toBeVisible()
+  await newProject(page, "Work")
+  await startsIn("Work")
+  const work = focused.getByRole("textbox", { name: "Message to Fake AI" })
+  await work.fill("hello")
+  await work.press("Enter")
+  await expect(page.getByText("You said: hello")).toBeVisible()
+
+  // The row of the Thread in focus is marked, and only while it is.
+  const scratch = sidebar.getByRole("button", { name: /scratch hello/ })
+  const hello = sidebar
+    .getByRole("button", { name: /hello/ })
+    .filter({ hasNotText: "scratch" })
+  await expect(hello).toHaveAttribute("aria-current", "true")
+  await expect(scratch).not.toHaveAttribute("aria-current")
+  await scratch.click()
+  await expect(scratch).toHaveAttribute("aria-current", "true")
+  await expect(hello).not.toHaveAttribute("aria-current")
+
+  // The header's New Thread starts in home.
+  const header = sidebar.getByRole("button", {
+    name: "New Thread",
+    exact: true,
+  })
+  await header.click()
+  await startsIn("Work")
+  await expect(scratch).not.toHaveAttribute("aria-current")
+  await newProject(page, "lab")
+  await startsIn("lab")
+
+  // Listed as places, a Project picked: the header's starts in it.
+  await sidebar.getByRole("button", { name: /^View: / }).click()
+  await page.getByRole("menuitemradio", { name: /^places/ }).click()
+  const projects = sidebar.getByRole("group", { name: "Projects" })
+  const lab = projects.getByRole("button", { name: /^lab/ })
+  await lab.click()
+  await expect(lab).toHaveAttribute("aria-pressed", "true")
+  await header.click()
+  await startsIn("lab")
+  await lab.click()
+  await expect(lab).toHaveAttribute("aria-pressed", "false")
+  // A Project's own, at its line, and its menu's.
+  await projects.getByRole("button", { name: "New Thread in Work" }).click()
+  await startsIn("Work")
+  await lab.click({ button: "right" })
+  await page.getByRole("menuitem", { name: "New Thread" }).click()
+  await startsIn("lab")
+
+  // Listed by Project: a section's own, its menu's, and No Project's.
+  await sidebar.getByRole("button", { name: /^View: / }).click()
+  await page.getByRole("menuitemradio", { name: /^projects/ }).click()
+  const section = sidebar.getByRole("group", { name: "Work", exact: true })
+  await section.getByRole("button", { name: "New Thread in Work" }).click()
+  await startsIn("Work")
+  await section.getByRole("button", { name: /^Work/ }).click({
+    button: "right",
+  })
+  await page.getByRole("menuitem", { name: "New Thread" }).click()
+  await startsIn("Work")
+  await sidebar
+    .getByRole("button", { name: "New Thread in No Project" })
+    .click()
+  await startsIn("No Project")
 })
 
 test("the sidebar's edge drags its width, which the Strip follows and the window keeps", async () => {
