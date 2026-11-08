@@ -10,7 +10,13 @@
 import { createContext, useCallback, useContext } from "react"
 import type { ProjectId } from "@banda/contract"
 import { waits, works } from "@banda/ui/components/banda-mark"
-import { sameEach, Store, useStore } from "@banda/ui/lib/store"
+import {
+  type Readable,
+  sameData,
+  sameEach,
+  Store,
+  useStore,
+} from "@banda/ui/lib/store"
 import {
   type Attention,
   type Call,
@@ -47,20 +53,6 @@ export function newStores(now = Date.now()): Stores {
     items: new Store<Lists>({}),
     calls: new Store<Calls>({ attention: QUIET, now, list: [] }),
   }
-}
-
-/** Whether two values of plain data, as a Listed is, say the same. */
-function sameData(a: unknown, b: unknown): boolean {
-  if (Object.is(a, b)) return true
-  if (typeof a !== "object" || typeof b !== "object" || !a || !b) return false
-  if (Array.isArray(a) !== Array.isArray(b)) return false
-  const keys = Object.keys(a)
-  if (keys.length !== Object.keys(b).length) return false
-  const one = a as Record<string, unknown>
-  const other = b as Record<string, unknown>
-  return keys.every(
-    (key) => Object.hasOwn(other, key) && sameData(one[key], other[key])
-  )
 }
 
 /**
@@ -130,24 +122,26 @@ export function followCalls({ items, calls }: Stores): () => void {
 }
 
 /**
- * Calls `listener` as the lists change, and as a snoozed Thread wakes,
- * which changes what calls (ADR 0074): `WindowApi.watchLists`. Returns how
- * to stop.
+ * What every App lists, as code outside React reads it
+ * (`WindowApi.items`): its listeners hear each change of the lists, and
+ * a snoozed Thread waking, which changes what calls (ADR 0074).
  */
-export function watchLists(
-  { items, calls }: Stores,
-  listener: () => void
-): () => void {
-  let now = calls.get().now
-  const stopItems = items.subscribe(listener)
-  const stopCalls = calls.subscribe(() => {
-    if (calls.get().now === now) return
-    now = calls.get().now
-    listener()
-  })
-  return () => {
-    stopItems()
-    stopCalls()
+export function itemsOf({ items, calls }: Stores): Readable<Lists> {
+  return {
+    get: items.get,
+    subscribe: (listener) => {
+      let now = calls.get().now
+      const stopItems = items.subscribe(listener)
+      const stopCalls = calls.subscribe(() => {
+        if (calls.get().now === now) return
+        now = calls.get().now
+        listener()
+      })
+      return () => {
+        stopItems()
+        stopCalls()
+      }
+    },
   }
 }
 

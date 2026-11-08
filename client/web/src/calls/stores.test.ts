@@ -4,12 +4,12 @@ import { afterEach, expect, test, vi } from "vitest"
 import {
   callingIn,
   followCalls,
+  itemsOf,
   keptLists,
   listedIn,
   newStores,
   takeAttention,
   takeLists,
-  watchLists,
   workingIn,
 } from "./stores"
 
@@ -138,7 +138,7 @@ test("what watches the lists hears them change, and a snooze wake, not a mark", 
   const stores = newStores(1_000)
   const stop = followCalls(stores)
   const heard = vi.fn()
-  const unwatch = watchLists(stores, heard)
+  const unwatch = itemsOf(stores).subscribe(heard)
 
   takeLists(stores, {
     [p]: [thread("a", { mark: "done", snooze: { at: 0, until: 1_500 } })],

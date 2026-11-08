@@ -9,24 +9,13 @@ import { FILES_FILE } from "@banda/contract/files"
 import { tomlOf } from "@banda/contract/settings"
 import { fileNow } from "@banda/ui/lib/look"
 import { actInScope } from "@banda/ui/hooks/use-scope"
-import { defineModule, scoped, takes, type WindowApi } from "@banda/ui/module"
+import { defineModule, scoped, takes } from "@banda/ui/module"
 import { filePane, openFile, peekFile } from "./FilePane"
 import { FILES, KEYS } from "./keys"
 import { peeked } from "./peek"
 import { PREVIEWERS } from "./previewers"
 import { filesSource } from "./sources"
 import { openTree, treePane } from "./TreePane"
-
-/** The Thread the focused Pane shows, as the lists name one with its
- * Agent; none for a Pane of no Thread. */
-function threadShown(
-  window: WindowApi,
-  at: NonNullable<ReturnType<WindowApi["focused"]>>
-): string | null {
-  const listed = window.lists()[at.project] ?? []
-  const shown = listed.find((one) => one.id === at.shows)
-  return shown?.agent ? shown.id : null
-}
 
 /** The id of the Banda menu's source of files, which quick open shows. */
 const FIND = filesSource.id
@@ -45,13 +34,12 @@ export const files = defineModule({
       section: "Panes",
       keys: [{ code: "KeyE", mod: true }],
       run: (window, args = {}) => {
-        const at = window.focused()
+        const at = window.here.get().pane
         const asked = typeof args.project === "string" ? args.project : null
         const project = (asked as ProjectId | null) ?? at?.project
         const dir = typeof args.dir === "string" ? args.dir : ""
         // Opened from a Thread, it marks and follows that Thread's turns.
-        const thread =
-          at && at.project === project ? threadShown(window, at) : null
+        const thread = at?.project === project ? at?.subject : undefined
         openTree(
           window,
           { dir, ...(thread && { thread }) },

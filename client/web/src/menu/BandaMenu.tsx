@@ -30,7 +30,8 @@ import {
   matches,
   sameKey,
 } from "@banda/ui/lib/keys"
-import type { Action, Here, MenuRow, Source } from "@banda/ui/module"
+import { type Here, useHere } from "@banda/ui/here"
+import type { Action, MenuAt, MenuRow, Source } from "@banda/ui/module"
 import {
   BadgeCheckIcon,
   BoxIcon,
@@ -108,7 +109,6 @@ export const BandaMenu = memo(function BandaMenu({
   onAdded,
   engine,
   modules,
-  project,
   asleep,
   projects,
   actions,
@@ -124,8 +124,6 @@ export const BandaMenu = memo(function BandaMenu({
   engine: Engine
   /** The modules the engine runs: the sources of the others find nothing. */
   modules: readonly string[]
-  /** The Project the Person is in, where the sources look. */
-  project: ProjectId
   /** Whether a Thread sleeps now (ADR 0074), by the window's clock. */
   asleep: (listed: Listed) => boolean
   projects: readonly ProjectSummary[]
@@ -153,12 +151,14 @@ export const BandaMenu = memo(function BandaMenu({
       })),
     [running, rows]
   )
-  const here: Here = useMemo(() => {
-    const at = looking.entered ?? project
+  // The sources look in the Project the Person is in, or the one gone into.
+  const project = useHere(projectOf)
+  const at: MenuAt = useMemo(() => {
+    const where = looking.entered ?? project
     return {
       engine,
-      project: at,
-      folder: projects.find((one) => one.id === at)?.folder,
+      project: where,
+      folder: projects.find((one) => one.id === where)?.folder,
       entered: looking.entered !== undefined,
       ...(looking.only && { only: looking.only }),
     }
@@ -181,7 +181,7 @@ export const BandaMenu = memo(function BandaMenu({
           key={source.id}
           source={source}
           words={looking.words}
-          here={here}
+          at={at}
           hear={hear}
         />
       ))}
@@ -231,12 +231,12 @@ export const BandaMenu = memo(function BandaMenu({
 function Finder({
   source,
   words,
-  here,
+  at,
   hear,
 }: {
   source: Source
   words: string
-  here: Here
+  at: MenuAt
   hear: (id: string, rows?: readonly MenuRow[]) => void
 }) {
   const { id, Find } = source
@@ -245,8 +245,11 @@ function Finder({
     [hear, id]
   )
   useEffect(() => () => hear(id), [hear, id])
-  return <Find words={words} here={here} found={found} />
+  return <Find words={words} at={at} found={found} />
 }
+
+/** The Project the Person is in, as Here says it. */
+const projectOf = (here: Here) => here.project
 
 /** What the menu looks for: the words typed at its root, or the Project it
  * went into, or in one source alone. */

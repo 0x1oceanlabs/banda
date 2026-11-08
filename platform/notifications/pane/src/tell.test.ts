@@ -41,24 +41,22 @@ test("the first list is what already was: no news", () => {
   })
 })
 
-test("only the focused Pane's thing is asked whether the Person looks at it, so what shows is never measured for it", () => {
+test("the Person looks at the thing the Pane in focus shows, the Window in front", () => {
   const calling = [call("t1", "done"), call("t2", "asking"), call("t3", "done")]
-  const asked: string[] = []
-  const sight = (looking: boolean) => (one: Call) => {
-    asked.push(one.about)
-    return looking ? ("looking" as const) : ("away" as const)
-  }
-  const at = { project: "s", shows: "t2" }
-  expect(lookedAt(calling, at, sight(true)).map((c) => c.about)).toEqual(["t2"])
-  // The window behind: the focused Pane is not looked at.
-  expect(lookedAt(calling, at, sight(false))).toEqual([])
-  // No Pane focused, one that shows no thing, or one of another Project.
-  expect(lookedAt(calling, null, sight(true))).toEqual([])
-  expect(lookedAt(calling, { project: "s" }, sight(true))).toEqual([])
+  const pane = { id: "p", project: "s", subject: "t2" }
+  expect(lookedAt(calling, { front: true, pane }).map((c) => c.about)).toEqual([
+    "t2",
+  ])
+  // The Window behind: the Pane in focus is not looked at.
+  expect(lookedAt(calling, { front: false, pane })).toEqual([])
+  // No Pane in focus, one that shows no thing, or one of another Project.
+  expect(lookedAt(calling, { front: true, pane: null })).toEqual([])
   expect(
-    lookedAt(calling, { project: "other", shows: "t2" }, sight(true))
+    lookedAt(calling, { front: true, pane: { id: "p", project: "s" } })
   ).toEqual([])
-  expect(asked).toEqual(["t2", "t2"])
+  expect(
+    lookedAt(calling, { front: true, pane: { ...pane, project: "other" } })
+  ).toEqual([])
 })
 
 test("a call is told once, where the Person will notice it", () => {

@@ -12,7 +12,9 @@ import type {
   ProjectSummary,
 } from "@banda/contract"
 import type { Details } from "./components/thread-details"
+import type { HereStore } from "./here"
 import type { Key } from "./lib/keys"
+import type { Readable } from "./lib/store"
 import { ZOOM_KEYS, zoomId } from "./lib/zoom"
 import type { Notify } from "@banda/contract/look"
 import type { Lists, PaneKind, PaneState, Watch } from "./pane"
@@ -87,41 +89,45 @@ export type WindowApi = {
    * shown gets the focus instead, as a Pane's own `open`: one its kind
    * names the same (`PaneKind.identity`), as the Project's one Diff; with
    * `update` too, it shows these args, as a file's Pane the line a link
-   * names. One whose kind says `home` opens on its Project's workspace
-   * (ADR 0065).
+   * names. With `toggle`, the Pane in focus closes instead when it is
+   * this one, as its kind names it: Mod+D's Diff. One whose kind says
+   * `home` opens on its Project's workspace (ADR 0065).
    */
   open: (
     pane: PaneState,
     project?: ProjectId,
-    how?: { focus?: boolean; beside?: string; again?: false; update?: true }
+    how?: {
+      focus?: boolean
+      beside?: string
+      again?: false
+      update?: true
+      toggle?: true
+    }
   ) => void
-  /** The focused Pane and its Project, and the one thing it shows, as its
-   * kind says (`PaneKind.shows`): a Thread's ID for a Thread. None while
-   * no Pane has the focus. */
-  focused: () => {
-    project: ProjectId
-    pane: PaneState
-    shows?: string
-  } | null
+  /** Here (ADR 0087, decision 4): where the Person is in this Window. An
+   * act reads it as it runs (`here.get()`), the Tiling's last change in
+   * it, so keys pressed faster than the window draws each act where the
+   * last one left the Person; what runs outside React follows it. A
+   * widget reads it by selector (`useHere`). */
+  here: HereStore
   /** Where the thing `agent` works in is, as a Thread its Agent's (ADR
    * 0029, decision 4); none when no module lists one. */
   beside: (agent: string) => Beside | null
-  /** What every module lists now, as the sidebar shows it (ADR 0008). */
-  lists: () => Lists
-  /** Calls `listener` on each change of `lists`, and as a snoozed Thread
-   * wakes, which changes what calls (ADR 0074); returns how to stop. */
-  watchLists: (listener: () => void) => () => void
+  /** What every module lists now, as the sidebar shows it (ADR 0008):
+   * the Window's items (ADR 0088, decision 7), for what runs outside
+   * React. Its listeners hear each change, and a snoozed Thread waking,
+   * which changes what calls (ADR 0074). */
+  items: Readable<Lists>
   /** Runs an action by its id, a module's or the window's, as its key
    * would: how one module asks another for what it does. */
   run: (action: string, args?: Args) => void
-  /** Where the Person looks, for `thing` (ADR 0056, decision 1); for
-   * none, whether at the window or away. */
+  /** Where the Person looks for `thing` (ADR 0056, decision 1), as the
+   * calls part works it out (`sightOf`): from Here and what the Tiles of
+   * the workspace on screen show, measured as it is asked (ADR 0087,
+   * decision 9); for none, whether at the Window or away. Only for the
+   * part that tells the Person, a counted case until who is told moves
+   * to the host (E9): any other part reads Here. */
   sight: (thing?: Thing) => Sight
-  /** Calls `listener` when where the Person looks may have changed: the
-   * workspaces, or the window in front or behind. A Strip that only
-   * scrolls calls it not: `sight` measures that as it is asked. Returns
-   * how to stop. */
-  watchSight: (listener: () => void) => () => void
   /** Goes to `thing`: to the Pane that shows it, on any workspace, else
    * opens `pane` for it. */
   goTo: (thing: Thing & { pane: PaneState }) => void
@@ -330,8 +336,9 @@ export type MenuRow = {
 }
 
 /** Where the Banda menu looks: the Project the Person is in, or the one
- * they went into (`entered`). */
-export type Here = {
+ * they went into (`entered`). Not Here, where the Person is, which it
+ * starts from. */
+export type MenuAt = {
   engine: Engine
   project: ProjectId
   /** The Project's folder, where it has one. */
@@ -345,7 +352,7 @@ export type Here = {
 export type FindProps = {
   /** What the Person typed, trimmed. */
   words: string
-  here: Here
+  at: MenuAt
   /** Says the rows that fit, now or later; each call replaces the last.
    * Said in a layout effect, they show with the words they fit. */
   found: (rows: readonly MenuRow[]) => void
@@ -366,13 +373,11 @@ export type Source = {
   Find: ComponentType<FindProps>
 }
 
-/** What the window gives a widget on the bar, as it gives a Watch. */
+/** What the window gives a widget on the bar, as it gives a Watch.
+ * Where the Person is, it reads from Here (`useHere`). */
 export type WidgetProps = {
   engine: Engine
   projects: readonly ProjectSummary[]
-  /** The Project the Person is in: the focused Pane's, else the
-   * workspace's, else home. */
-  project: ProjectId
   window: WindowApi
 }
 

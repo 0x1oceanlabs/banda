@@ -184,9 +184,11 @@ What Apps give never talk to each other.
 
 ## 3. Here: the context, like `$PWD`
 
-Every rule here binds *after* B4c, which builds Here. *Until* then, take
-context from your args and `PaneProps`, and from `WidgetProps.project` in
-a Widget.
+Every rule here binds from B4c, which built Here. A Widget reads it with
+`useHere(select)` from `@banda/ui/here`; an act reads it as it runs,
+`window.here.get()`, so it acts where the Person is at its gesture. Until
+Addresses come with `item@1` (B7), `subject` is the id the App lists the
+thing with (`PaneKind.shows`).
 
 ```ts
 type Here = {
@@ -202,25 +204,31 @@ Neither the Pane's kind nor the device's form is in it: branch on
 neither (borders.5, device.5).
 
 - **here.1 Context comes only from Here and your own args.** Not from
-  globals, module variables, DOM queries or another App's rows (today
-  Files reads Threads' rows, `apps/files/pane/src/index.ts:20-29`).
-  *Check:* planned.
+  globals, module variables, DOM queries or another App's rows (today the
+  browser reads Threads' rows for its tabs,
+  `apps/browser/pane/src/threads.ts`, until B7a). *Check:* the API has no
+  other record of where the Person is but `WindowApi.sight`, which only
+  the notifications part asks until E9, a counted case
+  (`client/web/src/architecture.test.ts`); planned (the borders test).
 - **here.2 Read only the fields you need, by selector:**
   `useHere((h) => h.project)`. A Tree Widget will declare them as `reads`
   and get them as args (V2). *Check:* review; planned with V2.
 - **here.3 Here is read-only.** Change where the Person is only by an
   action (`pane.pick`, `sidebar.toggle`, `show.*@1`). *Check:* by
-  construction.
+  construction: its store has no setter, and only the Window gives it
+  (`client/web/src/architecture.test.ts`).
 - **here.4 Here never reaches a host as state,** only as the args of a
   query or a command. Hosts see presence, nothing more (ADR 0082 d12).
   *Check:* review.
 - **here.5 A Pane never reads Here to draw,** and its header and Pane
   menu act on its own args (ADR 0066 d6). An act gets Here at its
-  gesture: an unset `project` or `pane` arg is filled from the gesture,
-  then from Here. *Check:* review.
+  gesture: it reads `window.here.get()` as it runs for an unset
+  `project` or `pane` arg, and from B4f `useRun` fills them from the
+  gesture, then from Here. *Check:* review.
 - **here.6 Don't work out sight or visibility yourself.** The platform
-  derives sight; drawing follows the Tile's state (motion.4). *Check:*
-  review.
+  derives sight (the calls part's `sightOf`, which the notifications
+  part asks through `WindowApi.sight` until E9); drawing follows the
+  Tile's state (motion.4). *Check:* review.
 
 ---
 
@@ -446,11 +454,13 @@ holds that only `modules.ts` and the bridge table name an App's package
 and that nothing more animates a size or a place. Of ADR 0087, it holds
 three ratchets that only fall: what the Tiling imports of the Window,
 the App strings in the Window and the Tiling, and a line ceiling on the
-Window's root (`client/web/src/window/Shell.tsx`); and two rules: a
-mark's rank is read only to pick the loudest, on the lines listed
-(decision 8), and the calls part reads no page and, of the Tiling,
-imports only its model (decision 9). Of ADR 0088, the parts the Window
-draws on every move stay memoized (decision 7).
+Window's root (`client/web/src/window/Shell.tsx`), and the files that
+ask the Window where the Person looks (`WindowApi.sight`, until E9);
+and three rules: only the Window gives Here (decision 4), a mark's rank
+is read only to pick the loudest, on the lines listed (decision 8), and
+the calls part reads no page and, of the Tiling, imports only its model
+(decision 9). Of ADR 0088, the parts the Window draws on every move
+stay memoized (decision 7).
 
 **Planned,** each an allowlist whose count only falls:
 
@@ -609,13 +619,13 @@ a path, a key of its own, or another App's name.
 code:
 
 - **These bind now:** borders.2 to borders.7, borders.9 to borders.11,
-  give.1 to give.3 and give.7, data.1 to data.4, data.6 and data.8,
-  design.1 and design.3 to design.8, motion.1 to motion.3 and motion.5 to
-  motion.8, device.2 to device.5, trust.1, trust.3 to trust.8, and the
-  words.
-- **These bind after their step:** here.1 to here.6 (B4c); give.4 (B7);
-  give.5 (B4i); give.6 (B4d); motion.4 (P2); borders.8 (B8); data.5 (E8);
-  device.1 (E3); borders.1's marks (B4f).
+  give.1 to give.3 and give.7, here.1 to here.6, data.1 to data.4, data.6
+  and data.8, design.1 and design.3 to design.8, motion.1 to motion.3 and
+  motion.5 to motion.8, device.2 to device.5, trust.1, trust.3 to
+  trust.8, and the words.
+- **These bind after their step:** give.4 (B7); give.5 (B4i); give.6
+  (B4d); motion.4 (P2); borders.8 (B8); data.5 (E8); device.1 (E3);
+  borders.1's marks (B4f).
 - **These wait for the renderer:** data.7, design.2 and trust.2 (V1, V2).
 
 Today's cases of borders.3, borders.6, borders.9 and data.4 are counted,

@@ -12,9 +12,9 @@ export const webSource: Source = {
   Find: FindWeb,
 }
 
-function FindWeb({ words, here, found }: FindProps) {
+function FindWeb({ words, at, found }: FindProps) {
   const addressOf = useAddressOf()
-  const { entered, project } = here
+  const { entered, project } = at
   const rows = useMemo(
     (): MenuRow[] =>
       entered || !words

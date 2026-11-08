@@ -83,7 +83,7 @@ Nothing an App gives talks to anything else directly.
 - `give.6` A verb on your own Items is an item action (after B4d).
 - `give.7` A dialog or picker is part of the view that opens it.
 
-## Here (after B4c)
+## Here
 
 - `here.1` Context comes only from Here and your own args.
 - `here.2` Read only the fields you need, by selector:
@@ -91,12 +91,13 @@ Nothing an App gives talks to anything else directly.
 - `here.3` Here is read-only; change it by an action.
 - `here.4` Here reaches a host only as args.
 - `here.5` A Pane never reads Here to draw; an act gets Here at its
-  gesture.
+  gesture, `window.here.get()` as it runs.
 - `here.6` Don't work out sight or visibility yourself.
 
 Here holds `front`, `sidebar`, `workspace`, `pane` (`{id, project,
 subject?}`) and `project`. It has no Pane kind and no device form: branch
-on neither.
+on neither. A Widget reads it with `useHere` from `@banda/ui/here`; an act
+reads `window.here.get()` as it runs.
 
 ## Data
 

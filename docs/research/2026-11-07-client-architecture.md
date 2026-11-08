@@ -237,7 +237,7 @@ The Window owns it: one stack in a fixed order over every workspace, drawn throu
 ### 5.1 Here
 
 ```ts
-// client/core/here.ts from W0; client/web/src/window/here.ts until then.
+// client/core/here.ts from W0; client/ui/src/here.ts until then (kept by client/web/src/window/here.tsx).
 // The client's view (ADR 0062 d13, ADR 0082 d1): never a host's state.
 export type Here = {
   front: boolean                                      // the Window has the OS focus
@@ -256,7 +256,7 @@ export function useHere<T>(select: (here: Here) => T): T   // useSyncExternalSto
 **Rules:**
 
 - **Only the Window writes it.** It folds three sources: the Tiling's events, its own areas, and the device port.
-- **`get()` is always current.** Two keys in one slow frame both act on the latest Here. Listeners are told once at the end of the input task, in a microtask, and never in the clock's read phase (`client/ui/src/lib/frames.ts:24-33`), where a React commit would force layouts.
+- **`get()` is always current.** Two keys in one slow frame both act on the latest Here. Listeners are told once at the end of the input task, in a microtask, and never in the clock's read phase (`client/ui/src/lib/frames.ts:24-33`), where a React commit would force layouts. As B4c built it, every source of Here is the Window's state, so the Window tells them from its effect once it drew the change: for a key that is the same task; for what the engine says, a reader may draw a commit after the Window (`client/web/src/window/here.tsx`).
 - **It is read by selector,** never passed down as props: by `useHere` now, and as the fields a Tree Widget declares, given as args, at V2. Re-rendering the whole Window from the key handler is what makes the 8–30 ms tasks measured in the workspace phase (`Shell.tsx:1109-1137`, §8.1).
 - **No host stores it.** It reaches a host only as the args of a query or a command, and as presence (ADR 0082 d12). It has no host field: an Address names none (ADR 0082 d15).
 - **Every act runs with the Here of its gesture.** An unset `project` or `pane` arg is filled from the gesture first (the row or Pane menu it came from), then from Here, like an environment variable.
@@ -264,7 +264,7 @@ export function useHere<T>(select: (here: Here) => T): T   // useSyncExternalSto
 
 **What it fixes.** In an empty Project workspace, New Thread from the menu starts in home today: `focused(workspaces)?.project ?? home` (`Shell.tsx:1175`), and `focused()` returns nothing for an empty workspace (`client/web/src/workspaces/model.ts:122-126`). After the Person archives the last done Thread of Project X, New Thread lands in the wrong Project. `here.project` takes the workspace's Project.
 
-**What it replaces:** `WindowApi.focused`, `sight`, `watchSight`, `lists` and `watchLists` (`module.ts:99-120`), by `useHere`, the calls part's `sightOf` and the stores; `WidgetProps.project` (`module.ts:366-372`), and `WidgetProps.window` by `useRun()`; `OwnProps.sidebarShown` and `current` (`Widgets.tsx:20-32`); Files' `threadShown` (`apps/files/pane/src/index.ts:20-29`), by `useHere((h) => h.pane?.subject)`.
+**What it replaces:** `WindowApi.focused`, `sight`, `watchSight`, `lists` and `watchLists` (`module.ts:99-120`), by `useHere`, the calls part's `sightOf` and the stores (`sight` stays for the notifications part alone, which needs the Tiles measured to tell the Person, a counted case until E9 moves who is told to the host); `WidgetProps.project` (`module.ts:366-372`), and `WidgetProps.window` by `useRun()`; `OwnProps.sidebarShown` and `current` (`Widgets.tsx:20-32`); Files' `threadShown` (`apps/files/pane/src/index.ts:20-29`), by `useHere((h) => h.pane?.subject)`.
 
 ### 5.2 Channels
 
@@ -616,7 +616,7 @@ A separate compositor process; a WebGPU layer over the DOM; a native window tool
 | B4a | The Tiling leaves | `shell/` → `window/`, `workspaces/` → `tiling/`, but `Drawer.tsx`, `Peek.tsx` and `Popped.tsx` go to `window/` (the Top layer and popped-out windows); `useTiling` takes the queue verbatim; `here` → `instead`; three ratchets | L move | D0, C0 | — | B4b, R1, P2 |
 | B4b | Keys and device | `window/keys.ts`; `window/device.ts` holds the Window's `window.banda` uses | S-M | B4a | — | W0 |
 | R1 | Stores and memo | items and calls stores fed by the Watches; memo on `PaneFrame`, `Strip`, widgets; stable action context and Tile handles | M | B4a | — | workspace p95 < 6 ms |
-| B4c | Here | `useHere`; replaces `WindowApi.focused/sight`, `WidgetProps.project`, `threadShown`; the menu's `Here` is renamed `MenuAt` | S-M | R1 | — | B4d, B4f, W0 |
+| B4c | Here | `useHere`; replaces `WindowApi.focused/sight` (`sight` stays for the notifications part, counted, until E9), `WidgetProps.project`, `threadShown`; the menu's `Here` is renamed `MenuAt` | S-M | R1 | — | B4d, B4f, W0 |
 | **Wave 3: performance nobody sees** | | | | | | |
 | P1 | Idle | the Mark, the page follow, the overview, terminals on one clock | S-M | P0 | — | quiet rAF = 0 |
 | P2 | Tile states | `tileOf`, `useTile`, `setVisible`, the page box, `useLive` holds; predicted states; containment | M | P0, B4a, C1c | — | hidden draws = 0 |

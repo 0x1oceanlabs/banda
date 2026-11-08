@@ -31,7 +31,7 @@ const watchLists = (listener: () => void) => {
 export function threadOf(
   agent: string
 ): { project: ProjectId; listed: Listed } | null {
-  return shell && listedOf(shell.lists(), agent)
+  return shell && listedOf(shell.items.get(), agent)
 }
 
 /** The Thread of `agent` as listed, drawn again as the lists change. */
@@ -54,7 +54,7 @@ export function threadsIn(listed: readonly Listed[]): Listed[] {
 export function useThreadsOf(project: ProjectId): readonly Listed[] {
   const listed = useSyncExternalStore(
     watchLists,
-    () => shell?.lists()[project] ?? NONE
+    () => shell?.items.get()[project] ?? NONE
   )
   return useMemo(() => threadsIn(listed), [listed])
 }
@@ -93,7 +93,7 @@ export function followThreads(window: WindowApi): () => void {
   const turns = new Map<string, number>()
   const check = () => {
     for (const { agent, project } of lends()) {
-      const listed = window.lists()[project] ?? []
+      const listed = window.items.get()[project] ?? []
       if (!threadsIn(listed).length) continue
       if (!listed.some((each) => each.agent === agent))
         browserHost()?.ended(agent)
@@ -115,7 +115,11 @@ export function followThreads(window: WindowApi): () => void {
   const heard = () => {
     for (const listener of listening) listener()
   }
-  const stops = [window.watchLists(heard), watchLists(check), watchPages(check)]
+  const stops = [
+    window.items.subscribe(heard),
+    watchLists(check),
+    watchPages(check),
+  ]
   heard()
   return () => {
     for (const stop of stops) stop()
