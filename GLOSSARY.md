@@ -46,10 +46,18 @@ do from the Harness's declared capabilities.
 **Account**:
 One sign-in of a Harness: a subscription, an API key or a gateway. In
 `harnesses.toml` it is an entry `of` its Harness, with its own name, folder
-and mark: a dot in its colour and the first letter of its name (ADR 0078).
-A Harness's own entry is its first account. An environment sign-in is one
-too, made for boxes (ADR 0084).
-_Avoid_: profile, instance.
+and Emblem (ADR 0078, ADR 0093). Its name is its Harness's until the Person
+renames it. A Harness's own entry is its first account. An environment
+sign-in is one too, made for boxes (ADR 0084). A new Thread starts on the
+default account, or on the fallback while the default is out (ADR 0093).
+_Avoid_: profile, instance, provider.
+
+**Emblem**:
+An account's icon drawn in its colour, which the Person picks: Banda shows
+it wherever the account is, its name beside it where there is room. One of
+fifteen icons, the Harness's own and neutral ones, in one of five colours,
+the Harness's own and four more (ADR 0093).
+_Avoid_: mark, logo, badge, avatar.
 
 **Limit**:
 How much of a Harness's subscription a window of time allows, such as

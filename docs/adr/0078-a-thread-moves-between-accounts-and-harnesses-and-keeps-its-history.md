@@ -75,7 +75,7 @@ The points Roma decided are marked _decided_.
    - Going back to a Harness the Thread used before continues that Harness's own session, and sends only what it missed.
    - Codex's own Claude importer may replace the plain text for Claude → Codex later. That is not part of this ADR.
 
-6. **A usage limit is a pause, not a failure.** The turn's red failure becomes a card. It names the account, the window and the reset, and says the turn goes on where it stopped. It offers:
+6. **A usage limit is a pause, not a failure.** Amended by [ADR 0093](0093-an-account-has-an-emblem-the-person-picks-and-a-new-thread-has-a-fallback-account.md), decision 8: the card's main way on is the fallback account. The turn's red failure becomes a card. It names the account, the window and the reset, and says the turn goes on where it stopped. It offers:
    - **Continue on the account of the same Harness with the most room.** This is the main button: no loss.
    - **The other Harness**, through the confirmation in decision 5.
    - **Wait until the reset**: ADR 0074's snooze until then (PR 630's "Snooze until"). The Thread then retries the turn by itself.
@@ -91,15 +91,15 @@ The points Roma decided are marked _decided_.
    - "Move all" (_decided_) is in the card's ⋯ and in the limits widget's popover, beside a spent account. It is still one click by the Person.
    - Whether an Agent may move its own Thread is not decided here.
 
-8. **A new Thread starts on the Harness's default account** (_decided_). If that account is spent, the chip shows the warning dot and its popover names the reset. Banda does not pick another account for it.
+8. **A new Thread starts on the Harness's default account** (_decided_). Replaced by [ADR 0093](0093-an-account-has-an-emblem-the-person-picks-and-a-new-thread-has-a-fallback-account.md), decision 7: while the default is out, a new Thread starts on the fallback. If that account is spent, the chip shows the warning dot and its popover names the reset. Banda does not pick another account for it.
 
-9. **The account's mark is a pill** (_decided_).
+9. **The account's mark is a pill** (_decided_). Replaced by [ADR 0093](0093-an-account-has-an-emblem-the-person-picks-and-a-new-thread-has-a-fallback-account.md), decision 1: the mark is the account's emblem.
    - The pill is a dot in the account's colour and the first letter of its name, on a pale ground of the same colour. The letter takes the text's colour.
    - It stands after the Harness's logo wherever the account's name is not written: the composer's chip and the sidebar's rows.
    - Where the name is written (the picker, the divider, the limit card) the dot alone shows. Charts and legends keep the dot.
    - Two accounts of one Harness with the same first letter get two letters. `mark = "…"` in the entry overrides it.
 
-10. **Four account colours** (_decided_). They replace `--account-1…5` (ADR 0055 decision 4).
+10. **Four account colours** (_decided_). Amended by [ADR 0093](0093-an-account-has-an-emblem-the-person-picks-and-a-new-thread-has-a-fallback-account.md), decision 3: the Harness's own colour is a fifth, and the green and the light orange change. They replace `--account-1…5` (ADR 0055 decision 4).
 
     | Slot | Colour | Light | Dark |
     |---|---|---|---|
