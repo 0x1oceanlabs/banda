@@ -1,0 +1,715 @@
+{
+  "about": "A Pane keeps new args where it is, an object; two Panes may show the same then, and one opened names the first. Args are the same with their keys in any order, and a null in them is part of them.",
+  "start": [
+    {
+      "id": "e059b3de-e833-54f8-96d6-4759445c56c0",
+      "columns": []
+    }
+  ],
+  "steps": [
+    {
+      "method": "workspaces.open",
+      "seed": "0000000c-0000-4000-8000-000000000001",
+      "params": {
+        "args": {
+          "n": 1
+        },
+        "kind": "a.a",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "fde43031-03e8-59a7-bab9-24d94802cd32"
+      },
+      "after": [
+        {
+          "id": "e059b3de-e833-54f8-96d6-4759445c56c0",
+          "columns": [
+            {
+              "id": "456d3036-c275-538d-922a-66247fac0d3c",
+              "panes": [
+                {
+                  "id": "fde43031-03e8-59a7-bab9-24d94802cd32",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "58f9142f-1977-5fcd-af41-096dd948b1a2",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.update",
+      "seed": "0000000c-0000-4000-8000-000000000002",
+      "params": {
+        "args": {
+          "n": 7
+        },
+        "pane": "fde43031-03e8-59a7-bab9-24d94802cd32"
+      },
+      "answer": {},
+      "after": [
+        {
+          "id": "e059b3de-e833-54f8-96d6-4759445c56c0",
+          "columns": [
+            {
+              "id": "456d3036-c275-538d-922a-66247fac0d3c",
+              "panes": [
+                {
+                  "id": "fde43031-03e8-59a7-bab9-24d94802cd32",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "58f9142f-1977-5fcd-af41-096dd948b1a2",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.update",
+      "seed": "0000000c-0000-4000-8000-000000000003",
+      "params": {
+        "args": null,
+        "pane": "fde43031-03e8-59a7-bab9-24d94802cd32"
+      },
+      "refused": "invalid",
+      "after": [
+        {
+          "id": "e059b3de-e833-54f8-96d6-4759445c56c0",
+          "columns": [
+            {
+              "id": "456d3036-c275-538d-922a-66247fac0d3c",
+              "panes": [
+                {
+                  "id": "fde43031-03e8-59a7-bab9-24d94802cd32",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "58f9142f-1977-5fcd-af41-096dd948b1a2",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.update",
+      "seed": "0000000c-0000-4000-8000-000000000004",
+      "params": {
+        "args": [
+          7
+        ],
+        "pane": "fde43031-03e8-59a7-bab9-24d94802cd32"
+      },
+      "refused": "invalid",
+      "after": [
+        {
+          "id": "e059b3de-e833-54f8-96d6-4759445c56c0",
+          "columns": [
+            {
+              "id": "456d3036-c275-538d-922a-66247fac0d3c",
+              "panes": [
+                {
+                  "id": "fde43031-03e8-59a7-bab9-24d94802cd32",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "58f9142f-1977-5fcd-af41-096dd948b1a2",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.update",
+      "seed": "0000000c-0000-4000-8000-000000000005",
+      "params": {
+        "args": {
+          "n": 7
+        },
+        "pane": "e0000000-0000-4000-8000-000000000001"
+      },
+      "refused": "not_found",
+      "after": [
+        {
+          "id": "e059b3de-e833-54f8-96d6-4759445c56c0",
+          "columns": [
+            {
+              "id": "456d3036-c275-538d-922a-66247fac0d3c",
+              "panes": [
+                {
+                  "id": "fde43031-03e8-59a7-bab9-24d94802cd32",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "58f9142f-1977-5fcd-af41-096dd948b1a2",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "0000000c-0000-4000-8000-000000000006",
+      "params": {
+        "args": {
+          "n": 2
+        },
+        "kind": "a.a",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "3df369cc-c714-5ffb-a96b-68d3632d0209"
+      },
+      "after": [
+        {
+          "id": "e059b3de-e833-54f8-96d6-4759445c56c0",
+          "columns": [
+            {
+              "id": "456d3036-c275-538d-922a-66247fac0d3c",
+              "panes": [
+                {
+                  "id": "fde43031-03e8-59a7-bab9-24d94802cd32",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "28fe14b4-78f4-52e6-b6a1-3ae3ae261e2b",
+              "panes": [
+                {
+                  "id": "3df369cc-c714-5ffb-a96b-68d3632d0209",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "58f9142f-1977-5fcd-af41-096dd948b1a2",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.update",
+      "seed": "0000000c-0000-4000-8000-000000000007",
+      "params": {
+        "args": {
+          "n": 7
+        },
+        "pane": "3df369cc-c714-5ffb-a96b-68d3632d0209"
+      },
+      "answer": {},
+      "after": [
+        {
+          "id": "e059b3de-e833-54f8-96d6-4759445c56c0",
+          "columns": [
+            {
+              "id": "456d3036-c275-538d-922a-66247fac0d3c",
+              "panes": [
+                {
+                  "id": "fde43031-03e8-59a7-bab9-24d94802cd32",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "28fe14b4-78f4-52e6-b6a1-3ae3ae261e2b",
+              "panes": [
+                {
+                  "id": "3df369cc-c714-5ffb-a96b-68d3632d0209",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "58f9142f-1977-5fcd-af41-096dd948b1a2",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "0000000c-0000-4000-8000-000000000008",
+      "params": {
+        "args": {
+          "n": 7
+        },
+        "kind": "a.a",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": false,
+        "pane": "fde43031-03e8-59a7-bab9-24d94802cd32"
+      },
+      "after": [
+        {
+          "id": "e059b3de-e833-54f8-96d6-4759445c56c0",
+          "columns": [
+            {
+              "id": "456d3036-c275-538d-922a-66247fac0d3c",
+              "panes": [
+                {
+                  "id": "fde43031-03e8-59a7-bab9-24d94802cd32",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "28fe14b4-78f4-52e6-b6a1-3ae3ae261e2b",
+              "panes": [
+                {
+                  "id": "3df369cc-c714-5ffb-a96b-68d3632d0209",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "58f9142f-1977-5fcd-af41-096dd948b1a2",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.close",
+      "seed": "0000000c-0000-4000-8000-000000000009",
+      "params": {
+        "pane": "fde43031-03e8-59a7-bab9-24d94802cd32"
+      },
+      "answer": {},
+      "after": [
+        {
+          "id": "e059b3de-e833-54f8-96d6-4759445c56c0",
+          "columns": [
+            {
+              "id": "28fe14b4-78f4-52e6-b6a1-3ae3ae261e2b",
+              "panes": [
+                {
+                  "id": "3df369cc-c714-5ffb-a96b-68d3632d0209",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "58f9142f-1977-5fcd-af41-096dd948b1a2",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "0000000c-0000-4000-8000-00000000000a",
+      "params": {
+        "args": {
+          "n": 7
+        },
+        "kind": "a.a",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": false,
+        "pane": "3df369cc-c714-5ffb-a96b-68d3632d0209"
+      },
+      "after": [
+        {
+          "id": "e059b3de-e833-54f8-96d6-4759445c56c0",
+          "columns": [
+            {
+              "id": "28fe14b4-78f4-52e6-b6a1-3ae3ae261e2b",
+              "panes": [
+                {
+                  "id": "3df369cc-c714-5ffb-a96b-68d3632d0209",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "58f9142f-1977-5fcd-af41-096dd948b1a2",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.update",
+      "seed": "0000000c-0000-4000-8000-00000000000b",
+      "params": {
+        "args": {
+          "deep": {
+            "a": "x",
+            "b": [
+              1,
+              {
+                "z": null
+              }
+            ]
+          },
+          "n": 8
+        },
+        "pane": "3df369cc-c714-5ffb-a96b-68d3632d0209"
+      },
+      "answer": {},
+      "after": [
+        {
+          "id": "e059b3de-e833-54f8-96d6-4759445c56c0",
+          "columns": [
+            {
+              "id": "28fe14b4-78f4-52e6-b6a1-3ae3ae261e2b",
+              "panes": [
+                {
+                  "id": "3df369cc-c714-5ffb-a96b-68d3632d0209",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "deep": {
+                      "a": "x",
+                      "b": [
+                        1,
+                        {
+                          "z": null
+                        }
+                      ]
+                    },
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "58f9142f-1977-5fcd-af41-096dd948b1a2",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "0000000c-0000-4000-8000-00000000000c",
+      "params": {
+        "args": {
+          "deep": {
+            "a": "x",
+            "b": [
+              1,
+              {
+                "z": null
+              }
+            ]
+          },
+          "n": 8
+        },
+        "kind": "a.a",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": false,
+        "pane": "3df369cc-c714-5ffb-a96b-68d3632d0209"
+      },
+      "after": [
+        {
+          "id": "e059b3de-e833-54f8-96d6-4759445c56c0",
+          "columns": [
+            {
+              "id": "28fe14b4-78f4-52e6-b6a1-3ae3ae261e2b",
+              "panes": [
+                {
+                  "id": "3df369cc-c714-5ffb-a96b-68d3632d0209",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "deep": {
+                      "a": "x",
+                      "b": [
+                        1,
+                        {
+                          "z": null
+                        }
+                      ]
+                    },
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "58f9142f-1977-5fcd-af41-096dd948b1a2",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "0000000c-0000-4000-8000-00000000000d",
+      "params": {
+        "args": {
+          "deep": {
+            "a": "x",
+            "b": [
+              1,
+              {}
+            ]
+          },
+          "n": 8
+        },
+        "kind": "a.a",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "586bac51-6ee4-5c51-940c-a47e9ce636e5"
+      },
+      "after": [
+        {
+          "id": "e059b3de-e833-54f8-96d6-4759445c56c0",
+          "columns": [
+            {
+              "id": "28fe14b4-78f4-52e6-b6a1-3ae3ae261e2b",
+              "panes": [
+                {
+                  "id": "3df369cc-c714-5ffb-a96b-68d3632d0209",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "deep": {
+                      "a": "x",
+                      "b": [
+                        1,
+                        {
+                          "z": null
+                        }
+                      ]
+                    },
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "d573fc4f-92ab-5588-a860-0447f24479e6",
+              "panes": [
+                {
+                  "id": "586bac51-6ee4-5c51-940c-a47e9ce636e5",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "deep": {
+                      "a": "x",
+                      "b": [
+                        1,
+                        {}
+                      ]
+                    },
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "58f9142f-1977-5fcd-af41-096dd948b1a2",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "0000000c-0000-4000-8000-00000000000e",
+      "params": {
+        "args": {
+          "deep": {
+            "a": "x",
+            "b": [
+              1,
+              {
+                "z": 1
+              }
+            ]
+          },
+          "n": 8
+        },
+        "kind": "a.a",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "c067fd27-5ae1-5bae-b13c-f3a9516a9e1b"
+      },
+      "after": [
+        {
+          "id": "e059b3de-e833-54f8-96d6-4759445c56c0",
+          "columns": [
+            {
+              "id": "28fe14b4-78f4-52e6-b6a1-3ae3ae261e2b",
+              "panes": [
+                {
+                  "id": "3df369cc-c714-5ffb-a96b-68d3632d0209",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "deep": {
+                      "a": "x",
+                      "b": [
+                        1,
+                        {
+                          "z": null
+                        }
+                      ]
+                    },
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "d573fc4f-92ab-5588-a860-0447f24479e6",
+              "panes": [
+                {
+                  "id": "586bac51-6ee4-5c51-940c-a47e9ce636e5",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "deep": {
+                      "a": "x",
+                      "b": [
+                        1,
+                        {}
+                      ]
+                    },
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "aac5e167-d57c-5659-aa3c-910ee37208ff",
+              "panes": [
+                {
+                  "id": "c067fd27-5ae1-5bae-b13c-f3a9516a9e1b",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "deep": {
+                      "a": "x",
+                      "b": [
+                        1,
+                        {
+                          "z": 1
+                        }
+                      ]
+                    },
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "58f9142f-1977-5fcd-af41-096dd948b1a2",
+          "columns": []
+        }
+      ]
+    }
+  ]
+}

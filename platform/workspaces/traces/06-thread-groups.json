@@ -1,0 +1,865 @@
+{
+  "about": "A Thread opens as a Group, and what it opens goes into its Group as a Deck right of it; one shown already stays. A Thread opened again is only named.",
+  "start": [
+    {
+      "id": "0de62f58-0845-5d41-b7e1-2bf8b4973fd3",
+      "columns": []
+    }
+  ],
+  "steps": [
+    {
+      "method": "workspaces.open",
+      "seed": "00000006-0000-4000-8000-000000000001",
+      "params": {
+        "args": {
+          "n": 1
+        },
+        "grouped": true,
+        "kind": "agents.thread",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "b71676de-efd9-50c2-be69-2e580527b2f2"
+      },
+      "after": [
+        {
+          "id": "0de62f58-0845-5d41-b7e1-2bf8b4973fd3",
+          "columns": [
+            {
+              "id": "48e17963-446b-5611-8c5e-cabe573cf0dd",
+              "panes": [
+                {
+                  "id": "b71676de-efd9-50c2-be69-2e580527b2f2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "agents.thread",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false,
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            }
+          ]
+        },
+        {
+          "id": "b66fb1c4-4c83-5042-be22-639d5c181a9a",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000006-0000-4000-8000-000000000002",
+      "params": {
+        "args": {
+          "n": 2
+        },
+        "kind": "a.a",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "7bf3a7a6-8acb-5a86-9c2d-7e8911d940cd"
+      },
+      "after": [
+        {
+          "id": "0de62f58-0845-5d41-b7e1-2bf8b4973fd3",
+          "columns": [
+            {
+              "id": "48e17963-446b-5611-8c5e-cabe573cf0dd",
+              "panes": [
+                {
+                  "id": "b71676de-efd9-50c2-be69-2e580527b2f2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "agents.thread",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false,
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            },
+            {
+              "id": "ef49425e-f12c-5e84-9d5b-1d53eeda2aaa",
+              "panes": [
+                {
+                  "id": "7bf3a7a6-8acb-5a86-9c2d-7e8911d940cd",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "b66fb1c4-4c83-5042-be22-639d5c181a9a",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000006-0000-4000-8000-000000000003",
+      "params": {
+        "args": {
+          "n": 3
+        },
+        "kind": "git.diff",
+        "place": {
+          "pane": "b71676de-efd9-50c2-be69-2e580527b2f2",
+          "to": "group"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "951a4c58-4565-57a2-9a4f-c3005410570c"
+      },
+      "after": [
+        {
+          "id": "0de62f58-0845-5d41-b7e1-2bf8b4973fd3",
+          "columns": [
+            {
+              "id": "48e17963-446b-5611-8c5e-cabe573cf0dd",
+              "panes": [
+                {
+                  "id": "b71676de-efd9-50c2-be69-2e580527b2f2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "agents.thread",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false,
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            },
+            {
+              "id": "673ecc6b-3d8d-5fb0-b284-790c8faa8a56",
+              "panes": [
+                {
+                  "id": "951a4c58-4565-57a2-9a4f-c3005410570c",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "git.diff",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            },
+            {
+              "id": "ef49425e-f12c-5e84-9d5b-1d53eeda2aaa",
+              "panes": [
+                {
+                  "id": "7bf3a7a6-8acb-5a86-9c2d-7e8911d940cd",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "b66fb1c4-4c83-5042-be22-639d5c181a9a",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000006-0000-4000-8000-000000000004",
+      "params": {
+        "args": {
+          "n": 4
+        },
+        "kind": "browser.browser",
+        "place": {
+          "pane": "b71676de-efd9-50c2-be69-2e580527b2f2",
+          "to": "group"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "26946861-c55c-5d50-bf44-d0b7fbb466b7"
+      },
+      "after": [
+        {
+          "id": "0de62f58-0845-5d41-b7e1-2bf8b4973fd3",
+          "columns": [
+            {
+              "id": "48e17963-446b-5611-8c5e-cabe573cf0dd",
+              "panes": [
+                {
+                  "id": "b71676de-efd9-50c2-be69-2e580527b2f2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "agents.thread",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false,
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            },
+            {
+              "id": "673ecc6b-3d8d-5fb0-b284-790c8faa8a56",
+              "panes": [
+                {
+                  "id": "951a4c58-4565-57a2-9a4f-c3005410570c",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "git.diff",
+                  "args": {
+                    "n": 3
+                  }
+                },
+                {
+                  "id": "26946861-c55c-5d50-bf44-d0b7fbb466b7",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "browser.browser",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            },
+            {
+              "id": "ef49425e-f12c-5e84-9d5b-1d53eeda2aaa",
+              "panes": [
+                {
+                  "id": "7bf3a7a6-8acb-5a86-9c2d-7e8911d940cd",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "b66fb1c4-4c83-5042-be22-639d5c181a9a",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000006-0000-4000-8000-000000000005",
+      "params": {
+        "args": {
+          "n": 3
+        },
+        "kind": "git.diff",
+        "place": {
+          "pane": "b71676de-efd9-50c2-be69-2e580527b2f2",
+          "to": "group"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": false,
+        "pane": "951a4c58-4565-57a2-9a4f-c3005410570c"
+      },
+      "after": [
+        {
+          "id": "0de62f58-0845-5d41-b7e1-2bf8b4973fd3",
+          "columns": [
+            {
+              "id": "48e17963-446b-5611-8c5e-cabe573cf0dd",
+              "panes": [
+                {
+                  "id": "b71676de-efd9-50c2-be69-2e580527b2f2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "agents.thread",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false,
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            },
+            {
+              "id": "673ecc6b-3d8d-5fb0-b284-790c8faa8a56",
+              "panes": [
+                {
+                  "id": "951a4c58-4565-57a2-9a4f-c3005410570c",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "git.diff",
+                  "args": {
+                    "n": 3
+                  }
+                },
+                {
+                  "id": "26946861-c55c-5d50-bf44-d0b7fbb466b7",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "browser.browser",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            },
+            {
+              "id": "ef49425e-f12c-5e84-9d5b-1d53eeda2aaa",
+              "panes": [
+                {
+                  "id": "7bf3a7a6-8acb-5a86-9c2d-7e8911d940cd",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "b66fb1c4-4c83-5042-be22-639d5c181a9a",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.move_pane",
+      "seed": "00000006-0000-4000-8000-000000000006",
+      "params": {
+        "pane": "7bf3a7a6-8acb-5a86-9c2d-7e8911d940cd",
+        "place": {
+          "pane": "b71676de-efd9-50c2-be69-2e580527b2f2",
+          "to": "group"
+        }
+      },
+      "answer": {},
+      "after": [
+        {
+          "id": "0de62f58-0845-5d41-b7e1-2bf8b4973fd3",
+          "columns": [
+            {
+              "id": "48e17963-446b-5611-8c5e-cabe573cf0dd",
+              "panes": [
+                {
+                  "id": "b71676de-efd9-50c2-be69-2e580527b2f2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "agents.thread",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false,
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            },
+            {
+              "id": "673ecc6b-3d8d-5fb0-b284-790c8faa8a56",
+              "panes": [
+                {
+                  "id": "951a4c58-4565-57a2-9a4f-c3005410570c",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "git.diff",
+                  "args": {
+                    "n": 3
+                  }
+                },
+                {
+                  "id": "26946861-c55c-5d50-bf44-d0b7fbb466b7",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "browser.browser",
+                  "args": {
+                    "n": 4
+                  }
+                },
+                {
+                  "id": "7bf3a7a6-8acb-5a86-9c2d-7e8911d940cd",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            }
+          ]
+        },
+        {
+          "id": "b66fb1c4-4c83-5042-be22-639d5c181a9a",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.regroup",
+      "seed": "00000006-0000-4000-8000-000000000007",
+      "params": {
+        "column": "673ecc6b-3d8d-5fb0-b284-790c8faa8a56",
+        "toward": "right"
+      },
+      "answer": {},
+      "after": [
+        {
+          "id": "0de62f58-0845-5d41-b7e1-2bf8b4973fd3",
+          "columns": [
+            {
+              "id": "48e17963-446b-5611-8c5e-cabe573cf0dd",
+              "panes": [
+                {
+                  "id": "b71676de-efd9-50c2-be69-2e580527b2f2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "agents.thread",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false,
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            },
+            {
+              "id": "673ecc6b-3d8d-5fb0-b284-790c8faa8a56",
+              "panes": [
+                {
+                  "id": "951a4c58-4565-57a2-9a4f-c3005410570c",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "git.diff",
+                  "args": {
+                    "n": 3
+                  }
+                },
+                {
+                  "id": "26946861-c55c-5d50-bf44-d0b7fbb466b7",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "browser.browser",
+                  "args": {
+                    "n": 4
+                  }
+                },
+                {
+                  "id": "7bf3a7a6-8acb-5a86-9c2d-7e8911d940cd",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck"
+            }
+          ]
+        },
+        {
+          "id": "b66fb1c4-4c83-5042-be22-639d5c181a9a",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000006-0000-4000-8000-000000000008",
+      "params": {
+        "args": {
+          "n": 1
+        },
+        "grouped": true,
+        "kind": "agents.thread",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": false,
+        "pane": "b71676de-efd9-50c2-be69-2e580527b2f2"
+      },
+      "after": [
+        {
+          "id": "0de62f58-0845-5d41-b7e1-2bf8b4973fd3",
+          "columns": [
+            {
+              "id": "48e17963-446b-5611-8c5e-cabe573cf0dd",
+              "panes": [
+                {
+                  "id": "b71676de-efd9-50c2-be69-2e580527b2f2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "agents.thread",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false,
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            },
+            {
+              "id": "673ecc6b-3d8d-5fb0-b284-790c8faa8a56",
+              "panes": [
+                {
+                  "id": "951a4c58-4565-57a2-9a4f-c3005410570c",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "git.diff",
+                  "args": {
+                    "n": 3
+                  }
+                },
+                {
+                  "id": "26946861-c55c-5d50-bf44-d0b7fbb466b7",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "browser.browser",
+                  "args": {
+                    "n": 4
+                  }
+                },
+                {
+                  "id": "7bf3a7a6-8acb-5a86-9c2d-7e8911d940cd",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck"
+            }
+          ]
+        },
+        {
+          "id": "b66fb1c4-4c83-5042-be22-639d5c181a9a",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000006-0000-4000-8000-000000000009",
+      "params": {
+        "args": {
+          "n": 5
+        },
+        "kind": "git.diff",
+        "place": {
+          "pane": "b71676de-efd9-50c2-be69-2e580527b2f2",
+          "to": "group"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "a08658b4-fac7-5887-b0ed-9a69ef273c27"
+      },
+      "after": [
+        {
+          "id": "0de62f58-0845-5d41-b7e1-2bf8b4973fd3",
+          "columns": [
+            {
+              "id": "48e17963-446b-5611-8c5e-cabe573cf0dd",
+              "panes": [
+                {
+                  "id": "b71676de-efd9-50c2-be69-2e580527b2f2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "agents.thread",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false,
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            },
+            {
+              "id": "e4e09134-f021-503f-8e43-9d505b846507",
+              "panes": [
+                {
+                  "id": "a08658b4-fac7-5887-b0ed-9a69ef273c27",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "git.diff",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            },
+            {
+              "id": "673ecc6b-3d8d-5fb0-b284-790c8faa8a56",
+              "panes": [
+                {
+                  "id": "951a4c58-4565-57a2-9a4f-c3005410570c",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "git.diff",
+                  "args": {
+                    "n": 3
+                  }
+                },
+                {
+                  "id": "26946861-c55c-5d50-bf44-d0b7fbb466b7",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "browser.browser",
+                  "args": {
+                    "n": 4
+                  }
+                },
+                {
+                  "id": "7bf3a7a6-8acb-5a86-9c2d-7e8911d940cd",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck"
+            }
+          ]
+        },
+        {
+          "id": "b66fb1c4-4c83-5042-be22-639d5c181a9a",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000006-0000-4000-8000-00000000000a",
+      "params": {
+        "args": {
+          "n": 6
+        },
+        "kind": "a.a",
+        "place": {
+          "pane": "951a4c58-4565-57a2-9a4f-c3005410570c",
+          "to": "group"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "4abab1c3-0790-5a19-ba5a-d07558660a5d"
+      },
+      "after": [
+        {
+          "id": "0de62f58-0845-5d41-b7e1-2bf8b4973fd3",
+          "columns": [
+            {
+              "id": "48e17963-446b-5611-8c5e-cabe573cf0dd",
+              "panes": [
+                {
+                  "id": "b71676de-efd9-50c2-be69-2e580527b2f2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "agents.thread",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false,
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            },
+            {
+              "id": "e4e09134-f021-503f-8e43-9d505b846507",
+              "panes": [
+                {
+                  "id": "a08658b4-fac7-5887-b0ed-9a69ef273c27",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "git.diff",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            },
+            {
+              "id": "673ecc6b-3d8d-5fb0-b284-790c8faa8a56",
+              "panes": [
+                {
+                  "id": "951a4c58-4565-57a2-9a4f-c3005410570c",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "git.diff",
+                  "args": {
+                    "n": 3
+                  }
+                },
+                {
+                  "id": "26946861-c55c-5d50-bf44-d0b7fbb466b7",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "browser.browser",
+                  "args": {
+                    "n": 4
+                  }
+                },
+                {
+                  "id": "7bf3a7a6-8acb-5a86-9c2d-7e8911d940cd",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "9e2a347d-483f-5947-8ee0-fbc40c50c5a3"
+            },
+            {
+              "id": "1074f311-2427-51ce-9c31-6853eda1641e",
+              "panes": [
+                {
+                  "id": "4abab1c3-0790-5a19-ba5a-d07558660a5d",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "9e2a347d-483f-5947-8ee0-fbc40c50c5a3"
+            }
+          ]
+        },
+        {
+          "id": "b66fb1c4-4c83-5042-be22-639d5c181a9a",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000006-0000-4000-8000-00000000000b",
+      "params": {
+        "args": {
+          "n": 7
+        },
+        "kind": "a.a",
+        "place": {
+          "pane": "e0000000-0000-4000-8000-000000000001",
+          "to": "group"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "refused": "not_found",
+      "after": [
+        {
+          "id": "0de62f58-0845-5d41-b7e1-2bf8b4973fd3",
+          "columns": [
+            {
+              "id": "48e17963-446b-5611-8c5e-cabe573cf0dd",
+              "panes": [
+                {
+                  "id": "b71676de-efd9-50c2-be69-2e580527b2f2",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "agents.thread",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false,
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            },
+            {
+              "id": "e4e09134-f021-503f-8e43-9d505b846507",
+              "panes": [
+                {
+                  "id": "a08658b4-fac7-5887-b0ed-9a69ef273c27",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "git.diff",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "11be3372-c1fb-551d-a788-37ab2c89698b"
+            },
+            {
+              "id": "673ecc6b-3d8d-5fb0-b284-790c8faa8a56",
+              "panes": [
+                {
+                  "id": "951a4c58-4565-57a2-9a4f-c3005410570c",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "git.diff",
+                  "args": {
+                    "n": 3
+                  }
+                },
+                {
+                  "id": "26946861-c55c-5d50-bf44-d0b7fbb466b7",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "browser.browser",
+                  "args": {
+                    "n": 4
+                  }
+                },
+                {
+                  "id": "7bf3a7a6-8acb-5a86-9c2d-7e8911d940cd",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "9e2a347d-483f-5947-8ee0-fbc40c50c5a3"
+            },
+            {
+              "id": "1074f311-2427-51ce-9c31-6853eda1641e",
+              "panes": [
+                {
+                  "id": "4abab1c3-0790-5a19-ba5a-d07558660a5d",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false,
+              "display": "deck",
+              "group": "9e2a347d-483f-5947-8ee0-fbc40c50c5a3"
+            }
+          ]
+        },
+        {
+          "id": "b66fb1c4-4c83-5042-be22-639d5c181a9a",
+          "columns": []
+        }
+      ]
+    }
+  ]
+}

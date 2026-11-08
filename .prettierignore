@@ -10,6 +10,9 @@ sdk/contract/src/generated/
 apps/*/window.json
 platform/*/window.json
 client/web/window.json
+# Written by the workspaces engine's tests, for the client's copy of the
+# arrangement (ADR 0088, decision 11).
+platform/workspaces/traces/
 client/desktop/test-results/
 *.md
 *.rs

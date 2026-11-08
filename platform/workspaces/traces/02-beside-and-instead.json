@@ -1,0 +1,1854 @@
+{
+  "about": "A Pane opens beside another, at a column's place on a workspace, in a column's stack, or instead of another, which leaves; past the last place, the last. One shown already stays where it is.",
+  "start": [
+    {
+      "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+      "columns": []
+    }
+  ],
+  "steps": [
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-000000000001",
+      "params": {
+        "args": {
+          "n": 1
+        },
+        "kind": "a.a",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "324e9dff-2f26-52f5-9355-b4507c572415"
+      },
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "324e9dff-2f26-52f5-9355-b4507c572415",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-000000000002",
+      "params": {
+        "args": {
+          "n": 2
+        },
+        "kind": "a.a",
+        "place": {
+          "pane": "324e9dff-2f26-52f5-9355-b4507c572415",
+          "side": "right",
+          "to": "beside"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf"
+      },
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "324e9dff-2f26-52f5-9355-b4507c572415",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "46555360-391f-500e-81a6-5fa913eeb433",
+              "panes": [
+                {
+                  "id": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-000000000003",
+      "params": {
+        "args": {
+          "n": 3
+        },
+        "kind": "a.a",
+        "place": {
+          "pane": "324e9dff-2f26-52f5-9355-b4507c572415",
+          "side": "left",
+          "to": "beside"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "75b8e67e-d9dc-50ce-9f6e-d2a883af10f6"
+      },
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "bbea0a24-a26e-5846-a04a-eb68f90636d4",
+              "panes": [
+                {
+                  "id": "75b8e67e-d9dc-50ce-9f6e-d2a883af10f6",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "324e9dff-2f26-52f5-9355-b4507c572415",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "46555360-391f-500e-81a6-5fa913eeb433",
+              "panes": [
+                {
+                  "id": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-000000000004",
+      "params": {
+        "args": {
+          "n": 4
+        },
+        "kind": "a.a",
+        "place": {
+          "pane": "324e9dff-2f26-52f5-9355-b4507c572415",
+          "side": "below",
+          "to": "beside"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "1de97b02-b7b2-5a35-a4ad-cc1274e51f66"
+      },
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "bbea0a24-a26e-5846-a04a-eb68f90636d4",
+              "panes": [
+                {
+                  "id": "75b8e67e-d9dc-50ce-9f6e-d2a883af10f6",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "324e9dff-2f26-52f5-9355-b4507c572415",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                },
+                {
+                  "id": "1de97b02-b7b2-5a35-a4ad-cc1274e51f66",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "46555360-391f-500e-81a6-5fa913eeb433",
+              "panes": [
+                {
+                  "id": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-000000000005",
+      "params": {
+        "args": {
+          "n": 5
+        },
+        "kind": "a.a",
+        "place": {
+          "pane": "324e9dff-2f26-52f5-9355-b4507c572415",
+          "side": "above",
+          "to": "beside"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "1e3a2c09-e35b-50a1-8ce1-2c3da604ee11"
+      },
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "bbea0a24-a26e-5846-a04a-eb68f90636d4",
+              "panes": [
+                {
+                  "id": "75b8e67e-d9dc-50ce-9f6e-d2a883af10f6",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "1e3a2c09-e35b-50a1-8ce1-2c3da604ee11",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                },
+                {
+                  "id": "324e9dff-2f26-52f5-9355-b4507c572415",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                },
+                {
+                  "id": "1de97b02-b7b2-5a35-a4ad-cc1274e51f66",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "46555360-391f-500e-81a6-5fa913eeb433",
+              "panes": [
+                {
+                  "id": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-000000000006",
+      "params": {
+        "args": {
+          "n": 6
+        },
+        "instead": "324e9dff-2f26-52f5-9355-b4507c572415",
+        "kind": "a.a",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "1dc179f5-a2f6-5acf-9116-4adde4aed930"
+      },
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "bbea0a24-a26e-5846-a04a-eb68f90636d4",
+              "panes": [
+                {
+                  "id": "75b8e67e-d9dc-50ce-9f6e-d2a883af10f6",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "1e3a2c09-e35b-50a1-8ce1-2c3da604ee11",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                },
+                {
+                  "id": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                },
+                {
+                  "id": "1de97b02-b7b2-5a35-a4ad-cc1274e51f66",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "46555360-391f-500e-81a6-5fa913eeb433",
+              "panes": [
+                {
+                  "id": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-000000000007",
+      "params": {
+        "args": {
+          "n": 7
+        },
+        "instead": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+        "kind": "a.a",
+        "place": {
+          "pane": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+          "side": "left",
+          "to": "beside"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "refused": "invalid",
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "bbea0a24-a26e-5846-a04a-eb68f90636d4",
+              "panes": [
+                {
+                  "id": "75b8e67e-d9dc-50ce-9f6e-d2a883af10f6",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "1e3a2c09-e35b-50a1-8ce1-2c3da604ee11",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                },
+                {
+                  "id": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                },
+                {
+                  "id": "1de97b02-b7b2-5a35-a4ad-cc1274e51f66",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "46555360-391f-500e-81a6-5fa913eeb433",
+              "panes": [
+                {
+                  "id": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-000000000008",
+      "params": {
+        "args": {
+          "n": 7
+        },
+        "instead": "e0000000-0000-4000-8000-000000000001",
+        "kind": "a.a",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "refused": "not_found",
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "bbea0a24-a26e-5846-a04a-eb68f90636d4",
+              "panes": [
+                {
+                  "id": "75b8e67e-d9dc-50ce-9f6e-d2a883af10f6",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "1e3a2c09-e35b-50a1-8ce1-2c3da604ee11",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                },
+                {
+                  "id": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                },
+                {
+                  "id": "1de97b02-b7b2-5a35-a4ad-cc1274e51f66",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "46555360-391f-500e-81a6-5fa913eeb433",
+              "panes": [
+                {
+                  "id": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-000000000009",
+      "params": {
+        "args": {
+          "n": 2
+        },
+        "kind": "a.a",
+        "place": {
+          "pane": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+          "side": "left",
+          "to": "beside"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": false,
+        "pane": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf"
+      },
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "bbea0a24-a26e-5846-a04a-eb68f90636d4",
+              "panes": [
+                {
+                  "id": "75b8e67e-d9dc-50ce-9f6e-d2a883af10f6",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "1e3a2c09-e35b-50a1-8ce1-2c3da604ee11",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                },
+                {
+                  "id": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                },
+                {
+                  "id": "1de97b02-b7b2-5a35-a4ad-cc1274e51f66",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "46555360-391f-500e-81a6-5fa913eeb433",
+              "panes": [
+                {
+                  "id": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-00000000000a",
+      "params": {
+        "args": {
+          "n": 7
+        },
+        "kind": "a.a",
+        "place": {
+          "index": 0,
+          "to": "column",
+          "workspace": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "f5297004-9ef2-5cc1-92a3-058b5da95302"
+      },
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "8299756c-3b85-5feb-a38d-0aedbc51d646",
+              "panes": [
+                {
+                  "id": "f5297004-9ef2-5cc1-92a3-058b5da95302",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "bbea0a24-a26e-5846-a04a-eb68f90636d4",
+              "panes": [
+                {
+                  "id": "75b8e67e-d9dc-50ce-9f6e-d2a883af10f6",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "1e3a2c09-e35b-50a1-8ce1-2c3da604ee11",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                },
+                {
+                  "id": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                },
+                {
+                  "id": "1de97b02-b7b2-5a35-a4ad-cc1274e51f66",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "46555360-391f-500e-81a6-5fa913eeb433",
+              "panes": [
+                {
+                  "id": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-00000000000b",
+      "params": {
+        "args": {
+          "n": 8
+        },
+        "kind": "a.a",
+        "place": {
+          "index": 9,
+          "to": "column",
+          "workspace": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "b1911eb0-0795-5d22-b40b-c81cd418e278"
+      },
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "8299756c-3b85-5feb-a38d-0aedbc51d646",
+              "panes": [
+                {
+                  "id": "f5297004-9ef2-5cc1-92a3-058b5da95302",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "bbea0a24-a26e-5846-a04a-eb68f90636d4",
+              "panes": [
+                {
+                  "id": "75b8e67e-d9dc-50ce-9f6e-d2a883af10f6",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "1e3a2c09-e35b-50a1-8ce1-2c3da604ee11",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                },
+                {
+                  "id": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                },
+                {
+                  "id": "1de97b02-b7b2-5a35-a4ad-cc1274e51f66",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "46555360-391f-500e-81a6-5fa913eeb433",
+              "panes": [
+                {
+                  "id": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "8721fcac-9dee-575c-8bcf-fa40ff981a5a",
+              "panes": [
+                {
+                  "id": "b1911eb0-0795-5d22-b40b-c81cd418e278",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-00000000000c",
+      "params": {
+        "args": {
+          "n": 9
+        },
+        "kind": "a.a",
+        "place": {
+          "index": 0,
+          "to": "column",
+          "workspace": "e0000000-0000-4000-8000-000000000001"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "refused": "not_found",
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "8299756c-3b85-5feb-a38d-0aedbc51d646",
+              "panes": [
+                {
+                  "id": "f5297004-9ef2-5cc1-92a3-058b5da95302",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "bbea0a24-a26e-5846-a04a-eb68f90636d4",
+              "panes": [
+                {
+                  "id": "75b8e67e-d9dc-50ce-9f6e-d2a883af10f6",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "1e3a2c09-e35b-50a1-8ce1-2c3da604ee11",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                },
+                {
+                  "id": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                },
+                {
+                  "id": "1de97b02-b7b2-5a35-a4ad-cc1274e51f66",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "46555360-391f-500e-81a6-5fa913eeb433",
+              "panes": [
+                {
+                  "id": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "8721fcac-9dee-575c-8bcf-fa40ff981a5a",
+              "panes": [
+                {
+                  "id": "b1911eb0-0795-5d22-b40b-c81cd418e278",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-00000000000d",
+      "params": {
+        "args": {
+          "n": 9
+        },
+        "kind": "a.a",
+        "place": {
+          "column": "84d1eb7c-5a74-5919-8076-35297423b51c",
+          "index": 9,
+          "to": "stack"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "f093b628-7242-5b49-bcc7-a154ca6b4db4"
+      },
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "8299756c-3b85-5feb-a38d-0aedbc51d646",
+              "panes": [
+                {
+                  "id": "f5297004-9ef2-5cc1-92a3-058b5da95302",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "bbea0a24-a26e-5846-a04a-eb68f90636d4",
+              "panes": [
+                {
+                  "id": "75b8e67e-d9dc-50ce-9f6e-d2a883af10f6",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "1e3a2c09-e35b-50a1-8ce1-2c3da604ee11",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                },
+                {
+                  "id": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                },
+                {
+                  "id": "1de97b02-b7b2-5a35-a4ad-cc1274e51f66",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                },
+                {
+                  "id": "f093b628-7242-5b49-bcc7-a154ca6b4db4",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 9
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "46555360-391f-500e-81a6-5fa913eeb433",
+              "panes": [
+                {
+                  "id": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "8721fcac-9dee-575c-8bcf-fa40ff981a5a",
+              "panes": [
+                {
+                  "id": "b1911eb0-0795-5d22-b40b-c81cd418e278",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-00000000000e",
+      "params": {
+        "args": {
+          "n": 10
+        },
+        "kind": "a.a",
+        "place": {
+          "column": "84d1eb7c-5a74-5919-8076-35297423b51c",
+          "index": 0,
+          "to": "stack"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "answer": {
+        "new": true,
+        "pane": "6cbbfb71-f410-5859-84d8-8084532f67a5"
+      },
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "8299756c-3b85-5feb-a38d-0aedbc51d646",
+              "panes": [
+                {
+                  "id": "f5297004-9ef2-5cc1-92a3-058b5da95302",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "bbea0a24-a26e-5846-a04a-eb68f90636d4",
+              "panes": [
+                {
+                  "id": "75b8e67e-d9dc-50ce-9f6e-d2a883af10f6",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "6cbbfb71-f410-5859-84d8-8084532f67a5",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 10
+                  }
+                },
+                {
+                  "id": "1e3a2c09-e35b-50a1-8ce1-2c3da604ee11",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                },
+                {
+                  "id": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                },
+                {
+                  "id": "1de97b02-b7b2-5a35-a4ad-cc1274e51f66",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                },
+                {
+                  "id": "f093b628-7242-5b49-bcc7-a154ca6b4db4",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 9
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "46555360-391f-500e-81a6-5fa913eeb433",
+              "panes": [
+                {
+                  "id": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "8721fcac-9dee-575c-8bcf-fa40ff981a5a",
+              "panes": [
+                {
+                  "id": "b1911eb0-0795-5d22-b40b-c81cd418e278",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-00000000000f",
+      "params": {
+        "args": {
+          "n": 11
+        },
+        "kind": "a.a",
+        "place": {
+          "column": "e0000000-0000-4000-8000-000000000001",
+          "index": 0,
+          "to": "stack"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "refused": "not_found",
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "8299756c-3b85-5feb-a38d-0aedbc51d646",
+              "panes": [
+                {
+                  "id": "f5297004-9ef2-5cc1-92a3-058b5da95302",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "bbea0a24-a26e-5846-a04a-eb68f90636d4",
+              "panes": [
+                {
+                  "id": "75b8e67e-d9dc-50ce-9f6e-d2a883af10f6",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "6cbbfb71-f410-5859-84d8-8084532f67a5",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 10
+                  }
+                },
+                {
+                  "id": "1e3a2c09-e35b-50a1-8ce1-2c3da604ee11",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                },
+                {
+                  "id": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                },
+                {
+                  "id": "1de97b02-b7b2-5a35-a4ad-cc1274e51f66",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                },
+                {
+                  "id": "f093b628-7242-5b49-bcc7-a154ca6b4db4",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 9
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "46555360-391f-500e-81a6-5fa913eeb433",
+              "panes": [
+                {
+                  "id": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "8721fcac-9dee-575c-8bcf-fa40ff981a5a",
+              "panes": [
+                {
+                  "id": "b1911eb0-0795-5d22-b40b-c81cd418e278",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-000000000010",
+      "params": {
+        "args": {
+          "n": 11
+        },
+        "kind": "a.a",
+        "place": {
+          "pane": "e0000000-0000-4000-8000-000000000001",
+          "side": "right",
+          "to": "beside"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "refused": "not_found",
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "8299756c-3b85-5feb-a38d-0aedbc51d646",
+              "panes": [
+                {
+                  "id": "f5297004-9ef2-5cc1-92a3-058b5da95302",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "bbea0a24-a26e-5846-a04a-eb68f90636d4",
+              "panes": [
+                {
+                  "id": "75b8e67e-d9dc-50ce-9f6e-d2a883af10f6",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "6cbbfb71-f410-5859-84d8-8084532f67a5",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 10
+                  }
+                },
+                {
+                  "id": "1e3a2c09-e35b-50a1-8ce1-2c3da604ee11",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                },
+                {
+                  "id": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                },
+                {
+                  "id": "1de97b02-b7b2-5a35-a4ad-cc1274e51f66",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                },
+                {
+                  "id": "f093b628-7242-5b49-bcc7-a154ca6b4db4",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 9
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "46555360-391f-500e-81a6-5fa913eeb433",
+              "panes": [
+                {
+                  "id": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "8721fcac-9dee-575c-8bcf-fa40ff981a5a",
+              "panes": [
+                {
+                  "id": "b1911eb0-0795-5d22-b40b-c81cd418e278",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-000000000011",
+      "params": {
+        "args": {
+          "n": 11
+        },
+        "kind": "a.a",
+        "place": {
+          "pane": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+          "side": "right",
+          "to": "beside"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001",
+        "width": "2/3"
+      },
+      "answer": {
+        "new": true,
+        "pane": "cb8d2e58-e212-5d22-9100-535fd3b36c35"
+      },
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "8299756c-3b85-5feb-a38d-0aedbc51d646",
+              "panes": [
+                {
+                  "id": "f5297004-9ef2-5cc1-92a3-058b5da95302",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "bbea0a24-a26e-5846-a04a-eb68f90636d4",
+              "panes": [
+                {
+                  "id": "75b8e67e-d9dc-50ce-9f6e-d2a883af10f6",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "6cbbfb71-f410-5859-84d8-8084532f67a5",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 10
+                  }
+                },
+                {
+                  "id": "1e3a2c09-e35b-50a1-8ce1-2c3da604ee11",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                },
+                {
+                  "id": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                },
+                {
+                  "id": "1de97b02-b7b2-5a35-a4ad-cc1274e51f66",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                },
+                {
+                  "id": "f093b628-7242-5b49-bcc7-a154ca6b4db4",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 9
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "7affd734-2ec4-51c8-9bd9-da2e4a2996d6",
+              "panes": [
+                {
+                  "id": "cb8d2e58-e212-5d22-9100-535fd3b36c35",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 11
+                  }
+                }
+              ],
+              "width": "2/3",
+              "full": false
+            },
+            {
+              "id": "46555360-391f-500e-81a6-5fa913eeb433",
+              "panes": [
+                {
+                  "id": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "8721fcac-9dee-575c-8bcf-fa40ff981a5a",
+              "panes": [
+                {
+                  "id": "b1911eb0-0795-5d22-b40b-c81cd418e278",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000002-0000-4000-8000-000000000012",
+      "params": {
+        "args": {
+          "n": 12
+        },
+        "kind": "a.a",
+        "place": {
+          "pane": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+          "side": "below",
+          "to": "beside"
+        },
+        "project": "a0000000-0000-4000-8000-000000000001",
+        "width": "2/3"
+      },
+      "answer": {
+        "new": true,
+        "pane": "216aeb20-faac-5ee4-80ea-289497e3b64a"
+      },
+      "after": [
+        {
+          "id": "3be42dd8-d692-5d9f-a81a-d61c5c6116f5",
+          "columns": [
+            {
+              "id": "8299756c-3b85-5feb-a38d-0aedbc51d646",
+              "panes": [
+                {
+                  "id": "f5297004-9ef2-5cc1-92a3-058b5da95302",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "bbea0a24-a26e-5846-a04a-eb68f90636d4",
+              "panes": [
+                {
+                  "id": "75b8e67e-d9dc-50ce-9f6e-d2a883af10f6",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "84d1eb7c-5a74-5919-8076-35297423b51c",
+              "panes": [
+                {
+                  "id": "6cbbfb71-f410-5859-84d8-8084532f67a5",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 10
+                  }
+                },
+                {
+                  "id": "1e3a2c09-e35b-50a1-8ce1-2c3da604ee11",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                },
+                {
+                  "id": "1dc179f5-a2f6-5acf-9116-4adde4aed930",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                },
+                {
+                  "id": "216aeb20-faac-5ee4-80ea-289497e3b64a",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 12
+                  }
+                },
+                {
+                  "id": "1de97b02-b7b2-5a35-a4ad-cc1274e51f66",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                },
+                {
+                  "id": "f093b628-7242-5b49-bcc7-a154ca6b4db4",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 9
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "7affd734-2ec4-51c8-9bd9-da2e4a2996d6",
+              "panes": [
+                {
+                  "id": "cb8d2e58-e212-5d22-9100-535fd3b36c35",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 11
+                  }
+                }
+              ],
+              "width": "2/3",
+              "full": false
+            },
+            {
+              "id": "46555360-391f-500e-81a6-5fa913eeb433",
+              "panes": [
+                {
+                  "id": "d8cc2dfa-6a12-5833-8dc4-6737e807dbbf",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "8721fcac-9dee-575c-8bcf-fa40ff981a5a",
+              "panes": [
+                {
+                  "id": "b1911eb0-0795-5d22-b40b-c81cd418e278",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "45667a26-e4bc-5609-aa58-932f7465b415",
+          "columns": []
+        }
+      ]
+    }
+  ]
+}

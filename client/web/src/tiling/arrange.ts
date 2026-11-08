@@ -10,13 +10,7 @@
  * Pane goes; what that puts where becomes one command, and the engine's
  * event draws it. Pure, so plain tests cover it.
  */
-import type {
-  CommandId,
-  Engine,
-  Event,
-  MethodOf,
-  Params,
-} from "@banda/contract"
+import type { CommandId, Engine, Event } from "@banda/contract"
 import type {
   Arranged,
   Changed,
@@ -26,6 +20,7 @@ import type {
 } from "@banda/contract/workspaces"
 import type { PaneState } from "@banda/ui/pane"
 import type { Source } from "@banda/ui/hooks/use-live"
+import type { Command } from "./arrangement"
 import {
   clamp,
   type Column,
@@ -303,13 +298,6 @@ export function keptOf(state: Workspaces): Kept[] {
     ...(workspace.project !== undefined && { project: workspace.project }),
   }))
 }
-
-type Named = Extract<MethodOf<"command">, `workspaces.${string}`>
-
-/** One of the module's commands, with its params. */
-type Command = {
-  [M in Named]: { method: M; params: Params<M> }
-}[Named]
 
 /** A change for the engine to make, and the Pane to focus once it shows
  * it; a Pane opened is focused by the ID the engine gives it, unless
