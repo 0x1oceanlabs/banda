@@ -119,7 +119,8 @@ export type WindowApi = {
    * which changes what calls (ADR 0074). */
   items: Readable<Lists>
   /** Runs an action by its id, a module's or the window's, as its key
-   * would: how one module asks another for what it does. */
+   * would: how one module asks another for what it does, and how it goes
+   * to a Pane, by the Window's `pane.pick` (ADR 0087, decision 7). */
   run: (action: string, args?: Args) => void
   /** Where the Person looks for `thing` (ADR 0056, decision 1), as the
    * calls part works it out (`sightOf`): from Here and what the Tiles of
@@ -128,9 +129,6 @@ export type WindowApi = {
    * part that tells the Person, a counted case until who is told moves
    * to the host (E9): any other part reads Here. */
   sight: (thing?: Thing) => Sight
-  /** Goes to `thing`: to the Pane that shows it, on any workspace, else
-   * opens `pane` for it. */
-  goTo: (thing: Thing & { pane: PaneState }) => void
   /** The Projects open in the window. */
   projects: () => readonly ProjectSummary[]
   /** How the look says to tell and to sound: `[notify]` and `[sound]`. */

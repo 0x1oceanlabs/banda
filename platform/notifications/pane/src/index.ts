@@ -40,7 +40,7 @@ export const notifications = defineModule({
           Array.isArray(paneArgs)
         )
           return
-        teller?.goTo({
+        teller?.answer({
           project: project as ProjectId,
           about,
           pane: { kind: pane.kind, args: paneArgs },
