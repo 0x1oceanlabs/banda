@@ -74,14 +74,18 @@
           "$ref": "#/$defs/AccountKind"
         },
         "mark": {
-          "description": "The letters of its mark, one or two: by default the first of its\nname, two when another account of its Harness starts the same.",
+          "description": "The letters of its mark, one or two: by default the first of its\nname, two when another account of its Harness starts the same. The\nemblem of a Harness Banda has no icons for shows them.",
           "type": "string"
         },
+        "icon": {
+          "description": "The icon of its emblem (ADR 0093, decision 2): `claude-code` or\n`claude` for Claude Code's accounts, `codex` or `chatgpt` for\nCodex's, or for any account `work`, `personal`, `team`, `client`,\n`spare`, `experiments`, `key`, `gateway`, `cloud`, `local` or `box`.\nBy default its kind's: its Harness's program's for a subscription,\n`key` for an API key, `gateway` for a gateway.",
+          "$ref": "#/$defs/Icon"
+        },
         "colour": {
-          "description": "Its colour: 1 violet, 2 rose, 3 green, 4 graphite. By default its\nplace in this file, from 1 round to 4 again.",
+          "description": "Its colour: 0 its Harness's own (Claude's orange, Codex's the\ntext's), 1 violet, 2 rose, 3 green, 4 graphite. By default a\nHarness's own entry takes its own, and its accounts 1 to 4 in turn.",
           "type": "integer",
           "format": "uint8",
-          "minimum": 1,
+          "minimum": 0,
           "maximum": 4
         }
       },
@@ -128,6 +132,86 @@
           "description": "A gateway's base URL and key, such as OpenRouter's.",
           "type": "string",
           "const": "gateway"
+        }
+      ]
+    },
+    "Icon": {
+      "description": "The icon of an account's emblem (ADR 0093, decision 2): two of its\nHarness's own for Claude Code and Codex, and the neutral ones any\naccount may take.",
+      "oneOf": [
+        {
+          "description": "Claude Code's character, from the block characters its CLI prints.",
+          "type": "string",
+          "const": "claude-code"
+        },
+        {
+          "description": "Claude's spark.",
+          "type": "string",
+          "const": "claude"
+        },
+        {
+          "description": "Codex's mark: a filled shape with `>_` cut out.",
+          "type": "string",
+          "const": "codex"
+        },
+        {
+          "description": "OpenAI's knot.",
+          "type": "string",
+          "const": "chatgpt"
+        },
+        {
+          "description": "A briefcase: the work account.",
+          "type": "string",
+          "const": "work"
+        },
+        {
+          "description": "A house: one's own.",
+          "type": "string",
+          "const": "personal"
+        },
+        {
+          "description": "People: a team's plan.",
+          "type": "string",
+          "const": "team"
+        },
+        {
+          "description": "A building: a client's or an employer's.",
+          "type": "string",
+          "const": "client"
+        },
+        {
+          "description": "A life buoy: kept for when the others are out.",
+          "type": "string",
+          "const": "spare"
+        },
+        {
+          "description": "A flask: trying models and settings.",
+          "type": "string",
+          "const": "experiments"
+        },
+        {
+          "description": "A key: an API key, billed by use.",
+          "type": "string",
+          "const": "key"
+        },
+        {
+          "description": "Two paths joining: a gateway, such as OpenRouter or LiteLLM.",
+          "type": "string",
+          "const": "gateway"
+        },
+        {
+          "description": "A cloud: Bedrock, Vertex.",
+          "type": "string",
+          "const": "cloud"
+        },
+        {
+          "description": "A chip: a local model, such as Ollama or LM Studio.",
+          "type": "string",
+          "const": "local"
+        },
+        {
+          "description": "A box: an environment sign-in (ADR 0084).",
+          "type": "string",
+          "const": "box"
         }
       ]
     },

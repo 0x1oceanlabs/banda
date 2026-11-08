@@ -29,9 +29,17 @@ pub struct HarnessView {
     /// How the account pays.
     pub kind: AccountKind,
     /// The letters of its mark: the first of its name, or two where
-    /// another account of its Harness starts with the same (decision 9).
+    /// another account of its Harness starts with the same. Its emblem
+    /// shows them when it has no icon (ADR 0093, decision 2).
     pub mark: String,
-    /// Its colour, 1 to 4 (decision 10).
+    /// The icon of its emblem: what its entry names, else its kind's.
+    /// None for a Harness Banda has no icons for, whose emblem is its
+    /// letters (ADR 0093, decision 2).
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<Icon>,
+    /// Its colour: 0 its Harness's own, then 1 violet, 2 rose, 3 green,
+    /// 4 graphite (ADR 0093, decision 3).
     pub colour: u8,
 }
 
@@ -50,10 +58,75 @@ pub enum AccountKind {
     Gateway,
 }
 
+/// The icon of an account's emblem (ADR 0093, decision 2): two of its
+/// Harness's own for Claude Code and Codex, and the neutral ones any
+/// account may take.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(export, export_to = "harnesses/")]
+pub enum Icon {
+    /// Claude Code's character, from the block characters its CLI prints.
+    ClaudeCode,
+    /// Claude's spark.
+    Claude,
+    /// Codex's mark: a filled shape with `>_` cut out.
+    Codex,
+    /// OpenAI's knot.
+    Chatgpt,
+    /// A briefcase: the work account.
+    Work,
+    /// A house: one's own.
+    Personal,
+    /// People: a team's plan.
+    Team,
+    /// A building: a client's or an employer's.
+    Client,
+    /// A life buoy: kept for when the others are out.
+    Spare,
+    /// A flask: trying models and settings.
+    Experiments,
+    /// A key: an API key, billed by use.
+    Key,
+    /// Two paths joining: a gateway, such as OpenRouter or LiteLLM.
+    Gateway,
+    /// A cloud: Bedrock, Vertex.
+    Cloud,
+    /// A chip: a local model, such as Ollama or LM Studio.
+    Local,
+    /// A box: an environment sign-in (ADR 0084).
+    Box,
+}
+
+impl Icon {
+    /// The Harness whose own icon it is, by its ID; None for a neutral one.
+    pub fn harness(self) -> Option<&'static str> {
+        match self {
+            Self::ClaudeCode | Self::Claude => Some("claude"),
+            Self::Codex | Self::Chatgpt => Some("codex"),
+            _ => None,
+        }
+    }
+
+    /// The icon an account of `harness` takes by default for its `kind`:
+    /// its Harness's program's for a subscription, a key for an API key, a
+    /// gateway's for a gateway. None when Banda has no icons for the
+    /// Harness of a subscription: its emblem is its letters.
+    pub fn of(harness: &str, kind: AccountKind) -> Option<Self> {
+        match (kind, harness) {
+            (AccountKind::Subscription, "claude") => Some(Self::ClaudeCode),
+            (AccountKind::Subscription, "codex") => Some(Self::Codex),
+            (AccountKind::Subscription, _) => None,
+            (AccountKind::Api, _) => Some(Self::Key),
+            (AccountKind::Gateway, _) => Some(Self::Gateway),
+        }
+    }
+}
+
 impl HarnessView {
     /// `harness` as the window reads it, with the mark and colour the list
     /// gave it among the others.
     pub(crate) fn of(harness: &crate::Harness, mark: String, colour: u8) -> Self {
+        let icon = (harness.icon).or_else(|| Icon::of(harness.harness(), harness.kind));
         let start = harness.start();
         Self {
             id: harness.id.clone(),
@@ -65,6 +138,7 @@ impl HarnessView {
             harness: harness.harness().to_owned(),
             kind: harness.kind,
             mark,
+            icon,
             colour,
         }
     }
