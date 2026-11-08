@@ -597,17 +597,22 @@ A module declares itself in its code and a short `app.toml` (ADR 0022,
 which calls it `module.toml`).
 Its engine part is the `Module` it gives the kernel, with its `methods!`
 table. Its window part is one
-`defineModule({ id, engine, panes, watches, actions, sources, bar, threadDetails, previewers, items, start })`
+`defineModule({ id, engine, panes, watches, actions, sources, bar, slots, previewers, items, start })`
 exported from its Pane package; the window lists these in
 `client/web/src/modules.ts`, the one place that names a module, and builds its
 registries from them. `start` runs once with the window API, for a module
 that acts on the window when the desktop tells it something.
-`threadDetails` are its rows in a Thread's details card (ADR 0034): the
-frame hands every Pane the rows of the modules that run, and a Pane puts
-its own buttons in the header the frame draws with `InHeader`. Threads'
-own action `agents.thread.details{part}` shows the focused Thread's card
-with a part of its rows open, as git's Alt+Shift+G runs it for its branch
-picker.
+`slots` are what it puts in other Apps' things, each a Slot by its name
+(ADR 0082, decision 8; `@banda/ui/slots`): Git's rows in Threads'
+`thread.details`, a Thread's details card (ADR 0034), and Threads' Mark of
+a Thread in the Tiling's `pane.header`, a Pane's header and its tile's
+label in the Overview (ADR 0062, decision 17), where the window names
+another machine too. The window gives what the modules that run put in
+each (`Slots`), and each Slot's owner reads its own in one place
+(`useSlot`), in the modules' order. A Pane puts its own buttons in the
+header the frame draws with `InHeader`. Threads' own action
+`agents.thread.details{part}` shows the focused Thread's card with a part
+of its rows open, as git's Alt+Shift+G runs it for its branch picker.
 `items` are its item actions (ADR 0087, decision 12): what the Person
 does to one of the Items it lists, as renaming or snoozing a Thread. Each
 is an action, by a key too, with the row it shows for an Item; the Thread
