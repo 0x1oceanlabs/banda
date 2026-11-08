@@ -4925,6 +4925,9 @@ test("Suggest a title renames in one press with Undo, and Mark as unread calls a
   await header.getByRole("button", { name: suggested, exact: true }).click()
   await page.getByRole("menuitem", { name: /Mark as unread/ }).click()
   await expect(done(row)).toBeVisible()
+  // The menu gone: as it closes it gives the focus back to its title, in
+  // the Thread, which a New Thread drawn at once would lose (#901).
+  await expect(page.getByRole("menu")).toBeHidden()
   await page.keyboard.press("Alt+Enter")
   await expect(thread).toHaveAttribute("data-focused", "false")
   await expect(done(row)).toBeVisible()
