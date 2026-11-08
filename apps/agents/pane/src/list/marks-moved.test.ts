@@ -1,4 +1,4 @@
-import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import type { Engine, ProjectId, ProjectSummary, Status } from "@banda/contract"
 import type { ImportMarks, ListedThread } from "@banda/contract/agents"
 import { works } from "@banda/ui/components/banda-mark"
 import { DAY } from "@banda/ui/lib/words"
@@ -12,6 +12,7 @@ import {
   moveMarks,
   type OldMarks,
   oldMarks,
+  unreadOf,
 } from "./marks-moved"
 import { listedOf } from "./rows"
 
@@ -158,6 +159,7 @@ test("the frozen rule archives what the window's showed archived, and no more", 
                   thread: thread(one, changed, { latest, asking, snooze }),
                   old: {
                     seen: seen ? { [one]: seen } : {},
+                    seenKept: true,
                     says: say ? { [one]: say } : {},
                     before,
                   },
@@ -444,4 +446,92 @@ test("a list waits a while at most: for a move that never starts, or one that ne
   } finally {
     vi.useRealTimers()
   }
+})
+
+test("a Thread marked unread here, seen on its host, is taken back there; one never seen here is not", () => {
+  // T1 seen here, T2 marked unread here after the host kept its seen, T3
+  // seen on the host at an older turn, T4 at work, T5 seen on no host.
+  const held = storage({ "banda.agents.seen": { [T1]: U1 } })
+  const threads = [
+    thread(T1, NOW, { seen: U1 }),
+    thread(T2, NOW, { seen: U1 }),
+    thread(T3, NOW, {
+      seen: U1,
+      latest: { turn: U2, state: "done", began: NOW },
+    }),
+    thread(T4, NOW, {
+      seen: U1,
+      latest: { turn: U2, state: "running", began: NOW },
+    }),
+    thread(T5, NOW),
+  ]
+  // Only T2 shows settled on the host though this window shows it Done.
+  expect(unreadOf(threads, oldMarks(held))).toEqual([T2])
+  // A window that never kept a seen takes none back: the host's came from
+  // another machine.
+  const none = storage({ "banda.sidebar.archived": {} })
+  expect(unreadOf(threads, oldMarks(none))).toEqual([])
+  // One whose Person took back every seen it kept still has the key.
+  const emptied = storage({ "banda.agents.seen": {} })
+  expect(unreadOf(threads, oldMarks(emptied))).toEqual([T1, T2])
+})
+
+/** An engine of this machine's, open, whose Project P1 lists `threads`,
+ * and every command it was sent, by method; it refuses `refuses`. */
+function markingEngine(threads: ListedThread[], refuses: string[] = []) {
+  const sent: { method: string; params: unknown }[] = []
+  const status = { state: "open" } as Status
+  const engine = {
+    status,
+    watch: (watcher: (status: Status) => void) => {
+      watcher(status)
+      return () => undefined
+    },
+    call: async (method: string) =>
+      method === "projects.list"
+        ? [{ id: P1, missing: false } as ProjectSummary]
+        : { at: 0, threads },
+    command: async (method: string, params: unknown) => {
+      sent.push({ method, params })
+      return { count: 1 }
+    },
+    commandAt: async (method: string, params: unknown) => {
+      sent.push({ method, params })
+      if (refuses.includes(method)) throw new Error("refused")
+      return { answer: null, at: 9 }
+    },
+  } as unknown as Engine
+  return { engine, sent }
+}
+
+test("the move takes back on the host what this window marked unread, after the import, once", async () => {
+  const held = storage({
+    "banda.agents.seen": { [T1]: U1 },
+    "banda.sidebar.archived": { [T2]: { archived: true, at: NOW } },
+    ...NO_DAYS,
+  })
+  const threads = [thread(T1, NOW - DAY), thread(T2, NOW - DAY, { seen: U1 })]
+  const { engine, sent } = markingEngine(threads)
+  expect(await moveMarks(engine, held)).toBe(2)
+  // The import first: an unread would keep the host from taking T2's
+  // archive (#898).
+  expect(sent).toEqual([
+    {
+      method: "agents.import_marks",
+      params: { seen: { [T1]: U1 }, archived: [T2] },
+    },
+    { method: "agents.unread", params: { thread: T2 } },
+  ])
+  expect(JSON.parse(held.getItem("banda.marks.moved")!)).toEqual([P1])
+})
+
+test("a take-back the host refuses leaves the Project to move again", async () => {
+  const held = storage({ "banda.agents.seen": {}, ...NO_DAYS })
+  const { engine, sent } = markingEngine(
+    [thread(T1, NOW - DAY, { seen: U1 })],
+    ["agents.unread"]
+  )
+  expect(await moveMarks(engine, held)).toBe(0)
+  expect(sent).toEqual([{ method: "agents.unread", params: { thread: T1 } }])
+  expect(held.getItem("banda.marks.moved")).toBeNull()
 })

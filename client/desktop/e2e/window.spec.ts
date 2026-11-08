@@ -4993,6 +4993,10 @@ test("the marks this window kept move to its host once, and its first list shows
     .toEqual(["done", "done"])
   const outside = titled("from outside")
   expect(outside.seen).toBeUndefined()
+  // hello, which the Person looked at, is seen on the host.
+  await expect
+    .poll(() => titled("hello").seen)
+    .toBe(titled("hello").latest.turn)
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   const list = sidebar.getByRole("group", { name: "Threads" })
   const hello = list.getByRole("button", { name: /hello/ })
@@ -5000,7 +5004,8 @@ test("the marks this window kept move to its host once, and its first list shows
   await expect(marked.getByRole("img", { name: "Done" })).toBeVisible()
 
   // The old keys, as a window before ADR 0096 kept them: the outside
-  // Thread seen, hello archived; and no move gone yet.
+  // Thread seen; hello archived, and marked unread here after its Pane
+  // told the host it was seen (step 2a); and no move gone yet.
   await page.evaluate(
     ({ seen, archived }) => {
       localStorage.setItem("banda.agents.seen", JSON.stringify(seen))
@@ -5037,6 +5042,8 @@ test("the marks this window kept move to its host once, and its first list shows
   // On the host, which every window reads; the Project moved, once.
   expect(titled("hello").archived).toBeDefined()
   expect(titled("from outside").seen).toBe(outside.latest.turn)
+  // The unread made here went too: hello calls again, on every machine.
+  await expect.poll(() => titled("hello").seen).toBeUndefined()
   const moved = await page.evaluate(() =>
     localStorage.getItem("banda.marks.moved")
   )
