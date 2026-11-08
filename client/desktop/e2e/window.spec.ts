@@ -1574,44 +1574,47 @@ test("a line's start makes it a heading, a list, a task, a quote or a rule", asy
   const { page } = window
   const { thread, composer } = await firstThread(page)
   const items = composer.locator("[data-item]")
+  // At a Person's pace: keys sent back to back outrun the editor's news of
+  // the selection, and a line's start reads text it has not heard of.
+  const typing = { delay: 20 }
 
-  await composer.pressSequentially("# Plan")
+  await composer.pressSequentially("# Plan", typing)
   await expect(composer.locator("h1")).toHaveText("Plan")
   // After a heading comes text; a list goes on with Shift+Enter, and an
   // empty item ends it, the line text again.
-  await composer.press("Shift+Enter")
-  await composer.pressSequentially("- one")
-  await composer.press("Shift+Enter")
-  await composer.pressSequentially("two")
+  await composer.press("Shift+Enter", typing)
+  await composer.pressSequentially("- one", typing)
+  await composer.press("Shift+Enter", typing)
+  await composer.pressSequentially("two", typing)
   await expect(items).toHaveText(["•one", "•two"])
-  await composer.press("Shift+Enter")
-  await composer.press("Shift+Enter")
+  await composer.press("Shift+Enter", typing)
+  await composer.press("Shift+Enter", typing)
   // Numbers go on; Tab takes an item in.
-  await composer.pressSequentially("1. first")
-  await composer.press("Shift+Enter")
-  await composer.pressSequentially("second")
+  await composer.pressSequentially("1. first", typing)
+  await composer.press("Shift+Enter", typing)
+  await composer.pressSequentially("second", typing)
   await expect(items.nth(3)).toHaveText("2.second")
-  await composer.press("Shift+Enter")
-  await composer.press("Shift+Enter")
+  await composer.press("Shift+Enter", typing)
+  await composer.press("Shift+Enter", typing)
   // A task's box ticks with a click.
-  await composer.pressSequentially("- [ ] ship it")
+  await composer.pressSequentially("- [ ] ship it", typing)
   const box = composer.getByRole("checkbox", { name: "To do" })
   await box.click()
   await expect(composer.getByRole("checkbox", { name: "Done" })).toBeChecked()
-  await composer.press("End")
-  await composer.press("Shift+Enter")
-  await composer.press("Shift+Enter")
-  await composer.pressSequentially("> said so")
+  await composer.press("End", typing)
+  await composer.press("Shift+Enter", typing)
+  await composer.press("Shift+Enter", typing)
+  await composer.pressSequentially("> said so", typing)
   await expect(composer.locator("blockquote")).toHaveText("said so")
-  await composer.press("Shift+Enter")
-  await composer.press("Shift+Enter")
-  await composer.pressSequentially("---")
+  await composer.press("Shift+Enter", typing)
+  await composer.press("Shift+Enter", typing)
+  await composer.pressSequentially("---", typing)
   await expect(composer.locator("hr")).toHaveCount(1)
-  await composer.pressSequentially("end")
+  await composer.pressSequentially("end", typing)
   await page.screenshot({ path: "test-results/18g-blocks.png" })
 
   // It is sent as the markdown it was written as.
-  await composer.press("Enter")
+  await composer.press("Enter", typing)
   const written = [
     "# Plan",
     "- one",
@@ -1627,11 +1630,11 @@ test("a line's start makes it a heading, a list, a task, a quote or a rule", asy
   await expect(said).toHaveJSProperty("textContent", written)
 
   // Backspace at an item's start makes it text again.
-  await composer.pressSequentially("- gone")
-  await composer.press("Home")
+  await composer.pressSequentially("- gone", typing)
+  await composer.press("Home", typing)
   // Keys outrun the selection's news to the editor; let it arrive.
   await page.evaluate(() => new Promise((done) => setTimeout(done)))
-  await composer.press("Backspace")
+  await composer.press("Backspace", typing)
   await expect(items).toHaveCount(0)
   await expect(composer.locator("p")).toHaveText("gone")
 })

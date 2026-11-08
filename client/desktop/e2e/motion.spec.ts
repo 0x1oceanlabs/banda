@@ -1,10 +1,10 @@
 /**
  * How the Tiling moves, measured on the real app (ADR 0088, decision 13):
  * a Strip of three terminals and a browser Pane, the first terminal
- * printing off screen; then the window left quiet, a column's width
- * stepped, the focus stepped along the Strip, a column maximized, the
- * workspaces stepped, and the overview opened and closed. The browser's
- * page shows in every phase.
+ * printing off screen; then the window left quiet, nothing holding the
+ * keyboard, a column's width stepped, the focus stepped along the Strip, a
+ * column maximized, the workspaces stepped, and the overview opened and
+ * closed. The browser's page shows in every phase.
  *
  * For each phase it reports the main thread's work a second, from Chrome's
  * own counters; what motion-probe.ts counts in the page (ticks, layout read
@@ -245,8 +245,7 @@ test("how the Tiling moves, against motion-budget.json", async () => {
   await measure("printing", () => page.waitForTimeout(3000), { still: true })
   expect(lines() - printedBefore, "the lines printed").toBeGreaterThan(10)
   // Quiet from here: what the window costs by itself, and its moves. The
-  // first terminal stops printing, as its draws show, and the last, beside
-  // the browser, has the focus.
+  // first terminal stops printing, as its draws show.
   writeFileSync(stop, "")
   await terminal(2).click()
   await expect(async () => {
@@ -255,7 +254,16 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     const [printing] = (await page.evaluate(read)).terminals
     expect(printing.draws[0] + printing.draws[1]).toBe(0)
   }).toPass({ timeout: 15_000 })
-  await measure("quiet", () => page.waitForTimeout(3000), { still: true })
+  // Nothing has the keyboard, so no cursor blinks: a focused terminal's
+  // blink is the working phase's (ADR 0088, decision 1).
+  await page.evaluate(() => (document.activeElement as HTMLElement).blur())
+  // A Mark playing its trick is no quiet window: the logo plays one about
+  // every half minute, so the next try finds it still.
+  for (let tries = 1; ; tries++) {
+    await measure("quiet", () => page.waitForTimeout(3000), { still: true })
+    if (phases.quiet.counted.marks === 0 || tries === 3) break
+  }
+  // The last terminal, beside the browser, has the focus for the moves.
   await terminal(2).click()
   // Through the widths short of the whole screen, and back: the browser
   // beside it stays in sight.

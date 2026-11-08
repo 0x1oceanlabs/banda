@@ -42,7 +42,10 @@ Import paths, so the files find each other here, and the tests import
   background too, are on screen pixels (ADR 0047, decision 3).
 - the surface takes a `linkTitle`: a link under the pointer shows it as
   the canvas's tooltip;
-- `linkTextAt` names the link at a point, for the terminal's menu.
+- `linkTextAt` names the link at a point, for the terminal's menu;
+- the surface takes a `clock`, the host's, to ask for the tick it draws
+  in: the window's, so the screen ticks with all else that moves (ADR
+  0088, decision 3).
 
 T3's tests of its own terminal drawer are not brought: they test T3's
 transport, not the adapter.

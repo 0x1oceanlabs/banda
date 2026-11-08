@@ -12,6 +12,7 @@ import {
   useLayoutEffect,
   useRef,
 } from "react"
+import { cancelFrame, onMove } from "@banda/ui/lib/frames"
 import { nudge, pushed, swallowClick } from "./moving"
 import { THRESHOLD } from "./sizing"
 
@@ -108,8 +109,9 @@ export function useReorder(
       item.style.transform = y ? `translateY(${y}px)` : ""
     })
   }
-  // Once a frame: near the top or the bottom what scrolls does, and the
-  // one carried follows the pointer.
+  // A move on the window's clock, once a tick: near the top or the bottom
+  // what scrolls does, and the one carried follows the pointer; the
+  // overview draws its workspace after it.
   const follow = (d: Drag) => {
     const element = scroller.current
     if (element) {
@@ -121,7 +123,7 @@ export function useReorder(
       d.to = landing(d.places, d.from, by)
       draw(d)
     }
-    d.frame = requestAnimationFrame(() => follow(d))
+    d.frame = onMove(() => follow(d))
   }
   const end = (d: Drag) => {
     drag.current = undefined
@@ -223,7 +225,7 @@ function lift(d: Drag, key: (event: KeyboardEvent) => void) {
 
 /** A drag let go, kept or not. */
 function release(d: Drag) {
-  cancelAnimationFrame(d.frame)
+  cancelFrame(d.frame)
   if (!d.on) return
   delete document.documentElement.dataset.drag
   if (d.key) window.removeEventListener("keydown", d.key, true)

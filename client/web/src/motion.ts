@@ -5,7 +5,13 @@
  * as niri's do.
  */
 import type { Move, Spring } from "@banda/contract/look"
-import { afterMoves, cancelFrame, onMove } from "@banda/ui/lib/frames"
+import {
+  afterMoves,
+  cancelFrame,
+  followMoves,
+  moved,
+  onMove,
+} from "@banda/ui/lib/frames"
 
 /** Where a value is and how fast it goes, per second. */
 export interface State {
@@ -68,21 +74,25 @@ export function bezierAt(points: readonly number[], t: number): number {
 
 type Frame = (run: (now: number) => void) => number
 
-/** The browser's frames and clock; tests turn their own. */
+/** The window's clock; tests turn their own. */
 export interface Clock {
   frame: Frame
   cancel: (id: number) => void
   now: () => number
+  /** Says a value jumped outside a tick, so what follows the moves, as a
+   * browser's page, catches up. */
+  moved?: () => void
 }
 
 /** Takes back what `afterMoves` asked for. */
 export const cancelAfterMoves = cancelFrame
-export { afterMoves }
+export { afterMoves, followMoves, moved }
 
 const BROWSER: Clock = {
   frame: onMove,
   cancel: cancelFrame,
   now: () => performance.now(),
+  moved,
 }
 
 /**
@@ -136,6 +146,8 @@ export class Moving {
     this.stop()
     if (move.kind === "off" || from === target) {
       this.#land(target)
+      // No step of it runs on the clock: what follows the moves hears it.
+      this.#clock.moved?.()
       return
     }
     const step =

@@ -20,7 +20,7 @@ import { labelOf, useSaid } from "../registry"
 import { workspaceTo } from "./arrange"
 import { ThreadMark } from "@banda/ui/components/banda-mark"
 import { moveOf, useLookColumns, useLookOverview } from "../look"
-import { afterMoves, cancelAfterMoves, Moving } from "../motion"
+import { followMoves, moved, Moving } from "../motion"
 import { fit, ROW } from "./fit"
 import {
   drawnColumns,
@@ -165,6 +165,8 @@ export function Overview({
   // zooming must not move every screen by a whole height in one frame.
   const originAt = useRef(index)
   const origin = useRef<Moving | null>(null)
+  /** Asks it to draw in the next tick, while it is drawn. */
+  const drawAgain = useRef<(() => void) | undefined>(undefined)
 
   // The keys come here while it is open, not to a Pane under it.
   useEffect(() => {
@@ -359,7 +361,10 @@ export function Overview({
           : []
       )
     const { from, width, height } = screen
-    let frame = 0
+    // The look's, which no move changes: read once.
+    const stroke = focusFrame
+      ? parseFloat(getComputedStyle(focusFrame).outlineWidth)
+      : 0
     const step = () => {
       // Every read, then every write: the page lays out once.
       const over = element.getBoundingClientRect()
@@ -372,9 +377,10 @@ export function Overview({
         '[data-stack] [data-column] section[data-tile][data-selected="true"]'
       )
       const owner = selected?.closest("[data-stack]")
-      const stroke = focusFrame
-        ? parseFloat(getComputedStyle(focusFrame).outlineWidth)
-        : 0
+      // A row that steps aside for a workspace carried moves by its CSS.
+      const stepping = element
+        .getAnimations({ subtree: true })
+        .some((animation) => animation.playState === "running")
       const read = all.map(({ row, strip, stack }) => {
         // Before it stops clipping, while its scroll is still there.
         holdScroll(strip)
@@ -399,6 +405,7 @@ export function Overview({
         }
       })
       if (focusClip) focusClip.style.visibility = "hidden"
+      let drew = false
       all.forEach((one, i) => {
         const fitted = fits.current?.get(one.id)
         if (!fitted) return
@@ -425,6 +432,7 @@ export function Overview({
         const lit = (i === index ? LIT : glass ? GLASS : 0) * amount
         const drawn = `${x} ${y} ${scale} ${left} ${across} ${lit}`
         if (drawn !== one.drawn) {
+          drew = true
           one.drawn = drawn
           // The Strip shows whole, as wide as ever; its plate clips it.
           one.strip.style.overflow = "visible"
@@ -490,17 +498,39 @@ export function Overview({
           focusFrame.style.borderRadius = `${Math.max(0, radius * scale - tuck)}px`
         }
       })
+      // The Panes went with their workspaces: a browser's page follows.
+      if (drew) moved()
       if (!open && progress.current === 0 && !origin.current?.moving) {
+        drawing.stop()
         onExited()
         return
       }
-      // After the columns' and the scroll's moves, so it reads where they
-      // put the Panes this frame, not the last.
-      frame = afterMoves(step)
+      // A row stepping aside moves on no tick of the clock: it draws on
+      // while one does.
+      if (stepping) drawing.again()
     }
+    // In every tick something moves in, as its own springs, a Strip's
+    // scroll or a workspace carried by its number: after the moves, so it
+    // reads where they put the Panes, and before a browser's page, which
+    // follows where it puts them. Once landed, it waits (ADR 0088,
+    // decision 3).
+    const drawing = followMoves(step, { first: true })
+    const again = () => drawing.again()
     step()
-    return () => cancelAfterMoves(frame)
+    const quietly = { capture: true, passive: true }
+    element.addEventListener("scroll", again, quietly)
+    element.addEventListener("transitionrun", again, quietly)
+    drawAgain.current = again
+    return () => {
+      drawing.stop()
+      element.removeEventListener("scroll", again, quietly)
+      element.removeEventListener("transitionrun", again, quietly)
+      drawAgain.current = undefined
+    }
   }, [zoom, screen, ids, index, open, onExited])
+  // What it draws from changes with each of its renders, as a column's
+  // width: it draws again.
+  useLayoutEffect(() => drawAgain.current?.())
   // The Pane picked, or its workspace, in view.
   useEffect(() => {
     const element = root.current
