@@ -67,12 +67,17 @@ Import paths, so the files find each other here, and the tests import
   canvas shows: a frame draws only the rows whose cells, cursor or
   hovered link differ from it, and a screen that scrolled moves its
   pixels by the rows it scrolled, on screen pixels, and draws only the
-  rows that came in. While a glyph that stands past its row may be on
-  the canvas, a diagonal's or a block cursor's, it draws as T3's did
-  (`src/renderer.test.ts`; `e2e/terminal-pixels.spec.ts` compares a
-  build's pixels with main's) (ADR 0088, step P4).
+  rows that came in. That holds where rows draw alike, at a scale of 1,
+  1.6 or 2 (`rowsDrawAlike`); at 1.25 or 1.5, say, and while a glyph
+  that stands past its row may be on the canvas, a diagonal's or a block
+  cursor's, it draws as T3's did. A canvas whose context was lost and
+  restored draws every row again (`src/renderer.test.ts`;
+  `e2e/terminal-pixels.spec.ts` compares a build's pixels with main's)
+  (ADR 0088, step P4).
 
 T3's tests of its own terminal drawer are not brought: they test T3's
-transport, not the adapter.
+transport, not the adapter. `tools/pixel-fuzz/run.mjs` fuzzes the
+renderer against another checkout's, pixel for pixel, at every scale; its
+first lines say how.
 
 `src/index.ts` is Banda's: it names what the window uses.
