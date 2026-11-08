@@ -167,6 +167,12 @@ Machines) and `clip-notes.png`.
      Dev is not open there", not "…on m1pro". The page puts the
      machine's name before them where they need one, as `reachWords`
      does.
+   - A Test, and Add's Connect, find a machine before any Welcome: its
+     name and its system come through main's ssh probe
+     (`client/desktop/src/hosts.ts`), and main cleans them with the
+     page's rule. The page cleans the name again before it draws it
+     (`client/web/src/settings/machines.ts`); #938 makes the two one
+     rule.
 
 3. **With no setup, a machine has a name and an icon.**
    - The name is the hostname without `.local`. A hostname a system made
@@ -376,9 +382,18 @@ Each step is its own PR.
      `client/web/src/tiling/PaneFrame.tsx`;
      `apps/agents/pane/src/composer/NewThread.tsx` and
      `thread/Thread.tsx` (`:538`).
-5. **Settings → Machines**, with its Show card. Files:
-   `client/web/src/settings/sections.ts` and a section of its own beside
-   `client/web/src/settings/ProjectsSettings.tsx`.
+5. **Settings → Machines**, in two PRs:
+   - **PR 3, the section**: This machine, Other machines and Add a
+     machine (decision 9). Files: `client/web/src/settings/sections.ts`,
+     `MachinesSettings.tsx`, `MachinePicker.tsx` and `machines.ts`;
+     `client/web/src/window/device.ts` (the bridge's adding, removing,
+     testing, changing and suggestions); `client/ui/src/hooks/use-status.ts`
+     (`useNamed`, `forgetNamed`); the Banda menu's Machines row, which
+     opens its row; `client/desktop/src/hosts.ts`, whose states carry
+     their `ssh` and `banda`; and a test at the end of
+     `client/desktop/e2e/hosts.spec.ts`.
+   - **PR 4, the Show card and what it does**, after the window's B4e
+     and B4i, which reshape the sidebar and the Pane's frame it reads.
 6. **Later**: another machine's own emblems on its rows (decision 5);
    "Update arc" (#775); a Mac's "not open" in its own words (#826); a
    terminal on another machine, named after its folder (decision 7),

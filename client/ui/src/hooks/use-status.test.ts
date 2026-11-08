@@ -1,5 +1,6 @@
 import type { Engine, Status } from "@banda/contract"
 import { MACHINE_NAMED } from "@banda/contract/machines"
+import { cleanText, followThisNamed, forgetNamed } from "./use-status"
 import { afterEach, expect, test, vi } from "vitest"
 import { cleanNamed, followNamed, seenNamed } from "./use-status"
 
@@ -36,6 +37,13 @@ test("a name left empty is the machine's key in hosts.toml, and an icon not of t
       name: "m1pro",
       icon: "desktop",
     })
+})
+
+test("other text a machine says of itself, as its system, is cleaned the same way and cut where it is asked", () => {
+  expect(cleanText("Arch‮ Linux ", 40)).toBe("Arch Linux")
+  expect(cleanText("x".repeat(50), 40)).toHaveLength(40)
+  expect(cleanText(null, 40)).toBe("")
+  expect(cleanText(7, 40)).toBe("")
 })
 
 /** An engine that says what the test tells it: its status, and the
@@ -76,6 +84,54 @@ function engineSaying() {
     },
   }
 }
+
+/** A storage the test reads, in place of the window's. */
+function storage() {
+  const stored = new Map<string, string>()
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => stored.set(key, value),
+  })
+  return stored
+}
+
+test("a machine taken out is forgotten: added again, it is its key until its first welcome", () => {
+  const stored = storage()
+  const { engine, open } = engineSaying()
+  const stop = followNamed(engine, "box", () => undefined)
+  open({ name: "Cloud 2", icon: "tower" })
+  stop()
+  expect(seenNamed("box")).toEqual({ name: "Cloud 2", icon: "tower" })
+
+  forgetNamed("box")
+  expect(seenNamed("box")).toEqual({ name: "box", icon: "desktop" })
+  expect(JSON.parse(stored.get("banda.machines.seen")!)).not.toHaveProperty(
+    "box"
+  )
+  // Forgetting one never seen changes nothing.
+  forgetNamed("never")
+  expect(seenNamed("never")).toEqual({ name: "never", icon: "desktop" })
+})
+
+test("this machine's own name and icon come from its welcome and each change, cleaned, and nothing is kept on the device", () => {
+  const stored = storage()
+  const { engine, heard, open } = engineSaying()
+  const took = vi.fn()
+  const stop = followThisNamed(engine, took)
+  expect(heard.map((one) => one.method)).toEqual([MACHINE_NAMED])
+  expect(took).not.toHaveBeenCalled()
+
+  open({ name: "m1pro\u200b", icon: "laptop" })
+  expect(took).toHaveBeenLastCalledWith({ name: "m1pro", icon: "laptop" })
+  heard[0]!.onPiece({ name: "studio", icon: "toaster" })
+  expect(took).toHaveBeenLastCalledWith({ name: "studio", icon: "desktop" })
+  expect(stored.size).toBe(0)
+
+  stop()
+  expect(heard).toEqual([])
+  open({ name: "later", icon: "vm" })
+  expect(took).toHaveBeenCalledTimes(2)
+})
 
 test("the device keeps the last name and icon it saw of a machine, from its welcome and each change after", () => {
   const stored = new Map<string, string>()
