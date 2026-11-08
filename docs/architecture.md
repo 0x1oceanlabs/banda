@@ -597,20 +597,23 @@ A module declares itself in its code and a short `app.toml` (ADR 0022,
 which calls it `module.toml`).
 Its engine part is the `Module` it gives the kernel, with its `methods!`
 table. Its window part is one
-`defineModule({ id, engine, panes, watches, actions, sources, bar, threadDetails, previewers, listed, start })`
+`defineModule({ id, engine, panes, watches, actions, sources, bar, threadDetails, previewers, items, start })`
 exported from its Pane package; the window lists these in
 `client/web/src/modules.ts`, the one place that names a module, and builds its
 registries from them. `start` runs once with the window API, for a module
 that acts on the window when the desktop tells it something.
 `threadDetails` are its rows in a Thread's details card (ADR 0034): the
 frame hands every Pane the rows of the modules that run, and a Pane puts
-its own buttons in the header the frame draws with `InHeader`. A
-module's key asks the focused Thread's card to show and open a part of
-its rows with `askDetails`, as git's Alt+Shift+G its branch picker.
-`listed` says how the window renames, suggests a title for and marks
-unread a thing the module lists (ADR 0077): the Thread menu is the
-window's, and it finds the module by the first word of the thing's Pane
-kind.
+its own buttons in the header the frame draws with `InHeader`. Threads'
+own action `agents.thread.details{part}` shows the focused Thread's card
+with a part of its rows open, as git's Alt+Shift+G runs it for its branch
+picker.
+`items` are its item actions (ADR 0087, decision 12): what the Person
+does to one of the Items it lists, as renaming or snoozing a Thread. Each
+is an action, by a key too, with the row it shows for an Item; the Thread
+menu lists them, its App's and then the sidebar list's Archive, and the
+Pane menu and the Banda menu's Tab those offered there. The window finds
+an Item's App by the first word of its Pane kind, and runs each by id.
 `previewers` are how it draws kinds of file (ADR 0073, decision 6): each
 `definePreviewer({ id, title, match, priority, can, load })`, whose view
 `load` imports only once a file of its kind is shown. The window gathers

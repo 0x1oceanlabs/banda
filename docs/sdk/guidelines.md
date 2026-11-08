@@ -88,8 +88,12 @@ What Apps give never talk to each other.
   and Git (`apps/files/pane/src/live.ts:24`, `:84`;
   `apps/git/pane/src/read.ts:160`); `terminal.terminal` from Threads
   (`apps/agents/pane/src/SignIn.tsx:220`); `browser.open` from the
-  terminal (`apps/terminal/pane/src/Servers.tsx:120`). *Check:* planned
-  (the borders test; the registry refuses an undeclared listen).
+  terminal (`apps/terminal/pane/src/Servers.tsx:120`);
+  `agents.thread.details` from Git's Switch branch
+  (`apps/git/pane/src/index.ts`). *Check:* the architecture test counts
+  where an App runs another App's action by its id, and where the Window
+  calls an App's method by name; planned, the borders test and the
+  registry refusing an undeclared listen.
 - **borders.4 Import no other App, and none of its contract types.** A
   Pane imports only the contract, the kit, React and lucide
   (`apps/git/pane/src/architecture.test.ts:11-17`, which still lets Git
@@ -106,12 +110,15 @@ What Apps give never talk to each other.
   name an App no more than the list holds"); planned, no `Listed`.
 - **borders.6 Don't reach into the Window.** Keep no `WindowApi` in a
   module variable (`apps/browser/pane/src/threads.ts:22`,
-  `apps/git/pane/src/ended.ts:12-21`); use no module global as a channel
-  between Apps (`client/ui/src/components/thread-details.tsx:73-90`); take
-  no privileged props (`client/web/src/bar/Widgets.tsx:20-40`). The
-  Window gives you Here and runs actions; that is all. New code keeps it
-  now; the cases named here are counted until B4d, B4f and B8c.
-  *Check:* planned.
+  `apps/git/pane/src/ended.ts:11-20`); use no module global as a channel
+  between Apps, or between an App and the Window (Threads still writes
+  the title field's store, `client/ui/src/lib/naming.ts`, #861); take no
+  privileged props (`client/web/src/bar/Widgets.tsx:20-40`). The Window
+  gives you Here and runs actions; that is all. New code keeps it now;
+  the cases named here are counted until B4f, B8c and #861. *Check:* the
+  architecture test finds no global of a Thread's details card in
+  `@banda/ui` (B4d made it Threads' action `agents.thread.details`), and
+  counts the Apps that write the title field's store; the rest planned.
 - **borders.7 Work in one Project at a time.** App code is walled to the
   Project it runs for; only the platform listens across Projects (ADR
   0082 d6). Anything that spans Projects reads `item@1` and `call@1`.
@@ -174,8 +181,12 @@ What Apps give never talk to each other.
   *Check:* review.
 - **give.6 A verb on your own Items is an item action.** The Thread menu
   lists the owner App's item actions and then the platform's (unread,
-  archive). *After* B4d. *Until* then, `Listing` (`client/ui/src/module.ts:288-301`).
-  *Check:* review.
+  archive), and the Pane menu and the Banda menu's Tab those offered
+  there (`ItemAction`, `client/ui/src/module.ts`). Threads' are in
+  `apps/agents/pane/src/list/items.ts`; Mark as unread stays one of them
+  until the seen mark is the platform's (E8a, #849). *Check:* the
+  architecture test finds no page code but Threads' naming a Thread's
+  verb; review.
 - **give.7 A dialog, popover or picker is part of the view that opens
   it,** drawn in the Top layer. It is not something you add to the
   Window. *Check:* review.
@@ -635,13 +646,14 @@ a path, a key of its own, or another App's name.
 code:
 
 - **These bind now:** borders.2 to borders.7, borders.9 to borders.11,
-  give.1 to give.3 and give.7, here.1 to here.6, data.1 to data.4, data.6
-  and data.8, design.1 and design.3 to design.8, motion.1 to motion.8,
-  device.2 to device.5, trust.1, trust.3 to trust.8, and the words.
-- **These bind after their step:** give.4 (B7); give.5 (B4i); give.6
-  (B4d); motion.4's one fit (P7); borders.8 (B8); data.5 (E8); device.1
-  (E3); borders.1's marks (B4f).
+  give.1 to give.3, give.6 and give.7, here.1 to here.6, data.1 to
+  data.4, data.6 and data.8, design.1 and design.3 to design.8, motion.1
+  to motion.8, device.2 to device.5, trust.1, trust.3 to trust.8, and the
+  words.
+- **These bind after their step:** give.4 (B7); give.5 (B4i); motion.4's
+  one fit (P7); borders.8 (B8); data.5 (E8); device.1 (E3); borders.1's
+  marks (B4f).
 - **These wait for the renderer:** data.7, design.2 and trust.2 (V1, V2).
 
 Today's cases of borders.3, borders.6, borders.9 and data.4 are counted,
-and fall as B4d, B4f, B8c, E1, E6 and E8 land.
+and fall as B4f, B8c, E1, E6 and E8 land.

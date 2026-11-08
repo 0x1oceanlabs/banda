@@ -80,7 +80,7 @@ Nothing an App gives talks to anything else directly.
   `call@1` with the change behind it (after B7).
 - `give.5` To add to another App's thing, put an Item in its Slot (after
   B4i).
-- `give.6` A verb on your own Items is an item action (after B4d).
+- `give.6` A verb on your own Items is an item action.
 - `give.7` A dialog or picker is part of the view that opens it.
 
 ## Here
