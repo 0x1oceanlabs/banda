@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { beforeAll, describe, expect, it, vi } from "vitest"
 import { GhosttyTerminalCore } from "./t3/core"
-import { GhosttyRenderer, type GhosttyCellRange } from "./t3/renderer"
+import {
+  GhosttyRenderer,
+  rowsDrawAlike,
+  type GhosttyCellRange,
+} from "./t3/renderer"
 
 // The adapter fetches its WebAssembly by URL, as a page does; here, from
 // the vendored files.
@@ -45,7 +49,7 @@ function recording() {
 
 /** A terminal, a renderer and its canvas: `frame` draws what it shows now
  * and says the calls that took. */
-async function terminal(text: string) {
+async function terminal(text: string, ratio = 1) {
   const core = await GhosttyTerminalCore.create(
     COLS,
     ROWS,
@@ -70,6 +74,7 @@ async function terminal(text: string) {
       metrics: METRICS,
       fontSize: 12,
       fontFamily: "monospace",
+      ratio,
       padding: PADDING,
       forceFull: options.forceFull ?? false,
       cursorOn: true,
@@ -142,6 +147,35 @@ describe("the renderer", () => {
     expect(rowsDrawn(frame({ hoveredLinkRange: link }))).toEqual([])
     expect(rowsDrawn(frame())).toEqual([4])
     core.dispose()
+  })
+
+  it("draws as T3's renderer did where rows do not draw alike", async () => {
+    // At 1.25 a screen pixel is 0.8 CSS pixels: 16 rows of 20 screen
+    // pixels each, but no edge the drawing rounds is exact.
+    const { core, frame } = await terminal(lines(0, ROWS), 1.25)
+    expect(rowsDrawn(frame())).toEqual([...Array(ROWS).keys()])
+    expect(rowsDrawn(frame())).toEqual([ROWS - 1])
+    core.write(lines(ROWS, ROWS + 1))
+    const scrolled = frame()
+    expect(scrolled.filter(({ name }) => name === "drawImage")).toEqual([])
+    expect(rowsDrawn(scrolled)).toEqual([...Array(ROWS).keys()])
+    core.dispose()
+  })
+
+  it("knows where rows draw alike", () => {
+    // Scale, row height and origin, in CSS pixels.
+    expect(rowsDrawAlike(1, 16, 4)).toBe(true)
+    expect(rowsDrawAlike(2, 16.5, 4)).toBe(true)
+    expect(rowsDrawAlike(1.6, 18.125, 3.75)).toBe(true)
+    // Not whole screen pixels tall, or not starting on one.
+    expect(rowsDrawAlike(1.6, 18.1, 3.75)).toBe(false)
+    expect(rowsDrawAlike(2, 16, 4.25)).toBe(false)
+    // A screen pixel that is no binary fraction of a CSS pixel.
+    expect(rowsDrawAlike(1.25, 16, 4)).toBe(false)
+    expect(rowsDrawAlike(1.5, 18, 4)).toBe(false)
+    expect(rowsDrawAlike(3, 17, 4)).toBe(false)
+    // 4/3 is one, but a hair under it as a double.
+    expect(rowsDrawAlike(4 / 3, 15, 3.75)).toBe(false)
   })
 
   it("draws as T3's renderer did while a glyph may stand past its row", async () => {
