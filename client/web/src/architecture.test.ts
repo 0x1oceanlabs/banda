@@ -36,6 +36,8 @@
  *   to what the Window draws. Where the Person looks is the calls part's
  *   to work out: only the files listed ask the Window, and the list only
  *   falls.
+ * - One action goes to an Agent, `pane.pick` (ADR 0087, decision 7): the
+ *   Window answers it in one place, and gives no App another way.
  * - What the Window draws on every move it makes is drawn again only as
  *   its own props change (ADR 0088, decision 7): the parts listed stay
  *   memoized, and the list only grows.
@@ -259,6 +261,33 @@ test("only the files listed ask the Window where the Person looks", () => {
 })
 
 /**
+ * One action goes to an Agent, `pane.pick` (ADR 0087, decision 7): a
+ * sidebar row, a row of the counts list, a toast's button and Alt+U run
+ * it. The Window answers it in one place, which alone brings a Pane to the
+ * left once drawn, and only the action reaches that answer. No App is
+ * given another way to go to a Pane: the Window's API has no `goTo`.
+ */
+test("one place answers a pick, and only the action reaches it", () => {
+  const places = (pattern: RegExp) =>
+    sources(join(app, "web/src"), { tests: false }).flatMap((file) =>
+      (readFileSync(file, "utf8").match(pattern) ?? []).map(() =>
+        relative(app, file)
+      )
+    )
+  expect(places(/\bhow: "left"/g)).toEqual(["web/src/window/Shell.tsx"])
+  expect(places(/\bshell\.pick\(/g)).toEqual(["web/src/window/actions.ts"])
+  const api = readFileSync(join(app, "ui/src/module.ts"), "utf8").match(
+    /export type WindowApi = \{\n([\s\S]*?)\n\}/
+  )
+  expect(api).not.toBeNull()
+  const fields = [...api![1].matchAll(/^ {2}(\w+)\??:/gm)].map(
+    (found) => found[1]
+  )
+  expect(fields).toContain("run")
+  expect(fields).not.toContain("goTo")
+})
+
+/**
  * What the Window and the Tiling still say of an App, once for each place
  * they do, by file (`appStrings`): a string that names an action or a kind
  * of the agents module's (`agents.…`) or a Thread's (`thread.…`), and that
@@ -308,7 +337,7 @@ test("a string that no longer names an App leaves the list", () => {
  * lowers it; the room lets PRs in flight that each cut a few lines leave
  * it alone.
  */
-const WINDOW_LINES = 1198
+const WINDOW_LINES = 1194
 const SLACK = 20
 
 test("the Window's root keeps under its ceiling, and the ceiling follows it down", () => {
