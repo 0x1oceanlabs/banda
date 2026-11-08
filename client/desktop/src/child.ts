@@ -30,20 +30,21 @@ const LONGEST_WAIT = 10_000
 const HEALTHY = 30_000
 /** How long a program asked to stop has before it is killed. */
 const GRACE = "5 seconds"
-/** `program args…`, its stderr the window's. Its stdin is a pipe the
- * window holds: if the window dies, the program sees it close. It has the
- * window's environment, `env` over it. */
+/** `program args…`, its stderr the window's, or a pipe to read. Its
+ * stdin is a pipe the window holds: if the window dies, the program sees
+ * it close. It has the window's environment, `env` over it. */
 export function command(
   program: string,
   args: string[],
-  env?: Record<string, string>
+  env?: Record<string, string>,
+  stderr: "inherit" | "pipe" = "inherit"
 ) {
   return ChildProcess.make(program, args, {
     env,
     extendEnv: true,
     stdin: "pipe",
     stdout: "pipe",
-    stderr: "inherit",
+    stderr,
     // In the window's process group, as any child: Ctrl+C in a terminal
     // stops both. On Windows it has a console of its own, hidden, and
     // Node's Job Object ends it as the window ends.

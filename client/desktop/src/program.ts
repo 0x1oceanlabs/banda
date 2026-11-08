@@ -243,7 +243,7 @@ const copyIn = (program: string, folder: string) =>
 
 /** What `program --version` says, trimmed; a program that does not
  * start, ends badly, says nothing or takes too long fails. */
-const versionOf = (program: string) =>
+export const versionOf = (program: string) =>
   Effect.scoped(
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner

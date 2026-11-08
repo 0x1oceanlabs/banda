@@ -14,6 +14,8 @@
  * browser's pages, kept apart from the page (modules.ts, ADR 0013, ADR
  * 0028). Settings are a Pane of the page; the desktop writes their files
  * (settings.ts, ADR 0016). It updates Banda itself (update.ts, ADR 0041).
+ * It reaches the engines of the machines in `hosts.toml` over ssh, and
+ * hands the page their addresses too (hosts.ts, ADR 0081).
  */
 import { existsSync } from "node:fs"
 import { userInfo } from "node:os"
@@ -62,7 +64,7 @@ import { engineLayer, Stop } from "./engine"
 import { loginPath } from "./login"
 import { firstFrame, firstLook, lookLayer } from "./look"
 import { modules } from "./modules"
-import { channel, dataFolder, stateFolder } from "./channel"
+import { channel, configFolder, dataFolder, stateFolder } from "./channel"
 import {
   asksOnQuit,
   type Closing,
@@ -71,6 +73,7 @@ import {
   quitAsking,
 } from "./closing"
 import { listApp, listShortcut } from "./entry"
+import { Hosts } from "./hosts"
 import { startLog, watchProblems } from "./problems"
 import { Editors } from "./editors"
 import { dragOut, exists, openFile, showFile } from "./outside"
@@ -245,8 +248,9 @@ function leave(): void {
  * settings, all three on the window's `banda` (program.ts), the byte
  * host, over them the modules' own, the browser's and the notifications'
  * (modules.ts), and the road that answers what the modules' engine parts
- * ask (road.ts). They start with the first effect run, and stop when it
- * is disposed. */
+ * ask (road.ts). Beside them, not under them, the other machines' engines
+ * (hosts.ts): only the page reaches those. They start with the first
+ * effect run, and stop when it is disposed. */
 const runtime = ManagedRuntime.make(
   roadLayer(modules.asked).pipe(
     Layer.provideMerge(modules.layer),
@@ -274,6 +278,9 @@ const runtime = ManagedRuntime.make(
         FileHost.layer,
         PreviewHost.layer
       )
+    ),
+    Layer.merge(
+      Hosts.layer(join(configFolder(app.getPath("appData")), "hosts.toml"))
     ),
     // A packed Banda that cannot run a copy of its own says why.
     Layer.provide(
@@ -356,6 +363,19 @@ async function ready(): Promise<void> {
       )
     )
   )
+  // Each window hears how the other machines are (hosts.ts).
+  runtime.runFork(
+    Hosts.use((hosts) =>
+      hosts.changes.pipe(
+        Stream.runForEach((now) =>
+          Effect.sync(() => {
+            for (const shown of [window, ...popped.values()])
+              tellPage(shown?.webContents, BRIDGE.hosts.listen, now)
+          })
+        )
+      )
+    )
+  )
   protocol.handle("app", (request) => {
     const served = hosts.get(new URL(request.url).host)
     if (served) return runtime.runPromise(served(request))
@@ -386,6 +406,9 @@ async function ready(): Promise<void> {
   )
   serve(runtime, fromPage, BRIDGE, {
     engine: [none, () => Engine.use((engine) => engine.address)],
+    // The other machines' engines, through ssh (hosts.ts, ADR 0081).
+    hosts: { current: [none, () => Hosts.use((hosts) => hosts.current)] },
+    hostEngine: [text, ([name]) => Hosts.use((hosts) => hosts.address(name))],
     look: {
       current: [
         none,

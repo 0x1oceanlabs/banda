@@ -71,6 +71,29 @@ export type Update = { name: string; have: string; always: boolean } & (
  * a Stable's PRs (ADR 0033, decision 4). */
 export type Note = { version: string; text: string }
 
+/**
+ * Another machine's engine, as the window reaches it over ssh (ADR 0081,
+ * decision 4; `hosts.toml`): starting; waiting for the Person to sign in
+ * to Tailscale at `url`; live, with its build and this window's own
+ * (`own`), which may differ; away, and tried again soon; stopped as asked
+ * there, and tried again later or when its address is asked for; or
+ * refused, and not tried again. `why` is the window's words, never what
+ * the other machine said.
+ */
+export type HostState = { name: string } & (
+  | { state: "connecting" }
+  | { state: "signin"; url: string }
+  | {
+      state: "live"
+      build: string | null
+      version: string | null
+      own: { build: string | null; version: string | null }
+    }
+  | { state: "away"; why: string }
+  | { state: "stopped" }
+  | { state: "refused"; why: string }
+)
+
 /** The page's route that draws Pane `pane` alone, in a window of its
  * own (ADR 0025, decision 9). */
 export const poppedRoute = (pane: string) => `#pane/${pane}`
@@ -119,6 +142,17 @@ export function follow<T>(
 export const BRIDGE = bridge({
   /** Where the engine listens now; it waits while the engine starts. */
   engine: invoke<[], Address>(),
+  /** The other machines in `hosts.toml`, as the window reaches them over
+   * ssh (ADR 0081, decision 4), with no secret. */
+  hosts: {
+    current: invoke<[], HostState[]>(),
+    /** Calls `listener` with them each time one changes. */
+    listen: push<HostState[]>(),
+  },
+  /** Where host `name`'s engine listens, through the window's forward:
+   * it waits while the host connects, and fails for one refused or not
+   * in `hosts.toml`. */
+  hostEngine: invoke<[name: string], Address>(),
   /** `banda look --follow --with-parent`, as the desktop hears it. */
   look: {
     /** The last look; none before the first. */
