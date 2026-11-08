@@ -203,6 +203,11 @@ wall).
    - The Person key comes with pairing, before Banda Cloud brokers any
      (ADR 0081 step 9).
    - Isolated Projects may start any time after the fence (ADR 0084).
+   - The `ssh` route (ADR 0081, step 5) opens no listener beyond loopback
+     and gives no more than the ssh login gives, so it comes before the
+     fence; `direct`, pairing and Banda Cloud keep their order. When
+     owner access leaves TCP (F0's owner socket), an ssh route over stdio
+     comes in the same PR (amended 2026-11-08).
 
 8. **The web client's code comes only from the home host's signed
    binary** (Roma, 2026-11-06, the vision's decision 12).

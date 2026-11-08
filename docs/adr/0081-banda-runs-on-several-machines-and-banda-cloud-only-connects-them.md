@@ -200,6 +200,14 @@ What stands in the way today:
 4. Spikes: iroh in the engine and in a browser; the SNI edge; Better
    Auth's OIDC provider and device grant.
 5. Routes: `ssh` and `direct`; the client's route list.
+   _Amended 2026-11-08 (Roma): `ssh` comes first, alone, before step 2.
+   The window's main runs the system's ssh twice for each host in
+   `hosts.toml`: one follows `banda start --with-parent` there, one
+   forwards a loopback port to its engine, and the page gets that address
+   (`client/desktop/src/hosts.ts`, `docs/hosts.md`). It installs nothing
+   yet: that machine has the same build. It opens no listener beyond
+   loopback and gives no more than the ssh login gives, so it does not
+   wait for the fence (ADR 0083, decision 7)._
 6. One client over several hosts: the home host, the merged Inbox (ADR
    0062 decision 13).
 7. Calls on the host, the devices' register, the road to a device.

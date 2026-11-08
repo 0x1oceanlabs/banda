@@ -75,11 +75,21 @@ export function dataFolder(appData: string): string {
   return folderOf("data", system(appData))
 }
 
+/**
+ * The engine's config folder, where the window reads `hosts.toml` too
+ * (hosts.ts): `BANDA_CONFIG`, or the system's config folder as the
+ * engine finds it, with this Banda's folder in it.
+ */
+export function configFolder(appData: string): string {
+  return folderOf("config", system(appData))
+}
+
 /** The variable that moves each place, and its XDG folder and the one
- * under `~/.local` that holds it when none is set. */
+ * in home that holds it when none is set. */
 const PLACES = {
-  state: { named: "BANDA_STATE", xdg: "XDG_STATE_HOME", local: "state" },
-  data: { named: "BANDA_DATA", xdg: "XDG_DATA_HOME", local: "share" },
+  state: { named: "BANDA_STATE", xdg: "XDG_STATE_HOME", home: ".local/state" },
+  data: { named: "BANDA_DATA", xdg: "XDG_DATA_HOME", home: ".local/share" },
+  config: { named: "BANDA_CONFIG", xdg: "XDG_CONFIG_HOME", home: ".config" },
 } as const
 
 /**
@@ -87,14 +97,14 @@ const PLACES = {
  * this Banda's `folder` in the system's. On Windows that is
  * `%LOCALAPPDATA%\<folder>\<name>`, all of Banda's under one folder and
  * none in Roaming (ADR 0090, decision 3); on macOS in `appData`; elsewhere
- * in XDG's folder, or `~/.local/<local>`.
+ * in XDG's folder, or the one in home.
  */
 export function folderOf(
   name: keyof typeof PLACES,
   on: System,
   folder: string = channel.folder
 ): string {
-  const { named, xdg, local } = PLACES[name]
+  const { named, xdg, home } = PLACES[name]
   const set = on.env[named]
   if (set) return set
   if (on.platform === "win32") {
@@ -107,6 +117,6 @@ export function folderOf(
       ? on.appData
       : xdgFolder && posix.isAbsolute(xdgFolder)
         ? xdgFolder
-        : posix.join(on.home, ".local", local)
+        : posix.join(on.home, home)
   return posix.join(base, folder)
 }

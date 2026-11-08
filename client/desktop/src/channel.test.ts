@@ -29,9 +29,9 @@ const on = (
   appData: "/Users/ro/Library/Application Support",
 })
 
-test("on Windows the window keeps its state and data where the engine does", () => {
+test("on Windows the window keeps its state and data, and reads its config, where the engine does", () => {
   const local = { LOCALAPPDATA: WINDOWS.local }
-  for (const name of ["state", "data"] as const) {
+  for (const name of ["state", "data", "config"] as const) {
     expect(folderOf(name, on("win32", local), WINDOWS.folder)).toBe(
       WINDOWS.places[name]
     )
@@ -49,6 +49,12 @@ test("elsewhere it keeps them in XDG's folders, ~/.local's, or macOS's app data"
   expect(folderOf("data", on("linux"), "banda")).toBe(
     "/home/ro/.local/share/banda"
   )
+  expect(folderOf("config", on("linux"), "banda")).toBe(
+    "/home/ro/.config/banda"
+  )
+  expect(
+    folderOf("config", on("linux", { XDG_CONFIG_HOME: "/x/config" }), "banda")
+  ).toBe("/x/config/banda")
   expect(
     folderOf("state", on("linux", { XDG_STATE_HOME: "/x/state" }), "banda")
   ).toBe("/x/state/banda")
@@ -58,6 +64,9 @@ test("elsewhere it keeps them in XDG's folders, ~/.local's, or macOS's app data"
   expect(folderOf("data", on("darwin"), "banda")).toBe(
     "/Users/ro/Library/Application Support/banda"
   )
+  expect(folderOf("config", on("darwin"), "banda")).toBe(
+    "/Users/ro/Library/Application Support/banda"
+  )
 })
 
 test("a variable moves a place, on any system", () => {
@@ -65,4 +74,5 @@ test("a variable moves a place, on any system", () => {
   const moved = win32.join(on("win32").home, "trial", "state")
   expect(folderOf("state", on("win32", { BANDA_STATE: moved }))).toBe(moved)
   expect(folderOf("data", on("linux", { BANDA_DATA: "/d" }))).toBe("/d")
+  expect(folderOf("config", on("linux", { BANDA_CONFIG: "/c" }))).toBe("/c")
 })
