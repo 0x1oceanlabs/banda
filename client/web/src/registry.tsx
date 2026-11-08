@@ -1,13 +1,12 @@
 /**
  * The kinds of Pane this window knows, the Watches on what calls for the
- * Person and the previewers that draw files, built from the modules (ADR
- * 0022): theirs, and the window's own, the launcher. A Pane or a Watch
- * runs only while the engine runs its module.
+ * Person, the previewers that draw files and what fills the Slots, built
+ * from the modules (ADR 0022): theirs, and the window's own, the launcher.
+ * A Pane or a Watch runs only while the engine runs its module.
  */
 import type { Engine, JsonValue } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import { Kbd } from "@banda/ui/components/kbd"
-import type { Details } from "@banda/ui/components/thread-details"
 import { useModules } from "@banda/ui/hooks/use-status"
 import {
   type AnyPaneKind,
@@ -32,6 +31,7 @@ import {
   type Watch,
 } from "@banda/ui/pane"
 import { useScope } from "@banda/ui/hooks/use-scope"
+import type { Fillers } from "@banda/ui/slots"
 import { LayoutGridIcon, type LucideIcon } from "lucide-react"
 import { memo, useCallback, useSyncExternalStore } from "react"
 import { columnsOf } from "./look"
@@ -146,12 +146,17 @@ export const widgets: ReadonlyMap<string, { widget: Widget; module: Module }> =
       )
     )
   )
-/** The rows a Thread's details card has of the modules that run, in the
- * modules' order. */
-export function detailsOf(engineModules: readonly string[]): Details[] {
-  return all
+/** What fills each Slot (ADR 0082, decision 8): what the modules that
+ * run put there, in their order, the window's own first. The Window gives
+ * it to what it draws (`Slots`), and each Slot's owner reads its own. */
+export function slotsOf(engineModules: readonly string[]): Fillers {
+  const filling = all
     .filter((module) => runs(module, engineModules))
-    .flatMap((module) => module.threadDetails)
+    .flatMap((module) => module.slots)
+  return {
+    "thread.details": filling.filter((one) => one.slot === "thread.details"),
+    "pane.header": filling.filter((one) => one.slot === "pane.header"),
+  }
 }
 
 /** The item actions of the module that lists Items of Pane kind `kind`,

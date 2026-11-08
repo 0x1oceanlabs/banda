@@ -35,7 +35,7 @@ export const git = defineModule({
   engine: true,
   panes: [diffPane],
   actions: [toggleDiff, switchBranch],
-  threadDetails: [gitDetails],
+  slots: [gitDetails],
   // What a card's run tells the Person, when no card is in sight.
   start: keepWindow,
 })

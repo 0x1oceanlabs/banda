@@ -11,7 +11,6 @@ import type {
   ProjectId,
   ProjectSummary,
 } from "@banda/contract"
-import type { Details } from "./components/thread-details"
 import type { HereStore } from "./here"
 import type { Key } from "./lib/keys"
 import type { Readable } from "./lib/store"
@@ -19,6 +18,7 @@ import { ZOOM_KEYS, zoomId } from "./lib/zoom"
 import type { Notify } from "@banda/contract/look"
 import type { Listed, Lists, PaneKind, PaneState, Watch } from "./pane"
 import type { SoundSettings } from "./sound/settings"
+import type { Filler } from "./slots"
 import { actInScope } from "./hooks/use-scope"
 
 export {
@@ -500,8 +500,10 @@ export type Module = {
   sources: readonly Source[]
   /** What it shows on the bar, where the look's `[bar]` puts it. */
   bar: readonly Widget[]
-  /** Its rows in a Thread's details card (ADR 0034, decision 4). */
-  threadDetails: readonly Details[]
+  /** What it puts in the Slots of other Apps' things (ADR 0082, decision
+   * 8): Git its rows in a Thread's details card, Threads a Thread's Mark
+   * in its Pane's header. */
+  slots: readonly Filler[]
   /** How it draws kinds of file, wherever a file is shown (ADR 0073,
    * decision 6). */
   previewers: readonly Previewer[]
@@ -528,7 +530,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
   scopes?: readonly Scope[]
   sources?: readonly Source[]
   bar?: readonly Widget[]
-  threadDetails?: readonly Details[]
+  slots?: readonly Filler[]
   previewers?: readonly Previewer[]
   items?: readonly ItemAction[]
   start?: (window: WindowApi) => () => void
@@ -544,7 +546,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
     scopes: module.scopes ?? [],
     sources: module.sources ?? [],
     bar: module.bar ?? [],
-    threadDetails: module.threadDetails ?? [],
+    slots: module.slots ?? [],
     previewers: module.previewers ?? [],
     items: module.items ?? [],
     start: module.start,

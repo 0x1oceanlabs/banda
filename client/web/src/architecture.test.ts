@@ -753,9 +753,15 @@ const APPS = new Set(
  */
 test("no page code but Threads' names a Thread's verb", () => {
   const threads = join(root, "apps/agents/pane/src")
-  // What others may name of a Thread's: New Thread, an intent with B8, and
-  // the facts they hear. Any other `thread.…`, a template's too, is a verb.
-  const others = new Set(["thread.new", "thread.started", "thread.rewound"])
+  // What others may name of a Thread's: New Thread, an intent with B8, the
+  // facts they hear, and the Slot of its details card they fill. Any other
+  // `thread.…`, a template's too, is a verb.
+  const others = new Set([
+    "thread.new",
+    "thread.started",
+    "thread.rewound",
+    "thread.details",
+  ])
   const verb = (what: string) =>
     (what.startsWith("thread.") && !others.has(what)) ||
     /^agents\.(?:previous-title|make-project)$/.test(what)

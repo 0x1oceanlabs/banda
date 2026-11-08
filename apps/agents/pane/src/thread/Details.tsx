@@ -1,11 +1,12 @@
 /**
  * Thread details (ADR 0034, decision 4): the card of rows the modules
- * give, as T3 Code's. It sits at the Thread's top right when the Thread
- * is wide enough to hold it beside the messages, open until the Person
- * hides it; when narrower, it opens in a popover under its button. The
- * button is in the Thread's header, and Ctrl+Shift+B does the same; a
- * module's key may ask the focused Thread's card to show with a part of
- * its rows open (`agents.thread.details`).
+ * give, as T3 Code's, Threads' Slot `thread.details`, which it reads here
+ * alone. It sits at the Thread's top right when the Thread is wide enough
+ * to hold it beside the messages, open until the Person hides it; when
+ * narrower, it opens in a popover under its button. The button is in the
+ * Thread's header, and Ctrl+Shift+B does the same; a module's key may ask
+ * the focused Thread's card to show with a part of its rows open
+ * (`agents.thread.details`).
  */
 import type { RefObject } from "react"
 import { Button } from "@banda/ui/components/button"
@@ -20,8 +21,8 @@ import {
   DETAILS_GAP as GAP,
   DETAILS_WIDE,
   type DetailsProps,
-  useDetails,
 } from "@banda/ui/components/thread-details"
+import { useSlot } from "@banda/ui/slots"
 import { useWiderThan } from "@banda/ui/hooks/use-wider-than"
 import { SquareMenuIcon } from "lucide-react"
 
@@ -44,18 +45,18 @@ export function ThreadDetails({
   shown: boolean
   onShown: (shown: boolean) => void
 }) {
-  const details = useDetails()
+  const details = useSlot("thread.details")
   if (details.length === 0) return null
 
   const card = (
     <div className="hidden flex-col has-[>section:not(:empty)]:flex">
-      {details.map(({ id, Rows }) => (
+      {details.map(({ id, Fill }) => (
         <section
           key={id}
           aria-label={id}
           className="flex flex-col gap-0.5 border-t pt-1 first:border-t-0 first:pt-0 empty:hidden [&+section]:mt-1"
         >
-          <Rows {...props} />
+          <Fill {...props} />
         </section>
       ))}
     </div>
