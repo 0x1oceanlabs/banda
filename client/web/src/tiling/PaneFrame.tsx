@@ -47,13 +47,20 @@ import {
 } from "lucide-react"
 import {
   detailsOf,
+  ELSEWHERE,
   kindOf,
   kindRuns,
   labelOf,
   sayLabel,
+  showsOf,
   useLabel,
 } from "../registry"
-import { reachWords, runsElsewhere, useReach } from "../calls/hosts"
+import {
+  reachWords,
+  runsElsewhere,
+  useReach,
+  useShownNow,
+} from "../calls/hosts"
 import { sayComposer } from "../window/attach"
 import { heightAt } from "./layout"
 import { ThreadMark } from "@banda/ui/components/banda-mark"
@@ -234,15 +241,19 @@ export const PaneFrame = memo(function PaneFrame({
   )
   const { close } = handle
   // What it runs of the Window's, there only what reaches neither this
-  // machine's files nor its engine's Projects.
+  // machine's files nor its engine's Projects: an item action, on an Item
+  // of that host's (ADR 0081).
+  const shownNow = useShownNow()
+  const subject = showsOf(entry.pane)
   const run = useMemo(
     () =>
       there === undefined
         ? frame.run
-        : (action: string, args?: Args) => {
-            if (runsElsewhere(action)) frame.run(action, args)
-          },
-    [frame, there]
+        : runsElsewhere(frame.run, ELSEWHERE, () => shownNow(there), {
+            project: entry.project,
+            item: subject,
+          }),
+    [frame, there, shownNow, entry.project, subject]
   )
   // It with the host it is on in its args: its Pane reads that at once,
   // as Here does, and the args keep it, so it comes back there after a

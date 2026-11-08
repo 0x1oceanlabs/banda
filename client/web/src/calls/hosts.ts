@@ -14,6 +14,7 @@ import {
   type ProjectSummary,
 } from "@banda/contract"
 import type { Read } from "@banda/ui/hooks/use-read"
+import type { Args } from "@banda/ui/module"
 import { shownProjects } from "@banda/ui/lib/projects"
 import { type Readable, sameEach, Store, useStore } from "@banda/ui/lib/store"
 import { paneHost, type PaneState, withHost } from "@banda/ui/pane"
@@ -323,21 +324,53 @@ export function reachWords(
 }
 
 /** The Window's actions a Pane on another host runs: the page's own
- * paste and copy, the settings, and a Thread's snooze, which goes to its
- * host's engine (`useEngineOf`). None reaches this machine's files or its
- * engine's Projects. */
+ * paste and copy, and the settings. None reaches this machine's files or
+ * its engine's Projects. */
 const RUNS_ELSEWHERE: ReadonlySet<string> = new Set([
   "edit.paste",
   "edit.paste-plain",
   "edit.copy-image",
   "settings.open",
-  "thread.snooze",
-  "thread.wake",
 ])
 
-/** Whether a Pane on another host runs `action` of the Window's. */
-export const runsElsewhere = (action: string): boolean =>
-  RUNS_ELSEWHERE.has(action)
+/** What a Pane on host `there` runs of the Window's: those above, and the
+ * item actions `items` its Apps say go to their Item's host (ADR 0087,
+ * decision 12), as a Thread's snooze, each to an Item of that host's
+ * alone (`ownItem`); none of the rest. */
+export function runsElsewhere(
+  run: (action: string, args?: Args) => void,
+  items: ReadonlySet<string>,
+  shownNow: () => Shown | undefined,
+  own: { project: ProjectId; item: string | null }
+): (action: string, args?: Args) => void {
+  return (action, args) => {
+    if (RUNS_ELSEWHERE.has(action)) return run(action, args)
+    if (!items.has(action)) return
+    const asked = ownItem(shownNow(), own, args)
+    if (asked) run(action, asked)
+  }
+}
+
+/**
+ * The args of an item action a Pane on another host runs (ADR 0081): its
+ * Item, the one the Pane shows where they name none, in the Pane's own
+ * Project where they name none. That Project must be one of the host's as
+ * the Window shows it (`shown`), so the action goes to its engine, never
+ * to one of this machine's, which wins an ID both have, nor another
+ * host's; none for another, and nothing runs. A Thread that host has not
+ * placed in a Project yet, as one unplaced in No Project, is one of none.
+ */
+export function ownItem(
+  shown: Shown | undefined,
+  own: { project: ProjectId; item: string | null },
+  args?: Args
+): Args | undefined {
+  const project = args?.project ?? own.project
+  const item = args?.item ?? args?.thread ?? own.item
+  if (typeof project !== "string" || typeof item !== "string") return undefined
+  if (!shown?.projects.some((one) => one.id === project)) return undefined
+  return { ...args, project, item }
+}
 
 /** Where a Pane reaches its engine: this machine's; or another host's,
  * by its name, with what the Window knows of that host yet, and its
@@ -386,6 +419,16 @@ export function useEngineOf(
       return host === undefined ? engine : kept.engine(host)
     },
     [kept, engine]
+  )
+}
+
+/** How the Window shows host `name` now, as an act asks it; the same
+ * function while the Window's hosts stay. */
+export function useShownNow(): (name: string) => Shown | undefined {
+  const kept = useContext(HostsContext)
+  return useCallback(
+    (name: string) => kept.get().find((one) => one.name === name),
+    [kept]
   )
 }
 
