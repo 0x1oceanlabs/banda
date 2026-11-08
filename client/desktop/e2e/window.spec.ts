@@ -1668,6 +1668,31 @@ test("a sent message moves near the top, the end says what waits, and a Thread k
   await thread.getByRole("button", { name: "Stop" }).click()
 })
 
+test("scrolled up and back down by hand, the Thread's button to the end goes away", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  const long = Array.from({ length: 30 }, (_, i) => `line ${i}`).join("\n\n")
+  await composer.fill(long)
+  await composer.press("Enter")
+  await expect(thread.getByText("line 29").last()).toBeVisible()
+  const view = thread.getByRole("region", { name: "Thread with Fake AI" })
+  const toEnd = thread.locator('[data-slot="message-scroller-button"]')
+  await expect(toEnd).toHaveAttribute("data-active", "false")
+  await view.hover()
+  await page.mouse.wheel(0, -600)
+  await expect(toEnd).toHaveAttribute("data-active", "true")
+  // At the very end, though the last message's row reaches past it to
+  // give its actions room.
+  await page.mouse.wheel(0, 5000)
+  await expect
+    .poll(() =>
+      view.evaluate((v) => v.scrollHeight - v.scrollTop - v.clientHeight)
+    )
+    .toBeLessThan(1)
+  await expect(toEnd).toHaveAttribute("data-active", "false")
+})
+
 test("Ctrl+F finds in the Thread and opens what folds it, and the minimap goes to a message", async () => {
   window = await startWindow()
   const { page } = window

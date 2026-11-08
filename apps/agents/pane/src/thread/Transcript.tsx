@@ -138,10 +138,13 @@ export function Transcript({
                   line.kind === "item" && line.item.author.kind === "person"
                 }
                 // A message's actions show under it, over the room before
-                // the next row: room of its own, so they paint there.
+                // the next row: room of its own, so they paint there. The
+                // last row keeps its margin: the scroller finds the end by
+                // its rows' boxes, and a row reaching past the end kept
+                // "Scroll to end" on at the end.
                 className={
                   line.kind === "item" && line.item.body.kind === "message"
-                    ? "-mb-6 pb-6"
+                    ? "-mb-6 pb-6 [&:not(:has(~[data-slot=message-scroller-item]))]:mb-0"
                     : undefined
                 }
               >
