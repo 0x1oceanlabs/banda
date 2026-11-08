@@ -14,6 +14,7 @@
 import type { Dialog } from "@banda/contract/browser"
 import type { ProjectId } from "@banda/contract"
 import { followMoves } from "@banda/ui/lib/frames"
+import { type Tile, tileOf } from "@banda/ui/lib/tile"
 import { HELD_BY, paneLayer } from "@banda/ui/pane"
 import type { ZoomStep } from "@banda/ui/lib/zoom"
 import {
@@ -116,6 +117,10 @@ export class Page {
   /** Who waits for it to attach. */
   private attaching: ((contents: number) => void)[] = []
   private slot: Slot | null = null
+  /** The Tile of its slot, while it has one: hidden, the page waits out
+   * of sight and is not measured (ADR 0088, decision 4). */
+  private tile: Tile | null = null
+  private stopWatching = () => {}
   /** What may cut the slot: its ancestors, of which those that clip as
    * the page is drawn do, and the tile's corner. The overview shows a
    * whole Strip, which clips no more, and clips its screen instead. */
@@ -163,6 +168,11 @@ export class Page {
       this.radius = cornerOf(element)
       if (this.slot) sizes?.unobserve(this.slot.element)
       sizes?.observe(element)
+      // Its Tile shown again, the page takes its slot's place in the next
+      // tick, before the frame shows it.
+      this.stopWatching()
+      this.tile = tileOf(element)
+      this.stopWatching = this.tile.watch(() => following.again())
     }
     this.slot = { element, selected }
     following.again()
@@ -172,6 +182,8 @@ export class Page {
   release(element: HTMLElement): void {
     if (this.slot?.element !== element) return
     this.slot = null
+    this.stopWatching()
+    this.tile = null
     sizes?.unobserve(element)
     following.again()
   }
@@ -240,6 +252,7 @@ export class Page {
   destroy(): void {
     if (this.contents !== null) byContents.delete(this.contents)
     if (this.slot) sizes?.unobserve(this.slot.element)
+    this.stopWatching()
     this.box.remove()
   }
 
@@ -249,6 +262,7 @@ export class Page {
    * out once.
    */
   measure(): Place {
+    if (this.tile?.now().state === "hidden") return null
     const slot = this.slot
     const element = slot?.element
     const width = element?.offsetWidth ?? 0

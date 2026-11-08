@@ -30,6 +30,7 @@ import { groupState } from "@banda/ui/components/banda-mark"
 import { agentsOf } from "./groups"
 import { type Shows, useShows } from "./shows"
 import { type Frame, PaneFrame } from "./PaneFrame"
+import { aimed, drawnStrip, leftStrip } from "./tiles"
 
 import { Tabs } from "./Tabs"
 import { pixels, scrollsSideways, SWIPE_END, Swipe, type Way } from "./swipe"
@@ -190,6 +191,33 @@ export const Strip = memo(function Strip({
       reveal(strip, all, first, undefined, "left")
     }
   }, [asked, live, workspace])
+  // Each Tile's state, from what the Strip shows and where it is headed,
+  // once it scrolled where its focus goes (ADR 0088, decision 4).
+  useLayoutEffect(() => {
+    const strip = scroller.current
+    if (!strip) return
+    drawnStrip(strip, {
+      workspace: workspace.id,
+      columns,
+      motion: motion.current,
+      tiles: [
+        ...strip.querySelectorAll<HTMLElement>(
+          ":scope > [data-column] > section[data-tile]"
+        ),
+      ].map((element) => ({
+        element,
+        column: element.parentElement?.dataset.column ?? "",
+        covered: element.hidden !== false,
+        over: element.dataset.zoomed !== undefined,
+      })),
+    })
+  })
+  useLayoutEffect(() => {
+    const strip = scroller.current
+    return () => {
+      if (strip) leftStrip(strip)
+    }
+  }, [])
   useEffect(() => {
     const strip = scroller.current
     if (!strip) return
@@ -500,6 +528,8 @@ function reveal(
   const most = Math.max(0, (all.at(-1)?.right ?? 0) - pad - inner)
   const target = Math.max(0, Math.min(most, to))
   if (target !== at) scroll.to(target, moveOf("strip"))
+  // Where it goes shows from now, before it slides in.
+  aimed(strip)
 }
 
 /**

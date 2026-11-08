@@ -397,6 +397,13 @@ export class ColumnMotion {
     this.#tiles = tiles
   }
 
+  /** A column grows, shrinks or slides to its place now. */
+  get moving(): boolean {
+    for (const moved of this.#columns.values())
+      if (moved.size.moving || moved.slide.moving) return true
+    return false
+  }
+
   /** Column `id`'s share as drawn, or as it is headed. */
   shareOf(id: string): number | undefined {
     return this.#columns.get(id)?.size.target

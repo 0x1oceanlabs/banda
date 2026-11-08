@@ -335,12 +335,15 @@ are the same on every run, so they gate already.
   ask for ticks only while something moves. *Check:* planned (an
   allowlist that only falls).
 - **motion.4 Obey your Tile's Configure.** Read it with `useTile(select)`
-  or `tileOf(element)`, never keep your own `ResizeObserver` or
-  `IntersectionObserver` inside a Tile. Hidden: draw nothing, stop timers,
-  keep state. Moving: measure nothing, resize nothing. Fit once per
-  settled size. *After* P2, which builds the Configure. *Until* then,
-  keep no observer or loop of your own (motion.3). *Check:* planned
-  (motion gates, P2).
+  or `tileOf(element)` (`@banda/ui/lib/tile`), never as a prop, and never
+  keep your own `ResizeObserver` or `IntersectionObserver` inside a Tile.
+  Hidden: draw nothing, stop timers, keep state; `useLive` holds what
+  changes for a second. Moving: measure nothing, resize nothing. Fit once
+  per settled size, *after* P3, which adds the size to the Configure.
+  *Check:* motion.spec fails where a terminal draws while its Tile is
+  hidden; tiles.spec.ts shows one has drawn what it printed before the
+  frame that shows it again; the architecture test lists the files that
+  configure a Tile, and finds no state of it in a Pane's props.
 - **motion.5 No animation values in React state.** Read Here and data by
   selector; memoise; pass no inline functions or objects into a memoised
   child; act by action id. *Check:* review; motion.spec counts the
@@ -460,7 +463,9 @@ and three rules: only the Window gives Here (decision 4), a mark's rank
 is read only to pick the loudest, on the lines listed (decision 8), and
 the calls part reads no page and, of the Tiling, imports only its model
 (decision 9). Of ADR 0088, the parts the Window draws on every move
-stay memoized (decision 7).
+stay memoized (decision 7), only the listed files configure a Tile, and
+a Pane's props carry no state of its Tile (decision 4); motion.spec's
+budget for a hidden Tile's draws, 0, blocks in record mode too.
 
 **Planned,** each an allowlist whose count only falls:
 
@@ -472,8 +477,8 @@ stay memoized (decision 7).
 2. **The rest of the Window and Tiling ratchets** (ADR 0087): no
    `Listed`, no Thread imports; the Window's root's ceiling down to 400
    lines.
-3. **The motion gates** (ADR 0088): quiet ticks, hidden draws, layouts per
-   moving frame, renders per focus step, trailing frames.
+3. **The motion gates** (ADR 0088): quiet ticks, layouts per moving
+   frame, renders per focus step, trailing frames.
 4. **Manifest checks,** with the Level 1 manifest sections at V2: every
    Widget names an action; every action with args has a schema;
    capabilities come from the known list.
@@ -620,12 +625,11 @@ code:
 
 - **These bind now:** borders.2 to borders.7, borders.9 to borders.11,
   give.1 to give.3 and give.7, here.1 to here.6, data.1 to data.4, data.6
-  and data.8, design.1 and design.3 to design.8, motion.1 to motion.3 and
-  motion.5 to motion.8, device.2 to device.5, trust.1, trust.3 to
-  trust.8, and the words.
+  and data.8, design.1 and design.3 to design.8, motion.1 to motion.8,
+  device.2 to device.5, trust.1, trust.3 to trust.8, and the words.
 - **These bind after their step:** give.4 (B7); give.5 (B4i); give.6
-  (B4d); motion.4 (P2); borders.8 (B8); data.5 (E8); device.1 (E3);
-  borders.1's marks (B4f).
+  (B4d); motion.4's one fit (P3); borders.8 (B8); data.5 (E8); device.1
+  (E3); borders.1's marks (B4f).
 - **These wait for the renderer:** data.7, design.2 and trust.2 (V1, V2).
 
 Today's cases of borders.3, borders.6, borders.9 and data.4 are counted,

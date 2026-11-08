@@ -268,7 +268,9 @@ export function Sidebar({
           onDismiss?.()
       }}
       className={cn(
-        "absolute inset-y-(--gap-outer) left-(--gap-outer) z-20 flex w-(--sidebar-width) max-w-[calc(100%-2*var(--gap-outer))] flex-col overflow-hidden rounded-tile border bg-panel shadow-(--panel-shadow) *:transition-opacity",
+        // An area of the window: what changes in it lays out and paints
+        // nothing outside it (ADR 0088, decision 8).
+        "absolute inset-y-(--gap-outer) left-(--gap-outer) z-20 flex w-(--sidebar-width) max-w-[calc(100%-2*var(--gap-outer))] flex-col overflow-hidden rounded-tile border bg-panel shadow-(--panel-shadow) [contain:layout_paint_style] *:transition-opacity",
         // Its panel stays, over the Strip; what is in it dims.
         hiding && "*:opacity-40",
         !over &&

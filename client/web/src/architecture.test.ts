@@ -17,6 +17,9 @@
  * - The window ticks on one clock, which stops while nothing moves (ADR
  *   0088, decision 3): what still asks the browser for a frame of its own
  *   is listed, and the list only falls.
+ * - A Pane reads its Tile's state, never as a prop, and only the Tiling
+ *   gives it (ADR 0088, decision 4): the files that do are listed, and
+ *   the list only falls.
  * - What calls has one order, the sidebar's (ADR 0087, decision 8): a
  *   mark's rank is read only to pick the loudest, on the lines listed,
  *   and no list sorts by it.
@@ -450,7 +453,6 @@ const OWN_FRAMES: Record<string, number> = {
   "client/ui/src/components/code-file.tsx": 4,
   "client/ui/src/components/file-tree.tsx": 3,
   "client/ui/src/components/line-comment.tsx": 1,
-  "client/ui/src/hooks/use-live.ts": 1,
   "client/web/src/sidebar/Edge.tsx": 1,
   "client/web/src/tiling/reorder.ts": 1,
   "client/web/src/tiling/useMoving.ts": 2,
@@ -477,6 +479,50 @@ test("nothing more asks for a frame of its own than the list holds, but the cloc
 
 test("a place that joins the clock comes off the list", () => {
   expect(own).toEqual(OWN_FRAMES)
+})
+
+/** What a Tile is in the page and how the Tiling configures it
+ * (`@banda/ui/lib/tile`), past what a Pane reads (`tileOf`, `useTile`). */
+const TILE_LIB = "client/ui/src/lib/tile.ts"
+
+/**
+ * The files that configure a Tile (ADR 0088, decision 4): the Tiling, as
+ * it draws its Tiles and works out which show, and the Drawer, whose Tile
+ * hides once it slid away. A Pane only reads its Tile; one that gave its
+ * own a state would draw over what the Tiling worked out. A file that no
+ * longer configures one leaves the list.
+ */
+const CONFIGURING = [
+  "client/web/src/tiling/PaneFrame.tsx",
+  "client/web/src/tiling/tiles.ts",
+  "client/web/src/window/Drawer.tsx",
+]
+
+test("only the Tiling configures a Tile, as the list holds", () => {
+  const configuring = drawing
+    .filter((file) => relative(root, file) !== TILE_LIB)
+    .filter((file) =>
+      /\b(?:TileBox|holdTile|boxOf)\b/.test(readFileSync(file, "utf8"))
+    )
+    .map((file) => relative(root, file))
+    .sort()
+  expect(configuring).toEqual(CONFIGURING)
+})
+
+test("a Pane's props carry no state of its Tile: it reads it", () => {
+  const props = readFileSync(join(app, "ui/src/pane.ts"), "utf8").match(
+    /export type PaneProps<A> = \{\n([\s\S]*?)\n\}/
+  )
+  expect(props).not.toBeNull()
+  const fields = [...props![1].matchAll(/^ {2}(\w+)\??:/gm)].map(
+    (found) => found[1]
+  )
+  expect(fields).toContain("focused")
+  expect(
+    fields.filter((field) =>
+      /^(?:tile|configure|state|visible|hidden|shown|moving)$/.test(field)
+    )
+  ).toEqual([])
 })
 
 /**

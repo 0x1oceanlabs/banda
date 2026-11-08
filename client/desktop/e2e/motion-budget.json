@@ -10,8 +10,8 @@
       "measure": "printing.draws.hidden",
       "gate": "hard",
       "budget": 0,
-      "tolerance": 0.2,
-      "note": "follows the lines the shell prints, until P2"
+      "note": "a hidden Tile draws nothing (ADR 0088, decision 4)",
+      "blocks": true
     },
     {
       "measure": "focus.moving.layouts",
@@ -154,7 +154,7 @@
   "recorded": {
     "1": {
       "quiet.ticks.callbacksPerSecond": 0,
-      "printing.draws.hidden": 45.2,
+      "printing.draws.hidden": 0,
       "focus.moving.layouts": 0,
       "workspace.moving.layouts": 0.03,
       "width.moving.layouts": 1.39,
@@ -183,7 +183,7 @@
     },
     "1.6": {
       "quiet.ticks.callbacksPerSecond": 0,
-      "printing.draws.hidden": 44.9,
+      "printing.draws.hidden": 0,
       "focus.moving.layouts": 0,
       "workspace.moving.layouts": 0.04,
       "width.moving.layouts": 1.38,

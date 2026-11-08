@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react"
+import { useContext, useEffect, useRef, useState } from "react"
+import { cancelFrame, onDraw } from "../lib/frames"
+import { TileContext, type TileState } from "../lib/tile"
 import { useMachine } from "./use-status"
 import {
   type Engine,
@@ -37,12 +39,22 @@ const LOADING = { state: "loading" } as const
 /** How long to wait before reading again after the connection broke. */
 const AGAIN = 500
 
+/** How long what changed waits to be drawn, by its Tile's state (ADR
+ * 0088, decision 4): while it shows, the next tick of the clock; while it
+ * moves, about a tenth of a second; while it is hidden, a second. */
+const HELD: Record<Exclude<TileState, "shown">, number> = {
+  moving: 100,
+  hidden: 1000,
+}
+
 /**
  * Reads a view, then follows the Project's events after it (ADR 0002,
  * decision 5). The view stays current across reconnects; when the engine
  * asks for a fresh read, it reads again. Events that arrive within one
- * frame render once. A new `round` reads again too, the view kept until
- * the read answers: for what no event tells, as files changed on disk.
+ * tick render once; while the Tile it is drawn in moves or is hidden,
+ * they are held longer (`HELD`), and what is held renders as soon as the
+ * Tile shows. A new `round` reads again too, the view kept until the read
+ * answers: for what no event tells, as files changed on disk.
  */
 export function useLive<S extends { at: number }>(
   engine: Engine,
@@ -58,6 +70,8 @@ export function useLive<S extends { at: number }>(
     }
   )
 
+  const tile = useContext(TileContext)
+
   // How the running effect reads again, for a new round.
   const again = useRef(() => {})
   useEffect(() => {
@@ -68,21 +82,49 @@ export function useLive<S extends { at: number }>(
     if (!source) return
     let stopped = false
     let unfollow = () => {}
+    // What changed is drawn in a tick of the clock, or once a while is up.
     let frame = 0
+    let timer: ReturnType<typeof setTimeout> | undefined
     // Each read is numbered: only the newest one's answer is held, and
     // only it follows.
     let newest = 0
     const hold = (live: Live<S>) => {
       if (!stopped) setHeld({ source, live })
     }
+    // The view followed, not yet drawn.
+    let due: S | null = null
+    const draw = () => {
+      cancel()
+      if (due === null) return
+      const view = due
+      due = null
+      hold({ state: "ready", view })
+    }
+    const cancel = () => {
+      cancelFrame(frame)
+      frame = 0
+      clearTimeout(timer)
+      timer = undefined
+    }
+    const pace = () => {
+      const { state } = tile.now()
+      if (state === "shown") frame ||= onDraw(draw)
+      else timer ??= setTimeout(draw, HELD[state])
+    }
+    // The Tile's state changed: what is held waits as the new one says.
+    const stopWatching = tile.watch(() => {
+      if (due === null) return
+      cancel()
+      pace()
+    })
 
     const start = async (): Promise<void> => {
       if (stopped) return
       const read = ++newest
       unfollow()
       unfollow = () => {}
-      cancelAnimationFrame(frame)
-      frame = 0
+      cancel()
+      due = null
       const stale = () => stopped || read !== newest
       let view: S
       try {
@@ -108,10 +150,8 @@ export function useLive<S extends { at: number }>(
           }
           if (next === view) return
           view = next
-          frame ||= requestAnimationFrame(() => {
-            frame = 0
-            hold({ state: "ready", view })
-          })
+          due = next
+          pace()
         },
         (refusal) => {
           if (stale()) return
@@ -126,10 +166,11 @@ export function useLive<S extends { at: number }>(
     return () => {
       again.current = () => {}
       stopped = true
-      cancelAnimationFrame(frame)
+      cancel()
+      stopWatching()
       unfollow()
     }
-  }, [engine, project, source])
+  }, [engine, project, source, tile])
 
   return held.source === source ? held.live : LOADING
 }

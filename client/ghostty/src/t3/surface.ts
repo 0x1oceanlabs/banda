@@ -589,6 +589,8 @@ export class GhosttyTerminalSurface {
   private cursorOn = true;
   private renderedCursorY: number | null = null;
   private forceFullRender = true;
+  /** Banda: the frames it drew, to tell whether a fit drew one. */
+  private drawn = 0;
   private scrollbarDirty = true;
   private scrollbarState: GhosttyScrollbar | null = null;
   private scrollbarPointerId: number | null = null;
@@ -765,14 +767,17 @@ export class GhosttyTerminalSurface {
     if (this.disposed || this.visible === visible) return;
     this.visible = visible;
     this.cursorOn = true;
-    this.forceFullRender = true;
     this.scrollbarDirty = true;
     if (!visible) {
       this.cancelRender();
       this.setSelectionAutoscroll(0);
       return;
     }
-    this.fit();
+    // Banda: the canvas kept what it showed, and the core the rows that
+    // changed since: it draws those, now, before a frame shows it, unless
+    // the fit drew it whole (ADR 0088, decision 4).
+    const drawn = this.drawn;
+    if (this.fit() && this.drawn === drawn) this.renderFrame();
   }
 
   write(data: string): void {
@@ -888,7 +893,7 @@ export class GhosttyTerminalSurface {
   }
 
   fit(): boolean {
-    if (this.disposed || !this.visible) return false;
+    if (this.disposed) return false;
     const width = this.mount.clientWidth;
     const height = this.mount.clientHeight;
     if (width <= 0 || height <= 0) {
@@ -898,6 +903,12 @@ export class GhosttyTerminalSurface {
       return false;
     }
     this.hasSize = true;
+    // Banda: hidden, the screen still takes its grid, so the program hears
+    // its size as it would shown; it sizes its canvas and draws once it shows.
+    if (!this.visible) {
+      this.takeGrid(width, height);
+      return false;
+    }
     const ratio = window.devicePixelRatio || 1;
     const pixelWidth = Math.max(1, Math.round(width * ratio));
     const pixelHeight = Math.max(1, Math.round(height * ratio));
@@ -919,6 +930,15 @@ export class GhosttyTerminalSurface {
       // A resize can return to the painted size before its queued frame runs.
       this.pendingCanvasConfiguration = null;
     }
+    if (this.takeGrid(width, height)) shouldRender = true;
+    // Repaint synchronously before paint so resize never stretches the old backing store.
+    if (shouldRender || this.forceFullRender) this.renderFrame();
+    return true;
+  }
+
+  /** Banda: the grid a mount of this size holds, told to the PTY; whether
+   * the drawn grid changed. */
+  private takeGrid(width: number, height: number): boolean {
     const grid = terminalGridSize(width, height, this.metrics, CONTENT_PADDING);
     this.mountHeight = height;
     // onResize is the only PTY resize channel, so the first successful fit must
@@ -932,10 +952,7 @@ export class GhosttyTerminalSurface {
       this.measuredRows = grid.rows;
       this.notifyResize();
     }
-    if (this.applyGrid()) shouldRender = true;
-    // Repaint synchronously before paint so resize never stretches the old backing store.
-    if (shouldRender || this.forceFullRender) this.renderFrame();
-    return true;
+    return this.applyGrid();
   }
 
   /**
@@ -2071,6 +2088,7 @@ export class GhosttyTerminalSurface {
       this.updateScrollbar();
     }
     this.forceFullRender = false;
+    this.drawn += 1;
     this.scheduleCursorBlink();
   }
 

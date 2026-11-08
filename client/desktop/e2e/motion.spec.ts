@@ -262,6 +262,10 @@ test("how the Tiling moves, against motion-budget.json", async () => {
   const printedBefore = lines()
   await measure("printing", () => page.waitForTimeout(3000), { still: true })
   expect(lines() - printedBefore, "the lines printed").toBeGreaterThan(10)
+  // Its Tile hidden, the terminal printing off screen draws nothing (ADR
+  // 0088, decision 4): a hard gate, whatever the budget file's mode.
+  const [offScreen] = phases.printing.counted.terminals
+  expect(offScreen.draws[1], "printing: draws off screen").toBe(0)
   // Quiet from here: what the window costs by itself, and its moves. The
   // first terminal stops printing, as its draws show.
   writeFileSync(stop, "")
