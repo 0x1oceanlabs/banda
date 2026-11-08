@@ -3,8 +3,8 @@
 
 use banda_kernel::api::Identity;
 use banda_kernel::{
-    AgentId, Call, Caller, Code, CommandId, Effect, Error, EventFilter, Kernel, Kind, Lease,
-    Module, ModuleProject, OnRestart, Outcome, Participant, Pass, PersonId, ProjectId,
+    AgentId, Call, Caller, Code, CommandId, Effect, Error, Event, EventFilter, Kernel, Kind, Lease,
+    Listener, Module, ModuleProject, OnRestart, Outcome, Participant, Pass, PersonId, ProjectId,
     ProjectSummary, Refusal, Retry, Right, Scope, Settled, SignKind, Stream, Tx, decode, now_ms,
 };
 use futures::{SinkExt, StreamExt};
@@ -375,7 +375,8 @@ impl Module for Desk {
 }
 
 /// A module that keeps each Project it opens in, to react to the log as a
-/// test says: a Project's, or, as `listens`, the machine's.
+/// test says: a Project's, or, as `listens`, the machine's. A Project's
+/// keeps the texts it copies of what it hears in `hears_copies`.
 #[derive(Clone, Default)]
 struct Hears {
     projects: Arc<Mutex<Vec<ModuleProject>>>,
@@ -397,7 +398,11 @@ impl Module for Hears {
     }
 
     fn migrations(&self) -> &'static [&'static str] {
-        &[]
+        if self.machine {
+            &[]
+        } else {
+            &["CREATE TABLE hears_copies (text TEXT NOT NULL)"]
+        }
     }
 
     fn right(&self, _: &str) -> Option<Right> {
@@ -2338,25 +2343,34 @@ async fn a_module_of_a_project_hears_the_machine_until_its_project_closes() {
     };
     let short = Duration::from_millis(50);
 
-    // It hears from now on, and only hears.
+    // A new listener hears from now on, and what it writes goes in its
+    // own Project, never in the machine's log.
     open_pane("before").await.unwrap();
     let filter = EventFilter {
         module: Some("desk".into()),
         ..EventFilter::default()
     };
-    let mut heard = module.react_to_machine(filter).await.unwrap().unwrap();
-    assert!(
-        heard.project().is_none(),
-        "it never writes the machine's log"
-    );
+    let heard = module.listen_to_machine("panes", filter).await;
+    let mut heard = heard.unwrap().unwrap();
+    assert_eq!(heard.project().map(|own| own.id()), Some(work.id));
     open_pane("terminal").await.unwrap();
     assert!(!machine.reacted(short).await, "the machine waits for it");
     let event = heard.next().await.unwrap().unwrap();
     assert_eq!(event.payload["kind"], "terminal");
     let next = tokio::spawn(async move { heard.next().await });
     assert!(machine.reacted(Duration::from_secs(5)).await);
+    let places = || -> i64 {
+        let machine = rusqlite::Connection::open(dir.path().join("machine/project.sqlite3"));
+        let listener = format!("hears.panes@{}", work.id);
+        let count = "SELECT count(*) FROM kernel_cursors WHERE listener = ?1";
+        let machine = machine.unwrap();
+        machine
+            .query_row(count, [listener], |row| row.get(0))
+            .unwrap()
+    };
+    assert_eq!(places(), 1, "its place is kept in the machine's store");
 
-    // Its Project removed and closed, it hears no more.
+    // Its Project removed and closed, it hears no more, and its place goes.
     drop(module);
     hears.projects.lock().unwrap().clear();
     let remove = json!({ "project": work.id });
@@ -2368,13 +2382,16 @@ async fn a_module_of_a_project_hears_the_machine_until_its_project_closes() {
         remove,
     );
     removed.await.unwrap();
+    assert_eq!(places(), 0);
     let ended = tokio::time::timeout(Duration::from_secs(5), next).await;
     assert!(ended.unwrap().unwrap().unwrap().is_none());
     open_pane("after").await.unwrap();
     assert!(machine.reacted(short).await);
 
     // A module of the machine has no machine to hear but its own log.
-    let own = machine.react_to_machine(EventFilter::default()).await;
+    let own = machine
+        .listen_to_machine("panes", EventFilter::default())
+        .await;
     assert!(own.unwrap().is_none());
 }
 
@@ -3129,7 +3146,7 @@ async fn an_effect_waits_until_the_modules_reacting_to_the_log_have_reacted() {
         module: Some("notes".into()),
         ..EventFilter::default()
     };
-    let mut heard = module.react(module.at().await.unwrap(), filter);
+    let mut heard = module.listen("notes", filter).await.unwrap();
     let person = Participant::Person(owner);
     add(&kernel, person, &project, "one").await.unwrap();
     assert!(!module.reacted(short).await, "it has not heard the note");
@@ -3144,6 +3161,319 @@ async fn an_effect_waits_until_the_modules_reacting_to_the_log_have_reacted() {
     let _ = next.await;
     add(&kernel, person, &project, "two").await.unwrap();
     assert!(module.reacted(short).await);
+}
+
+/// What `event` says was written, copied into `hears_copies` in the
+/// transaction that acks it: a reaction in the scope of the log it hears.
+async fn copy(module: &ModuleProject, heard: &Listener, event: &Event) -> Result<(), Error> {
+    let (ack, copy) = (heard.ack(event), keep_copy(copied_text(event)));
+    module
+        .write(move |tx| copy(tx).and_then(|()| tx.ack(&ack)))
+        .await
+}
+
+/// Keeps `text` in `hears_copies`, in the transaction it is given.
+fn keep_copy(text: String) -> impl FnOnce(&mut Tx<'_>) -> Result<(), Error> + Send + 'static {
+    move |tx| {
+        let sql = tx.sql();
+        sql.execute("INSERT INTO hears_copies (text) VALUES (?1)", [&text])?;
+        Ok(())
+    }
+}
+
+/// A note's text, or a pane's kind.
+fn copied_text(event: &Event) -> String {
+    let text = (event.payload.get("text")).or(event.payload.get("kind"));
+    text.and_then(Value::as_str).unwrap_or_default().to_owned()
+}
+
+async fn copies(module: &ModuleProject) -> Vec<String> {
+    module.read(|sql| Ok(copied(sql)?)).await.unwrap()
+}
+
+/// The texts in `hears_copies`, as they were kept.
+fn copied(sql: &rusqlite::Connection) -> rusqlite::Result<Vec<String>> {
+    let mut statement = sql.prepare("SELECT text FROM hears_copies ORDER BY rowid")?;
+    let texts = statement.query_map([], |row| row.get(0))?;
+    texts.collect()
+}
+
+/// The one Project `hears` was opened in, once the kernel has opened it.
+async fn opened_in(hears: &Hears) -> ModuleProject {
+    eventually(|| async { !hears.projects.lock().unwrap().is_empty() }).await;
+    hears.projects.lock().unwrap()[0].clone()
+}
+
+/// A listener resumes from its cursor, not the log's head: a fact
+/// committed before a crash, or while it was gone, it reacts to once
+/// after the restart, and a fact acked already is refused with the
+/// change it came with (ADR 0082, A5).
+#[tokio::test]
+async fn a_listener_resumes_from_its_cursor_and_reacts_once_across_a_crash() {
+    let root = tempfile::tempdir().unwrap();
+    let data = root.path().join(".data");
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let notes = Notes::default();
+    let start = |hears: &Hears| {
+        Kernel::builder(root.path(), data.clone(), owner)
+            .module(notes.clone())
+            .module(hears.clone())
+            .open()
+    };
+    let filter = EventFilter {
+        module: Some("notes".into()),
+        ..EventFilter::default()
+    };
+    let hears = Hears::default();
+    let kernel = start(&hears).await.unwrap();
+    let project = create(&kernel, owner, "Work").await;
+    add(&kernel, person, &project, "history").await.unwrap();
+
+    // New, it hears from the head on.
+    let module = opened_in(&hears).await;
+    let mut heard = module.listen("copies", filter.clone()).await.unwrap();
+    add(&kernel, person, &project, "one").await.unwrap();
+    let one = heard.next().await.unwrap().unwrap();
+    copy(&module, &heard, &one).await.unwrap();
+    let again = copy(&module, &heard, &one).await;
+    assert!(matches!(again, Err(Error::Refused(refused)) if refused.code == Code::Conflict));
+    assert_eq!(copies(&module).await, ["one"]);
+
+    // Heard, and the engine gone before its reaction was kept.
+    add(&kernel, person, &project, "two").await.unwrap();
+    let two = heard.next().await.unwrap().unwrap();
+    assert_eq!(copied_text(&two), "two");
+    drop((heard, module));
+    hears.projects.lock().unwrap().clear();
+    let_go(kernel, &data, &[]).await;
+    // Written while nothing listened.
+    let kernel = reopen(root.path(), owner, &notes, 1).await;
+    add(&kernel, person, &project, "three").await.unwrap();
+    let_go(kernel, &data, &[]).await;
+
+    // Back, it reacts to each once, then hears only what is new.
+    for text in ["four", "five"] {
+        let hears = Hears::default();
+        let kernel = start(&hears).await.unwrap();
+        let module = opened_in(&hears).await;
+        let mut heard = module.listen("copies", filter.clone()).await.unwrap();
+        add(&kernel, person, &project, text).await.unwrap();
+        loop {
+            let event = heard.next().await.unwrap().unwrap();
+            copy(&module, &heard, &event).await.unwrap();
+            if copied_text(&event) == text {
+                break;
+            }
+        }
+        drop((heard, module));
+        hears.projects.lock().unwrap().clear();
+        let_go(kernel, &data, &[]).await;
+    }
+    let texts = copied(&sqlite(&data, &project)).unwrap();
+    assert_eq!(texts, ["one", "two", "three", "four", "five"]);
+}
+
+/// A listener new to the kernel begins where its module's own cursor
+/// stood before the kernel kept one, never past the log's head; once the
+/// kernel keeps it, that cursor no longer counts (ADR 0082, A5).
+#[tokio::test]
+async fn a_listener_begins_once_where_its_modules_own_cursor_stood() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let (notes, hears) = (Notes::default(), Hears::default());
+    let kernel = Kernel::builder(root.path(), root.path().join(".data"), owner)
+        .module(notes.clone())
+        .module(hears.clone())
+        .open()
+        .await
+        .unwrap();
+    let project = create(&kernel, owner, "Work").await;
+    let module = opened_in(&hears).await;
+    let filter = EventFilter {
+        module: Some("notes".into()),
+        ..EventFilter::default()
+    };
+    let one = add(&kernel, person, &project, "one").await.unwrap();
+    add(&kernel, person, &project, "two").await.unwrap();
+    let carried = one["seq"].as_i64();
+    let mut heard = (module.listen_from("carried", filter.clone(), carried).await).unwrap();
+    let two = heard.next().await.unwrap().unwrap();
+    assert_eq!(copied_text(&two), "two");
+    heard.ack_through(two.seq).await.unwrap();
+    drop(heard);
+    // Its own cursor counts no more; one past the head begins there.
+    add(&kernel, person, &project, "three").await.unwrap();
+    let mut heard = module.listen_from("carried", filter.clone(), carried).await;
+    let three = heard.as_mut().unwrap().next().await.unwrap().unwrap();
+    assert_eq!(copied_text(&three), "three");
+    let mut heard = module.listen_from("ahead", filter, Some(i64::MAX)).await;
+    add(&kernel, person, &project, "four").await.unwrap();
+    let four = heard.as_mut().unwrap().next().await.unwrap().unwrap();
+    assert_eq!(copied_text(&four), "four");
+}
+
+/// Whether `result` was refused with `code`.
+fn refused<T>(result: Result<T, Error>, code: Code) -> bool {
+    matches!(result, Err(Error::Refused(refused)) if refused.code == code)
+}
+
+/// One name is one listener of a log while it listens, and it acks only
+/// what it has heard, in its reaction's transaction (ADR 0082, A5).
+#[tokio::test]
+async fn one_name_is_one_listener_and_it_acks_only_what_it_heard() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let (notes, hears) = (Notes::default(), Hears::default());
+    let kernel = Kernel::builder(root.path(), root.path().join(".data"), owner)
+        .module(notes.clone())
+        .module(hears.clone())
+        .open()
+        .await
+        .unwrap();
+    let project = create(&kernel, owner, "Work").await;
+    let module = opened_in(&hears).await;
+    let filter = EventFilter {
+        module: Some("notes".into()),
+        ..EventFilter::default()
+    };
+    let mut heard = module.listen("copies", filter.clone()).await.unwrap();
+    let twice = module.listen("copies", filter.clone()).await;
+    assert!(refused(twice, Code::Conflict), "one name, one listener");
+
+    add(&kernel, person, &project, "one").await.unwrap();
+    add(&kernel, person, &project, "two").await.unwrap();
+    let one = heard.next().await.unwrap().unwrap();
+    let two = Event {
+        seq: one.seq + 1,
+        ..one.clone()
+    };
+    assert!(refused(heard.ack_through(two.seq).await, Code::Invalid));
+    let ack = heard.ack(&two);
+    let unheard = module.write(move |tx| tx.ack(&ack)).await;
+    assert!(refused(unheard, Code::Invalid), "it has not heard two");
+    let own = heard.once(&one, keep_copy("one".into())).await;
+    assert!(
+        refused(own, Code::Invalid),
+        "it acks in its own transaction"
+    );
+    copy(&module, &heard, &one).await.unwrap();
+
+    // Gone, its name is free again, and it hears on from its cursor.
+    drop(heard);
+    let mut heard = module.listen("copies", filter).await.unwrap();
+    assert_eq!(copied_text(&heard.next().await.unwrap().unwrap()), "two");
+    assert_eq!(copies(&module).await, ["one"]);
+}
+
+/// A listener begun behind the log's head, where nothing is for it, has
+/// handled the log once it reads it: an effect does not wait on it until
+/// the next event (ADR 0082, A5).
+#[tokio::test]
+async fn a_listener_begun_behind_the_head_has_handled_what_it_does_not_hear() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let (notes, hears) = (Notes::default(), Hears::default());
+    let kernel = Kernel::builder(root.path(), root.path().join(".data"), owner)
+        .module(notes.clone())
+        .module(hears.clone())
+        .open()
+        .await
+        .unwrap();
+    let project = create(&kernel, owner, "Work").await;
+    let module = opened_in(&hears).await;
+    let one = add(&kernel, person, &project, "one").await.unwrap();
+    add(&kernel, person, &project, "two").await.unwrap();
+    let nothing = EventFilter {
+        subject: Some("nothing".into()),
+        ..EventFilter::default()
+    };
+    let carried = one["seq"].as_i64();
+    let mut heard = module.listen_from("nothing", nothing, carried).await;
+    let short = Duration::from_millis(50);
+    assert!(!module.reacted(short).await, "it has not read the log");
+    let next = tokio::spawn(async move { heard.as_mut().unwrap().next().await.map(drop) });
+    assert!(module.reacted(Duration::from_secs(5)).await);
+    next.abort();
+}
+
+/// A Project's module hears the machine's log, its cursor in the
+/// machine's store and its reaction in its own Project's: written under
+/// the receipt of a derived command, then acked. A crash between the two,
+/// and the fact is heard again, but its reaction is not written again
+/// (ADR 0082, decision 4; A5).
+#[tokio::test]
+async fn a_reaction_across_scopes_is_written_once_though_its_ack_was_lost() {
+    let dir = tempfile::tempdir().unwrap();
+    let (data, machine) = (dir.path().join("data"), dir.path().join("machine"));
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let start = |hears: &Hears| {
+        Kernel::builder(dir.path().join("root"), data.clone(), owner)
+            .module(Desk)
+            .module(hears.clone())
+            .machine(machine.clone())
+            .open()
+    };
+    let filter = EventFilter {
+        module: Some("desk".into()),
+        ..EventFilter::default()
+    };
+    let hears = Hears::default();
+    let kernel = start(&hears).await.unwrap();
+    create(&kernel, owner, "Work").await;
+    let open_pane = |kernel: &Arc<Kernel>, kind: &str| {
+        let params = json!({ "kind": kind });
+        let command = Some(CommandId::new());
+        let kernel = kernel.clone();
+        async move {
+            kernel
+                .call(person, "desk.open", None, command, params)
+                .await
+        }
+    };
+
+    let module = opened_in(&hears).await;
+    let heard = module.listen_to_machine("panes", filter.clone()).await;
+    let mut heard = heard.unwrap().unwrap();
+    open_pane(&kernel, "terminal").await.unwrap();
+    let terminal = heard.next().await.unwrap().unwrap();
+    // Its cursor is in another store: an ack in its own transaction is refused.
+    let ack = heard.ack(&terminal);
+    let own = module.write(move |tx| tx.ack(&ack)).await;
+    assert!(matches!(own, Err(Error::Refused(refused)) if refused.code == Code::Invalid));
+    let copy = keep_copy(copied_text(&terminal));
+    assert_eq!(heard.once(&terminal, copy).await.unwrap(), Some(()));
+    drop((heard, module));
+    hears.projects.lock().unwrap().clear();
+    let_go(kernel, &data, &[&machine]).await;
+
+    // The engine died after the Project's write, before the machine's ack.
+    let rewound = rusqlite::Connection::open(machine.join("project.sqlite3"))
+        .unwrap()
+        .execute(
+            "UPDATE kernel_cursors SET seq = seq - 1 WHERE listener LIKE 'hears.panes@%'",
+            [],
+        )
+        .unwrap();
+    assert_eq!(rewound, 1);
+
+    let hears = Hears::default();
+    let kernel = start(&hears).await.unwrap();
+    let module = opened_in(&hears).await;
+    let heard = module.listen_to_machine("panes", filter).await;
+    let mut heard = heard.unwrap().unwrap();
+    open_pane(&kernel, "editor").await.unwrap();
+    for (kind, written) in [("terminal", None), ("editor", Some(()))] {
+        let event = heard.next().await.unwrap().unwrap();
+        assert_eq!(copied_text(&event), kind);
+        let copy = keep_copy(kind.to_owned());
+        assert_eq!(heard.once(&event, copy).await.unwrap(), written, "{kind}");
+    }
+    assert_eq!(copies(&module).await, ["terminal", "editor"]);
 }
 
 #[tokio::test]

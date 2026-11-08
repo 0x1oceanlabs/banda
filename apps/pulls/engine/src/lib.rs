@@ -61,7 +61,7 @@ impl Pulls {
         let mut lives = self.lives.lock().unwrap();
         lives
             .entry(project.id())
-            .or_insert_with(|| Live::new(project.clone(), self.gh.clone()))
+            .or_insert_with(|| Live::new(project, self.gh.clone()))
             .clone()
     }
 }
@@ -113,16 +113,15 @@ impl Module for Pulls {
         Self::method_tools(self.name())
     }
 
-    /// From now on, it hears the Threads' shell calls and turns, and the
-    /// pushes from their cards.
+    /// It hears the Threads' shell calls and turns, and the pushes from
+    /// their cards, from where it last acked: a pull request an Agent
+    /// made as the engine stopped is linked as it starts again.
     async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
         let live = self.live(&project);
-        let at = project.at().await?;
-        tokio::spawn(heard::follow_agents(
-            project.react(at, heard::agents()),
-            live.clone(),
-        ));
-        tokio::spawn(heard::follow_git(project.react(at, heard::git()), live));
+        let links = project.listen(heard::LINKS, heard::agents()).await?;
+        tokio::spawn(heard::follow_agents(links, live.clone()));
+        let pushes = project.listen(heard::PUSHES, heard::git()).await?;
+        tokio::spawn(heard::follow_git(pushes, live));
         Ok(())
     }
 

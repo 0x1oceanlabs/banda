@@ -360,6 +360,14 @@ _Avoid_: call (its old name).
 An event other Apps may hear, named `app.noun.past-verb@major` and
 declared by its App. Every other event is its App's own (ADR 0082).
 
+**Listener**:
+A module's named reader of a log. The kernel keeps how far it has heard,
+its cursor, beside that log, so after a restart it hears on from there and
+misses no fact. A reaction that writes in the store acks each fact in the
+same transaction, so it runs once. One that cannot, its work outside the
+store or what it follows spanning several facts, acks once its work is
+done, and looks before it acts (ADR 0082).
+
 **Receipt**:
 The kernel's record of a command under its CommandId, with its place in
 the log, so a resend gets the same answer and runs nothing twice (ADR

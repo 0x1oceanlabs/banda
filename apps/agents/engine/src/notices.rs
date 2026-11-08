@@ -9,25 +9,30 @@
 use crate::model::ThreadId;
 use crate::notes::one_line;
 use crate::{store, transcript};
-use banda_kernel::{Error, EventFilter, Heard, Participant, Tx};
+use banda_kernel::{Error, EventFilter, Listener, Participant, Tx};
 
 /// How long a notice may be, in characters.
 pub const NOTICE: usize = 500;
 
-/// What the module hears, each from its module: a step git's card asked
-/// for was done; a tab the Person lent a Thread, or the end of its lend.
-pub fn heard() -> [EventFilter; 2] {
+/// What the module hears, each from its module by a listener of its own:
+/// a step git's card asked for was done; a tab the Person lent a Thread,
+/// or the end of its lend.
+pub fn heard() -> [(&'static str, EventFilter); 2] {
     let told = |module: &str, kind: &str| EventFilter {
         module: Some(module.into()),
         subject: None,
         kinds: Some(vec![kind.into()]),
     };
-    [told("git", "git.acted"), told("browser", "browser.lent")]
+    [
+        ("card-steps", told("git", "git.acted")),
+        ("lent-tabs", told("browser", "browser.lent")),
+    ]
 }
 
 /// Posts each notice one module tells of in its Thread, one at a time,
-/// until the Project is gone.
-pub async fn follow(mut heard: Heard) {
+/// until the Project is gone: once, as the fact is acked in the same
+/// transaction, so one told as the engine stopped is posted as it starts.
+pub async fn follow(mut heard: Listener) {
     loop {
         let event = match heard.next().await {
             Ok(Some(event)) => event,
@@ -47,8 +52,12 @@ pub async fn follow(mut heard: Heard) {
         let (Some(thread), Some(text)) = (thread, text) else {
             continue;
         };
-        let by = event.author;
-        if let Err(error) = project.write(move |tx| post(tx, by, thread, &text)).await {
+        let (by, ack) = (event.author, heard.ack(&event));
+        let posted = project.write(move |tx| {
+            tx.ack(&ack)?;
+            post(tx, by, thread, &text)
+        });
+        if let Err(error) = posted.await {
             tracing::warn!(%error, "a notice for the Agent was not posted");
         }
     }

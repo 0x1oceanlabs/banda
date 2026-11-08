@@ -6,7 +6,7 @@ use crate::github::{self, Missed};
 use crate::judge;
 use crate::model::{By, Listed, Need, Pull, PullRef, Snapshot, State, Turn};
 use crate::store::{self, Row};
-use banda_kernel::{Error, ModuleProject, Stream};
+use banda_kernel::{Error, ModuleProject, Stream, WeakModuleProject};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -24,9 +24,11 @@ pub const PAUSE: i64 = 10 * 60_000;
 /// How long a merged or closed pull request stays in the list.
 pub const LANDED_FOR: i64 = 24 * 60 * 60_000;
 
-/// What a Project's reader holds.
+/// What a Project's reader holds. It holds the Project weakly: what hears
+/// the log for it, and the module's own list of them, keep no Project
+/// open, so one removed or let go of closes.
 pub struct Live {
-    project: ModuleProject,
+    project: WeakModuleProject,
     gh: PathBuf,
     /// None until the first list is made.
     listed: watch::Sender<Option<Arc<Listed>>>,
@@ -48,9 +50,9 @@ struct Read {
 }
 
 impl Live {
-    pub fn new(project: ModuleProject, gh: PathBuf) -> Arc<Self> {
+    pub fn new(project: &ModuleProject, gh: PathBuf) -> Arc<Self> {
         Arc::new(Self {
-            project,
+            project: project.downgrade(),
             gh,
             listed: watch::Sender::new(None),
             wake: Notify::new(),
@@ -59,6 +61,11 @@ impl Live {
             working: Mutex::new(HashSet::new()),
             state: Mutex::new(Read::default()),
         })
+    }
+
+    /// The Project, while it is open.
+    fn project(&self) -> Result<ModuleProject, Error> {
+        self.project.upgrade().ok_or(Error::Closed)
     }
 
     /// Says something changed: a link, a turn, a push. With `force`, every
@@ -113,7 +120,7 @@ impl Live {
 
     /// The list as it is kept now, the links not read yet read first.
     pub async fn list(&self) -> Result<Listed, Error> {
-        let rows = self.project.read(store::links).await?;
+        let rows = self.project()?.read(store::links).await?;
         let unread = self.unread(&rows).await?;
         if !unread.is_empty() {
             self.read(unread, banda_kernel::now_ms()).await?;
@@ -126,6 +133,11 @@ impl Live {
             let now = banda_kernel::now_ms();
             let next = match self.turn(now).await {
                 Ok(next) => next,
+                // Its Project closed: the list ends, and what follows it.
+                Err(Error::Closed) => {
+                    *self.reading.lock().unwrap() = false;
+                    return;
+                }
                 Err(error) => {
                     tracing::warn!(%error, "the pull requests were not read");
                     Some(Duration::from_millis(OPEN as u64))
@@ -149,7 +161,7 @@ impl Live {
     /// when the next is due.
     async fn turn(&self, now: i64) -> Result<Option<Duration>, Error> {
         let force = self.force.swap(false, Ordering::Relaxed);
-        let rows = self.project.read(store::links).await?;
+        let rows = self.project()?.read(store::links).await?;
         let known = self.known(&rows).await?;
         let paused = now < self.state.lock().unwrap().paused_until;
         if !paused {
@@ -177,7 +189,7 @@ impl Live {
     /// Each linked pull request, once, with what was kept of it.
     async fn known(&self, rows: &[Row]) -> Result<Vec<(PullRef, Option<(Snapshot, bool)>)>, Error> {
         let pulls: Vec<PullRef> = unique(rows);
-        self.project
+        self.project()?
             .read(move |sql| {
                 pulls
                     .into_iter()
@@ -214,7 +226,7 @@ impl Live {
                         state.synced_at = Some(now);
                     }
                     let found = read.pulls;
-                    self.project
+                    self.project()?
                         .write(move |tx| {
                             for (pull, snapshot) in &found {
                                 store::keep(tx.sql(), pull, snapshot)?;
@@ -238,7 +250,7 @@ impl Live {
 
     /// The list from what is kept, and who works now.
     async fn compose(&self) -> Result<Listed, Error> {
-        let rows = self.project.read(store::links).await?;
+        let rows = self.project()?.read(store::links).await?;
         let known: HashMap<PullRef, Snapshot> = self
             .known(&rows)
             .await?

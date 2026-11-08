@@ -7,7 +7,7 @@
 use crate::model::{Fact, Snooze, ThreadId, TurnState, Wake, Woke};
 use crate::rules::snooze::{asleep, goes_on, may_snooze, wake_of, wakes};
 use crate::{emit, store};
-use banda_kernel::{Error, EventFilter, Heard, Participant, Refusal, Tx, now_ms};
+use banda_kernel::{Error, EventFilter, Listener, Participant, Refusal, Tx, now_ms};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::time::Duration;
@@ -204,6 +204,9 @@ fn may_touch(tx: &Tx<'_>, author: Participant, thread: ThreadId) -> Result<(), E
     Ok(())
 }
 
+/// The name of the module's listener of new snoozes.
+pub const LISTENER: &str = "snoozes";
+
 /// The facts that may bring a turn that goes on by itself: a new snooze.
 pub fn snoozed() -> EventFilter {
     EventFilter {
@@ -215,9 +218,10 @@ pub fn snoozed() -> EventFilter {
 
 /// Goes on with each Thread snoozed to go on by itself as its time comes
 /// (ADR 0074, decision 8): its failed turn goes again. A time that passed
-/// while the engine was off goes as it starts. It hears new snoozes, and
-/// stops with its Project.
-pub async fn resume(mut heard: Heard) {
+/// while the engine was off goes as it starts. It hears new snoozes, each
+/// acked once the snoozes are read again, and stops with its Project.
+pub async fn resume(mut heard: Listener) {
+    let mut woken: Option<i64> = None;
     loop {
         let Some(project) = heard.project() else {
             return;
@@ -242,10 +246,17 @@ pub async fn resume(mut heard: Heard) {
             }
         }
         drop(project);
+        if let Some(seq) = woken.take()
+            && let Err(error) = heard.ack_through(seq).await
+        {
+            tracing::warn!(%error, "the snoozes' place in the log was not kept");
+        }
         // Until the next one's time, or a new snooze.
         let wait = next.map_or(Duration::MAX, |at| Duration::from_millis((at - now) as u64));
-        if let Ok(Ok(None) | Err(_)) = tokio::time::timeout(wait, heard.next()).await {
-            return;
+        match tokio::time::timeout(wait, heard.next()).await {
+            Ok(Ok(Some(snoozed))) => woken = Some(snoozed.seq),
+            Ok(Ok(None) | Err(_)) => return,
+            Err(_) => {}
         }
     }
 }

@@ -1,4 +1,5 @@
 use crate::access::{self, Caller, Right};
+use crate::cursors;
 use crate::environment::{Environment, Nowhere};
 use crate::foreign::{self, Foreign};
 use crate::methods::{Asks, Kind, Nothing, Tool, needs_command_id};
@@ -1418,12 +1419,18 @@ impl Kernel {
 
     /// Takes the Project out of the list at once, and its data out of the
     /// engine's sight: `<id>.gone`, deleted once nothing holds the Project,
-    /// or else on the next start. Its modules stop what runs there first.
+    /// or else on the next start. Its modules stop what runs there first,
+    /// and their places in this machine's log go.
     /// A Project that is already gone is what was asked for.
     async fn remove(&self, _: Own<'_>, OneProject { project }: OneProject) -> Result<(), Refusal> {
         let Some(entry) = self.projects.write().await.remove(&project) else {
             return Ok(());
         };
+        if let Some(machine) = &self.machine
+            && let Err(error) = cursors::forget(machine, project).await
+        {
+            tracing::warn!(%error, "a removed Project's places in the machine's log stayed");
+        }
         let gone = self.projects_data.join(format!("{project}{GONE}"));
         let project = match entry {
             Entry::Open(project) => project,

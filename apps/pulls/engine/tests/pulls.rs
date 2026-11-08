@@ -12,7 +12,6 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
-#[cfg(unix)]
 use std::time::Duration;
 
 /// The agents module as pulls hears it: `say { kind, thread, … }` writes
@@ -53,7 +52,20 @@ struct World {
     kernel: Arc<Kernel>,
     owner: PersonId,
     project: ProjectId,
+    /// What `restart` reads through again.
+    #[cfg(unix)]
+    gh: PathBuf,
     _root: tempfile::TempDir,
+}
+
+/// The engine on the data under `root`, with pulls reading through `gh`.
+async fn engine(root: &Path, owner: PersonId, gh: PathBuf) -> Arc<Kernel> {
+    Kernel::builder(root.join("projects"), root.join(".data"), owner)
+        .module(Pulls::new().gh(gh))
+        .module(Agents)
+        .open()
+        .await
+        .unwrap()
 }
 
 /// GitHub's answer for one pull request, `r0.p0`: its checks failed.
@@ -100,16 +112,7 @@ impl World {
         let root = tempfile::tempdir().unwrap();
         let owner = PersonId::new();
         let gh = gh(root.path());
-        let kernel = Kernel::builder(
-            root.path().join("projects"),
-            root.path().join(".data"),
-            owner,
-        )
-        .module(Pulls::new().gh(gh))
-        .module(Agents)
-        .open()
-        .await
-        .unwrap();
+        let kernel = engine(root.path(), owner, gh.clone()).await;
         let made = kernel
             .call(
                 Participant::Person(owner),
@@ -141,8 +144,30 @@ impl World {
             kernel,
             owner,
             project,
+            #[cfg(unix)]
+            gh,
             _root: root,
         }
+    }
+
+    /// The engine stopped, and started again on the same data, its
+    /// Project open again: nothing pulls held of it kept it open.
+    #[cfg(unix)]
+    async fn restart(self) -> World {
+        let lock =
+            (self._root.path()).join(format!(".data/projects/{}/project.lock", self.project));
+        drop(self.kernel);
+        let free = || std::fs::File::open(&lock).is_ok_and(|file| file.try_lock().is_ok());
+        for _ in 0..500 {
+            if free() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(free(), "the engine stopped, and its Project stayed open");
+        let kernel = engine(self._root.path(), self.owner, self.gh.clone()).await;
+        assert!(kernel.project(self.project).await.is_ok());
+        World { kernel, ..self }
     }
 
     fn person(&self) -> Participant {
@@ -335,6 +360,87 @@ async fn an_agent_s_gh_pr_create_links_what_it_made_once() {
         .unwrap();
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert!(world.list().await["pulls"].as_array().unwrap().is_empty());
+}
+
+/// A pull request an Agent made as the engine stopped is linked as it
+/// starts again: pulls hears the call it followed again, from where it
+/// last acked (ADR 0082, decision 6), and nothing it held of the Project
+/// kept it open.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_pull_request_made_as_the_engine_stopped_is_linked_once_it_starts_again() {
+    let world = World::new(|root| gh(root, &answer(7))).await;
+    let agent = Participant::Agent(AgentId::new());
+    let say =
+        |kind: &str, payload: Value| json!({ "kind": kind, "thread": "t3", "payload": payload });
+    let before = [
+        say("turn.started", json!({ "turn": "u1" })),
+        say(
+            "tool.started",
+            json!({ "item": "i1", "turn": "u1", "title": "gh pr create --fill",
+                    "tool": "execute", "status": "running", "content": [] }),
+        ),
+        say(
+            "tool.output",
+            json!({ "item": "i1", "text": "https://github.com/o/r/pull/7\n", "cut": false }),
+        ),
+    ];
+    for fact in before {
+        world.call(agent, "agents.say", fact).await.unwrap();
+    }
+    let world = world.restart().await;
+    let done = say(
+        "tool.changed",
+        json!({ "item": "i1", "status": "done", "exit": { "code": 0 } }),
+    );
+    world.call(agent, "agents.say", done).await.unwrap();
+    let listed = world
+        .list_until(|listed| listed["pulls"][0]["number"] == 7)
+        .await;
+    let pulls = listed["pulls"].as_array().unwrap();
+    assert_eq!(pulls.len(), 1);
+    assert_eq!(pulls[0]["owner"], "t3");
+    assert_eq!(pulls[0]["by"], "agent");
+}
+
+/// A removed Project closes: nothing pulls keeps of it holds it open, so
+/// its data goes, and a window's watch of its list ends.
+#[tokio::test]
+async fn a_removed_project_closes_and_its_watch_ends() {
+    let world = World::new(|root| root.join("no-gh-here")).await;
+    let mut watch = world
+        .kernel
+        .stream(
+            world.person(),
+            "pulls.watch",
+            Some(world.project),
+            json!({}),
+        )
+        .await
+        .unwrap();
+    let first = tokio::time::timeout(Duration::from_secs(5), watch.recv()).await;
+    assert!(first.unwrap().is_some());
+    let remove = json!({ "project": world.project });
+    (world.kernel)
+        .call(
+            world.person(),
+            "projects.remove",
+            None,
+            Some(CommandId::new()),
+            remove,
+        )
+        .await
+        .unwrap();
+    let ended = tokio::time::timeout(Duration::from_secs(5), watch.recv()).await;
+    assert!(ended.unwrap().is_none(), "the watch ends with its Project");
+    let gone = (world._root.path()).join(format!(".data/projects/{}.gone", world.project));
+    for _ in 0..500 {
+        if !gone.exists() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("the removed Project stayed open, and its data with it");
 }
 
 #[tokio::test]

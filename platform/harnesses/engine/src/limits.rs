@@ -28,6 +28,10 @@ pub(crate) const LIMITS_CHANGED: &str = "limits_changed";
 /// The version of `limits_changed`.
 const VERSION: u32 = 1;
 
+/// The name of its listener of the accounts, which reads a Harness again
+/// after its account changed: the kernel keeps its place in the log by it.
+const LISTENER: &str = "limits";
+
 /// How often the engine looks whether a read is due.
 const LOOK: Duration = Duration::from_secs(60);
 
@@ -159,8 +163,8 @@ impl Reader {
     /// Reads each Harness as it is due, and again after its account
     /// changed, till the machine's Project closes.
     pub async fn start(&self, project: ModuleProject) -> Result<(), Error> {
-        // It holds the Project only as it reads: the reaction lets it go.
-        let mut changed = project.react(project.at().await?, account_changed());
+        // It holds the Project only as it reads: the listener lets it go.
+        let mut changed = project.listen(LISTENER, account_changed()).await?;
         let reader = self.clone();
         tokio::spawn(async move {
             let mut look = tokio::time::interval(LOOK);
@@ -168,10 +172,17 @@ impl Reader {
                 tokio::select! {
                     heard = changed.next() => {
                         let Ok(Some(event)) = heard else { break };
-                        let found = event.subject.and_then(|id| reader.harnesses.find(&id));
+                        let found = (event.subject.as_deref()).and_then(|id| reader.harnesses.find(id));
                         if let (Some(harness), Some(project)) = (found, changed.project()) {
                             // A reaction answers at once: the read runs on its own.
                             reader.read(&project, harness, Duration::ZERO);
+                        }
+                        // The read runs on after the ack, so the sign-in that
+                        // waits for the reactions is not held: one cut short by
+                        // a restart is made again by the next look while a
+                        // window is open, or as a window asks.
+                        if let Err(error) = changed.ack_through(event.seq).await {
+                            tracing::warn!(%error, "the limits' place in the log was not kept");
                         }
                     }
                     _ = look.tick() => {

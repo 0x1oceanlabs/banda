@@ -3,6 +3,7 @@
 //! the engine's data, in `projects/<id>/`: `project.json`, which names the
 //! folder, the SQLite, the lock, and the modules' files.
 
+use crate::cursors::{Cursor, Listener};
 use crate::environment::Environment;
 use crate::events::{self, Event, EventFilter};
 use crate::kernel::Entry;
@@ -19,7 +20,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Display;
 use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
@@ -228,9 +229,9 @@ pub struct Project {
     passes: Arc<Passes>,
     window: Arc<Window>,
     environment: Arc<dyn Environment>,
-    /// How far each module reacting to the log has reacted: see
-    /// [`ModuleProject::react`].
-    reactions: std::sync::Mutex<Vec<watch::Receiver<i64>>>,
+    /// How far each module's listener of this log has reacted, by its
+    /// key: see [`ModuleProject::listen`].
+    reactions: std::sync::Mutex<HashMap<String, Reaction>>,
     /// This machine's scope, which its modules may hear (ADR 0040,
     /// decision 3); none for the machine itself, or with no module of it.
     machine: Option<Arc<Project>>,
@@ -501,36 +502,31 @@ impl Project {
             .await
     }
 
-    /// Events after `after` that match `filter`; as a module's reaction,
-    /// the effects that wait for reactions wait for it too (see
-    /// [`ModuleProject::react`]).
-    pub(crate) fn hear(
-        self: &Arc<Self>,
+    /// The listener `key` of this log, handled up to `after`: an effect
+    /// that waits for the reactions ([`ModuleProject::reacted`]) waits for
+    /// it until its sender says it handled more, or is dropped, or `home`,
+    /// the Project of the module that listens, closes. Refused as
+    /// `conflict` while another listener hears this log under its key.
+    pub(crate) fn listening(
+        &self,
+        key: &str,
         after: i64,
-        filter: EventFilter,
-        reaction_of: Option<&'static str>,
-    ) -> Heard {
-        let handled = reaction_of.map(|_| {
-            let (handled, reaction) = watch::channel(after);
-            let mut reactions = self.reactions.lock().unwrap();
-            // One whose Heard is gone reacts no more.
-            reactions.retain(|reaction| reaction.has_changed().is_ok());
-            reactions.push(reaction);
-            handled
-        });
-        // Listening before the log is read, nothing falls between the two.
-        Heard {
-            live: self.subscribe(),
-            project: Arc::downgrade(self),
-            module: reaction_of,
-            filter,
-            last: after,
-            given: after,
-            handled,
-            read: Default::default(),
-            caught_up: false,
-            from: None,
+        home: Option<watch::Receiver<()>>,
+    ) -> Result<watch::Sender<i64>, Refusal> {
+        let mut reactions = self.reactions.lock().unwrap();
+        reactions.retain(|_, reaction| reaction.live());
+        if reactions.contains_key(key) {
+            return Err(Refusal::conflict(format!(
+                "The listener {key} hears this log already: one name is one listener."
+            )));
         }
+        let (handled, reaction) = watch::channel(after);
+        let reaction = Reaction {
+            handled: reaction,
+            home,
+        };
+        reactions.insert(key.to_owned(), reaction);
+        Ok(handled)
     }
 
     /// This Project as one module sees it.
@@ -611,115 +607,20 @@ impl Committed {
     }
 }
 
-/// Events of any module as they are committed, from a place in the log
-/// on: see [`ModuleProject::react`]. It holds the Project only while it reads
-/// the log, so a removed Project still goes.
-pub struct Heard {
-    project: std::sync::Weak<Project>,
-    /// The module whose reaction it is.
-    module: Option<&'static str>,
-    live: broadcast::Receiver<Arc<Event>>,
-    filter: EventFilter,
-    /// The last event heard.
-    last: i64,
-    /// The last event given.
-    given: i64,
-    /// Where it says how far it has reacted, when it reacts.
-    handled: Option<watch::Sender<i64>>,
-    /// Read from the log and not yet given.
-    read: std::collections::VecDeque<Event>,
-    /// The log is read up to the live events.
-    caught_up: bool,
-    /// Whether the Project of the module that hears is open, when it hears
-    /// another's log: it ends as that Project closes. A watch, not that
-    /// Project's log, which would wake it at each of its events.
-    from: Option<watch::Receiver<()>>,
+/// How far one listener of a Project's log has reacted, while it listens.
+struct Reaction {
+    handled: watch::Receiver<i64>,
+    /// Whether the Project of the module that listens is open, when it
+    /// hears another scope's log.
+    home: Option<watch::Receiver<()>>,
 }
 
-/// How many events one read of the log takes.
-const PAGE: usize = 500;
-
-impl Heard {
-    /// The next event, in the log's order; none once the Project is gone.
-    /// Falling behind the live events, it reads the log again, so none is
-    /// missed. Asking for the next says the last one given is handled.
-    pub async fn next(&mut self) -> Result<Option<Event>, Error> {
-        self.reacted(self.given);
-        loop {
-            if self
-                .from
-                .as_ref()
-                .is_some_and(|from| from.has_changed().is_err())
-            {
-                return Ok(self.end());
-            }
-            if let Some(event) = self.read.pop_front() {
-                self.given = event.seq;
-                return Ok(Some(event));
-            }
-            if !self.caught_up {
-                let Some(project) = self.project.upgrade() else {
-                    return Ok(None);
-                };
-                let page = project
-                    .events_after(self.last, self.filter.clone(), PAGE)
-                    .await?;
-                self.caught_up = page.len() < PAGE;
-                if let Some(last) = page.last() {
-                    self.last = last.seq;
-                }
-                self.read.extend(page);
-                continue;
-            }
-            let heard = match &mut self.from {
-                Some(from) => tokio::select! {
-                    heard = self.live.recv() => heard,
-                    _ = from.changed() => return Ok(self.end()),
-                },
-                None => self.live.recv().await,
-            };
-            match heard {
-                Ok(event) if event.seq > self.last => {
-                    self.last = event.seq;
-                    if self.filter.matches(&event) {
-                        self.given = event.seq;
-                        return Ok(Some(Event::clone(&event)));
-                    }
-                }
-                Ok(_) => {}
-                // Back to the log for what went by.
-                Err(broadcast::error::RecvError::Lagged(_)) => self.caught_up = false,
-                Err(broadcast::error::RecvError::Closed) => return Ok(None),
-            }
-            // Everything up to the last heard is handled: the log's events
-            // were given, and the others are not its to react to.
-            self.reacted(self.last);
-        }
-    }
-
-    /// The Project it hears, while it is open, as the module reacting sees
-    /// it.
-    pub fn project(&self) -> Option<ModuleProject> {
-        Some(self.project.upgrade()?.module(self.module?))
-    }
-
-    /// Its hearing Project closed: it reacts no more, so no one waits on it.
-    fn end(&mut self) -> Option<Event> {
-        self.handled = None;
-        None
-    }
-
-    /// Says it has reacted to every event up to `seq`.
-    fn reacted(&self, seq: i64) {
-        if let Some(handled) = &self.handled {
-            handled.send_if_modified(|was| {
-                let further = seq > *was;
-                if further {
-                    *was = seq;
-                }
-                further
-            });
-        }
+impl Reaction {
+    /// It reacts no more once its listener is gone or ended, or the
+    /// Project of its module closed.
+    fn live(&self) -> bool {
+        self.handled.has_changed().is_ok()
+            && (self.home.as_ref()).is_none_or(|home| home.has_changed().is_ok())
     }
 }
 
@@ -731,9 +632,38 @@ pub struct ModuleProject {
     module: &'static str,
 }
 
+/// A [`ModuleProject`] held weakly ([`ModuleProject::downgrade`]): it
+/// keeps no Project open.
+#[derive(Clone)]
+pub struct WeakModuleProject {
+    project: std::sync::Weak<Project>,
+    module: &'static str,
+}
+
+impl WeakModuleProject {
+    /// The Project as its module sees it, while it is open.
+    pub fn upgrade(&self) -> Option<ModuleProject> {
+        Some(ModuleProject {
+            project: self.project.upgrade()?,
+            module: self.module,
+        })
+    }
+}
+
 impl ModuleProject {
     pub fn id(&self) -> ProjectId {
         self.project.id
+    }
+
+    /// This Project held weakly, for what a module keeps of it past one
+    /// call, in a task or a cache of its own. A strong hold there keeps the
+    /// Project open after it is removed or let go of, its store, its lock
+    /// and its listeners too, until the engine stops.
+    pub fn downgrade(&self) -> WeakModuleProject {
+        WeakModuleProject {
+            project: Arc::downgrade(&self.project),
+            module: self.module,
+        }
     }
 
     /// The Project's work folder. A module of this machine gets the
@@ -894,32 +824,61 @@ impl ModuleProject {
             .await
     }
 
-    /// Every module's events that match `filter`, after `after` in the
-    /// log, and then each as it is committed: how a module reacts to what
-    /// another did, as git keeps a checkpoint as a turn starts (ADR 0034).
-    /// An effect that waits for the reactions ([`ModuleProject::reacted`])
-    /// waits until it has handled each one before.
-    pub fn react(&self, after: i64, filter: EventFilter) -> Heard {
-        self.project.hear(after, filter, Some(self.module))
+    /// This module's listener `name` of this scope's log: every module's
+    /// events that match `filter`, from where it last acked, and then each
+    /// as it is committed (ADR 0082, decision 6). How a module reacts to
+    /// what another did, as git keeps a checkpoint as a turn starts (ADR
+    /// 0034). A listener new to the log hears from now on. Its reaction
+    /// acks each fact in the transaction that writes it
+    /// ([`Listener::ack`]), so it runs once; or, its work outside the
+    /// store, once that is done ([`Listener::ack_through`]), so after a
+    /// crash it may run again, and looks before it acts. After a restart
+    /// it hears again only what it did not ack. An effect that waits for
+    /// the reactions ([`ModuleProject::reacted`]) waits until it has
+    /// handled each one before. `name` is lowercase letters, digits and
+    /// dashes, fixed in the module's code, and names what it does: another
+    /// name is another listener, which starts from the head. A second
+    /// listener under a name that hears already is refused as `conflict`.
+    pub async fn listen(&self, name: &'static str, filter: EventFilter) -> Result<Listener, Error> {
+        self.listen_from(name, filter, None).await
     }
 
-    /// This machine's events that match `filter`, from now on, and then
-    /// each as it is committed: how a module of a Project reacts to what
-    /// this computer did, as `agents` lets go of its Harness processes
-    /// after a sign-in (ADR 0040, decision 3). The machine's
-    /// [`ModuleProject::reacted`] waits for it too. It only hears: its
-    /// [`Heard::project`] is none, so it never writes the machine's log. It
-    /// ends as this Project closes. None for a module of the machine, or
-    /// while the engine has none.
-    pub async fn react_to_machine(&self, filter: EventFilter) -> Result<Option<Heard>, Error> {
+    /// [`ModuleProject::listen`], begun at `carried` when the listener has
+    /// no cursor yet: where the module heard up to with a cursor of its
+    /// own, from before the kernel kept them, so no fact is heard twice or
+    /// lost as it moves over.
+    pub async fn listen_from(
+        &self,
+        name: &'static str,
+        filter: EventFilter,
+        carried: Option<i64>,
+    ) -> Result<Listener, Error> {
+        let cursor = Cursor::new(self.module, name, self.project.id, None)?;
+        Listener::begin(&self.project, cursor, filter, carried, None).await
+    }
+
+    /// This module's listener `name` of this machine's log: its events that
+    /// match `filter`, as [`ModuleProject::listen`] hears this scope's. How
+    /// a module of a Project reacts to what this computer did, as `agents`
+    /// lets go of its Harness processes after a sign-in (ADR 0040, decision
+    /// 3). Its cursor is kept in the machine's store, beside the log it
+    /// reads, so what it writes in this Project goes through
+    /// [`Listener::once`], and work outside any store acks by itself. The
+    /// machine's [`ModuleProject::reacted`] waits for it. It ends as this
+    /// Project closes, and its cursor goes as this Project is removed.
+    /// None for a module of the machine, or while the engine has none.
+    pub async fn listen_to_machine(
+        &self,
+        name: &'static str,
+        filter: EventFilter,
+    ) -> Result<Option<Listener>, Error> {
         let Some(machine) = &self.project.machine else {
             return Ok(None);
         };
-        let mut heard = machine.hear(machine.head().await?, filter, Some(self.module));
-        // It only hears: there is no machine's Project of its module to give.
-        heard.module = None;
-        heard.from = Some(self.project.open.subscribe());
-        Ok(Some(heard))
+        let cursor = Cursor::new(self.module, name, machine.id, Some(&self.project))?;
+        let home = Some(self.project.open.subscribe());
+        let listener = Listener::begin(machine, cursor, filter, None, home).await?;
+        Ok(Some(listener))
     }
 
     /// How many Projects this machine has, the missing too. None for a
@@ -982,11 +941,11 @@ impl ModuleProject {
         let Ok(at) = self.at().await else {
             return false;
         };
-        let reactions = {
+        let reactions: Vec<_> = {
             let mut reactions = self.project.reactions.lock().unwrap();
-            // One whose Heard is gone reacts no more.
-            reactions.retain(|reaction| reaction.has_changed().is_ok());
-            reactions.clone()
+            reactions.retain(|_, reaction| reaction.live());
+            let handled = reactions.values().map(|reaction| &reaction.handled);
+            handled.cloned().collect()
         };
         let all = async {
             for mut reaction in reactions {

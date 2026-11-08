@@ -16,6 +16,10 @@ use std::sync::Arc;
 use std::time::Duration;
 pub(crate) use store::{REREAD_CODEX, TABLES};
 
+/// The name of its listener of the accounts, which it hears only to end
+/// as the machine's Project closes: the kernel keeps its place by it.
+const LISTENER: &str = "usage";
+
 const DAY: i64 = 86_400_000;
 const KEEP: i64 = 92 * DAY;
 
@@ -79,15 +83,20 @@ impl Reader {
     }
 
     pub async fn start(&self, project: ModuleProject) -> Result<(), Error> {
-        // The reaction keeps only a weak Project, so closing the machine
+        // The listener keeps only a weak Project, so closing the machine
         // releases its database even while the timer is idle.
-        let mut lifetime = project.react(project.at().await?, crate::account_changed());
+        let mut lifetime = project.listen(LISTENER, crate::account_changed()).await?;
         let reader = self.clone();
         tokio::spawn(async move {
             let mut timer = tokio::time::interval(Duration::from_secs(60));
             loop {
                 tokio::select! {
-                    event=lifetime.next()=>{if !matches!(event,Ok(Some(_))) {break;}}
+                    event=lifetime.next()=>{
+                        let Ok(Some(event)) = event else { break };
+                        if let Err(error) = lifetime.ack_through(event.seq).await {
+                            tracing::warn!(%error, "usage's place in the log was not kept");
+                        }
+                    }
                     _=timer.tick()=>{
                         let Some(project)=lifetime.project() else {break;};
                         if project.window_open() && let Err(error)=reader.scan(&project).await {

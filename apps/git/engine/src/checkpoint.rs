@@ -9,7 +9,7 @@
 use crate::index::{INDEX, UNTRACKED, own_index};
 use crate::repo::Repo;
 use crate::run::{Failure, Opts};
-use banda_kernel::{Event, EventFilter, Heard, ModuleProject, Refusal};
+use banda_kernel::{Event, EventFilter, Listener, ModuleProject, Refusal};
 use std::collections::BTreeSet;
 use std::path::Path;
 
@@ -20,6 +20,10 @@ const ROOT: &str = "refs/banda/checkpoints";
 const STARTED: &str = "turn.started";
 const ENDED: &str = "turn.ended";
 const REWOUND: &str = "thread.rewound";
+
+/// The name of git's listener of the turns, which the kernel keeps its
+/// place in the log by (ADR 0082, decision 6).
+pub const LISTENER: &str = "checkpoints";
 
 /// What git hears from the agents module.
 pub fn heard() -> EventFilter {
@@ -186,8 +190,11 @@ async fn forget(repo: &Repo, thread: &str, turns: &[&str]) -> Result<(), Refusal
 }
 
 /// Makes or lets go of checkpoints as the agents module's facts are
-/// heard, one at a time, until the Project is gone.
-pub async fn follow(mut heard: Heard) {
+/// heard, one at a time, until the Project is gone. Each fact is acked
+/// once git has handled it, outside the store, whether it kept its
+/// checkpoint or not: one heard again after a crash before the ack finds
+/// its checkpoint there, and keeps it.
+pub async fn follow(mut heard: Listener) {
     loop {
         let event = match heard.next().await {
             Ok(Some(event)) => event,
@@ -200,14 +207,19 @@ pub async fn follow(mut heard: Heard) {
         let Some(project) = heard.project() else {
             return;
         };
-        if let Err(refusal) = on(&project, &event).await {
+        if let Err(refusal) = on(&project, &event, heard.late(&event)).await {
             tracing::warn!(kind = %event.kind, ?refusal, "a checkpoint was not kept");
+        }
+        drop(project);
+        if let Err(error) = heard.ack_through(event.seq).await {
+            tracing::warn!(%error, "git's place among the turns was not kept");
         }
     }
 }
 
-/// What one fact does to the checkpoints of its Thread.
-async fn on(project: &ModuleProject, event: &Event) -> Result<(), Refusal> {
+/// What one fact does to the checkpoints of its Thread; `late`, it was
+/// committed while git was not there to hear it.
+async fn on(project: &ModuleProject, event: &Event, late: bool) -> Result<(), Refusal> {
     let (Some(thread), Some(turn)) = (&event.subject, event.payload["turn"].as_str()) else {
         return Ok(());
     };
@@ -215,18 +227,26 @@ async fn on(project: &ModuleProject, event: &Event) -> Result<(), Refusal> {
         return Ok(());
     };
     match event.kind.as_str() {
-        // A turn run again after a restart keeps how it first began.
-        STARTED => {
+        // A turn run again after a restart keeps how it first began. One
+        // that began while git was not there may have changed the tree
+        // since, so it has none, as one that began before checkpoints were
+        // kept.
+        STARTED if !late => {
             let before = reference(thread, turn, When::Before)?;
             if find(&repo, &before).await?.is_none() {
                 capture(&repo, &before).await?;
             }
         }
-        // A turn that began before checkpoints were kept has none.
+        // A turn that began before checkpoints were kept has none, and one
+        // heard ending again keeps how it first ended. One that ended while
+        // git was not there, its start kept, gets its end as git is back.
         ENDED => {
-            let before = reference(thread, turn, When::Before)?;
-            if find(&repo, &before).await?.is_some() {
-                capture(&repo, &reference(thread, turn, When::After)?).await?;
+            let (before, after) = (
+                reference(thread, turn, When::Before)?,
+                reference(thread, turn, When::After)?,
+            );
+            if find(&repo, &before).await?.is_some() && find(&repo, &after).await?.is_none() {
+                capture(&repo, &after).await?;
             }
         }
         // The turn and every turn after it left the Thread, and so do

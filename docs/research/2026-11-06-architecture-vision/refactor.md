@@ -241,9 +241,10 @@ None of these change behaviour, unless noted.
 
 **A5 · Durable listeners** · M · deps R0, 0.2b
 - `kernel_cursors(listener, source_scope, seq)`.
-- `listen(name, filter)` resumes from the stored seq. The ack is written in the same transaction for the same scope; across scopes it uses `CommandId::derive(listener, event_id)`.
+- `listen(name, filter)` resumes from the stored seq. The ack is written in the same transaction for the same scope; across scopes it uses `CommandId::derive(listener, event_id)`. A reaction that cannot ack there (work outside the store, as git's checkpoints, or a shell call that spans several facts, as pulls') acks once its work is done, and looks before it acts (ADR 0082, decision 6, amended in A5).
 - git (`lib.rs:187`), agents, pulls and sharing move off `react(head)` (`project.rs:806-817`). Sharing's private cursor and outbox (`sharing/engine/src/outbox.rs`) are deleted.
 - Verify: a crash test (emit, kill before the reaction, restart) shows the reaction runs once.
+- Later, once a release carried every install over: `ModuleProject::listen_from`, `sharing_heard`, `sharing_carried` and sharing's carry go.
 
 **A6 · Outbox garbage collection; safe `banda mcp` retries** · S
 - Done rows and receipts older than 30 days are deleted (`store.rs:44-68` has no `DELETE` today).
@@ -319,6 +320,7 @@ None of these change behaviour, unless noted.
   - methods: `agents.*` is an alias for one release (CLI, `keys.toml`, the skill);
   - events: module `agents` is read as `threads` (`was = ["agents"]`);
   - tables: `agents_*` stay, as a declared legacy prefix;
+  - listeners' cursors: `kernel_cursors` rows keyed `agents.<name>` in each Project's store, and `agents.<name>@<Project>` in the machine's store, are renamed to `threads.*` in the same migration that reads `agents` as `threads`. A new key starts at the head, so a fact committed just before the upgrade would be skipped;
   - Panes: `agents.thread` is upgraded through the pane-upgrade hook.
 - Verify: a fixture of an old state folder opens, with its Threads, Panes and keys.
 
@@ -350,7 +352,7 @@ None of these change behaviour, unless noted.
 
 **B11 · pulls hears one fact per tool call** · S-M · deps B10, B3
 - `threads.tool.ran@1` is normalised in `acp/`.
-- `heard.rs:121-176` is rewritten against it.
+- `heard.rs:121-176` is rewritten against it. With a call in one fact, each link acks in its own transaction (`Tx::ack`), and the place held before open calls, with its day, goes.
 - `link` reads the Thread from the Session; `pulls_agents` is dropped; the remote comes from the query `git.remote@1`.
 
 **B12 · Deltas leave the log** · M · deps B7 · needed before relay (H10)

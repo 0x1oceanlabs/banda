@@ -26,6 +26,7 @@
 //! Unknown fields are ignored on both sides, so either side can be newer.
 
 use crate::access::Caller;
+use crate::cursors::Heard;
 use crate::events::{Event, EventFilter};
 use crate::module::Stream;
 use crate::{Answer, Code, CommandId, Kernel, PROTOCOL, Participant, PersonId, ProjectId, Refusal};
@@ -467,7 +468,7 @@ async fn hear(stream: u64, mut pieces: Stream, out: mpsc::Sender<Outgoing>) {
 }
 
 /// Replays the stored events after `after`, then forwards live ones, with no
-/// gap and no repeat (see [`crate::Heard`]).
+/// gap and no repeat (see `cursors::Heard`).
 async fn follow(
     project: Arc<crate::Project>,
     subscription: u64,
@@ -475,7 +476,7 @@ async fn follow(
     filter: EventFilter,
     out: mpsc::Sender<Outgoing>,
 ) {
-    let mut heard = project.hear(after, filter, None);
+    let mut heard = Heard::new(&project, after, filter);
     // It holds the Project only while it reads the log.
     drop(project);
     loop {

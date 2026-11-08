@@ -108,8 +108,9 @@ const DERIVED: uuid::Uuid = uuid::Uuid::from_u128(0x1381_b1cc_08e3_41ff_b9bd_24b
 impl CommandId {
     /// The command `step` of `source` sends: the same ID each time it is
     /// made, a UUIDv5. What sends a command again, `banda mcp` a request
-    /// of its session, later a reaction to an event or a workflow's step,
-    /// lands on the first one's receipt, so it runs once (ADR 0082,
+    /// of its session, a listener's reaction to a fact of another scope's
+    /// log ([`Listener::once`](crate::Listener::once)), later a workflow's
+    /// step, lands on the first one's receipt, so it runs once (ADR 0082,
     /// decision 4), for as long as the receipt is kept: thirty days. Past
     /// them the same ID runs as a new command, so a reaction that catches
     /// up on older events keeps its own cursor of what it did. `source`
