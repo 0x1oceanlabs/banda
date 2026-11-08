@@ -16,7 +16,7 @@ import {
 import type { Read } from "@banda/ui/hooks/use-read"
 import { shownProjects } from "@banda/ui/lib/projects"
 import { type Readable, sameEach, Store, useStore } from "@banda/ui/lib/store"
-import { paneHost, type PaneState } from "@banda/ui/pane"
+import { paneHost, type PaneState, withHost } from "@banda/ui/pane"
 import { createContext, useCallback, useContext, useEffect } from "react"
 import type { HostState } from "../host"
 
@@ -178,6 +178,14 @@ export class KeptHosts implements Readable<readonly Shown[]> {
    * (`hostOfPane`); none for this machine's. */
   hostOf(project: ProjectId, named: string | undefined): string | undefined {
     return hostOfPane(this.get(), this.#ours, project, named)
+  }
+
+  /** `pane` of `project` as a pick opens it (`pane.pick`): its args name
+   * the host it is on (`hostOf`), so it opens on that host's engine, never
+   * on this machine's with another host's Project (ADR 0081); none for
+   * this machine's. */
+  paneOn(project: ProjectId, pane: PaneState): PaneState {
+    return withHost(pane, this.hostOf(project, paneHost(pane)))
   }
 
   /** Starts host `name`'s engine again there. */
@@ -378,6 +386,19 @@ export function useEngineOf(
       return host === undefined ? engine : kept.engine(host)
     },
     [kept, engine]
+  )
+}
+
+/** A Pane of a Project as a pick opens it (`KeptHosts.paneOn`); the same
+ * function while the Window's hosts stay. */
+export function usePaneOn(): (
+  project: ProjectId,
+  pane: PaneState
+) => PaneState {
+  const kept = useContext(HostsContext)
+  return useCallback(
+    (project: ProjectId, pane: PaneState) => kept.paneOn(project, pane),
+    [kept]
   )
 }
 

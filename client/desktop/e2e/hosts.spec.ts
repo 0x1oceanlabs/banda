@@ -6,8 +6,9 @@
  * ssh does, so main's check that ssh holds the port holds. arc's label
  * shows below this machine's Projects, with its Projects and Threads;
  * stopped there, it says so, and Start brings it back. Its Thread opens
- * from the sidebar on arc's engine, and waits while arc is away. As a Mac,
- * its `uname` says Darwin, and the window finds its Banda in its
+ * from the sidebar on arc's engine, and waits while arc is away; Alt+U
+ * and a toast open one there too, as `pane.pick` keeps its host. As a
+ * Mac, its `uname` says Darwin, and the window finds its Banda in its
  * Application Support; its engine is this checkout's still, which serves
  * for the follower, as a Mac's does not (engine/src/control.rs). With
  * BANDA_E2E_SHOTS set to a folder, it leaves pictures of each state there
@@ -443,4 +444,46 @@ test("a Mac there, with no banda in hosts.toml: the window finds its Banda in th
   expect(readFileSync(join(arc.dir, "home/ran"), "utf8")).toBe(
     `${join(arc.dir, "home", MAC_COPY)}\n`
   )
+})
+
+test("another machine's Thread that calls opens on its engine by Alt+U and from its toast, never on this one's", async () => {
+  test.setTimeout(120_000)
+  arc = newArc()
+  const banda = await seed(arc)
+  window = await withArc(arc)
+  const { page } = window
+  await work(window)
+  const done = (title: string) =>
+    sidebarOf(page)
+      .getByRole("button", { name: new RegExp(title) })
+      .getByRole("img", { name: "Done" })
+  await expect(done("Sidebar for arc")).toBeVisible()
+  await expect(done("Bench window tests")).toBeVisible()
+
+  // Alt+U goes down what calls, this machine's first: then arc's Thread,
+  // which opens read live from arc's engine.
+  await page.keyboard.press("Alt+U")
+  await expect(
+    page.getByRole("region", { name: "Sidebar for arc", exact: true })
+  ).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+U")
+  const bench = page.getByRole("region", {
+    name: "Bench window tests",
+    exact: true,
+  })
+  await expect(bench).toHaveAttribute("data-focused", "true")
+  await expect(bench.getByText("You said: Bench window tests")).toBeVisible()
+
+  // One there that finishes out of sight tells with a toast, whose button
+  // opens it there too.
+  send(arc, banda, "Done on arc")
+  const toast = page
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+    .filter({ hasText: "Done on arc" })
+  await toast.getByRole("button", { name: "Open" }).click()
+  const there = page.getByRole("region", { name: "Done on arc", exact: true })
+  await expect(there).toHaveAttribute("data-focused", "true")
+  await expect(there.getByText("You said: Done on arc")).toBeVisible()
+  await expect(toast).toBeHidden()
 })

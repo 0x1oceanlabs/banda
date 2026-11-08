@@ -1,6 +1,7 @@
 import type { ProjectId } from "@banda/contract"
 import type { Listed, Lists } from "@banda/ui/pane"
 import { afterEach, expect, test, vi } from "vitest"
+import { wokeTold } from "../sidebar/snoozed"
 import {
   callingIn,
   dropHost,
@@ -242,4 +243,23 @@ test("a host's Listed opens its Pane on that host, with no answer for this machi
   expect(here!.answers).toEqual(answers)
   expect(there!.pane.args).toEqual({ thread: "b", host: "arc" })
   expect(there!.answers).toBeUndefined()
+})
+
+test("what a host lists and calls for, as Alt+U, a toast, the woke notice and the counts pick it, opens on that host", () => {
+  const stores = newStores(0)
+  const stop = followCalls(stores)
+  takeLists(stores, { [p]: [thread("a", { mark: "done" })] })
+  takeLists(stores, { [r]: [thread("b", { mark: "asking" })] }, "arc")
+  const picked = Object.fromEntries(
+    stores.calls.get().list.map((call) => [call.about, call.pane.args])
+  )
+  expect(picked).toEqual({
+    a: { thread: "a" },
+    b: { thread: "b", host: "arc" },
+  })
+  const [there] = stores.items.get()[r]!
+  expect(wokeTold(r, there!)).toMatchObject({
+    buttons: [{ args: { project: r, pane: { args: { host: "arc" } } } }],
+  })
+  stop()
 })
