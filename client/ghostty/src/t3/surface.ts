@@ -16,7 +16,7 @@ import {
 import {
   measureGhosttyCell,
   onDevicePixel,
-  renderGhosttySnapshot,
+  GhosttyRenderer,
   terminalGridSize,
   type GhosttyCellRange,
   type GhosttyCellMetrics,
@@ -618,7 +618,8 @@ export class GhosttyTerminalSurface {
   private compositionInputToSuppress: string | null = null;
   private compositionSuppressionTimer: number | null = null;
   private cursorOn = true;
-  private renderedCursorY: number | null = null;
+  /** Banda: what the canvas shows, so a frame draws only what changed (ADR 0088, step P4). */
+  private readonly renderer = new GhosttyRenderer();
   private forceFullRender = true;
   /** Banda: the frames it drew, to tell whether a fit drew one. */
   private drawn = 0;
@@ -902,6 +903,8 @@ export class GhosttyTerminalSurface {
 
   private applyFontMetrics(): void {
     this.metrics = measureGhosttyCell(this.context, this.fontSize, this.fontFamily);
+    // Banda: a face loaded under the same name draws other glyphs.
+    this.renderer.forget();
     this.core.resize(this.cols, this.rows, this.metrics.width, this.metrics.height);
     this.inputLeft = -1;
     this.inputTop = -1;
@@ -2111,6 +2114,8 @@ export class GhosttyTerminalSurface {
       this.context.setTransform(canvasConfiguration.ratio, 0, 0, canvasConfiguration.ratio, 0, 0);
       this.canvasConfigured = true;
       this.canvasDevicePixelRatio = canvasConfiguration.ratio;
+      // Banda: a new backing size cleared the canvas.
+      this.renderer.forget();
     }
     this.snapshot = this.core.snapshot();
     if (!this.blinkEnabled()) this.cursorOn = true;
@@ -2133,7 +2138,7 @@ export class GhosttyTerminalSurface {
       this.forceFullRender = true;
     }
     this.refreshHoveredLink();
-    renderGhosttySnapshot({
+    this.renderer.render({
       context: this.context,
       snapshot: this.snapshot,
       metrics: this.metrics,
@@ -2145,7 +2150,6 @@ export class GhosttyTerminalSurface {
       originY: this.originY,
       forceFull: this.forceFullRender,
       cursorOn: this.cursorOn,
-      previousCursorY: this.renderedCursorY,
       focused: this.focused,
       hoveredLinkRange: this.hoveredLink?.range ?? null,
       ...(this.theme.selectionBackground !== undefined
@@ -2153,10 +2157,6 @@ export class GhosttyTerminalSurface {
         : {}),
     });
     this.positionInput();
-    this.renderedCursorY =
-      this.cursorOn && this.snapshot.cursorVisible && this.snapshot.cursorY >= 0
-        ? this.snapshot.cursorY
-        : null;
     this.updateScrollbar(scrollState);
     this.forceFullRender = false;
     this.drawn += 1;

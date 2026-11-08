@@ -56,7 +56,21 @@ Import paths, so the files find each other here, and the tests import
   size or the screen a new scale, instead of its own `observeResize` of
   the mount and watch of the screen's scale: the window's Tile says so,
   through its resize gate, without React's `flushSync` (ADR 0088, decision
-  5). T3's observer stays for a host that says nothing.
+  5); T3's observer stays for a host that says nothing;
+- the core reads libghostty-vt's dirty rows into typed arrays, the
+  snapshot's `grid`: a code point, two colours and a style for each cell,
+  a hash for each row, and no object per cell; its foreground is asked
+  for only where the style sets one (`src/grid.test.ts` checks it against
+  a read of every value on its own, as T3's was);
+- the scrollbar is written only where what it shows changed;
+- the renderer is a `GhosttyRenderer`, which keeps what each row of the
+  canvas shows: a frame draws only the rows whose cells, cursor or
+  hovered link differ from it, and a screen that scrolled moves its
+  pixels by the rows it scrolled, on screen pixels, and draws only the
+  rows that came in. While a glyph that stands past its row may be on
+  the canvas, a diagonal's or a block cursor's, it draws as T3's did
+  (`src/renderer.test.ts`; `e2e/terminal-pixels.spec.ts` compares a
+  build's pixels with main's) (ADR 0088, step P4).
 
 T3's tests of its own terminal drawer are not brought: they test T3's
 transport, not the adapter.
