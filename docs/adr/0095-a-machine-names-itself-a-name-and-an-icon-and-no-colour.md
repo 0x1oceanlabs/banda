@@ -355,16 +355,23 @@ Each step is its own PR.
      `client/web/src/menu/BandaMenu.tsx`;
      `platform/notifications/pane/src/system.ts`.
    - **4b, writing to another machine**: the composer's placeholder and
-     the empty Thread, the pill with its icon and its states' actions,
-     and Send off while the machine is away, with its tooltip (decision
-     7). The Thread Pane knows only `args.host` today
-     (`apps/agents/pane/src/ThreadPane.tsx:41`), so `PaneProps` gains the
-     machine a Pane is on, with its name, icon and state, which the
-     window hands it. Files: `client/ui/src/pane.ts`;
-     `client/web/src/tiling/PaneFrame.tsx`;
-     `apps/agents/pane/src/ThreadPane.tsx`, `composer/Composer.tsx`,
-     `composer/placeholder.ts` and `thread/Thread.tsx` (the empty Thread,
-     `:587`).
+     the empty Thread, "Write to Personal on arc", and Send off while the
+     machine cannot be reached, with its tooltip, the draft kept
+     (decision 7). The tooltip says "Connecting to arc…" while the
+     window first tries arc's engine, up to 3 seconds, and "arc is away.
+     Send once it is back." after: an engine waits as connecting the
+     whole time its machine is away, so connecting again is away too, as
+     the pill says. `PaneProps` gains no machine: the Thread Pane reads it
+     from `client/ui` by its `args.host`, its name and icon as this
+     device last saw them (`useSeenNamed`, beside `seenNamed`) and its
+     engine's connection (`useStatus`). Files:
+     `client/ui/src/hooks/use-status.ts`;
+     `apps/agents/pane/src/composer/Composer.tsx`,
+     `composer/placeholder.ts` and `thread/Thread.tsx`;
+     `client/desktop/e2e/hosts.spec.ts`. The pill's icon, its minutes and
+     its states' actions, as Start, come after B4i, which reshapes the
+     Pane's header in `client/web/src/tiling/PaneFrame.tsx`; the picker's
+     machine is 4c's.
    - **4c, a New Thread on another machine**: the Project picker grouped
      by machine, and a Thread started in another machine's Project
      opened on that machine's engine (decision 7). The picker holds one

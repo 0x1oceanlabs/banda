@@ -1,9 +1,25 @@
 import type { Engine, Status } from "@banda/contract"
 import { MACHINE_NAMED } from "@banda/contract/machines"
 import { afterEach, expect, test, vi } from "vitest"
-import { cleanNamed, followNamed, seenNamed } from "./use-status"
+import { cleanNamed, followNamed, seenNamed, useSeenNamed } from "./use-status"
 
 afterEach(() => vi.unstubAllGlobals())
+
+/** A hook drawn outside React: a store read now, its listener kept to
+ * count the draws it asks for, and a memo made afresh each draw. */
+const draws = vi.hoisted(() => ({ asked: 0, stop: () => {} }))
+vi.mock("react", async (actual) => ({
+  ...(await actual<typeof import("react")>()),
+  useSyncExternalStore: (
+    listen: (draw: () => void) => () => void,
+    read: () => unknown
+  ) => {
+    draws.stop()
+    draws.stop = listen(() => draws.asked++)
+    return read()
+  },
+  useMemo: <T>(make: () => T) => make(),
+}))
 
 test("another machine's name is cut at 16 characters, with no control or format characters, and drawn as text", () => {
   const name = (said: string) =>
@@ -114,4 +130,35 @@ test("the device keeps the last name and icon it saw of a machine, from its welc
   expect(heard).toEqual([])
   open({ name: "later", icon: "vm" })
   expect(took).toHaveBeenCalledTimes(2)
+})
+
+test("a Pane reads another machine as this device last saw it, and draws again as it is seen anew; none for this machine", () => {
+  const stored = new Map<string, string>()
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => stored.set(key, value),
+  })
+  vi.stubGlobal("window", {
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  })
+  // This machine's own Pane has no key: no machine.
+  expect(useSeenNamed(undefined)).toBeUndefined()
+  // Before its first welcome on this device: its key, with the desktop
+  // icon.
+  expect(useSeenNamed("mini")).toEqual({ name: "mini", icon: "desktop" })
+
+  // Its engine names it: the Pane is asked to draw again, and reads it
+  // cleaned, with no stream of its own.
+  const { engine, heard, open } = engineSaying()
+  const stop = followNamed(engine, "mini", () => undefined)
+  const asked = draws.asked
+  open({ name: "Mac mini‮", icon: "desktop" })
+  expect(draws.asked).toBeGreaterThan(asked)
+  expect(useSeenNamed("mini")).toEqual({ name: "Mac mini", icon: "desktop" })
+  heard[0]!.onPiece({ name: "studio", icon: "tower" })
+  expect(useSeenNamed("mini")).toEqual({ name: "studio", icon: "tower" })
+  expect(heard).toHaveLength(1)
+  stop()
+  draws.stop()
 })

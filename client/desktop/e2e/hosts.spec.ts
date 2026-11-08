@@ -509,8 +509,12 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
     "Bench window tests",
     "buttons",
   ])
-  // It writes there: arc's Agent answers.
+  // It writes there, and its composer says so: arc's Agent answers.
   const composer = thread.getByRole("textbox", { name: "Message to Fake AI" })
+  await expect(composer).toHaveAttribute(
+    "aria-placeholder",
+    "Write to Fake AI on arc. @ files, / commands, $ skills"
+  )
   await composer.fill("hi")
   await composer.press("Enter")
   await expect(thread.getByText("You said: hi")).toBeVisible()
@@ -528,25 +532,45 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   await shot(page, "pr3-1-remote-thread")
 
   // The link drops, and arc's engine ends with it: the Pane says so,
-  // and its Thread stays as it was. As arc is back, it reads it again and
-  // writes there.
+  // and its Thread stays as it was. Send waits and says why, Enter sends
+  // nothing, and what is written stays. As arc is back, it reads it again
+  // and writes there.
   arc.down(true)
   arc.cut()
   const away = page.getByRole("status").filter({ hasText: "arc is away" })
   await expect(away).toBeVisible()
   await expect(thread.getByText("You said: hi")).toBeVisible()
+  await composer.fill("back again")
+  const sending = thread.getByRole("button", { name: "Send", exact: true })
+  await expect(sending).toBeDisabled()
+  await expect(sending).toHaveAttribute(
+    "title",
+    "arc is away. Send once it is back."
+  )
+  // Held, it still takes the pointer, so its tooltip shows.
+  await sending.hover({ timeout: 5_000 })
+  await composer.press("Enter")
+  await expect(composer).toHaveText("back again")
+  await expect(sending).toBeDisabled()
   await shot(page, "pr3-2-away")
   arc.down(false)
   await expect(away).toHaveCount(0, { timeout: 60_000 })
-  await composer.fill("back again")
+  // The engine connects again on its own wait, which may end after the
+  // pill has gone: Send waits for it, the draft still there.
+  await expect(sending).toBeEnabled({ timeout: 60_000 })
+  await expect(sending).not.toHaveAttribute("title")
+  await expect(composer).toHaveText("back again")
   await composer.press("Enter")
   await expect(thread.getByText("You said: back again")).toBeVisible()
+  await expect(composer).toHaveText("")
   // arc's Agent answered it there, in the same Thread.
   await expect
     .poll(() => states(arc!, banda))
     .toEqual([["Bench window tests", "done"]])
   const [only] = threadsOf(arc!, banda)
   expect(keptOf(arc!, banda, only!.id)).toContain("You said: back again")
+  // Once: nothing went while arc was away.
+  await expect(thread.getByText("You said: back again")).toHaveCount(1)
   // The window's arrangement keeps the Pane on arc: drawn anew, as after
   // a restart, it opens there again.
   await page.reload()

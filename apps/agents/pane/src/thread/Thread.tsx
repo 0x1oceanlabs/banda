@@ -7,8 +7,15 @@ import {
   ContextMenu,
   ContextMenuTrigger,
 } from "@banda/ui/components/context-menu"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import type { ProjectId } from "@banda/contract"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react"
+import type { Engine, ProjectId } from "@banda/contract"
 import {
   Empty,
   EmptyDescription,
@@ -31,6 +38,7 @@ import { paneOf, type PaneProps } from "@banda/ui/pane"
 import { BotIcon } from "lucide-react"
 import { threadPaneOf } from "../list/rows"
 import { suggested } from "../composer/slash"
+import { heldWords } from "../composer/placeholder"
 import { type Comment, isComment } from "../composer/comments"
 import { Composer, type ComposerHandle } from "../composer/Composer"
 import { QuoteSelection } from "./Quote"
@@ -51,7 +59,13 @@ import { SignIn, Warning } from "./SignIn"
 import { SnoozeLine } from "./Snoozed"
 import { SupervisedLine, useHeardSupervised } from "./Supervised"
 import { FENCE_LINK } from "../settings/fence"
-import { holdsWhole, useFence, useMachine } from "@banda/ui/hooks/use-status"
+import {
+  holdsWhole,
+  useFence,
+  useMachine,
+  useSeenNamed,
+  useStatus,
+} from "@banda/ui/hooks/use-status"
 import { NewThreadBar } from "../composer/NewThread"
 import { type ThreadArgs, useThreadSession, zoomKey } from "./session"
 import { threadPane } from "../ThreadPane"
@@ -90,6 +104,10 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   // ask its Person there, stays off.
   const { thread, host } = args
   const here = host === undefined
+  // That machine, by the name it says it has; while its engine is not
+  // open, Send waits (ADR 0095, decision 7).
+  const on = useSeenNamed(host)?.name
+  const held = useHeld(engine, on)
   const {
     live,
     state,
@@ -266,7 +284,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
       ) : (
         // Its terminal would run there, where no one sees it.
         <p className="text-xs text-muted-foreground">
-          Sign in to {short} on {host}, then try again.
+          Sign in to {short} on {on}, then try again.
         </p>
       ),
   }
@@ -372,6 +390,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
             <Start
               harness={harness}
               name={name}
+              on={on}
               harnesses={harnesses}
               // Full access never asks; a No Space draft's mode is the
               // engine's, which is Full access where the fence holds
@@ -491,6 +510,8 @@ export function Thread(props: PaneProps<ThreadArgs>) {
         <Composer
           ref={composer}
           name={name}
+          machine={on}
+          held={held}
           thread={thread}
           history={history}
           placeholder={
@@ -575,16 +596,55 @@ function Centered({ children }: { children: React.ReactNode }) {
   )
 }
 
+/** The engines this window has tried: open once, lost or refused once, or
+ * connecting longer than `FIRST_TRY`. Kept as long as the window, as its
+ * engines are, so a Pane opened anew says what the one before it said. */
+const TRIED = new WeakSet<Engine>()
+
+/** How long an engine's first connect may take before its machine counts
+ * as away. */
+const FIRST_TRY = 3_000
+
+/**
+ * Why Send waits on `machine`'s Thread while its `engine` is not open
+ * (`heldWords`); nothing for this machine's Threads, which name no
+ * machine. An engine waits as connecting the whole time its machine is
+ * away, so connecting counts as away once the window has tried it.
+ */
+function useHeld(engine: Engine, machine: string | undefined) {
+  const { state } = useStatus(engine)
+  const [, redraw] = useReducer((draws: number) => draws + 1, 0)
+  useEffect(() => {
+    if (machine === undefined || TRIED.has(engine)) return
+    if (state !== "connecting") {
+      TRIED.add(engine)
+      return
+    }
+    const timer = setTimeout(() => {
+      TRIED.add(engine)
+      redraw()
+    }, FIRST_TRY)
+    return () => clearTimeout(timer)
+  }, [engine, machine, state])
+  return machine === undefined
+    ? undefined
+    : heldWords(machine, state, TRIED.has(engine))
+}
+
 /** A Thread not yet started: whom it writes to, by its account's emblem,
- * and one quiet line (ADR 0058), where its mode asks at all. */
+ * and on which machine when it is another's (ADR 0095, decision 7), and
+ * one quiet line (ADR 0058), where its mode asks at all. */
 function Start({
   harness,
   name,
+  on,
   asks,
   harnesses,
 }: {
   harness: string
   name: string
+  /** The other machine it writes to, by its name. */
+  on?: string
   asks: boolean
   harnesses: readonly EmblemOf[]
 }) {
@@ -601,7 +661,10 @@ function Start({
             <BotIcon className="size-6 text-muted-foreground" />
           )}
         </EmptyMedia>
-        <EmptyTitle>Write to {name}</EmptyTitle>
+        <EmptyTitle>
+          Write to {name}
+          {on !== undefined && ` on ${on}`}
+        </EmptyTitle>
         {asks && (
           <EmptyDescription>
             It asks you before anything that needs your yes.
