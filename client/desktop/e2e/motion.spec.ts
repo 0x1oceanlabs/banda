@@ -9,7 +9,9 @@
  * For each phase it reports the main thread's work a second, from Chrome's
  * own counters; what motion-probe.ts counts in the page (ticks, layout read
  * inside them, each terminal's draws and fits, long tasks and frames, slow
- * keys, how far the page trails its slot); and, from a trace of the phase
+ * keys, how far the page trails its slot, React's drawings of the Tiles,
+ * Strips, widgets and sidebar, for each key a phase presses too); and,
+ * from a trace of the phase
  * (motion-trace.ts), the frames presented and dropped and the main
  * thread's work in each moving frame. It fails where a measure has nothing
  * to stand on, so a broken probe never reads as a perfect 0.
@@ -152,11 +154,12 @@ test("how the Tiling moves, against motion-budget.json", async () => {
   )
 
   const phases: Record<string, Phase> = {}
-  /** Measures `act` as the phase `name`; a `still` one moves nothing. */
+  /** Measures `act` as the phase `name`; a `still` one moves nothing,
+   * and one of `steps` presses that many keys. */
   const measure = async (
     name: string,
     act: () => Promise<void>,
-    { still = false } = {}
+    { still = false, steps = 0 } = {}
   ) => {
     if (traced) await startTrace(cdp, name)
     const profile = profiled.includes(name)
@@ -209,6 +212,7 @@ test("how the Tiling moves, against motion-budget.json", async () => {
       expect(trace.moving.frames, `${name}: moving frames`).toBeGreaterThan(0)
     phases[name] = {
       seconds,
+      steps,
       perSecond: perSecondOf(before, after),
       counted,
       trace,
@@ -270,55 +274,80 @@ test("how the Tiling moves, against motion-budget.json", async () => {
   await terminal(2).click()
   // Through the widths short of the whole screen, and back: the browser
   // beside it stays in sight.
-  await measure("width", async () => {
-    await presses([
-      "Control+Alt+ArrowLeft",
-      "Control+Alt+ArrowRight",
-      "Control+Alt+ArrowRight",
-      "Control+Alt+ArrowLeft",
-      "Control+Alt+ArrowLeft",
-      "Control+Alt+ArrowRight",
-    ])
-  })
+  await measure(
+    "width",
+    async () => {
+      await presses([
+        "Control+Alt+ArrowLeft",
+        "Control+Alt+ArrowRight",
+        "Control+Alt+ArrowRight",
+        "Control+Alt+ArrowLeft",
+        "Control+Alt+ArrowLeft",
+        "Control+Alt+ArrowRight",
+      ])
+    },
+    { steps: 6 }
+  )
   await terminal(2).click()
   // To the first terminal and back to the browser, its page sliding out
   // and in, and from the page to the last terminal.
   let went: string[] = []
-  await measure("focus", async () => {
-    went = await presses([
-      "Alt+ArrowLeft",
-      "Alt+ArrowLeft",
-      "Alt+ArrowRight",
-      "Alt+ArrowRight",
-      "Alt+ArrowRight",
-      "Alt+ArrowLeft",
-    ])
-  })
+  await measure(
+    "focus",
+    async () => {
+      went = await presses([
+        "Alt+ArrowLeft",
+        "Alt+ArrowLeft",
+        "Alt+ArrowRight",
+        "Alt+ArrowRight",
+        "Alt+ArrowRight",
+        "Alt+ArrowLeft",
+      ])
+    },
+    { steps: 6 }
+  )
   // The last key went from the page, and reached the window.
   expect(went.at(-1)).toBe("page")
   await expect(
     terminal(2).locator("xpath=ancestor::section[@data-tile][1]")
   ).toHaveAttribute("data-focused", "true")
   await terminal(2).click()
-  await measure("maximize", async () => {
-    await presses(["Alt+KeyF", "Alt+KeyF", "Alt+KeyF", "Alt+KeyF"])
-  })
+  await measure(
+    "maximize",
+    async () => {
+      await presses(["Alt+KeyF", "Alt+KeyF", "Alt+KeyF", "Alt+KeyF"])
+    },
+    { steps: 4 }
+  )
   await terminal(2).click()
-  await measure("workspace", async () => {
-    await presses(["Alt+PageDown", "Alt+PageUp", "Alt+PageDown", "Alt+PageUp"])
-  })
+  await measure(
+    "workspace",
+    async () => {
+      await presses([
+        "Alt+PageDown",
+        "Alt+PageUp",
+        "Alt+PageDown",
+        "Alt+PageUp",
+      ])
+    },
+    { steps: 4 }
+  )
   await terminal(2).click()
   const overview = page.getByRole("dialog", { name: "Overview" })
-  await measure("overview", async () => {
-    for (let i = 0; i < 2; i++) {
-      await page.keyboard.press("Alt+KeyO")
-      await expect(overview).toBeVisible()
-      await page.waitForTimeout(900)
-      await page.keyboard.press("Escape")
-      await expect(overview).toBeHidden()
-      await page.waitForTimeout(900)
-    }
-  })
+  await measure(
+    "overview",
+    async () => {
+      for (let i = 0; i < 2; i++) {
+        await page.keyboard.press("Alt+KeyO")
+        await expect(overview).toBeVisible()
+        await page.waitForTimeout(900)
+        await page.keyboard.press("Escape")
+        await expect(overview).toBeHidden()
+        await page.waitForTimeout(900)
+      }
+    },
+    { steps: 4 }
+  )
 
   report(scale, versions, phases)
 })
