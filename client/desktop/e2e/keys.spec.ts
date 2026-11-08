@@ -392,3 +392,348 @@ for (const latency of [0, 150]) {
     })
   })
 }
+
+/**
+ * What the page says to the engine from now, counted by method; and its
+ * socket to the engine, for a test that breaks the connection. A test
+ * that `swallow`s a method sends its next call with `params` instead, as
+ * one the engine refuses.
+ */
+async function hearSent(page: Page) {
+  await page.evaluate(() => {
+    const kept = window as unknown as Sent
+    kept.sent = {}
+    const send = WebSocket.prototype.send
+    WebSocket.prototype.send = function (data) {
+      kept.socket = this
+      if (typeof data !== "string") return send.call(this, data)
+      const frame = JSON.parse(data) as { method?: string; params?: object }
+      if (!frame.method) return send.call(this, data)
+      kept.sent[frame.method] = (kept.sent[frame.method] ?? 0) + 1
+      const instead = kept.swallow?.[frame.method]
+      if (!instead) return send.call(this, data)
+      delete kept.swallow![frame.method]
+      return send.call(this, JSON.stringify({ ...frame, params: instead }))
+    }
+  })
+  return () => page.evaluate(() => (window as unknown as Sent).sent)
+}
+
+type Sent = {
+  sent: Record<string, number>
+  socket?: WebSocket
+  swallow?: Record<string, object>
+}
+
+/** The page's warnings, as they come. */
+function warningsOf(page: Page): string[] {
+  const warnings: string[] = []
+  page.on("console", (message) => {
+    if (message.type() === "warning") warnings.push(message.text())
+  })
+  return warnings
+}
+
+/** Each column's share of its Strip, in hundredths, by its ID. */
+function sharesNow(page: Page): Promise<Record<string, number>> {
+  return page.evaluate(() =>
+    Object.fromEntries(
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          "[data-strip] > [data-column]"
+        ),
+      ].map((column) => {
+        const strip = column.parentElement!
+        const style = getComputedStyle(strip)
+        const gap = parseFloat(style.columnGap) || 0
+        const room =
+          strip.clientWidth -
+          parseFloat(style.paddingLeft) -
+          parseFloat(style.paddingRight) +
+          gap
+        const share = ((column.offsetWidth + gap) / room) * 100
+        return [column.dataset.column!, Math.round(share)]
+      })
+    )
+  )
+}
+
+/** Columns drawn as narrow as the engine keeps them, so each one's share
+ * on screen is its width. */
+const NARROW = "[columns]\nmin = 0\n"
+
+/** Each column's width as drawn, by its ID: what React set, before any
+ * motion. */
+function widthsNow(page: Page): Promise<Record<string, string>> {
+  return page.evaluate(() =>
+    Object.fromEntries(
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          "[data-strip] > [data-column]"
+        ),
+      ].map((column) => [column.dataset.column!, column.style.width])
+    )
+  )
+}
+
+/** The share column `column` is drawn at once its motion is over. */
+async function widthShare(page: Page, column: string): Promise<number> {
+  const width = (await widthsNow(page))[column]
+  return Number(/^calc\(([\d.]+) \*/.exec(width)![1])
+}
+
+/** The Tile in focus, and its column's ID. */
+async function inFocus(page: Page) {
+  const tile = page.locator('[data-tile][data-focused="true"]')
+  const id = (await tile.getAttribute("data-tile"))!
+  const column = await tile.evaluate(
+    (tile) => tile.closest<HTMLElement>("[data-column]")!.dataset.column!
+  )
+  return { tile, id, column }
+}
+
+/** Two terminals, side by side after the first Thread; the second in
+ * focus. */
+async function twoTerminals(page: Page) {
+  const first = await newTerminal(page)
+  const screens = page.getByRole("region", { name: "Terminal screen" })
+  await page.keyboard.press("Control+Alt+Enter")
+  await expect(screens).toHaveCount(2)
+  await expect(screens.nth(1)).toHaveAttribute("data-state", "running")
+  await screens.nth(1).click()
+  return first
+}
+
+test.describe("a key drawn before the engine answers", () => {
+  test("a Pane drawn before the engine has it stays the one drawn: its terminal keeps its stream, its page its document", async () => {
+    test.setTimeout(120_000)
+    const late = 800
+    const address = await pageSite()
+    window = await startWindow({ latency: late })
+    const { app, page, dir } = window
+    const warnings = warningsOf(page)
+    await newTerminal(page)
+    const sent = await hearSent(page)
+    const tiles = page.locator("section[data-tile]")
+    const before = await tiles.count()
+
+    // A terminal, drawn at once: its Tile is taken as drawn, before the
+    // engine's word can come.
+    const pressed = Date.now()
+    await page.keyboard.press("Control+Alt+Enter")
+    await expect(tiles).toHaveCount(before + 1)
+    const { tile, id } = await inFocus(page)
+    const drawn = await tile.elementHandle()
+    expect(Date.now() - pressed, "taken before the engine spoke").toBeLessThan(
+      late - 100
+    )
+    // The engine's fact draws it by the same ID, in the same Tile.
+    await expect.poll(() => apart(page, window)).toEqual([])
+    const screen = page
+      .locator(`[data-tile="${id}"]`)
+      .getByRole("region", { name: "Terminal screen" })
+    await expect(screen).toHaveAttribute("data-state", "running")
+    expect(await drawn!.evaluate((tile) => tile.isConnected)).toBe(true)
+    // Its program hears what is typed, on the one stream it started.
+    const typed = join(dir, "typed-once")
+    await screen.click()
+    await page.keyboard.type(`: > '${typed}'`)
+    await page.keyboard.press("Enter")
+    await expect.poll(() => existsSync(typed)).toBe(true)
+    expect(await sent()).toMatchObject({
+      "terminal.open": 1,
+      "terminal.watch": 1,
+    })
+
+    // A page, opened from the launcher and given its address before the
+    // engine's word comes: one page, loaded once.
+    await app.evaluate(({ app }) => {
+      const pages = { made: 0, loaded: [] as string[] }
+      Object.assign(globalThis, { pages })
+      app.on("web-contents-created", (_, contents) => {
+        if (contents.getType() !== "webview") return
+        pages.made++
+        contents.on("did-finish-load", () =>
+          pages.loaded.push(contents.getURL())
+        )
+      })
+    })
+    await page.keyboard.press("Alt+KeyN")
+    await page
+      .getByRole("region", { name: "New Pane" })
+      .getByRole("button", { name: "Browser" })
+      .click()
+    const bar = page.getByRole("textbox", { name: "Address" })
+    await bar.fill(address)
+    await bar.press("Enter")
+    await expect(page.locator("[data-held-by]")).toHaveCount(1)
+    await expect.poll(() => apart(page, window)).toEqual([])
+    await expect
+      .poll(() =>
+        app.evaluate(({ webContents }) =>
+          webContents
+            .getAllWebContents()
+            .filter((c) => c.getType() === "webview")
+            .map((c) => c.getTitle())
+        )
+      )
+      .toEqual(["Page"])
+    // Long enough for a second document to have come, were there one.
+    await page.waitForTimeout(late)
+    expect(
+      await app.evaluate(() => (globalThis as { pages?: object }).pages)
+    ).toEqual({ made: 1, loaded: [address] })
+    expect(warnings.filter((text) => text.includes("another ID"))).toEqual([])
+  })
+
+  test("a change the engine refuses is drawn until its refusal comes, and the changes after it stay", async () => {
+    const late = 150
+    window = await startWindow({ latency: late, look: NARROW })
+    const { page } = window
+    const warnings = warningsOf(page)
+    await twoTerminals(page)
+    const { column: maximized } = await inFocus(page)
+    const shares = await sharesNow(page)
+    expect(shares[maximized]).toBeLessThan(100)
+    await hearSent(page)
+    // The engine is asked to maximize a column it has none of, and
+    // refuses: the window drew the one in focus maximized.
+    await page.evaluate(() => {
+      const kept = window as unknown as Sent
+      kept.swallow = {
+        "workspaces.maximize": {
+          column: "00000000-0000-4000-8000-0000000000ff",
+          full: true,
+        },
+      }
+    })
+    // The column's share as each frame draws it, as its width moves to
+    // where the Tiling puts it (layout.ts).
+    await page.evaluate((column) => {
+      const seen: { at: number; share: number }[] = []
+      Object.assign(window, { seen })
+      const look = () => {
+        const one = document.querySelector<HTMLElement>(
+          `[data-column="${column}"]`
+        )
+        const share = one && /^calc\(([\d.]+) \*/.exec(one.style.width)?.[1]
+        if (share) seen.push({ at: performance.now(), share: Number(share) })
+        if (seen.length < 600) requestAnimationFrame(look)
+      }
+      requestAnimationFrame(look)
+    }, maximized)
+    const was = await widthShare(page, maximized)
+    const key = await page.evaluate(() => performance.now())
+    await page.keyboard.press("Alt+KeyF")
+    // Then the column before it, in focus, and a width of its own: changes
+    // that leave the maximized one as it is.
+    await page.keyboard.press("Alt+ArrowLeft")
+    await page.keyboard.press("Control+Alt+ArrowLeft")
+    const after = await page.evaluate(() => performance.now())
+    await expect.poll(() => apart(page, window), { timeout: 5000 }).toEqual([])
+    // Its motion back over too.
+    const last = () =>
+      page.evaluate(
+        () =>
+          (window as unknown as { seen: { share: number }[] }).seen.at(-1)!
+            .share
+      )
+    await expect.poll(last).toBe(was)
+    const seen = await page.evaluate(
+      () =>
+        (window as unknown as { seen: { at: number; share: number }[] }).seen
+    )
+    const moving = seen.filter((frame) => frame.at > key)
+    // It grows toward the whole screen from the frame after the key, and
+    // still does after the keys that followed: the queue drew them on top
+    // of it.
+    const grows = moving.findIndex((frame) => frame.share > was + 0.01)
+    expect(grows, "drawn maximized at once").toBeGreaterThanOrEqual(0)
+    expect(
+      moving[grows].at - key,
+      "maximized before the engine could speak"
+    ).toBeLessThan(late)
+    const peak = moving.reduce(
+      (top, frame, i) => (frame.share > moving[top].share ? i : top),
+      grows
+    )
+    expect(moving[peak].at, "maximized after the next keys").toBeGreaterThan(
+      after
+    )
+    // Back as the refusal comes, no sooner than the engine can speak.
+    expect(moving[peak].at - key, "back once refused").toBeGreaterThanOrEqual(
+      late
+    )
+    expect(moving.at(-1)!.share).toBe(was)
+    expect(
+      warnings.filter((text) =>
+        text.startsWith("The workspaces did not change")
+      )
+    ).toHaveLength(1)
+  })
+
+  test("a change from elsewhere while keys wait for their answers is drawn under them", async () => {
+    window = await startWindow({ latency: 150, look: NARROW })
+    const { page } = window
+    await twoTerminals(page)
+    const tiles = await page.locator("section[data-tile]").elementHandles()
+    const { column } = await inFocus(page)
+    const others = arrangedOf(window)[0].columns.filter((c) => c.id !== column)
+    const keys = [
+      "Control+Alt+ArrowLeft",
+      "Control+Alt+ArrowLeft",
+      "Control+Alt+ArrowRight",
+    ]
+    await page.keyboard.press(keys[0])
+    // An Agent's width, or another device's, for a column the keys leave.
+    window.banda(
+      "call",
+      "workspaces.size",
+      "--params",
+      JSON.stringify({ column: others[0].id, width: "1/4" })
+    )
+    for (const key of keys.slice(1)) await page.keyboard.press(key)
+    await expect.poll(() => apart(page, window)).toEqual([])
+    expect(arrangedOf(window)[0].columns[0].width).toBe("1/4")
+    // Nothing was made again.
+    for (const tile of tiles)
+      expect(await tile.evaluate((tile) => tile.isConnected)).toBe(true)
+  })
+
+  test("keys pressed as the connection breaks land in order, drawn as the engine then has them", async () => {
+    const late = 1500
+    window = await startWindow({ latency: late, look: NARROW })
+    const { page } = window
+    await twoTerminals(page)
+    await hearSent(page)
+    const tiles = await page.locator("section[data-tile]").elementHandles()
+    const { column } = await inFocus(page)
+    const pressed = Date.now()
+    // Down two widths and maximized; the connection breaks with their
+    // answers on the way; back from the whole screen and up a width.
+    for (const key of [
+      "Control+Alt+ArrowLeft",
+      "Control+Alt+ArrowLeft",
+      "Alt+KeyF",
+    ])
+      await page.keyboard.press(key)
+    await page.evaluate(() => (window as unknown as Sent).socket!.close())
+    for (const key of ["Alt+KeyF", "Control+Alt+ArrowRight", "Alt+ArrowLeft"])
+      await page.keyboard.press(key)
+    // What the keys drew, once its motion is over, before the engine
+    // answered them.
+    await page.waitForTimeout(600)
+    const drawn = await widthsNow(page)
+    expect(Date.now() - pressed, "read before the engine spoke").toBeLessThan(
+      late - 100
+    )
+    await expect.poll(() => apart(page, window)).toEqual([])
+    // The engine ran each in order: it has what was drawn, each width a
+    // key set being whole, so nothing moved as it answered.
+    const kept = arrangedOf(window)[0].columns.find((c) => c.id === column)!
+    expect(kept.full ?? false).toBe(false)
+    expect(await widthsNow(page)).toEqual(drawn)
+    for (const tile of tiles)
+      expect(await tile.evaluate((tile) => tile.isConnected)).toBe(true)
+  })
+})
