@@ -10,6 +10,18 @@
 //! Banda asks it, so the window quits too; otherwise the window starts it
 //! again. Where the engine is the window's child (`service.rs`), or its
 //! unit does not start, it serves the engine itself.
+//!
+//! Another machine's window runs it here too, over ssh, and says so
+//! (`BANDA_OVER_SSH`, ADR 0081, decision 4). Where the engine is its
+//! window's child and the system has no service for it yet (macOS, until
+//! its launchd agent: ADR 0086, plan step 7), whatever made it the child
+//! (`BANDA_ENGINE_AS`, Banda Local), it then only follows the engine
+//! Banda's window here runs, and starts none: that one would live only as
+//! long as the link, in the ssh session's environment, and a window
+//! opened here meanwhile would follow it and lose it, with its Agents, as
+//! the link drops. While no Banda is open here, and once the
+//! one open quits, it exits 75 (`Failure::Later`): that window tries
+//! again, and sees this machine once Banda is open here.
 
 use crate::client::{Client, Pass};
 use crate::places::{Places, Running};
@@ -21,6 +33,32 @@ use serde_json::{Value, json};
 use std::fs::{File, TryLockError};
 use std::io::{BufRead, IsTerminal, Write};
 use std::time::{Duration, Instant};
+
+/// Set by another machine's window on the `banda start --with-parent` it
+/// runs here over ssh (`client/desktop/src/hosts.ts`).
+const OVER_SSH_VARIABLE: &str = "BANDA_OVER_SSH";
+
+/// Whether `banda start --with-parent` only follows the engine Banda's
+/// window runs here, and starts none: for another machine's window
+/// (`over_ssh`), where the engine is its window's child and the system
+/// has no service for it (see the module's words). On Linux it serves
+/// one as before.
+fn follows_only(way: Way, over_ssh: bool) -> bool {
+    over_ssh && matches!(way, Way::Child(_)) && !service::SERVICE_HERE
+}
+
+/// [`follows_only`], as `BANDA_OVER_SSH` says.
+pub fn follows_only_here(way: Way) -> bool {
+    let over_ssh = std::env::var_os(OVER_SSH_VARIABLE).is_some_and(|set| !set.is_empty());
+    follows_only(way, over_ssh)
+}
+
+/// What another machine's window hears while no Banda is open here.
+fn not_open() -> Failure {
+    Failure::Later(
+        "Banda is not open here: another machine sees this one's Agents while it is.".into(),
+    )
+}
 
 /// How long `banda stop`, and the window's follower, wait for the engine
 /// to go: past its own timeout to stop its Harnesses (`TimeoutStopSec`),
@@ -89,11 +127,14 @@ async fn started(
 }
 
 /// `banda start`: starts the engine when none answers, and says how it
-/// runs. With `with_parent`, for the window: see the module's words.
-pub async fn start(places: Places, with_parent: bool, way: Way) -> Result<(), Failure> {
+/// runs. With `with_parent`, for the window, here or over ssh; `only`
+/// when it only follows ([`follows_only`]): see the module's words.
+pub async fn start(places: Places, with_parent: bool, way: Way, only: bool) -> Result<(), Failure> {
+    let only = with_parent && only;
     let found = match (answering(&places).await, way) {
         (Ok(found), _) => found,
         (Err(refused @ Failure::Refused(_)), _) => return Err(refused),
+        (Err(_), _) if only => return Err(not_open()),
         (Err(_), Way::Service { version }) => match started(&places, version, &User).await {
             Ok(found) => found,
             // The window still gets an engine: its own child, this once.
@@ -126,7 +167,7 @@ pub async fn start(places: Places, with_parent: bool, way: Way) -> Result<(), Fa
         }
     };
     if with_parent {
-        return follow(&places, found).await;
+        return follow(&places, found, only).await;
     }
     println!("{}", said(&found.0));
     Ok(())
@@ -134,8 +175,13 @@ pub async fn start(places: Places, with_parent: bool, way: Way) -> Result<(), Fa
 
 /// Prints where the engine listens, as `serve --with-parent` does, and
 /// follows it until the window goes, or until it stops: then it says
-/// whether it stopped as asked, or must be started again.
-async fn follow(places: &Places, (running, client): (Running, Client)) -> Result<(), Failure> {
+/// whether it stopped as asked, or must be started again. When it `only`
+/// follows, an engine stopped as asked is a Banda no longer open here.
+async fn follow(
+    places: &Places,
+    (running, client): (Running, Client),
+    only: bool,
+) -> Result<(), Failure> {
     let own = build_id::own();
     if running.build.is_some() && own.is_some() && running.build != own {
         tracing::warn!(
@@ -164,6 +210,7 @@ async fn follow(places: &Places, (running, client): (Running, Client)) -> Result
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
     match run::before(places).0 {
+        Before::Left(_) if only => Err(not_open()),
         Before::Left(_) => Ok(()),
         _ => Err(Failure::Broken(
             "Banda's engine stopped without being asked to: the window starts it again.".into(),
@@ -463,5 +510,35 @@ mod tests {
         assert!(!line.to_string().contains("never said"), "no secret");
         let bare = said(&Running::default());
         assert_eq!(bare, json!({ "running": true, "protocol": 0 }));
+    }
+
+    #[test]
+    fn only_another_machines_window_off_linux_only_follows() {
+        // Whatever made the engine the window's child: on a Mac, also
+        // `BANDA_ENGINE_AS=child` and Banda Local.
+        for why in [Why::NotYet, Why::Asked, Why::Checkout, Why::NoSystemd] {
+            let way = Way::Child(why);
+            assert_eq!(follows_only(way, true), !service::SERVICE_HERE, "{way:?}");
+            assert!(!follows_only(way, false), "{way:?}");
+        }
+        assert!(!follows_only(Way::Service { version: 257 }, true));
+    }
+
+    #[tokio::test]
+    async fn over_ssh_on_a_mac_with_no_banda_open_it_starts_none_and_says_later() {
+        let base = tempfile::tempdir().unwrap();
+        let started = start(
+            Places::under(base.path()),
+            true,
+            Way::Child(Why::NotYet),
+            true,
+        )
+        .await;
+        let Err(Failure::Later(words)) = started else {
+            panic!("it should say: later");
+        };
+        assert!(words.starts_with("Banda is not open here"), "{words}");
+        // No engine served here: it took no lock, and wrote no state.
+        assert!(!base.path().join("state").exists());
     }
 }

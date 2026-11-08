@@ -6,7 +6,10 @@
  *
  * - the follower runs `banda start --with-parent` there, which starts that
  *   machine's engine when it does not run and prints where it listens, as
- *   the window's own does here (engine.ts), then follows it;
+ *   the window's own does here (engine.ts), then follows it. On a Mac,
+ *   whose engine is its window's child until its launchd agent (ADR 0086,
+ *   plan step 7), it starts none: it follows the one Banda's window runs
+ *   there, and while none is open the host is away;
  * - the forward carries a port of this machine's loopback to the port
  *   that engine listens on, on that machine's loopback.
  *
@@ -161,6 +164,11 @@ const PLAIN_SSH = [
 
 /** What a shell exits with when it finds no program to run. */
 const NOT_FOUND = 127
+/** What `banda start --with-parent` exits with there while no Banda is
+ * open on a machine whose engine is only its window's child, as a Mac's
+ * (engine/src/control.rs): it starts none for this window, which tries
+ * again as after any end. */
+const NOT_OPEN = 75
 
 /** This build's names, which the follower looks for there: its program
  * on PATH and its data folder (`banda-dev`), and its app (`Banda Dev`). */
@@ -168,21 +176,24 @@ type Own = { readonly folder: string; readonly name: string }
 
 /** What the follower runs there, through `sh` whatever the login shell
  * is: `banda start --with-parent`, with the session's runtime folder set
- * when ssh set none, so systemd's user manager answers. `banda` is plain
- * (`BANDA`), so it goes in as it is, and `~/` is home there. With no
- * `banda`, it runs the first of this build's own it finds: on PATH, the
- * newest copy an AppImage keeps in its data folder (program.ts), or
- * macOS's app; with none, it exits 127. `own`'s names are channel.ts's,
- * in letters, digits, spaces and -. */
+ * when ssh set none, so systemd's user manager answers, and
+ * `BANDA_OVER_SSH`, so a Mac's starts no engine that lives only as long
+ * as the link. `banda` is plain (`BANDA`), so it goes in as it is, and
+ * `~/` is home there. With no `banda`, it runs the first of this build's
+ * own it finds: on PATH, the newest copy the window there keeps in its
+ * data folder (program.ts, channel.ts), as that machine's `uname` says
+ * where that is, or macOS's app; with none, it exits 127. `own`'s names
+ * are channel.ts's, in letters, digits, spaces and -. */
 export const remoteCommand = (
   banda: string | undefined,
   own: Own = channel
 ) => {
-  const start = `exec env XDG_RUNTIME_DIR="\${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"`
+  const start = `exec env XDG_RUNTIME_DIR="\${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" BANDA_OVER_SSH=1`
   if (banda !== undefined)
     return `sh -c '${start} ${banda} start --with-parent'`
   const found = [
-    `b=$(command -v ${own.folder}) || b=$(ls -1d "\${XDG_DATA_HOME:-$HOME/.local/share}"/${own.folder}/engine/*/banda 2>/dev/null | sort -V | tail -n 1)`,
+    `case $(uname) in Darwin) d="$HOME/Library/Application Support" ;; *) d="\${XDG_DATA_HOME:-$HOME/.local/share}" ;; esac`,
+    `b=$(command -v ${own.folder}) || b=$(ls -1d "$d"/${own.folder}/engine/*/banda 2>/dev/null | sort -V | tail -n 1)`,
     `[ -x "$b" ] || b="/Applications/${own.name}.app/Contents/Resources/banda"`,
     `[ -x "$b" ] || { echo "no ${own.name} here" >&2; exit ${NOT_FOUND}; }`,
     `${start} "$b" start --with-parent`,
@@ -763,11 +774,14 @@ const once = (
   )
 
 /** How the follower's end leaves the host: code 0 is its engine stopped
- * as asked, 255 ssh's own failure, 127 no `banda` there, none a signal. */
+ * as asked, 255 ssh's own failure, 127 no `banda` there, 75 no Banda open
+ * there, none a signal. */
 function endOf(host: Entry, code: number): Ended {
   if (code === 0) return { state: "stopped" }
   if (code === KILLED) return away(`ssh to ${host.ssh} was killed`)
   if (code === 255) return away(`ssh could not reach ${host.ssh}`)
+  if (code === NOT_OPEN)
+    return away(`${channel.name} is not open on ${host.name}`)
   if (code === NOT_FOUND)
     return {
       state: "refused",

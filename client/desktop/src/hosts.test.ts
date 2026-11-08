@@ -135,7 +135,7 @@ it("the follower takes no agent, no X11, no forward, no tunnel, no command of th
   // The destination comes after `--`, and the remote command last.
   expect(args.slice(-3)).toEqual(["--", "devbox", remoteCommand(DEVBOX.banda)])
   expect(remoteCommand(DEVBOX.banda)).toBe(
-    `sh -c 'exec env XDG_RUNTIME_DIR="\${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" ~/.local/bin/banda-dev start --with-parent'`
+    `sh -c 'exec env XDG_RUNTIME_DIR="\${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" BANDA_OVER_SSH=1 ~/.local/bin/banda-dev start --with-parent'`
   )
 })
 
@@ -155,21 +155,40 @@ function fakeBanda(path: string) {
   writeFileSync(path, `#!/bin/sh\necho "$0 $*"\n`, { mode: 0o755 })
 }
 
+/** A folder in `home` with a `uname` that says `system`, as that
+ * machine's would, whatever this one's says. */
+function fakeUname(home: string, system: string) {
+  const dir = join(home, system)
+  mkdirSync(dir)
+  writeFileSync(join(dir, "uname"), `#!/bin/sh\necho ${system}\n`, {
+    mode: 0o755,
+  })
+  return dir
+}
+
+/** A build's names that no machine here has. */
+const FINDME = { folder: "banda-findme", name: "Banda Findme" }
+
+/** The follower's script with no banda, as the login shell there takes
+ * the command ssh gives it: in `home`, with `first` before the system's
+ * folders on its PATH, and `env`. */
+const findIn =
+  (home: string, first: string) =>
+  (env: Record<string, string> = {}) =>
+    spawnSync("/bin/sh", ["-c", remoteCommand(undefined, FINDME)], {
+      env: { HOME: home, PATH: `${first}:/usr/bin:/bin`, ...env },
+      encoding: "utf8",
+    })
+
 it.skipIf(process.platform === "win32")(
   "with no banda in hosts.toml the follower runs this build's own there: on PATH, else the newest copy in its data folder, else none, and exits 127",
   () => {
-    const own = { folder: "banda-findme", name: "Banda Findme" }
     const home = folder()
     const bin = join(home, "bin")
     const copies = join(home, ".local/share/banda-findme/engine")
-    const there = (env: Record<string, string>) =>
-      // As the login shell there takes the command ssh gives it.
-      spawnSync("/bin/sh", ["-c", remoteCommand(undefined, own)], {
-        env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, ...env },
-        encoding: "utf8",
-      })
+    const there = findIn(home, `${fakeUname(home, "Linux")}:${bin}`)
     // None at all.
-    const none = there({})
+    const none = there()
     expect(none.status).toBe(127)
     expect(none.stdout).toBe("")
     expect(none.stderr).toBe("no Banda Findme here\n")
@@ -178,7 +197,7 @@ it.skipIf(process.platform === "win32")(
     for (const version of ["0.1.0-dev.42", "0.1.0-dev.418", "0.1.0-dev.9"])
       fakeBanda(join(copies, version, "banda"))
     fakeBanda(join(copies, ".0.1.0-dev.500-x1", "banda"))
-    expect(there({}).stdout).toBe(
+    expect(there().stdout).toBe(
       `${copies}/0.1.0-dev.418/banda start --with-parent\n`
     )
     // XDG_DATA_HOME moves the data folder.
@@ -187,9 +206,55 @@ it.skipIf(process.platform === "win32")(
     expect(there({ XDG_DATA_HOME: data }).stdout).toBe(
       `${data}/banda-findme/engine/0.1.0-dev.1/banda start --with-parent\n`
     )
+    // A Mac's data folder is not this one's.
+    fakeBanda(
+      join(home, "Library/Application Support/banda-findme/engine/0.2.0/banda")
+    )
+    expect(there().stdout).toBe(
+      `${copies}/0.1.0-dev.418/banda start --with-parent\n`
+    )
     // On PATH first.
     fakeBanda(join(bin, "banda-findme"))
-    expect(there({}).stdout).toBe(`${bin}/banda-findme start --with-parent\n`)
+    expect(there().stdout).toBe(`${bin}/banda-findme start --with-parent\n`)
+  }
+)
+
+it.skipIf(process.platform === "win32")(
+  "on a Mac the follower looks in the data folder a Mac has: on PATH, else the newest copy in Application Support, else the app",
+  () => {
+    const home = folder()
+    const bin = join(home, "bin")
+    const copies = join(home, "Library/Application Support/banda-findme/engine")
+    const there = findIn(home, `${fakeUname(home, "Darwin")}:${bin}`)
+    // None: no copy, and no app, as none is in /Applications here.
+    expect(there()).toMatchObject({
+      status: 127,
+      stdout: "",
+      stderr: "no Banda Findme here\n",
+    })
+    // A Linux's data folder, or XDG's, is not a Mac's.
+    fakeBanda(join(home, ".local/share/banda-findme/engine/0.1.0/banda"))
+    const data = join(home, "data")
+    fakeBanda(join(data, "banda-findme/engine/0.1.0/banda"))
+    expect(there({ XDG_DATA_HOME: data }).status).toBe(127)
+    // The newest copy in Application Support, its space and all.
+    for (const version of ["0.1.0-dev.42", "0.1.0-dev.418", "0.1.0-dev.9"])
+      fakeBanda(join(copies, version, "banda"))
+    expect(there().stdout).toBe(
+      `${copies}/0.1.0-dev.418/banda start --with-parent\n`
+    )
+    // On PATH first.
+    fakeBanda(join(bin, "banda-findme"))
+    expect(there().stdout).toBe(`${bin}/banda-findme start --with-parent\n`)
+    // The app comes after the copy, last.
+    const said = remoteCommand(undefined, FINDME)
+    const app = said.indexOf(
+      "/Applications/Banda Findme.app/Contents/Resources/banda"
+    )
+    expect(said.indexOf("Library/Application Support")).toBeLessThan(app)
+    expect(
+      said.indexOf('BANDA_OVER_SSH=1 "$b" start --with-parent')
+    ).toBeGreaterThan(app)
   }
 )
 
@@ -650,6 +715,42 @@ it.live(
         expect(fake.runs("follower")).toHaveLength(2)
         const unknown = yield* Effect.flip(hosts.start("nowhere"))
         expect(unknown.message).toMatch(/no host "nowhere"/)
+      }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
+    }),
+  20_000
+)
+
+it.live(
+  "with no Banda open on a Mac the host is away, never stopped, and is tried again until one is",
+  () =>
+    Effect.gen(function* () {
+      const fake = fakeSsh({
+        followers: [
+          // Open, then Quit there: its engine stopped as asked.
+          [{ out: running("one", 1111) }, { until: "quit" }, { exit: 75 }],
+          // Not open.
+          [{ err: "banda: Banda is not open here", exit: 75 }],
+          // Open again.
+          [{ out: running("two", 2222) }],
+        ],
+      })
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        expect((yield* hosts.address("devbox")).secret).toBe("one")
+        const seen = yield* watched
+        fake.touch("quit")
+        expect(yield* reaches((host) => host.state === "away")).toEqual({
+          name: "devbox",
+          state: "away",
+          why: `${channel.name} is not open on devbox`,
+        })
+        // No one asks: it comes back as Banda opens there.
+        expect((yield* hosts.address("devbox")).secret).toBe("two")
+        expect(fake.runs("follower")).toHaveLength(3)
+        expect(seen.map((host) => host.state)).not.toContain("stopped")
+        expect(logged).toContain(
+          `banda: devbox is away (${channel.name} is not open on devbox); Banda tries again in 100 ms`
+        )
       }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
     }),
   20_000

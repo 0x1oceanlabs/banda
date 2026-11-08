@@ -86,6 +86,11 @@ const XDG_BASES: [Option<&str>; 5] = [
     Some("XDG_CACHE_HOME"),
 ];
 
+/// Whether this system has a service to run the engine as: systemd's
+/// user manager on Linux. macOS's, a launchd agent, comes later (ADR 0086,
+/// plan step 7).
+pub const SERVICE_HERE: bool = cfg!(target_os = "linux");
+
 /// How this Banda runs its engine here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Way {
@@ -229,7 +234,7 @@ fn way(asked: Option<&str>, checkout: bool, systemd: &dyn Systemd) -> Way {
         _ if checkout => return Way::Child(Why::Checkout),
         _ => {}
     }
-    if !cfg!(target_os = "linux") {
+    if !SERVICE_HERE {
         return Way::Child(Why::NotYet);
     }
     match systemd.version() {
