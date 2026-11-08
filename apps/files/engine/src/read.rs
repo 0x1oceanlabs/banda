@@ -30,10 +30,31 @@ pub fn stat(path: &Path) -> Option<Stat> {
 }
 
 /// A file's kind of content: by its extension, else by its first bytes,
-/// else text when they read as text.
+/// else text when they read as text. An extension guessed as a video, a
+/// sound or bare bytes is checked against the bytes, as code is often
+/// named so: `main.ts`, `go.mod`, `Main.java`.
 pub(crate) fn mime(path: &Path) -> String {
     if let Some(guess) = mime_guess::from_path(path).first() {
-        return guess.essence_str().to_owned();
+        let guess = guess.essence_str();
+        let doubtful = guess.starts_with("video/")
+            || guess.starts_with("audio/")
+            || matches!(
+                guess,
+                "application/octet-stream" | "application/x-msdownload"
+            );
+        if !(doubtful && head(path).is_ok_and(|head| text_len(&head, true).is_some())) {
+            return guess.to_owned();
+        }
+        let typescript = matches!(
+            path.extension().and_then(|e| e.to_str()),
+            Some("ts" | "mts" | "cts")
+        );
+        return if typescript {
+            "text/typescript"
+        } else {
+            "text/plain"
+        }
+        .to_owned();
     }
     let Ok(head) = head(path) else {
         return "application/octet-stream".to_owned();
@@ -189,6 +210,10 @@ mod tests {
         let png = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0];
         for (name, bytes, mime) in [
             ("notes.md", &b"# hi"[..], "text/markdown"),
+            ("main.ts", &b"export const one = 1"[..], "text/typescript"),
+            ("clip.ts", &b"G\0\x11\x10"[..], "video/vnd.dlna.mpeg-tts"),
+            ("go.mod", &b"module aurora"[..], "text/plain"),
+            ("Main.java", &b"class Main {}"[..], "text/plain"),
             ("picture", &png[..], "image/png"),
             ("LICENSE", &b"Apache"[..], "text/plain"),
             ("blob", &b"\0\x01\x02"[..], "application/octet-stream"),
