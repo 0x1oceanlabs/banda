@@ -47,11 +47,13 @@ export function actInScope(
     event?.target instanceof Element ? event.target : document.activeElement
   )
   const at = from?.closest(`[data-scope="${CSS.escape(scope)}"]`)
-  if (!at) return false
-  const acted = new CustomEvent<Acted>(ACTED, {
-    detail: { id, args, event },
-    cancelable: true,
-  })
+  return at ? sent(at, { id, args, event }) : false
+}
+
+/** Sends `at`, a scope's element, one of its actions; whether its
+ * handler took it. */
+function sent(at: Element, detail: Acted): boolean {
+  const acted = new CustomEvent<Acted>(ACTED, { detail, cancelable: true })
   at.dispatchEvent(acted)
   return acted.defaultPrevented
 }
@@ -60,18 +62,13 @@ export function actInScope(
  * Runs action `id` of `scope` as `actInScope` does, else on the focused
  * Pane's tile when it is the scope's: as an action that is not the
  * scope's asks for it, from wherever the focus is, as git's Switch branch
- * the focused Thread's card. Whether it was taken.
+ * the focused Thread's card. Whether it was taken. `scoped()` has no such
+ * fallback yet (#865).
  */
 export function actOnTile(scope: string, id: string, args?: Args): boolean {
   if (actInScope(scope, id, args)) return true
   const tile = focusedTile()
-  if (tile?.dataset.scope !== scope) return false
-  const acted = new CustomEvent<Acted>(ACTED, {
-    detail: { id, args },
-    cancelable: true,
-  })
-  tile.dispatchEvent(acted)
-  return acted.defaultPrevented
+  return tile?.dataset.scope === scope ? sent(tile, { id, args }) : false
 }
 
 /** A scope's handler for one of its actions: whether it took it. With

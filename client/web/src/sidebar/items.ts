@@ -81,10 +81,7 @@ export function itemActionOf(
 
 /** How `listed` stands for its rows, as an act reads it outside React:
  * in `project`, archived or not, now. */
-export function itemAt(
-  listed: Listed,
-  project: ProjectSummary | undefined
-): ItemAt {
+function itemAt(listed: Listed, project: ProjectSummary | undefined): ItemAt {
   return { project, now: Date.now(), archived: archivedNow(listed) }
 }
 
@@ -101,7 +98,7 @@ export function rowsOf(listed: Listed, at: ItemAt): Shown[] {
 
 /** The rows of `listed` offered `where`, the Pane menu or the Banda
  * menu's Tab: those on, as a row that is off is left out there. */
-export function offeredOf(
+function offeredOf(
   listed: Listed,
   at: ItemAt,
   where: "pane" | "menu"

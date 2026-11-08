@@ -611,11 +611,12 @@ export function actsOf(row: Choice, sources: Sources): Act[] {
         now: sources.now,
         archived: sources.archived(listed),
       }
-      // Each row an item action offers the menu, and is on now.
+      // Each row an item action offers the menu, and is on now, read as
+      // the sidebar list's `offeredOf` reads it: this file loads no module.
       const items = sources.items(listed).flatMap((action): Act[] => {
         const shown = action.offered?.includes("menu") && action.row(listed, at)
         if (!shown || shown.off) return []
-        // Counted as chosen by what it does, as before item actions.
+        // Counted as chosen by what it does, as before item actions (#862).
         const id = `${action.does ?? action.id}:${listed.id}`
         const act: Choice = {
           kind: "item",

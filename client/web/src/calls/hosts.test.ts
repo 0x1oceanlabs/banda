@@ -11,7 +11,7 @@ import {
   otherBuild,
   type Reach,
   reachWords,
-  runsElsewhere,
+  runOnHost,
   shownOf,
   useEngineOf,
   useReach,
@@ -359,7 +359,7 @@ test("a Pane on another host runs none of the Window's actions on this machine's
   const ran: [string, Args | undefined][] = []
   const arc = () => hosts.get().find((one) => one.name === "arc")
   const own = { project: "r1" as ProjectId, item: "t1" }
-  const run = runsElsewhere(
+  const run = runOnHost(
     (action, args) => void ran.push([action, args]),
     new Set(["thread.snooze"]),
     arc,
@@ -377,7 +377,7 @@ test("a Pane on another host runs none of the Window's actions on this machine's
   run("thread.snooze", { project: "r1", item: "t1", until: 5 })
   run("thread.snooze")
   // Its Thread in No Project there, one of that host's Projects.
-  run("thread.snooze", { project: "s9", thread: "t2" })
+  run("thread.snooze", { project: "s9", item: "t2" })
   // This machine's Project, which wins the ID both have: nothing.
   run("thread.snooze", { project: "mine", item: "t9" })
   // One no host shows, as a Thread not placed yet there: nothing.
@@ -386,10 +386,10 @@ test("a Pane on another host runs none of the Window's actions on this machine's
     ["edit.paste", undefined],
     ["thread.snooze", { project: "r1", item: "t1", until: 5 }],
     ["thread.snooze", { project: "r1", item: "t1" }],
-    ["thread.snooze", { project: "s9", thread: "t2", item: "t2" }],
+    ["thread.snooze", { project: "s9", item: "t2" }],
   ])
   // Before the Window knows that host, nothing either.
-  const waiting = runsElsewhere(
+  const waiting = runOnHost(
     (action, args) => void ran.push([action, args]),
     new Set(["thread.snooze"]),
     () => undefined,

@@ -97,7 +97,9 @@ export function ThreadRows({
   const naming = shown.filter(({ action }) => action.group === "name")
   const others = shown.filter(({ action }) => action.group === "other")
   const drawn = ({ action, row }: Shown) => {
-    const act = () => run(action.id, { project, item: listed.id, from: where })
+    // Where it opens a field, to one that takes it, as Rename….
+    const from = "from" in action.args.properties && { from: where }
+    const act = () => run(action.id, { project, item: listed.id, ...from })
     // A key of its own, or one the Person gave it.
     const key = keyFor(action.id)
     return (

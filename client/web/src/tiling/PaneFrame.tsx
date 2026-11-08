@@ -55,12 +55,7 @@ import {
   showsOf,
   useLabel,
 } from "../registry"
-import {
-  reachWords,
-  runsElsewhere,
-  useReach,
-  useShownNow,
-} from "../calls/hosts"
+import { reachWords, runOnHost, useReach, useShownNow } from "../calls/hosts"
 import { sayComposer } from "../window/attach"
 import { heightAt } from "./layout"
 import { ThreadMark } from "@banda/ui/components/banda-mark"
@@ -249,7 +244,7 @@ export const PaneFrame = memo(function PaneFrame({
     () =>
       there === undefined
         ? frame.run
-        : runsElsewhere(frame.run, ELSEWHERE, () => shownNow(there), {
+        : runOnHost(frame.run, ELSEWHERE, () => shownNow(there), {
             project: entry.project,
             item: subject,
           }),

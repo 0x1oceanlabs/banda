@@ -777,17 +777,18 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
   archiving,
   {
     // Threads' "Make a Project from it…" (ADR 0046): its dialog is the
-    // Window's, for a Project of No Project alone.
-    id: "sidebar.make-project",
+    // Window's, for a Project of No Project alone, missing or not, as the
+    // Thread menu shows its row.
+    id: "project.make",
     args: takes({ project: "the No Project's Project its Thread is in" }, [
       "project",
     ]),
     section: "Threads",
     title: "Make a Project from a Thread in No Project",
     unlisted: true,
-    run: (shell, args) => {
-      const project = shell.projects().find((one) => one.id === args?.project)
-      if (project?.scratch) makeProject(project.id)
+    run: (_, args) => {
+      if (typeof args?.project === "string")
+        makeProject(args.project as ProjectId)
     },
   },
   {
@@ -1038,7 +1039,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
 
 /** Where the modules' item actions stand among the Window's own: after
  * its own Thread actions, as the key sheet listed them while they were
- * the Window's. */
+ * the Window's. It goes with B4h, actions by owner. */
 const ITEMS_AT =
   WINDOW_ACTIONS.findIndex((action) => action.id === "sidebar.archive") + 1
 
