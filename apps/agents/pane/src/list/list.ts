@@ -85,9 +85,16 @@ export function readsAgain(state: ThreadList, event: Event): boolean {
  * that heard a message or ended a turn moves there. Each Thread keeps its
  * latest turn that began, its Questions that wait, the start of its
  * latest message, its snooze and the Person's marks, as the engine reads
- * them. A mark moves no Thread (ADR 0096, decision 6).
+ * them. A mark moves no Thread (ADR 0096, decision 6). A list the fact
+ * changed stands at the fact's place in the log, which a mark the Person
+ * sent waits for (`./sent.ts`); one it left as it was stays where it was.
  */
 export function applyThreads(state: ThreadList, event: Event): ThreadList {
+  const next = applied(state, event)
+  return next === state ? state : { ...next, at: event.seq }
+}
+
+function applied(state: ThreadList, event: Event): ThreadList {
   const fact = decodeFact(event)
   if (!fact) return state
   switch (fact.kind) {
@@ -202,7 +209,7 @@ export function applyThreads(state: ThreadList, event: Event): ThreadList {
 }
 
 /** `thread` with no `mark`: the same Thread when it had none. */
-function without(
+export function without(
   thread: ListedThread,
   mark: "seen" | "archived"
 ): ListedThread {
