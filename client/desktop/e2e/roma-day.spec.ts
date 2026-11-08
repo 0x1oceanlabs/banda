@@ -406,6 +406,15 @@ test("Alt+Z snoozes the Thread in front until the time typed, its Pane closes, U
   const shelf = sidebar.getByRole("button", { name: /^Snoozed/ })
   await expect(shelf).toBeHidden()
 
+  // The Pane menu's Snooze… opens the same picker, for its Pane's Thread
+  // (ADR 0087, decision 12); Esc leaves it awake.
+  await b.getByRole("button", { name: "Pane menu" }).click()
+  await page.getByRole("menuitem", { name: /^Snooze…/ }).click()
+  await expect(picker).toContainText("hello b")
+  await page.keyboard.press("Escape")
+  await expect(picker).toBeHidden()
+  await expect(b).toBeVisible()
+
   // The picker names the Thread, and reads what is typed as a time.
   await page.keyboard.press("Alt+KeyZ")
   await expect(picker).toContainText("hello b")
@@ -456,6 +465,23 @@ test("Alt+Z snoozes the Thread in front until the time typed, its Pane closes, U
   await expect(row).toContainText(/ · 4\dm/)
   await row.focus()
   await actions.getByRole("button", { name: "Wake" }).click()
+  await leaveSidebar(page)
+  await expect(shelf).toBeHidden()
+  await expect(row).toBeVisible()
+  await expect(row).not.toContainText("·")
+
+  // Its row's Thread menu snoozes it too, and on the shelf, wakes it.
+  const menu = page.getByRole("menu", { name: "Thread menu" })
+  await row.click({ button: "right" })
+  await menu.getByRole("menuitem", { name: /^Snooze…/ }).click()
+  await expect(field).toBeFocused()
+  await field.fill("45m")
+  await field.press("Enter")
+  // The shelf stays open, as the Person left it.
+  await expect(shelf).toHaveAttribute("aria-expanded", "true")
+  await expect(row).toContainText(/ · 4\dm/)
+  await row.click({ button: "right" })
+  await menu.getByRole("menuitem", { name: "Wake now" }).click()
   await leaveSidebar(page)
   await expect(shelf).toBeHidden()
   await expect(row).toBeVisible()

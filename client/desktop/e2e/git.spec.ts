@@ -757,12 +757,18 @@ test("Alt+D shows the Diff beside the Thread and hides it, and Alt+Shift+G opens
   await expect(aside).toBeVisible()
   await expect(search).toBeHidden()
 
-  // Both are in the Banda menu, as any action.
+  // Both are in the Banda menu, as any action: Switch branch there opens
+  // the focused Thread's picker, as its key does.
   await page.keyboard.press("Alt+Space")
   await page.keyboard.type("switch branch")
   await expect(
     page.getByRole("option", { name: /Switch branch/ })
   ).toBeVisible()
+  await page.keyboard.press("Enter")
+  await expect(search).toBeFocused()
+  await page.keyboard.press("Escape")
+  await expect(search).toBeHidden()
+  await expect(aside).toBeVisible()
 })
 
 test("a branch diverged from its upstream neither syncs nor pulls, and says why, as T3 Code's", async () => {

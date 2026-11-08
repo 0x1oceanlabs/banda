@@ -212,7 +212,14 @@ function threadsOf(arc: Arc, project: string) {
   const { ok } = JSON.parse(
     arc.banda("call", "agents.threads", "--project", project)
   ) as {
-    ok: { threads: { id: string; title: string; latest?: { state: string } }[] }
+    ok: {
+      threads: {
+        id: string
+        title: string
+        latest?: { state: string }
+        snooze?: { until?: number }
+      }[]
+    }
   }
   return ok.threads
 }
@@ -252,8 +259,8 @@ const sidebarOf = (page: Page) =>
 const arcOf = (page: Page) =>
   sidebarOf(page).getByRole("group", { name: "arc", exact: true })
 
-/** This machine's Project "Work", with a Thread done. */
-async function work(window: Window) {
+/** This machine's Project "Work", with a Thread done; its id. */
+async function work(window: Window): Promise<string> {
   const folder = join(window.dir, "work/Work")
   mkdirSync(folder, { recursive: true })
   const project = JSON.parse(window.banda("project", "add", folder)).ok.id
@@ -268,6 +275,7 @@ async function work(window: Window) {
   // A Project added from outside shows as the window comes to the front.
   await setInFront(window.page, false)
   await setInFront(window.page, true)
+  return project
 }
 
 /** A picture of the window for the Person, when they asked for them,
@@ -370,7 +378,7 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   const banda = await seed(arc)
   window = await withArc(arc)
   const { page } = window
-  await work(window)
+  const local = await work(window)
   await expect(sidebarOf(page).getByText("Sidebar for arc")).toBeVisible()
 
   // A click opens it as a Thread of this machine's opens, read live from
@@ -432,6 +440,27 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   await expect(other.getByText("Not on arc yet")).toBeVisible()
   await expect(other.getByRole("button", { name: "Terminal" })).toHaveCount(0)
   await shot(page, "pr3-3-not-on-arc")
+
+  // Alt+Z on arc's Thread snoozes it on arc's engine, as its Pane is
+  // there (#797): its Pane closes, and this machine's Thread stays awake.
+  await thread.getByRole("textbox", { name: "Message to Fake AI" }).focus()
+  await page.keyboard.press("Alt+KeyZ")
+  const picker = page.getByRole("dialog").filter({ hasText: "Snooze ·" })
+  await expect(picker).toContainText("Bench window tests")
+  const field = picker.getByRole("textbox", { name: "When it comes back" })
+  await expect(field).toBeFocused()
+  await field.fill("2h")
+  await field.press("Enter")
+  await expect(thread).toBeHidden()
+  await expect
+    .poll(() => threadsOf(arc!, banda)[0]?.snooze?.until ?? 0)
+    .toBeGreaterThan(Date.now())
+  const { ok } = JSON.parse(
+    window.banda("call", "agents.threads", "--project", local)
+  ) as { ok: { threads: { title: string; snooze?: object }[] } }
+  expect(ok.threads.map(({ title, snooze }) => [title, snooze])).toEqual([
+    ["Sidebar for arc", undefined],
+  ])
 })
 
 test("a Mac there, with no banda in hosts.toml: the window finds its Banda in the Mac's Application Support", async () => {
