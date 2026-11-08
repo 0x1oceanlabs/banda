@@ -1,3 +1,4 @@
+import type { Fence } from "@banda/contract"
 import type {
   HarnessOption,
   Mode,
@@ -22,6 +23,8 @@ import {
 } from "@banda/ui/components/dropdown-menu"
 import {
   ChevronDownIcon,
+  CircleAlertIcon,
+  InfoIcon,
   ListTodoIcon,
   ShieldAlertIcon,
   ShieldCheckIcon,
@@ -32,10 +35,12 @@ import {
 import { cn } from "@banda/ui/lib/utils"
 import { FOOTER_CONTROL } from "../composer/Composer"
 import { choose, chosen } from "../thread/state"
+import { fullAccessAbout, reasonOf, warns } from "./fence"
 
 /** The modes in the order of how freely the Agent acts (ADR 0003,
  * decision 9); `short`, the word the composer's footer shows for a name
- * too long for it. */
+ * too long for it. What Full access means follows the fence
+ * (`fullAccessAbout`). */
 const MODES: (Choice & { id: Mode; icon: LucideIcon; short?: string })[] = [
   {
     id: "supervised",
@@ -59,7 +64,6 @@ const MODES: (Choice & { id: Mode; icon: LucideIcon; short?: string })[] = [
   {
     id: "full_access",
     name: "Full access",
-    about: "Never asks, and works with your rights on this computer.",
     icon: ShieldAlertIcon,
   },
 ]
@@ -107,9 +111,18 @@ function ChoiceItems({
   )
 }
 
-/** The mode `settings` name, as {@link MODES} words it. */
+/** The mode `settings` name, as {@link MODES} words it; one this window
+ * does not know reads as Supervised, the mode that asks. */
 function modeOf(settings: Settings) {
-  return MODES.find((m) => m.id === settings.mode) ?? MODES[3]
+  return MODES.find((m) => m.id === settings.mode) ?? MODES[0]
+}
+
+/** What the mode menus are told of the fence (ADR 0083): how it stands,
+ * and what Learn more under the modes does. */
+type FenceShown = {
+  fence: Fence | undefined
+  /** Opens Settings → General at the Fence row. */
+  onLearn: () => void
 }
 
 /** A Harness's option's choices, as a menu shows them. */
@@ -138,12 +151,14 @@ export function ModeMenu({
   options,
   disabled,
   onChange,
+  fence,
 }: {
   settings: Settings
   /** The Harness's options the model picker leaves out. */
   options: HarnessOption[]
   disabled: boolean
   onChange: (settings: Settings) => void
+  fence: FenceShown
 }) {
   const mode = modeOf(settings)
   return (
@@ -170,7 +185,7 @@ export function ModeMenu({
         align="end"
         className={cn("w-auto min-w-64", MENU)}
       >
-        <ModeItems settings={settings} onChange={onChange} />
+        <ModeItems settings={settings} onChange={onChange} fence={fence} />
         {options.length > 0 && <DropdownMenuSeparator />}
         {options.map((option) =>
           option.choices.length > 0 ? (
@@ -236,11 +251,13 @@ export function SettingsBar({
   offer,
   disabled,
   onChange,
+  fence,
 }: {
   settings: Settings
   offer: Offer
   disabled: boolean
   onChange: (settings: Settings) => void
+  fence: FenceShown
 }) {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-0.5">
@@ -272,7 +289,12 @@ export function SettingsBar({
           onChange={(plan) => onChange({ ...settings, plan })}
         />
       )}
-      <Modes settings={settings} disabled={disabled} onChange={onChange} />
+      <Modes
+        settings={settings}
+        disabled={disabled}
+        onChange={onChange}
+        fence={fence}
+      />
     </div>
   )
 }
@@ -389,10 +411,12 @@ function Modes({
   settings,
   disabled,
   onChange,
+  fence,
 }: {
   settings: Settings
   disabled: boolean
   onChange: (settings: Settings) => void
+  fence: FenceShown
 }) {
   const now = modeOf(settings)
   return (
@@ -413,30 +437,65 @@ function Modes({
         <ChevronDownIcon data-icon="inline-end" />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" className="w-auto min-w-64">
-        <ModeItems settings={settings} onChange={onChange} />
+        <ModeItems settings={settings} onChange={onChange} fence={fence} />
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
-/** The modes, as a menu's group, the one in `settings` checked. */
+/**
+ * The modes, as a menu's group, the one in `settings` checked; Full
+ * access says what it means with the fence as it stands. Where the fence
+ * does not hold whole, one item under them says why, and leads to the
+ * Fence row in Settings → General (ADR 0083).
+ */
 function ModeItems({
   settings,
   onChange,
+  fence: { fence, onLearn },
 }: {
   settings: Settings
   onChange: (settings: Settings) => void
+  fence: FenceShown
 }) {
+  const choices = MODES.map((mode) =>
+    mode.id === "full_access"
+      ? { ...mode, about: fullAccessAbout(fence) }
+      : mode
+  )
+  const reason = reasonOf(fence)
+  const Icon = warns(fence) ? CircleAlertIcon : InfoIcon
   return (
-    <DropdownMenuGroup>
-      <DropdownMenuLabel className="px-2.5">
-        How freely it acts
-      </DropdownMenuLabel>
-      <ChoiceItems
-        value={settings.mode}
-        choices={MODES}
-        onChange={(mode) => onChange({ ...settings, mode: mode as Mode })}
-      />
-    </DropdownMenuGroup>
+    <>
+      <DropdownMenuGroup>
+        <DropdownMenuLabel className="px-2.5">
+          How freely it acts
+        </DropdownMenuLabel>
+        <ChoiceItems
+          value={settings.mode}
+          choices={choices}
+          onChange={(mode) => onChange({ ...settings, mode: mode as Mode })}
+        />
+      </DropdownMenuGroup>
+      {reason && (
+        <>
+          <DropdownMenuSeparator />
+          {/* Wraps within the menu's width, never widening it. */}
+          <DropdownMenuItem
+            className="w-0 min-w-full items-start py-1.5 pl-2.5 text-xs text-muted-foreground"
+            title="Settings → General → Fence"
+            onClick={onLearn}
+          >
+            <Icon className="mt-px size-3.5" />
+            <span>
+              {reason}{" "}
+              <span className="whitespace-nowrap text-foreground">
+                Learn more
+              </span>
+            </span>
+          </DropdownMenuItem>
+        </>
+      )}
+    </>
   )
 }

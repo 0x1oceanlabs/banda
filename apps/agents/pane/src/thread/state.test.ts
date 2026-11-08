@@ -1,5 +1,5 @@
 import type { Event, Participant } from "@banda/contract"
-import type { ListedThread, TurnView } from "@banda/contract/agents"
+import type { ListedThread, ThreadView, TurnView } from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import { agent, event, person } from "../testing"
 import {
@@ -7,6 +7,7 @@ import {
   apply,
   asked as askedOf,
   declineOnce,
+  fromView,
   proposedPlan,
   choose,
   chosen,
@@ -396,6 +397,33 @@ test("the Thread's settings and the Harness's offer follow their facts", () => {
   const smart = choose(state.settings, "model", "smart")
   expect(chosen(smart, model)).toBe("smart")
   expect(smart.mode).toBe("supervised")
+})
+
+test("a turn Banda kept Supervised changes the Thread's settings alone, as the engine's next view has them (ADR 0014, decision 3)", () => {
+  const view = {
+    at: 0,
+    thread: { title: "Fix it", harness: "fake" },
+    items: [],
+    turns: [],
+    settings: { mode: "full_access", plan: false, options: {} },
+    offer: EMPTY.offer,
+    held: false,
+  } as unknown as ThreadView
+  const supervised = { mode: "supervised", plan: false, options: {} } as const
+  const kept = apply(
+    fromView(view),
+    event("thread.configured", {
+      thread: "t",
+      settings: supervised,
+      supervised: {
+        before: true,
+        fence: { fence: "missing", why: "off", words: "BANDA_FENCE=off" },
+      },
+    })
+  )
+  expect({ ...kept, at: 0 }).toEqual(
+    fromView({ ...view, settings: supervised })
+  )
 })
 
 test("an Agent's plan is one item its steps change, and the context follows", () => {

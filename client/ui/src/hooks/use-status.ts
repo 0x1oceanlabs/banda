@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import type { Engine, ProjectId, Status } from "@banda/contract"
+import type { Engine, Fence, ProjectId, Status } from "@banda/contract"
 
 /** The engine connection's status, kept current. */
 export function useStatus(engine: Engine): Status {
@@ -44,4 +44,49 @@ export function useMachine(engine: Engine): ProjectId | undefined {
     [engine]
   )
   return machine
+}
+
+/** The fence of an engine that says none: one from before the fence,
+ * which gets it as it starts again. */
+const BEFORE_THE_FENCE: Fence = {
+  fence: "missing",
+  why: "not_built",
+  words: "This engine is from before the fence.",
+}
+
+/**
+ * Whether the fence around the engine's Harnesses holds, as the engine
+ * last said (ADR 0083, decision 1): what a new Thread's mode follows. A
+ * connection that breaks keeps it; none until the engine first answered.
+ */
+export function useFence(engine: Engine): Fence | undefined {
+  const [fence, setFence] = useState<Fence>()
+  useEffect(
+    () =>
+      engine.watch((status) => {
+        if (status.state !== "open") return
+        const now = status.fence ?? BEFORE_THE_FENCE
+        setFence((was) =>
+          JSON.stringify(was) === JSON.stringify(now) ? was : now
+        )
+      }),
+    [engine]
+  )
+  return fence
+}
+
+/**
+ * Whether `fence` holds whole, as the engine's `Fence::holds_whole` says:
+ * with Landlock's scopes too, and for a user outside the `docker` group.
+ * Only there is Full access the default, and an Agent in it not the
+ * Person in Banda.
+ */
+export function holdsWhole(fence: Fence | undefined): boolean {
+  return fence?.fence === "holds" && !fence.docker_group && !hasGaps(fence)
+}
+
+/** Whether a fence that holds lacks Landlock's scopes, its second layer:
+ * it has gaps. */
+export function hasGaps(fence: Fence & { fence: "holds" }): boolean {
+  return !fence.layers.includes("landlock")
 }

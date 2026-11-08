@@ -17,8 +17,14 @@ import { useAct } from "@banda/ui/hooks/use-act"
 import { useRead } from "@banda/ui/hooks/use-read"
 import { trustProject } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
-import { FolderIcon, PlugIcon } from "lucide-react"
-import { askedOf, NOTHING_YET, UNSEEN, type Waiting } from "./trust"
+import { FolderIcon, GitBranchIcon, PlugIcon } from "lucide-react"
+import {
+  askedOf,
+  GITHUB_TOKEN,
+  NOTHING_YET,
+  UNSEEN,
+  type Waiting,
+} from "./trust"
 
 /** What is not built yet, beside its greyed control (ADR 0084). */
 export function Soon({ className }: { className?: string }) {
@@ -63,13 +69,27 @@ export function Waits({ waits }: { waits: readonly Waiting[] }) {
   )
 }
 
+/** That trusting a Project gives its Agents the Person's GitHub token
+ * (ADR 0083), under what else waits for it. */
+function TokenLine() {
+  return (
+    <p className="flex items-center gap-2 text-xs text-muted-foreground">
+      <GitBranchIcon className="size-3.5 shrink-0" />
+      {GITHUB_TOKEN}
+    </p>
+  )
+}
+
 /** A Project to trust, and what the card stands by. */
 export type Trusting = { project: ProjectId; anchor: Element }
 
 /**
  * The card that trusts a Project after it was added: what its Harnesses
- * will load, and Trust. Only this click trusts it; Cancel, Esc or a click
- * elsewhere leaves it as it is.
+ * will load, that its Agents get the Person's GitHub token, and Trust. A
+ * Project trusted only as nothing marked it foreign is said to be trusted
+ * here, and the card names it by what that does: it gives its Agents the
+ * token. Only this click trusts it; Cancel, Esc or a click elsewhere
+ * leaves it as it is.
  */
 export function TrustCard({
   engine,
@@ -136,17 +156,31 @@ function Card({
       <div className="flex items-center gap-2">
         <ProjectSign project={project} />
         <PopoverTitle className="min-w-0 truncate">
-          Trust {project.name}?
+          {project.trusted
+            ? `Give ${project.name}'s Agents your GitHub token?`
+            : `Trust ${project.name}?`}
         </PopoverTitle>
       </div>
-      <PopoverDescription>
-        Claude Code and Codex will load what it names, from their next turn:
-      </PopoverDescription>
-      {read.state === "ready" && <Waits waits={askedOf(read.value).waits} />}
-      {read.state === "refused" && (
-        <p className="text-xs text-muted-foreground">
-          {UNSEEN} {read.refusal.message}
-        </p>
+      {project.trusted ? (
+        <PopoverDescription>
+          Say you trust it, and its Agents get your GitHub token from their next
+          turn.
+        </PopoverDescription>
+      ) : (
+        <>
+          <PopoverDescription>
+            Claude Code and Codex will load what it names, from their next turn:
+          </PopoverDescription>
+          {read.state === "ready" && (
+            <Waits waits={askedOf(read.value).waits} />
+          )}
+          {read.state === "refused" && (
+            <p className="text-xs text-muted-foreground">
+              {UNSEEN} {read.refusal.message}
+            </p>
+          )}
+          <TokenLine />
+        </>
       )}
       {problem && (
         <p role="alert" className="text-xs text-destructive">

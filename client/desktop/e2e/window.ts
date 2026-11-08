@@ -8,6 +8,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -15,6 +16,7 @@ import {
 import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
+import { DatabaseSync } from "node:sqlite"
 import {
   _electron as electron,
   expect,
@@ -415,6 +417,32 @@ export async function firstThread(
   const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
   const thread = page.locator("section").filter({ has: composer })
   return { thread, composer }
+}
+
+/**
+ * Marks how every Thread of `dir`'s Projects came to be in Full access,
+ * where the engine keeps it and reads it as a turn starts (ADR 0083): no
+ * mark, as a Thread from before the fence has, or `fenced`, as Full
+ * access chosen where the fence held whole.
+ */
+export function markFullAccess(dir: string, mark: "fenced" | null) {
+  const projects = join(dir, "data/projects")
+  for (const id of readdirSync(projects)) {
+    const file = join(projects, id, "project.sqlite3")
+    if (!existsSync(file)) continue
+    const db = new DatabaseSync(file, { timeout: 5000 })
+    try {
+      const table = db
+        .prepare("SELECT 1 FROM sqlite_master WHERE name = 'agents_threads'")
+        .get()
+      if (table)
+        db.prepare(
+          "UPDATE agents_threads SET full_access = ? WHERE full_access IS NOT NULL"
+        ).run(mark)
+    } finally {
+      db.close()
+    }
+  }
 }
 
 /**

@@ -38,7 +38,10 @@ export type ThreadState = {
   forkedFrom?: string
 }
 
-/** What a Thread runs with when nobody chose otherwise, as the engine has it. */
+/** What a Thread runs with until the engine says (`agents.defaults`), and
+ * what a No Space draft keeps but its mode: Supervised, which asks. Where
+ * the fence holds whole, the engine starts a new Thread in Full access
+ * (ADR 0083). */
 export const DEFAULT_SETTINGS: Settings = {
   mode: "supervised",
   plan: false,

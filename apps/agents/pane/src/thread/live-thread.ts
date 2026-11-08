@@ -1,9 +1,39 @@
 /** A Thread as a Pane follows it: loaded once, then each of its events. */
 import { useMemo } from "react"
-import type { Engine, ProjectId } from "@banda/contract"
-import type { ThreadId } from "@banda/contract/agents"
+import type { Engine, Event, ProjectId } from "@banda/contract"
+import {
+  decodeFact,
+  type ThreadId,
+  type WhySupervised,
+} from "@banda/contract/agents"
 import { useLive } from "@banda/ui/hooks/use-live"
-import { apply, fromView } from "./state"
+import { apply, fromView, type ThreadState } from "./state"
+
+/** Why Banda kept a Thread Supervised, and when, in ms since the epoch. */
+export type Supervised = WhySupervised & { at: number }
+
+/**
+ * A Thread as its Pane follows it: the engine's view of it, which the
+ * Pane's projection keeps equal (ADR 0014, decision 3), and what the Pane
+ * heard as it followed that no view holds.
+ */
+export type Followed = ThreadState & {
+  /** Why Banda last kept it Supervised while this Pane followed it, and
+   * when (ADR 0083): the fence no longer keeps its Full access. A view
+   * read again forgets it; the Pane keeps what it said of it. */
+  supervised?: Supervised
+}
+
+/** `apply`, and what Banda said as it kept the Thread Supervised. Pure, so
+ * plain tests cover it. */
+export function follow(state: Followed, event: Event): Followed {
+  const next: Followed = apply(state, event)
+  if (next === state) return next
+  const fact = decodeFact(event)
+  return fact?.kind === "thread.configured" && fact.payload.supervised
+    ? { ...next, supervised: { ...fact.payload.supervised, at: event.at } }
+    : next
+}
 
 /** The Thread `thread` of `project`, live; none to follow without one. */
 export function useThread(
@@ -16,12 +46,12 @@ export function useThread(
       thread === null
         ? null
         : {
-            read: async () =>
+            read: async (): Promise<Followed> =>
               fromView(
                 await engine.call("agents.thread", { thread }, { project })
               ),
             filter: { module: "agents", subject: thread },
-            apply,
+            apply: follow,
           },
     [engine, project, thread]
   )

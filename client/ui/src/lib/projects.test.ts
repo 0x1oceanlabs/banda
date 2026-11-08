@@ -34,3 +34,9 @@ test("promotion changes a Project list even if no other field changes", () => {
 test("a change of trust changes a Project list, so its sign's corner follows", () => {
   expect(sameProjects([{ ...project, trusted: false }], [project])).toBe(false)
 })
+
+test("trust said changes a Project list, so its settings stop offering Trust…", () => {
+  expect(sameProjects([{ ...project, trust_said: true }], [project])).toBe(
+    false
+  )
+})

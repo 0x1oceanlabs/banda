@@ -222,6 +222,17 @@ test("General, the sidebar's presets, and hearing a sound", async () => {
   })
   await sections.getByRole("button", { name: /General/ }).click()
   await expect(settings.getByText(/^banda \d/)).toBeVisible()
+  // The fence, off in the tests: why, what Full access means then, and
+  // where each Harness's new Threads' mode is (ADR 0083).
+  const fence = settings.locator('[data-key="fence"]')
+  await expect(fence).toContainText(
+    "Off. It is turned off for testing (BANDA_FENCE=off). New Threads start Supervised, unless you set another mode for them."
+  )
+  await expect(fence).toContainText(
+    "In Full access, an Agent is you, in Banda too."
+  )
+  await fence.getByRole("button", { name: "New Threads' mode" }).click()
+  await expect(settings.getByRole("group", { name: "Fake AI" })).toBeVisible()
 
   await sections.getByRole("button", { name: /Sidebar/ }).click()
   const preset = settings.locator('[data-key="preset"]')

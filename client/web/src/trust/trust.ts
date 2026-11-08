@@ -95,6 +95,10 @@ export const UNSEEN = "Banda couldn't look in its folder."
 export const NOTHING_YET =
   "Its own .claude/, .codex/ and .mcp.json, once it has them."
 
+/** What trusting a Project also gives its Agents (ADR 0083): only a
+ * Project the Person said they trust does, as they add it or later. */
+export const GITHUB_TOKEN = "Its Agents also get your GitHub token."
+
 /** The question's two answers, Not yet first, as Enter takes it. */
 export const ANSWERS = {
   notYet: {
@@ -103,7 +107,7 @@ export const ANSWERS = {
   },
   trust: {
     title: "Trust",
-    about: "Its settings, hooks and MCP servers load.",
+    about: `Its settings, hooks and MCP servers load. ${GITHUB_TOKEN}`,
   },
 } as const
 
@@ -121,9 +125,30 @@ export const ISOLATED = {
     "Agents, terminals and this Project's scripts run in a container. Your files stay where they are.",
 }
 
-/** What the Project's settings say of its trust. */
-export function trustAbout(trusted: boolean): string {
-  return trusted
-    ? "Trusted. Claude Code and Codex load its own settings, hooks and MCP servers, from their next turn."
-    : "Not trusted. Claude Code and Codex read only your own settings here; its .claude/, .codex/ and .mcp.json wait."
+/** What the Project's settings say of its trust: whether it is trusted,
+ * and where the fence holds (`fenced`), whether the Person said so, which
+ * gives its Agents their GitHub token. Elsewhere they act as the Person,
+ * and `gh` reaches the token itself. */
+export function trustAbout(
+  project: { trusted: boolean; trust_said?: boolean },
+  fenced: boolean
+): string {
+  if (!project.trusted)
+    return "Not trusted. Claude Code and Codex read only your own settings here; its .claude/, .codex/ and .mcp.json wait."
+  const loads =
+    "Trusted. Claude Code and Codex load its own settings, hooks and MCP servers, from their next turn."
+  if (!fenced) return loads
+  return project.trust_said
+    ? `${loads} ${GITHUB_TOKEN}`
+    : "Trusted, as nothing marked it foreign: its settings, hooks and MCP servers load. Its Agents get your GitHub token once you say you trust it."
+}
+
+/** Whether a trusted Project's settings offer to say it is trusted: only
+ * where the fence holds, as only there does saying it give its Agents
+ * the GitHub token. */
+export function offersSaying(
+  project: { trusted: boolean; trust_said?: boolean },
+  fenced: boolean
+): boolean {
+  return fenced && project.trusted && !project.trust_said
 }

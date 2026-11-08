@@ -101,7 +101,7 @@ export const SECTIONS: Section[] = [
     id: "general",
     title: "General",
     icon: SettingsIcon,
-    about: "Banda's engine, and where its settings files are.",
+    about: "Banda's engine, its fence, and where its settings files are.",
     Body: General,
   },
   {

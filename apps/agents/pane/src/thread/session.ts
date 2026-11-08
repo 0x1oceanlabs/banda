@@ -239,6 +239,20 @@ export function useThreadSession({
         project
       )
     )
+  // A No Space draft shows no mode, so its Person chose none: what they
+  // chose of the rest goes with the mode the engine gives a new Thread in
+  // its new Project, which follows the fence (ADR 0083). With nothing
+  // chosen, the engine decides it all.
+  const drafted = async (target: ProjectId): Promise<Settings | null> => {
+    const draft = drafts[harness]
+    if (!draft) return null
+    const engines = await engine.call(
+      "agents.defaults",
+      { harness },
+      { project: target }
+    )
+    return { ...draft, mode: engines.settings.mode }
+  }
   /** Sends `text`; an existing Thread changes to `next` first, if given. */
   const go = async (
     text: string,
@@ -262,7 +276,7 @@ export function useThreadSession({
           settings:
             thread === null
               ? unplaced
-                ? (drafts[harness] ?? null)
+                ? await drafted(target)
                 : (settings ?? null)
               : (next ?? null),
           steer,
@@ -422,8 +436,9 @@ export function useThreadSession({
 const OFFERED = { module: "agents", kinds: ["thread.offered"] }
 
 /**
- * What a new Thread on each of `harnesses` starts with: full access, and
- * what the Harness last offered, such as its models.
+ * What a new Thread on each of `harnesses` starts with: the mode the
+ * fence allows, or agents.toml's, and what the Harness last offered,
+ * such as its models.
  */
 function useHarnessDefaults(
   engine: Engine,
