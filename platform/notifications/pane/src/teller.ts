@@ -37,7 +37,7 @@ export type Teller = {
   /** Goes to a thing that calls, as its toast's button does, by the
    * Window's `pane.pick` (ADR 0087, decision 7): its toast and its
    * notification go. */
-  answer: (thing: Thing & { pane: PaneState }) => void
+  goTo: (thing: Thing & { pane: PaneState }) => void
   stop: () => void
 }
 
@@ -221,7 +221,7 @@ export function startTelling(
   ]
   return {
     told,
-    answer,
+    goTo: answer,
     stop: () => {
       clearTimeout(timer)
       for (const stop of stops) stop()
