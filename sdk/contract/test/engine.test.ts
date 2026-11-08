@@ -15,11 +15,13 @@ import { join, resolve } from "node:path"
 import { createInterface } from "node:readline"
 import { afterEach, beforeEach, expect, test } from "vitest"
 import { decodeFact } from "../src/agents"
+import { seeded } from "../src/workspaces"
 import {
   type Address,
   Engine,
   newId,
   type Event,
+  type ProjectId,
   Refused,
   type Status,
 } from "../src/index"
@@ -268,4 +270,93 @@ test("a stream heard once ends when the connection breaks, and is not asked agai
   await stop()
   await until(client, "lost")
   await expect.poll(() => ends).toEqual(["may_have_run"])
+})
+
+/** The machine's own log, which its modules, the workspaces too, write
+ * and are followed by. */
+function machineOf(engine: Engine): ProjectId {
+  const status = engine.status
+  if (status.state !== "open" || !status.machine) throw new Error("no machine")
+  return status.machine
+}
+
+test("a command is answered with its place in the log, as the event it wrote stands there", async () => {
+  await serve()
+  client = new Engine(address)
+  await until(client, "open")
+  const project = await client.command("projects.create", { name: "Work" })
+  const heard: number[] = []
+  client.follow(
+    machineOf(client),
+    0,
+    { module: "workspaces" },
+    (event) => heard.push(event.seq),
+    () => {}
+  )
+  const notes = { project: project.id, kind: "notes.page", args: { page: 1 } }
+  const id = newId()
+  const opened = await client.commandAt("workspaces.open", notes, undefined, id)
+  // The module says where its event stands, and so does the engine.
+  expect(opened.at).toEqual(expect.any(Number))
+  expect(opened.answer.at).toBe(opened.at)
+  await expect.poll(() => heard).toContain(opened.at)
+  // Sent again, the same answer at the same place.
+  const again = await client.commandAt("workspaces.open", notes, undefined, id)
+  expect(again).toEqual(opened)
+  // Shown already, it writes nothing: the module says none, and the
+  // engine the log's head as it answered, which a client has heard.
+  const shown = await client.commandAt("workspaces.open", notes)
+  expect(shown.answer).toMatchObject({ pane: opened.answer.pane, at: null })
+  expect(shown.at).toBeGreaterThanOrEqual(opened.at!)
+  // A refusal has no place: it rejects, as `command` does.
+  const unfit = client.commandAt("workspaces.close", { pane: newId() })
+  await expect(unfit).rejects.toMatchObject({ refusal: { code: "not_found" } })
+})
+
+test("commands cut off by a restart go again in the order sent, and their places rise in that order", async () => {
+  await serve()
+  client = new Engine(address)
+  await until(client, "open")
+  const project = await client.command("projects.create", { name: "Work" })
+  const ids = [1, 2, 3, 4, 5].map(() => newId())
+  const opening = (page: number) =>
+    client!.commandAt(
+      "workspaces.open",
+      { project: project.id, kind: "notes.page", args: { page } },
+      undefined,
+      ids[page - 1]
+    )
+  // Sent together, and the engine stops at once: some may be answered
+  // before it goes, the rest are sent again once it is back. One it was
+  // running as it stopped answers `may_have_run`.
+  const sent = [1, 2, 3].map(opening)
+  await stop()
+  await until(client, "lost")
+  // Sent while it is away: they wait, and go after those.
+  sent.push(...[4, 5].map(opening))
+  await serve()
+  const settled = await Promise.allSettled(sent)
+  const places: number[] = []
+  for (const one of settled) {
+    if (one.status === "fulfilled") places.push(one.value.at!)
+    else expect(one.reason).toMatchObject({ refusal: { code: "may_have_run" } })
+  }
+  expect(settled.slice(3).map((one) => one.status)).toEqual([
+    "fulfilled",
+    "fulfilled",
+  ])
+  expect(places.every((at) => typeof at === "number")).toBe(true)
+  expect(places).toEqual([...places].sort((a, b) => a - b))
+  expect(new Set(places).size).toBe(places.length)
+  // None was opened twice; each answered was opened.
+  const listed = (await client.call("workspaces.list", {})).workspaces
+    .flatMap((workspace) => workspace.columns)
+    .flatMap((column) => column.panes)
+    .map((pane) => pane.id)
+  const made = ids.map((id) => seeded(id, "pane"))
+  for (const [i, pane] of made.entries()) {
+    const times = listed.filter((one) => one === pane).length
+    if (settled[i].status === "fulfilled") expect(times).toBe(1)
+    else expect(times).toBeLessThanOrEqual(1)
+  }
 })

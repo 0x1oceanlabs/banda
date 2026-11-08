@@ -38,6 +38,7 @@ export {
   PROTOCOL,
   Refused,
   type Address,
+  type Answered,
   type Status,
 } from "./engine"
 export { newId } from "./ids"
