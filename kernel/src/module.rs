@@ -70,6 +70,17 @@ pub trait Module: Send + Sync + 'static {
     /// ([`Kernel::answer`](crate::Kernel::answer)).
     fn kind(&self, method: &str) -> Option<Kind>;
 
+    /// Whether one of its commands runs on past one write before it
+    /// answers, as a sign-in that waits for the Person does. The router
+    /// keeps such a command in no queue, so the next commands of its
+    /// session go on beside it (ADR 0082, decision 4). `method` comes
+    /// without the module's prefix. Work longer than one write should
+    /// answer at once and report through facts; until it does, it is
+    /// named here.
+    fn runs_on(&self, _method: &str) -> bool {
+        false
+    }
+
     /// Its methods an Agent may call as tools: the lines of its `methods!`
     /// table marked `tool`, `Self::method_tools(self.name())` (ADR 0019,
     /// decision 3).

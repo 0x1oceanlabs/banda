@@ -824,7 +824,8 @@ impl Receipt {
     }
 
     /// Marks, in the change's transaction, that the command's change was
-    /// written, with the log's head after it.
+    /// written, with the log's head after it: the change's last fact if it
+    /// wrote one, or else a fact written before it.
     fn written(&self, sql: &Connection) -> Result<(), Error> {
         sql.execute(
             "UPDATE kernel_receipts SET seq = ?2 WHERE command = ?1 AND answered = 0",

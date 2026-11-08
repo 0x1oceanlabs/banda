@@ -1259,6 +1259,11 @@ impl Module for Agents {
         Self::method_kind(method)
     }
 
+    /// A title waits for a Harness's model to write it.
+    fn runs_on(&self, method: &str) -> bool {
+        method == "suggest_title"
+    }
+
     fn tools(&self) -> Vec<Tool> {
         Self::method_tools(self.name())
     }

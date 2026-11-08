@@ -10,6 +10,19 @@
 //!    machine's modules are followed by (ADR 0025).
 //! 2. `call` runs a method and gets one `result` with the same `id`; a
 //!    command's carries its place in the log, `at` (ADR 0082, decision 4).
+//!    A connection's commands to one scope, this machine's or a Project's,
+//!    wait in one queue: each starts once the one before it answered, so
+//!    they commit, and answer, in the order sent. A client sends the next
+//!    before the last answers. Queues run beside each other, and a call
+//!    or a stream waits in none, nor does a command that runs on past one
+//!    write ([`Module::runs_on`](crate::Module::runs_on)).
+//!
+//!    The decision's session is one connection here. A reconnect gets new
+//!    queues, while the old connection's still run what is in them. Order
+//!    holds across it only as a client sends its unanswered commands
+//!    again, in order, before any new one, as `sdk/contract`'s `command()`
+//!    does. Receipts make the two queues agree: a resend waits for the run
+//!    already under way, or gets its answer.
 //! 3. `subscribe` follows a Project's events after a position. The window first
 //!    reads a view with its position, then subscribes after it (ADR 0002,
 //!    decision 5). The log is replayed a page at a time, then live events
@@ -28,6 +41,7 @@
 use crate::access::Caller;
 use crate::cursors::Heard;
 use crate::events::{Event, EventFilter};
+use crate::kernel::Queue;
 use crate::module::Stream;
 use crate::{Answer, Code, CommandId, Kernel, PROTOCOL, Participant, PersonId, ProjectId, Refusal};
 use axum::Router;
@@ -36,7 +50,8 @@ use axum::extract::ws::{Message, Utf8Bytes, WebSocket, WebSocketUpgrade};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
-use futures::{SinkExt, StreamExt};
+use futures::future::BoxFuture;
+use futures::{FutureExt, SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -47,6 +62,13 @@ use tokio::task::JoinHandle;
 use ts_rs::TS;
 
 const HELLO_WITHIN: Duration = Duration::from_secs(10);
+
+/// How long a command may hold up the next in its queue: a guard against
+/// one that hangs. A command is one write, so it answers well within
+/// this, even as the disk stalls; one that runs on by design waits in no
+/// queue ([`Module::runs_on`](crate::Module::runs_on)). One still running
+/// past it gives up its place, and the log says so (ADR 0082, decision 4).
+const HOLDS_UP: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Debug, Deserialize, Serialize, TS)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -132,8 +154,11 @@ pub enum EngineFrame {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         error: Option<Refusal>,
-        /// A command's place in the log: what it wrote is at or before it,
-        /// so a view current there shows it (ADR 0082, decision 4).
+        /// A command's place in the log of its scope (ADR 0082, decision
+        /// 4): the log's head as its change committed, its last fact if it
+        /// wrote one, or, when it wrote no change, the head as it was
+        /// answered. A view current there shows what it did. The same for
+        /// a resend; none for a refusal or a call.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional, type = "number")]
         at: Option<i64>,
@@ -363,6 +388,7 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
         }
     });
     let mut subscriptions: HashMap<u64, JoinHandle<()>> = HashMap::new();
+    let mut queues = Queues::default();
 
     while let Some(Ok(message)) = stream.next().await {
         let Message::Text(body) = message else {
@@ -393,12 +419,20 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                 command,
                 params,
             } => {
+                let queue = api.kernel.queue(caller, &method, project);
                 let kernel = api.kernel.clone();
                 let out = out.clone();
-                tokio::spawn(async move {
+                let name = method.clone();
+                let run = async move {
                     let answer = kernel.answer(caller, &method, project, command, params);
                     let _ = out.send(answered(id, answer.await)).await;
-                });
+                };
+                match queue {
+                    Some(queue) => queues.push(queue, name, run),
+                    None => {
+                        tokio::spawn(run);
+                    }
+                }
             }
             ClientFrame::Subscribe {
                 id,
@@ -456,6 +490,51 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
     }
     drop(out);
     let _ = writer.await;
+}
+
+/// One connection's queues of commands, one for each scope they run in
+/// (ADR 0082, decision 4). A queue runs its commands one at a time, in the
+/// order they came, each once the one before it answered or ran for
+/// [`HOLDS_UP`]. Its last commands run even once the connection is gone,
+/// as a call does: a resend after a reconnect finds their receipts.
+#[derive(Default)]
+struct Queues(HashMap<Queue, mpsc::UnboundedSender<Queued>>);
+
+/// A command in a queue: its method, for the log, and the run that
+/// answers it.
+type Queued = (String, BoxFuture<'static, ()>);
+
+impl Queues {
+    /// Queues `run`, which answers one command. The connection's reader
+    /// never waits here, so a long queue holds up no other.
+    fn push(
+        &mut self,
+        queue: Queue,
+        method: String,
+        run: impl Future<Output = ()> + Send + 'static,
+    ) {
+        let queued = self.0.entry(queue).or_insert_with(|| {
+            let (queued, runs) = mpsc::unbounded_channel();
+            tokio::spawn(one_at_a_time(runs, HOLDS_UP));
+            queued
+        });
+        // Its task ends only once this sender is gone.
+        let _ = queued.send((method, run.boxed()));
+    }
+}
+
+async fn one_at_a_time(mut runs: mpsc::UnboundedReceiver<Queued>, holds_up: Duration) {
+    while let Some((method, run)) = runs.recv().await {
+        // A task of its own, so one that hangs runs on, and the next goes.
+        let mut running = tokio::spawn(run);
+        if tokio::time::timeout(holds_up, &mut running).await.is_err() {
+            tracing::warn!(
+                %method,
+                "a command ran past {}s, so the next in its queue starts beside it",
+                holds_up.as_secs()
+            );
+        }
+    }
 }
 
 /// Forwards a stream's pieces, then says that it ended.
@@ -532,6 +611,25 @@ mod tests {
         ] {
             assert!(!origin_allowed(refused), "{refused:?}");
         }
+    }
+
+    #[tokio::test]
+    async fn a_command_that_hangs_gives_up_its_place_once_it_ran_past_the_limit() {
+        let holds_up = Duration::from_millis(50);
+        let (queued, runs) = mpsc::unbounded_channel();
+        tokio::spawn(one_at_a_time(runs, holds_up));
+        let (ran, heard) = oneshot::channel();
+        let sent = std::time::Instant::now();
+        let hangs = std::future::pending::<()>().boxed();
+        queued.send(("notes.hang".into(), hangs)).unwrap();
+        let next = async move { ran.send(()).unwrap() }.boxed();
+        queued.send(("notes.add".into(), next)).unwrap();
+
+        tokio::time::timeout(Duration::from_secs(10), heard)
+            .await
+            .expect("the next starts beside it")
+            .unwrap();
+        assert!(sent.elapsed() >= holds_up, "once it waited for it");
     }
 
     #[test]

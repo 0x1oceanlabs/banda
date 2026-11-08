@@ -461,6 +461,7 @@ The kernel holds only what every module needs, and it names no module.
 
 ```
 command (with its ID)
+  → the session's queue for its scope: it starts once the one before answered
   → receipt, begun: a resend gets the answer kept, or waits for the run
   → access decision (one exhaustive map: method → right)
   → module operation: rules decide, store writes
@@ -471,6 +472,18 @@ command (with its ID)
     or by a worker outside it under a lease; retried as their kind says
   → how one ended: one transaction with what its module writes of it, tried until it commits
 ```
+
+- A session's commands to one scope, this machine's or a Project's,
+  commit in the order sent (ADR 0082, decision 4): the API keeps one
+  queue for each scope a connection sends commands to, and runs it one
+  command at a time, so a client sends the next before the last answers.
+  Queues run beside each other, and calls and streams wait in none, nor
+  does a command its module says runs on past one write
+  (`Module::runs_on`), as a sign-in that waits for the Person. A command
+  still running after thirty seconds, which only one that hangs does,
+  gives up its place, and the next starts beside it; the log says so. A
+  session is one connection: order holds across a reconnect as the
+  client sends its unanswered commands again, in order, first.
 
 - An effect's end and what its module writes of it, such as how a turn
   ended, commit together. A write that fails is tried again; one that
@@ -495,7 +508,10 @@ command (with its ID)
     the receipt is kept (below): the command never runs twice. So Files'
     writes and renames, which act on the disk before anything is written,
     are safe to resend.
-  - The answer carries `at`, the log's head once the change was written.
+  - The answer carries `at`, a seq of its scope's log: the log's head as
+    its change committed, its last fact if it wrote one, or, when it wrote
+    no change, the head as it was answered. A resend gets the same; a
+    refusal has none.
   - The writer syncs with `synchronous = NORMAL`, so receipts hold across
     a crash of the engine. A power cut may lose the last ones, and with
     them the `may_have_run` of a disk change made just before.

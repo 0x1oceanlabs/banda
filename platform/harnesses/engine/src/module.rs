@@ -210,6 +210,11 @@ impl Module for HarnessesModule {
         Self::method_kind(method)
     }
 
+    /// A sign-in waits for the Person, up to ten minutes.
+    fn runs_on(&self, method: &str) -> bool {
+        method == "sign_in"
+    }
+
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
         self.dispatch(call, method, params).await
     }

@@ -142,11 +142,27 @@ Roma, 2026-11-06, among the vision's decisions:
      params is refused as `conflict`.
    - The answer carries `at`, the place in the log of what the command
      wrote. A control the Person changed stays pending until an update at
-     or past `at` arrives.
+     or past `at` arrives. `at` is a seq of the log of the command's
+     scope: the log's head as its change committed, its last fact if it
+     wrote one, or, for a command that wrote no change, the head as it
+     was answered. A refusal carries none. (Amended in A8.)
    - Commands from one session to one scope commit in the order sent. The
      router keeps one queue for each session and scope; on a transport
      with several streams, commands share one ordered stream. So a client
-     sends the next command before the last one answers.
+     sends the next command before the last one answers. (Amended in A8:)
+     - A session is one connection. A reconnect gets new queues, and the
+       old connection's queues still run the commands already in them.
+       Order holds across a reconnect only because the client sends its
+       unanswered commands again, in order, before any new one. Receipts
+       make the two queues agree: a resend waits for the run already under
+       way, or gets its answer.
+     - A command that breaks the rule below waits in no queue: a sign-in
+       that waits for the Person, a title a Harness writes, an issue sent
+       to GitHub, and a link to a pull request that then reads GitHub's
+       list. Its module names it so until it answers at once.
+     - A command still running thirty seconds after it began, which only
+       one that hangs does, gives up its place, and the next starts beside
+       it. The engine's log says so.
    - A command may carry `not_after`, checked in host time; past it the
      host refuses `expired`. It carries `expect{rev}` only where a rewrite
      of a whole state needs it.
