@@ -64,6 +64,9 @@
  *   Thread's Mark of the Tiling's own: Threads fills the Slot with it, and
  *   what the Tiling still takes of Banda's mark or reads of an Item's Mark
  *   is listed, only falling.
+ * - The Person's marks are the Thread's host's (ADR 0096): only the move
+ *   names the keys the window kept them under, which stay to be read for
+ *   one stable release.
  */
 import { existsSync, readFileSync } from "node:fs"
 import { join, relative } from "node:path"
@@ -1133,4 +1136,24 @@ test("each Slot is read in one place, and only the Window gives what fills them"
     )
     .map((file) => relative(root, file))
   expect(around).toEqual([])
+})
+
+/**
+ * The window's old marks (ADR 0096, decision 9): their keys stay, read
+ * only, for one stable release, for the move to read. Only the move, and
+ * the renaming that brings older names to them first, name them: no page
+ * code keeps a mark there again. One that no longer names them leaves the
+ * list.
+ */
+const OLD_MARKS = [
+  "apps/agents/pane/src/list/marks-moved.ts",
+  "client/web/src/renamed.ts",
+]
+
+test("only the move names the window's old marks' keys", () => {
+  const old = /["'`]banda\.(?:agents\.seen|sidebar\.archived(?:-before)?)["'`]/
+  const naming = pageFiles
+    .filter((file) => old.test(readFileSync(file, "utf8")))
+    .map((file) => relative(root, file))
+  expect(naming.sort()).toEqual(OLD_MARKS)
 })
