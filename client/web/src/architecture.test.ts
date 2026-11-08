@@ -20,6 +20,10 @@
  * - A Pane reads its Tile's state, never as a prop, and only the Tiling
  *   gives it (ADR 0088, decision 4): the files that do are listed, and
  *   the list only falls.
+ * - A Pane's content takes its size from its Tile, through the resize
+ *   gate's one observer (ADR 0088, decision 5): what else observes a size
+ *   is listed with what it measures, and what still sizes a Pane's
+ *   content by itself only falls.
  * - What calls has one order, the sidebar's (ADR 0087, decision 8): a
  *   mark's rank is read only to pick the loudest, on the lines listed,
  *   and no list sorts by it.
@@ -513,6 +517,65 @@ test("only the Tiling configures a Tile, as the list holds", () => {
     .map((file) => relative(root, file))
     .sort()
   expect(configuring).toEqual(CONFIGURING)
+})
+
+/**
+ * What still sizes what a Pane draws by an observer of its own, outside
+ * the resize gate (`@banda/ui/lib/tile`), by its file and how many it
+ * makes: its size comes from its Tile once it reads it there, and it
+ * leaves the list, which only falls. The terminal and the browser's page
+ * read their Tiles' (ADR 0088, decision 5).
+ */
+const SIZING: Record<string, number> = {
+  // T3's own, for a host that says no size: Banda's terminal hears its
+  // Tile's, so it makes none.
+  "client/ghostty/src/t3/lib/observeResize.ts": 1,
+  // An image fitted to its stage, under the file view's bar; it reads its
+  // Tile once the Person's pick says when a size settles (the client's
+  // plan, P7).
+  "apps/files/pane/src/views/image.tsx": 1,
+}
+
+/**
+ * What else observes a size, as it should, by its file and how many it
+ * makes: a part inside a Pane laid out by the Pane itself, a list it
+ * windows, or the Tiling's own boxes and the pages' layer. None sizes a
+ * Pane's content to its Tile. A new one is added on purpose, with what it
+ * measures.
+ */
+const MEASURING: Record<string, number> = {
+  // A Visual's frame guesses its height from its width, in a Thread.
+  "apps/agents/pane/src/visual/Frame.tsx": 1,
+  // The window's size, which moves every page; each slot's own comes from
+  // its Tile.
+  "apps/browser/pane/src/pages.ts": 1,
+  // Files: the film's items drawn in view, the newest column kept in view,
+  // the crumbs that fit the path bar, and a view's width for its parts.
+  "apps/files/pane/src/Columns.tsx": 1,
+  "apps/files/pane/src/Gallery.tsx": 1,
+  "apps/files/pane/src/PathBar.tsx": 1,
+  "apps/files/pane/src/views/near.ts": 1,
+  // A list's own window, and a part's own width for its layout.
+  "client/ui/src/components/virtual-list.tsx": 1,
+  "client/ui/src/hooks/use-wider-than.ts": 1,
+  // The Tiling's own boxes: the overview's room, a Strip's room, and the
+  // Group plates' pieces.
+  "client/web/src/tiling/Overview.tsx": 1,
+  "client/web/src/tiling/Strip.tsx": 1,
+  "client/web/src/tiling/usePlates.ts": 1,
+}
+
+const observing = Object.fromEntries(
+  drawing.flatMap((file) => {
+    const found = readFileSync(file, "utf8").match(/\bnew ResizeObserver\s*\(/g)
+    return found ? [[relative(root, file), found.length]] : []
+  })
+)
+
+test("a Pane's content takes its size from its Tile, through the gate's one observer", () => {
+  const { [TILE_LIB]: gate, ...others } = observing
+  expect(gate).toBe(1)
+  expect(others).toEqual({ ...SIZING, ...MEASURING })
 })
 
 test("a Pane's props carry no state of its Tile: it reads it", () => {
