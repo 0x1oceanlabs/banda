@@ -21,6 +21,7 @@ import {
   firstThread,
   fromLeft,
   GLASS,
+  headerShows,
   layoutOf,
   markFullAccess,
   ON_SCREEN,
@@ -92,6 +93,18 @@ test("a Person makes a Project, starts a Thread in it, and works with it", async
   await expect(row).toContainText("Asks you")
   const mark = page.getByRole("button", { name: /^Sidebar/ })
   await expect(mark).toHaveAccessibleName(/Asks you/)
+  // In its header, Threads' Mark stands in the icon's place, before its
+  // Project and its title (ADR 0031; ADR 0062, decision 17).
+  const head = thread.locator("header").first()
+  await expect(head.getByRole("img", { name: "Asks you" })).toHaveClass(
+    /\bsize-4\b/
+  )
+  expect(await headerShows(thread)).toEqual([
+    "mark",
+    "project",
+    "hello",
+    "buttons",
+  ])
   await page.screenshot({ path: "test-results/2-question.png" })
   await question.getByRole("button", { name: "Allow", exact: true }).click()
   await expect(thread.getByText("The check passed.")).toBeVisible()
@@ -99,9 +112,13 @@ test("a Person makes a Project, starts a Thread in it, and works with it", async
   await expect(question).toBeHidden()
   await openWork(thread)
   await expect(thread.getByText("Allowed: Run a check")).toBeVisible()
-  // The Person watched it finish, so nothing calls for them.
+  // The Person watched it finish, so nothing calls for them: its Mark in
+  // the header rests, faint.
   await expect(row).not.toContainText("Asks you")
   await expect(mark).toHaveAccessibleName("Sidebar")
+  await expect(head.getByRole("img", { name: "Nothing runs" })).toHaveClass(
+    /\bopacity-40\b/
+  )
   await page.screenshot({ path: "test-results/3-answered.png" })
 
   await thread.getByRole("button", { name: "Close hello" }).click()
@@ -4286,9 +4303,13 @@ test("the overview shows how each Thread is, rings the one that calls, and draws
   // Only what is there: no search, and a workspace's number alone.
   await expect(overview.getByRole("status")).toHaveCount(0)
   const tile = overview.getByRole("button", { name: "slow hello in Work" })
-  // Done out of sight, it calls: its mark says so, and it is ringed.
+  // Done out of sight, it calls: its mark says so, at a size to read, and
+  // it is ringed.
   await expect(tile).toHaveAttribute("data-called", "")
   await expect(tile.getByRole("img", { name: "Done" })).toBeVisible()
+  await expect(tile.getByRole("img", { name: "Done" })).toHaveClass(
+    /\bsize-3\.5\b/
+  )
   await expect(overview.getByText("1 Pane", { exact: true })).toHaveCount(0)
   const empty = overview.getByRole("group", { name: "Workspace 2" })
   await expect(empty).toHaveAttribute("data-empty", "true")

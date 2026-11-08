@@ -682,3 +682,28 @@ export async function fromLeft(page: Page, tile: Locator): Promise<number> {
     )
   return Math.abs((await tile.boundingBox())!.x - left)
 }
+
+/**
+ * What the header of `tile`, a Pane's section, shows, in order: a Mark,
+ * a Project, another machine, Banda's buttons at its end, and the rest by
+ * its words, as its title. A Thread's Mark and another machine's name
+ * are the Apps' in the header's Slot (ADR 0062, decision 17).
+ */
+export async function headerShows(tile: Locator): Promise<string[]> {
+  return tile
+    .locator("header")
+    .first()
+    .evaluate((header) =>
+      [...header.children].map((part) =>
+        part.matches('[data-slot="banda-mark"]')
+          ? "mark"
+          : part.querySelector("[data-sign]")
+            ? "project"
+            : part.querySelector("[data-machine-icon]")
+              ? "machine"
+              : part.matches('[data-slot="pane-buttons"]')
+                ? "buttons"
+                : (part.textContent ?? "").trim()
+      )
+    )
+}

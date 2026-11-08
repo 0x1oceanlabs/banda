@@ -34,7 +34,7 @@ import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { expect, type Page, test } from "@playwright/test"
 import type { Host } from "@banda/web/host"
-import { setInFront, startWindow, type Window } from "./window"
+import { headerShows, setInFront, startWindow, type Window } from "./window"
 
 const repository = resolve(import.meta.dirname, "../../..")
 const program = join(repository, "target/debug/banda")
@@ -498,10 +498,17 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
     exact: true,
   })
   await expect(thread.getByText("You said: Bench window tests")).toBeVisible()
-  // Its header names arc after its Project.
+  // Its header names arc after its Project, before its title.
   await expect(
     thread.locator('[data-machine-icon="server"]').first()
   ).toBeVisible()
+  expect(await headerShows(thread)).toEqual([
+    "mark",
+    "project",
+    "machine",
+    "Bench window tests",
+    "buttons",
+  ])
   // It writes there: arc's Agent answers.
   const composer = thread.getByRole("textbox", { name: "Message to Fake AI" })
   await composer.fill("hi")
