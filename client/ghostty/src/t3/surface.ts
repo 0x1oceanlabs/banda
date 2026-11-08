@@ -1359,6 +1359,22 @@ export class GhosttyTerminalSurface {
     this.requestRender();
   };
 
+  // Banda: a context lost, after a GPU reset for one, comes back empty and
+  // with its state reset, so the renderer forgets what it drew and the next
+  // frame draws every row again, on the screen's pixels (ADR 0088, step P4).
+  private readonly onContextLost = () => {
+    this.renderer.forget();
+  };
+
+  private readonly onContextRestored = () => {
+    if (this.disposed) return;
+    const ratio = this.canvasDevicePixelRatio || 1;
+    this.context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    this.renderer.forget();
+    this.forceFullRender = true;
+    this.requestRender();
+  };
+
   private readonly onDevicePixelRatioChange = () => {
     this.watchDevicePixelRatio();
     this.rescale();
@@ -1927,6 +1943,8 @@ export class GhosttyTerminalSurface {
     this.canvas.addEventListener("mousedown", this.onMouseDown);
     this.canvas.addEventListener("mouseup", this.onMouseUp);
     this.canvas.addEventListener("contextmenu", this.onContextMenu);
+    this.canvas.addEventListener("contextlost", this.onContextLost);
+    this.canvas.addEventListener("contextrestored", this.onContextRestored);
     this.scrollbar.addEventListener("pointerdown", this.onScrollbarPointerDown);
     this.scrollbar.addEventListener("pointermove", this.onScrollbarPointerMove);
     this.scrollbar.addEventListener("pointerup", this.onScrollbarPointerUp);
@@ -1957,6 +1975,8 @@ export class GhosttyTerminalSurface {
     this.canvas.removeEventListener("mousedown", this.onMouseDown);
     this.canvas.removeEventListener("mouseup", this.onMouseUp);
     this.canvas.removeEventListener("contextmenu", this.onContextMenu);
+    this.canvas.removeEventListener("contextlost", this.onContextLost);
+    this.canvas.removeEventListener("contextrestored", this.onContextRestored);
     this.scrollbar.removeEventListener("pointerdown", this.onScrollbarPointerDown);
     this.scrollbar.removeEventListener("pointermove", this.onScrollbarPointerMove);
     this.scrollbar.removeEventListener("pointerup", this.onScrollbarPointerUp);

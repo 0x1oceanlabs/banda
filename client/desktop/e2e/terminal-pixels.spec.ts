@@ -1,7 +1,8 @@
 /**
  * A terminal's pixels, as it draws them frame by frame: what it printed
- * line by line, its scrollback and back, a selection, a resize and lines
- * with diagonals, which draw past their rows (ADR 0088, step P4). Its
+ * line by line, its scrollback and back, a selection, a resize, its canvas
+ * lost and restored, and lines with diagonals, which draw past their rows
+ * (ADR 0088, step P4). Its
  * renderer draws only the rows that changed and moves a scrolled screen's
  * pixels, so each state must hold the pixels a whole frame of it holds.
  *
@@ -118,9 +119,8 @@ for (const scale of [1, 1.6, 2]) {
     if (SAVE) mkdirSync(SAVE, { recursive: true })
     const shots: Record<string, { canvas: string; screen: string }> = {}
     const failed: string[] = []
-    /** The canvas once it stops changing, and the screen's screenshot,
-     * scrollbar too; kept and compared as asked. */
-    const state = async (name: string) => {
+    /** The canvas once it stops changing. */
+    const settled = async () => {
       const pixels = () =>
         canvas.evaluate((element) => (element as HTMLCanvasElement).toDataURL())
       let last = ""
@@ -135,8 +135,13 @@ for (const scale of [1, 1.6, 2]) {
           { intervals: [300] }
         )
         .toBe(true)
+      return last
+    }
+    /** The canvas once it stops changing, and the screen's screenshot,
+     * scrollbar too; kept and compared as asked. */
+    const state = async (name: string) => {
       const shot = {
-        canvas: last,
+        canvas: await settled(),
         screen: png(await screen.screenshot({ mask: [scrollbar] })),
       }
       shots[name] = shot
@@ -214,6 +219,16 @@ for (const scale of [1, 1.6, 2]) {
       .poll(async () => (await canvas.boundingBox())!.width)
       .toBeLessThan(box.width)
     await state("resized")
+
+    // A canvas whose context was lost, after a GPU reset say, comes back
+    // empty and with its state reset: the screen draws again in full.
+    // Main's renderer never heard of it, so this build alone checks it.
+    await canvas.evaluate((element) => {
+      const lost = element as HTMLCanvasElement
+      lost.getContext("2d")!.reset()
+      lost.dispatchEvent(new Event("contextrestored"))
+    })
+    expect(await settled(), "restored").toBe(shots.resized!.canvas)
 
     // Diagonals, drawn past their rows, scroll the screen too.
     await run("sh diagonals.sh", "drawn")
