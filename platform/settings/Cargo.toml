@@ -15,6 +15,7 @@ banda-harnesses = { path = "../../platform/harnesses/engine" }
 # A file written whole is put in place as the host does it (ADR 0090).
 banda-kernel = { path = "../../kernel" }
 banda-look = { path = "../../platform/look" }
+banda-machines = { path = "../../platform/machines/engine" }
 banda-sharing = { path = "../../platform/sharing/engine" }
 banda-terminal = { path = "../../apps/terminal/engine" }
 dunce.workspace = true

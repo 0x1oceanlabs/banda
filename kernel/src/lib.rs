@@ -37,6 +37,9 @@
 //!   through ([`ModuleProject::environment`], ADR 0084). It hands back
 //!   the handle that stops what it started ([`Started`]), and a
 //!   terminal's own handle ([`Pty`]).
+//! - [`Named`] is what this host is called and drawn by, which its
+//!   `welcome` says and `machine.named` streams ([`KernelBuilder::named`],
+//!   ADR 0095).
 //! - [`api`] serves all of it over WebSocket.
 
 pub mod access;
@@ -54,6 +57,7 @@ mod ids;
 mod kernel;
 pub mod methods;
 mod module;
+mod named;
 mod old;
 mod outbox;
 mod passes;
@@ -78,6 +82,7 @@ pub use ids::{AgentId, CommandId, EventId, Participant, PersonId, ProjectId};
 pub use kernel::{Kernel, KernelBuilder, ProjectSummary, decode};
 pub use methods::{Kind, Method, Nothing, Picture, Tool};
 pub use module::{Call, Module, Scope, Stream, Wall};
+pub use named::{MachineIcon, NAME_MOST, Named};
 pub use outbox::{Claim, Effect, LONGEST_LEASE, Lease, OnRestart, Outcome, Retry, Settled};
 pub use passes::{Pass, secret};
 pub use project::{Committed, ModuleProject, Project, Tally, WeakModuleProject};

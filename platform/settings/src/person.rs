@@ -1,6 +1,7 @@
 //! What only the Person changes in Banda's settings (ADR 0083): what a
 //! Harness runs, and with what; how freely a new Thread's Agent acts; what
-//! Agents may do in the browser; and what Banda sends. An Agent that
+//! Agents may do in the browser; what Banda sends; and what this machine is
+//! called and drawn by, which every window shows. An Agent that
 //! changes settings does so through the engine, which refuses these, until
 //! Banda asks the Person to agree (B15); and every line of `keys.toml`,
 //! which binds a key as `banda keys bind` checks it.
@@ -68,6 +69,7 @@ fn only_the_person_at(name: &str, parts: &[&str], value: Option<&str>) -> Option
         ("agents.toml", ["start", _, "mode"]) => Some(MODE_WORDS),
         ("browser.toml", ["agents", ..]) => Some(BROWSER_WORDS),
         ("sharing.toml", _) => Some(SHARING_WORDS),
+        ("machine.toml", _) => Some(MACHINE_WORDS),
         _ => None,
     }
 }
@@ -153,6 +155,9 @@ const BROWSER_WORDS: &str = "Only your Person says what Agents may do in Banda's
 const SHARING_WORDS: &str = "Only your Person says what Banda sends. Give them the line, to set \
                              it themselves.";
 
+const MACHINE_WORDS: &str = "Only your Person names this machine: every window shows it by that \
+                             name. Give them the line, to set it themselves.";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -204,6 +209,8 @@ mod tests {
             ("browser.toml", "agents.screenshots", Some("true")),
             ("browser.toml", "agents", Some("{ enabled = true }")),
             ("sharing.toml", "problems", Some("true")),
+            ("machine.toml", "name", Some("\"m1pro\"")),
+            ("machine.toml", "icon", None),
             ("look.toml", "tile..border", Some("2")),
         ] {
             assert!(only_the_person(name, key, value).is_some(), "{name} {key}");

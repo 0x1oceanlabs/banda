@@ -210,9 +210,17 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 - `keys_free`: Frees a key, in keys.toml: it goes to the Pane, as Alt+F to a shell, and the action that had it keeps its other keys.
 - `keys_reset`: Takes the Person's line of a key out of keys.toml, so Banda's own key is back.
 - `keys_mod`: Sets the mod, held for every Banda key and the mouse's moves: one or two of Alt, Ctrl and Super, as `Ctrl+Alt` where the desktop holds Alt. It moves the Person's lines with it.
-- `settings_set`: Sets a key of one of Banda's settings files, as `banda settings set` does (and does through this under your pass: behind the fence the files are read-only). It refuses what only your Person changes: which program a Harness runs and with what, how freely a new Thread's Agent acts, what Agents may do in the browser, what Banda sends, and keys, which `keys_bind` binds. Tell your Person what changed.
+- `settings_set`: Sets a key of one of Banda's settings files, as `banda settings set` does (and does through this under your pass: behind the fence the files are read-only). It refuses what only your Person changes: which program a Harness runs and with what, how freely a new Thread's Agent acts, what Agents may do in the browser, what Banda sends, this machine's name and icon, and keys, which `keys_bind` binds. Tell your Person what changed.
 - `settings_reset`: Takes a key of a settings file out, as `banda settings reset` does, with `settings_set`'s refusals.
 - `settings_rename`: Names a key of a settings file otherwise, in its table, as `banda settings rename` does, with `settings_set`'s refusals for the key and for what it becomes.
+
+## Machines (`machines`)
+
+What this machine is called and drawn by, the same in every window that shows it: a name of up to 16 characters and one of ten icons, as its own machine.toml says, else as Banda finds them from its hostname and what it is (ADR 0095). The engine says them in its welcome, and on the stream machine.named as they change; only the Person changes them.
+
+Its settings: `machine.toml`.
+
+Its methods, `banda call machines.<method>`: `get`.
 
 ## Notifications (`notifications`)
 

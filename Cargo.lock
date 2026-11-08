@@ -270,6 +270,7 @@ dependencies = [
  "banda-kernel",
  "banda-keys",
  "banda-look",
+ "banda-machines",
  "banda-problems",
  "banda-pulls",
  "banda-settings",
@@ -539,6 +540,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "banda-machines"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "banda-kernel",
+ "banda-keys",
+ "banda-look",
+ "futures",
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "ts-rs",
+ "windows",
+]
+
+[[package]]
 name = "banda-problems"
 version = "0.1.0"
 dependencies = [
@@ -583,6 +606,7 @@ dependencies = [
  "banda-harnesses",
  "banda-kernel",
  "banda-look",
+ "banda-machines",
  "banda-sharing",
  "banda-terminal",
  "dunce",

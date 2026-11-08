@@ -46,12 +46,13 @@ Banda is changed through text files, the same way the Person changes it.
    what only they change: which Harnesses there are and what each runs
    (a `harness.<id>` entry whole, and its `id`, `command`, `args`, `env`,
    `cli`, `of`, `carried` and `record`), the `mode` a new Thread starts
-   in, what Agents may do in the browser (browser.toml's `[agents]`), and
-   what Banda sends (sharing.toml). A key is bound with `banda keys
-   bind`, as the topic `keys` says. A new file of the Person's own that
-   no command writes, a sidebar preset or a theme, you write in your
-   Project, and give your Person the line that copies it into their
-   settings folder. Every key is optional: set only what changes.
+   in, what Agents may do in the browser (browser.toml's `[agents]`),
+   what Banda sends (sharing.toml), and this machine's name and icon
+   (machine.toml). A key is bound with `banda keys bind`, as the topic
+   `keys` says. A new file of the Person's own that no command writes, a
+   sidebar preset or a theme, you write in your Project, and give your
+   Person the line that copies it into their settings folder. Every key
+   is optional: set only what changes.
 3. Check it: `banda settings check`, or `banda settings check <file>` for
    a new file, prints `path:line:column: problem`
    for each mistake, and nothing when all is well. `banda settings schema
@@ -216,4 +217,5 @@ in `~/.config/banda-local/`, as their data and state too:
 | `agents.toml` | what Enter does with a message written while the Agent works |
 | `keys.toml` | the Person's keys, `[binds]`: `"Alt+M" = "column.maximize"`, or `"none"` to free a key; `mod`, the keys held for every Banda key, `"Ctrl+Alt"` where the desktop holds Alt; Ctrl+Alt+Shift+K brings Banda's own back. Bind with `banda keys` or the `keys_*` tools: the topic `keys` |
 | `harnesses.toml` | the Harnesses Threads start with |
+| `machine.toml` | this machine's name and icon, as every window shows it; `banda machine` prints them |
 | `schemas/` | each file's JSON Schema, written by Banda for editors |

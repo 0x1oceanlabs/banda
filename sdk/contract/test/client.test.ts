@@ -150,3 +150,20 @@ test("the status says whether the engine's fence holds, as its welcome does", as
   expect(older.status).not.toHaveProperty("fence")
   older.close()
 })
+
+test("the status names the machine, as its welcome does", async () => {
+  const engine = new Engine(address)
+  await flush()
+  const socket = Socket.made[0]
+  socket.onopen?.()
+  const named = { name: "arc", icon: "server" }
+  socket.say({ type: "welcome", engine: "test", modules: [], boot: "b", named })
+  expect(engine.status).toMatchObject({ state: "open", named })
+  engine.close()
+
+  const older = new Engine(address)
+  await flush()
+  Socket.made[1].welcome()
+  expect(older.status).not.toHaveProperty("named")
+  older.close()
+})

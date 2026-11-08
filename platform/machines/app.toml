@@ -1,0 +1,16 @@
+# The machines module, as it declares itself (ADR 0022). What its code
+# says, its methods, its code declares; this holds the rest.
+id = "machines"
+kind = "platform"
+name = "Machines"
+about = "What this machine is called and drawn by, the same in every window that shows it: a name of up to 16 characters and one of ten icons, as its own machine.toml says, else as Banda finds them from its hostname and what it is (ADR 0095). The engine says them in its welcome, and on the stream machine.named as they change; only the Person changes them."
+version = "0.1.0"
+# The major of the App API it is written to (ADR 0062, ADR 0082).
+api = 1
+from-banda = true
+# The settings files it owns, in ~/.config/banda.
+settings = ["machine.toml"]
+
+# What it needs of Banda (ADR 0082, decision 2): nothing it could
+# declare here is built yet.
+[needs]

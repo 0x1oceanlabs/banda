@@ -23,6 +23,7 @@ use banda_harnesses::Harnesses;
 use banda_harnesses::carried::{Carried, Here};
 use banda_kernel::api::{self, OwnerSecret};
 use banda_kernel::{Kernel, PROTOCOL};
+use banda_machines::Machine;
 use std::fs::{File, TryLockError};
 use std::path::Path;
 
@@ -102,8 +103,12 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         program,
         engine: running.url(),
     };
+    // What this machine is called and drawn by: found once, as it is,
+    // and named over that by its machine.toml.
+    let machine = Machine::new(&places.config, banda_machines::found().await);
     let builder = Kernel::builder(&places.root, &places.data, owner)
         .machine(places.machine())
+        .named(machine.named())
         // Every Project's programs run on this host, as the Person's own
         // do (ADR 0084), a Harness's behind the fence where it holds (ADR
         // 0083).
@@ -115,6 +120,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         harnesses: &harnesses,
         pipe: &pipe,
         kept: &kept,
+        machine: &machine,
     };
     let opening = apps::serve(builder, &host).open();
     let kernel = tokio::select! {

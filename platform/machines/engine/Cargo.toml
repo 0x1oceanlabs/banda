@@ -1,0 +1,37 @@
+[package]
+name = "banda-machines"
+description = "The machines module: what this machine is called and drawn by, from its machine.toml over what Banda finds, in the engine."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+banda-kernel = { path = "../../../kernel" }
+banda-look = { path = "../../../platform/look" }
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sysinfo.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+ts-rs.workspace = true
+
+# A battery is asked of Windows through its WinRT API, which needs no
+# unsafe code.
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = ["Devices_Power", "System_Power"] }
+
+[dev-dependencies]
+axum.workspace = true
+# The settings' `set`, which writes machine.toml in the tests as the
+# window does.
+banda-keys = { path = "../../keys/engine" }
+futures.workspace = true
+tempfile.workspace = true
+tokio-tungstenite.workspace = true
+
+[lints]
+workspace = true

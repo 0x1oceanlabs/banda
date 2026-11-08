@@ -10,7 +10,7 @@ export type ClientFrame = { "type": "hello", protocol: number, token: string, } 
  */
 command?: CommandId, params: JsonValue, } | { "type": "subscribe", id: number, project: ProjectId, after: number, filter: EventFilter, } | { "type": "unsubscribe", id: number, subscription: number, } | { "type": "stream", id: number, 
 /**
- * None for a stream of this machine's: `window.requests`, or a
- * module of the machine's.
+ * None for a stream of this machine's: `window.requests`,
+ * `machine.named`, or a module of the machine's.
  */
 project?: ProjectId, method: string, params: JsonValue, };
