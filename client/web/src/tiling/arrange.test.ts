@@ -349,7 +349,10 @@ describe("send", () => {
   test("sends a change under the command ID given, which names what it makes", async () => {
     const sent: unknown[][] = []
     const engine = {
-      command: (...call: unknown[]) => (sent.push(call), Promise.resolve({})),
+      commandAt: (...call: unknown[]) => (
+        sent.push(call),
+        Promise.resolve({ answer: { at: null } })
+      ),
     } as unknown as Engine
     const close = { method: "workspaces.close", params: { pane: "p" } } as const
     await sendToEngine(engine, close, "019a5b2e-3c4d-7e8f-9a0b-1c2d3e4f5a6b")

@@ -7,8 +7,10 @@
  * two make the `Workspaces` the window draws (`model.ts`).
  *
  * A key still works out its change with `model.ts`, which says where a
- * Pane goes; what that puts where becomes one command, and the engine's
- * event draws it. Pure, so plain tests cover it.
+ * Pane goes; what that puts where becomes one command, which the window
+ * draws at once with the client's copy of the engine's commands
+ * (`pending.ts`), until the engine's event holds it. Pure, so plain tests
+ * cover it.
  */
 import type { CommandId, Engine, Event } from "@banda/contract"
 import type {
@@ -45,13 +47,17 @@ export type View = {
   focus: Record<string, Held>
   /** Each column's shown Pane, by the column's ID. */
   active: Record<string, Held>
-  /** A Pane to focus once the arrangement stands past `after` in the
-   * machine's log: one just opened or moved, which is then where the
-   * change put it. */
+  /** A Pane to focus, one just opened or moved: where the change put it. */
   want?: Want
 }
 
-type Want = { pane: string; after: number }
+/**
+ * A Pane to focus: while the command that put it there waits for its fact
+ * (`command`, `pending.ts`), or once the arrangement stands past `after`
+ * in the machine's log, as a window kept it before it drew its changes at
+ * once, and an arrangement it moved over waits for still.
+ */
+export type Want = { pane: string; command?: string; after?: number }
 
 export const NO_VIEW: View = { focus: {}, active: {} }
 
@@ -127,7 +133,7 @@ export function viewOf(state: Workspaces, want?: Want, at = Infinity): View {
   const workspace = state.list[state.current]
   if (workspace) view.current = { id: workspace.id, at: state.current }
   const shown = entries(state).some((entry) => entry.id === want?.pane)
-  if (want && (at < want.after || !shown)) view.want = want
+  if (want && (at < (want.after ?? 0) || !shown)) view.want = want
   return view
 }
 
@@ -546,13 +552,14 @@ export function tidied(state: Workspaces): Command | undefined {
 
 /**
  * Runs a command on this machine's workspaces, in no Project, under `id`
- * when given: what it makes takes IDs derived from it (`seeded`).
+ * when given: what it makes takes IDs derived from it (`seeded`). Its
+ * answer comes with its place in the machine's log (ADR 0082, decision 4).
  */
 export function send(
   engine: Engine,
   command: Command,
   id?: CommandId
-): Promise<unknown> {
+): Promise<{ answer: { at: number | null; pane?: string }; at?: number }> {
   const { method, params } = command
-  return engine.command(method, params as never, undefined, id)
+  return engine.commandAt(method, params as never, undefined, id)
 }

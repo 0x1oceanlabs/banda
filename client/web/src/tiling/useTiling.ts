@@ -169,10 +169,7 @@ export function useTiling({
         // The change's command ID: what it makes takes IDs derived from
         // it, so a client can draw it before the engine answers.
         const id = newId()
-        const answer = (await send(engine, next.command, id)) as {
-          at: number | null
-          pane?: string
-        }
+        const { answer } = await send(engine, next.command, id)
         const want =
           next.focus === false ? undefined : (next.want ?? answer.pane)
         const after = answeredAt(answer.at)
