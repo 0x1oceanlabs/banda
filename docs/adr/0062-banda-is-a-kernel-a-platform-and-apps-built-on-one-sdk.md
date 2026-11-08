@@ -629,6 +629,8 @@ a native phone's renderer.
 - ADR 0022, decisions 1 and 2: `module.toml` becomes `app.toml`, and
   every list of Apps, the window's included, is made from them
   (decision 11). Decision 6, the unstable marks, stays.
+  - _Since 2026-11-08, step B1 (b):_ every manifest is `app.toml`, the
+    window's own part's (`client/web/app.toml`) included.
 - ADR 0025, decision 1: one key in flight gives way to prediction and
   intent commands (decision 17).
 - ADR 0029, decision 1: as ADR 0083 decision 4 amends it; the Agents'

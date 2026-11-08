@@ -281,7 +281,7 @@ The kernel holds only what every module needs, and it names no module.
   dropping a table (its data is kept, ADR 0085), and renaming one, as
   SQLite does not tell the new name (a module rebuilds a table under a
   new name it owns). A module whose id changed keeps its tables' names,
-  for data at rest is never renamed: its `module.toml` declares the
+  for data at rest is never renamed: its `app.toml` declares the
   prefixes it kept, `legacy-prefixes`, which its engine part tells the
   kernel (`Module::legacy_prefixes`), and the kernel refuses one that is
   another module's name or reserved (`kernel`, `sqlite`, `pragma`,
@@ -517,12 +517,13 @@ contract. It is one folder: an App's in `apps/`, the platform's in
 <name>/
   engine/      Rust crate: rules · store · operation · adapters
   pane/        React package: its window part, one defineModule
-  module.toml  id, kind, name, version, api, from Banda, settings files,
+  app.toml     id, kind, name, version, api, from Banda, settings files,
                legacy table prefixes, needs (empty yet), unstable marks
   window.json  its window part as the engine reads it, written by the window's tests
 ```
 
-A module declares itself in its code and a short `module.toml` (ADR 0022).
+A module declares itself in its code and a short `app.toml` (ADR 0022,
+which calls it `module.toml`).
 Its engine part is the `Module` it gives the kernel, with its `methods!`
 table. Its window part is one
 `defineModule({ id, engine, panes, watches, actions, sources, bar, threadDetails, previewers, listed, start })`
@@ -547,19 +548,21 @@ every module's and gives them to its Panes as `@banda/ui`'s
 else the closest match (extension, MIME, MIME family, first bytes), then
 the higher priority. A view is keyed by its previewer, so the next file of
 its kind updates it rather than drawing it anew.
-`module.toml` holds only what no code says. Its `kind` is `app` in
+`app.toml` holds only what no code says. Its `kind` is `app` in
 `apps/` and `platform` in `platform/`; `api` is the major of the App
 API it is written to, a whole number; `[needs]` stays empty until what
-an App needs (ADR 0082, decision 2) is built. It becomes `app.toml`
-(ADR 0062, decision 11).
+an App needs (ADR 0082, decision 2) is built. The window's own part
+declares itself in `client/web/app.toml` too, with no `kind`, `api` or
+`[needs]`, as it is neither an App nor a platform part (ADR 0087,
+decision 1).
 `banda modules` prints the three as one JSON per module
 (`engine/src/modules.rs`), and the skill's `modules` topic is written
 from it. A path a module takes that the contract lacks is an unstable mark
-in its `module.toml`, with why; the tests hold the count at a ceiling that
+in its `app.toml`, with why; the tests hold the count at a ceiling that
 only falls, and `scripts/check.sh` prints them.
 
 **One list of Apps.** `engine/build.rs` scans the folders of `apps/` and
-`platform/` with a `module.toml`, Apps first, each bucket by name. It
+`platform/` with an `app.toml`, Apps first, each bucket by name. It
 refuses a manifest whose id is not its folder's name, whose kind is not
 its bucket's, or whose `api` or `[needs]` is wrong, and a folder with a
 part's files (`engine/Cargo.toml`, `pane/` or `desktop/`'s
@@ -1611,7 +1614,7 @@ images. Sweeps retain images still referenced by a fork after a rewind.
   decision 1). In the window (`client/web/src/architecture.test.ts`),
   only `modules.ts` and the bridge's table name a module's package, and
   nothing more animates a size or a place (ADR 0088). Its tests find the
-  Apps' and platform parts' folders through `parts`
+  Apps' and platform parts' folders by their `app.toml` through `parts`
   (`@banda/ui/testing/architecture`), which fails when it finds none. Of
   ADR 0087's checks, three ratchets that only fall hold what the Tiling
   imports of the Window, the App strings in the Window and the Tiling,

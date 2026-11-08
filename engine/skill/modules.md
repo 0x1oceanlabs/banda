@@ -5,7 +5,7 @@ description: Banda's modules - what each is, the settings files it owns, its act
 
 # Modules
 
-<!-- Written by banda's tests from each module's module.toml and code: do not edit. -->
+<!-- Written by banda's tests from each module's app.toml and code: do not edit. -->
 
 Banda's work is done by modules. `banda modules` prints all of this as JSON, one line per module; `banda modules --unstable` lists the paths a module takes that are not in the contract yet.
 

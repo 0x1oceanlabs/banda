@@ -210,7 +210,7 @@ enum Command {
         export: Option<PathBuf>,
     },
     /// Prints what each module offers, one JSON object per line: its
-    /// module.toml, its engine part's methods and its window part's
+    /// app.toml, its engine part's methods and its window part's
     /// Panes, actions and sources, each action with its keys by level
     /// and what it takes; the window's own, the tiling's, as `window`.
     Modules {

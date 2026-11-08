@@ -215,7 +215,7 @@ _Avoid_: permission (that is a Harness's mode).
 **Manifest**:
 What an App offers and needs, as it declares it (ADR 0022): its engine
 part's `methods!` table, its window part's `defineModule`, and its short
-`app.toml` (`module.toml` until the rename, ADR 0062) for what no code
+`app.toml` (`module.toml` before the rename, ADR 0062) for what no code
 says, such as what it hears, calls and asks of a device (ADR 0082).
 `banda modules` prints all three.
 

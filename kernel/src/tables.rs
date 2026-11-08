@@ -5,7 +5,7 @@
 //! - A module's tables and indexes go by its name and `_`: `notes` owns
 //!   `notes_items`. A module whose id changed keeps its tables' names, for
 //!   data at rest is never renamed: the prefixes it kept are its legacy
-//!   ones, which its `module.toml` declares (`legacy-prefixes`,
+//!   ones, which its `app.toml` declares (`legacy-prefixes`,
 //!   [`Module::legacy_prefixes`]).
 //! - The kernel's own tables, `kernel_*`, a module reaches only through
 //!   the kernel's API: [`Tx::emit`](crate::Tx::emit),
