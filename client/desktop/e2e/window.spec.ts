@@ -1766,6 +1766,9 @@ test("opened again in its Pane, a Thread left at its end opens at the start of w
   await expect(thread.getByText("You said: one")).toBeVisible()
 
   const go = await pages(window, composer)
+  // Left at its end: what the Person sent is drawn before the Pane
+  // closes, which waits for no answer now (ADR 0088, T-pred; #900).
+  await expect(log.getByText("pages 30", { exact: true })).toBeVisible()
   await thread.getByRole("button", { name: "Close one" }).click()
   await expect(log).toHaveCount(0)
   go()
