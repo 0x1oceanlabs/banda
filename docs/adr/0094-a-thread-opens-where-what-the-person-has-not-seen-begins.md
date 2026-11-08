@@ -84,12 +84,14 @@ still counts as seen, for now (see "Open").
    - A Person who left while scrolled up comes back to their place, as
      `ScrollPlace` does now. Rule 2 wins over rule 3.
 
-4. **The button to the end says that something new is below.** When the
-   Thread opens by rule 3 and there is more below, the button says so,
-   next to what it says already ("2 queued", "waiting for you"; ADR 0010,
-   decision 8). The Person then knows the reply goes on below and has not
-   stopped. Its words and look are a visible step: a mockup goes to Roma
-   first.
+4. **The button to the end stays a plain arrow.** When the Thread opens
+   by rule 3, what came runs on past the bottom of the screen, and the
+   round ↓ already shows there is more below. It says nothing new beside
+   what it says already ("2 queued", "waiting for you"; ADR 0010,
+   decision 8). Roma chose this from a mockup of three (2026-11-08: the
+   arrow as it is, the arrow with a dot, the arrow with "New below"). If
+   the Person comes to mix up "new below" and "older below, I scrolled
+   up", a dot in the accent colour on the arrow is the next step.
 
 5. **The rules are ours, and tests hold them.** The Thread places itself
    by these rules in its own code (`Transcript.tsx`, `ScrollPlace.tsx`),
@@ -105,7 +107,7 @@ still counts as seen, for now (see "Open").
    sight, and on its return places the first line after it near the top.
    A window test covers each kind of away: another workspace, beside the
    screen, another Thread in the Pane. One PR.
-3. Rule 4: a mockup of the button for Roma, then the PR.
+3. Rule 4: nothing to build; the arrow stays.
 
 ## Open
 
