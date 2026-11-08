@@ -1,8 +1,9 @@
 import {
+  GHOSTTY_CELL,
   GHOSTTY_CELL_WIDE,
-  ghosttyColorsEqual,
-  type GhosttyCell,
-  type GhosttyColor,
+  ghosttyCellTextAt,
+  ghosttyCellWide,
+  type GhosttyGrid,
   type GhosttySnapshot,
 } from "./core";
 import { drawGlyph, drawsItself, onDevicePixel } from "../glyphs";
@@ -22,38 +23,47 @@ export interface GhosttyCellRange {
 
 const DEFAULT_SELECTION_BACKGROUND = "rgba(72, 122, 191, 0.35)";
 
-function cssColor(color: GhosttyColor): string {
-  return `rgb(${color.r}, ${color.g}, ${color.b})`;
+// Banda: colours are 0xRRGGBB (ADR 0088, step P4); each one's CSS is made once.
+const cssColors = new Map<number, string>();
+
+function cssColor(color: number): string {
+  let css = cssColors.get(color);
+  if (css === undefined) {
+    if (cssColors.size > 1024) cssColors.clear();
+    css = `rgb(${(color >> 16) & 0xff}, ${(color >> 8) & 0xff}, ${color & 0xff})`;
+    cssColors.set(color, css);
+  }
+  return css;
 }
 
-function sameTextStyle(left: GhosttyCell, right: GhosttyCell): boolean {
+// Banda: the lines a cell's style draws over it.
+const DECORATIONS = GHOSTTY_CELL.underline | GHOSTTY_CELL.strikethrough | GHOSTTY_CELL.overline;
+
+// Banda: the style bits a run of text shares, besides its foreground.
+const TEXT_STYLE = GHOSTTY_CELL.bold | GHOSTTY_CELL.italic | GHOSTTY_CELL.invisible;
+
+function sameTextStyle(grid: GhosttyGrid, left: number, right: number): boolean {
   // Selection only tints the background; splitting text runs shifts glyph spacing when advances differ from cell width.
   return (
-    ghosttyColorsEqual(left.foreground, right.foreground) &&
-    left.bold === right.bold &&
-    left.italic === right.italic &&
-    left.invisible === right.invisible
+    grid.foregrounds[left] === grid.foregrounds[right] &&
+    (grid.styles[left]! & TEXT_STYLE) === (grid.styles[right]! & TEXT_STYLE)
   );
 }
 
-function ghosttyTextRunEnd(
-  cells: readonly GhosttyCell[],
-  start: number,
-  sameStyle: (cell: GhosttyCell) => boolean,
-): number {
+// Banda: cells by their index in the grid; the run ends by its row's end.
+function ghosttyTextRunEnd(grid: GhosttyGrid, start: number, rowEnd: number): number {
   let end = start + 1;
-  while (end < cells.length) {
-    const next = cells[end];
-    if (!next) break;
-    if (next.wide === GHOSTTY_CELL_WIDE.spacerTail) {
+  while (end < rowEnd) {
+    if (ghosttyCellWide(grid, end) === GHOSTTY_CELL_WIDE.spacerTail) {
       end += 1;
       continue;
     }
+    const text = ghosttyCellTextAt(grid, end);
     if (
-      next.text.length === 0 ||
+      text.length === 0 ||
       // Banda: a glyph the terminal draws itself, powerline's too, is a run of its own.
-      drawsItself(next.text) ||
-      !sameStyle(next)
+      drawsItself(text) ||
+      !sameTextStyle(grid, end, start)
     )
       break;
     end += 1;
@@ -61,10 +71,10 @@ function ghosttyTextRunEnd(
   return end;
 }
 
-function fontForCell(cell: GhosttyCell, fontSize: number, fontFamily: string): string {
-  const style = cell.italic ? "italic" : "normal";
-  const weight = cell.bold ? "700" : "400";
-  return `${style} ${weight} ${fontSize}px ${fontFamily}`;
+function fontForCell(style: number, fontSize: number, fontFamily: string): string {
+  const italic = (style & GHOSTTY_CELL.italic) !== 0 ? "italic" : "normal";
+  const weight = (style & GHOSTTY_CELL.bold) !== 0 ? "700" : "400";
+  return `${italic} ${weight} ${fontSize}px ${fontFamily}`;
 }
 
 export function measureGhosttyCell(
@@ -131,6 +141,8 @@ export function renderGhosttySnapshot(options: {
     cursorOn,
     previousCursorY,
   } = options;
+  const grid = snapshot.grid;
+  const { cols, foregrounds, backgrounds, styles } = grid;
   const focused = options.focused ?? true;
   const selectionBackground = options.selectionBackground ?? DEFAULT_SELECTION_BACKGROUND;
   const hoveredLinkRange = options.hoveredLinkRange ?? null;
@@ -174,38 +186,36 @@ export function renderGhosttySnapshot(options: {
   // Banda: with ligatures off, Chromium draws each letter on its own (ADR 0047).
   context.textRendering = options.ligatures === false ? "optimizeSpeed" : "auto";
   for (const rowIndex of rowsToDraw) {
-    const row = snapshot.rowData[rowIndex];
-    if (!row) continue;
+    if (rowIndex < 0 || rowIndex >= grid.rows) continue;
     const top = originY + rowIndex * metrics.height;
+    // Banda: the row's cells by their index in the grid (ADR 0088, step P4).
+    const rowStart = rowIndex * cols;
+    const rowEnd = rowStart + cols;
 
     // Banda: the whole width, padding too, so no half pixel at either edge
     // keeps what a cursor left there.
     context.clearRect(0, top, context.canvas.width, metrics.height);
 
-    let backgroundStart = 0;
-    while (backgroundStart < row.cells.length) {
-      const first = row.cells[backgroundStart];
-      if (!first) break;
+    let backgroundStart = rowStart;
+    while (backgroundStart < rowEnd) {
+      const background = backgrounds[backgroundStart]!;
+      const selected = styles[backgroundStart]! & GHOSTTY_CELL.selected;
       let backgroundEnd = backgroundStart + 1;
-      while (backgroundEnd < row.cells.length) {
-        const next = row.cells[backgroundEnd];
-        if (
-          !next ||
-          next.selected !== first.selected ||
-          !ghosttyColorsEqual(next.background, first.background)
-        ) {
-          break;
-        }
+      while (
+        backgroundEnd < rowEnd &&
+        (styles[backgroundEnd]! & GHOSTTY_CELL.selected) === selected &&
+        backgrounds[backgroundEnd] === background
+      ) {
         backgroundEnd += 1;
       }
-      if (first.selected || !ghosttyColorsEqual(first.background, snapshot.background)) {
-        const left = cellX(backgroundStart);
-        const width = cellX(backgroundEnd) - left;
-        if (!ghosttyColorsEqual(first.background, snapshot.background)) {
-          context.fillStyle = cssColor(first.background);
+      if (selected || background !== snapshot.background) {
+        const left = cellX(backgroundStart - rowStart);
+        const width = cellX(backgroundEnd - rowStart) - left;
+        if (background !== snapshot.background) {
+          context.fillStyle = cssColor(background);
           context.fillRect(left, top, width, metrics.height);
         }
-        if (first.selected) {
+        if (selected) {
           context.fillStyle = selectionBackground;
           context.fillRect(left, top, width, metrics.height);
         }
@@ -213,70 +223,58 @@ export function renderGhosttySnapshot(options: {
       backgroundStart = backgroundEnd;
     }
 
-    let runStart = 0;
-    while (runStart < row.cells.length) {
-      const first = row.cells[runStart];
-      if (!first) break;
-      if (first.text.length === 0) {
+    let runStart = rowStart;
+    while (runStart < rowEnd) {
+      const firstText = ghosttyCellTextAt(grid, runStart);
+      if (firstText.length === 0) {
         runStart += 1;
         continue;
       }
-      if (drawsItself(first.text)) {
-        if (!first.invisible) {
-          context.fillStyle = cssColor(first.foreground);
-          drawGlyph(context, first.text, cellOf(runStart, top));
+      const style = styles[runStart]!;
+      const invisible = (style & GHOSTTY_CELL.invisible) !== 0;
+      if (drawsItself(firstText)) {
+        if (!invisible) {
+          context.fillStyle = cssColor(foregrounds[runStart]!);
+          drawGlyph(context, firstText, cellOf(runStart - rowStart, top));
         }
         runStart += 1;
         continue;
       }
-      const runEnd = ghosttyTextRunEnd(row.cells, runStart, (cell) => sameTextStyle(cell, first));
-      const text = row.cells
-        .slice(runStart, runEnd)
-        .map((cell) => cell.text)
-        .join("");
-      if (!first.invisible && text.trim().length > 0) {
+      const runEnd = ghosttyTextRunEnd(grid, runStart, rowEnd);
+      let text = firstText;
+      for (let cell = runStart + 1; cell < runEnd; cell += 1) text += ghosttyCellTextAt(grid, cell);
+      if (!invisible && text.trim().length > 0) {
+        const left = padding + (runStart - rowStart) * metrics.width;
         context.save();
         context.beginPath();
-        context.rect(
-          padding + runStart * metrics.width,
-          top,
-          (runEnd - runStart) * metrics.width,
-          metrics.height,
-        );
+        context.rect(left, top, (runEnd - runStart) * metrics.width, metrics.height);
         context.clip();
-        context.font = fontForCell(first, fontSize, fontFamily);
-        context.fillStyle = cssColor(first.foreground);
-        context.fillText(
-          text,
-          padding + runStart * metrics.width,
-          top + metrics.baseline,
-          (runEnd - runStart) * metrics.width,
-        );
+        context.font = fontForCell(style, fontSize, fontFamily);
+        context.fillStyle = cssColor(foregrounds[runStart]!);
+        context.fillText(text, left, top + metrics.baseline, (runEnd - runStart) * metrics.width);
         context.restore();
       }
       runStart = runEnd;
     }
 
-    for (let column = 0; column < row.cells.length; column += 1) {
-      const cell = row.cells[column];
+    for (let column = 0; column < cols; column += 1) {
+      const style = styles[rowStart + column]!;
       const hoveredLink =
         hoveredLinkRange !== null &&
         rowIndex >= hoveredLinkRange.start.y &&
         rowIndex <= hoveredLinkRange.end.y &&
         (rowIndex > hoveredLinkRange.start.y || column >= hoveredLinkRange.start.x) &&
         (rowIndex < hoveredLinkRange.end.y || column <= hoveredLinkRange.end.x);
-      if (!cell || (!cell.underline && !cell.strikethrough && !cell.overline && !hoveredLink)) {
-        continue;
-      }
-      context.fillStyle = cssColor(cell.foreground);
+      if ((style & DECORATIONS) === 0 && !hoveredLink) continue;
+      context.fillStyle = cssColor(foregrounds[rowStart + column]!);
       const { left, width } = cellOf(column, top);
-      if (cell.underline || hoveredLink) {
+      if ((style & GHOSTTY_CELL.underline) !== 0 || hoveredLink) {
         context.fillRect(left, top + metrics.height - 2, width, 1);
       }
-      if (cell.strikethrough) {
+      if ((style & GHOSTTY_CELL.strikethrough) !== 0) {
         context.fillRect(left, top + Math.floor(metrics.height * 0.55), width, 1);
       }
-      if (cell.overline) context.fillRect(left, top + 1, width, 1);
+      if ((style & GHOSTTY_CELL.overline) !== 0) context.fillRect(left, top + 1, width, 1);
     }
   }
 
@@ -298,14 +296,16 @@ export function renderGhosttySnapshot(options: {
       context.strokeRect(left + 0.5, top + 0.5, width - 1, metrics.height - 1);
     } else {
       context.fillRect(left, top, width, metrics.height);
-      const cell = snapshot.rowData[snapshot.cursorY]?.cells[snapshot.cursorX];
-      if (cell?.text) {
+      const index = snapshot.cursorY * cols + snapshot.cursorX;
+      const text =
+        snapshot.cursorY < grid.rows && snapshot.cursorX < cols ? ghosttyCellTextAt(grid, index) : "";
+      if (text) {
         context.fillStyle = cssColor(snapshot.background);
-        if (drawsItself(cell.text)) {
-          drawGlyph(context, cell.text, under);
+        if (drawsItself(text)) {
+          drawGlyph(context, text, under);
         } else {
-          context.font = fontForCell(cell, fontSize, fontFamily);
-          context.fillText(cell.text, left, top + metrics.baseline, width);
+          context.font = fontForCell(styles[index]!, fontSize, fontFamily);
+          context.fillText(text, left, top + metrics.baseline, width);
         }
       }
     }

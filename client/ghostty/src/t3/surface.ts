@@ -3,8 +3,11 @@ import { SELECTION_MULTI_CLICK_INTERVAL_MS } from "./lib/shared";
 import { collectWrappedTerminalLinkLine, extractTerminalLinks } from "./lib/terminal-links";
 import {
   GHOSTTY_CELL_WIDE,
+  GHOSTTY_LINE,
   GhosttyTerminalCore,
-  type GhosttyCell,
+  ghosttyCellTextAt,
+  ghosttyCellWide,
+  type GhosttyGrid,
   type GhosttyScrollbar,
   type GhosttySnapshot,
   type GhosttyCursor,
@@ -207,25 +210,42 @@ function terminalGridCellAt(options: {
   };
 }
 
-function terminalCellText(cell: GhosttyCell): string {
-  if (cell.wide === GHOSTTY_CELL_WIDE.spacerTail || cell.wide === GHOSTTY_CELL_WIDE.spacerHead) {
+// Banda: a row is its index in the snapshot's typed grid (ADR 0088, step P4).
+function terminalCellText(grid: GhosttyGrid, index: number): string {
+  const wide = ghosttyCellWide(grid, index);
+  if (wide === GHOSTTY_CELL_WIDE.spacerTail || wide === GHOSTTY_CELL_WIDE.spacerHead) {
     return "";
   }
-  return cell.text || " ";
+  return ghosttyCellTextAt(grid, index) || " ";
 }
 
-function terminalRowText(row: GhosttySnapshot["rowData"][number], trimRight: boolean): string {
-  const text = row.cells.map(terminalCellText).join("");
+function terminalRowText(grid: GhosttyGrid, row: number, trimRight: boolean): string {
+  let text = "";
+  for (let column = 0; column < grid.cols; column += 1) {
+    text += terminalCellText(grid, row * grid.cols + column);
+  }
   return trimRight ? text.trimEnd() : text;
 }
 
-function terminalColumnOffset(row: GhosttySnapshot["rowData"][number], column: number): number {
+function terminalColumnOffset(grid: GhosttyGrid, row: number, column: number): number {
   let offset = 0;
   for (let cellIndex = 0; cellIndex < column; cellIndex += 1) {
-    const cell = row.cells[cellIndex];
-    offset += cell ? terminalCellText(cell).length : 1;
+    offset +=
+      cellIndex < grid.cols ? terminalCellText(grid, row * grid.cols + cellIndex).length : 1;
   }
   return offset;
+}
+
+/** Banda: the width of the cell at `column` of `row`; none outside the row. */
+function terminalCellWide(grid: GhosttyGrid, row: number, column: number): number | undefined {
+  return column >= 0 && column < grid.cols
+    ? ghosttyCellWide(grid, row * grid.cols + column)
+    : undefined;
+}
+
+/** Banda: whether `row` is in the grid and has the GHOSTTY_LINE `mark`. */
+function terminalRowHas(grid: GhosttyGrid, row: number, mark: number): boolean {
+  return row >= 0 && row < grid.rows && (grid.lines[row]! & mark) !== 0;
 }
 
 export interface TerminalLinkWithRange {
@@ -246,41 +266,46 @@ function isSameTerminalLink(
   );
 }
 
-function terminalColumnAtOffset(row: GhosttySnapshot["rowData"][number], offset: number): number {
-  for (let column = 0; column < row.cells.length; column += 1) {
-    const nextOffset = terminalColumnOffset(row, column + 1);
+function terminalColumnAtOffset(grid: GhosttyGrid, row: number, offset: number): number {
+  for (let column = 0; column < grid.cols; column += 1) {
+    const nextOffset = terminalColumnOffset(grid, row, column + 1);
     if (offset < nextOffset) return column;
   }
-  return Math.max(0, row.cells.length - 1);
+  return Math.max(0, grid.cols - 1);
 }
 
 export function terminalLinkAtPositionWithRange(
-  rows: GhosttySnapshot["rowData"],
+  grid: GhosttyGrid,
   rowIndex: number,
   column: number,
 ): TerminalLinkWithRange | null {
+  const inGrid = (row: number) => row >= 0 && row < grid.rows;
   const wrappedLine = collectWrappedTerminalLinkLine(rowIndex + 1, (index) => {
-    const row = rows[index];
-    if (!row) return null;
+    if (!inGrid(index)) return null;
     return {
-      isWrapped: row.isWrapContinuation,
-      translateToString: (trimRight = false) => terminalRowText(row, trimRight),
+      isWrapped: terminalRowHas(grid, index, GHOSTTY_LINE.wrapContinuation),
+      translateToString: (trimRight = false) => terminalRowText(grid, index, trimRight),
     };
   });
   if (!wrappedLine) return null;
   // A wrapped line starting above the viewport would produce a truncated, incorrect link.
   const firstSegment = wrappedLine.segments[0];
-  if (firstSegment && rows[firstSegment.bufferLineNumber - 1]?.isWrapContinuation) {
+  if (
+    firstSegment &&
+    terminalRowHas(grid, firstSegment.bufferLineNumber - 1, GHOSTTY_LINE.wrapContinuation)
+  ) {
     return null;
   }
   const segment = wrappedLine.segments.find((value) => value.bufferLineNumber === rowIndex + 1);
-  const row = rows[rowIndex];
-  if (!segment || !row) return null;
+  const row = rowIndex;
+  if (!segment || !inGrid(row)) return null;
   const lastSegment = wrappedLine.segments.at(-1);
-  const lastRow = lastSegment ? rows[lastSegment.bufferLineNumber - 1] : undefined;
-  const continuesBelowViewport = lastRow !== undefined && lastRow.wrapsToNext;
-  const hitColumn = row.cells[column]?.wide === GHOSTTY_CELL_WIDE.spacerTail ? column - 1 : column;
-  const offset = segment.startIndex + terminalColumnOffset(row, hitColumn);
+  const continuesBelowViewport =
+    lastSegment !== undefined &&
+    terminalRowHas(grid, lastSegment.bufferLineNumber - 1, GHOSTTY_LINE.wrapsToNext);
+  const hitColumn =
+    terminalCellWide(grid, row, column) === GHOSTTY_CELL_WIDE.spacerTail ? column - 1 : column;
+  const offset = segment.startIndex + terminalColumnOffset(grid, row, hitColumn);
   for (const match of extractTerminalLinks(wrappedLine.text)) {
     if (offset >= match.start && offset < match.end) {
       if (match.end === wrappedLine.text.length && continuesBelowViewport) return null;
@@ -290,20 +315,21 @@ export function terminalLinkAtPositionWithRange(
       const endSegment = wrappedLine.segments.find(
         (value) => match.end - 1 >= value.startIndex && match.end - 1 < value.endIndex,
       );
-      const startRow = startSegment ? rows[startSegment.bufferLineNumber - 1] : undefined;
-      const endRow = endSegment ? rows[endSegment.bufferLineNumber - 1] : undefined;
-      if (!startSegment || !endSegment || !startRow || !endRow) return null;
-      const endColumn = terminalColumnAtOffset(endRow, match.end - 1 - endSegment.startIndex);
+      if (!startSegment || !endSegment) return null;
+      const startRow = startSegment.bufferLineNumber - 1;
+      const endRow = endSegment.bufferLineNumber - 1;
+      if (!inGrid(startRow) || !inGrid(endRow)) return null;
+      const endColumn = terminalColumnAtOffset(grid, endRow, match.end - 1 - endSegment.startIndex);
       return {
         text: match.text,
         range: {
           start: {
-            x: terminalColumnAtOffset(startRow, match.start - startSegment.startIndex),
+            x: terminalColumnAtOffset(grid, startRow, match.start - startSegment.startIndex),
             y: startSegment.bufferLineNumber - 1,
           },
           end: {
             x:
-              endRow.cells[endColumn + 1]?.wide === GHOSTTY_CELL_WIDE.spacerTail
+              terminalCellWide(grid, endRow, endColumn + 1) === GHOSTTY_CELL_WIDE.spacerTail
                 ? endColumn + 1
                 : endColumn,
             y: endSegment.bufferLineNumber - 1,
@@ -2220,7 +2246,8 @@ export class GhosttyTerminalSurface {
         const previous =
           start.x > 0
             ? { x: start.x - 1, y: start.y }
-            : start.y > 0 && this.snapshot.rowData[start.y]?.isWrapContinuation
+            : start.y > 0 &&
+                terminalRowHas(this.snapshot.grid, start.y, GHOSTTY_LINE.wrapContinuation)
               ? { x: this.cols - 1, y: start.y - 1 }
               : null;
         if (!previous || this.core.hyperlinkAt(previous.x, previous.y) !== explicitHyperlink) break;
@@ -2231,7 +2258,8 @@ export class GhosttyTerminalSurface {
         const next =
           end.x + 1 < this.cols
             ? { x: end.x + 1, y: end.y }
-            : end.y + 1 < this.rows && this.snapshot.rowData[end.y]?.wrapsToNext
+            : end.y + 1 < this.rows &&
+                terminalRowHas(this.snapshot.grid, end.y, GHOSTTY_LINE.wrapsToNext)
               ? { x: 0, y: end.y + 1 }
               : null;
         if (!next || this.core.hyperlinkAt(next.x, next.y) !== explicitHyperlink) break;
@@ -2243,7 +2271,7 @@ export class GhosttyTerminalSurface {
         range: { start, end },
       };
     }
-    return terminalLinkAtPositionWithRange(this.snapshot.rowData, cell.y, cell.x);
+    return terminalLinkAtPositionWithRange(this.snapshot.grid, cell.y, cell.x);
   }
 
   private sendMouse(action: TerminalMouseAction, button: number | null, event: MouseEvent): void {
