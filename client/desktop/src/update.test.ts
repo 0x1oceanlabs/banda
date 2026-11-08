@@ -1,23 +1,30 @@
 import { expect, it } from "vitest"
-import { arrivedAt, firstLine, needsPerson, notesOf } from "./update"
+import {
+  arrivedAt,
+  firstLine,
+  installsAtQuit,
+  needsPerson,
+  notesOf,
+} from "./update"
 
 const info = (releaseNotes: unknown) =>
   ({ version: "0.1.0-dev.66", releaseNotes }) as Parameters<typeof notesOf>[0]
 
-it("lists what changed since the Person's version, as text", () => {
+it("lists what changed since the Person's version, a line apiece", () => {
   expect(
     notesOf(
       info([
         {
           version: "0.1.0-dev.66",
-          note: "<p>Built from 6c3d557: fix(ci): the runner&#39;s hook ends in .sh</p>",
+          note: "Built from 6c3d557: fix(ci): the runner's hook ends in .sh",
         },
         {
           version: "0.1.0-dev.65",
-          note: "<p>Built from <code>3e145b7</code>: a &amp; b &lt;c&gt;</p><p>next</p>",
+          note: "  feat(bar): a & b <c>\n\n  fix(sidebar):   the row  \n",
         },
         { version: "0.1.0-dev.64", note: null },
-        { version: "0.1.0-dev.62", note: "<p>the Person's own</p>" },
+        { version: "0.1.0-dev.63", note: " \n " },
+        { version: "0.1.0-dev.62", note: "the Person's own" },
       ]),
       "0.1.0-dev.62"
     )
@@ -26,12 +33,15 @@ it("lists what changed since the Person's version, as text", () => {
       version: "0.1.0-dev.66",
       text: "Built from 6c3d557: fix(ci): the runner's hook ends in .sh",
     },
-    { version: "0.1.0-dev.65", text: "Built from 3e145b7: a & b <c> next" },
+    {
+      version: "0.1.0-dev.65",
+      text: "feat(bar): a & b <c>\nfix(sidebar): the row",
+    },
   ])
 })
 
 it("takes one release's notes when they come as one text", () => {
-  expect(notesOf(info("<h2>What's Changed</h2>"), "0.1.0")).toEqual([
+  expect(notesOf(info("What's Changed"), "0.1.0")).toEqual([
     { version: "0.1.0-dev.66", text: "What's Changed" },
   ])
   expect(notesOf(info(null), "0.1.0")).toEqual([])
@@ -65,4 +75,36 @@ it("says Banda updated only when it restarted into the version left (ADR 0072)",
   // The install did not take, or an older file stayed behind.
   expect(arrivedAt(left, "0.1.0-dev.97")).toBeUndefined()
   expect(arrivedAt("{", "0.1.0-dev.104")).toBeUndefined()
+})
+
+it("installs at the quit only what the last look, an hour old at most, still offered (ADR 0092)", () => {
+  const at = Date.parse("2026-11-08T12:00:00Z")
+  const quit = {
+    ready: "0.1.0-dev.421",
+    offered: { version: "0.1.0-dev.421", at: at - 50 * 60_000 },
+    listed: "0.1.0-dev.420",
+    at,
+  }
+  expect(installsAtQuit(quit)).toBe(true)
+  // An entry naming no version, as a file the Person renamed, holds none back.
+  expect(installsAtQuit({ ...quit, listed: undefined })).toBe(true)
+  // Nothing ready, or the last look offered another.
+  expect(installsAtQuit({ ...quit, ready: undefined })).toBe(false)
+  expect(installsAtQuit({ ...quit, offered: undefined })).toBe(false)
+  expect(
+    installsAtQuit({
+      ...quit,
+      offered: { ...quit.offered, version: "0.1.0-dev.420" },
+    })
+  ).toBe(false)
+  // A look over an hour old: the version may have been withdrawn since.
+  expect(
+    installsAtQuit({
+      ...quit,
+      offered: { ...quit.offered, at: at - 2 * 3_600_000 },
+    })
+  ).toBe(false)
+  // A newer Banda Dev started from another file since: its entry stays.
+  expect(installsAtQuit({ ...quit, listed: "0.1.0-dev.421" })).toBe(false)
+  expect(installsAtQuit({ ...quit, listed: "0.750.0" })).toBe(false)
 })

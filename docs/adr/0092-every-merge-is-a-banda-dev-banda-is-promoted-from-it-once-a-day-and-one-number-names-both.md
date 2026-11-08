@@ -361,9 +361,11 @@ the background, takes effect at the next start, and never goes back.
 **Today's installs move.** An installed Banda Dev at `0.1.0-dev.N` takes
 only tags with the word `dev` (`GitHubProvider.js:52-88`), and `v0.750.0`
 has none. So step 3 ships the new update source while versions are still
-`0.1.0-dev.N`. Its merge changes `release.yml` and publishes nothing; the
-first Dev after it, say `0.1.0-dev.420`, is **the bridge**, which today's
-installs take as any Dev. Step 4, the plain numbers, is merged once Roma's
+`0.1.0-dev.N`. Its own merge publishes a Dev like any other (the
+workflow's token tags a commit that changes `release.yml` all the same, as
+`v0.1.0-dev.390` and `v0.1.0-dev.400` show); that Dev, say
+`0.1.0-dev.420`, is **the bridge**, which today's installs take as any Dev.
+Step 4, the plain numbers, is merged once Roma's
 Banda Devs on Linux and the Mac run the bridge; its first release, say
 `0.750.0`, is above every `0.1.0-dev.N`. On a Mac, `brew upgrade` moves in
 any case. A Banda Dev that missed the bridge is installed again. No Banda is
@@ -384,7 +386,11 @@ files (electron-builder 27, in alpha); a fix to a Stable from a branch.
    `:142`, `:150`, `:190`, `:222`) renamed in the same PR, and the Mac's
    retry (`update.ts:312-316`) kept until step 5; hourly looks, also while
    a version is ready; the quit check; `BANDA_UPDATES=off`. Tried with three
-   Devs (installed, ready, newer), on Linux and the Mac.
+   Devs (installed, ready, newer), on Linux and the Mac. A bridge that
+   misbehaves is mended with a newer Dev, never by reverting
+   `publish.channel: "dev"` or the `dev-*.yml` names: a Banda Dev that took
+   the bridge reads only `dev-linux.yml`, and stops at the first release
+   without it.
 4. **Plain numbers**: `.github/release.toml`; the version from main's
    first-parent count, in one job, with its refusals; `BANDA_COMMIT` and
    `BANDA_DATE`, also in `docs/sharing.md`; `banda --version`'s first line
