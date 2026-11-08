@@ -1,6 +1,7 @@
+import type { Engine, ProjectId } from "@banda/contract"
 import type { ThreadList } from "@banda/contract/agents"
-import { expect, test } from "vitest"
-import { applyThreads, readsAgain, THREADS_FILTER } from "./list"
+import { expect, test, vi } from "vitest"
+import { applyThreads, readsAgain, THREADS_FILTER, threadsSource } from "./list"
 import { agent, event, person } from "../testing"
 
 const empty: ThreadList = { at: 0, threads: [] }
@@ -312,4 +313,25 @@ test("a Thread that moves to another account lists it, and keeps its place", () 
     ["t2", "codex"],
     ["t1", "claude-b"],
   ])
+})
+
+test("the list's own read waits for no move of old marks: a Thread's writers and a popped-out window read at once", async () => {
+  // A window with old marks whose move never started.
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) =>
+      key === "banda.agents.seen" ? '{"t1":"u1"}' : null,
+  })
+  try {
+    const asked: string[] = []
+    const engine = {
+      call: async (method: string) => {
+        asked.push(method)
+        return { at: 0, threads: [] }
+      },
+    } as unknown as Engine
+    await threadsSource(engine, "p1" as ProjectId).read()
+    expect(asked).toEqual(["agents.threads"])
+  } finally {
+    vi.unstubAllGlobals()
+  }
 })
