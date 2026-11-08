@@ -11,6 +11,7 @@ publish.workspace = true
 async-trait.workspace = true
 banda-kernel = { path = "../../../kernel" }
 banda-look = { path = "../../../platform/look" }
+dunce.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
