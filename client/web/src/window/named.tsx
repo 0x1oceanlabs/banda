@@ -8,7 +8,7 @@ import type { ProjectId } from "@banda/contract"
 import { MachineMark } from "@banda/ui/components/machine-icon"
 import { paneHost, type PaneState } from "@banda/ui/pane"
 import type { Filler, HeaderProps } from "@banda/ui/slots"
-import { useNamedOf } from "./hosts"
+import { useNamedOf } from "../calls/hosts"
 
 function Named({ project, pane }: { project: ProjectId; pane: PaneState }) {
   const named = useNamedOf(project, paneHost(pane))

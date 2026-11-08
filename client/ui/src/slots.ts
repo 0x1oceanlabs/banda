@@ -62,16 +62,17 @@ export type Filler<S extends Slot = Slot> = {
   }
 }[S]
 
-/** What fills each Slot: the modules that run, in their order. */
-export type Fillers = { readonly [S in Slot]: readonly Filler<S>[] }
+/** What fills each Slot: the modules that run, in their order. A Slot
+ * no module fills has none. */
+export type Fillers = { readonly [S in Slot]?: readonly Filler<S>[] }
 
-/** No Slot filled, where no Window gives what fills them, as in a test. */
-export const NO_FILLERS: Fillers = { "thread.details": [], "pane.header": [] }
+/** What fills each Slot, as the Window gives it to what it draws; none
+ * where no Window gives it, as in a test. */
+export const Slots = createContext<Fillers>({})
 
-/** What fills each Slot, as the Window gives it to what it draws. */
-export const Slots = createContext<Fillers>(NO_FILLERS)
+const NONE: readonly never[] = []
 
 /** What fills `slot`, in order: what its owner draws there. */
-export function useSlot<S extends Slot>(slot: S): Fillers[S] {
-  return useContext(Slots)[slot]
+export function useSlot<S extends Slot>(slot: S): readonly Filler<S>[] {
+  return useContext(Slots)[slot] ?? NONE
 }

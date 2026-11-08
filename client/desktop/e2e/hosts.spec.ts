@@ -564,6 +564,13 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
       .locator('[data-machine-icon="server"]')
   ).toBeVisible()
   await expect(other.getByRole("button", { name: "Terminal" })).toHaveCount(0)
+  // Its header names arc after its icon and title: it names no Project.
+  expect(await headerShows(other)).toEqual([
+    "",
+    "New Pane",
+    "machine",
+    "buttons",
+  ])
   await shot(page, "pr3-3-not-on-arc")
 
   // Alt+Z on arc's Thread snoozes it on arc's engine, as its Pane is

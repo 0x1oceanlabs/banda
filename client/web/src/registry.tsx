@@ -32,10 +32,10 @@ import {
   type Watch,
 } from "@banda/ui/pane"
 import { useScope } from "@banda/ui/hooks/use-scope"
-import type { Fillers } from "@banda/ui/slots"
+import type { Filler, Fillers } from "@banda/ui/slots"
 import { LayoutGridIcon, type LucideIcon } from "lucide-react"
 import { memo, useCallback, useSyncExternalStore } from "react"
-import { machineHeader } from "./calls/named"
+import { machineHeader } from "./window/named"
 import { columnsOf } from "./look"
 import { modules } from "./modules"
 import { keepProblem } from "./problems/keep"
@@ -154,13 +154,12 @@ export const widgets: ReadonlyMap<string, { widget: Widget; module: Module }> =
  * run put there, in their order, the window's own first. The Window gives
  * it to what it draws (`Slots`), and each Slot's owner reads its own. */
 export function slotsOf(engineModules: readonly string[]): Fillers {
-  const filling = all
-    .filter((module) => runs(module, engineModules))
-    .flatMap((module) => module.slots)
-  return {
-    "thread.details": filling.filter((one) => one.slot === "thread.details"),
-    "pane.header": filling.filter((one) => one.slot === "pane.header"),
-  }
+  const fillers: { [slot: string]: Filler[] } = {}
+  for (const module of all)
+    if (runs(module, engineModules))
+      for (const one of module.slots) (fillers[one.slot] ??= []).push(one)
+  // Each went in under its own Slot, so each list holds that Slot's alone.
+  return fillers as Fillers
 }
 
 /** The item actions of the module that lists Items of Pane kind `kind`,

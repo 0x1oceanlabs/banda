@@ -252,7 +252,9 @@ without naming who handles it. In v1 one App handles each (ADR 0082).
 
 **Slot**:
 A place in one App's thing that other Apps fill with Items, such as a
-Thread's details or the Pane header (ADR 0082).
+Thread's details or the Pane header (ADR 0082). Until an App's view
+answers a Tree (V2), a module fills one with code of its own, its `slots`
+(ADR 0087).
 
 **Item**:
 A thing an App lists, `item@1`: an Address, a title, a Mark, when it
