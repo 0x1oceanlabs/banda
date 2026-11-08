@@ -1534,6 +1534,11 @@ fn from_home(path: &str) -> Result<PathBuf, Refusal> {
     let path = match path.trim() {
         "~" => home()?,
         path => match path.strip_prefix("~/") {
+            // `~/~/x` is a path typed again over the field's `~/`: no
+            // folder named `~` is made of it.
+            Some(rest) if rest == "~" || rest.starts_with("~/") => {
+                return Err(Refusal::invalid(format!("{path} starts at ~ twice.")));
+            }
             Some(rest) => home()?.join(rest),
             None => PathBuf::from(path),
         },
@@ -1584,4 +1589,19 @@ fn subfolders(parent: &Path, prefix: &str) -> Vec<BrowsedFolder> {
 pub fn decode<T: serde::de::DeserializeOwned>(params: Value) -> Result<T, Refusal> {
     serde_json::from_value(params)
         .map_err(|e| Refusal::invalid(format!("The call's parameters do not fit: {e}.")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_path_from_home_starts_at_it_once() {
+        let home = dirs::home_dir().unwrap();
+        assert_eq!(from_home("~/code").unwrap(), home.join("code"));
+        assert_eq!(from_home("~").unwrap(), home);
+        assert!(from_home("~/~/code").is_err());
+        assert!(from_home("~/~").is_err());
+        assert!(from_home("code").is_err());
+    }
 }

@@ -79,6 +79,7 @@ import {
   type Sources,
   wordsIn,
   isPathField,
+  restarted,
   LOCATE,
   lookedAt,
   pathAdding,
@@ -575,7 +576,11 @@ function Menu({
           data-takes-keys={taking ? "" : undefined}
           value={taking ? "" : words}
           onChange={(event) => {
-            setWords(event.currentTarget.value)
+            const typed = event.currentTarget.value
+            // Only what is typed or pasted starts it over: a part taken
+            // out of the middle leaves `//` for a moment.
+            const added = typed.length > words.length
+            setWords(isPathField(inside) && added ? restarted(typed) : typed)
             setIndex(0)
             setActing(undefined)
           }}

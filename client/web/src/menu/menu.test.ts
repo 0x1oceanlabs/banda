@@ -19,6 +19,7 @@ import {
   settingsLinkOf,
   type Sources,
   trustBranch,
+  restarted,
 } from "./menu"
 
 const thread = (id: string, title: string, more: Partial<Listed> = {}) =>
@@ -378,6 +379,13 @@ describe("its branches and acts", () => {
 })
 
 describe("Add Project (ADR 0026)", () => {
+  test("a path typed again over the field's start takes its place", () => {
+    expect(restarted("~/~/code/app")).toBe("~/code/app")
+    expect(restarted("~//home/roma/x")).toBe("/home/roma/x")
+    expect(restarted("~/code/app")).toBe("~/code/app")
+    expect(restarted("~/")).toBe("~/")
+  })
+
   const add: Branch = { kind: "add", id: "project.add" }
   const way = (source: "new" | "folder"): Branch => ({
     kind: "source",
