@@ -193,6 +193,14 @@ export function wordsIn(path: readonly Branch[]): string {
   return isPathField(inside) ? "~/" : ""
 }
 
+/** A path field's text after a new path is typed over the old one: the
+ * new one wins, as in GTK's location bar. `~/~/code` is `~/code`,
+ * `~//etc` is `/etc`. */
+export function restarted(words: string): string {
+  const again = Math.max(words.lastIndexOf("/~/"), words.lastIndexOf("//"))
+  return again < 0 ? words : words.slice(again + 1)
+}
+
 /** What a folder in a path field does: added, made first when `create`,
  * or found as the missing Project's, which only a folder that is there
  * can be. */
