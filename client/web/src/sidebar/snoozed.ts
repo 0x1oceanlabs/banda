@@ -6,10 +6,8 @@
  */
 import { useEffect, useMemo } from "react"
 import { kept } from "@banda/ui/lib/kept"
-import type { ProjectId } from "@banda/contract"
 import type { HereStore } from "@banda/ui/here"
 import type { Readable } from "@banda/ui/lib/store"
-import type { Args } from "@banda/ui/module"
 import { asleep, type Listed, type Lists, wokeOf } from "@banda/ui/pane"
 import { useIsArchived } from "./archived"
 
@@ -107,28 +105,4 @@ export function useSnoozesAt(now: number): Snoozes {
     }),
     [now, acked, archived]
   )
-}
-
-/** What the notifications module tells of a Thread that woke by itself
- * with nothing that calls (ADR 0074, decision 7): one that calls is told
- * of by its call. Its button opens it. */
-export function wokeTold(project: ProjectId, listed: Listed): Args {
-  const { id: about, title, pane } = listed
-  return {
-    key: `woke:${project}:${about}`,
-    kind: "done",
-    title,
-    body: "Woke from its snooze",
-    in: project,
-    about,
-    buttons: [
-      {
-        label: "Open",
-        // The notifications module's GO_TO: the window names a module's
-        // action by its id, not its package.
-        action: "notifications.go-to",
-        args: { project, about, pane },
-      },
-    ],
-  }
 }
