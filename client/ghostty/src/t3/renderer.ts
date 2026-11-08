@@ -409,27 +409,21 @@ function moveDrawn(drawn: Drawn, rows: number): void {
  * Banda: whether T3's drawing of a row is the same pixels on every row, so a
  * row's pixels are its own and move with it (ADR 0088, step P4). The
  * drawing is in CSS pixels and rounds its edges onto screen pixels. That
- * rounds alike on every row only where every edge it rounds is exact, a
- * binary fraction: where a screen pixel is a whole number of 1024ths of a
- * CSS pixel, at a scale of 1, 1.6 or 2, and the rows' height and origin are
- * whole screen pixels. At 1.25 or 1.5 an edge half way between two screen
- * pixels rounds up on one row and down on another, a half block a pixel
- * taller there, and an edge on a screen pixel's lands a hair past it, so a
- * cursor's outline or a clear leaves 1 in 255 on the row beside it until
- * that row is drawn again. The pixel fuzz finds both
+ * rounds alike on every row only where every edge it rounds is exact: where
+ * the screen's scale is a power of two, 1 or 2, and the rows' height and
+ * origin are whole screen pixels. Anywhere else, 1.25, 1.5 or the 1.6 that
+ * Chromium reports as 1.600000023841858, a screen pixel is no binary
+ * fraction of a CSS pixel: an edge half way between two screen pixels
+ * rounds up on one row and down on the next, a strike or a block's edge a
+ * pixel lower there, and an edge on a screen pixel's lands a hair past it,
+ * so a cursor's outline or a clear leaves 1 in 255 on the row beside it
+ * until that row is drawn again. The pixel fuzz finds both
  * (`tools/pixel-fuzz`).
  */
 export function rowsDrawAlike(ratio: number, height: number, originY: number): boolean {
-  const perPixel = 1024 / ratio;
   return (
-    Number.isInteger(perPixel) &&
-    // Read as a double, a scale such as 1.6 is a hair over what it is, so an
-    // edge half way between two screen pixels rounds up on every row. Where
-    // it is a hair under, that holds only while the hair is small enough,
-    // so those are left out, 4/3 among them. Compared exactly, as integers.
-    BigInt(ratio * 2 ** 64) * BigInt(perPixel) >= 1024n << 64n &&
-    Number.isInteger(height * 1024) &&
-    Number.isInteger(originY * 1024) &&
+    ratio > 0 &&
+    2 ** Math.round(Math.log2(ratio)) === ratio &&
     Number.isInteger(height * ratio) &&
     Number.isInteger(originY * ratio)
   );

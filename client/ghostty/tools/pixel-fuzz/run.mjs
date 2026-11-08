@@ -10,9 +10,10 @@
 // the renderer draws as T3's did, which leaves traces a whole frame does
 // not. Options:
 // --seeds=40 --steps=200 --scales=1,1.1,1.25,1.5,1.6,1.75,2,2.25,3
-// (1,1.6,2 for `self`) --diagonals (lines with diagonals, which stand past
-// their rows) --browsers=3 (seeds shared between that many Chromiums).
-// Chromium is Playwright's own, or the one $CHROMIUM names.
+// (1,2 for `self`), each as Chromium keeps it, a float --diagonals (lines
+// with diagonals, which stand past their rows) --browsers=3 (seeds shared
+// between that many Chromiums). Chromium is Playwright's own, or the one
+// $CHROMIUM names.
 import { createRequire } from "node:module"
 import { resolve } from "node:path"
 import { createServer } from "vite"
@@ -31,7 +32,7 @@ const seeds = Number(option("seeds", 40))
 const steps = Number(option("steps", 200))
 const scales = option(
   "scales",
-  self ? "1,1.6,2" : "1,1.1,1.25,1.5,1.6,1.75,2,2.25,3"
+  self ? "1,2" : "1,1.1,1.25,1.5,1.6,1.75,2,2.25,3"
 )
   .split(",")
   .map(Number)
@@ -77,7 +78,7 @@ const failures = (
         return await page.evaluate((options) => window.fuzz(options), {
           from,
           to,
-          ratios: scales,
+          scales,
           diagonals,
           steps,
         })
@@ -90,7 +91,7 @@ const failures = (
 await server.close()
 
 const byScale = Object.fromEntries(scales.map((scale) => [scale, 0]))
-for (const failure of failures) byScale[failure.ratio] += 1
+for (const failure of failures) byScale[failure.scale] += 1
 for (const failure of failures) console.log(JSON.stringify(failure))
 console.log(
   JSON.stringify({

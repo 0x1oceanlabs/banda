@@ -67,9 +67,9 @@ Import paths, so the files find each other here, and the tests import
   canvas shows: a frame draws only the rows whose cells, cursor or
   hovered link differ from it, and a screen that scrolled moves its
   pixels by the rows it scrolled, on screen pixels, and draws only the
-  rows that came in. That holds where rows draw alike, at a scale of 1,
-  1.6 or 2 (`rowsDrawAlike`); at 1.25 or 1.5, say, and while a glyph
-  that stands past its row may be on the canvas, a diagonal's or a block
+  rows that came in. That holds where rows draw alike, at a scale of 1
+  or 2 (`rowsDrawAlike`); at 1.25, 1.5 or 1.6, and while a glyph that
+  stands past its row may be on the canvas, a diagonal's or a block
   cursor's, it draws as T3's did. A canvas whose context was lost and
   restored draws every row again (`src/renderer.test.ts`;
   `e2e/terminal-pixels.spec.ts` compares a build's pixels with main's)

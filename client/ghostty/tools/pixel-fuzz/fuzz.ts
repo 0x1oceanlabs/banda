@@ -188,10 +188,13 @@ function compare(left: HTMLCanvasElement, right: HTMLCanvasElement) {
 
 async function run(
   seed: number,
-  ratio: number,
+  scale: number,
   diagonals: boolean,
   steps: number
 ) {
+  // Chromium keeps a screen's scale as a float: its 1.6 is
+  // 1.600000023841858, and so is the page's devicePixelRatio.
+  const ratio = Math.fround(scale)
   const next = random(seed)
   let cols = 34
   let rows = 14
@@ -312,7 +315,7 @@ async function run(
     if (differs) {
       done()
       const row = Math.floor((differs.y / ratio - originY) / metrics.height)
-      return { seed, ratio, diagonals, step, what, row, ...differs }
+      return { seed, scale, diagonals, step, what, row, ...differs }
     }
   }
   done()
@@ -324,7 +327,7 @@ declare global {
     fuzz: (options: {
       from: number
       to: number
-      ratios: number[]
+      scales: number[]
       diagonals: boolean
       steps: number
     }) => Promise<unknown[]>
@@ -332,11 +335,11 @@ declare global {
   }
 }
 
-window.fuzz = async ({ from, to, ratios, diagonals, steps }) => {
+window.fuzz = async ({ from, to, scales, diagonals, steps }) => {
   const failures: unknown[] = []
   for (let seed = from; seed < to; seed++) {
-    for (const ratio of ratios) {
-      const failure = await run(seed, ratio, diagonals, steps)
+    for (const scale of scales) {
+      const failure = await run(seed, scale, diagonals, steps)
       if (failure) failures.push(failure)
     }
   }
