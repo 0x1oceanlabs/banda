@@ -23,6 +23,7 @@ import {
   GLASS,
   layoutOf,
   markFullAccess,
+  ON_SCREEN,
   newProject,
   sendAndLeave,
   sharesOf,
@@ -5897,10 +5898,18 @@ test("Alt+Up and Down go on past a column's end to the workspace there, and with
   await expect(thread).toHaveAttribute("data-focused", "true")
 
   // With Shift the Thread goes along, as a column beside the launcher.
+  // The workspace it left, empty, goes as niri's: the launcher's is the
+  // first now. It is drawn so at once (ADR 0088, T-pred), never as the
+  // second for the moment the engine took to answer.
   await page.keyboard.press("Alt+Shift+ArrowDown")
-  await on("2")
+  await on("1")
   await expect(thread).toHaveAttribute("data-focused", "true")
   await expect(launcher).toBeVisible()
+  const workspace = page.locator(ON_SCREEN)
+  await expect(workspace.getByRole("region", { name: "hello" })).toBeVisible()
+  await expect(
+    workspace.getByRole("region", { name: "New Pane" })
+  ).toBeVisible()
 })
 
 test("Alt+Shift+PageUp and PageDown move the workspace on screen, never under the empty one", async () => {
