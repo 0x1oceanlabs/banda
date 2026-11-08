@@ -255,7 +255,8 @@ Each step is its own PR.
      then goes to the Thread's host as `agents.read` as well as to
      today's `localStorage`, failing quietly (decision 8), so each host's
      seen fills before the flip; a new
-     `client/web/src/marks-moved.ts`, with frozen copies of the old seen,
+     `apps/agents/pane/src/list/marks-moved.ts`, the agents module's, as
+     the window names no App method, with frozen copies of the old seen,
      archive and cutoff rules, one `import_marks` per Project of this
      machine and the `banda.marks.moved` flag, not yet wired; tests. Its
      file list is agreed with the window's session first.
@@ -265,7 +266,8 @@ Each step is its own PR.
      and `isArchived` read the listed fields, with what was sent shown
      until its fact comes back; the `localStorage` writes and the cutoff
      go; Shell's archive and `Alt+S` become one command; `RUNS_ELSEWHERE`
-     gains `thread.unread` and `sidebar.archive`; `marks-moved` runs once.
+     gains `thread.unread` and `sidebar.archive`; `marks-moved` runs once,
+     from the agents module's `index.ts` after the first list load.
 3. **Rollout.** Both machines get a build with 1a to 2b, then each
    machine's window starts once, which moves its marks.
 

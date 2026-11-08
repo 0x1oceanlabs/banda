@@ -1,6 +1,6 @@
 import type { ThreadList } from "@banda/contract/agents"
 import { expect, test } from "vitest"
-import { applyThreads, rewound } from "./list"
+import { applyThreads, readsAgain, THREADS_FILTER } from "./list"
 import { agent, event, person } from "../testing"
 
 const empty: ThreadList = { at: 0, threads: [] }
@@ -82,6 +82,22 @@ const one: ThreadList = {
       updated_at: 1,
       asking: [],
     },
+  ],
+}
+
+/** `one`, below a newer Thread. */
+const two: ThreadList = {
+  at: 2,
+  threads: [
+    {
+      id: "t2",
+      agent: "a2",
+      harness: "",
+      title: "Two",
+      updated_at: 2,
+      asking: [],
+    },
+    ...one.threads,
   ],
 }
 
@@ -170,10 +186,54 @@ test("a fact about a Thread the list does not have changes nothing", () => {
 test("a Thread that goes back to before a message has the list read again", () => {
   const back = (thread: string) =>
     event("thread.rewound", { thread, turn: "u2" }, { subject: thread })
-  expect(rewound(one, back("t1"))).toBe(true)
-  expect(rewound(one, back("t2"))).toBe(false)
+  expect(readsAgain(one, back("t1"))).toBe(true)
+  expect(readsAgain(one, back("t2"))).toBe(false)
   // Only the engine knows the message before; the list alone keeps it.
   expect(applyThreads(one, back("t1"))).toBe(one)
+})
+
+test("the Person's marks follow their facts, and move no Thread (ADR 0096)", () => {
+  const mark = (kind: string, payload: object = {}) =>
+    event(kind, { thread: "t1", ...payload }, { author: person, subject: "t1" })
+  const seen = applyThreads(two, mark("thread.seen", { turn: "u1" }))
+  expect(seen.threads.map((t) => t.id)).toEqual(["t2", "t1"])
+  expect(seen.threads[1]).toMatchObject({ seen: "u1", updated_at: 1 })
+  const later = applyThreads(seen, mark("thread.seen", { turn: "u2" }))
+  expect(later.threads[1].seen).toBe("u2")
+  const unseen = applyThreads(later, mark("thread.unseen"))
+  expect(unseen.threads[1]).not.toHaveProperty("seen")
+  // Nothing to take off: the same list.
+  expect(applyThreads(unseen, mark("thread.unseen"))).toBe(unseen)
+
+  // Archived in the host's time, the event's own.
+  const put = mark("thread.archived")
+  const archived = applyThreads(two, put)
+  expect(archived.threads.map((t) => t.id)).toEqual(["t2", "t1"])
+  expect(archived.threads[1]).toMatchObject({
+    archived: { at: put.at },
+    updated_at: 1,
+  })
+  const back = applyThreads(archived, mark("thread.unarchived"))
+  expect(back.threads[1]).not.toHaveProperty("archived")
+  expect(applyThreads(back, mark("thread.unarchived"))).toBe(back)
+
+  // The list hears each of them.
+  expect(THREADS_FILTER.kinds).toEqual(
+    expect.arrayContaining([
+      "thread.seen",
+      "thread.unseen",
+      "thread.archived",
+      "thread.unarchived",
+      "marks.moved",
+    ])
+  )
+})
+
+test("a window that moved its marks has every list read again", () => {
+  const moved = event("marks.moved", {}, { author: person, subject: "p1" })
+  expect(readsAgain(one, moved)).toBe(true)
+  expect(readsAgain({ at: 0, threads: [] }, moved)).toBe(true)
+  expect(applyThreads(one, moved)).toBe(one)
 })
 
 test("a Thread keeps its latest snooze, and what woke it", () => {
@@ -214,20 +274,6 @@ test("a Thread keeps its latest snooze, and what woke it", () => {
 })
 
 test("a renamed Thread takes its new title and keeps the one before, where it stands", () => {
-  const two: ThreadList = {
-    at: 2,
-    threads: [
-      {
-        id: "t2",
-        agent: "a2",
-        harness: "",
-        title: "Two",
-        updated_at: 2,
-        asking: [],
-      },
-      ...one.threads,
-    ],
-  }
   const renamed = event(
     "thread.renamed",
     { thread: "t1", title: "Fix the list", was: "One" },

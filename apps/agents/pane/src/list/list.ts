@@ -23,7 +23,8 @@ export async function readThreads(
 
 /**
  * The facts the list follows: which Threads there are, in what order, what
- * each is called, and where each one's work stands. A streaming reply never reaches it.
+ * each is called, where each one's work stands, and the Person's marks on
+ * it, which its host keeps (ADR 0096). A streaming reply never reaches it.
  */
 export const THREADS_FILTER = {
   module: "agents",
@@ -40,6 +41,11 @@ export const THREADS_FILTER = {
     "thread.snoozed",
     "thread.woke",
     "thread.switched",
+    "thread.seen",
+    "thread.unseen",
+    "thread.archived",
+    "thread.unarchived",
+    "marks.moved",
   ] satisfies Fact["kind"][],
 } satisfies EventFilter
 
@@ -52,17 +58,22 @@ export function threadsSource(
     read: () => readThreads(engine, project),
     filter: THREADS_FILTER,
     apply: (state, event) =>
-      rewound(state, event) ? READ_AGAIN : applyThreads(state, event),
+      readsAgain(state, event) ? READ_AGAIN : applyThreads(state, event),
   }
 }
 
 /**
- * Whether a Thread of the list went back to before a message (ADR 0027):
- * its latest turn and message are then earlier ones, which only the
- * engine knows, so the list is read again. It seldom happens.
+ * Whether the list is read again, as only the engine knows what it is
+ * now. Both seldom happen:
+ * - a Thread of the list went back to before a message (ADR 0027): its
+ *   latest turn and message are then earlier ones, and a seen that named
+ *   a turn taken out names none (ADR 0096, decision 2);
+ * - a window moved its marks to the host, all in one fact (ADR 0096,
+ *   decision 9).
  */
-export function rewound(state: ThreadList, event: Event): boolean {
+export function readsAgain(state: ThreadList, event: Event): boolean {
   const fact = decodeFact(event)
+  if (fact?.kind === "marks.moved") return true
   return (
     fact?.kind === "thread.rewound" &&
     state.threads.some((thread) => thread.id === fact.payload.thread)
@@ -73,7 +84,8 @@ export function rewound(state: ThreadList, event: Event): boolean {
  * The list after one fact. A new Thread joins it at the top, and a Thread
  * that heard a message or ended a turn moves there. Each Thread keeps its
  * latest turn that began, its Questions that wait, the start of its
- * latest message and its snooze, as the engine reads them.
+ * latest message, its snooze and the Person's marks, as the engine reads
+ * them. A mark moves no Thread (ADR 0096, decision 6).
  */
 export function applyThreads(state: ThreadList, event: Event): ThreadList {
   const fact = decodeFact(event)
@@ -171,9 +183,33 @@ export function applyThreads(state: ThreadList, event: Event): ThreadList {
       const { harness } = fact.payload
       return change(state, event, (thread) => ({ ...thread, harness }))
     }
+    case "thread.seen": {
+      const { turn } = fact.payload
+      return change(state, event, (thread) => ({ ...thread, seen: turn }))
+    }
+    case "thread.unseen":
+      return change(state, event, (thread) => without(thread, "seen"))
+    case "thread.archived": {
+      // In the host's time, the event's own, as its `updated_at` is.
+      const archived = { at: event.at }
+      return change(state, event, (thread) => ({ ...thread, archived }))
+    }
+    case "thread.unarchived":
+      return change(state, event, (thread) => without(thread, "archived"))
     default:
       return state
   }
+}
+
+/** `thread` with no `mark`: the same Thread when it had none. */
+function without(
+  thread: ListedThread,
+  mark: "seen" | "archived"
+): ListedThread {
+  if (thread[mark] === undefined) return thread
+  const unmarked = { ...thread }
+  delete unmarked[mark]
+  return unmarked
 }
 
 /**

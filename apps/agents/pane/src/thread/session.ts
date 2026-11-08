@@ -13,6 +13,7 @@ import type {
   Offer,
   Settings,
   ThreadId,
+  TurnId,
   TurnView,
 } from "@banda/contract/agents"
 import { useMachine } from "@banda/ui/hooks/use-status"
@@ -33,6 +34,7 @@ import { useImageReader } from "../entries/parts/MessageImages"
 import { base64Of, dataUrl } from "../composer/images"
 import type { QueueActions } from "./Queue"
 import { markSeen } from "../list/seen"
+import { type WhenPresent, whenPresent } from "./presence"
 import {
   asked,
   declineOnce,
@@ -79,6 +81,35 @@ export const zoomKey = (thread: string | null) => `thread ${thread ?? "new"}`
 
 /** What Implement asks the Agent, once plan mode is off. */
 const IMPLEMENT = "Implement the plan."
+
+/**
+ * Marks `turn` of `thread` seen once its Person is at the window, as
+ * `when` tells: an input within the last minute, or the first after (ADR
+ * 0096, decision 3). Gives back how to call that off.
+ *
+ * The mark goes to the Thread's host, `engine`, which every window and
+ * machine reads, but only while that host is there: a call made while it
+ * is away waits and goes once it is back, maybe after the Person marked
+ * the Thread unread on another machine, so none is made then (decision
+ * 8). A refusal, as an older host's, says nothing. This window's storage
+ * keeps the mark as well until the window reads the host's, in step 2b,
+ * which takes that write out.
+ */
+export function seeWhenPresent(
+  engine: Engine,
+  project: ProjectId,
+  thread: ThreadId,
+  turn: TurnId,
+  when: WhenPresent = whenPresent
+): () => void {
+  return when(() => {
+    markSeen(thread, turn)
+    if (engine.status.state !== "open") return
+    void engine
+      .command("agents.read", { thread, turn }, project)
+      .catch(() => undefined)
+  })
+}
 
 /** The Thread a Pane with `args` shows, and what its Person may do there. */
 export function useThreadSession({
@@ -155,13 +186,14 @@ export function useThreadSession({
 
   // A Person who looks at the Thread, its Pane focused in the window in
   // front, sees how its latest turn ended, which settles its mark in the
-  // sidebar and the bar (ADR 0011, decision 1).
+  // sidebar and the bar (ADR 0011, decision 1), once they are at the
+  // window. The mark goes to the Thread's host, this Pane's engine.
   const front = useInFront()
   const settled = state && settledTurn(state.turns)
   useEffect(() => {
-    if (focused && front && thread !== null && settled)
-      markSeen(thread, settled)
-  }, [focused, front, thread, settled])
+    if (!focused || !front || thread === null || !settled) return
+    return seeWhenPresent(engine, project, thread, settled)
+  }, [focused, front, thread, settled, engine, project])
 
   // A Thread not yet started keeps its settings here until its first
   // message, starting from its Harness's; each Harness's, as the model
