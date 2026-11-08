@@ -390,9 +390,8 @@ test("the sidebar list takes no more code than the list holds, and no Project's 
 
 /**
  * A Project's pin is the Window's `projects.pin`, and the Flow the Person
- * picks is to be `flow.pick`, beside `flow.solo` (ADR 0087, B4e): the
- * sidebar list pins no Project itself, and only the files listed still
- * write `agents.toml`. The list only falls.
+ * picks is `flow.pick`, beside `flow.solo` (ADR 0087, B4e): the sidebar
+ * list pins no Project and writes no `agents.toml` itself.
  */
 test("the sidebar list pins no Project and writes no agents.toml", () => {
   const writing =
@@ -403,7 +402,7 @@ test("the sidebar list pins no Project and writes no agents.toml", () => {
     files
       .filter((file) => writing.test(readFileSync(file, "utf8")))
       .map((file) => relative(app, file))
-  ).toEqual(["web/src/sidebar/FlowMenu.tsx"])
+  ).toEqual([])
 })
 
 /**
@@ -462,7 +461,6 @@ test("one place answers a pick, and only the action reaches it", () => {
  * only tests use.
  */
 const APP_STRINGS = [
-  "web/src/sidebar/FlowMenu.tsx: AGENTS_FILE",
   "web/src/sidebar/FlowMenu.tsx: AGENTS_FILE",
   "web/src/sidebar/open.ts: thread.new",
   "web/src/window/Shell.tsx: AGENTS_FILE",

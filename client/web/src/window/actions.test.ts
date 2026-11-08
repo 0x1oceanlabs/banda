@@ -202,3 +202,33 @@ test("a Project's verbs and the menu at a route do what the sidebar's buttons di
   expect(route).toHaveBeenCalledTimes(3)
   expect(settings).toHaveBeenCalledTimes(1)
 })
+
+test("flow.pick writes the Flow it names into agents.toml, as flow.solo does from the one in force, and a word it does not know nothing", async () => {
+  const writeSetting = vi.fn(() => Promise.resolve([] as string[]))
+  const shell = { writeSetting } as unknown as Shell
+  takeLook({
+    files: { [AGENTS_FILE.name]: { ...DEFAULT_AGENTS, flow: "row" } },
+  } as unknown as Look)
+
+  runAction(shell, "flow.pick", { flow: "free" })
+  runAction(shell, "flow.pick", { flow: "solo" })
+  for (const args of [undefined, { flow: "toString" }, { flow: 1 }])
+    runAction(shell, "flow.pick", args)
+  runAction(shell, "flow.solo")
+  expect(writeSetting.mock.calls).toEqual([
+    [AGENTS_FILE.name, "flow", '"free"'],
+    [AGENTS_FILE.name, "flow", '"solo"'],
+    [AGENTS_FILE.name, "flow", '"solo"'],
+  ])
+
+  // A refused write says so in the console, as the menu's did.
+  const error = vi.spyOn(console, "error").mockImplementation(() => undefined)
+  writeSetting.mockResolvedValueOnce(["flow: not a Flow"])
+  runAction(shell, "flow.pick", { flow: "row" })
+  await vi.waitFor(() =>
+    expect(error).toHaveBeenCalledWith(`banda: ${AGENTS_FILE.name} refused`, [
+      "flow: not a Flow",
+    ])
+  )
+  error.mockRestore()
+})
