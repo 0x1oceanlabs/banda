@@ -1,18 +1,27 @@
+import { spawnSync } from "node:child_process"
 import { createConnection, createServer, type Server } from "node:net"
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
-import { delimiter, join } from "node:path"
+import { delimiter, dirname, join } from "node:path"
 import { NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
 import type { HostState } from "@banda/web/host"
-import { Effect, Layer, Option, Stream } from "effect"
+import { Effect, Fiber, Layer, Option, Stream } from "effect"
 import { afterEach, beforeEach, vi } from "vitest"
+import { channel, CHANNELS } from "./channel"
 import {
   followerArgs,
   forwardArgs,
   forwardsIn,
   Hosts,
   hostsOf,
+  linesOf,
   listenersIn,
   ownOf,
   remoteCommand,
@@ -86,19 +95,15 @@ ssh = "devbox;touch /tmp/x"
 [[hosts]]
 name = "box-3"
 ssh = "ssh://roma@[fd7a:115c::1]:2222"
-`,
-    "banda-dev"
+`
   )
   expect(hosts).toEqual([
     { name: "devbox", ssh: "roma@devbox", banda: "~/.local/bin/banda-dev" },
-    // With no `banda`, this build's own, from that machine's PATH.
-    { name: "box-2", ssh: "box2.tail1234.ts.net", banda: "banda-dev" },
-    {
-      name: "box-3",
-      ssh: "ssh://roma@[fd7a:115c::1]:2222",
-      banda: "banda-dev",
-    },
+    // With no `banda`, this build's own, as the follower finds it there.
+    { name: "box-2", ssh: "box2.tail1234.ts.net" },
+    { name: "box-3", ssh: "ssh://roma@[fd7a:115c::1]:2222" },
   ])
+  expect(hosts[1]!.banda).toBeUndefined()
   expect(refused).toHaveLength(10)
   expect(refused[0]).toMatch(/^host 3: `name` is not lowercase/)
   expect(refused[1]).toMatch(/"local" is Banda's own/)
@@ -133,6 +138,99 @@ it("the follower takes no agent, no X11, no forward, no tunnel, no command of th
     `sh -c 'exec env XDG_RUNTIME_DIR="\${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" ~/.local/bin/banda-dev start --with-parent'`
   )
 })
+
+/** The folders a test made, removed after each test. */
+const folders: string[] = []
+
+/** A folder of the test's own, removed after it. */
+function folder() {
+  const dir = mkdtempSync(join(tmpdir(), "banda-hosts-"))
+  folders.push(dir)
+  return dir
+}
+
+/** A `banda` at `path` that says where it is and what it was given. */
+function fakeBanda(path: string) {
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, `#!/bin/sh\necho "$0 $*"\n`, { mode: 0o755 })
+}
+
+it.skipIf(process.platform === "win32")(
+  "with no banda in hosts.toml the follower runs this build's own there: on PATH, else the newest copy in its data folder, else none, and exits 127",
+  () => {
+    const own = { folder: "banda-findme", name: "Banda Findme" }
+    const home = folder()
+    const bin = join(home, "bin")
+    const copies = join(home, ".local/share/banda-findme/engine")
+    const there = (env: Record<string, string>) =>
+      // As the login shell there takes the command ssh gives it.
+      spawnSync("/bin/sh", ["-c", remoteCommand(undefined, own)], {
+        env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, ...env },
+        encoding: "utf8",
+      })
+    // None at all.
+    const none = there({})
+    expect(none.status).toBe(127)
+    expect(none.stdout).toBe("")
+    expect(none.stderr).toBe("no Banda Findme here\n")
+    // The newest copy, as versions sort, not as text; not a half-written
+    // one (program.ts's `.<version>-` folders).
+    for (const version of ["0.1.0-dev.42", "0.1.0-dev.418", "0.1.0-dev.9"])
+      fakeBanda(join(copies, version, "banda"))
+    fakeBanda(join(copies, ".0.1.0-dev.500-x1", "banda"))
+    expect(there({}).stdout).toBe(
+      `${copies}/0.1.0-dev.418/banda start --with-parent\n`
+    )
+    // XDG_DATA_HOME moves the data folder.
+    const data = join(home, "data")
+    fakeBanda(join(data, "banda-findme/engine/0.1.0-dev.1/banda"))
+    expect(there({ XDG_DATA_HOME: data }).stdout).toBe(
+      `${data}/banda-findme/engine/0.1.0-dev.1/banda start --with-parent\n`
+    )
+    // On PATH first.
+    fakeBanda(join(bin, "banda-findme"))
+    expect(there({}).stdout).toBe(`${bin}/banda-findme start --with-parent\n`)
+  }
+)
+
+it("the follower's script takes each channel's names as they are, inside sh's quotes", () => {
+  for (const own of Object.values(CHANNELS)) {
+    expect(own.folder).toMatch(/^[a-z0-9-]+$/)
+    expect(own.name).toMatch(/^[A-Za-z0-9 -]+$/)
+    const said = remoteCommand(undefined, own)
+    expect(said.startsWith("sh -c '") && said.endsWith("'")).toBe(true)
+    // Nothing that ends the quotes, nor that fish reads as an escape.
+    expect(said.slice(7, -1)).not.toMatch(/['\\]/)
+    expect(said).toContain(
+      `"/Applications/${own.name}.app/Contents/Resources/banda"`
+    )
+  }
+})
+
+it.effect(
+  "each line from ssh is read up to 4 KiB, the rest of a longer one dropped",
+  () =>
+    Effect.gen(function* () {
+      const bytes = (text: string) => new TextEncoder().encode(text)
+      const said = yield* linesOf(
+        Stream.make(
+          bytes("one\r\ntw"),
+          bytes("o\n\n"),
+          bytes("x".repeat(3000)),
+          bytes("y".repeat(3000) + "z\nafter\n"),
+          bytes("é".repeat(3000)),
+          bytes("\nlast")
+        )
+      ).pipe(Stream.runCollect)
+      expect(said.slice(0, 3)).toEqual(["one", "two", ""])
+      expect(said[3]).toBe("x".repeat(3000) + "y".repeat(1096))
+      expect(said[4]).toBe("after")
+      // 2 bytes each: 2048 of them.
+      expect(said[5]).toBe("é".repeat(2048))
+      expect(said[6]).toBe("last")
+      expect(said).toHaveLength(7)
+    })
+)
 
 it("the forward listens on this machine's loopback alone, to that machine's loopback, and ends when it cannot", () => {
   const args = forwardArgs(DEVBOX, 40_001, 4321)
@@ -257,13 +355,9 @@ const until = (name) =>
 })()
 `
 
-/** The fake ssh's folders, removed after each test. */
-const folders: string[] = []
-
 /** A fake ssh first on PATH, in a folder of its own, playing `play`. */
 function fakeSsh(play: Play) {
-  const dir = mkdtempSync(join(tmpdir(), "banda-ssh-"))
-  folders.push(dir)
+  const dir = folder()
   writeFileSync(join(dir, "play.json"), JSON.stringify(play))
   writeFileSync(join(dir, "ssh"), `#!${process.execPath}\n${FAKE}`, {
     mode: 0o755,
@@ -313,7 +407,7 @@ const running = (secret: string, port: number, protocol = 1) =>
 const FAST: Times = {
   first: 50,
   longest: 200,
-  stopped: 60_000,
+  refused: 60_000,
   answer: 5_000,
   signin: 10_000,
 }
@@ -522,7 +616,7 @@ it.live(
 )
 
 it.live(
-  "an engine stopped there as asked leaves the host stopped and Banda running, and asking for it starts it again",
+  "an engine stopped there as asked leaves the host stopped and Banda running: asking for its address waits, and only starting it starts it",
   () =>
     Effect.gen(function* () {
       const fake = fakeSsh({
@@ -536,20 +630,36 @@ it.live(
         yield* hosts.address("devbox")
         fake.touch("stop")
         yield* reaches((host) => host.state === "stopped")
-        yield* Effect.sleep(300)
+        // No timer starts the engine the Person stopped, nor does asking
+        // where it listens.
+        const asked = yield* Effect.forkScoped(hosts.address("devbox"))
+        yield* Effect.sleep(500)
         expect((yield* hosts.current)[0]!.state).toBe("stopped")
         expect(fake.runs("follower")).toHaveLength(1)
-        expect((yield* hosts.address("devbox")).secret).toBe("two")
+        expect(asked.pollUnsafe()).toBeUndefined()
+        expect(logged).toContain(
+          "banda: devbox's engine stopped as asked; Banda starts it again when asked"
+        )
+        // Starting it does, and the one waiting gets its address.
+        yield* hosts.start("devbox")
+        expect((yield* Fiber.join(asked)).secret).toBe("two")
+        expect(fake.runs("follower")).toHaveLength(2)
+        // Starting a live host does nothing; one not in hosts.toml fails.
+        yield* hosts.start("devbox")
+        yield* Effect.sleep(200)
+        expect(fake.runs("follower")).toHaveLength(2)
+        const unknown = yield* Effect.flip(hosts.start("nowhere"))
+        expect(unknown.message).toMatch(/no host "nowhere"/)
       }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
     }),
   20_000
 )
 
 it.live(
-  "a refusal from banda there leaves the host refused, tried no more",
+  "a refusal from banda there leaves the host refused: it is tried again at once when asked, else after a long wait",
   () =>
     Effect.gen(function* () {
-      const fake = fakeSsh({
+      const play: Play = {
         followers: [
           [
             {
@@ -563,7 +673,8 @@ it.live(
             },
           ],
         ],
-      })
+      }
+      const fake = fakeSsh(play)
       yield* Effect.gen(function* () {
         const hosts = yield* Hosts
         expect(yield* reaches((host) => host.state === "refused")).toEqual({
@@ -573,11 +684,75 @@ it.live(
         })
         yield* Effect.sleep(300)
         expect(fake.runs("follower")).toHaveLength(1)
+        // Asking where it listens tries it again, and fails with the new
+        // go's refusal, not the old one's.
         const asked = yield* Effect.flip(hosts.address("devbox"))
         expect(asked.message).toMatch(/^devbox: devbox runs a Banda/)
+        expect(fake.runs("follower")).toHaveLength(2)
+        // So does starting it.
+        yield* hosts.start("devbox")
+        yield* until(() => fake.runs("follower").length === 3)
         const unknown = yield* Effect.flip(hosts.address("nowhere"))
         expect(unknown.message).toMatch(/no host "nowhere"/)
       }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
+      // With no one asking, after the long wait.
+      const slow = fakeSsh(play)
+      yield* Effect.gen(function* () {
+        yield* until(() => slow.runs("follower").length === 2)
+        expect(logged).toContainEqual(
+          expect.stringMatching(
+            /^banda: devbox is refused: .*; Banda tries again in 300 ms, or when asked$/
+          )
+        )
+      }).pipe(Effect.scoped, Effect.provide(hostsOn(slow, { refused: 300 })))
+    }),
+  20_000
+)
+
+it.live(
+  "with no Banda there the host is refused, saying how to set it, and not tried again soon",
+  () =>
+    Effect.gen(function* () {
+      const fake = fakeSsh({
+        followers: [[{ err: "no Banda Local here", exit: 127 }]],
+      })
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        expect(yield* reaches((host) => host.state === "refused")).toEqual({
+          name: "devbox",
+          state: "refused",
+          why: `no ${channel.name} found on devbox; set banda in hosts.toml`,
+        })
+        // Past the wait after an ssh that ends: not tried again.
+        yield* Effect.sleep(400)
+        expect(fake.runs("follower")).toHaveLength(1)
+        const asked = yield* Effect.flip(hosts.address("devbox"))
+        expect(asked.message).toBe(
+          `devbox: no ${channel.name} found on devbox; set banda in hosts.toml`
+        )
+        // The follower looked for it, as no banda is set.
+        expect(fake.runs("follower")[0]!.args.at(-1)).toBe(
+          remoteCommand(undefined)
+        )
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(
+          hostsOn(fake, {}, `[[hosts]]\nname = "devbox"\nssh = "devbox"\n`)
+        )
+      )
+      // A `banda` set in hosts.toml and not there says so.
+      const set = fakeSsh({ followers: [[{ exit: 127 }]] })
+      yield* reaches((host) => host.state === "refused").pipe(
+        Effect.map((host) =>
+          expect(host).toEqual({
+            name: "devbox",
+            state: "refused",
+            why: "no ~/.local/bin/banda-dev on devbox; check banda in hosts.toml",
+          })
+        ),
+        Effect.scoped,
+        Effect.provide(hostsOn(set))
+      )
     }),
   20_000
 )
@@ -720,6 +895,37 @@ it.live(
         expect(fake.runs("-N")).toHaveLength(2)
         expect(fake.runs("follower")).toHaveLength(1)
         expect(address.url).toBe(`ws://127.0.0.1:${portOf(fake, 1)}/ws`)
+        expect(logged).toContain(
+          "banda: the forward to devbox could not listen on its port; it tries another"
+        )
+      }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
+    }),
+  20_000
+)
+
+it.live(
+  "a forward that ends early for another reason waits as after any end, and the next go starts from ssh's config",
+  () =>
+    Effect.gen(function* () {
+      const fake = fakeSsh({
+        followers: [[{ out: running("one", 1111) }]],
+        forwards: [
+          [{ err: "ssh: connect to host devbox port 22: refused", exit: 255 }],
+          [{ listen: true }],
+        ],
+      })
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        const seen = yield* watched
+        const address = yield* hosts.address("devbox")
+        expect(
+          seen.flatMap((host) => (host.state === "away" ? [host.why] : []))
+        ).toEqual(["the forward to devbox ended before it answered (code 255)"])
+        expect(fake.runs("-G")).toHaveLength(2)
+        expect(fake.runs("follower")).toHaveLength(2)
+        expect(fake.runs("-N")).toHaveLength(2)
+        expect(address.url).toBe(`ws://127.0.0.1:${portOf(fake, 1)}/ws`)
+        expect(logged.join("\n")).not.toContain("tries another")
       }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
     }),
   20_000
@@ -804,6 +1010,44 @@ it.live(
         expect(told).toHaveLength(21)
         expect(told.at(-1)).toMatch(/ssh says more/)
         expect(logged.join("\n")).not.toContain("s3cr3t-one")
+      }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
+    }),
+  20_000
+)
+
+it.live(
+  "past 4 KiB, a line from either ssh is dropped: what comes after counts for nothing",
+  () =>
+    Effect.gen(function* () {
+      const long = "x".repeat(5000)
+      const fake = fakeSsh({
+        followers: [
+          [
+            { err: `${long} https://login.tailscale.com/a/1` },
+            // Whole, it is where the engine listens.
+            { out: `${" ".repeat(5000)}${running("one", 1111)}` },
+          ],
+          [{ out: running("two", 2222) }],
+        ],
+        forwards: [
+          [{ err: `${long} cannot listen to port: 5`, exit: 255 }],
+          [{ listen: true }],
+        ],
+      })
+      yield* Effect.gen(function* () {
+        const seen = yield* watched
+        const live = yield* reaches((host) => host.state === "live")
+        expect(live).toMatchObject({ state: "live" })
+        expect(seen.map((host) => host.state)).not.toContain("signin")
+        expect(
+          seen.flatMap((host) => (host.state === "away" ? [host.why] : []))
+        ).toEqual([
+          "devbox's banda said something unexpected",
+          "the forward to devbox ended before it answered (code 255)",
+        ])
+        expect(
+          (yield* Hosts.use((hosts) => hosts.address("devbox"))).secret
+        ).toBe("two")
       }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
     }),
   20_000
