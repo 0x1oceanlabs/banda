@@ -72,7 +72,7 @@ import {
 } from "../registry"
 import { Edge } from "../sidebar/Edge"
 import { Sidebar } from "../sidebar/Sidebar"
-import { SnoozePicker, type Snoozing } from "../sidebar/SnoozePicker"
+import { SnoozePicker, type Snoozing } from "../sidebar/Snoozing"
 import { QuitDialog } from "./Quit"
 import {
   seeWoke,
