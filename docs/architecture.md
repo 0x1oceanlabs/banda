@@ -1433,12 +1433,12 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   is elsewhere.
   - The `notifications` module tells of it (`platform/notifications/pane`),
     from its `start`, asking the window only what it knows (`WindowApi`:
-    `items`, `here`, `sight`, `look`). It compares each list with the one
-    before: what starts calling is news, what stops is taken back, and a
-    Project's first list is what already was. A toast's button goes to
-    its Thread by the Window's `pane.pick`, the one way to go to an Agent,
-    which a sidebar row, the counts list and `Alt+U` run too (ADR 0087,
-    decision 7).
+    `items`, `here`, `sight`, `look`, `projects`, `run`). It compares each
+    list with the one before: what starts calling is news, what stops is
+    taken back, and a Project's first list is what already was. A toast's
+    button goes to its Thread by the Window's `pane.pick`, the one way to
+    go to an Agent, which a sidebar row, the counts list and `Alt+U` run
+    too (ADR 0087, decision 7).
   - It gathers the news for a tenth of a second and tells of each where
     the Person looks (`tell.ts`): nothing while they look at it; the sound
     when it is on screen; the sound and a toast when it is elsewhere in

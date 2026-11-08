@@ -1,7 +1,9 @@
+import { AGENTS_FILE, DEFAULT_AGENTS } from "@banda/contract/agents"
+import type { Look } from "@banda/contract/look"
+import { takeLook } from "@banda/ui/lib/look"
 import type { Args } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
-import { homeOf } from "../registry"
 import { entries, focused, open, start, type Workspaces } from "../tiling/model"
 import {
   closingShown,
@@ -111,16 +113,19 @@ test("a pick goes to the Pane that shows its thing, on any workspace, else opens
       params: { project: "project-a", kind: "agents.thread", args: t3.args },
     },
   })
-  expect(picking(start(), "project-a", t3)).toMatchObject({
-    command: {
-      params: {
-        place:
-          homeOf(t3) === "project"
-            ? { to: "project", project: "project-a" }
-            : "right",
-      },
-    },
-  })
+  // Where the Flow says: a new column right of the Pane in front in Free,
+  // the first on an empty workspace; last on its Project's workspace in
+  // Row, the Flow there is before a look comes.
+  for (const [flow, place] of [
+    ["free", { to: "column", index: 0 }],
+    ["row", { to: "project", project: "project-a" }],
+  ] as const) {
+    const files = { [AGENTS_FILE.name]: { ...DEFAULT_AGENTS, flow } }
+    takeLook({ files } as unknown as Look)
+    expect(picking(start(), "project-a", t3)).toMatchObject({
+      command: { params: { place } },
+    })
+  }
   // A kind that names no thing: the Pane that is the same one, as its
   // kind names it.
   const usage = { kind: "harnesses.usage", args: {} }

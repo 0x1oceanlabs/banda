@@ -275,16 +275,17 @@ test("one place answers a pick, and only the action reaches it", () => {
       )
     )
   expect(places(/\bhow: "left"/g)).toEqual(["web/src/window/Shell.tsx"])
-  expect(places(/\bshell\.pick\(/g)).toEqual(["web/src/window/actions.ts"])
+  // The Shell answers it as `parts` too: neither is called but by the action.
+  expect(places(/\b(?:shell|parts)\.pick\(/g)).toEqual([
+    "web/src/window/actions.ts",
+  ])
   const api = readFileSync(join(app, "ui/src/module.ts"), "utf8").match(
     /export type WindowApi = \{\n([\s\S]*?)\n\}/
   )
   expect(api).not.toBeNull()
-  const fields = [...api![1].matchAll(/^ {2}(\w+)\??:/gm)].map(
-    (found) => found[1]
-  )
-  expect(fields).toContain("run")
-  expect(fields).not.toContain("goTo")
+  expect(api![1]).toMatch(/^ {2}run\b/m)
+  // Not as a field, a method or a word in its comments.
+  expect(api![1]).not.toMatch(/\bgoTo\b/)
 })
 
 /**
