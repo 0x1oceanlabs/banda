@@ -29,7 +29,6 @@ import {
   PaneHeader,
   TileHeader,
 } from "@banda/ui/components/pane-header"
-import { DetailsRows } from "@banda/ui/components/thread-details"
 import {
   type Label,
   type Listed,
@@ -49,7 +48,6 @@ import {
   SquareArrowOutUpRightIcon,
 } from "lucide-react"
 import {
-  detailsOf,
   ELSEWHERE,
   kindOf,
   kindRuns,
@@ -267,7 +265,6 @@ export const PaneFrame = memo(function PaneFrame({
   }, [frame, entry.id, entry.pane, onHost])
   const summary =
     project ?? reach.shown?.projects.find((one) => one.id === entry.project)
-  const details = useMemo(() => detailsOf(modules), [modules])
   // Its Tile, which the Tiling configures and its Pane reads (ADR 0088,
   // decision 4): the same for as long as it is drawn, so no Configure
   // draws it again.
@@ -383,124 +380,120 @@ export const PaneFrame = memo(function PaneFrame({
       )}
       <TileHeader value={header}>
         <HeaderSlot>
-          <DetailsRows details={details}>
-            {/* A stand-in draws the frame's header, as its Pane is not drawn. */}
-            {(zoomed || away || kind?.header !== false) && (
-              <PaneHeader
-                title={title}
-                icon={listed ? undefined : Icon}
-                onClose={close}
-                className={kind?.header === "bare" ? "border-b-0" : undefined}
-              >
-                {listed && (
-                  <>
-                    <ThreadMark
-                      listed={listed}
-                      className={
-                        listed.mark === "rest" ? "opacity-40" : undefined
-                      }
-                    />
-                    {summary && (
-                      <ProjectName
-                        project={summary}
-                        className="shrink-0 text-muted-foreground"
-                      />
-                    )}
-                    {machine && <MachineMark named={machine} form="full" />}
-                  </>
-                )}
-                {listed && reach.engine ? (
-                  <Title
-                    project={entry.project}
+          {/* A stand-in draws the frame's header, as its Pane is not drawn. */}
+          {(zoomed || away || kind?.header !== false) && (
+            <PaneHeader
+              title={title}
+              icon={listed ? undefined : Icon}
+              onClose={close}
+              className={kind?.header === "bare" ? "border-b-0" : undefined}
+            >
+              {listed && (
+                <>
+                  <ThreadMark
                     listed={listed}
-                    title={title}
-                    focused={focused}
+                    className={
+                      listed.mark === "rest" ? "opacity-40" : undefined
+                    }
                   />
-                ) : (
-                  <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[selected=true]/tile:text-foreground">
-                    {title}
-                  </h2>
-                )}
-                <Edits edits={edits} />
-                {/* The detail takes what room the title leaves: a long
+                  {summary && (
+                    <ProjectName
+                      project={summary}
+                      className="shrink-0 text-muted-foreground"
+                    />
+                  )}
+                  {machine && <MachineMark named={machine} form="full" />}
+                </>
+              )}
+              {listed && reach.engine ? (
+                <Title
+                  project={entry.project}
+                  listed={listed}
+                  title={title}
+                  focused={focused}
+                />
+              ) : (
+                <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[selected=true]/tile:text-foreground">
+                  {title}
+                </h2>
+              )}
+              <Edits edits={edits} />
+              {/* The detail takes what room the title leaves: a long
                     one, as a folder's path, gives way first. */}
-                {detail && (
-                  <span className="max-w-fit min-w-0 flex-[1_1_0] truncate text-xs text-muted-foreground">
-                    {detail}
-                  </span>
-                )}
-                {mixed && !listed && summary && (
-                  <ProjectName
-                    project={summary}
-                    className="shrink-0 gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground"
-                  />
-                )}
-                {machine && !listed && (
-                  <MachineMark named={machine} form="full" />
-                )}
-                {zoomed && (
-                  <button
-                    type="button"
-                    title={keyFor("pane.zoom", "Back in its column")}
-                    className="flex shrink-0 items-center gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground hover:text-foreground"
-                    onClick={() => frame.run("pane.zoom")}
-                  >
-                    <Minimize2Icon className="size-3" />
-                    Zoomed
-                  </button>
-                )}
-              </PaneHeader>
-            )}
-            <div className="relative min-h-0 flex-1">
-              {away ? (
+              {detail && (
+                <span className="max-w-fit min-w-0 flex-[1_1_0] truncate text-xs text-muted-foreground">
+                  {detail}
+                </span>
+              )}
+              {mixed && !listed && summary && (
+                <ProjectName
+                  project={summary}
+                  className="shrink-0 gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground"
+                />
+              )}
+              {machine && !listed && (
+                <MachineMark named={machine} form="full" />
+              )}
+              {zoomed && (
                 <button
                   type="button"
-                  title="Go to its window"
-                  className="flex size-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground outline-none hover:text-foreground"
-                  onClick={() => popOut?.(entry.id)}
+                  title={keyFor("pane.zoom", "Back in its column")}
+                  className="flex shrink-0 items-center gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => frame.run("pane.zoom")}
                 >
-                  <SquareArrowOutUpRightIcon className="size-5" />
-                  In its own window
+                  <Minimize2Icon className="size-3" />
+                  Zoomed
                 </button>
-              ) : machine && !kind?.elsewhere ? (
-                <Elsewhere machine={machine}>
-                  Not on {machine.name} yet
-                </Elsewhere>
-              ) : !reach.engine ? (
-                <Elsewhere machine={machine}>{words}</Elsewhere>
-              ) : shown ? (
-                <Broken close={close}>
-                  <TileContext value={tile}>
-                    <shown.Pane
-                      engine={reach.engine}
-                      project={entry.project}
-                      args={onHost.args}
-                      focused={focused}
-                      selected={selected}
-                      {...handle}
-                      run={run}
-                    />
-                  </TileContext>
-                </Broken>
-              ) : (
-                <p className="p-4 text-sm text-muted-foreground">
-                  {kind
-                    ? "This Pane comes back when the engine runs its module."
-                    : "This window does not know this kind of Pane."}
-                </p>
               )}
-              {/* Its host out of reach, it shows what it showed, and
+            </PaneHeader>
+          )}
+          <div className="relative min-h-0 flex-1">
+            {away ? (
+              <button
+                type="button"
+                title="Go to its window"
+                className="flex size-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground outline-none hover:text-foreground"
+                onClick={() => popOut?.(entry.id)}
+              >
+                <SquareArrowOutUpRightIcon className="size-5" />
+                In its own window
+              </button>
+            ) : machine && !kind?.elsewhere ? (
+              <Elsewhere machine={machine}>Not on {machine.name} yet</Elsewhere>
+            ) : !reach.engine ? (
+              <Elsewhere machine={machine}>{words}</Elsewhere>
+            ) : shown ? (
+              <Broken close={close}>
+                <TileContext value={tile}>
+                  <shown.Pane
+                    engine={reach.engine}
+                    project={entry.project}
+                    args={onHost.args}
+                    focused={focused}
+                    selected={selected}
+                    {...handle}
+                    run={run}
+                  />
+                </TileContext>
+              </Broken>
+            ) : (
+              <p className="p-4 text-sm text-muted-foreground">
+                {kind
+                  ? "This Pane comes back when the engine runs its module."
+                  : "This window does not know this kind of Pane."}
+              </p>
+            )}
+            {/* Its host out of reach, it shows what it showed, and
                   catches up once that host is back. */}
-              {!away && reach.engine && words && (
-                <p
-                  role="status"
-                  className="pointer-events-none absolute top-2 left-1/2 z-10 -translate-x-1/2 rounded-full border bg-tile px-2.5 py-0.5 text-xs whitespace-nowrap text-muted-foreground shadow-sm"
-                >
-                  {words}
-                </p>
-              )}
-            </div>
-          </DetailsRows>
+            {!away && reach.engine && words && (
+              <p
+                role="status"
+                className="pointer-events-none absolute top-2 left-1/2 z-10 -translate-x-1/2 rounded-full border bg-tile px-2.5 py-0.5 text-xs whitespace-nowrap text-muted-foreground shadow-sm"
+              >
+                {words}
+              </p>
+            )}
+          </div>
         </HeaderSlot>
       </TileHeader>
     </section>

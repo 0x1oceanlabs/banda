@@ -4,7 +4,7 @@ import { useModules } from "@banda/ui/hooks/use-status"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { paneHost, type PaneState } from "@banda/ui/pane"
 import { HostsContext, useNamedOf, useOurs } from "../calls/hosts"
-import { labelOf, previewers } from "../registry"
+import { labelOf, previewers, slotsOf } from "../registry"
 import { closing } from "./actions"
 import { device } from "./device"
 import { useKeys, usePoppedKeys } from "./keys"
@@ -15,6 +15,7 @@ import { type Entry, samePane } from "../tiling/model"
 import { type Frame, PaneFrame } from "../tiling/PaneFrame"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { Previewers } from "@banda/ui/lib/previewers"
+import { Slots } from "@banda/ui/slots"
 
 /**
  * A Pane in a window of its own (ADR 0025, decision 9). The window keeps
@@ -25,6 +26,7 @@ import { Previewers } from "@banda/ui/lib/previewers"
  */
 export function Popped({ engine, pane }: { engine: Engine; pane: string }) {
   const modules = useModules(engine)
+  const slots = useMemo(() => slotsOf(modules), [modules])
   const { listed: projects } = useProjects(engine)
   // This machine's Projects win an ID a host has too, as in the window.
   useOurs(useContext(HostsContext), projects)
@@ -105,20 +107,23 @@ export function Popped({ engine, pane }: { engine: Engine; pane: string }) {
     <KeysInForce.Provider value={keys}>
       <div className="flex h-svh bg-desk text-foreground">
         {entry ? (
-          // Its Pane draws a file with the modules' previewers.
+          // Its Pane draws a file with the modules' previewers, and what
+          // the modules fill the Slots with.
           <Previewers value={previewers}>
-            <PaneFrame
-              entry={entry}
-              engine={engine}
-              modules={modules}
-              focused
-              marked={false}
-              listed={undefined}
-              project={project}
-              mixed={false}
-              frame={frame}
-              alone
-            />
+            <Slots value={slots}>
+              <PaneFrame
+                entry={entry}
+                engine={engine}
+                modules={modules}
+                focused
+                marked={false}
+                listed={undefined}
+                project={project}
+                mixed={false}
+                frame={frame}
+                alone
+              />
+            </Slots>
           </Previewers>
         ) : (
           <p className="m-auto text-sm text-muted-foreground">

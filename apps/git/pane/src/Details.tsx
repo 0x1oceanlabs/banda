@@ -8,10 +8,10 @@
  * They follow `git.watch`.
  */
 import {
-  type Details,
   type DetailsProps,
   DetailsRow,
 } from "@banda/ui/components/thread-details"
+import type { Filler } from "@banda/ui/slots"
 import { DiffCounts } from "@banda/ui/components/diff"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useEffect } from "react"
@@ -104,4 +104,9 @@ function GitRows({
 export const diffOn = (scope: Scope = CHANGES) =>
   paneOf(diffPane, { scope, file: null })
 
-export const gitDetails: Details = { id: "git.branch", Rows: GitRows }
+/** Git's rows in Threads' Slot `thread.details`. */
+export const gitDetails: Filler<"thread.details"> = {
+  id: "git.branch",
+  slot: "thread.details",
+  Fill: GitRows,
+}

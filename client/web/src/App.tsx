@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type { Engine } from "@banda/contract"
 import { Spinner } from "@banda/ui/components/spinner"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { Previewers } from "@banda/ui/lib/previewers"
 import { useMachine, useModules, useStatus } from "@banda/ui/hooks/use-status"
 import { shownProjects } from "@banda/ui/lib/projects"
+import { Slots } from "@banda/ui/slots"
 import { HostsContext, KeptHosts, useOurs } from "./calls/hosts"
-import { previewers } from "./registry"
+import { previewers, slotsOf } from "./registry"
 import { device } from "./window/device"
 import { Shell } from "./window/Shell"
 import { AskToShare } from "./sharing/AskToShare"
@@ -20,6 +21,7 @@ export function App({ engine }: { engine: Engine }) {
   const status = useStatus(engine)
   const machine = useMachine(engine)
   const modules = useModules(engine)
+  const slots = useMemo(() => slotsOf(modules), [modules])
   // A Project added here shows at once, as the engine answered it.
   const { listed, put } = useProjects(engine)
   const [hosts] = useState(() => new KeptHosts(device.hosts))
@@ -48,19 +50,22 @@ export function App({ engine }: { engine: Engine }) {
   // one whose folder is missing opens nothing.
   const home = projects.find((project) => !project.missing && !project.scratch)
   if (!machine) return <Spinner />
-  // Every Pane draws a file with the modules' previewers (ADR 0073).
+  // Every Pane draws a file with the modules' previewers (ADR 0073), and
+  // every Slot's owner what the modules that run fill it with.
   return (
     <Previewers value={previewers}>
-      <HostsContext value={hosts}>
-        <Shell
-          engine={engine}
-          status={status}
-          modules={modules}
-          projects={projects}
-          home={home?.id ?? machine}
-          onCreated={put}
-        />
-      </HostsContext>
+      <Slots value={slots}>
+        <HostsContext value={hosts}>
+          <Shell
+            engine={engine}
+            status={status}
+            modules={modules}
+            projects={projects}
+            home={home?.id ?? machine}
+            onCreated={put}
+          />
+        </HostsContext>
+      </Slots>
       {projects.length > 0 && <AskToShare engine={engine} />}
     </Previewers>
   )

@@ -1,16 +1,10 @@
 /**
  * Thread details (ADR 0034, decision 4): a quiet card in the Thread Pane,
  * as T3 Code's, whose rows the modules give, git's now and `pulls`' after.
- * The Thread Pane draws the card; the window hands it the rows of the
- * modules that run; each module draws its own.
+ * The Thread Pane draws the card, the Slot `thread.details` (`slots.ts`),
+ * with the rows of the modules that run; each module draws its own.
  */
-import {
-  type ComponentProps,
-  type ComponentType,
-  createContext,
-  type ReactNode,
-  useContext,
-} from "react"
+import type { ComponentProps, ReactNode } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
 import { cn } from "../lib/utils"
 import type { PaneState, Place } from "../pane"
@@ -32,14 +26,6 @@ export type DetailsProps = {
   opened: () => void
 }
 
-/** A module's rows in the card: drawn in a section of its own, gone
- * from it when they draw nothing. */
-export type Details = {
-  /** Dotted, its module's id first: `git.branch`. */
-  id: string
-  Rows: ComponentType<DetailsProps>
-}
-
 /** How wide the card is, and the room it keeps from the Pane's edge. */
 export const DETAILS_CARD = 280
 export const DETAILS_GAP = 12
@@ -48,24 +34,6 @@ const MESSAGES = 768
 /** How wide a Pane holds the card beside its centred messages: what a
  * Pane beside the Thread can take as wide too. */
 export const DETAILS_WIDE = MESSAGES + 2 * (DETAILS_CARD + DETAILS_GAP)
-
-const Given = createContext<readonly Details[]>([])
-
-/** Hands the Panes drawn inside it the rows of the modules that run. */
-export function DetailsRows({
-  details,
-  children,
-}: {
-  details: readonly Details[]
-  children: ReactNode
-}) {
-  return <Given value={details}>{children}</Given>
-}
-
-/** The rows the modules that run give the card. */
-export function useDetails(): readonly Details[] {
-  return useContext(Given)
-}
 
 /** A row's faint fill under the mouse; a row split in two, as the git
  * button and its `▾`, puts it on what holds both. */
