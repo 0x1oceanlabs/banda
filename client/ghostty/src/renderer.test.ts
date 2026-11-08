@@ -176,6 +176,10 @@ describe("the renderer", () => {
     expect(rowsDrawAlike(1.25, 16, 4)).toBe(false)
     expect(rowsDrawAlike(1.5, 18, 4)).toBe(false)
     expect(rowsDrawAlike(3, 17, 4)).toBe(false)
+    // Powers of two but 1 and 2: below 1 rows round apart, and 4 is unproven.
+    expect(rowsDrawAlike(0.5, 16, 4)).toBe(false)
+    expect(rowsDrawAlike(0.25, 16, 4)).toBe(false)
+    expect(rowsDrawAlike(4, 16, 4)).toBe(false)
   })
 
   it("draws as T3's renderer did while a glyph may stand past its row", async () => {
