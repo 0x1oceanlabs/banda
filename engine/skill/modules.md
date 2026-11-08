@@ -17,7 +17,7 @@ Its settings: `agents.toml`.
 
 Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
 
-- New Thread (`thread.new`), Alt+Return; takes `project` (the Project it starts in), `ask` (what to write to its Agent first), `harness` (the Harness it starts on)
+- New Thread (`thread.new`), Alt+Return; takes `project` (the Project it starts in), `ask` (what to write to its Agent first), `harness` (the Harness it starts on), `place` (drawer: it opens in the drawer, in place of what the drawer held)
 - Send the message, as agents.toml says Enter does (`agents.composer.send`), Return, `[binds.composer]`
 - Send it the other way: queued, or steering (`agents.composer.send-other`), Ctrl+Return, `[binds.composer]`
 - A new line in the message (`agents.composer.newline`), Shift+Return, `[binds.composer]`
@@ -27,11 +27,16 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Zoom the Thread in (`agents.thread.zoom-in`), Ctrl+= or Ctrl+Shift+=, `[binds.thread]`
 - Zoom the Thread out (`agents.thread.zoom-out`), Ctrl+-, `[binds.thread]`
 - The Thread at its own size (`agents.thread.zoom-reset`), Ctrl+0, `[binds.thread]`
-- Show or hide the Thread's details (`agents.thread.details`), Ctrl+Shift+B, `[binds.thread]`
+- Show or hide the Thread's details (`agents.thread.details`), Ctrl+Shift+B, `[binds.thread]`; takes `part` (a part of its rows to open, as git's branch picker, git.branch)
 - Find in the Thread (`agents.thread.find`), Ctrl+F, `[binds.thread]`
 - Zoom the Visual in (`agents.visual.zoom-in`), Ctrl+= or Ctrl+Shift+=, `[binds.visual]`
 - Zoom the Visual out (`agents.visual.zoom-out`), Ctrl+-, `[binds.visual]`
 - The Visual at its own size (`agents.visual.zoom-reset`), Ctrl+0, `[binds.visual]`
+- Rename the Thread you look at (`thread.rename`), F2; takes `project` (the Project of the Item it acts on), `item` (the Item's id in its Project, as a Thread's; none for the one in focus), `title` (its new title; an empty one gives back the title it had by itself), `from` (where its field opens, without a title: head or row)
+- Suggest a title for the Thread you look at, and rename it (`thread.suggest-title`), Shift+F2; takes `project` (the Project of the Item it acts on), `item` (the Item's id in its Project, as a Thread's; none for the one in focus)
+- Mark the Thread you look at as unread, or as read (`thread.unread`), Alt+Shift+U; takes `project` (the Project of the Item it acts on), `item` (the Item's id in its Project, as a Thread's; none for the one in focus)
+- Snooze the Thread you look at, or wake it (`thread.snooze`), Alt+Z; takes `project` (the Project of the Item it acts on), `item` (the Item's id in its Project, as a Thread's; none for the one in focus), `until` (when it wakes, in milliseconds since 1970), `resume` (with until, its failed turn goes again then), `done` (it sleeps until its turn ends)
+- Wake the snoozed Thread you look at (`thread.wake`); takes `project` (the Project of the Item it acts on), `item` (the Item's id in its Project, as a Thread's; none for the one in focus)
 
 Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `composer` (the Composer, a field), `thread` (the Thread), `visual` (the Visual preview).
 
@@ -317,12 +322,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Move the workspace down (`workspace.move-down`), Alt+Shift+PageDown
 - A new workspace: the empty one at the bottom (`workspace.new`)
 - Go to what calls you (`calls.answer`), Alt+U
-- Archive the Thread you look at, or bring it back (`sidebar.archive`), Alt+S
-- Rename the Thread you look at (`thread.rename`), F2
-- Suggest a title for the Thread you look at, and rename it (`thread.suggest-title`), Shift+F2
-- Mark the Thread you look at as unread, or as read (`thread.unread`), Alt+Shift+U
-- Snooze the Thread you look at, or wake it (`thread.snooze`), Alt+Z
-- Wake the snoozed Thread you look at (`thread.wake`)
+- Archive the Thread you look at, or bring it back (`sidebar.archive`), Alt+S; takes `project` (the Project of the Item it acts on), `item` (the Item's id in its Project, as a Thread's; none for the one in focus)
 - Banda menu (`menu.open`), Alt+Space; takes `source` (a source's id, to show its rows alone, as files.find)
 - Every action and its key (`menu.keys`), Alt+K
 - Open the settings (`settings.open`), Alt+,; takes `link` (a section, or a row in it, as keys)
