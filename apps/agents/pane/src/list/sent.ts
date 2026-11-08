@@ -34,14 +34,16 @@ import { toast } from "@banda/ui/components/sonner"
 import { Store, useStore } from "@banda/ui/lib/store"
 import { problem } from "@banda/ui/lib/words"
 import { useCallback } from "react"
-import { without } from "./list"
+import { archiveHolds, without } from "./list"
 
 /**
- * A mark the Person gives a Thread: the turn they saw end; `latest`, the
- * latest that ended, as "Mark as read" has it; none, as "Mark as unread"
- * does; or archived, or brought back.
+ * A mark the Person gives a Thread, not Banda's Mark that shows what it
+ * calls them for: the turn they saw end; `latest`, the latest that ended,
+ * as "Mark as read" has it; none, as "Mark as unread" does; or archived,
+ * or brought back.
  */
-export type Mark = { seen: TurnId | "latest" | null } | { archived: boolean }
+export type PersonMark =
+  { seen: TurnId | "latest" | null } | { archived: boolean }
 
 /** A mark on its way: what it says, the command that carries it, and,
  * once the host answered, where in its log that command wrote. */
@@ -119,7 +121,7 @@ export async function mark(
   engine: Engine,
   project: ProjectId,
   thread: ThreadId,
-  mark: Mark,
+  mark: PersonMark,
   { quiet = false }: { quiet?: boolean } = {}
 ): Promise<boolean> {
   const failed = (error: unknown) => {
@@ -162,7 +164,7 @@ function commandOf(
   engine: Engine,
   project: ProjectId,
   thread: ThreadId,
-  mark: Mark,
+  mark: PersonMark,
   command: string
 ): Promise<{ at: number | null }> {
   if ("archived" in mark)
@@ -208,7 +210,7 @@ function markedBy(thread: ListedThread, sending: Sending): ListedThread {
   if (seen === null) now = without(now, "seen")
   else if (seen !== undefined && now.seen !== seen) now = { ...now, seen }
   if (sending.archived?.to === false) now = without(now, "archived")
-  else if (sending.archived && !holds(now))
+  else if (sending.archived && !archiveHolds(now))
     now = { ...now, archived: { at: now.updated_at } }
   return now
 }
@@ -227,11 +229,6 @@ function seenOf(
     return latest.state === "running" ? undefined : latest.turn
   return latest.turn === to ? to : undefined
 }
-
-/** Whether `thread`'s archive holds, as its host's rule has it: nothing
- * happened in it since (ADR 0096, decision 4). */
-const holds = ({ archived, updated_at }: ListedThread) =>
-  archived !== undefined && updated_at <= archived.at
 
 /**
  * Drops what `list`, of a Project of `engine`, has heard of what was sent
