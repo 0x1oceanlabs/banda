@@ -41,6 +41,7 @@ import { isFlow, nextFlow } from "../sidebar/FlowMenu"
 import { archiving } from "../sidebar/items"
 import { makeProject } from "../titles/MakeProject"
 import { pickSnooze } from "../sidebar/Snoozing"
+import { logged } from "../sidebar/write-setting"
 import {
   type Change,
   columnMoved,
@@ -427,12 +428,7 @@ function present(args: Args | undefined, then: (file: string) => void) {
  */
 function writeFlow(shell: Shell, flow: Flow) {
   const file = AGENTS_FILE.name
-  shell.writeSetting(file, "flow", tomlOf(flow)).then(
-    (refused) => {
-      if (refused.length > 0) console.error(`banda: ${file} refused`, refused)
-    },
-    (error: unknown) => console.error(`banda: ${file} was not written`, error)
-  )
+  logged(file, shell.writeSetting(file, "flow", tomlOf(flow)))
 }
 
 /** The other machines a stop is on its way to, by their keys: a second
@@ -701,8 +697,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     id: "flow.pick",
     args: takes({ flow: "free, row or solo" }, ["flow"]),
     section: "Workspaces",
-    title:
-      "Pick how the Agents' windows stand, as the sidebar's Flow menu does",
+    title: "Pick how the Agents' windows stand: free, row or solo",
     unlisted: true,
     run: (shell, args) => {
       if (isFlow(args?.flow)) writeFlow(shell, args.flow)
@@ -894,14 +889,15 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     // The sidebar's Search and its key sheet's button: the menu opens
     // there whatever shows, as `banda menu` opens it. Alt+Space is
     // menu.open's, which fills Quick Look where it shows, and Alt+K
-    // closes the menu at its Actions.
-    id: "menu.route",
+    // closes the menu at its Actions. A route is a row's id in the menu
+    // (ADR 0017), not a client's Route to a host.
+    id: "menu.at",
     args: takes({
       route:
         "a route of banda menu, as actions or project.add; none for its root",
     }),
     section: "Banda",
-    title: "Open the Banda menu at a route, as banda menu does",
+    title: "Open the Banda menu at a route",
     unlisted: true,
     run: (shell, args) =>
       shell.route(typeof args?.route === "string" ? args.route : ""),
@@ -1047,12 +1043,14 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     },
   },
   {
+    // The Person's Locate: it asks for the folder in the menu, which then
+    // sends the engine's own `projects.locate` with the folder picked.
     id: "projects.locate",
     args: takes({ project: "the Project whose folder is missing" }, [
       "project",
     ]),
     section: "Banda",
-    title: "Find the folder of a Project whose folder is missing",
+    title: "Open the Banda menu to find a missing Project's folder",
     unlisted: true,
     run: (shell, args) => {
       if (typeof args?.project === "string")

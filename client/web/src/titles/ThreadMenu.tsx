@@ -5,7 +5,7 @@
  * first: the Window draws them and runs each by its id, and the Item's App
  * does it.
  */
-import { createContext, type ReactNode, useContext, useMemo } from "react"
+import { createContext, type ReactNode, useContext } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { useAfterMenu } from "@banda/ui/components/context-menu"
 import {
@@ -21,11 +21,9 @@ import { useIsArchived } from "../sidebar/archived"
 import { rowsOf, type Shown } from "../sidebar/items"
 import { Making } from "./MakeProject"
 
-/** What the Thread menu asks of the window, wherever it opens; it runs
+/** The window's Projects, for the Thread menu wherever it opens; it runs
  * its rows by the Window's `run` (`useRun`). */
-type Threads = { projects: readonly ProjectSummary[] }
-
-const ThreadsContext = createContext<Threads>({ projects: [] })
+const ProjectsContext = createContext<readonly ProjectSummary[]>([])
 
 /** Gives the Thread menus inside it the window's Projects, and holds the
  * dialog that makes a Project. */
@@ -38,12 +36,11 @@ export function ThreadMenus({
   projects: readonly ProjectSummary[]
   children: ReactNode
 }) {
-  const threads = useMemo(() => ({ projects }), [projects])
   return (
-    <ThreadsContext value={threads}>
+    <ProjectsContext value={projects}>
       {children}
       <Making engine={engine} projects={projects} />
-    </ThreadsContext>
+    </ProjectsContext>
   )
 }
 
@@ -70,7 +67,7 @@ export function ThreadRows({
   later?: (act: () => void) => void
 }) {
   const keyFor = useKeyLabel()
-  const { projects } = useContext(ThreadsContext)
+  const projects = useContext(ProjectsContext)
   const run = useRun()
   const isArchived = useIsArchived()
   // Whether it sleeps, by a clock that moves as the menu stays open.

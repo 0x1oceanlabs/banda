@@ -174,8 +174,8 @@ test("a Project's verbs and the menu at a route do what the sidebar's buttons di
 
   // The Search opens the menu at its root, the key sheet's button at its
   // Actions (`openingOf`), as `banda menu` does.
-  runAction(shell, "menu.route")
-  runAction(shell, "menu.route", { route: "actions" })
+  runAction(shell, "menu.at")
+  runAction(shell, "menu.at", { route: "actions" })
   // A missing Project's folder is found in the menu; its settings are its
   // own.
   runAction(shell, "projects.locate", { project: "p1" })
