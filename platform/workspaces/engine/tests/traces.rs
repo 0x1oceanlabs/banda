@@ -1,7 +1,8 @@
 //! The golden traces each client's copy of the arrangement replays
 //! (`client/web/src/tiling/parity.test.ts`; ADR 0088, decision 11). Each
 //! scenario holds rules of the arrangement: its commands run through
-//! `commands::apply`, as the module runs them, and it is written to
+//! `commands::apply`, on the model functions the module's handlers run,
+//! and it is written to
 //! `platform/workspaces/traces/` as JSON, with each step's answer or
 //! refusal and the arrangement after it.
 //!

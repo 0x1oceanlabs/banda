@@ -214,8 +214,9 @@ settles.
       TypeScript one: a copy of the model's commands
       (`client/web/src/tiling/arrangement.ts`), which the prediction runs
       and T1 replaces. The engine's tests record the traces
-      (`platform/workspaces/traces/`) from the function its module runs
-      (`commands::apply`). (Amended in T-par.)
+      (`platform/workspaces/traces/`) from the model functions its
+      module's handlers run, through `commands::apply`. (Amended in
+      T-par.)
     - Then the client draws its prediction at once, sends intents in
       order with a CommandId, and reconciles by `at` (ADR 0082 d4, A8).
       The wait for the host to draw (`Shell.tsx:198`, `:438-492`) goes.
