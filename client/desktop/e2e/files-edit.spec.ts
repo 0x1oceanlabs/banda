@@ -88,6 +88,15 @@ test("a file is edited in place: saved as one types and at once with Ctrl+S, a d
     .poll(() => disk("src/util.ts"), { timeout: 400 })
     .toBe("export const one = 1 // edited!\nexport const two = 2\n")
 
+  // The disk goes back to the very text the editor started from, as
+  // `git checkout` does: the editor shows it, and what is typed next is
+  // typed on it, not on the text that was there before.
+  writeFileSync(join(project, "src/util.ts"), UTIL)
+  await expect(util.getByText("// edited!")).toBeHidden()
+  await page.keyboard.type("?")
+  await expect.poll(() => disk("src/util.ts")).not.toBe(UTIL)
+  expect(disk("src/util.ts")).not.toContain("edited")
+
   // Esc is done editing.
   await page.keyboard.press("Escape")
   await expect(edit).toHaveAttribute("aria-pressed", "false")
