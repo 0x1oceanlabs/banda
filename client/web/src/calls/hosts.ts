@@ -337,7 +337,7 @@ const RUNS_ELSEWHERE: ReadonlySet<string> = new Set([
  * item actions `items` its Apps say go to their Item's host (ADR 0087,
  * decision 12), as a Thread's snooze, each to an Item of that host's
  * alone (`ownItem`); none of the rest. */
-export function runsElsewhere(
+export function runOnHost(
   run: (action: string, args?: Args) => void,
   items: ReadonlySet<string>,
   shownNow: () => Shown | undefined,
@@ -366,7 +366,7 @@ export function ownItem(
   args?: Args
 ): Args | undefined {
   const project = args?.project ?? own.project
-  const item = args?.item ?? args?.thread ?? own.item
+  const item = args?.item ?? own.item
   if (typeof project !== "string" || typeof item !== "string") return undefined
   if (!shown?.projects.some((one) => one.id === project)) return undefined
   return { ...args, project, item }

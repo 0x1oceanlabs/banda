@@ -298,7 +298,7 @@ export function Shell({
   )
   // The drawer (ADR 0025, decision 8): its Pane, kept between runs, and
   // whether it shows. Dropped with none, it gets a new Thread in the home
-  // Project, the agents module's, which opens it there (`place`).
+  // Project, the agents module's, which opens it there (`drawer`).
   const [drawer, setDrawer] = useState(loadDrawer)
   const [drawerShown, setDrawerShown] = useState(false)
   // Kept from the last run, it is drawn from its first drop in this one.
@@ -475,9 +475,9 @@ export function Shell({
     open: (
       pane,
       project,
-      { beside, again = true, update, toggle, place, ...how } = {}
+      { beside, again = true, update, toggle, drawer, ...how } = {}
     ) => {
-      if (place === "drawer") return intoDrawer(pane, project ?? home)
+      if (drawer) return intoDrawer(pane, project ?? home)
       // The Pane that peeks, opened in the workspace, peeks no more.
       const peeked = peekNow.current
       if (

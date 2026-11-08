@@ -25,7 +25,7 @@ export function makeProject(project: ProjectId) {
   making.set(project)
 }
 
-/** The dialog, while it is asked for one of `projects`. */
+/** The dialog, while it is asked for one of `projects` in No Project. */
 export function Making({
   engine,
   projects,
@@ -35,7 +35,7 @@ export function Making({
 }) {
   const asked = useStore(making, now)
   const project = projects.find((one) => one.id === asked)
-  if (!project) return null
+  if (!project?.scratch) return null
   return (
     <MakeProject
       engine={engine}

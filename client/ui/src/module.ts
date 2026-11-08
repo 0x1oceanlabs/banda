@@ -91,9 +91,9 @@ export type WindowApi = {
    * `update` too, it shows these args, as a file's Pane the line a link
    * names. With `toggle`, the Pane in focus closes instead when it is
    * this one, as its kind names it: Mod+D's Diff. One whose kind says
-   * `home` opens on its Project's workspace (ADR 0065). With `place:
-   * "drawer"` it is the drawer's Pane instead, dropped, in place of any
-   * the drawer held (ADR 0025, decision 8).
+   * `home` opens on its Project's workspace (ADR 0065). With `drawer` it
+   * is the drawer's Pane instead, dropped, in place of any the drawer
+   * held (ADR 0025, decision 8).
    */
   open: (
     pane: PaneState,
@@ -104,7 +104,7 @@ export type WindowApi = {
       again?: false
       update?: true
       toggle?: true
-      place?: "drawer"
+      drawer?: true
     }
   ) => void
   /** Here (ADR 0087, decision 4): where the Person is in this Window. An
@@ -325,7 +325,8 @@ export type ItemAction<Context = WindowApi> = Action<Context> & {
   row: (item: Listed, at: ItemAt) => ItemRow | null
   /** What Banda's own parts ask it for, as the title's field asks to
    * rename, and the snooze's picker to snooze: a stand-in for the intents
-   * that take its place with B8. */
+   * that take its place with B8 (#862), counted till then. The Banda
+   * menu's recents count its rows by it. */
   does?: "rename" | "suggest" | "snooze" | "wake" | "archive"
   /** Where else its row is: the Pane menu, the Banda menu's Tab. Those
    * leave out a row that is off. */
@@ -371,15 +372,14 @@ export function itemArgs(more: { [name: string]: Takes } = {}): ArgsSchema {
 
 /**
  * The Item `args` name, as a list holds it: by its `project` and its id,
- * `item`, or `thread` as a Thread's Pane named it before item actions;
- * with no id, the one the Pane in focus shows (Here). None when no list
- * holds it.
+ * `item`; with no id, the one the Pane in focus shows (Here). None when
+ * no list holds it.
  */
 export function itemOf(
   window: Pick<WindowApi, "here" | "items">,
   args?: Args
 ): { project: ProjectId; listed: Listed } | undefined {
-  const named = args?.item ?? args?.thread
+  const named = args?.item
   const { pane } = window.here.get()
   const at =
     typeof named !== "string"

@@ -113,7 +113,7 @@ const newThread: Action = {
     window.open(
       thread,
       typeof project === "string" ? (project as ProjectId) : window.home,
-      place === "drawer" ? { place } : undefined
+      place === "drawer" ? { drawer: true } : undefined
     )
   },
 }

@@ -46,7 +46,7 @@ type At = { project: ProjectId; listed: Listed }
 
 /** The Thread `args` name, else the one the Pane in focus shows; none
  * when it is not a Thread, as Threads acts only on its own Items. */
-export function threadOf(window: WindowApi, args?: Args): At | undefined {
+function threadAt(window: WindowApi, args?: Args): At | undefined {
   const at = itemOf(window, args)
   return at?.listed.pane.kind.startsWith("agents.") ? at : undefined
 }
@@ -54,7 +54,7 @@ export function threadOf(window: WindowApi, args?: Args): At | undefined {
 /** Whether the Pane in focus shows a Thread: F2 and Shift+F2 are not the
  * mod's (ADR 0077), and a Thread takes them only while one has the
  * focus, as a terminal's program has them else. */
-const inSight = (window: WindowApi) => threadOf(window) !== undefined
+const inSight = (window: WindowApi) => threadAt(window) !== undefined
 
 /** The engine of the host that lists the Thread: this machine's, or
  * another host's (ADR 0081). */
@@ -161,7 +161,7 @@ const rename: ItemAction = {
   when: inSight,
   row: () => ({ title: "Rename…", icon: PencilIcon }),
   run: (window, args) => {
-    const at = threadOf(window, args)
+    const at = threadAt(window, args)
     if (!at) return
     if (typeof args?.title === "string") renamed(window, at, args.title)
     else
@@ -186,11 +186,12 @@ const suggest: ItemAction = {
   when: inSight,
   row: () => ({ title: "Suggest a title", icon: SparklesIcon }),
   run: (window, args) => {
-    const at = threadOf(window, args)
-    // By its key, another host's Thread asks nothing: its header's menu
-    // and its field ask its own engine.
-    const named = args?.item ?? args?.thread
-    if (!at || (named === undefined && window.here.get().pane?.host)) return
+    const at = threadAt(window, args)
+    // By its key, another host's Thread asks nothing, as before item
+    // actions: its header's menu and its field ask. `sessionOf` reaches
+    // its engine now, so the guard can go, as a change of its own.
+    if (!at || (args?.item === undefined && window.here.get().pane?.host))
+      return
     if (namingNow(at.project, at.listed.id)) void suggestIntoField(window, at)
     else void suggestTitle(window, at)
   },
@@ -209,7 +210,7 @@ const previous: ItemAction = {
       ? null
       : { title: "Previous title", icon: Undo2Icon },
   run: (window, args) => {
-    const at = threadOf(window, args)
+    const at = threadAt(window, args)
     if (at?.listed.was !== undefined) renamed(window, at, at.listed.was)
   },
 }
@@ -232,7 +233,7 @@ const unread: ItemAction = {
         ? { title: "Mark as unread", icon: CircleDotIcon }
         : { title: "Mark as read", icon: CircleIcon },
   run: (window, args) => {
-    const at = threadOf(window, args)
+    const at = threadAt(window, args)
     if (at?.listed.seen !== undefined) markUnread(at.listed.id, at.listed.seen)
   },
 }
@@ -253,8 +254,8 @@ const makeProject: ItemAction = {
       ? { title: "Make a Project from it…", icon: FolderPlusIcon }
       : null,
   run: (window, args) => {
-    const at = threadOf(window, args)
-    if (at) window.run("sidebar.make-project", { project: at.project })
+    const at = threadAt(window, args)
+    if (at) window.run("project.make", { project: at.project })
   },
 }
 
@@ -317,7 +318,7 @@ const snooze: ItemAction = {
           ...(snoozable(item) ? {} : { off: true }),
         },
   run: (window, args) => {
-    const at = threadOf(window, args)
+    const at = threadAt(window, args)
     if (!at) return
     const until = typeof args?.until === "number" ? args.until : undefined
     if (until !== undefined || args?.done === true)
@@ -343,7 +344,7 @@ const wake: ItemAction = {
   row: (item, at) =>
     asleep(item, at.now) ? { title: "Wake now", icon: AlarmClockIcon } : null,
   run: (window, args) => {
-    const at = threadOf(window, args)
+    const at = threadAt(window, args)
     if (at) waking(window, at)
   },
 }

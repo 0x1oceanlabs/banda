@@ -637,7 +637,7 @@
       }
     },
     {
-      "id": "sidebar.make-project",
+      "id": "project.make",
       "title": "Make a Project from a Thread in No Project",
       "section": "Threads",
       "keys": [],

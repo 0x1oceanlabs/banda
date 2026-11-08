@@ -120,16 +120,6 @@ test("Rename with no title opens the field where it was asked; by its key, in th
   expect(namingNow(S1, "t1")?.where).toBe("head")
 })
 
-test("a Thread's Pane names it as `thread`, as it did before item actions", () => {
-  const { window, named } = fake(listed())
-  action("thread.rename").run(window, {
-    project: "s1",
-    thread: "t1",
-    title: "Named",
-  })
-  expect(named).toEqual(["Named"])
-})
-
 test("Suggest renames in one press, and Undo gives back the first message's title", async () => {
   const { window, named } = fake(listed(), "Переименование треда")
   await suggestTitle(window, { project: S1, listed: listed() })
@@ -237,7 +227,7 @@ test("Make a Project is a row of a Thread in No Project alone, and the Window's 
   )
   const { window, ran } = fake(listed())
   make.run(window, { project: "s1", item: "t1" })
-  expect(ran).toEqual([["sidebar.make-project", { project: "s1" }]])
+  expect(ran).toEqual([["project.make", { project: "s1" }]])
 })
 
 test("Threads acts on its own Items alone", () => {
@@ -276,10 +266,10 @@ test("Snooze till its turn ends sends no time", async () => {
   expect(sent).toEqual([["agents.snooze", { thread: "t1" }]])
 })
 
-test("Snooze asked for no time opens the Window's picker; a Thread's Pane names it as `thread`", () => {
+test("Snooze asked for no time opens the Window's picker, for the Thread named or the one in focus", () => {
   const { window, sent, ran } = fake(listed())
   action("thread.snooze").run(window)
-  action("thread.snooze").run(window, { project: "s1", thread: "t1" })
+  action("thread.snooze").run(window, { project: "s1", item: "t1" })
   expect(sent).toEqual([])
   expect(ran).toEqual([
     ["sidebar.snooze-picker", { project: "s1", item: "t1" }],
