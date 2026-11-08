@@ -176,7 +176,7 @@
       "maximize.renders.perStep.tiles": 0,
       "workspace.renders.perStep.tiles": 1,
       "focus.renders.perStep.widgets": 0,
-      "focus.tasks.longestMs": 10.1,
+      "focus.tasks.longestMs": 7.4,
       "workspace.tasks.longestMs": 13.7,
       "focus.longFrames.count": 0,
       "workspace.longFrames.count": 0
@@ -205,7 +205,7 @@
       "maximize.renders.perStep.tiles": 0,
       "workspace.renders.perStep.tiles": 1,
       "focus.renders.perStep.widgets": 0,
-      "focus.tasks.longestMs": 10.7,
+      "focus.tasks.longestMs": 7.1,
       "workspace.tasks.longestMs": 22.1,
       "focus.longFrames.count": 0,
       "workspace.longFrames.count": 0
