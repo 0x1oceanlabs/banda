@@ -150,6 +150,7 @@ export function useEditing(props: PreviewProps) {
     shows && start
       ? {
           key: path,
+          start: start.taken,
           onChange: (text) => draftOf(key)?.type(text),
           onDone: toggle,
         }

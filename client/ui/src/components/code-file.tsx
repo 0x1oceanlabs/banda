@@ -38,6 +38,9 @@ export type Editor = {
    * path. What was kept is taken up again only while it holds the text
    * given, so a file changed meanwhile starts afresh. */
   key: string
+  /** Moves each time the editor starts again from the text given, even
+   * when that text reads the same as before. */
+  start?: number
   /** Each change, as the whole text. */
   onChange: (text: string) => void
   /** Esc, with nothing picked to let go of first. */
@@ -109,19 +112,24 @@ export function CodeFile({
   // The comment's form sits under the last line picked.
   const under = comment && picked ? Math.max(picked.start, picked.end) : null
   const key = edit?.key
+  const start = edit?.start
+  // Pierre takes a file anew only when it reads differently, or by a new
+  // cache key: a new start gives one, so the disk taken back to the text
+  // the editor began with still replaces what was typed.
+  const cacheKey = useMemo(() => `file-${++counted}`, [text, start])
   const items = useMemo<CodeViewItem<undefined>[]>(() => {
     if (key !== undefined) forgetUnlike(key, text)
     return [
       {
         id: ID,
         type: "file",
-        file: { name, contents: text },
+        file: { name, contents: text, cacheKey },
         ...(under !== null ? { annotations: [{ lineNumber: under }] } : {}),
         ...(key !== undefined ? { edit: true } : {}),
         version: ++counted,
       },
     ]
-  }, [name, text, under, key])
+  }, [name, text, under, key, cacheKey])
   // What the editor is told, as it is now. The view's options are made
   // anew when its callbacks change, which drops a pick under way: they
   // stay the same.
