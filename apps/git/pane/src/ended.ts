@@ -5,7 +5,6 @@
  * engine (`git.acted`).
  */
 import type { ProjectId } from "@banda/contract"
-import { detailsShown } from "@banda/ui/components/thread-details"
 import type { Args, WindowApi } from "@banda/ui/module"
 
 /** What the window lets the module ask, while it runs. */
@@ -18,6 +17,31 @@ export function keepWindow(window: WindowApi): () => void {
   return () => {
     if (kept === window) kept = null
   }
+}
+
+/** The cards git's rows are drawn in now, by Project: each one's Thread,
+ * none for a new one. */
+const drawn = new Map<ProjectId, Map<symbol, string | null>>()
+
+/** Says git's rows are drawn in the card of `thread` in `project`, as they
+ * are while the card shows; returns how to say they are not. */
+export function showDetails(
+  project: ProjectId,
+  thread: string | null
+): () => void {
+  const one = Symbol(project)
+  const cards = drawn.get(project) ?? new Map<symbol, string | null>()
+  drawn.set(project, cards.set(one, thread))
+  return () => {
+    cards.delete(one)
+    if (cards.size === 0 && drawn.get(project) === cards) drawn.delete(project)
+  }
+}
+
+/** The Threads of `project` whose card is drawn now, none for a new
+ * Thread's: what git's rows say there is seen, when its Thread is. */
+function detailsShown(project: ProjectId): (string | null)[] {
+  return [...(drawn.get(project)?.values() ?? [])]
 }
 
 /** How a run of the git button ended, as the card says it. */

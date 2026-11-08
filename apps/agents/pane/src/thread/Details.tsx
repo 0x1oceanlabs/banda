@@ -4,9 +4,10 @@
  * is wide enough to hold it beside the messages, open until the Person
  * hides it; when narrower, it opens in a popover under its button. The
  * button is in the Thread's header, and Ctrl+Shift+B does the same; a
- * module's key may ask the focused Thread's card to show (`askDetails`).
+ * module's key may ask the focused Thread's card to show with a part of
+ * its rows open (`agents.thread.details`).
  */
-import { type RefObject, useEffect, useEffectEvent, useState } from "react"
+import type { RefObject } from "react"
 import { Button } from "@banda/ui/components/button"
 import { InHeader } from "@banda/ui/components/pane-header"
 import {
@@ -19,8 +20,6 @@ import {
   DETAILS_GAP as GAP,
   DETAILS_WIDE,
   type DetailsProps,
-  hearAsks,
-  showDetails,
   useDetails,
 } from "@banda/ui/components/thread-details"
 import { useWiderThan } from "@banda/ui/hooks/use-wider-than"
@@ -39,42 +38,14 @@ export function ThreadDetails({
   wide,
   shown,
   onShown,
-  focused,
-  ...given
-}: Omit<DetailsProps, "opening" | "opened"> & {
-  /** The Thread's tile has the focus: a key's ask is its. */
-  focused: boolean
+  ...props
+}: DetailsProps & {
   wide: boolean
   shown: boolean
   onShown: (shown: boolean) => void
 }) {
   const details = useDetails()
-  // A key's ask, as Alt+Shift+G's, shows the focused Thread's card and
-  // keeps what to open in it till that part is drawn and opened; hidden,
-  // the card forgets it.
-  const [opening, setOpening] = useState<string | null>(null)
-  const [was, setWas] = useState(shown)
-  if (was !== shown) {
-    setWas(shown)
-    if (!shown) setOpening(null)
-  }
-  const asked = useEffectEvent((id: string) => {
-    setOpening(id)
-    onShown(true)
-  })
-  useEffect(() => (focused ? hearAsks(asked) : undefined), [focused])
-  // Shown, its rows' Project knows the card says what they do.
-  const { project, thread } = given
-  useEffect(
-    () => (shown ? showDetails(project, thread) : undefined),
-    [shown, project, thread]
-  )
   if (details.length === 0) return null
-  const props: DetailsProps = {
-    ...given,
-    opening,
-    opened: () => setOpening(null),
-  }
 
   const card = (
     <div className="hidden flex-col has-[>section:not(:empty)]:flex">

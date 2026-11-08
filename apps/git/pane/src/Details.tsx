@@ -14,6 +14,7 @@ import {
 } from "@banda/ui/components/thread-details"
 import { DiffCounts } from "@banda/ui/components/diff"
 import { useAct } from "@banda/ui/hooks/use-act"
+import { useEffect } from "react"
 import { paneOf } from "@banda/ui/pane"
 import { FileDiffIcon, GitBranchPlusIcon } from "lucide-react"
 import { BranchPicker, PICKER } from "./BranchPicker"
@@ -22,6 +23,7 @@ import { GitButton } from "./GitButton"
 import { CHANGES, type Scope } from "./scope"
 import { filesOf, useGitStatus } from "./status"
 import { GitAlert } from "./GitAlert"
+import { showDetails } from "./ended"
 
 function GitRows({
   engine,
@@ -34,6 +36,8 @@ function GitRows({
 }: DetailsProps) {
   const status = useGitStatus(engine, project)
   const init = useAct()
+  // Drawn while the card shows: how a run ends, the card says itself.
+  useEffect(() => showDetails(project, thread), [project, thread])
   if (!status) return null
   // A repository git will not read, as another user's: why, and no
   // Initialize Git, which would make another inside it.

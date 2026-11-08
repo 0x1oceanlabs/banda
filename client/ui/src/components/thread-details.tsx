@@ -26,7 +26,8 @@ export type DetailsProps = {
   /** Opens a Pane beside the Thread, as the Thread's own links do. */
   open: (pane: PaneState, place?: Place) => void
   /** The part of a row a key asked the card to open, as Alt+Shift+G
-   * the branch picker (`askDetails`), until the row says it is `opened`. */
+   * the branch picker (`agents.thread.details` with its `part`), until
+   * the row says it is `opened`. */
   opening: string | null
   opened: () => void
 }
@@ -49,45 +50,6 @@ const MESSAGES = 768
 export const DETAILS_WIDE = MESSAGES + 2 * (DETAILS_CARD + DETAILS_GAP)
 
 const Given = createContext<readonly Details[]>([])
-
-/** The cards drawn now, by Project: each one's Thread, none for a new one. */
-const drawn = new Map<ProjectId, Map<symbol, string | null>>()
-
-/** Says the card of `thread` in `project` is drawn, as the Thread Pane does
- * while it shows it; returns how to say it is not. */
-export function showDetails(
-  project: ProjectId,
-  thread: string | null
-): () => void {
-  const one = Symbol(project)
-  const cards = drawn.get(project) ?? new Map<symbol, string | null>()
-  drawn.set(project, cards.set(one, thread))
-  return () => {
-    cards.delete(one)
-    if (cards.size === 0 && drawn.get(project) === cards) drawn.delete(project)
-  }
-}
-
-/** The Threads of `project` whose card is drawn now, none for a new
- * Thread's: what a module's rows say there is seen, when its Thread is. */
-export function detailsShown(project: ProjectId): (string | null)[] {
-  return [...(drawn.get(project)?.values() ?? [])]
-}
-
-const hearing = new Set<(id: string) => void>()
-
-/** Asks the focused Thread's card to show, and to open the part `id` of
- * its rows, as Alt+Shift+G the branch picker. */
-export function askDetails(id: string) {
-  for (const hear of hearing) hear(id)
-}
-
-/** Calls `listener` with each ask; returns how to stop. The focused
- * Thread's card hears them. */
-export function hearAsks(listener: (id: string) => void): () => void {
-  hearing.add(listener)
-  return () => hearing.delete(listener)
-}
 
 /** Hands the Panes drawn inside it the rows of the modules that run. */
 export function DetailsRows({
