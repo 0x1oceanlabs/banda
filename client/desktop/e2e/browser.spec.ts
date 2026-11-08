@@ -1721,21 +1721,27 @@ for (const dpr of [1, 2])
     await expect(
       page.getByRole("region", { name: "Zoom corners", exact: true })
     ).toBeVisible()
-    const view = await page
-      .locator("[data-held-by] webview")
-      .evaluate((view) => ({
-        width: view.clientWidth,
-        height: view.clientHeight,
-      }))
+    // The webview is 300×150, an element's default, until its Tile lays it
+    // out, and the page inside is that wide then too: read its size once it
+    // has its own and the page has followed it.
+    let view = { width: 0, height: 0 }
     await expect
-      .poll(() =>
-        app.evaluate(
+      .poll(async () => {
+        view = await page
+          .locator("[data-held-by] webview")
+          .evaluate((view) => ({
+            width: view.clientWidth,
+            height: view.clientHeight,
+          }))
+        const inner = await app.evaluate(
           ({ webContents }, tab) =>
             webContents.fromId(tab)!.executeJavaScript("innerWidth"),
           tab
         )
-      )
-      .toBe(view.width)
+        const laid = view.width !== 300 || view.height !== 150
+        return laid && inner === view.width
+      })
+      .toBe(true)
     for (const zoom of [1, 1.25, 0.8]) {
       for (const scroll of [0, 120]) {
         const at = await app.evaluate(

@@ -31,8 +31,17 @@ ignoredOptionalDependencies:
 # trusted, it marks none (ADR 0083, decision 5). On Windows it starts
 # codex hidden, and its commands with no shell, which split a path with a
 # space (codex-acp#602; ADR 0090, decision 3).
+#
+# And to the Thread's message scroller: it took a message the Person sent
+# as new only past the list's old length, and an equal length's first
+# anchor as new, so a sent message that took the place of the
+# "getting ready" row stayed below the screen, and a reply that took its
+# draft's place threw the Thread back to its first message (#713, #742).
+# A new anchor is now one it has not seen, wherever it lands. It goes once
+# @shadcn/react's message-scroller does the same.
 patchedDependencies:
   "@agentclientprotocol/codex-acp@2.5.0": platform/harnesses/adapters/patches/@agentclientprotocol__codex-acp@2.5.0.patch
+  "@shadcn/react@0.3.1": client/ui/patches/@shadcn__react@0.3.1.patch
 
 # Versions set for what other packages ask for: each says why, and when it
 # goes.
