@@ -35,6 +35,7 @@ const view = (id: string, name: string, command: string[]): HarnessView => ({
   kind: "subscription",
   mark: name.slice(0, 1),
   colour: 1,
+  sessions: id,
 })
 
 const list = [

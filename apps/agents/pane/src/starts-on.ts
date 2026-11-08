@@ -91,12 +91,12 @@ export function startsOnWords(
 
 const NO_LIMITS: Limits[] = []
 
-/** Where a new Thread starts now, as {@link startsOn} says: the Harness
- * list, `agents.toml` and the machine's limits, read again as they change
- * and each minute, as a reset passes. */
-export function useStartsOn(engine: Engine): StartsOn | undefined {
-  const harnesses = useHarnesses(engine)
-  const { account, fallback } = useFile(AGENTS_FILE)
+/** The machine's limits as last read, read again as they change, and the
+ * minute they hold at: each minute, as a reset passes. */
+export function useLimitsNow(engine: Engine): {
+  limits: readonly Limits[]
+  now: number
+} {
   const source = useMemo<Source<LimitsNow>>(
     () => ({
       read: () => engine.call("harnesses.limits", {}),
@@ -108,6 +108,15 @@ export function useStartsOn(engine: Engine): StartsOn | undefined {
   const now = useNow(MINUTE)
   const live = useMachineLive(engine, source, now)
   const limits = live.state === "ready" ? live.view.limits : NO_LIMITS
+  return { limits, now }
+}
+
+/** Where a new Thread starts now, as {@link startsOn} says: the Harness
+ * list, `agents.toml` and the machine's limits. */
+export function useStartsOn(engine: Engine): StartsOn | undefined {
+  const harnesses = useHarnesses(engine)
+  const { account, fallback } = useFile(AGENTS_FILE)
+  const { limits, now } = useLimitsNow(engine)
   return useMemo(
     () => startsOn(harnesses, { account, fallback }, limits, now),
     [harnesses, account, fallback, limits, now]

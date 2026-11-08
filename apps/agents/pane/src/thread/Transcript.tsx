@@ -92,6 +92,7 @@ export function Transcript({
     turnState,
     finding,
     name,
+    harness: state.harness,
     answering,
     snooze,
   }

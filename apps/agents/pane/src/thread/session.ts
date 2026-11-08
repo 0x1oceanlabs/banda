@@ -337,6 +337,12 @@ export function useThreadSession({
     void acting.act(() =>
       engine.command("agents.retry", { turn: turn.id }, project)
     )
+  const retryOn = (turn: TurnView, harness: string) =>
+    void acting.act(async () => {
+      if (thread === null) return
+      await engine.command("agents.switch", { thread, harness }, project)
+      await engine.command("agents.retry", { turn: turn.id }, project)
+    })
   // The fork opens here, as a Thread picked in the sidebar does.
   const fork = (turn: TurnView) =>
     void acting
@@ -422,6 +428,7 @@ export function useThreadSession({
     openDiff,
     stop,
     retry,
+    retryOn,
     /** Forks the Thread at the end of `turn` and opens the fork. */
     fork,
     /** Takes the Thread back to before `turn`'s message; resolves

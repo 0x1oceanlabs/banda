@@ -1,5 +1,10 @@
 import { useState } from "react"
-import type { Failure } from "@banda/contract/agents"
+import type { Engine } from "@banda/contract"
+import { AGENTS_FILE, type Failure } from "@banda/contract/agents"
+import type { HarnessView } from "@banda/contract/harnesses"
+import { Emblem } from "@banda/ui/components/emblem"
+import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
+import { useFile } from "@banda/ui/lib/look"
 import { Button } from "@banda/ui/components/button"
 import { Switch } from "@banda/ui/components/switch"
 import {
@@ -11,6 +16,7 @@ import {
 import { useNow } from "@banda/ui/hooks/use-now"
 import { clock } from "@banda/ui/lib/words"
 import { sleeps } from "@banda/ui/lib/snooze"
+import { outOf, useLimitsNow } from "../starts-on"
 import { useThreadAround } from "../thread/context"
 import type { LineProps } from "./types"
 import {
@@ -27,7 +33,7 @@ import {
 export function EndedLine({ line, facts }: LineProps<"ended">) {
   const { turn } = line
   const { answering: busy, snooze } = facts
-  const { acts } = useThreadAround()
+  const { engine, acts } = useThreadAround()
   const again = turn.can.retry
   const onRetry = again ? () => acts.retry(turn) : undefined
   // Snoozes the Thread until a usage limit's reset, and with `resume`
@@ -47,6 +53,13 @@ export function EndedLine({ line, facts }: LineProps<"ended">) {
     resets !== undefined && resets > now && !sleeps(snooze, now)
       ? resets
       : undefined
+  // Out of its limits, its fallback goes first, where the Thread can go on
+  // there: the Person's click moves it (ADR 0093, decision 8).
+  const fallback = useFallbackFor(
+    engine,
+    facts.harness,
+    again && failure?.class === "usage_limit"
+  )
   return (
     <Trace>
       <TraceLine
@@ -64,6 +77,20 @@ export function EndedLine({ line, facts }: LineProps<"ended">) {
         <div className="flex flex-wrap items-center gap-2 pl-6">
           {advice && (
             <span className="text-meta text-muted-foreground">{advice}</span>
+          )}
+          {fallback && (
+            // First, and in its account's colour: the main way on. Outlined,
+            // as a filled button would drown the emblem's colour.
+            <Button
+              variant="outline"
+              size="xs"
+              className="font-medium"
+              disabled={busy}
+              onClick={() => acts.retryOn(turn, fallback.id)}
+            >
+              <Emblem of={fallback} className="size-3" />
+              Go on with {fallback.name}
+            </Button>
           )}
           {onRetry && (
             <Button
@@ -101,6 +128,33 @@ export function EndedLine({ line, facts }: LineProps<"ended">) {
       {signsIn && <div className="pl-6">{acts.signIn(turn)}</div>}
     </Trace>
   )
+}
+
+/** The fallback account a Thread on `harness` that is out may go on
+ * with: `agents.toml`'s `start.fallback`, on, another entry that goes on
+ * with the Thread's session, and not out itself. Another Harness's waits
+ * for the handoff (ADR 0078, decision 5). None unless `wanted`. */
+function useFallbackFor(
+  engine: Engine,
+  harness: string,
+  wanted: boolean
+): HarnessView | undefined {
+  const harnesses = useHarnesses(engine)
+  const { fallback } = useFile(AGENTS_FILE)
+  const { limits, now } = useLimitsNow(engine)
+  if (!wanted || !fallback || fallback === harness) return undefined
+  const from = harnesses.find((one) => one.id === harness)
+  const to = harnesses.find((one) => one.id === fallback && one.enabled)
+  if (!from || !to || to.sessions !== from.sessions) return undefined
+  // The fallback out too is no way on.
+  if (
+    outOf(
+      limits.find((one) => one.harness === to.id),
+      now
+    )
+  )
+    return undefined
+  return to
 }
 
 /** What a Person can do about a failure, beyond trying again. */

@@ -118,6 +118,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     openDiff,
     stop,
     retry,
+    retryOn,
     fork,
     rewind,
     queue,
@@ -227,6 +228,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
           composer.current?.putBack(message.body.text, message.body.images)
       }),
     retry,
+    retryOn,
     snooze:
       run &&
       ((until, resume) =>
