@@ -48,7 +48,6 @@ const drawn = (lines: number, machine?: Named, hide: Part[] = []) => {
       settings={settings}
       inProject={false}
       current={false}
-      onOpen={() => undefined}
       field={<span>Bench window tests</span>}
       machine={machine}
     />

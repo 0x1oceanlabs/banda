@@ -91,7 +91,7 @@ import { device } from "../window/device"
 import { PRESET_WORDS, type Settings } from "./settings"
 import { type Held, held, hold, rowKey } from "./hold"
 import { useIsArchived } from "./archived"
-import { seeWoke } from "./snoozed"
+import { Dismiss, dismissing, newThread, useOpen } from "./open"
 import { itemActionOf } from "./items"
 import { pickSnooze } from "./Snoozing"
 import { FlowMenu } from "./FlowMenu"
@@ -114,13 +114,20 @@ function MenuKey() {
  * every Thread of every Project, arranged as `sidebar.toml` says (ADR 0008).
  * The modules list what each Project has; the sidebar only arranges and
  * draws it. Its view menu writes the preset into the file, through the
- * desktop, and the new arrangement comes back with the look.
+ * desktop, and the new arrangement comes back with the look. What the
+ * Person asks of it runs by the actions' ids (`useRun`, ADR 0087), as
+ * their keys would: the Window hands it what it shows and how its area
+ * stands, no verb.
  */
 export function Sidebar({
   over,
   onDismiss,
   hiding,
-  ...props
+  engine,
+  projects,
+  home,
+  machine,
+  isCurrent,
 }: {
   /**
    * Shown over the Strip in a narrow window (ADR 0025, decision 10): a
@@ -129,56 +136,23 @@ export function Sidebar({
    */
   over?: boolean
   onDismiss?: () => void
+  /** Its edge is dragged past the narrowest: letting go hides it. */
+  hiding?: boolean
   engine: Engine
   projects: ProjectSummary[]
   /** The Project a new Thread from the header starts in. */
   home: ProjectId
-  /** Whether a Pane is the one that has the focus. */
+  /** This machine's No Project, where its section's New Thread starts;
+   * none until the engine names it. */
+  machine?: ProjectId
+  /** Whether a Pane is the one that has the focus (#827). */
   isCurrent: (project: ProjectId, pane: PaneState) => boolean
-  /** Opens the Banda menu, as Alt+Space does (ADR 0017). */
-  onMenu: () => void
-  /** Opens the settings, as Alt+, does (ADR 0016). */
-  onSettings: () => void
-  /** Lists every action and its key, as Alt+K does. */
-  onKeys: () => void
-  /** Its edge is dragged past the narrowest: letting go hides it. */
-  hiding?: boolean
-  /**
-   * Opens a Pane a row stands for: where a workspace shows it, or in a new
-   * column of the current one.
-   */
-  onOpen: (project: ProjectId, pane: PaneState) => void
-  onNewThread: (project: ProjectId) => void
-  onNoProject: () => void
-  /** Opens "Add Project" in the Banda menu (ADR 0026). */
-  onAddProject: () => void
-  /** Pins the Project, so it comes first, or unpins it (ADR 0026). */
-  onPin: (project: ProjectId, pinned: boolean) => void
-  /** Opens the settings at the Project's own (ADR 0026). */
-  onProjectSettings: (project: ProjectId) => void
-  /** Finds the folder of a Project whose folder is missing (ADR 0026). */
-  onLocate: (project: ProjectId) => void
 }) {
   const keyFor = useKeyLabel()
-  const { projects, home, isCurrent, onPin } = props
   // What every module lists, from the Window's items, and its snoozes by
   // the calls' clock.
   const lists = useLists()
-  const done =
-    <A extends unknown[]>(act: (...args: A) => void) =>
-    (...args: A) => {
-      onDismiss?.()
-      act(...args)
-    }
-  const onMenu = done(props.onMenu)
-  const onSettings = done(props.onSettings)
-  const onKeys = done(props.onKeys)
-  const onOpen = done(props.onOpen)
-  const onNewThread = done(props.onNewThread)
-  const onNoProject = done(props.onNoProject)
-  const onAddProject = done(props.onAddProject)
-  const onProjectSettings = done(props.onProjectSettings)
-  const onLocate = done(props.onLocate)
+  const open = dismissing(useRun(), onDismiss)
   const settings = useLookSidebar()
   const { preset, presets } = settings
   const host = window.banda
@@ -203,7 +177,6 @@ export function Sidebar({
   // The other machines of `hosts.toml`, below this one's (ADR 0081): the
   // rows of those live or away, each host's state by its name.
   const hosts = useHosts()
-  const kept = useContext(HostsContext)
   const elsewhere = useMemo((): Elsewhere[] => hosts.filter(holds), [hosts])
   const fresh = useMemo(
     () =>
@@ -228,8 +201,6 @@ export function Sidebar({
       elsewhere,
     ]
   )
-  const awayOf = (host: string) => hosts.find((one) => one.name === host)?.away
-  const onStart = (host: string) => kept.start(host)
   // Under the pointer, the rows hold still; what would move or come
   // waits as updates, taken in by the pill or as the pointer leaves
   // (ADR 0065, decision 8).
@@ -250,7 +221,7 @@ export function Sidebar({
   const onTrust = (project: ProjectId, anchor: Element) =>
     setTrusting({ project, anchor })
   const onStopTrusting = (project: ProjectId) => {
-    trustProject(props.engine, project, false).catch((error: unknown) =>
+    trustProject(engine, project, false).catch((error: unknown) =>
       toast.error(problem(error))
     )
   }
@@ -258,12 +229,8 @@ export function Sidebar({
   const withMenu: WithMenu = (project, row) => (
     <ProjectMenu
       project={project}
-      onNewThread={onNewThread}
-      onPin={onPin}
       onTrust={onTrust}
       onStopTrusting={onStopTrusting}
-      onSettings={onProjectSettings}
-      onLocate={onLocate}
     >
       {row}
     </ProjectMenu>
@@ -282,12 +249,9 @@ export function Sidebar({
       isCurrent={isCurrent}
       onToggle={() => setToggled((set) => flip(set, section.key))}
       onMore={() => setMore((set) => flip(set, section.key))}
-      onOpen={onOpen}
-      onNoProject={onNoProject}
-      engine={props.engine}
-      onNewThread={onNewThread}
+      engine={engine}
+      machine={machine}
       withMenu={withMenu}
-      awayOf={awayOf}
     />
   )
   // Another host's label, with what it holds below it unless folded:
@@ -296,7 +260,6 @@ export function Sidebar({
     <HostPart
       key={host.name}
       host={host}
-      onStart={onStart}
       folded={folded.has(host.name)}
       onFold={() => setFolded((set) => flip(set, host.name))}
     >
@@ -309,206 +272,213 @@ export function Sidebar({
     arranged.shelves.every((s) => s.rows.length === 0)
 
   return (
-    <aside
-      aria-label="Sidebar"
-      onPointerEnter={take}
-      onPointerLeave={() => setHolding(undefined)}
-      onKeyDown={(event) => {
-        // Not Esc in a menu it opened, drawn elsewhere in the page.
-        if (
-          event.key === "Escape" &&
-          event.currentTarget.contains(event.target as Node)
-        )
-          onDismiss?.()
-      }}
-      className={cn(
-        // An area of the window: what changes in it lays out and paints
-        // nothing outside it (ADR 0088, decision 8).
-        "absolute inset-y-(--gap-outer) left-(--gap-outer) z-20 flex w-(--sidebar-width) max-w-[calc(100%-2*var(--gap-outer))] flex-col overflow-hidden rounded-tile border bg-panel shadow-(--panel-shadow) [contain:layout_paint_style] *:transition-opacity",
-        // Its panel stays, over the Strip; what is in it dims.
-        hiding && "*:opacity-40",
-        !over &&
-          "sidebar-desk:inset-y-0 sidebar-desk:left-0 sidebar-desk:rounded-none sidebar-desk:border-0 sidebar-desk:bg-desk sidebar-desk:shadow-none"
-      )}
-    >
-      <div className="flex items-center gap-0.5 px-2 pt-2 pb-1">
-        <button
-          type="button"
-          onClick={onMenu}
-          className="mr-1 flex h-7 min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md border bg-background/60 px-2 text-[13px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-        >
-          <SearchIcon className="size-3.5 shrink-0" />
-          <span className="min-w-0 flex-1 truncate text-left">Search</span>
-          <MenuKey />
-        </button>
-        <FlowMenu />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="text-muted-foreground"
-          aria-label="New Thread"
-          title="New Thread"
-          onClick={() => onNewThread(only ?? home)}
-        >
-          <SquarePenIcon />
-        </Button>
-      </div>
-      {updates > 0 && (
-        <button
-          type="button"
-          onClick={take}
-          className="absolute top-11 left-1/2 z-10 -translate-x-1/2 rounded-full bg-primary px-2.5 py-0.5 text-xs text-primary-foreground shadow-md"
-        >
-          ↑ {updates} {updates === 1 ? "update" : "updates"}
-        </button>
-      )}
-      {/* Where more Threads are below, the list fades out at its foot
+    <Dismiss value={onDismiss}>
+      <aside
+        aria-label="Sidebar"
+        onPointerEnter={take}
+        onPointerLeave={() => setHolding(undefined)}
+        onKeyDown={(event) => {
+          // Not Esc in a menu it opened, drawn elsewhere in the page.
+          if (
+            event.key === "Escape" &&
+            event.currentTarget.contains(event.target as Node)
+          )
+            onDismiss?.()
+        }}
+        className={cn(
+          // An area of the window: what changes in it lays out and paints
+          // nothing outside it (ADR 0088, decision 8).
+          "absolute inset-y-(--gap-outer) left-(--gap-outer) z-20 flex w-(--sidebar-width) max-w-[calc(100%-2*var(--gap-outer))] flex-col overflow-hidden rounded-tile border bg-panel shadow-(--panel-shadow) [contain:layout_paint_style] *:transition-opacity",
+          // Its panel stays, over the Strip; what is in it dims.
+          hiding && "*:opacity-40",
+          !over &&
+            "sidebar-desk:inset-y-0 sidebar-desk:left-0 sidebar-desk:rounded-none sidebar-desk:border-0 sidebar-desk:bg-desk sidebar-desk:shadow-none"
+        )}
+      >
+        <div className="flex items-center gap-0.5 px-2 pt-2 pb-1">
+          <button
+            type="button"
+            onClick={() => open("menu.route")}
+            className="mr-1 flex h-7 min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md border bg-background/60 px-2 text-[13px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          >
+            <SearchIcon className="size-3.5 shrink-0" />
+            <span className="min-w-0 flex-1 truncate text-left">Search</span>
+            <MenuKey />
+          </button>
+          <FlowMenu />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
+            aria-label="New Thread"
+            title="New Thread"
+            onClick={() => {
+              const project = only ?? home
+              const { missing } =
+                projects.find((one) => one.id === project) ?? {}
+              newThread(open, project, missing)
+            }}
+          >
+            <SquarePenIcon />
+          </Button>
+        </div>
+        {updates > 0 && (
+          <button
+            type="button"
+            onClick={take}
+            className="absolute top-11 left-1/2 z-10 -translate-x-1/2 rounded-full bg-primary px-2.5 py-0.5 text-xs text-primary-foreground shadow-md"
+          >
+            ↑ {updates} {updates === 1 ? "update" : "updates"}
+          </button>
+        )}
+        {/* Where more Threads are below, the list fades out at its foot
           instead of a line. */}
-      <ScrollArea className="min-h-0 flex-1 data-overflow-y-end:mask-b-from-[calc(100%-1.5rem)]">
-        <div className="flex flex-col gap-1 px-1.5 pb-2">
-          {arranged.projects && (
-            <ProjectsList
-              lines={arranged.projects.filter((line) => !line.host)}
-              settings={settings}
-              only={only}
-              onPick={(project) =>
-                setOnly((was) => (was === project ? undefined : project))
-              }
-              onLocate={onLocate}
-              onNewThread={onNewThread}
-              withMenu={withMenu}
-            >
-              {hosts.map((host) => {
-                const lines = arranged.projects!.filter(
-                  (line) => line.host === host.name
-                )
-                return part(
-                  host,
-                  lines.length > 0 && (
-                    <HostLines lines={lines} settings={settings} />
+        <ScrollArea className="min-h-0 flex-1 data-overflow-y-end:mask-b-from-[calc(100%-1.5rem)]">
+          <div className="flex flex-col gap-1 px-1.5 pb-2">
+            {arranged.projects && (
+              <ProjectsList
+                lines={arranged.projects.filter((line) => !line.host)}
+                settings={settings}
+                only={only}
+                onPick={(project) =>
+                  setOnly((was) => (was === project ? undefined : project))
+                }
+                withMenu={withMenu}
+              >
+                {hosts.map((host) => {
+                  const lines = arranged.projects!.filter(
+                    (line) => line.host === host.name
                   )
-                )
-              })}
-            </ProjectsList>
-          )}
-          {nothing ? (
-            <p className="px-2 py-1 text-xs text-muted-foreground">
-              No Threads yet
-            </p>
-          ) : (
-            arranged.sections.filter((section) => !section.host).map(drawn)
-          )}
-          {/* Grouped by Project, each host's sections follow under its
+                  return part(
+                    host,
+                    lines.length > 0 && (
+                      <HostLines lines={lines} settings={settings} />
+                    )
+                  )
+                })}
+              </ProjectsList>
+            )}
+            {nothing ? (
+              <p className="px-2 py-1 text-xs text-muted-foreground">
+                No Threads yet
+              </p>
+            ) : (
+              arranged.sections.filter((section) => !section.host).map(drawn)
+            )}
+            {/* Grouped by Project, each host's sections follow under its
               label; grouped otherwise, its rows are among this machine's,
               and its label shows only what is not as usual. */}
-          {byProject
-            ? hosts.map((host) => {
-                const held = arranged.sections.filter(
-                  (section) => section.host === host.name
-                )
-                return part(
-                  host,
-                  !nothing && held.length > 0 && held.map(drawn)
-                )
-              })
-            : !arranged.projects &&
-              hosts.filter(saysSomething).map((host) => part(host))}
-        </div>
-      </ScrollArea>
-      {arranged.shelves.length > 0 && (
-        <div className="max-h-[45%] overflow-y-auto px-1.5 py-1">
-          {arranged.shelves.map(drawn)}
-        </div>
-      )}
-      {/* Its foot: Banda's settings and keys, its theme, and how the
+            {byProject
+              ? hosts.map((host) => {
+                  const held = arranged.sections.filter(
+                    (section) => section.host === host.name
+                  )
+                  return part(
+                    host,
+                    !nothing && held.length > 0 && held.map(drawn)
+                  )
+                })
+              : !arranged.projects &&
+                hosts.filter(saysSomething).map((host) => part(host))}
+          </div>
+        </ScrollArea>
+        {arranged.shelves.length > 0 && (
+          <div className="max-h-[45%] overflow-y-auto px-1.5 py-1">
+            {arranged.shelves.map(drawn)}
+          </div>
+        )}
+        {/* Its foot: Banda's settings and keys, its theme, and how the
           sidebar arranges, with "Add Project" beside it. */}
-      <div className="flex items-center gap-0.5 px-1.5 pt-0.5 pb-1.5">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="text-muted-foreground"
-          aria-label="Settings"
-          title={keyFor("settings.open", "Settings")}
-          onClick={onSettings}
-        >
-          <SettingsIcon />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="text-muted-foreground"
-          aria-label="Every action and its key"
-          title={keyFor("menu.keys", "Every action and its key")}
-          onClick={onKeys}
-        >
-          <KeyboardIcon />
-        </Button>
-        <ThemeMenu />
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`View: ${preset}`}
-                title={`View: ${preset}`}
-                className="text-muted-foreground"
-              >
-                <ListFilterIcon />
-              </Button>
-            }
-          />
-          <DropdownMenuContent side="top" className="w-auto min-w-60">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>How the sidebar is arranged</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={preset}
-                onValueChange={(next: string) => device.sidebar.preset(next)}
-              >
-                {presets.map(({ name, origin }) => (
-                  <DropdownMenuRadioItem
-                    key={name}
-                    value={name}
-                    disabled={!host}
-                    closeOnClick
-                  >
-                    <span className="flex flex-col">
-                      <span className="capitalize">{name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {origin === "yours"
-                          ? "Your own preset"
-                          : PRESET_WORDS[name]}
+        <div className="flex items-center gap-0.5 px-1.5 pt-0.5 pb-1.5">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
+            aria-label="Settings"
+            title={keyFor("settings.open", "Settings")}
+            onClick={() => open("settings.open")}
+          >
+            <SettingsIcon />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
+            aria-label="Every action and its key"
+            title={keyFor("menu.keys", "Every action and its key")}
+            onClick={() => open("menu.route", { route: "actions" })}
+          >
+            <KeyboardIcon />
+          </Button>
+          <ThemeMenu />
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`View: ${preset}`}
+                  title={`View: ${preset}`}
+                  className="text-muted-foreground"
+                >
+                  <ListFilterIcon />
+                </Button>
+              }
+            />
+            <DropdownMenuContent side="top" className="w-auto min-w-60">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>
+                  How the sidebar is arranged
+                </DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={preset}
+                  onValueChange={(next: string) => device.sidebar.preset(next)}
+                >
+                  {presets.map(({ name, origin }) => (
+                    <DropdownMenuRadioItem
+                      key={name}
+                      value={name}
+                      disabled={!host}
+                      closeOnClick
+                    >
+                      <span className="flex flex-col">
+                        <span className="capitalize">{name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {origin === "yours"
+                            ? "Your own preset"
+                            : PRESET_WORDS[name]}
+                        </span>
                       </span>
-                    </span>
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem disabled={!host} onClick={edit}>
-              <FileCogIcon />
-              Edit sidebar.toml
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="text-muted-foreground"
-          aria-label="Add Project"
-          title="Add Project"
-          onClick={onAddProject}
-        >
-          <FolderPlusIcon />
-        </Button>
-      </div>
-      <TrustCard
-        engine={props.engine}
-        projects={projects}
-        target={trusting}
-        onClose={() => setTrusting(undefined)}
-      />
-    </aside>
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={!host} onClick={edit}>
+                <FileCogIcon />
+                Edit sidebar.toml
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
+            aria-label="Add Project"
+            title="Add Project"
+            onClick={() => open("project.add")}
+          >
+            <FolderPlusIcon />
+          </Button>
+        </div>
+        <TrustCard
+          engine={engine}
+          projects={projects}
+          target={trusting}
+          onClose={() => setTrusting(undefined)}
+        />
+      </aside>
+    </Dismiss>
   )
 }
 
@@ -520,12 +490,9 @@ function SectionView({
   isCurrent,
   onToggle,
   onMore,
-  onOpen,
   engine,
-  onNoProject,
-  onNewThread,
+  machine,
   withMenu,
-  awayOf,
 }: {
   section: Section
   settings: Settings
@@ -533,16 +500,14 @@ function SectionView({
   isCurrent: (project: ProjectId, pane: PaneState) => boolean
   onToggle: () => void
   onMore: () => void
-  onOpen: (project: ProjectId, pane: PaneState) => void
   engine: Engine
-  onNoProject: () => void
-  onNewThread: (project: ProjectId) => void
+  /** This machine's No Project, once the engine named it. */
+  machine?: ProjectId
   withMenu: WithMenu
-  /** When another host went away, while it is. */
-  awayOf: (host: string) => number | undefined
 }) {
   const keyFor = useKeyLabel()
   const run = useRun()
+  const dismiss = useContext(Dismiss)
   // A row's Snooze and Wake are its Thread's App's (ADR 0087, decision 12).
   const wake = ({ project, listed }: Arranged) => {
     const action = itemActionOf(listed, "wake")
@@ -591,13 +556,18 @@ function SectionView({
           size="icon-xs"
           aria-label="New Thread in No Project"
           title="New Thread"
-          onClick={onNoProject}
+          onClick={() => {
+            // It goes, as from any New Thread, though none starts before
+            // the engine names this machine.
+            dismiss?.()
+            if (machine) newThread(run, machine)
+          }}
         >
           <SquarePenIcon />
         </Button>
       )}
       {project && mine && settings.projects.newThread && (
-        <NewThreadIn project={project} onNewThread={onNewThread} />
+        <NewThreadIn project={project} />
       )}
     </div>
   )
@@ -614,12 +584,7 @@ function SectionView({
               settings={settings}
               inProject={project !== undefined || row.project.scratch}
               current={isCurrent(row.project.id, row.listed.pane)}
-              onOpen={() => {
-                seeWoke(row.listed)
-                onOpen(row.project.id, row.listed.pane)
-              }}
               named={!mine}
-              away={row.host === undefined ? undefined : awayOf(row.host)}
               action={
                 row.state === "snoozed" ? (
                   <Button variant="ghost" size="xs" onClick={() => wake(row)}>
@@ -671,14 +636,11 @@ function ThreadRow({
   engine,
   row,
   named,
-  away,
   ...props
 }: Omit<ComponentProps<typeof Row>, "field" | "machine" | "stillAt"> & {
   engine: Engine
   /** A label above names its host, when it is another host's. */
   named: boolean
-  /** When its host went away, while it is. */
-  away?: number
 }) {
   const project = row.project.id
   const naming = useNaming(project, row.listed.id, "row")
@@ -690,9 +652,7 @@ function ThreadRow({
         settings={props.settings}
         inProject={props.inProject}
         current={props.current}
-        onOpen={props.onOpen}
         named={named}
-        away={away}
       />
     )
   if (naming)
@@ -729,21 +689,19 @@ function ProjectsList({
   settings,
   only,
   onPick,
-  onNewThread,
-  onLocate,
   withMenu,
   children,
 }: {
   lines: ProjectLine[]
   settings: Settings
   only?: ProjectId
+  /** Shows only that Project's rows, or all again. */
   onPick: (project: ProjectId) => void
-  onNewThread: (project: ProjectId) => void
-  onLocate: (project: ProjectId) => void
   withMenu: WithMenu
   /** The other hosts' Projects, below this machine's. */
   children?: ReactNode
 }) {
+  const open = useOpen()
   return (
     <div
       role="group"
@@ -771,7 +729,9 @@ function ProjectsList({
                   only === project.id && "border-border bg-tile shadow-xs"
                 )}
                 onClick={() =>
-                  project.missing ? onLocate(project.id) : onPick(project.id)
+                  project.missing
+                    ? open("projects.locate", { project: project.id })
+                    : onPick(project.id)
                 }
               >
                 <ProjectSign project={project} />
@@ -786,7 +746,7 @@ function ProjectsList({
                 )}
               </button>
               {settings.projects.newThread && !project.missing && (
-                <NewThreadIn project={project} onNewThread={onNewThread} />
+                <NewThreadIn project={project} />
               )}
             </div>
           )}
@@ -819,13 +779,9 @@ function Rollup({ mark, waiting }: { mark: Section["mark"]; waiting: number }) {
   )
 }
 
-function NewThreadIn({
-  project,
-  onNewThread,
-}: {
-  project: ProjectSummary
-  onNewThread: (project: ProjectId) => void
-}) {
+/** A New Thread button in a Project's header or line. */
+function NewThreadIn({ project }: { project: ProjectSummary }) {
+  const open = useOpen()
   return (
     <Button
       variant="ghost"
@@ -833,7 +789,7 @@ function NewThreadIn({
       aria-label={`New Thread in ${project.name}`}
       title="New Thread"
       className="opacity-0 group-hover/head:opacity-100 focus-visible:opacity-100"
-      onClick={() => onNewThread(project.id)}
+      onClick={() => newThread(open, project.id, project.missing)}
     >
       <SquarePenIcon />
     </Button>
@@ -847,36 +803,33 @@ type WithMenu = (project: ProjectSummary, row: ReactElement) => ReactElement
  * 5), with its trust (ADR 0083, decision 5). */
 function ProjectMenu({
   project,
-  onNewThread,
-  onPin,
   onTrust,
   onStopTrusting,
-  onSettings,
-  onLocate,
   children,
 }: {
   project: ProjectSummary
-  onNewThread: (project: ProjectId) => void
-  onPin: (project: ProjectId, pinned: boolean) => void
   /** Asks on a card by `row` whether to trust the Project. */
   onTrust: (project: ProjectId, row: Element) => void
   onStopTrusting: (project: ProjectId) => void
-  onSettings: (project: ProjectId) => void
-  onLocate: (project: ProjectId) => void
   children: ReactElement
 }) {
   const row = useRef<HTMLDivElement>(null)
+  // A pin changes the list in place; the rest open a Pane or a menu.
+  const run = useRun()
+  const open = useOpen()
   return (
     <ContextMenu>
       <ContextMenuTrigger ref={row}>{children}</ContextMenuTrigger>
       <ContextMenuContent>
         {project.missing ? (
-          <DropdownMenuItem onClick={() => onLocate(project.id)}>
+          <DropdownMenuItem
+            onClick={() => open("projects.locate", { project: project.id })}
+          >
             <FolderSearchIcon />
             {LOCATE}
           </DropdownMenuItem>
         ) : (
-          <DropdownMenuItem onClick={() => onNewThread(project.id)}>
+          <DropdownMenuItem onClick={() => newThread(open, project.id)}>
             <SquarePenIcon />
             New Thread
           </DropdownMenuItem>
@@ -887,7 +840,14 @@ function ProjectMenu({
           <CopyIcon />
           Copy path
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onPin(project.id, !project.pinned)}>
+        <DropdownMenuItem
+          onClick={() =>
+            run("projects.pin", {
+              project: project.id,
+              pinned: !project.pinned,
+            })
+          }
+        >
           {project.pinned ? <PinOffIcon /> : <PinIcon />}
           {project.pinned ? "Unpin Project" : "Pin Project"}
         </DropdownMenuItem>
@@ -898,7 +858,9 @@ function ProjectMenu({
             onStopTrusting={() => onStopTrusting(project.id)}
           />
         )}
-        <DropdownMenuItem onClick={() => onSettings(project.id)}>
+        <DropdownMenuItem
+          onClick={() => open("projects.settings", { project: project.id })}
+        >
           <SettingsIcon />
           Project settings
         </DropdownMenuItem>
@@ -948,13 +910,11 @@ function saysSomething(host: Shown): boolean {
  */
 function HostPart({
   host,
-  onStart,
   folded,
   onFold,
   children,
 }: {
   host: Shown
-  onStart: (host: string) => void
   folded: boolean
   onFold: () => void
   children?: ReactNode
@@ -969,7 +929,7 @@ function HostPart({
           <MachineMark named={host.named} form="full" />
         </h3>
         <span className="ml-auto flex min-w-0 items-center gap-1.5 tabular-nums">
-          <HostWords host={host} onStart={onStart} />
+          <HostWords host={host} />
         </span>
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -1042,14 +1002,9 @@ function HostPart({
 }
 
 /** What a host's label says of its state: nothing when live, and only
- * the window's own words. */
-function HostWords({
-  host,
-  onStart,
-}: {
-  host: Shown
-  onStart: (host: string) => void
-}) {
+ * the window's own words; stopped, its Start starts Banda there. */
+function HostWords({ host }: { host: Shown }) {
+  const kept = useContext(HostsContext)
   const { state } = host
   switch (state.state) {
     case "connecting":
@@ -1078,7 +1033,7 @@ function HostWords({
             variant="ghost"
             size="xs"
             className="-my-1 -mr-1.5"
-            onClick={() => onStart(host.name)}
+            onClick={() => kept.start(host.name)}
           >
             <PlayIcon />
             Start
@@ -1162,18 +1117,14 @@ function ElsewhereRow({
   settings,
   inProject,
   current,
-  onOpen,
   named,
-  away,
 }: {
   row: Arranged
   settings: Settings
   inProject: boolean
   current: boolean
-  onOpen: () => void
   /** A label above names its host. */
   named: boolean
-  away?: number
 }) {
   const { host } = row
   const machineOf = useCallback(
@@ -1182,13 +1133,18 @@ function ElsewhereRow({
     [named, host]
   )
   const machine = useHostsBy(machineOf, sameData)
+  // When its host went away, while it is.
+  const awayOf = useCallback(
+    (hosts: readonly Shown[]) => hosts.find((one) => one.name === host)?.away,
+    [host]
+  )
+  const away = useHostsBy(awayOf)
   const drawn = (
     <Row
       row={row}
       settings={settings}
       inProject={inProject}
       current={current}
-      onOpen={onOpen}
       machine={machine}
       stillAt={away}
     />

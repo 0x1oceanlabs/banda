@@ -16,7 +16,7 @@ import {
 import { Toaster, toast } from "@banda/ui/components/sonner"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
-import { openProjects, updateProject } from "@banda/ui/lib/projects"
+import { openProjects } from "@banda/ui/lib/projects"
 import { useStore } from "@banda/ui/lib/store"
 import type { PaneState } from "@banda/ui/pane"
 import { Bar } from "../bar/Bar"
@@ -877,12 +877,10 @@ export function Shell({
                   engine={engine}
                   over={narrow}
                   onDismiss={narrow ? hideOver : undefined}
-                  onMenu={() => setMenu(openingAt("root"))}
-                  onSettings={() => settings()}
-                  onKeys={() => setMenu(openingAt("actions"))}
                   hiding={hiding}
                   projects={projects}
                   home={home}
+                  machine={machine}
                   isCurrent={(project, pane) => {
                     const entry = focused(workspaces)
                     return (
@@ -890,23 +888,6 @@ export function Shell({
                       samePane(entry, { project, pane }, identityOf)
                     )
                   }}
-                  onOpen={pickPane}
-                  onNewThread={newThreadIn}
-                  onNoProject={() => machine && startThread(machine)}
-                  onAddProject={() => parts.run("project.add")}
-                  onPin={(project, pinned) =>
-                    updateProject(engine, { project, pinned }).catch(
-                      (error: unknown) =>
-                        console.error(
-                          "banda: the Project was not pinned",
-                          error
-                        )
-                    )
-                  }
-                  onProjectSettings={(project) =>
-                    settings(`projects/${project}`)
-                  }
-                  onLocate={(project) => route(locateRoute(project))}
                 />
               )}
               {sidebarShown && !narrow && (
