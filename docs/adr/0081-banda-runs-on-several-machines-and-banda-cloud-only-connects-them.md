@@ -135,6 +135,10 @@ What stands in the way today:
     Person's (themes, `keys.toml`, `sidebar.toml`, the Flow, `[notify]`),
     or a device's (its theme, zoom, the Person's own browser).
     `browser.toml` and `agents.toml` are cut in two.
+    _Amended 2026-11-08 by [ADR 0095](0095-a-machine-names-itself-a-name-and-an-icon-and-no-colour.md),
+    decision 2: the host's `machine.toml` gives its name and icon;
+    `hosts.toml` is a device's, and its `name` is that device's key for an
+    ssh entry, not the name a window shows._
 
 13. **The CLI names its host**: `banda hosts add | list | use | pair`,
     `banda --host server …`, as kubectl's contexts. An Agent's `banda`

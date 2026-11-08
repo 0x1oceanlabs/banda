@@ -163,9 +163,20 @@ _Avoid_: server (that is a machine), backend.
 **Host**:
 A machine where `banda serve` keeps Projects and runs their work: this
 computer, a server, a devbox, or a machine in Banda Cloud. Clients only
-show the work (ADR 0062, ADR 0081).
+show the work (ADR 0062, ADR 0081). The Person calls it a **machine**
+(ADR 0095).
 _Avoid_: server, node; "host" for the Harness process pool (`Hosts<H>`),
 which is the process pool.
+
+**Machine**:
+What the Person calls a host. It names itself, in its `machine.toml`: a
+name of up to 16 characters and one of ten icons, drawn in the text's
+colour and never in a colour of its own, and every window shows the same.
+Another machine is named after the Project wherever its work shows; this
+one only when the Person asks (ADR 0095). In code, the Welcome's
+`machine` field is the Host scope's ID, an older name.
+_Avoid_: host, in the window's words; mark or emblem, for its name and
+icon.
 
 **Home host**:
 The host that keeps the Person's documents: the always-on host when the
