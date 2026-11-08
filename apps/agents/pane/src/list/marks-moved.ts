@@ -8,6 +8,12 @@
  * machine's Threads are dropped, as that machine's own window brings
  * them (#854 is the idea of sending them too).
  *
+ * One mark the old keys cannot say: from step 2a, a Thread's Pane told
+ * its host what the Person saw, but "Mark as unread" took the mark back
+ * from this window's storage alone. The move takes those back on the host
+ * too (`unreadOf`), so a Thread the Person kept to come back to still
+ * calls them.
+ *
  * The rules here are frozen copies of the window's old seen and
  * `sidebar/archived.ts` as they were, so the move reads what the window
  * showed whatever those became. They only read the old keys, named here
@@ -21,11 +27,16 @@
  * (`Move.over`), so the first list the Person sees has the marks moved.
  */
 import type { Engine, ProjectId } from "@banda/contract"
-import type { ImportMarks, ListedThread } from "@banda/contract/agents"
+import type {
+  ImportMarks,
+  ListedThread,
+  ThreadId,
+} from "@banda/contract/agents"
 import { openProjects } from "@banda/ui/lib/projects"
 import { DAY } from "@banda/ui/lib/words"
+import { mark } from "./sent"
 
-/** Where `./seen.ts` kept the turn of each Thread its Person saw. */
+/** Where the window's seen kept the turn of each Thread its Person saw. */
 const SEEN = "banda.agents.seen"
 
 /** Where the window's sidebar kept what the Person said of each row. */
@@ -82,6 +93,8 @@ function record<V>(
 export type OldMarks = {
   /** The turn of each Thread its Person saw. */
   seen: Record<string, string>
+  /** Whether the window kept a seen at all, as one that saw a Thread did. */
+  seenKept: boolean
   /** What the Person said of each row. */
   says: Record<string, Say>
   /** The cutoff: 0, archiving nothing, with none. */
@@ -114,13 +127,16 @@ export function holdCutoff(storage: Storage, now: number): void {
  */
 export function oldMarks(storage: Storage): OldMarks {
   let before = 0
+  let seenKept = false
   try {
     before = Number(storage.getItem(CUTOFF)) || 0
+    seenKept = storage.getItem(SEEN) !== null
   } catch {
     // Its storage fails: nothing was kept either.
   }
   return {
     seen: record(storage, SEEN, isId),
+    seenKept,
     says: record(storage, ARCHIVED, isSay),
     before,
   }
@@ -165,6 +181,31 @@ export function marksOf(
   return marks
 }
 
+/**
+ * The Threads of `threads` whose host keeps them seen, settled, though
+ * this window keeps no seen of them: those its Person marked unread here
+ * after step 2a's Pane had told the host what they saw, as "Mark as
+ * unread" then took the mark back from this window's storage alone. The
+ * move takes the host's back too, so each calls its Person as this window
+ * showed it. One seen on another machine alone calls again too, once: a
+ * Done that comes back, never a reminder lost. None from a window that
+ * never kept a seen.
+ */
+export function unreadOf(
+  threads: readonly ListedThread[],
+  { seen, seenKept }: OldMarks
+): ThreadId[] {
+  if (!seenKept) return []
+  return threads
+    .filter(
+      (thread) =>
+        seen[thread.id] === undefined &&
+        thread.seen !== undefined &&
+        thread.seen === thread.latest?.turn
+    )
+    .map(({ id }) => id as ThreadId)
+}
+
 /** The Projects whose marks moved already. */
 function movedOf(storage: Storage): Set<string> {
   const value = parsed(storage, MOVED)
@@ -178,7 +219,9 @@ function movedOf(storage: Storage): Set<string> {
  * once: a Project whose move went is kept in `banda.marks.moved`, and one
  * that did not goes again at the next start. A Project whose marks went
  * before is left alone; the host skips a Thread its Person changed since
- * too, so one sent twice undoes nothing. Resolves how many marks moved.
+ * too, so one sent twice undoes nothing. The seen this window took back
+ * go after the import, as a Thread marked unread takes no archive from it
+ * (#898). Resolves how many marks moved.
  */
 export async function moveMarks(
   engine: Engine,
@@ -188,9 +231,7 @@ export async function moveMarks(
   const old = oldMarks(storage)
   // A window that kept nothing, as a new one, has nothing to read for.
   const kept =
-    Object.keys(old.seen).length > 0 ||
-    Object.keys(old.says).length > 0 ||
-    old.before > 0
+    old.seenKept || Object.keys(old.says).length > 0 || old.before > 0
   if (!kept) return 0
   let projects: ProjectId[]
   try {
@@ -210,6 +251,15 @@ export async function moveMarks(
       if (Object.keys(marks.seen).length > 0 || marks.archived.length > 0)
         count += (await engine.command("agents.import_marks", marks, project))
           .count
+      const unread = unreadOf(threads, old)
+      const took = await Promise.all(
+        unread.map((thread) =>
+          mark(engine, project, thread, { seen: null }, { quiet: true })
+        )
+      )
+      count += took.filter(Boolean).length
+      // One the host did not take goes again at the next start.
+      if (took.includes(false)) continue
       moved.add(project)
       storage.setItem(MOVED, JSON.stringify([...moved]))
     } catch {

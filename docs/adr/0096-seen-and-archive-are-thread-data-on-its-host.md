@@ -276,6 +276,13 @@ Each step is its own PR.
      took it. The move starts with the module's `start`, and each Threads
      list's first read waits for it, a few seconds at most, so no first
      list shows the Archive's Threads in the list before the move.
+     From 2a, a Pane told the host what the Person saw, but "Mark as
+     unread" took the mark back from the window's storage alone, which
+     the import cannot say, as it moves seen forward only. So, after the
+     import, the move sends `agents.unread` for each Thread the host
+     keeps seen and settled while the window, which kept seen, has none
+     for it. A Thread seen on another machine alone, on a 2a build, so
+     calls again once: a Done that comes back, never a reminder lost.
 3. **Rollout.** Both machines get a build with 1a to 2b, then each
    machine's window starts once, which moves its marks.
 
