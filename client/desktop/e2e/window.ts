@@ -103,9 +103,10 @@ export const textOf = (file: string) =>
  * listed after it. `look` and `sidebar` are the text of `look.toml` and
  * `sidebar.toml`; `files` are more, by their paths in the throwaway
  * folder. Unless `asked` is false, the first run's sharing question was
- * answered already: nothing shared. `env` is more of the window's
- * environment; `dir`, the throwaway folder of a window before, to open
- * again on what it left. */
+ * answered already: nothing shared. `latency` is how many ms late the
+ * page hears the engine, as from a host far away (`BANDA_TEST_LATENCY`).
+ * `env` is more of the window's environment; `dir`, the throwaway folder
+ * of a window before, to open again on what it left. */
 export async function startWindow({
   account = false,
   oldCli = false,
@@ -115,6 +116,7 @@ export async function startWindow({
   files = {} as Record<string, string>,
   asked = true,
   deviceScaleFactor = 1,
+  latency = 0,
   env: more = {} as Record<string, string>,
   dir = mkdtempSync(join(tmpdir(), "banda-window-")),
 } = {}): Promise<Window> {
@@ -179,6 +181,9 @@ export async function startWindow({
     // The system's Trash is a throwaway one, as freedesktop finds it, on
     // the same disk as the throwaway Projects (ADR 0073, decision 10).
     XDG_DATA_HOME: join(dir, "xdg-data"),
+    // What the engine says reaches the page this many ms late, as from a
+    // host far away (`Address.latency`).
+    ...(latency > 0 && { BANDA_TEST_LATENCY: String(latency) }),
     ...more,
   }
   const app = await electron.launch({
