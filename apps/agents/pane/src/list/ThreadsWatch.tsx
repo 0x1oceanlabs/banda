@@ -3,6 +3,7 @@ import { useLive } from "@banda/ui/hooks/use-live"
 import type { Watch, WatchProps } from "@banda/ui/pane"
 import { harnessName, useHarnesses } from "../harnesses"
 import { threadsSource } from "./list"
+import { move } from "./marks-moved"
 import { attentionOf } from "./marks"
 import { listedOf } from "./rows"
 import { heardEnded, useSeen } from "./seen"
@@ -18,10 +19,13 @@ export const threadsWatch: Watch = {
 }
 
 function ThreadsWatch({ engine, project, report }: WatchProps) {
-  const source = useMemo(
-    () => threadsSource(engine, project),
-    [engine, project]
-  )
+  // It reads once this window's old marks moved to their host (ADR 0096,
+  // decision 9), so it never shows what the host had before them.
+  const source = useMemo(() => {
+    const threads = threadsSource(engine, project)
+    const read = () => move.over(engine, project).then(threads.read)
+    return { ...threads, read }
+  }, [engine, project])
   const live = useLive(engine, project, source)
   const harnesses = useHarnesses(engine)
   const seen = useSeen()

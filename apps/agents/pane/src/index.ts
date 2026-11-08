@@ -23,6 +23,7 @@ import { askSource } from "./list/sources"
 import { NEW_THREAD } from "./thread/session"
 import { threadItems } from "./list/items"
 import { threadHeader } from "./list/header"
+import { move } from "./list/marks-moved"
 import { ANSWER, RETRY, SHOW } from "./list/rows"
 
 /** An arg that is a text, or none. */
@@ -194,4 +195,10 @@ export const agents = defineModule({
   sources: [askSource],
   items: threadItems,
   slots: [threadHeader],
+  // This machine's window moves the marks it kept to their host, once
+  // (ADR 0096, decision 9): its own engine's, never another host's.
+  start: (window) => {
+    move.start(window.engine)
+    return () => undefined
+  },
 })

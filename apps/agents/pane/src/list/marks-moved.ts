@@ -8,19 +8,22 @@
  * machine's Threads are dropped, as that machine's own window brings
  * them (#854 is the idea of sending them too).
  *
- * The rules here are frozen copies of `./seen.ts` and the window's
+ * The rules here are frozen copies of the window's old seen and
  * `sidebar/archived.ts` as they were, so the move reads what the window
- * showed whatever those become. They only read the old keys, named here
+ * showed whatever those became. They only read the old keys, named here
  * again, which stay for one stable release, as ADR 0069 (decision 3) kept
- * its old names. The move is the agents module's: it asks its own engine
- * part, so the window names none of it.
+ * its old names; nothing else names them (architecture.test.ts). The move
+ * is the agents module's: it asks its own engine part, so the window
+ * names none of it.
  *
- * Not called yet: the flip (step 2b) calls it once, from the module's
- * index.ts, after the first list load.
+ * The module's start moves them once (`Move.start`), on this machine's
+ * engine alone, and the Threads lists read their host's once it is over
+ * (`Move.over`), so the first list the Person sees has the marks moved.
  */
 import type { Engine, ProjectId } from "@banda/contract"
 import type { ImportMarks, ListedThread } from "@banda/contract/agents"
 import { openProjects } from "@banda/ui/lib/projects"
+import { DAY } from "@banda/ui/lib/words"
 
 /** Where `./seen.ts` kept the turn of each Thread its Person saw. */
 const SEEN = "banda.agents.seen"
@@ -86,8 +89,28 @@ export type OldMarks = {
 }
 
 /**
+ * The cutoff as `sidebar/archived.ts` wrote it as the window started
+ * (`cutoff`, frozen), kept in `storage` where it is not yet, so a Project
+ * moved at a later start reads the same moment. A window from before it,
+ * with marks kept, takes three quiet days before `now`, as that one did
+ * at its first start (ADR 0069, decision 5). Narrowed to the old marks'
+ * keys: a window now writes keys of its own before the move, which the
+ * old rule would have taken for a window that had the three days.
+ */
+export function holdCutoff(storage: Storage, now: number): void {
+  try {
+    if (storage.getItem(CUTOFF) !== null) return
+    const older =
+      storage.getItem(SEEN) !== null || storage.getItem(ARCHIVED) !== null
+    storage.setItem(CUTOFF, String(older ? now - 3 * DAY : 0))
+  } catch {
+    // Its storage fails: nothing was kept either.
+  }
+}
+
+/**
  * The old keys, read only, and only the values the old rules took. The
- * cutoff is as `sidebar/archived.ts` wrote it as the window started.
+ * cutoff is as `holdCutoff` keeps it.
  */
 export function oldMarks(storage: Storage): OldMarks {
   let before = 0
@@ -161,6 +184,7 @@ export async function moveMarks(
   engine: Engine,
   storage: Storage = localStorage
 ): Promise<number> {
+  holdCutoff(storage, Date.now())
   const old = oldMarks(storage)
   // A window that kept nothing, as a new one, has nothing to read for.
   const kept =
@@ -195,3 +219,73 @@ export async function moveMarks(
   }
   return count
 }
+
+/** How long a list waits for the move before it reads all the same: a
+ * move that takes longer, or one that never starts, holds none up past
+ * it. */
+export const MOVE_WAIT = 3_000
+
+/** Whether `promise` settled within `ms`. */
+function within(promise: Promise<unknown>, ms: number): Promise<boolean> {
+  return new Promise((done) => {
+    const timer = setTimeout(() => done(false), ms)
+    const settled = () => {
+      clearTimeout(timer)
+      done(true)
+    }
+    promise.then(settled, settled)
+  })
+}
+
+/**
+ * One window's move: started once, by the agents module's start, on this
+ * machine's engine and never another host's, which brings its own marks
+ * (decision 9); a popped-out Pane's window starts none. A Threads list
+ * waits for it before it reads (`over`), so it shows the marks moved, not
+ * a flash of what the host had before.
+ */
+export class Move {
+  readonly #storage: () => Storage
+  readonly #wait: number
+  #move: { engine: Engine; over: Promise<unknown> } | undefined
+  readonly #starts = new Set<() => void>()
+  /** No move started within the wait: no list waits for one again. */
+  #none = false
+
+  constructor(storage: () => Storage, wait = MOVE_WAIT) {
+    this.#storage = storage
+    this.#wait = wait
+  }
+
+  /** Moves the marks to `engine`, this machine's; again, nothing. */
+  start(engine: Engine): void {
+    if (this.#move) return
+    this.#move = { engine, over: moveMarks(engine, this.#storage()) }
+    for (const start of this.#starts) start()
+    this.#starts.clear()
+  }
+
+  /**
+   * Resolves once `project` of `engine` may be read: at once for a Project
+   * whose marks moved, and for another host's once the move started;
+   * else once the move is over, as it went. It waits for the move to
+   * start, and then for it to end, at most `MOVE_WAIT` each.
+   */
+  async over(engine: Engine, project: ProjectId): Promise<void> {
+    if (movedOf(this.#storage()).has(project)) return
+    if (!this.#move && !this.#none) {
+      let start = () => {}
+      const started = new Promise<void>((done) => (start = done))
+      this.#starts.add(start)
+      if (!(await within(started, this.#wait))) {
+        this.#starts.delete(start)
+        this.#none = !this.#move
+      }
+    }
+    const move = this.#move
+    if (move?.engine === engine) await within(move.over, this.#wait)
+  }
+}
+
+/** This window's move. */
+export const move = new Move(() => localStorage)
