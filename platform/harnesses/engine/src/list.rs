@@ -4,7 +4,7 @@
 //! `agents.toml` (ADR 0040, decision 6).
 
 use crate::carried::Carried;
-use crate::model::{AccountKind, HarnessView, LimitsLook};
+use crate::model::{AccountKind, HarnessView, Icon, LimitsLook};
 use banda_kernel::{Holes, Program, ProjectId, SSH_AGENT, project_env};
 use banda_look::Problem;
 use schemars::JsonSchema;
@@ -52,7 +52,10 @@ pub struct Harness {
     pub kind: AccountKind,
     /// The letters of its mark, when its entry names them (decision 9).
     pub mark: Option<String>,
-    /// Its colour, 1 to 4, when its entry names one (decision 10).
+    /// The icon of its emblem, when its entry names one (ADR 0093).
+    pub icon: Option<Icon>,
+    /// Its colour, 0 its Harness's own or 1 to 4, when its entry names
+    /// one (ADR 0093, decision 3).
     pub colour: Option<u8>,
     /// The file of the adapter Banda carries: only Banda's own entries
     /// have one. When the engine found the adapters and a Node on its
@@ -514,15 +517,25 @@ struct HarnessEntry {
     #[schemars(extend("default" = "subscription"))]
     kind: Option<AccountKind>,
     /// The letters of its mark, one or two: by default the first of its
-    /// name, two when another account of its Harness starts the same.
+    /// name, two when another account of its Harness starts the same. The
+    /// emblem of a Harness Banda has no icons for shows them.
     mark: Option<String>,
-    /// Its colour: 1 violet, 2 rose, 3 green, 4 graphite. By default its
-    /// place in this file, from 1 round to 4 again.
-    #[schemars(range(min = 1, max = 4))]
+    /// The icon of its emblem (ADR 0093, decision 2): `claude-code` or
+    /// `claude` for Claude Code's accounts, `codex` or `chatgpt` for
+    /// Codex's, or for any account `work`, `personal`, `team`, `client`,
+    /// `spare`, `experiments`, `key`, `gateway`, `cloud`, `local` or `box`.
+    /// By default its kind's: its Harness's program's for a subscription,
+    /// `key` for an API key, `gateway` for a gateway.
+    icon: Option<Icon>,
+    /// Its colour: 0 its Harness's own (Claude's orange, Codex's the
+    /// text's), 1 violet, 2 rose, 3 green, 4 graphite. By default a
+    /// Harness's own entry takes its own, and its accounts 1 to 4 in turn.
+    #[schemars(range(min = 0, max = 4))]
     colour: Option<u8>,
 }
 
-/// How many colours the accounts take in turn (ADR 0078, decision 10).
+/// How many colours the accounts take in turn, after their Harness's own
+/// (ADR 0093, decision 3).
 pub const COLOURS: usize = 4;
 
 impl HarnessEntry {
@@ -589,9 +602,20 @@ impl HarnessEntry {
             return Err(format!("`mark` is one or two letters, not {mark:?}"));
         }
         if let Some(colour) = self.colour
-            && !(1..=COLOURS as u8).contains(&colour)
+            && colour > COLOURS as u8
         {
-            return Err(format!("`colour` is 1 to {COLOURS}, not {colour}"));
+            return Err(format!("`colour` is 0 to {COLOURS}, not {colour}"));
+        }
+        // An account is of a Harness, never of another account.
+        let of = self.of.as_deref().unwrap_or(&self.id);
+        if let Some(icon) = self.icon
+            && let Some(owner) = icon.harness()
+            && owner != of
+        {
+            let icon = serde_json::to_string(&icon).unwrap_or_default();
+            return Err(format!(
+                "`icon` {icon} is {owner}'s: an account of {of} takes its own or a neutral one"
+            ));
         }
         let base = base.map(|b| (b.args, b.env, b.cli, b.carried));
         let (args, base_env, cli, carried) = base.unwrap_or_default();
@@ -613,6 +637,7 @@ impl HarnessEntry {
             of: self.of,
             kind: self.kind.unwrap_or_default(),
             mark: self.mark,
+            icon: self.icon,
             colour: self.colour,
             carried,
             record: None,
@@ -645,8 +670,9 @@ fn account_of(of: &str, id: &str, earlier: &[Harness]) -> Result<Harness, String
 /// Each entry's mark and colour among the others (ADR 0078, decisions 9
 /// and 10). The mark is the first letter of its name; where another
 /// account of the same Harness starts with that letter too, the first
-/// two; where those match as well, the letter and its count. The colour
-/// is its place in the file, round the four. What an entry names wins.
+/// two; where those match as well, the letter and its count. A Harness's
+/// own entry takes its own colour, 0, and its accounts the four in turn
+/// (ADR 0093, decision 3). What an entry names wins.
 fn looks(list: &[Harness]) -> Vec<(String, u8)> {
     let letters = |name: &str, n: usize| -> String {
         let mut chars = name.chars().filter(|c| c.is_alphanumeric());
@@ -674,7 +700,13 @@ fn looks(list: &[Harness]) -> Vec<(String, u8)> {
     };
     (list.iter().enumerate())
         .map(|(place, harness)| {
-            let colour = harness.colour.unwrap_or((place % COLOURS) as u8 + 1);
+            let accounts_before = (list[..place].iter())
+                .filter(|other| other.of.is_some() && other.harness() == harness.harness())
+                .count();
+            let colour = harness.colour.unwrap_or(match harness.of {
+                None => 0,
+                Some(_) => (accounts_before % COLOURS) as u8 + 1,
+            });
             let mark = if harness.mark.is_some() || !shared(&ones, place) {
                 ones[place].clone()
             } else if !shared(&twos, place) {
@@ -864,6 +896,7 @@ fn known() -> Vec<Harness> {
                 of: None,
                 kind: AccountKind::default(),
                 mark: None,
+                icon: None,
                 colour: None,
                 carried: Some(adapter.file()),
                 record: None,
@@ -1602,7 +1635,7 @@ mod tests {
     }
 
     #[test]
-    fn marks_are_first_letters_and_colours_go_round_four() {
+    fn marks_are_first_letters_and_accounts_take_the_four_colours_in_turn() {
         let entry = |id: &str, of: &str, name: &str| {
             format!("[[harness]]\nid = {id:?}\nof = {of:?}\nname = {name:?}\n")
         };
@@ -1614,6 +1647,7 @@ mod tests {
             entry("api", "claude", "API"),
             entry("work-2", "codex", "Work"),
             entry("again", "claude", "Wild"),
+            entry("fifth", "claude", "Fifth"),
             "[[harness]]\nid = \"own\"\nof = \"claude\"\nname = \"Ж\"\nmark = \"Я\"\ncolour = 2\n"
                 .to_owned(),
         ]
@@ -1625,13 +1659,14 @@ mod tests {
         assert_eq!(
             looks,
             [
-                ("C".into(), 1),  // Claude Code: no other C among Claude's
-                ("Wo".into(), 2), // Work and wild one share W
-                ("W1".into(), 3), // wild one and Wild share Wi too
-                ("C".into(), 4),  // Codex, another Harness
-                ("A".into(), 1),  // the fifth takes the first colour again
-                ("W".into(), 2),  // Codex's Work: alone among Codex's
-                ("W2".into(), 3),
+                ("C".into(), 0),  // Claude Code's own entry: its own colour
+                ("Wo".into(), 1), // Work and wild one share W
+                ("W1".into(), 2), // wild one and Wild share Wi too
+                ("C".into(), 0),  // Codex's own entry
+                ("A".into(), 3),  // Claude's third account, whatever lies between
+                ("W".into(), 1),  // Codex's first account: alone among Codex's
+                ("W2".into(), 4),
+                ("F".into(), 1), // the fifth account takes the first again
                 ("Я".into(), 2), // what its entry names
             ]
         );
@@ -1639,6 +1674,51 @@ mod tests {
         assert_eq!(views[1].harness, "claude");
         assert_eq!(views[0].harness, "claude");
         assert_eq!(views[5].harness, "codex");
+    }
+
+    #[test]
+    fn an_account_takes_its_kinds_icon_unless_its_entry_names_one() {
+        let text = concat!(
+            "[[harness]]\nid = \"claude\"\n",
+            "[[harness]]\nid = \"api\"\nof = \"claude\"\nkind = \"api\"\n",
+            "[[harness]]\nid = \"router\"\nof = \"codex\"\nkind = \"gateway\"\n",
+            "[[harness]]\nid = \"codex\"\n",
+            "[[harness]]\nid = \"work\"\nof = \"codex\"\nicon = \"chatgpt\"\ncolour = 0\n",
+            "[[harness]]\nid = \"home\"\nof = \"codex\"\nicon = \"personal\"\n",
+            "[[harness]]\nid = \"other\"\nname = \"Other\"\ncommand = \"other-acp\"\n",
+        );
+        let list = Harnesses::new(listed_in(Path::new("h"), text).unwrap());
+        let icons: Vec<_> = (list.views().into_iter())
+            .map(|view| (view.icon, view.colour))
+            .collect();
+        assert_eq!(
+            icons,
+            [
+                (Some(Icon::ClaudeCode), 0),
+                (Some(Icon::Key), 1),
+                (Some(Icon::Gateway), 1), // a gateway's models may be anyone's
+                (Some(Icon::Codex), 0),
+                (Some(Icon::Chatgpt), 0),
+                (Some(Icon::Personal), 3), // Codex's third account
+                (None, 0),                 // no icons for it: its letters
+            ]
+        );
+    }
+
+    #[test]
+    fn an_icon_of_another_harness_or_a_sixth_colour_is_refused() {
+        let wrong = |text: &str| listed_in(Path::new("h"), text).unwrap_err().message;
+        let codex_on_claude = "[[harness]]\nid = \"a\"\nof = \"claude\"\nicon = \"codex\"\n";
+        assert!(wrong(codex_on_claude).contains("`icon` \"codex\" is codex's"));
+        let claude_on_other =
+            "[[harness]]\nid = \"o\"\nname = \"O\"\ncommand = \"o\"\nicon = \"claude\"\n";
+        assert!(wrong(claude_on_other).contains("`icon`"));
+        let pony = wrong("[[harness]]\nid = \"a\"\nof = \"claude\"\nicon = \"pony\"\n");
+        assert!(
+            pony.contains("`pony`, expected one of `claude-code`"),
+            "{pony}"
+        );
+        assert!(wrong("[[harness]]\nid = \"a\"\nof = \"claude\"\ncolour = 5\n").contains("0 to 4"));
     }
 
     #[test]
