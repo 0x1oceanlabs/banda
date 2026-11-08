@@ -24,8 +24,7 @@ import {
   attentionOf,
   useCalling,
   useCalls,
-  useItems,
-  workingIn,
+  useWorkingHere,
 } from "../calls/stores"
 import { useLookBar, useLookProblems } from "../look"
 import type { InBar } from "../tiling/model"
@@ -93,7 +92,7 @@ export function Bar({
   // What the modules' work calls the Person for, for the mark to show,
   // and how many Threads work now, which a restart into an update stops.
   const attention = useCalls(attentionOf)
-  const working = useItems(workingIn)
+  const working = useWorkingHere()
   const mark = loudest([attention.mark, markOf(status)])
   const { waiting } = attention
   const words =

@@ -47,3 +47,50 @@ test("the Panes in windows of their own come now and as they change, and nothing
   stop?.()
   expect(stopped).toHaveBeenCalledTimes(2)
 })
+
+test("the hosts come now and as they change, a change before the first answer wins, and without the desktop none is reached", async () => {
+  let answer: (hosts: unknown[]) => void = () => undefined
+  let tell: (hosts: unknown[]) => void = () => undefined
+  vi.stubGlobal("window", {
+    banda: {
+      hosts: {
+        current: () => new Promise((done) => (answer = done)),
+        listen: (listener: (hosts: unknown[]) => void) => {
+          tell = listener
+          return () => undefined
+        },
+      },
+    },
+  })
+  const taken: unknown[] = []
+  device.hosts.follow((hosts) => taken.push(hosts))
+  tell(["newer"])
+  answer(["older"])
+  await Promise.resolve()
+  expect(taken).toEqual([["newer"]])
+
+  // A first answer that fails is said, and the changes still come.
+  const warned = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+  vi.stubGlobal("window", {
+    banda: {
+      hosts: {
+        current: () => Promise.reject(new Error("gone")),
+        listen: (listener: (hosts: unknown[]) => void) => {
+          tell = listener
+          return () => undefined
+        },
+      },
+    },
+  })
+  device.hosts.follow((hosts) => taken.push(hosts))
+  await Promise.resolve()
+  expect(warned).toHaveBeenCalledOnce()
+  tell(["later"])
+  expect(taken.at(-1)).toEqual(["later"])
+  warned.mockRestore()
+
+  vi.stubGlobal("window", {})
+  expect(device.hosts.follow(() => undefined)).toBeUndefined()
+  await expect(device.hosts.engine("arc")).rejects.toThrow()
+  expect(() => device.hosts.start("arc")).not.toThrow()
+})

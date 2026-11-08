@@ -3,6 +3,7 @@ import type { Listed, Lists } from "@banda/ui/pane"
 import { afterEach, expect, test, vi } from "vitest"
 import {
   callingIn,
+  dropHost,
   followCalls,
   itemsOf,
   keptLists,
@@ -10,6 +11,7 @@ import {
   newStores,
   takeAttention,
   takeLists,
+  workingHere,
   workingIn,
 } from "./stores"
 
@@ -172,4 +174,59 @@ test("what the bar reads of the lists: who works, which Projects call, and a Pan
   expect(
     listedIn(lists, { project: q, pane: { kind: "terminal", args: {} } }, shows)
   ).toBeUndefined()
+})
+
+const r = "r" as ProjectId
+
+test("each host's lists are kept apart, and the items hold them all, this machine's first", () => {
+  const stores = newStores(0)
+  const heard = vi.fn()
+  stores.items.subscribe(heard)
+  takeLists(stores, { [p]: [thread("a", { mark: "running" })] })
+  takeLists(stores, { [r]: [thread("b", { mark: "running" })] }, "arc")
+  expect(heard).toHaveBeenCalledTimes(2)
+  expect(Object.keys(stores.items.get())).toEqual([p, r])
+
+  // A host's new list leaves the other's as it was, each Listed kept.
+  const before = stores.items.get()[p]
+  takeLists(stores, { [r]: [thread("b", { mark: "done" })] }, "arc")
+  expect(heard).toHaveBeenCalledTimes(3)
+  expect(stores.items.get()[p]).toBe(before)
+  takeLists(stores, { [p]: [thread("a", { mark: "running" })] })
+  expect(heard).toHaveBeenCalledTimes(3)
+
+  // Only this machine's Agents are what Quit and a restart stop.
+  expect(workingIn(stores.items.get())).toBe(1)
+  takeLists(stores, { [r]: [thread("b", { mark: "running" })] }, "arc")
+  expect(workingIn(stores.items.get())).toBe(2)
+  expect(workingHere(stores)).toBe(1)
+
+  // A Project two hosts list is this machine's.
+  takeLists(stores, { [p]: [thread("c")], [r]: [thread("b")] }, "devbox")
+  expect(stores.items.get()[p]?.map((one) => one.id)).toEqual(["a"])
+
+  // A host let go of leaves the rest, and tells once.
+  dropHost(stores, "devbox")
+  heard.mockClear()
+  dropHost(stores, "arc")
+  expect(heard).toHaveBeenCalledTimes(1)
+  expect(Object.keys(stores.items.get())).toEqual([p])
+  dropHost(stores, "arc")
+  expect(heard).toHaveBeenCalledTimes(1)
+})
+
+test("the calls hold the loudest of every host's, and how many wait in all", () => {
+  const stores = newStores(0)
+  const heard = vi.fn()
+  stores.calls.subscribe(heard)
+  takeAttention(stores, { mark: "done", waiting: 1 })
+  takeAttention(stores, { mark: "asking", waiting: 2 }, "arc")
+  expect(stores.calls.get().attention).toEqual({ mark: "asking", waiting: 3 })
+  expect(heard).toHaveBeenCalledTimes(2)
+  // This machine's quiet leaves the host's call.
+  takeAttention(stores, { mark: "rest", waiting: 0 })
+  expect(stores.calls.get().attention).toEqual({ mark: "asking", waiting: 2 })
+  dropHost(stores, "arc")
+  expect(stores.calls.get().attention).toEqual({ mark: "rest", waiting: 0 })
+  expect(heard).toHaveBeenCalledTimes(4)
 })

@@ -314,3 +314,92 @@ test("a Thread that woke stands with what calls, as of when it woke", () => {
   ])
   expect(woke.sections[0].rows[0].woke).toBe(10)
 })
+
+/** Another host, "arc", with a Project of its own and a scratch one. */
+const banda = project("r1", "banda", "/home/roma/banda")
+const arcScratch = { ...project("r2", "No Project", "/s"), scratch: true }
+const arc = { name: "arc", projects: [banda, arcScratch] }
+const withArc = {
+  ...lists,
+  r1: [listed("bench", "done", 7), listed("hosts", "running", 8)],
+  r2: [listed("idea", "asking", 9)],
+}
+const elsewhere = (preset: Preset, keys?: Keys) =>
+  arrange(withArc, projects, resolve(preset, keys), undefined, undefined, {}, [
+    arc,
+  ])
+
+test("with no other host, every preset arranges as it did, and no row names one", () => {
+  for (const preset of Object.keys(PRESETS) as Preset[]) {
+    const none = arrange(lists, projects, resolve(preset))
+    expect(
+      arrange(lists, projects, resolve(preset), undefined, new Set(), {}, [])
+    ).toEqual(none)
+    expect(JSON.stringify(none)).not.toContain('"host"')
+  }
+})
+
+test("grouped by Project, another host's sections follow this machine's, under its name", () => {
+  const byProject = elsewhere("projects")
+  expect(ids(byProject)).toEqual([
+    ["s2", ["letters", "migration", "release"]],
+    ["s1", ["form", "headers", "logo"]],
+    ["arc/r1", ["bench", "hosts"]],
+    ["arc/no-project", ["idea"]],
+  ])
+  expect(byProject.sections.map((s) => s.host)).toEqual([
+    undefined,
+    undefined,
+    "arc",
+    "arc",
+  ])
+  expect(byProject.sections[2]).toMatchObject({ label: "banda", mark: "done" })
+  expect(byProject.sections[2]?.rows.every((row) => row.host === "arc")).toBe(
+    true
+  )
+  // Its sections fold by the Person's toggle, apart from this machine's.
+  const folded = arrange(
+    withArc,
+    projects,
+    resolve("projects"),
+    undefined,
+    new Set(["arc/r1"]),
+    {},
+    [arc]
+  )
+  expect(folded.sections.map((s) => [s.key, s.folded])).toEqual([
+    ["s2", false],
+    ["s1", false],
+    ["arc/r1", true],
+    ["arc/no-project", false],
+  ])
+})
+
+test("grouped otherwise, another host's rows join this machine's, each with its name", () => {
+  const inbox = elsewhere("inbox")
+  expect(ids(inbox)).toEqual([
+    ["active", ["idea", "bench", "letters", "migration", "form", "logo"]],
+  ])
+  expect(ids(inbox, "shelves")).toEqual([
+    ["working", ["hosts", "headers", "release"]],
+  ])
+  const hostOf = (id: string) =>
+    [...inbox.sections, ...inbox.shelves]
+      .flatMap((s) => s.rows)
+      .find((row) => row.listed.id === id)?.host
+  expect([hostOf("bench"), hostOf("idea"), hostOf("form")]).toEqual([
+    "arc",
+    "arc",
+    undefined,
+  ])
+  // The list of Projects has its Projects after this machine's.
+  const places = elsewhere("places")
+  expect(
+    places.projects?.map((line) => [line.project.name, line.host])
+  ).toEqual([
+    ["API", undefined],
+    ["Landing", undefined],
+    ["Quiet", undefined],
+    ["banda", "arc"],
+  ])
+})

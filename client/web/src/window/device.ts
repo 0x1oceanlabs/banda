@@ -7,12 +7,52 @@
  * (ADR 0089, decisions 2 and 11). Without the desktop, as in a page of
  * its own, each part does nothing, and what answers says so.
  */
-import type { Host, PoppedAsk } from "../host"
+import type { Address } from "@banda/contract"
+import type { Host, HostState, PoppedAsk } from "../host"
 
 /** The desktop's bridge as each part is used; none without the desktop. */
 const desktop = (): Host | undefined => window.banda
 
 export const device = {
+  /** The other machines of `hosts.toml`, as the desktop reaches them over
+   * ssh (ADR 0081, decision 4). */
+  hosts: {
+    /** Hands `take` the hosts now, then each time one changes, until it
+     * is stopped. A change told while the first answer was on its way is
+     * the newer, so it wins. */
+    follow: (take: (hosts: HostState[]) => void) => {
+      const hosts = desktop()?.hosts
+      if (!hosts) return undefined
+      let on = true
+      let told = false
+      hosts.current().then(
+        (first) => on && !told && take(first),
+        (error: unknown) =>
+          console.warn("banda: the hosts were not read", error)
+      )
+      const stop = hosts.listen((now) => {
+        told = true
+        take(now)
+      })
+      return () => {
+        on = false
+        stop()
+      }
+    },
+    /** Where host `name`'s engine listens: asked of the desktop each time,
+     * and kept nowhere in the page. */
+    engine: (name: string): Promise<Address> =>
+      desktop()?.hostEngine(name) ??
+      Promise.reject(new Error("Only Banda's app reaches other machines.")),
+    /** Starts host `name`'s engine again there, as the Person asks. */
+    start: (name: string): void => {
+      desktop()
+        ?.hostStart(name)
+        .catch((error: unknown) => {
+          console.error(`banda: ${name} was not started`, error)
+        })
+    },
+  },
   /** Panes in windows of their own (ADR 0025, decision 9): main keeps
    * which, and opens and closes their windows. */
   popped: {

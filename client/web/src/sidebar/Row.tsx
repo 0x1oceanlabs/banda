@@ -39,6 +39,8 @@ export function Row({
   onOpen,
   action,
   field,
+  host,
+  stillAt,
 }: {
   row: Arranged
   settings: Settings
@@ -52,6 +54,11 @@ export function Row({
   /** The field that names it, in its title's place (ADR 0077): the row
    * is then no button. */
   field?: ReactNode
+  /** The other host its Agent works on, named beside its Project where
+   * no label above names it (ADR 0081). */
+  host?: string
+  /** When its host went away: its timer stands as it was then. */
+  stillAt?: number
 }) {
   const { lines, hide, layout } = settings.row
   const parts = (layout ?? LAYOUTS[lines] ?? LAYOUTS[3]).map((line) =>
@@ -86,6 +93,8 @@ export function Row({
                     part={part}
                     row={row}
                     wide={!one}
+                    host={host}
+                    stillAt={stillAt}
                   />
                 )
               )}
@@ -109,10 +118,14 @@ function Piece({
   part,
   row,
   wide,
+  host,
+  stillAt,
 }: {
   part: Part
   row: Arranged
   wide: boolean
+  host?: string
+  stillAt?: number
 }) {
   const { listed, project } = row
   // Nothing waits in it and nothing works: it steps back.
@@ -131,14 +144,26 @@ function Piece({
       return <Title row={row} quiet={quiet} />
     case "project":
       // A row with room shows the Project's sign and name; a row of one
-      // line, its sign (ADR 0070, decision 5).
-      return wide ? (
-        <ProjectName
-          project={project}
-          className="text-xs text-muted-foreground"
-        />
-      ) : (
-        <ProjectSign project={project} size={14} />
+      // line, its sign (ADR 0070, decision 5). Another host's names it.
+      return (
+        <>
+          {wide ? (
+            <ProjectName
+              project={project}
+              className="text-xs text-muted-foreground"
+            />
+          ) : (
+            <ProjectSign project={project} size={14} />
+          )}
+          {host && (
+            <span
+              className="shrink-0 rounded-sm border px-1 text-[10px] leading-3.5 text-muted-foreground"
+              title={`Its Agent works on ${host}`}
+            >
+              {host}
+            </span>
+          )}
+        </>
       )
     case "harness": {
       // Claude's or Codex's logo, as T3 Code shows them; another Harness
@@ -149,7 +174,7 @@ function Piece({
     case "status":
       if (row.state === "snoozed") return <Sleeps listed={listed} />
       if (row.woke !== undefined) return <Woke listed={listed} at={row.woke} />
-      return <Status listed={listed} />
+      return <Status listed={listed} stillAt={stillAt} />
     case "note": {
       const text = listed.calls ?? listed.said
       if (!text) return <span className="min-w-0 flex-1" />
@@ -190,10 +215,16 @@ function Title({ row, quiet }: { row: Arranged; quiet: boolean }) {
 }
 
 /**
- * What calls the Person, in its colour; the running turn's timer; or how
- * long ago it last changed.
+ * What calls the Person, in its colour; the running turn's timer, which
+ * stands at `stillAt` when it is given; or how long ago it last changed.
  */
-export function Status({ listed }: { listed: Listed }) {
+export function Status({
+  listed,
+  stillAt,
+}: {
+  listed: Listed
+  stillAt?: number
+}) {
   const { mark, changed, began } = listed
   switch (mark) {
     case "asking":
@@ -205,7 +236,9 @@ export function Status({ listed }: { listed: Listed }) {
       return <Word className="text-foreground">{MARK_WORDS.done}</Word>
     case "running":
     case "thinking":
-      return began === undefined ? null : <Timer from={began} />
+      return began === undefined ? null : (
+        <Timer from={began} stillAt={stillAt} />
+      )
     default:
       return (
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
@@ -265,12 +298,13 @@ function Word({
   )
 }
 
-/** How long the work that runs now has run, ticking each second. */
-function Timer({ from }: { from: number }) {
-  const now = useNow(1000)
+/** How long the work that runs now has run, ticking each second, or
+ * until `stillAt`, standing. */
+function Timer({ from, stillAt }: { from: number; stillAt?: number }) {
+  const now = useNow(1000, stillAt === undefined)
   return (
     <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-      {elapsed(now - from)}
+      {elapsed((stillAt ?? now) - from)}
     </span>
   )
 }
