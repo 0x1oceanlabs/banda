@@ -15,6 +15,8 @@ export type LineFacts = {
   finding: string
   /** The Agent's name. */
   name: string
+  /** The account the Thread runs on, by its entry's ID. */
+  harness: string
   /** Whether a command is on its way. */
   answering: boolean
   /** The Thread's snooze, if it sleeps. */

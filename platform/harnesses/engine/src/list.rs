@@ -206,9 +206,18 @@ impl Harness {
     /// the Project's folder (ADR 0078, decision 3). Codex's accounts share
     /// none yet.
     pub fn shares_sessions(&self, other: &Harness) -> bool {
+        self.sessions() == other.sessions()
+    }
+
+    /// Where its sessions live, as [`Harness::shares_sessions`] tells two
+    /// entries apart: `claude` for every Claude Code account, else its own
+    /// ID.
+    pub fn sessions(&self) -> &str {
         use crate::limits::Kind;
-        self.id == other.id
-            || (Kind::of(self) == Some(Kind::Claude) && Kind::of(other) == Some(Kind::Claude))
+        match Kind::of(self) {
+            Some(Kind::Claude) => "claude",
+            _ => &self.id,
+        }
     }
 
     /// The entry as its process for `project` starts: it, and every program

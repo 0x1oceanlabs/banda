@@ -34,6 +34,10 @@ export type ThreadActs = {
   rewind: (turn: TurnView, message: Item) => void
   /** Sends `turn`'s message again. */
   retry: (turn: TurnView) => void
+  /** Moves the Thread to account `harness`, then sends `turn`'s message
+   * again there: the Person's click on a limit's card (ADR 0093,
+   * decision 8). */
+  retryOn: (turn: TurnView, harness: string) => void
   /** Snoozes the Thread until a time, and with `resume` tries the turn
    * again then (ADR 0074, decision 8); none where it cannot. */
   snooze?: (until: number, resume: boolean) => void
@@ -86,6 +90,7 @@ export function ThreadAroundProvider({
       fork: (turn) => latest.current.fork(turn),
       rewind: (turn, message) => latest.current.rewind(turn, message),
       retry: (turn) => latest.current.retry(turn),
+      retryOn: (turn, harness) => latest.current.retryOn(turn, harness),
       snooze: snoozes
         ? (until, resume) => latest.current.snooze?.(until, resume)
         : undefined,

@@ -50,4 +50,10 @@ icon?: Icon,
  * Its colour: 0 its Harness's own, then 1 violet, 2 rose, 3 green,
  * 4 graphite (ADR 0093, decision 3).
  */
-colour: number, };
+colour: number, 
+/**
+ * Where its sessions live: a Thread moves to another entry with the
+ * same and goes on with its session, as every Claude Code account's
+ * is `claude` (ADR 0078, decision 3). Else its own ID.
+ */
+sessions: string, };
