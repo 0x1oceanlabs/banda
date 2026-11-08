@@ -14,14 +14,17 @@
 //! It sends two events: `$exception`, of each Problem, and `day`, the
 //! usage counts of each day (decision 6).
 
+mod courier;
 pub mod events;
 mod exception;
-mod outbox;
 mod post;
 pub mod settings;
 pub mod usage;
 
-use banda_kernel::{Call, Error, Kind, Module, ModuleProject, Nothing, Refusal, Right, Scope};
+use banda_kernel::{
+    Call, Effect, Error, Kind, Module, ModuleProject, Nothing, OnRestart, Outcome, Refusal, Retry,
+    Right, Scope,
+};
 pub use post::Post;
 use post::{CAPTURE, Capture};
 use rusqlite::Row;
@@ -115,6 +118,17 @@ impl Sharing {
         Self {
             post: Arc::new(post),
             ..self
+        }
+    }
+
+    fn courier(&self) -> courier::Courier {
+        courier::Courier {
+            file: self.file.clone(),
+            ids: self.ids.clone(),
+            never: self.never,
+            channel: self.channel,
+            clock: self.clock.clone(),
+            post: self.post.clone(),
         }
     }
 
@@ -232,7 +246,9 @@ impl Module for Sharing {
                made INTEGER NOT NULL,
                sent INTEGER
            )",
-            // How far into the log it has heard.
+            // How far into the log it had heard, until the kernel kept its
+            // cursor (ADR 0082, decision 6): read as it starts, and used
+            // once, as its listener begins there.
             "CREATE TABLE sharing_heard (
                one INTEGER PRIMARY KEY CHECK (one = 1),
                at INTEGER NOT NULL
@@ -245,22 +261,36 @@ impl Module for Sharing {
                since INTEGER NOT NULL,
                last INTEGER
              )",
+            // Whether what waited in `sharing_sent` was queued in the
+            // kernel's outbox, which sends it now (ADR 0082, A5): once.
+            "CREATE TABLE sharing_carried (one INTEGER PRIMARY KEY CHECK (one = 1))",
         ]
     }
 
     /// From where it last heard, it makes an event of each Problem as the
-    /// problems module says it, and sends what waits: at once, and again
-    /// every few minutes, from the host.
+    /// problems module says it, and the kernel's outbox posts each from
+    /// the host, the oldest first.
     async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
-        let courier = outbox::Courier {
-            file: self.file.clone(),
-            ids: self.ids.clone(),
-            never: self.never,
-            channel: self.channel,
-            clock: self.clock.clone(),
-            post: self.post.clone(),
-        };
-        outbox::start(courier, project).await
+        courier::start(self.courier(), project).await
+    }
+
+    /// Posts one event it kept.
+    async fn run(&self, project: ModuleProject, effect: Effect) -> Outcome {
+        match effect.kind.as_str() {
+            courier::POST => self.courier().post(project, &effect).await,
+            other => Outcome::Fail(format!("sharing runs no effect of kind {other}")),
+        }
+    }
+
+    /// A post cut short goes again: PostHog may take it twice, as it may
+    /// when its answer is lost.
+    fn on_restart(&self, _: &str) -> OnRestart {
+        OnRestart::Replay
+    }
+
+    /// A post is tried for as long as its event is kept.
+    fn retry(&self, _: &str) -> Retry {
+        courier::TRIED
     }
 
     fn right(&self, method: &str) -> Option<Right> {

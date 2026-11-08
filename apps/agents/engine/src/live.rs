@@ -34,7 +34,7 @@ use crate::touching::Touches;
 use crate::{Pipe, kept};
 use banda_harnesses::hosts::Hosts;
 use banda_harnesses::{Failed, Harness};
-use banda_kernel::{AgentId, Heard, Holes, ModuleProject, Pass, Program, ProjectId};
+use banda_kernel::{AgentId, Holes, Listener, ModuleProject, Pass, Program, ProjectId};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -200,15 +200,25 @@ impl Live {
         }
     }
 
+    /// The name of a Project's listener of the machine's accounts.
+    pub const ACCOUNTS: &str = "accounts";
+
     /// Lets go of `project`'s process of each Harness whose account changed,
     /// as the machine says, until the Project closes (ADR 0040, decision 4).
-    pub async fn let_go_as_accounts_change(self: Arc<Self>, project: ProjectId, mut heard: Heard) {
+    pub async fn let_go_as_accounts_change(
+        self: Arc<Self>,
+        project: ProjectId,
+        mut heard: Listener,
+    ) {
         loop {
             match heard.next().await {
                 Ok(Some(event)) => {
                     // It starts again on its next turn.
                     if let Some(harness) = &event.subject {
                         self.hosts.let_go(project, Some(harness));
+                    }
+                    if let Err(error) = heard.ack_through(event.seq).await {
+                        tracing::warn!(%error, "a Project's place in the accounts was not kept");
                     }
                 }
                 Ok(None) => return,

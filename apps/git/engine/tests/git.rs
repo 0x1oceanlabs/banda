@@ -63,19 +63,25 @@ struct World {
 }
 
 impl World {
+    /// The engine on `root`'s data, with git or without it, and what its
+    /// environment is asked.
+    async fn engine(root: &std::path::Path, owner: PersonId, git: bool) -> (Arc<Kernel>, Asks) {
+        let environment = Recorded::new(Local);
+        let asks = environment.asks();
+        let builder = Kernel::builder(root, root.join(".data"), owner).environment(environment);
+        let builder = if git {
+            builder.module(Git::new())
+        } else {
+            builder
+        };
+        (builder.module(Agents).open().await.unwrap(), asks)
+    }
+
     /// A Project whose folder is no repository yet.
     async fn bare() -> World {
         let root = tempfile::tempdir().unwrap();
         let owner = PersonId::new();
-        let environment = Recorded::new(Local);
-        let asks = environment.asks();
-        let kernel = Kernel::builder(root.path(), root.path().join(".data"), owner)
-            .environment(environment)
-            .module(Git::new())
-            .module(Agents)
-            .open()
-            .await
-            .unwrap();
+        let (kernel, asks) = World::engine(root.path(), owner, true).await;
         let project = kernel
             .call(
                 Participant::Person(owner),
@@ -101,6 +107,33 @@ impl World {
             asks,
             _root: root,
         }
+    }
+
+    /// The engine stopped, and started again on the same data, with git or
+    /// without it, its Project open again.
+    async fn restart(self, git: bool) -> World {
+        let lock =
+            (self._root.path()).join(format!(".data/projects/{}/project.lock", self.project));
+        drop(self.kernel);
+        let free = || std::fs::File::open(&lock).is_ok_and(|file| file.try_lock().is_ok());
+        for _ in 0..500 {
+            if free() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        let (kernel, asks) = World::engine(self._root.path(), self.owner, git).await;
+        for _ in 0..500 {
+            if kernel.project(self.project).await.is_ok() {
+                return World {
+                    kernel,
+                    asks,
+                    ..self
+                };
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        panic!("the Project never opened again");
     }
 
     /// A Project whose folder is a repository with no commits, on `main`.
@@ -1892,6 +1925,59 @@ async fn a_turn_keeps_each_file_a_filter_cleans_as_the_index_has_it() {
         paths(&world.diff(turn).await),
         ["new/deep/made.raw", "new/deep/made.txt"]
     );
+}
+
+/// git hears the log from where it stopped, not from its head: a turn
+/// that ended while it was gone gets its "after" once it is back, and one
+/// that began then, the tree perhaps changed since, has none (ADR 0082,
+/// A5).
+#[tokio::test]
+async fn a_turn_that_ended_while_git_was_gone_gets_its_checkpoint_after() {
+    let world = World::committed().await;
+    let ids = || (ProjectId::new().to_string(), ProjectId::new().to_string());
+    let ((thread, turn), (other, missed)) = (ids(), ids());
+    world.say("turn.started", &thread, &turn).await;
+    world.checkpoints(1).await;
+    let world = world.restart(false).await;
+    world.write("a.txt", "one\n2\nthree\n");
+    world.say("turn.ended", &thread, &turn).await;
+    world.say("turn.started", &other, &missed).await;
+    let world = world.restart(true).await;
+    // A turn heard live after them: git has heard them all.
+    let (later, now) = ids();
+    world.say("turn.started", &later, &now).await;
+    let kept = world.checkpoints(3).await;
+    assert!(!kept.iter().any(|kept| kept.contains(&missed)), "{kept:?}");
+    let turn = json!({ "scope": { "kind": "turn", "thread": thread, "turn": turn } });
+    assert_eq!(paths(&world.diff(turn).await), ["a.txt"]);
+}
+
+/// A turn heard begun or ended again, as after a crash before git said it
+/// handled it, keeps its checkpoints as they were first kept.
+#[tokio::test]
+async fn a_turn_heard_again_keeps_its_checkpoints_as_first_kept() {
+    let world = World::committed().await;
+    let (thread, turn) = (ProjectId::new().to_string(), ProjectId::new().to_string());
+    let sha = |when: &str| {
+        let name = format!("refs/banda/checkpoints/{thread}/{turn}/{when}");
+        world.git(&["rev-parse", &name])
+    };
+    world.say("turn.started", &thread, &turn).await;
+    world.checkpoints(1).await;
+    let before = sha("before");
+    world.write("a.txt", "one\n2\nthree\n");
+    world.say("turn.started", &thread, &turn).await;
+    world.say("turn.ended", &thread, &turn).await;
+    world.checkpoints(2).await;
+    assert_eq!(sha("before"), before);
+    let after = sha("after");
+    world.write("a.txt", "one\n2\n3\n");
+    world.say("turn.ended", &thread, &turn).await;
+    // A turn heard after it: git has heard it.
+    let next = ProjectId::new().to_string();
+    world.say("turn.started", &thread, &next).await;
+    world.checkpoints(3).await;
+    assert_eq!((sha("before"), sha("after")), (before, after));
 }
 
 #[tokio::test]

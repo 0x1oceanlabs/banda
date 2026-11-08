@@ -214,6 +214,26 @@ The kernel holds only what every module needs, and it names no module.
 - **Event log.** Append-only, with typed events, one per Project. Windows and
   the CLI subscribe to it. A subscription sends only what its view needs.
   The database itself refuses to change or delete an event.
+- **Durable listeners** (ADR 0082, decision 6; A5 of the architecture
+  vision). A module hears a log only through a `Listener` it names
+  (`ModuleProject::listen`, `listen_to_machine`), one name to one
+  listener, and the kernel keeps how far each has heard in
+  `kernel_cursors`, beside that log, so a restart resumes there and loses
+  no fact. A listener new to a log starts at its head. In one scope a
+  reaction acks its fact in the transaction it writes in (`Tx::ack`), so
+  it runs once, and a second ack is refused. One that cannot, its work
+  outside the store (git's checkpoints) or what it follows spanning
+  several facts (pulls' shell calls), acks once its work is done
+  (`Listener::ack_through`), so it may run again after a crash, and
+  looks before it acts. Across scopes, what a reaction writes in its own
+  Project goes under the receipt of `CommandId::derive(listener, event)`,
+  then the cursor moves (`Listener::once`); work outside any store acks
+  by itself (`Listener::ack_through`), as agents lets go of a Harness's
+  processes after a sign-in. An effect that waits for the
+  reactions (`ModuleProject::reacted`) waits for every listener of its
+  log. A Project's cursors in the machine's log go as it is removed, and
+  its listeners end as it closes: what a module keeps of a Project past
+  one call holds it weakly (`ModuleProject::downgrade`).
 - **Access decision.** One function decides whether a Participant may perform
   an action on a target. Every method and every subscription passes through
   it, before any module code runs. On one computer it answers: the owner may
@@ -928,7 +948,7 @@ If Chat is removed, Agents still works through its own Thread.
 - **A sign-in or sign-out writes `harnesses.account_changed`**, its
   subject the Harness's ID and nothing else. Every holder of that
   Harness's process lets go of it: this module, and each Project's agents
-  module, which hears the machine's log (`ModuleProject::react_to_machine`)
+  module, which hears the machine's log (`ModuleProject::listen_to_machine`)
   and lets go of its own hosts of it without waiting. A host that was
   starting then is let go the next time it is asked for (`hosts.rs`
   marks it stale). The command answers once every reaction handled

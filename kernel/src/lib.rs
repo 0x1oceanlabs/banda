@@ -12,6 +12,12 @@
 //! - The outbox runs side effects after commit, in order per target: the
 //!   engine's own, and workers' outside it under leases. It settles what a
 //!   restart or a lease that ran out cut short, and lets old rows go.
+//! - A module hears the log through a durable listener
+//!   ([`ModuleProject::listen`]): the kernel keeps its cursor, so a crash
+//!   loses no fact. A reaction that writes in the store acks each fact in
+//!   its transaction, so it runs once. One that cannot, its work outside
+//!   the store or what it follows spanning several facts, acks once its
+//!   work is done, and looks before it acts (ADR 0082, decision 6).
 //! - [`access::decide`] is the one place that says whether a Participant may
 //!   do something, and [`access::within`] keeps an Agent in its Project.
 //! - A pass names an Agent's session in its Project, for `banda mcp`
@@ -31,6 +37,7 @@
 
 pub mod access;
 pub mod api;
+mod cursors;
 mod environment;
 mod error;
 mod events;
@@ -54,6 +61,7 @@ mod watching;
 mod window;
 
 pub use access::{Caller, Right};
+pub use cursors::{Ack, Listener};
 pub use environment::{Environment, Holes, Input, Program, Whose};
 pub use error::{Code, Error, Refusal};
 pub use events::{Event, EventFilter};
@@ -64,7 +72,7 @@ pub use methods::{Kind, Method, Nothing, Picture, Tool};
 pub use module::{Call, Module, Scope, Stream, Wall};
 pub use outbox::{Claim, Effect, LONGEST_LEASE, Lease, OnRestart, Outcome, Retry, Settled};
 pub use passes::{Pass, secret};
-pub use project::{Committed, Heard, ModuleProject, Project, Tally};
+pub use project::{Committed, ModuleProject, Project, Tally, WeakModuleProject};
 pub use pty::{Pty, PtyControl, PtySize};
 pub use reach::Reach;
 /// For `methods!` and `id!`, which name it from a module's crate.

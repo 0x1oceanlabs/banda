@@ -193,7 +193,14 @@ Roma, 2026-11-06, among the vision's decisions:
    - **An acting listener** (git, pulls, later compositions) keeps its
      cursor in the source Project's store. It acks a fact in the same
      transaction as the command or effect it writes. So it acts exactly
-     once in a scope, and its cursor moves with the Project.
+     once in a scope, and its cursor moves with the Project. One that
+     cannot ack in that transaction acks once its work is done: work
+     outside the store, as git's checkpoints, or a reaction to what spans
+     several facts, as pulls' shell calls, whose place stays before the
+     first fact of each call it still follows. After a crash it may hear
+     a fact again, so it looks before it acts, and what it does is still
+     done once, as pulls keeps each link by its call's key. (Amended in
+     A5.)
    - **A projection** (the Inbox's calls, the sidebar's items) is a table
      worked out from published facts. It lives in the Host store with its
      own seq, so a client resumes with one number per host. It can be
@@ -463,17 +470,17 @@ lists there.
 2. A receipt for every command: final refusals only, the params' hash;
    `banda mcp`'s CommandId per request (A3, A6).
 3. The router's queue per session and scope; receipts carry `at` (A8).
-4. Durable listeners: cursors acked in the listener's transaction; gates
-   (A5).
+4. Durable listeners: cursors acked in the listener's transaction (A5).
+   Gates come with `facts!`, in step 8 (B7). (Amended in A5.)
 5. One list of Apps, scanned from `app.toml` (B1).
 6. The machine scope splits into Host and Person; the Person's documents
    with a `rev`; the old state migrated (A2).
 7. `agents` becomes `threads`, with aliases (T0): ADR 0085's step 1.
-8. `facts!`: published and private facts, `item@1` and `call@1` (B7); the
-   deltas leave the log (B12).
+8. `facts!`: published and private facts, with `gate`, `item@1` and
+   `call@1` (B7); the deltas leave the log (B12).
 9. Intents: `show(verb, args)` replaces the tiling's Pane kinds (B8); git
-   and Threads stop knowing each other, and pulls hears
-   `threads.tool.ran@1` (B10).
+   and Threads stop knowing each other, the turn's start gated in place
+   of `reacted`'s 5 s wait, and pulls hears `threads.tool.ran@1` (B10).
 10. One access rule, with the wall on the resolved ProjectId (B14,
     ADR 0083's step 5).
 11. Bytes from the host (E1); the device road (E3); calls on the host,
@@ -497,7 +504,10 @@ lists there.
   hears nothing of git's.
 - A resend never runs twice, and a passing error is never the answer for
   good.
-- A crash loses no fact a listener had not handled.
+- A crash loses no fact a listener had not handled. Two bounds, neither
+  worse than before A5: git keeps no "before" for a turn that began while
+  it was not there, as the tree may have changed since, and a shell call
+  holds pulls' place back a day at most.
 - Closing every window stops nothing that runs on the host: workflows,
   calls and the device road live there.
 - Hosts know nothing of each other; adding one adds a connection in each

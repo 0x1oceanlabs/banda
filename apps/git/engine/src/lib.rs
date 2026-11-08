@@ -190,11 +190,13 @@ impl Module for Git {
         Self::method_kind(method)
     }
 
-    /// From now on, it keeps a checkpoint as each turn begins and ends,
-    /// before the turn's Harness is asked anything.
+    /// It keeps a checkpoint as each turn begins and ends, before the
+    /// turn's Harness is asked anything, from where it last heard: a turn
+    /// that ended as the engine stopped gets its "after" as it starts
+    /// again.
     async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
-        let heard = project.react(project.at().await?, checkpoint::heard());
-        tokio::spawn(checkpoint::follow(heard));
+        let heard = project.listen(checkpoint::LISTENER, checkpoint::heard());
+        tokio::spawn(checkpoint::follow(heard.await?));
         Ok(())
     }
 

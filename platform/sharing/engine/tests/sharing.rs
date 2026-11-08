@@ -7,6 +7,7 @@ use banda_kernel::{CommandId, Kernel, Participant, PersonId, ProjectId};
 use banda_sharing::Post;
 use banda_sharing::{Never, Sharing};
 use serde_json::{Value, json};
+use std::future::Future;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -229,6 +230,107 @@ async fn a_problem_goes_once_a_day_from_the_host_while_problems_are_shared() {
             .iter()
             .all(|one| !one["about"].as_str().unwrap().contains("Baz"))
     );
+}
+
+/// Runs one life of the engine, `run`, on a runtime of its own: as it
+/// ends, every task the engine spawned goes, as in a crash, and the next
+/// life opens the machine's Project once nothing holds it.
+fn life<T>(root: &Path, run: impl Future<Output = T>) -> T {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let ended = runtime.block_on(run);
+    drop(runtime);
+    let lock = root.join("state/machine/project.lock");
+    for _ in 0..500 {
+        if std::fs::File::open(&lock).is_ok_and(|file| file.try_lock().is_ok()) {
+            return ended;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("the machine's Project was never let go");
+}
+
+/// The next post, within five seconds.
+async fn next_post(posts: &mut Posts) -> Posted {
+    let within = std::time::Duration::from_secs(5);
+    let next = tokio::time::timeout(within, posts.recv()).await;
+    next.expect("nothing was posted").unwrap()
+}
+
+/// Whether every event kept went.
+fn all_sent(sent: &Value) -> bool {
+    (sent.as_array().unwrap().iter()).all(|one| one["sent"].is_number())
+}
+
+/// What sharing hears and what waits outlive the engine: a Problem
+/// recorded while sharing did not run is made once it runs again, and
+/// an event that waited in sharing's own outbox, from before the kernel
+/// kept one, is queued once and goes first (ADR 0082, A5).
+#[test]
+fn what_was_heard_or_waited_before_a_restart_goes_once_after() {
+    let root = tempfile::tempdir().unwrap();
+    let root = root.path();
+    let owner = PersonId::new();
+    share(root, "problems = true\n");
+    let id = life(root, async {
+        let (kernel, _) = sending(root, owner, None).await;
+        state(&kernel, owner).await["id"].clone()
+    });
+
+    // Sharing gone, a Problem is recorded.
+    life(root, async {
+        let kernel = Kernel::builder(root.join("projects"), root.join("data"), owner)
+            .machine(root.join("state/machine"))
+            .module(banda_problems::Problems::new(
+                root.join("state/problems"),
+                root.join("state/logs"),
+            ))
+            .open()
+            .await
+            .unwrap();
+        record(&kernel, owner, "Tabs").await;
+    });
+    // And one event waits in sharing's own outbox, as before the kernel's.
+    let old = json!({ "event": "$exception", "distinct_id": id, "properties": { "old": true } });
+    rusqlite::Connection::open(root.join("state/machine/project.sqlite3"))
+        .unwrap()
+        .execute_batch(&format!(
+            "DELETE FROM sharing_carried;
+             INSERT INTO sharing_sent (event, about, json, made)
+             VALUES ('$exception', 'waited', '{old}', {});",
+            banda_kernel::now_ms()
+        ))
+        .unwrap();
+
+    life(root, async {
+        let (kernel, mut posts) = sending(root, owner, None).await;
+        let waited = next_post(&mut posts).await;
+        assert_eq!(waited.event["properties"]["old"], true);
+        waited.took();
+        let heard = next_post(&mut posts).await;
+        let frames = &heard.event["properties"]["$exception_list"][0]["stacktrace"];
+        assert_eq!(frames["frames"][0]["function"], "Tabs");
+        heard.took();
+        for _ in 0..200 {
+            if all_sent(&state(&kernel, owner).await["sent"]) {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        panic!("what was posted was not kept as sent");
+    });
+
+    // Again, nothing is made or sent twice.
+    life(root, async {
+        let (kernel, mut posts) = sending(root, owner, None).await;
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert!(posts.try_recv().is_err(), "nothing posted again");
+        let sent = state(&kernel, owner).await["sent"].clone();
+        assert_eq!(sent.as_array().unwrap().len(), 2);
+        assert!(all_sent(&sent));
+    });
 }
 
 #[tokio::test]

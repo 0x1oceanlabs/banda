@@ -130,6 +130,19 @@ ALTER TABLE kernel_receipts ADD COLUMN params TEXT;
 ALTER TABLE kernel_receipts ADD COLUMN seq INTEGER;
 ALTER TABLE kernel_receipts ADD COLUMN answered INTEGER NOT NULL DEFAULT 1;
 "#,
+    // How far each durable listener has heard this store's log, kept
+    // beside it (ADR 0082, decision 6): `listener` is `<module>.<name>`,
+    // with `@<Project>` for a Project's module that hears this machine's
+    // log, and `source_scope` the scope whose log it is (`cursors.rs`).
+    r#"
+CREATE TABLE kernel_cursors (
+    listener TEXT NOT NULL,
+    source_scope TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (listener, source_scope)
+);
+"#,
 ];
 
 type Job = Box<dyn FnOnce(&mut Connection) + Send>;
@@ -252,6 +265,17 @@ impl Tx<'_> {
         )?;
         self.enqueued = true;
         Ok(())
+    }
+
+    /// Acks the fact `ack` names, which one of this module's listeners
+    /// heard ([`Listener::ack`](crate::Listener::ack)), in this
+    /// transaction: the reaction it writes runs exactly once (ADR 0082,
+    /// decision 6). Refused as `conflict` when the fact was acked already,
+    /// so the change is not kept twice; and refused for a fact the
+    /// listener had not given, or one whose cursor is in another scope's
+    /// store.
+    pub fn ack(&self, ack: &crate::Ack) -> Result<(), Error> {
+        crate::cursors::ack(&self.kernel(), self.module, ack)
     }
 
     /// Refuses as `conflict` unless `claim` still holds its effect, which
@@ -675,6 +699,9 @@ enum Kept {
     Answered(Result<Value, Refusal>, Option<i64>),
 }
 
+/// Why a command is refused whose ID a receipt keeps for another call.
+const OTHER_CALL: &str = "This command ID was already used for another call.";
+
 /// A command's receipt: which call it answers, who made it, and a hash of
 /// its params.
 #[derive(Clone)]
@@ -705,10 +732,7 @@ impl Receipt {
     ) -> Result<Result<Begun, watch::Receiver<Ended>>, Error> {
         let answered = |answer: Result<Answer, Refusal>| Ok(Ok(Begun::Answered(answer)));
         match self.kept(sql)? {
-            Some(Kept::Other) => {
-                let other = "This command ID was already used for another call.";
-                return answered(Err(Refusal::conflict(other)));
-            }
+            Some(Kept::Other) => return answered(Err(Refusal::conflict(OTHER_CALL))),
             Some(Kept::Answered(answer, seq)) if is_kept(&answer) => {
                 return answered(answer.map(|value| Answer { value, at: seq }));
             }
@@ -724,10 +748,18 @@ impl Receipt {
             }
             None => {}
         }
+        self.insert(sql, None)?;
+        Ok(Ok(Begun::Run(Running::new(runs, self.clone()))))
+    }
+
+    /// Writes the receipt: begun, or answered with `ok` at its place in
+    /// the log.
+    fn insert(&self, sql: &Connection, ok: Option<(&Value, i64)>) -> Result<(), Error> {
+        let (answered, seq) = (ok.is_some(), ok.map(|(_, seq)| seq));
         sql.execute(
             "INSERT INTO kernel_receipts
-                 (command, module, method, author_kind, author_id, params, answered, at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7)",
+                 (command, module, method, author_kind, author_id, params, answered, ok, seq, at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 self.command,
                 self.module,
@@ -735,10 +767,13 @@ impl Receipt {
                 self.author.kind(),
                 self.author.id(),
                 self.params,
+                answered,
+                ok.map(|(value, _)| value.to_string()),
+                seq,
                 now_ms()
             ],
         )?;
-        Ok(Ok(Begun::Run(Running::new(runs, self.clone()))))
+        Ok(())
     }
 
     /// What this command's receipt holds. One for another call, by someone
@@ -835,6 +870,24 @@ impl Receipt {
             |row| row.get(0),
         );
         Ok(seq.optional()?.flatten())
+    }
+
+    /// In the transaction of a reaction across scopes
+    /// ([`Listener::once`](crate::Listener::once)): whether its command ran
+    /// already, and so writes nothing again. Another call under its ID is
+    /// refused as `conflict`.
+    pub(crate) fn ran(&self, sql: &Connection) -> Result<bool, Error> {
+        match self.kept(sql)? {
+            None => Ok(false),
+            Some(Kept::Other) => Err(Refusal::conflict(OTHER_CALL).into()),
+            Some(Kept::Begun { .. } | Kept::Answered(..)) => Ok(true),
+        }
+    }
+
+    /// Keeps, in that reaction's transaction once it wrote its change, that
+    /// its command ran, answered with nothing, at the log's head.
+    pub(crate) fn ran_now(&self, sql: &Connection) -> Result<(), Error> {
+        self.insert(sql, Some((&Value::Null, events::head(sql)?)))
     }
 
     /// Forgets the receipt, so a resend runs.
