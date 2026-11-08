@@ -1704,8 +1704,12 @@ images. Sweeps retain images still referenced by a fork after a rewind.
   Apps' and platform parts' folders by their `app.toml` through `parts`
   (`@banda/ui/testing/architecture`), which fails when it finds none. Of
   ADR 0087's checks, three ratchets that only fall hold what the Tiling
-  imports of the Window, the App strings in the Window and the Tiling,
-  and a line ceiling on the Window's root (decisions 1 and 5); a mark's
+  imports of the Window, the App strings in the Window, the Tiling and
+  the sidebar list, and a line ceiling on the Window's root (decisions 1
+  and 5); what the sidebar list's components still take as code is
+  listed, none of it a Project's or a Thread's verb, and the list pins
+  no Project and writes no `agents.toml`, as it runs the actions by id
+  with the `run` only the Window gives (decision 11); a mark's
   rank is read only to pick the loudest, on the lines listed (decision
   8); and the calls part reads no page and, of the Tiling, imports only
   its model (decision 9). The parts the Window draws on every move, each
