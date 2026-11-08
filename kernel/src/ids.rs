@@ -1,12 +1,14 @@
 //! Our IDs are the identity, and a Harness's IDs are evidence (ADR 0002,
-//! decision 7). Every ID here is a UUIDv7 made by Banda, but a command ID
-//! derived from what sends it, a UUIDv5 ([`CommandId::derive`]).
+//! decision 7). An ID Banda makes is a UUIDv7, except a derived one, a
+//! UUIDv5: a command ID derived from what sends it ([`CommandId::derive`]),
+//! and what a workspaces command makes, derived from that command's ID
+//! (ADR 0088, decision 11).
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Defines an ID type: a UUIDv7 that is text in SQLite and a string on the
-/// wire. A module uses it for its own IDs. The crate that uses it depends on
+/// Defines an ID type: a UUID that is text in SQLite and a string on the
+/// wire, and that `new()` makes as a UUIDv7. A module uses it for its own IDs. The crate that uses it depends on
 /// `serde`, `ts-rs`, `uuid` and `rusqlite`. Its JSON Schema, for a tool's
 /// params, is a string. Pass `export_to = "<dir>/"` to
 /// put its TypeScript type in a module's folder.
