@@ -14,8 +14,6 @@ import { GripHorizontalIcon, PlusIcon, XIcon } from "lucide-react"
 import { Button } from "@banda/ui/components/button"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { DEFAULT_OVERVIEW } from "@banda/contract/look"
-import type { Listed } from "@banda/ui/pane"
-import type { Chime } from "@banda/ui/sound"
 import { labelOf, useSaid } from "../registry"
 import { workspaceTo } from "./arrange"
 import { ThreadMark } from "@banda/ui/components/banda-mark"
@@ -23,6 +21,7 @@ import { moveOf, useLookColumns, useLookOverview } from "../look"
 import { Moving } from "../motion"
 import { followMoves, moved } from "@banda/ui/lib/frames"
 import { fit, ROW } from "./fit"
+import { type Listing, useShown } from "./listing"
 import {
   drawnColumns,
   heightAt,
@@ -36,7 +35,6 @@ import {
 } from "./layout"
 import {
   type Direction,
-  type Entry,
   find,
   focused,
   groupAttributes,
@@ -126,8 +124,7 @@ export function Overview({
   onExited,
   workspaces,
   projectOf,
-  listed,
-  called,
+  listing,
   frame,
   onPick,
   onArrow,
@@ -139,10 +136,9 @@ export function Overview({
   onExited: () => void
   workspaces: Workspaces
   projectOf: (project: ProjectId) => ProjectSummary | undefined
-  /** The Thread a Pane shows, as its module lists it, if it shows one. */
-  listed: (entry: Entry) => Listed | undefined
-  /** How the Thread a Pane shows calls the Person, if it does. */
-  called: (entry: Entry) => Chime | undefined
+  /** The Thread each Pane shows, as its module lists it, and how it
+   * calls the Person. */
+  listing: Listing
   frame: Pick<Frame, "arrange" | "focus" | "close">
   /** Puts the focus on a Pane, and goes to its workspace. */
   onPick: (entry: string) => void
@@ -658,8 +654,7 @@ export function Overview({
                       zoom={zoom}
                       screen={screen}
                       projectOf={projectOf}
-                      listed={listed}
-                      called={called}
+                      listing={listing}
                       onClosePane={frame.close}
                       onPick={(entry) => {
                         onPick(entry)
@@ -714,8 +709,7 @@ function Row({
   zoom,
   screen,
   projectOf,
-  listed,
-  called,
+  listing,
   onPick,
   onClosePane,
   onGo,
@@ -732,8 +726,7 @@ function Row({
   zoom: number
   screen: Screen
   projectOf: (project: ProjectId) => ProjectSummary | undefined
-  listed: (entry: Entry) => Listed | undefined
-  called: (entry: Entry) => Chime | undefined
+  listing: Listing
   onPick: (entry: string) => void
   /** Closes a Pane, as Alt+W does: a middle click on it, or its cross. */
   onClosePane: (entry: string) => void
@@ -741,6 +734,7 @@ function Row({
 }) {
   const closeTitle = useKeyLabel()("pane.close", "Close")
   const said = useSaid()
+  const { listed, called } = useShown(listing, workspace)
   const empty = workspace.columns.length === 0
   const scale = empty ? zoom : fit.zoom
   return (

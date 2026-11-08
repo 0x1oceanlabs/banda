@@ -1618,7 +1618,9 @@ images. Sweeps retain images still referenced by a fork after a rewind.
   and a line ceiling on the Window's root (decisions 1 and 5); a mark's
   rank is read only to pick the loudest, on the lines listed (decision
   8); and the calls part reads no page and, of the Tiling, imports only
-  its model (decision 9).
+  its model (decision 9). The parts the Window draws on every move, each
+  Tile and its Pane, each Strip and the widgets, stay memoized (ADR 0088,
+  decision 7).
 - **Module tests** run through the module's interface: commands go in and
   events come out. Nothing past the interface is mocked.
 - **Checkpoints** (ADR 0014, decision 3). With `BANDA_CHECKPOINTS` set,

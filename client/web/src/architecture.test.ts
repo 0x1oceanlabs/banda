@@ -22,6 +22,9 @@
  *   and no list sorts by it.
  * - The calls part reads no page, and of the Tiling only its model (ADR
  *   0087, decision 9).
+ * - What the Window draws on every move it makes is drawn again only as
+ *   its own props change (ADR 0088, decision 7): the parts listed stay
+ *   memoized, and the list only grows.
  */
 import { existsSync, readFileSync } from "node:fs"
 import { join, relative } from "node:path"
@@ -183,7 +186,7 @@ test("a string that no longer names an App leaves the list", () => {
  * lowers it; the room lets PRs in flight that each cut a few lines leave
  * it alone.
  */
-const WINDOW_LINES = 1401
+const WINDOW_LINES = 1369
 const SLACK = 20
 
 test("the Window's root keeps under its ceiling, and the ceiling follows it down", () => {
@@ -194,6 +197,36 @@ test("the Window's root keeps under its ceiling, and the ceiling follows it down
     WINDOW_LINES - lines,
     `Shell.tsx has ${lines} lines: lower WINDOW_LINES to it`
   ).toBeLessThanOrEqual(SLACK)
+})
+
+/**
+ * The parts the Window draws on every move, which a move leaves alone (ADR
+ * 0088, decision 7): each Tile and the Pane in it, each Strip, the
+ * Watches, the Banda menu, the drawer and the bar's widgets, the
+ * window's own and each module's, stay memoized, each by what its file
+ * says. Their props stay steady too, which the motion numbers hold: the
+ * Tiles React draws again for a key (motion.spec.ts). The list only
+ * grows.
+ */
+const MEMOIZED = [
+  "web/src/tiling/PaneFrame.tsx: export const PaneFrame = memo(",
+  "web/src/tiling/Strip.tsx: export const Strip = memo(",
+  "web/src/bar/Watches.tsx: export const Watches = memo(",
+  "web/src/menu/BandaMenu.tsx: export const BandaMenu = memo(",
+  "web/src/window/Drawer.tsx: export const Drawer = memo(",
+  'web/src/bar/Widgets.tsx: "sidebar.counts": memo(Counts)',
+  'web/src/bar/Widgets.tsx: "workspaces.aside": memo(',
+  "web/src/bar/Widgets.tsx: const Widget = memoOf(",
+  "web/src/registry.tsx: kind: { ...kind, Pane: memoOf(kind.Pane) }",
+]
+
+test("the parts the Window draws on every move stay memoized", () => {
+  const lost = MEMOIZED.filter((each) => {
+    const at = each.indexOf(": ")
+    const text = readFileSync(join(app, each.slice(0, at)), "utf8")
+    return !text.includes(each.slice(at + 2))
+  })
+  expect(lost).toEqual([])
 })
 
 /** The `[unstable]` marks a module's manifest names. */

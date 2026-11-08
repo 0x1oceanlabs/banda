@@ -2,11 +2,12 @@ import type { ProjectId } from "@banda/contract"
 import type { Problem } from "@banda/contract/look"
 import type { Aside } from "@banda/contract/workspaces"
 import type { WidgetProps } from "@banda/ui/module"
-import type { Listed, Lists, PaneState } from "@banda/ui/pane"
-import { type ComponentType, type ReactNode, useMemo } from "react"
+import type { PaneState } from "@banda/ui/pane"
+import { type ComponentType, memo, type ReactNode, useMemo } from "react"
 import { useLookBar, useLookSettings } from "../look"
-import { runs, widgets } from "../registry"
+import { memoOf, runs, widgets } from "../registry"
 import { AsidePill } from "../safe/AsidePill"
+import type { Entry } from "../tiling/model"
 import { Counts } from "./Counts"
 import type { Layout } from "./arrange"
 import { type Known, PARTS, type Part, placed, WORKSPACES } from "./placed"
@@ -16,15 +17,14 @@ import { type Known, PARTS, type Part, placed, WORKSPACES } from "./placed"
 export type Drawn = { id: string; node: ReactNode }
 
 /** What the window's own widgets are given besides a module's, as the
- * window's own actions are (`Action<Context>`). */
+ * window's own actions are (`Action<Context>`). What every module lists
+ * they read from the Window's stores. */
 export type OwnProps = WidgetProps & {
-  /** What every module lists now, as the sidebar shows it. */
-  lists: Lists
   /** Whether the sidebar shows. */
   sidebarShown: boolean
-  /** The Thread in front, an Agent's, which the counts name while the
-   * sidebar is hidden (ADR 0065, decision 9). */
-  current?: Listed
+  /** The Pane in focus, whose Thread, an Agent's, the counts name while
+   * the sidebar is hidden (ADR 0065, decision 9). */
+  ahead?: Entry
   /** Opens a Pane as a row of the sidebar does. */
   onOpen: (project: ProjectId, pane: PaneState) => void
   /** The workspaces set aside, while they are (ADR 0039, decision 2). */
@@ -32,11 +32,13 @@ export type OwnProps = WidgetProps & {
 }
 
 /** The window's own widgets, by id, which stand on the bar as a module's
- * do. */
+ * do. Each is drawn again only as its own props change (ADR 0088,
+ * decision 7), as a module's is. */
 const OWN: Readonly<Record<string, ComponentType<OwnProps>>> = {
-  "sidebar.counts": Counts,
-  "workspaces.aside": ({ engine, aside }) =>
-    aside && <AsidePill engine={engine} aside={aside} />,
+  "sidebar.counts": memo(Counts),
+  "workspaces.aside": memo(({ engine, aside }: OwnProps) =>
+    aside ? <AsidePill engine={engine} aside={aside} /> : null
+  ),
 }
 
 /**
@@ -62,14 +64,23 @@ export function useWidgets(
     return placed(bar, known, settings)
   }, [bar, running, settings])
   const drawn = {} as Record<Part, Drawn[]>
+  const { engine, projects, project, window } = props
   for (const part of PARTS) {
     drawn[part] = parts[part].map((id) => {
       if (id === WORKSPACES) return { id, node: null }
-      // A module's widget takes what it knows of the window's own props.
-      const Widget = Object.hasOwn(OWN, id)
-        ? OWN[id]!
-        : widgets.get(id)!.widget.Widget
-      return { id, node: <Widget {...props} /> }
+      const Own = OWN[id]
+      if (Object.hasOwn(OWN, id) && Own) return { id, node: <Own {...props} /> }
+      // A module's widget is given only what a module's is.
+      const Widget = memoOf(widgets.get(id)!.widget.Widget)
+      const node = (
+        <Widget
+          engine={engine}
+          projects={projects}
+          project={project}
+          window={window}
+        />
+      )
+      return { id, node }
     })
   }
   const listed = useMemo(

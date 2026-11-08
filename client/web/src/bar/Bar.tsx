@@ -8,9 +8,9 @@ import {
 import { Button } from "@banda/ui/components/button"
 import { Spinner } from "@banda/ui/components/spinner"
 import { cn } from "@banda/ui/lib/utils"
-import { type Attention, QUIET } from "@banda/ui/pane"
 import { PlusIcon, TriangleAlertIcon } from "lucide-react"
 import {
+  type ReactNode,
   type RefObject,
   useCallback,
   useEffect,
@@ -20,6 +20,7 @@ import {
   useState,
 } from "react"
 import type { Problem, Workspaces } from "@banda/contract/look"
+import { useCalls, useItems, workingIn } from "../calls/stores"
 import { useLookBar, useLookProblems } from "../look"
 import type { InBar } from "../tiling/model"
 import type { ProjectSummary } from "@banda/contract"
@@ -28,7 +29,6 @@ import { ProjectSign } from "@banda/ui/components/project-sign"
 /** A workspace as the bar shows it: a Project's by its badge, with a dot
  * while one of that Project's Threads calls (ADR 0065, decision 9). */
 export type BarWorkspace = InBar & { owner?: ProjectSummary; calls?: boolean }
-import { type MapColumn, WorkspaceMap } from "./Map"
 import { BarMotion } from "./motion"
 import { type Layout, moved, same, written } from "./arrange"
 import { PARTS, type Part, WORKSPACES } from "./placed"
@@ -46,10 +46,11 @@ import { useKeyLabel, useHoldsMod } from "@banda/ui/hooks/use-key-of"
  * left, in the middle, centred on the window whatever the sides hold, and
  * on the right before the engine's connection, as the look's `[bar]` lists
  * them (ADR 0024). With the mod held, the mouse moves one (ADR 0064).
+ * What calls, for its Mark, and how many Agents work, it reads from the
+ * Window's stores.
  */
 export function Bar({
   status,
-  attention = QUIET,
   workspaces,
   current,
   map,
@@ -60,17 +61,15 @@ export function Bar({
   widgets,
   listed,
   onArrange,
-  working = 0,
 }: {
   status: Status
-  /** What the modules' work calls the Person for, for the mark to show. */
-  attention?: Attention
   /** The workspaces it shows: those with Panes, the current one, and the
    * empty one at the bottom. */
   workspaces: readonly BarWorkspace[]
   current: number
-  /** The current workspace's columns, small, by their Groups (ADR 0065). */
-  map?: readonly MapColumn[]
+  /** The current workspace's columns, small, by their Groups (ADR 0065):
+   * its `WorkspaceMap`. */
+  map?: ReactNode
   sidebar: boolean
   onSidebar: () => void
   onPick: (index: number) => void
@@ -83,10 +82,12 @@ export function Bar({
   listed?: Layout
   /** Writes `[bar]`'s lists once a widget moved with the mod. */
   onArrange?: (bar: Layout) => void
-  /** How many Threads work now, which a restart into an update stops. */
-  working?: number
 }) {
   const keyFor = useKeyLabel()
+  // What the modules' work calls the Person for, for the mark to show,
+  // and how many Threads work now, which a restart into an update stops.
+  const attention = useCalls((calls) => calls.attention)
+  const working = useItems(workingIn)
   const mark = loudest([attention.mark, markOf(status)])
   const { waiting } = attention
   const words =
@@ -139,7 +140,7 @@ export function Bar({
               current={current}
               onPick={onPick}
             />
-            {map && <WorkspaceMap columns={map} />}
+            {map}
           </>
         ) : (
           nodes.get(id)

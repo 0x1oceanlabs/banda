@@ -1,27 +1,27 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useState } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
-import type { Attention, Listed, Lists, Report, Watch } from "@banda/ui/pane"
+import type { Listed, Report, Watch } from "@banda/ui/pane"
+import { type Stores, takeAttention, takeLists } from "../calls/stores"
 import { runs, watches } from "../registry"
 import { combine, folded } from "./attention"
 
 /**
  * Draws every module's Watch for every Project, while the engine runs the
- * module, and says what they call the Person for together and what each
- * Project lists. It shows nothing: the bar and the sidebar show what it
- * says, and the notifications module tells of what calls (ADR 0056).
+ * module, and keeps what they call the Person for together and what each
+ * Project lists in the Window's stores. It shows nothing: the bar and the
+ * sidebar show what it says, and the notifications module tells of what
+ * calls (ADR 0056). Drawn again only as its own props change.
  */
-export function Watches({
+export const Watches = memo(function Watches({
   engine,
   modules,
   projects,
-  onChange,
-  onLists,
+  stores,
 }: {
   engine: Engine
   modules: readonly string[]
   projects: ProjectSummary[]
-  onChange: (attention: Attention) => void
-  onLists: (lists: Lists) => void
+  stores: Stores
 }) {
   const [reports, setReports] = useState<Record<string, Heard>>({})
   const hear = useCallback((key: string, heard?: Heard) => {
@@ -40,7 +40,10 @@ export function Watches({
     () => combine(Object.values(reports)),
     [reports]
   )
-  useEffect(() => onChange({ mark, waiting }), [onChange, mark, waiting])
+  useEffect(
+    () => takeAttention(stores, { mark, waiting }),
+    [stores, mark, waiting]
+  )
   const lists = useMemo(() => {
     const lists: Record<ProjectId, readonly Listed[]> = {}
     for (const { project, listed } of Object.values(reports)) {
@@ -49,7 +52,7 @@ export function Watches({
     for (const project in lists) lists[project] = folded(lists[project]!)
     return lists
   }, [reports])
-  useEffect(() => onLists(lists), [onLists, lists])
+  useEffect(() => takeLists(stores, lists), [stores, lists])
 
   return watches
     .filter(({ module }) => runs(module, modules))
@@ -68,7 +71,7 @@ export function Watches({
         )
       })
     )
-}
+})
 
 /** What one Watch said about one Project. */
 type Heard = Report & { project: ProjectId }

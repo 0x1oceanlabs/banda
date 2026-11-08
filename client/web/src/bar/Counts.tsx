@@ -12,9 +12,12 @@ import {
 } from "@banda/ui/components/dropdown-menu"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import { cn } from "@banda/ui/lib/utils"
-import type { Listed, Lists, PaneState } from "@banda/ui/pane"
+import type { Lists, PaneState } from "@banda/ui/pane"
 import { useMemo, useState } from "react"
+import { all, listedIn, useItems } from "../calls/stores"
 import { useLookSidebar } from "../look"
+import { showsOf } from "../registry"
+import type { Entry } from "../tiling/model"
 import { ThreadMark, toneOf } from "@banda/ui/components/banda-mark"
 import { sidebarOrder } from "../sidebar/order"
 import { Status } from "../sidebar/Row"
@@ -42,23 +45,26 @@ type Open = (project: ProjectId, pane: PaneState) => void
  * The sidebar's counts in the bar's middle (ADR 0035): who waits for the
  * Person and who works, each by its mark, as `[bar]` in `sidebar.toml`
  * says. A click lists them; a row opens its Thread, as the sidebar's does.
+ * What every module lists it reads from the Window's items.
  */
 export function Counts({
-  lists,
   projects,
   sidebarShown,
-  current,
+  ahead,
   onOpen,
 }: {
-  lists: Lists
   projects: readonly ProjectSummary[]
   /** Whether the sidebar shows, and with it the same. */
   sidebarShown: boolean
-  /** The Agent's Thread in front, named while the sidebar is hidden: the
-   * counts are then the switcher (ADR 0065, decision 9). */
-  current?: Listed
+  /** The Pane in front: its Thread, an Agent's, is named while the
+   * sidebar is hidden, as the counts are then the switcher (ADR 0065,
+   * decision 9). */
+  ahead?: Entry
   onOpen: Open
 }) {
+  const lists: Lists = useItems(all)
+  const aheadRow = ahead && listedIn(lists, ahead, showsOf)
+  const current = aheadRow?.agent !== undefined ? aheadRow : undefined
   const settings = useLookSidebar().bar
   const snoozes = useSnoozes(lists)
   const tallies = useMemo(
