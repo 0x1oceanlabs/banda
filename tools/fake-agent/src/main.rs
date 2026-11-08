@@ -19,6 +19,8 @@
 //! - `quit`: ends the turn as cancelled, though nobody stopped it.
 //! - `slow`: replies in forty pieces, fifty milliseconds apart, and stops
 //!   early when cancelled.
+//! - `pages`: works on until a file `go` is in the session's folder, takes
+//!   it, then says paragraphs `page 0 of 30` on; `pages 2` says two.
 //! - `wait`: says it waits, then waits for a message sent into its turn
 //!   (`_session/steering`) and replies to that, or stops when cancelled.
 //!   A message sent into any other turn is taken and goes unanswered.
@@ -525,6 +527,32 @@ async fn turn(
             )?;
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
+        return Ok(StopReason::EndTurn);
+    }
+    if words.contains("pages") {
+        // A long run that ends while its Person is away (see the top).
+        let go = fake.setup(&session).folder.join("go");
+        while !go.exists() {
+            if fake.cancelled(&session) {
+                return Ok(StopReason::Cancelled);
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let _ = std::fs::remove_file(&go);
+        let count = words
+            .split_whitespace()
+            .skip_while(|word| *word != "pages")
+            .nth(1)
+            .and_then(|word| word.parse().ok())
+            .unwrap_or(30);
+        let pages: Vec<String> = (0..count)
+            .map(|at| format!("page {at} of {count}"))
+            .collect();
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text(&pages.join("\n\n"))),
+        )?;
         return Ok(StopReason::EndTurn);
     }
     if words.contains("quit") {

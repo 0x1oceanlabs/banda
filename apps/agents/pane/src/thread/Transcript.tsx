@@ -33,7 +33,7 @@ import { awaiting, thoughtTimes, timeline } from "./timeline"
 import { key, LineOf } from "../lines"
 import type { LineFacts } from "../lines/types"
 import { Queue, type QueueActions } from "./Queue"
-import { ScrollPlace } from "./ScrollPlace"
+import { PEEK, ScrollPlace } from "./ScrollPlace"
 import { Minimap } from "./Minimap"
 import { useThreadAround } from "./context"
 
@@ -110,7 +110,11 @@ export function Transcript({
       : []
   )
   return (
-    <MessageScrollerProvider autoScroll defaultScrollPosition="end">
+    <MessageScrollerProvider
+      autoScroll
+      defaultScrollPosition="end"
+      scrollPreviousItemPeek={PEEK}
+    >
       <MessageScroller>
         <MessageScrollerViewport
           ref={viewport}
@@ -183,7 +187,7 @@ export function Transcript({
         </MessageScrollerViewport>
         <ScrollToEnd queued={waits.length} forYou={forYou} />
         <Minimap messages={messages} />
-        <ScrollPlace thread={thread} viewport={viewport} />
+        <ScrollPlace thread={thread} viewport={viewport} last={last?.id} />
       </MessageScroller>
     </MessageScrollerProvider>
   )
