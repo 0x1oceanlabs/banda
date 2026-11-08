@@ -78,7 +78,9 @@ export type Note = { version: string; text: string }
  * (`own`), which may differ; away, and tried again soon; stopped as asked
  * there, and started again only when the page asks (`hostStart`); or
  * refused, and tried again every ten minutes or when the page asks. `why`
- * is the window's words, never what the other machine said.
+ * is the window's words, never what the other machine said, and names no
+ * machine: the page puts the machine's name before it (ADR 0095, decision
+ * 2).
  */
 export type HostState = { name: string } & (
   | { state: "connecting" }
@@ -93,6 +95,36 @@ export type HostState = { name: string } & (
   | { state: "stopped" }
   | { state: "refused"; why: string }
 )
+
+/** A machine of `hosts.toml`: this device's key for it, where ssh goes,
+ * and the `banda` it runs there, or none to find this build's own there
+ * (ADR 0081, decision 4; ADR 0095, decision 2). */
+export type HostEntry = { name: string; ssh: string; banda?: string }
+
+/**
+ * What Test, and Add's Connect, find at an address over ssh, starting
+ * nothing there (ADR 0095, decision 9; #837): found, with what its `uname`
+ * says the machine is, the `banda` found there and this window's own, and
+ * its engine while one runs, by what it says of itself (`banda status`),
+ * whether it speaks this window's protocol; waiting for the Person to
+ * sign in to Tailscale at `url`, Test asked again once they have; away; or
+ * refused. `why` is as a host's state's.
+ */
+export type HostTest =
+  | {
+      state: "found"
+      system: "Linux" | "macOS" | null
+      banda: { build: string | null; version: string | null }
+      own: { build: string | null; version: string | null }
+      engine: {
+        build: string | null
+        version: string | null
+        speaks: boolean
+      } | null
+    }
+  | { state: "signin"; url: string }
+  | { state: "away"; why: string }
+  | { state: "refused"; why: string }
 
 /** The page's route that draws Pane `pane` alone, in a window of its
  * own (ADR 0025, decision 9). */
@@ -156,6 +188,28 @@ export const BRIDGE = bridge({
   /** Starts host `name` again when its engine is stopped there or it is
    * refused; fails for one not in `hosts.toml`. */
   hostStart: invoke<[name: string]>(),
+  /** Adds a machine to `hosts.toml`, its comments and other hosts kept,
+   * and reaches it at once: `name` is made from `ssh` when not given, and
+   * an empty `banda` is none. The entry written; fails for one Banda
+   * refuses, or whose name or address is there already. */
+  hostAdd: invoke<
+    [machine: { name?: string; ssh: string; banda?: string }],
+    HostEntry
+  >(),
+  /** Takes host `name` out of `hosts.toml`, the rest kept, and ends its
+   * ssh; its Projects stay there. */
+  hostRemove: invoke<[name: string]>(),
+  /** What is at `ssh`, with `banda` or this build's own, starting nothing
+   * there: Test connection, and Add's Connect. An empty `banda` is none. */
+  hostTest: invoke<[ssh: string, banda: string | null], HostTest>(),
+  /** Stop Banda on host `name`: its own `banda stop` there, which stops
+   * its engine; the host shows stopped, live or away before, and nothing
+   * starts it until `hostStart`. `working` while Agents work there and
+   * `force` is not set: nothing was stopped, and the page asks first. */
+  hostStop: invoke<[name: string, force: boolean], "stopped" | "working">(),
+  /** The Hosts of `~/.ssh/config` to suggest in Add a machine: no
+   * pattern, none `hosts.toml` reaches already. */
+  sshSuggestions: invoke<[], string[]>(),
   /** `banda look --follow --with-parent`, as the desktop hears it. */
   look: {
     /** The last look; none before the first. */
