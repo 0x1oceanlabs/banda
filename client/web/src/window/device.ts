@@ -2,9 +2,10 @@
  * The device as the Window reaches it: the Window's part of what the
  * desktop gives the page on `window.banda` (`host.ts`, ADR 0028), and its
  * only way there. Nothing else in the Window or the Tiling names
- * `window.banda` (architecture.test.ts); W0 makes this the device port's
- * desktop adapter (ADR 0089, decision 2). Without the desktop, as in a
- * page of its own, each part does nothing, and what answers says so.
+ * `window.banda` (architecture.test.ts). W0 replaces it with the device
+ * port, whose desktop adapter, `boot/desktop.ts`, is then the only reader
+ * (ADR 0089, decisions 2 and 11). Without the desktop, as in a page of
+ * its own, each part does nothing, and what answers says so.
  */
 import type { Host, PoppedAsk } from "../host"
 
@@ -22,7 +23,9 @@ export const device = {
     /** Closes Pane `pane`'s window: it is back in its place. */
     close: (pane: string): void => desktop()?.popped.close(pane),
     /** Hands `take` the Panes in windows of their own now, then each time
-     * they change, until it is stopped. */
+     * they change, until it is stopped. Unlike `follow` in `host.ts`, a
+     * first answer that comes after a change is still taken, as the
+     * Window has always taken it. */
     follow: (take: (panes: ReadonlySet<string>) => void) => {
       const popped = desktop()?.popped
       if (!popped) return undefined
@@ -49,6 +52,18 @@ export const device = {
      * until it is stopped. */
     listen: (listener: (route: string) => void) =>
       desktop()?.menu.listen(listener),
+  },
+  /** `sidebar.toml`, which the desktop writes (ADR 0008). */
+  sidebar: {
+    /** Arranges the sidebar by the preset `name`: the desktop writes it
+     * into the file, and the arrangement comes back with the look. */
+    preset: (name: string): void => {
+      desktop()
+        ?.sidebar.preset(name)
+        .catch((error: unknown) => {
+          console.error("banda: the sidebar's preset was not written", error)
+        })
+    },
   },
   /** The settings' files (ADR 0016). */
   settings: {

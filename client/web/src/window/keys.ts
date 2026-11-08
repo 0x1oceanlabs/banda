@@ -14,13 +14,16 @@ import type { Action } from "@banda/ui/module"
 import { IN_PROGRAM } from "@banda/ui/pane"
 import {
   actionFor,
+  type Held,
   inScope,
   keysInForce,
   pressFor,
   withKeys,
 } from "../actions/actions"
 import { useLookKeys } from "../look"
-import { ACTIONS, heldBy, type Shell as Parts } from "./actions"
+import { modules } from "../modules"
+import { windowModule } from "../registry"
+import { ACTIONS, type Shell as Parts } from "./actions"
 
 /**
  * The actions with the keys in force, as the look makes them (ADR 0071,
@@ -44,6 +47,19 @@ export function useKeys() {
   }, [said])
   const own = useCallback(() => setShipped(saidNow.current), [])
   return { mod, binds: inForce.binds, keyed, keys, own }
+}
+
+/** The scopes whose keys work with the mod still held too, as the
+ * launcher's letters after Alt+N, with the mod in force (`pressFor`). */
+const HELD_SCOPES: ReadonlySet<string> = new Set(
+  [...modules, windowModule]
+    .flatMap((module) => module.scopes)
+    .filter((scope) => scope.modHeld)
+    .map((scope) => scope.id)
+)
+
+function heldBy(mod: Mod): Held {
+  return { mod, scopes: HELD_SCOPES }
 }
 
 /** The presses the window made to hand a key on, which it leaves alone. */

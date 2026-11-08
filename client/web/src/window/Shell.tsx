@@ -73,7 +73,6 @@ import {
 } from "../registry"
 import { Edge } from "../sidebar/Edge"
 import { Sidebar } from "../sidebar/Sidebar"
-import { pickPreset } from "../sidebar/settings"
 import { SnoozePicker, type Snoozing } from "../sidebar/SnoozePicker"
 import { QuitDialog } from "./Quit"
 import {
@@ -928,7 +927,7 @@ export function Shell({
         case "wake":
           return wakeThread(row.project, row.listed.id)
         case "preset":
-          return pickPreset(row.name)
+          return device.sidebar.preset(row.name)
         case "found":
           return row.row.run(parts)
       }

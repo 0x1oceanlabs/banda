@@ -141,46 +141,61 @@ test("the calls part reads no layout, and of the Tiling only its model", () => {
 })
 
 /**
- * Where the page reads the desktop's bridge, `window.banda`, by file, with
- * how many places (`desktopReads`). The Window and the Tiling read it only
- * in the Window's device part (B4b), which W0 makes the device port's
- * desktop adapter (ADR 0089, decision 2); the rest are listed here until
- * the port takes them, and at last only `boot/desktop.ts` reads it
- * (decision 11). None joins the list, and a place that goes leaves it.
+ * Where the page reads the desktop's bridge, `window.banda`, by file from
+ * the repository's root, with how many places (`desktopReads`): this
+ * page's code, `@banda/ui`'s and each module's Pane part. The Window and
+ * the Tiling read it only in the Window's device part (B4b); the rest are
+ * listed here until W0's device port takes them, and at last only its
+ * desktop adapter, `boot/desktop.ts`, reads it (ADR 0089, decisions 2 and
+ * 11). `hostOf` in `@banda/ui/desktop` is one place: the Pane parts that
+ * reach their part of the bridge through it are counted there. None joins
+ * the list, and a place that goes leaves it.
  */
-const DEVICE = "web/src/window/device.ts"
+const DEVICE = "client/web/src/window/device.ts"
 const DESKTOP_READS: Record<string, number> = {
-  "web/src/actions/actions.ts": 1,
-  "web/src/bar/Update.tsx": 1,
-  "web/src/main.tsx": 1,
-  "web/src/menu/browse.ts": 1,
-  "web/src/settings/Agents.tsx": 3,
-  "web/src/settings/BrowserSites.tsx": 1,
-  "web/src/settings/General.tsx": 1,
-  "web/src/settings/Keys.tsx": 2,
-  "web/src/settings/Mod.tsx": 1,
-  "web/src/settings/ProblemsSettings.tsx": 1,
-  "web/src/settings/ProjectsSettings.tsx": 1,
-  "web/src/settings/SettingRow.tsx": 2,
-  "web/src/settings/Settings.tsx": 1,
-  "web/src/settings/ThemePicker.tsx": 1,
-  "web/src/sharing/AskToShare.tsx": 1,
-  "web/src/sidebar/Sidebar.tsx": 1,
-  "web/src/sidebar/ThemeMenu.tsx": 1,
-  "web/src/sidebar/settings.ts": 1,
-  "web/src/sidebar/write-setting.ts": 1,
+  "apps/browser/pane/src/host.ts": 1,
+  "client/ui/src/desktop.ts": 1,
+  "client/web/src/actions/actions.ts": 1,
+  "client/web/src/bar/Update.tsx": 1,
+  "client/web/src/main.tsx": 1,
+  "client/web/src/menu/browse.ts": 1,
+  "client/web/src/settings/Agents.tsx": 3,
+  "client/web/src/settings/BrowserSites.tsx": 1,
+  "client/web/src/settings/General.tsx": 1,
+  "client/web/src/settings/Keys.tsx": 2,
+  "client/web/src/settings/Mod.tsx": 1,
+  "client/web/src/settings/ProblemsSettings.tsx": 1,
+  "client/web/src/settings/ProjectsSettings.tsx": 1,
+  "client/web/src/settings/SettingRow.tsx": 2,
+  "client/web/src/settings/Settings.tsx": 1,
+  "client/web/src/settings/ThemePicker.tsx": 1,
+  "client/web/src/sharing/AskToShare.tsx": 1,
+  "client/web/src/sidebar/Sidebar.tsx": 1,
+  "client/web/src/sidebar/ThemeMenu.tsx": 1,
+  "client/web/src/sidebar/write-setting.ts": 1,
+  "platform/notifications/pane/src/desktop.ts": 1,
 }
 
+const pageCode = [
+  join(app, "web/src"),
+  join(app, "ui/src"),
+  ...[...folders.values()]
+    .map((folder) => join(folder, "pane/src"))
+    .filter((folder) => existsSync(folder)),
+]
+
 const { [DEVICE]: device, ...reading } = Object.fromEntries(
-  sources(join(app, "web/src"), { tests: false }).flatMap((file) => {
-    const count = desktopReads(readFileSync(file, "utf8"), file)
-    return count > 0 ? [[relative(app, file), count]] : []
-  })
+  pageCode
+    .flatMap((folder) => sources(folder, { tests: false }))
+    .flatMap((file) => {
+      const count = desktopReads(readFileSync(file, "utf8"), file)
+      return count > 0 ? [[relative(root, file), count]] : []
+    })
 )
 
 test("the Window and the Tiling read the desktop's bridge only in their device part", () => {
   expect(device).toBeGreaterThan(0)
-  const ours = /^web\/src\/(window|tiling)\//
+  const ours = /^client\/web\/src\/(window|tiling)\//
   expect(Object.keys(reading).filter((file) => ours.test(file))).toEqual([])
 })
 
@@ -245,7 +260,7 @@ test("a string that no longer names an App leaves the list", () => {
  * lowers it; the room lets PRs in flight that each cut a few lines leave
  * it alone.
  */
-const WINDOW_LINES = 1214
+const WINDOW_LINES = 1213
 const SLACK = 20
 
 test("the Window's root keeps under its ceiling, and the ceiling follows it down", () => {

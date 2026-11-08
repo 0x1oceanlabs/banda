@@ -65,7 +65,8 @@ import { Row } from "./Row"
 import { ThreadRows } from "../titles/ThreadMenu"
 import { TitleField } from "../titles/Title"
 import { useNaming } from "../titles/titles"
-import { pickPreset, PRESET_WORDS, type Settings } from "./settings"
+import { device } from "../window/device"
+import { PRESET_WORDS, type Settings } from "./settings"
 import { type Held, held, hold, rowKey } from "./hold"
 import { useIsArchived } from "./archived"
 import { seeWoke, snoozable } from "./snoozed"
@@ -379,7 +380,7 @@ export function Sidebar({
               <DropdownMenuLabel>How the sidebar is arranged</DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={preset}
-                onValueChange={(next: string) => pickPreset(next)}
+                onValueChange={(next: string) => device.sidebar.preset(next)}
               >
                 {presets.map(({ name, origin }) => (
                   <DropdownMenuRadioItem
