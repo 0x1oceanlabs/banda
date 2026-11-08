@@ -81,6 +81,7 @@ asked to build all of it; the rest are our defaults and stay his to change.
      while it is not focused.
 
 8. **Scrolling as in T3 Code.**
+   _Amended by [ADR 0094](0094-a-thread-opens-where-what-the-person-has-not-seen-begins.md): a Thread shows where what the Person has not seen begins, and never moves what they are reading._
    - A sent message moves near the top and the reply grows below it; the
      timeline then follows the end until the Person scrolls up.
    - The button to the end says what waits there: "2 queued", "waiting
