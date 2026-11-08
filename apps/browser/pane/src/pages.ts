@@ -8,8 +8,10 @@
  * the workspace shows of it, rounds the tile's corners and darkens as the
  * tile does. It does so on the window's clock, in each tick the Tiling
  * moves in, and once after whatever else may put its slot elsewhere; at
- * rest it costs nothing (ADR 0088, decision 3). A page whose slot is gone
- * waits out of sight until its Pane comes back, or leaves every workspace.
+ * rest it costs nothing (ADR 0088, decision 3). Its slot's new size comes
+ * from its Tile, as the resize gate lets it through (decision 5). A page
+ * whose slot is gone waits out of sight until its Pane comes back, or
+ * leaves every workspace.
  */
 import type { Dialog } from "@banda/contract/browser"
 import type { ProjectId } from "@banda/contract"
@@ -118,7 +120,8 @@ export class Page {
   private attaching: ((contents: number) => void)[] = []
   private slot: Slot | null = null
   /** The Tile of its slot, while it has one: hidden, the page waits out
-   * of sight and is not measured (ADR 0088, decision 4). */
+   * of sight and is not measured (ADR 0088, decision 4); its new size
+   * moves the page before the frame shows it (decision 5). */
   private tile: Tile | null = null
   private stopWatching = () => {}
   /** What may cut the slot: its ancestors, of which those that clip as
@@ -166,13 +169,24 @@ export class Page {
     if (this.slot?.element !== element) {
       this.clips = ancestorsOf(element, this.box.parentElement!)
       this.radius = cornerOf(element)
-      if (this.slot) sizes?.unobserve(this.slot.element)
-      sizes?.observe(element)
-      // Its Tile shown again, the page takes its slot's place in the next
-      // tick, before the frame shows it.
       this.stopWatching()
-      this.tile = tileOf(element)
-      this.stopWatching = this.tile.watch(() => following.again())
+      const tile = tileOf(element)
+      this.tile = tile
+      let { state, size } = tile.now()
+      this.stopWatching = tile.watch((now) => {
+        // Its Tile shown again, the page takes its slot's place in the next
+        // tick, before the frame shows it.
+        if (now.state !== state) {
+          ;({ state, size } = now)
+          following.again()
+          return
+        }
+        if (now.size === size) return
+        size = now.size
+        // A new size: the page takes it before the frame that laid it out
+        // shows, unless it waits out of sight.
+        if (state !== "hidden") resized()
+      })
     }
     this.slot = { element, selected }
     following.again()
@@ -184,8 +198,14 @@ export class Page {
     this.slot = null
     this.stopWatching()
     this.tile = null
-    sizes?.unobserve(element)
     following.again()
+  }
+
+  /** Its slot took another size inside its Tile, as its Pane laid its own
+   * parts out again (its tabs on the left or on top): no Configure says
+   * so, and the page takes it before the frame shows it. */
+  relaid(): void {
+    if (this.slot) resized()
   }
 
   get shown(): boolean {
@@ -251,7 +271,6 @@ export class Page {
 
   destroy(): void {
     if (this.contents !== null) byContents.delete(this.contents)
-    if (this.slot) sizes?.unobserve(this.slot.element)
     this.stopWatching()
     this.box.remove()
   }
@@ -477,15 +496,30 @@ function step(): void {
  * in it, after the overview has drawn the workspaces. */
 const following = followMoves(step)
 
-/** What else puts a slot elsewhere, once the first page is made. */
+/** A step asked for after the slots' new sizes were heard, once: it runs
+ * as the task that heard them ends, before the frame is drawn. */
+let stepping = false
+
+/** The pages take their slots' places once every Tile heard its new size,
+ * so all the reads of the page come before their writes. */
+function resized(): void {
+  if (stepping) return
+  stepping = true
+  queueMicrotask(() => {
+    stepping = false
+    step()
+  })
+}
+
+/** The window's size, heard once the first page is made. */
 let sizes: ResizeObserver | undefined
 
 /**
- * Besides the Tiling's moves, a slot goes elsewhere when it or the window
- * changes size, when what holds it scrolls, and when a box round it
- * animates, as the Drawer sliding in and Quick Look opening do. A change
- * of size is heard after layout and before paint, so the page goes with
- * its slot in the same frame.
+ * Besides the Tiling's moves and a slot's new size (`resized`), a slot
+ * goes elsewhere when the window changes size, when what holds it
+ * scrolls, and when a box round it animates, as the Drawer sliding in and
+ * Quick Look opening do. A change of size is heard after layout and
+ * before paint, so the page goes with its slot in the same frame.
  */
 function watch(layer: HTMLElement): void {
   if (sizes) return

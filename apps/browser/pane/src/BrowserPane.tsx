@@ -7,6 +7,7 @@
 import {
   type KeyboardEvent,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -422,6 +423,11 @@ function Browser({
   }, [heldIds, scope])
 
   const left = settings.tabs === "left"
+  // The tabs going to the left or back on top size the slot inside the
+  // Tile, which no Configure says: the page follows before the frame shows.
+  useLayoutEffect(() => {
+    page?.relaid()
+  }, [left, page])
   return (
     <div ref={root} className="flex h-full flex-col">
       <PaneHeader
