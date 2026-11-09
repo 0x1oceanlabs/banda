@@ -1,6 +1,6 @@
 [package]
 name = "banda-machines"
-description = "The machines module: what this machine is called and drawn by, from its machine.toml over what Banda finds, in the engine."
+description = "The machines module: what this machine is called and drawn by, from its machine.toml over what Banda finds, in the engine; and its hold that keeps it awake while its Agents work."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
