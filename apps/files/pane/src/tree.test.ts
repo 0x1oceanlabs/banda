@@ -1,6 +1,8 @@
 import type { Entry } from "@banda/contract/files"
 import { expect, test } from "vitest"
 import {
+  ahead,
+  type Expected,
   type Listed,
   matchesOf,
   merged,
@@ -107,4 +109,110 @@ test("a new thing is untitled, then untitled 2, as the names are taken", () => {
   expect(
     untitled([entry("untitled folder"), entry("untitled folder 2")], true)
   ).toBe("untitled folder 3")
+})
+
+const QUIET = { hidden: false, ignored: false }
+const expecting = (
+  ...pairs: [string, Expected[]][]
+): ReadonlyMap<string, readonly Expected[]> => new Map(pairs)
+
+test("a thing made shows until its folder is listed again, whatever another folder's listing brings", () => {
+  let listed: Listed = new Map([
+    ["", [folder("docs"), folder("lib")]],
+    ["docs/", [file("a.txt")]],
+    ["lib/", []],
+  ])
+  const made = expecting([
+    "docs/",
+    [{ made: { name: "untitled", kind: "file" } }],
+  ])
+  // Another open folder listed meanwhile: its own Map, still with the row.
+  listed = merged(listed, "lib/", [file("new.txt")])
+  expect(treeOf(ahead(listed, made), QUIET).paths).toEqual([
+    "docs/",
+    "docs/a.txt",
+    "docs/untitled",
+    "lib/",
+    "lib/new.txt",
+  ])
+  // Listed with it, it shows once, as listed.
+  const again = merged(listed, "docs/", [
+    file("a.txt"),
+    file("untitled", { size: 0 }),
+  ])
+  expect(ahead(again, made).get("docs/")).toEqual(again.get("docs/"))
+  // A folder not listed yet holds what was made in it.
+  const unlisted = merged(listed, "", [
+    folder("docs"),
+    folder("lib"),
+    folder("new"),
+  ])
+  expect(
+    ahead(
+      unlisted,
+      expecting(["new/", [{ made: { name: "x", kind: "folder" } }]])
+    ).get("new/")
+  ).toEqual([{ name: "x", kind: "folder", hidden: false, ignored: false }])
+})
+
+test("a thing renamed shows under its new name, with what an open folder holds, until listed again", () => {
+  const listed: Listed = new Map([
+    ["", [folder("src"), file("a.md", { ignored: true, size: 3 })]],
+    ["src/", [folder("lib"), file("main.rs")]],
+    ["src/lib/", [file("x.rs")]],
+  ])
+  const renamed = ahead(
+    listed,
+    expecting(
+      ["", [{ renamed: { from: "src", to: "code" } }]],
+      ["code/", [{ renamed: { from: "main.rs", to: "lib.rs" } }]]
+    )
+  )
+  expect(treeOf(renamed, ALL).paths).toEqual([
+    "code/",
+    "code/lib/",
+    "code/lib/x.rs",
+    "code/lib.rs",
+    "a.md",
+  ])
+  expect([...renamed.keys()]).toEqual(["", "code/", "code/lib/"])
+  // Made, then named in place, in the order done.
+  const named = ahead(
+    listed,
+    expecting([
+      "src/",
+      [
+        { made: { name: "untitled", kind: "file" } },
+        { renamed: { from: "untitled", to: "notes.md" } },
+      ],
+    ])
+  )
+  expect(named.get("src/")?.map((entry) => entry.name)).toEqual([
+    "lib",
+    "main.rs",
+    "notes.md",
+  ])
+})
+
+test("a thing renamed to a dotfile keeps what it was, as the tree shows it until listed", () => {
+  const listed: Listed = new Map([
+    ["", [file("a.md", { ignored: true, size: 3 }), file("b.md")]],
+  ])
+  const renamed = ahead(
+    listed,
+    expecting(["", [{ renamed: { from: "a.md", to: ".a.md" } }]])
+  )
+  expect(renamed.get("")).toEqual([
+    file(".a.md", { ignored: true, size: 3 }),
+    file("b.md"),
+  ])
+  expect(treeOf(renamed, { hidden: false, ignored: true }).paths).toEqual([
+    ".a.md",
+    "b.md",
+  ])
+})
+
+test("with nothing expected the listings are the same, so the tree's paths keep their identity", () => {
+  const listed: Listed = new Map([["", [file("a")]]])
+  expect(ahead(listed, new Map())).toBe(listed)
 })

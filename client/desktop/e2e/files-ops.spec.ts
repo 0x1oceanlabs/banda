@@ -65,6 +65,39 @@ const trashed = (dir: string) => {
   return existsSync(files) ? readdirSync(files).sort() : []
 }
 
+/** Holds what the page sends the engine to `method`, for a path that
+ * ends with `end`, until the call it gives back lets it go; that says
+ * how much it held. */
+async function hold(page: Page, method: string, end = "") {
+  await page.evaluate(
+    ({ method, end }) => {
+      const send = WebSocket.prototype.send
+      const held: [WebSocket, string][] = []
+      WebSocket.prototype.send = function (data) {
+        if (typeof data === "string") {
+          const frame = JSON.parse(data) as {
+            method?: string
+            params?: { dir?: string; path?: string }
+          }
+          const path = frame.params?.dir ?? frame.params?.path ?? ""
+          if (frame.method === method && path.endsWith(end))
+            return void held.push([this, data])
+        }
+        return send.call(this, data)
+      }
+      ;(window as unknown as Holding).release = () => {
+        WebSocket.prototype.send = send
+        for (const [socket, data] of held) socket.send(data)
+        return held.length
+      }
+    },
+    { method, end }
+  )
+  return () => page.evaluate(() => (window as unknown as Holding).release())
+}
+
+type Holding = { release: () => number }
+
 test("Files makes a file, renames in place, duplicates, pastes with a clash kept both, and moves a row dropped on a folder, each with Undo", async () => {
   window = await startWindow()
   const { app, page, dir } = window
@@ -166,6 +199,79 @@ test("Files makes a file, renames in place, duplicates, pastes with a clash kept
     .click()
   await expect.poll(() => textOf(join(project, "docs/b.txt"))).toBe("b")
   expect(existsSync(join(project, "lib/b.txt"))).toBe(false)
+})
+
+test("a New file and a rename in place keep their row while another open folder is listed first", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const { composer } = await firstThread(page)
+  const project = join(dir, "root", "Work")
+  put(project, "docs/a.txt", "a")
+  put(project, "lib/b.txt", "b")
+  const { row, renaming } = await openFiles(page, composer)
+  await row("docs").click()
+  await expect(row("a.txt")).toBeVisible()
+  await row("lib").click()
+  await expect(row("b.txt")).toBeVisible()
+
+  // New file in docs, not listed again until let go: an Agent writes in
+  // lib meanwhile, which is listed again, and the untitled row and its
+  // field stay.
+  let release = await hold(page, "files.list", "/docs")
+  await row("a.txt").click({ button: "right" })
+  await page
+    .getByRole("menu", { name: "Row" })
+    .getByRole("menuitem", { name: "New file" })
+    .click()
+  await expect(renaming).toBeFocused()
+  await expect(renaming).toHaveValue("untitled")
+  put(project, "lib/new.txt")
+  await expect(row("new.txt")).toBeVisible()
+  await expect(renaming).toBeFocused()
+  await expect(renaming).toHaveValue("untitled")
+  expect(await release()).toBeGreaterThan(0)
+  await page.keyboard.type("held.md")
+  await page.keyboard.press("Enter")
+  await expect(row("held.md")).toBeVisible()
+  await expect(page.getByText("Made “held.md”")).toBeVisible()
+  expect(existsSync(join(project, "docs/held.md"))).toBe(true)
+
+  // A rename in place the engine hears only once let go: lib listed
+  // again meanwhile, the row keeps its new name.
+  release = await hold(page, "files.rename")
+  await row("a.txt").click()
+  await page.keyboard.press("F2")
+  await expect(renaming).toBeFocused()
+  await expect.poll(() => pickedIn(renaming)).toBe("a")
+  await page.keyboard.type("z")
+  await page.keyboard.press("Enter")
+  await expect(row("z.txt")).toBeVisible()
+  put(project, "lib/more.txt")
+  await expect(row("more.txt")).toBeVisible()
+  await expect(row("z.txt")).toBeVisible()
+  await expect(row("a.txt")).toHaveCount(0)
+  expect(await release()).toBe(1)
+  await expect(page.getByText("Renamed “a.txt” to “z.txt”")).toBeVisible()
+  expect(textOf(join(project, "docs/z.txt"))).toBe("a")
+  await expect(row("z.txt")).toBeVisible()
+
+  // One the engine refuses, its new name taken on disk meanwhile: once
+  // lib is listed again, the row has its old name back, beside the new.
+  release = await hold(page, "files.rename")
+  await row("held.md").click()
+  await page.keyboard.press("F2")
+  await expect.poll(() => pickedIn(renaming)).toBe("held")
+  await page.keyboard.type("w")
+  await page.keyboard.press("Enter")
+  await expect(row("w.md")).toBeVisible()
+  put(project, "docs/w.md", "w")
+  expect(await release()).toBe(1)
+  await expect(page.getByText("w.md is already there.")).toBeVisible()
+  put(project, "lib/last.txt")
+  await expect(row("last.txt")).toBeVisible()
+  await expect(row("held.md")).toBeVisible()
+  await expect(row("w.md")).toBeVisible()
+  expect(textOf(join(project, "docs/w.md"))).toBe("w")
 })
 
 test("a row goes to the Trash and Undo puts it back; the Trash place puts back too; three names are renamed as text through a diff", async () => {

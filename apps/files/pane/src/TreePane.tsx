@@ -118,7 +118,14 @@ import { SearchView } from "./SearchView"
 import { TrashList } from "./TrashList"
 import { Look } from "./Preview"
 import { isPicture, useThumbs } from "./thumbs"
-import { matchesOf, onlyFolder, type Showing, treeOf, untitled } from "./tree"
+import {
+  ahead,
+  matchesOf,
+  onlyFolder,
+  type Showing,
+  treeOf,
+  untitled,
+} from "./tree"
 import type { RowMarks, ViewEvents } from "./ViewParts"
 import {
   entryOf,
@@ -488,6 +495,13 @@ function FolderView({
     () => treeOf(folder.listed, showing),
     [folder.listed, showing]
   )
+  // What the tree shows: the paths with what Files made or renamed itself
+  // until its folder is listed again, so another folder listed meanwhile
+  // takes neither back. All else here waits for the listing.
+  const held = useMemo(() => {
+    const laid = ahead(folder.listed, folder.expected)
+    return laid === folder.listed ? paths : treeOf(laid, showing).paths
+  }, [folder.listed, folder.expected, showing, paths])
 
   // git's marks, where the folder is in the Project's repository.
   const inside = folder.top.state === "listed" && folder.top.inside
@@ -698,12 +712,17 @@ function FolderView({
     async (kind: Making, row: string | null) => {
       const into = folderOfRow(row)
       const name = untitled(folder.listed.get(into) ?? [], kind === "folder")
-      // Its row shows before the folder is listed again: a listing from
-      // before it was made would take the row back, its field with it.
+      // Its row shows before the folder is listed again, so the folder
+      // expects it until then: else a listing from before it was made, or
+      // one of another folder meanwhile, would take the row back, its
+      // field with it. A thing not made is not expected.
       const over = changeIn(into)
-      const done = await acts
-        .make(at, wholeOf(dir, into), name, kind)
-        .finally(over)
+      let done: Undoable | null = null
+      try {
+        done = await acts.make(at, wholeOf(dir, into), name, kind)
+      } finally {
+        over(done ? { made: { name, kind } } : { failed: true })
+      }
       if (!done) return
       const path = `${into}${name}${kind === "folder" ? "/" : ""}`
       if (into) tree.current?.expand([into])
@@ -719,12 +738,19 @@ function FolderView({
       const was = made.current?.path === from ? made.current.done : undefined
       made.current = null
       const name = nameOf(wholeOf(dir, to))
-      // The tree shows it renamed already: a listing from before the
-      // rename would name it back.
-      const over = changeIn(parentRow(from))
-      const done = await acts
-        .rename(at, wholeOf(dir, from), name, was)
-        .finally(over)
+      // The tree shows it renamed already, so the folder expects it until
+      // it is listed again: else a listing from before the rename, or one
+      // of another folder meanwhile, would name it back.
+      const over = changeIn(parentRow(from), {
+        from: nameOf(wholeOf(dir, from)),
+        to: name,
+      })
+      let done = false
+      try {
+        done = await acts.rename(at, wholeOf(dir, from), name, was)
+      } finally {
+        over(done ? undefined : { failed: true })
+      }
       if (done) setPicked(to)
       return done
     },
@@ -1125,7 +1151,7 @@ function FolderView({
                   ? `find\0${found?.words}`
                   : `${showing.hidden}\0${showing.ignored}`
               }
-              paths={filtering ? matches.paths : paths}
+              paths={filtering ? matches.paths : held}
               open={filtering ? matches.open : open}
               marks={marks}
               turned={turned}

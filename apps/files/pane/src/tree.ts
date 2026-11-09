@@ -1,6 +1,7 @@
 /**
  * A folder as `files.tree` holds it: each folder listed as it opens, and
- * the tree's paths made from those listings, or from a filter's matches.
+ * the tree's paths made from those listings, with what Files made or
+ * renamed itself laid over them until listed, or from a filter's matches.
  * A path is from the tree's top folder, with `/` between names; a
  * folder's ends with `/`, and the top is `""`. Pure, so plain tests cover
  * it.
@@ -68,6 +69,60 @@ export function merged(
     if (path === folder || !path.startsWith(folder)) continue
     const child = path.slice(0, path.indexOf("/", folder.length) + 1)
     if (!held.has(child)) next.delete(path)
+  }
+  return next
+}
+
+/** What Files changed in a folder itself, which the tree shows before the
+ * folder is listed again: a thing it made there, or one it renamed, by
+ * their names in the folder. */
+export type Expected =
+  | { made: Pick<Entry, "name" | "kind"> }
+  | { renamed: { from: string; to: string } }
+
+/**
+ * The listings with what each folder is yet to list laid over them, folder
+ * by folder as Files first changed them, each in the order it was done
+ * there: a thing made as the tree adds it, shown whatever it is named; one
+ * renamed as it was, under its new name, with what is listed in it when it
+ * is an open folder, as the tree moves them. The same listings when
+ * nothing is expected, so the tree's paths keep their identity between
+ * draws.
+ */
+export function ahead(
+  listed: Listed,
+  expected: ReadonlyMap<string, readonly Expected[]>
+): Listed {
+  if (expected.size === 0) return listed
+  const next = new Map(listed)
+  for (const [folder, changes] of expected) {
+    // A folder not listed yet shows as holding what was made in it.
+    let entries = next.get(folder) ?? []
+    for (const change of changes) {
+      if ("made" in change) {
+        const { name } = change.made
+        if (!entries.some((entry) => entry.name === name))
+          entries = [
+            ...entries,
+            { ...change.made, hidden: false, ignored: false },
+          ]
+        continue
+      }
+      const { from, to } = change.renamed
+      const was = entries.find((entry) => entry.name === from)
+      if (!was) continue
+      entries = entries.flatMap((entry) =>
+        entry.name === to ? [] : entry === was ? [{ ...was, name: to }] : entry
+      )
+      if (!isFolder(was)) continue
+      const [old, now] = [`${folder}${from}/`, `${folder}${to}/`]
+      for (const [path, under] of [...next])
+        if (path.startsWith(old)) {
+          next.delete(path)
+          next.set(now + path.slice(old.length), under)
+        }
+    }
+    if (entries.length > 0 || next.has(folder)) next.set(folder, entries)
   }
   return next
 }
