@@ -36,6 +36,11 @@ is refused.
 ## Decision
 
 1. **The mod is a line of `keys.toml`: `mod = "Alt"`.**
+   _Amended 2026-11-09 by
+   [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): once
+   machines copy `keys.toml`, its binds are shared and `mod` is each
+   device's, in the device's file (ADR 0100, step 0a). The rest stands: Alt
+   by default everywhere, ⌘ alone refused._
    - It is one or two of Alt, Ctrl and Super. On a Mac, Alt is ⌥ and
      Super is ⌘. Alt is Banda's own, on every system, as the window
      holds it today.

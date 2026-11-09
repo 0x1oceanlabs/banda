@@ -50,6 +50,19 @@ Research, the same day: `docs/research/2026-11-09-platform-themes.md`
    | **The theme** | the theme files, which theme each display takes, `[colors]`, `[tokens]`, `[shape]`, glass | the files on the home host | **the device**: one pure function, files and the device's inputs in, tokens out |
    | **The device's own** | zoom, widths, the system's mode, accent, font, material, reduce transparency | the device | the device |
 
+   _Amended 2026-11-09 by
+   [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): there
+   is no home host, and a Mac that reads its own files is the intended
+   behaviour, not a gap. Every machine keeps its own copy, and its engine
+   and `banda look` read it. The split is shared, device and machine (that
+   ADR's decision 3). Shared: the keys' binds, the sidebar, `[notify]`, the
+   Flow and the Person's theme folders, copied between machines later. The
+   device's grows: which theme, the mode, the glass, `[display.*]`, columns,
+   bar, drawer, overview, groups, motion, font, sound and `mod`. So
+   `look.toml` is the device's file, `[notify]` moves to a shared file of
+   its own, and "which the engine serves" reads "which each machine reads
+   from its own copy". The theme is still worked out by the device._
+
    - `look.toml` keeps only the theme part. The other sections move to
      the Person's settings files, one per subject, as ADR 0016 has them for
      modules. An old `look.toml` still reads; `banda settings check` says
@@ -87,6 +100,11 @@ Research, the same day: `docs/research/2026-11-09-platform-themes.md`
      engine.
    - A display may take another theme than the rest: `[display.<name>]
      theme = "…"`. Which display takes which is the Person's (decision 1).
+   - _Amended 2026-11-09 by
+     [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): which
+     theme and which display takes which are the device's. `"platform"`
+     stays the default in each device's file, so a new machine looks right
+     with nothing set._
 
 3. **Banda's look is airy, light and round.** Large radii, as macOS,
    Claude and ChatGPT have them; the `banda` theme sets them, and the
@@ -126,6 +144,11 @@ Research, the same day: `docs/research/2026-11-09-platform-themes.md`
    `banda theme shot`, a picture of a sample page in all four. Banda
    reloads the theme as the file changes. A topic in the Banda skill lists
    the tokens.
+   _Amended 2026-11-09 by
+   [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): the
+   folder is shared, a copy on every machine; the `theme =` line and glass
+   are the device's. A theme whose folder has not reached this machine yet
+   falls back to `"platform"`, and Problems says so._
 
 6. **The surface stays three things:** the theme, the mode and the glass,
    in the sidebar foot's menu (ADR 0067), each theme as a small preview.
@@ -182,6 +205,13 @@ Each step is an issue and a PR.
 0. **The split** (this ADR, decision 1), as the slice E4/E5 of the
    roadmap's stage 2: on the Mac, arc's keys and sidebar, the Mac's own
    theme.
+   _Amended 2026-11-09 by
+   [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): step 0
+   waits for no stage. 0a is the split on each machine alone: each file's
+   class, the mixed files cut, `mod` and `[notify]` moved, an old file still
+   read and `banda settings check` saying where each key went; nothing on
+   screen changes. 0b, copying the shared files between machines, is that
+   ADR's E5. arc's machine files from the Mac are stage 2's slice 5 (E4)._
 1. `theme.toml`, `extends` and `"platform"`; the built-in themes move to
    it. Nothing on screen changes. (ADR 0080 step 1.)
 2. The token list once, in `platform/theme`; CSS and TypeScript written
@@ -227,3 +257,6 @@ Moss…); where the web works a theme out.
   "decided with the web".
 - ADR 0007: decision 10's one `banda look` splits into the theme, worked
   out on the device, and the Person's settings, served by the engine.
+  _Amended 2026-11-09 by
+  [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): the
+  shared settings, read from this machine's own copy._

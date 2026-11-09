@@ -38,6 +38,13 @@ What stands in the way today:
    the home host's; the view is each device's. Banda Cloud adds no second
    writer: it connects, delivers pushes, keeps backups, or is a host
    itself. So there is nothing to merge, and no CRDT.
+   _Amended 2026-11-09 by
+   [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md):
+   machines are peers, and there is no home host. One writer still holds for
+   a Project (its machine), a machine's files and the view. The Person's
+   shared files are a full copy on every machine, copied whole later, last
+   edit wins, the other kept beside; still no CRDT. The arrangement is the
+   machine's whose window shows it._
 
 2. **One Person across hosts, by keys.** Each host and each device has an
    Ed25519 key. Pairing joins a device or a host to the Person: a code or
@@ -116,6 +123,12 @@ What stands in the way today:
    | hosts | Agents on day and night with no server of one's own | one's own server |
    | webhooks | a stable address that forwards to a host | none |
 
+   _Amended 2026-11-09 by
+   [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): "the
+   Person's home" row goes. A host in Banda Cloud is one more peer, up more:
+   it keeps a copy of the shared files and may pass copies on while the
+   others sleep. Without it, each machine's own copy is used._
+
    _Open:_ the control plane (`api.banda.so`) on Cloudflare Workers and
    Durable Objects (as T3's relay is) or as a Rust service on the relay's
    VMs.
@@ -142,6 +155,15 @@ What stands in the way today:
     _Amended 2026-11-08 by [ADR 0096](0096-seen-and-archive-are-thread-data-on-its-host.md):
     the Person's files do not hold seen marks, as ADR 0082 had them; seen
     and archive are the Thread's, in its Project on its host._
+    _Amended 2026-11-09 by
+    [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md),
+    decision 3: each file, or part of one, is shared (a copy on every
+    machine: the sidebar, `[notify]`, the Flow, the Person's theme folders,
+    the keys' binds), the device's (which theme, mode, glass, columns, bar,
+    zoom, `mod`, `hosts.toml`, `terminal.toml`) or the machine's
+    (`machine.toml`, `harnesses.toml`, `agents.toml [start]`,
+    `sharing.toml`, the Agents' browser, Files' pinned places, read and
+    written through its engine)._
 
 13. **The CLI names its host**: `banda hosts add | list | use | pair`,
     `banda --host server …`, as kubectl's contexts. An Agent's `banda`
@@ -217,6 +239,10 @@ What stands in the way today:
    wait for the fence (ADR 0083, decision 7)._
 6. One client over several hosts: the home host, the merged Inbox (ADR
    0062 decision 13).
+   _Amended 2026-11-09 by
+   [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): one
+   client over several machines, the merged Inbox. Copying the shared files
+   is that ADR's E5._
 7. Calls on the host, the devices' register, the road to a device.
 8. The web client, served by the host, as a PWA with Web Push.
 9. Banda Cloud, a service at a time: `auth` and `api`, the relay, push,

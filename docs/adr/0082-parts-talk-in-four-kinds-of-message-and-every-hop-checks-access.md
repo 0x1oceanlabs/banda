@@ -20,6 +20,12 @@ Person's documents (decisions 1, 15 and 16, plan step 11, and its note on
 ADR 0081 decision 12), read the Thread instead: the client joins none, and
 none waits on the device while home is away._
 
+_Amended 2026-11-09 by
+[ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): machines
+are peers, and there is no home host. Roma's decisions 4 and 15 in the
+list below now read: the Person's files are a full copy on every machine,
+and any machine the browser reaches serves the PWA._
+
 ADR 0062 makes Banda a kernel, a platform and Apps built on one SDK.
 ADR 0081 runs Banda on several machines: hosts run the work, and clients
 show it and ask for changes. Neither says how the parts talk to each
@@ -90,6 +96,13 @@ Roma, 2026-11-06, among the vision's decisions:
        hand, that way.
    - Today's machine scope splits into Host and Person. Its data is
      migrated by owner, and the old machine log stays, read-only.
+   - _Amended 2026-11-09 by
+     [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): there
+     is no Person scope and no home host. The kernel keeps Project and Host;
+     today's machine scope is the Host's, the arrangement with it. The
+     Person's files are files on each machine, each shared, the device's or
+     the machine's, with a full copy on every machine and a whole-file copy
+     later. Project and Host stay as written._
    - What a device shows (the focus, the scroll, the zoom, the resolved
      theme) stays the device's, as ADR 0081 decision 1 has it. It is not a
      scope of the kernel.
@@ -250,6 +263,9 @@ Roma, 2026-11-06, among the vision's decisions:
      `show.requested@1{pane, by, owner}` into the Project's log, and the
      home host places it in the Agent's Group (decision 15). An Agent
      moves and closes only the Panes it opened, the same way.
+     _Amended 2026-11-09 by
+     [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): each
+     machine whose window sees it places it in its own arrangement._
    - A Pane kind marked `runs_as_person`, such as a terminal, is refused
      for an Agent.
    - The Person's defaults and a picker come when a verb has a second
@@ -338,6 +354,10 @@ Roma, 2026-11-06, among the vision's decisions:
     | `ping`, `pong{time, version, heads}` | both | freshness and the clock's offset |
     | `goodbye{reason}` | host → client | `unsupported{range}`, `forbidden`, `revoked` |
 
+    _Amended 2026-11-09 by
+    [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): the
+    welcome's `person` is `{id}`; there is no home._
+
     - **Freshness.** A client pings every 15 seconds. After two missed
       `pong`s, or when its path is lost, the host is **stale**: its rows
       dim and say "as of 14:02", queries answer from the client's cache,
@@ -424,6 +444,13 @@ Roma, 2026-11-06, among the vision's decisions:
       Project, and the new Pane's id is derived from the event. So several
       clients place a Pane once, and a Pane already closed is skipped. A
       Pane appears once a client is open, the only time anyone sees it.
+      _Amended 2026-11-09 by
+      [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): it
+      sends it to its own machine's engine, which places it once in that
+      machine's arrangement, by `placed_through`, and checks it again there,
+      as below. `not_home` goes: an Agent writes a shared file on its own
+      machine only, as a proposal where ADR 0083 decision 3 asks one, and
+      the copy between machines carries it._
     - **The home host checks every placement again**, since another host
       is only semi-trusted and the client only carries the placement: the
       Pane's kind is in the home host's registry, it does not run as the
@@ -439,6 +466,13 @@ Roma, 2026-11-06, among the vision's decisions:
 
 16. **The home host is the always-on host when there is one, and a host
     that is away fails fast** (Roma, 2026-11-06, the vision's decision 4).
+    _Amended 2026-11-09 by
+    [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): its
+    home half goes. Pairing asks nothing about home, a host in Banda Cloud
+    is one more peer, and "while home is away" goes: a write to the Person's
+    files is local and never fails or waits for another machine. Fail fast,
+    `unreachable`, the visible queue, `not_after` and `next_wake_at` stay,
+    for a machine's Projects and files._
     - Pairing asks which host is always on, and that one is home. Without
       one, the laptop is.
     - A host in Banda Cloud, kept always on, is a home host like any
@@ -472,6 +506,11 @@ Roma, 2026-11-06, among the vision's decisions:
       `localhost`.
     - **The phone's v1 is a PWA the home host serves; a native app comes
       later** (Roma, 2026-11-06, the vision's decision 15).
+      _Amended 2026-11-09 by
+      [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): any
+      machine reached over `direct` serves it from the binary it runs, and
+      the page connects to the others from there. Which machine a phone
+      opens first is the Person's pick._
     - A PWA needs a secure context for its Service Worker and Web Push.
       So the phone's v1 route is `direct` over a tailnet, or a LAN name
       with a trusted certificate, and every host the PWA joins needs a
@@ -497,6 +536,11 @@ lists there.
 5. One list of Apps, scanned from `app.toml` (B1).
 6. The machine scope splits into Host and Person; the Person's documents
    with a `rev`; the old state migrated (A2).
+   _Amended 2026-11-09 by
+   [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): each
+   settings file's class (shared, device or machine), and for the copy
+   between machines, the hashes each machine last agreed on. Nothing
+   splits._
 7. `agents` becomes `threads`, with aliases (T0): ADR 0085's step 1.
 8. `facts!`: published and private facts, with `gate`, `item@1` and
    `call@1` (B7); the deltas leave the log (B12).
@@ -516,6 +560,9 @@ lists there.
     (H5).
 15. The directory cache, `show.*` placements relayed to the home host,
     the merged Inbox and sidebar (H6).
+    _Amended 2026-11-09 by
+    [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md):
+    placements go to each window's own machine._
 16. Later: iroh routes, and iroh in WebAssembly (H10).
 
 **Consequences.**
@@ -536,6 +583,10 @@ lists there.
   client. The price: an Agent's Pane on another host appears only once a
   client is open, and a write to the Person's data waits for the home
   host.
+  _Amended 2026-11-09 by
+  [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): a write
+  to the Person's files never waits; another machine sees it once the copy
+  runs._
 - Every answer says how fresh it is, so a sleeping host shows "as of",
   never now.
 - The stores gain a few columns and a table (the params' hash, `at`,
@@ -563,6 +614,15 @@ lists there.
   goes. The pieces of a reply, a thought or a tool's output go on
   `threads.live`, and the log keeps each item once, whole, when it ends
   (decision 5).
+- _Amended 2026-11-09 by
+  [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): every
+  entry below that moves something to the home host is read without it. ADR
+  0005 decision 7 and ADR 0025 decision 1: the arrangement is the machine's
+  whose window shows it, as built. ADR 0032: the open question loses its
+  home option, and an Agent's Panes are placed by each machine's window. ADR
+  0071 decision 5: an Agent's `keys.*` writes run on its own host, a
+  proposal where ADR 0083 decision 3 asks one, and `not_home` goes. ADR 0081
+  decisions 1, 9 and 12 and plan step 6: as that ADR's notes say._
 - **ADR 0005, decision 7**: "the workspaces live on the Person's
   computer" becomes: on the home host, the always-on host when there is
   one (decisions 1 and 16).
