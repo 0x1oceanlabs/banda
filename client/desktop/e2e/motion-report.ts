@@ -349,8 +349,8 @@ function summary(
     ),
     "",
     "React's drawings in the phase: of the Tiles in the Strips, the " +
-      "Strips, the bar's widgets but the workspaces' and the sidebar; and " +
-      "for each key pressed.",
+      "Strips, the bar's widgets but the workspaces' Group map, and the " +
+      "sidebar; and for each key pressed.",
     "",
     table(
       [

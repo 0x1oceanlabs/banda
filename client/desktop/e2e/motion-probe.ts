@@ -349,12 +349,13 @@ export function install(): void {
   }
 
   // React's drawings, by the elements the parts draw: the Tiles in the
-  // Strips, the Strips, the bar's widgets but the workspaces', whose list
-  // follows the workspaces, and the sidebar.
+  // Strips, the Strips, the bar's widgets, the workspaces' numbers but not
+  // their Group map, which frames the column in focus, and the sidebar.
   const drawn: Record<Drawn, string> = {
     tiles: "[data-strip] section[data-tile]",
     strips: "[data-strip]",
-    widgets: "[data-widget]:not([data-widget='workspaces.list']) > *",
+    widgets:
+      "[data-widget]:not([data-widget='workspaces.list']) > *, [data-widget='workspaces.list'] > nav",
     sidebar: "aside[aria-label='Sidebar']",
   }
   const counted = new WeakSet<Element>()
