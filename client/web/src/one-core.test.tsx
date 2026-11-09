@@ -32,7 +32,6 @@ import pageConfig from "../vite.config"
 import { newStores } from "./calls/stores"
 import { widgets } from "./registry"
 import type { Tiled } from "./tiling/kept"
-import type { Shows } from "./tiling/shows"
 import { WAITING } from "./tiling/unheard"
 import { Kept } from "./window/here"
 
@@ -56,7 +55,6 @@ const here = new Store<Here>({
  * tests draw none of its parts. */
 const tiled: Tiled = {
   store: new Store(WAITING),
-  shows: {} as Shows,
   aside: null,
 }
 

@@ -801,7 +801,7 @@ export function Shell({
       <Kept
         stores={stores}
         here={here}
-        tiled={{ store: tiling.store, shows, aside }}
+        tiled={{ store: tiling.store, aside }}
         run={parts.run}
       >
         <ThreadMenus engine={engine} projects={projects}>

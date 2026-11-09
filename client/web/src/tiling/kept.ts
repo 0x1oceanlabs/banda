@@ -12,7 +12,6 @@ import type { Aside } from "@banda/contract/workspaces"
 import { type Readable, useStore } from "@banda/core/react"
 import { createContext, useContext } from "react"
 import type { Workspaces } from "./model"
-import type { Shows } from "./shows"
 import { WAITING } from "./unheard"
 
 /** What the Window gives of its Tiling to what it draws. */
@@ -20,9 +19,6 @@ export type Tiled = {
   /** The workspaces as the Tiling draws them (`useTiling`), solo and
    * all, which only the Tiling changes. */
   store: Readable<Workspaces>
-  /** What the Apps list of the Tiling's Panes, the same for the Window's
-   * life. */
-  shows: Shows
   /** The workspaces set aside, while they are (ADR 0039, decision 2). */
   aside: Aside | null
 }
@@ -33,10 +29,6 @@ export const TilingContext = createContext<Readable<Workspaces>>({
   get: () => WAITING,
   subscribe: () => () => {},
 })
-
-/** What the Apps list of the Tiling's Panes: nothing where no Window gives
- * it. */
-export const ShowsContext = createContext<Shows | null>(null)
 
 /** The workspaces set aside, while they are: none where no Window says
  * so. */

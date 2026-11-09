@@ -3,7 +3,6 @@ import type { Listed, Lists } from "@banda/ui/pane"
 import { afterEach, expect, test, vi } from "vitest"
 import { wokeTold } from "./woke"
 import {
-  callingIn,
   dropHost,
   followCalls,
   itemsOf,
@@ -143,18 +142,12 @@ test("what watches the lists hears them change, and a Later wake, not a mark", (
   expect(heard).toHaveBeenCalledTimes(2)
 })
 
-test("what the bar reads of the lists: who works, which Projects call, and a Pane's own", () => {
+test("what the bar reads of the lists: who works, and a Pane's own", () => {
   const lists: Lists = {
     [p]: [thread("a", { mark: "running" }), thread("b", { mark: "asking" })],
     [q]: [thread("c", { mark: "thinking" }), thread("d", { mark: "done" })],
   }
   expect(workingIn(lists)).toBe(2)
-  expect(callingIn(lists, 0)).toEqual([p, q])
-  const away: Lists = {
-    ...lists,
-    [q]: [lists[q][0], { ...lists[q][1], archived: true }],
-  }
-  expect(callingIn(away, 0)).toEqual([p])
 
   const shows = (pane: { args?: unknown }) =>
     (pane.args as { thread?: string } | undefined)?.thread ?? null

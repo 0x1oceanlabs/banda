@@ -243,6 +243,9 @@ for any Panes, and an Agent's Panes are simply its Group.
    - The bar shows each such workspace as its Space's badge, with a dot
      while one of its Agents calls, and a small map of the current
      workspace's Groups.
+     _Changed on 2026-11-09:_ Roma found the dot and the map noisy. A
+     Project's workspace shows its sign alone, with no dot for a call,
+     and the map is gone. What calls is the sidebar's and the toasts'.
    - With the sidebar hidden, the bar's agents widget is the switcher.
      It shows the current Agent and the counts, opens the same list as
      the Inbox, and new calls come as toasts (ADR 0048).

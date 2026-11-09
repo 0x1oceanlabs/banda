@@ -531,25 +531,21 @@ html[data-glass] [data-group-plate] {
  * marks it, on a ladder from quiet to loud: at work, done, failed, and a
  * call the loudest. No Agent: the text's.
  */
-/* The bar's map (`[data-map]`) takes the same colours, still; so does a
-   lent tab's chip and the marks of its Thread (`[data-lent]`, ADR 0083,
-   decision 4), grey at rest. */
-[data-map] {
-  --group-color: color-mix(in oklab, var(--foreground) 45%, transparent);
-}
+/* A lent tab's chip and the marks of its Thread (`[data-lent]`, ADR 0083,
+   decision 4) take the same colours, still, grey at rest. */
 [data-lent] {
   --group-color: var(--muted-foreground);
 }
-:is([data-group-plate], [data-map], [data-lent])[data-state="working"] {
+:is([data-group-plate], [data-lent])[data-state="working"] {
   --group-color: var(--working);
 }
-:is([data-group-plate], [data-map], [data-lent])[data-state="asking"] {
+:is([data-group-plate], [data-lent])[data-state="asking"] {
   --group-color: var(--attention);
 }
-:is([data-group-plate], [data-map], [data-lent])[data-state="done"] {
+:is([data-group-plate], [data-lent])[data-state="done"] {
   --group-color: var(--added);
 }
-:is([data-group-plate], [data-map], [data-lent])[data-state="failed"] {
+:is([data-group-plate], [data-lent])[data-state="failed"] {
   --group-color: var(--destructive);
 }
 [data-group-plate][data-state="working"] {
