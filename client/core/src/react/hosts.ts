@@ -48,6 +48,18 @@ const all = (hosts: readonly Shown[]) => hosts
 /** The hosts as the Window shows them, drawn again as any changes. */
 export const useHosts = (): readonly Shown[] => useHostsBy(all)
 
+/** Host `host` as the Window shows it, drawn again as that changes; none
+ * for no host, as this machine's Panes name none, or one the Window does
+ * not know yet. */
+export function useShownOf(host: string | undefined): Shown | undefined {
+  const select = useCallback(
+    (hosts: readonly Shown[]) =>
+      host === undefined ? undefined : hosts.find((one) => one.name === host),
+    [host]
+  )
+  return useHostsBy(select)
+}
+
 /** Where a Pane reaches its engine: this machine's; or another host's,
  * by its name, with what the Window knows of that host yet, and its
  * engine once it knows it. */
@@ -72,12 +84,7 @@ export function useReach(
     [kept, project, named]
   )
   const host = useStore(kept, on)
-  const select = useCallback(
-    (hosts: readonly Shown[]) =>
-      host === undefined ? undefined : hosts.find((one) => one.name === host),
-    [host]
-  )
-  const shown = useStore(kept, select)
+  const shown = useShownOf(host)
   if (host === undefined) return { engine }
   return { host, shown, engine: shown && kept.engine(host) }
 }

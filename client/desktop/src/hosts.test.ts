@@ -39,6 +39,7 @@ import {
   signInOf,
   stopCommand,
   suggestionsOf,
+  TIMES,
   type Times,
 } from "./hosts"
 import { Program } from "./program"
@@ -128,7 +129,15 @@ ssh = "ssh://roma@[fd7a:115c::1]:2222"
   expect(hostsOf(`[[hosts]\nname=`).refused[0]).toMatch(/^it is not TOML/)
 })
 
-it("the follower takes no agent, no X11, no forward, no tunnel, no command of the config's and no shared connection, and runs banda through sh", () => {
+/** How long ssh with `args` waits for each answer before it is in, in
+ * ms: ServerAliveInterval times ServerAliveCountMax (OpenSSH). */
+const waitsBeforeIn = (args: string[]) => {
+  const said = (key: string) =>
+    Number(args.find((one) => one.startsWith(`${key}=`))?.split("=")[1])
+  return said("ServerAliveInterval") * said("ServerAliveCountMax") * 1000
+}
+
+it("the follower takes no agent, no X11, no forward, no tunnel, no command of the config's and no shared connection, gives up soon on a machine that does not answer but waits out a sign-in, and runs banda through sh", () => {
   const args = followerArgs(DEVBOX)
   for (const one of ["-T", "-a", "-x"]) expect(args).toContain(one)
   for (const option of [
@@ -139,12 +148,16 @@ it("the follower takes no agent, no X11, no forward, no tunnel, no command of th
     "ForwardAgent=no",
     "ForwardX11=no",
     "ClearAllForwardings=yes",
+    "ConnectTimeout=10",
     "ServerAliveInterval=15",
-    "ServerAliveCountMax=2",
+    "ServerAliveCountMax=48",
     "ControlPath=none",
     "ControlMaster=no",
   ])
     expect(args[args.indexOf(option) - 1]).toBe("-o")
+  // ssh waits as long for each answer before it is in, while Tailscale
+  // SSH says nothing as the Person signs in: longer than they are given.
+  expect(waitsBeforeIn(args)).toBeGreaterThan(TIMES.signin)
   // The destination comes after `--`, and the remote command last.
   expect(args.slice(-3)).toEqual(["--", "devbox", remoteCommand(DEVBOX.banda)])
   expect(remoteCommand(DEVBOX.banda)).toBe(
@@ -694,13 +707,21 @@ it.effect(
     })
 )
 
-it("the forward listens on this machine's loopback alone, to that machine's loopback, and ends when it cannot", () => {
+it("the forward listens on this machine's loopback alone, to that machine's loopback, and ends when it cannot, and soon on a link gone silent", () => {
   const args = forwardArgs(DEVBOX, 40_001, 4321)
   expect(args[0]).toBe("-N")
   expect(args[args.indexOf("-L") + 1]).toBe("127.0.0.1:40001:127.0.0.1:4321")
   expect(args[args.indexOf("ExitOnForwardFailure=yes") - 1]).toBe("-o")
-  for (const option of ["BatchMode=yes", "ForwardAgent=no", "ForwardX11=no"])
-    expect(args).toContain(option)
+  for (const option of [
+    "BatchMode=yes",
+    "ForwardAgent=no",
+    "ForwardX11=no",
+    "ConnectTimeout=10",
+    "ServerAliveInterval=5",
+    "ServerAliveCountMax=3",
+  ])
+    expect(args[args.indexOf(option) - 1]).toBe("-o")
+  expect(waitsBeforeIn(args)).toBe(15_000)
   for (const one of ["-T", "-a", "-x"]) expect(args).toContain(one)
   expect(args).not.toContain("ClearAllForwardings=yes")
   expect(args.slice(-2)).toEqual(["--", "devbox"])

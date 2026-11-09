@@ -129,7 +129,8 @@ const LONGEST_WAIT = 5000
  * A window's connection to the engine: JSON frames over one WebSocket.
  *
  * - It connects at once, and again whenever the connection breaks, asking
- *   `address` each time: a restarted engine listens elsewhere.
+ *   `address` each time: a restarted engine listens elsewhere. Each try
+ *   waits longer than the last, up to 5 s; `wake` tries at once.
  * - A call made while the engine is away waits for it.
  * - A subscription goes on after a reconnect from the last event it
  *   delivered, so a Pane sees no gap and no repeat.
@@ -146,6 +147,8 @@ export class Engine {
   readonly #following = new Map<number, Following>()
   readonly #hearing = new Map<number, Hearing>()
   #wait = FIRST_WAIT
+  /** The next try, while the connection is lost. */
+  #next: ReturnType<typeof setTimeout> | undefined
   #closed = false
 
   constructor(address: () => Promise<Address>) {
@@ -325,6 +328,18 @@ export class Engine {
         })
       }
     }
+  }
+
+  /**
+   * Tries again at once, as when the machine it is on is back: a lost
+   * connection does not wait out its try, and the next waits from the
+   * first wait again. Open, connecting or refused, only the wait changes.
+   */
+  wake(): void {
+    this.#wait = FIRST_WAIT
+    if (this.#closed || this.#status.state !== "lost") return
+    clearTimeout(this.#next)
+    void this.#connect()
   }
 
   /** Closes the connection for good. */
@@ -510,6 +525,6 @@ export class Engine {
     const wait = this.#wait
     this.#wait = Math.min(wait * 2, LONGEST_WAIT)
     this.#set({ state: "lost", retryIn: wait })
-    setTimeout(() => void this.#connect(), wait)
+    this.#next = setTimeout(() => void this.#connect(), wait)
   }
 }

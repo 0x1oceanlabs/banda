@@ -272,6 +272,40 @@ test("a stream heard once ends when the connection breaks, and is not asked agai
   await expect.poll(() => ends).toEqual(["may_have_run"])
 })
 
+test("woken, as its machine is back, a window tries at once, and waits from the first wait again", async () => {
+  await serve()
+  // While its machine is away, the window is not told where it listens.
+  let away = false
+  client = new Engine(() =>
+    away ? Promise.reject(new Error("away")) : address()
+  )
+  await until(client, "open")
+  const lost: { retryIn: number; at: number }[] = []
+  client.watch((status) => {
+    if (status.state === "lost")
+      lost.push({ retryIn: status.retryIn, at: Date.now() })
+  })
+  away = true
+  await stop()
+  await serve()
+  // Each try waits longer than the last.
+  const longer = { timeout: 5_000 }
+  await expect.poll(() => lost.at(-1)?.retryIn, longer).toBe(1_000)
+  client.wake()
+  await expect.poll(() => lost.at(-1)?.retryIn).toBe(250)
+  await expect.poll(() => lost.at(-1)?.retryIn, longer).toBe(2_000)
+  // Back, it connects before its wait is out; open, waking changes
+  // nothing.
+  away = false
+  const { at, retryIn } = lost.at(-1)!
+  client.wake()
+  await until(client, "open")
+  expect(Date.now()).toBeLessThan(at + retryIn)
+  const { boot } = client.status as { boot: string }
+  client.wake()
+  expect(client.status).toMatchObject({ state: "open", boot })
+})
+
 /** The machine's own log, which its modules, the workspaces too, write
  * and are followed by. */
 function machineOf(engine: Engine): ProjectId {

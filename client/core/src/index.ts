@@ -18,6 +18,7 @@ export type { Here, HereStore } from "./here"
 export {
   awayFor,
   emptyIn,
+  heldWords,
   holds,
   hostOfPane,
   type HostsDevice,

@@ -1,8 +1,9 @@
-import type { ProjectId, ProjectSummary } from "@banda/contract"
+import type { ProjectId, ProjectSummary, Status } from "@banda/contract"
 import type { Named } from "@banda/contract/machines"
 import { afterEach, expect, test, vi } from "vitest"
 import type { HostState } from "./device"
 import {
+  heldWords,
   type HostsDevice,
   KeptHosts,
   keyNamed,
@@ -271,6 +272,68 @@ test("an engine that said goodbye is made anew as its host is live again", async
   anew.close()
 })
 
+test("a host live again has its engine try at once, not after its wait", async () => {
+  vi.useFakeTimers()
+  vi.stubGlobal("WebSocket", Socket)
+  Socket.opened = []
+  const { device, tell } = desktop()
+  const hosts = new KeptHosts(device, forgetting)
+  hosts.follow()
+  tell([live])
+  const engine = hosts.engine("arc")
+  await vi.advanceTimersByTimeAsync(0)
+  // Its connection breaks again and again: each try waits longer.
+  for (const wait of [250, 500, 1_000, 2_000]) {
+    Socket.opened.at(-1)!.close()
+    expect(engine.status).toEqual({ state: "lost", retryIn: wait })
+    await vi.advanceTimersByTimeAsync(wait)
+  }
+  Socket.opened.at(-1)!.close()
+  expect(engine.status).toEqual({ state: "lost", retryIn: 4_000 })
+  const asked = device.engine.mock.calls.length
+  tell([away])
+  tell([live])
+  await vi.advanceTimersByTimeAsync(0)
+  expect(device.engine).toHaveBeenCalledTimes(asked + 1)
+  // From the first wait again; and a host live still wakes nothing.
+  Socket.opened.at(-1)!.close()
+  expect(engine.status).toEqual({ state: "lost", retryIn: 250 })
+  tell([live])
+  await vi.advanceTimersByTimeAsync(0)
+  expect(device.engine).toHaveBeenCalledTimes(asked + 1)
+  engine.close()
+})
+
+test("a host live again while its engine waits for it has that engine wait from its first wait again", async () => {
+  vi.useFakeTimers()
+  vi.stubGlobal("WebSocket", Socket)
+  Socket.opened = []
+  const { device, tell } = desktop()
+  const hosts = new KeptHosts(device, forgetting)
+  hosts.follow()
+  tell([live])
+  const engine = hosts.engine("arc")
+  await vi.advanceTimersByTimeAsync(0)
+  // Its connection breaks again and again: its wait grows to the longest.
+  for (const wait of [250, 500, 1_000, 2_000]) {
+    Socket.opened.at(-1)!.close()
+    await vi.advanceTimersByTimeAsync(wait)
+  }
+  Socket.opened.at(-1)!.close()
+  // arc goes away before the next try, which waits for arc to be live.
+  tell([away])
+  await vi.advanceTimersByTimeAsync(4_000)
+  expect(engine.status).toEqual({ state: "connecting" })
+  const opened = Socket.opened.length
+  tell([live])
+  await vi.advanceTimersByTimeAsync(0)
+  expect(Socket.opened).toHaveLength(opened + 1)
+  // That try fails at once: the next waits the first wait, not 5 s.
+  Socket.opened.at(-1)!.close()
+  expect(engine.status).toEqual({ state: "lost", retryIn: 250 })
+  engine.close()
+})
+
 test("a pick of another host's Thread opens it on that host, never on this machine's engine with its Project", () => {
   const { device, tell } = desktop()
   const hosts = new KeptHosts(device, forgetting)
@@ -508,6 +571,56 @@ test("a Pane says why it cannot reach its host in the window's own words, by the
       why: "an older window",
     })
   ).toBe("Studio: an older window")
+})
+
+test("Send on a Pane on another host says what its pill says, and connects only while the host is live and its engine is not open yet", () => {
+  const held = (state: HostState | undefined, status: Status["state"]) =>
+    heldWords("arc", state && shownOf(undefined, state, 0), status, keyNamed)
+  // Not live, the pill's words, whatever its engine says: a connection
+  // that broke without closing still says open.
+  for (const status of ["connecting", "lost", "refused", "open"] as const) {
+    expect(held(away, status)).toBe("arc is away. Send once it is back.")
+    expect(held(connecting, status)).toBe("Connecting to arc")
+    expect(
+      held(
+        { name: "arc", ssh: "arc", state: "signin", url: "https://x" },
+        status
+      )
+    ).toBe("Sign in to Tailscale to reach arc")
+    expect(held({ name: "arc", ssh: "arc", state: "stopped" }, status)).toBe(
+      "Banda is stopped on arc"
+    )
+    expect(
+      held(
+        { name: "arc", ssh: "arc", state: "refused", why: "an older window" },
+        status
+      )
+    ).toBe("arc: an older window")
+    expect(held(undefined, status)).toBe("Waiting for arc")
+  }
+  // Live, it connects until its engine is open.
+  expect(held(live, "connecting")).toBe("Connecting to arc…")
+  expect(held(live, "lost")).toBe("Connecting to arc…")
+  expect(held(live, "refused")).toBe("arc refused this window")
+  expect(held(live, "open")).toBeUndefined()
+  // By the name the host says it has.
+  const studio = { name: "Studio", icon: "desktop" } as const
+  expect(
+    heldWords(
+      "arc",
+      { ...shownOf(undefined, live, 0), named: studio },
+      "connecting",
+      keyNamed
+    )
+  ).toBe("Connecting to Studio…")
+  expect(
+    heldWords(
+      "arc",
+      { ...shownOf(undefined, away, 0), named: studio },
+      "open",
+      keyNamed
+    )
+  ).toBe("Studio is away. Send once it is back.")
 })
 
 test("a Pane on another host runs none of the Window's actions on this machine's files, and its Items' on that host's alone", () => {

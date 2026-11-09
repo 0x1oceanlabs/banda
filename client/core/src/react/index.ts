@@ -17,6 +17,7 @@ export {
   usePaneOn,
   useReach,
   useShownNow,
+  useShownOf,
 } from "./hosts"
 export { MachinesContext, useMachines } from "./machines"
 export { RunContext, useRun } from "./run"
