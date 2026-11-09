@@ -316,14 +316,21 @@ export class Move {
   }
 
   /**
-   * Resolves once `project` of `engine` may be read: at once for a Project
-   * whose marks moved, and for another host's once the move started;
-   * else once the move is over, as it went. It waits for the move to
-   * start, and then for it to end, at most `MOVE_WAIT` each.
+   * Resolves once `project` of `engine` may be read: at once for another
+   * host's, by its name in `hosts.toml`, and for a Project whose marks
+   * moved; for another engine's once the move started; else once the
+   * move is over, as it went. It waits for the move to start, and then
+   * for it to end, at most `MOVE_WAIT` each.
    */
-  async over(engine: Engine, project: ProjectId): Promise<void> {
+  async over(engine: Engine, project: ProjectId, host?: string): Promise<void> {
+    // Another host's marks are its own window's to move (decision 9).
+    if (host !== undefined) return
     if (movedOf(this.#storage()).has(project)) return
-    if (!this.#move && !this.#none) {
+    if (!this.#move && this.#none) {
+      // The module's start may come in the commit this list reads in, as
+      // the window's effect runs after its children's: one tick for it.
+      await Promise.resolve()
+    } else if (!this.#move) {
       let start = () => {}
       const started = new Promise<void>((done) => (start = done))
       this.#starts.add(start)

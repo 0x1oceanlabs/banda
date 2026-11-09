@@ -106,6 +106,7 @@ export const Watches = memo(function Watches({
             watch={watch}
             engine={engine}
             project={project.id}
+            host={host}
             hear={hear}
           />
         )
@@ -167,12 +168,14 @@ function One({
   watch,
   engine,
   project,
+  host,
   hear,
 }: {
   id: string
   watch: Watch
   engine: Engine
   project: ProjectId
+  host?: string
   hear: (key: string, heard?: Heard) => void
 }) {
   const report = useCallback(
@@ -183,5 +186,7 @@ function One({
   // nothing.
   useEffect(() => () => hear(id), [hear, id])
   const Watched = watch.Watch
-  return <Watched engine={engine} project={project} report={report} />
+  return (
+    <Watched engine={engine} project={project} host={host} report={report} />
+  )
 }

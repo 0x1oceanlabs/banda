@@ -385,7 +385,7 @@ test("the move starts once, on the engine it is given, and its lists read once i
   const reading = move.over(here.engine, P).then(() => (read = true))
   move.start(here.engine)
   move.start(arc.engine)
-  // Another host's list waits for nothing.
+  // Another engine's list waits for nothing.
   await move.over(arc.engine, P)
   await vi.waitFor(() => expect(here.asked).toContain("agents.import_marks"))
   expect(read).toBe(false)
@@ -443,6 +443,54 @@ test("a list waits a while at most: for a move that never starts, or one that ne
     await vi.advanceTimersByTimeAsync(MOVE_WAIT)
     await waiting
     expect(over).toBe(true)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test("another host's list reads at once, before any start, and moves nothing there", async () => {
+  vi.useFakeTimers()
+  try {
+    const held = storage({ "banda.agents.seen": { [T1]: U1 } })
+    const move = new Move(() => held)
+    const arc = slowEngine()
+    let read = false
+    const reading = move.over(arc.engine, P, "arc").then(() => (read = true))
+    // No while goes by: it never waits for this machine's start.
+    await vi.advanceTimersByTimeAsync(0)
+    expect(read).toBe(true)
+    await reading
+    // Nor for the move, once this machine's started.
+    const here = slowEngine()
+    move.start(here.engine)
+    await move.over(arc.engine, P, "arc")
+    expect(arc.asked).toEqual([])
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test("once no move started within the wait, one that starts in the same tick is still waited for", async () => {
+  vi.useFakeTimers()
+  try {
+    const held = storage({ "banda.agents.seen": { [T1]: U1 } })
+    const move = new Move(() => held)
+    // A list that waited the while for nothing.
+    const first = move.over(slowEngine().engine, P)
+    await vi.advanceTimersByTimeAsync(MOVE_WAIT)
+    await first
+    // Then this machine's list reads in the commit the module starts in,
+    // its effect before the window's.
+    const here = slowEngine()
+    let read = false
+    const reading = move.over(here.engine, P).then(() => (read = true))
+    move.start(here.engine)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(here.asked).toContain("agents.import_marks")
+    expect(read).toBe(false)
+    here.go()
+    await reading
+    expect(JSON.parse(held.getItem("banda.marks.moved")!)).toEqual([P1])
   } finally {
     vi.useRealTimers()
   }

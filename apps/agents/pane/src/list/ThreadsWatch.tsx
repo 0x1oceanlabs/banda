@@ -19,14 +19,15 @@ export const threadsWatch: Watch = {
   Watch: ThreadsWatch,
 }
 
-function ThreadsWatch({ engine, project, report }: WatchProps) {
+function ThreadsWatch({ engine, project, host, report }: WatchProps) {
   // It reads once this window's old marks moved to their host (ADR 0096,
-  // decision 9), so it never shows what the host had before them.
+  // decision 9), so it never shows what the host had before them; another
+  // host's, at once.
   const source = useMemo(() => {
     const threads = threadsSource(engine, project)
-    const read = () => move.over(engine, project).then(threads.read)
+    const read = () => move.over(engine, project, host).then(threads.read)
     return { ...threads, read }
-  }, [engine, project])
+  }, [engine, project, host])
   const live = useLive(engine, project, source)
   const harnesses = useHarnesses(engine)
   const sending = useSending(engine)
