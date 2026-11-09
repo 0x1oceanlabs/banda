@@ -149,6 +149,11 @@ machine, next to the snooze. He chose (b).
    - Nothing in that Thread changes while its host is away, so the Person
      marks it again once it is back. The window shows the last list it
      heard, as it does now.
+     _Changed on 2026-11-09 (#973, #972):_ the window's own seen of the
+     Thread on screen, not sent while its host was away, is armed again
+     once the host is back and goes when the Person is there (decision
+     3); the Person's marks still never queue, and none is sent again
+     after its connection broke.
    - A host older than this refuses the commands, and the window's toast
      names that machine. Its list has no marks, so its Threads show Done,
      as today.
