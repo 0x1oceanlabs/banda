@@ -93,13 +93,13 @@ import { existsSync, readFileSync } from "node:fs"
 import { dirname, join, relative, sep } from "node:path"
 import {
   appStrings,
+  componentProps,
   desktopReads,
-  functionProps,
   imports,
   layoutMotion,
   manifestIn,
   parts,
-  propNames,
+  programOver,
   sources,
   valuesTaken,
 } from "@banda/ui/testing/architecture"
@@ -494,10 +494,12 @@ test("only the Window gives run to what it draws", () => {
 
 /**
  * What the sidebar list's components take as code, not data, by file and
- * component (`functionProps`, ADR 0087, B4e): each `.tsx` under
+ * component (`componentProps`, ADR 0087, B4e): each `.tsx` under
  * `sidebar/` is read, its counts on the Bar's too (B4f), which go to a
  * Thread as a row does, and a file whose components take no code is left
- * out. The rest it does by the actions' ids, as their keys would
+ * out. Props are read as TypeScript types them, wherever their type is
+ * declared, so a `Dispatch<…>` is code and a row's props brought from
+ * Row's are read. The rest it does by the actions' ids, as their keys would
  * (`useRun`): opening a Pane, a New Thread, the menu, the settings and a
  * Project's verbs. What stays is the Window's area (`onDismiss`, and the
  * sidebar's width and hiding by its `Edge`), which Pane has the focus
@@ -505,8 +507,8 @@ test("only the Window gives run to what it draws", () => {
  * around its row (`withMenu`), the trust card the Sidebar anchors by a row
  * (ADR 0083, decision 5), until trust is an action too (#947), and what is
  * picked in the Later's picker, which the picker runs as its App's action
- * by its id. Each list only falls, and no prop, whatever its type
- * (`propNames`), is a Project's or a Thread's verb.
+ * by its id. Each list only falls, and no prop, whatever its type, is a
+ * Project's or a Thread's verb.
  */
 const SIDEBAR_CODE: Record<string, Record<string, string[]>> = {
   "web/src/sidebar/Edge.tsx": {
@@ -530,29 +532,48 @@ const VERBS =
   /^on(?:Open|NewThread|NoProject|AddProject|Pin|Locate|ProjectSettings|Menu|Settings|Keys|Start|Later|Wake|Archive|Rename)$/
 
 test("the sidebar list takes no more code than the list holds, and no Project's or Thread's verb", () => {
-  const files = sources(join(app, "web/src/sidebar"), { tests: false })
-    .filter((file) => file.endsWith(".tsx"))
-    .map((file) => [relative(app, file), readFileSync(file, "utf8")] as const)
-  expect(files.map(([file]) => file)).toContain("web/src/sidebar/Row.tsx")
+  const files = sources(join(app, "web/src/sidebar"), { tests: false }).filter(
+    (file) => file.endsWith(".tsx")
+  )
+  expect(files).toContain(join(app, "web/src/sidebar/Row.tsx"))
+  const program = programOver(files, join(app, "web/tsconfig.json"))
+  const read = files.map(
+    (file) => [relative(app, file), componentProps(program, file)] as const
+  )
   // A component that takes no code is left out, and so is a file of none.
   const taken = Object.fromEntries(
-    files.flatMap(([file, source]) => {
-      const some = Object.entries(functionProps(source, file)).filter(
-        ([, names]) => names.length > 0
-      )
+    read.flatMap(([file, components]) => {
+      const some = Object.entries(components)
+        .map(([component, { code }]) => [component, code] as const)
+        .filter(([, code]) => code.length > 0)
       return some.length > 0 ? [[file, Object.fromEntries(some)]] : []
     })
   )
-  const verbs = files.flatMap(([file, source]) =>
-    Object.entries(propNames(source, file)).flatMap(([component, names]) =>
-      names
+  const verbs = read.flatMap(([file, components]) =>
+    Object.entries(components).flatMap(([component, { props }]) =>
+      props
         .filter((name) => VERBS.test(name))
         .map((name) => `${file}: ${component} ${name}`)
     )
   )
   expect(verbs).toEqual([])
-  expect(taken).toEqual(SIDEBAR_CODE)
-})
+  // componentProps sorts the names, so the list is compared sorted.
+  expect(taken).toEqual(
+    Object.fromEntries(
+      Object.entries(SIDEBAR_CODE).map(([file, components]) => [
+        file,
+        Object.fromEntries(
+          Object.entries(components).map(([component, code]) => [
+            component,
+            code.toSorted(),
+          ])
+        ),
+      ])
+    )
+  )
+  // Reading the types of all the sidebar imports takes some seconds, more
+  // while other tests run beside it.
+}, 60_000)
 
 /**
  * A Project's pin is the Window's `projects.pin`, and the Flow the Person
