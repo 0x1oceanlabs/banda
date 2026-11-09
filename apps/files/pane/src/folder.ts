@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { type Engine, type ProjectId, Refused } from "@banda/contract"
 import type { Entry } from "@banda/contract/files"
 import { problem } from "@banda/ui/lib/words"
-import { type Listed, merged, toList } from "./tree"
+import { type Expected, type Listed, merged, toList } from "./tree"
 import { within, wholeOf } from "./where"
 
 /** The folder at the top, as the engine found it. */
@@ -26,23 +26,44 @@ export type Top =
 
 const LOADING: Top = { state: "loading" }
 const NONE: Listed = new Map()
+const NOTHING: Expecting = new Map()
+const NO_EXPECTED: Folder["expected"] = new Map()
 /** How long to wait before listing again after the connection broke. */
 const AGAIN = 500
 /** How many folders are listed at once. */
 const AT_ONCE = 4
 
+/** How a change Files made itself went, when not plainly done: what it
+ * made, or that it failed. */
+type Outcome = { made: Pick<Entry, "name" | "kind"> } | { failed: true }
+
+/** What a change done is expected to show, and the clock as it was done;
+ * a change of a name, from its start. */
+type Expectation = { expected: Expected; done?: number }
+type Expecting = ReadonlyMap<string, readonly Expectation[]>
+
 export type Folder = {
   top: Top
   listed: Listed
+  /** What Files changed itself in each folder, not listed since: the tree
+   * shows it already, so it lays it over `listed`. The same while
+   * nothing changes. */
+  expected: ReadonlyMap<string, readonly Expected[]>
   /** The folders open and not listed yet: a spinner on each. */
   listing: ReadonlySet<string>
   /** Whether the system has no watch left for some open folder. */
   limit: boolean
   /** Says Files changes `folder` itself, which the tree shows before the
-   * folder is listed again; the call it gives back says the change is
-   * done. A listing sent before then is dropped, as it may have read the
-   * folder before the change, and the folder is listed again after. */
-  change: (folder: string) => () => void
+   * folder is listed again: a thing in it `renamed`, as the tree shows at
+   * once. The call it gives back says the change is done, with what it
+   * made, or that it failed. A listing sent before then is dropped, as it
+   * may have read the folder before the change, and the folder is listed
+   * again after; what the change shows is expected of the folder until
+   * that listing comes, and a change that failed expects nothing. */
+  change: (
+    folder: string,
+    renamed?: { from: string; to: string }
+  ) => (outcome?: Outcome) => void
 }
 
 /**
@@ -59,6 +80,10 @@ export function useFolder(
   const [top, setTop] = useState<{ dir: string; top: Top }>()
   const [listed, setListed] = useState<{ dir: string; listed: Listed }>()
   const [limit, setLimit] = useState<string>()
+  // What Files changed itself in each folder, until a listing of it sent
+  // after the change was done comes; none kept from another folder.
+  const [expecting, setExpecting] = useState<{ dir: string; by: Expecting }>()
+  if (expecting !== undefined && expecting.dir !== dir) setExpecting(undefined)
   const heard = useRef(onListed)
   // What a listing that comes late checks it is still for.
   const now = useRef(dir)
@@ -79,6 +104,22 @@ export function useFolder(
   const changed = useRef(new Map<string, number>())
   const dropped = useRef(new Set<string>())
   const clock = useRef(0)
+  // A change that ends after the Pane went to another folder expects
+  // nothing of the one it shows now.
+  const expectIn = useCallback(
+    (
+      folder: string,
+      edit: (those: readonly Expectation[]) => readonly Expectation[]
+    ) => {
+      if (now.current !== dir) return
+      setExpecting((was) => {
+        const by = was?.dir === dir ? was.by : NOTHING
+        const next = edited(by, folder, edit)
+        return next === by ? was : { dir, by: next }
+      })
+    },
+    [dir]
+  )
   const list = useCallback(
     function listing(folder: string) {
       if (running.current.has(folder)) {
@@ -86,11 +127,17 @@ export function useFolder(
         return
       }
       running.current.add(folder)
-      const keep = (entries: readonly Entry[]) =>
+      // A listing sent after a change was done shows what it did, which
+      // is expected no longer.
+      const keep = (entries: readonly Entry[], sent: number) => {
         setListed((was) => ({
           dir,
           listed: merged(was?.dir === dir ? was.listed : NONE, folder, entries),
         }))
+        expectIn(folder, (those) =>
+          those.filter((one) => one.done === undefined || one.done > sent)
+        )
+      }
       function go() {
         const sent = ++clock.current
         engine
@@ -104,7 +151,7 @@ export function useFolder(
                 sent < (changed.current.get(folder) ?? 0)
               if (before) return void dropped.current.add(folder)
               dropped.current.delete(folder)
-              keep(found.entries)
+              keep(found.entries, sent)
               if (folder === "")
                 setTop({
                   dir,
@@ -129,7 +176,7 @@ export function useFolder(
                   },
                 })
               // A folder that cannot be read shows as holding nothing.
-              else keep([])
+              else keep([], sent)
             }
           )
           .finally(() => {
@@ -141,24 +188,41 @@ export function useFolder(
       if (running.current.size <= AT_ONCE) go()
       else waiting.current.push(go)
     },
-    [engine, project, dir]
+    [engine, project, dir, expectIn]
   )
   // A change done: the folder is listed again if a listing was dropped
-  // meanwhile, or after the one running, which is dropped as it comes.
+  // meanwhile, or after the one running, which is dropped as it comes;
+  // and always when the change shows, so what it shows is not expected
+  // for longer than a listing takes.
   const change = useCallback(
-    (folder: string) => {
+    (folder: string, renamed?: { from: string; to: string }) => {
       changing.current.set(folder, (changing.current.get(folder) ?? 0) + 1)
+      const mine = renamed && { expected: { renamed } }
+      if (mine) expectIn(folder, (those) => [...those, mine])
       let over = false
-      return () => {
+      return (outcome?: Outcome) => {
         if (over) return
         over = true
         changing.current.set(folder, (changing.current.get(folder) ?? 1) - 1)
-        changed.current.set(folder, ++clock.current)
+        const done = ++clock.current
+        changed.current.set(folder, done)
+        const failed = outcome !== undefined && "failed" in outcome
+        const made = outcome && "made" in outcome ? outcome.made : undefined
+        // What was made is expected only once it was, so a make that
+        // failed never shows a row; a rename that failed, its old name.
+        const shows = !failed && (mine !== undefined || made !== undefined)
+        if (mine || made)
+          expectIn(folder, (those) => [
+            ...those.flatMap((one) =>
+              one !== mine ? [one] : failed ? [] : [{ ...one, done }]
+            ),
+            ...(made ? [{ expected: { made }, done }] : []),
+          ])
         if (running.current.has(folder)) again.current.add(folder)
-        else if (dropped.current.delete(folder)) list(folder)
+        else if (dropped.current.delete(folder) || shows) list(folder)
       }
     },
-    [list]
+    [list, expectIn]
   )
 
   // Another folder: its top at once.
@@ -216,11 +280,41 @@ export function useFolder(
     () => new Set(open.filter((folder) => !shown.has(folder))),
     [open, shown]
   )
+  const expected = useMemo(
+    () =>
+      expecting?.dir === dir && expecting.by.size > 0
+        ? new Map(
+            [...expecting.by].map(([folder, those]) => [
+              folder,
+              those.map((one) => one.expected),
+            ])
+          )
+        : NO_EXPECTED,
+    [expecting, dir]
+  )
   return {
     top: top?.dir === dir ? top.top : LOADING,
     listed: shown,
+    expected,
     listing,
     limit: limit === dir,
     change,
   }
+}
+
+/** `by` with `folder`'s changes as `edit` leaves them, a folder with none
+ * left out; `by` itself when they are the same. */
+function edited(
+  by: Expecting,
+  folder: string,
+  edit: (those: readonly Expectation[]) => readonly Expectation[]
+): Expecting {
+  const was = by.get(folder) ?? []
+  const now = edit(was)
+  if (now.length === was.length && now.every((one, n) => one === was[n]))
+    return by
+  const next = new Map(by)
+  if (now.length > 0) next.set(folder, now)
+  else next.delete(folder)
+  return next
 }
