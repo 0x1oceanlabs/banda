@@ -38,6 +38,10 @@ export function pickSnooze(target: Snoozing | undefined): void {
   picking.set(target)
 }
 
+/** What is picked: a time for the Thread to come back at, when its turn
+ * is done, or to wake it now. */
+type Picked = number | "done" | "wake"
+
 /** One line of the picker, and what picking it does. */
 type Choice = {
   label: string
@@ -65,9 +69,9 @@ export function SnoozePicker() {
   const target = useStore(picking, now)
   const onClose = () => pickSnooze(undefined)
   // Its App's, by what each does: the picker names none of its actions.
-  const onSnooze = ({ project, listed }: Snoozing, until?: number) => {
+  const onSnooze = ({ project, listed }: Snoozing, until: number | "done") => {
     const action = itemActionOf(listed, "snooze")
-    const when: Args = until === undefined ? { done: true } : { until }
+    const when: Args = until === "done" ? { done: true } : { until }
     if (action) run(action.id, { project, item: listed.id, ...when })
   }
   const onWake = ({ project, listed }: Snoozing) => {
@@ -90,12 +94,9 @@ export function SnoozePicker() {
           <Picking
             key={`${target.project}:${target.listed.id}`}
             listed={target.listed}
-            onSnooze={(until) => {
-              onSnooze(target, until)
-              onClose()
-            }}
-            onWake={() => {
-              onWake(target)
+            onPick={(picked) => {
+              if (picked === "wake") onWake(target)
+              else onSnooze(target, picked)
               onClose()
             }}
           />
@@ -105,14 +106,15 @@ export function SnoozePicker() {
   )
 }
 
+/** The picker's lines, for one Thread. What is picked goes back by one
+ * prop, not by a snooze's and a wake's: the sidebar list takes no Thread's
+ * verb as a prop (ADR 0087, B4e). */
 function Picking({
   listed,
-  onSnooze,
-  onWake,
+  onPick,
 }: {
   listed: Listed
-  onSnooze: (until?: number) => void
-  onWake: () => void
+  onPick: (picked: Picked) => void
 }) {
   const id = useId()
   const [now] = useState(Date.now)
@@ -130,27 +132,27 @@ function Picking({
       label: clock(typed, now),
       note: `in ${left(typed, now)}`,
       icon: <ArrowRightIcon />,
-      pick: () => onSnooze(typed),
+      pick: () => onPick(typed),
     })
   if (asleep(listed, now))
     choices.push({
       label: "Wake now",
       note: "",
       icon: <AlarmClockIcon />,
-      pick: onWake,
+      pick: () => onPick("wake"),
     })
   for (const preset of listedPresets)
     choices.push({
       label: preset.label,
       note: clock(preset.at, now),
-      pick: () => onSnooze(preset.at),
+      pick: () => onPick(preset.at),
     })
   if (works(listed.mark))
     choices.push({
       label: "When it's done",
       note: "the turn ends",
       icon: <LoaderIcon />,
-      pick: () => onSnooze(),
+      pick: () => onPick("done"),
     })
   const picked = Math.min(at, choices.length - 1)
   const title = (
