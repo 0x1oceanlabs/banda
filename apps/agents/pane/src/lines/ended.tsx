@@ -16,7 +16,7 @@ import {
 import { useNow } from "@banda/ui/hooks/use-now"
 import { clock } from "@banda/ui/lib/words"
 import { sleeps } from "@banda/ui/lib/snooze"
-import { outOf, useLimitsNow } from "../starts-on"
+import { outOf, useLimitsNow } from "../thread/starts-on"
 import { useThreadAround } from "../thread/context"
 import type { LineProps } from "./types"
 import {
