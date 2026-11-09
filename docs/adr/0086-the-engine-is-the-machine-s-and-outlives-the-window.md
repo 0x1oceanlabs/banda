@@ -343,6 +343,24 @@ starts at login too, later.
   while Agents work, then restarts it anyway if the Person confirms.
   brew's cask never quits Banda, and its zap removes the job. Plan step
   7 is six PRs, 7a to 7f, and Linux login start is step 8.
+- Decision 1 on macOS, as step 7c built it (2026-11-09): once the Mac's
+  job stops as asked, another machine's window tells a Quit at the Mac
+  from a logout by the Person's gui domain there. Still there 10 s on,
+  Banda quit at the Mac: the host shows stopped, and is not started
+  again until the Person starts it from that window, or that window's
+  Banda starts again. Gone, they logged out: the host is away, and that
+  window tries again each minute.
+- Decision 4, as step 7c built it (2026-11-09): the engine knows its app
+  by its own program, the app's or the window's copy of it, and whether
+  the app runs by the lock Electron keeps in the window's profile. It
+  opens the app when it starts with none, and when the app crashed, which
+  leaves the lock naming a process that is gone and a crash dump newer
+  than the lock; never one the Person quit, or that quit as they logged
+  out, which takes its lock away, nor one ended with Force Quit, which
+  leaves no dump. After three opens with no app that ran five minutes
+  between them, it opens none for the rest of its run. It is built off:
+  until step 7e the app shows its window, in front, as it opens, and 7e
+  turns the opening on once the app opens with none.
 - The draft in PR #460, decision 6: the engine's own `hello` with a
   "generation" gives way to ADR 0082's `challenge`, `hello` with a
   range, and `welcome`.

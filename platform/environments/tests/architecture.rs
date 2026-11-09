@@ -27,7 +27,7 @@ const MAKES: [&str; 5] = [
 
 /// Where the engine makes a process on the host for no Project's
 /// program: the file, how many places in it make one, and why.
-const ON_THE_HOST: [(&str, usize, &str); 13] = [
+const ON_THE_HOST: [(&str, usize, &str); 14] = [
     (
         "kernel/src/host.rs",
         1,
@@ -47,6 +47,12 @@ const ON_THE_HOST: [(&str, usize, &str); 13] = [
         "loads, asks after and stops the engine itself as macOS's launchd job with the system's \
          launchctl, and starts the job again in its own place with the login shell's PATH (ADR \
          0086, decision 1)",
+    ),
+    (
+        "engine/src/service/app.rs",
+        1,
+        "opens Banda's own app, hidden, with the system's open, when the engine's launchd job \
+         has none, from step 7e (ADR 0086, decision 4)",
     ),
     (
         "platform/git-cli/src/lib.rs",

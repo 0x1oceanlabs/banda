@@ -73,14 +73,24 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   again with it, without launchd's `XPC_SERVICE_NAME`. It stops with
   exit 0 where another engine holds its lock, or at the third start
   after a crash within a minute, as launchd has no limit of its own
-  (`engine/src/service/launchd.rs`). Where neither answers (a Mac with
-  nobody logged in at its screen; Windows, until its own; a container;
-  CI), or the unit or the job does not start, the engine is the
-  window's child, as before, and the log and `banda status` (`child`)
-  say why; so is a checkout's, Banda Local, unless
-  `BANDA_ENGINE_AS=service`. `banda status` says whether it runs, since
-  when and its build; it names its unit, or job, only as that unit's
-  own process. `banda stop` is Quit Banda: it asks first while
+  (`engine/src/service/launchd.rs`). Another machine's window starts the
+  job too, over ssh, while the Person is logged in at the Mac's screen,
+  locked or not, so the engine runs in that session as if started there;
+  with nobody logged in, it starts none and exits 75, and that window
+  tries again (`engine/src/control.rs`). From step 7e, once the app
+  opens with no window, the job opens its app, hidden, by its path
+  (`open -g -j`), when it starts with none, and when the app crashed, as
+  the lock Electron keeps in the window's profile and a new crash dump
+  say; never one the Person quit, which takes its lock away, or ended
+  with Force Quit, which leaves no dump (`engine/src/service/app.rs`).
+  Where neither answers (a Mac with nobody logged in at its screen;
+  Windows, until its own; a container; CI), or the unit or the job does
+  not start, the engine is this machine's window's child, as before, and
+  the log and `banda status` (`child`) say why; so is a checkout's,
+  Banda Local, unless `BANDA_ENGINE_AS=service`. Off Linux, another
+  machine's window never gets the engine as its child. `banda status`
+  says whether it runs, since when and its build; it names its unit, or
+  job, only as that unit's own process. `banda stop` is Quit Banda: it asks first while
   Agents work (`--force` does not), refuses an Agent's pass, and stops
   an engine that does not answer too. An engine of another build, whose
   protocol this one does not speak, says so, and runs until Banda quits;

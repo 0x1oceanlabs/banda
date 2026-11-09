@@ -22,6 +22,13 @@
 //! loaded names this client's build. The engine moves its plist itself as
 //! the setting changes ([`follow_login`]). `banda stop` boots the job out.
 //!
+//! Another machine's window is such a client too, over ssh, while the
+//! Person is logged in at the screen, locked or not (ADR 0086, plan step
+//! 7c; `control.rs`): loaded from the ssh session into the Person's gui
+//! domain, the job runs in the screen's session, with their sign-ins, as
+//! if started there. Its plist carries nothing of the ssh session's but
+//! Banda's own variables ([`job`]).
+//!
 //! The plist names no PATH, and launchd's is bare
 //! (`/usr/bin:/bin:/usr/sbin:/sbin`): the engine asks the login shell for
 //! its own as it starts, and starts itself again with it, without
@@ -341,16 +348,27 @@ pub fn job(places: &Places, program: &Path) -> Job {
     let plists = Plists::of(places, &label);
     let at_login = plists.at_login.is_some() && banda_machines::starts_at_login(&places.config);
     let starter: Vec<(String, String)> = std::env::vars().collect();
-    let env = super::own(&starter, places, &[]);
     let stderr = places.logs().join(STDERR);
     Job {
-        plist: plist(&label, program, &env, &stderr),
+        plist: plist(&label, program, &variables(&starter, places), &stderr),
         label,
         plists,
         at_login,
         stderr,
         crash_starts: crate::run::crash_starts_file(places),
     }
+}
+
+/// What the job gets of its `starter`'s variables, a window's here or an
+/// ssh session's: Banda's own ([`super::own`]), and its places only where
+/// the starter set them. A Mac's places never follow the XDG folders, so
+/// those a starter's shell sets, as an ssh session's may, move none.
+fn variables(starter: &[(String, String)], places: &Places) -> Vec<(String, String)> {
+    let xdg: Vec<(String, String)> = (starter.iter())
+        .filter(|(name, _)| name.starts_with("XDG_"))
+        .cloned()
+        .collect();
+    super::own(starter, places, &xdg)
 }
 
 /// The job's plist: launchd runs `program serve` with `env`, keeps it
@@ -361,8 +379,8 @@ pub fn job(places: &Places, program: &Path) -> Job {
 ///   a kill, and not after it stopped as asked.
 /// - `ProcessType` Interactive: neither it nor its Harnesses are slowed as
 ///   a background job's.
-/// - `LimitLoadToSessionType` Aqua: only the session at the screen loads
-///   it, never an ssh session's.
+/// - `LimitLoadToSessionType` Aqua: it runs only in the session at the
+///   screen, one loaded from an ssh session too, never in that session.
 /// - `AssociatedBundleIdentifiers`: Login Items may name it by the app,
 ///   where macOS lets it.
 ///
@@ -774,6 +792,57 @@ mod tests {
         // With nothing of Banda's to carry, no empty dict.
         let bare = plist("so.banda.app.engine", program, &[], stderr);
         assert!(!bare.contains("EnvironmentVariables"));
+    }
+
+    #[test]
+    fn a_job_loaded_over_ssh_carries_nothing_of_the_ssh_session_s() {
+        let starter: Vec<(String, String)> = [
+            ("SSH_CONNECTION", "100.64.0.1 50000 100.79.149.28 22"),
+            ("SSH_CLIENT", "100.64.0.1 50000 22"),
+            ("SSH_AUTH_SOCK", "/tmp/ssh-x/agent.1"),
+            ("SSH_TTY", "/dev/ttys004"),
+            ("TERM", "xterm-256color"),
+            ("LANG", "en_US.UTF-8"),
+            ("LC_ALL", "C"),
+            ("PATH", "/usr/bin:/bin"),
+            ("HOME", "/Users/person"),
+            ("USER", "person"),
+            ("SHELL", "/bin/zsh"),
+            ("XDG_RUNTIME_DIR", "/run/user/501"),
+            ("XDG_CONFIG_HOME", "/Users/person/.config"),
+            ("XDG_DATA_HOME", "/Users/person/.local/share"),
+            ("BANDA_OVER_SSH", "1"),
+            ("BANDA_LOG", "debug"),
+        ]
+        .map(|(name, value)| (name.to_owned(), value.to_owned()))
+        .into();
+        let places = Places::under(Path::new("/Users/person/Library/Application Support"));
+        let env = variables(&starter, &places);
+        assert_eq!(env, [("BANDA_LOG".to_owned(), "debug".to_owned())]);
+        let program =
+            Path::new("/Users/person/Library/Application Support/banda/engine/0.3.0/banda");
+        let text = plist("so.banda.app.engine", program, &env, Path::new("/x.log"));
+        for never in [
+            "SSH_",
+            "TERM",
+            "LANG",
+            "LC_ALL",
+            "PATH",
+            "HOME",
+            "USER",
+            "SHELL",
+            "XDG_",
+            "OVER_SSH",
+            "BANDA_CONFIG",
+            "BANDA_DATA",
+        ] {
+            assert!(!text.contains(never), "{never} in\n{text}");
+        }
+        // A place the starter set is carried, as it resolved it.
+        let mut moved = starter.clone();
+        moved.push(("BANDA_STATE".into(), "/elsewhere".into()));
+        let env = variables(&moved, &places);
+        assert!(env.iter().any(|(name, _)| name == "BANDA_STATE"), "{env:?}");
     }
 
     #[test]
