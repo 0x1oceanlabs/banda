@@ -20,7 +20,9 @@
  * it is taken out, and its address changes in place; Test finds arc's
  * Banda, its system and its own name, and starts nothing there, and Stop
  * Banda stops it. arc names itself in its machine.toml (ADR 0095), as
- * this checkout's engine says in its welcome: "arc", a server. With
+ * this checkout's engine says in its welcome: "arc", a server. In
+ * Settings → Machines a row stays busy while any of its acts runs, as a
+ * Test main holds outlasts an address refused meanwhile. With
  * BANDA_E2E_SHOTS set to a folder, it leaves pictures of each state there
  * for the Person to see.
  */
@@ -1423,4 +1425,40 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
       .getByRole("group", { name: "Cloud 2", exact: true })
       .getByText("Bench window tests")
   ).toBeVisible()
+
+  // Two acts at once in its row: a Test main holds, and an address
+  // refused meanwhile. The refusal ends first and the Test runs on, so
+  // the row stays busy and says so until the Test ends too (#966).
+  await app.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler("hostTest")
+    ipcMain.handle(
+      "hostTest",
+      () =>
+        new Promise((done) => {
+          ;(globalThis as { tested?: (test: unknown) => void }).tested = done
+        })
+    )
+  })
+  const testing = row.getByRole("button", { name: "Test connection" })
+  await testing.click()
+  await expect(row).toContainText("Testing Cloud 2…")
+  const address = row.getByRole("textbox", { name: "Cloud 2's address" })
+  await address.fill("not an address")
+  await address.press("Enter")
+  await expect(row.getByRole("alert")).toContainText("`ssh` is not")
+  await expect(testing).toBeDisabled()
+  await expect(row).toContainText("Testing Cloud 2…")
+  await app.evaluate(() =>
+    (globalThis as { tested?: (test: unknown) => void }).tested?.({
+      state: "away",
+      why: "held",
+    })
+  )
+  await expect(row.getByRole("status")).toContainText("No answer: held")
+  await expect(testing).toBeEnabled()
+  // What went wrong stays until the next act starts.
+  await expect(row.getByRole("alert")).toContainText("`ssh` is not")
+  expect(readFileSync(hostsFile, "utf8")).toBe(
+    '[[hosts]]\nname = "arc"\nssh = "arc"\n'
+  )
 })
