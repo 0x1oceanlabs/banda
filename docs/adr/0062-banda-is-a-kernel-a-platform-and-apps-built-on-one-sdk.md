@@ -264,9 +264,12 @@ resolve. Its answers are decisions 4, 5, 6, 7, 10, 13, 14 and 17 below.
      sent as the Person from this device (decision 5). The control shows
      the new value at once and stays pending until the view is read at
      or past the command's place in the log; a refusal puts it back
-     (ADR 0025's rule). A form is checked on the client against the
-     method's schema and sent as one command. The client sends no other
-     method a tree names: the client is trusted, the tree is not.
+     (ADR 0025's rule). An answer with no place (the command wrote no
+     fact) has nothing to wait for: the control stops being pending at
+     once, and a read sent after the answer shows what it did. (Amended
+     by #880.) A form is checked on the client against the method's
+     schema and sent as one command. The client sends no other method a
+     tree names: the client is trusted, the tree is not.
    - Props carry no functions and no colours. A table's cells are typed
      columns or a subtree; `className` takes layout utilities only;
      colour comes through variants; images come only from the host, by
