@@ -1730,15 +1730,15 @@ images. Sweeps retain images still referenced by a fork after a rewind.
 
 - **Architecture tests.** The kernel names no module, no module reads
   another's tables, and a Pane imports only the API, `@banda/ui`, React
-  and its icons, and the core only as `@banda/core/react`; the terminal's
-  Pane also Ghostty. No code of the engine
-  makes a process but `banda-environments`, and the places named in its
-  test, each with how many and why, that ask the host about itself or keep
-  Banda's books and run nothing of a Project's (ADR 0084, decision 4); no
-  code uses ACP's agent that starts its own. Each place that makes a
-  `Program` is named there too, with whose it makes and why (ADR 0083,
-  decision 1). In the window (`client/web/src/architecture.test.ts`),
-  only `modules.ts` and the bridge's table name a module's package, and
+  and its icons, and the core only as `@banda/core/react`; the
+  terminal's Pane also Ghostty. No code of the engine makes a process
+  but `banda-environments`, and the places named in its test, each with
+  how many and why, that ask the host about itself or keep Banda's books
+  and run nothing of a Project's (ADR 0084, decision 4); no code uses
+  ACP's agent that starts its own. Each place that makes a `Program` is
+  named there too, with whose it makes and why (ADR 0083, decision 1).
+  In the window (`client/web/src/architecture.test.ts`), only
+  `modules.ts` and the bridge's table name a module's package, and
   nothing more animates a size or a place (ADR 0088). Its tests find the
   Apps' and platform parts' folders by their `app.toml` through `parts`
   (`@banda/ui/testing/architecture`), which fails when it finds none. Of

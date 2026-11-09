@@ -96,7 +96,7 @@ What Apps give never talk to each other.
   registry refusing an undeclared listen.
 - **borders.4 Import no other App, and none of its contract types.** A
   Pane imports only the contract, the kit, React and lucide
-  (`apps/git/pane/src/architecture.test.ts:11-17`, which still lets Git
+  (`apps/git/pane/src/architecture.test.ts:11-19`, which still lets Git
   import Threads' contract at `:12`), and the client core only as
   `@banda/core/react`, where its hooks and contexts are (`useHere`,
   `useRun`, `useMachines`). Name another App's things by Address.
@@ -201,9 +201,9 @@ What Apps give never talk to each other.
 
 Every rule here binds from B4c, which built Here. A Widget reads it with
 `useHere(select)` from `@banda/core/react`; an act reads it as it runs,
-`window.here.get()`, so it acts where the Person is at its gesture. Until Addresses come with `item@1`
-(B7), `subject` is the id the App lists the thing with
-(`PaneKind.shows`).
+`window.here.get()`, so it acts where the Person is at its gesture. Until
+Addresses come with `item@1` (B7), `subject` is the id the App lists the
+thing with (`PaneKind.shows`).
 
 ```ts
 type Here = {
