@@ -805,7 +805,7 @@ test("another machine's Thread is seen, marked unread and archived on its engine
   await page.getByRole("menuitem", { name: /Mark as unread/ }).click()
   await expect(done).toBeVisible()
   await expect.poll(() => bench().seen).toBeUndefined()
-  // Alt+S archives it there, and its Pane closes once arc took it.
+  // Alt+S archives it there, and its Pane closes at once (#974).
   await thread.getByRole("textbox", { name: "Message to Fake AI" }).focus()
   await page.keyboard.press("Alt+S")
   await expect(thread).toBeHidden()

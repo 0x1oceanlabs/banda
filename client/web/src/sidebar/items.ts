@@ -25,9 +25,10 @@ import { archivable, archivedNow, toggled } from "./archived"
  * Archive thread, or Unarchive thread (ADR 0069; ADR 0008, decision 4):
  * the sidebar list's own row and key. The Item's host keeps the mark (ADR
  * 0096), so its App's own archive sends it there, in one command, which
- * ends a snoozed Thread's snooze too; archived, the Item is put away once
- * its host took it: every Pane that shows it closes, on any workspace. An
- * Item whose App has none stays as it is.
+ * ends a snoozed Thread's snooze too; archived, the Item is put away at
+ * once, without waiting for its host's answer: every Pane that shows it
+ * closes, on any workspace (#974). An Item whose App has none stays as it
+ * is.
  */
 export const archiving: ItemAction<Shell> = {
   id: "sidebar.archive",
