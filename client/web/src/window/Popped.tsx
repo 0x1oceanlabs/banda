@@ -77,10 +77,10 @@ export function Popped({ engine, pane }: { engine: Engine; pane: string }) {
         }),
       update: (_entry, { args }: PaneState) => {
         setAsked({ args, until: Infinity })
-        engine.command("workspaces.update", { pane, args }).then(
-          (done) =>
+        engine.commandAt("workspaces.update", { pane, args }).then(
+          ({ at }) =>
             setAsked((was) =>
-              was?.args === args ? { args, until: done.at ?? 0 } : was
+              was?.args === args ? { args, until: at ?? 0 } : was
             ),
           (error: unknown) => {
             console.warn("The workspaces did not change:", error)

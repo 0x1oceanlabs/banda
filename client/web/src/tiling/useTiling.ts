@@ -123,8 +123,7 @@ export function useTiling({
           // drew by another, or not at all, comes as the fact says.
           if (answer.pane && answer.pane !== drawn.opens)
             console.warn("The engine opened a Pane by another ID than drawn")
-          const place = answer.at === null ? null : (at ?? answer.at)
-          store.set(answered(store.get(), id, place))
+          store.set(answered(store.get(), id, at))
         },
         (error: unknown) => {
           unanswered.done(id)
@@ -199,9 +198,9 @@ export function useTiling({
       // key's does: an update after it that finds its args there already
       // is kept until this one's fact is heard, so the args before it are
       // not drawn back meanwhile.
-      engine.command("workspaces.update", { pane, args }).then(
-        (done) => {
-          store.set(answeredTo(store.get(), done.at))
+      engine.commandAt("workspaces.update", { pane, args }).then(
+        ({ at }) => {
+          store.set(answeredTo(store.get(), at))
           until(store.get().answered)
         },
         (error: unknown) => {
