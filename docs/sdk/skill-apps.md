@@ -47,7 +47,8 @@ Nothing an App gives talks to anything else directly.
 
 - `borders.1` Your code runs on your host; client React only for
   first-party live components, each Pane or Widget written so marked
-  `[unstable] client-pane` or `client-widget` (the marks after B4f).
+  `[unstable] client-pane` or `client-widget` (the marks after an engine
+  step, #1001).
 - `borders.2` Write only your own tables; read no other App's.
 - `borders.3` Reach another App only by its published facts (`listens`),
   published queries (`calls`) and intents (after B8); never by a method

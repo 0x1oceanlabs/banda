@@ -65,9 +65,9 @@ What Apps give never talk to each other.
   (ADR 0062 d7). Client code is allowed only for first-party live
   components. A Pane or Widget still written in client React carries an
   `[unstable] client-pane` or `client-widget` mark in its manifest, and
-  that count only falls. *After* B4f for the two marks. *Check:* today,
-  the mark ceiling (`engine/src/modules.rs:32`); planned, the two new
-  marks (B4f).
+  that count only falls. *After* an engine step for the two marks (#1001):
+  they raise the engine's ceiling. *Check:* today, the mark ceiling
+  (`CEILING` in `engine/src/modules.rs`); planned, the two new marks.
 - **borders.2 Own your data.** A module's name prefixes its methods,
   events and tables; it writes only its own tables and reads no other
   module's (`kernel/src/module.rs:33-37`). *Check:* the kernel's SQLite
@@ -88,7 +88,7 @@ What Apps give never talk to each other.
   and Git (`apps/files/pane/src/live.ts:24`, `:84`;
   `apps/git/pane/src/read.ts:160`); `terminal.terminal` from Threads
   (`apps/agents/pane/src/SignIn.tsx:220`); `browser.open` from the
-  terminal (`apps/terminal/pane/src/Servers.tsx:120`);
+  terminal (`apps/terminal/pane/src/Servers.tsx:112`);
   `agents.thread.details` from Git's Switch branch
   (`apps/git/pane/src/index.ts`). *Check:* the architecture test counts
   where an App runs another App's action by its id, and where the Window
@@ -113,12 +113,13 @@ What Apps give never talk to each other.
   `apps/git/pane/src/ended.ts:11-20`); use no module global as a channel
   between Apps, or between an App and the Window (Threads still writes
   the title field's store, `client/ui/src/lib/naming.ts`, #861); take no
-  privileged props (`client/web/src/bar/Widgets.tsx:20-40`). The Window
-  gives you Here and runs actions; that is all. New code keeps it now;
-  the cases named here are counted until B4f, B8c and #861. *Check:* the
-  architecture test finds no global of a Thread's details card in
-  `@banda/ui` (B4d made it Threads' action `agents.thread.details`), and
-  counts the Apps that write the title field's store; the rest planned.
+  privileged props. The Window gives you Here and runs actions; that is
+  all. New code keeps it now; the cases named here are counted until B8c
+  and #861. *Check:* the architecture test finds no global of a Thread's
+  details card in `@banda/ui` (B4d made it Threads' action
+  `agents.thread.details`), counts the Apps that write the title field's
+  store, and holds every widget's props to the engine and the Projects,
+  the window's own as a module's (B4f); the rest planned.
 - **borders.7 Work in one Project at a time.** App code is walled to the
   Project it runs for; only the platform listens across Projects (ADR
   0082 d6). Anything that spans Projects reads `item@1` and `call@1`.
@@ -168,8 +169,8 @@ What Apps give never talk to each other.
   action through `useRun()` or opens its own popover. Mark it `compact`
   only if it has a form that stays in a narrow Bar and a phone's header.
   Where it stands is the Person's `look.toml [bar]`, never yours (ADR
-  0064). *Until* B4f, run the action through `WidgetProps.window.run`.
-  *Check:* review.
+  0064). *Check:* review; the architecture test holds its props to
+  `{engine, projects}` and lists the widgets marked `compact`.
 - **give.4 To be listed or to call the Person, publish `item@1` or
   `call@1`,** in the same transaction as the change behind it (ADR 0082
   d9). Don't ask for a place in the Sidebar: the sidebar list shows
@@ -234,8 +235,10 @@ neither (borders.5, device.5).
 - **here.5 A Pane never reads Here to draw,** and its header and Pane
   menu act on its own args (ADR 0066 d6). An act gets Here at its
   gesture: it reads `window.here.get()` as it runs for an unset
-  `project` or `pane` arg, and from B4f `useRun` fills them from the
-  gesture, then from Here. *Check:* review.
+  `project` or `pane` arg. What the gesture meant it on, a widget or a
+  row says in its args, as a row of the counts runs `pane.pick` with its
+  Thread: `useRun` runs with the Window's Here as it runs and adds
+  nothing of its own (B4f). *Check:* review.
 - **here.6 Don't work out sight or visibility yourself.** The platform
   derives sight (the calls part's `sightOf`, which the notifications
   part asks through `WindowApi.sight` until E9); drawing follows the
@@ -652,8 +655,9 @@ code:
   words.
 - **These bind after their step:** give.4 (B7); give.5 (B4i); motion.4's
   one fit (P7); borders.8 (B8); data.5 (E8); device.1 (E3); borders.1's
-  marks (B4f).
+  marks (#1001).
 - **These wait for the renderer:** data.7, design.2 and trust.2 (V1, V2).
 
 Today's cases of borders.3, borders.6, borders.9 and data.4 are counted,
-and fall as B4f, B8c, E1, E6 and E8 land.
+and fall as B8c, E1, E6 and E8 land; B4f took the widgets' privileged
+props.
