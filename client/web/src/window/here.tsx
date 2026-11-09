@@ -19,6 +19,7 @@ import {
   RunContext,
 } from "@banda/core/react"
 import { inFront } from "@banda/ui/hooks/use-in-front"
+import { ItemsContext } from "@banda/ui/hooks/use-item"
 import { paneHost } from "@banda/ui/pane"
 import { type ReactNode, useContext, useEffect, useState } from "react"
 import type { Shows } from "../calls/sight"
@@ -104,7 +105,10 @@ export function useKeptHere(
 
 /** What the Window keeps outside React, for all it draws to read by
  * selector: the items and the calls (ADR 0088, decision 7), and Here;
- * and its `run`, steady, by which what it draws runs an action by id. */
+ * and its `run`, steady, by which what it draws runs an action by id.
+ * The items go to the Apps too, as what fills a Pane's header finds the
+ * Item it shows there (`useItem`): the store, not `itemsOf`, so the
+ * snooze clock wakes no header. */
 export function Kept({
   stores,
   here,
@@ -118,9 +122,11 @@ export function Kept({
 }) {
   return (
     <StoresContext value={stores}>
-      <HereContext value={here}>
-        <RunContext value={run}>{children}</RunContext>
-      </HereContext>
+      <ItemsContext value={stores.items}>
+        <HereContext value={here}>
+          <RunContext value={run}>{children}</RunContext>
+        </HereContext>
+      </ItemsContext>
     </StoresContext>
   )
 }
