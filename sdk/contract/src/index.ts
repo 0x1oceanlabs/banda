@@ -39,6 +39,7 @@ export {
   Refused,
   type Address,
   type Answered,
+  type CommandOptions,
   type Status,
 } from "./engine"
 export { newId } from "./ids"
