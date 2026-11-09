@@ -4,8 +4,9 @@
 //!   Person's session, a systemd unit on Linux and a launchd job on macOS,
 //!   which any command that reaches it starts when it does not run (ADR
 //!   0086, decision 1); `banda start` only starts it, `banda status` says
-//!   whether it runs, since when and its build, and `banda stop` is Quit
-//!   Banda (decision 3).
+//!   whether it runs, since when and its build, and who works and who
+//!   waits on this machine, `--follow` on each change, for the bar (decision
+//!   4), and `banda stop` is Quit Banda (decision 3).
 //! - `banda call <method>` calls one API method and prints `{"ok": …}`.
 //! - `banda follow --project <id>` prints the Project's events, one JSON
 //!   object per line.
@@ -59,6 +60,7 @@ mod problems;
 mod run;
 mod serve;
 mod service;
+mod status;
 mod window;
 
 use banda_kernel::{CommandId, EventFilter, ProjectId, Refusal};
@@ -114,10 +116,18 @@ enum Command {
         #[arg(long)]
         with_parent: bool,
     },
-    /// Says whether the engine runs, since when, and its build, and what
-    /// this machine is: its system, and its own name and icon; as one
-    /// JSON line. It starts nothing.
-    Status,
+    /// Says whether the engine runs, since when, and its build, what this
+    /// machine is: its system, and its own name and icon; and who works
+    /// and who waits on it; as one JSON line. It starts nothing.
+    Status {
+        /// Prints a line again on each change, the current one first: with
+        /// no engine, it says so and waits for one.
+        #[arg(long)]
+        follow: bool,
+        /// For a bar that follows it: stops when stdin closes.
+        #[arg(long, requires = "follow")]
+        with_parent: bool,
+    },
     /// Quits Banda: stops the engine, its Agents, Harnesses and Terminals,
     /// and any window open on it. When Agents are working it asks first.
     Stop {
@@ -670,7 +680,10 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             serve::serve(places, serving).await
         }
         Command::Start { .. } => unreachable!("banda start knows how this Banda runs its engine"),
-        Command::Status => control::status(&places).await,
+        Command::Status {
+            follow,
+            with_parent,
+        } => status::status(&places, follow, with_parent).await,
         Command::Stop { force } => control::stop(&places, force).await,
         Command::Call {
             method,

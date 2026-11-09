@@ -874,11 +874,15 @@ fn an_agents_banda_acts_under_its_pass() {
     let agents = std::fs::read_to_string(places.config.join("agents.toml")).unwrap_or_default();
     assert!(agents.contains("\nlater = \"full_access\""), "{agents}");
     assert!(!agents.contains("\nmode ="), "{agents}");
-    // Its own pass's status: the engine that gave it, and its fence.
+    // Its own pass's status: the engine that gave it, and its fence, and
+    // not who works and who waits, which is the Person's bar's.
     let status = places.as_agent(session, &["status"]);
     let status: serde_json::Value = serde_json::from_slice(&status.stdout).unwrap();
     assert_eq!(status["running"], true, "{status}");
     assert!(status["fence"]["fence"].is_string(), "{status}");
+    assert!(status.get("agents").is_none(), "{status}");
+    let follow = places.as_agent(session, &["status", "--follow"]);
+    assert!(!follow.status.success(), "{follow:?}");
     let bound = places.as_agent(session, &["keys", "bind", "Alt+M", "column.maximize"]);
     assert!(bound.status.success(), "{bound:?}");
     let keys = std::fs::read_to_string(places.config.join("keys.toml")).unwrap();
@@ -1269,6 +1273,129 @@ fn banda_status_says_whether_the_engine_runs_and_banda_stop_quits_it() {
     let problems = places.ok("problems.list", None, json!({}));
     assert_eq!(problems["problems"], json!([]), "{problems}");
     drop(stdin);
+}
+
+#[test]
+fn banda_status_follow_says_who_works_and_who_waits_until_stdin_closes() {
+    let places = Places::new();
+    // With no engine it says so, and starts none.
+    let idle = places.banda(&["status"]).output().unwrap();
+    assert!(idle.status.success(), "{idle:?}");
+    let idle: Value = serde_json::from_slice(&idle.stdout).unwrap();
+    assert_eq!(idle["running"], false, "{idle}");
+    assert!(idle.get("agents").is_none(), "{idle}");
+    assert!(!places.state.join("engine.json").exists(), "none started");
+
+    // Without a parent, stdin is not watched: with none, it goes on.
+    let mut alone = places
+        .banda(&["status", "--follow"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut first = String::new();
+    let mut out = BufReader::new(alone.stdout.take().unwrap());
+    out.read_line(&mut first).unwrap();
+    let first: Value = serde_json::from_str(&first).unwrap();
+    assert_eq!(first["running"], false, "{first}");
+    assert!(alone.try_wait().unwrap().is_none(), "it goes on");
+    alone.kill().unwrap();
+    alone.wait().unwrap();
+
+    let mut follow = places
+        .banda(&["status", "--follow", "--with-parent"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let stdin = follow.stdin.take().unwrap();
+    let (heard, said) = mpsc::channel();
+    let lines = BufReader::new(follow.stdout.take().unwrap());
+    std::thread::spawn(move || {
+        for line in lines.lines().map_while(Result::ok) {
+            let _ = heard.send(serde_json::from_str::<Value>(&line).unwrap());
+        }
+    });
+    // The lines it prints, until one says what `until` looks for.
+    let next_until = |until: &dyn Fn(&Value) -> bool| loop {
+        let line = said
+            .recv_timeout(Duration::from_secs(30))
+            .expect("a line comes");
+        if until(&line) {
+            return line;
+        }
+    };
+    // It says no engine runs, and waits for one.
+    let first = next_until(&|_| true);
+    assert_eq!(first["running"], false, "{first}");
+    assert!(!places.state.join("engine.json").exists(), "none started");
+
+    let (mut engine, engine_stdin, running) = places.serve();
+    let line = next_until(&|line| line["running"] == true);
+    assert_eq!(line["version"], running["version"], "{line}");
+    assert_eq!(line["build"], running["build"], "{line}");
+    assert_eq!(line["channel"], "local", "a checkout's: {line}");
+    let calm = json!({
+        "working": 0, "waiting": 0, "asking": 0, "failed": 0, "done": 0, "threads": [],
+    });
+    assert_eq!(line["agents"], calm, "{line}");
+
+    // A turn starts: one works.
+    let work = places.ok("projects.create", None, json!({ "name": "Work" }));
+    let work = text(&work["id"]).to_owned();
+    let waits = json!({ "harness": "fake", "text": "wait" });
+    let waiting = places.ok("agents.send", Some(&work), waits);
+    let line = next_until(&|line| line["agents"]["working"] == 1);
+    let rows = &line["agents"]["threads"];
+    assert_eq!(rows[0]["thread"], waiting["thread"], "{line}");
+    assert_eq!(rows[0]["project"], json!(work), "{line}");
+    assert_eq!(rows[0]["project_name"], "Work", "{line}");
+    assert_eq!(rows[0]["state"], "working", "{line}");
+    assert_eq!(line["agents"]["waiting"], 0, "{line}");
+    // Said once, it says the same.
+    let once = places.banda(&["status"]).output().unwrap();
+    assert!(once.status.success(), "{once:?}");
+    let once: Value = serde_json::from_slice(&once.stdout).unwrap();
+    assert_eq!(once["agents"]["working"], 1, "{once}");
+    assert_eq!(once["agents"]["threads"][0]["thread"], waiting["thread"]);
+
+    // Another asks its Person: one waits, and comes first.
+    let asks = json!({ "harness": "fake", "text": "ask" });
+    let asking = places.ok("agents.send", Some(&work), asks);
+    let line = next_until(&|line| line["agents"]["asking"] == 1);
+    let agents = &line["agents"];
+    assert_eq!(
+        (&agents["working"], &agents["waiting"]),
+        (&json!(1), &json!(1)),
+        "{line}"
+    );
+    let order: Vec<_> = (agents["threads"].as_array().unwrap().iter())
+        .map(|row| (row["thread"].clone(), row["state"].clone()))
+        .collect();
+    assert_eq!(
+        order,
+        [
+            (asking["thread"].clone(), json!("asking")),
+            (waiting["thread"].clone(), json!("working")),
+        ],
+        "{line}"
+    );
+
+    // The engine goes: it says so, and waits for the next.
+    drop(engine_stdin);
+    assert!(engine.wait().unwrap().success());
+    let gone = next_until(&|line| line["running"] == false);
+    assert!(gone.get("agents").is_none(), "{gone}");
+    assert!(follow.try_wait().unwrap().is_none(), "it goes on");
+
+    // Its reader closes stdin: it ends.
+    drop(stdin);
+    let ended = wait_for(Duration::from_secs(10), || follow.try_wait().unwrap());
+    let Some(ended) = ended else {
+        follow.kill().unwrap();
+        panic!("banda status --follow did not end with its stdin");
+    };
+    assert!(ended.success(), "{ended:?}");
 }
 
 #[cfg(unix)]

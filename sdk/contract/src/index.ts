@@ -4,6 +4,7 @@
  */
 export type { AgentId } from "./generated/AgentId"
 export type { Code } from "./generated/Code"
+export type { EngineStatus } from "./generated/EngineStatus"
 export type { CommandId } from "./generated/CommandId"
 export type { Event } from "./generated/Event"
 export type { EventFilter } from "./generated/EventFilter"

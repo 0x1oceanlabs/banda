@@ -56,6 +56,9 @@ pub struct Running {
     /// Its version, as `banda --version` says it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    /// Which Banda it is: `stable`, `dev` or `local` ([`channel`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel: Option<String>,
     /// When it began to serve, in ms since the epoch.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub since: Option<i64>,
