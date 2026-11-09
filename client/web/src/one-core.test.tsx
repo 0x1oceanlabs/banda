@@ -3,13 +3,21 @@
  * gives through `@banda/core/react` is what an App's part reads, by the
  * path its own package takes to it, and an App's widget draws on the
  * page's React. Two copies of the core would leave an App the defaults, no
- * run and Here nowhere; two of React would throw at an App's first hook.
+ * run, Here nowhere and no machines but its own; two of React would throw
+ * at an App's first hook.
  */
 import { createRequire } from "node:module"
 import { join } from "node:path"
-import type { Engine } from "@banda/contract"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import type * as CoreReact from "@banda/core/react"
-import { type Here, type Run, Store } from "@banda/core/react"
+import {
+  type Here,
+  type Machine,
+  MachinesContext,
+  type Run,
+  Store,
+} from "@banda/core/react"
+import type { ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "vitest"
 import { newStores } from "./calls/stores"
@@ -68,4 +76,57 @@ test("an App's widget draws on the page's React, under the Window's", () => {
       </Kept>
     )
   ).toBe("")
+})
+
+test("a new Thread's picker lists the machines the Window gives, by the path its package takes to them", async () => {
+  // As `App.tsx` gives them, from the page's `@banda/core/react`; the
+  // picker reads them from the Threads package's.
+  const { NewThreadBar } = (await import(
+    join(root, "apps/agents/pane/src/composer/NewThread.tsx")
+  )) as {
+    NewThreadBar: (props: {
+      engine: Engine
+      project: ProjectId
+      host: string | undefined
+      disabled: boolean
+      onProject: () => void
+    }) => ReactNode
+  }
+  const project = (id: string): ProjectSummary => ({
+    id: id as ProjectId,
+    name: id,
+    folder: `/${id}`,
+    pinned: false,
+    archived: false,
+    sees_others: false,
+    sign: { kind: "letters", text: id[0]!.toUpperCase(), picked: false },
+    trusted: true,
+    scratch: false,
+    missing: false,
+  })
+  const machines: Machine[] = [
+    { machine: "m0" as ProjectId, state: "live", projects: [project("work")] },
+    {
+      host: "arc",
+      named: { name: "Studio", icon: "server" },
+      machine: "m1" as ProjectId,
+      state: "live",
+      projects: [project("r1")],
+    },
+  ]
+  // A Pane on arc, which its engine has not welcomed yet: the picker names
+  // the machine as the Window does, not by its key.
+  const drawn = renderToStaticMarkup(
+    <MachinesContext value={machines}>
+      <NewThreadBar
+        engine={{} as Engine}
+        project={"r1" as ProjectId}
+        host="arc"
+        disabled={false}
+        onProject={() => undefined}
+      />
+    </MachinesContext>
+  )
+  expect(drawn).toContain("on Studio")
+  expect(drawn).not.toContain("on arc")
 })

@@ -51,9 +51,19 @@ test("entries/ and lines/ import no Pane API, ThreadPane or thread/Thread, and r
           /\/thread\/Thread$/.test(name)
       )
       .map((name) => `${relative(folder, file)}: ${name}`)
+    // Nor the Pane's words the core holds, as a Pane's host.
+    const fromCore = [
+      ...source.matchAll(
+        /\bimport\s+(?:type\s+)?\{([^}]*)\}\s*from\s*"@banda\/core(?:\/react)?"/g
+      ),
+    ]
+      .flatMap(([, names]) => names.split(","))
+      .map((name) => name.replace(/^\s*type\s+/, "").trim())
+      .filter((name) => /^(?:PaneState|Place|paneHost|withHost)$/.test(name))
+      .map((name) => `${relative(folder, file)}: ${name}`)
     return /\bwindow\.banda\b/.test(source)
-      ? [...named, `${relative(folder, file)}: window.banda`]
-      : named
+      ? [...named, ...fromCore, `${relative(folder, file)}: window.banda`]
+      : [...named, ...fromCore]
   })
   expect(crossing).toEqual([])
 })
