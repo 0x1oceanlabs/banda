@@ -351,7 +351,7 @@ describe("send", () => {
     const engine = {
       commandAt: (...call: unknown[]) => (
         sent.push(call),
-        Promise.resolve({ answer: { at: null } })
+        Promise.resolve({ answer: {}, at: null })
       ),
     } as unknown as Engine
     const close = { method: "workspaces.close", params: { pane: "p" } } as const

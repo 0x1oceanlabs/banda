@@ -224,9 +224,8 @@ pub fn open(list: &mut Arrangement, open: Open, seed: &Seed) -> Result<(PaneId, 
 }
 
 /// Runs the command `method`, one of `METHODS`, with its params, as the
-/// module runs it, and answers as it does but for where its event stands
-/// in the log, which is the log's: `{"pane", "new"}` for `open`, `{}` for
-/// the rest. A refused command may leave `list` half changed, as the
+/// module runs it, and answers as it does: `{"pane", "new"}` for `open`,
+/// `{}` for the rest. A refused command may leave `list` half changed, as the
 /// model's functions do: keep it only when the command passes.
 pub fn apply(
     list: &mut Arrangement,

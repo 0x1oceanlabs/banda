@@ -330,15 +330,16 @@ test("a command is answered with its place in the log, as the event it wrote sta
   const notes = { project: project.id, kind: "notes.page", args: { page: 1 } }
   const id = newId()
   const opened = await client.commandAt("workspaces.open", notes, undefined, id)
-  // The module says where its event stands, and so does the engine.
+  // The engine says where its event stands; the module's answer says
+  // only what it opened.
   expect(opened.at).toEqual(expect.any(Number))
-  expect(opened.answer.at).toBe(opened.at)
+  expect(opened.answer).toEqual({ pane: expect.any(String), new: true })
   await expect.poll(() => heard).toContain(opened.at)
   // Sent again, the same answer at the same place.
   const again = await client.commandAt("workspaces.open", notes, undefined, id)
   expect(again).toEqual(opened)
-  // Shown already, it writes nothing: the module says none, and so does
-  // the engine, so a client waits to hear nothing (#880), sent again too.
+  // Shown already, it writes nothing: the engine says no place, so a
+  // client waits to hear nothing (#880), sent again too.
   const once = newId()
   const shown = await client.commandAt(
     "workspaces.open",
@@ -346,7 +347,7 @@ test("a command is answered with its place in the log, as the event it wrote sta
     undefined,
     once
   )
-  expect(shown.answer).toMatchObject({ pane: opened.answer.pane, at: null })
+  expect(shown.answer).toEqual({ pane: opened.answer.pane, new: false })
   expect(shown.at).toBeNull()
   const shownAgain = client.commandAt("workspaces.open", notes, undefined, once)
   expect(await shownAgain).toEqual(shown)

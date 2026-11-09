@@ -3,7 +3,7 @@
 //! and each change said in one event.
 
 use banda_kernel::{
-    AgentId, Caller, Code, CommandId, Kernel, Participant, PersonId, ProjectId, Refusal,
+    AgentId, Answer, Caller, Code, CommandId, Kernel, Participant, PersonId, ProjectId, Refusal,
 };
 use banda_workspaces::Workspaces;
 use banda_workspaces::model::{ColumnId, PaneId, Seed, WorkspaceId};
@@ -38,9 +38,21 @@ impl Machine {
         method: &str,
         params: Value,
     ) -> Result<Value, Refusal> {
+        let answer = self.answer(command, method, params);
+        answer.await.map(|answer| answer.value)
+    }
+
+    /// As `command_as`, with where the kernel says the command stands in
+    /// the log: the event it wrote, none when it wrote none.
+    async fn answer(
+        &self,
+        command: CommandId,
+        method: &str,
+        params: Value,
+    ) -> Result<Answer, Refusal> {
         let person = Participant::Person(self.owner);
         self.kernel
-            .call(person, method, None, Some(command), params)
+            .answer(person, method, None, Some(command), params)
             .await
     }
 
@@ -65,12 +77,26 @@ impl Machine {
         method: &str,
         params: Value,
     ) -> Result<Value, Refusal> {
+        let answer = self.agent_answer(command, agent, project, method, params);
+        answer.await.map(|answer| answer.value)
+    }
+
+    /// As `agent_as`, with where the kernel says the command stands in the
+    /// log, as `answer`.
+    async fn agent_answer(
+        &self,
+        command: CommandId,
+        agent: AgentId,
+        project: ProjectId,
+        method: &str,
+        params: Value,
+    ) -> Result<Answer, Refusal> {
         let caller = Caller {
             participant: Participant::Agent(agent),
             only: Some(project),
         };
         self.kernel
-            .call(caller, method, None, Some(command), params)
+            .answer(caller, method, None, Some(command), params)
             .await
     }
 
@@ -96,6 +122,12 @@ impl Machine {
     }
 }
 
+/// The answer to a command that changed nothing: it said nothing, so the
+/// kernel gives it no place in the log (#880).
+fn unplaced(value: Value) -> Answer {
+    Answer { value, at: None }
+}
+
 /// Every Pane of `workspaces`, as `list` and `panes` say them, from the top
 /// down and from the left.
 fn panes(workspaces: &Value) -> Vec<Value> {
@@ -119,15 +151,12 @@ async fn the_arrangement_is_kept_said_in_events_and_survives_a_restart() {
     let bottom = first["workspaces"][0]["id"].clone();
 
     let pane = json!({ "project": project, "kind": "browser.browser", "args": { "url": "a" } });
-    let opened = machine
-        .command("workspaces.open", pane.clone())
-        .await
-        .unwrap();
+    let open = |pane| machine.answer(CommandId::new(), "workspaces.open", pane);
+    let Answer { value: opened, at } = open(pane.clone()).await.unwrap();
     assert_eq!(opened["new"], true);
     // Shown already: it is named, and nothing changes or is said.
-    let again = machine.command("workspaces.open", pane).await.unwrap();
-    let same = json!({ "pane": opened["pane"], "new": false, "at": null });
-    assert_eq!(again, same);
+    let same = json!({ "pane": opened["pane"], "new": false });
+    assert_eq!(open(pane).await.unwrap(), unplaced(same));
 
     let arranged = machine.list().await;
     let workspaces = arranged["workspaces"].as_array().unwrap();
@@ -153,8 +182,9 @@ async fn the_arrangement_is_kept_said_in_events_and_survives_a_restart() {
     let events = machine.events().await;
     let kinds: Vec<&str> = events.iter().map(|(kind, _)| kind.as_str()).collect();
     assert_eq!(kinds, ["opened", "updated", "sized"]);
-    // A change answers where its event stands, so a window draws it first.
-    assert_eq!(opened["at"], json!(1));
+    // A change is answered where its event stands, so a window draws it
+    // first.
+    assert_eq!(at, Some(1));
     assert_eq!(events[0].1["workspaces"], arranged["workspaces"]);
     assert_eq!(events[1].1, args);
     let now = machine.list().await;
@@ -331,6 +361,12 @@ async fn an_agent_opens_a_threads_pane_by_its_id_alone_and_the_person_with_every
         let open = json!({ "kind": "agents.thread", "args": args });
         as_agent("workspaces.open_pane", open)
     };
+    // As `open`, with where the kernel says it stands in the log.
+    let named_again = |args: Value| {
+        let open = json!({ "kind": "agents.thread", "args": args });
+        let method = "workspaces.open_pane";
+        machine.agent_answer(CommandId::new(), agent, work, method, open)
+    };
     let pane_of = |workspaces: &Value, id: &Value| -> Value {
         let mut all = panes(workspaces).into_iter();
         all.find(|pane| pane["id"] == *id).unwrap()
@@ -382,9 +418,9 @@ async fn an_agent_opens_a_threads_pane_by_its_id_alone_and_the_person_with_every
     let named = json!({ "thread": thread, "harness": "fake", "title": "Fix the build" });
     let update = json!({ "pane": opened["pane"], "args": named });
     machine.command("workspaces.update", update).await.unwrap();
-    let again = open(json!({ "thread": thread })).await.unwrap();
-    let same = json!({ "pane": opened["pane"], "new": false, "at": null });
-    assert_eq!(again, same);
+    let again = named_again(json!({ "thread": thread })).await.unwrap();
+    let same = json!({ "pane": opened["pane"], "new": false });
+    assert_eq!(again, unplaced(same));
 
     // The Person's Pane on a Thread is the one its ID names, and stays the
     // Person's to move and close.
@@ -393,9 +429,9 @@ async fn an_agent_opens_a_threads_pane_by_its_id_alone_and_the_person_with_every
         json!({ "thread": other, "harness": "fake", "title": "Release", "details": false });
     let shows = json!({ "project": work, "kind": "agents.thread", "args": theirs });
     let person = machine.command("workspaces.open", shows).await.unwrap();
-    let named = open(json!({ "thread": other })).await.unwrap();
-    let same = json!({ "pane": person["pane"], "new": false, "at": null });
-    assert_eq!(named, same);
+    let named = named_again(json!({ "thread": other })).await.unwrap();
+    let same = json!({ "pane": person["pane"], "new": false });
+    assert_eq!(named, unplaced(same));
     let seen = as_agent("workspaces.panes", json!({})).await.unwrap();
     assert_eq!(pane_of(&seen, &person["pane"])["yours"], false);
     let close = as_agent("workspaces.close_own", json!({ "pane": person["pane"] }));
@@ -522,12 +558,10 @@ async fn the_workspaces_set_aside_stay_and_come_back_after_the_ones_there_are() 
     let project = ProjectId::new();
     let open = |url: &str| json!({ "project": project, "kind": "browser.browser", "args": { "url": url } });
 
-    // Nothing to set aside: nothing changes or is said.
-    let nothing = machine
-        .command("workspaces.set_aside", json!({}))
-        .await
-        .unwrap();
-    assert_eq!(nothing["at"], Value::Null);
+    // Nothing to set aside: nothing changes or is said. The answer is
+    // still `{}`, which a window takes as done, never null.
+    let nothing = machine.answer(CommandId::new(), "workspaces.set_aside", json!({}));
+    assert_eq!(nothing.await.unwrap(), unplaced(json!({})));
     assert_eq!(machine.list().await["aside"], Value::Null);
 
     machine.command("workspaces.open", open("a")).await.unwrap();

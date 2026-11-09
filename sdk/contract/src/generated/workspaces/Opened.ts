@@ -11,8 +11,4 @@ pane: PaneId,
 /**
  * False when the workspaces showed it already.
  */
-new: boolean, 
-/**
- * Where its event stands in the log, as `Done`'s.
- */
-at: number | null, };
+new: boolean, };
