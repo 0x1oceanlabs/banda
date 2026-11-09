@@ -94,6 +94,45 @@ test("a command gives up after three tries, and says the engine is away", async 
   engine.close()
 })
 
+test("a command sent once fails as the connection breaks and is not sent again, while a plain one is", async () => {
+  const engine = new Engine(address)
+  await flush()
+  const first = Socket.made[0]
+  first.welcome()
+  const once = engine.commandAt(
+    "agents.read",
+    { thread: "t1" },
+    "project",
+    undefined,
+    { once: true }
+  )
+  const plain = engine.commandAt("agents.send", { text: "hi" }, "project")
+  // Settled or not, as the break leaves it, without an unheard rejection.
+  const onceEnded = once.then(
+    () => "answered",
+    (error: unknown) => error
+  )
+  await flush()
+  const [read, send] = first.sent.slice(1)
+  expect(read).toMatchObject({ type: "call", method: "agents.read" })
+  expect(send).toMatchObject({ type: "call", method: "agents.send" })
+  first.close()
+
+  await vi.advanceTimersByTimeAsync(250)
+  const second = Socket.made[1]
+  second.welcome()
+  await flush()
+  // Only the plain one goes again, with its own command ID.
+  const again = second.sent.slice(1)
+  expect(again).toEqual([
+    expect.objectContaining({ method: "agents.send", command: send.command }),
+  ])
+  expect(await onceEnded).toBeInstanceOf(Lost)
+  second.say({ type: "result", id: again[0].id, ok: { thread: "t2" }, at: 3 })
+  await expect(plain).resolves.toEqual({ answer: { thread: "t2" }, at: 3 })
+  engine.close()
+})
+
 test("a subscription follows on after a reconnect from the last event it heard", async () => {
   const engine = new Engine(address)
   await flush()

@@ -100,6 +100,23 @@ export type Answered<M extends MethodOf<"command">> = {
   at: number | null
 }
 
+/**
+ * How a command goes, beside what it says (`Engine.commandAt`). Each is
+ * left out by default, and a caller names only what it needs.
+ */
+export type CommandOptions = {
+  /**
+   * Sent once at most: when the connection breaks after it went, it
+   * fails with `Lost` at once and is not sent again once the engine is
+   * back. For what must not land later than its caller said it failed,
+   * as a Person's mark (ADR 0096, decision 8). One that reached the
+   * engine before the break may still have run: its fact then says so.
+   * A command made while the engine is away still waits for it, and goes
+   * then.
+   */
+  once?: boolean
+}
+
 type Following = {
   project: ProjectId
   last: number
@@ -231,12 +248,14 @@ export class Engine {
    * commands to one scope commit in the order sent, and one sent again
    * after the connection broke goes in that order too, before any sent
    * since, so the `at`s of those that have one rise in the order sent.
+   * One sent `once` (`options`) is not sent again.
    */
   async commandAt<M extends MethodOf<"command">>(
     method: M,
     params: Params<M>,
     project?: ProjectId,
-    command: CommandId = newId()
+    command: CommandId = newId(),
+    { once = false }: CommandOptions = {}
   ): Promise<Answered<M>> {
     for (let attempt = 1; ; attempt++) {
       try {
@@ -246,7 +265,8 @@ export class Engine {
           at: result.at ?? null,
         }
       } catch (error) {
-        if (!(error instanceof Lost) || attempt === ATTEMPTS) throw error
+        if (!(error instanceof Lost) || once || attempt === ATTEMPTS)
+          throw error
       }
     }
   }
