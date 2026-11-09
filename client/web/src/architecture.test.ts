@@ -594,6 +594,24 @@ test("every widget on the Bar is given the engine and the Projects, and no more"
   expect(naming).toEqual([])
 })
 
+/**
+ * The widgets that stay in a narrow Bar (`compact`, ADR 0087, decision
+ * 11): the counts, the switcher while the Sidebar is hidden, the
+ * workspaces and the pill that brings them back, which no action reaches.
+ * Nothing reads the mark until the phone's form (W4); a widget joins the
+ * list as it gets a compact form.
+ */
+test("compact marks the counts, the workspaces and the set-aside pill", () => {
+  const compact = [...widgets.values()]
+    .filter(({ widget }) => widget.compact)
+    .map(({ widget }) => widget.id)
+  expect(compact.sort()).toEqual([
+    "sidebar.counts",
+    "workspaces.aside",
+    "workspaces.list",
+  ])
+})
+
 /** The `[unstable]` marks a module's manifest names. */
 function marksOf(module: string): string[] {
   const folder = folders.get(module)

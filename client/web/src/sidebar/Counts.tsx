@@ -155,6 +155,7 @@ export const countsWidget: Widget = {
   about:
     "Who waits for you and who works, by their marks; click for them in the sidebar's order.",
   Widget: Counts,
+  compact: true,
 }
 
 /** What the counts count, drawn only while the list is open, in the
