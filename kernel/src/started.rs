@@ -51,6 +51,18 @@ pub struct Started {
     pub stdout: Option<ChildStdout>,
     /// What it says on stderr, when the engine reads it.
     pub stderr: Option<ChildStderr>,
+    /// What goes with it, let go of as it is ([`Started::holding`]).
+    held: Option<Held>,
+}
+
+/// What a [`Started`] holds for whoever started it, only to drop it with
+/// it.
+struct Held(#[expect(dead_code, reason = "only dropped")] Box<dyn Send + Sync>);
+
+impl std::fmt::Debug for Held {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Held")
+    }
 }
 
 impl Started {
@@ -77,7 +89,15 @@ impl Started {
             stdin,
             stdout,
             stderr,
+            held: None,
         }
+    }
+
+    /// It, holding `held` till it is let go of: as the engine's note that
+    /// it runs, which goes once the engine no longer holds it.
+    pub fn holding(mut self, held: impl Send + Sync + 'static) -> Started {
+        self.held = Some(Held(Box::new(held)));
+        self
     }
 
     /// Its number, until it ended and was waited for.
