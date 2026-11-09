@@ -17,7 +17,13 @@ import {
   type ProjectSummary,
   type Status,
 } from "@banda/contract"
-import type { Named } from "@banda/contract/machines"
+import {
+  type AwakeWhy,
+  type Battery,
+  MACHINE_POWER,
+  type Named,
+  type Power,
+} from "@banda/contract/machines"
 import type { HostState } from "./device"
 import { paneHost, type PaneState, withHost } from "./pane"
 import { openProjects, shownProjects } from "./projects"
@@ -79,6 +85,11 @@ export type Shown = {
    * its engine said it, while the Window shows its rows; none while this
    * machine, or a host before it, has that ID. */
   machine?: ProjectId
+  /** Its battery and why it is held awake, cleaned, as its engine says
+   * them on `machine.power` (ADR 0097, decision 7): only while it is
+   * live, as the last heard is no longer true once it is away; none
+   * before its engine says them, and from an engine older than them. */
+  power?: Power
 }
 
 const NONE: readonly ProjectSummary[] = []
@@ -105,7 +116,13 @@ export function shownOf(
   const named = was?.named ?? seen(name)
   switch (now.state) {
     case "live":
-      return { name, named, state: now, projects: kept }
+      return {
+        name,
+        named,
+        state: now,
+        projects: kept,
+        ...(was?.power && { power: was.power }),
+      }
     case "away":
       return { name, named, state: now, away: was?.away ?? at, projects: kept }
     case "connecting":
@@ -182,6 +199,10 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   readonly #machines = new Store<readonly Machine[]>(machinesOf(this.#ours, []))
   /** The clashes said once in the log, as `host project`. */
   readonly #said = new Set<string>()
+  /** Each live host's `machine.power` on its engine, and how to stop
+   * hearing it; kept once that engine ended or refused it, so it is not
+   * asked again until the host is live again. */
+  readonly #powers = new Map<string, { engine: Engine; stop: () => void }>()
 
   /** This machine and the hosts a new Thread starts on (`machinesOf`),
    * told again only as what they say changes. */
@@ -219,6 +240,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
         this.#engines.delete(one.name)
     }
     this.#shown.set(this.#placed(now))
+    this.#hearPowers()
     for (const one of now)
       if (live(one) && was.get(one.name)?.state.state !== "live")
         this.#engines.get(one.name)?.wake()
@@ -264,6 +286,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
         if (status.state === "open" && status.machine)
           this.#scope(name, status.machine)
       })
+      this.#hearPowers()
     }
     return engine
   }
@@ -296,6 +319,45 @@ export class KeptHosts implements Readable<readonly Shown[]> {
           : { ...one, named }
       )
     )
+  }
+
+  /**
+   * Hears the battery of each live host whose engine is made, on
+   * `machine.power`, and lets go of each other's (ADR 0097, decision 7):
+   * what a host away said is no longer true. An engine that refuses the
+   * stream, as an older one does, or ends it, is not asked again until
+   * its host is live again.
+   */
+  #hearPowers(): void {
+    const now = new Set(liveIn(this.get()))
+    for (const [name, heard] of this.#powers) {
+      if (now.has(name) && this.#engines.get(name) === heard.engine) continue
+      heard.stop()
+      this.#powers.delete(name)
+    }
+    for (const name of now) {
+      const engine = this.#engines.get(name)
+      if (!engine || this.#powers.has(name)) continue
+      const stop = hearPower(
+        engine,
+        (said) => this.#power(name, cleanPower(said)),
+        () => this.#power(name, undefined)
+      )
+      this.#powers.set(name, { engine, stop })
+    }
+  }
+
+  /** Takes what host `name` says of its power now, while it is live;
+   * none, as its engine ends the stream, or the host goes away. */
+  #power(name: string, power: Power | undefined): void {
+    const hosts = this.get()
+    const at = hosts.findIndex((one) => one.name === name)
+    const one = hosts[at]
+    if (!one || sameData(one.power, power)) return
+    if (power !== undefined && !live(one)) return
+    const now = { ...one, power }
+    if (power === undefined) delete now.power
+    this.#shown.set(hosts.map((host, i) => (i === at ? now : host)))
   }
 
   /** Takes host `name`'s Host scope's ID, as its engine said it. */
@@ -460,6 +522,142 @@ export function awayFor(
   const minutes = since === undefined ? 0 : Math.floor((now - since) / 60_000)
   if (minutes < 1) return undefined
   return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h`
+}
+
+/** Hears `machine.power` on `engine`: a stream of the machine's that
+ * the contract's methods do not list, as `machine.named` is. */
+function hearPower(
+  engine: Engine,
+  onPiece: (said: unknown) => void,
+  onEnd: () => void
+): () => void {
+  const hear = engine.stream.bind(engine) as unknown as (
+    project: undefined,
+    method: string,
+    params: object,
+    onPiece: (piece: unknown) => void,
+    onEnd: () => void
+  ) => () => void
+  return hear(undefined, MACHINE_POWER, {}, onPiece, onEnd)
+}
+
+/** Whether `said` is one of the two whys a machine is held awake for. */
+const isWhy = (said: unknown): said is AwakeWhy =>
+  said === "working" || said === "plugged-in"
+
+/** A whole number from `least` to `most`, if `said` is one. */
+const whole = (said: unknown, least: number, most: number) =>
+  typeof said === "number" &&
+  Number.isInteger(said) &&
+  said >= least &&
+  said <= most
+    ? said
+    : undefined
+
+/**
+ * What another machine says of its power, as the page takes it (ADR
+ * 0097, decision 6): a battery only where each word of it is one, its
+ * percent from 0 to 100 and its time in whole minutes, else none; a why
+ * only of the two, else none.
+ */
+export function cleanPower(said: unknown): Power {
+  const { battery, awake } = (
+    typeof said === "object" && said !== null ? said : {}
+  ) as { battery?: unknown; awake?: unknown }
+  const why = isWhy(awake) ? awake : null
+  if (typeof battery !== "object" || battery === null) return { awake: why }
+  const { percent, charging, on_power, left } = battery as Record<
+    string,
+    unknown
+  >
+  const at = whole(percent, 0, 100)
+  const time = whole(left, 0, 100 * 60)
+  if (
+    at === undefined ||
+    typeof charging !== "boolean" ||
+    typeof on_power !== "boolean"
+  )
+    return { awake: why }
+  return {
+    battery: {
+      percent: at,
+      charging,
+      on_power,
+      ...(time !== undefined && { left: time }),
+    },
+    awake: why,
+  }
+}
+
+/** Minutes as a clock says a time left: `2:02`. */
+const hoursOf = (minutes: number) =>
+  `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`
+
+/** Whether a battery is on battery, not on power: what the warning and
+ * its icon read. */
+export const onBattery = (battery: Battery): boolean =>
+  !battery.on_power && !battery.charging
+
+/**
+ * Another machine's battery in full, as Settings, its hover and the
+ * warning say it (ADR 0097, decision 7): "42% · on battery · 2:02 left",
+ * "67% · charging · 0:48 to full", "80% · on power". A time its system
+ * does not know yet is left out, and so is one on power while it does not
+ * charge.
+ */
+export function batteryWords(battery: Battery): string {
+  const { percent, charging, left } = battery
+  const state = charging
+    ? "charging"
+    : onBattery(battery)
+      ? "on battery"
+      : "on power"
+  const time =
+    left === undefined || state === "on power"
+      ? []
+      : [`${hoursOf(left)} ${charging ? "to full" : "left"}`]
+  return [`${percent}%`, state, ...time].join(" · ")
+}
+
+/** How many Agents work on a machine, with their verb: "1 Agent
+ * works", "2 Agents work". */
+export const agentsWork = (working: number): string =>
+  working === 1 ? "1 Agent works" : `${working} Agents work`
+
+/**
+ * Why another machine is awake now, by what it says (`Power.awake`) and
+ * how many of its Agents' Turns run in this window's lists (ADR 0097,
+ * decision 7): as Settings says it under its Battery line, "Kept awake:
+ * 2 Agents work there.", and as its hover says it beside Awake, "While 2
+ * Agents work there". Held for Agents with none running, it is the 10
+ * minutes after its last Turn.
+ */
+export function awakeWords(
+  awake: AwakeWhy | null,
+  working: number
+): { line: string; short: string } {
+  switch (awake) {
+    case "working":
+      return working > 0
+        ? {
+            line: `Kept awake: ${agentsWork(working)} there.`,
+            short: `While ${agentsWork(working)} there`,
+          }
+        : {
+            line: "Kept awake: for 10 minutes after its last Turn.",
+            short: "For 10 minutes after its last Turn",
+          }
+    case "plugged-in":
+      return {
+        line: "Kept awake: plugged in, its switch on.",
+        short: "While plugged in, its switch on",
+      }
+    default:
+      return {
+        line: "Sleeps by itself when idle.",
+        short: "Sleeps by itself when idle",
+      }
+  }
 }
 
 /** What a Pane on host `host` says while it cannot reach it, as the
