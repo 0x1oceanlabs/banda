@@ -2,8 +2,6 @@ import type { Engine } from "@banda/contract"
 import type { Aside } from "@banda/contract/workspaces"
 import { Button } from "@banda/ui/components/button"
 import { useAct } from "@banda/ui/hooks/use-act"
-import { RowFrame, Rows } from "../settings/SettingRow"
-import { useArranged } from "../tiling/useArranged"
 
 /** The workspaces set aside, in words: "3 workspaces, 7 Panes". */
 export function asideWords(aside: Aside): string {
@@ -11,8 +9,9 @@ export function asideWords(aside: Aside): string {
   return `${count(aside.workspaces, "workspace")}, ${count(aside.panes, "Pane")}`
 }
 
-/** Brings the workspaces set aside back, after the ones there are now. */
-function useBringBack(engine: Engine) {
+/** Brings the workspaces set aside back, after the ones there are now. The
+ * pill and Settings' row both bring them back with it. */
+export function useBringBack(engine: Engine) {
   const { busy, problem, act } = useAct()
   const bring = () =>
     void act(() => engine.command("workspaces.bring_back", {}))
@@ -44,30 +43,5 @@ export function AsidePill({ engine, aside }: { engine: Engine; aside: Aside }) {
         Bring them back
       </Button>
     </div>
-  )
-}
-
-/**
- * The workspaces set aside, in Settings → Projects too, while there are
- * some: what is aside, and Bring them back.
- */
-export function AsideRow({ engine }: { engine: Engine }) {
-  const live = useArranged(engine)
-  const { busy, problem, bring } = useBringBack(engine)
-  const aside = live.state === "ready" ? live.view.aside : null
-  if (!aside) return null
-  return (
-    <Rows>
-      <RowFrame
-        dataKey="aside"
-        title="Workspaces set aside"
-        about={`${asideWords(aside)}, set aside when Banda's window broke. They come back after your workspaces.`}
-        wrong={problem ? [problem] : []}
-      >
-        <Button size="sm" disabled={busy} onClick={bring}>
-          Bring them back
-        </Button>
-      </RowFrame>
-    </Rows>
   )
 }

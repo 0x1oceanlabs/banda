@@ -45,7 +45,7 @@ import {
   Trash2Icon,
 } from "lucide-react"
 import { LOCATE, locateRoute } from "../menu/menu"
-import { AsideRow } from "../tiling/AsidePill"
+import { AsideRow } from "../safe/AsideRow"
 import { Field, Group, RowFrame, Rows } from "./SettingRow"
 import { SignField, signAbout } from "./SignField"
 import { Soon, TrustCard, type Trusting } from "../trust/TrustCard"
