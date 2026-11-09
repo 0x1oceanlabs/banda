@@ -76,7 +76,10 @@
  *   them, and a Pane's header and its tile in the Overview draw no
  *   Thread's Mark of the Tiling's own: Threads fills the Slot with it, and
  *   what the Tiling still takes of Banda's mark or reads of an Item's Mark
- *   is listed, only falling.
+ *   is listed, only falling. A Pane's header gives what fills it the Pane
+ *   alone; what the Apps list reaches them only from the Window's `Kept`,
+ *   which only its root draws, and only the files listed read an Item by
+ *   it, a list that only falls.
  * - The Person's marks are the Thread's host's (ADR 0096): only the move
  *   names the keys the window kept them under, which stay to be read for
  *   one stable release.
@@ -1316,6 +1319,133 @@ test("each Slot is read in one place, and only the Window gives what fills them"
     )
     .map((file) => relative(root, file))
   expect(around).toEqual([])
+})
+
+/**
+ * A Pane's header gives what fills it the Pane alone (#943): its Project,
+ * its args and where it is drawn, never an Item, so no App is handed
+ * another's. By what `HeaderProps` declares, in each of its forms.
+ */
+test("a Pane's header gives what fills it the Pane alone", () => {
+  const file = join(app, "ui/src/slots.ts")
+  const { statements } = ts.createSourceFile(
+    file,
+    readFileSync(file, "utf8"),
+    ts.ScriptTarget.Latest,
+    true
+  )
+  const header = statements
+    .filter(ts.isTypeAliasDeclaration)
+    .find(({ name }) => name.text === "HeaderProps")
+  expect(header).toBeDefined()
+  // Its keys, through each form it joins; a type named among them, not
+  // as a key's, would hide what it gives.
+  const keysOf = (node: ts.TypeNode): string[] =>
+    ts.isTypeLiteralNode(node)
+      ? node.members.map((member) =>
+          member.name && ts.isIdentifier(member.name)
+            ? member.name.text
+            : member.getText()
+        )
+      : ts.isIntersectionTypeNode(node) || ts.isUnionTypeNode(node)
+        ? node.types.flatMap(keysOf)
+        : ts.isParenthesizedTypeNode(node)
+          ? keysOf(node.type)
+          : [`type ${node.getText()}`]
+  const keys = new Set(keysOf(header!.type))
+  expect([...keys].sort()).toEqual(["at", "calling", "pane", "project"])
+})
+
+/**
+ * What the Apps list reaches them from the Window alone, through the kit
+ * (`hooks/use-item.ts`), until B7a gives the Item a store of its own: only
+ * the Window's `Kept` gives it, and only the Window's root draws a `Kept`,
+ * so a popped-out Pane's window, which lists nothing, never draws a Mark
+ * by its kind's icon. The files that read an Item by it are listed: it
+ * lets any App read every Item, so only what fills a Pane's header with
+ * its own does, and the list only falls.
+ */
+const ITEM_READERS = ["apps/agents/pane/src/list/header.tsx"]
+
+/** What `file` takes of the kit's `use-item`, by name, or `*` for all of
+ * it: by an import, or an export from it. */
+function takenOfItems(file: string): string[] {
+  const { statements } = ts.createSourceFile(
+    file,
+    readFileSync(file, "utf8"),
+    ts.ScriptTarget.Latest
+  )
+  return statements.flatMap((statement) => {
+    if (
+      !ts.isImportDeclaration(statement) &&
+      !ts.isExportDeclaration(statement)
+    )
+      return []
+    const from = statement.moduleSpecifier
+    if (
+      !from ||
+      !ts.isStringLiteral(from) ||
+      !/(^|\/)use-item$/.test(from.text)
+    )
+      return []
+    const named = ts.isImportDeclaration(statement)
+      ? statement.importClause?.namedBindings
+      : statement.exportClause
+    return named && (ts.isNamedImports(named) || ts.isNamedExports(named))
+      ? named.elements.map(
+          ({ name, propertyName }) => (propertyName ?? name).text
+        )
+      : ["*"]
+  })
+}
+
+/** The files of `files` that draw an element `tag`, or `tag.Provider`. */
+function drawingTag(files: readonly string[], tag: string): string[] {
+  return files
+    .filter((file) => file.endsWith(".tsx"))
+    .filter((file) => {
+      let found = false
+      const visit = (node: ts.Node) => {
+        if (
+          (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
+          [tag, `${tag}.Provider`].includes(node.tagName.getText())
+        )
+          found = true
+        ts.forEachChild(node, visit)
+      }
+      visit(
+        ts.createSourceFile(
+          file,
+          readFileSync(file, "utf8"),
+          ts.ScriptTarget.Latest,
+          true,
+          ts.ScriptKind.TSX
+        )
+      )
+      return found
+    })
+    .map((file) => relative(root, file))
+    .sort()
+}
+
+test("only the Window gives the Apps what it lists, and only what fills a Pane's header reads it", () => {
+  const kit = join(app, "ui/src/hooks/use-item.ts")
+  const taking = (name: string) =>
+    pageFiles
+      .filter((file) => file !== kit)
+      .filter((file) =>
+        takenOfItems(file).some((one) => one === name || one === "*")
+      )
+      .map((file) => relative(root, file))
+      .sort()
+  expect(taking("useItem")).toEqual(ITEM_READERS)
+  expect(taking("ItemsContext")).toEqual(["client/web/src/window/here.tsx"])
+  expect(drawingTag(pageFiles, "ItemsContext")).toEqual([
+    "client/web/src/window/here.tsx",
+  ])
+  expect(drawingTag(pageFiles, "Kept")).toEqual([
+    "client/web/src/window/Shell.tsx",
+  ])
 })
 
 /**
