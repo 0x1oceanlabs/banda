@@ -8,8 +8,8 @@ date: 2026-11-09
 _It amends ADR 0005 (decision 8), ADR 0008 (decisions 4 and 5: the row
 and the presets), ADR 0017 (decision 3), ADR 0067 (decisions 3 and 4:
 the header and the foot), ADR 0069 (Archive as a shelf), ADR 0074
-(decisions 1 and 6: asking and the Snoozed shelf) and ADR 0079 (the Flow's
-place). The mark it draws is ADR 0099's. Code is cited from main at
+(decisions 1 and 6, asking and the Snoozed shelf, and its name: Snooze
+becomes Later) and ADR 0079 (the Flow's place). The mark it draws is ADR 0099's. Code is cited from main at
 `de0deb68`; the audit cites `290ec9a9`._
 
 Roma, on 2026-11-09 (translated): "I want to put the sidebar with the
@@ -121,7 +121,7 @@ From the audit (`2-code.md`):
      text's colours. No shadow under the open Thread's card.
    - **Line 2's word** is neutral: **Asks**, **Done**, **Failed**,
      **Woke**. After it: the question, the done note, why it failed, or
-     "You snoozed it 3h ago" and what was. Failed shows nothing on the
+     "You put it off 3h ago" and what was. Failed shows nothing on the
      right.
    - **Line 3 names the Project, not the branch**: the branch says
      little at a glance.
@@ -152,13 +152,13 @@ From the audit (`2-code.md`):
 
     Later is a clock, Archive a check, Wake an arrow back, Unarchive the
     archive-restore icon; each says its key in its tooltip. Archive acts
-    at once, with an "Archived · Undo" toast; Later opens the snooze
+    at once, with an "Archived · Undo" toast; Later opens the Later
     picker at the card (ADR 0074, decision 5).
-11. **A Thread that asks may be snoozed.** The Agent waits; it comes back
+11. **A Thread that asks may be put off until Later.** The Agent waits; it comes back
     as Woke with the same question. A new call (a new question, a
     failure) still wakes it early (ADR 0074, decision 1). It still
     cannot be archived while it asks.
-12. **Someday stays**: a snooze with no time, last in Later, that never
+12. **Someday stays**: a Later with no time, last in Later, that never
     wakes by itself. Inbox zero says "4 someday" once a week.
 13. **Keys in the sidebar**: `↑` `↓` select, `Enter` opens, `Shift+Enter`
     opens beside, `S` archive, `Z` later, `U` unread, `1`–`4` the tabs.
@@ -176,7 +176,7 @@ From the audit (`2-code.md`):
     - `Ctrl`+click, `Shift`+click, `Shift+↑↓` and `Ctrl+A` select; checks
       take the marks' place and a bar at the foot offers Archive, Later,
       Unread and ✕. `S` `Z` `U` act on all of them; `Esc` clears. One
-      snooze time serves them all.
+      Later time serves them all.
 
 ### Projects
 
@@ -263,7 +263,7 @@ From the audit (`2-code.md`):
 25. **Every empty place says what goes there and offers one way to fill
     it**: the first run ("Add a project to start", Add Project…, or a
     Thread with no project); inbox zero (decision 4); Working ("No Agent
-    works now", New Thread); Later ("Nothing snoozed. Z on a card puts it
+    works now", New Thread); Later ("Nothing for later. Z on a card puts it
     here"); Archive ("S on a card closes it here"); a search with no
     match ("No Thread matches "zed" · searched titles and messages on arc
     and mac").
@@ -275,10 +275,23 @@ From the audit (`2-code.md`):
     `turn`, `open`, `working`, `later` or `archived`, with its word. The
     other fourteen places read it.
     - It fixes the two bugs: an archived Thread is no Call, and the bar's
-      Mark leaves out what is snoozed or archived.
+      Mark leaves out what is Later or archived.
     - "Waiting" means one thing: Your turn.
 27. **A card is drawn from one row model**, `card.ts`: the sidebar, the
     bar's small inbox and the counts' list draw the same thing.
+
+### One name: Later
+
+28. **Snooze is renamed Later everywhere**: on screen, in the GLOSSARY
+    and the docs, and in the code. Roma, 2026-11-09: "yes, snooze must be
+    renamed to later".
+    - The engine's `snooze` command and the Agents' `snooze` tool become
+      `later`; `Snooze`, `SnoozeAsk`, `snoozes.rs`, `rules/snooze.rs`,
+      `ListedThread.snooze`, the window's `snoozed` state and `snoozable`
+      take Later's name. The contract is regenerated.
+    - A Thread's stored `snooze` is read as `later` once and written back
+      under the new name, so nothing put off is lost.
+    - "Wake" and "woke" stay: what is put off until later wakes.
 
 ## What it amends
 
@@ -291,44 +304,46 @@ From the audit (`2-code.md`):
 - **ADR 0017, decision 3; ADR 0067, decisions 3 and 4**: the header and
   the foot are decisions 19–21's. **ADR 0079**: the Flow's menu is in
   the bar.
-- **ADR 0069** and **ADR 0074, decision 6**: Archive and Snoozed are
+- **ADR 0069** and **ADR 0074, decision 6**: Archive and Later are
   tabs, not shelves. **ADR 0074, decision 1**: a Thread that asks may be
-  snoozed.
+  put off. **ADR 0074 as a whole**: its Snooze is called Later.
 - **GLOSSARY**: the Inbox is the tab, the Person's Calls and the Threads
   open with no turn; the Sidebar's entry loses "a preset arranges it";
-  Snooze keeps its name in code and docs and is shown as **Later**;
-  Quiet is new.
+  Snooze becomes **Later** (decision 28); Quiet is new.
 
 ## Plan
 
 Each step is its own PR, tried in the window before it.
 
 0. This ADR and ADR 0099, and the GLOSSARY.
-1. **Where it stands, once** (decision 26): `status.ts` with the five
+1. **Later, by name** (decision 28): the rename in the engine, the
+   contract, the Agents' tool, the window and the docs; the stored name
+   read under the old one. Nothing changes on screen but words.
+2. **Where it stands, once** (decision 26): `status.ts` with the five
    places and their words, its tests, and the fourteen readers moved to
    it; the two bugs fixed.
-2. **The row model** (decision 27): `card.ts`, from `Listed` and the
+3. **The row model** (decision 27): `card.ts`, from `Listed` and the
    settings to the six slots; `Row.tsx` and `Counts.tsx` draw it.
-3. **`Sidebar.tsx` split** into its header, tabs, list, sections, rows
+4. **`Sidebar.tsx` split** into its header, tabs, list, sections, rows
    and foot, with nothing changed on screen.
-4. **The tabs and the Inbox** (decisions 1–6).
-5. **The card** (decisions 8–9).
-6. **Hover actions, keys and the toast** (decisions 10, 13), and snooze
+5. **The tabs and the Inbox** (decisions 1–6).
+6. **The card** (decisions 8–9).
+7. **Hover actions, keys and the toast** (decisions 10, 13), and Later
    on asking (11–12).
-7. **Group by and the view menu** (decision 7), `sidebar.toml`'s keys,
+8. **Group by and the view menu** (decision 7), `sidebar.toml`'s keys,
    the presets read as `group`.
-8. **Header, foot and bar** (decisions 19–21): ✎'s menu, the Flow in the
+9. **Header, foot and bar** (decisions 19–21): ✎'s menu, the Flow in the
    bar, Quiet, the key sheet and the theme in the Banda menu.
-9. **The card's menu** (14) and **several at once** (15).
-10. **Projects** (16): the group header's menu, trust and missing as
+10. **The card's menu** (14) and **several at once** (15).
+11. **Projects** (16): the group header's menu, trust and missing as
     cards.
-11. **Search** (17).
-12. **Machines** (18).
-13. **Children** (23–24) and **empty places** (25).
-14. **The sidebar hidden** (22).
+12. **Search** (17).
+13. **Machines** (18).
+14. **Children** (23–24) and **empty places** (25).
+15. **The sidebar hidden** (22).
 
-Steps 1–3 change nothing on screen but the two bugs. ADR 0099's steps
-come beside 4–6.
+Steps 1–4 change nothing on screen but words and the two bugs. ADR
+0099's steps come beside 5–7.
 
 ## Roma's calls
 
@@ -344,5 +359,6 @@ On 2026-11-09, over the mocks and the prototype:
   foot, Someday, the view menu for the presets.
 - One view and Group by, not three presets: "let's see the mock grouped
   by Projects" — "yes, good".
+- Snooze renamed Later, everywhere.
 - The icons: Flow to the bar, the key sheet and theme to the Banda menu,
   Quiet in the foot: "all the decisions are good".

@@ -655,7 +655,7 @@ another: it acts on the Pane, not the Thread. Its rows are item actions:
 the Threads App's, then Banda's own (ADR 0087).
 
 **Item action**:
-An action that takes one Item, such as renaming or snoozing a Thread. The
+An action that takes one Item, such as renaming a Thread or putting it off until Later. The
 Item's App gives its own; Banda gives marking it unread and archiving it
 (ADR 0087).
 
@@ -782,25 +782,24 @@ _Avoid_: panel. Inbox is its first tab.
 **Archive**:
 Where the Threads the Person put away wait, folded at the sidebar's
 bottom. Only the Person archives a Thread; anything new in it brings it
-back to the list (ADR 0069). The Thread's host keeps the mark, beside the
-snooze, so a Thread archived on one machine is archived on all (ADR
+back to the list (ADR 0069). The Thread's host keeps the mark, beside its
+Later, so a Thread archived on one machine is archived on all (ADR
 0096). A Project is archived too, which hides it from the pickers until
 the Person brings it back (ADR 0026).
 _Avoid_: settled (its name before ADR 0069).
 
-**Snooze**:
-A Thread put away until a time, until its turn ends, or until its usage
-limit resets, or Someday, with no time; the sidebar shows it on its Later
-tab and calls the action Later. A new call wakes it early; a Thread that
-asks may be snoozed, and comes back with the same question (ADR 0098). The engine keeps
-it, so every window, machine and Agent sees it; an Agent may snooze its
-own Thread (ADR 0074).
-_Avoid_: remind. "Later" only on screen.
+**Later**:
+A Thread put away until a time, until its turn ends, until its usage limit
+resets, or Someday, with no time; on the sidebar's Later tab. A new call
+wakes it early; a Thread that asks may be put off, and comes back with the
+same question. The engine keeps it, so every window, machine and Agent
+sees it; an Agent may put its own Thread off (ADR 0074, ADR 0098).
+_Avoid_: snooze, remind.
 
 **Seen**:
 The Person's mark that they saw how a Thread's latest turn ended: that
 turn's ID, never a time. A finished or failed turn calls until it is
-seen. The Thread's host keeps it, beside the snooze, so every window and
+seen. The Thread's host keeps it, beside its Later, so every window and
 machine agrees; a window marks it only while the Person is there, and
 "Mark as unread" takes it back. Only the Person marks it (ADR 0096).
 _Avoid_: read (the menu's word for the action, not the mark).
@@ -847,7 +846,7 @@ once they stop, and the new Banda says it updated (ADR 0041, ADR 0072).
 **Mark**:
 Banda's sign: three tiles, the top one an Agent with eyes. Its shape and
 colour say what the work calls the Person for: it asks them (a triangle),
-failed (an octagon), finished, woke from a snooze, is open, sleeps until
+failed (an octagon), finished, woke from Later, is open, sleeps until
 later, or the engine is offline; while it works it shows what its Agent
 does: reads, edits, runs `>_`, waits on sub-agents (ADR 0099). In the bar
 it shows the loudest of every Thread, on its top tile only; in the
