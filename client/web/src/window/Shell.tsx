@@ -168,17 +168,23 @@ export function Shell({
   const machine = useMachine(engine)
   // Solo (ADR 0079, decision 2): every Agent's Group on a Project's
   // workspace is drawn the whole screen wide, and the Strip scrolls
-  // from one to the next.
+  // from one to the next. `Alt+M` shows the workspace in view as the row
+  // for a while (`row`), until it goes or the Flow changes.
   const flow = useFile(AGENTS_FILE).flow
-  const tiling = useTiling({
-    engine,
-    machine,
-    modules,
-    home,
-    solo: flow === "solo",
-  })
+  const solo = flow === "solo"
+  const [row, setRow] = useState<string>()
+  const tiling = useTiling({ engine, machine, modules, home, solo, row })
   const { ready, aside, workspaces, standing, drawnNow, changing } = tiling
   const { change, update } = tiling
+  const inView = current(workspaces).id
+  // Gone from it, or out of solo, the row is over: as drawn, at once.
+  if (row !== undefined && (!solo || row !== inView)) setRow(undefined)
+  const glance = useCallback(() => {
+    if (!solo) return false
+    const id = current(drawnNow()).id
+    setRow((was) => (was === id ? undefined : id))
+    return true
+  }, [solo, drawnNow])
   // A start that drew its workspaces and stayed up went well (ADR 0039).
   useEffect(() => {
     if (!ready) return
@@ -559,6 +565,7 @@ export function Shell({
     putAway: closeShown,
     menu: toggleMenu,
     fillPeek,
+    glance,
     peek: (pane, project) =>
       setPeek((was) =>
         pane

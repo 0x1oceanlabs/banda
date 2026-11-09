@@ -271,6 +271,14 @@ test("in solo every Agent is the whole screen wide at once, and the Strip scroll
   await expect(a).toBeInViewport({ ratio: 0.99 })
   expect(await shares()).toEqual([100, 100, 100])
 
+  // Alt+M shows the row for a while, the focus where it was, and again
+  // goes back to solo; agents.toml keeps solo.
+  await page.keyboard.press("Alt+KeyM")
+  await expect.poll(shares).toEqual([50, 50, 50])
+  await expect(a).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+KeyM")
+  await expect.poll(shares).toEqual([100, 100, 100])
+
   // Back to the row, the room comes back.
   await page.keyboard.press("Alt+Shift+KeyM")
   await expect.poll(shares).toEqual([50, 50, 50])

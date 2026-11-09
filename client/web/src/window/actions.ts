@@ -120,6 +120,9 @@ export type Shell = WindowApi & {
   /** Has what peeks over the desk fill it, or float again (ADR 0073,
    * decision 7); false when nothing peeks. */
   fillPeek: () => boolean
+  /** In solo, the workspace in view as the row for a while, or back to
+   * solo (ADR 0079); false when the Flow is not solo. */
+  glance: () => boolean
   /** Opens the Banda menu at a route, or the settings at theirs, as
    * `banda menu ROUTE` does (ADR 0017, decision 7). */
   route: (route: string) => void
@@ -679,15 +682,17 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
   {
     id: "group.maximize",
     section: "Groups",
-    title: "The Group the whole screen wide, or back",
+    title:
+      "The Group the whole screen wide, or back; in solo, the row for a while",
     keys: [{ code: "KeyM", mod: true }],
-    run: (shell) => shell.change(filling),
+    run: (shell) => {
+      if (!shell.glance()) shell.change(filling)
+    },
   },
   {
     id: "flow.solo",
     section: "Workspaces",
-    title:
-      "Solo, the Agent you are at the whole screen wide, or back to the row",
+    title: "Solo, every Agent the whole screen wide, or back to the row",
     keys: [{ code: "KeyM", mod: true, shift: true }],
     run: (shell) => writeFlow(shell, nextFlow(fileNow(AGENTS_FILE).flow)),
   },

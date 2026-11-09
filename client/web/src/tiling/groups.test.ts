@@ -157,6 +157,8 @@ describe("a Group", () => {
     expect(groupEnds(workspace, 3).pad).toBe(false)
     // The engine's arrangement is not touched.
     expect(state.list[0].solo).toBeUndefined()
+    // The workspace Alt+M shows as the row for a while is as it is.
+    expect(soloed(state, state.list[0].id)).toBe(state)
     // Back to the row, a Group `Alt+M` filled gives the room back.
     const filled = strip("ab", "gg", 0)
     filled.list[0].filled = "g"
