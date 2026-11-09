@@ -693,7 +693,7 @@ test("a string that no longer names an App leaves the list", () => {
  * lowers it; the room lets PRs in flight that each cut a few lines leave
  * it alone.
  */
-const WINDOW_LINES = 967
+const WINDOW_LINES = 953
 const SLACK = 20
 
 test("the Window's root keeps under its ceiling, and the ceiling follows it down", () => {
@@ -741,14 +741,37 @@ test("the parts the Window draws on every move stay memoized", () => {
 })
 
 /**
- * The Tiling's widgets read what the Window hands them of it, around its
- * Bar (`TilingBar`): only the Window gives it, as it gives Here.
+ * The Tiling's widgets read it as every part the Window draws does (ADR
+ * 0087, decision 11): by selector, from the workspaces the Window's
+ * `Kept` gives (`tiling/kept.ts`), and they act by an action's id, a
+ * number by `workspace.go` (#1023). No context of their own hands them
+ * the Tiling's state, and they name no `change` of it, as TypeScript
+ * reads them.
  */
-test("only the Window hands the Tiling's widgets what they read of it", () => {
-  const giving = sources(join(app, "web/src"), { tests: false })
-    .filter((file) => /<TilingBar\b/.test(readFileSync(file, "utf8")))
-    .map((file) => relative(app, file))
-  expect(giving).toEqual(["web/src/window/Shell.tsx"])
+test("the Tiling's widgets make no context of their own and name no change of the Tiling", () => {
+  const widgets = join(app, "web/src/tiling/widgets.tsx")
+  const names = ["createContext", "change", "Change"]
+  expect(
+    hasNode(
+      widgets,
+      (node) => ts.isIdentifier(node) && names.includes(node.text)
+    )
+  ).toBe(false)
+  // By context they read only the port and the aside: the workspaces come
+  // by selector (`useTiled`).
+  const read: string[] = []
+  hasNode(widgets, (node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "useContext"
+    ) {
+      const [context] = node.arguments
+      read.push(context && ts.isIdentifier(context) ? context.text : "?")
+    }
+    return false
+  })
+  expect(read.sort()).toEqual(["AsideContext", "ShowsContext"])
 })
 
 /**
@@ -1621,6 +1644,33 @@ test("only the Window gives the Apps what they list, and only what fills a Pane'
   expect(drawingTag(pageFiles, "Kept")).toEqual([
     "client/web/src/window/Shell.tsx",
   ])
+})
+
+/**
+ * What the Tiling's parts read of it, its workspaces as it draws them,
+ * its port of what the Apps list and the workspaces set aside
+ * (`tiling/kept.ts`), only the Window's `Kept` gives, as it gives the
+ * items and Here, and only the Window's root draws a `Kept` (above). The
+ * workspaces are read by selector alone (`useTiled`): no file but
+ * `Kept`'s takes their context.
+ */
+test("only the Window's Kept gives the Tiling's workspaces, its port and the aside, and the workspaces are read by selector", () => {
+  const here = join(app, "web/src/window/here.tsx")
+  for (const tag of ["TilingContext", "ShowsContext", "AsideContext"]) {
+    expect(drawingTag(pageFiles, tag), tag).toEqual([
+      "client/web/src/window/here.tsx",
+    ])
+    expect(drawingIn(here, tag), tag).toEqual(["Kept"])
+  }
+  const kept = join(app, "web/src/tiling/kept")
+  const taking = pageFiles
+    .filter((file) =>
+      takenOf(file, (path, file) => join(dirname(file), path) === kept).some(
+        (name) => name === "TilingContext" || name === "*"
+      )
+    )
+    .map((file) => relative(root, file))
+  expect(taking).toEqual(["client/web/src/window/here.tsx"])
 })
 
 /**

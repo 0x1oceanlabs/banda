@@ -115,7 +115,6 @@ import {
   loadSidebarWidth,
 } from "../tiling/store"
 import { Workspaces } from "../tiling/Workspaces"
-import { TilingBar } from "../tiling/widgets"
 import {
   bringing,
   closing,
@@ -800,26 +799,24 @@ export function Shell({
 
   return (
     <KeysInForce.Provider value={keys}>
-      <Kept stores={stores} here={here} run={parts.run}>
+      <Kept
+        stores={stores}
+        here={here}
+        tiled={{ store: tiling.store, shows, aside }}
+        run={parts.run}
+      >
         <ThreadMenus engine={engine} projects={projects}>
           <div className="flex h-svh flex-col bg-desk text-foreground">
             <Watches engine={engine} modules={modules} projects={open} />
-            <TilingBar
-              workspaces={workspaces}
-              shows={shows}
-              change={change}
-              aside={aside}
-            >
-              <Bar
-                status={status}
-                sidebar={narrow ? over : sidebar}
-                onSidebar={toggleSidebar}
-                problems={bar.problems}
-                widgets={bar.parts}
-                listed={bar.listed}
-                onArrange={arrangeBar}
-              />
-            </TilingBar>
+            <Bar
+              status={status}
+              sidebar={narrow ? over : sidebar}
+              onSidebar={toggleSidebar}
+              problems={bar.problems}
+              widgets={bar.parts}
+              listed={bar.listed}
+              onArrange={arrangeBar}
+            />
             <div
               className="relative flex min-h-0 flex-1"
               data-sidebar-shown={(sidebarShown && !narrow) || undefined}

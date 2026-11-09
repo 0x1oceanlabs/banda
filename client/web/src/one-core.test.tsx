@@ -31,6 +31,9 @@ import { expect, test } from "vitest"
 import pageConfig from "../vite.config"
 import { newStores } from "./calls/stores"
 import { widgets } from "./registry"
+import type { Tiled } from "./tiling/kept"
+import type { Shows } from "./tiling/shows"
+import { WAITING } from "./tiling/unheard"
 import { Kept } from "./window/here"
 
 const root = join(import.meta.dirname, "../../..")
@@ -49,6 +52,14 @@ const here = new Store<Here>({
   project: "p1",
 })
 
+/** The Tiling as the Window gives it before it read the workspaces: these
+ * tests draw none of its parts. */
+const tiled: Tiled = {
+  store: new Store(WAITING),
+  shows: {} as Shows,
+  aside: null,
+}
+
 test("an App's part reads the run and Here the Window gives, by the path its package takes to them", async () => {
   // As the servers' widget and the bell take the run, and the Threads'
   // tests Here: from `@banda/core/react`, by their own packages' paths.
@@ -64,7 +75,7 @@ test("an App's part reads the run and Here the Window gives, by the path its pac
   }
   expect(
     renderToStaticMarkup(
-      <Kept stores={newStores()} here={here} run={run}>
+      <Kept stores={newStores()} here={here} tiled={tiled} run={run}>
         <Reads />
       </Kept>
     )
@@ -80,7 +91,12 @@ test("an App's widget draws on the page's React, under the Window's", () => {
   const engine = {} as Engine
   expect(
     renderToStaticMarkup(
-      <Kept stores={newStores()} here={here} run={() => undefined}>
+      <Kept
+        stores={newStores()}
+        here={here}
+        tiled={tiled}
+        run={() => undefined}
+      >
         <Widget engine={engine} projects={[]} />
       </Kept>
     )
@@ -160,7 +176,7 @@ test("Threads' part of a Pane's header finds its Thread among what the Apps list
     renderToStaticMarkup(node).replace(/banda-mark-[\w-]+/g, "banda-mark-id")
   expect(
     markup(
-      <Kept stores={stores} here={here} run={() => undefined}>
+      <Kept stores={stores} here={here} tiled={tiled} run={() => undefined}>
         <Fill project={"p1" as ProjectId} pane={listed.pane} at="start" />
       </Kept>
     )

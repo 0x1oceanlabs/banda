@@ -4,113 +4,96 @@
  * and the pill that says the workspaces are set aside. The Tiling is the
  * middle's program, and the Bar shows its workspaces as a bar shows a
  * compositor's; where they stand is the look's `[bar]`, by their ids
- * (`widget-ids.ts`). What they read of the Tiling, the Window hands them
- * (`TilingBar`): the workspaces, which are the Tiling's own to change, and
- * the aside apart, so a key that moves the workspaces draws the pill not.
+ * (`widget-ids.ts`). Each is given the engine and the Projects, as every
+ * widget is (decision 11): what it reads of the Tiling, it reads by
+ * selector from what the Window keeps (`kept.ts`), and a click runs an
+ * action by its id.
  */
-import type { Aside } from "@banda/contract/workspaces"
-import type { Workspaces as Style } from "@banda/contract/look"
 import type { ProjectSummary } from "@banda/contract"
+import type { Workspaces as Style } from "@banda/contract/look"
+import { type Run, sameData, useRun } from "@banda/core/react"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
-import { useRun } from "@banda/core/react"
 import { cn } from "@banda/ui/lib/utils"
 import type { Widget, WidgetProps } from "@banda/ui/module"
 import { PlusIcon } from "lucide-react"
-import {
-  createContext,
-  type ReactNode,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-} from "react"
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useCalling } from "../calls/stores"
 import { useLookBar } from "../look"
 import { AsidePill } from "./AsidePill"
-import type { Change } from "./arrange"
 import { BarMotion } from "./bar-motion"
+import { AsideContext, ShowsContext, useTiled } from "./kept"
 import { WorkspaceMap } from "./Map"
-import { current, go, type InBar, inBar, type Workspaces } from "./model"
-import type { Shows } from "./shows"
+import { current, type InBar, inBar, type Workspaces } from "./model"
 import { ASIDE, WORKSPACES } from "./widget-ids"
-
-/** What the workspaces' widget reads of the Tiling: the workspaces as it
- * drew them, what the Apps list of their Panes, and how it changes them. */
-type Tiled = {
-  workspaces: Workspaces
-  shows: Shows
-  change: (how: Change) => Promise<void>
-}
-
-const TiledContext = createContext<Tiled | null>(null)
-const AsideContext = createContext<Aside | null>(null)
-
-/** Hands the Tiling's widgets what they read of it: the Window gives it
- * around its Bar. */
-export function TilingBar({
-  workspaces,
-  shows,
-  change,
-  aside,
-  children,
-}: Tiled & { aside: Aside | null; children: ReactNode }) {
-  const tiled = useMemo(
-    () => ({ workspaces, shows, change }),
-    [workspaces, shows, change]
-  )
-  return (
-    <TiledContext value={tiled}>
-      <AsideContext value={aside}>{children}</AsideContext>
-    </TiledContext>
-  )
-}
 
 /** A workspace as the bar shows it: a Project's by its badge (ADR 0065,
  * decision 9). */
 type BarWorkspace = InBar & { owner?: ProjectSummary }
 
+/** What the numbers read of the workspaces: those the bar shows, and the
+ * one on screen. Made afresh each time, it is told by `sameData`, so a
+ * key that moves only the focus draws the numbers not. */
+function barOf(state: Workspaces): {
+  list: InBar[]
+  current: number
+} {
+  return { list: inBar(state), current: state.current }
+}
+
+/** What a click on the workspace at `index` runs: on the one on screen,
+ * the overview; on another, a go there by its place, as the keys of
+ * `workspace.go-N` reach only the first nine. */
+export function picked(run: Run, index: number, current: number): void {
+  if (index === current) run("overview.toggle")
+  else run("workspace.go", { index })
+}
+
 /**
- * The workspaces and the Group map of the one on screen. A click on
- * another goes there, by the Tiling's own change, as `workspace.go-N`
- * reaches only the first nine; on the one on screen, it opens the
- * overview.
+ * The workspaces and the Group map of the one on screen, each drawn again
+ * only as what it reads changes: the numbers as the bar's workspaces do,
+ * the map as the one on screen does.
  */
 function WorkspacesWidget({ projects }: WidgetProps) {
-  const tiled = useContext(TiledContext)
-  const run = useRun()
-  // A Project's by its name (ADR 0065, decision 9).
-  const shown = useMemo(
-    () =>
-      tiled
-        ? inBar(tiled.workspaces).map((w) =>
-            w.project
-              ? {
-                  ...w,
-                  owner: projects.find((project) => project.id === w.project),
-                }
-              : w
-          )
-        : [],
-    [tiled, projects]
-  )
-  if (!tiled) return null
-  const { workspaces, shows, change } = tiled
   return (
     <>
-      <WorkspaceList
-        workspaces={shown}
-        current={workspaces.current}
-        onPick={(index) =>
-          index === workspaces.current
-            ? run("overview.toggle")
-            : void change((w) => go(w, index))
-        }
-      />
-      <WorkspaceMap workspace={current(workspaces)} shows={shows} />
+      <Numbers projects={projects} />
+      <MapOnScreen />
     </>
   )
+}
+
+/** The workspaces the bar shows, a Project's by its name (ADR 0065,
+ * decision 9). */
+function Numbers({ projects }: { projects: readonly ProjectSummary[] }) {
+  const bar = useTiled(barOf, sameData)
+  const run = useRun()
+  const shown = useMemo(
+    () =>
+      bar.list.map((w) =>
+        w.project
+          ? {
+              ...w,
+              owner: projects.find((project) => project.id === w.project),
+            }
+          : w
+      ),
+    [bar, projects]
+  )
+  return (
+    <WorkspaceList
+      workspaces={shown}
+      current={bar.current}
+      onPick={(index) => picked(run, index, bar.current)}
+    />
+  )
+}
+
+/** The Group map of the workspace on screen. */
+function MapOnScreen() {
+  const workspace = useTiled(current)
+  const shows = useContext(ShowsContext)
+  return shows && <WorkspaceMap workspace={workspace} shows={shows} />
 }
 
 /** The pill, while the workspaces are set aside (ADR 0039, decision 2). */

@@ -13,7 +13,7 @@ import {
   type ProjectId,
   Refused,
 } from "@banda/contract"
-import { Store, useStore } from "@banda/core/react"
+import { type Readable, Store, useStore } from "@banda/core/react"
 import type { PaneState } from "@banda/ui/pane"
 import { groupedOf, startable, widthOf } from "../registry"
 import { type Change, type Plan, send, tidied, viewOf } from "./arrange"
@@ -231,6 +231,14 @@ export function useTiling({
     () => drawing(store.get().state),
     [store, drawing]
   )
+  // The same for what the Window draws, read by selector (`kept.ts`):
+  // as drawn, solo and all, and read only, as only the Tiling changes
+  // them. Another once solo or Alt+M's row changes, so each reader reads
+  // again.
+  const readable = useMemo<Readable<Workspaces>>(
+    () => ({ get: drawnNow, subscribe: store.subscribe }),
+    [drawnNow, store]
+  )
   // The workspaces set aside, while they are (ADR 0039, decision 2).
   const aside = (ready && live.view.aside) || null
   return {
@@ -239,6 +247,7 @@ export function useTiling({
     workspaces,
     standing,
     drawnNow,
+    store: readable,
     changing,
     change,
     update,

@@ -24,6 +24,12 @@ import { paneHost } from "@banda/ui/pane"
 import { type ReactNode, useContext, useEffect, useState } from "react"
 import type { Shows } from "../calls/sight"
 import { type Stores, StoresContext } from "../calls/stores"
+import {
+  AsideContext,
+  ShowsContext,
+  type Tiled,
+  TilingContext,
+} from "../tiling/kept"
 import { current, focused, projectIn, type Workspaces } from "../tiling/model"
 import { useSteady } from "./steady"
 
@@ -104,19 +110,23 @@ export function useKeptHere(
 }
 
 /** What the Window keeps outside React, for all it draws to read by
- * selector: the items and the calls (ADR 0088, decision 7), and Here;
- * and its `run`, steady, by which what it draws runs an action by id.
+ * selector: the items and the calls (ADR 0088, decision 7), Here, and
+ * the Tiling's workspaces as it draws them, with its port and the aside
+ * (`tiling/kept.ts`); and its `run`, steady, by which what it draws runs
+ * an action by id.
  * The items go to the Apps too, as what fills a Pane's header finds the
  * Item it shows there (`useItem`): the store, not `itemsOf`, as a put-off
  * Thread waking changes no Item and so runs no header's selector. */
 export function Kept({
   stores,
   here,
+  tiled,
   run,
   children,
 }: {
   stores: Stores
   here: HereStore
+  tiled: Tiled
   run: Run
   children: ReactNode
 }) {
@@ -124,7 +134,13 @@ export function Kept({
     <StoresContext value={stores}>
       <ItemsContext value={stores.items}>
         <HereContext value={here}>
-          <RunContext value={run}>{children}</RunContext>
+          <TilingContext value={tiled.store}>
+            <ShowsContext value={tiled.shows}>
+              <AsideContext value={tiled.aside}>
+                <RunContext value={run}>{children}</RunContext>
+              </AsideContext>
+            </ShowsContext>
+          </TilingContext>
         </HereContext>
       </ItemsContext>
     </StoresContext>
