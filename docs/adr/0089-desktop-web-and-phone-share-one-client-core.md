@@ -59,12 +59,13 @@ desktop, web and the PWA now.
      `KeptHere`, the store the Window keeps it in), the store read by
      selector and its hooks, what an action runs with (`Run`, `Args`,
      `useRun`), and the device port's vocabulary: the words the page and
-     main share. The device object and its desktop adapter stay in
-     `client/web/src/boot/` until W1 gives the port a second reader. The
-     hosts store, `KeptHosts`, joins the core at W0 (W0a2), not at H5. The
-     items and calls stores come with B7a and E8b, the action matcher with
-     W1, and no marks store is made: ADR 0096 made a Thread's seen and
-     archived its host's. Plan step 2 shrinks with it.
+     main share. The port's interface (`Device`) joins the core at W1,
+     with its second reader; the device object and its desktop adapter
+     stay in `client/web/src/boot/` (decision 4). The hosts store,
+     `KeptHosts`, joins the core at W0 (W0a2), not at H5. The items and
+     calls stores come with B7a and E8b, the action matcher with W1, and
+     no marks store is made: ADR 0096 made a Thread's seen and archived
+     its host's. Plan step 2 shrinks with it.
 
 2. **The device port is the only way to the device.**
    - It carries ADR 0082 d12's closed list (`notify`, `sound`,
@@ -178,6 +179,9 @@ are the research's §9 and the vision's §9.3.
 2. W0: `client/core` with the device port and its desktop adapter, Here,
    the stores keyed by host and the marks store; the bridge table moves
    into `client/desktop`.
+
+   _Changed on 2026-11-09 (Roma):_ narrowed, see decision 1. It lands as
+   W0a1, W0a2 (the hosts store) and W0b.
 3. H5 (vision): the hosts router, stale hosts and the visible queue;
    `sessionOf(project)` feeds every Pane.
 4. W1 to W3 (vision): the page without Electron, served by the host, the

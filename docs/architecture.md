@@ -1370,9 +1370,8 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   store the Window keeps it in, the store read by selector, what an
   action runs with, and the words the page and the desktop say to each
   other. It has no DOM, reads no device and names no App (decision 1).
-  The Window may import
-  the Tiling; what the Tiling still imports of the Window, the
-  architecture test lists, and the list only falls.
+  The Window may import the Tiling; what the Tiling still imports of the
+  Window, the architecture test lists, and the list only falls.
 - **The workspaces** follow niri (`client/web/src/tiling/model.ts`); every
   change to them is a pure function.
   - They sit one under another, and there is always one empty workspace
