@@ -18,7 +18,7 @@ import {
 import { IN_PROGRAM, type PaneState, paneOf } from "@banda/ui/pane"
 import { RESET_KEY } from "../actions/actions"
 import { chipOf } from "./attach"
-import { device } from "./device"
+import { device } from "../boot"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
 import { type At, locateRoute } from "../menu/menu"

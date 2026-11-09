@@ -28,7 +28,7 @@ import {
   type Source,
 } from "@banda/ui/hooks/use-live"
 import { useNow } from "@banda/ui/hooks/use-now"
-import { useRun } from "@banda/ui/hooks/use-run"
+import { useRun } from "@banda/core/react"
 import { cn } from "@banda/ui/lib/utils"
 import { MINUTE, ago, fullDate, problem } from "@banda/ui/lib/words"
 import type { WidgetProps } from "@banda/ui/module"

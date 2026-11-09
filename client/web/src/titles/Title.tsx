@@ -5,7 +5,7 @@ import {
   DropdownMenuContent,
 } from "@banda/ui/components/dropdown-menu"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
-import { useRun } from "@banda/ui/hooks/use-run"
+import { useRun } from "@banda/core/react"
 import {
   type Naming,
   stopNaming,

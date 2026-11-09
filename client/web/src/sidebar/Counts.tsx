@@ -11,8 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
 import { ProjectSign } from "@banda/ui/components/project-sign"
-import { type Here, useHere } from "@banda/ui/here"
-import { useRun } from "@banda/ui/hooks/use-run"
+import { type Here, useHere, useRun } from "@banda/core/react"
 import { cn } from "@banda/ui/lib/utils"
 import type { Widget, WidgetProps } from "@banda/ui/module"
 import type { Lists } from "@banda/ui/pane"

@@ -7,8 +7,13 @@ import { type HeaderProps, Slots } from "@banda/ui/slots"
 import type { ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "vitest"
-import type { HostState } from "./host"
-import { HostsContext, KeptHosts } from "./calls/hosts"
+import {
+  HostsContext,
+  type HostState,
+  KeptHosts,
+  type Names,
+  unseen,
+} from "@banda/core/react"
 import { slotsOf } from "./registry"
 import { PaneSlot } from "./tiling/PaneSlot"
 
@@ -28,11 +33,17 @@ const terminalPane = { kind: "terminal.terminal", args: {} }
 const markup = (node: ReactNode) =>
   renderToStaticMarkup(node).replace(/banda-mark-[\w-]+/g, "banda-mark-id")
 
+/** A device that remembers no name: each host goes by its key. */
+const forgetting: Names = { seen: unseen, follow: () => () => undefined }
+
 /** What the Slot draws with `props`, filled by the modules that run, with
  * the Window's hosts `hosts`. */
 const drawn = (
   props: HeaderProps,
-  hosts = new KeptHosts({ follow: () => undefined, engine, start: () => {} })
+  hosts = new KeptHosts(
+    { follow: () => undefined, engine, start: () => {} },
+    forgetting
+  )
 ) =>
   markup(
     <HostsContext value={hosts}>
@@ -98,14 +109,17 @@ test("a Pane that shows no Thread has nothing of Threads', and another machine's
     drawn({ project: "p1", pane: terminalPane, listed: other, at: "start" })
   ).toBe("")
 
-  const hosts = new KeptHosts({
-    follow: (take) => {
-      take([arc])
-      return () => undefined
+  const hosts = new KeptHosts(
+    {
+      follow: (take) => {
+        take([arc])
+        return () => undefined
+      },
+      engine,
+      start: () => {},
     },
-    engine,
-    start: () => {},
-  })
+    forgetting
+  )
   hosts.follow()
   hosts.projects("arc", [remote])
   const there = (at: "start" | "project", listed?: Listed) =>

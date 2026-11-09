@@ -15,8 +15,7 @@ import {
   SuggestionDescription,
   SuggestionList,
 } from "@banda/ui/components/suggestions"
-import { useRun } from "@banda/ui/hooks/use-run"
-import { Store, useStore } from "@banda/ui/lib/store"
+import { Store, useRun, useStore } from "@banda/core/react"
 import { clock, left } from "@banda/ui/lib/words"
 import type { Args } from "@banda/ui/module"
 import { asleep, type Listed, snoozable } from "@banda/ui/pane"

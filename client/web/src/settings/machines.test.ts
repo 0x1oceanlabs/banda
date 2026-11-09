@@ -1,7 +1,7 @@
 import { expect, test } from "vitest"
-import type { HostState, HostTest } from "../host"
+import type { HostState, HostTest } from "@banda/core"
 import { Refused } from "@banda/contract"
-import { ELSEWHERE } from "../window/device"
+import { ELSEWHERE } from "../boot"
 import {
   addedWords,
   failedWords,

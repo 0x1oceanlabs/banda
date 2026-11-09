@@ -31,7 +31,7 @@ import type {
   TurnId,
 } from "@banda/contract/agents"
 import { toast } from "@banda/ui/components/sonner"
-import { Store, useStore } from "@banda/ui/lib/store"
+import { Store, useStore } from "@banda/core/react"
 import { problem } from "@banda/ui/lib/words"
 import { useCallback } from "react"
 import { archiveHolds, without } from "./list"

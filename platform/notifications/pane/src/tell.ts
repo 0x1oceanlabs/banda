@@ -3,7 +3,7 @@
  * decisions 1 and 6; ADR 0056, decision 1). Pure, so plain tests cover it.
  */
 import type { Notify } from "@banda/contract/look"
-import type { Here } from "@banda/ui/here"
+import type { Here } from "@banda/core/react"
 import type { Sight } from "@banda/ui/module"
 import type { Call } from "@banda/ui/pane"
 import { type Chime, type SoundSettings, voicing } from "@banda/ui/sound"

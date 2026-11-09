@@ -12,7 +12,7 @@ import {
 } from "@banda/ui/components/dialog"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { updateProject } from "@banda/ui/lib/projects"
-import { Store, useStore } from "@banda/ui/lib/store"
+import { Store, useStore } from "@banda/core/react"
 
 /** The No Project's Project the dialog makes a Project of, while it is
  * open. */

@@ -1,7 +1,7 @@
 import { Button } from "@banda/ui/components/button"
 import { Toaster, type ToastT, toast } from "@banda/ui/components/sonner"
 import { TopLayer } from "@banda/ui/components/top-layer"
-import { useRun } from "@banda/ui/hooks/use-run"
+import { useRun } from "@banda/core/react"
 import { BellIcon } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { LAST, recentNow } from "./recent"

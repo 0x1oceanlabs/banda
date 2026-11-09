@@ -7,7 +7,7 @@
  * T-a, once the Tiling reads no Listed.
  */
 import { useCallback, useMemo } from "react"
-import { sameEach, useSelected } from "@banda/ui/lib/store"
+import { sameEach, useSelected } from "@banda/core/react"
 import type { Listed } from "@banda/ui/pane"
 import type { Chime } from "@banda/ui/sound"
 import type { Entry, Workspace } from "./model"

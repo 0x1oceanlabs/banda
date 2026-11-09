@@ -9,9 +9,8 @@
 import type { MachineIcon, Named } from "@banda/contract/machines"
 import { cleanNamed, cleanText } from "@banda/ui/hooks/use-status"
 import { problem } from "@banda/ui/lib/words"
-import { otherBuild } from "../calls/hosts"
-import type { HostState, HostTest } from "../host"
-import { ELSEWHERE } from "../window/device"
+import { type HostState, type HostTest, otherBuild } from "@banda/core"
+import { ELSEWHERE } from "../boot"
 
 /** The ten icons, in the picker's order (decision 1). */
 export const ICONS: readonly MachineIcon[] = [

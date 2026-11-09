@@ -10,7 +10,7 @@
 import type { ComponentType } from "react"
 import type { LucideIcon } from "lucide-react"
 import type { Engine, JsonValue, ProjectId } from "@banda/contract"
-import type { PaneState, Place } from "@banda/core"
+import { paneHost, type PaneState, type Place, withHost } from "@banda/core"
 import type { MarkState } from "./components/banda-mark"
 import type { Chip } from "./module"
 import type { Chime } from "./sound/families"
@@ -70,32 +70,10 @@ export function within(tile: Element, element: Element | null): boolean {
   )
 }
 
-/** What one tile shows, and where a Pane opens: the core's (ADR 0089),
- * named here too for the modules that take them from here, until L3
- * splits this package. */
-export type { PaneState, Place }
-
-/**
- * The other host of `hosts.toml` whose Project a Pane shows, by its name,
- * as its args keep it under `host` (ADR 0081, decision 4): the arrangement
- * keeps it, so the Pane comes back there after a restart. None for this
- * machine's. It stands in for the client's Placement (ADR 0082) until
- * there is one.
- */
-export function paneHost(pane: PaneState): string | undefined {
-  const host = pane.args.host
-  return typeof host === "string" && host !== "" ? host : undefined
-}
-
-/** `pane` as a Pane of host `host`'s Project keeps it; of this machine's,
- * `host` none, with no host. */
-export function withHost(pane: PaneState, host: string | undefined): PaneState {
-  if (paneHost(pane) === host) return pane
-  const args = { ...pane.args }
-  if (host === undefined) delete args.host
-  else args.host = host
-  return { ...pane, args }
-}
+/** What one tile shows, the host a Pane is on, and where a Pane opens:
+ * the core's (ADR 0089), named here too for the modules that take them
+ * from here, until L3 splits this package. */
+export { paneHost, type PaneState, type Place, withHost }
 
 /**
  * What a Pane draws. A part of it that keeps its own Esc, as a list of

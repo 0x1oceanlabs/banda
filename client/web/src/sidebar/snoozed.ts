@@ -6,8 +6,7 @@
  */
 import { useEffect, useMemo } from "react"
 import { kept } from "@banda/ui/lib/kept"
-import type { HereStore } from "@banda/ui/here"
-import type { Readable } from "@banda/ui/lib/store"
+import type { HereStore, Readable } from "@banda/core"
 import { asleep, type Listed, type Lists, wokeOf } from "@banda/ui/pane"
 import { useIsArchived } from "./archived"
 

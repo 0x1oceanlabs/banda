@@ -1,24 +1,21 @@
-import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
-import type { Args } from "@banda/ui/module"
-import { createElement } from "react"
-import { renderToStaticMarkup } from "react-dom/server"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
+import type { Named } from "@banda/contract/machines"
 import { afterEach, expect, test, vi } from "vitest"
-import type { HostState } from "../host"
+import type { HostState } from "./device"
 import {
-  HostsContext,
   type HostsDevice,
   KeptHosts,
   machinesOf,
+  type Names,
   namedIn,
   otherBuild,
-  type Reach,
   reachWords,
   runOnHost,
   type Shown,
   shownOf,
-  useEngineOf,
-  useReach,
+  unseen,
 } from "./hosts"
+import type { Args } from "./run"
 
 afterEach(() => {
   vi.useRealTimers()
@@ -76,6 +73,9 @@ function desktop() {
   } satisfies HostsDevice
   return { device, tell: (hosts: HostState[]) => tell(hosts) }
 }
+
+/** A device that remembers no name: each host goes by its key. */
+const forgetting: Names = { seen: unseen, follow: () => () => undefined }
 
 test("a host that goes away stays away through the tries after, its rows standing as they were", () => {
   const first = shownOf(undefined, connecting, 0)
@@ -142,7 +142,7 @@ test("another build says both, the host's first", () => {
 test("a host's Projects are its engine's, none archived, and never one shown before it", () => {
   const warned = vi.spyOn(console, "warn").mockImplementation(() => undefined)
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device)
+  const hosts = new KeptHosts(device, forgetting)
   hosts.follow()
   const devbox: HostState = { ...live, name: "devbox", ssh: "devbox" }
   tell([live, devbox])
@@ -214,7 +214,7 @@ test("a host's engine asks the desktop where it listens on each connect, once th
   vi.stubGlobal("WebSocket", Socket)
   Socket.opened = []
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device)
+  const hosts = new KeptHosts(device, forgetting)
   hosts.follow()
   tell([connecting])
   const engine = hosts.engine("arc")
@@ -250,7 +250,7 @@ test("an engine that said goodbye is made anew as its host is live again", async
   vi.stubGlobal("WebSocket", Socket)
   Socket.opened = []
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device)
+  const hosts = new KeptHosts(device, forgetting)
   hosts.follow()
   tell([live])
   const engine = hosts.engine("arc")
@@ -271,77 +271,9 @@ test("an engine that said goodbye is made anew as its host is live again", async
   anew.close()
 })
 
-test("a Pane reaches the engine of the host its args name, else of the host listing its Project; this machine's wins a clash", async () => {
-  vi.useFakeTimers()
-  vi.stubGlobal("WebSocket", Socket)
-  Socket.opened = []
-  const { device, tell } = desktop()
-  const hosts = new KeptHosts(device)
-  hosts.follow()
-  const here = { here: true } as unknown as Engine
-  /** What a Pane of `project`, its args naming host `named`, reaches. */
-  const reach = (project: string, named?: string) => {
-    let got: Reach | undefined
-    const Pane = () => {
-      got = useReach(here, project as ProjectId, named)
-      return null
-    }
-    renderToStaticMarkup(
-      createElement(HostsContext, { value: hosts }, createElement(Pane))
-    )
-    return got!
-  }
-
-  // Before the desktop tells its hosts, as after a restart: it waits.
-  expect(reach("r1", "arc")).toEqual({
-    host: "arc",
-    shown: undefined,
-    engine: undefined,
-  })
-  expect(reachWords("arc", undefined)).toBe("Waiting for arc")
-
-  tell([live])
-  hosts.ours([project("mine")])
-  hosts.projects("arc", [project("mine"), project("r1")])
-  const arc = hosts.engine("arc")
-  const named = reach("r1", "arc")
-  expect(named.host).toBe("arc")
-  expect(named.engine).toBe(arc)
-  expect(reachWords("arc", named.shown)).toBeUndefined()
-  // Its host unsaid, the one that lists the Project.
-  expect(reach("r1").engine).toBe(arc)
-  // A clash: this machine's Project, on its own engine, whatever the args.
-  expect(reach("mine", "arc")).toEqual({ engine: here })
-  expect(reach("x")).toEqual({ engine: here })
-  expect(hosts.hostOf("mine" as ProjectId, "arc")).toBeUndefined()
-
-  // Away, the Pane keeps its engine, which catches up as the host returns.
-  tell([away])
-  const gone = reach("r1", "arc")
-  expect(gone.engine).toBe(arc)
-  expect(reachWords("arc", gone.shown)).toBe("arc is away")
-
-  let engineOf: ReturnType<typeof useEngineOf> | undefined
-  const Shell = () => {
-    engineOf = useEngineOf(here)
-    return null
-  }
-  renderToStaticMarkup(
-    createElement(HostsContext, { value: hosts }, createElement(Shell))
-  )
-  expect(engineOf!("r1" as ProjectId)).toBe(arc)
-  expect(engineOf!("mine" as ProjectId)).toBe(here)
-  // A Pane goes by the host its args name, never this machine's engine
-  // in its place, but for a clash.
-  const on = (host: string) => ({ kind: "agents.thread", args: { host } })
-  expect(engineOf!("gone" as ProjectId, on("arc"))).toBe(arc)
-  expect(engineOf!("mine" as ProjectId, on("arc"))).toBe(here)
-  arc.close()
-})
-
 test("a pick of another host's Thread opens it on that host, never on this machine's engine with its Project", () => {
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device)
+  const hosts = new KeptHosts(device, forgetting)
   hosts.follow()
   tell([live])
   hosts.ours([project("mine")])
@@ -419,7 +351,7 @@ test("a new Thread's machines: this one first and unnamed, then each host live o
 
 test("the Window's machines follow its hosts, told again only as they say something new; this machine's No Project is its own from a Pane on another host too", () => {
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device)
+  const hosts = new KeptHosts(device, forgetting)
   hosts.follow()
   hosts.ours([project("mine")], "m0" as ProjectId)
   tell([live])
@@ -454,7 +386,7 @@ test("the Window's machines follow its hosts, told again only as they say someth
 
 test("a Pane says why it cannot reach its host in the window's own words, by the name the host says it has", () => {
   const words = (state: HostState) =>
-    reachWords("arc", shownOf(undefined, state, 0))
+    reachWords("arc", shownOf(undefined, state, 0), unseen)
   expect(words(connecting)).toBe("Connecting to arc")
   expect(
     words({ name: "arc", ssh: "arc", state: "signin", url: "https://x" })
@@ -467,10 +399,14 @@ test("a Pane says why it cannot reach its host in the window's own words, by the
   ).toBe("arc: an older window")
   // Named, it goes by that name, not by its key.
   const studio = (state: HostState) =>
-    reachWords("arc", {
-      ...shownOf(undefined, state, 0),
-      named: { name: "Studio", icon: "desktop" },
-    })
+    reachWords(
+      "arc",
+      {
+        ...shownOf(undefined, state, 0),
+        named: { name: "Studio", icon: "desktop" },
+      },
+      unseen
+    )
   expect(studio(away)).toBe("Studio is away")
   expect(studio({ name: "arc", ssh: "arc", state: "stopped" })).toBe(
     "Banda is stopped on Studio"
@@ -487,7 +423,7 @@ test("a Pane says why it cannot reach its host in the window's own words, by the
 
 test("a Pane on another host runs none of the Window's actions on this machine's files, and its Items' on that host's alone", () => {
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device)
+  const hosts = new KeptHosts(device, forgetting)
   hosts.follow()
   tell([live])
   hosts.ours([project("mine")])
@@ -547,57 +483,55 @@ test("a Pane on another host runs none of the Window's actions on this machine's
   expect(ran).toEqual([["sidebar.archive", { project: "r1", item: "t1" }]])
 })
 
-test("a host goes by the name and icon its engine says, cleaned, from its welcome and each change after; before, by its key", async () => {
+test("a host goes by the name this device remembers until its engine says one, and the device remembers what it says", () => {
   vi.useFakeTimers()
   vi.stubGlobal("WebSocket", Socket)
   Socket.opened = []
+  const memory = new Map<string, Named>([
+    ["mini", { name: "Mac mini", icon: "laptop" }],
+  ])
+  const followed: string[] = []
+  let say: (named: Named) => void = () => undefined
+  const names: Names = {
+    seen: (key) => memory.get(key) ?? unseen(key),
+    follow: (_engine, key, take) => {
+      followed.push(key)
+      say = (named) => {
+        memory.set(key, named)
+        take(named)
+      }
+      return () => undefined
+    },
+  }
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device)
+  const hosts = new KeptHosts(device, names)
   hosts.follow()
-  // Its own key here, apart from arc's in the tests before.
-  const mini: HostState = { ...live, name: "mini", ssh: "mini" }
-  tell([mini])
-  expect(hosts.get()[0]!.named).toEqual({ name: "mini", icon: "desktop" })
-  expect(namedIn(hosts.get(), "mini")).toEqual({
-    name: "mini",
+  tell([{ ...live, name: "mini", ssh: "mini" }, live])
+  // Before its engine says a name: as this device last saw it, else by
+  // its key.
+  expect(hosts.get().map((one) => one.named)).toEqual([
+    { name: "Mac mini", icon: "laptop" },
+    unnamed,
+  ])
+  expect(namedIn(hosts.get(), "devbox", hosts.seen)).toEqual({
+    name: "devbox",
     icon: "desktop",
   })
+  expect(reachWords("mini", undefined, hosts.seen)).toBe("Waiting for Mac mini")
 
-  const engine = hosts.engine("mini")
-  await vi.advanceTimersByTimeAsync(0)
-  const socket = Socket.opened[0]!
-  socket.onopen?.()
-  const named = { name: "Studio\u202E\u200B", icon: "server" }
-  socket.say({ type: "welcome", engine: "e", modules: [], boot: "b", named })
-  expect(hosts.get()[0]!.named).toEqual({ name: "Studio", icon: "server" })
-  // Renamed there, it says so on its stream, which names no Project.
-  const stream = socket.sent.find((frame) => frame.method === "machine.named")
-  expect(stream).toMatchObject({ type: "stream" })
-  expect(stream).not.toHaveProperty("project")
-  socket.say({
-    type: "piece",
-    stream: stream!.id,
-    data: { name: "Mac mini", icon: "watch" },
-  })
-  const renamed = hosts.get()[0]!
-  expect(renamed.named).toEqual({ name: "Mac mini", icon: "desktop" })
+  // Its engine is followed once, as it is made.
+  const engine = hosts.engine("arc")
+  hosts.engine("arc")
+  expect(followed).toEqual(["arc"])
+  say({ name: "Studio", icon: "server" })
+  const studio = hosts.get()[1]!
+  expect(studio.named).toEqual({ name: "Studio", icon: "server" })
   // The same again draws nothing anew.
-  socket.say({
-    type: "piece",
-    stream: stream!.id,
-    data: { name: "Mac mini", icon: "desktop" },
-  })
-  expect(hosts.get()[0]).toBe(renamed)
-  // Away, and through the tries after, it keeps its name.
-  tell([{ ...away, name: "mini" }])
-  tell([{ ...connecting, name: "mini" }])
-  expect(hosts.get()[0]!.named.name).toBe("Mac mini")
-  expect(reachWords("mini", hosts.get()[0])).toBe("Mac mini is away")
+  say({ name: "Studio", icon: "server" })
+  expect(hosts.get()[1]).toBe(studio)
   // A window made after, as a popped one, has the last name seen here.
-  const later = new KeptHosts(desktop().device)
-  expect(namedIn(later.get(), "mini")).toEqual({
-    name: "Mac mini",
-    icon: "desktop",
-  })
+  const later = new KeptHosts(desktop().device, names)
+  expect(later.seen("arc")).toEqual({ name: "Studio", icon: "server" })
+  expect(namedIn(later.get(), "arc", later.seen)).toEqual(studio.named)
   engine.close()
 })

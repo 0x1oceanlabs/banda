@@ -84,6 +84,9 @@ importers:
       '@banda/contract':
         specifier: workspace:*
         version: link:../../../sdk/contract
+      '@banda/core':
+        specifier: workspace:*
+        version: link:../../../client/core
       '@banda/ui':
         specifier: workspace:*
         version: link:../../../client/ui
@@ -275,6 +278,9 @@ importers:
       '@banda/contract':
         specifier: workspace:*
         version: link:../../../sdk/contract
+      '@banda/core':
+        specifier: workspace:*
+        version: link:../../../client/core
       '@banda/ghostty':
         specifier: workspace:*
         version: link:../../../client/ghostty
@@ -718,6 +724,9 @@ importers:
       '@banda/contract':
         specifier: workspace:*
         version: link:../../../sdk/contract
+      '@banda/core':
+        specifier: workspace:*
+        version: link:../../../client/core
       '@banda/ui':
         specifier: workspace:*
         version: link:../../../client/ui
@@ -789,6 +798,9 @@ importers:
       '@banda/contract':
         specifier: workspace:*
         version: link:../../../sdk/contract
+      '@banda/core':
+        specifier: workspace:*
+        version: link:../../../client/core
       '@banda/ui':
         specifier: workspace:*
         version: link:../../../client/ui

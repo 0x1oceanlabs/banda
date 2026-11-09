@@ -1,7 +1,6 @@
 import type { Notify } from "@banda/contract/look"
 import { toast } from "@banda/ui/components/sonner"
-import type { Here } from "@banda/ui/here"
-import { Store } from "@banda/ui/lib/store"
+import { type Here, Store } from "@banda/core/react"
 import type { Thing, WindowApi } from "@banda/ui/module"
 import type { Listed, Lists } from "@banda/ui/pane"
 import { DEFAULT_SOUND } from "@banda/ui/sound"

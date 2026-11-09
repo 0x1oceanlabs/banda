@@ -43,10 +43,9 @@
  *   device; and only the Window makes the store that keeps Here.
  * - The bridge's table is the desktop's (ADR 0089, decision 4): the
  *   desktop imports nothing of the page, and the page takes only the
- *   table's type, in the files listed, a list that only falls. What still
- *   stands at a path the core or the bridge left, re-exporting it, is
- *   listed too, until W0a2 points its importers to the new path, and so
- *   is what the kit names of the core again until L3.
+ *   table's type, in the files listed, a list that only falls. No path
+ *   the core or the bridge left stands, re-exporting it, and what the kit
+ *   names of the core again until L3 is listed.
  * - Only the Window keeps Here (ADR 0087, decision 4): one place gives it
  *   to what the Window draws, and only the Window gives the `run` its parts
  *   run an action by. Where the Person looks is the calls part's to work
@@ -1417,10 +1416,16 @@ test("the core names no App", () => {
 /**
  * What the core may keep at a module's top level as an instance, an array
  * or an object, by file and name: constants nothing changes. A context's
- * default is made by `createContext`, not listed. W0a2 brings the hosts
- * store's.
+ * default is made by `createContext`, not listed.
  */
-const CORE_CONSTANTS = ["core/src/react/here.ts: NOWHERE"]
+const CORE_CONSTANTS = [
+  "core/src/hosts.ts: ITEMS_ELSEWHERE",
+  "core/src/hosts.ts: NONE",
+  "core/src/hosts.ts: RUNS_ELSEWHERE",
+  "core/src/react/here.ts: NOWHERE",
+  "core/src/react/hosts.ts: FORGETTING",
+  "core/src/react/hosts.ts: NOWHERE",
+]
 
 /** What `value` makes, past a cast: `new Map() as Kept` makes a Map. */
 function made(value: ts.Expression): ts.Expression {
@@ -1542,7 +1547,6 @@ const BRIDGE_TYPES = [
   "web/src/boot/desktop.ts",
   "web/src/enter-key.ts",
   "web/src/frame.ts",
-  "web/src/host.ts",
   "web/src/look.ts",
 ]
 
@@ -1587,17 +1591,11 @@ test("the page takes the bridge's table only as a type, in the files listed", ()
 
 /**
  * What still stands at a path the core, the bridge's table or the device's
- * adapter left in W0a1, only re-exporting it from its new place, so what
- * imports the old path, open PRs among them, keeps building. W0a2 points
- * every importer to the new path and empties the list; none joins it.
+ * adapter left, only re-exporting it from its new place. W0a1 kept five
+ * so the open PRs of the time kept building; W0a2 pointed every importer
+ * to the new path and took them away. None joins the list.
  */
-const OLD_PATHS = [
-  "client/ui/src/here.ts",
-  "client/ui/src/hooks/use-run.ts",
-  "client/ui/src/lib/store.ts",
-  "client/web/src/host.ts",
-  "client/web/src/window/device.ts",
-]
+const OLD_PATHS: string[] = []
 
 test("a path the core or the bridge left only re-exports it, as the list holds", () => {
   const boot = join(app, "web/src/boot")
@@ -1635,9 +1633,13 @@ test("a path the core or the bridge left only re-exports it, as the list holds",
  * `OLD_PATHS` instead.
  */
 const UI_FROM_CORE = [
+  "client/ui/src/lib/projects.ts: openProjects",
+  "client/ui/src/lib/projects.ts: shownProjects",
   "client/ui/src/module.ts: Args",
   "client/ui/src/pane.ts: PaneState",
   "client/ui/src/pane.ts: Place",
+  "client/ui/src/pane.ts: paneHost",
+  "client/ui/src/pane.ts: withHost",
 ]
 
 test("the kit names the core again only as listed", () => {

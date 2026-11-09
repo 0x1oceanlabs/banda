@@ -12,7 +12,7 @@ import {
   type ProjectId,
   Refused,
 } from "@banda/contract"
-import { Store, useStore } from "@banda/ui/lib/store"
+import { Store, useStore } from "@banda/core/react"
 import type { PaneState } from "@banda/ui/pane"
 import { groupedOf, startable, widthOf } from "../registry"
 import { type Change, type Plan, send, tidied, viewOf } from "./arrange"

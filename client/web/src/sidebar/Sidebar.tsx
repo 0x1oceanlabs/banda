@@ -35,22 +35,23 @@ import { Kbd } from "@banda/ui/components/kbd"
 import { ScrollArea } from "@banda/ui/components/scroll-area"
 import { toast } from "@banda/ui/components/sonner"
 import { trustProject } from "@banda/ui/lib/projects"
-import { sameData } from "@banda/ui/lib/store"
+import {
+  holds,
+  HostsContext,
+  namedIn,
+  otherBuild,
+  sameData,
+  type Shown,
+  useHosts,
+  useHostsBy,
+  useRun,
+} from "@banda/core/react"
 import { cn } from "@banda/ui/lib/utils"
 import { clock, problem } from "@banda/ui/lib/words"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
-import { useRun } from "@banda/ui/hooks/use-run"
+import { seenNamed } from "@banda/ui/hooks/use-status"
 import { type Listed, type PaneState, snoozable } from "@banda/ui/pane"
-import {
-  HostsContext,
-  holds,
-  namedIn,
-  otherBuild,
-  type Shown,
-  useHosts,
-  useHostsBy,
-} from "../calls/hosts"
 import { useLists, useSnoozesNow } from "../calls/stores"
 import {
   AlarmClockIcon,
@@ -87,7 +88,7 @@ import { Row } from "./Row"
 import { ThreadRows } from "../titles/ThreadMenu"
 import { TitleField } from "../titles/Title"
 import { useNaming } from "@banda/ui/lib/naming"
-import { device } from "../window/device"
+import { device } from "../boot"
 import { PRESET_WORDS, type Settings } from "./settings"
 import { type Held, held, hold, rowKey } from "./hold"
 import { useIsArchived } from "./archived"
@@ -1127,7 +1128,7 @@ function ElsewhereRow({
   const { host } = row
   const machineOf = useCallback(
     (hosts: readonly Shown[]) =>
-      named || host === undefined ? undefined : namedIn(hosts, host),
+      named || host === undefined ? undefined : namedIn(hosts, host, seenNamed),
     [named, host]
   )
   const machine = useHostsBy(machineOf, sameData)

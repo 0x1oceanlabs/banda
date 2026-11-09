@@ -1,11 +1,11 @@
 import "./renamed"
+import { followNamed, seenNamed } from "@banda/ui/hooks/use-status"
 import { readSignsFrom } from "@banda/ui/lib/signs"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { Engine } from "@banda/contract"
 import "@banda/ui/globals.css"
-import { HostsContext, KeptHosts } from "./calls/hosts"
-import { poppedOf } from "@banda/core"
+import { HostsContext, KeptHosts, poppedOf } from "@banda/core/react"
 import { moveEnterKey } from "./enter-key"
 import { followAccent } from "./accent"
 import { followFrame } from "./frame"
@@ -49,7 +49,10 @@ if (host && engine) {
       ? import("./window/Popped").then(({ Popped }) => {
           // A Pane on another host reaches it from here too (ADR 0081),
           // for the window's life.
-          const hosts = new KeptHosts(device.hosts)
+          const hosts = new KeptHosts(device.hosts, {
+            seen: seenNamed,
+            follow: followNamed,
+          })
           hosts.follow()
           return (
             <HostsContext value={hosts}>

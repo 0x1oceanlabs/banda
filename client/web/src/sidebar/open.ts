@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react"
 import type { ProjectId } from "@banda/contract"
-import { type Run, useRun } from "@banda/ui/hooks/use-run"
+import { type Run, useRun } from "@banda/core/react"
 import type { Row } from "./arrange"
 import { seeWoke } from "./snoozed"
 

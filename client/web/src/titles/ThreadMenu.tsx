@@ -15,7 +15,7 @@ import {
 } from "@banda/ui/components/dropdown-menu"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { useNow } from "@banda/ui/hooks/use-now"
-import { useRun } from "@banda/ui/hooks/use-run"
+import { useRun } from "@banda/core/react"
 import type { Listed } from "@banda/ui/pane"
 import { useIsArchived } from "../sidebar/archived"
 import { rowsOf, type Shown } from "../sidebar/items"

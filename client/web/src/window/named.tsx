@@ -9,6 +9,7 @@
 import type { ProjectId } from "@banda/contract"
 import { MachineIcon, MachineMark } from "@banda/ui/components/machine-icon"
 import { useNow } from "@banda/ui/hooks/use-now"
+import { seenNamed } from "@banda/ui/hooks/use-status"
 import { cn } from "@banda/ui/lib/utils"
 import { paneHost, type PaneState } from "@banda/ui/pane"
 import type { Filler, HeaderProps } from "@banda/ui/slots"
@@ -21,7 +22,7 @@ import {
   type Shown,
   useHostsBy,
   useNamedOf,
-} from "../calls/hosts"
+} from "@banda/core/react"
 
 function Named({ project, pane }: { project: ProjectId; pane: PaneState }) {
   const named = useNamedOf(project, paneHost(pane))
@@ -47,7 +48,7 @@ export function MachinePill({
 }) {
   // It ticks only while away, as only then is `away` set.
   const now = useNow(15_000, shown.away !== undefined)
-  const words = reachWords(shown.name, shown)
+  const words = reachWords(shown.name, shown, seenNamed)
   if (!words) return null
   const long = awayFor(shown.away, now)
   const stopped = shown.state.state === "stopped"

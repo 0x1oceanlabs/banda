@@ -1,5 +1,5 @@
 import type { ProjectId, ProjectSummary } from "@banda/contract"
-import type { Machine } from "@banda/ui/hooks/use-machines"
+import type { Machine } from "@banda/core/react"
 import { expect, test } from "vitest"
 import type { ThreadArgs } from "../thread/session"
 import { groupsOf, movedArgs } from "./NewThread"

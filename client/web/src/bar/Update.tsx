@@ -20,7 +20,7 @@ import { useNow } from "@banda/ui/hooks/use-now"
 import { cn } from "@banda/ui/lib/utils"
 import { MINUTE } from "@banda/ui/lib/words"
 import { type ReactNode, useEffect, useState } from "react"
-import type { Note, Update } from "../host"
+import type { Note, Update } from "@banda/core"
 import {
   firstOf,
   groupsOf,

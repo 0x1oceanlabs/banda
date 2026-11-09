@@ -63,9 +63,14 @@ import {
   PowerIcon,
   Undo2Icon,
 } from "lucide-react"
-import { HostsContext, type Shown, useHosts } from "../calls/hosts"
-import type { HostEntry, HostTest } from "../host"
-import { device } from "../window/device"
+import {
+  type HostEntry,
+  HostsContext,
+  type HostTest,
+  type Shown,
+  useHosts,
+} from "@banda/core/react"
+import { device } from "../boot"
 import { MachinePicker } from "./MachinePicker"
 import {
   addedWords,

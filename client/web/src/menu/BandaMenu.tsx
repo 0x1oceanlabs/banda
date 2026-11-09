@@ -22,6 +22,7 @@ import {
 } from "@banda/ui/components/suggestions"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useWrite } from "@banda/ui/hooks/use-write"
+import { seenNamed } from "@banda/ui/hooks/use-status"
 import {
   type Key,
   keyCaps,
@@ -31,7 +32,13 @@ import {
   matches,
   sameKey,
 } from "@banda/ui/lib/keys"
-import { type Here, useHere } from "@banda/ui/here"
+import {
+  type Here,
+  namedIn,
+  type Shown,
+  useHere,
+  useHosts,
+} from "@banda/core/react"
 import type { Action, MenuAt, MenuRow, Source } from "@banda/ui/module"
 import {
   BadgeCheckIcon,
@@ -54,7 +61,6 @@ import {
 } from "lucide-react"
 import { KEYS_FILE, writeBind } from "../actions/actions"
 import { paneHost } from "@banda/ui/pane"
-import { namedIn, type Shown, useHosts } from "../calls/hosts"
 import { useLists } from "../calls/stores"
 import { useLookSidebar } from "../look"
 import { runs, sources as allSources } from "../registry"
@@ -803,7 +809,8 @@ function RowView({
       // Another machine's names its Project and then that machine (ADR
       // 0095, decision 8): "banda ▭ arc · waits".
       const host = paneHost(listed.pane)
-      const there = host === undefined ? undefined : namedIn(hosts, host)
+      const there =
+        host === undefined ? undefined : namedIn(hosts, host, seenNamed)
       const listing =
         host === undefined
           ? sources.projects

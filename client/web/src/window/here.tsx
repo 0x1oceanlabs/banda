@@ -12,14 +12,15 @@ import {
   type Here,
   HereContext,
   type HereStore,
+  HostsContext,
   KeptHere,
+  type KeptHosts,
   type Run,
   RunContext,
 } from "@banda/core/react"
 import { inFront } from "@banda/ui/hooks/use-in-front"
 import { paneHost } from "@banda/ui/pane"
 import { type ReactNode, useContext, useEffect, useState } from "react"
-import { HostsContext, type KeptHosts } from "../calls/hosts"
 import type { Shows } from "../calls/sight"
 import { type Stores, StoresContext } from "../calls/stores"
 import { current, focused, projectIn, type Workspaces } from "../tiling/model"

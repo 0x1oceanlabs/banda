@@ -1,15 +1,26 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react"
 import type { Engine } from "@banda/contract"
 import { Spinner } from "@banda/ui/components/spinner"
-import { MachinesContext } from "@banda/ui/hooks/use-machines"
+import {
+  HostsContext,
+  KeptHosts,
+  MachinesContext,
+  useMachinesOf,
+  useOurs,
+} from "@banda/core/react"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { Previewers } from "@banda/ui/lib/previewers"
-import { useMachine, useModules, useStatus } from "@banda/ui/hooks/use-status"
+import {
+  followNamed,
+  seenNamed,
+  useMachine,
+  useModules,
+  useStatus,
+} from "@banda/ui/hooks/use-status"
 import { shownProjects } from "@banda/ui/lib/projects"
 import { Slots } from "@banda/ui/slots"
-import { HostsContext, KeptHosts, useMachinesOf, useOurs } from "./calls/hosts"
 import { previewers, slotsOf } from "./registry"
-import { device } from "./window/device"
+import { device } from "./boot"
 import { Shell } from "./window/Shell"
 import { AskToShare } from "./sharing/AskToShare"
 
@@ -25,7 +36,11 @@ export function App({ engine }: { engine: Engine }) {
   const slots = useMemo(() => slotsOf(modules), [modules])
   // A Project added here shows at once, as the engine answered it.
   const { listed, put } = useProjects(engine)
-  const [hosts] = useState(() => new KeptHosts(device.hosts))
+  // The names it shows each host by, as this device last saw them, are
+  // the device's to keep (ADR 0081, decision 1).
+  const [hosts] = useState(
+    () => new KeptHosts(device.hosts, { seen: seenNamed, follow: followNamed })
+  )
   useEffect(() => hosts.follow(), [hosts])
   useOurs(hosts, listed, machine)
 
