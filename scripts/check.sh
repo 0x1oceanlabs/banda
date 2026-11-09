@@ -67,9 +67,16 @@ rust() {
   # a system that refuses them.
   [[ -n "${CI:-}" ]] || export BANDA_FENCE_TESTS="${BANDA_FENCE_TESTS:-require}"
   cargo test --workspace --quiet
+  # cargo test links target/debug/banda for the engine's own tests but
+  # writes the list of sources beside it (banda.d) only when cargo build
+  # asks for it. The ts part's tests check that list against this checkout
+  # (sdk/contract/test/built.ts), and on CI's shared target/ the list left
+  # there is another checkout's. Everything is compiled by now, so this
+  # only links and writes the lists.
+  cargo build --workspace --quiet
 
   step "The modules' unstable marks (ADR 0022, decision 6)"
-  # cargo test built it, and holds the count at its ceiling.
+  # cargo build made it, and holds the count at its ceiling.
   target/debug/banda modules --unstable
 
   step "The TypeScript types match the Rust"
