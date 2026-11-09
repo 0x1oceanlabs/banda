@@ -317,15 +317,30 @@ export function awakeOn(
   return awakeSaid(naming)?.[SAID[key]] ?? AWAKE[key]
 }
 
-/** What the Person last set a switch to (`on`), and what its file said
- * then (`was`). */
-export type Wrote = { readonly was: boolean; readonly on: boolean }
+/** What the Person last set a switch to (`on`), against what was heard of
+ * its file then (`to`: the look's line, or the other machine's answer),
+ * which said `was`. */
+export type Wrote = {
+  readonly to: unknown
+  readonly was: boolean
+  readonly on: boolean
+}
 
-/** A switch the Person set: as they set it while its file still says what
- * it said then, as the file is heard a moment after it is written; else
- * as the file says now (`said`). */
-export const shownOn = (said: boolean, wrote?: Wrote): boolean =>
-  wrote !== undefined && wrote.was === said ? wrote.on : said
+/**
+ * A switch the Person set: as they set it while what is heard of its file
+ * (`heard`) is still what they set it against and says what it said then,
+ * as the file is heard a moment after it is written; else as the file
+ * says now (`said`). Anything heard since says the file afresh, so a
+ * change by hand back to what it was shows too.
+ */
+export const shownOn = (
+  said: boolean,
+  heard: unknown,
+  wrote?: Wrote
+): boolean =>
+  wrote !== undefined && wrote.to === heard && wrote.was === said
+    ? wrote.on
+    : said
 
 /** What `machine.toml` gets as the Person turns `key` `on`: none where
  * that is Banda's own, which takes the line out; else the value. */

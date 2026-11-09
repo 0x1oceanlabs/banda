@@ -246,7 +246,8 @@ function ThisMachine({
   const { listed } = useProjects(engine)
   const { busy, problem, ask } = useAsk()
   const keyed = useLookSettings()[FILE]
-  // What the Person last set each switch to, until the look hears it.
+  // What the Person last set each switch to, over the look's line it was
+  // set against: the look heard again says the file afresh.
   const [wrote, setWrote] = useState<Partial<Record<AwakeKey, Wrote>>>({})
   const got = naming.state === "ready" ? naming.value : undefined
   // What Banda finds, which a key machine.toml leaves out takes; each
@@ -271,10 +272,11 @@ function ThisMachine({
   const set = (key: "name" | "icon", value: string | null) =>
     void ask(() => write(engine, key, value))
   const turn = (key: AwakeKey, on: boolean) => {
+    const to = keyed?.[key]
     const was = awakeOn(key, keyed, got)
     void ask(async () => {
       await write(engine, key, awakeValue(key, on))
-      setWrote((now) => ({ ...now, [key]: { was, on } }))
+      setWrote((now) => ({ ...now, [key]: { to, was, on } }))
     })
   }
   // What machine.toml changed of what Banda finds, to take out.
@@ -363,8 +365,9 @@ function ThisMachine({
             dataKey={key}
             title={title}
             about={about(now.name)}
-            on={shownOn(awakeOn(key, keyed, got), wrote[key])}
-            onChange={busy ? undefined : (on) => turn(key, on)}
+            on={shownOn(awakeOn(key, keyed, got), keyed?.[key], wrote[key])}
+            busy={busy}
+            onChange={(on) => turn(key, on)}
             className="border-t px-(--card-spacing) py-3 last:pb-0"
           />
         ))}
@@ -387,13 +390,14 @@ function ThisMachine({
   )
 }
 
-/** A setting of a machine.toml as a switch, with what it does; one with no
- * `onChange` is greyed and takes no click, as while a write runs. */
+/** A setting of a machine.toml as a switch, with what it does; still while
+ * `busy`, as while a write runs. */
 function SwitchRow({
   dataKey,
   title,
   about,
   on,
+  busy,
   onChange,
   className,
 }: {
@@ -401,7 +405,8 @@ function SwitchRow({
   title: string
   about: string
   on: boolean
-  onChange?: (on: boolean) => void
+  busy: boolean
+  onChange: (on: boolean) => void
   className?: string
 }) {
   return (
@@ -413,12 +418,38 @@ function SwitchRow({
         <div className="text-sm font-medium">{title}</div>
         <div className="text-xs text-muted-foreground">{about}</div>
       </div>
-      {onChange ? (
-        <Switch label={title} on={on} onChange={onChange} />
-      ) : (
-        <Switch label={title} on={on} disabled />
-      )}
+      <BusySwitch label={title} on={on} busy={busy} onChange={onChange} />
     </div>
+  )
+}
+
+/** A switch that, while `busy`, is greyed, said to be so, and takes no
+ * click, yet keeps the focus, as a disabled one would not: the Person
+ * turning it by the keys stays on it. */
+function BusySwitch({
+  label,
+  on,
+  busy,
+  onChange,
+}: {
+  label: string
+  on: boolean
+  busy: boolean
+  onChange: (on: boolean) => void
+}) {
+  return (
+    <span
+      aria-disabled={busy || undefined}
+      className={cn("flex", busy && "opacity-50")}
+    >
+      <Switch
+        label={label}
+        on={on}
+        onChange={(next) => {
+          if (!busy) onChange(next)
+        }}
+      />
+    </span>
   )
 }
 
@@ -817,8 +848,9 @@ function HostRow({
  * "Stay awake while plugged in" in another machine's row (ADR 0097,
  * decision 2): as that machine's `machines.get` says, asked as the row
  * opens while it is live, and turned through `onTurn`, which writes it
- * there. While the machine is not live, or a write runs, it takes no
- * click; while it is not live, it is off.
+ * there. While the machine is not live, it is off, greyed, and takes no
+ * click; while the row's acts run, it takes none either, yet keeps the
+ * focus.
  */
 function PluggedIn({
   host,
@@ -849,16 +881,13 @@ function PluggedIn({
         : undefined
   // What the Person last set it to, over the answer it was set against:
   // one read again, as the machine is back, says it afresh.
-  const [wrote, setWrote] = useState<{ to: unknown; wrote: Wrote }>()
+  const [wrote, setWrote] = useState<Wrote>()
   const there = pluggedInThere(name, live, answer)
   const title = "Stay awake while plugged in"
-  const on =
-    there.can &&
-    shownOn(there.on, wrote && wrote.to === answer ? wrote.wrote : undefined)
+  const on = there.can && shownOn(there.on, answer, wrote)
   const turn = (next: boolean) =>
     void onTurn(next).then(
-      (done) =>
-        done && setWrote({ to: answer, wrote: { was: there.on, on: next } })
+      (done) => done && setWrote({ to: answer, was: there.on, on: next })
     )
   return (
     <RowFrame
@@ -866,8 +895,8 @@ function PluggedIn({
       title={title}
       about={there.about}
     >
-      {there.can && !busy ? (
-        <Switch label={title} on={on} onChange={turn} />
+      {there.can ? (
+        <BusySwitch label={title} on={on} busy={busy} onChange={turn} />
       ) : (
         <Switch label={title} on={on} disabled />
       )}

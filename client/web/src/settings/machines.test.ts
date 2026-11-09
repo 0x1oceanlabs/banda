@@ -304,12 +304,22 @@ test("this machine stays awake as the look reads its machine.toml, else as its e
 })
 
 test("a switch shows what the Person set until its file says otherwise, and Banda's own takes the line out", () => {
-  expect(shownOn(false)).toBe(false)
+  const line = setting(false)
+  expect(shownOn(false, line)).toBe(false)
   // Written, and the file not heard yet: as it was set.
-  expect(shownOn(false, { was: false, on: true })).toBe(true)
+  const wrote = { to: line, was: false, on: true }
+  expect(shownOn(false, line, wrote)).toBe(true)
   // The file heard: as it says, whatever was set.
-  expect(shownOn(true, { was: false, on: true })).toBe(true)
-  expect(shownOn(true, { was: false, on: false })).toBe(true)
+  expect(shownOn(true, setting(true), wrote)).toBe(true)
+  expect(shownOn(true, setting(true), { ...wrote, on: false })).toBe(true)
+  // Heard again as it was, by hand or from another machine: as the file
+  // says, not as the Person set it before.
+  expect(shownOn(false, setting(false), wrote)).toBe(false)
+  // Nothing heard of the file, as before the look comes: as it was set,
+  // while what the engine said is still what it said then.
+  const unheard = { ...wrote, to: undefined }
+  expect(shownOn(false, undefined, unheard)).toBe(true)
+  expect(shownOn(true, undefined, { ...unheard, on: false })).toBe(true)
   // Banda's own value takes the Person's line out; the other is written.
   expect(awakeValue("awake-plugged-in", true)).toBe(true)
   expect(awakeValue("awake-plugged-in", false)).toBeNull()

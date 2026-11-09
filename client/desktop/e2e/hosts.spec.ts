@@ -1344,7 +1344,8 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
 
   // It stays awake while Agents work, as Banda does by itself; and while
   // plugged in once the Person turns it on, in its machine.toml. Turned
-  // back, the line goes; by hand, the switch follows (ADR 0097).
+  // back, the line goes; by hand, the switch follows, one the Person
+  // turned too (ADR 0097).
   const working = here.getByRole("switch", {
     name: "Stay awake while Agents work",
   })
@@ -1366,14 +1367,23 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
   await expect(plugged).toHaveAttribute("aria-checked", "false")
   writeFileSync(
     ours,
-    `${readFileSync(ours, "utf8")}awake-while-working = false\n`
+    `${readFileSync(ours, "utf8")}awake-plugged-in = true\nawake-while-working = false\n`
   )
+  await expect(plugged).toHaveAttribute("aria-checked", "true")
   await expect(working).toHaveAttribute("aria-checked", "false")
   await working.click()
   await expect
     .poll(() => readFileSync(ours, "utf8"))
     .not.toMatch(/awake-while-working/)
   await expect(working).toHaveAttribute("aria-checked", "true")
+  // Turned by the keys, it keeps the focus while it is written.
+  await plugged.focus()
+  await page.keyboard.press("Space")
+  await expect
+    .poll(() => readFileSync(ours, "utf8"))
+    .not.toMatch(/awake-plugged-in/)
+  await expect(plugged).toHaveAttribute("aria-checked", "false")
+  await expect(plugged).toBeFocused()
 
   // The Banda menu's Machine settings opens arc's row, where Test finds
   // arc, its system and its own name.
