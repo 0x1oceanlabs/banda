@@ -1,3 +1,4 @@
+import type { ProjectId } from "@banda/contract"
 import type { PaneState } from "@banda/ui/pane"
 import { describe, expect, test } from "vitest"
 import { DEFAULT_COLUMNS } from "@banda/contract/look"
@@ -22,6 +23,7 @@ import {
   left,
   maximize,
   move,
+  normalize,
   open,
   parse,
   projectIn,
@@ -81,6 +83,25 @@ describe("a start", () => {
     expect(inBar(state)).toEqual([
       { id: state.list[0]!.id, index: 0, empty: true, bottom: true },
     ])
+  })
+})
+
+describe("a Project's workspace", () => {
+  test("stays emptied, shown in the bar, and is never the one at the bottom (ADR 0102)", () => {
+    const mine = "p1" as ProjectId
+    const state: Workspaces = {
+      list: [
+        { id: "w0", columns: [], focus: 0, project: mine },
+        { id: "w1", columns: [], focus: 0 },
+        { id: "w2", columns: [], focus: 0, project: mine },
+      ],
+      current: 1,
+    }
+    const kept = normalize(state)
+    expect(kept.list.map((w) => w.id).slice(0, 3)).toEqual(["w0", "w1", "w2"])
+    expect(kept.list).toHaveLength(4)
+    expect(new Set(kept.list.map((w) => w.id)).size).toBe(4)
+    expect(inBar(kept).map((w) => w.id)).toEqual(kept.list.map((w) => w.id))
   })
 })
 

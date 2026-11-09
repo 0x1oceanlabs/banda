@@ -1,4 +1,4 @@
-import type { Engine, Event } from "@banda/contract"
+import type { Engine, Event, ProjectId } from "@banda/contract"
 import type { PaneState } from "@banda/ui/pane"
 import { describe, expect, test } from "vitest"
 import {
@@ -295,6 +295,30 @@ describe("plans", () => {
     expect(tidied(left)).toEqual({
       method: "workspaces.tidy",
       params: { keep: current(left).id },
+    })
+    // A Project's stays but when its Project is known to have no Threads
+    // (ADR 0102, decision 2).
+    const mine = "p1" as ProjectId
+    const kept: Workspaces = {
+      list: [
+        { id: "mine", columns: [], focus: 0, project: mine },
+        ...state.list,
+      ],
+      current: 1,
+    }
+    expect(tidied(kept)).toBeUndefined()
+    expect(tidied(kept, [mine])).toEqual({
+      method: "workspaces.tidy",
+      params: { keep: current(kept).id },
+    })
+    // With another empty one to let go, it is named to stay.
+    const both: Workspaces = {
+      list: [...kept.list.slice(0, 1), ...left.list],
+      current: 2,
+    }
+    expect(tidied(both)).toEqual({
+      method: "workspaces.tidy",
+      params: { keep: current(both).id, projects: [mine] },
     })
   })
 })

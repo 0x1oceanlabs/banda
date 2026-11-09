@@ -276,16 +276,20 @@ pub enum Place {
     /// one dropped between two in the overview. Never under the empty one
     /// at the bottom.
     Workspace { index: usize },
-    /// Last on a Project's workspace, where its Agents' Threads open (ADR
-    /// 0065, decision 9): the one it owns; else the top one that shows its
-    /// Panes and is no other Project's, or the empty one at the bottom,
-    /// which it owns then. `{"to": "space", "space": …}` before ADR 0069
-    /// (grace).
+    /// Last on a Project's workspace, in the row and solo (ADR 0102,
+    /// decision 1): the one it owns, even emptied; else the empty one at
+    /// the bottom, which it owns then. It never takes a workspace another
+    /// Project owns or a free one. `{"to": "space", "space": …}` before ADR
+    /// 0069 (grace).
     #[serde(alias = "space")]
     Project {
         #[serde(alias = "space")]
         project: ProjectId,
     },
+    /// Last on the top free workspace, one no Project owns that holds a
+    /// Pane, as a Thread of no Project opens (ADR 0102, decision 1); else
+    /// the empty one at the bottom, which is free then.
+    Free,
     /// In the Group of a Pane, as what a Thread opens goes (ADR 0065,
     /// decision 7): its column starts a Group if it is in none, and the
     /// Panes go last into the Group's column right of it, or into a new
@@ -482,7 +486,7 @@ pub fn open(list: &mut Arrangement, opening: Opening, seed: &Seed) -> Result<Pan
         list[at.workspace].columns[at.column].panes[at.pane] = pane;
     } else {
         let place = place.unwrap_or_else(|| Place::Column {
-            workspace: list[showing_project(list, pane.shows.project, |_| true)].id,
+            workspace: list[showing_project(list, pane.shows.project)].id,
             index: usize::MAX,
         });
         put(
@@ -558,24 +562,16 @@ fn put(
             list.insert(above_empty(list, index), workspace);
         }
         Place::Project { project } => {
-            let owned = |w: &Workspace| w.project == Some(project) && !w.columns.is_empty();
-            let w = (list.iter().position(owned)).unwrap_or_else(|| {
-                showing_project(list, project, |w| {
-                    w.project.is_none_or(|other| other == project)
-                })
-            });
+            let w =
+                (list.iter().position(|w| w.project == Some(project))).unwrap_or(list.len() - 1);
             list[w].project = Some(project);
-            let workspace = list[w].id;
-            put(
-                list,
-                column,
-                &Place::Column {
-                    workspace,
-                    index: usize::MAX,
-                },
-                None,
-                seed,
-            )?;
+            put_last(list, w, column, seed)?;
+        }
+        Place::Free => {
+            let w = (list.iter())
+                .position(|w| w.project.is_none() && !w.columns.is_empty())
+                .unwrap_or(list.len() - 1);
+            put_last(list, w, column, seed)?;
         }
         Place::Group { pane } => {
             let at = spot(list, pane)?;
@@ -598,15 +594,21 @@ fn put(
     Ok(())
 }
 
-/// The top workspace that shows a Pane of `project` and is `free`, else the
-/// empty one at the bottom.
-fn showing_project(
-    list: &Arrangement,
-    project: ProjectId,
-    free: impl Fn(&Workspace) -> bool,
-) -> usize {
+/// Puts a column last on workspace `w`.
+fn put_last(list: &mut Arrangement, w: usize, column: Column, seed: &Seed) -> Result<(), Refusal> {
+    let workspace = list[w].id;
+    let last = Place::Column {
+        workspace,
+        index: usize::MAX,
+    };
+    put(list, column, &last, None, seed)
+}
+
+/// The top workspace that shows a Pane of `project`, else the empty one at
+/// the bottom.
+fn showing_project(list: &Arrangement, project: ProjectId) -> usize {
     (list.iter())
-        .position(|w| free(w) && panes_of(w).any(|p| p.shows.project == project))
+        .position(|w| panes_of(w).any(|p| p.shows.project == project))
         .unwrap_or(list.len() - 1)
 }
 
@@ -944,10 +946,16 @@ pub fn fill(list: &mut Arrangement, column: ColumnId, fill: bool) -> Result<(), 
 }
 
 /// Lets every empty workspace go but `keep`, the one the Person looks at,
-/// and the last.
-pub fn tidy(list: &mut Arrangement, keep: Option<WorkspaceId>) {
+/// the last, and those of the `projects` that keep their place while they
+/// have Threads (ADR 0102, decision 2).
+pub fn tidy(list: &mut Arrangement, keep: Option<WorkspaceId>, projects: &[ProjectId]) {
     let last = list.last().map(|w| w.id);
-    list.retain(|w| !w.columns.is_empty() || Some(w.id) == keep || Some(w.id) == last);
+    list.retain(|w| {
+        !w.columns.is_empty()
+            || Some(w.id) == keep
+            || Some(w.id) == last
+            || w.project.is_some_and(|p| projects.contains(&p))
+    });
 }
 
 /// Puts a window's arrangement over the engine's (ADR 0025, decision 2),
@@ -987,7 +995,9 @@ pub fn take(list: &mut Arrangement, taken: Arrangement, seed: &Seed) -> Result<(
     }
     normalize(&mut all, seed);
     // Of the empty workspaces, only the last stays.
-    tidy(&mut all, None);
+    // A Project's workspace, emptied, keeps its place (ADR 0102, decision 2).
+    let projects: Vec<ProjectId> = all.iter().filter_map(|w| w.project).collect();
+    tidy(&mut all, None, &projects);
     *list = all;
     Ok(())
 }
@@ -1021,7 +1031,12 @@ fn normalize(list: &mut Arrangement, seed: &Seed) {
             workspace.filled = None;
         }
     }
-    if list.last().is_none_or(|w| !w.columns.is_empty()) {
+    // A Project's, emptied, is never the empty one at the bottom (ADR 0102,
+    // decision 2).
+    if list
+        .last()
+        .is_none_or(|w| !w.columns.is_empty() || w.project.is_some())
+    {
         list.push(blank(seed.bottom()));
     }
 }
@@ -1332,12 +1347,12 @@ mod tests {
         // It stays while the Person looks at it; only the window knows.
         assert_eq!(layout(&list), [EMPTY, EMPTY]);
         let looked_at = list[0].id;
-        tidy(&mut list, Some(looked_at));
+        tidy(&mut list, Some(looked_at), &[]);
         assert_eq!(list.len(), 2);
-        tidy(&mut list, None);
+        tidy(&mut list, None, &[]);
         assert_eq!(layout(&list), [EMPTY]);
         // The last stays.
-        tidy(&mut list, None);
+        tidy(&mut list, None, &[]);
         assert_eq!(list.len(), 1);
         assert!(close(&mut list, two, &seed()).is_err());
     }
@@ -1697,20 +1712,66 @@ mod tests {
             list.iter().map(|w| w.project).collect::<Vec<_>>(),
             [Some(work), Some(home), None]
         );
-        // A Project with none takes the top one that shows its Panes.
+        // A free workspace that shows its Panes is not taken: the Project
+        // owns the empty one at the bottom (ADR 0102, decision 1).
         let mut other = start();
         opened(&mut other, shown(work, "a.a", 7), None);
         opened(&mut other, shown(work, "agents.thread", 8), on(work));
-        assert_eq!(layout(&other), [vec![vec![7], vec![8]], EMPTY]);
-        assert_eq!(other[0].project, Some(work));
-        // Emptied, it is no Project's place: the Project takes the empty one.
+        assert_eq!(layout(&other), [vec![vec![7]], vec![vec![8]], EMPTY]);
+        assert_eq!(
+            other.iter().map(|w| w.project).collect::<Vec<_>>(),
+            [None, Some(work), None]
+        );
+        // Emptied while it has Threads, it keeps its place and stays the
+        // Project's (decision 2).
         let two = list[1].columns[0].panes[0].id;
         close(&mut list, two, &seed()).unwrap();
-        tidy(&mut list, None);
+        tidy(&mut list, None, &[home]);
+        assert_eq!(layout(&list), [vec![vec![1], vec![3]], EMPTY, EMPTY]);
         opened(&mut list, shown(home, "agents.thread", 4), on(home));
         assert_eq!(
             layout(&list),
             [vec![vec![1], vec![3]], vec![vec![4]], EMPTY]
+        );
+        // With none, it goes, and the Project takes the empty one.
+        let four = list[1].columns[0].panes[0].id;
+        close(&mut list, four, &seed()).unwrap();
+        tidy(&mut list, None, &[]);
+        assert_eq!(layout(&list), [vec![vec![1], vec![3]], EMPTY]);
+        opened(&mut list, shown(home, "agents.thread", 5), on(home));
+        assert_eq!(
+            layout(&list),
+            [vec![vec![1], vec![3]], vec![vec![5]], EMPTY]
+        );
+    }
+
+    #[test]
+    fn a_thread_of_no_project_opens_on_the_top_free_workspace() {
+        let mut list = start();
+        let (work, none) = (ProjectId::new(), ProjectId::new());
+        opened(
+            &mut list,
+            shown(work, "agents.thread", 1),
+            Some(Place::Project { project: work }),
+        );
+        // None free: the empty one at the bottom, which stays free.
+        opened(
+            &mut list,
+            shown(none, "agents.thread", 2),
+            Some(Place::Free),
+        );
+        opened(
+            &mut list,
+            shown(none, "agents.thread", 3),
+            Some(Place::Free),
+        );
+        assert_eq!(
+            layout(&list),
+            [vec![vec![1]], vec![vec![2], vec![3]], EMPTY]
+        );
+        assert_eq!(
+            list.iter().map(|w| w.project).collect::<Vec<_>>(),
+            [Some(work), None, None]
         );
     }
 

@@ -248,6 +248,15 @@ export function callingIn(lists: Lists, now: number): ProjectId[] {
     .map(([project]) => project as ProjectId)
 }
 
+/** The Projects whose lists came and hold no Thread: their workspace, kept
+ * while they had Threads, goes (ADR 0102, decision 2). A Project whose
+ * lists have not come yet is in none of them. */
+export function threadlessIn(lists: Lists): ProjectId[] {
+  return Object.entries(lists)
+    .filter(([, listed]) => listed.length === 0)
+    .map(([project]) => project as ProjectId)
+}
+
 /** The Window's stores, for its parts drawn inside it; elsewhere, as in a
  * popped-out window, empty ones. */
 export const StoresContext = createContext<Stores>(newStores())

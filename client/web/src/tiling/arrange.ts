@@ -12,7 +12,7 @@
  * (`unheard.ts`), until the engine's event holds it. Pure, so plain tests
  * cover it.
  */
-import type { CommandId, Engine, Event } from "@banda/contract"
+import type { CommandId, Engine, Event, ProjectId } from "@banda/contract"
 import type {
   Arranged,
   Changed,
@@ -535,18 +535,32 @@ export function resized(
 
 /**
  * Lets the empty workspaces go that the Person no longer looks at, as
- * niri does, once the window has left them; none when there are none.
+ * niri does, once the window has left them; none when there are none. A
+ * Project's stays but when its Project is known to have no Threads, one of
+ * `gone` (ADR 0102, decision 2).
  */
-export function tidied(state: Workspaces): Command | undefined {
+export function tidied(
+  state: Workspaces,
+  gone: readonly ProjectId[] = []
+): Command | undefined {
   const last = state.list.length - 1
+  const kept = (workspace: Workspace) =>
+    workspace.project !== undefined && !gone.includes(workspace.project)
   const empty = state.list.some(
     (workspace, i) =>
-      workspace.columns.length === 0 && i !== state.current && i !== last
+      workspace.columns.length === 0 &&
+      i !== state.current &&
+      i !== last &&
+      !kept(workspace)
   )
   if (!empty) return undefined
+  const keep = state.list[state.current]?.id
+  const projects = state.list
+    .filter(kept)
+    .map((workspace) => workspace.project!)
   return {
     method: "workspaces.tidy",
-    params: { keep: state.list[state.current]?.id },
+    params: { keep, ...(projects.length > 0 && { projects }) },
   }
 }
 

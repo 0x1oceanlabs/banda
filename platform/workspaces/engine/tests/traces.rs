@@ -33,6 +33,7 @@ const WORK: &str = "a0000000-0000-4000-8000-000000000001";
 const HOME: &str = "a0000000-0000-4000-8000-000000000002";
 const THIRD: &str = "a0000000-0000-4000-8000-000000000003";
 const FOURTH: &str = "a0000000-0000-4000-8000-000000000004";
+const FIFTH: &str = "a0000000-0000-4000-8000-000000000005";
 const AGENT: &str = "b0000000-0000-4000-8000-000000000001";
 /// An ID the workspaces hold nowhere.
 const NOWHERE: &str = "e0000000-0000-4000-8000-000000000001";
@@ -514,31 +515,43 @@ fn project_row() -> Tracing {
     let mut t = Tracing::new(
         5,
         "project-row",
-        "A Project's Threads open last on its own workspace, in a row: the one it owns \
-         while it holds Panes; else the top one that shows its Panes and is no other \
-         Project's; else the empty one at the bottom, which it owns then.",
+        "A Project's Threads open last on its own workspace, in a row: the one it owns, \
+         even emptied while it has Threads; else the empty one at the bottom, which it \
+         owns then. A free workspace or another Project's is never its row. A Thread of \
+         no Project opens on the top free workspace, else on the bottom one.",
     );
     let row = |project: &str| json!({ "place": { "to": "project", "project": project } });
+    let free = json!({ "place": { "to": "free" } });
     t.ok("open", and(shows(WORK, "agents.thread", 1), row(WORK)));
     t.ok("open", and(shows(HOME, "agents.thread", 2), row(HOME)));
     t.ok("open", and(shows(WORK, "agents.thread", 3), row(WORK)));
     assert_eq!(t.layout(), [vec![vec![1], vec![3]], vec![vec![2]], EMPTY]);
-    // One that owns none takes the top one that shows its Panes.
+    // A free workspace that shows its Panes is not its row.
     t.ok("open", shows(THIRD, "a.a", 7));
     t.ok("open", and(shows(THIRD, "agents.thread", 8), row(THIRD)));
-    assert_eq!(t.layout()[2], [vec![7], vec![8]]);
-    // Emptied, it is no Project's place: the Project takes the bottom one.
+    assert_eq!(t.layout()[2], [vec![7]]);
+    assert_eq!(t.layout()[3], [vec![8]]);
+    // Emptied, it stays while its Project has Threads, and is its row.
     let home = t.pane(1, 0, 0);
     t.ok("close", json!({ "pane": home }));
+    t.ok("tidy", json!({ "projects": [HOME] }));
+    assert_eq!(t.layout()[1], EMPTY);
     t.ok("open", and(shows(HOME, "agents.thread", 4), row(HOME)));
-    assert_eq!(t.layout()[3], [vec![4]]);
+    assert_eq!(t.layout()[1], [vec![4]]);
+    // With none, it goes.
+    let four = t.pane(1, 0, 0);
+    t.ok("close", json!({ "pane": four }));
     t.ok("tidy", json!({}));
+    assert_eq!(t.layout().len(), 4);
     // Another Project's workspace is never its row, though it shows its Panes.
     let work = t.workspace(0);
     let on_work = json!({ "place": { "to": "column", "workspace": work, "index": 9 } });
     t.ok("open", and(shows(FOURTH, "a.a", 9), on_work));
     t.ok("open", and(shows(FOURTH, "agents.thread", 10), row(FOURTH)));
     assert_eq!(t.layout()[3], [vec![10]]);
+    // A Thread of no Project: the top free workspace.
+    t.ok("open", and(shows(FIFTH, "agents.thread", 11), free));
+    assert_eq!(t.layout()[1], [vec![7], vec![11]]);
     t
 }
 

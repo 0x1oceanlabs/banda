@@ -625,7 +625,7 @@ impl Workspaces {
 
     async fn tidy(&self, call: Call, tidy: Tidy) -> Result<Done, Refusal> {
         change(&call, "tidied", None, Say::Whole, move |list, _, _| {
-            model::tidy(list, tidy.keep);
+            model::tidy(list, tidy.keep, &tidy.projects);
             Ok(())
         })
         .await

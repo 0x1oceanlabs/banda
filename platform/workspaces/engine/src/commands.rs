@@ -17,7 +17,7 @@
 use crate::model::{
     self, Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Toward, WorkspaceId,
 };
-use banda_kernel::{Refusal, decode};
+use banda_kernel::{ProjectId, Refusal, decode};
 use banda_look::columns::Display;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -190,6 +190,11 @@ pub struct Tidy {
     #[serde(default)]
     #[ts(optional)]
     pub keep: Option<WorkspaceId>,
+    /// The Projects whose workspace stays even empty, as they have Threads
+    /// (ADR 0102, decision 2). Left out, none.
+    #[serde(default)]
+    #[ts(as = "Option<Vec<ProjectId>>", optional)]
+    pub projects: Vec<ProjectId>,
 }
 
 #[derive(Deserialize, TS)]
@@ -312,8 +317,8 @@ pub fn apply(
             model::fill(list, column, fill)?;
         }
         "tidy" => {
-            let Tidy { keep } = read(list, seed, params)?;
-            model::tidy(list, keep);
+            let Tidy { keep, projects } = read(list, seed, params)?;
+            model::tidy(list, keep, &projects);
         }
         "take" => {
             let Take { workspaces } = read(list, seed, params)?;
