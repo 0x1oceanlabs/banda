@@ -1354,22 +1354,39 @@ test("a Pane's header gives what fills it the Pane alone", () => {
           : [`type ${node.getText()}`]
   const keys = new Set(keysOf(header!.type))
   expect([...keys].sort()).toEqual(["at", "calling", "pane", "project"])
+  // And the Slot gives `HeaderProps` itself: nothing joined to it there.
+  const slots = statements
+    .filter(ts.isTypeAliasDeclaration)
+    .find(({ name }) => name.text === "SlotProps")?.type
+  const given =
+    slots && ts.isTypeLiteralNode(slots)
+      ? slots.members.find(
+          (member) => member.name?.getText() === '"pane.header"'
+        )
+      : undefined
+  expect(
+    given && ts.isPropertySignature(given) ? given.type?.getText() : given
+  ).toBe("HeaderProps")
 })
 
 /**
  * What the Apps list reaches them from the Window alone, through the kit
  * (`hooks/use-item.ts`), until B7a gives the Item a store of its own: only
  * the Window's `Kept` gives it, and only the Window's root draws a `Kept`,
- * so a popped-out Pane's window, which lists nothing, never draws a Mark
- * by its kind's icon. The files that read an Item by it are listed: it
- * lets any App read every Item, so only what fills a Pane's header with
- * its own does, and the list only falls.
+ * by any name, so a popped-out Pane's window, which is given no Items,
+ * never draws a Mark by its kind's icon. The files that read an Item by
+ * it are listed: it lets any App read every Item, so only what fills a
+ * Pane's header with its own does, and the list only falls.
  */
 const ITEM_READERS = ["apps/agents/pane/src/list/header.tsx"]
 
-/** What `file` takes of the kit's `use-item`, by name, or `*` for all of
- * it: by an import, or an export from it. */
-function takenOfItems(file: string): string[] {
+/** What `file` takes, by name, or `*` for all of it, of each module
+ * whose path, as `file` writes it, `from` matches: by an import, or an
+ * export from it. */
+function takenOf(
+  file: string,
+  from: (path: string, file: string) => boolean
+): string[] {
   const { statements } = ts.createSourceFile(
     file,
     readFileSync(file, "utf8"),
@@ -1381,13 +1398,8 @@ function takenOfItems(file: string): string[] {
       !ts.isExportDeclaration(statement)
     )
       return []
-    const from = statement.moduleSpecifier
-    if (
-      !from ||
-      !ts.isStringLiteral(from) ||
-      !/(^|\/)use-item$/.test(from.text)
-    )
-      return []
+    const path = statement.moduleSpecifier
+    if (!path || !ts.isStringLiteral(path) || !from(path.text, file)) return []
     const named = ts.isImportDeclaration(statement)
       ? statement.importClause?.namedBindings
       : statement.exportClause
@@ -1399,50 +1411,72 @@ function takenOfItems(file: string): string[] {
   })
 }
 
+/** The functions of `file` that draw an element `tag`, or `tag.Provider`,
+ * by name: one for each it draws, `?` for one with no name of its own. */
+function drawingIn(file: string, tag: string): string[] {
+  const drawing: string[] = []
+  const visit = (node: ts.Node) => {
+    if (
+      (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
+      [tag, `${tag}.Provider`].includes(node.tagName.getText())
+    ) {
+      let around = node.parent
+      while (!ts.isFunctionLike(around) && !ts.isSourceFile(around))
+        around = around.parent
+      drawing.push(
+        ts.isFunctionDeclaration(around) && around.name ? around.name.text : "?"
+      )
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(
+    ts.createSourceFile(
+      file,
+      readFileSync(file, "utf8"),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX
+    )
+  )
+  return drawing
+}
+
 /** The files of `files` that draw an element `tag`, or `tag.Provider`. */
 function drawingTag(files: readonly string[], tag: string): string[] {
   return files
     .filter((file) => file.endsWith(".tsx"))
-    .filter((file) => {
-      let found = false
-      const visit = (node: ts.Node) => {
-        if (
-          (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
-          [tag, `${tag}.Provider`].includes(node.tagName.getText())
-        )
-          found = true
-        ts.forEachChild(node, visit)
-      }
-      visit(
-        ts.createSourceFile(
-          file,
-          readFileSync(file, "utf8"),
-          ts.ScriptTarget.Latest,
-          true,
-          ts.ScriptKind.TSX
-        )
-      )
-      return found
-    })
+    .filter((file) => drawingIn(file, tag).length > 0)
     .map((file) => relative(root, file))
     .sort()
 }
 
-test("only the Window gives the Apps what it lists, and only what fills a Pane's header reads it", () => {
+test("only the Window gives the Apps what they list, and only what fills a Pane's header reads it", () => {
   const kit = join(app, "ui/src/hooks/use-item.ts")
-  const taking = (name: string) =>
+  const here = join(app, "web/src/window/here")
+  // Who takes `name` of a module `from` matches, under any name of
+  // their own.
+  const taking = (name: string, from: Parameters<typeof takenOf>[1]) =>
     pageFiles
-      .filter((file) => file !== kit)
       .filter((file) =>
-        takenOfItems(file).some((one) => one === name || one === "*")
+        takenOf(file, from).some((one) => one === name || one === "*")
       )
       .map((file) => relative(root, file))
       .sort()
-  expect(taking("useItem")).toEqual(ITEM_READERS)
-  expect(taking("ItemsContext")).toEqual(["client/web/src/window/here.tsx"])
+  const fromKit = (path: string, file: string) =>
+    file !== kit && /(^|\/)use-item$/.test(path)
+  expect(taking("useItem", fromKit)).toEqual(ITEM_READERS)
+  expect(taking("ItemsContext", fromKit)).toEqual([
+    "client/web/src/window/here.tsx",
+  ])
+  // Only `Kept` gives it, and only the root takes `Kept`: no wrapper of
+  // another name gives a window the items.
   expect(drawingTag(pageFiles, "ItemsContext")).toEqual([
     "client/web/src/window/here.tsx",
   ])
+  expect(drawingIn(`${here}.tsx`, "ItemsContext")).toEqual(["Kept"])
+  expect(
+    taking("Kept", (path, file) => join(dirname(file), path) === here)
+  ).toEqual(["client/web/src/window/Shell.tsx"])
   expect(drawingTag(pageFiles, "Kept")).toEqual([
     "client/web/src/window/Shell.tsx",
   ])
