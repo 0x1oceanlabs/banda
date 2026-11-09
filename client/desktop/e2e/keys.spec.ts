@@ -160,6 +160,9 @@ async function strip(page: Page, address: string) {
   await page.waitForTimeout(500)
 }
 
+/** The phase pressed with the Sidebar hidden, the last. */
+const HIDDEN = "focus, the Sidebar hidden"
+
 /** A phase's keys, pressed one at a time as a Person does: each lands on
  * a window at rest. */
 const PHASES: Record<string, string[]> = {
@@ -197,6 +200,17 @@ const PHASES: Record<string, string[]> = {
     "Alt+KeyW",
     "Alt+KeyN",
     "Alt+KeyW",
+  ],
+  // The focus again, the Sidebar hidden first, so the counts show as the
+  // switcher: they read the Sidebar and what the Pane in focus shows from
+  // Here, and a move between Panes that show no Thread draws them not.
+  [HIDDEN]: [
+    "Alt+ArrowLeft",
+    "Alt+ArrowLeft",
+    "Alt+ArrowRight",
+    "Alt+ArrowRight",
+    "Alt+ArrowLeft",
+    "Alt+ArrowRight",
   ],
 }
 
@@ -271,6 +285,16 @@ for (const latency of [0, 150]) {
 
       const measured: Record<string, Measured> = {}
       for (const [name, keys] of Object.entries(PHASES)) {
+        if (name === HIDDEN) {
+          await page.keyboard.press("Alt+KeyA")
+          await expect(
+            page.getByRole("complementary", { name: "Sidebar" })
+          ).toBeHidden()
+          await expect(
+            page.locator("[data-widget='sidebar.counts'] > *")
+          ).toHaveCount(1)
+          await page.waitForTimeout(700)
+        }
         await page.evaluate(reset, false)
         for (const key of keys) {
           await page.keyboard.press(key)
@@ -298,6 +322,10 @@ for (const latency of [0, 150]) {
       const steps = (phase: string) => measured[phase].steps
       expect(each("focus").tiles, "focus: Tiles drawn").toBe(2 * steps("focus"))
       expect(each("focus").widgets, "focus: widgets drawn").toBe(0)
+      expect(each(HIDDEN).tiles, `${HIDDEN}: Tiles drawn`).toBe(
+        2 * steps(HIDDEN)
+      )
+      expect(each(HIDDEN).widgets, `${HIDDEN}: widgets drawn`).toBe(0)
       expect(each("width").tiles, "width: Tiles drawn").toBe(0)
       expect(each("maximize").tiles, "maximize: Tiles drawn").toBe(0)
       expect(each("workspace").tiles, "workspace: Tiles drawn").toBe(
