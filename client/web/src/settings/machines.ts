@@ -2,11 +2,13 @@
  * Settings → Machines' own rules and words (ADR 0095): the ten icons in
  * the picker's order, how Add numbers a name another machine shown has
  * and moves a server's icon on (decision 3), what a machine's state, its
- * build and a Test say, and what the Person's acts show while several
- * run. Its state's words are Settings' own small list; the sidebar's
- * label keeps its own (`HostWords`). Pure, so plain tests cover it.
+ * build and a Test say, when a machine stays awake and what its lid does
+ * (ADR 0097), and what the Person's acts show while several run. Its
+ * state's words are Settings' own small list; the sidebar's label keeps
+ * its own (`HostWords`). Pure, so plain tests cover it.
  */
-import type { MachineIcon, Named } from "@banda/contract/machines"
+import type { Awake, MachineIcon, Named } from "@banda/contract/machines"
+import type { Setting } from "@banda/contract/settings"
 import { cleanNamed, cleanText } from "@banda/ui/hooks/use-status"
 import { problem } from "@banda/ui/lib/words"
 import { type HostState, type HostTest, otherBuild } from "@banda/core"
@@ -188,6 +190,10 @@ export function buildWords(state: HostState): string | undefined {
  * engine writes them, and only while it is live. */
 export const renameWords = (name: string) => `Rename ${name} when it is back`
 
+/** Why whether another machine stays awake on power cannot be set now, as
+ * its name cannot (ADR 0097). */
+export const awayWords = (name: string) => `Set it on ${name} when it is back`
+
 /** The name and icon a Test found the machine has, cleaned again as a
  * welcome's are, `name` where it says an empty one; none from a banda
  * before them, or where nothing was found. Main cleaned them already
@@ -240,6 +246,137 @@ export function testWords(
     case "refused":
       return { found: false, title: `Cannot use it: ${test.why}` }
   }
+}
+
+/** The keys of `machine.toml` that say when a machine stays awake, each
+ * with Banda's own value: while its Agents work, on; while it is plugged
+ * in, off (ADR 0097, decisions 1 and 2). */
+export const AWAKE = {
+  "awake-while-working": true,
+  "awake-plugged-in": false,
+} as const
+
+export type AwakeKey = keyof typeof AWAKE
+
+/** Each key as `machines.get` names it, in its `awake`. */
+const SAID: Readonly<Record<AwakeKey, keyof Awake>> = {
+  "awake-while-working": "while_working",
+  "awake-plugged-in": "plugged_in",
+}
+
+/** This machine's switches, under its name, with what each says of the
+ * machine `name`. */
+export const AWAKE_ROWS: readonly {
+  key: AwakeKey
+  title: string
+  about: (name: string) => string
+}[] = [
+  {
+    key: "awake-while-working",
+    title: "Stay awake while Agents work",
+    about: (name) =>
+      `${name} does not sleep by itself while a Turn runs here, and for 10 minutes after. Its screen sleeps as usual.`,
+  },
+  {
+    key: "awake-plugged-in",
+    title: "Stay awake while plugged in",
+    about: (name) =>
+      `While on power, ${name} never sleeps by itself, so other machines can reach it.`,
+  },
+]
+
+/** What an engine's `machines.get` (`naming`) says of when its machine
+ * stays awake; none from an engine before ADR 0097, which says nothing of
+ * it, or one that says it otherwise. */
+export function awakeSaid(naming: unknown): Awake | undefined {
+  const { awake } = (
+    typeof naming === "object" && naming !== null ? naming : {}
+  ) as { awake?: unknown }
+  if (typeof awake !== "object" || awake === null) return undefined
+  const { while_working, plugged_in } = awake as Partial<
+    Record<keyof Awake, unknown>
+  >
+  return typeof while_working === "boolean" && typeof plugged_in === "boolean"
+    ? { while_working, plugged_in }
+    : undefined
+}
+
+/**
+ * Whether `key` of this machine is on: as the look reads its
+ * `machine.toml` (`keyed`), so a change by hand shows at once; else as its
+ * engine said in `machines.get` (`naming`), as before the look comes;
+ * else Banda's own.
+ */
+export function awakeOn(
+  key: AwakeKey,
+  keyed: Readonly<Record<string, Setting>> | undefined,
+  naming?: unknown
+): boolean {
+  const looked = keyed?.[key]?.value
+  if (typeof looked === "boolean") return looked
+  return awakeSaid(naming)?.[SAID[key]] ?? AWAKE[key]
+}
+
+/** What the Person last set a switch to (`on`), and what its file said
+ * then (`was`). */
+export type Wrote = { readonly was: boolean; readonly on: boolean }
+
+/** A switch the Person set: as they set it while its file still says what
+ * it said then, as the file is heard a moment after it is written; else
+ * as the file says now (`said`). */
+export const shownOn = (said: boolean, wrote?: Wrote): boolean =>
+  wrote !== undefined && wrote.was === said ? wrote.on : said
+
+/** What `machine.toml` gets as the Person turns `key` `on`: none where
+ * that is Banda's own, which takes the line out; else the value. */
+export const awakeValue = (key: AwakeKey, on: boolean): boolean | null =>
+  on === AWAKE[key] ? null : on
+
+/** Whether a machine runs macOS, as `machines.get` says its system:
+ * "macOS 26.1". */
+const onMac = (system: unknown) =>
+  typeof system === "string" && /^macOS\b/.test(system)
+
+/** What a closed lid does to this machine, `name`, which has a battery,
+ * as its `system` is: a Mac's sleeps it, whatever holds it awake; Linux's
+ * and Windows' do what their own settings say. Banda changes neither
+ * (ADR 0097, decision 4). */
+export const lidWords = (name: string, system?: unknown): string =>
+  onMac(system)
+    ? `A closed lid still sleeps ${name}. Banda does not change its settings.`
+    : `A closed lid does what ${name}'s own settings say. Banda does not change them.`
+
+/**
+ * "Stay awake while plugged in" in the row of another machine, `name`
+ * (ADR 0097, decision 2): whether it is on, whether the Person can turn
+ * it, and what the row says. It is set there, through its engine, so only
+ * while it is `live`, and off-looking otherwise; `naming` is what its
+ * `machines.get` answered, `undefined` while it is asked, `null` where it
+ * refused. Its lid is named where it has a battery, as its system is.
+ */
+export function pluggedInThere(
+  name: string,
+  live: boolean,
+  naming: unknown
+): { on: boolean; can: boolean; about: string } {
+  if (!live) return { on: false, can: false, about: `${awayWords(name)}.` }
+  const set = `Set on ${name}, in its machine.toml.`
+  if (naming === undefined) return { on: false, can: false, about: set }
+  const said = awakeSaid(naming)
+  if (!said)
+    return {
+      on: false,
+      can: false,
+      about: `Update Banda on ${name} to set it here.`,
+    }
+  const { battery, system } = naming as { battery?: unknown; system?: unknown }
+  const lid =
+    battery !== true
+      ? ""
+      : onMac(system)
+        ? " A closed lid still sleeps it."
+        : " A closed lid does what its own settings say."
+  return { on: said.plugged_in, can: true, about: `${set}${lid}` }
 }
 
 /** One of the Person's acts while it runs, with what it is doing in

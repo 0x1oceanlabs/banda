@@ -10,7 +10,8 @@
 //! answers `get` for Settings.
 //!
 //! The file also says when the machine stays awake, which the engine
-//! follows ([`Machine::awake`], [`awake::keep`], ADR 0097).
+//! follows ([`Machine::awake`], [`awake::keep`], ADR 0097); `get` says it
+//! too, and whether the machine has a battery, for Settings → Machines.
 
 mod about;
 pub mod awake;
@@ -147,15 +148,17 @@ impl Machines {
 banda_kernel::methods! {
     Machines(Call) as "MachinesMethods" in "machines/" {
         /// This machine's name and icon, as every window shows it, and what
-        /// Banda found, which a key machine.toml leaves out takes. The
-        /// settings' `set` changes them, in machine.toml, which only the
-        /// Person does; the stream `machine.named` says each change.
+        /// Banda found, which a key machine.toml leaves out takes; when it
+        /// stays awake, and whether it has a battery. The settings' `set`
+        /// changes them, in machine.toml, which only the Person does; the
+        /// stream `machine.named` says each change of the name and icon.
         call get(Nothing) -> Naming, Read;
     }
 }
 
-/// This machine's name and icon now, and what Banda found; and what it
-/// is, in words, for Settings' "This machine", as its system says now.
+/// This machine's name and icon now, and what Banda found; what it is, in
+/// words, for Settings' "This machine", as its system says now; and when it
+/// stays awake, which another machine's window shows too (ADR 0097).
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "machines/")]
 pub struct Naming {
@@ -173,16 +176,27 @@ pub struct Naming {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub model: Option<String>,
+    /// When it stays awake, as its machine.toml says now.
+    pub awake: Awake,
+    /// It has a battery of its own, as a laptop: Settings says what a
+    /// closed lid does to it (ADR 0097, decision 4).
+    pub battery: bool,
 }
 
 impl Machines {
     async fn get(&self, _: Call, _: Nothing) -> Result<Naming, Refusal> {
+        // The file as it is now, so a `set` just made is in the answer
+        // before the folder's watch hears it.
+        self.machine.reread();
+        let battery = found::battery().await;
         let About { system, model } = about();
         Ok(Naming {
             named: self.machine.now(),
             found: self.machine.0.found.clone(),
             system,
             model,
+            awake: *self.machine.0.awake.borrow(),
+            battery,
         })
     }
 }

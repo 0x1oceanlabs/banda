@@ -4,17 +4,24 @@ import { Refused } from "@banda/contract"
 import { ELSEWHERE } from "../boot"
 import {
   addedWords,
+  AWAKE_ROWS,
+  awakeOn,
+  awakeSaid,
+  awakeValue,
   ended,
   failedWords,
   buildWords,
   factsWords,
   foundNamed,
+  lidWords,
   movedIcon,
   NO_ACTS,
   numbered,
+  pluggedInThere,
   settle,
   settleWords,
   shownActs,
+  shownOn,
   started,
   stateWords,
   testWords,
@@ -253,4 +260,125 @@ test("what went wrong stays until the next act starts, whatever ends meanwhile",
     busy: true,
     doing: "Testing arc…",
   })
+})
+
+/** A setting as the look reads it from the file, or from Banda's own. */
+const setting = (value: boolean, layer = "file") => ({
+  value,
+  from: { layer },
+})
+
+/** What an engine's `machines.get` answers, kept awake as `awake` says. */
+const naming = (awake?: object, more: object = {}) => ({
+  name: "m1pro",
+  icon: "laptop",
+  found: { name: "m1pro", icon: "laptop" },
+  ...(awake && { awake }),
+  ...more,
+})
+
+test("this machine stays awake as the look reads its machine.toml, else as its engine said, else as Banda does by itself", () => {
+  // Banda's own: awake while Agents work, not for being plugged in.
+  expect(awakeOn("awake-while-working", undefined)).toBe(true)
+  expect(awakeOn("awake-plugged-in", undefined)).toBe(false)
+  // The look reads the file, so a change by hand shows.
+  const keyed = {
+    "awake-while-working": setting(false),
+    "awake-plugged-in": setting(true),
+  }
+  expect(awakeOn("awake-while-working", keyed)).toBe(false)
+  expect(awakeOn("awake-plugged-in", keyed)).toBe(true)
+  // Before the look comes, as the engine says; the look wins once there.
+  const said = naming({ while_working: false, plugged_in: true })
+  expect(awakeOn("awake-while-working", {}, said)).toBe(false)
+  expect(awakeOn("awake-plugged-in", {}, said)).toBe(true)
+  const defaults = { "awake-plugged-in": setting(false, "defaults") }
+  expect(awakeOn("awake-plugged-in", defaults, said)).toBe(false)
+  // An engine before it, or one that says it otherwise, says nothing.
+  expect(awakeSaid(naming())).toBeUndefined()
+  expect(awakeSaid(naming({ while_working: "yes", plugged_in: true }))).toBe(
+    undefined
+  )
+  expect(awakeSaid(null)).toBeUndefined()
+  expect(awakeOn("awake-while-working", {}, naming())).toBe(true)
+})
+
+test("a switch shows what the Person set until its file says otherwise, and Banda's own takes the line out", () => {
+  expect(shownOn(false)).toBe(false)
+  // Written, and the file not heard yet: as it was set.
+  expect(shownOn(false, { was: false, on: true })).toBe(true)
+  // The file heard: as it says, whatever was set.
+  expect(shownOn(true, { was: false, on: true })).toBe(true)
+  expect(shownOn(true, { was: false, on: false })).toBe(true)
+  // Banda's own value takes the Person's line out; the other is written.
+  expect(awakeValue("awake-plugged-in", true)).toBe(true)
+  expect(awakeValue("awake-plugged-in", false)).toBeNull()
+  expect(awakeValue("awake-while-working", false)).toBe(false)
+  expect(awakeValue("awake-while-working", true)).toBeNull()
+})
+
+test("this machine's switches say what each does, and its lid as its system does it", () => {
+  expect(AWAKE_ROWS.map((row) => [row.title, row.about("arc")])).toEqual([
+    [
+      "Stay awake while Agents work",
+      "arc does not sleep by itself while a Turn runs here, and for 10 minutes after. Its screen sleeps as usual.",
+    ],
+    [
+      "Stay awake while plugged in",
+      "While on power, arc never sleeps by itself, so other machines can reach it.",
+    ],
+  ])
+  expect(lidWords("m1pro", "macOS 26.1")).toBe(
+    "A closed lid still sleeps m1pro. Banda does not change its settings."
+  )
+  for (const system of ["Arch Linux", "Windows 11 Pro", undefined, 42])
+    expect(lidWords("arc", system)).toBe(
+      "A closed lid does what arc's own settings say. Banda does not change them."
+    )
+})
+
+test("another machine's switch is set there while it is live, as its engine says, and is off and still while it is away", () => {
+  const mac = naming(
+    { while_working: true, plugged_in: true },
+    { battery: true, system: "macOS 26.1" }
+  )
+  expect(pluggedInThere("m1pro", true, mac)).toEqual({
+    on: true,
+    can: true,
+    about: "Set on m1pro, in its machine.toml. A closed lid still sleeps it.",
+  })
+  const linux = naming(
+    { while_working: true, plugged_in: false },
+    { battery: true, system: "Arch Linux" }
+  )
+  expect(pluggedInThere("arc", true, linux)).toEqual({
+    on: false,
+    can: true,
+    about:
+      "Set on arc, in its machine.toml. A closed lid does what its own settings say.",
+  })
+  // No battery, no lid.
+  const server = naming({ while_working: true, plugged_in: true })
+  expect(pluggedInThere("devbox", true, server).about).toBe(
+    "Set on devbox, in its machine.toml."
+  )
+  // Away: off, and not to be turned, whatever it said before.
+  expect(pluggedInThere("m1pro", false, mac)).toEqual({
+    on: false,
+    can: false,
+    about: "Set it on m1pro when it is back.",
+  })
+  // Asked, and no answer yet.
+  expect(pluggedInThere("m1pro", true, undefined)).toEqual({
+    on: false,
+    can: false,
+    about: "Set on m1pro, in its machine.toml.",
+  })
+  // A Banda there from before it, or one that refused.
+  for (const said of [naming(), null])
+    expect(pluggedInThere("m1pro", true, said)).toEqual({
+      on: false,
+      can: false,
+      about: "Update Banda on m1pro to set it here.",
+    })
 })

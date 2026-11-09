@@ -52,6 +52,20 @@ pub async fn found() -> Named {
     of(&here().await)
 }
 
+/// Whether this machine has a battery of its own, as [`found`] reads it to
+/// pick the laptop icon, read again each time it is asked.
+pub(crate) async fn battery() -> bool {
+    match System::here() {
+        #[cfg(target_os = "linux")]
+        System::Linux => linux::battery(std::path::Path::new("/sys/class/power_supply")),
+        #[cfg(target_os = "macos")]
+        System::Mac => {
+            (said("pmset", &["-g", "batt"]).await).is_some_and(|said| mac::battery(&said))
+        }
+        _ => own_battery(),
+    }
+}
+
 /// The name and icon `facts` make.
 pub(crate) fn of(facts: &Facts) -> Named {
     Named {
@@ -212,7 +226,7 @@ async fn here() -> Facts {
             hostname,
             system,
             system_name: sysinfo::System::name().ok(),
-            battery: battery(),
+            battery: own_battery(),
             boxed: false,
         },
     }
@@ -251,7 +265,7 @@ pub(crate) async fn said(program: &str, args: &[&str]) -> Option<String> {
 /// Whether Windows says it has a battery, through WinRT's aggregate of
 /// them: no battery at all reads as `NotPresent`.
 #[cfg(windows)]
-fn battery() -> bool {
+fn own_battery() -> bool {
     use windows::Devices::Power::Battery;
     use windows::System::Power::BatteryStatus;
     Battery::AggregateBattery()
@@ -262,7 +276,7 @@ fn battery() -> bool {
 
 /// Elsewhere, Linux and the Mac say it in their facts.
 #[cfg(not(windows))]
-fn battery() -> bool {
+fn own_battery() -> bool {
     false
 }
 
@@ -305,7 +319,7 @@ pub(crate) mod linux {
 
     /// Whether a power supply in `supplies` is the machine's own battery:
     /// a wireless mouse's or a headset's says it is a device's.
-    fn battery(supplies: &Path) -> bool {
+    pub(crate) fn battery(supplies: &Path) -> bool {
         supplied(supplies, |kind, _| kind == "Battery")
     }
 
@@ -369,9 +383,14 @@ pub(crate) mod mac {
             hostname: local.filter(|name| !name.is_empty()).unwrap_or(hostname),
             system: System::Mac,
             system_name: None,
-            battery: power.is_some_and(|said| said.contains("InternalBattery")),
+            battery: power.is_some_and(battery),
             boxed: vmm.is_some_and(|said| said.trim() == "1"),
         }
+    }
+
+    /// Whether `pmset -g batt` names the Mac's own battery.
+    pub(crate) fn battery(power: &str) -> bool {
+        power.contains("InternalBattery")
     }
 
     /// Whether a Mac is on power, as `pmset -g batt` says on its first

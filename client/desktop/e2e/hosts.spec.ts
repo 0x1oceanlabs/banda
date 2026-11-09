@@ -1341,7 +1341,39 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
   ).toHaveValue("m1pro")
   await expect(here.locator('[data-machine-icon="laptop"]')).toBeVisible()
   await expect(here).toContainText(/Banda \S/)
+
+  // It stays awake while Agents work, as Banda does by itself; and while
+  // plugged in once the Person turns it on, in its machine.toml. Turned
+  // back, the line goes; by hand, the switch follows (ADR 0097).
+  const working = here.getByRole("switch", {
+    name: "Stay awake while Agents work",
+  })
+  const plugged = here.getByRole("switch", {
+    name: "Stay awake while plugged in",
+  })
+  await expect(working).toHaveAttribute("aria-checked", "true")
+  await expect(plugged).toHaveAttribute("aria-checked", "false")
   await settingsShot(page, "1-this-machine")
+  await plugged.click()
+  await expect
+    .poll(() => readFileSync(ours, "utf8"))
+    .toMatch(/^awake-plugged-in = true$/m)
+  await expect(plugged).toHaveAttribute("aria-checked", "true")
+  await plugged.click()
+  await expect
+    .poll(() => readFileSync(ours, "utf8"))
+    .not.toMatch(/awake-plugged-in/)
+  await expect(plugged).toHaveAttribute("aria-checked", "false")
+  writeFileSync(
+    ours,
+    `${readFileSync(ours, "utf8")}awake-while-working = false\n`
+  )
+  await expect(working).toHaveAttribute("aria-checked", "false")
+  await working.click()
+  await expect
+    .poll(() => readFileSync(ours, "utf8"))
+    .not.toMatch(/awake-while-working/)
+  await expect(working).toHaveAttribute("aria-checked", "true")
 
   // The Banda menu's Machine settings opens arc's row, where Test finds
   // arc, its system and its own name.
@@ -1409,6 +1441,15 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
   await page.keyboard.press("Escape")
   await expect(arcOf(page)).toBeVisible()
 
+  // Kept awake on power, on arc: its machine.toml has it (ADR 0097).
+  const awake = row.getByRole("switch", { name: "Stay awake while plugged in" })
+  await expect(awake).toHaveAttribute("aria-checked", "false")
+  await awake.click()
+  await expect
+    .poll(() => readFileSync(arcs, "utf8"))
+    .toMatch(/^awake-plugged-in = true$/m)
+  await expect(awake).toHaveAttribute("aria-checked", "true")
+
   // Away, it is renamed only once it is back.
   arc.down(true)
   arc.cut()
@@ -1417,6 +1458,10 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
   )
   await expect(row.getByRole("button", { name: "Edit" })).toBeDisabled()
   await expect(row).toContainText("Rename arc when it is back.")
+  // Away, it is off and still: what arc said is no longer known.
+  await expect(awake).toBeDisabled()
+  await expect(awake).toHaveAttribute("aria-checked", "false")
+  await expect(row).toContainText("Set it on arc when it is back.")
   await expect(
     row.getByRole("button", { name: "Stop Banda on arc" })
   ).toHaveCount(0)
@@ -1426,6 +1471,13 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
     "live · same build",
     { timeout: 60_000 }
   )
+  // Back, as arc says it; turned off there, its line goes.
+  await expect(awake).toHaveAttribute("aria-checked", "true")
+  await awake.click()
+  await expect
+    .poll(() => readFileSync(arcs, "utf8"))
+    .not.toMatch(/awake-plugged-in/)
+  await expect(awake).toHaveAttribute("aria-checked", "false")
 
   // Renamed by hand on arc, as two VMs both "Cloud": the window follows.
   writeFileSync(arcs, 'name = "Cloud"\nicon = "server"\n')

@@ -362,6 +362,9 @@ mod every_key {
         // fallback (ADR 0093, decision 7).
         "agents.toml:start.account",
         "agents.toml:start.fallback",
+        // None: what Banda finds the machine is called and drawn by.
+        "machine.toml:name",
+        "machine.toml:icon",
         // None: the file's own keys, with no preset under them.
         "sidebar.toml:preset",
         // None: the look's `[font]` mono, and three quarters of its size.

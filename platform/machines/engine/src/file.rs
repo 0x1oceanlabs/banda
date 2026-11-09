@@ -4,13 +4,15 @@
 //! (ADR 0081, decision 12): only this machine reads it, and a window
 //! elsewhere changes it through this machine's engine.
 //! The settings know it as every file (ADR 0016): its schema, the text it
-//! starts as, and its check; this says what it makes of what Banda found.
+//! starts as, and its check. The look resolves it, so Settings → Machines
+//! draws its keys as they are and follows a change by hand (ADR 0097); this
+//! says what the engine makes of it over what Banda found.
 
 use crate::awake::Awake;
 use banda_kernel::{MachineIcon, NAME_MOST, Named};
-use banda_look::{Problem, SettingsFile};
+use banda_look::{OneFile, Problem, SettingsFile};
 use schemars::JsonSchema;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::io;
 use std::path::Path;
 
@@ -18,12 +20,12 @@ use std::path::Path;
 pub const NAME: &str = "machine.toml";
 
 /// `machine.toml` as the settings know it.
-pub const FILE: SettingsFile = SettingsFile::new::<MachineFile>(NAME, template, check);
+pub const FILE: SettingsFile = SettingsFile::of::<MachineFile>();
 
 /// This machine's name and icon, as every window shows it beside its
 /// Projects and Threads, whether Banda starts at login here, and when it
 /// stays awake. Each key is optional: Banda finds what is left out.
-#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(crate) struct MachineFile {
     /// Its name, up to 16 characters. Left out or empty: its hostname, or
@@ -60,25 +62,51 @@ pub(crate) struct Said {
     pub awake: Awake,
 }
 
-fn template() -> String {
-    include_str!("../machine.toml").to_owned()
-}
+impl OneFile for MachineFile {
+    const NAME: &'static str = NAME;
+    const TEMPLATE: &'static str = include_str!("../machine.toml");
+    /// Its keys over Banda's own: a name and an icon it leaves out stay
+    /// out, as only the machine finds them.
+    type Resolved = MachineFile;
 
-fn check(path: &Path, text: &str) -> Vec<Problem> {
-    let mut problems = Vec::new();
-    read(path, text, &mut problems);
-    problems
+    /// Banda's own, as [`at_login`] and [`awake`] read a key left out.
+    fn defaults() -> Self {
+        MachineFile {
+            name: None,
+            icon: None,
+            start_at_login: Some(true),
+            awake_while_working: Some(true),
+            awake_plugged_in: Some(false),
+        }
+    }
+
+    fn over(self, under: Self) -> Self {
+        MachineFile {
+            name: self.name.or(under.name),
+            icon: self.icon.or(under.icon),
+            start_at_login: self.start_at_login.or(under.start_at_login),
+            awake_while_working: self.awake_while_working.or(under.awake_while_working),
+            awake_plugged_in: self.awake_plugged_in.or(under.awake_plugged_in),
+        }
+    }
+
+    fn resolved(self) -> Self {
+        self
+    }
+
+    /// A name that cannot name a machine is named, and left out.
+    fn check(&mut self, path: &Path, _: &str, problems: &mut Vec<Problem>) {
+        if let Some(Err(why)) = self.name.as_deref().map(fits) {
+            problems.push(Problem::of_key(path, "name", why));
+            self.name = None;
+        }
+    }
 }
 
 /// What `text`, the file at `path`, says: a key that is wrong is named in
 /// `problems` and left out, as an icon Banda has not, and the rest reads.
 fn read(path: &Path, text: &str, problems: &mut Vec<Problem>) -> MachineFile {
-    let mut file: MachineFile = banda_look::read(path, text, problems).unwrap_or_default();
-    if let Some(Err(why)) = file.name.as_deref().map(fits) {
-        problems.push(Problem::of_key(path, "name", why));
-        file.name = None;
-    }
-    file
+    banda_look::file::read::<MachineFile>(path, text, problems).unwrap_or_default()
 }
 
 /// Why `name` cannot name a machine. Empty, it names none: Banda finds one.
@@ -169,11 +197,15 @@ mod tests {
         said(path, held, found).named
     }
 
+    fn template() -> String {
+        FILE.template()
+    }
+
     fn read_text(text: &str) -> (Named, Vec<Problem>) {
         let path = Path::new("/c/machine.toml");
         (
             named(path, Some(text.as_bytes()), &found()),
-            check(path, text),
+            FILE.check(path, text),
         )
     }
 
@@ -282,6 +314,27 @@ mod tests {
         assert_eq!(problems.len(), 1, "{problems:?}");
         let (_, problems) = read_text("awake-plugged-in = true\nawake-while-working = false\n");
         assert!(problems.is_empty(), "{problems:?}");
+    }
+
+    #[test]
+    fn the_look_reads_each_key_as_the_engine_does() {
+        let path = Path::new("/c/machine.toml");
+        let texts = [
+            "",
+            "start-at-login = false\n",
+            "awake-while-working = false\nawake-plugged-in = true\n",
+            "awake-plugged-in = \"yes\"\n",
+            &template(),
+        ];
+        for text in texts {
+            let mut problems = Vec::new();
+            let looked = read(path, text, &mut problems).over(MachineFile::defaults());
+            let said = said(path, Some(text.as_bytes()), &found());
+            assert_eq!(looked.start_at_login, Some(said.at_login), "{text:?}");
+            let awake = (looked.awake_while_working, looked.awake_plugged_in);
+            let engine = (Some(said.awake.while_working), Some(said.awake.plugged_in));
+            assert_eq!(awake, engine, "{text:?}");
+        }
     }
 
     #[test]
