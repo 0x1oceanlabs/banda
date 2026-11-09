@@ -25,6 +25,7 @@ import {
   takeAttention,
   takeLists,
 } from "../calls/stores"
+import { useLowBattery } from "../calls/battery"
 import { runs, watches } from "../registry"
 import { useListedOn } from "../window/machines"
 import { combine, folded } from "./attention"
@@ -134,6 +135,9 @@ function Elsewhere() {
   useEffect(() => {
     for (const name of empty) dropHost(stores, name)
   }, [stores, empty])
+  // A machine low on battery while its Agents work there warns once
+  // (ADR 0097, decision 8).
+  useLowBattery(hosts, stores)
   return live.map((name) => <Remote key={name} hosts={hosts} name={name} />)
 }
 
