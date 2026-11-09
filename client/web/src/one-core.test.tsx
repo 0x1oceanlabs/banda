@@ -4,7 +4,9 @@
  * path its own package takes to it, and an App's widget draws on the
  * page's React. Two copies of the core would leave an App the defaults, no
  * run, Here nowhere and no machines but its own; two of React would throw
- * at an App's first hook.
+ * at an App's first hook. So with the kit, which gives the Apps what the
+ * Window lists until B7a: two copies would leave a Thread's header no
+ * Mark.
  */
 import { createRequire } from "node:module"
 import { join } from "node:path"
@@ -17,6 +19,9 @@ import {
   type Run,
   Store,
 } from "@banda/core/react"
+import { ThreadMark } from "@banda/ui/components/banda-mark"
+import type { Listed } from "@banda/ui/pane"
+import type { Filler } from "@banda/ui/slots"
 import type { ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "vitest"
@@ -129,4 +134,31 @@ test("a new Thread's picker lists the machines the Window gives, by the path its
   )
   expect(drawn).toContain("on Studio")
   expect(drawn).not.toContain("on arc")
+})
+
+test("Threads' part of a Pane's header finds its Thread in what the Window lists, by the path its package takes to the kit", async () => {
+  // As the Tiling draws the Slot `pane.header` under the Window's `Kept`;
+  // the filler reads the items from the Threads package's kit.
+  const { threadHeader } = (await import(
+    join(root, "apps/agents/pane/src/list/header.tsx")
+  )) as { threadHeader: Filler<"pane.header"> }
+  const { Fill } = threadHeader
+  const listed: Listed = {
+    id: "t1",
+    title: "Hello",
+    mark: "done",
+    changed: 1,
+    pane: { kind: "agents.thread", args: { thread: "t1" } },
+  }
+  const stores = newStores()
+  stores.items.set({ ["p1" as ProjectId]: [listed] })
+  const markup = (node: ReactNode) =>
+    renderToStaticMarkup(node).replace(/banda-mark-[\w-]+/g, "banda-mark-id")
+  expect(
+    markup(
+      <Kept stores={stores} here={here} run={() => undefined}>
+        <Fill project={"p1" as ProjectId} pane={listed.pane} at="start" />
+      </Kept>
+    )
+  ).toBe(markup(<ThreadMark listed={listed} />))
 })

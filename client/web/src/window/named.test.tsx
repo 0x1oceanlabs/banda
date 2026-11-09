@@ -131,7 +131,6 @@ test("the Window fills the pill of a Pane by the host its args name, as the Wind
             at="pill"
             project={"r1" as ProjectId}
             pane={{ kind: "agents.thread", args: pane }}
-            listed={undefined}
           />
         </HostsContext>
       )

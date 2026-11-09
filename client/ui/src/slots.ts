@@ -12,19 +12,18 @@
 import type { ProjectId } from "@banda/contract"
 import { type ComponentType, createContext, useContext } from "react"
 import type { DetailsProps } from "./components/thread-details"
-import type { Listed, PaneState } from "./pane"
+import type { PaneState } from "./pane"
 
 /**
  * What a Pane's header gives what fills it (ADR 0062, decision 17): the
- * Pane, the Item it shows, and where in the header it is drawn. Each
- * draws what it shows of the Pane there, or nothing.
+ * Pane alone, its Project and its args, and where in the header it is
+ * drawn. Each draws what it shows of the Pane there, or nothing. An App
+ * that shows the Item the Pane shows finds it itself (`useItem`): the
+ * header hands no App another's Item (#943).
  */
 export type HeaderProps = {
   project: ProjectId
   pane: PaneState
-  /** The Item the Pane shows, as its App lists it; none for a Pane that
-   * shows none. */
-  listed: Listed | undefined
 } & (
   | {
       /** At the header's start, in the icon's place of a Pane that shows
