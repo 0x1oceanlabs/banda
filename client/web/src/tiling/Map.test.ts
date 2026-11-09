@@ -1,11 +1,11 @@
 import type { ProjectId } from "@banda/contract"
 import { DEFAULT_COLUMNS } from "@banda/contract/look"
-import type { Listed, PaneState } from "@banda/ui/pane"
+import type { PaneState } from "@banda/ui/pane"
 import { expect, test } from "vitest"
 import type { Workspace } from "./model"
 import { mapOf } from "./Map"
 
-test("the map draws each column by its share, a Group's by its Agent's state", () => {
+test("the map draws each column by its share, a Group's by its owner's state", () => {
   const entry = (id: string) => ({
     id,
     project: "s" as ProjectId,
@@ -20,19 +20,18 @@ test("the map draws each column by its share, a Group's by its Agent's state", (
       { id: "c", entries: [entry("c1")], active: 0, width: "1/4" },
     ],
   }
-  const listed = (e: { id: string }) =>
-    e.id === "a1"
-      ? ({
-          id: "t",
-          title: "T",
-          mark: "asking",
-          changed: 0,
-          agent: "x",
-        } as Listed)
-      : undefined
-  expect(mapOf(workspace, DEFAULT_COLUMNS, listed)).toEqual([
+  const groups = new Map([["g", { state: "asking" as const, name: "T" }]])
+  expect(mapOf(workspace, DEFAULT_COLUMNS, groups)).toEqual([
     { id: "a", share: 0.5, group: "g", state: "asking", focused: false },
     { id: "b", share: 0.25, group: "g", state: "asking", focused: true },
     { id: "c", share: 0.25, focused: false },
   ])
+  // A Group no one owns has no state.
+  expect(mapOf(workspace, DEFAULT_COLUMNS, new Map())[0]).toEqual({
+    id: "a",
+    share: 0.5,
+    group: "g",
+    state: undefined,
+    focused: false,
+  })
 })

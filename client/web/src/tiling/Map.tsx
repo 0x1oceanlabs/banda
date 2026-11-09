@@ -1,16 +1,14 @@
 /**
  * The current workspace, small, beside its number (ADR 0065, decision 9):
  * a bar for each column, as wide as its share, a Group's in the colour
- * of its Agent's state as its plate takes it, the focused one framed.
+ * of its owner's state as its plate takes it, the focused one framed.
  */
 import type { Columns } from "@banda/contract/look"
 import { cn } from "@banda/ui/lib/utils"
-import type { Listed } from "@banda/ui/pane"
-import { type GroupState, groupState } from "@banda/ui/components/banda-mark"
+import type { GroupState } from "@banda/ui/components/banda-mark"
 import { useLookColumns } from "../look"
-import { agentsOf } from "./groups"
-import { type Shows, useShows } from "./shows"
-import { type Entry, share, widthIn, type Workspace } from "./model"
+import { type Owned, type Shows, useShows } from "./shows"
+import { share, widthIn, type Workspace } from "./model"
 
 /** A column of the map: its share of the screen, its Group, if any, and
  * that Group's state. */
@@ -22,19 +20,19 @@ export type MapColumn = {
   focused: boolean
 }
 
-/** The map of `workspace`, by the look's widths and what is listed. */
+/** The map of `workspace`, by the look's widths and each owned Group's
+ * state, by its id (`useShows`). */
 export function mapOf(
   workspace: Workspace,
   look: Pick<Columns, "presets" | "default" | "alone">,
-  listed: (entry: Entry) => Listed | undefined
+  groups: ReadonlyMap<string, Owned>
 ): MapColumn[] {
-  const agents = agentsOf(workspace.columns, listed)
   return workspace.columns.map((column, c) => ({
     id: column.id,
     share: share(widthIn(workspace, column, look)) ?? 0.5,
     ...(column.group !== undefined && {
       group: column.group,
-      state: groupState(agents.get(column.group)?.mark),
+      state: groups.get(column.group)?.state,
     }),
     focused: c === workspace.focus,
   }))
@@ -52,8 +50,8 @@ export function WorkspaceMap({
   workspace: Workspace
   shows: Shows
 }) {
-  const { listed } = useShows(shows, workspace)
-  const columns = mapOf(workspace, useLookColumns(), listed)
+  const { groups } = useShows(shows, workspace)
+  const columns = mapOf(workspace, useLookColumns(), groups)
   if (columns.length < 2 || !columns.some((c) => c.group !== undefined)) {
     return null
   }

@@ -4,7 +4,6 @@
  * Group is moving any of its columns (`model.ts`, `columnMoved`).
  */
 import { type Plan, columnTo } from "./arrange"
-import type { Listed } from "@banda/ui/pane"
 import {
   type Column,
   current,
@@ -14,6 +13,7 @@ import {
   runOf,
   type Workspaces,
 } from "./model"
+import type { Owner } from "./shows"
 
 /** `Alt+G`: a Group of the focused column alone, for others to join. It
  * only starts one. */
@@ -99,21 +99,21 @@ export function unsoloing(state: Workspaces): Plan | undefined {
   return column && fillPlan(column.id, false)
 }
 
-/** Each Group's Agent, by the first Thread in it that one works in, as
- * its module lists it: what colours and names the Group. */
-export function agentsOf(
+/** Each Group's owner, by the first Pane in it whose Item names one, as
+ * `owner` says: whose Mark colours the Group, and whose name it bears. */
+export function ownersOf(
   columns: readonly Column[],
-  listed: (entry: Entry) => Listed | undefined
-): Map<string, Listed> {
-  const agents = new Map<string, Listed>()
+  owner: (entry: Entry) => Owner | undefined
+): Map<string, Owner> {
+  const owners = new Map<string, Owner>()
   for (const { group, entries } of columns) {
-    if (group === undefined || agents.has(group)) continue
+    if (group === undefined || owners.has(group)) continue
     for (const entry of entries) {
-      const thread = listed(entry)
-      if (thread?.agent === undefined) continue
-      agents.set(group, thread)
+      const one = owner(entry)
+      if (one === undefined) continue
+      owners.set(group, one)
       break
     }
   }
-  return agents
+  return owners
 }
