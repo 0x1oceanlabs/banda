@@ -504,7 +504,7 @@ test("only the Window gives run to what it draws", () => {
  * (`isCurrent`, #827), the list's own folding and filter, a Project's menu
  * around its row (`withMenu`), the trust card the Sidebar anchors by a row
  * (ADR 0083, decision 5), until trust is an action too (#947), and what is
- * picked in the snooze's picker, which the picker runs as its App's action
+ * picked in the Later's picker, which the picker runs as its App's action
  * by its id. Each list only falls, and no prop, whatever its type
  * (`propNames`), is a Project's or a Thread's verb.
  */
@@ -520,14 +520,14 @@ const SIDEBAR_CODE: Record<string, Record<string, string[]>> = {
     TrustItem: ["onTrust", "onStopTrusting"],
     HostPart: ["onFold"],
   },
-  "web/src/sidebar/Snoozing.tsx": {
+  "web/src/sidebar/LaterPicker.tsx": {
     Picking: ["onPick"],
   },
 }
 
 /** The verbs the sidebar list ran by props until B4e, and a Thread's. */
 const VERBS =
-  /^on(?:Open|NewThread|NoProject|AddProject|Pin|Locate|ProjectSettings|Menu|Settings|Keys|Start|Snooze|Wake|Archive|Rename)$/
+  /^on(?:Open|NewThread|NoProject|AddProject|Pin|Locate|ProjectSettings|Menu|Settings|Keys|Start|Later|Wake|Archive|Rename)$/
 
 test("the sidebar list takes no more code than the list holds, and no Project's or Thread's verb", () => {
   const files = sources(join(app, "web/src/sidebar"), { tests: false })
@@ -1329,10 +1329,10 @@ test("an App reaches the title field's store no more than the list holds", () =>
  */
 const BY_DOES = [
   "web/src/menu/menu.ts: action.does",
+  "web/src/sidebar/LaterPicker.tsx: itemActionOf",
+  "web/src/sidebar/LaterPicker.tsx: itemActionOf",
   "web/src/sidebar/Sidebar.tsx: itemActionOf",
   "web/src/sidebar/Sidebar.tsx: itemActionOf",
-  "web/src/sidebar/Snoozing.tsx: itemActionOf",
-  "web/src/sidebar/Snoozing.tsx: itemActionOf",
   "web/src/sidebar/items.ts: action.does",
   "web/src/sidebar/items.ts: itemActionOf",
   "web/src/titles/Title.tsx: itemActionOf",
@@ -1355,14 +1355,14 @@ test("the Window finds an item action by what it does no more than the list hold
  * The page's stores kept in a module, not one per Window (#863), by file,
  * over all the page's code: the Window's, the core's, `@banda/ui`'s and
  * each module's Pane part. Most hold what an unlisted action sets for a
- * part to draw: the snooze's picker, the new Project's field and the
+ * part to draw: the Later's picker, the new Project's field and the
  * limits' look a refused write answers (#1020); Threads' holds the
  * Person's marks on their way to a host (ADR 0096). The core keeps none
  * (ADR 0089). None joins the list, and one that goes leaves it.
  */
 const MODULE_STORES = [
   "apps/agents/pane/src/list/sent.ts: sent",
-  "client/web/src/sidebar/Snoozing.tsx: picking",
+  "client/web/src/sidebar/LaterPicker.tsx: picking",
   "client/web/src/titles/MakeProject.tsx: making",
   "platform/harnesses/pane/src/look.ts: picked",
 ]

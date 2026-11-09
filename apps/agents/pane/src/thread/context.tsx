@@ -38,9 +38,9 @@ export type ThreadActs = {
    * again there: the Person's click on a limit's card (ADR 0093,
    * decision 8). */
   retryOn: (turn: TurnView, harness: string) => void
-  /** Snoozes the Thread until a time, and with `resume` tries the turn
+  /** Puts the Thread off until a time, and with `resume` tries the turn
    * again then (ADR 0074, decision 8); none where it cannot. */
-  snooze?: (until: number, resume: boolean) => void
+  putOff?: (until: number, resume: boolean) => void
   /** How its Person signs in again, below a turn that failed for that. */
   signIn: (turn: TurnView) => React.ReactNode
 }
@@ -81,7 +81,7 @@ export function ThreadAroundProvider({
   useLayoutEffect(() => {
     latest.current = acts
   })
-  const snoozes = acts.snooze !== undefined
+  const canPutOff = acts.putOff !== undefined
   const stable = useMemo<ThreadActs>(
     () => ({
       openDiff: (turn, path) => latest.current.openDiff(turn, path),
@@ -91,12 +91,12 @@ export function ThreadAroundProvider({
       rewind: (turn, message) => latest.current.rewind(turn, message),
       retry: (turn) => latest.current.retry(turn),
       retryOn: (turn, harness) => latest.current.retryOn(turn, harness),
-      snooze: snoozes
-        ? (until, resume) => latest.current.snooze?.(until, resume)
+      putOff: canPutOff
+        ? (until, resume) => latest.current.putOff?.(until, resume)
         : undefined,
       signIn: (turn) => latest.current.signIn(turn),
     }),
-    [snoozes]
+    [canPutOff]
   )
   const around = useMemo(
     () => ({ engine, project, thread, host, reader, acts: stable }),

@@ -1,7 +1,7 @@
 /**
  * The Person's marks on a Thread, as this window sends them to the
  * Thread's host (ADR 0096): what they saw of it, unread and read, archived
- * and back, and that they saw it wake by itself (ADR 0074). The host keeps each one, beside the snooze, and every window
+ * and back, and that they saw it wake by itself (ADR 0074). The host keeps each one, beside the Later, and every window
  * and machine reads it there, in the Thread's list. Only this file sends
  * them (architecture.test.ts), so none goes around what follows.
  *
@@ -236,10 +236,10 @@ function markedBy(thread: ListedThread, sending: Sending): ListedThread {
     now = { ...now, archived: { at: now.updated_at } }
   // What it saw of its waking moves forward only, as its host keeps it.
   const woke = sending.woke?.to
-  const { snooze } = now
-  const was = snooze?.woke_seen
-  if (woke && snooze && was !== "dismissed" && was !== woke)
-    now = { ...now, snooze: { ...snooze, woke_seen: woke } }
+  const { later } = now
+  const was = later?.woke_seen
+  if (woke && later && was !== "dismissed" && was !== woke)
+    now = { ...now, later: { ...later, woke_seen: woke } }
   return now
 }
 

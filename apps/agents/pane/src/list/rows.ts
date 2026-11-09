@@ -8,12 +8,12 @@
  * plain tests cover it.
  */
 import type { ProjectId } from "@banda/contract"
-import type { Choice, ListedThread, Snooze } from "@banda/contract/agents"
+import type { Choice, ListedThread, Later } from "@banda/contract/agents"
 import { works } from "@banda/ui/components/banda-mark"
 import {
   type Answering,
   type Listed,
-  type ListedSnooze,
+  type ListedLater,
   paneOf,
   type PaneState,
 } from "@banda/ui/pane"
@@ -121,12 +121,12 @@ export function listedOf(
     ...(seenNow !== undefined ? { seen: seenNow } : {}),
     ...(archived ? { archived: true as const } : {}),
     pane: threadPaneOf(thread),
-    ...(thread.snooze ? { snooze: snoozeOf(thread.snooze) } : {}),
+    ...(thread.later ? { later: laterOf(thread.later) } : {}),
   }
 }
 
-/** A Thread's snooze as the sidebar reads it (ADR 0074). */
-function snoozeOf({ at, until, by, woke, woke_seen }: Snooze): ListedSnooze {
+/** A Thread's Later as the sidebar reads it (ADR 0074). */
+function laterOf({ at, until, by, woke, woke_seen }: Later): ListedLater {
   return {
     at,
     ...(until === undefined ? {} : { until }),

@@ -170,7 +170,7 @@ test("empty sections hide unless the settings show them", () => {
   expect(shown.sections.map((s) => s.key)).toEqual(["active"])
   expect(shown.shelves.map((s) => s.key)).toEqual([
     "working",
-    "snoozed",
+    "later",
     "archived",
   ])
 })
@@ -247,7 +247,7 @@ test("scratch Threads follow grouping, sorting, shelves and filtering like other
   }
 })
 
-test("a snoozed Thread waits on its shelf above Archive, by when it wakes", () => {
+test("a put-off Thread waits on its shelf above Archive, by when it wakes", () => {
   const sleeping = (listed: Listed) =>
     ["logo", "headers", "letters"].includes(listed.id)
   const wakes: Record<string, number | undefined> = {
@@ -261,7 +261,7 @@ test("a snoozed Thread waits on its shelf above Archive, by when it wakes", () =
       sleeping(one)
         ? {
             ...one,
-            snooze: {
+            later: {
               at: 0,
               ...(wakes[one.id] ? { until: wakes[one.id] } : {}),
             },
@@ -269,7 +269,7 @@ test("a snoozed Thread waits on its shelf above Archive, by when it wakes", () =
         : one
     ),
     s2: lists.s2.map((one) =>
-      sleeping(one) ? { ...one, snooze: { at: 0, until: wakes[one.id] } } : one
+      sleeping(one) ? { ...one, later: { at: 0, until: wakes[one.id] } } : one
     ),
   }
   const shown = arrange(
@@ -280,18 +280,18 @@ test("a snoozed Thread waits on its shelf above Archive, by when it wakes", () =
     new Set(),
     {
       asleep: sleeping,
-      // Archived too, it is snoozed: a snooze outranks the archive.
+      // Archived too, it is put off: a Later outranks the archive.
       archived: (listed) => listed.id === "logo",
     }
   )
   expect(ids(shown)).toEqual([["active", ["migration", "form"]]])
   expect(ids(shown, "shelves")).toEqual([
     ["working", ["release"]],
-    ["snoozed", ["letters", "logo", "headers"]],
+    ["later", ["letters", "logo", "headers"]],
   ])
   const shelf = shown.shelves[1]
   expect([shelf.label, shelf.folded, shelf.next, shelf.waiting]).toEqual([
-    "Snoozed",
+    "Later",
     true,
     300,
     0,

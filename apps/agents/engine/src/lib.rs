@@ -34,6 +34,7 @@ mod full_access;
 mod images;
 mod issues;
 mod kept;
+mod laters;
 mod live;
 mod marks;
 pub mod model;
@@ -44,7 +45,6 @@ mod questions;
 mod rules;
 pub mod sending;
 mod skills;
-mod snoozes;
 mod store;
 mod switching;
 mod titles;
@@ -69,6 +69,7 @@ use changes::{ChangesAsk, TurnChanges};
 use full_access::Chosen;
 use images::Images;
 use issues::{AnswerIssue, DraftIssue};
+use laters::{LaterAsk, SeeWokeAsk, WakeAsk};
 use live::Live;
 use marks::{ImportMarks, Imported, ReadAsk};
 use model::{
@@ -80,7 +81,6 @@ use rules::Event;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use snoozes::{SeeWokeAsk, SnoozeAsk, WakeAsk};
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::path::PathBuf;
@@ -430,18 +430,18 @@ banda_kernel::methods! {
         command notify(Notify) -> String, Write, tool "notify";
         /// A Visual's page, as the window serves it.
         call visual(OneVisual) -> VisualPage, Read;
-        /// Snoozes your own Thread: it leaves your Person's list for
+        /// Puts off your own Thread: it leaves your Person's list for
         /// `after` (`30m`, `2h`, `1d`, a year at most), or until `until`,
         /// in milliseconds since the epoch. Give one of them: with
         /// neither, it leaves the list only until this turn ends.
         /// Anything that needs your Person wakes it early, and so does
         /// their message. It does not wake you or start a turn. Use it
         /// when you wait on something slow and have nothing for your
-        /// Person meanwhile. A Thread that asks cannot be snoozed, nor
-        /// one your Person snoozed to go on by itself. A Person snoozes
+        /// Person meanwhile. A Thread that asks cannot be put off, nor
+        /// one your Person put off to go on by itself. A Person puts off
         /// any Thread (ADR 0074).
-        command snooze(SnoozeAsk) -> (), Write, tool "snooze";
-        /// Brings your own snoozed Thread back to your Person's list now,
+        command later(LaterAsk) -> (), Write, tool "later";
+        /// Brings your own put-off Thread back to your Person's list now,
         /// as when what you waited on came early. One awake stays so. A
         /// Person wakes any Thread (ADR 0074).
         command wake(WakeAsk) -> (), Write, tool "wake";
@@ -449,7 +449,7 @@ banda_kernel::methods! {
         /// that it did (ADR 0074): its row no longer says it woke, and,
         /// dismissed, its Pane's line goes. It moves forward only, and a
         /// Thread that did not wake by itself stays as it is. The list says
-        /// it, as the snooze's `woke_seen`. Only a Person marks a Thread.
+        /// it, as the Later's `woke_seen`. Only a Person marks a Thread.
         command see_woke(SeeWokeAsk) -> (), Write;
         /// Marks a Thread read for its Person (ADR 0096): `turn`, or
         /// without it the latest that ended, is the last they saw, so it
@@ -807,7 +807,7 @@ fn plain(error: impl Display) -> String {
 /// if it sleeps and the fact calls its Person (ADR 0074).
 fn emit(tx: &mut Tx<'_>, author: Participant, thread: ThreadId, fact: &Fact) -> Result<(), Error> {
     write_fact(tx, author, Some(thread), fact)?;
-    snoozes::heard(tx, author, thread, fact)
+    laters::heard(tx, author, thread, fact)
 }
 
 /// Writes one of the module's facts about the Project's Threads together:
@@ -1152,21 +1152,20 @@ impl Agents {
         Ok(notes::NOTED.to_owned())
     }
 
-    async fn snooze(&self, call: Call, ask: SnoozeAsk) -> Result<(), Refusal> {
+    async fn later(&self, call: Call, ask: LaterAsk) -> Result<(), Refusal> {
         let author = call.participant();
-        call.command(move |tx| snoozes::snooze(tx, author, ask))
-            .await
+        call.command(move |tx| laters::later(tx, author, ask)).await
     }
 
     async fn wake(&self, call: Call, WakeAsk { thread }: WakeAsk) -> Result<(), Refusal> {
         let author = call.participant();
-        call.command(move |tx| snoozes::wake(tx, author, thread))
+        call.command(move |tx| laters::wake(tx, author, thread))
             .await
     }
 
     async fn see_woke(&self, call: Call, ask: SeeWokeAsk) -> Result<(), Refusal> {
         let author = marks::person(&call)?;
-        call.command(move |tx| snoozes::see_woke(tx, author, ask))
+        call.command(move |tx| laters::see_woke(tx, author, ask))
             .await
     }
 
@@ -1418,9 +1417,9 @@ impl Module for Agents {
         for (name, filter) in notices::heard() {
             tokio::spawn(notices::follow(project.listen(name, filter).await?));
         }
-        // A snoozed Thread's failed turn goes on as its time comes.
-        let snoozed = project.listen(snoozes::LISTENER, snoozes::snoozed());
-        tokio::spawn(snoozes::resume(snoozed.await?));
+        // A put-off Thread's failed turn goes on as its time comes.
+        let heard = project.listen(laters::LISTENER, laters::put_off());
+        tokio::spawn(laters::resume(heard.await?));
         let filter = banda_harnesses::account_changed();
         if let Some(heard) = project.listen_to_machine(Live::ACCOUNTS, filter).await? {
             let live = self.live.clone();

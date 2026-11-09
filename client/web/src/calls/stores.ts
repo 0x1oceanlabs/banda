@@ -30,23 +30,18 @@ import {
   QUIET,
   withHost,
 } from "@banda/ui/pane"
-import {
-  nextWake,
-  type Snoozes,
-  useSnoozesAt,
-  wakeAfter,
-} from "../sidebar/snoozed"
+import { nextWake, type Laters, useLatersAt, wakeAfter } from "../sidebar/later"
 
 /** What calls the Person now. */
 export type Calls = {
   /** The loudest of what the Watches say calls, and how many things
    * wait: the bar's Mark. */
   attention: Attention
-  /** The clock snoozes are read by (ADR 0074): it moves only as the next
+  /** The clock Laters are read by (ADR 0074): it moves only as the next
    * one wakes by its time. */
   now: number
   /** Every App's Calls, the Inbox, in no order: the sidebar's `order` orders
-   * them. One snoozed calls no one while it sleeps. */
+   * them. One put off calls no one while it sleeps. */
   list: readonly Call[]
 }
 
@@ -183,8 +178,8 @@ export function ownLists({ hosts }: Stores): Lists {
 const NO_LISTS: Lists = {}
 
 /**
- * Keeps the calls following the items and the snooze clock: worked out
- * again as the lists change, and as the next snooze wakes by its time,
+ * Keeps the calls following the items and the Later clock: worked out
+ * again as the lists change, and as the next Later wakes by its time,
  * and only then. The calls are set anew after every change of the items,
  * so what reads both may listen to the calls alone, and hears once, with
  * both new. Returns how to stop.
@@ -210,7 +205,7 @@ export function followCalls({ items, calls }: Stores): () => void {
 /**
  * What every App lists, as code outside React reads it
  * (`WindowApi.items`): its listeners hear each change of the lists, and
- * a snoozed Thread waking, which changes what calls (ADR 0074).
+ * a put-off Thread waking, which changes what calls (ADR 0074).
  */
 export function itemsOf({ items, calls }: Stores): Readable<Lists> {
   return {
@@ -305,19 +300,19 @@ export function useWorkingHere(): number {
 /** The bar's Mark: what calls the Person, and how many things wait. */
 export const attentionOf = (calls: Calls) => calls.attention
 
-/** The snooze clock. */
+/** The Later clock. */
 export const nowOf = (calls: Calls) => calls.now
 
-/** The snoozes, read by the calls' clock, which moves as the next one
+/** The Laters, read by the calls' clock, which moves as the next one
  * wakes by its time. */
-export function useSnoozesNow(): Snoozes {
-  return useSnoozesAt(useCalls(nowOf))
+export function useLatersNow(): Laters {
+  return useLatersAt(useCalls(nowOf))
 }
 
 /** The Projects one of whose Threads calls the Person now, unless it is
  * put away: the bar's dots, drawn again only as they change. */
 export function useCalling(): ProjectId[] {
-  const { away } = useSnoozesNow()
+  const { away } = useLatersNow()
   const select = useCallback((lists: Lists) => callingIn(lists, away), [away])
   return useItems(select, sameEach)
 }

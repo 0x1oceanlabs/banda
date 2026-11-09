@@ -39,7 +39,7 @@ test("a Thread's item actions are Threads', then the sidebar list's Archive", ()
     "agents.previous-title",
     "thread.unread",
     "agents.make-project",
-    "thread.snooze",
+    "thread.later",
     "thread.wake",
     "agents.archive-thread",
     "sidebar.archive",
@@ -55,7 +55,7 @@ test("the Thread menu's rows, as it stands", () => {
   expect(titles(thread())).toEqual([
     "Rename…",
     "Suggest a title",
-    "Snooze…",
+    "Later…",
     "Archive thread",
   ])
   expect(
@@ -68,29 +68,29 @@ test("the Thread menu's rows, as it stands", () => {
     "Previous title",
     "Mark as unread",
     "Make a Project from it…",
-    "Snooze… (off)",
+    "Later… (off)",
     "Archive thread (off)",
   ])
   expect(
-    titles(thread({ snooze: { at: 1, until: 20 } }), { archived: true })
+    titles(thread({ later: { at: 1, until: 20 } }), { archived: true })
   ).toEqual(["Rename…", "Suggest a title", "Wake now", "Unarchive thread"])
 })
 
-test("the Pane menu offers Snooze… or Wake now, and nothing that is off", () => {
+test("the Pane menu offers Later… or Wake now, and nothing that is off", () => {
   const ids = (listed: Listed) =>
     paneRowsOf(listed, S1, []).map(({ id, title, args }) => [id, title, args])
   const item = { project: S1, item: "t1" }
-  expect(ids(thread())).toEqual([["thread.snooze", "Snooze…", item]])
-  expect(
-    ids(thread({ snooze: { at: 1, until: Date.now() + 60_000 } }))
-  ).toEqual([["thread.wake", "Wake now", item]])
+  expect(ids(thread())).toEqual([["thread.later", "Later…", item]])
+  expect(ids(thread({ later: { at: 1, until: Date.now() + 60_000 } }))).toEqual(
+    [["thread.wake", "Wake now", item]]
+  )
   expect(ids(thread({ mark: "asking" }))).toEqual([])
 })
 
 test("Archive asks the Item's App to archive it on its host, in one command; an archived one, to bring it back", () => {
   const item = { project: S1, item: "t1" }
-  // A sleeping one too: its host ends the snooze as it archives it.
-  const sleeping = thread({ snooze: { at: 1, until: Date.now() + 60_000 } })
+  // A sleeping one too: its host ends the Later as it archives it.
+  const sleeping = thread({ later: { at: 1, until: Date.now() + 60_000 } })
   const first = fake(sleeping)
   archiving.run(first.shell)
   expect(first.ran).toEqual([

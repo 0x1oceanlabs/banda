@@ -58,7 +58,7 @@ export function Row({
   /** It sits under its Project's header, which already names the Project. */
   inProject: boolean
   current: boolean
-  /** A button that shows while the pointer is over the row: its snooze's
+  /** A button that shows while the pointer is over the row: its Later's
    * clock, or Wake (ADR 0074). */
   action?: ReactNode
   /** The field that names it, in its title's place (ADR 0077): the row
@@ -151,7 +151,7 @@ function Piece({
   // Nothing waits in it and nothing works: it steps back.
   const quiet =
     row.state === "archived" ||
-    row.state === "snoozed" ||
+    row.state === "later" ||
     (row.state === "active" && !waits(listed.mark) && row.woke === undefined)
   switch (part) {
     case "~":
@@ -195,7 +195,7 @@ function Piece({
       )
     }
     case "status":
-      if (row.state === "snoozed") return <Sleeps listed={listed} />
+      if (row.state === "later") return <Sleeps listed={listed} />
       if (row.woke !== undefined) return <Woke listed={listed} at={row.woke} />
       return <Status listed={listed} stillAt={stillAt} />
     case "note": {
@@ -292,16 +292,16 @@ export function Status({
   }
 }
 
-/** When a snoozed Thread wakes, and how long is left: "22:40 · 1h",
+/** When a put-off Thread wakes, and how long is left: "22:40 · 1h",
  * "Fri 09:00 · 12h", or "when done" (ADR 0074, decision 6). */
 function Sleeps({ listed }: { listed: Listed }) {
   const now = useNow(15_000)
-  const until = listed.snooze?.until
-  const by = listed.snooze?.byAgent ? "Snoozed by its Agent" : "Snoozed"
+  const until = listed.later?.until
+  const by = listed.later?.byAgent ? "Later by its Agent" : "Later"
   return (
     <span
       className="shrink-0 text-xs text-muted-foreground tabular-nums"
-      title={until === undefined ? `${by} until it's done` : by}
+      title={until === undefined ? `${by}, until it's done` : by}
     >
       {until === undefined
         ? "when done"
@@ -320,7 +320,7 @@ function Woke({ listed, at }: { listed: Listed; at: number }) {
         "flex shrink-0 items-center gap-1 text-xs font-medium tabular-nums",
         toneOf(listed.mark) ?? "text-foreground"
       )}
-      title="Woke from its snooze"
+      title="Woke from Later"
     >
       <AlarmClockIcon className="size-3" aria-label="Woke" />
       {calls ? MARK_WORDS[listed.mark] : clock(at)}

@@ -807,10 +807,10 @@ pub struct ListedThread {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
-    /// Its latest snooze (ADR 0074), asleep or woken.
+    /// Its latest Later (ADR 0074), asleep or woken.
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub snooze: Option<Snooze>,
+    pub later: Option<Later>,
     /// The latest of its turns that ended which its Person saw (ADR
     /// 0096). It moves forward only; none until they see one, and none
     /// again once they mark it unread or a rewind takes that turn out.
@@ -818,7 +818,7 @@ pub struct ListedThread {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seen: Option<TurnId>,
     /// When its Person archived it (ADR 0096), unless they brought it
-    /// back or snoozed it since. It is archived only while it neither
+    /// back or put it off since. It is archived only while it neither
     /// works nor asks and nothing happened in it after: `updated_at <=
     /// archived.at`, both the host's times.
     #[ts(optional)]
@@ -855,8 +855,8 @@ pub struct Archived {
 /// `until` with now, and no fact says that the time came.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
-pub struct Snooze {
-    /// When it was snoozed, in milliseconds since the epoch.
+pub struct Later {
+    /// When it was put off, in milliseconds since the epoch.
     #[ts(type = "number")]
     pub at: i64,
     pub by: Participant,
@@ -875,7 +875,7 @@ pub struct Snooze {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resume: Option<TurnId>,
     /// What its Person has seen of it waking by itself (ADR 0074,
-    /// decisions 3 and 7; ADR 0096): kept here, beside the snooze, so
+    /// decisions 3 and 7; ADR 0096): kept here, beside the Later, so
     /// every window and machine reads the same.
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -894,7 +894,7 @@ pub enum WokeSeen {
     Dismissed,
 }
 
-/// What woke a snoozed Thread before its time, and when.
+/// What woke a put-off Thread before its time, and when.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct Woke {
@@ -903,7 +903,7 @@ pub struct Woke {
     pub by: Wake,
 }
 
-/// Why a snoozed Thread woke before its time (ADR 0074, decision 3).
+/// Why a put-off Thread woke before its time (ADR 0074, decision 3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "agents/")]
@@ -1042,9 +1042,10 @@ pub enum Fact {
     #[serde(rename = "thread.held")]
     ThreadHeld { thread: ThreadId, held: bool },
     /// The Thread is put away until `until`, or, without it, until the
-    /// turn that runs ends (ADR 0074). Its author snoozed it.
-    #[serde(rename = "thread.snoozed")]
-    ThreadSnoozed {
+    /// turn that runs ends (ADR 0074). Its author put it off.
+    // Its name before ADR 0098, as old logs and older engines say it.
+    #[serde(rename = "thread.later", alias = "thread.snoozed")]
+    ThreadLater {
         thread: ThreadId,
         #[ts(optional, type = "number")]
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1054,12 +1055,12 @@ pub enum Fact {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         resume: Option<TurnId>,
     },
-    /// A snoozed Thread woke before its time. One whose time came says
+    /// A put-off Thread woke before its time. One whose time came says
     /// nothing.
     #[serde(rename = "thread.woke")]
     ThreadWoke { thread: ThreadId, by: Wake },
     /// The Person saw the Thread wake by itself, or dismissed that it
-    /// did: its snooze's `woke_seen` is `seen` now. Like each of the
+    /// did: its Later's `woke_seen` is `seen` now. Like each of the
     /// Person's marks below, it moves the Thread nowhere in a list.
     #[serde(rename = "thread.woke_seen")]
     ThreadWokeSeen { thread: ThreadId, seen: WokeSeen },
@@ -1077,7 +1078,7 @@ pub enum Fact {
     /// `at`.
     #[serde(rename = "thread.archived")]
     ThreadArchived { thread: ThreadId },
-    /// The Thread left Archive: its Person brought it back, or a snooze
+    /// The Thread left Archive: its Person brought it back, or a Later
     /// took it out (ADR 0074, decision 4).
     #[serde(rename = "thread.unarchived")]
     ThreadUnarchived { thread: ThreadId },

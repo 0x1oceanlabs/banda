@@ -2,10 +2,10 @@ import { readFileSync } from "node:fs"
 import { expect, test } from "vitest"
 import { HOUR, MINUTE } from "@banda/ui/lib/words"
 import { DEFAULT_SIDEBAR } from "@banda/contract/sidebar"
-import { presets, whenOf } from "./snooze-time"
+import { presets, whenOf } from "./later-time"
 
 /** Banda's presets, as `banda look` gives them with no file. */
-const PRESETS = DEFAULT_SIDEBAR.snooze.presets
+const PRESETS = DEFAULT_SIDEBAR.later.presets
 
 /** Thursday, 5 November 2026, 21:40, in the machine's own time. */
 const NOW = new Date(2026, 10, 5, 21, 40).getTime()
@@ -78,11 +78,11 @@ test("two presets on one minute show once, and an unread one not at all", () => 
 })
 
 test("it reads what the look's check reads, and no more", () => {
-  // The words the look's snooze.rs tests too, so neither reads one the
+  // The words the look's later.rs tests too, so neither reads one the
   // other does not.
   const words = JSON.parse(
     readFileSync(
-      new URL("../../../../platform/look/snooze-words.json", import.meta.url),
+      new URL("../../../../platform/look/later-words.json", import.meta.url),
       "utf8"
     )
   ) as { reads: string[]; unread: string[] }

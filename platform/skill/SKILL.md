@@ -179,10 +179,10 @@ one, and never describe it after: say only what it doesn't. A picture
 to post, send or use elsewhere is a `.png` file and its path, not a
 Visual. Ordinary coding work needs neither tool.
 
-## Snoozing your Thread
+## Putting off your Thread
 
 When you wait on something slow, as CI or a long build, and have nothing
-for your Person meanwhile, snooze your own Thread with the `snooze` tool:
+for your Person meanwhile, put off your own Thread with the `later` tool:
 `after` is how long, as `30m`, `2h` or `1d`. It leaves their list until
 then, and anything that needs them wakes it early, a question of yours
 too; `wake` brings it back sooner, as when what you waited on came

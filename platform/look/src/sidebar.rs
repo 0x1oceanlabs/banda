@@ -27,7 +27,9 @@ pub enum State {
     /// Its Agent is at work.
     Working,
     /// Put away until a time, or until its turn ends (ADR 0074).
-    Snoozed,
+    /// `snoozed` before ADR 0098 (grace).
+    #[serde(alias = "snoozed")]
+    Later,
     /// Put away by the Person, until something new happens in it
     /// (ADR 0069). Its name was `settled`, which still reads as it.
     /// `settled` before ADR 0069 (grace).
@@ -166,15 +168,15 @@ pub struct SidebarSettings {
     /// The counts in the bar's middle: who waits for you, who works.
     #[serde(default)]
     pub bar: BarSettings,
-    /// The snooze's presets (ADR 0074).
-    #[serde(default)]
-    pub snooze: SnoozeSettings,
+    /// The Later's presets (ADR 0074). `[snooze]` before ADR 0098 (grace).
+    #[serde(default, alias = "snooze")]
+    pub later: LaterSettings,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
-pub struct SnoozeSettings {
-    /// The times the snooze's picker offers, in its field's words, up to
+pub struct LaterSettings {
+    /// The times the Later's picker offers, in its field's words, up to
     /// eight: "1h", "18:00", "tomorrow 9:00", "mon 9:00".
     #[schemars(with = "Option<Vec<String>>")]
     pub presets: Option<Vec<Spanned<String>>>,
@@ -265,13 +267,13 @@ pub struct Sidebar {
     pub projects: Projects,
     pub row: Row,
     pub bar: BarCounts,
-    pub snooze: Snooze,
+    pub later: Later,
 }
 
-/// The snooze's picker (ADR 0074, decision 9).
+/// The Later's picker (ADR 0074, decision 9).
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
 #[ts(export, export_to = "sidebar/")]
-pub struct Snooze {
+pub struct Later {
     /// The times it offers, in its field's words; the window reads each
     /// against its clock.
     pub presets: Vec<String>,
@@ -358,8 +360,13 @@ pub struct BarCounts {
 
 /// What a sidebar file may still say as before ADR 0069 (grace): the
 /// table `[spaces]`, the preset `spaces`, `by` and a row's part `space`,
-/// and the archive's state `settled`.
+/// and the archive's state `settled`; and as before ADR 0098, decision 28:
+/// the table `[snooze]` and the state `snoozed`.
 const RENAMED: &[Renamed] = &[
+    Renamed::key("", "snooze", "later"),
+    Renamed::value("group.states", "snoozed", "later"),
+    Renamed::value("group.bottom", "snoozed", "later"),
+    Renamed::value("group.folded", "snoozed", "later"),
     Renamed::key("", "spaces", "projects"),
     Renamed::value("preset", "spaces", "projects"),
     Renamed::value("group.by", "space", "project"),
@@ -383,13 +390,13 @@ pub const BUILT_IN: [(&str, &str); 3] = [
 /// preset, and every other key with its default, commented out.
 pub const TEMPLATE: &str = include_str!("../sidebar.toml");
 
-/// `bottom` with the snoozed shelf, when neither it nor `states` names
-/// it: above Archive's, or last. A snooze always puts its Thread away
+/// `bottom` with the Later shelf, when neither it nor `states` names
+/// it: above Archive's, or last. A Later always puts its Thread away
 /// (ADR 0074), where a state named nowhere would go to the last section.
-fn with_snoozed(mut bottom: Vec<State>, states: &[State]) -> Vec<State> {
-    if !bottom.contains(&State::Snoozed) && !states.contains(&State::Snoozed) {
+fn with_later(mut bottom: Vec<State>, states: &[State]) -> Vec<State> {
+    if !bottom.contains(&State::Later) && !states.contains(&State::Later) {
         let at = bottom.iter().position(|state| *state == State::Archived);
-        bottom.insert(at.unwrap_or(bottom.len()), State::Snoozed);
+        bottom.insert(at.unwrap_or(bottom.len()), State::Later);
     }
     bottom
 }
@@ -430,8 +437,8 @@ impl SidebarSettings {
                 words: self.bar.words.or(under.bar.words),
                 empty: self.bar.empty.or(under.bar.empty),
             },
-            snooze: SnoozeSettings {
-                presets: self.snooze.presets.or(under.snooze.presets),
+            later: LaterSettings {
+                presets: self.later.presets.or(under.later.presets),
             },
         }
     }
@@ -443,8 +450,8 @@ impl SidebarSettings {
             group: GroupSettings {
                 by: Some(GroupBy::State),
                 states: Some(vec![State::Active]),
-                bottom: Some(vec![State::Working, State::Snoozed, State::Archived]),
-                folded: Some(vec!["snoozed".to_owned(), "archived".to_owned()]),
+                bottom: Some(vec![State::Working, State::Later, State::Archived]),
+                folded: Some(vec!["later".to_owned(), "archived".to_owned()]),
                 limit: Some(10),
                 empty: Some(Empty::Hide),
             },
@@ -471,9 +478,9 @@ impl SidebarSettings {
                 words: Some(false),
                 empty: Some(BarEmpty::Mark),
             },
-            snooze: SnoozeSettings {
+            later: LaterSettings {
                 presets: Some(
-                    (crate::snooze::PRESETS.iter())
+                    (crate::later::PRESETS.iter())
                         .map(|word| Spanned::new(0..0, (*word).to_owned()))
                         .collect(),
                 ),
@@ -494,20 +501,14 @@ impl SidebarSettings {
             presets,
             group: Group {
                 by: all.group.by.unwrap_or(GroupBy::State),
-                bottom: with_snoozed(
+                bottom: with_later(
                     all.group.bottom.unwrap_or_default(),
                     all.group.states.as_deref().unwrap_or_default(),
                 ),
                 states: all.group.states.unwrap_or_default(),
-                // `settled` is the archive's name before ADR 0069 (grace).
+                // Names, not states: an old one reads as its name now.
                 folded: (all.group.folded.unwrap_or_default().into_iter())
-                    .map(|name| {
-                        if name == "settled" {
-                            "archived".into()
-                        } else {
-                            name
-                        }
-                    })
+                    .map(|name| Renamed::now_of(RENAMED, "group.folded", name))
                     .collect(),
                 limit: all.group.limit.unwrap_or(10),
                 empty: all.group.empty.unwrap_or(Empty::Hide),
@@ -533,8 +534,8 @@ impl SidebarSettings {
                 words: all.bar.words.unwrap_or(false),
                 empty: all.bar.empty.unwrap_or(BarEmpty::Mark),
             },
-            snooze: Snooze {
-                presets: (all.snooze.presets.unwrap_or_default().into_iter())
+            later: Later {
+                presets: (all.later.presets.unwrap_or_default().into_iter())
                     .map(Spanned::into_inner)
                     .collect(),
             },
@@ -571,28 +572,28 @@ pub fn read_sidebar(
         ));
         settings.row.lines = None;
     }
-    if let Some(presets) = &mut settings.snooze.presets {
+    if let Some(presets) = &mut settings.later.presets {
         let (kept, unread): (Vec<_>, Vec<_>) = std::mem::take(presets)
             .into_iter()
-            .partition(|word| crate::snooze::reads(word.get_ref()));
+            .partition(|word| crate::later::reads(word.get_ref()));
         for word in unread {
             let says = format!(
-                "snooze.presets: \"{}\" is no time the picker reads, as 1h, 18:00, \
+                "later.presets: \"{}\" is no time the picker reads, as 1h, 18:00, \
                  tomorrow 9:00 or mon 9:00",
                 word.get_ref()
             );
             problems.push(Problem::at(path, text, Some(word.span()), &says));
         }
         *presets = kept;
-        if presets.len() > crate::snooze::MOST {
-            let past = presets[crate::snooze::MOST].span();
+        if presets.len() > crate::later::MOST {
+            let past = presets[crate::later::MOST].span();
             problems.push(Problem::at(
                 path,
                 text,
                 Some(past),
-                "snooze.presets holds eight at most: the rest are left out",
+                "later.presets holds eight at most: the rest are left out",
             ));
-            presets.truncate(crate::snooze::MOST);
+            presets.truncate(crate::later::MOST);
         }
     }
     Some(settings)
@@ -757,9 +758,9 @@ mod tests {
         assert_eq!(sidebar.group.states, vec![State::Active]);
         assert_eq!(
             sidebar.group.bottom,
-            vec![State::Working, State::Snoozed, State::Archived]
+            vec![State::Working, State::Later, State::Archived]
         );
-        assert_eq!(sidebar.group.folded, ["snoozed", "archived"]);
+        assert_eq!(sidebar.group.folded, ["later", "archived"]);
         assert_eq!(sidebar.row.lines, 3);
         assert_eq!(sidebar.bar.show, BarShow::Closed);
         assert_eq!(
@@ -786,17 +787,17 @@ mod tests {
     }
 
     #[test]
-    fn the_snoozes_presets_are_t3s_unless_the_person_names_others() {
+    fn the_later_pickers_presets_are_t3s_unless_the_person_names_others() {
         let dir = tempfile::tempdir().unwrap();
         let (sidebar, _) = resolved(dir.path());
-        assert_eq!(sidebar.snooze.presets, crate::snooze::PRESETS);
+        assert_eq!(sidebar.later.presets, crate::later::PRESETS);
         std::fs::write(
             dir.path().join("sidebar.toml"),
-            "[snooze]\npresets = [\"30m\", \"someday\", \"fri 14\"]\n",
+            "[later]\npresets = [\"30m\", \"someday\", \"fri 14\"]\n",
         )
         .unwrap();
         let (sidebar, problems) = resolved(dir.path());
-        assert_eq!(sidebar.snooze.presets, ["30m", "fri 14"]);
+        assert_eq!(sidebar.later.presets, ["30m", "fri 14"]);
         let said: Vec<_> = problems.iter().map(|p| p.message.as_str()).collect();
         assert!(
             said.iter().any(|m| m.contains("\"someday\"")),
@@ -805,7 +806,7 @@ mod tests {
     }
 
     #[test]
-    fn a_snooze_has_its_shelf_where_the_persons_keys_name_it_nowhere() {
+    fn the_later_shelf_shows_where_the_persons_keys_name_it_nowhere() {
         let dir = tempfile::tempdir().unwrap();
         let write = |group: &str| {
             std::fs::write(
@@ -818,11 +819,11 @@ mod tests {
         let older = write("bottom = [\"working\", \"archived\"]");
         assert_eq!(
             older.bottom,
-            [State::Working, State::Snoozed, State::Archived]
+            [State::Working, State::Later, State::Archived]
         );
         let none = write("bottom = []");
-        assert_eq!(none.bottom, [State::Snoozed]);
-        let named = write("states = [\"active\", \"snoozed\"]\nbottom = []");
+        assert_eq!(none.bottom, [State::Later]);
+        let named = write("states = [\"active\", \"later\"]\nbottom = []");
         assert!(named.bottom.is_empty(), "a section of its own");
     }
 
@@ -857,6 +858,33 @@ mod tests {
                 (5, "\"settled\" is called \"archived\" now"),
                 (6, "spaces is called projects now"),
                 (9, "\"space\" is called \"project\" now"),
+            ]
+        );
+    }
+
+    #[test]
+    fn names_before_adr_0098_read_as_now_and_each_says_its_name_now() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("sidebar.toml"),
+            "[group]\nstates = [\"active\", \"snoozed\"]\n\
+             folded = [\"snoozed\"]\n\
+             [snooze]\npresets = [\"30m\"]\n",
+        )
+        .unwrap();
+        let (sidebar, problems) = resolved(dir.path());
+        assert_eq!(sidebar.group.states, [State::Active, State::Later]);
+        assert_eq!(sidebar.group.folded, ["later"]);
+        assert_eq!(sidebar.later.presets, ["30m"]);
+        let said: Vec<_> = (problems.iter())
+            .map(|p| (p.line.unwrap(), p.message.as_str()))
+            .collect();
+        assert_eq!(
+            said,
+            [
+                (2, "\"snoozed\" is called \"later\" now"),
+                (3, "\"snoozed\" is called \"later\" now"),
+                (4, "snooze is called later now"),
             ]
         );
     }

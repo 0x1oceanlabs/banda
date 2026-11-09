@@ -18,6 +18,7 @@ import type { ImportMarks } from "./ImportMarks";
 import type { Imported } from "./Imported";
 import type { Keep } from "./Keep";
 import type { Kept } from "./Kept";
+import type { LaterAsk } from "./LaterAsk";
 import type { Notify } from "./Notify";
 import type { OneHarness } from "./OneHarness";
 import type { OneImage } from "./OneImage";
@@ -32,7 +33,6 @@ import type { SeeWokeAsk } from "./SeeWokeAsk";
 import type { Send } from "./Send";
 import type { Sent } from "./Sent";
 import type { ShowVisual } from "./ShowVisual";
-import type { SnoozeAsk } from "./SnoozeAsk";
 import type { Switch } from "./Switch";
 import type { ThreadList } from "./ThreadList";
 import type { ThreadView } from "./ThreadView";
@@ -214,20 +214,20 @@ notify: CommandMethod<Notify, string>,
  */
 visual: CallMethod<OneVisual, VisualPage>, 
 /**
- * Snoozes your own Thread: it leaves your Person's list for
+ * Puts off your own Thread: it leaves your Person's list for
  * `after` (`30m`, `2h`, `1d`, a year at most), or until `until`,
  * in milliseconds since the epoch. Give one of them: with
  * neither, it leaves the list only until this turn ends.
  * Anything that needs your Person wakes it early, and so does
  * their message. It does not wake you or start a turn. Use it
  * when you wait on something slow and have nothing for your
- * Person meanwhile. A Thread that asks cannot be snoozed, nor
- * one your Person snoozed to go on by itself. A Person snoozes
+ * Person meanwhile. A Thread that asks cannot be put off, nor
+ * one your Person put off to go on by itself. A Person puts off
  * any Thread (ADR 0074).
  */
-snooze: CommandMethod<SnoozeAsk, null>, 
+later: CommandMethod<LaterAsk, null>, 
 /**
- * Brings your own snoozed Thread back to your Person's list now,
+ * Brings your own put-off Thread back to your Person's list now,
  * as when what you waited on came early. One awake stays so. A
  * Person wakes any Thread (ADR 0074).
  */
@@ -237,7 +237,7 @@ wake: CommandMethod<WakeAsk, null>,
  * that it did (ADR 0074): its row no longer says it woke, and,
  * dismissed, its Pane's line goes. It moves forward only, and a
  * Thread that did not wake by itself stays as it is. The list says
- * it, as the snooze's `woke_seen`. Only a Person marks a Thread.
+ * it, as the Later's `woke_seen`. Only a Person marks a Thread.
  */
 see_woke: CommandMethod<SeeWokeAsk, null>, 
 /**

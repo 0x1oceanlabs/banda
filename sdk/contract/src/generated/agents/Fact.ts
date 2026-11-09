@@ -52,7 +52,7 @@ harness?: string, } } | { "kind": "turn.ended", "payload": { turn: TurnId, state
 /**
  * What its Agent tells its Person, with `notify` (ADR 0057).
  */
-note?: string, } } | { "kind": "turn.queued", "payload": { turn: TurnId, message: ItemId, } } | { "kind": "thread.held", "payload": { thread: ThreadId, held: boolean, } } | { "kind": "thread.snoozed", "payload": { thread: ThreadId, until?: number, 
+note?: string, } } | { "kind": "turn.queued", "payload": { turn: TurnId, message: ItemId, } } | { "kind": "thread.held", "payload": { thread: ThreadId, held: boolean, } } | { "kind": "thread.later", "payload": { thread: ThreadId, until?: number, 
 /**
  * The failed turn that goes again as `until` comes.
  */

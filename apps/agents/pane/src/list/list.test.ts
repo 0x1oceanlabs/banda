@@ -237,15 +237,15 @@ test("a window that moved its marks has every list read again", () => {
   expect(applyThreads(one, moved)).toBe(one)
 })
 
-test("a Thread keeps its latest snooze, and what woke it", () => {
-  const snoozed = event(
-    "thread.snoozed",
+test("a Thread keeps its latest Later, and what woke it", () => {
+  const later = event(
+    "thread.later",
     { thread: "t1", until: 5000 },
     { author: person, subject: "t1" }
   )
-  const asleep = applyThreads(one, snoozed)
-  expect(asleep.threads[0].snooze).toEqual({
-    at: snoozed.at,
+  const asleep = applyThreads(one, later)
+  expect(asleep.threads[0].later).toEqual({
+    at: later.at,
     by: person,
     until: 5000,
   })
@@ -257,18 +257,18 @@ test("a Thread keeps its latest snooze, and what woke it", () => {
     { subject: "t1" }
   )
   const awake = applyThreads(asleep, woke)
-  expect(awake.threads[0].snooze?.woke).toEqual({
+  expect(awake.threads[0].later?.woke).toEqual({
     at: woke.at,
     by: "question",
   })
 
-  // Until done, it names no time; a new snooze leaves the old waking.
+  // Until done, it names no time; a new Later leaves the old waking.
   const again = event(
-    "thread.snoozed",
+    "thread.later",
     { thread: "t1" },
     { author: agent, subject: "t1" }
   )
-  expect(applyThreads(awake, again).threads[0].snooze).toEqual({
+  expect(applyThreads(awake, again).threads[0].later).toEqual({
     at: again.at,
     by: agent,
   })
@@ -280,11 +280,11 @@ test("a Thread keeps its latest snooze, and what woke it", () => {
     { author: person, subject: "t1" }
   )
   const looked = applyThreads(awake, seen)
-  expect(looked.threads[0].snooze?.woke_seen).toBe("seen")
+  expect(looked.threads[0].later?.woke_seen).toBe("seen")
   expect(looked.threads[0].updated_at).toBe(awake.threads[0].updated_at)
   expect(
-    applyThreads(one, seen).threads[0].snooze,
-    "no snooze, nothing to see"
+    applyThreads(one, seen).threads[0].later,
+    "no Later, nothing to see"
   ).toBeUndefined()
 })
 

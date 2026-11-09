@@ -57,7 +57,7 @@ export type Choice =
   /** Arranges the sidebar by a preset (ADR 0008). */
   | { kind: "preset"; id: string; name: string; current: boolean }
   /** Runs one of a Thread's item actions on it, by its id (ADR 0087,
-   * decision 12): Snooze…, Wake now, Archive thread. */
+   * decision 12): Later…, Wake now, Archive thread. */
   | {
       kind: "item"
       id: string
@@ -357,7 +357,7 @@ export type Sources = {
   presets: { names: readonly string[]; current: string }
   /** Whether a Thread is archived now. */
   archived: (listed: Listed) => boolean
-  /** The clock a Thread's snooze is read by (ADR 0074). */
+  /** The clock a Thread's Later is read by (ADR 0074). */
   now: number
   /** A Thread's item actions, its App's and the sidebar list's (ADR
    * 0087, decision 12): Tab lists the rows each offers the menu. */

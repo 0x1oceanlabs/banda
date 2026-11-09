@@ -740,7 +740,7 @@ const ITEMS_ELSEWHERE: ReadonlySet<string> = new Set(["sidebar.archive"])
 
 /** What a Pane on host `there` runs of the Window's: those above, and the
  * item actions `items` its Apps say go to their Item's host (ADR 0087,
- * decision 12), as a Thread's snooze, and the Window's own that do, each
+ * decision 12), as a Thread's Later, and the Window's own that do, each
  * to an Item of that host's alone (`ownItem`); none of the rest. */
 export function runOnHost(
   run: (action: string, args?: Args) => void,

@@ -1,12 +1,12 @@
 /**
- * When a snooze ends, in a Person's words (ADR 0074, decisions 5 and 9):
+ * When a Later ends, in a Person's words (ADR 0074, decisions 5 and 9):
  * what the picker's field takes, and the presets, named as T3 Code names
  * them. Pure, so plain tests cover it.
  */
 import { DAY, HOUR, MINUTE } from "@banda/ui/lib/words"
 
-/** The longest a snooze lasts: a year, as the engine takes it
- * (`platform/look/src/snooze.rs`). */
+/** The longest a Later lasts: a year, as the engine takes it
+ * (`platform/look/src/later.rs`). */
 const LONGEST = 365 * DAY
 
 /** One preset, as the picker lists it. */
@@ -111,7 +111,7 @@ function read(text: string, now: number): When | undefined {
   return { kind: "day", at: dayAt(now, days, ...time), days, monday }
 }
 
-/** When `text` says a snooze ends, from `now`; none when it says no time
+/** When `text` says a Later ends, from `now`; none when it says no time
  * to come. */
 export function whenOf(text: string, now: number): number | undefined {
   return read(text, now)?.at

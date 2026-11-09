@@ -1,5 +1,5 @@
 //! The Person's marks on a Thread, kept on the Thread by its host beside
-//! its snooze (ADR 0096): the latest turn they saw, and that they archived
+//! its Later (ADR 0096): the latest turn they saw, and that they archived
 //! it. Each window kept them in its own storage before, so a window on
 //! another machine never knew them. Now every window and every Agent reads
 //! them in the list. Only the Person marks a Thread: an Agent reads the
@@ -7,8 +7,8 @@
 
 use crate::model::{Archived, Fact, ThreadId, TurnId};
 use crate::rules::archive::{holds, may_archive};
-use crate::rules::snooze::asleep;
-use crate::{emit, emit_in_project, snoozes, store};
+use crate::rules::later::asleep;
+use crate::{emit, emit_in_project, laters, store};
 use banda_kernel::{Call, Error, Participant, Refusal, Tx};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -129,7 +129,7 @@ pub fn archive(tx: &mut Tx<'_>, author: Participant, thread: ThreadId) -> Result
     if holds(store::archived(tx.sql(), thread)?, changed, works, asks) {
         return Ok(());
     }
-    snoozes::wake(tx, author, Some(thread))?;
+    laters::wake(tx, author, Some(thread))?;
     store::set_archived(tx.sql(), thread, Some(Archived { at: tx.now() }))?;
     emit(tx, author, thread, &Fact::ThreadArchived { thread })
 }
@@ -145,7 +145,7 @@ pub fn unarchive(tx: &mut Tx<'_>, author: Participant, thread: ThreadId) -> Resu
 }
 
 /// Takes `thread` out of Archive, if it is marked: as its Person brings it
-/// back, or as `author` snoozes it (ADR 0074, decision 4). Says whether it
+/// back, or as `author` puts it off (ADR 0074, decision 4). Says whether it
 /// was.
 pub fn unarchived(tx: &mut Tx<'_>, author: Participant, thread: ThreadId) -> Result<bool, Error> {
     if store::archived(tx.sql(), thread)?.is_none() {
@@ -203,7 +203,7 @@ fn takes(sql: &Connection, thread: ThreadId, at: i64) -> Result<bool, Error> {
     if store::archived(sql, thread)?.is_some() || store::cleared(sql, thread)? {
         return Ok(false);
     }
-    if store::snooze(sql, thread)?.is_some_and(|snooze| asleep(&snooze, at)) {
+    if store::later(sql, thread)?.is_some_and(|later| asleep(&later, at)) {
         return Ok(false);
     }
     let (works, asks) = state(sql, thread)?;

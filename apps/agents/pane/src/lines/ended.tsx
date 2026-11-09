@@ -15,7 +15,7 @@ import {
 } from "@banda/ui/components/trace"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { clock } from "@banda/ui/lib/words"
-import { sleeps } from "@banda/ui/lib/snooze"
+import { sleeps } from "@banda/ui/lib/later"
 import { outOf, useLimitsNow } from "../thread/starts-on"
 import { useThreadAround } from "../thread/context"
 import type { LineProps } from "./types"
@@ -32,25 +32,25 @@ import {
  * its Person must sign in offers the ways to, while it can go again. */
 export function EndedLine({ line, facts }: LineProps<"ended">) {
   const { turn } = line
-  const { answering: busy, snooze } = facts
+  const { answering: busy, later } = facts
   const { engine, acts } = useThreadAround()
   const again = turn.can.retry
   const onRetry = again ? () => acts.retry(turn) : undefined
-  // Snoozes the Thread until a usage limit's reset, and with `resume`
+  // Puts the Thread off until a usage limit's reset, and with `resume`
   // tries the turn again then (ADR 0074, decision 8).
-  const onSnooze = again ? acts.snooze : undefined
+  const onLater = again ? acts.putOff : undefined
   const failed = turn.state === "failed"
   const signsIn = turn.failure?.class === "sign_in" && onRetry !== undefined
   const advice = !signsIn && turn.failure && adviceFor(turn.failure)
   // A usage limit that says when it resets, still to come, offers a
-  // snooze till then, unless the Thread sleeps already.
+  // Later till then, unless the Thread sleeps already.
   const failure = turn.failure
   const resets =
-    onSnooze && failure?.class === "usage_limit" ? failure.until : undefined
+    onLater && failure?.class === "usage_limit" ? failure.until : undefined
   const now = useNow(60_000, resets !== undefined)
   const [goOn, setGoOn] = useState(true)
   const until =
-    resets !== undefined && resets > now && !sleeps(snooze, now)
+    resets !== undefined && resets > now && !sleeps(later, now)
       ? resets
       : undefined
   // Out of its limits, its fallback goes first, where the Thread can go on
@@ -108,10 +108,10 @@ export function EndedLine({ line, facts }: LineProps<"ended">) {
               <Button
                 variant="outline"
                 size="xs"
-                onClick={() => onSnooze?.(until, goOn)}
+                onClick={() => onLater?.(until, goOn)}
               >
                 <AlarmClockIcon data-icon="inline-start" />
-                Snooze until {clock(until)}
+                Later, until {clock(until)}
               </Button>
               <label className="flex items-center gap-1.5 text-meta text-muted-foreground">
                 <Switch

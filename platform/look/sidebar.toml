@@ -11,8 +11,8 @@ preset = "inbox"
 # [group]
 # by = "state"                       # "state", "project" or "none"
 # states = ["active"]                # the sections, in this order
-# bottom = ["working", "snoozed", "archived"]  # shelves at the bottom, with their counts
-# folded = ["snoozed", "archived"]   # sections, shelves or Projects folded at first
+# bottom = ["working", "later", "archived"]    # shelves at the bottom, with their counts
+# folded = ["later", "archived"]     # sections, shelves or Projects folded at first
 # limit = 10                         # rows before "Show more"; 0 shows all
 # empty = "hide"                     # an empty section: "hide" or "show"
 
@@ -25,7 +25,7 @@ preset = "inbox"
 # rollup = true                      # a Project shows its loudest mark and count
 # new-thread = true                  # each Project offers a new Thread in it
 
-# [snooze]
+# [later]
 # presets = ["1h", "3h", "18:00", "tomorrow 9:00", "mon 9:00"]  # the picker's, up to eight
 
 # [row]

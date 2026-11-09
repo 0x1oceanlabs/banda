@@ -47,9 +47,9 @@ export function ThreadMenus({
 /**
  * The Thread menu's rows for `listed`, in its order: its App's item
  * actions that name it (Rename…, Suggest a title, Previous title, Mark as
- * unread or read), then the rest (Make a Project from it…, Snooze… or
+ * unread or read), then the rest (Make a Project from it…, Later… or
  * Wake now) and the sidebar list's Archive thread. A row that does not
- * apply is not there; Snooze while the Thread asks, and Archive while it
+ * apply is not there; Later while the Thread asks, and Archive while it
  * works or asks, are there but off.
  */
 export function ThreadRows({

@@ -1,11 +1,11 @@
 //! A Thread put away until a time, or until the turn that runs ends (ADR
-//! 0074). The snooze is the Thread's, kept on it, so every window, machine
+//! 0074). The Later is the Thread's, kept on it, so every window, machine
 //! and Agent sees the same one. Whether it still sleeps is worked out
-//! from it ([`crate::rules::snooze`]): what calls its Person wakes it
+//! from it ([`crate::rules::later`]): what calls its Person wakes it
 //! early as that fact is written ([`heard`]), and its time needs no timer.
 
-use crate::model::{Fact, Snooze, ThreadId, TurnState, Wake, Woke, WokeSeen};
-use crate::rules::snooze::{asleep, goes_on, may_snooze, sees, wake_of, wakes};
+use crate::model::{Fact, Later, ThreadId, TurnState, Wake, Woke, WokeSeen};
+use crate::rules::later::{asleep, goes_on, may_put_off, sees, wake_of, wakes};
 use crate::{emit, store};
 use banda_kernel::{Error, EventFilter, Listener, Participant, Refusal, Tx, now_ms};
 use schemars::JsonSchema;
@@ -13,10 +13,10 @@ use serde::Deserialize;
 use std::time::Duration;
 use ts_rs::TS;
 
-/// What `agents.snooze` is asked: a Thread, and until when.
+/// What `agents.later` is asked: a Thread, and until when.
 #[derive(Deserialize, TS, JsonSchema)]
 #[ts(export_to = "agents/")]
-pub struct SnoozeAsk {
+pub struct LaterAsk {
     /// The Thread's ID, as `threads` lists it; an Agent's own by default.
     #[serde(default)]
     #[ts(optional)]
@@ -60,11 +60,11 @@ pub struct WakeAsk {
     pub thread: Option<ThreadId>,
 }
 
-/// Snoozes `thread` for `author`, in place of a snooze it had. An Agent
-/// snoozes only its own Thread, never so that it goes on by itself, and
+/// Puts off `thread` for `author`, in place of a Later it had. An Agent
+/// puts off only its own Thread, never so that it goes on by itself, and
 /// not while its Person's goes on.
-pub fn snooze(tx: &mut Tx<'_>, author: Participant, ask: SnoozeAsk) -> Result<(), Error> {
-    let SnoozeAsk {
+pub fn later(tx: &mut Tx<'_>, author: Participant, ask: LaterAsk) -> Result<(), Error> {
+    let LaterAsk {
         thread,
         after,
         until,
@@ -72,11 +72,11 @@ pub fn snooze(tx: &mut Tx<'_>, author: Participant, ask: SnoozeAsk) -> Result<()
     } = ask;
     let thread = thread_of(tx, author, thread)?;
     may_touch(tx, author, thread)?;
-    // An Agent's snooze sends nothing and starts no turn (decision 10):
+    // An Agent's Later sends nothing and starts no turn (decision 10):
     // only its Person's goes on by itself.
     if resume && author.agent().is_some() {
         return Err(Refusal::forbidden(
-            "An Agent's snooze starts no turn: only its Person's goes on by itself.",
+            "An Agent's Later starts no turn: only its Person's goes on by itself.",
         )
         .into());
     }
@@ -106,11 +106,11 @@ pub fn snooze(tx: &mut Tx<'_>, author: Participant, ask: SnoozeAsk) -> Result<()
     let asks = store::asks(tx.sql(), thread)?;
     let works = store::running(tx.sql(), thread)?.is_some();
     let at = tx.now();
-    may_snooze(asks, works, until, at)?;
-    // Snoozed, an archived Thread leaves Archive, whoever snoozed it (ADR
+    may_put_off(asks, works, until, at)?;
+    // Put off, an archived Thread leaves Archive, whoever put it off (ADR
     // 0074, decision 4).
     crate::marks::unarchived(tx, author, thread)?;
-    let snooze = Snooze {
+    let later = Later {
         at,
         by: author,
         until,
@@ -118,16 +118,16 @@ pub fn snooze(tx: &mut Tx<'_>, author: Participant, ask: SnoozeAsk) -> Result<()
         resume,
         woke_seen: None,
     };
-    store::set_snooze(tx.sql(), thread, &snooze)?;
-    let snoozed = Fact::ThreadSnoozed {
+    store::set_later(tx.sql(), thread, &later)?;
+    let fact = Fact::ThreadLater {
         thread,
         until,
         resume,
     };
-    emit(tx, author, thread, &snoozed)
+    emit(tx, author, thread, &fact)
 }
 
-/// The Thread a snooze or a wake names, or for an Agent that names none,
+/// The Thread a Later or a wake names, or for an Agent that names none,
 /// its own.
 fn thread_of(
     tx: &Tx<'_>,
@@ -136,10 +136,10 @@ fn thread_of(
 ) -> Result<ThreadId, Error> {
     match (thread, author) {
         (Some(thread), _) => Ok(thread),
-        // A pass of no Thread, as a Harness's process's, has none to snooze.
+        // A pass of no Thread, as a Harness's process's, has none to put off.
         (None, Participant::Agent(agent)) => store::thread_of(tx.sql(), agent)?.ok_or_else(|| {
             Refusal::forbidden(
-                "An Agent snoozes or wakes only its own Thread, and this pass names none.",
+                "An Agent puts off or wakes only its own Thread, and this pass names none.",
             )
             .into()
         }),
@@ -148,9 +148,9 @@ fn thread_of(
 }
 
 /// `30m`, `2h`, `1d`, `90 minutes`: how long, in milliseconds, as the
-/// snooze's field reads it (`banda_look::snooze`), a year at most.
+/// Later's field reads it (`banda_look::later`), a year at most.
 fn while_of(text: &str) -> Result<i64, Refusal> {
-    banda_look::snooze::while_of(text).ok_or_else(|| {
+    banda_look::later::while_of(text).ok_or_else(|| {
         Refusal::invalid(format!(
             "`after` is how long, up to a year, as 30m, 2h or 1d, not \"{text}\"."
         ))
@@ -159,13 +159,13 @@ fn while_of(text: &str) -> Result<i64, Refusal> {
 
 /// Wakes `thread` now, if it sleeps; one awake stays so, and nothing is
 /// written, as `mkdir -p` answers. An Agent wakes only its own Thread,
-/// its default, and not while its Person's snooze goes on.
+/// its default, and not while its Person's Later goes on.
 pub fn wake(tx: &mut Tx<'_>, author: Participant, thread: Option<ThreadId>) -> Result<(), Error> {
     let thread = thread_of(tx, author, thread)?;
     may_touch(tx, author, thread)?;
     let now = tx.now();
-    match store::snooze(tx.sql(), thread)? {
-        Some(snooze) if asleep(&snooze, now) => woke(tx, author, thread, snooze, Wake::Woken),
+    match store::later(tx.sql(), thread)? {
+        Some(later) if asleep(&later, now) => woke(tx, author, thread, later, Wake::Woken),
         _ => Ok(()),
     }
 }
@@ -181,21 +181,14 @@ pub fn see_woke(
 ) -> Result<(), Error> {
     store::thread(tx.sql(), thread)?
         .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
-    let Some(snooze) = store::snooze(tx.sql(), thread)? else {
+    let Some(later) = store::later(tx.sql(), thread)? else {
         return Ok(());
     };
-    if !sees(&snooze, seen, tx.now()) {
+    if !sees(&later, seen, tx.now()) {
         return Ok(());
     }
     let woke_seen = Some(seen);
-    store::set_snooze(
-        tx.sql(),
-        thread,
-        &Snooze {
-            woke_seen,
-            ..snooze
-        },
-    )?;
+    store::set_later(tx.sql(), thread, &Later { woke_seen, ..later })?;
     emit(tx, author, thread, &Fact::ThreadWokeSeen { thread, seen })
 }
 
@@ -210,8 +203,8 @@ pub fn heard(
     let Some(by) = wake_of(fact, author) else {
         return Ok(());
     };
-    match store::snooze(tx.sql(), thread)? {
-        Some(snooze) if wakes(&snooze, by, tx.now()) => woke(tx, author, thread, snooze, by),
+    match store::later(tx.sql(), thread)? {
+        Some(later) if wakes(&later, by, tx.now()) => woke(tx, author, thread, later, by),
         _ => Ok(()),
     }
 }
@@ -220,17 +213,17 @@ fn woke(
     tx: &mut Tx<'_>,
     author: Participant,
     thread: ThreadId,
-    snooze: Snooze,
+    later: Later,
     by: Wake,
 ) -> Result<(), Error> {
     let woke = Some(Woke { at: tx.now(), by });
-    store::set_snooze(tx.sql(), thread, &Snooze { woke, ..snooze })?;
+    store::set_later(tx.sql(), thread, &Later { woke, ..later })?;
     emit(tx, author, thread, &Fact::ThreadWoke { thread, by })
 }
 
-/// Whether `author` may snooze or wake `thread`: a Thread there is, and,
-/// for an Agent, its own, with no snooze of its Person's that goes on by
-/// itself: snoozed again or woken, it would not go on (decision 8).
+/// Whether `author` may put off or wake `thread`: a Thread there is, and,
+/// for an Agent, its own, with no Later of its Person's that goes on by
+/// itself: put off again or woken, it would not go on (decision 8).
 fn may_touch(tx: &Tx<'_>, author: Participant, thread: ThreadId) -> Result<(), Error> {
     let (_, its) = store::title_and_agent(tx.sql(), thread)?
         .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
@@ -238,33 +231,33 @@ fn may_touch(tx: &Tx<'_>, author: Participant, thread: ThreadId) -> Result<(), E
         return Ok(());
     };
     if agent != its {
-        return Err(Refusal::forbidden("An Agent snoozes or wakes only its own Thread.").into());
+        return Err(Refusal::forbidden("An Agent puts off or wakes only its own Thread.").into());
     }
-    if store::snooze(tx.sql(), thread)?.is_some_and(|snooze| goes_on(&snooze)) {
+    if store::later(tx.sql(), thread)?.is_some_and(|later| goes_on(&later)) {
         return Err(Refusal::forbidden(
-            "Your Person snoozed this Thread to go on by itself: only they change that snooze.",
+            "Your Person put this Thread off to go on by itself: only they change that Later.",
         )
         .into());
     }
     Ok(())
 }
 
-/// The name of the module's listener of new snoozes.
-pub const LISTENER: &str = "snoozes";
+/// The name of the module's listener of new Laters.
+pub const LISTENER: &str = "laters";
 
-/// The facts that may bring a turn that goes on by itself: a new snooze.
-pub fn snoozed() -> EventFilter {
+/// The facts that may bring a turn that goes on by itself: a new Later.
+pub fn put_off() -> EventFilter {
     EventFilter {
         module: Some("agents".into()),
         subject: None,
-        kinds: Some(vec!["thread.snoozed".into()]),
+        kinds: Some(vec!["thread.later".into()]),
     }
 }
 
-/// Goes on with each Thread snoozed to go on by itself as its time comes
+/// Goes on with each Thread put off to go on by itself as its time comes
 /// (ADR 0074, decision 8): its failed turn goes again. A time that passed
-/// while the engine was off goes as it starts. It hears new snoozes, each
-/// acked once the snoozes are read again, and stops with its Project.
+/// while the engine was off goes as it starts. It hears new Laters, each
+/// acked once the Laters are read again, and stops with its Project.
 pub async fn resume(mut heard: Listener) {
     let mut woken: Option<i64> = None;
     loop {
@@ -274,53 +267,53 @@ pub async fn resume(mut heard: Listener) {
         let due = match project.read(store::resuming).await {
             Ok(due) => due,
             Err(error) => {
-                tracing::warn!(%error, "the snoozes that go on were not read");
+                tracing::warn!(%error, "the Laters that go on were not read");
                 return;
             }
         };
         let now = now_ms();
-        let times = due.iter().filter_map(|(_, snooze)| snooze.until);
+        let times = due.iter().filter_map(|(_, later)| later.until);
         let next = times.filter(|&until| until > now).min();
         for (thread, _) in due
             .iter()
-            .filter(|(_, s)| s.until.is_some_and(|u| u <= now))
+            .filter(|(_, later)| later.until.is_some_and(|until| until <= now))
         {
             let thread = *thread;
             if let Err(error) = project.write(move |tx| go_on(tx, thread)).await {
-                tracing::warn!(%error, "a snoozed Thread's turn did not go on");
+                tracing::warn!(%error, "a put-off Thread's turn did not go on");
             }
         }
         drop(project);
         if let Some(seq) = woken.take()
             && let Err(error) = heard.ack_through(seq).await
         {
-            tracing::warn!(%error, "the snoozes' place in the log was not kept");
+            tracing::warn!(%error, "the Laters' place in the log was not kept");
         }
-        // Until the next one's time, or a new snooze.
+        // Until the next one's time, or a new Later.
         let wait = next.map_or(Duration::MAX, |at| Duration::from_millis((at - now) as u64));
         match tokio::time::timeout(wait, heard.next()).await {
-            Ok(Ok(Some(snoozed))) => woken = Some(snoozed.seq),
+            Ok(Ok(Some(event))) => woken = Some(event.seq),
             Ok(Ok(None) | Err(_)) => return,
             Err(_) => {}
         }
     }
 }
 
-/// Sends `thread`'s failed turn again, as the one who snoozed it, once:
-/// the snooze no longer goes on after. One that is no longer its latest
+/// Sends `thread`'s failed turn again, as the one who put it off, once:
+/// the Later no longer goes on after. One that is no longer its latest
 /// stays as it is.
 fn go_on(tx: &mut Tx<'_>, thread: ThreadId) -> Result<(), Error> {
-    let found = store::snooze(tx.sql(), thread)?;
-    let Some(mut snooze) = found.filter(|snooze| snooze.woke.is_none()) else {
+    let found = store::later(tx.sql(), thread)?;
+    let Some(mut later) = found.filter(|later| later.woke.is_none()) else {
         return Ok(());
     };
-    let Some(turn) = snooze.resume.take() else {
+    let Some(turn) = later.resume.take() else {
         return Ok(());
     };
-    store::set_snooze(tx.sql(), thread, &snooze)?;
-    // Refused, it is not tried again: the snooze has gone on once.
-    if let Err(error) = crate::retry(tx, snooze.by, turn) {
-        tracing::warn!(%error, "a snoozed Thread's failed turn did not go again");
+    store::set_later(tx.sql(), thread, &later)?;
+    // Refused, it is not tried again: the Later has gone on once.
+    if let Err(error) = crate::retry(tx, later.by, turn) {
+        tracing::warn!(%error, "a put-off Thread's failed turn did not go again");
     }
     Ok(())
 }

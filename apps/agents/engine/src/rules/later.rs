@@ -1,64 +1,64 @@
-//! A snooze's rules (ADR 0074): when a Thread may be snoozed, and what
+//! A Later's rules (ADR 0074): when a Thread may be put off, and what
 //! wakes one before its time. Pure: the caller brings the time.
 
-use crate::model::{Fact, Snooze, TurnState, Wake, WokeSeen};
+use crate::model::{Fact, Later, TurnState, Wake, WokeSeen};
 use banda_kernel::{Participant, Refusal};
-use banda_look::snooze::LONGEST;
+use banda_look::later::LONGEST;
 
-/// Whether a Thread may be snoozed until `until`, or, without it, until
+/// Whether a Thread may be put off until `until`, or, without it, until
 /// the turn that runs ends, at `now`. One that `asks` may not be: what
-/// calls its Person is never put away. One snoozed until its turn ends
+/// calls its Person is never put away. One put off until its turn ends
 /// needs a turn that `works`, and none sleeps longer than a year.
-pub fn may_snooze(asks: bool, works: bool, until: Option<i64>, now: i64) -> Result<(), Refusal> {
+pub fn may_put_off(asks: bool, works: bool, until: Option<i64>, now: i64) -> Result<(), Refusal> {
     if asks {
         return Err(Refusal::conflict(
-            "This Thread asks its Person: answer it before snoozing it.",
+            "This Thread asks its Person: answer it before putting it off.",
         ));
     }
     match until {
         Some(until) if until <= now => Err(Refusal::invalid("That time has passed.")),
         Some(until) if until.saturating_sub(now) > LONGEST => {
-            Err(Refusal::invalid("A snooze lasts a year at most."))
+            Err(Refusal::invalid("A Later lasts a year at most."))
         }
         None if !works => Err(Refusal::conflict(
-            "Only a Thread at work can be snoozed until it is done.",
+            "Only a Thread at work can be put off until it is done.",
         )),
         _ => Ok(()),
     }
 }
 
-/// Whether a Thread sleeps at `now` under `snooze`: nothing woke it, and
+/// Whether a Thread sleeps at `now` under `later`: nothing woke it, and
 /// its time has not come.
-pub fn asleep(snooze: &Snooze, now: i64) -> bool {
-    snooze.woke.is_none() && snooze.until.is_none_or(|until| until > now)
+pub fn asleep(later: &Later, now: i64) -> bool {
+    later.woke.is_none() && later.until.is_none_or(|until| until > now)
 }
 
-/// Whether a Thread under `snooze` woke by itself at `now`: its time
+/// Whether a Thread under `later` woke by itself at `now`: its time
 /// came, or what calls its Person woke it early. One its Person woke, by
 /// hand or by writing to it, did not: they know already.
-pub fn woke_by_itself(snooze: &Snooze, now: i64) -> bool {
-    match snooze.woke {
+pub fn woke_by_itself(later: &Later, now: i64) -> bool {
+    match later.woke {
         Some(woke) => !matches!(woke.by, Wake::Woken | Wake::Message),
-        None => !asleep(snooze, now),
+        None => !asleep(later, now),
     }
 }
 
-/// Whether its Person seeing `seen` of a Thread under `snooze` at `now`
+/// Whether its Person seeing `seen` of a Thread under `later` at `now`
 /// marks anything: it woke by itself, and the mark moves forward.
-pub fn sees(snooze: &Snooze, seen: WokeSeen, now: i64) -> bool {
-    woke_by_itself(snooze, now) && snooze.woke_seen.is_none_or(|was| seen > was)
+pub fn sees(later: &Later, seen: WokeSeen, now: i64) -> bool {
+    woke_by_itself(later, now) && later.woke_seen.is_none_or(|was| seen > was)
 }
 
-/// Whether `snooze` is its Person's that goes on by itself (ADR 0074,
+/// Whether `later` is its Person's that goes on by itself (ADR 0074,
 /// decision 8), and has not yet: nothing woke it, and its turn has not
 /// gone again. While it is, it stays theirs to change.
-pub fn goes_on(snooze: &Snooze) -> bool {
-    matches!(snooze.by, Participant::Person(_)) && snooze.woke.is_none() && snooze.resume.is_some()
+pub fn goes_on(later: &Later) -> bool {
+    matches!(later.by, Participant::Person(_)) && later.woke.is_none() && later.resume.is_some()
 }
 
-/// What `fact`, by `author`, would wake a snoozed Thread for: what
+/// What `fact`, by `author`, would wake a put-off Thread for: what
 /// calls its Person, or the end of a turn. Most facts, as a reply that
-/// grows, wake nothing, and need no look at a snooze.
+/// grows, wake nothing, and need no look at a Later.
 pub fn wake_of(fact: &Fact, author: Participant) -> Option<Wake> {
     match fact {
         Fact::QuestionAsked { .. } => Some(Wake::Question),
@@ -77,10 +77,10 @@ pub fn wake_of(fact: &Fact, author: Participant) -> Option<Wake> {
     }
 }
 
-/// Whether `by` wakes a Thread under `snooze` at `now`: it sleeps, and
-/// the end of a turn wakes only one snoozed until it is done.
-pub fn wakes(snooze: &Snooze, by: Wake, now: i64) -> bool {
-    asleep(snooze, now) && (by != Wake::Done || snooze.until.is_none())
+/// Whether `by` wakes a Thread under `later` at `now`: it sleeps, and
+/// the end of a turn wakes only one put off until it is done.
+pub fn wakes(later: &Later, by: Wake, now: i64) -> bool {
+    asleep(later, now) && (by != Wake::Done || later.until.is_none())
 }
 
 #[cfg(test)]
@@ -91,8 +91,8 @@ mod tests {
 
     const NOW: i64 = 1_000;
 
-    fn until(until: Option<i64>) -> Snooze {
-        Snooze {
+    fn until(until: Option<i64>) -> Later {
+        Later {
             at: NOW - 10,
             by: Participant::Person(PersonId::new()),
             until,
@@ -123,28 +123,28 @@ mod tests {
     }
 
     #[test]
-    fn a_thread_that_asks_or_a_time_gone_cannot_be_snoozed() {
-        assert!(may_snooze(false, false, Some(NOW + 1), NOW).is_ok());
-        assert!(may_snooze(true, true, Some(NOW + 1), NOW).is_err());
-        assert!(may_snooze(false, false, Some(NOW), NOW).is_err());
-        assert!(may_snooze(false, true, None, NOW).is_ok());
+    fn a_thread_that_asks_or_a_time_gone_cannot_be_put_off() {
+        assert!(may_put_off(false, false, Some(NOW + 1), NOW).is_ok());
+        assert!(may_put_off(true, true, Some(NOW + 1), NOW).is_err());
+        assert!(may_put_off(false, false, Some(NOW), NOW).is_err());
+        assert!(may_put_off(false, true, None, NOW).is_ok());
         assert!(
-            may_snooze(false, false, None, NOW).is_err(),
+            may_put_off(false, false, None, NOW).is_err(),
             "until done needs work"
         );
-        assert!(may_snooze(false, false, Some(NOW + LONGEST), NOW).is_ok());
+        assert!(may_put_off(false, false, Some(NOW + LONGEST), NOW).is_ok());
         for later in [NOW + LONGEST + 1, i64::MAX] {
             assert!(
-                may_snooze(false, false, Some(later), NOW).is_err(),
+                may_put_off(false, false, Some(later), NOW).is_err(),
                 "a year at most"
             );
         }
     }
 
     #[test]
-    fn only_the_persons_snooze_that_has_yet_to_go_on_goes_on() {
+    fn only_the_persons_later_that_has_yet_to_go_on_goes_on() {
         let turn = Some(TurnId::new());
-        let going = Snooze {
+        let going = Later {
             resume: turn,
             ..until(Some(NOW + 60))
         };
@@ -154,12 +154,12 @@ mod tests {
             at: NOW,
             by: Wake::Message,
         };
-        let woke = Snooze {
+        let woke = Later {
             woke: Some(woken),
             ..going.clone()
         };
         assert!(!goes_on(&woke), "woken, it goes on no more");
-        let agents = Snooze {
+        let agents = Later {
             by: Participant::Agent(AgentId::new()),
             ..going
         };
@@ -171,7 +171,7 @@ mod tests {
         assert!(asleep(&until(Some(NOW + 1)), NOW));
         assert!(!asleep(&until(Some(NOW)), NOW), "its time came");
         assert!(asleep(&until(None), NOW + 1_000_000));
-        let woken = Snooze {
+        let woken = Later {
             woke: Some(Woke {
                 at: NOW,
                 by: Wake::Woken,
@@ -188,13 +188,13 @@ mod tests {
         assert!(woke_by_itself(&timed, NOW + 60), "its time came");
         assert!(!sees(&timed, WokeSeen::Seen, NOW), "nothing to see yet");
         assert!(sees(&timed, WokeSeen::Seen, NOW + 60));
-        let seen = Snooze {
+        let seen = Later {
             woke_seen: Some(WokeSeen::Seen),
             ..timed.clone()
         };
         assert!(!sees(&seen, WokeSeen::Seen, NOW + 60), "seen once");
         assert!(sees(&seen, WokeSeen::Dismissed, NOW + 60), "then dismissed");
-        let dismissed = Snooze {
+        let dismissed = Later {
             woke_seen: Some(WokeSeen::Dismissed),
             ..timed.clone()
         };
@@ -206,7 +206,7 @@ mod tests {
             (Wake::Message, false),
             (Wake::Woken, false),
         ] {
-            let woke = Snooze {
+            let woke = Later {
                 woke: Some(Woke { at: NOW, by }),
                 ..timed.clone()
             };
@@ -214,9 +214,9 @@ mod tests {
         }
     }
 
-    /// What `fact` by `author` wakes a Thread under `snooze` for.
-    fn woken(snooze: &Snooze, fact: &Fact, author: Participant, now: i64) -> Option<Wake> {
-        wake_of(fact, author).filter(|by| wakes(snooze, *by, now))
+    /// What `fact` by `author` wakes a Thread under `later` for.
+    fn woken(later: &Later, fact: &Fact, author: Participant, now: i64) -> Option<Wake> {
+        wake_of(fact, author).filter(|by| wakes(later, *by, now))
     }
 
     #[test]

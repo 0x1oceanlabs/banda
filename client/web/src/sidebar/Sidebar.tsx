@@ -50,8 +50,8 @@ import { clock, problem } from "@banda/ui/lib/words"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
 import { seenNamed } from "@banda/ui/hooks/use-status"
-import { type Listed, type PaneState, snoozable } from "@banda/ui/pane"
-import { useLists, useSnoozesNow } from "../calls/stores"
+import { type Listed, type PaneState, mayPutOff } from "@banda/ui/pane"
+import { useLists, useLatersNow } from "../calls/stores"
 import {
   AlarmClockIcon,
   BadgeCheckIcon,
@@ -89,7 +89,7 @@ import { type Held, held, hold, rowKey } from "./hold"
 import { useIsArchived } from "./archived"
 import { Dismiss, dismissing, newThread, useOpen } from "./open"
 import { itemActionOf } from "./items"
-import { pickSnooze } from "./Snoozing"
+import { pickLater } from "./LaterPicker"
 import { FlowMenu } from "./FlowMenu"
 import { ThemeMenu } from "./ThemeMenu"
 import { TrustCard, type Trusting } from "../trust/TrustCard"
@@ -146,7 +146,7 @@ export function Sidebar({
   isCurrent: (project: ProjectId, pane: PaneState) => boolean
 }) {
   const keyFor = useKeyLabel()
-  // What every module lists, from the Window's items, and its snoozes by
+  // What every module lists, from the Window's items, and its Laters by
   // the calls' clock.
   const lists = useLists()
   const open = dismissing(useRun(), onDismiss)
@@ -170,7 +170,7 @@ export function Sidebar({
   // The Threads the Person archived (ADR 0069), and those that sleep or
   // woke (ADR 0074).
   const archived = useIsArchived()
-  const { asleep, woke } = useSnoozesNow()
+  const { asleep, woke } = useLatersNow()
   // The other machines of `hosts.toml`, below this one's (ADR 0081): the
   // rows of those the order places, as the counts and Alt+U place them,
   // and each host's state by its name.
@@ -503,13 +503,13 @@ function SectionView({
   const keyFor = useKeyLabel()
   const run = useRun()
   const dismiss = useContext(Dismiss)
-  // A row's Snooze and Wake are its Thread's App's (ADR 0087, decision 12).
+  // A row's Later and Wake are its Thread's App's (ADR 0087, decision 12).
   const wake = ({ project, listed }: Arranged) => {
     const action = itemActionOf(listed, "wake")
     if (action) run(action.id, { project: project.id, item: listed.id })
   }
-  const snoozeKey = (listed: Listed) =>
-    keyFor(itemActionOf(listed, "snooze")?.id ?? "")
+  const laterKey = (listed: Listed) =>
+    keyFor(itemActionOf(listed, "later")?.id ?? "")
   const { limit } = settings.group
   const rows = limit > 0 && !more ? section.rows.slice(0, limit) : section.rows
   const hidden = section.rows.length - rows.length
@@ -581,20 +581,20 @@ function SectionView({
               current={isCurrent(row.project.id, row.listed.pane)}
               named={!mine}
               action={
-                row.state === "snoozed" ? (
+                row.state === "later" ? (
                   <Button variant="ghost" size="xs" onClick={() => wake(row)}>
                     <AlarmClockIcon />
                     Wake
                   </Button>
-                ) : snoozable(row.listed) ? (
+                ) : mayPutOff(row.listed) ? (
                   <Button
                     variant="ghost"
                     size="icon-xs"
-                    aria-label="Snooze"
-                    title={`Snooze ${snoozeKey(row.listed)}`}
+                    aria-label="Later"
+                    title={`Later ${laterKey(row.listed)}`}
                     onClick={(event) => {
                       const anchor = event.currentTarget.closest("[data-row]")
-                      pickSnooze({
+                      pickLater({
                         project: row.project.id,
                         listed: row.listed,
                         ...(anchor ? { anchor } : {}),
@@ -1105,7 +1105,7 @@ function HostLines({
 /**
  * Another host's Thread (ADR 0081): shown as this machine's are, and a
  * click opens it there, as its listed Pane names its host; with no menu
- * or snooze yet, as the row's would go to this machine's engine. Where no
+ * or put off yet, as the row's would go to this machine's engine. Where no
  * label above names its host, the row does; away, it dims and its timer
  * stands.
  */

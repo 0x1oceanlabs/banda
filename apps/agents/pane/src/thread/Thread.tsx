@@ -48,7 +48,7 @@ import { ModelPicker } from "../composer/ModelPicker"
 import { pickedOf } from "../composer/picker"
 import { ModeMenu } from "../settings/ThreadSettings"
 import { SignIn, Warning } from "./SignIn"
-import { SnoozeLine, useSeeWoke } from "./Snoozed"
+import { LaterLine, useSeeWoke } from "./Later"
 import { SupervisedLine, useHeardSupervised } from "./Supervised"
 import { FENCE_LINK } from "../settings/fence"
 import {
@@ -169,7 +169,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   const written = useRef(false)
   const writers = useWriters(engine, project, thread)
   // A Thread that woke by itself is seen as its Person looks at it.
-  useSeeWoke(engine, project, thread, writers.own?.snooze, focused)
+  useSeeWoke(engine, project, thread, writers.own?.later, focused)
   const found = useFound(area, find?.query ?? "", find?.at ?? 0, state)
   // The details card: kept open on a wide Thread until hidden, popped
   // open for a moment on a narrow one.
@@ -267,10 +267,10 @@ export function Thread(props: PaneProps<ThreadArgs>) {
       }),
     retry,
     retryOn,
-    snooze:
+    putOff:
       run &&
       ((until, resume) =>
-        run("thread.snooze", { project, item: thread, until, resume })),
+        run("thread.later", { project, item: thread, until, resume })),
     signIn: (turn) =>
       here ? (
         <SignIn
@@ -468,11 +468,11 @@ export function Thread(props: PaneProps<ThreadArgs>) {
           </div>
         )}
         {thread && run && (
-          <SnoozeLine
+          <LaterLine
             engine={engine}
             project={project}
             thread={thread}
-            snooze={writers.own?.snooze}
+            later={writers.own?.later}
             turns={state?.turns ?? []}
             onWake={() => run("thread.wake", { project, item: thread })}
           />

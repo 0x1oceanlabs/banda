@@ -5436,7 +5436,7 @@ test("the Person renames a Thread in place: a double click on its title, F2, and
     /Suggest a title\s*Shift\+F2/,
     /Previous title/,
     /Mark as unread\s*Alt\+Shift\+U/,
-    /Snooze…\s*Alt\+Z/,
+    /Later…\s*Alt\+Z/,
     /Archive thread\s*Alt\+S/,
   ])
   await page.screenshot({ path: "test-results/27-thread-menu.png" })
@@ -5562,8 +5562,8 @@ test("the Banda menu goes into a Project and the sidebar's view, and Tab shows w
   await search.press("Tab")
   await expect(acts).toContainText("Open beside")
   await page.screenshot({ path: "test-results/27-banda-menu-acts.png" })
-  // Snooze… stands before it (ADR 0074): it is picked by its name.
-  await expect(acts).toContainText("Snooze…")
+  // Later… stands before it (ADR 0074): it is picked by its name.
+  await expect(acts).toContainText("Later…")
   await acts.getByRole("option", { name: /Archive thread/ }).click()
   await expect(menu).toBeHidden()
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })

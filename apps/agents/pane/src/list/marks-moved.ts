@@ -146,7 +146,7 @@ export function oldMarks(storage: Storage): OldMarks {
 
 /**
  * Whether the old rule shows `thread` archived (`isArchived`, frozen):
- * one that works or asks never is; a snooze after what the Person said
+ * one that works or asks never is; a Later after what the Person said
  * takes it out; what they said holds until something new happens in it;
  * without that, it is archived if nothing happened in it since `before`.
  */
@@ -157,7 +157,7 @@ function shownArchived(
 ): boolean {
   if (thread.asking.length > 0 || thread.latest?.state === "running")
     return false
-  if ((thread.snooze?.at ?? -Infinity) > (say?.at ?? before)) return false
+  if ((thread.later?.at ?? -Infinity) > (say?.at ?? before)) return false
   if (say && thread.updated_at <= say.at) return say.archived
   return thread.updated_at <= before
 }

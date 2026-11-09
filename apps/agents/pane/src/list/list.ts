@@ -38,7 +38,7 @@ export const THREADS_FILTER = {
     "question.asked",
     "question.answered",
     "question.closed",
-    "thread.snoozed",
+    "thread.later",
     "thread.woke",
     "thread.woke_seen",
     "thread.switched",
@@ -85,7 +85,7 @@ export function readsAgain(state: ThreadList, event: Event): boolean {
  * The list after one fact. A new Thread joins it at the top, and a Thread
  * that heard a message or ended a turn moves there. Each Thread keeps its
  * latest turn that began, its Questions that wait, the start of its
- * latest message, its snooze and the Person's marks, as the engine reads
+ * latest message, its Later and the Person's marks, as the engine reads
  * them. A mark moves no Thread (ADR 0096, decision 6). A list the fact
  * changed stands at the fact's place in the log, which a mark the Person
  * sent waits for (`./sent.ts`); one it left as it was stays where it was.
@@ -170,27 +170,25 @@ function applied(state: ThreadList, event: Event): ThreadList {
           : thread
       )
     }
-    case "thread.snoozed": {
-      const snooze = {
+    case "thread.later": {
+      const later = {
         at: event.at,
         by: event.author,
         until: fact.payload.until,
       }
-      return change(state, event, (thread) => ({ ...thread, snooze }))
+      return change(state, event, (thread) => ({ ...thread, later }))
     }
     case "thread.woke": {
       const woke = { at: event.at, by: fact.payload.by }
       return change(state, event, (thread) =>
-        thread.snooze
-          ? { ...thread, snooze: { ...thread.snooze, woke } }
-          : thread
+        thread.later ? { ...thread, later: { ...thread.later, woke } } : thread
       )
     }
     case "thread.woke_seen": {
       const { seen } = fact.payload
       return change(state, event, (thread) =>
-        thread.snooze
-          ? { ...thread, snooze: { ...thread.snooze, woke_seen: seen } }
+        thread.later
+          ? { ...thread, later: { ...thread.later, woke_seen: seen } }
           : thread
       )
     }

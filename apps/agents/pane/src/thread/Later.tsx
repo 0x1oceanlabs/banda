@@ -1,5 +1,5 @@
 /**
- * The Thread's quiet line about its snooze (ADR 0074, decisions 4 and 7),
+ * The Thread's quiet line about its Later (ADR 0074, decisions 4 and 7),
  * above the composer: while it sleeps, until when, with Wake now; once it
  * woke by itself, when, with Dismiss, until its next turn ends. What its
  * Person saw of it waking is its host's mark (`woke_seen`, ADR 0096), so
@@ -7,12 +7,12 @@
  */
 import { useEffect } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
-import type { Snooze, ThreadId, TurnView } from "@banda/contract/agents"
+import type { Later, ThreadId, TurnView } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
 import { useInFront } from "@banda/ui/hooks/use-in-front"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { clock, left } from "@banda/ui/lib/words"
-import { sleeps, wokeOf } from "@banda/ui/lib/snooze"
+import { sleeps, wokeOf } from "@banda/ui/lib/later"
 import { AlarmClockIcon } from "lucide-react"
 import { Docked } from "../entries/parts/Card"
 import { mark, useSending } from "../list/sent"
@@ -27,17 +27,17 @@ export function useSeeWoke(
   engine: Engine,
   project: ProjectId,
   thread: ThreadId | null,
-  snooze: Snooze | undefined,
+  later: Later | undefined,
   focused: boolean
 ): void {
   const front = useInFront()
   // A clock only while it sleeps till a time: it wakes as that comes.
-  const now = useNow(30_000, snooze?.until !== undefined && !snooze.woke)
-  const seen = useWokeSeen(engine, thread, snooze)
-  // Its waking that is still to be seen: when it was snoozed, the snooze's
-  // own, so a new snooze is seen again.
+  const now = useNow(30_000, later?.until !== undefined && !later.woke)
+  const seen = useWokeSeen(engine, thread, later)
+  // Its waking that is still to be seen: when it was put off, the Later's
+  // own, so a new Later is seen again.
   const unseen =
-    snooze && !seen && wokeOf(snooze, now) !== undefined ? snooze.at : undefined
+    later && !seen && wokeOf(later, now) !== undefined ? later.at : undefined
   useEffect(() => {
     if (!focused || !front || thread === null || unseen === undefined) return
     return markWhenPresent(engine, project, thread, { woke: "seen" })
@@ -45,7 +45,7 @@ export function useSeeWoke(
 }
 
 /** What woke it early, in a few words; nothing for its time coming. */
-const WHY: Partial<Record<NonNullable<Snooze["woke"]>["by"], string>> = {
+const WHY: Partial<Record<NonNullable<Later["woke"]>["by"], string>> = {
   question: "it asked, so it woke early",
   failure: "a turn failed, so it woke early",
   done: "its turn ended",
@@ -56,54 +56,54 @@ const WHY: Partial<Record<NonNullable<Snooze["woke"]>["by"], string>> = {
 function useWokeSeen(
   engine: Engine,
   thread: ThreadId | null,
-  snooze: Snooze | undefined
-): Snooze["woke_seen"] {
+  later: Later | undefined
+): Later["woke_seen"] {
   const sending = useSending(engine)[thread ?? ""]?.woke?.to
-  return snooze?.woke_seen === "dismissed"
+  return later?.woke_seen === "dismissed"
     ? "dismissed"
-    : (sending ?? snooze?.woke_seen)
+    : (sending ?? later?.woke_seen)
 }
 
-export function SnoozeLine({
+export function LaterLine({
   engine,
   project,
   thread,
-  snooze,
+  later,
   turns,
   onWake,
 }: {
   engine: Engine
   project: ProjectId
   thread: ThreadId
-  snooze: Snooze | undefined
+  later: Later | undefined
   turns: readonly TurnView[]
   /** Wakes it now, as the window does (`thread.wake`). */
   onWake: () => void
 }) {
   // A clock only while it sleeps till a time: what it says then moves.
-  const now = useNow(30_000, snooze?.until !== undefined && !snooze.woke)
-  const seen = useWokeSeen(engine, thread, snooze)
-  if (!snooze) return null
-  const byAgent = snooze.by.kind === "agent" ? " by its Agent" : ""
-  if (sleeps(snooze, now)) {
+  const now = useNow(30_000, later?.until !== undefined && !later.woke)
+  const seen = useWokeSeen(engine, thread, later)
+  if (!later) return null
+  const byAgent = later.by.kind === "agent" ? " by its Agent" : ""
+  if (sleeps(later, now)) {
     const until =
-      snooze.until === undefined
+      later.until === undefined
         ? "it's done"
-        : `${clock(snooze.until, now)} · ${left(snooze.until, now)} left${snooze.resume ? " · goes on by itself" : ""}`
+        : `${clock(later.until, now)} · ${left(later.until, now)} left${later.resume ? " · goes on by itself" : ""}`
     return (
       <Line
-        words={`Snoozed${byAgent} until ${until}`}
+        words={`Later${byAgent}, until ${until}`}
         action="Wake now"
         onAction={onWake}
       />
     )
   }
-  const at = wokeOf(snooze, now)
+  const at = wokeOf(later, now)
   if (at === undefined || seen === "dismissed") return null
   // Its next turn that ends puts the line away, as Dismiss does.
   if (turns.some((turn) => turn.ended !== undefined && turn.ended > at))
     return null
-  const why = snooze.woke && WHY[snooze.woke.by]
+  const why = later.woke && WHY[later.woke.by]
   return (
     <Line
       words={`Woke at ${clock(at, now)}${why ? ` · ${why}` : ""}`}
@@ -124,7 +124,7 @@ function Line({
 }) {
   return (
     <Docked
-      label="Snooze"
+      label="Later"
       className="flex items-center gap-2 py-1.5 pr-1.5 pl-4"
     >
       <AlarmClockIcon className="size-3.75 shrink-0 text-muted-foreground" />

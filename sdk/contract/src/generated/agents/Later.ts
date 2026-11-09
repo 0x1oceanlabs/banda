@@ -10,9 +10,9 @@ import type { WokeSeen } from "./WokeSeen";
  * comes, unless `woke` says what woke it first: a reader compares
  * `until` with now, and no fact says that the time came.
  */
-export type Snooze = { 
+export type Later = { 
 /**
- * When it was snoozed, in milliseconds since the epoch.
+ * When it was put off, in milliseconds since the epoch.
  */
 at: number, by: Participant, 
 /**
@@ -31,7 +31,7 @@ woke?: Woke,
 resume?: TurnId, 
 /**
  * What its Person has seen of it waking by itself (ADR 0074,
- * decisions 3 and 7; ADR 0096): kept here, beside the snooze, so
+ * decisions 3 and 7; ADR 0096): kept here, beside the Later, so
  * every window and machine reads the same.
  */
 woke_seen?: WokeSeen, };

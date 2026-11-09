@@ -69,9 +69,9 @@ import {
 } from "../registry"
 import { Edge } from "../sidebar/Edge"
 import { Sidebar } from "../sidebar/Sidebar"
-import { SnoozePicker } from "../sidebar/Snoozing"
+import { LaterPicker } from "../sidebar/LaterPicker"
 import { QuitDialog } from "./Quit"
-import { useSnoozesAt } from "../sidebar/snoozed"
+import { useLatersAt } from "../sidebar/later"
 import { useWokeNote } from "../calls/woke"
 import { paneRowsOf } from "../sidebar/items"
 import { attachTo, focusedOn } from "./attach"
@@ -250,12 +250,12 @@ export function Shell({
   // What the Apps list and what calls the Person, for the Marks, the
   // rings and Alt+U, kept outside React: a list that changes draws again
   // only what reads it (ADR 0088, decision 7). The notifications module
-  // tells of what calls (ADR 0056, decision 1). Snoozes are read by a
+  // tells of what calls (ADR 0056, decision 1). Laters are read by a
   // clock that moves as the next one wakes (ADR 0074): a Thread that
   // sleeps calls no one, and calls again as it wakes.
   const [stores] = useState(newStores)
   useEffect(() => followCalls(stores), [stores])
-  const snoozes = useSnoozesAt(useStore(stores.calls, nowOf))
+  const laters = useLatersAt(useStore(stores.calls, nowOf))
   const orderNow = useOrderNow()
   // What the Tiling reads of them, the same for the Window's life.
   const [shows] = useState(() => tilingShows(stores, showsOf))
@@ -540,7 +540,7 @@ export function Shell({
     // Alt+U: the next call below the Thread in front, as the sidebar lists
     // them, another machine's among this one's (ADR 0079, decision 4), picked.
     answer: () => {
-      const keys = keysOf(orderNow(stores.items.get(), projects, snoozes))
+      const keys = keysOf(orderNow(stores.items.get(), projects, laters))
       const { pane } = here.get()
       const at = pane?.subject ? `${pane.project}:${pane.subject}` : undefined
       const call = nextCall(stores.calls.get().list, keys, at)
@@ -893,7 +893,7 @@ export function Shell({
                   />
                 )}
                 <Toaster />
-                <SnoozePicker />
+                <LaterPicker />
                 <QuitDialog
                   working={quitting}
                   onQuit={device.quit}
@@ -906,7 +906,7 @@ export function Shell({
                   onAdded={added}
                   engine={engine}
                   modules={modules}
-                  snoozeNow={snoozes.now}
+                  laterClock={laters.now}
                   projects={menuProjects}
                   actions={keyed}
                   binds={binds}

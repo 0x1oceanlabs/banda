@@ -2,6 +2,6 @@
 import type { Wake } from "./Wake";
 
 /**
- * What woke a snoozed Thread before its time, and when.
+ * What woke a put-off Thread before its time, and when.
  */
 export type Woke = { at: number, by: Wake, };

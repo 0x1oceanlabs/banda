@@ -119,7 +119,7 @@ export const BandaMenu = memo(function BandaMenu({
   onAdded,
   engine,
   modules,
-  snoozeNow,
+  laterClock,
   projects,
   actions,
   binds,
@@ -134,8 +134,8 @@ export const BandaMenu = memo(function BandaMenu({
   engine: Engine
   /** The modules the engine runs: the sources of the others find nothing. */
   modules: readonly string[]
-  /** The clock a Thread's snooze is read by (ADR 0074): the window's. */
-  snoozeNow: number
+  /** The clock a Thread's Later is read by (ADR 0074): the window's. */
+  laterClock: number
   projects: readonly ProjectSummary[]
   actions: readonly Action<Shell>[]
   /** The Person's keys in force, from keys.toml. */
@@ -234,7 +234,7 @@ export const BandaMenu = memo(function BandaMenu({
               key={opening.n}
               engine={engine}
               opening={opening}
-              snoozeNow={snoozeNow}
+              laterClock={laterClock}
               projects={projects}
               actions={actions}
               binds={binds}
@@ -319,7 +319,7 @@ const NOWHERE: Looking = { words: "" }
 function Menu({
   engine,
   opening,
-  snoozeNow,
+  laterClock,
   projects,
   actions,
   binds,
@@ -331,7 +331,7 @@ function Menu({
 }: {
   engine: Engine
   opening: Opening
-  snoozeNow: number
+  laterClock: number
   projects: readonly ProjectSummary[]
   actions: readonly Action<Shell>[]
   /** The Person's keys in force, from keys.toml. */
@@ -389,7 +389,7 @@ function Menu({
       actions,
       presets: { names: presets.map((one) => one.name), current: preset },
       archived,
-      now: snoozeNow,
+      now: laterClock,
       items: itemActionsOf,
       found: machines ? [...found, machines] : found,
       weight: (id) => weightOf(uses[id], now),
@@ -402,7 +402,7 @@ function Menu({
       presets,
       preset,
       archived,
-      snoozeNow,
+      laterClock,
       found,
       machines,
       uses,

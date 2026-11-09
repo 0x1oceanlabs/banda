@@ -33,7 +33,7 @@ working here keeps.
 - `entries/` and `lines/` import no `@banda/ui/pane`, no `ThreadPane`
   and no `thread/Thread`, and read no `window.banda`. A helper an entry
   needs from those goes in `@banda/ui/lib`, as `sleeps` did
-  (`lib/snooze.ts`). `architecture.test.ts` holds this.
+  (`lib/later.ts`). `architecture.test.ts` holds this.
 - Views draw from `@banda/ui`'s components with the look's values only
   (ADR 0058, ADR 0080). They add no radius, size or colour of their own.
 

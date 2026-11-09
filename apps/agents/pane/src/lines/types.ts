@@ -1,6 +1,6 @@
 /** What every line's view is given (ADR 0091, decision 3). */
 import type { ComponentType } from "react"
-import type { Item, Snooze, TurnState } from "@banda/contract/agents"
+import type { Item, Later, TurnState } from "@banda/contract/agents"
 import type { EntryFacts } from "../entries/types"
 import type { Line } from "../thread/timeline"
 
@@ -19,8 +19,8 @@ export type LineFacts = {
   harness: string
   /** Whether a command is on its way. */
   answering: boolean
-  /** The Thread's snooze, if it sleeps. */
-  snooze?: Snooze
+  /** The Thread's Later, if it sleeps. */
+  later?: Later
 }
 
 export type LineProps<K extends Line["kind"]> = {

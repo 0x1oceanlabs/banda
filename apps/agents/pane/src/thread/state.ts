@@ -333,8 +333,8 @@ function project(state: ThreadState, event: Event): ThreadState {
     }
     case "thread.held":
       return { ...next, held: fact.payload.held }
-    // A Thread's snooze is the list's for now (ADR 0074).
-    case "thread.snoozed":
+    // A Thread's Later is the list's for now (ADR 0074).
+    case "thread.later":
     case "thread.woke":
     case "thread.woke_seen":
     case "thread.seen":
@@ -546,7 +546,7 @@ export type Said = Item & { body: Extract<Body, { kind: "message" }> }
 export type Listing = {
   threads: ReadonlyMap<string, ListedThread>
   self?: string
-  /** This Thread, as the list has it: its snooze, for one (ADR 0074). */
+  /** This Thread, as the list has it: its Later, for one (ADR 0074). */
   own?: ListedThread
 }
 

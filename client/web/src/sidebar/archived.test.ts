@@ -14,11 +14,9 @@ const listed = (mark: MarkState, more: Partial<Listed> = {}): Listed => ({
 
 test("a Thread is archived as its App lists it from its host, and nothing else archives it", () => {
   expect(isArchived(listed("rest", { archived: true }))).toBe(true)
-  // Quiet for days, or snoozed: only its host's mark archives it.
+  // Quiet for days, or put off: only its host's mark archives it.
   expect(isArchived(listed("rest", { changed: 0 }))).toBe(false)
-  expect(isArchived(listed("done", { snooze: { at: 0, until: 9 } }))).toBe(
-    false
-  )
+  expect(isArchived(listed("done", { later: { at: 0, until: 9 } }))).toBe(false)
 })
 
 test("work going on, or a question, cannot be archived", () => {

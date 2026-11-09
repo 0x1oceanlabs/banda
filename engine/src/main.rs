@@ -154,7 +154,7 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// Snoozes a Thread, or wakes it (ADR 0074): snoozed, it leaves its
+    /// Puts a Thread off, or wakes it (ADR 0074): put off, it leaves its
     /// Person's list until then.
     Thread {
         #[command(subcommand)]
@@ -313,10 +313,11 @@ enum ProjectCommand {
 
 #[derive(Subcommand)]
 enum ThreadCommand {
-    /// Snoozes a Thread for a while, or until a moment; with neither, a
+    /// Puts a Thread off for a while, or until a moment; with neither, a
     /// Thread at work until its turn ends. Anything that needs its Person
     /// wakes it early. In a Thread, an Agent's own is the default.
-    Snooze {
+    #[command(alias = "snooze")]
+    Later {
         /// The Thread's ID; an Agent's own Thread when left out.
         thread: Option<String>,
         /// Its Project; `$BANDA_PROJECT` when left out, as in a Thread.
@@ -329,7 +330,7 @@ enum ThreadCommand {
         #[arg(long)]
         until: Option<i64>,
     },
-    /// Wakes a snoozed Thread now; one awake stays so. In a Thread, an
+    /// Wakes a put-off Thread now; one awake stays so. In a Thread, an
     /// Agent's own is the default.
     Wake {
         /// The Thread's ID; an Agent's own Thread when left out.
@@ -712,14 +713,14 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
         Command::Machine { json } => machine(&places, json).await,
         Command::Thread { what } => {
             let (method, project, params) = match what {
-                ThreadCommand::Snooze {
+                ThreadCommand::Later {
                     thread,
                     project,
                     after,
                     until,
                 } => {
                     let params = json!({ "thread": thread, "after": after, "until": until });
-                    ("agents.snooze", project, params)
+                    ("agents.later", project, params)
                 }
                 ThreadCommand::Wake { thread, project } => {
                     ("agents.wake", project, json!({ "thread": thread }))

@@ -352,19 +352,19 @@ describe("its branches and acts", () => {
     ])
   })
 
-  test("Tab on a Thread opens it, beside, snoozes or archives it", () => {
+  test("Tab on a Thread opens it, beside, puts it off or archives it", () => {
     const [t3, t2] = menuOf({ words: "", at: "root", sources })[0].rows
     expect(actsOf(t2, sources).map((act) => act.title)).toEqual([
       "Open",
       "Open beside",
-      "Snooze…",
+      "Later…",
       "Archive thread",
     ])
     expect(actsOf(t3, sources).at(-1)?.title).toBe("Unarchive thread")
     if (t2.kind !== "thread") throw new Error("not a Thread")
     const sleeping = {
       ...t2,
-      listed: { ...t2.listed, snooze: { at: 1, until: 20 } },
+      listed: { ...t2.listed, later: { at: 1, until: 20 } },
     }
     const [, , wake] = actsOf(sleeping, sources)
     expect(wake.title, "one that sleeps").toBe("Wake now")
