@@ -40,6 +40,7 @@ import { columnsOf } from "./look"
 import { modules } from "./modules"
 import { keepProblem } from "./problems/keep"
 import { settingsPane } from "./settings/pane"
+import { countsWidget } from "./sidebar/Counts"
 import type { Entry, Width } from "./tiling/model"
 import { tilingWidgets } from "./tiling/widgets"
 
@@ -81,8 +82,8 @@ const opening = (id: string, title: string, shift: boolean) =>
 
 /** The window's own things, as a module of their own: the launcher, its
  * letters, the settings and their search (ADR 0016), another machine's
- * name in a Pane's header (ADR 0095, decision 7), and the Tiling's widgets
- * on the Bar (ADR 0087, decision 5). */
+ * name in a Pane's header (ADR 0095, decision 7), and on the Bar the
+ * sidebar list's counts and the Tiling's widgets (ADR 0087, decision 5). */
 export const windowModule = defineModule({
   id: "window",
   engine: false,
@@ -99,7 +100,7 @@ export const windowModule = defineModule({
   ],
   scopes: [LAUNCHER, SETTINGS],
   slots: [machineHeader],
-  bar: tilingWidgets,
+  bar: [countsWidget, ...tilingWidgets],
 })
 
 const all: readonly Module[] = [windowModule, ...modules]

@@ -363,7 +363,8 @@ test("only the Window gives run to what it draws", () => {
 
 /**
  * What the sidebar list's components take as code, not data, by file and
- * component (`functionProps`, ADR 0087, B4e). The rest it does by the
+ * component (`functionProps`, ADR 0087, B4e), its counts on the Bar's too
+ * (B4f), which go to a Thread as a row does. The rest it does by the
  * actions' ids, as their keys would (`useRun`): opening a Pane, a New
  * Thread, the menu, the settings and a Project's verbs. What stays is the
  * Window's area (`onDismiss`), which Pane has the focus (`isCurrent`,
@@ -374,6 +375,7 @@ test("only the Window gives run to what it draws", () => {
  * and none holds a Project's or a Thread's verb.
  */
 const SIDEBAR_CODE: Record<string, Record<string, string[]>> = {
+  "web/src/sidebar/Counts.tsx": {},
   "web/src/sidebar/Row.tsx": {},
   "web/src/sidebar/Sidebar.tsx": {
     Sidebar: ["onDismiss", "isCurrent"],
@@ -511,7 +513,7 @@ test("a string that no longer names an App leaves the list", () => {
  * lowers it; the room lets PRs in flight that each cut a few lines leave
  * it alone.
  */
-const WINDOW_LINES = 991
+const WINDOW_LINES = 967
 const SLACK = 20
 
 test("the Window's root keeps under its ceiling, and the ceiling follows it down", () => {
@@ -532,7 +534,8 @@ test("the Window's root keeps under its ceiling, and the ceiling follows it down
  * says. Their props stay steady too, which the motion numbers hold: the
  * Tiles React draws again for a key (motion.spec.ts). The list only
  * grows, but where a part comes to be memoized by a line already on it:
- * the window's own widgets stand in the registry's, as the modules' do.
+ * the window's own widgets, the counts and the Tiling's, stand in the
+ * registry's, as the modules' do (ADR 0087, B4f).
  */
 const MEMOIZED = [
   "web/src/tiling/PaneFrame.tsx: export const PaneFrame = memo(",
@@ -540,7 +543,6 @@ const MEMOIZED = [
   "web/src/bar/Watches.tsx: export const Watches = memo(",
   "web/src/menu/BandaMenu.tsx: export const BandaMenu = memo(",
   "web/src/window/Drawer.tsx: export const Drawer = memo(",
-  'web/src/bar/Widgets.tsx: "sidebar.counts": memo(Counts)',
   "web/src/registry.tsx: { widget: { ...widget, Widget: memo(widget.Widget) }, module }",
   "web/src/registry.tsx: { kind: { ...kind, Pane: memo(kind.Pane) }, module }",
 ]
@@ -552,9 +554,9 @@ test("the parts the Window draws on every move stay memoized", () => {
     return !text.includes(each.slice(at + 2))
   })
   expect(lost).toEqual([])
-  // The window's own widgets, the Tiling's, the registry memoizes as a
-  // module's, by its line above.
-  for (const id of ["workspaces.list", "workspaces.aside"])
+  // The window's own widgets the registry memoizes as a module's, by its
+  // line above.
+  for (const id of ["sidebar.counts", "workspaces.list", "workspaces.aside"])
     expect(widgets.get(id)?.module, id).toBe(windowModule)
 })
 
@@ -567,6 +569,29 @@ test("only the Window hands the Tiling's widgets what they read of it", () => {
     .filter((file) => /<TilingBar\b/.test(readFileSync(file, "utf8")))
     .map((file) => relative(app, file))
   expect(giving).toEqual(["web/src/window/Shell.tsx"])
+})
+
+/**
+ * Every widget on the Bar is given the same, the window's own as a
+ * module's (ADR 0087, B4f): the engine and the Projects. Where the Person
+ * is it reads from Here, and it acts by an action's id (`useRun`), so no
+ * widget is handed the Window's run or its state as props, and none takes
+ * a type of props of the window's own beside them.
+ */
+test("every widget on the Bar is given the engine and the Projects, and no more", () => {
+  const props = readFileSync(join(app, "ui/src/module.ts"), "utf8").match(
+    /export type WidgetProps = \{\n([\s\S]*?)\n\}/
+  )
+  expect(props).not.toBeNull()
+  const fields = [...props![1].matchAll(/^ {2}(\w+)\??:/gm)].map(
+    (found) => found[1]
+  )
+  expect(fields).toEqual(["engine", "projects"])
+  const naming = pageCode
+    .flatMap((folder) => sources(folder, { tests: false }))
+    .filter((file) => /\bOwnProps\b/.test(readFileSync(file, "utf8")))
+    .map((file) => relative(root, file))
+  expect(naming).toEqual([])
 })
 
 /** The `[unstable]` marks a module's manifest names. */

@@ -616,17 +616,11 @@ export function Shell({
   // The keys run the actions, before any Pane hears them (keys.ts).
   useKeyRouter(parts, keyed, mod)
   // A row of the menu opens its Pane, where a workspace shows it or in a
-  // new column; one of the sidebar or the counts list goes to it, as
-  // `pane.pick` does; a Project gets a new Thread.
+  // new column; a Project gets a new Thread.
   const openPane = useCallback(
     (project: ProjectId, pane: PaneState) =>
       change((w) => opening(w, project, pane, { place: "right" })),
     [change]
-  )
-  const pickPane = useCallback(
-    (project: ProjectId, pane: PaneState) =>
-      parts.run("pane.pick", { project, pane }),
-    [parts]
   )
   // Pinned, the drawer's Thread is a column of the workspace on screen.
   const pinDrawer = useCallback(() => {
@@ -674,27 +668,9 @@ export function Shell({
     flowWas.current = flow
   }, [flow, change])
   // The bar's widgets, the window's own and the modules', where the
-  // look's `[bar]` puts them (ADR 0024); the thing the Pane in front
-  // shows, whose Agent's Thread the bar names with the sidebar hidden (ADR
-  // 0065, decision 9), the same object while it stays in front.
-  const aheadEntry = focused(workspaces)
-  const aheadProject = aheadEntry?.project
-  const aheadThing = aheadEntry && showsOf(aheadEntry.pane)
-  const ahead = useMemo(
-    () =>
-      aheadProject && aheadThing
-        ? { project: aheadProject, thing: aheadThing }
-        : undefined,
-    [aheadProject, aheadThing]
-  )
-  const bar = useWidgets(modules, {
-    engine,
-    projects,
-    window: api,
-    sidebarShown,
-    ahead,
-    onOpen: pickPane,
-  })
+  // look's `[bar]` puts them (ADR 0024). Where the Person is they read
+  // from Here, so a move of the focus draws only those it concerns.
+  const bar = useWidgets(modules, { engine, projects })
   // A widget moved with the mod writes the parts of `[bar]` it changed, one
   // after another, as they are one file (ADR 0064).
   const arrangeBar = useCallback(
