@@ -186,7 +186,7 @@ export type Actions = { actions: Action[] }
 /**
  * The browser's part of the desktop bridge, on `window.banda.browser`
  * (ADR 0028). The window's table takes it in, which names its leaves
- * (client/web/src/host.ts).
+ * (client/desktop/src/bridge.ts).
  */
 export const BROWSER_BRIDGE = {
   /** Writes where the tabs are into `browser.toml`; the look brings it back. */

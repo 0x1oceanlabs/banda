@@ -5,15 +5,9 @@
  * module's engine part offers, its `methods!` table says.
  */
 import type { ComponentType, ReactNode } from "react"
-import type {
-  Engine,
-  JsonValue,
-  ProjectId,
-  ProjectSummary,
-} from "@banda/contract"
-import type { HereStore } from "./here"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import type { Args, HereStore, Readable } from "@banda/core"
 import type { Key } from "./lib/keys"
-import type { Readable } from "./lib/store"
 import { ZOOM_KEYS, zoomId } from "./lib/zoom"
 import type { Notify } from "@banda/contract/look"
 import type { Listed, Lists, PaneKind, PaneState, Watch } from "./pane"
@@ -61,9 +55,9 @@ export type Chip = {
 }
 
 /** A Pane's args, and what an action is run with besides the window: the
- * Banda menu's words, a Project. Plain data, as `keys.toml` and the CLI will
- * give it. */
-export type Args = { [key: string]: JsonValue }
+ * core's (ADR 0089), named here too for the modules that take it from
+ * here, until L3 splits this package. */
+export type { Args }
 
 /** What a registry holds of a kind of Pane: its args' type forgotten. */
 export type AnyPaneKind = PaneKind<Args>

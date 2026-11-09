@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client"
 import { Engine } from "@banda/contract"
 import "@banda/ui/globals.css"
 import { HostsContext, KeptHosts } from "./calls/hosts"
-import { poppedOf } from "./host"
+import { poppedOf } from "@banda/core"
 import { moveEnterKey } from "./enter-key"
 import { followAccent } from "./accent"
 import { followFrame } from "./frame"
@@ -13,7 +13,7 @@ import { followLook } from "./look"
 import { keepProblem, watchProblems } from "./problems/keep"
 import { type Broke, BrokeCard } from "./safe/Broke"
 import { OFFER_AFTER, starting } from "./safe/starts"
-import { device } from "./window/device"
+import { device } from "./boot"
 
 const host = window.banda
 // The look the desktop reads (ADR 0007), else the system's light or dark.

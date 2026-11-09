@@ -32,6 +32,10 @@ function placesOnly(): Plugin {
 export default defineConfig({
   base: "./",
   plugins: [react(), tailwindcss(), placesOnly()],
+  // One React for the page, whichever package asks for it: `@banda/core`
+  // has it as a peer, and a second copy would give each its own contexts
+  // and hooks (ADR 0089).
+  resolve: { dedupe: ["react", "react-dom"] },
   // The page loads from disk, so one large chunk costs nothing to fetch.
   build: {
     target: "es2023",

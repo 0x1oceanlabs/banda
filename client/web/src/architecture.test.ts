@@ -33,9 +33,9 @@
  *   list sorts by it.
  * - The calls part reads no page, and of the Tiling only its model (ADR
  *   0087, decision 9).
- * - The Window and the Tiling reach the desktop only through the Window's
- *   device part (ADR 0089, decision 2): what else in the page reads the
- *   desktop's bridge is listed, and the list only falls.
+ * - The Window and the Tiling reach the desktop only through the device's
+ *   adapter, `boot/desktop.ts` (ADR 0089, decision 2): what else in the
+ *   page reads the desktop's bridge is listed, and the list only falls.
  * - Only the Window keeps Here (ADR 0087, decision 4): one place gives it
  *   to what the Window draws, and only the Window gives the `run` its parts
  *   run an action by. Where the Person looks is the calls part's to work
@@ -115,10 +115,10 @@ const STILL: Record<string, string> = {
 const NAMING = [
   "web/src/modules.ts",
   "desktop/src/modules.ts",
-  "web/src/host.ts",
+  "desktop/src/bridge.ts",
 ]
 
-const reaching = ["web/src", "desktop/src"]
+const reaching = ["web/src", "desktop/src", "core/src"]
   .flatMap((folder) => sources(join(app, folder)))
   .filter((file) => file !== import.meta.filename)
   .filter((file) => imports(readFileSync(file, "utf8")).some(reachesModule))
@@ -149,7 +149,7 @@ const TILING_STILL: Record<string, string[]> = {
 }
 
 test("the Tiling imports no more of the Window than the list holds", () => {
-  const outside = /^\.\.\/(window|bar|sidebar|titles|menu)(\/|$)/
+  const outside = /^\.\.\/(window|bar|sidebar|titles|menu|boot)(\/|$)/
   const imported = Object.fromEntries(
     sources(join(app, "web/src/tiling")).flatMap((file) => {
       const names = imports(readFileSync(file, "utf8")).filter((name) =>
@@ -261,15 +261,16 @@ test("the calls part reads no layout, and of the Tiling only its model", () => {
 /**
  * Where the page reads the desktop's bridge, `window.banda`, by file from
  * the repository's root, with how many places (`desktopReads`): this
- * page's code, `@banda/ui`'s and each module's Pane part. The Window and
- * the Tiling read it only in the Window's device part (B4b); the rest are
- * listed here until W0's device port takes them, and at last only its
- * desktop adapter, `boot/desktop.ts`, reads it (ADR 0089, decisions 2 and
- * 11). `hostOf` in `@banda/ui/desktop` is one place: the Pane parts that
- * reach their part of the bridge through it are counted there. None joins
- * the list, and a place that goes leaves it.
+ * page's code, the core's, `@banda/ui`'s and each module's Pane part. The
+ * Window and the Tiling read it only through the device's desktop
+ * adapter, `boot/desktop.ts` (B4b, W0a1); the rest are listed here until
+ * the device port takes them, and at last only the adapter reads it (ADR
+ * 0089, decisions 2 and 11). `hostOf` in `@banda/ui/desktop` is one
+ * place: the Pane parts that reach their part of the bridge through it
+ * are counted there. None joins the list, and a place that goes leaves
+ * it.
  */
-const DEVICE = "client/web/src/window/device.ts"
+const DEVICE = "client/web/src/boot/desktop.ts"
 const DESKTOP_READS: Record<string, number> = {
   "apps/browser/pane/src/host.ts": 1,
   "client/ui/src/desktop.ts": 1,
@@ -296,6 +297,7 @@ const DESKTOP_READS: Record<string, number> = {
 
 const pageCode = [
   join(app, "web/src"),
+  join(app, "core/src"),
   join(app, "ui/src"),
   ...[...folders.values()]
     .map((folder) => join(folder, "pane/src"))
@@ -313,7 +315,7 @@ const { [DEVICE]: device, ...reading } = Object.fromEntries(
 
 test("the Window and the Tiling read the desktop's bridge only in their device part", () => {
   expect(device).toBeGreaterThan(0)
-  const ours = /^client\/web\/src\/(window|tiling)\//
+  const ours = /^client\/web\/src\/(window|tiling|boot)\//
   expect(Object.keys(reading).filter((file) => ours.test(file))).toEqual([])
 })
 
@@ -490,7 +492,12 @@ const APP_STRINGS = [
   "web/src/window/actions.ts: AGENTS_FILE",
 ]
 
-const saying = ["web/src/window", "web/src/tiling", "web/src/sidebar"]
+const saying = [
+  "web/src/window",
+  "web/src/tiling",
+  "web/src/sidebar",
+  "web/src/boot",
+]
   .flatMap((folder) => sources(join(app, folder), { tests: false }))
   .flatMap((file) =>
     appStrings(readFileSync(file, "utf8"), file).map(
@@ -659,7 +666,9 @@ const LAYOUT_MOTION = [
 /** The window's own code and the Panes', with their stylesheets; not
  * what only tests use. */
 const drawing = [
-  ...["web/src", "ui/src", "ghostty/src"].map((folder) => join(app, folder)),
+  ...["web/src", "core/src", "ui/src", "ghostty/src"].map((folder) =>
+    join(app, folder)
+  ),
   ...[...folders.values()]
     .map((folder) => join(folder, "pane/src"))
     .filter((folder) => existsSync(folder)),
@@ -1193,8 +1202,8 @@ test("the Window finds an item action by what it does no more than the list hold
 
 /**
  * The Window's stores kept in a module, not one per Window (#863): what
- * an unlisted action sets and a part of the Window draws. None joins the
- * list, and one that goes leaves it.
+ * an unlisted action sets and a part of the Window draws. The core keeps
+ * none (ADR 0089). None joins the list, and one that goes leaves it.
  */
 const MODULE_STORES = [
   "web/src/sidebar/Snoozing.tsx: picking",
@@ -1203,11 +1212,13 @@ const MODULE_STORES = [
 
 test("the Window keeps no more stores in a module than the list holds", () => {
   const store = /^(?:export )?const (\w+) = new Store\b/gm
-  const kept = sources(join(app, "web/src"), { tests: false }).flatMap((file) =>
-    [...readFileSync(file, "utf8").matchAll(store)].map(
-      ([, name]) => `${relative(app, file)}: ${name}`
+  const kept = ["web/src", "core/src"]
+    .flatMap((folder) => sources(join(app, folder), { tests: false }))
+    .flatMap((file) =>
+      [...readFileSync(file, "utf8").matchAll(store)].map(
+        ([, name]) => `${relative(app, file)}: ${name}`
+      )
     )
-  )
   expect(kept.sort()).toEqual(MODULE_STORES)
 })
 

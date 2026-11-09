@@ -4,7 +4,8 @@
  * accent is this variable, so its focus, rings and buttons take the
  * Person's colour; without one, globals.css gives Apple's blue.
  */
-import { follow, type Host } from "./host"
+import { follow } from "@banda/core"
+import type { Host } from "@banda/desktop/bridge"
 
 export function followAccent(host: Host | undefined): void {
   if (!host) return

@@ -2,7 +2,7 @@
  * The desktop bridge (ADR 0028) as a Pane reaches it, typed (ADR 0073,
  * decision 14). `FILES_BRIDGE` is the part any Pane may use, whichever
  * module it is: the files on the machine. The window's table takes it in
- * under `files` (client/web/src/host.ts), and main answers it. A module
+ * under `files` (client/desktop/src/bridge.ts), and main answers it. A module
  * reaches its own part with `hostOf`. Neither is there outside Banda's
  * desktop window: in the browser build and in tests.
  */

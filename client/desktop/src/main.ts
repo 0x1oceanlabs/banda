@@ -56,11 +56,11 @@ import {
   Window,
 } from "@banda/desktop-kit"
 import {
-  BRIDGE,
   type PoppedAsk as PoppedAskValue,
   poppedOf,
   poppedRoute,
-} from "@banda/web/host"
+} from "@banda/core"
+import { BRIDGE } from "./bridge"
 import { openDoor } from "./door"
 import { engineLayer, Stop } from "./engine"
 import { loginPath } from "./login"

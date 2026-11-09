@@ -4,7 +4,8 @@
  * `--frame-inset` is the room the system's window buttons take at the
  * bar's start (`frame:` in globals.css).
  */
-import { follow, type Host } from "./host"
+import { follow } from "@banda/core"
+import type { Host } from "@banda/desktop/bridge"
 
 export function followFrame(host: Host | undefined): void {
   if (!host) return

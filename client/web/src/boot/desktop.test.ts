@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest"
-import { device } from "./device"
+import { device } from "./desktop"
 
 afterEach(() => vi.unstubAllGlobals())
 

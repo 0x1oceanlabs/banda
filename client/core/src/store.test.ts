@@ -1,6 +1,5 @@
-import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test, vi } from "vitest"
-import { sameEach, Store, useStore } from "./store"
+import { sameEach, Store } from "./store"
 
 test("a store tells its listeners of a new value, and of none it already holds", () => {
   const store = new Store({ n: 1 })
@@ -39,12 +38,4 @@ test("two lists are the same when each holds the same objects in order", () => {
   expect(sameEach([a], [a, b])).toBe(false)
   expect(sameEach([a], [{ id: "a" }])).toBe(false)
   expect(sameEach([undefined, NaN], [undefined, NaN])).toBe(true)
-})
-
-test("a reader drawn to text reads what the store holds now", () => {
-  const store = new Store({ count: 3, other: "x" })
-  function Count() {
-    return <>{useStore(store, (value) => value.count)}</>
-  }
-  expect(renderToStaticMarkup(<Count />)).toBe("3")
 })

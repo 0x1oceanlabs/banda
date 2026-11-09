@@ -31,7 +31,7 @@ import { DEFAULT_SIDEBAR, type Sidebar } from "@banda/contract/sidebar"
 import { currentLook, takeLook, useLook } from "@banda/ui/lib/look"
 import { DEFAULT_SOUND, type SoundSettings } from "@banda/ui/sound"
 import { DEFAULT_NOTIFY } from "./calls/settings"
-import type { Host } from "./host"
+import type { Host } from "@banda/desktop/bridge"
 
 // Outside a window, as in tests, nothing is asked of the system.
 const ask = (query: string) =>
