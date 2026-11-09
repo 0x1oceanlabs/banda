@@ -8,13 +8,16 @@ use std::path::{Path, PathBuf};
 fn main() {
     println!("cargo::rerun-if-env-changed=BANDA_CHANNEL");
     let channel = std::env::var("BANDA_CHANNEL").unwrap_or_default();
-    let folder = match channel.as_str() {
-        "stable" => "banda",
-        "dev" => "banda-dev",
-        "" | "local" => "banda-local",
+    // The app's bundle ID beside it, as the window's channel.ts names it:
+    // macOS knows Banda's launchd job by it (src/service/launchd.rs).
+    let (folder, app_id) = match channel.as_str() {
+        "stable" => ("banda", "so.banda.app"),
+        "dev" => ("banda-dev", "so.banda.dev"),
+        "" | "local" => ("banda-local", "so.banda.local"),
         other => panic!("BANDA_CHANNEL is stable, dev or local, not {other:?}."),
     };
     println!("cargo::rustc-env=BANDA_FOLDER={folder}");
+    println!("cargo::rustc-env=BANDA_APP_ID={app_id}");
 
     // Its version (decision 2): 0.X.Y or 0.X.Y-dev.N, or the workspace's.
     println!("cargo::rerun-if-env-changed=BANDA_VERSION");

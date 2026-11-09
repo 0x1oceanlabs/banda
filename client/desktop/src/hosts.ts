@@ -11,9 +11,9 @@
  * - the follower runs `banda start --with-parent` there, which starts that
  *   machine's engine when it does not run and prints where it listens, as
  *   the window's own does here (engine.ts), then follows it. On a Mac,
- *   whose engine is its window's child until its launchd agent (ADR 0086,
- *   plan step 7), it starts none: it follows the one Banda's window runs
- *   there, and while none is open the host is away;
+ *   until it may start the Mac's launchd job over ssh (ADR 0086, plan step
+ *   7c), it starts none: it follows the engine that runs there, started
+ *   at login or by Banda there, and while none runs the host is away;
  * - the forward carries a port of this machine's loopback to the port
  *   that engine listens on, on that machine's loopback.
  *
@@ -582,10 +582,10 @@ const PLAIN_SSH = [
 
 /** What a shell exits with when it finds no program to run. */
 const NOT_FOUND = 127
-/** What `banda start --with-parent` exits with there while no Banda is
- * open on a machine whose engine is only its window's child, as a Mac's
- * (engine/src/control.rs): it starts none for this window, which tries
- * again as after any end. */
+/** What `banda start --with-parent` exits with there while no engine runs
+ * on a machine where it starts none for this window, as a Mac until plan
+ * step 7c (engine/src/control.rs): the window tries again as after any
+ * end. */
 const NOT_OPEN = 75
 
 /** This build's names, which the follower looks for there: its program
@@ -1625,13 +1625,13 @@ const sshEnded = (host: Entry, code: number) =>
       : undefined
 
 /** How the follower's end leaves the host: code 0 is its engine stopped
- * as asked, 255 ssh's own failure, 127 no `banda` there, 75 no Banda open
- * there, none a signal. */
+ * as asked, 255 ssh's own failure, 127 no `banda` there, 75 no engine
+ * running there, none a signal. */
 function endOf(host: Entry, code: number): Ended {
   if (code === 0) return { state: "stopped" }
   const ssh = sshEnded(host, code)
   if (ssh) return away(ssh)
-  if (code === NOT_OPEN) return away(`${channel.name} is not open there`)
+  if (code === NOT_OPEN) return away(`${channel.name} is not running there`)
   if (code === NOT_FOUND) return { state: "refused", why: notFound(host) }
   return away(`the link to ${host.ssh} ended (code ${code})`)
 }

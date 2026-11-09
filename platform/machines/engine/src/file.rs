@@ -1,9 +1,9 @@
-//! `machine.toml`: this machine's name and icon (ADR 0095, decision 2).
-//! It is a file of the host's (ADR 0081, decision 12): only this machine
-//! reads it, and a window elsewhere changes it through this machine's
-//! engine. The settings know it
-//! as every file (ADR 0016): its schema, the text it starts as, and its
-//! check; this says what it makes of what Banda found.
+//! `machine.toml`: this machine's name and icon (ADR 0095, decision 2),
+//! and whether Banda starts at login here (ADR 0086, decision 1). It is
+//! a file of the host's (ADR 0081, decision 12): only this machine reads
+//! it, and a window elsewhere changes it through this machine's engine.
+//! The settings know it as every file (ADR 0016): its schema, the text it
+//! starts as, and its check; this says what it makes of what Banda found.
 
 use banda_kernel::{MachineIcon, NAME_MOST, Named};
 use banda_look::{Problem, SettingsFile};
@@ -19,10 +19,10 @@ pub const NAME: &str = "machine.toml";
 pub const FILE: SettingsFile = SettingsFile::new::<MachineFile>(NAME, template, check);
 
 /// This machine's name and icon, as every window shows it beside its
-/// Projects and Threads. Each key is optional: Banda finds what is left
-/// out.
+/// Projects and Threads, and whether Banda starts at login here. Each key
+/// is optional: Banda finds what is left out.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(crate) struct MachineFile {
     /// Its name, up to 16 characters. Left out or empty: its hostname, or
     /// a word for a hostname the system made up.
@@ -31,6 +31,19 @@ pub(crate) struct MachineFile {
     /// Its icon. Left out: what Banda finds the machine is, as a laptop by
     /// its battery.
     pub icon: Option<MachineIcon>,
+    /// Start Banda at login: its engine starts as you log in, so its
+    /// Agents and other machines find it running. Off, it starts as you
+    /// open Banda. On by default; macOS has it so far, Linux next.
+    pub start_at_login: Option<bool>,
+}
+
+/// What `machine.toml` says, over what Banda found.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Said {
+    /// The machine's name and icon.
+    pub named: Named,
+    /// Whether Banda starts at login: unless the file says it does not.
+    pub at_login: bool,
 }
 
 fn template() -> String {
@@ -79,10 +92,30 @@ pub(crate) fn held(path: &Path) -> Option<Vec<u8>> {
     }
 }
 
-/// The machine as `held`, the file at `path`, says, over what Banda
-/// `found`: with no file, or one that is not UTF-8, what was found. What
-/// is wrong in it goes to the log, as the look names it to the Person.
-pub(crate) fn named(path: &Path, held: Option<&[u8]>, found: &Named) -> Named {
+/// What `held`, the file at `path`, says, over what Banda `found`: with no
+/// file, or one that is not UTF-8, what was found, and Banda starting at
+/// login. What is wrong in it goes to the log, as the look names it to the
+/// Person.
+pub(crate) fn said(path: &Path, held: Option<&[u8]>, found: &Named) -> Said {
+    let file = logged(path, held);
+    let name = (file.name.as_deref().map(str::trim)).filter(|name| !name.is_empty());
+    Said {
+        named: Named {
+            name: name.map_or_else(|| found.name.clone(), str::to_owned),
+            icon: file.icon.unwrap_or(found.icon),
+        },
+        at_login: at_login(&file),
+    }
+}
+
+/// Whether Banda starts at login, as `file` says: unless it says not.
+pub(crate) fn at_login(file: &MachineFile) -> bool {
+    file.start_at_login.unwrap_or(true)
+}
+
+/// What `held`, the file at `path`, holds: nothing with no file, or one
+/// that is not UTF-8. What is wrong in it goes to the log.
+pub(crate) fn logged(path: &Path, held: Option<&[u8]>) -> MachineFile {
     let text = held.and_then(|held| {
         (std::str::from_utf8(held).inspect_err(|error| {
             tracing::warn!(%error, file = NAME, "not UTF-8: the machine is named as Banda found it");
@@ -94,11 +127,7 @@ pub(crate) fn named(path: &Path, held: Option<&[u8]>, found: &Named) -> Named {
     for problem in &problems {
         tracing::warn!(%problem, file = NAME);
     }
-    let name = (file.name.as_deref().map(str::trim)).filter(|name| !name.is_empty());
-    Named {
-        name: name.map_or_else(|| found.name.clone(), str::to_owned),
-        icon: file.icon.unwrap_or(found.icon),
-    }
+    file
 }
 
 #[cfg(test)]
@@ -110,6 +139,10 @@ mod tests {
             name: "arc".to_owned(),
             icon: MachineIcon::Server,
         }
+    }
+
+    fn named(path: &Path, held: Option<&[u8]>, found: &Named) -> Named {
+        said(path, held, found).named
     }
 
     fn read_text(text: &str) -> (Named, Vec<Problem>) {
@@ -179,6 +212,21 @@ mod tests {
     }
 
     #[test]
+    fn banda_starts_at_login_unless_the_file_says_it_does_not() {
+        let path = Path::new("/c/machine.toml");
+        let at_login = |text: &str| said(path, Some(text.as_bytes()), &found()).at_login;
+        assert!(said(path, None, &found()).at_login, "with no file");
+        assert!(at_login(&template()));
+        assert!(at_login("start-at-login = true\n"));
+        assert!(!at_login("start-at-login = false\n"));
+        assert!(!at_login("name = \"studio\"\nstart-at-login = false\n"));
+        // A file that does not read leaves it on.
+        assert!(at_login("start-at-login = \"no\"\n"));
+        let (_, problems) = read_text("start-at-login = \"no\"\n");
+        assert_eq!(problems.len(), 1, "{problems:?}");
+    }
+
+    #[test]
     fn its_schema_offers_the_ten_icons_and_bounds_the_name() {
         let schema = serde_json::to_value(FILE.schema()).unwrap();
         assert_eq!(schema["title"], NAME);
@@ -188,5 +236,12 @@ mod tests {
             assert!(icons.contains(&format!("\"{icon}\"")), "{icon}");
         }
         assert!(FILE.about().starts_with("This machine's name and icon"));
+        let login = &schema["properties"]["start-at-login"];
+        assert!(
+            login["description"]
+                .as_str()
+                .unwrap()
+                .starts_with("Start Banda at login")
+        );
     }
 }

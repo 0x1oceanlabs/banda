@@ -63,10 +63,15 @@ pub struct Running {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pid: Option<u32>,
     /// The systemd user unit it runs as, when it is the session's service
-    /// (ADR 0086, decision 1); none as a window's child, or a `banda
-    /// serve` in a shell, even one inside that unit (`service::own_unit`).
+    /// (ADR 0086, decision 1), or on macOS its launchd job's label; none
+    /// as a window's child, or a `banda serve` in a shell, even one inside
+    /// that unit (`service::own_unit`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unit: Option<String>,
+    /// Why it runs as the window's child where it is not the session's
+    /// service, as launchd or systemd did not start it, in plain words.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub child: Option<String>,
     /// The PID namespace its process runs in, by its inode: its `pid`
     /// names it only there.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -98,6 +103,10 @@ impl Running {
 /// config folder, a lock or a socket. The window names the same
 /// (`client/desktop/src/channel.ts`).
 pub const FOLDER: &str = env!("BANDA_FOLDER");
+
+/// The app's bundle ID on macOS, as the window's `channel.ts` names it:
+/// `so.banda.app`, `so.banda.dev` or `so.banda.local` (build.rs).
+pub const APP_ID: &str = env!("BANDA_APP_ID");
 
 /// Every Banda's folder: Stable's, Dev's and a checkout's. The fence hides
 /// them all (`fence.rs`), on Linux so far.

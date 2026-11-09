@@ -1143,7 +1143,7 @@ it.live(
 )
 
 it.live(
-  "with no Banda open on a Mac the host is away, never stopped, and is tried again until one is",
+  "with no engine running on a Mac the host is away, never stopped, and is tried again until one runs",
   () =>
     Effect.gen(function* () {
       const fake = fakeSsh({
@@ -1151,7 +1151,7 @@ it.live(
           // Open, then Quit there: its engine stopped as asked.
           [{ out: running("one", 1111) }, { until: "quit" }, { exit: 75 }],
           // Not open.
-          [{ err: "banda: Banda is not open here", exit: 75 }],
+          [{ err: "banda: Banda's engine is not running here", exit: 75 }],
           // Open again.
           [{ out: running("two", 2222) }],
         ],
@@ -1165,14 +1165,14 @@ it.live(
           name: "devbox",
           ...DEVBOX_AT,
           state: "away",
-          why: `${channel.name} is not open there`,
+          why: `${channel.name} is not running there`,
         })
         // No one asks: it comes back as Banda opens there.
         expect((yield* hosts.address("devbox")).secret).toBe("two")
         expect(fake.runs("follower")).toHaveLength(3)
         expect(seen.map((host) => host.state)).not.toContain("stopped")
         expect(logged).toContain(
-          `banda: devbox is away (${channel.name} is not open there); Banda tries again in 100 ms`
+          `banda: devbox is away (${channel.name} is not running there); Banda tries again in 100 ms`
         )
       }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
     }),

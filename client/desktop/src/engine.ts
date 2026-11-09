@@ -1,14 +1,15 @@
 /**
  * The engine, as the window reaches it: `banda start --with-parent`, run
  * on the window's `banda` (program.ts), a packed Banda's own copy (ADR
- * 0086). On Linux the engine is the session's service, which outlives the
- * window: that program starts it when it does not run, prints where it
- * listens, and follows it while the window is open; the window's end
- * leaves the engine running (decisions 1 and 3). Where the engine is the
- * window's child, as on macOS for now and for Banda Local, that program
- * is the engine, `serve --with-parent` (ADR 0020), and stops with the
- * window (child.ts); on macOS the app, and so the engine, stays as its
- * window closes (closing.ts).
+ * 0086). The engine is the session's service, which outlives the window:
+ * a systemd unit on Linux, a launchd job on macOS. That program starts it
+ * when it does not run, prints where it listens, and follows it while the
+ * window is open; the window's end, or the app's crash, leaves the engine
+ * running (decisions 1 and 3). Where the engine is the window's child, as
+ * for Banda Local, on Windows for now, and where systemd or launchd did
+ * not start it, that program is the engine, `serve --with-parent` (ADR
+ * 0020), and stops with the window (child.ts); on macOS the app stays as
+ * its window closes (closing.ts).
  *
  * The window learns the engine's address from the first line, and forgets
  * it while the engine is down. An engine that stops as asked, as Quit

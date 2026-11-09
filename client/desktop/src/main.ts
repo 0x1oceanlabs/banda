@@ -1,10 +1,11 @@
 /**
- * The desktop window. It reaches the engine, the session's service on
- * Linux, which it starts when it does not run, or else its child
- * (engine.ts, ADR 0086), serves the page from `app://banda` and hands the
- * page the engine's address. Closing it is not quitting Banda: the engine
- * and its Agents go on, and Quit Banda stops them; on macOS, where the
- * engine is still the app's child, closing it hides it (closing.ts). It also
+ * The desktop window. It reaches the engine, the session's service (a
+ * systemd unit on Linux, a launchd job on macOS), which it starts when it
+ * does not run, or else its child (engine.ts, ADR 0086), serves the page
+ * from `app://banda` and hands the page the engine's address. Closing it
+ * is not quitting Banda: the engine and its Agents go on, and Quit Banda
+ * stops them; on macOS, until Banda lives in the menu bar, closing it
+ * hides it (closing.ts). It also
  * runs `banda look --follow` and hands the page each look (ADR 0007),
  * writes the preset the page picks into `sidebar.toml` (ADR 0008), and
  * opens the system's folder picker for "Add Project" (ADR 0026), and a
@@ -654,8 +655,8 @@ async function ready(): Promise<void> {
   // macOS says it logs out, restarts or shuts down before it asks Banda
   // to quit (Electron's `shutdown`, on NSWorkspaceWillPowerOffNotification):
   // that quit goes through unasked, as nobody may be there to answer and
-  // macOS would give up waiting, and the engine, the app's child, stops
-  // with it. Only there: on Linux the event holds the session's shutdown
+  // macOS would give up waiting; the engine, a launchd job, stops as the
+  // session ends. Only there: on Linux the event holds the session's shutdown
   // for Banda (a logind delay lock).
   if (process.platform === "darwin")
     powerMonitor.on("shutdown", () => {
@@ -1049,9 +1050,9 @@ function macMenu(): Menu {
 // Closing the last window closes the window only: an engine that is the
 // session's service goes on, and its Agents with it (ADR 0086, decision
 // 3). One that is the window's child, as on Windows, on a Linux without
-// systemd and in Banda Local, stops with it. On macOS, where the engine
-// is still the app's child, the main window hides as it closes instead
-// (closing.ts), so this comes on Linux and Windows.
+// systemd and in Banda Local, stops with it. On macOS, until Banda lives
+// in the menu bar (plan step 7e), the main window hides as it closes
+// instead (closing.ts), so this comes on Linux and Windows.
 app.on("window-all-closed", () => app.quit())
 
 // On macOS a quit the app is asked for, by the app menu's or the Dock's

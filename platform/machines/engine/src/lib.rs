@@ -40,6 +40,8 @@ struct Held {
     config: PathBuf,
     found: Named,
     now: watch::Sender<Named>,
+    /// Whether Banda starts at login here, as the file says.
+    at_login: watch::Sender<bool>,
     /// The file as last read, none while it is not there: what it holds,
     /// not its time, tells a change, as the look's files do, so a change
     /// of another file of the folder logs nothing again.
@@ -53,11 +55,12 @@ impl Machine {
         let config = config.into();
         let path = config.join(file::NAME);
         let held = file::held(&path);
-        let named = file::named(&path, held.as_deref(), &found);
+        let said = file::said(&path, held.as_deref(), &found);
         Machine(Arc::new(Held {
             config,
             found,
-            now: watch::Sender::new(named),
+            now: watch::Sender::new(said.named),
+            at_login: watch::Sender::new(said.at_login),
             read: Mutex::new(held),
         }))
     }
@@ -66,6 +69,13 @@ impl Machine {
     /// engine's `welcome` says, and its `machine.named` streams.
     pub fn named(&self) -> watch::Receiver<Named> {
         self.0.now.subscribe()
+    }
+
+    /// Whether Banda starts at login on this machine, kept current: the
+    /// engine's launchd job keeps its plist where launchd loads it at
+    /// login, or not, as it changes (ADR 0086, decision 1).
+    pub fn starts_at_login(&self) -> watch::Receiver<bool> {
+        self.0.at_login.subscribe()
     }
 
     fn now(&self) -> Named {
@@ -81,14 +91,27 @@ impl Machine {
         if held == *read {
             return;
         }
-        let named = file::named(&path, held.as_deref(), &self.0.found);
+        let said = file::said(&path, held.as_deref(), &self.0.found);
         *read = held;
         self.0.now.send_if_modified(|now| {
-            let changed = *now != named;
-            *now = named;
+            let changed = *now != said.named;
+            *now = said.named;
+            changed
+        });
+        self.0.at_login.send_if_modified(|at_login| {
+            let changed = *at_login != said.at_login;
+            *at_login = said.at_login;
             changed
         });
     }
+}
+
+/// Whether Banda starts at login on this machine, as `machine.toml` in
+/// `config` says: unless it says it does not. For a client that starts
+/// the engine, which has no [`Machine`].
+pub fn starts_at_login(config: &std::path::Path) -> bool {
+    let path = config.join(file::NAME);
+    file::at_login(&file::logged(&path, file::held(&path).as_deref()))
 }
 
 /// The machines module.
@@ -206,5 +229,40 @@ impl Module for Machines {
 
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
         self.dispatch(call, method, params).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use banda_kernel::MachineIcon;
+
+    #[test]
+    fn whether_banda_starts_at_login_follows_the_file() {
+        let config = tempfile::tempdir().unwrap();
+        let found = Named {
+            name: "m1pro".to_owned(),
+            icon: MachineIcon::Laptop,
+        };
+        let machine = Machine::new(config.path(), found);
+        let mut at_login = machine.starts_at_login();
+        assert!(*at_login.borrow_and_update(), "on, with no file");
+        assert!(starts_at_login(config.path()));
+
+        std::fs::write(config.path().join(file::NAME), "start-at-login = false\n").unwrap();
+        machine.reread();
+        assert!(at_login.has_changed().unwrap());
+        assert!(!*at_login.borrow_and_update());
+        assert!(!starts_at_login(config.path()));
+        assert_eq!(machine.now().name, "m1pro", "the name as it was");
+
+        // A change of the name alone says nothing new of it.
+        std::fs::write(
+            config.path().join(file::NAME),
+            "name = \"studio\"\nstart-at-login = false\n",
+        )
+        .unwrap();
+        machine.reread();
+        assert!(!at_login.has_changed().unwrap());
     }
 }

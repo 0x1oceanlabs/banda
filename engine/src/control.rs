@@ -12,21 +12,23 @@
 //! unit does not start, it serves the engine itself.
 //!
 //! Another machine's window runs it here too, over ssh, and says so
-//! (`BANDA_OVER_SSH`, ADR 0081, decision 4). Where the engine is its
-//! window's child and the system has no service for it yet (macOS, until
-//! its launchd agent: ADR 0086, plan step 7), whatever made it the child
-//! (`BANDA_ENGINE_AS`, Banda Local), it then only follows the engine
-//! Banda's window here runs, and starts none: that one would live only as
-//! long as the link, in the ssh session's environment, and a window
-//! opened here meanwhile would follow it and lose it, with its Agents, as
-//! the link drops. While no Banda is open here, and once the
-//! one open quits, it exits 75 (`Failure::Later`): that window tries
-//! again, and sees this machine once Banda is open here.
+//! (`BANDA_OVER_SSH`, ADR 0081, decision 4). On a Mac, until arc may start
+//! the Mac's engine over ssh (ADR 0086, plan step 7c), and where the
+//! engine is its window's child on a system with no service for it yet
+//! (Windows), whatever made it the child (`BANDA_ENGINE_AS`, Banda
+//! Local), it then only follows the engine that runs here, and starts
+//! none: a child would live only as long as the link, in the ssh session's
+//! environment, and a window opened here meanwhile would follow it and
+//! lose it, with its Agents, as the link drops. While no engine runs here,
+//! and once it stops as asked, it exits 75 (`Failure::Later`): that
+//! window tries again, and sees this machine once Banda runs here.
 
 use crate::client::{Client, Pass};
 use crate::places::{Places, Running};
 use crate::run::{self, Before};
-use crate::service::{self, Systemd, User, Way, Why};
+use crate::serve::Serving;
+use crate::service::launchd::{self, Launchctl};
+use crate::service::{self, Manager, Service, User, Way, Why};
 use crate::{Failure, build_id, parent, serve};
 use banda_kernel::{Code, CommandId, ENGINE_VARIABLE, Named, PROTOCOL, Refusal};
 use banda_machines::Machine;
@@ -37,15 +39,16 @@ use std::time::{Duration, Instant};
 
 /// Set by another machine's window on the `banda start --with-parent` it
 /// runs here over ssh (`client/desktop/src/hosts.ts`).
-const OVER_SSH_VARIABLE: &str = "BANDA_OVER_SSH";
+pub(crate) const OVER_SSH_VARIABLE: &str = "BANDA_OVER_SSH";
 
-/// Whether `banda start --with-parent` only follows the engine Banda's
-/// window runs here, and starts none: for another machine's window
-/// (`over_ssh`), where the engine is its window's child and the system
-/// has no service for it (see the module's words). On Linux it serves
-/// one as before.
+/// Whether `banda start --with-parent` only follows the engine that runs
+/// here, and starts none: for another machine's window (`over_ssh`), on a
+/// Mac, until step 7c, and where the engine is its window's child and the
+/// system has no service for it (see the module's words). On Linux it
+/// serves one as before.
 fn follows_only(way: Way, over_ssh: bool) -> bool {
-    over_ssh && matches!(way, Way::Child(_)) && !service::SERVICE_HERE
+    let no_service = matches!(way, Way::Child(_)) && !service::SERVICE_HERE;
+    over_ssh && (cfg!(target_os = "macos") || no_service)
 }
 
 /// [`follows_only`], as `BANDA_OVER_SSH` says.
@@ -54,10 +57,13 @@ pub fn follows_only_here(way: Way) -> bool {
     follows_only(way, over_ssh)
 }
 
-/// What another machine's window hears while no Banda is open here.
+/// What another machine's window hears while no engine runs here: on a
+/// Mac, none started at login or by Banda here.
 fn not_open() -> Failure {
     Failure::Later(
-        "Banda is not open here: another machine sees this one's Agents while it is.".into(),
+        "Banda's engine is not running here: another machine sees this one's Agents while it \
+         runs."
+            .into(),
     )
 }
 
@@ -83,8 +89,8 @@ pub async fn connect(places: &Places) -> Result<Client, Failure> {
         Err(refused @ Failure::Refused(_)) => return Err(refused),
         Err(none) => none,
     };
-    match service::way_here(&User) {
-        Way::Service { version } => Ok(started(places, version, &User).await?.1),
+    match service::way_here() {
+        Way::Service(service) => Ok(started(places, service).await?.1),
         Way::Child(_) => Err(none),
     }
 }
@@ -114,17 +120,26 @@ async fn answering(places: &Places) -> Result<(Running, Client), Failure> {
     }
 }
 
-/// Starts the engine as the session's service, and returns once it
+/// Starts the engine as the session's `service`, and returns once it
 /// answers, with a client of it.
-async fn started(
-    places: &Places,
-    version: u32,
-    systemd: &dyn Systemd,
-) -> Result<(Running, Client), Failure> {
+async fn started(places: &Places, service: Service) -> Result<(Running, Client), Failure> {
     let program = std::env::current_exe().map_err(Failure::broken)?;
-    let unit = service::unit(places, program, version, systemd).await;
-    tracing::info!(unit = %unit.name, "Banda's engine starts as the session's service");
-    service::start(systemd, &unit, || answering(places)).await
+    match service {
+        Service::Unit { version } => {
+            let unit = service::unit(places, program, version, &User).await;
+            tracing::info!(unit = %unit.name, "Banda's engine starts as the session's service");
+            service::start(&User, &unit, || answering(places)).await
+        }
+        Service::Job => {
+            let job = launchd::job(places, &program);
+            tracing::info!(
+                job = %job.label,
+                at_login = job.at_login,
+                "Banda's engine starts as a launchd job"
+            );
+            launchd::start(&Launchctl, &job, || answering(places)).await
+        }
+    }
 }
 
 /// `banda start`: starts the engine when none answers, and says how it
@@ -136,29 +151,29 @@ pub async fn start(places: Places, with_parent: bool, way: Way, only: bool) -> R
         (Ok(found), _) => found,
         (Err(refused @ Failure::Refused(_)), _) => return Err(refused),
         (Err(_), _) if only => return Err(not_open()),
-        (Err(_), Way::Service { version }) => match started(&places, version, &User).await {
+        (Err(_), Way::Service(service)) => match started(&places, service).await {
             Ok(found) => found,
             // The window still gets an engine: its own child, this once.
             Err(failed @ Failure::Broken(_)) if with_parent => {
+                let why = failed.words();
                 tracing::warn!(
-                    "{} The engine runs as the window's child this time, and stops with it; \
-                     its log is the window's.",
-                    failed.words()
+                    "{why} The engine runs as the window's child this time, and stops with it; \
+                     its log is the window's."
                 );
                 banda_problems::catch_panics(places.problems());
-                return serve::serve(places, 0, true).await;
+                return serve::serve(places, Serving::child(why)).await;
             }
             Err(failed) => return Err(failed),
         },
         (Err(_), Way::Child(why)) if with_parent => {
             match why {
-                Why::NoSystemd => tracing::warn!(
+                Why::NoSystemd | Why::NoScreen => tracing::warn!(
                     "{}: the engine runs as the window's child, and stops with it",
                     why.words()
                 ),
                 _ => tracing::info!("the engine runs as the window's child: {}", why.words()),
             }
-            return serve::serve(places, 0, true).await;
+            return serve::serve(places, Serving::child(why.words())).await;
         }
         (Err(_), Way::Child(why)) => {
             return Err(Failure::Broken(format!(
@@ -307,6 +322,7 @@ fn said(running: &Running) -> Value {
         ("since", running.since.map(Value::from)),
         ("pid", running.pid.map(Value::from)),
         ("unit", running.unit.clone().map(Value::from)),
+        ("child", running.child.clone().map(Value::from)),
     ] {
         if let Some(value) = value {
             line[key] = value;
@@ -327,9 +343,9 @@ pub async fn stop(places: &Places, force: bool) -> Result<(), Failure> {
              Nothing was stopped."
         ))));
     }
-    let systemd = User;
+    let manager = service::manager();
     let Ok((running, mut client)) = answering(places).await else {
-        return stop_unanswering(places, &systemd).await;
+        return stop_unanswering(places, manager).await;
     };
     if !force {
         let working = working(&mut client).await?;
@@ -339,7 +355,7 @@ pub async fn stop(places: &Places, force: bool) -> Result<(), Failure> {
     }
     drop(client);
     match (&running.unit, running.pid) {
-        (Some(unit), _) => stop_unit(&systemd, unit)?,
+        (Some(unit), _) => stop_unit(manager, unit)?,
         (None, Some(pid)) => terminate(&running, pid)?,
         (None, None) => {
             return Err(Failure::Broken(
@@ -347,16 +363,17 @@ pub async fn stop(places: &Places, force: bool) -> Result<(), Failure> {
             ));
         }
     }
-    gone(&systemd, running.unit.as_deref(), running.pid).await
+    gone(manager, running.unit.as_deref(), running.pid).await
 }
 
-/// Stops an engine that does not answer: its unit when it runs, else the
-/// process `engine.json` names while the engine's lock is held, which
-/// only a running engine holds and only it wrote. With neither, none runs.
-async fn stop_unanswering(places: &Places, systemd: &dyn Systemd) -> Result<(), Failure> {
+/// Stops an engine that does not answer: its unit, or job, when it runs,
+/// else the process `engine.json` names while the engine's lock is held,
+/// which only a running engine holds and only it wrote. With neither,
+/// none runs.
+async fn stop_unanswering(places: &Places, manager: &dyn Manager) -> Result<(), Failure> {
     let unit = service::unit_of(places);
-    if systemd.runs(&unit) {
-        return stop_unit(systemd, &unit);
+    if manager.runs(&unit) {
+        return stop_unit(manager, &unit);
     }
     let running = places.running().ok();
     let pid = (running.as_ref())
@@ -365,7 +382,7 @@ async fn stop_unanswering(places: &Places, systemd: &dyn Systemd) -> Result<(), 
     match (running, pid) {
         (Some(running), Some(pid)) => {
             terminate(&running, pid)?;
-            gone(systemd, None, Some(pid)).await
+            gone(manager, None, Some(pid)).await
         }
         _ => {
             eprintln!("banda: Banda's engine is not running.");
@@ -374,16 +391,17 @@ async fn stop_unanswering(places: &Places, systemd: &dyn Systemd) -> Result<(), 
     }
 }
 
-/// Stops the engine's `unit`, and returns once systemd has.
-fn stop_unit(systemd: &dyn Systemd, unit: &str) -> Result<(), Failure> {
-    (systemd.stop(unit))
+/// Stops the engine's `unit`, or job, and returns once its manager has.
+fn stop_unit(manager: &dyn Manager, unit: &str) -> Result<(), Failure> {
+    (manager.stop(unit))
         .map_err(|said| Failure::Broken(format!("Banda's engine did not stop: {said}")))
 }
 
-/// Waits until the engine's process `pid` and its `unit` have gone.
-async fn gone(systemd: &dyn Systemd, unit: Option<&str>, pid: Option<u32>) -> Result<(), Failure> {
+/// Waits until the engine's process `pid` and its `unit`, or job, have
+/// gone.
+async fn gone(manager: &dyn Manager, unit: Option<&str>, pid: Option<u32>) -> Result<(), Failure> {
     let began = Instant::now();
-    while pid.is_some_and(alive) || unit.is_some_and(|unit| systemd.runs(unit)) {
+    while pid.is_some_and(alive) || unit.is_some_and(|unit| manager.runs(unit)) {
         if began.elapsed() > STOPS_WITHIN {
             return Err(Failure::Broken(format!(
                 "Banda's engine did not stop within {} s.",
@@ -552,6 +570,16 @@ mod tests {
         assert!(!line.to_string().contains("never said"), "no secret");
         let bare = said(&Running::default());
         assert_eq!(bare, json!({ "running": true, "protocol": 0 }));
+        // A window's child where launchd or systemd did not start it says
+        // why.
+        let child = Running {
+            child: Some("launchd did not start Banda's engine".into()),
+            ..Running::default()
+        };
+        assert_eq!(
+            said(&child)["child"],
+            "launchd did not start Banda's engine"
+        );
     }
 
     #[tokio::test]
@@ -605,12 +633,24 @@ mod tests {
     fn only_another_machines_window_off_linux_only_follows() {
         // Whatever made the engine the window's child: on a Mac, also
         // `BANDA_ENGINE_AS=child` and Banda Local.
-        for why in [Why::NotYet, Why::Asked, Why::Checkout, Why::NoSystemd] {
+        let off_linux = !cfg!(target_os = "linux");
+        for why in [
+            Why::NotYet,
+            Why::Asked,
+            Why::Checkout,
+            Why::NoSystemd,
+            Why::NoScreen,
+        ] {
             let way = Way::Child(why);
-            assert_eq!(follows_only(way, true), !service::SERVICE_HERE, "{way:?}");
+            assert_eq!(follows_only(way, true), off_linux, "{way:?}");
             assert!(!follows_only(way, false), "{way:?}");
         }
-        assert!(!follows_only(Way::Service { version: 257 }, true));
+        // A Mac's launchd job is started over ssh from step 7c.
+        let job = Way::Service(Service::Job);
+        assert_eq!(follows_only(job, true), cfg!(target_os = "macos"));
+        assert!(!follows_only(job, false));
+        let unit = Way::Service(Service::Unit { version: 257 });
+        assert_eq!(follows_only(unit, true), cfg!(target_os = "macos"));
     }
 
     #[tokio::test]
@@ -626,7 +666,10 @@ mod tests {
         let Err(Failure::Later(words)) = started else {
             panic!("it should say: later");
         };
-        assert!(words.starts_with("Banda is not open here"), "{words}");
+        assert!(
+            words.starts_with("Banda's engine is not running here"),
+            "{words}"
+        );
         // No engine served here: it took no lock, and wrote no state.
         assert!(!base.path().join("state").exists());
     }

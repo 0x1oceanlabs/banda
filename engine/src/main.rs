@@ -1,10 +1,11 @@
 //! `banda`: the engine and its CLI in one program.
 //!
-//! - `banda serve` runs this machine's engine. On Linux it runs as a
-//!   service of the Person's session, which any command that reaches it
-//!   starts when it does not run (ADR 0086, decision 1); `banda start` only
-//!   starts it, `banda status` says whether it runs, since when and its
-//!   build, and `banda stop` is Quit Banda (decision 3).
+//! - `banda serve` runs this machine's engine. It runs as a service of the
+//!   Person's session, a systemd unit on Linux and a launchd job on macOS,
+//!   which any command that reaches it starts when it does not run (ADR
+//!   0086, decision 1); `banda start` only starts it, `banda status` says
+//!   whether it runs, since when and its build, and `banda stop` is Quit
+//!   Banda (decision 3).
 //! - `banda call <method>` calls one API method and prints `{"ok": …}`.
 //! - `banda follow --project <id>` prints the Project's events, one JSON
 //!   object per line.
@@ -88,6 +89,10 @@ enum Command {
         /// the first line, and stops when stdin closes.
         #[arg(long)]
         with_parent: bool,
+        /// The engine's launchd job, started again by itself with the
+        /// login shell's PATH (macOS): it says so, and nothing else does.
+        #[arg(long, hide = true)]
+        job: bool,
     },
     /// Starts the engine as this session's service when it does not run,
     /// as every command that reaches it does, and says how it runs, as
@@ -98,7 +103,7 @@ enum Command {
         /// running, or until it stops. Where the engine is the window's
         /// child, this serves it, and stops it when stdin closes; but on
         /// macOS for another machine's window, over ssh, it only follows
-        /// the one Banda's window runs.
+        /// the one that runs there.
         #[arg(long)]
         with_parent: bool,
     },
@@ -476,7 +481,13 @@ impl Failure {
 
 fn main() -> ExitCode {
     banda_kernel::set_version(env!("BANDA_VERSION"));
-    let cli = parse();
+    let mut cli = parse();
+    // The engine's launchd job starts itself again first, with the login
+    // shell's PATH, before anything else runs (macOS); from here on `job`
+    // says whether this is the job.
+    if let Command::Serve { job, .. } = &mut cli.command {
+        *job = service::launchd::begin(*job);
+    }
     match cli.command {
         // Before anything else: it stays on this one thread.
         Command::Fence {
@@ -499,7 +510,7 @@ fn main() -> ExitCode {
     }
     // How this Banda runs its engine, for `banda start`.
     let way = match cli.command {
-        Command::Start { .. } => Some(service::way_here(&service::User)),
+        Command::Start { .. } => Some(service::way_here()),
         _ => None,
     };
     // Whether `start` only follows the engine, for another machine's
@@ -518,7 +529,10 @@ fn main() -> ExitCode {
     if let Some(places) = &serving {
         banda_problems::catch_panics(places.problems());
     }
-    logging(serving.map(|places| places.logs().join("engine.log")));
+    // launchd's job logs to its file alone: its stderr is a file of
+    // launchd's that never starts again.
+    let job = matches!(cli.command, Command::Serve { job: true, .. });
+    logging(serving.map(|places| places.logs().join("engine.log")), !job);
     let runtime = || tokio::runtime::Runtime::new().map_err(Failure::broken);
     let done = match (cli.command, way) {
         // It needs no places: its variables say where the engine is.
@@ -551,9 +565,10 @@ fn parse() -> Cli {
     Cli::from_arg_matches(&matches).unwrap_or_else(|error| error.exit())
 }
 
-/// The log, on stderr, and for the engine in `file` too, which starts
-/// again past [`LOG_MOST`], the one before kept beside it.
-fn logging(file: Option<PathBuf>) {
+/// The log, on stderr unless not `to_stderr`, and for the engine in `file`
+/// too, which starts again past [`LOG_MOST`], the one before kept beside
+/// it.
+fn logging(file: Option<PathBuf>, to_stderr: bool) {
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
     use tracing_subscriber::{EnvFilter, fmt};
@@ -569,9 +584,10 @@ fn logging(file: Option<PathBuf>) {
             None
         }
     });
+    let stderr = to_stderr.then(|| fmt::layer().with_writer(std::io::stderr));
     tracing_subscriber::registry()
         .with(filter)
-        .with(fmt::layer().with_writer(std::io::stderr))
+        .with(stderr)
         .with(kept)
         .init();
 }
@@ -623,7 +639,19 @@ impl std::io::Write for Rolling {
 
 async fn run(command: Command, places: Places) -> Result<(), Failure> {
     match command {
-        Command::Serve { port, with_parent } => serve::serve(places, port, with_parent).await,
+        Command::Serve {
+            port,
+            with_parent,
+            job,
+        } => {
+            let serving = serve::Serving {
+                port,
+                with_parent,
+                job,
+                child: None,
+            };
+            serve::serve(places, serving).await
+        }
         Command::Start { .. } => unreachable!("banda start knows how this Banda runs its engine"),
         Command::Status => control::status(&places).await,
         Command::Stop { force } => control::stop(&places, force).await,

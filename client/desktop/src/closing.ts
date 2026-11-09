@@ -2,8 +2,8 @@
  * What closing Banda's window and quitting the app do (ADR 0086, decision
  * 3). On Linux, and on Windows, closing the window closes it, and the
  * last one quits the app; an engine that is the session's service goes
- * on. On macOS the engine is still the app's child, until it is a launchd
- * agent and Banda lives in the menu bar (plan step 7), so the app stays:
+ * on. On macOS the engine is a launchd job, which outlives the app, but
+ * the app stays until Banda lives in the menu bar (plan step 7e):
  * closing the main window hides it, its page left alive to call the
  * Person (ADR 0011) and sound (ADR 0009), and the Dock's icon shows it
  * again. A quit the app is asked for there, by the app menu's or the
