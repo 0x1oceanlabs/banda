@@ -31,22 +31,34 @@ export type Group = {
 /**
  * The picker's groups (ADR 0095, decision 7): the Window's `machines`,
  * this one first and each other under its label, as the sidebar shows
- * them; outside a Window, as in a window of its own, only `own`, the
- * Pane's own engine's, on the machine its Pane is on. A machine with
- * nothing to start in has none.
+ * them, in the root's window and a popped-out Pane's alike; outside a
+ * Window only `own`, the Pane's own engine's, on the machine its Pane is
+ * on. A machine with nothing to start in has none.
  */
 export function groupsOf(
   machines: readonly Machine[] | undefined,
   own: Group
 ): Group[] {
   if (!machines) return [own]
+  // The Pane's own engine may have named its No Project first, unless
+  // the Window shows that ID on a machine already: a pick of it would
+  // open there.
+  const shown = new Set(
+    machines.flatMap(({ machine, projects }) => [
+      ...(machine === undefined ? [] : [machine]),
+      ...projects.map((project) => project.id),
+    ])
+  )
+  const first =
+    own.machine === undefined || shown.has(own.machine)
+      ? undefined
+      : own.machine
   return machines
     .map(({ host, named, machine, state, projects }) => ({
       host,
       named,
       away: state === "away",
-      // The Pane's own engine may have named it first.
-      machine: machine ?? (host === own.host ? own.machine : undefined),
+      machine: machine ?? (host === own.host ? first : undefined),
       projects,
     }))
     .filter((group) => group.machine !== undefined || group.projects.length > 0)

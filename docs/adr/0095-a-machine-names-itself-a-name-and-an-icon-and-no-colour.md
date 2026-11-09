@@ -403,6 +403,19 @@ Each step is its own PR.
      `settings/ThreadSettings.tsx` and `thread/Thread.tsx`;
      `client/desktop/e2e/hosts.spec.ts`. `client/ui/src/pane.ts` and
      `thread.new` stay as they are.
+
+     _Changed on 2026-11-09 (Roma, #1010):_ a popped-out Pane's window
+     hands its Pane the machines too, through the one wrapper the root's
+     window hands them by (`client/web/src/window/machines.tsx`), and
+     lists each live machine's Projects itself, as it draws no sidebar;
+     its picker lists this machine's Projects first, then arc's under its
+     label, as the window's does. And one clash rule places an ID on one
+     machine in the sidebar and the picker alike (`KeptHosts`): this
+     machine's every ID, archived, missing and scratch ones and its Host
+     scope's too, then each other machine's in the order of
+     `hosts.toml`. Another machine's No Project of an ID this machine has,
+     as a copy of its Banda's has, is no longer offered, as a pick of it
+     opened this machine's.
    - **The pill, after B4i**: its icon; how long the machine has been
      away, by its label's clock and rule ("arc is away · 2 min" beside
      "away · 2 min"); and Start while Banda is stopped there, the

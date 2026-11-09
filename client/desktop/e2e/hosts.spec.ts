@@ -7,10 +7,12 @@
  * shows below this machine's Projects, with its Projects and Threads;
  * stopped there, it says so, and Start brings it back. Its Thread opens
  * from the sidebar on arc's engine, and waits while arc is away; Alt+U
- * and a toast open one there too, as `pane.pick` keeps its host. As a
- * Mac, its `uname` says Darwin, and the window finds its Banda in its
- * Application Support; its engine is this checkout's still, which serves
- * for the follower, as a Mac's does not (engine/src/control.rs).
+ * and a toast open one there too, as `pane.pick` keeps its host. A new
+ * Thread's picker groups the Projects by machine, in a popped-out Pane's
+ * window as in the window. As a Mac, its `uname` says Darwin, and the
+ * window finds its Banda in its Application Support; its engine is this
+ * checkout's still, which serves for the follower, as a Mac's does not
+ * (engine/src/control.rs).
  * hosts.toml applies as it changes: a machine written there by hand, or
  * added through the bridge as the page will, shows at once, and goes as
  * it is taken out, and its address changes in place; Test finds arc's
@@ -898,6 +900,64 @@ test("a new Thread's Project picker groups the Projects by machine; one started 
   await expect(
     draft.getByRole("textbox", { name: "Message to Fake AI" })
   ).toHaveAttribute("aria-placeholder", /^Write to Fake AI\. /)
+})
+
+test("a popped-out Pane on arc picks from the window's machines: this machine's Projects first, then arc's under its name", async () => {
+  test.setTimeout(shots ? 300_000 : 120_000)
+  arc = newArc()
+  await seed(arc)
+  window = await withArc(arc)
+  const { page, app } = window
+  await work(window)
+  await expect(arcOf(page).getByText("Bench window tests")).toBeVisible()
+  await page
+    .getByRole("region", { name: "New Thread" })
+    .getByRole("button", { name: "Close New Thread", exact: true })
+    .click()
+  // A new Thread in arc's banda, picked in the window.
+  await sidebarOf(page)
+    .getByRole("button", { name: "New Thread in Work" })
+    .click()
+  const draft = page
+    .getByRole("region", { name: "New Thread" })
+    .and(page.locator('[data-focused="true"]'))
+  await draft.getByRole("button", { name: "Project: Work" }).click()
+  await page
+    .getByRole("menu")
+    .getByRole("group", { name: /^arc/ })
+    .getByRole("menuitemradio", { name: /^banda/ })
+    .click()
+  await expect(
+    draft.getByRole("button", { name: "Project: banda on arc" })
+  ).toBeVisible()
+
+  // In a window of its own, its picker lists what the window's does.
+  await draft.getByRole("button", { name: "Pane menu" }).click()
+  const [popped] = await Promise.all([
+    app.waitForEvent("window"),
+    page.getByRole("menuitem", { name: "In its own window" }).click(),
+  ])
+  await popped.waitForLoadState()
+  await popped.getByRole("button", { name: "Project: banda on arc" }).click()
+  const menu = popped.getByRole("menu")
+  await expect(menu.getByRole("menuitemradio")).toHaveText([
+    /No Project/,
+    /Work/,
+    /No Project/,
+    /banda/,
+  ])
+  const arcPart = menu.getByRole("group", { name: /^arc/ })
+  await expect(arcPart.getByRole("menuitemradio")).toHaveText([
+    /No Project/,
+    /banda/,
+  ])
+  await expect(arcPart.locator('[data-machine-icon="server"]')).toBeVisible()
+  await expect(
+    arcPart.getByRole("menuitemradio", { name: /^banda/ })
+  ).toHaveAttribute("aria-checked", "true")
+  await expect(menu.getByRole("menuitem", { name: "Add Project" })).toHaveCount(
+    0
+  )
 })
 
 test("a Mac there, with no banda in hosts.toml: the window finds its Banda in the Mac's Application Support", async () => {
