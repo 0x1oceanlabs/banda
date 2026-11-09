@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "machine.toml",
-  "description": "This machine's name and icon, as every window shows it beside its\nProjects and Threads. Each key is optional: Banda finds what is left\nout.",
+  "description": "This machine's name and icon, as every window shows it beside its\nProjects and Threads, and whether Banda starts at login here. Each key\nis optional: Banda finds what is left out.",
   "type": "object",
   "properties": {
     "name": {
@@ -12,6 +12,10 @@
     "icon": {
       "description": "Its icon. Left out: what Banda finds the machine is, as a laptop by\nits battery.",
       "$ref": "#/$defs/MachineIcon"
+    },
+    "start-at-login": {
+      "description": "Start Banda at login: its engine starts as you log in, so its\nAgents and other machines find it running. Off, it starts as you\nopen Banda. On by default; macOS has it so far, Linux next.",
+      "type": "boolean"
     }
   },
   "additionalProperties": false,

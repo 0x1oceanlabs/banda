@@ -98,13 +98,14 @@ Banda waits up to ten minutes.
 
 ## arc sees the Mac
 
-A Mac's engine is its window's child until Banda has a launchd agent
-there (ADR 0086, step 7). So Banda on another machine sees the Mac's
-Projects and Agents while Banda is open on the Mac, its window closed or
-not. It starts no engine there for itself: one started over ssh would
-stop as the link drops, with its Agents, and would lack the Mac's PATH.
-While Banda is not open there, or the Mac sleeps, the host shows
-"away" (its tooltip says which), and Banda tries again each minute.
+A Mac's engine is a launchd job (ADR 0086, step 7a): it starts as the
+Person logs in at the Mac, unless "Start Banda at login" is off there,
+and Banda there starts it when it does not run. So Banda on another
+machine sees the Mac's Projects and Agents while that engine runs,
+Banda's window open there or not. Until step 7c it starts no engine
+there for itself. While none runs there, or the Mac sleeps, the host
+shows "away" (its tooltip says which), and Banda tries again each
+minute.
 
 Here arc is a Linux machine, and m1pro a Mac on the same tailnet, at
 `100.79.149.28`. On the Mac:

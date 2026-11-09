@@ -59,13 +59,28 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   and what is left is killed after 15 s. An engine that crashed starts
   again (`Restart=on-failure`), but not after three crashes in a minute.
   The engine raises its soft limit on open files to the hard one, as the
-  window's child had it (`engine/src/service.rs`). Where no systemd user
-  manager answers (macOS until its launchd agent, plan step 7; a
-  container; CI), or the unit does not start, the engine is the window's
-  child, as before, and the log says so; so is a checkout's, Banda
-  Local, unless `BANDA_ENGINE_AS=service`. `banda status` says whether
-  it runs, since when and its build; it names its unit only as that
-  unit's own process. `banda stop` is Quit Banda: it asks first while
+  window's child had it (`engine/src/service.rs`). On macOS it is a
+  launchd job in the Person's gui domain, `<bundle id>.engine`
+  (`so.banda.dev.engine`), whose plist is in `~/Library/LaunchAgents`
+  while "Start Banda at login" (`machine.toml`'s `start-at-login`, on by
+  default) is on, so launchd starts it at login, and in the state folder
+  while it is off; a client writes the plist where the setting says and
+  loads it, and the engine moves it as the setting changes. launchd
+  starts it again unless it exited 0; it has `ProcessType` Interactive
+  and 15 s to stop on SIGTERM, and raises its soft limit on open files
+  from launchd's 256 to 10240. Its plist names no PATH: started by
+  launchd, the engine asks the login shell for one and starts itself
+  again with it, without launchd's `XPC_SERVICE_NAME`. It stops with
+  exit 0 where another engine holds its lock, or at the third start
+  after a crash within a minute, as launchd has no limit of its own
+  (`engine/src/service/launchd.rs`). Where neither answers (a Mac with
+  nobody logged in at its screen; Windows, until its own; a container;
+  CI), or the unit or the job does not start, the engine is the
+  window's child, as before, and the log and `banda status` (`child`)
+  say why; so is a checkout's, Banda Local, unless
+  `BANDA_ENGINE_AS=service`. `banda status` says whether it runs, since
+  when and its build; it names its unit, or job, only as that unit's
+  own process. `banda stop` is Quit Banda: it asks first while
   Agents work (`--force` does not), refuses an Agent's pass, and stops
   an engine that does not answer too. An engine of another build, whose
   protocol this one does not speak, says so, and runs until Banda quits;
@@ -1270,8 +1285,9 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   window only closes it: the engine and its Agents go on. Quit Banda
   (`banda.quit`, Ctrl+Q, but for a terminal's program, whose key it is
   there) asks first while Agents work ("2 Agents are working. Stop them
-  and quit?"), then main runs `banda stop --force`. On macOS the engine
-  is the app's child until plan step 7, so the app stays
+  and quit?"), then main runs `banda stop --force`. On macOS the app
+  stays until it lives in the menu bar (plan step 7e), though its
+  engine, a launchd job, outlives it
   (`client/desktop/src/closing.ts`): closing the main window hides it,
   its page left to call the Person and sound, and its Panes' own windows
   close; the Dock's icon, or Window > Banda, shows it again. In the page

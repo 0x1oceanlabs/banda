@@ -1,7 +1,8 @@
 //! What only the Person changes in Banda's settings (ADR 0083): what a
 //! Harness runs, and with what; how freely a new Thread's Agent acts; what
 //! Agents may do in the browser; what Banda sends; and what this machine is
-//! called and drawn by, which every window shows. An Agent that
+//! called and drawn by, which every window shows, and whether Banda starts
+//! at login on it. An Agent that
 //! changes settings does so through the engine, which refuses these, until
 //! Banda asks the Person to agree (B15); and every line of `keys.toml`,
 //! which binds a key as `banda keys bind` checks it.
@@ -155,8 +156,9 @@ const BROWSER_WORDS: &str = "Only your Person says what Agents may do in Banda's
 const SHARING_WORDS: &str = "Only your Person says what Banda sends. Give them the line, to set \
                              it themselves.";
 
-const MACHINE_WORDS: &str = "Only your Person names this machine: every window shows it by that \
-                             name. Give them the line, to set it themselves.";
+const MACHINE_WORDS: &str = "Only your Person names this machine, which every window shows, and \
+                             says whether Banda starts at login on it. Give them the line, to set \
+                             it themselves.";
 
 #[cfg(test)]
 mod tests {
@@ -211,6 +213,7 @@ mod tests {
             ("sharing.toml", "problems", Some("true")),
             ("machine.toml", "name", Some("\"m1pro\"")),
             ("machine.toml", "icon", None),
+            ("machine.toml", "start-at-login", Some("false")),
             ("look.toml", "tile..border", Some("2")),
         ] {
             assert!(only_the_person(name, key, value).is_some(), "{name} {key}");

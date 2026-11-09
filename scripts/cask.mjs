@@ -51,13 +51,18 @@ cask "${channel.folder}" do
         args: ["-dr", "com.apple.quarantine", "{{appdir}}/${app}"]
   end
 
-  zap trash: [
-    "${support}/${channel.folder}",
-    "${support}/${channel.name}",
-    "~/Library/Caches/${channel.appId}",
-    "~/Library/Caches/${channel.appId}.ShipIt",
-    "~/Library/Preferences/${channel.appId}.plist",
-    "~/Library/Saved Application State/${channel.appId}.savedState",
-  ]
+  # The engine's launchd job (ADR 0086, decision 1): only zap takes it
+  # away, so an upgrade, whose uninstall runs, leaves the engine and its
+  # Agents running (decision 6).
+  zap launchctl: "${channel.appId}.engine",
+      trash:     [
+        "~/Library/LaunchAgents/${channel.appId}.engine.plist",
+        "${support}/${channel.folder}",
+        "${support}/${channel.name}",
+        "~/Library/Caches/${channel.appId}",
+        "~/Library/Caches/${channel.appId}.ShipIt",
+        "~/Library/Preferences/${channel.appId}.plist",
+        "~/Library/Saved Application State/${channel.appId}.savedState",
+      ]
 end
 `)

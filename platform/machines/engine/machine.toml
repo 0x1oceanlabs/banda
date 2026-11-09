@@ -1,8 +1,8 @@
 #:schema ./schemas/machine.schema.json
 # This machine's name and icon, as every window shows it beside its
-# Projects and Threads. Settings → Machines writes it, here or from
-# another machine through this one's engine. Check a change with:
-# banda settings check
+# Projects and Threads, and whether Banda starts at login here.
+# Settings → Machines writes it, here or from another machine through
+# this one's engine. Check a change with: banda settings check
 
 # Its name, up to 16 characters. Left out, or empty, it is the hostname,
 # or a word for a hostname the system made up, as DESKTOP-4F2K9XX.
@@ -13,3 +13,8 @@
 # a laptop by its battery, a server for Linux with none, vm for a
 # virtual machine or a container.
 # icon = "desktop"
+
+# Start Banda at login: its engine starts as you log in, so its Agents
+# and other machines find it running. false: it starts as you open
+# Banda. macOS has it so far, Linux next.
+# start-at-login = true

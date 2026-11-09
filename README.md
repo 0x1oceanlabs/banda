@@ -26,6 +26,21 @@ brew install --cask 0x1oceanlabs/banda/banda-dev
 Open **Banda Dev** from Applications. The app is signed ad hoc and is not
 notarized yet; the cask removes its quarantine so macOS lets it open.
 
+Banda's engine, which runs your Agents, starts as you log in to the Mac,
+and keeps running if the app quits unexpectedly. macOS says "Background
+Items Added" once, and lists it in System Settings → General → Login
+Items & Extensions as "banda", from an unidentified developer, since the
+app is signed ad hoc. **Quit Banda Dev** (⌘Q) stops the engine and its
+Agents, and so does logging out.
+
+- To start the engine only as you open Banda, set
+  `start-at-login = false` in `machine.toml` (Banda's settings, or
+  `~/Library/Application Support/banda-dev/machine.toml`). Switching
+  "banda" off in System Settings instead makes the engine stop with the
+  app.
+- `brew uninstall --zap --cask banda-dev` removes everything, the login
+  start too. A plain `brew uninstall` leaves it.
+
 ### Linux
 
 Download the newest `banda-dev-…-x86_64.AppImage` from

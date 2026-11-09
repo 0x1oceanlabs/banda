@@ -12,7 +12,7 @@ const others = (["linux", "win32"] as const).flatMap((platform) => [
   { platform, quitting: false, poweringOff: true },
 ])
 
-describe("on macOS, until the engine is a launchd agent", () => {
+describe("on macOS, until Banda lives in the menu bar", () => {
   it("closing the main window hides it, and the engine and its Agents go on", () => {
     expect(hidesOnClose(mac)).toBe(true)
     expect(hidesOnClose(macPoweringOff)).toBe(true)

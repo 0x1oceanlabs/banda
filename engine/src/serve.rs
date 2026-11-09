@@ -12,11 +12,17 @@
 //! decision 1; ADR 0083, decision 2). Asked to stop, as it opens too, it
 //! says so at once; as it stops, it keeps its sessions' passes for the
 //! next run, and says that it stopped.
+//!
+//! As macOS's launchd job (`service/launchd.rs`) it stops with exit 0,
+//! which launchd leaves stopped, where another engine holds its state's
+//! lock, and where it started again after a crash three times within a
+//! minute. On macOS it keeps its job's plist where "Start Banda at login"
+//! says, the job or not.
 
 use crate::apps::{self, HostContext};
 use crate::places::{FOLDER, HOST, Places, Running, from_checkout};
 use crate::run::{self, Before, Left, Run};
-use crate::service;
+use crate::service::{self, launchd};
 use crate::{Failure, build_id, parent};
 use banda_agents::Pipe;
 use banda_harnesses::Harnesses;
@@ -27,10 +33,42 @@ use banda_machines::Machine;
 use std::fs::{File, TryLockError};
 use std::path::Path;
 
+/// How an engine serves, by what started it.
+#[derive(Debug, Default)]
+pub struct Serving {
+    /// The port on 127.0.0.1; 0 takes the one it listened on last.
+    pub port: u16,
+    /// For a window that starts it: it runs until its stdin closes, and
+    /// prints where it listens on its first line.
+    pub with_parent: bool,
+    /// Why it is the window's child, not the session's service, which
+    /// `banda status` says.
+    pub child: Option<String>,
+    /// Whether it is macOS's launchd job (`launchd::begin`).
+    pub job: bool,
+}
+
+impl Serving {
+    /// The window's child, for the reason `why`.
+    pub fn child(why: impl Into<String>) -> Serving {
+        Serving {
+            with_parent: true,
+            child: Some(why.into()),
+            ..Serving::default()
+        }
+    }
+}
+
 /// Runs until a signal, or until stdin closes when `with_parent` is set: a
 /// window that starts the engine holds its stdin, and reads where the
 /// engine listens from its first line of output.
-pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), Failure> {
+pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
+    let Serving {
+        port,
+        with_parent,
+        child,
+        job,
+    } = serving;
     std::fs::create_dir_all(&places.state).map_err(Failure::broken)?;
     let lock = File::options()
         .create(true)
@@ -40,6 +78,14 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         .map_err(Failure::broken)?;
     match lock.try_lock() {
         Ok(()) => {}
+        // launchd would start it again and again while the other runs.
+        Err(TryLockError::WouldBlock) if job => {
+            tracing::warn!(
+                "another engine runs with this state folder: this launchd job stops, and \
+                 launchd leaves it stopped"
+            );
+            return Ok(());
+        }
         Err(TryLockError::WouldBlock) => {
             return Err(Failure::broken(
                 "Banda's engine already runs with this state folder.",
@@ -57,6 +103,15 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
                 "the engine's last run ended without stopping: it crashed, or was killed"
             );
             run::keep_crash(&places);
+            // launchd puts no limit on starts, as systemd's unit has.
+            if job && run::crash_starts(&places, banda_kernel::now_ms()) >= run::CRASH_STARTS {
+                tracing::error!(
+                    "the engine started again after a crash {} times within a minute: this \
+                     launchd job stops, and the next client starts it",
+                    run::CRASH_STARTS
+                );
+                return Ok(());
+            }
         }
         Before::Left(left) => tracing::info!(?left, "the engine's last run left"),
         Before::None => {}
@@ -94,7 +149,8 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         version: Some(env!("BANDA_VERSION").to_owned()),
         since: Some(banda_kernel::now_ms()),
         pid: Some(std::process::id()),
-        unit: own_unit(),
+        unit: own_unit().or_else(|| job.then(|| launchd::label_of(&places))),
+        child,
         pid_ns: crate::places::pid_ns(),
     };
     // Every Thread's session reaches the engine through this program's
@@ -106,6 +162,11 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
     // What this machine is called and drawn by: found once, as it is,
     // and named over that by its machine.toml.
     let machine = Machine::new(&places.config, banda_machines::found().await);
+    // A child too, so a plist left in LaunchAgents goes as the setting
+    // goes off.
+    if cfg!(target_os = "macos") {
+        launchd::follow_login(&places, machine.starts_at_login());
+    }
     let builder = Kernel::builder(&places.root, &places.data, owner)
         .machine(places.machine())
         .named(machine.named())
@@ -194,23 +255,42 @@ fn own_unit() -> Option<String> {
     }
 }
 
-/// Raises the soft limit on open files to the hard one, as a window's
-/// child had it from Electron: a user manager's units start at 1024, too
-/// few for the builds and watchers of the Agents' shells.
-#[cfg(target_os = "linux")]
+/// Raises the soft limit on open files to the most [`open_files_most`]
+/// allows, as a window's child had it from Electron: a user manager's
+/// units start at 1024, and launchd's jobs at 256, too few for the builds
+/// and watchers of the Agents' shells.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn open_files() {
     use rustix::process::{Resource, getrlimit, setrlimit};
     let mut limit = getrlimit(Resource::Nofile);
-    if limit.current < limit.maximum {
-        limit.current = limit.maximum;
+    let most = open_files_most(limit.maximum);
+    if limit.current < most {
+        limit.current = most;
         if let Err(error) = setrlimit(Resource::Nofile, limit) {
             tracing::warn!(%error, "the engine keeps its limit on open files");
         }
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 fn open_files() {}
+
+/// The most open files the engine takes, by the hard limit `maximum`
+/// (none: no limit): all of it on Linux; on macOS, where a launchd job has
+/// no hard limit and the system refuses more than its own, at most
+/// `OPEN_MAX`, which every Mac allows.
+#[cfg_attr(
+    not(any(target_os = "linux", target_os = "macos")),
+    expect(dead_code, reason = "Windows has no such limit")
+)]
+fn open_files_most(maximum: Option<u64>) -> Option<u64> {
+    const OPEN_MAX: u64 = 10_240;
+    if cfg!(target_os = "macos") {
+        Some(maximum.map_or(OPEN_MAX, |maximum| maximum.min(OPEN_MAX)))
+    } else {
+        maximum
+    }
+}
 
 /// Returns once TERM comes; never where it is not heard.
 #[cfg(unix)]
@@ -272,4 +352,58 @@ fn carried(program: &Path) -> Option<Carried> {
         ),
     }
     carried
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A job's [`Serving`].
+    fn job() -> Serving {
+        Serving {
+            job: true,
+            ..Serving::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn a_launchd_job_whose_state_another_engine_holds_stops_cleanly() {
+        let base = tempfile::tempdir().unwrap();
+        let places = Places::under(base.path());
+        std::fs::create_dir_all(&places.state).unwrap();
+        let held = File::options()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(places.lock())
+            .unwrap();
+        held.try_lock().unwrap();
+        // launchd leaves a job that exited 0 stopped.
+        assert!(serve(Places::under(base.path()), job()).await.is_ok());
+        let said = serve(Places::under(base.path()), Serving::default()).await;
+        let words = said.expect_err("not the job: it says so").words();
+        assert!(words.contains("already runs"), "{words}");
+        assert!(places.running().is_err(), "neither announced itself");
+    }
+
+    #[tokio::test]
+    async fn a_launchd_job_started_again_after_a_crash_a_third_time_in_a_minute_stops() {
+        let base = tempfile::tempdir().unwrap();
+        let places = Places::under(base.path());
+        std::fs::create_dir_all(&places.state).unwrap();
+        // A run that never said it stopped, after two starts after a crash.
+        Run::began(&places, 4100);
+        let now = banda_kernel::now_ms();
+        run::crash_starts(&places, now - 20_000);
+        run::crash_starts(&places, now - 10_000);
+        assert!(serve(Places::under(base.path()), job()).await.is_ok());
+        assert!(places.running().is_err(), "it opened nothing");
+        assert_eq!(run::before(&places).0, Before::Crashed, "as it was");
+        let starts = std::fs::read_to_string(run::crash_starts_file(&places)).unwrap();
+        assert_eq!(
+            starts.matches(',').count(),
+            2,
+            "this start counted: {starts}"
+        );
+    }
 }

@@ -3,11 +3,12 @@
  * or Spotlight gets launchd's PATH, `/usr/bin:/bin:/usr/sbin:/sbin`,
  * without what the shell profile adds: `~/.local/bin`, where Claude Code
  * and Codex install themselves, and the Node that `npx` comes from. The
- * window asks the login shell once, as VS Code does, and the engine
- * starts with what it says (engine.ts), so it finds the Harnesses as a
- * terminal would. A window started from a terminal (`TERM` is set) has
- * the profile's PATH already, and skips the seconds an interactive
- * profile takes. Only PATH is taken; Linux keeps its session's.
+ * window asks the login shell once, as VS Code does, and its programs
+ * start with what it says (engine.ts), so they find the Harnesses as a
+ * terminal would; the engine's launchd job asks the login shell itself.
+ * A window started from a terminal (`TERM` is set) has the profile's PATH
+ * already, and skips the seconds an interactive profile takes. Only PATH
+ * is taken; Linux keeps its session's.
  */
 import { Console, Duration, Effect, Option, Stream } from "effect"
 import { ChildProcess, type ChildProcessSpawner } from "effect/process"

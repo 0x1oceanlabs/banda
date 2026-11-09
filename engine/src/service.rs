@@ -23,14 +23,23 @@
 //! crashes is started again, as the engine never stops by itself; one
 //! that crashes again and again as it starts is not.
 //!
-//! Where no systemd user session answers (macOS, until its launchd agent,
-//! step 7; a container; CI), or where the unit does not start, the engine
-//! stays the window's child, as before, and the log says so. So does a
-//! checkout's, Banda Local, which an Agent's test runs must leave nothing
-//! of behind, unless `BANDA_ENGINE_AS` says `service`, as a test of the
-//! service does.
+//! On macOS it runs as a launchd job in the Person's gui domain,
+//! `<bundle id>.engine`, which launchd starts at login while "Start Banda
+//! at login" is on, and any client starts when no engine answers
+//! ([`launchd`]).
 //!
-//! Every call to systemd goes through [`Systemd`], so tests give their own.
+//! Where neither answers (a Mac with nobody logged in at its screen;
+//! Windows, until its own; a container; CI), or where the unit or the job
+//! does not start, the engine stays the window's child, as before, and the
+//! log and `banda status` say why. So does a checkout's, Banda Local,
+//! which an Agent's test runs must leave nothing of behind, unless
+//! `BANDA_ENGINE_AS` says `service`, as a test of the service does.
+//!
+//! Every call to systemd goes through [`Systemd`], and to launchd through
+//! [`launchd::Launchd`], so tests give their own; what a client asks of
+//! either to see the engine run, or stop it, is their [`Manager`].
+
+pub mod launchd;
 
 use crate::Failure;
 use crate::places::{FOLDER, Places};
@@ -87,17 +96,27 @@ const XDG_BASES: [Option<&str>; 5] = [
 ];
 
 /// Whether this system has a service to run the engine as: systemd's
-/// user manager on Linux. macOS's, a launchd agent, comes later (ADR 0086,
-/// plan step 7).
-pub const SERVICE_HERE: bool = cfg!(target_os = "linux");
+/// user manager on Linux, launchd on macOS. Windows' comes later (ADR
+/// 0090, step 10).
+pub const SERVICE_HERE: bool = cfg!(any(target_os = "linux", target_os = "macos"));
 
 /// How this Banda runs its engine here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Way {
-    /// As a systemd user unit, with the user manager's version.
-    Service { version: u32 },
+    /// As the session's service.
+    Service(Service),
     /// As the window's child.
     Child(Why),
+}
+
+/// What the session runs the engine as.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Service {
+    /// A systemd user unit, with the user manager's version, which says
+    /// what the unit may ask (Linux).
+    Unit { version: u32 },
+    /// A launchd job in the Person's gui domain (macOS).
+    Job,
 }
 
 /// Why the engine is the window's child here.
@@ -109,7 +128,11 @@ pub enum Why {
     Checkout,
     /// No systemd user manager answers.
     NoSystemd,
-    /// macOS, until its launchd agent (ADR 0086, plan step 7).
+    /// Nobody is logged in at the Mac's screen: launchd has no gui domain
+    /// for the Person, where the engine's job runs with their sign-ins.
+    NoScreen,
+    /// This system has no service for it yet: Windows, until ADR 0090's
+    /// step 10.
     NotYet,
 }
 
@@ -119,25 +142,42 @@ impl Why {
             Why::Asked => "BANDA_ENGINE_AS asks for it",
             Why::Checkout => "Banda Local's engine always is",
             Why::NoSystemd => "no systemd user session answers here",
-            Why::NotYet => "this system's service for it, a launchd agent on macOS, comes later",
+            Why::NoScreen => "nobody is logged in at this Mac's screen, where launchd runs it",
+            Why::NotYet => "this system's service for it comes later",
         }
     }
 }
 
+/// What runs the engine as the session's service: systemd's user
+/// manager, or launchd. A client asks it whether the engine's unit, or
+/// job, runs, and to stop it.
+pub trait Manager: Sync {
+    /// Whether `name` runs, or starts.
+    fn runs(&self, name: &str) -> bool;
+    /// The process `name` runs, when it runs one.
+    fn main_pid(&self, name: &str) -> Option<u32>;
+    /// Stops `name`, and returns once it has.
+    fn stop(&self, name: &str) -> Result<(), String>;
+}
+
 /// The user's systemd, as the engine asks it.
-pub trait Systemd: Sync {
+pub trait Systemd: Manager {
     /// The user manager's version; none when no user manager answers.
     fn version(&self) -> Option<u32>;
     /// The user manager's environment, as its units get it.
     fn environment(&self) -> Vec<(String, String)>;
     /// `systemd-run` with `arguments`, which start a transient unit.
     fn run(&self, arguments: &[String]) -> Result<(), String>;
-    /// Whether `unit` runs, or starts.
-    fn runs(&self, unit: &str) -> bool;
-    /// The process `unit` runs, when it runs one.
-    fn main_pid(&self, unit: &str) -> Option<u32>;
-    /// Stops `unit`, and returns once it has.
-    fn stop(&self, unit: &str) -> Result<(), String>;
+}
+
+/// What runs the engine as the session's service here: launchd on macOS,
+/// else systemd's user manager, where one answers.
+pub fn manager() -> &'static dyn Manager {
+    if cfg!(target_os = "macos") {
+        &launchd::Launchctl
+    } else {
+        &User
+    }
 }
 
 /// The systemd of this user's session, through `systemctl --user` and
@@ -192,7 +232,9 @@ impl Systemd for User {
         let arguments: Vec<&str> = arguments.iter().map(String::as_str).collect();
         User::ran("systemd-run", &arguments).map(drop)
     }
+}
 
+impl Manager for User {
     fn runs(&self, unit: &str) -> bool {
         matches!(
             User::property(unit, "ActiveState").as_deref(),
@@ -226,45 +268,70 @@ fn assignment(line: &str) -> Option<(String, String)> {
 
 /// How this Banda runs its engine: as `asked` says (`BANDA_ENGINE_AS`),
 /// else the window's child for a `checkout`'s, else the session's service
-/// where systemd's user manager answers on Linux.
-fn way(asked: Option<&str>, checkout: bool, systemd: &dyn Systemd) -> Way {
+/// this system has `here`, or the window's child, saying why.
+fn way(asked: Option<&str>, checkout: bool, here: impl FnOnce() -> Result<Service, Why>) -> Way {
     match asked {
         Some("child") => return Way::Child(Why::Asked),
         Some("service") => {}
         _ if checkout => return Way::Child(Why::Checkout),
         _ => {}
     }
-    if !SERVICE_HERE {
-        return Way::Child(Why::NotYet);
-    }
-    match systemd.version() {
-        Some(version) => Way::Service { version },
-        None => Way::Child(Why::NoSystemd),
-    }
+    here().map_or_else(Way::Child, Way::Service)
 }
 
-/// [`way`], as this program's environment and build say.
-pub fn way_here(systemd: &dyn Systemd) -> Way {
+/// The service this system runs the engine as, or why none: on macOS a
+/// launchd job, while the Person is logged in at its screen; on Linux a
+/// systemd unit, where the user manager answers.
+fn here() -> Result<Service, Why> {
+    if cfg!(target_os = "macos") {
+        return launchd::here(&launchd::Launchctl);
+    }
+    if !SERVICE_HERE {
+        return Err(Why::NotYet);
+    }
+    unit_here(&User)
+}
+
+/// A systemd unit, where `systemd`'s user manager answers.
+fn unit_here(systemd: &dyn Systemd) -> Result<Service, Why> {
+    (systemd.version())
+        .map(|version| Service::Unit { version })
+        .ok_or(Why::NoSystemd)
+}
+
+/// [`way`], as this program's environment, build and system say.
+pub fn way_here() -> Way {
     let asked = std::env::var(WAY_VARIABLE).ok();
-    way(asked.as_deref(), crate::places::from_checkout(), systemd)
+    way(asked.as_deref(), crate::places::from_checkout(), here)
 }
 
 /// The unit's name: `<folder>-engine`, and for a state folder other than
 /// the `default`, as a test or a trial has, a short hash of it after, so
 /// each engine has its own.
 fn unit_name(state: &Path, default: Option<&Path>) -> String {
+    match apart(state, default) {
+        None => format!("{FOLDER}-engine"),
+        Some(short) => format!("{FOLDER}-engine-{short}"),
+    }
+}
+
+/// For a state folder other than the `default`, as a test or a trial
+/// has, a short hash of it, which its engine's unit or job is named by.
+fn apart(state: &Path, default: Option<&Path>) -> Option<String> {
     use sha2::{Digest, Sha256};
     if default == Some(state) {
-        return format!("{FOLDER}-engine");
+        return None;
     }
     let hash = Sha256::digest(state.as_os_str().as_encoded_bytes());
-    let short: String = hash.iter().take(4).map(|b| format!("{b:02x}")).collect();
-    format!("{FOLDER}-engine-{short}")
+    Some(hash.iter().take(4).map(|b| format!("{b:02x}")).collect())
 }
 
 /// The unit the engine of `places` runs as, when it runs as the session's
-/// service.
+/// service; on macOS its launchd job's label.
 pub fn unit_of(places: &Places) -> String {
+    if cfg!(target_os = "macos") {
+        return launchd::label_of(places);
+    }
     unit_name(&places.state, crate::places::default_state().as_deref())
 }
 
@@ -355,10 +422,7 @@ impl Unit {
 /// The variables a unit gets over the user manager's (`manager`), from
 /// its `starter`'s:
 ///
-/// - those of Banda's own, but for what names an Agent's pass or Project,
-///   or Electron inside an AppImage, which goes as the AppImage stops;
-/// - each place as `places` resolved it, where the starter set it, or
-///   where the starter's XDG folder for it is not the manager's;
+/// - Banda's own ([`own`]);
 /// - the [`SESSION`]'s, where the manager lacks them;
 /// - PATH, the login shell's (`login`) then the manager's.
 fn environment(
@@ -367,11 +431,42 @@ fn environment(
     manager: &[(String, String)],
     login: Option<&str>,
 ) -> Vec<(String, String)> {
-    let given = |among: &[(String, String)], name: &str| {
-        (among.iter())
-            .find(|(named, value)| named == name && !value.is_empty())
-            .map(|(_, value)| value.clone())
-    };
+    let mut env = own(starter, places, manager);
+    for name in SESSION {
+        if let (Some(value), None) = (given(starter, name), given(manager, name)) {
+            env.push((name.to_owned(), value));
+        }
+    }
+    let manager_path = given(manager, "PATH").unwrap_or_default();
+    let path = merged(login.unwrap_or_default(), &manager_path);
+    if !path.is_empty() {
+        env.push(("PATH".to_owned(), path));
+    }
+    env
+}
+
+/// `name`'s value among `among`, when it is set and not empty.
+fn given(among: &[(String, String)], name: &str) -> Option<String> {
+    (among.iter())
+        .find(|(named, value)| named == name && !value.is_empty())
+        .map(|(_, value)| value.clone())
+}
+
+/// What an engine started apart, a unit or a launchd job, gets of its
+/// `starter`'s variables, over its `manager`'s:
+///
+/// - those of Banda's own, but for what names an Agent's pass, Project or
+///   terminal, says one Project is not trusted, or where one Project's
+///   Claude Code sessions are, that another machine's window started it
+///   over ssh, or Electron inside an AppImage, which goes as the AppImage
+///   stops: a login plist keeps what it gets;
+/// - each place as `places` resolved it, where the starter set it, or
+///   where the starter's XDG folder for it is not the manager's.
+fn own(
+    starter: &[(String, String)],
+    places: &Places,
+    manager: &[(String, String)],
+) -> Vec<(String, String)> {
     let in_appimage = given(starter, "APPIMAGE").is_some();
     let never = [
         TOKEN_VARIABLE,
@@ -379,6 +474,11 @@ fn environment(
         PROJECT_VARIABLE,
         "BANDA_SPACE",
         WAY_VARIABLE,
+        crate::control::OVER_SSH_VARIABLE,
+        // Each one Project's process's own, never the engine's.
+        "BANDA_UNTRUSTED",
+        "BANDA_CLAUDE_SESSIONS",
+        "BANDA_TERMINAL",
     ];
     let placed = crate::places::VARIABLES;
     let mut env: Vec<(String, String)> = (starter.iter())
@@ -393,16 +493,6 @@ fn environment(
         if given(starter, name).is_some() || moved {
             env.push((name.to_owned(), place.display().to_string()));
         }
-    }
-    for name in SESSION {
-        if let (Some(value), None) = (given(starter, name), given(manager, name)) {
-            env.push((name.to_owned(), value));
-        }
-    }
-    let manager_path = given(manager, "PATH").unwrap_or_default();
-    let path = merged(login.unwrap_or_default(), &manager_path);
-    if !path.is_empty() {
-        env.push(("PATH".to_owned(), path));
     }
     env
 }
@@ -422,19 +512,58 @@ fn merged(first: &str, then: &str) -> String {
 /// starter's; none when it fails, says nothing of it, or takes longer
 /// than the window waits.
 async fn login_path(shell: &Path, starter: &[(String, String)], path: &str) -> Option<String> {
+    let mut asked = tokio::process::Command::from(login_command(shell, starter, path));
+    let asked = asked.kill_on_drop(true).output();
+    let output = tokio::time::timeout(LOGIN_WITHIN, asked).await.ok()?.ok()?;
+    between(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// [`login_path`], waited for on this thread: for a launchd job, which
+/// asks before anything else runs (`launchd::begin`).
+fn login_path_now(shell: &Path, starter: &[(String, String)], path: &str) -> Option<String> {
+    let mut command = login_command(shell, starter, path);
+    let child = command.stdout(Stdio::piped()).spawn().ok()?;
+    let pid = child.id();
+    let (said, heard) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = said.send(child.wait_with_output());
+    });
+    match heard.recv_timeout(LOGIN_WITHIN) {
+        Ok(Ok(output)) => between(&String::from_utf8_lossy(&output.stdout)),
+        Ok(Err(_)) => None,
+        Err(_) => {
+            kill(pid);
+            None
+        }
+    }
+}
+
+/// Kills process `pid`, a login shell that took too long.
+#[cfg(unix)]
+fn kill(pid: u32) {
+    use rustix::process::{Pid, Signal, kill_process};
+    if let Some(pid) = i32::try_from(pid).ok().and_then(Pid::from_raw) {
+        let _ = kill_process(pid, Signal::KILL);
+    }
+}
+
+#[cfg(not(unix))]
+fn kill(_: u32) {}
+
+/// The login shell `shell`, asked to print its PATH between two marks,
+/// as [`login_path`] runs it.
+fn login_command(shell: &Path, starter: &[(String, String)], path: &str) -> Command {
     let script = format!("echo {MARK}; printenv PATH; echo {MARK}");
     let kept = (starter.iter()).filter(|(name, _)| LOGIN_KEEPS.contains(&name.as_str()));
-    let asked = tokio::process::Command::new(shell)
+    let mut command = Command::new(shell);
+    command
         .args(["-ilc", &script])
         .env_clear()
         .envs(kept.cloned())
         .env("PATH", path)
         .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .kill_on_drop(true)
-        .output();
-    let output = tokio::time::timeout(LOGIN_WITHIN, asked).await.ok()?.ok()?;
-    between(&String::from_utf8_lossy(&output.stdout))
+        .stderr(Stdio::null());
+    command
 }
 
 /// The line between the first two marks, if there is one.
@@ -494,7 +623,7 @@ pub async fn unit(places: &Places, program: PathBuf, version: u32, systemd: &dyn
 pub async fn start<T, F>(
     systemd: &dyn Systemd,
     unit: &Unit,
-    mut answers: impl FnMut() -> F,
+    answers: impl FnMut() -> F,
 ) -> Result<T, Failure>
 where
     F: Future<Output = Result<T, Failure>>,
@@ -506,6 +635,23 @@ where
             "Banda's engine did not start as a service: {said}"
         )));
     }
+    let says = format!("journalctl --user -u {}", unit.name);
+    answered(systemd, &unit.name, &says, answers).await
+}
+
+/// Waits for the engine that `name` runs to answer (`answers`), while
+/// `manager` says it runs and for [`OPENS_WITHIN`] at most; `says` is
+/// where what it did is told. An engine that answers with a refusal, as
+/// one of another protocol does, is not waited for.
+async fn answered<T, F>(
+    manager: &dyn Manager,
+    name: &str,
+    says: &str,
+    mut answers: impl FnMut() -> F,
+) -> Result<T, Failure>
+where
+    F: Future<Output = Result<T, Failure>>,
+{
     let began = Instant::now();
     loop {
         match answers().await {
@@ -513,23 +659,20 @@ where
             Err(refused @ Failure::Refused(_)) => return Err(refused),
             Err(_) => {}
         }
-        if !systemd.runs(&unit.name) {
+        if !manager.runs(name) {
             // It may have answered as it went.
             if let Ok(found) = answers().await {
                 return Ok(found);
             }
             return Err(Failure::Broken(format!(
-                "Banda's engine stopped as it started: its log, engine.log, says why \
-                 (journalctl --user -u {}).",
-                unit.name
+                "Banda's engine stopped as it started: its log, engine.log, says why ({says})."
             )));
         }
         if began.elapsed() > OPENS_WITHIN {
             return Err(Failure::Broken(format!(
                 "Banda's engine did not answer within {} s of its start: banda stop stops \
-                 it (journalctl --user -u {} says what it did).",
+                 it ({says} says what it did).",
                 OPENS_WITHIN.as_secs(),
-                unit.name
             )));
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -573,6 +716,9 @@ mod tests {
             self.up.store(!self.dies, Ordering::SeqCst);
             Ok(())
         }
+    }
+
+    impl Manager for Fake {
         fn runs(&self, _: &str) -> bool {
             self.up.load(Ordering::SeqCst)
         }
@@ -607,18 +753,37 @@ mod tests {
             ..Fake::default()
         };
         let none = Fake::default();
-        let service = Way::Service { version: 257 };
-        if cfg!(target_os = "linux") {
-            assert_eq!(way(None, false, &systemd), service);
-            assert_eq!(way(Some("service"), true, &systemd), service);
-            assert_eq!(way(None, false, &none), Way::Child(Why::NoSystemd));
-            let asked = way(Some("service"), true, &none);
-            assert_eq!(asked, Way::Child(Why::NoSystemd));
+        let service = Way::Service(Service::Unit { version: 257 });
+        let found = || unit_here(&systemd);
+        assert_eq!(way(None, false, found), service);
+        assert_eq!(way(Some("service"), true, found), service);
+        let missing = || unit_here(&none);
+        assert_eq!(way(None, false, missing), Way::Child(Why::NoSystemd));
+        let asked = way(Some("service"), true, missing);
+        assert_eq!(asked, Way::Child(Why::NoSystemd));
+        assert_eq!(way(None, true, found), Way::Child(Why::Checkout));
+        assert_eq!(way(Some("child"), false, found), Way::Child(Why::Asked));
+        // Nothing is asked of systemd for a child the way says.
+        let unasked = || -> Result<Service, Why> { panic!("asked") };
+        assert_eq!(way(None, true, unasked), Way::Child(Why::Checkout));
+    }
+
+    #[test]
+    fn each_system_runs_its_engine_as_its_own_service() {
+        let here = here();
+        if cfg!(target_os = "macos") {
+            assert!(
+                matches!(here, Ok(Service::Job) | Err(Why::NoScreen)),
+                "{here:?}"
+            );
+        } else if cfg!(target_os = "linux") {
+            assert!(
+                matches!(here, Ok(Service::Unit { .. }) | Err(Why::NoSystemd)),
+                "{here:?}"
+            );
         } else {
-            assert_eq!(way(None, false, &systemd), Way::Child(Why::NotYet));
+            assert_eq!(here, Err(Why::NotYet));
         }
-        assert_eq!(way(None, true, &systemd), Way::Child(Why::Checkout));
-        assert_eq!(way(Some("child"), false, &systemd), Way::Child(Why::Asked));
     }
 
     #[test]
@@ -715,6 +880,10 @@ mod tests {
             ("BANDA_PROJECT", "0190"),
             ("BANDA_SPACE", "0190"),
             ("BANDA_ENGINE_AS", "service"),
+            ("BANDA_OVER_SSH", "1"),
+            ("BANDA_UNTRUSTED", "1"),
+            ("BANDA_CLAUDE_SESSIONS", "/home/person/.claude/projects/x"),
+            ("BANDA_TERMINAL", "3"),
             ("BANDA_STATE", "/elsewhere"),
             ("BANDA_NODE", "/opt/banda/electron"),
             ("SSH_AUTH_SOCK", "/run/user/1000/ssh-agent.socket"),
@@ -747,6 +916,10 @@ mod tests {
             "BANDA_PROJECT",
             "BANDA_SPACE",
             "BANDA_ENGINE_AS",
+            "BANDA_OVER_SSH",
+            "BANDA_UNTRUSTED",
+            "BANDA_CLAUDE_SESSIONS",
+            "BANDA_TERMINAL",
             "XDG_CACHE_HOME",
         ] {
             assert_eq!(value(never), None, "{never}");
@@ -810,6 +983,20 @@ mod tests {
         let path = path.expect("the shell says its PATH");
         assert!(path.contains("/usr/bin"), "{path}");
         assert!(!path.contains("/starter/bin"), "{path}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_login_shell_asked_on_this_thread_says_its_path_the_same() {
+        let starter = pairs(&[("HOME", "/nonexistent"), ("PATH", "/starter/bin")]);
+        let path = login_path_now(Path::new("/bin/sh"), &starter, "/usr/bin:/bin");
+        let path = path.expect("the shell says its PATH");
+        assert!(path.contains("/usr/bin"), "{path}");
+        assert!(!path.contains("/starter/bin"), "{path}");
+        assert_eq!(
+            login_path_now(Path::new("/nonexistent/sh"), &starter, "/bin"),
+            None
+        );
     }
 
     #[tokio::test]
