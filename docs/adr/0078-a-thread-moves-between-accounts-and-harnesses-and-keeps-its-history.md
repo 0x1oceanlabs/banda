@@ -58,7 +58,10 @@ The points Roma decided are marked _decided_.
 3. **The sessions are Banda's** (_decided_).
    - **Claude Code.** The carried adapter gives the Agent SDK a `sessionStore` that the engine keeps, in the Project. Any Claude account continues a Thread's session, on this computer or, later, on another host.
    - **One adapter process per account.** The process's environment picks the account: the entry's `CLAUDE_CONFIG_DIR`, else the engine's own, as Limits and Usage read it. It never goes in a session's options, because on a resume the SDK follows the process's environment instead (the spike's trap, research part 4).
-   - **Codex.** An account's folder is a shadow of the shared `CODEX_HOME`: every entry is linked except `auth.json`, `auth.lock` and `models_cache.json`, as T3 Code does. A resume that fails with `invalid_encrypted_content` is retried once without the encrypted reasoning.
+   - **Codex.** An account's folder is a shadow of the shared `CODEX_HOME`: every entry is linked except `auth.json`, `auth.lock` and `models_cache.json`, as T3 Code does.
+     - The engine makes the shadow as the account's process starts. An entry the account's folder has of its own stays, its own `config.toml` say. Its own `sessions` and `archived_sessions` move into the shared ones, file by file. What cannot move is set aside as `<name>.before-banda`.
+     - A session that moves to another Codex account first loses its hidden reasoning: the reasoning items go from its rollout before the new account opens it. This replaces "retry once after `invalid_encrypted_content`" (step 4): the reasoning is sealed for the account that wrote it, so the first request on the new account would fail anyway. The visible conversation, tool calls and their results stay.
+     - Windows has no shadow, as links need the Person's leave there: each Codex account keeps its own sessions, and a Thread moves to none.
    - `Evidence` names a session by its store (the Harness), not by the entry. `continued_by` asks whether the store matches.
 
 4. **Moving to another account of the same Harness is one click.**
@@ -122,6 +125,7 @@ The points Roma decided are marked _decided_.
 - The Project's store holds Claude sessions, so a Thread's size on disk grows by its transcript. The Harness's own folder keeps its copy too, swept by `cleanupPeriodDays`.
 - `sessionStore` is `@alpha` in the Agent SDK. A change in it is a carried-adapter change, tested in CI (ADR 0059). If it goes away, a Claude account move falls back to the handoff of decision 5.
 - The usage limit's card builds on PR 630's snooze offer.
+- Codex's accounts share one `sessions` folder, so the Usage Pane counts their Codex use as one (ADR 0055 decision 1 reads the journal by folder). Counting by account would read each Turn's account instead.
 
 ## Steps
 

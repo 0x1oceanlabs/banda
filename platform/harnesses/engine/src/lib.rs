@@ -18,6 +18,7 @@ pub mod model;
 mod module;
 mod record;
 mod serving;
+mod shadow;
 
 pub use list::{Cli, Credentials, FILE, Harness, Harnesses, LimitsSettings};
 pub use module::{HarnessesModule, LimitsNow, SETTINGS, account_changed};

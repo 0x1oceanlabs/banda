@@ -214,6 +214,11 @@ impl<H: Host> Hosts<H> {
         if let Some(pause) = pause(slot.deaths) {
             tokio::time::sleep(pause).await;
         }
+        // A Codex account's home shares its Harness's sessions (ADR 0078,
+        // decision 3); one that cannot starts with its own.
+        if let Err(error) = harness.make_shadow().await {
+            tracing::warn!(%error, harness = %harness.id, "an account's home does not shadow its Harness's");
+        }
         match H::start(environment, harness).await {
             Ok(host) => {
                 slot.host = Some(host.clone());

@@ -38,6 +38,11 @@ fn forked_at(mut meta: acp::Meta, message: &str) -> acp::Meta {
 }
 
 impl Evidence {
+    /// The session's ID, as its Harness named it.
+    pub fn session(&self) -> &str {
+        &self.session
+    }
+
     /// The session of a Thread that forks this one's at `at`.
     pub fn forked_at(mut self, at: ForkAt) -> Evidence {
         self.fork = Some(at);

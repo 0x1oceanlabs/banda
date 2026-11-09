@@ -1015,6 +1015,24 @@ pub fn run_on(sql: &Connection, turn: TurnId) -> Result<Option<String>, Error> {
     )?)
 }
 
+/// The Harness entry the Thread's latest turn but `turn` ran on: the
+/// account a session moves from, when it moved (ADR 0078).
+pub fn ran_before(
+    sql: &Connection,
+    thread: ThreadId,
+    turn: TurnId,
+) -> Result<Option<String>, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT harness FROM agents_turns
+             WHERE thread = ?1 AND id != ?2 AND harness IS NOT NULL
+             ORDER BY created_at DESC, id DESC LIMIT 1",
+            params![thread, turn],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
 /// Who opened each of the Thread's turns.
 pub fn openers(sql: &Connection, thread: ThreadId) -> Result<HashMap<TurnId, Opener>, Error> {
     let mut statement = sql.prepare("SELECT id, opener FROM agents_turns WHERE thread = ?1")?;

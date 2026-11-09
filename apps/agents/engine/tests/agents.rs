@@ -74,6 +74,7 @@ fn fake_with(env: &[(&str, &str)]) -> Harness {
         mark: None,
         icon: None,
         colour: None,
+        shadows: None,
         carried: None,
         record: None,
         cwd: None,
@@ -1500,6 +1501,7 @@ fn with_cli_since(program: &str, minimum: Option<&str>) -> Agents {
         mark: None,
         icon: None,
         colour: None,
+        shadows: None,
         carried: None,
         record: None,
         cwd: None,
@@ -3337,6 +3339,7 @@ async fn the_real_harnesses_say_what_they_run_and_who_is_signed_in() {
         mark: None,
         icon: None,
         colour: None,
+        shadows: None,
         carried: None,
         record: None,
         cwd: None,
@@ -5962,6 +5965,7 @@ fn two_claude_accounts(cli: &Path) -> Agents {
         mark: None,
         icon: None,
         colour: None,
+        shadows: None,
         carried: None,
         record: None,
         cwd: None,
@@ -6031,6 +6035,78 @@ async fn a_thread_moves_to_another_account_and_keeps_its_session() {
     assert!(switch("gone").await.is_err(), "an entry the list has not");
 }
 
+/// Two accounts of Codex, the fake agent each: `codex`, whose home is
+/// `codex` under `root`, and `work`, which signs in in `work` and shadows
+/// it (ADR 0078, decision 3).
+#[cfg(unix)]
+fn two_codex_accounts(root: &Path, cli: &Path) -> Agents {
+    let entry = |id: &str, of: Option<&str>, home: &str| Harness {
+        id: id.into(),
+        name: id.into(),
+        cli: Some(Cli {
+            program: cli.display().to_string(),
+            variable: "CODEX_PATH".to_owned(),
+            minimum: None,
+        }),
+        of: of.map(Into::into),
+        shadows: of.map(|_| root.join("codex")),
+        ..fake_with(&[("CODEX_HOME", &root.join(home).display().to_string())])
+    };
+    Agents::new(Harnesses::new(vec![
+        entry("codex", None, "codex"),
+        entry("work", Some("codex"), "work"),
+    ]))
+}
+
+// Its CLI is a `sh` script that runs by its exec bit.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_codex_thread_moves_to_another_account_and_forgets_only_its_reasoning() {
+    let (root, bin) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let cli = fake_cli(bin.path());
+    let agents = two_codex_accounts(root.path(), &cli);
+    let world = World::new_on(root.path(), agents, "codex").await;
+    let (thread, (session, on_codex)) = ask_session(&world, None).await;
+    // Codex's rollout of the session, as the first account wrote it.
+    let day = root.path().join("codex/sessions/2026/11/09");
+    std::fs::create_dir_all(&day).unwrap();
+    let rollout = day.join(format!("rollout-2026-11-09T10-00-00-{session}.jsonl"));
+    let said = r#"{"type":"response_item","payload":{"type":"message"}}"#;
+    let sealed =
+        r#"{"type":"response_item","payload":{"type":"reasoning","encrypted_content":"x"}}"#;
+    std::fs::write(&rollout, format!("{said}\n{sealed}\n")).unwrap();
+    let switch = |harness: &str| {
+        let params = json!({ "thread": thread, "harness": harness });
+        world.call(world.person(), "agents.switch", params)
+    };
+
+    switch("work").await.unwrap();
+    let (_, (again, on_work)) = ask_session(&world, Some(&thread)).await;
+    assert_ne!(on_codex, on_work, "another account's process");
+    assert_eq!(session, again, "the same session");
+    let sessions = std::fs::read_link(root.path().join("work/sessions")).unwrap();
+    assert_eq!(
+        sessions,
+        root.path().join("codex/sessions"),
+        "a shadow home"
+    );
+    let left = std::fs::read_to_string(&rollout).unwrap();
+    assert_eq!(
+        left,
+        format!("{said}\n"),
+        "the first account's reasoning is gone"
+    );
+
+    // A turn on the account it is on keeps what that account wrote.
+    std::fs::write(&rollout, format!("{said}\n{sealed}\n")).unwrap();
+    ask_session(&world, Some(&thread)).await;
+    assert!(
+        std::fs::read_to_string(&rollout)
+            .unwrap()
+            .contains("reasoning")
+    );
+}
+
 /// Banda's own Claude Code entry, with the adapters the engine found on
 /// its host and a Node to run them on (ADR 0059; ADR 0062, step S1): a
 /// Thread's process is the carried adapter on that Node, told where the
@@ -6068,6 +6144,7 @@ async fn a_threads_process_runs_the_carried_adapter_on_the_node_found_with_the_p
         mark: None,
         icon: None,
         colour: None,
+        shadows: None,
         carried: Some("claude-agent-acp.mjs".into()),
         record: None,
         cwd: None,
