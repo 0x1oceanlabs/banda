@@ -28,10 +28,10 @@ light theme and the rhythm table).
 - **Eight states** (`MarkState`): rest, idle, thinking, running, asking,
   done, failed, offline. Running is one motion whatever the Agent does.
 - **Failed** is the square in red; nothing but colour tells it from done.
-- **A snoozed Thread that wakes** shows as it was; the sidebar adds a
+- **A Thread that wakes from Later** shows as it was; the sidebar adds a
   word. Nothing on the mark says it slept.
 - **The window does not know what a turn does now.** `ListedThread`
-  carries the latest turn, the questions, the message, the snooze and
+  carries the latest turn, the questions, the message, the Later and
   seen; the Body's tool entries have a `ToolKind` (read, edit, delete,
   move, search, execute, think, fetch, other) and a status, but no list
   reads them.
