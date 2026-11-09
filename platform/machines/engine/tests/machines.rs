@@ -290,15 +290,22 @@ async fn machine_power_says_the_battery_and_why_the_machine_is_awake_as_they_cha
     battery.send_modify(|_| {});
     no_frame(&mut socket).await;
 
-    // A Turn runs: the machine is held awake, and says why.
+    // A Turn runs: the machine is held awake, and says why, where its
+    // system holds it; Windows holds nothing yet, and says no why.
+    let holds = cfg!(any(target_os = "linux", target_os = "macos"));
+    let why = if holds { json!("working") } else { Value::Null };
     let turn = working.hold();
-    let working_now = piece_of(&mut socket, 2).await;
-    assert_eq!(working_now["awake"], "working", "{working_now}");
-    assert_eq!(working_now["battery"], lower["battery"]);
+    if holds {
+        let working_now = piece_of(&mut socket, 2).await;
+        assert_eq!(working_now["awake"], why, "{working_now}");
+        assert_eq!(working_now["battery"], lower["battery"]);
+    } else {
+        no_frame(&mut socket).await;
+    }
     // It ends: held still, for the tail after it.
     drop(turn);
     no_frame(&mut socket).await;
-    assert_eq!(*keeping.why().borrow(), Some(Why::Working));
+    assert_eq!(*keeping.why().borrow(), holds.then_some(Why::Working));
 
     // Plugged in, and charging, with no time known yet.
     let charging = Battery {
@@ -312,7 +319,7 @@ async fn machine_power_says_the_battery_and_why_the_machine_is_awake_as_they_cha
         piece_of(&mut socket, 2).await,
         json!({
             "battery": { "percent": 42, "charging": true, "on_power": true },
-            "awake": "working",
+            "awake": why,
         })
     );
 
