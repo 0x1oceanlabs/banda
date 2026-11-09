@@ -99,6 +99,7 @@ Roma asked for a visual settings module where Claude Code, Codex and the rest ar
 8. **Fewer sections than T3 Code's 22.**
    - The main ones: General, Appearance, Sidebar, Sounds & calls, Agents, Terminal, Browser and Keys.
    - Then under Banda: Modules, and Files (where each file is, and whether it reads).
+     - _Changed on 2026-11-09 (#1043)._ That section is "Settings files", with the id `settings-files`, apart from the Files App's own "Files" section.
    - A module from elsewhere adds its section through its manifest (ADR 0005, decision 12).
 
 9. **It looks like the mockup Roma approved**, `docs/adr/0016-settings-window.html`.
