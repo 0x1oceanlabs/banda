@@ -1,9 +1,11 @@
 //! A Thread put away until a time, until the turn that runs ends, or
-//! Someday (ADR 0074; ADR 0098, decisions 11 and 12). The Later is the Thread's, kept on it, so every window, machine
-//! and Agent sees the same one. Whether it still sleeps is worked out
-//! from it ([`crate::rules::later`]): what calls its Person wakes it
-//! early as that fact is written ([`heard`]), and its time needs no timer.
-
+//! Someday (ADR 0074; ADR 0098, decisions 11 and 12). The Later is the
+//! Thread's, kept on it, so every window, machine and Agent sees the same
+//! one. Whether it still sleeps is worked out from it
+//! ([`crate::rules::later`]): what calls its Person wakes it early as that
+//! fact is written ([`heard`]), and its time wakes it on the host
+//! ([`crate::time_comes`]); a reader whose clock is ahead of that fact
+//! takes it as awake already.
 use crate::model::{Fact, Later, ThreadId, TurnId, TurnState, Until, Wake, Woke, WokeSeen};
 use crate::rules::later::{asleep, may_put_off, persons_own, sees, wake_of, wakes};
 use crate::{emit, store};
@@ -183,7 +185,16 @@ pub fn wake(tx: &mut Tx<'_>, author: Participant, thread: Option<ThreadId>) -> R
     may_touch(tx, author, thread)?;
     let now = tx.now();
     match store::later(tx.sql(), thread)? {
-        Some(later) if asleep(&later, now) => woke(tx, author, thread, later, Wake::Woken),
+        Some(later) if asleep(&later, now) => woke(
+            tx,
+            author,
+            thread,
+            later,
+            Woke {
+                at: now,
+                by: Wake::Woken,
+            },
+        ),
         _ => Ok(()),
     }
 }
@@ -221,22 +232,31 @@ pub fn heard(
     let Some(by) = wake_of(fact, author) else {
         return Ok(());
     };
+    let now = tx.now();
     match store::later(tx.sql(), thread)? {
-        Some(later) if wakes(&later, by, tx.now()) => woke(tx, author, thread, later, by),
+        Some(later) if wakes(&later, by, now) => {
+            woke(tx, author, thread, later, Woke { at: now, by })
+        }
         _ => Ok(()),
     }
 }
 
-fn woke(
+/// `thread`, under `later`, woke at `at` by `by`, as `author` says.
+pub(crate) fn woke(
     tx: &mut Tx<'_>,
     author: Participant,
     thread: ThreadId,
     later: Later,
-    by: Wake,
+    Woke { at, by }: Woke,
 ) -> Result<(), Error> {
-    let woke = Some(Woke { at: tx.now(), by });
+    let woke = Some(Woke { at, by });
     store::set_later(tx.sql(), thread, &Later { woke, ..later })?;
-    emit(tx, author, thread, &Fact::ThreadWoke { thread, by })
+    let fact = Fact::ThreadWoke {
+        thread,
+        by,
+        at: Some(at),
+    };
+    emit(tx, author, thread, &fact)
 }
 
 /// Whether `author` may put off or wake `thread`: a Thread there is, and,

@@ -327,15 +327,14 @@ pub fn later(sql: &Connection, thread: ThreadId) -> Result<Option<Later>, Error>
     thread_json(sql, thread, "later")
 }
 
-/// The Threads whose failed turn goes again as their Later's time comes:
-/// each one's ID and Later (ADR 0074, decision 8).
-pub fn resuming(sql: &Connection) -> Result<Vec<(ThreadId, Later)>, Error> {
+/// Each put-off Thread with a time that has yet to wake, with its time.
+pub fn timed(sql: &Connection) -> Result<Vec<(ThreadId, i64)>, Error> {
     let mut statement = sql.prepare(
-        "SELECT id, later FROM agents_threads
-         WHERE json_extract(later, '$.resume') IS NOT NULL
+        "SELECT id, json_extract(later, '$.until') FROM agents_threads
+         WHERE json_extract(later, '$.until') IS NOT NULL
            AND json_extract(later, '$.woke') IS NULL",
     )?;
-    let rows = statement.query_map([], |row| Ok((row.get(0)?, column(row, 1)?)))?;
+    let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 

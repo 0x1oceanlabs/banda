@@ -180,7 +180,7 @@ function applied(state: ThreadList, event: Event): ThreadList {
       return change(state, event, (thread) => ({ ...thread, later }))
     }
     case "thread.woke": {
-      const woke = { at: event.at, by: fact.payload.by }
+      const woke = { at: fact.payload.at ?? event.at, by: fact.payload.by }
       return change(state, event, (thread) =>
         thread.later ? { ...thread, later: { ...thread.later, woke } } : thread
       )
