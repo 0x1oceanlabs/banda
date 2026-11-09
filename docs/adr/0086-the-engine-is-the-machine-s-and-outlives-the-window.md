@@ -9,7 +9,8 @@ _Drafted as ADR 0049 on 2026-11-04, in PR #460. Main has since given 0049
 to another ADR, so this one is 0086. Commits before then say ADR 0049.
 Roma accepted it as part of the architecture vision on 2026-11-06 (ADR
 0062 decision 19). Its decisions are as drafted, but for decisions 6 and
-8 (see Changes)._
+8, and for login start and what follows from it, which Roma decided on
+2026-11-09 (decisions 1, 3, 4 and 6; see Changes)._
 
 Today the engine is the window's child. The window starts
 `banda serve --with-parent`, and the engine stops when its stdin closes
@@ -51,19 +52,26 @@ Roma decided on 2026-11-04:
 
 1. **The engine is a service of the Person's session, not the window's
    child.**
+   - **It starts at login, by default, on every OS.** A setting, "Start
+     Banda at login", turns that off. macOS has it first, Linux next,
+     Windows later.
    - On Linux it is a systemd user unit, `<folder>-engine`
-     (`banda-engine`, `banda-dev-engine`; ADR 0033's folders). It is
-     started with `systemd-run --user`, as herdr-core does. So a window
-     crash, a closed window or a dropped ssh does not take it down.
-     Logging out does, because the user manager stops then. A server
-     that should keep it has the user's linger on
-     (`loginctl enable-linger`).
-   - On macOS it is a launchd agent in `~/Library/LaunchAgents`, started
-     on demand, not at login.
-   - **Any client starts it.** The window, `banda call`, `banda follow`
-     and the other commands first look for a running engine. If none
-     answers, they start the unit, then wait up to 5 s for it to answer.
-     The lock that refuses a second engine stays as it is.
+     (`banda-engine`, `banda-dev-engine`; ADR 0033's folders). With the
+     setting on, the unit is enabled, so the user manager starts it at
+     login. Otherwise a client starts it with `systemd-run --user`, as
+     herdr-core does. Either way a window crash, a closed window or a
+     dropped ssh does not take it down. Logging out does, because the
+     user manager stops then. A machine that serves others has the
+     user's linger on (`loginctl enable-linger`), so its engine runs
+     from boot and outlives a logout.
+   - On macOS it is a launchd agent, `<bundle id>.engine`. With the
+     setting on, launchd starts it at login. launchd keeps the job, so it
+     starts the engine again after a crash.
+   - **Any client starts it** when it is not running: the setting is
+     off, or the engine was quit. The window, `banda call`,
+     `banda follow` and the other commands first look for a running
+     engine. If none answers, they start it, then wait up to 5 s for it
+     to answer. The lock that refuses a second engine stays as it is.
    - **A client on this computer comes in through the owner socket,
      checked by its user** (ADR 0083, decision 1).
    - Harnesses, Terminals and the servers started in them (ADR 0044) are
@@ -74,15 +82,18 @@ Roma decided on 2026-11-04:
      `banda call` run inside Claude Code does not pass on `CLAUDECODE` or
      `CLAUDE_CODE_SESSION_ID`. Otherwise every Harness and Terminal would
      think it is nested. The user manager's PATH lacks what the shell
-     adds (mise, for one), so the engine takes PATH from the login shell,
-     as the window already does on macOS (`login.ts`).
+     adds (mise, for one), and launchd's is bare, so the engine takes
+     PATH from the login shell itself, as the window already does on
+     macOS (`login.ts`).
    - **One child's death does not stop it.** The unit has
      `OOMPolicy=continue`, as herdr-core's does. Without it, systemd
      stops the whole unit when the kernel kills one Harness for want of
      memory.
    - **It stops its children first.** The unit has `KillMode=mixed`.
      SIGTERM goes to the engine, which stops its Harnesses and Terminals
-     itself. Whatever is left after the timeout is killed.
+     itself. Whatever is left after the timeout is killed. macOS has no
+     such unit, so there the next engine stops what a crashed one left,
+     before it listens.
    - **It knows how the last engine left.** On a clean exit the engine
      writes that it left, and how: `stopped` or `handed over` (an
      update). An engine that finds no such word knows the last one
@@ -122,9 +133,11 @@ Roma decided on 2026-11-04:
      and so do the Agents.
    - **Quit Banda stops the engine.** It is in the Banda menu, on Ctrl+Q
      (⌘Q on macOS), on the bar icon, and in a new `banda stop`.
-   - If Turns are running, Quit asks first: "2 Agents are working. Stop
-     them and quit?" `banda stop` asks the same, and `--force` skips the
-     question.
+   - If Turns are running, Quit asks first, in one set of words
+     everywhere, with Cancel as the default: "2 Agents work on this Mac"
+     / "Quitting Banda stops them too." / "Quit anyway" or "Cancel". With
+     one Agent: "An Agent works on this Mac" / "Quitting Banda stops it
+     too." `banda stop` asks the same, and `--force` skips the question.
    - The engine stops its Harnesses and Terminals itself, on SIGTERM,
      before it exits.
 
@@ -145,21 +158,32 @@ Roma decided on 2026-11-04:
      bar. It has the same panel and the same Quit Banda. ⌘Q is Quit Banda
      (decision 3). Closing a window with ⌘W or the red button only closes
      it.
-   - The panel's look is shown to Roma as a mock first.
+   - **An engine with no app opens it.** Started from another machine,
+     or left running after the app crashed, the engine opens Banda.app
+     hidden, by its path (`open -g -j`), so the menu bar icon and the
+     calls are there.
+   - The panel's look is shown to Roma as a mock first. The macOS menu
+     bar mock (`mac-menubar-v1`) is accepted (2026-11-09).
 
 5. **With no window, the engine calls the Person itself.**
    - ADR 0011's calls come from the window today: an Agent waits, or a
      Turn ends. With no window, the engine sends them itself, on Linux
      through the freedesktop notification service. Clicking one opens a
      window on that Thread, through a new `banda open --thread <id>`.
-   - On macOS, Banda.app stays running (decision 4), so it calls the
-     Person as it does today.
+   - On macOS, Banda.app stays running, or the engine opens it
+     (decision 4), so it calls the Person as it does today.
 
-6. **An update restarts the engine only when no Turn runs.**
+6. **An update restarts the engine once no Turn runs, or when the Person
+   says so.**
    - ADR 0041 restarts the window into the new version, as before.
-   - The engine is restarted from the new copy (decision 2) when no Turn
-     runs. If Turns are running, it waits. The bar says "Banda updates
-     when the Agents finish", with "Restart now".
+   - The engine is restarted from the new copy (decision 2) once no Turn
+     runs, on every OS. If Turns are running, it waits. The updater says
+     "Banda updates when the Agents finish", with "Restart now".
+   - **Restart now warns while Agents work**, as Quit does (decision 3),
+     and restarts the engine anyway if the Person confirms.
+   - **brew's cask never quits Banda.** Its `uninstall` has no `quit:`
+     and no `launchctl:`, so `brew upgrade` leaves the engine and its
+     Agents running. Its `zap` removes the job.
    - A restart ends the Terminals, as it does today. If programs run in
      them, the update says how many before it restarts. Keeping Terminals
      across a restart is herdr-core's holder (research, point 9). That is
@@ -212,19 +236,40 @@ Roma decided on 2026-11-04:
 4. `banda status --follow`, and the Omarchy shell plugin, mock first
    (decision 4).
 5. The engine calls the Person when no window is open (decision 5).
-6. The engine updates when no Turn runs, with the versions `welcome`
-   names (ADR 0082, plan step 12), `contract/released.json` and its test
-   (decision 6). The released copy and its test may come earlier, on
-   their own.
-7. macOS: the launchd agent, the menu bar icon, ⌘Q, and no quitting on
-   the last window. Mock first (decisions 1 and 4).
+6. The engine updates once no Turn runs, or on Restart now, with the
+   versions `welcome` names (ADR 0082, plan step 12),
+   `contract/released.json` and its test (decision 6). The released copy
+   and its test may come earlier, on their own.
+7. macOS, in six PRs (decisions 1, 3, 4 and 6):
+   - 7a. The engine as a launchd job, started at login unless "Start
+     Banda at login" is off, and by any client when it is not running.
+   - 7b. Cleanup after a crash: the next engine stops the Harnesses and
+     Terminals a crashed one left, before it listens.
+   - 7c. arc starts the Mac's engine over ssh while the Person is logged
+     in at the Mac's screen, and an engine with no app opens Banda.app
+     hidden.
+   - 7d. `banda status --follow` (step 4's command, built here first, so
+     the menu bar and Omarchy's plugin read one source).
+   - 7e. The menu bar icon and its menu, the Dock icon only while a
+     window shows, and the one set of Quit words, as the accepted mock.
+   - 7f. Updates: the engine restarts on the new version once no Turn
+     runs, Restart now with its warning, and a cask that never quits
+     Banda (what step 6 has not built yet comes here).
+8. Linux: login start. The unit is enabled while "Start Banda at login"
+   is on, and a machine that serves others has linger on. Linger is
+   turned on once and off the start path, as herdr-core does, since
+   `loginctl` can wait long on polkit (decision 1).
 
-Another machine (decision 8) is ADR 0081's plan, after step 3.
+Another machine (decision 8) is ADR 0081's plan, after step 3. Windows
+starts at login too, later.
 
 **Consequences.**
 
 - New commands: `banda status [--follow]`, `banda stop [--force]` and
-  `banda open [--thread <id>]`.
+  `banda open [--thread <id>]`. A new setting, "Start Banda at login",
+  on by default.
+- macOS lists the engine under Login Items, and says so once when it is
+  added.
 - `docs/architecture.md`: "The engine is the window's child" becomes
   "The engine is the machine's", and the window becomes a client that
   starts the engine when it is not running.
@@ -251,8 +296,8 @@ Another machine (decision 8) is ADR 0081's plan, after step 3.
   worked out on the host, they follow ADR 0081 decision 6 and ADR 0082
   decision 15.
 - ADR 0041, decision 2: an update still restarts the window into the new
-  version; the engine restarts from its new copy only when no Turn runs
-  (decision 6).
+  version; the engine restarts from its new copy once no Turn runs, or
+  on Restart now (decision 6).
 - Decision 1, as step 3 built it (2026-11-07): a client waits up to two
   minutes, not 5 s, for an engine whose unit runs, as the engine answers
   only once it has opened every Project, with their migrations. The
@@ -267,13 +312,37 @@ Another machine (decision 8) is ADR 0081's plan, after step 3.
   engine does not let a Harness go for idling while a process under it
   listens, as a trial or a server it started does. A Person's terminal
   starts its windows in a unit of their own, as before.
-- Decision 1 on macOS, until step 7 (2026-11-08, Roma): another
+- Decision 1 on macOS, until step 7c (2026-11-08, Roma): another
   machine's window sees a Mac's engine over ssh only while Banda is open
   there. The `banda start --with-parent` it runs there says so
   (`BANDA_OVER_SSH`), and on a Mac it starts no engine: one would stop
   as the link drops, with its Agents, and lack the Mac's PATH. While no
   Banda is open there it exits 75, and that window shows the Mac away
-  and tries again (`docs/hosts.md`).
+  and tries again (`docs/hosts.md`). From step 7c (2026-11-09, Roma),
+  arc may start the Mac's engine over ssh while the Person is logged in
+  at the Mac's screen, even with the screen locked. The engine then runs
+  in the screen's session, with the Person's sign-ins, as if started
+  there, and takes PATH from the login shell itself. With nobody logged
+  in, the Mac is away (exit 75), as before. Tried on m1pro on
+  2026-11-09.
+- Decision 1, login start (2026-11-09, Roma): the engine starts at login
+  by default on every OS, and a setting, "Start Banda at login", turns
+  that off. This replaces "started on demand, not at login" on macOS,
+  and adds login start on Linux. Any client still starts it when it is
+  not running. On macOS it is a launchd agent; on Linux an enabled user
+  unit, with linger on a machine that serves others; Windows later.
+  herdr-core uses launchd only to start its server once, apart from the
+  app that launched it, and then lets the job go: no login start, no
+  restart after a crash, and over ssh a plain start. Banda keeps its
+  job, so the engine starts at login, comes back after a crash, and from
+  ssh runs in the screen's session.
+- Decisions 3, 4 and 6 (2026-11-09, Roma): Quit has one set of words
+  everywhere, Cancel by default. An engine with no app opens Banda.app
+  hidden, and the macOS menu bar mock is accepted. An update restarts
+  the engine once no Turn runs, on every OS, and "Restart now" warns
+  while Agents work, then restarts it anyway if the Person confirms.
+  brew's cask never quits Banda, and its zap removes the job. Plan step
+  7 is six PRs, 7a to 7f, and Linux login start is step 8.
 - The draft in PR #460, decision 6: the engine's own `hello` with a
   "generation" gives way to ADR 0082's `challenge`, `hello` with a
   range, and `welcome`.
