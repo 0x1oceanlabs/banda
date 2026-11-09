@@ -335,8 +335,9 @@ test("the Tiling names nothing the Apps list", () => {
  * Thread; the counts, which name the Thread the Pane in focus shows when
  * it is an Agent's; and the Window's adapter to the Tiling, where a
  * Thread's Agent is its Group's owner. No Tiling file, and not the
- * Window's root: Solo asks the port for an owner. B7a empties the list,
- * as `item@1` names its owner. None joins it, and one that goes leaves it.
+ * Window's root: a Group's owner comes through the port. B7a empties the
+ * list, as `item@1` names its owner. None joins it, and one that goes
+ * leaves it.
  */
 const AGENT_READERS = [
   "web/src/bar/fold.ts",
