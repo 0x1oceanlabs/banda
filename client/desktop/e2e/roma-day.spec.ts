@@ -397,7 +397,7 @@ test("with the Sidebar hidden, Alt+U goes down what calls in the sidebar list's 
   ).toBeVisible()
 })
 
-test("Alt+Z snoozes the Thread in front until the time typed, its Pane closes, Undo wakes it, and so does Wake on its shelf (ADR 0074)", async () => {
+test("Alt+Z snoozes the Thread in front until the time typed, its Pane closes, Undo wakes it, and so do Wake on its shelf and on its picker (ADR 0074)", async () => {
   window = await startWindow()
   const { page } = window
   const [, b] = await agents(window, "hello a", "hello b")

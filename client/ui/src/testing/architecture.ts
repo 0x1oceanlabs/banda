@@ -255,15 +255,19 @@ function componentProps(
     name && (ts.isIdentifier(name) || ts.isStringLiteral(name))
       ? [name.text]
       : []
-  const members = (type: ts.Node): string[] => {
+  // Each type once, so an interface that extends itself ends.
+  const members = (type: ts.Node, seen = new Set<ts.Node>()): string[] => {
     const node = resolved(type, new Set())
-    if (ts.isIntersectionTypeNode(node)) return node.types.flatMap(members)
+    if (seen.has(node)) return []
+    seen.add(node)
+    if (ts.isIntersectionTypeNode(node))
+      return node.types.flatMap((part) => members(part, seen))
     if (!ts.isTypeLiteralNode(node) && !ts.isInterfaceDeclaration(node))
       return []
     // An interface of the file takes the members of those it extends.
     const extended = ts.isInterfaceDeclaration(node)
       ? (node.heritageClauses ?? []).flatMap((clause) =>
-          clause.types.flatMap(members)
+          clause.types.flatMap((base) => members(base, seen))
         )
       : []
     const own = node.members.flatMap((member) => {

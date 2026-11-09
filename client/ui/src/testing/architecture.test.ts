@@ -83,12 +83,17 @@ test("the check sees every prop of a component, whatever its type, and each it t
     `const Row = ({ row, onOpen: open, ...rest }: Omit<ComponentProps<typeof Other>, "x">) => null`,
     `const Item = memo(function Item({ onArchive }: { onArchive: Archive }) { return null })`,
     `function lower({ onOpen }: { onOpen: VoidFunction }) {}`,
+    // Not TypeScript, as each extends the other, yet the check ends.
+    `interface Looping extends Looped { onLoop: VoidFunction }`,
+    `interface Looped extends Looping { looped: boolean }`,
+    `function Loop(props: Looping) {}`,
   ].join("\n")
   expect(propNames(source, "menu.tsx")).toEqual({
     Menu: ["project", "onPin", "onRename", "onWake"],
     Header: ["label", "onFold", "folded", "onPin"],
     Row: ["row", "onOpen"],
     Item: ["onArchive"],
+    Loop: ["looped", "onLoop"],
   })
   // Of these, only a method is surely code, read in the file alone.
   expect(functionProps(source, "menu.tsx")).toEqual({
@@ -96,6 +101,7 @@ test("the check sees every prop of a component, whatever its type, and each it t
     Header: ["onFold"],
     Row: [],
     Item: [],
+    Loop: [],
   })
 })
 
