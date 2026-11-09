@@ -270,6 +270,11 @@ test("Ctrl+Shift+F finds a word and opens its file at the line; Alt+P opens a fi
   await expect(menu.getByText("Files", { exact: true })).toBeVisible()
   const search = menu.getByRole("combobox", { name: "Search" })
   await expect(search).toBeFocused()
+  // Before a word, the file opened lately comes first; those found stay
+  // as a word is typed, only those that fit it, until the engine answers.
+  await expect(menu.getByRole("option").first()).toHaveAccessibleName(
+    /^main\.ts/
+  )
   await search.fill("util")
   await expect(menu.getByRole("option", { name: /^util\.ts/ })).toBeVisible()
   await search.press("Enter")
