@@ -289,8 +289,9 @@ export const PaneFrame = memo(function PaneFrame({
   }, [frame, entry.id, entry.pane, onHost])
   const summary =
     project ?? reach.shown?.projects.find((one) => one.id === entry.project)
-  // What the Slot in its header is given: the Pane, and the Item it shows.
-  const slot = { project: entry.project, pane: entry.pane, listed }
+  // What the Slot in its header is given: the Pane alone. What fills it
+  // finds the Item the Pane shows itself (#943).
+  const slot = { project: entry.project, pane: entry.pane }
   // Its Tile, which the Tiling configures and its Pane reads (ADR 0088,
   // decision 4): the same for as long as it is drawn, so no Configure
   // draws it again.

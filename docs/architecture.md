@@ -648,10 +648,13 @@ a Thread in the Tiling's `pane.header`, a Pane's header and its tile's
 label in the Overview (ADR 0062, decision 17), where the window names
 another machine too. The window gives what the modules that run put in
 each (`Slots`), and each Slot's owner reads its own in one place
-(`useSlot`), in the modules' order. A Pane puts its own buttons in the
-header the frame draws with `InHeader`. Threads' own action
-`agents.thread.details{part}` shows the focused Thread's card with a part
-of its rows open, as git's Alt+Shift+G runs it for its branch picker.
+(`useSlot`), in the modules' order. A Pane's header gives what fills it
+the Pane alone: Threads finds the Thread it shows in what the window
+lists, which the window gives the Apps (`useItem`, #943). A Pane puts
+its own buttons in the header the frame draws with `InHeader`. Threads'
+own action `agents.thread.details{part}` shows the focused Thread's card
+with a part of its rows open, as git's Alt+Shift+G runs it for its branch
+picker.
 `items` are its item actions (ADR 0087, decision 12): what the Person
 does to one of the Items it lists, as renaming or snoozing a Thread. Each
 is an action, by a key too, with the row it shows for an Item; the Thread

@@ -734,7 +734,7 @@ function Row({
 }) {
   const closeTitle = useKeyLabel()("pane.close", "Close")
   const said = useSaid()
-  const { listed, called } = useShows(shows, workspace)
+  const { called } = useShows(shows, workspace)
   const empty = workspace.columns.length === 0
   const scale = empty ? zoom : fit.zoom
   return (
@@ -841,7 +841,6 @@ function Row({
                     <PaneSlot
                       project={entry.project}
                       pane={entry.pane}
-                      listed={listed(entry)}
                       at="overview"
                       calling={call !== undefined}
                     />

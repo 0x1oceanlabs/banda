@@ -1,8 +1,9 @@
-import type { ProjectSummary } from "@banda/contract"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
 import type { Named } from "@banda/contract/machines"
 import { ThreadMark } from "@banda/ui/components/banda-mark"
 import { MachineMark } from "@banda/ui/components/machine-icon"
-import type { Listed } from "@banda/ui/pane"
+import { ItemsContext } from "@banda/ui/hooks/use-item"
+import type { Listed, Lists } from "@banda/ui/pane"
 import { type HeaderProps, Slots } from "@banda/ui/slots"
 import type { ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
@@ -13,21 +14,27 @@ import {
   KeptHosts,
   keyNamed,
   type Names,
+  type Readable,
+  Store,
 } from "@banda/core/react"
 import { slotsOf } from "./registry"
 import { PaneSlot } from "./tiling/PaneSlot"
 
-const thread = (mark: Listed["mark"], calls?: string): Listed => ({
-  id: "t1",
+const thread = (mark: Listed["mark"], calls?: string, id = "t1"): Listed => ({
+  id,
   title: "Hello",
   mark,
   changed: 1,
   ...(calls && { calls }),
-  pane: { kind: "agents.thread", args: { thread: "t1" } },
+  pane: { kind: "agents.thread", args: { thread: id } },
 })
 
 const threadPane = { kind: "agents.thread", args: { thread: "t1" } }
 const terminalPane = { kind: "terminal.terminal", args: {} }
+
+/** What the Window lists, as it keeps it: `listed`, in `project`. */
+const lists = (project: string, ...listed: Listed[]): Readable<Lists> =>
+  new Store<Lists>({ [project as ProjectId]: listed })
 
 /** The markup, its mask's ID as React's tree gives it left out. */
 const markup = (node: ReactNode) =>
@@ -37,44 +44,59 @@ const markup = (node: ReactNode) =>
 const forgetting: Names = { seen: keyNamed, follow: () => () => undefined }
 
 /** What the Slot draws with `props`, filled by the modules that run, with
- * the Window's hosts `hosts`. */
+ * what the Window lists, `items`, and its hosts, `hosts`. With no items
+ * given, it is drawn where no Window lists any, as in a popped-out Pane's
+ * window. */
 const drawn = (
   props: HeaderProps,
+  items?: Readable<Lists>,
   hosts = new KeptHosts(
     { follow: () => undefined, engine, start: () => {} },
     forgetting
   )
-) =>
-  markup(
+) => {
+  const slot = (
     <HostsContext value={hosts}>
       <Slots value={slotsOf(["agents", "git"])}>
         <PaneSlot {...props} />
       </Slots>
     </HostsContext>
   )
+  return markup(
+    items ? <ItemsContext value={items}>{slot}</ItemsContext> : slot
+  )
+}
 
 async function engine(): Promise<never> {
   throw new Error("no engine in this test")
 }
 
-test("a Thread's Pane has its Mark at its header's start, as the Tiling drew it, faint while nothing runs", () => {
+test("a Thread's Pane has its Thread's Mark at its header's start, as the Window lists it, faint while nothing runs", () => {
+  // Threads finds its own among what its Project lists.
+  const other = thread("asking", "Run npm test?", "t0")
+  const start = (listed: Listed) =>
+    drawn(
+      { project: "p1", pane: threadPane, at: "start" },
+      lists("p1", other, listed)
+    )
   const rest = thread("rest")
-  expect(
-    drawn({ project: "p1", pane: threadPane, listed: rest, at: "start" })
-  ).toBe(markup(<ThreadMark listed={rest} className="opacity-40" />))
+  expect(start(rest)).toBe(
+    markup(<ThreadMark listed={rest} className="opacity-40" />)
+  )
   const done = thread("done")
-  expect(
-    drawn({ project: "p1", pane: threadPane, listed: done, at: "start" })
-  ).toBe(markup(<ThreadMark listed={done} />))
+  expect(start(done)).toBe(markup(<ThreadMark listed={done} />))
   // After its Project, on this machine, nothing.
   expect(
-    drawn({ project: "p1", pane: threadPane, listed: done, at: "project" })
+    drawn({ project: "p1", pane: threadPane, at: "project" }, lists("p1", done))
   ).toBe("")
 })
 
 test("on its tile in the Overview its Mark is small, with what it asks while it calls, and none while it rests and calls not", () => {
   const overview = (listed: Listed, calling: boolean) =>
-    drawn({ project: "p1", pane: threadPane, listed, at: "overview", calling })
+    drawn(
+      { project: "p1", pane: threadPane, at: "overview", calling },
+      lists("p1", listed)
+    )
   expect(overview(thread("rest"), false)).toBe("")
   const running = thread("running")
   expect(overview(running, false)).toBe(
@@ -95,18 +117,54 @@ test("on its tile in the Overview its Mark is small, with what it asks while it 
   )
 })
 
+test("where the Window lists nothing, as in a popped-out Pane's window, a Thread's Pane has no Mark; nor has a Thread not started, or one listed in another Project", () => {
+  for (const at of ["start", "project"] as const)
+    expect(drawn({ project: "p1", pane: threadPane, at })).toBe("")
+  expect(
+    drawn({ project: "p1", pane: threadPane, at: "overview", calling: true })
+  ).toBe("")
+  // A New Thread shows no Thread yet.
+  const unsent = { kind: "agents.thread", args: { thread: null } }
+  expect(
+    drawn(
+      { project: "p1", pane: unsent, at: "start" },
+      lists("p1", thread("done"))
+    )
+  ).toBe("")
+  // Its Thread is its Project's: an id another Project lists is not it.
+  expect(
+    drawn(
+      { project: "p1", pane: threadPane, at: "start" },
+      lists("p2", thread("done"))
+    )
+  ).toBe("")
+})
+
 test("a Pane that shows no Thread has nothing of Threads', and another machine's Pane names it after its Project, in the header alone", () => {
   for (const at of ["start", "project"] as const)
     expect(
-      drawn({ project: "p1", pane: terminalPane, listed: undefined, at })
+      drawn(
+        { project: "p1", pane: terminalPane, at },
+        lists("p1", thread("done"))
+      )
     ).toBe("")
-  // An Item another App lists is not a Thread's.
+  // Nor one of another kind whose args name the Thread: only a Thread's
+  // Pane shows one.
+  const diff = { kind: "git.diff", args: { thread: "t1" } }
+  expect(
+    drawn(
+      { project: "p1", pane: diff, at: "start" },
+      lists("p1", thread("done"))
+    )
+  ).toBe("")
+  // An Item another App lists, by the id the Thread's Pane shows, is not
+  // a Thread's.
   const other: Listed = {
     ...thread("done"),
     pane: { kind: "browser.browser", args: {} },
   }
   expect(
-    drawn({ project: "p1", pane: terminalPane, listed: other, at: "start" })
+    drawn({ project: "p1", pane: threadPane, at: "start" }, lists("p1", other))
   ).toBe("")
 
   const hosts = new KeptHosts(
@@ -122,8 +180,8 @@ test("a Pane that shows no Thread has nothing of Threads', and another machine's
   )
   hosts.follow()
   hosts.projects("arc", [remote])
-  const there = (at: "start" | "project", listed?: Listed) =>
-    drawn({ project: remote.id, pane: threadPane, listed, at }, hosts)
+  const there = (at: "start" | "project") =>
+    drawn({ project: remote.id, pane: threadPane, at }, undefined, hosts)
   const named: Named = { name: "arc", icon: "desktop" }
   expect(there("project")).toBe(
     markup(<MachineMark named={named} form="full" />)
@@ -131,13 +189,8 @@ test("a Pane that shows no Thread has nothing of Threads', and another machine's
   expect(there("start")).toBe("")
   expect(
     drawn(
-      {
-        project: remote.id,
-        pane: threadPane,
-        listed: thread("done"),
-        at: "overview",
-        calling: true,
-      },
+      { project: remote.id, pane: threadPane, at: "overview", calling: true },
+      lists(remote.id, thread("done")),
       hosts
     )
   ).toBe(markup(<ThreadMark listed={thread("done")} className="size-3.5" />))
