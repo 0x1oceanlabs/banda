@@ -233,7 +233,8 @@ function keptOf(storage: Storage): OldMarks | undefined {
  * `engine`, and keeps the Project in `banda.marks.moved` once its move
  * went. The seen this window took back go after the import, as a Thread
  * marked unread takes no archive from it (#898). Resolves how many marks
- * moved; throws when the Project could not be read or its host refused.
+ * moved; throws when the Project could not be read, its host refused, or
+ * the storage would not keep it.
  */
 async function moveProject(
   engine: Engine,
@@ -328,7 +329,8 @@ export class Move {
   readonly #wait: number
   #move: { engine: Engine; over: Promise<unknown> } | undefined
   readonly #starts = new Set<() => void>()
-  /** No move started within the wait: no list waits for one again. */
+  /** No move started within the wait: a list waits one tick for one, not
+   * the whole wait again. */
   #none = false
   /** The Projects the start did not move, each moving alone, once. */
   readonly #alone = new Map<ProjectId, Promise<unknown>>()
