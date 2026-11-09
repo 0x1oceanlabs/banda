@@ -15,7 +15,7 @@ export {
   poppedRoute,
 } from "./device"
 export type { Here, HereStore } from "./here"
-export { KeptHere, keptHere } from "./kept-here"
+export { KeptHere } from "./kept-here"
 export type { PaneState, Place } from "./pane"
 export type { Args, Run } from "./run"
 export { type Readable, sameData, sameEach, Store } from "./store"
