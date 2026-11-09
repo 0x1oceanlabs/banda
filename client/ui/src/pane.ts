@@ -14,7 +14,7 @@ import { paneHost, type PaneState, type Place, withHost } from "@banda/core"
 import type { MarkState } from "./components/banda-mark"
 import type { Chip } from "./module"
 import type { Chime } from "./sound/families"
-import { sleeps } from "./lib/snooze"
+import { sleeps } from "./lib/later"
 
 /**
  * Marks where a program reads the keys, as in a terminal. Banda's Alt keys
@@ -267,9 +267,9 @@ export type Listed = {
   archived?: true
   /** What a click on it opens. */
   pane: PaneState
-  /** Its latest snooze (ADR 0074): the sidebar puts it away while it
+  /** Its latest Later (ADR 0074): the sidebar puts it away while it
    * sleeps. */
-  snooze?: ListedSnooze
+  later?: ListedLater
   /**
    * What answers its call there and then, as buttons on its toast (ADR
    * 0056, decision 3): each an action by its id and args, Allow and Deny
@@ -290,12 +290,12 @@ export type Answering = {
  * keeps it (ADR 0074). It sleeps until `until`, unless `woke` says what
  * woke it first.
  */
-export type ListedSnooze = {
-  /** When it was snoozed, in ms since the epoch. */
+export type ListedLater = {
+  /** When it was put off, in ms since the epoch. */
   at: number
   /** When it wakes; none: when its turn ends. */
   until?: number
-  /** Its own Agent snoozed it, not its Person. */
+  /** Its own Agent put it off, not its Person. */
   byAgent?: boolean
   /** What woke it before its time, and when. */
   woke?: {
@@ -340,15 +340,15 @@ const CHIMES: Partial<Record<MarkState, Chime>> = {
 
 /** Whether `listed` sleeps at `now`. */
 export function asleep(listed: Listed, now: number): boolean {
-  return sleeps(listed.snooze, now)
+  return sleeps(listed.later, now)
 }
 
-/** Whether the Person may snooze `listed`: it does not ask (ADR 0074). */
-export function snoozable(listed: Listed): boolean {
+/** Whether the Person may put off `listed`: it does not ask (ADR 0074). */
+export function mayPutOff(listed: Listed): boolean {
   return listed.mark !== "asking"
 }
 
-/** The things in the lists that call their Person now. One snoozed calls
+/** The things in the lists that call their Person now. One put off calls
  * no one while it sleeps (ADR 0074). */
 export function callsOf(lists: Lists, now = Date.now()): Call[] {
   return Object.entries(lists).flatMap(([project, listed]) =>

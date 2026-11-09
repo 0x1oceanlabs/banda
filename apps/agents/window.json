@@ -378,8 +378,8 @@
       }
     },
     {
-      "id": "thread.snooze",
-      "title": "Snooze the Thread you look at, or wake it",
+      "id": "thread.later",
+      "title": "Move the Thread you look at to Later, or wake it",
       "section": "Threads",
       "keys": [
         {
@@ -416,7 +416,7 @@
     },
     {
       "id": "thread.wake",
-      "title": "Wake the snoozed Thread you look at",
+      "title": "Wake the Thread you look at from Later",
       "section": "Threads",
       "keys": [],
       "args": {

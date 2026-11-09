@@ -1,6 +1,6 @@
 /**
  * Which Threads the Person archived (ADR 0069; ADR 0008, decision 4). The
- * Thread's host keeps the mark, beside the snooze, and its App lists it
+ * Thread's host keeps the mark, beside the Later, and its App lists it
  * (`Listed.archived`), so a Thread archived on one machine is archived on
  * all (ADR 0096). Only the Person archives a Thread, and anything new in
  * it brings it back, as a reply brings a letter back in Gmail.

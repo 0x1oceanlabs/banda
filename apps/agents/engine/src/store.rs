@@ -3,8 +3,8 @@
 
 use crate::full_access::Chosen;
 use crate::model::{
-    Archived, Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE, LatestTurn,
-    ListedThread, Offer, Opener, PlanStep, QuestionState, Settings, Snooze, ThreadId,
+    Archived, Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE, Later,
+    LatestTurn, ListedThread, Offer, Opener, PlanStep, QuestionState, Settings, ThreadId,
     ThreadSummary, ToolContent, TurnId, TurnState, TurnView, Usage, VisualId,
 };
 use banda_kernel::{AgentId, Error, Participant, Refusal};
@@ -188,7 +188,7 @@ ALTER TABLE agents_threads ADD COLUMN full_access TEXT;
 "#,
     r#"
 -- When its Person archived the Thread, as JSON (ADR 0096): its host
--- keeps it beside the snooze, as each window kept it before.
+-- keeps it beside the Later, as each window kept it before.
 ALTER TABLE agents_threads ADD COLUMN archived TEXT;
 "#,
     r#"
@@ -198,6 +198,10 @@ ALTER TABLE agents_threads ADD COLUMN seen TEXT;
 -- When its Person last took a mark off the Thread by hand, unread or
 -- unarchived: a window's old marks moved after leave it as they chose.
 ALTER TABLE agents_threads ADD COLUMN cleared_at INTEGER;
+"#,
+    r#"
+-- A snooze is called Later now (ADR 0098, decision 28).
+ALTER TABLE agents_threads RENAME COLUMN snooze TO later;
 "#,
 ];
 
@@ -318,25 +322,25 @@ pub fn set_offer(sql: &Connection, thread: ThreadId, offer: &Offer) -> Result<()
     set_thread_json(sql, thread, "offer", offer)
 }
 
-/// The Thread's latest snooze, asleep or woken (ADR 0074).
-pub fn snooze(sql: &Connection, thread: ThreadId) -> Result<Option<Snooze>, Error> {
-    thread_json(sql, thread, "snooze")
+/// The Thread's latest Later, asleep or woken (ADR 0074).
+pub fn later(sql: &Connection, thread: ThreadId) -> Result<Option<Later>, Error> {
+    thread_json(sql, thread, "later")
 }
 
-/// The Threads whose failed turn goes again as their snooze's time comes:
-/// each one's ID and snooze (ADR 0074, decision 8).
-pub fn resuming(sql: &Connection) -> Result<Vec<(ThreadId, Snooze)>, Error> {
+/// The Threads whose failed turn goes again as their Later's time comes:
+/// each one's ID and Later (ADR 0074, decision 8).
+pub fn resuming(sql: &Connection) -> Result<Vec<(ThreadId, Later)>, Error> {
     let mut statement = sql.prepare(
-        "SELECT id, snooze FROM agents_threads
-         WHERE json_extract(snooze, '$.resume') IS NOT NULL
-           AND json_extract(snooze, '$.woke') IS NULL",
+        "SELECT id, later FROM agents_threads
+         WHERE json_extract(later, '$.resume') IS NOT NULL
+           AND json_extract(later, '$.woke') IS NULL",
     )?;
     let rows = statement.query_map([], |row| Ok((row.get(0)?, column(row, 1)?)))?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
-pub fn set_snooze(sql: &Connection, thread: ThreadId, snooze: &Snooze) -> Result<(), Error> {
-    set_thread_json(sql, thread, "snooze", snooze)
+pub fn set_later(sql: &Connection, thread: ThreadId, later: &Later) -> Result<(), Error> {
+    set_thread_json(sql, thread, "later", later)
 }
 
 /// When its Person archived the Thread, unless it left Archive since
@@ -706,7 +710,7 @@ pub fn set_forked_from(sql: &Connection, thread: ThreadId, from: ThreadId) -> Re
 pub fn threads(sql: &Connection) -> Result<Vec<ListedThread>, Error> {
     // The Person's marks come with each row, not by a query of their own.
     let mut statement = sql.prepare(
-        "SELECT id, COALESCE(harness, ''), title, updated_at, was_title, agent, snooze,
+        "SELECT id, COALESCE(harness, ''), title, updated_at, was_title, agent, later,
                 seen, archived
          FROM agents_threads ORDER BY updated_at DESC, id DESC",
     )?;
@@ -717,13 +721,13 @@ pub fn threads(sql: &Connection) -> Result<Vec<ListedThread>, Error> {
     let summaries = rows.collect::<rusqlite::Result<Vec<_>>>()?;
     summaries
         .into_iter()
-        .map(|(thread, agent, (snooze, seen, archived))| {
+        .map(|(thread, agent, (later, seen, archived))| {
             Ok(ListedThread {
                 agent,
                 latest: last_begun(sql, thread.id)?,
                 asking: asking(sql, thread.id)?,
                 message: latest_message(sql, thread.id)?,
-                snooze,
+                later,
                 seen,
                 archived,
                 thread,

@@ -1,6 +1,6 @@
 /**
  * Roma's day, as he works it: ten Agents in a row in one Project, the
- * Flow, Solo, snoozes, Alt+U with the Sidebar hidden, keys pressed faster
+ * Flow, Solo, Laters, Alt+U with the Sidebar hidden, keys pressed faster
  * than the Window draws. A net under the Window's split (ADR 0087): each
  * test holds what the Person sees today, so a move that changes it fails
  * here first. Two hold sight (ADR 0087, decision 9): an Agent that
@@ -41,9 +41,9 @@ const sidebarOf = (page: Page) =>
 /** The Flow's button, in the Sidebar's header. */
 const flowOf = (page: Page) =>
   sidebarOf(page).getByRole("button", { name: /^Flow: / })
-/** The snooze picker, Alt+Z's. */
+/** The Later picker, Alt+Z's. */
 const pickerOf = (page: Page) =>
-  page.getByRole("dialog").filter({ hasText: "Snooze ·" })
+  page.getByRole("dialog").filter({ hasText: "Later ·" })
 const toastsOf = (page: Page) =>
   page.getByRole("region", { name: "Notifications" })
 
@@ -110,7 +110,7 @@ function threadNamed(window: Window, title: string) {
       id: string
       title: string
       latest: { turn: string; state: string }
-      snooze?: { woke_seen?: string }
+      later?: { woke_seen?: string }
     }[]
   }
   return threads.find((thread) => thread.title === title)
@@ -406,7 +406,7 @@ test("with the Sidebar hidden, Alt+U goes down what calls in the sidebar list's 
   ).toBeVisible()
 })
 
-test("Alt+Z snoozes the Thread in front until the time typed, its Pane closes, Undo wakes it, and so do Wake on its shelf and on its picker (ADR 0074)", async () => {
+test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, Undo wakes it, and so do Wake on its shelf and on its picker (ADR 0074)", async () => {
   window = await startWindow()
   const { page } = window
   const [, b] = await agents(window, "hello a", "hello b")
@@ -414,13 +414,13 @@ test("Alt+Z snoozes the Thread in front until the time typed, its Pane closes, U
   const toasts = toastsOf(page)
   const picker = pickerOf(page)
   const row = sidebar.getByRole("button", { name: /hello b/ })
-  const shelf = sidebar.getByRole("button", { name: /^Snoozed/ })
+  const shelf = sidebar.getByRole("button", { name: /^Later/ })
   await expect(shelf).toBeHidden()
 
-  // The Pane menu's Snooze… opens the same picker, for its Pane's Thread
+  // The Pane menu's Later… opens the same picker, for its Pane's Thread
   // (ADR 0087, decision 12); Esc leaves it awake.
   await b.getByRole("button", { name: "Pane menu" }).click()
-  await page.getByRole("menuitem", { name: /^Snooze…/ }).click()
+  await page.getByRole("menuitem", { name: /^Later…/ }).click()
   await expect(picker).toContainText("hello b")
   await page.keyboard.press("Escape")
   await expect(picker).toBeHidden()
@@ -442,11 +442,11 @@ test("Alt+Z snoozes the Thread in front until the time typed, its Pane closes, U
   // midnight reads with its weekday (`clock`).
   await expect(picker).toBeHidden()
   await expect(b).toBeHidden()
-  const snoozed = toasts.getByText(/^Snoozed until (\S+ )?\d/)
-  await expect(snoozed).toBeVisible()
+  const later = toasts.getByText(/^Later, until (\S+ )?\d/)
+  await expect(later).toBeVisible()
   // A toast goes after a few seconds, but not under the pointer: Undo
   // stays there to click.
-  await snoozed.hover()
+  await later.hover()
   await expect(shelf).toHaveAttribute("aria-expanded", "false")
   await expect(shelf).toContainText(/next (\S+ )?\d/)
   await expect(shelf).toContainText(/1$/)
@@ -457,11 +457,11 @@ test("Alt+Z snoozes the Thread in front until the time typed, its Pane closes, U
   await expect(row).toBeVisible()
   await expect(shelf).toBeHidden()
 
-  // The clock on its row snoozes it too. A row shows its clock under the
+  // The clock on its row puts it off too. A row shows its clock under the
   // pointer, or with the focus in it: headless, nothing hovers.
   const actions = sidebar.locator("[data-row]").filter({ hasText: "hello b" })
   await row.focus()
-  await actions.getByRole("button", { name: "Snooze" }).click()
+  await actions.getByRole("button", { name: "Later" }).click()
   await expect(field).toBeFocused()
   // Woken by Undo, its Pane stayed closed.
   await expect(b).toBeHidden()
@@ -481,10 +481,10 @@ test("Alt+Z snoozes the Thread in front until the time typed, its Pane closes, U
   await expect(row).toBeVisible()
   await expect(row).not.toContainText("·")
 
-  // Its row's Thread menu snoozes it too, and on the shelf, wakes it.
+  // Its row's Thread menu puts it off too, and on the shelf, wakes it.
   const menu = page.getByRole("menu", { name: "Thread menu" })
   await row.click({ button: "right" })
-  await menu.getByRole("menuitem", { name: /^Snooze…/ }).click()
+  await menu.getByRole("menuitem", { name: /^Later…/ }).click()
   await expect(field).toBeFocused()
   await field.fill("45m")
   await field.press("Enter")
@@ -513,20 +513,20 @@ test("Alt+Z snoozes the Thread in front until the time typed, its Pane closes, U
   await expect(row).not.toContainText("·")
 })
 
-test("a Thread at work snoozed until it's done comes back as its turn ends, with a toast that opens it (ADR 0074)", async () => {
+test("a Thread at work put off until it's done comes back as its turn ends, with a toast that opens it (ADR 0074)", async () => {
   window = await startWindow()
   const { page } = window
   const [a] = await agents(window, "wait a")
   const sidebar = sidebarOf(page)
   const toasts = toastsOf(page)
   const row = sidebar.getByRole("button", { name: /wait a/ })
-  const shelf = sidebar.getByRole("button", { name: /^Snoozed/ })
+  const shelf = sidebar.getByRole("button", { name: /^Later/ })
 
   // At work, it may sleep until its turn ends.
   await page.keyboard.press("Alt+KeyZ")
   await pickerOf(page).getByText("When it's done").click()
   await expect(a).toBeHidden()
-  await expect(toasts.getByText("Snoozed until it's done")).toBeVisible()
+  await expect(toasts.getByText("Later, until it's done")).toBeVisible()
   await shelf.click()
   await expect(row).toContainText("when done")
   await leaveSidebar(page)
@@ -540,7 +540,7 @@ test("a Thread at work snoozed until it's done comes back as its turn ends, with
   // is back in the list with a clock.
   const woke = toasts
     .getByRole("listitem")
-    .filter({ hasText: "Woke from its snooze" })
+    .filter({ hasText: "Woke from Later" })
   await expect(woke).toContainText("wait a")
   await expect(shelf).toBeHidden()
   await expect(row.getByRole("img", { name: "Woke" })).toBeVisible()
@@ -551,7 +551,7 @@ test("a Thread at work snoozed until it's done comes back as its turn ends, with
   await expect(a).toHaveAttribute("data-focused", "true")
   await expect(row.getByRole("img", { name: "Woke" })).toBeHidden()
   await expect
-    .poll(() => threadNamed(window, "wait a")!.snooze?.woke_seen)
+    .poll(() => threadNamed(window, "wait a")!.later?.woke_seen)
     .toBe("seen")
 })
 

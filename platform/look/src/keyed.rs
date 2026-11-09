@@ -247,6 +247,14 @@ impl Renamed {
             key: false,
         }
     }
+
+    /// `value` at `at` under its name now, by the first of `renamed` that
+    /// names it; unchanged when none does.
+    pub fn now_of(renamed: &[Renamed], at: &str, value: String) -> String {
+        (renamed.iter())
+            .find(|one| !one.key && one.at == at && one.was == value)
+            .map_or(value, |one| one.now.to_owned())
+    }
 }
 
 /// Each place `text` still says a name of `renamed`: where it starts, the

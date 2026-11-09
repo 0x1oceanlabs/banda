@@ -13,7 +13,7 @@ export type Settings = Pick<Sidebar, "group" | "sort" | "projects" | "row">
 export const STATES: readonly State[] = [
   "active",
   "working",
-  "snoozed",
+  "later",
   "archived",
 ]
 

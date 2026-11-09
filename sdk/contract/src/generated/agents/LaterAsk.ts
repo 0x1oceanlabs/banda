@@ -2,9 +2,9 @@
 import type { ThreadId } from "./ThreadId";
 
 /**
- * What `agents.snooze` is asked: a Thread, and until when.
+ * What `agents.later` is asked: a Thread, and until when.
  */
-export type SnoozeAsk = { 
+export type LaterAsk = { 
 /**
  * The Thread's ID, as `threads` lists it; an Agent's own by default.
  */

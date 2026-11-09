@@ -2,7 +2,7 @@
  * What the Person can do to one Item, by its item actions (ADR 0087,
  * decision 12): its App's, found by the first word of its Pane kind, in
  * their order, then the sidebar list's own, Archive. The Thread menu, the
- * Pane menu, the Banda menu's Tab, the title's field and the snooze's
+ * Pane menu, the Banda menu's Tab, the title's field and the Later's
  * picker draw their rows, and run them as any action, by id: none of them
  * knows what an App does to its Items.
  */
@@ -25,7 +25,7 @@ import { archivable, archivedNow, toggled } from "./archived"
  * Archive thread, or Unarchive thread (ADR 0069; ADR 0008, decision 4):
  * the sidebar list's own row and key. The Item's host keeps the mark (ADR
  * 0096), so its App's own archive sends it there, in one command, which
- * ends a snoozed Thread's snooze too; archived, the Item is put away at
+ * ends a put-off Thread's Later too; archived, the Item is put away at
  * once, without waiting for its host's answer: every Pane that shows it
  * closes, on any workspace (#974). An Item whose App has none stays as it
  * is.

@@ -28,9 +28,9 @@
       "description": "The counts in the bar's middle: who waits for you, who works.",
       "$ref": "#/$defs/BarSettings"
     },
-    "snooze": {
-      "description": "The snooze's presets (ADR 0074).",
-      "$ref": "#/$defs/SnoozeSettings"
+    "later": {
+      "description": "The Later's presets (ADR 0074). `[snooze]` before ADR 0098 (grace).",
+      "$ref": "#/$defs/LaterSettings"
     }
   },
   "additionalProperties": false,
@@ -109,9 +109,9 @@
           "const": "working"
         },
         {
-          "description": "Put away until a time, or until its turn ends (ADR 0074).",
+          "description": "Put away until a time, or until its turn ends (ADR 0074).\n`snoozed` before ADR 0098 (grace).",
           "type": "string",
-          "const": "snoozed"
+          "const": "later"
         },
         {
           "description": "Put away by the Person, until something new happens in it\n(ADR 0069). Its name was `settled`, which still reads as it.\n`settled` before ADR 0069 (grace).",
@@ -369,11 +369,11 @@
         }
       ]
     },
-    "SnoozeSettings": {
+    "LaterSettings": {
       "type": "object",
       "properties": {
         "presets": {
-          "description": "The times the snooze's picker offers, in its field's words, up to\neight: \"1h\", \"18:00\", \"tomorrow 9:00\", \"mon 9:00\".",
+          "description": "The times the Later's picker offers, in its field's words, up to\neight: \"1h\", \"18:00\", \"tomorrow 9:00\", \"mon 9:00\".",
           "type": "array",
           "items": {
             "type": "string"

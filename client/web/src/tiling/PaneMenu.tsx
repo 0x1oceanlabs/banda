@@ -53,7 +53,7 @@ export type Stand = {
   heights: readonly Width[]
   /** The share its column is never drawn narrower than, by its `min`. */
   floor: number
-  /** What its Item's item actions offer here, as Snooze… or Wake now for
+  /** What its Item's item actions offer here, as Later… or Wake now for
    * a Thread (ADR 0087, decision 12): each row, and what runs it. */
   items: readonly StandRow[]
 }

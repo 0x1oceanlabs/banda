@@ -362,7 +362,7 @@ mod tests {
             Some("Tiling perf")
         );
         assert_eq!(cleaned("**Usage bars**").as_deref(), Some("Usage bars"));
-        assert_eq!(cleaned("“Snooze menu”").as_deref(), Some("Snooze menu"));
+        assert_eq!(cleaned("“Later menu”").as_deref(), Some("Later menu"));
         // At a word, within 30 characters, without the comma it ends on there.
         assert_eq!(
             cleaned("Mode plan, model smart, brief false").as_deref(),

@@ -677,7 +677,7 @@
       }
     },
     {
-      "id": "sidebar.snooze-picker",
+      "id": "sidebar.later-picker",
       "title": "Pick when the Thread you look at wakes",
       "section": "Threads",
       "keys": [],

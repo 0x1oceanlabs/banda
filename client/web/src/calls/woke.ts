@@ -1,13 +1,13 @@
 /**
- * A Thread that woke from its snooze by itself is told of once (ADR 0074,
+ * A Thread that woke from its Later by itself is told of once (ADR 0074,
  * decision 7): one that calls, by its call; one that does not, by the
  * notifications module, here. It is the calls part's, as what calls is: it
- * looks as the calls follow the lists and the snooze clock.
+ * looks as the calls follow the lists and the Later clock.
  */
 import { useEffect } from "react"
 import type { ProjectId } from "@banda/contract"
 import type { Args } from "@banda/ui/module"
-import { wokeOf } from "@banda/ui/lib/snooze"
+import { wokeOf } from "@banda/ui/lib/later"
 import { asleep, type Listed } from "@banda/ui/pane"
 import type { Stores } from "./stores"
 
@@ -20,7 +20,7 @@ export function wokeTold(project: ProjectId, listed: Listed): Args {
     key: `woke:${project}:${about}`,
     kind: "done",
     title,
-    body: "Woke from its snooze",
+    body: "Woke from Later",
     in: project,
     about,
     buttons: [
@@ -50,15 +50,15 @@ export function tellWoke(
     sleeping = new Set()
     for (const [project, listed] of Object.entries(lists))
       for (const one of listed) {
-        if (!one.snooze) continue
+        if (!one.later) continue
         const key = `${project}:${one.id}`
-        const slept = `${key}@${one.snooze.at}`
+        const slept = `${key}@${one.later.at}`
         if (asleep(one, now)) sleeping.add(slept)
         else if (
           was.has(slept) &&
           !calls.has(key) &&
-          !one.snooze.wokeSeen &&
-          wokeOf(one.snooze, now) !== undefined
+          !one.later.wokeSeen &&
+          wokeOf(one.later, now) !== undefined
         )
           run("notifications.tell", wokeTold(project as ProjectId, one))
       }

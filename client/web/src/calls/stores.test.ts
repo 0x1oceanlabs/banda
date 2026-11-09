@@ -64,13 +64,13 @@ test("lists said again keep each Listed, and each list, that did not change", ()
   expect(keptLists({}, was)).toEqual(was)
 })
 
-test("a nested change, as an answer or a snooze, is a change", () => {
-  const was: Lists = { [p]: [thread("a", { snooze: { at: 1, until: 5 } })] }
+test("a nested change, as an answer or a Later, is a change", () => {
+  const was: Lists = { [p]: [thread("a", { later: { at: 1, until: 5 } })] }
   const now = keptLists(was, {
-    [p]: [thread("a", { snooze: { at: 1, until: 9 } })],
+    [p]: [thread("a", { later: { at: 1, until: 9 } })],
   })
   expect(now[p][0]).not.toBe(was[p][0])
-  expect(keptLists(was, { [p]: [thread("a")] })[p][0].snooze).toBeUndefined()
+  expect(keptLists(was, { [p]: [thread("a")] })[p][0].later).toBeUndefined()
 })
 
 test("the items tell their readers only when what is listed changed", () => {
@@ -96,7 +96,7 @@ test("the calls take what the Watches say calls only when it is new", () => {
   expect(stores.calls.get().attention).toEqual({ mark: "asking", waiting: 1 })
 })
 
-test("the calls follow the lists, and a snooze that wakes by its time", () => {
+test("the calls follow the lists, and a Later that wakes by its time", () => {
   vi.useFakeTimers({ now: 1_000 })
   const stores = newStores(1_000)
   const stop = followCalls(stores)
@@ -105,13 +105,13 @@ test("the calls follow the lists, and a snooze that wakes by its time", () => {
   takeLists(stores, {
     [p]: [
       thread("a", { mark: "asking" }),
-      thread("b", { mark: "done", snooze: { at: 0, until: 2_000 } }),
+      thread("b", { mark: "done", later: { at: 0, until: 2_000 } }),
     ],
   })
   expect(stores.calls.get().list.map((call) => call.about)).toEqual(["a"])
   const before = stores.calls.get()
 
-  // The clock moves only as the snooze wakes.
+  // The clock moves only as the Later wakes.
   vi.advanceTimersByTime(500)
   expect(stores.calls.get()).toBe(before)
   vi.advanceTimersByTime(600)
@@ -136,7 +136,7 @@ test("the calls are told of after each change of the items, one that calls none 
   stop()
 })
 
-test("what watches the lists hears them change, and a snooze wake, not a mark", () => {
+test("what watches the lists hears them change, and a Later wake, not a mark", () => {
   vi.useFakeTimers({ now: 1_000 })
   const stores = newStores(1_000)
   const stop = followCalls(stores)
@@ -144,7 +144,7 @@ test("what watches the lists hears them change, and a snooze wake, not a mark", 
   const unwatch = itemsOf(stores).subscribe(heard)
 
   takeLists(stores, {
-    [p]: [thread("a", { mark: "done", snooze: { at: 0, until: 1_500 } })],
+    [p]: [thread("a", { mark: "done", later: { at: 0, until: 1_500 } })],
   })
   expect(heard).toHaveBeenCalledTimes(1)
   takeAttention(stores, { mark: "asking", waiting: 1 })

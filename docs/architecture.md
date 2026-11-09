@@ -661,7 +661,7 @@ own action `agents.thread.details{part}` shows the focused Thread's card
 with a part of its rows open, as git's Alt+Shift+G runs it for its branch
 picker.
 `items` are its item actions (ADR 0087, decision 12): what the Person
-does to one of the Items it lists, as renaming or snoozing a Thread. Each
+does to one of the Items it lists, as renaming or putting a Thread off. Each
 is an action, by a key too, with the row it shows for an Item; the Thread
 menu lists them, its App's and then the sidebar list's Archive, and the
 Pane menu and the Banda menu's Tab those offered there. The window finds

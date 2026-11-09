@@ -112,7 +112,7 @@ export type WindowApi = {
   beside: (agent: string) => Beside | null
   /** What every module lists now, as the sidebar shows it (ADR 0008):
    * the Window's items (ADR 0088, decision 7), for what runs outside
-   * React. Its listeners hear each change, and a snoozed Thread waking,
+   * React. Its listeners hear each change, and a put-off Thread waking,
    * which changes what calls (ADR 0074). */
   items: Readable<Lists>
   /** Runs an action by its id, a module's or the window's, as its key
@@ -302,7 +302,7 @@ export function takes(
 
 /**
  * An action that takes one Item (ADR 0087, decision 12), as renaming or
- * snoozing a Thread: its App's, or Banda's own, as archiving it. Its args
+ * putting a Thread off: its App's, or Banda's own, as archiving it. Its args
  * name the Item by its `project` and its id, `item`; with none, it takes
  * the one the Pane in focus shows (`itemOf`). The Thread menu lists the
  * row of each that applies, the App's first, at a Thread's title and at
@@ -318,10 +318,10 @@ export type ItemAction<Context = WindowApi> = Action<Context> & {
    * now. */
   row: (item: Listed, at: ItemAt) => ItemRow | null
   /** What Banda's own parts ask it for, as the title's field asks to
-   * rename, and the snooze's picker to snooze: a stand-in for the intents
+   * rename, and the Later's picker to put off: a stand-in for the intents
    * that take its place with B8 (#862), counted till then. The Banda
    * menu's recents count its rows by it. */
-  does?: "rename" | "suggest" | "snooze" | "wake" | "archive"
+  does?: "rename" | "suggest" | "later" | "wake" | "archive"
   /** Where else its row is: the Pane menu, the Banda menu's Tab. Those
    * leave out a row that is off. */
   offered?: readonly ("pane" | "menu")[]
@@ -339,7 +339,7 @@ export type ItemAction<Context = WindowApi> = Action<Context> & {
 export type ItemRow = {
   title: string
   icon: ComponentType<{ className?: string }>
-  /** There, but off, as Snooze for a Thread that asks. */
+  /** There, but off, as Later for a Thread that asks. */
   off?: true
 }
 

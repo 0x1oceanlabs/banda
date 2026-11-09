@@ -2,8 +2,8 @@
 import type { AgentId } from "../AgentId";
 import type { Archived } from "./Archived";
 import type { Asking } from "./Asking";
+import type { Later } from "./Later";
 import type { LatestTurn } from "./LatestTurn";
-import type { Snooze } from "./Snooze";
 import type { ThreadId } from "./ThreadId";
 import type { TurnId } from "./TurnId";
 
@@ -31,9 +31,9 @@ asking: Array<Asking>,
  */
 message?: string, 
 /**
- * Its latest snooze (ADR 0074), asleep or woken.
+ * Its latest Later (ADR 0074), asleep or woken.
  */
-snooze?: Snooze, 
+later?: Later, 
 /**
  * The latest of its turns that ended which its Person saw (ADR
  * 0096). It moves forward only; none until they see one, and none
@@ -42,7 +42,7 @@ snooze?: Snooze,
 seen?: TurnId, 
 /**
  * When its Person archived it (ADR 0096), unless they brought it
- * back or snoozed it since. It is archived only while it neither
+ * back or put it off since. It is archived only while it neither
  * works nor asks and nothing happened in it after: `updated_at <=
  * archived.at`, both the host's times.
  */

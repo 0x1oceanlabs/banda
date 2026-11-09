@@ -51,8 +51,8 @@ export type { Sent } from "./generated/agents/Sent"
 export type { Settings } from "./generated/agents/Settings"
 export type { Skill } from "./generated/agents/Skill"
 export type { SlashCommand } from "./generated/agents/SlashCommand"
-export type { Snooze } from "./generated/agents/Snooze"
-export type { SnoozeAsk } from "./generated/agents/SnoozeAsk"
+export type { Later } from "./generated/agents/Later"
+export type { LaterAsk } from "./generated/agents/LaterAsk"
 export type { Wake } from "./generated/agents/Wake"
 export type { Woke } from "./generated/agents/Woke"
 export type { WokeSeen } from "./generated/agents/WokeSeen"
@@ -97,7 +97,7 @@ const KINDS: ReadonlySet<string> = new Set(
     "message.steered": true,
     "message.edited": true,
     "thread.held": true,
-    "thread.snoozed": true,
+    "thread.later": true,
     "thread.woke": true,
     "thread.woke_seen": true,
     "thread.seen": true,

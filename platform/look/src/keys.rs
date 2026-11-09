@@ -736,11 +736,13 @@ pub fn resolve(
 
 /// The id an action has now, for one it had before, which a line may
 /// still name for one stable release (ADR 0069: Settled is the archive,
-/// and a Space is a Project).
+/// and a Space is a Project; ADR 0098, decision 28: Snooze is Later).
 fn renamed(id: &str) -> &str {
     match id {
         "sidebar.settle" => "sidebar.archive",
         "space.add" => "project.add",
+        "thread.snooze" => "thread.later",
+        "sidebar.snooze-picker" => "sidebar.later-picker",
         _ => id,
     }
 }

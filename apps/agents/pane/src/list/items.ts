@@ -2,7 +2,7 @@
  * What the Person does to a Thread as one of the Items Threads lists (ADR
  * 0087, decision 12): rename it, have its Harness's small model suggest a
  * title, give back the title it had before, mark it unread or read (ADR
- * 0077), make a Project of the No Project it is in (ADR 0046), snooze it
+ * 0077), make a Project of the No Project it is in (ADR 0046), put it off
  * and wake it (ADR 0074), and archive it as the sidebar list asks (ADR
  * 0096). The Window draws their rows in the Thread menu,
  * the Pane menu and the Banda menu, and runs them by id, as any action;
@@ -29,7 +29,7 @@ import {
   itemOf,
   type WindowApi,
 } from "@banda/ui/module"
-import { asleep, type Listed, snoozable } from "@banda/ui/pane"
+import { asleep, type Listed, mayPutOff } from "@banda/ui/pane"
 import {
   AlarmClockIcon,
   CircleDotIcon,
@@ -274,22 +274,22 @@ function waking(window: WindowApi, at: At) {
 }
 
 /**
- * Snoozes the Thread till `until`, or till its turn ends with none (ADR
- * 0074). Snoozed, it is put away as an archived one is, its Panes closed;
+ * Puts the Thread off till `until`, or till its turn ends with none (ADR
+ * 0074). Put off, it is put away as an archived one is, its Panes closed;
  * a toast says till when, with Undo, which wakes it.
  */
-function snoozing(window: WindowApi, at: At, until?: number, resume = false) {
+function putOff(window: WindowApi, at: At, until?: number, resume = false) {
   const thread = at.listed.id as ThreadId
   const asked = until === undefined ? { thread } : { thread, until, resume }
   engineOf(window, at)
-    .command("agents.snooze", asked, at.project)
+    .command("agents.later", asked, at.project)
     .then(
       () => {
         window.run("pane.put-away", { project: at.project, item: thread })
         toast(
           until === undefined
-            ? "Snoozed until it's done"
-            : `Snoozed until ${clock(until)}`,
+            ? "Later, until it's done"
+            : `Later, until ${clock(until)}`,
           { action: { label: "Undo", onClick: () => waking(window, at) } }
         )
       },
@@ -297,12 +297,12 @@ function snoozing(window: WindowApi, at: At, until?: number, resume = false) {
     )
 }
 
-/** Snooze…: till a time, or till its turn ends; asked for neither, the
+/** Later…: till a time, or till its turn ends; asked for neither, the
  * Window's picker asks when, and wakes one that sleeps. */
-const snooze: ItemAction = {
-  id: "thread.snooze",
+const later: ItemAction = {
+  id: "thread.later",
   section: "Threads",
-  title: "Snooze the Thread you look at, or wake it",
+  title: "Move the Thread you look at to Later, or wake it",
   keys: [{ code: "KeyZ", mod: true }],
   args: itemArgs({
     until: { number: "when it wakes, in milliseconds since 1970" },
@@ -310,7 +310,7 @@ const snooze: ItemAction = {
     done: { flag: "it sleeps until its turn ends" },
   }),
   group: "other",
-  does: "snooze",
+  does: "later",
   offered: ["pane", "menu"],
   // The picker takes the focus.
   later: true,
@@ -319,19 +319,19 @@ const snooze: ItemAction = {
     asleep(item, at.now)
       ? null
       : {
-          title: "Snooze…",
+          title: "Later…",
           icon: AlarmClockIcon,
           // One that asks is answered first.
-          ...(snoozable(item) ? {} : { off: true }),
+          ...(mayPutOff(item) ? {} : { off: true }),
         },
   run: (window, args) => {
     const at = threadAt(window, args)
     if (!at) return
     const until = typeof args?.until === "number" ? args.until : undefined
     if (until !== undefined || args?.done === true)
-      snoozing(window, at, until, args?.resume === true)
+      putOff(window, at, until, args?.resume === true)
     else
-      window.run("sidebar.snooze-picker", {
+      window.run("sidebar.later-picker", {
         project: at.project,
         item: at.listed.id,
       })
@@ -342,7 +342,7 @@ const snooze: ItemAction = {
 const wake: ItemAction = {
   id: "thread.wake",
   section: "Threads",
-  title: "Wake the snoozed Thread you look at",
+  title: "Wake the Thread you look at from Later",
   args: itemArgs(),
   group: "other",
   does: "wake",
@@ -405,7 +405,7 @@ export const threadItems: readonly ItemAction[] = [
   previous,
   unread,
   makeProject,
-  snooze,
+  later,
   wake,
   archive,
 ]

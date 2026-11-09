@@ -399,20 +399,20 @@ test("the bar's Mark, the waiting count and the rows follow what was sent, as th
 test("what its Person saw of a Thread waking shows at once, forward only", async () => {
   const { engine, asked } = engineIn()
   const person = { kind: "person", id: "p1" } as const
-  const snooze = { at: 1, by: person, until: 2 }
+  const later = { at: 1, by: person, until: 2 }
   void mark(engine, PROJECT, "t1", { woke: "seen" })
-  expect(shownOf(engine, list(1, thread({ snooze }))).snooze).toEqual({
-    ...snooze,
+  expect(shownOf(engine, list(1, thread({ later }))).later).toEqual({
+    ...later,
     woke_seen: "seen",
   })
-  // Nothing to see without a snooze, and a dismissal is never taken back.
+  // Nothing to see without a Later, and a dismissal is never taken back.
   const quiet = thread()
   expect(shownOf(engine, list(1, quiet))).toBe(quiet)
-  const dismissed = thread({ snooze: { ...snooze, woke_seen: "dismissed" } })
+  const dismissed = thread({ later: { ...later, woke_seen: "dismissed" } })
   expect(shownOf(engine, list(1, dismissed))).toBe(dismissed)
   // Once the list heard its command, the host's mark is all there is.
   asked[0].answer(7)
   await vi.waitFor(() => expect(sendingTo(engine).t1?.woke?.at).toBe(7))
-  settle(engine, list(7, thread({ snooze })))
+  settle(engine, list(7, thread({ later })))
   expect(sendingTo(engine).t1).toBeUndefined()
 })

@@ -40,7 +40,7 @@ import { fileNow } from "@banda/ui/lib/look"
 import { isFlow, nextFlow } from "../sidebar/FlowMenu"
 import { archiving } from "../sidebar/items"
 import { makeProject } from "../titles/MakeProject"
-import { pickSnooze } from "../sidebar/Snoozing"
+import { pickLater } from "../sidebar/LaterPicker"
 import { logged } from "../sidebar/write-setting"
 import {
   type Change,
@@ -113,7 +113,7 @@ export type Shell = WindowApi & {
   /** Goes to what calls the Person first (ADR 0011, decision 5). */
   answer: () => void
   /** Closes every Pane that shows `item` of `project`, on any workspace:
-   * it is put away, archived or snoozed (ADR 0069; ADR 0074). */
+   * it is put away, archived or put off (ADR 0069; ADR 0074). */
   putAway: (project: ProjectId, item: string) => void
   /** Opens the Banda menu, or closes it when it is open (ADR 0017). */
   menu: (at: At) => void
@@ -745,7 +745,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
       }),
   },
   {
-    // What an App asks once an Item is put away, as a Thread snoozed.
+    // What an App asks once an Item is put away, as a Thread put off.
     id: "pane.put-away",
     args: takes(
       {
@@ -849,14 +849,14 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     },
   },
   {
-    // The snooze's picker (ADR 0074, decision 5): the sidebar list's, as
+    // The Later's picker (ADR 0074, decision 5): the sidebar list's, as
     // a Thread's App asks it when.
-    id: "sidebar.snooze-picker",
+    id: "sidebar.later-picker",
     args: itemArgs(),
     section: "Threads",
     title: "Pick when the Thread you look at wakes",
     unlisted: true,
-    run: (shell, args) => pickSnooze(itemOf(shell, args)),
+    run: (shell, args) => pickLater(itemOf(shell, args)),
   },
   {
     id: "menu.open",

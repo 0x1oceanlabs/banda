@@ -37,8 +37,8 @@ export const DEFAULT_SIDEBAR: Sidebar = {
   group: {
     by: "state",
     states: ["active"],
-    bottom: ["working", "snoozed", "archived"],
-    folded: ["snoozed", "archived"],
+    bottom: ["working", "later", "archived"],
+    folded: ["later", "archived"],
     limit: 10,
     empty: "hide",
   },
@@ -52,7 +52,7 @@ export const DEFAULT_SIDEBAR: Sidebar = {
     words: false,
     empty: "mark",
   },
-  snooze: {
+  later: {
     presets: ["1h", "3h", "18:00", "tomorrow 9:00", "mon 9:00"],
   },
 }

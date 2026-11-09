@@ -16,12 +16,12 @@ import { cn } from "@banda/ui/lib/utils"
 import type { Widget, WidgetProps } from "@banda/ui/module"
 import type { Lists } from "@banda/ui/pane"
 import { useMemo, useState } from "react"
-import { useLists, useSnoozesNow } from "../calls/stores"
+import { useLists, useLatersNow } from "../calls/stores"
 import { useLookSidebar } from "../look"
 import { ThreadMark, toneOf } from "@banda/ui/components/banda-mark"
 import { keysOf, order, useElsewhere } from "./order"
 import { Status } from "./Row"
-import type { Snoozes } from "./snoozed"
+import type { Laters } from "./later"
 import { type Counted, inOrder, type Tally, tally } from "./tally"
 
 /** Each count's words, after its number. */
@@ -67,10 +67,10 @@ function Counts({ projects }: WidgetProps) {
     : undefined
   const current = aheadRow?.agent !== undefined ? aheadRow : undefined
   const settings = useLookSidebar().bar
-  const snoozes = useSnoozesNow()
+  const laters = useLatersNow()
   const tallies = useMemo(
-    () => tally(lists, settings.counts, snoozes.away),
-    [lists, settings.counts, snoozes.away]
+    () => tally(lists, settings.counts, laters.away),
+    [lists, settings.counts, laters.away]
   )
   const shows =
     settings.show === "always" || (settings.show === "closed" && !sidebarShown)
@@ -137,7 +137,7 @@ function Counts({ projects }: WidgetProps) {
         <List
           tallies={tallies}
           lists={lists}
-          snoozes={snoozes}
+          laters={laters}
           projects={projects}
         />
       </DropdownMenuContent>
@@ -160,18 +160,18 @@ export const countsWidget: Widget = {
 function List({
   tallies,
   lists,
-  snoozes,
+  laters,
   projects,
 }: {
   tallies: readonly Tally[]
   lists: Lists
-  snoozes: Snoozes
+  laters: Laters
   projects: readonly ProjectSummary[]
 }) {
   const run = useRun()
   // Another machine's Threads stand where the sidebar list places them.
   const elsewhere = useElsewhere()
-  const keys = keysOf(order(lists, projects, snoozes, { elsewhere }))
+  const keys = keysOf(order(lists, projects, laters, { elsewhere }))
   const { waiting, working } = inOrder(tallies, keys)
   const named = new Map(projects.map((project) => [project.id, project]))
   const rows = (things: Counted[]) =>

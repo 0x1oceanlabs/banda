@@ -1,10 +1,10 @@
 /**
- * How the sidebar reads a Thread's snooze (ADR 0074). The engine keeps the
- * snooze, and what its Person saw of it waking beside it (ADR 0096);
+ * How the sidebar reads a Thread's Later (ADR 0074). The engine keeps the
+ * Later, and what its Person saw of it waking beside it (ADR 0096);
  * whether the Thread sleeps now is worked out here, against the clock.
  */
 import { useMemo } from "react"
-import { wokeOf } from "@banda/ui/lib/snooze"
+import { wokeOf } from "@banda/ui/lib/later"
 import { asleep, type Listed, type Lists } from "@banda/ui/pane"
 import { useIsArchived } from "./archived"
 
@@ -13,7 +13,7 @@ import { useIsArchived } from "./archived"
 export function nextWake(lists: Lists, now: number): number | undefined {
   let next: number | undefined
   for (const listed of Object.values(lists).flat()) {
-    const until = listed.snooze?.until
+    const until = listed.later?.until
     if (until !== undefined && asleep(listed, now))
       next = Math.min(next ?? until, until)
   }
@@ -23,14 +23,14 @@ export function nextWake(lists: Lists, now: number): number | undefined {
 /** The longest a browser's timer waits, about 24 days. */
 const LONGEST = 2 ** 31 - 1
 
-/** How long a timer waits for the snooze that wakes at `next`: a little
+/** How long a timer waits for the Later that wakes at `next`: a little
  * past it, so it has woken by then. */
 export function wakeAfter(next: number): number {
   return Math.min(Math.max(0, next - Date.now()) + 50, LONGEST)
 }
 
-/** What the sidebar knows of snoozes now, kept current. */
-export type Snoozes = {
+/** What the sidebar knows of Laters now, kept current. */
+export type Laters = {
   /** The clock they are read by: it moves as the next one wakes. */
   now: number
   /** Whether a Thread sleeps. */
@@ -44,17 +44,17 @@ export type Snoozes = {
   archived: (listed: Listed) => boolean
 }
 
-/** The snoozes read against `now`: the calls store's clock, which moves
+/** The Laters read against `now`: the calls store's clock, which moves
  * only as the next of them wakes by its time, so nothing ticks while none
  * sleeps (`followCalls`). */
-export function useSnoozesAt(now: number): Snoozes {
+export function useLatersAt(now: number): Laters {
   const archived = useIsArchived()
   return useMemo(
     () => ({
       now,
       asleep: (listed) => asleep(listed, now),
       woke: (listed) =>
-        listed.snooze?.wokeSeen ? undefined : wokeOf(listed.snooze, now),
+        listed.later?.wokeSeen ? undefined : wokeOf(listed.later, now),
       away: (listed) => asleep(listed, now) || archived(listed),
       archived,
     }),

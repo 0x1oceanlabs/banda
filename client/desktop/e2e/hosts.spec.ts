@@ -236,7 +236,7 @@ function threadsOf(arc: Arc, project: string) {
         id: string
         title: string
         latest?: { state: string; turn: string }
-        snooze?: { until?: number }
+        later?: { until?: number }
         seen?: string
         archived?: { at: number }
       }[]
@@ -767,11 +767,11 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   ])
   await shot(page, "pr3-3-not-on-arc")
 
-  // Alt+Z on arc's Thread snoozes it on arc's engine, as its Pane is
+  // Alt+Z on arc's Thread puts it off on arc's engine, as its Pane is
   // there (#797): its Pane closes, and this machine's Thread stays awake.
   await thread.getByRole("textbox", { name: "Message to Fake AI" }).focus()
   await page.keyboard.press("Alt+KeyZ")
-  const picker = page.getByRole("dialog").filter({ hasText: "Snooze ·" })
+  const picker = page.getByRole("dialog").filter({ hasText: "Later ·" })
   await expect(picker).toContainText("Bench window tests")
   const field = picker.getByRole("textbox", { name: "When it comes back" })
   await expect(field).toBeFocused()
@@ -779,12 +779,12 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   await field.press("Enter")
   await expect(thread).toBeHidden()
   await expect
-    .poll(() => threadsOf(arc!, banda)[0]?.snooze?.until ?? 0)
+    .poll(() => threadsOf(arc!, banda)[0]?.later?.until ?? 0)
     .toBeGreaterThan(Date.now())
   const { ok } = JSON.parse(
     window.banda("call", "agents.threads", "--project", local)
-  ) as { ok: { threads: { title: string; snooze?: object }[] } }
-  expect(ok.threads.map(({ title, snooze }) => [title, snooze])).toEqual([
+  ) as { ok: { threads: { title: string; later?: object }[] } }
+  expect(ok.threads.map(({ title, later }) => [title, later])).toEqual([
     ["Sidebar for arc", undefined],
   ])
 })

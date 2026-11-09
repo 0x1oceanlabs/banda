@@ -1,5 +1,5 @@
 /**
- * The snooze's picker (ADR 0074, decision 5): one wherever a snooze
+ * The Later's picker (ADR 0074, decision 5): one wherever a Later
  * starts, by the row's clock, from a menu or with Alt+Z. A time typed in
  * its field, a preset, "When it's done" for a Thread at work, or Wake now
  * for one that sleeps; ↑ ↓ and Enter pick. It is the sidebar list's, and
@@ -18,23 +18,27 @@ import {
 import { Store, useRun, useStore } from "@banda/core/react"
 import { clock, left } from "@banda/ui/lib/words"
 import type { Args } from "@banda/ui/module"
-import { asleep, type Listed, snoozable } from "@banda/ui/pane"
+import { asleep, type Listed, mayPutOff } from "@banda/ui/pane"
 import { AlarmClockIcon, ArrowRightIcon, LoaderIcon } from "lucide-react"
 import { type ReactNode, useId, useMemo, useState } from "react"
 import { useLookSidebar } from "../look"
 import { itemActionOf } from "./items"
-import { presets, whenOf } from "./snooze-time"
+import { presets, whenOf } from "./later-time"
 
-/** A Thread whose snooze is being picked, and what the picker stands by. */
-export type Snoozing = { project: ProjectId; listed: Listed; anchor?: Element }
+/** A Thread whose Later is being picked, and what the picker stands by. */
+export type LaterTarget = {
+  project: ProjectId
+  listed: Listed
+  anchor?: Element
+}
 
 /** The Thread the picker is open for; none while it is closed. */
-const picking = new Store<Snoozing | undefined>(undefined)
-const now = (target: Snoozing | undefined) => target
+const picking = new Store<LaterTarget | undefined>(undefined)
+const now = (target: LaterTarget | undefined) => target
 
 /** Opens the picker for a Thread, by its row where `anchor` is given;
  * none closes it. */
-export function pickSnooze(target: Snoozing | undefined): void {
+export function pickLater(target: LaterTarget | undefined): void {
   picking.set(target)
 }
 
@@ -62,19 +66,22 @@ const TOP = {
     }),
 }
 
-/** The picker, open for the Thread `pickSnooze` asked for: what is picked
- * runs its App's snooze, or its wake, by the Window's `run`. */
-export function SnoozePicker() {
+/** The picker, open for the Thread `pickLater` asked for: what is picked
+ * runs its App's Later, or its wake, by the Window's `run`. */
+export function LaterPicker() {
   const run = useRun()
   const target = useStore(picking, now)
-  const onClose = () => pickSnooze(undefined)
+  const onClose = () => pickLater(undefined)
   // Its App's, by what each does: the picker names none of its actions.
-  const onSnooze = ({ project, listed }: Snoozing, until: number | "done") => {
-    const action = itemActionOf(listed, "snooze")
+  const onLater = (
+    { project, listed }: LaterTarget,
+    until: number | "done"
+  ) => {
+    const action = itemActionOf(listed, "later")
     const when: Args = until === "done" ? { done: true } : { until }
     if (action) run(action.id, { project, item: listed.id, ...when })
   }
-  const onWake = ({ project, listed }: Snoozing) => {
+  const onWake = ({ project, listed }: LaterTarget) => {
     const action = itemActionOf(listed, "wake")
     if (action) run(action.id, { project, item: listed.id })
   }
@@ -96,7 +103,7 @@ export function SnoozePicker() {
             listed={target.listed}
             onPick={(picked) => {
               if (picked === "wake") onWake(target)
-              else onSnooze(target, picked)
+              else onLater(target, picked)
               onClose()
             }}
           />
@@ -107,7 +114,7 @@ export function SnoozePicker() {
 }
 
 /** The picker's lines, for one Thread. What is picked goes back by one
- * prop, not by a snooze's and a wake's: the sidebar list takes no Thread's
+ * prop, not by a Later's and a wake's: the sidebar list takes no Thread's
  * verb as a prop (ADR 0087, B4e). */
 function Picking({
   listed,
@@ -121,7 +128,7 @@ function Picking({
   const [text, setText] = useState("")
   const [at, setAt] = useState(0)
   // The presets `sidebar.toml` names (ADR 0074, decision 9).
-  const words = useLookSidebar().snooze.presets
+  const words = useLookSidebar().later.presets
   const listedPresets = useMemo(() => presets(words, now), [words, now])
   const typed = text.trim() ? whenOf(text, now) : undefined
   // What was typed comes first once it reads as a time, then Wake now
@@ -157,16 +164,16 @@ function Picking({
   const picked = Math.min(at, choices.length - 1)
   const title = (
     <div className="truncate px-1.5 pt-0.5 pb-1.5 text-xs text-muted-foreground">
-      Snooze · <span className="text-foreground/80">{listed.title}</span>
+      Later · <span className="text-foreground/80">{listed.title}</span>
     </div>
   )
-  if (!snoozable(listed))
+  if (!mayPutOff(listed))
     return (
       <>
         {title}
         <p className="px-1.5 pb-1 text-sm text-muted-foreground">
           <span className="font-medium text-attention">It asks you.</span>{" "}
-          Answer it first: a Thread that calls you can’t be snoozed.
+          Answer it first: a Thread that calls you can’t be put off.
         </p>
       </>
     )

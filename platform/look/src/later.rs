@@ -1,8 +1,8 @@
-//! The words a snooze's time is said in (ADR 0074, decisions 5 and 9), as
-//! `sidebar.toml`'s `[snooze] presets` write them. The window reads them
-//! against its clock (`client/web/src/sidebar/snooze-time.ts`); this checks
+//! The words a Later's time is said in (ADR 0074, decisions 5 and 9), as
+//! `sidebar.toml`'s `[later] presets` write them. The window reads them
+//! against its clock (`client/web/src/sidebar/later-time.ts`); this checks
 //! that it can, so `banda look check` names a preset it cannot, and says
-//! how long a while lasts, for an Agent's snooze and the CLI's.
+//! how long a while lasts, for an Agent's Later and the CLI's.
 
 /// Banda's presets: T3 Code's defaults, in the field's own words.
 pub const PRESETS: [&str; 5] = ["1h", "3h", "18:00", "tomorrow 9:00", "mon 9:00"];
@@ -13,7 +13,7 @@ pub const MOST: usize = 8;
 /// A minute, an hour and a day, in milliseconds: `UNITS`' order.
 const UNIT_MS: [i64; 3] = [60_000, 3_600_000, 86_400_000];
 
-/// The longest a snooze lasts, in milliseconds: a year. The field reads
+/// The longest a Later lasts, in milliseconds: a year. The field reads
 /// no longer while, and the engine takes no later moment.
 pub const LONGEST: i64 = 365 * 86_400_000;
 
@@ -160,7 +160,7 @@ fn time_of(word: &str) -> bool {
 mod tests {
     use super::*;
 
-    /// The words the window's field tests too: `platform/look/snooze-words.json`.
+    /// The words the window's field tests too: `platform/look/later-words.json`.
     #[derive(serde::Deserialize)]
     struct Words {
         reads: Vec<String>,
@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn it_reads_what_the_field_reads_and_no_more() {
-        let words: Words = serde_json::from_str(include_str!("../snooze-words.json")).unwrap();
+        let words: Words = serde_json::from_str(include_str!("../later-words.json")).unwrap();
         for text in &words.reads {
             assert!(reads(text), "{text}");
         }

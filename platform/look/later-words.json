@@ -1,5 +1,5 @@
 {
-  "about": "What a snooze's field reads, and what it does not (ADR 0074). The window's snooze-time.ts and the look's snooze.rs both test against it, so neither reads a word the other does not. Each word in `reads` says a time still to come on Thursday 5 November 2026 at 21:40.",
+  "about": "What a Later's field reads, and what it does not (ADR 0074). The window's later-time.ts and the look's later.rs both test against it, so neither reads a word the other does not. Each word in `reads` says a time still to come on Thursday 5 November 2026 at 21:40.",
   "reads": [
     "1h",
     "3h",

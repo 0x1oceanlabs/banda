@@ -21,7 +21,7 @@ import type { Listed } from "@banda/ui/pane"
 import type { Settings, State } from "./settings"
 
 /** One row: what a module listed, the Project it is in, where it stands,
- * when it woke from a snooze while its Person has not seen it, and the
+ * when it woke from a Later while its Person has not seen it, and the
  * other host its Project is on. */
 export type Row = {
   project: ProjectSummary
@@ -55,7 +55,7 @@ export type Section = {
   host?: string
   rows: Row[]
   folded: boolean
-  /** When the first of a snoozed shelf's rows wakes. */
+  /** When the first of the Later shelf's rows wakes. */
   next?: number
   /** The loudest mark of its rows, and how many need the Person. */
   mark: MarkState
@@ -82,23 +82,23 @@ export type Arranged = {
 export const STATE_WORDS: Record<State, string> = {
   active: "",
   working: "Working",
-  snoozed: "Snoozed",
+  later: "Later",
   archived: "Archive",
 }
 
 /** Where a row stands: asleep, at work, archived as the Person's marks
- * say, or active. A snooze outranks the rest (ADR 0074). */
+ * say, or active. A Later outranks the rest (ADR 0074). */
 function stateOf(listed: Listed, marks: Marks): State {
-  if (marks.asleep?.(listed)) return "snoozed"
+  if (marks.asleep?.(listed)) return "later"
   if (works(listed.mark)) return "working"
   return marks.archived?.(listed) ? "archived" : "active"
 }
 
 /** The attention order: what waits or woke first, then work, the rest,
- * the snoozed, the archived. */
+ * the Later, the archived. */
 function rank(row: Row): number {
   if (row.state === "archived") return 4
-  if (row.state === "snoozed") return 3
+  if (row.state === "later") return 3
   if (row.state === "working") return 1
   return waits(row.listed.mark) || row.woke !== undefined ? 0 : 2
 }
@@ -108,9 +108,9 @@ function changedOf(row: Row): number {
   return Math.max(row.listed.changed, row.woke ?? 0)
 }
 
-/** When a snoozed row wakes; one until done, after every time. */
+/** When a Later row wakes; one until done, after every time. */
 function wakesAt(row: Row): number {
-  return row.listed.snooze?.until ?? Infinity
+  return row.listed.later?.until ?? Infinity
 }
 
 /**
@@ -174,7 +174,7 @@ export function arrange(
     project?: ProjectSummary,
     name?: string
   ): Section => {
-    const asleep = held.filter((row) => row.state === "snoozed")
+    const asleep = held.filter((row) => row.state === "later")
     const next = Math.min(...asleep.map(wakesAt))
     return {
       key,
@@ -260,10 +260,10 @@ export function arrange(
       }
     case "state": {
       const { states, bottom } = settings.group
-      // The snoozed by when they wake; the rest as the settings sort.
+      // The Laters by when they wake; the rest as the settings sort.
       const of = (state: State) => {
         const held = rows.filter((row) => row.state === state)
-        return state === "snoozed"
+        return state === "later"
           ? held.sort((a, b) => wakesAt(a) - wakesAt(b))
           : held
       }
@@ -317,7 +317,7 @@ function rollup(rows: readonly Row[]): { mark: MarkState; waiting: number } {
     waiting: rows.filter(
       (row) =>
         row.state !== "archived" &&
-        row.state !== "snoozed" &&
+        row.state !== "later" &&
         waits(row.listed.mark)
     ).length,
   }

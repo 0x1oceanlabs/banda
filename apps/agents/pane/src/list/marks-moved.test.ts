@@ -27,7 +27,7 @@ function wasArchived(
   before: number
 ): boolean {
   if (works(listed.mark) || listed.mark === "asking") return false
-  if ((listed.snooze?.at ?? -Infinity) > (say?.at ?? before)) return false
+  if ((listed.later?.at ?? -Infinity) > (say?.at ?? before)) return false
   if (say && listed.changed <= say.at) return say.archived
   return listed.changed <= before
 }
@@ -96,9 +96,9 @@ test("a Project sends its Threads' seen, and what the old rules show archived", 
     thread(T3, NOW - 20 * DAY),
     // Nothing said: the three quiet days had archived it.
     thread(T4, NOW - 20 * DAY),
-    // Snoozed after it was archived: out of Archive (ADR 0074).
+    // Put off after it was archived: out of Archive (ADR 0074).
     thread(T5, NOW - 4 * DAY, {
-      snooze: { at: NOW - 2 * DAY, by: { kind: "person", id: "p" } },
+      later: { at: NOW - 2 * DAY, by: { kind: "person", id: "p" } },
     }),
   ]
   expect(marksOf(threads, oldMarks(held))).toEqual({
@@ -140,23 +140,23 @@ test("the frozen rule archives what the window's showed archived, and no more", 
       { archived: false, at },
     ]),
   ]
-  const snoozes = [undefined, ...times]
+  const laterTimes = [undefined, ...times]
   let n = 0
   const cases: { thread: ListedThread; old: OldMarks }[] = []
   for (const latest of latests)
     for (const asking of [[], [{ item: "q", title: "Which?" }]])
       for (const changed of times)
         for (const say of says)
-          for (const snoozed of snoozes)
+          for (const laterAt of laterTimes)
             for (const before of [0, NOW - 3 * DAY])
               for (const seen of [undefined, U1]) {
                 const one = id(100 + n++)
-                const snooze =
-                  snoozed === undefined
+                const later =
+                  laterAt === undefined
                     ? undefined
-                    : { at: snoozed, by: { kind: "person", id: "p" } as const }
+                    : { at: laterAt, by: { kind: "person", id: "p" } as const }
                 cases.push({
-                  thread: thread(one, changed, { latest, asking, snooze }),
+                  thread: thread(one, changed, { latest, asking, later }),
                   old: {
                     seen: seen ? { [one]: seen } : {},
                     seenKept: true,

@@ -47,7 +47,7 @@ const KEPT = [
   "thread.rename",
   "thread.suggest-title",
   "thread.unread",
-  "thread.snooze",
+  "thread.later",
   "thread.wake",
 ]
 

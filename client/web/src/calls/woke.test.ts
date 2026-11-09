@@ -28,10 +28,10 @@ test("a Thread that wakes by its time is told of once; one that calls, by its ca
   stops.push(tellWoke(stores, (action, args) => void told.push([action, args])))
   takeLists(stores, {
     [p]: [
-      thread("a", { snooze: { at: 0, until: 2_000 } }),
-      thread("b", { mark: "asking", snooze: { at: 0, until: 2_000 } }),
+      thread("a", { later: { at: 0, until: 2_000 } }),
+      thread("b", { mark: "asking", later: { at: 0, until: 2_000 } }),
       // Woken by its Person: nothing to tell.
-      thread("c", { snooze: { at: 0, woke: { at: 500, by: "woken" } } }),
+      thread("c", { later: { at: 0, woke: { at: 500, by: "woken" } } }),
     ],
   })
   expect(told).toEqual([])
@@ -41,13 +41,13 @@ test("a Thread that wakes by its time is told of once; one that calls, by its ca
       "notifications.tell",
       expect.objectContaining({
         key: "woke:p:a",
-        body: "Woke from its snooze",
+        body: "Woke from Later",
       }),
     ],
   ])
   // Said again, it is not told again.
   takeLists(stores, {
-    [p]: [thread("a", { snooze: { at: 0, until: 2_000 } })],
+    [p]: [thread("a", { later: { at: 0, until: 2_000 } })],
   })
   expect(told).toHaveLength(1)
   for (const stop of stops) stop()
@@ -60,11 +60,11 @@ test("a Thread its Person saw wake, on this machine or another, is not told of",
   const told: [string, Args | undefined][] = []
   stops.push(tellWoke(stores, (action, args) => void told.push([action, args])))
   takeLists(stores, {
-    [p]: [thread("a", { snooze: { at: 0, until: 2_000 } })],
+    [p]: [thread("a", { later: { at: 0, until: 2_000 } })],
   })
   // Its host says it was seen as its time came: another window saw it.
   takeLists(stores, {
-    [p]: [thread("a", { snooze: { at: 0, until: 2_000, wokeSeen: true } })],
+    [p]: [thread("a", { later: { at: 0, until: 2_000, wokeSeen: true } })],
   })
   vi.advanceTimersByTime(1_100)
   expect(told).toEqual([])

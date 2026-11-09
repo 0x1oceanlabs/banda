@@ -643,7 +643,7 @@ test("a Pane on another host runs none of the Window's actions on this machine's
   const own = { project: "r1" as ProjectId, item: "t1" }
   const run = runOnHost(
     (action, args) => void ran.push([action, args]),
-    new Set(["thread.snooze"]),
+    new Set(["thread.later"]),
     arc,
     own
   )
@@ -656,28 +656,28 @@ test("a Pane on another host runs none of the Window's actions on this machine's
   ])
     run(action, {})
   // Its own Thread, as its Pane names it, or the one it shows.
-  run("thread.snooze", { project: "r1", item: "t1", until: 5 })
-  run("thread.snooze")
+  run("thread.later", { project: "r1", item: "t1", until: 5 })
+  run("thread.later")
   // Its Thread in No Project there, one of that host's Projects.
-  run("thread.snooze", { project: "s9", item: "t2" })
+  run("thread.later", { project: "s9", item: "t2" })
   // This machine's Project, which wins the ID both have: nothing.
-  run("thread.snooze", { project: "mine", item: "t9" })
+  run("thread.later", { project: "mine", item: "t9" })
   // One no host shows, as a Thread not placed yet there: nothing.
-  run("thread.snooze", { project: "machine", item: "t3" })
+  run("thread.later", { project: "machine", item: "t3" })
   expect(ran).toEqual([
     ["edit.paste", undefined],
-    ["thread.snooze", { project: "r1", item: "t1", until: 5 }],
-    ["thread.snooze", { project: "r1", item: "t1" }],
-    ["thread.snooze", { project: "s9", item: "t2" }],
+    ["thread.later", { project: "r1", item: "t1", until: 5 }],
+    ["thread.later", { project: "r1", item: "t1" }],
+    ["thread.later", { project: "s9", item: "t2" }],
   ])
   // Before the Window knows that host, nothing either.
   const waiting = runOnHost(
     (action, args) => void ran.push([action, args]),
-    new Set(["thread.snooze"]),
+    new Set(["thread.later"]),
     () => undefined,
     own
   )
-  waiting("thread.snooze")
+  waiting("thread.later")
   expect(ran).toHaveLength(4)
 
   // The Window's own Archive goes to that host's Items alone, as an App's
@@ -685,7 +685,7 @@ test("a Pane on another host runs none of the Window's actions on this machine's
   ran.length = 0
   run("sidebar.archive")
   run("sidebar.archive", { project: "mine", item: "t9" })
-  run("sidebar.snooze-picker")
+  run("sidebar.later-picker")
   expect(ran).toEqual([["sidebar.archive", { project: "r1", item: "t1" }]])
 })
 

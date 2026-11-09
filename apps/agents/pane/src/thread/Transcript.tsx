@@ -65,8 +65,8 @@ export function Transcript({
   queue: QueueActions
 }) {
   const { thread, reader, acts } = useThreadAround()
-  // Its snooze, to snooze it until a usage limit's reset (ADR 0074).
-  const snooze = writers.own?.snooze
+  // Its Later, to put it off until a usage limit's reset (ADR 0074).
+  const later = writers.own?.later
   const turn = working(state)
   const lines = useMemo(() => timeline(state), [state])
   const asks = useMemo(() => awaiting(state), [state])
@@ -94,7 +94,7 @@ export function Transcript({
     name,
     harness: state.harness,
     answering,
-    snooze,
+    later,
   }
   const forkedFrom = useMemo(
     () => state.forkedFrom && threadOf(writers, state.forkedFrom),
