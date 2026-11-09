@@ -66,7 +66,7 @@ import {
   Undo2Icon,
 } from "lucide-react"
 import { useAccount } from "../harnesses"
-import { startsOnWords, useStartsOn } from "../starts-on"
+import { startsOnWords, useStartsOn } from "../thread/starts-on"
 import { commandLine, wordsOf } from "../thread/sign-in"
 import { type Open, Problem, Warning, Ways } from "../thread/SignIn"
 import { SettingsBar } from "./ThreadSettings"
