@@ -3748,6 +3748,119 @@ test("a Thread is a Group from its opening, and its Agent's Diff joins it", asyn
   expect((await thread.boundingBox())!.x).toBe(before.x)
 })
 
+test("an Agent's Group, its plate and its bars in the map, takes its state, and its handle says its Thread's title", async () => {
+  // Half the Strip each, so the Thread and its Diff both show; the
+  // handle, off by default.
+  window = await startWindow({
+    look: '[columns]\ndefault = "1/2"\n[groups]\nhandle = true\n',
+  })
+  const { page } = window
+  // Still, so what it draws is the same picture from one build to the
+  // next: a plate at work breathes otherwise.
+  await page.emulateMedia({ reducedMotion: "reduce" })
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("edit the notes")
+  await composer.press("Enter")
+  await expect(thread.getByText("I edited notes.md.")).toBeVisible()
+  // Its Agent's Diff joins its Group, so the map draws the Group too.
+  const changed = thread.getByRole("region", { name: "Changed files" })
+  await changed.getByRole("button", { name: /notes\.md/ }).click()
+  const diff = page.getByRole("region", { name: "Diff" })
+  await expect(diff).toBeVisible()
+  const plates = page.locator(`${ON_SCREEN} [data-group-plate]`)
+  const bars = page.locator("[data-map]")
+  await expect(plates).toHaveCount(2)
+  await expect(bars).toHaveCount(2)
+  const states = (of: Locator) =>
+    of.evaluateAll((all) => all.map((one) => one.getAttribute("data-state")))
+  // Watched as its turn ended, the Agent rests: the Group has no colour.
+  await expect.poll(() => states(plates)).toEqual([null, null])
+  await expect.poll(() => states(bars)).toEqual([null, null])
+
+  // The Person goes to another window, and the Agent works.
+  await setInFront(page, false)
+  await composer.fill("wait for me")
+  await composer.press("Enter")
+  await expect(thread.getByText("Waiting.")).toBeVisible()
+  await expect.poll(() => states(plates)).toEqual(["working", "working"])
+  await expect.poll(() => states(bars)).toEqual(["working", "working"])
+
+  // It ends its turn as the Person's word goes into it, from outside the
+  // Window: done, and not seen, as the Person is away.
+  const work = projectId(window, "Work")
+  const { threads } = JSON.parse(
+    window.banda("call", "agents.threads", "--project", work)
+  ).ok as { threads: { id: string; title: string }[] }
+  const id = threads.find((one) => one.title === "edit the notes")!.id
+  const go = JSON.stringify({ thread: id, text: "go", steer: true })
+  window.banda("call", "agents.send", "--project", work, "--params", go)
+  await expect.poll(() => states(plates)).toEqual(["done", "done"])
+  await expect.poll(() => states(bars)).toEqual(["done", "done"])
+  // Under the pointer its handle shows, named by its Agent's Thread.
+  const middle = await within(diff, 0.5, 0.5)
+  await page.mouse.move(middle.x, middle.y)
+  const handle = page.locator("[data-group-handle]")
+  await expect(handle).toHaveAttribute("data-hover", "")
+  await expect(handle).toHaveAccessibleName("edit the notes · 2 Panes")
+  await settled(thread, diff)
+  await groupShots(page, "done")
+
+  // A turn that fails colours it so.
+  await composer.fill("fail now")
+  await composer.press("Enter")
+  await expect.poll(() => states(plates)).toEqual(["failed", "failed"])
+  await expect.poll(() => states(bars)).toEqual(["failed", "failed"])
+  await expect(handle).toHaveAccessibleName("edit the notes · 2 Panes")
+  await settled(thread, diff)
+  await groupShots(page, "failed")
+})
+
+/**
+ * Pictures of the Group on screen, as drawn in `state`: its last plate,
+ * around the Diff; its handle, with the plate's edge it sits on; and the
+ * map. Set beside the same from another build, they show a change of the
+ * code that draws them changed none of the pixels.
+ */
+async function groupShots(page: Page, state: string) {
+  const plate = (await page
+    .locator(`${ON_SCREEN} [data-group-plate]`)
+    .last()
+    .boundingBox())!
+  await stillShot(page, `group-${state}-plate`, plate)
+  const handle = (await page.locator("[data-group-handle]").boundingBox())!
+  await stillShot(page, `group-${state}-handle`, {
+    x: handle.x - 8,
+    y: handle.y - 8,
+    width: handle.width + 16,
+    height: handle.height + 16,
+  })
+  const map = page.locator("[data-map]").first().locator("xpath=..")
+  await stillShot(page, `group-${state}-map`, (await map.boundingBox())!)
+}
+
+/**
+ * A picture of the page within `clip`, kept in test-results as
+ * `name`.png: taken again until two in a row are the same, as
+ * `toHaveScreenshot` waits, since the compositor may draw a few pixels a
+ * shade apart from one frame to the next. It never fails a test: it is
+ * for a Person to set beside another.
+ */
+async function stillShot(
+  page: Page,
+  name: string,
+  clip: { x: number; y: number; width: number; height: number }
+) {
+  const take = () => page.screenshot({ clip, animations: "disabled" })
+  let was = await take()
+  for (let tries = 0; tries < 20; tries++) {
+    const now = await take()
+    if (now.equals(was)) break
+    was = now
+  }
+  mkdirSync("test-results", { recursive: true })
+  writeFileSync(`test-results/${name}.png`, was)
+}
+
 test("a Group's handle carries it, and a Pane dropped inside its end joins it", async () => {
   // A third each, so the three fit in view; the handle, off by default.
   window = await startWindow({
