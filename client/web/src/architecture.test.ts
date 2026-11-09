@@ -91,6 +91,7 @@ import {
   layoutMotion,
   manifestIn,
   parts,
+  propNames,
   sources,
 } from "@banda/ui/testing/architecture"
 import ts from "typescript"
@@ -381,20 +382,24 @@ test("only the Window gives run to what it draws", () => {
 
 /**
  * What the sidebar list's components take as code, not data, by file and
- * component (`functionProps`, ADR 0087, B4e), its counts on the Bar's too
- * (B4f), which go to a Thread as a row does. The rest it does by the
- * actions' ids, as their keys would (`useRun`): opening a Pane, a New
- * Thread, the menu, the settings and a Project's verbs. What stays is the
- * Window's area (`onDismiss`), which Pane has the focus (`isCurrent`,
- * #827), the list's own folding and filter, a Project's menu around its
- * row (`withMenu`), and the trust card the Sidebar anchors by a row (ADR
- * 0083, decision 5), until trust is an action too (#947). Row's file is
- * read too, as ThreadRow takes its props from it. Each list only falls,
- * and none holds a Project's or a Thread's verb.
+ * component (`functionProps`, ADR 0087, B4e): each `.tsx` under
+ * `sidebar/` is read, its counts on the Bar's too (B4f), which go to a
+ * Thread as a row does, and a file whose components take no code is left
+ * out. The rest it does by the actions' ids, as their keys would
+ * (`useRun`): opening a Pane, a New Thread, the menu, the settings and a
+ * Project's verbs. What stays is the Window's area (`onDismiss`, and the
+ * sidebar's width and hiding by its `Edge`), which Pane has the focus
+ * (`isCurrent`, #827), the list's own folding and filter, a Project's menu
+ * around its row (`withMenu`), the trust card the Sidebar anchors by a row
+ * (ADR 0083, decision 5), until trust is an action too (#947), and what is
+ * picked in the snooze's picker, which the picker runs as its App's action
+ * by its id. Each list only falls, and no prop, whatever its type
+ * (`propNames`), is a Project's or a Thread's verb.
  */
 const SIDEBAR_CODE: Record<string, Record<string, string[]>> = {
-  "web/src/sidebar/Counts.tsx": {},
-  "web/src/sidebar/Row.tsx": {},
+  "web/src/sidebar/Edge.tsx": {
+    Edge: ["onWidth", "onHide", "onHiding"],
+  },
   "web/src/sidebar/Sidebar.tsx": {
     Sidebar: ["onDismiss", "isCurrent"],
     SectionView: ["isCurrent", "onToggle", "onMore", "withMenu"],
@@ -403,6 +408,9 @@ const SIDEBAR_CODE: Record<string, Record<string, string[]>> = {
     TrustItem: ["onTrust", "onStopTrusting"],
     HostPart: ["onFold"],
   },
+  "web/src/sidebar/Snoozing.tsx": {
+    Picking: ["onPick"],
+  },
 }
 
 /** The verbs the sidebar list ran by props until B4e, and a Thread's. */
@@ -410,17 +418,26 @@ const VERBS =
   /^on(?:Open|NewThread|NoProject|AddProject|Pin|Locate|ProjectSettings|Menu|Settings|Keys|Start|Snooze|Wake|Archive|Rename)$/
 
 test("the sidebar list takes no more code than the list holds, and no Project's or Thread's verb", () => {
+  const files = sources(join(app, "web/src/sidebar"), { tests: false })
+    .filter((file) => file.endsWith(".tsx"))
+    .map((file) => [relative(app, file), readFileSync(file, "utf8")] as const)
+  expect(files.map(([file]) => file)).toContain("web/src/sidebar/Row.tsx")
+  // A component that takes no code is left out, and so is a file of none.
   const taken = Object.fromEntries(
-    Object.keys(SIDEBAR_CODE).map((file) => {
-      const props = functionProps(readFileSync(join(app, file), "utf8"), file)
-      // A component that takes no code is left out.
-      const some = Object.entries(props).filter(([, names]) => names.length > 0)
-      return [file, Object.fromEntries(some)]
+    files.flatMap(([file, source]) => {
+      const some = Object.entries(functionProps(source, file)).filter(
+        ([, names]) => names.length > 0
+      )
+      return some.length > 0 ? [[file, Object.fromEntries(some)]] : []
     })
   )
-  const verbs = Object.values(taken)
-    .flatMap((byComponent) => Object.values(byComponent).flat())
-    .filter((name) => VERBS.test(name))
+  const verbs = files.flatMap(([file, source]) =>
+    Object.entries(propNames(source, file)).flatMap(([component, names]) =>
+      names
+        .filter((name) => VERBS.test(name))
+        .map((name) => `${file}: ${component} ${name}`)
+    )
+  )
   expect(verbs).toEqual([])
   expect(taken).toEqual(SIDEBAR_CODE)
 })
@@ -428,11 +445,12 @@ test("the sidebar list takes no more code than the list holds, and no Project's 
 /**
  * A Project's pin is the Window's `projects.pin`, and the Flow the Person
  * picks is `flow.pick`, beside `flow.solo` (ADR 0087, B4e): the sidebar
- * list pins no Project and writes no `agents.toml` itself.
+ * list pins no Project itself, by `updateProject` or by the engine's
+ * `projects.update`, and writes no `agents.toml`.
  */
 test("the sidebar list pins no Project and writes no agents.toml", () => {
   const writing =
-    /\bupdateProject\b|(?:writeSetting|settings\.set)\(\s*(?:AGENTS_FILE|["'`]agents\.toml)/
+    /\bupdateProject\b|\bprojects\.update\b|(?:writeSetting|settings\.set)\(\s*(?:AGENTS_FILE|["'`]agents\.toml)/
   const files = sources(join(app, "web/src/sidebar"), { tests: false })
   expect(files).toContain(join(app, "web/src/sidebar/Sidebar.tsx"))
   expect(
