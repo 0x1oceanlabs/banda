@@ -559,16 +559,29 @@ async fn work(
         .connection(project, &harness)
         .await
         .map_err(|failed| Ending::failed(failed.to_string(), Some(Failure::HarnessStopped)))?;
-    let earlier = project
-        .read(move |sql| store::evidence(sql, thread))
+    // The session the Thread had, and the account its turn before this
+    // one ran on.
+    let turn_id = turn.id;
+    let (earlier, before): (Option<acp::Evidence>, _) = project
+        .read(move |sql| {
+            let before = store::ran_before(sql, thread, turn_id)?;
+            Ok((store::evidence(sql, thread)?, before))
+        })
         .await
         .map_err(|e| unplanned(plain(e)))?;
     // The Thread's session lives in this process alone: one another account
     // of it had goes (ADR 0078, decision 4).
     live.forget_elsewhere(project.id(), thread, &harness.id)
         .await;
-    // Another account of the same Harness goes on with the same session.
+    // Another account of the same Harness goes on with the same session,
+    // readied for it as it moves here (ADR 0078, decision 3).
     let kin = |other: &str| (harnesses.find(other)).is_some_and(|o| o.shares_sessions(&harness));
+    if let (Some(before), Some(earlier)) = (before.and_then(|id| harnesses.find(&id)), &earlier)
+        && before.shares_sessions(&harness)
+        && let Err(error) = harness.take_session(&before, earlier.session()).await
+    {
+        tracing::warn!(%error, "a moved session was not readied for its new account");
+    }
     // A session that opens reaches Banda with a pass of its own, which
     // names its Thread (ADR 0019; ADR 0083, decision 2).
     let banda = || live.banda(project, turn.agent, thread);

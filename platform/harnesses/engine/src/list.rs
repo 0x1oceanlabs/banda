@@ -5,6 +5,7 @@
 
 use crate::carried::Carried;
 use crate::model::{AccountKind, HarnessView, Icon, LimitsLook};
+use crate::shadow;
 use banda_kernel::{Holes, Program, ProjectId, SSH_AGENT, project_env};
 use banda_look::Problem;
 use schemars::JsonSchema;
@@ -57,6 +58,9 @@ pub struct Harness {
     /// Its colour, 0 its Harness's own or 1 to 4, when its entry names
     /// one (ADR 0093, decision 3).
     pub colour: Option<u8>,
+    /// For a Codex account with a home of its own, the Harness's home, which
+    /// its own shadows (ADR 0078, decision 3; [`crate::shadow`]).
+    pub shadows: Option<PathBuf>,
     /// The file of the adapter Banda carries: only Banda's own entries
     /// have one. When the engine found the adapters and a Node on its
     /// host, the list starts the entry through it, on that Node, in place
@@ -202,22 +206,54 @@ impl Harness {
     }
 
     /// Whether `other`'s process goes on with this entry's sessions: the
-    /// same entry, or two Claude Code accounts, whose sessions both live in
-    /// the Project's folder (ADR 0078, decision 3). Codex's accounts share
-    /// none yet.
+    /// same entry; two Claude Code accounts, whose sessions both live in
+    /// the Project's folder; or a Codex Harness and its accounts, whose
+    /// homes shadow its own (ADR 0078, decision 3).
     pub fn shares_sessions(&self, other: &Harness) -> bool {
         self.sessions() == other.sessions()
     }
 
     /// Where its sessions live, as [`Harness::shares_sessions`] tells two
-    /// entries apart: `claude` for every Claude Code account, else its own
-    /// ID.
+    /// entries apart: `claude` for every Claude Code account; for Codex
+    /// the Harness it is or is an account of, where a home can shadow
+    /// another's; else its own ID.
     pub fn sessions(&self) -> &str {
         use crate::limits::Kind;
         match Kind::of(self) {
             Some(Kind::Claude) => "claude",
+            Some(Kind::Codex) if self.shadows.is_none() || shadow::LINKS => self.harness(),
             _ => &self.id,
         }
+    }
+
+    /// Makes its home a shadow of its Harness's, when it is a Codex account
+    /// with a home of its own, before its process starts.
+    pub async fn make_shadow(&self) -> std::io::Result<()> {
+        let (true, Some(shared), Some(home)) =
+            (shadow::LINKS, self.shadows.clone(), shadow::home(&self.env))
+        else {
+            return Ok(());
+        };
+        tokio::task::spawn_blocking(move || shadow::make(&home, &shared)).await?
+    }
+
+    /// Readies `session` to go on here, as it moves from the entry `from`,
+    /// another account of its Harness: a Codex session forgets the hidden
+    /// reasoning `from` sealed for itself, which this one cannot read
+    /// (ADR 0078, decision 3). Nothing for the same entry, nor for another
+    /// Harness's.
+    pub async fn take_session(&self, from: &Harness, session: &str) -> std::io::Result<()> {
+        use crate::limits::Kind;
+        if from.id == self.id || Kind::of(self) != Some(Kind::Codex) {
+            return Ok(());
+        }
+        // An account's own home reaches the shared sessions through its shadow.
+        let Some(home) = shadow::home(&self.env) else {
+            return Ok(());
+        };
+        let session = session.to_owned();
+        tokio::task::spawn_blocking(move || shadow::forget_reasoning(&home, &session).map(drop))
+            .await?
     }
 
     /// The entry as its process for `project` starts: it, and every program
@@ -628,13 +664,15 @@ impl HarnessEntry {
         }
         let base = base.map(|b| (b.args, b.env, b.cli, b.carried));
         let (args, base_env, cli, carried) = base.unwrap_or_default();
+        let shared_home = shadow::home(&base_env);
+        let own_home = (self.env.as_ref()).and_then(|own| own.get(shadow::VARIABLE).cloned());
         // An account's variables go over its Harness's; an entry of a
         // Harness says all of its own.
         let env = match (self.env, account) {
             (Some(own), true) => base_env.into_iter().chain(own).collect(),
             (own, _) => own.unwrap_or(base_env),
         };
-        Ok(Harness {
+        let mut harness = Harness {
             id: self.id,
             name,
             short,
@@ -648,12 +686,22 @@ impl HarnessEntry {
             mark: self.mark,
             icon: self.icon,
             colour: self.colour,
+            shadows: None,
             carried,
             record: None,
             cwd: None,
             holes: Holes::default(),
             credentials: Credentials::default(),
-        })
+        };
+        // A Codex account that signs in in a home of its own shadows its
+        // Harness's (ADR 0078, decision 3).
+        if account
+            && own_home.is_some_and(|home| !home.is_empty())
+            && crate::limits::Kind::of(&harness) == Some(crate::limits::Kind::Codex)
+        {
+            harness.shadows = shared_home;
+        }
+        Ok(harness)
     }
 }
 
@@ -907,6 +955,7 @@ fn known() -> Vec<Harness> {
                 mark: None,
                 icon: None,
                 colour: None,
+                shadows: None,
                 carried: Some(adapter.file()),
                 record: None,
                 cwd: None,
@@ -1302,7 +1351,7 @@ mod tests {
     }
 
     #[test]
-    fn claude_accounts_share_their_sessions_and_codex_s_not_yet() {
+    fn accounts_of_a_harness_share_their_sessions() {
         let list = known();
         let (claude, codex) = (&list[0], &list[1]);
         let second = "[[harness]]\nid = \"work\"\nname = \"Work\"\ncommand = \"acp\"\n\
@@ -1323,8 +1372,16 @@ mod tests {
         };
         assert!(
             !codex.shares_sessions(&codex_2),
-            "not before Codex's shadow homes"
+            "another Codex Harness, not an account"
         );
+        let work = "[[harness]]\nid = \"work\"\nof = \"codex\"\nenv = { CODEX_HOME = \"/h/.codex_work\" }\n";
+        let work = listed_in(Path::new("h"), work).unwrap().remove(0);
+        assert_eq!(work.shadows, shadow::home(&codex.env));
+        assert_eq!(codex.shares_sessions(&work), cfg!(unix), "a Codex account");
+        let alias = "[[harness]]\nid = \"alias\"\nof = \"codex\"\n";
+        let alias = listed_in(Path::new("h"), alias).unwrap().remove(0);
+        assert_eq!(alias.shadows, None, "the Harness's own home");
+        assert!(codex.shares_sessions(&alias));
     }
 
     #[test]
