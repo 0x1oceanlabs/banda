@@ -10,9 +10,10 @@
  *   flip back while its fact is on its way, whichever of the answer and
  *   the fact comes first (ADR 0082, decision 4).
  * - Nothing waits for a host away (decision 8): a mark made then is not
- *   sent, and one whose host went while it was on its way is taken back.
- *   A toast says so, as for one the host refused, but for the seen the
- *   window marks by itself, which fails quietly.
+ *   sent, and one whose host went while it was on its way is taken back,
+ *   and is not sent again once the host is back. A toast says so, as for
+ *   one the host refused, but for the seen the window marks by itself,
+ *   which fails quietly.
  * - A mark moves no Thread (decision 6): what shows changes the marks
  *   alone, never when the Thread changed or where it stands.
  * - No device's clock goes into a mark (decision 7): an archive shows
@@ -23,7 +24,14 @@
  * host's alone. They are kept in memory only: after a reload, the host's
  * list says all.
  */
-import { type Engine, Lost, newId, type ProjectId } from "@banda/contract"
+import {
+  type Engine,
+  Lost,
+  type MethodOf,
+  newId,
+  type Params,
+  type ProjectId,
+} from "@banda/contract"
 import type {
   ListedThread,
   ThreadId,
@@ -113,9 +121,11 @@ function change(
  * it. A host away is sent nothing, and one that goes before it answers
  * takes the mark back here; either way, and when the host refuses it, a
  * toast says so, unless it is `quiet`, as the seen the window marks by
- * itself. A command whose connection broke goes again once its host is
- * back (`Engine.commandAt`), with the same ID, so it lands once at most:
- * if it does, its fact shows it, as any mark made there.
+ * itself. Its command is sent `once` (`Engine.commandAt`): one whose
+ * connection broke is not sent again once its host is back, so a mark
+ * said to have failed does not land later. One that reached the host
+ * before the break may have landed all the same: its fact then shows it,
+ * as any mark made there.
  */
 export async function mark(
   engine: Engine,
@@ -136,7 +146,8 @@ export async function mark(
   // This mark's part, and no later one's, which took its place.
   const own = (part: Part<unknown> | undefined) => part?.command === command
   const answer = commandOf(engine, project, thread, mark, command)
-  // One that lands after its host came back says so by its fact alone.
+  // Its own Lost, which comes after `gone` said its host went, has no
+  // one to hear it.
   answer.catch(() => undefined)
   let stop = () => {}
   const gone = new Promise<never>((_, reject) => {
@@ -167,18 +178,19 @@ function commandOf(
   mark: PersonMark,
   command: string
 ): Promise<{ at: number | null }> {
+  // Each goes once: none waits out a break to land after its toast
+  // (decision 8).
+  const send = <M extends MethodOf<"command">>(method: M, params: Params<M>) =>
+    engine.commandAt(method, params, project, command, { once: true })
   if ("archived" in mark)
     return mark.archived
-      ? engine.commandAt("agents.archive", { thread }, project, command)
-      : engine.commandAt("agents.unarchive", { thread }, project, command)
+      ? send("agents.archive", { thread })
+      : send("agents.unarchive", { thread })
   const { seen } = mark
-  if (seen === null)
-    return engine.commandAt("agents.unread", { thread }, project, command)
-  return engine.commandAt(
+  if (seen === null) return send("agents.unread", { thread })
+  return send(
     "agents.read",
-    seen === "latest" ? { thread } : { thread, turn: seen },
-    project,
-    command
+    seen === "latest" ? { thread } : { thread, turn: seen }
   )
 }
 

@@ -76,9 +76,10 @@ test("entries/ and lines/ import no Pane API, ThreadPane or thread/Thread, and r
 
 /**
  * The Person's marks go to a Thread's host only through list/sent.ts
- * (ADR 0096), which shows each at once until its fact comes back and
- * queues none while the host is away: no other file of the module sends
- * one, so none goes around that.
+ * (ADR 0096), which shows each at once until its fact comes back,
+ * queues none while the host is away and sends each once, never again
+ * after a break: no other file of the module sends one, so none goes
+ * around that.
  */
 test("only list/sent.ts sends a Thread's marks to its host", () => {
   const folder = import.meta.dirname

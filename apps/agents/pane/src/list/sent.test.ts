@@ -1,4 +1,4 @@
-import type { Engine, ProjectId, Status } from "@banda/contract"
+import type { CommandOptions, Engine, ProjectId, Status } from "@banda/contract"
 import type { ListedThread, ThreadList } from "@banda/contract/agents"
 import { beforeEach, expect, test, vi } from "vitest"
 import { applyThreads } from "./list"
@@ -39,6 +39,8 @@ type Held = {
   method: string
   params: unknown
   command: string
+  /** How it goes: each mark is sent `once`. */
+  options: CommandOptions | undefined
   answer: (at: number | null) => void
   refuse: (error: Error) => void
 }
@@ -62,13 +64,15 @@ function engineIn(state: Status["state"] = "open") {
       method: string,
       params: unknown,
       _: ProjectId,
-      command: string
+      command: string,
+      options?: CommandOptions
     ) =>
       new Promise((resolve, reject) =>
         asked.push({
           method,
           params,
           command,
+          options,
           answer: (at) => resolve({ answer: null, at }),
           refuse: reject,
         })
@@ -85,7 +89,7 @@ function engineIn(state: Status["state"] = "open") {
 const shownOf = (engine: Engine, listed: ThreadList) =>
   shown(listed.threads, sendingTo(engine))[0]
 
-test("each mark goes to its host as its command", () => {
+test("each mark goes to its host as its command, sent once", () => {
   const { engine, asked } = engineIn()
   void mark(engine, PROJECT, "t1", { seen: "u1" })
   void mark(engine, PROJECT, "t2", { seen: "latest" })
@@ -99,6 +103,11 @@ test("each mark goes to its host as its command", () => {
     ["agents.archive", { thread: "t4" }],
     ["agents.unarchive", { thread: "t5" }],
   ])
+  // None goes again after a break, to land once its toast said it failed
+  // (decision 8).
+  expect(asked.map(({ options }) => options)).toEqual(
+    asked.map(() => ({ once: true }))
+  )
 })
 
 test("what was sent shows at once, and marks only the turn it names while it is the latest", () => {
@@ -255,7 +264,7 @@ test("a host away is sent nothing and keeps nothing: a menu's mark says so, the 
   ])
 })
 
-test("a host that goes before it answers takes the mark back, and its late answer changes nothing", async () => {
+test("a host that goes before it answers takes the mark back, and is not sent it again once back", async () => {
   const { engine, asked, go } = engineIn()
   const sent = mark(engine, PROJECT, "t1", { seen: null })
   expect(sendingTo(engine).t1).toBeDefined()
@@ -265,10 +274,13 @@ test("a host that goes before it answers takes the mark back, and its late answe
   expect(said.errors).toEqual([
     "Banda lost its engine for a moment. Try again.",
   ])
-  // Sent again once the host was back, it landed: its fact shows it.
+  // Sent once, it does not go again as the host comes back, so the mark
+  // the toast called failed does not land later (decision 8). One that
+  // reached the host before it went may have landed all the same: its
+  // fact shows it then, not this window.
   go("open")
-  asked[0]!.answer(4)
   await Promise.resolve()
+  expect(asked.map(({ options }) => options)).toEqual([{ once: true }])
   expect(sendingTo(engine)).toEqual({})
 
   // The window's own seen goes as quietly.
