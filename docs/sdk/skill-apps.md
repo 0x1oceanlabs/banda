@@ -104,7 +104,9 @@ act reads `window.here.get()` as it runs.
 ## Data
 
 - `data.1` Data comes only from a host: query, follow, stream.
-- `data.2` A write is a command, pending until its receipt's `at`.
+- `data.2` A write is a command, pending until its receipt's `at`; with
+  none (it wrote no fact), until the answer, and a read sent after it
+  shows the write.
 - `data.3` Publish facts as `<app>.<noun>.<past-verb>@<major>`, naming
   things by Address.
 - `data.4` The client never touches a host's disk; bytes by signed URL.

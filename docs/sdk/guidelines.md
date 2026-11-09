@@ -256,8 +256,10 @@ neither (borders.5, device.5).
   view is read whole again on its facts. *Check:* review.
 - **data.2 A write is a command.** It carries a CommandId, gets a receipt
   with `at`, shows as pending until a read at or past `at`, and a refusal
-  rolls it back. Long work reports through facts; a command never hangs
-  (ADR 0082 d4). *Check:* review.
+  rolls it back. An answer with no `at` (the command wrote no fact, #880)
+  has nothing to wait for: the control stops being pending at once, and
+  a read sent after the answer shows what it did. Long work reports
+  through facts; a command never hangs (ADR 0082 d4). *Check:* review.
 - **data.3 Publish what others may hear,** in `facts!`, named
   `<app>.<noun>.<past-verb>@<major>`, whose payloads name things by
   Address. Every other fact is your own (ADR 0082 d5). *Check:* today
