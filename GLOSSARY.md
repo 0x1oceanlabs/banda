@@ -605,8 +605,8 @@ sidebar list is the home screen (ADR 0087, ADR 0089).
 _Avoid_: place (in code, where a Pane opens), dock.
 
 **Top layer**:
-What sits over the tiles: the Banda menu, the launcher, the Drawer, Quick
-Look, dialogs, menus and toasts. There is one of each at a time, but
+What sits over the tiles: the Banda menu, the launcher, the Drawer, the
+Sheet, Quick Look, dialogs, menus and toasts. There is one of each at a time, but
 toasts, which stack up to three. The Drawer and Quick Look each hold one
 Pane; the Window draws the toasts (ADR 0011, ADR 0087).
 _Avoid_: overlay (that is the tiling's unsaved changes), float.
@@ -705,8 +705,9 @@ _Avoid_: overlay for what sits over the tiles (that is the Top layer).
 **Workspace**:
 One screen of Panes. It can hold Panes of any Projects; it only lays out the
 screen, and the Project stays the boundary. Workspaces sit one under another,
-and there is always one empty workspace at the bottom. A Project has one
-workspace where its Agents' Groups open, in a row (ADR 0065).
+and there is always one empty workspace at the bottom. In the row and solo,
+a Project has one workspace that holds its Panes only, and every other
+workspace is a free one (ADR 0065, ADR 0102).
 _Avoid_: Desk (in speech, «стол» is a workspace; the look's desk is the
 glass under the tiles).
 
@@ -762,6 +763,22 @@ PDF, a video. The one that matches a file best draws it, unless the
 Person picked another for its extension with "Open with…" (ADR 0073,
 decision 6).
 _Avoid_: viewer, renderer.
+
+**Free workspace**:
+A workspace that holds Panes of any Project and of none, as the Flow
+`free` does. In the row and solo there can be any number of them; the
+empty one at the bottom becomes one when a Pane is put on it, and a
+Thread of no Project opens on the first (ADR 0102).
+
+**Project's own Group**:
+The Group first on a Project's workspace that holds the Panes the Person
+opened for the Project and not for an Agent: a terminal, a dev server,
+Files, Git. It is there while it holds a Pane (ADR 0102).
+
+**Sheet**:
+Settings, Usage or the notifications, come in from the right edge over
+the workspace, in the top layer. The row stays as it is, and `Esc`
+takes it away (ADR 0102).
 
 **Drawer**:
 A quick Thread that drops from the top over the workspace (`` Alt+` ``)
