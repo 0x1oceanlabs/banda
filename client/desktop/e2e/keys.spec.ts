@@ -130,9 +130,10 @@ async function apart(page: Page, window: Window): Promise<string[]> {
  * Why this machine runs slower than it can, where it says so: at low load
  * a laptop on battery or in power-saver runs its cores at about half
  * their speed, and each key's ms with them (#1045). On Linux, the
- * `low-power` platform profile, or a battery that discharges, or where
- * no battery says, a mains supply that is off; on a Mac, Low Power Mode
- * or the battery. None elsewhere, and none where nothing can be read.
+ * `low-power` platform profile (`quiet` where it has none, as
+ * power-profiles-daemon picks), or the machine's battery discharging, or
+ * where no battery says, a mains supply that is off; on a Mac, Low Power
+ * Mode or the battery. None elsewhere, and none where nothing can be read.
  */
 function slowed(): string | undefined {
   if (process.platform === "darwin") {
@@ -151,8 +152,8 @@ function slowed(): string | undefined {
   }
   if (process.platform !== "linux") return undefined
   const text = (path: string) => fileText(path)?.trim()
-  if (text("/sys/firmware/acpi/platform_profile") === "low-power")
-    return "power-saver"
+  const profile = text("/sys/firmware/acpi/platform_profile")
+  if (profile === "low-power" || profile === "quiet") return "power-saver"
   const supplies = "/sys/class/power_supply"
   let names: string[]
   try {
@@ -162,9 +163,12 @@ function slowed(): string | undefined {
   }
   const of = (name: string, what: string) => text(join(supplies, name, what))
   // A USB-C charger shows as a USB supply, and the mains one may read off
-  // while it charges: a battery's own word comes first.
+  // while it charges: a battery's own word comes first. Not a mouse's or a
+  // headset's, which says it powers a Device.
   const batteries = names
-    .filter((name) => name.startsWith("BAT"))
+    .filter(
+      (name) => of(name, "type") === "Battery" && of(name, "scope") !== "Device"
+    )
     .flatMap((name) => of(name, "status") ?? [])
   if (batteries.length > 0)
     return batteries.includes("Discharging") ? "on battery" : undefined
@@ -748,7 +752,8 @@ test.describe("a key drawn before the engine answers", () => {
       moving[grows].at - key,
       "maximized before the engine could speak"
     ).toBeLessThan(late)
-    // It is drawn widest in the last frame before its refusal is heard.
+    // It is drawn widest about when its refusal is heard: the spring keeps
+    // its speed a frame or so past it (motion.ts).
     const peak = moving.reduce(
       (top, frame, i) => (frame.share > moving[top].share ? i : top),
       grows
@@ -781,6 +786,9 @@ test.describe("a key drawn before the engine answers", () => {
       late
     )
     expect(moving.at(-1)!.share).toBe(was)
+    expect(moving.at(-1)!.focus, "the column before it still in focus").toBe(
+      prior
+    )
     expect(
       warnings.filter((text) =>
         text.startsWith("The workspaces did not change")
