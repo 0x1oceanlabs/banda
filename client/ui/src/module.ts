@@ -454,12 +454,13 @@ export type Source = {
   Find: ComponentType<FindProps>
 }
 
-/** What the window gives a widget on the bar, as it gives a Watch.
- * Where the Person is, it reads from Here (`useHere`). */
+/** What the window gives a widget on the bar, the same to each, the
+ * window's own as a module's. Where the Person is, it reads from Here
+ * (`useHere`); it acts by running an action (`useRun`), as a menu row
+ * does. */
 export type WidgetProps = {
   engine: Engine
   projects: readonly ProjectSummary[]
-  window: WindowApi
 }
 
 /**

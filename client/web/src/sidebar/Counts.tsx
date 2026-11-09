@@ -1,4 +1,4 @@
-import type { ProjectId, ProjectSummary } from "@banda/contract"
+import type { ProjectSummary } from "@banda/contract"
 import type { Count } from "@banda/contract/sidebar"
 import { BandaMark, type MarkState } from "@banda/ui/components/banda-mark"
 import {
@@ -11,14 +11,18 @@ import {
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
 import { ProjectSign } from "@banda/ui/components/project-sign"
+import { type Here, useHere } from "@banda/ui/here"
+import { useRun } from "@banda/ui/hooks/use-run"
 import { cn } from "@banda/ui/lib/utils"
-import type { PaneState } from "@banda/ui/pane"
+import type { Widget, WidgetProps } from "@banda/ui/module"
+import type { Lists } from "@banda/ui/pane"
 import { useMemo, useState } from "react"
 import { useLists, useSnoozesNow } from "../calls/stores"
 import { useLookSidebar } from "../look"
 import { ThreadMark, toneOf } from "@banda/ui/components/banda-mark"
 import { keysOf, order } from "./order"
 import { Status } from "./Row"
+import type { Snoozes } from "./snoozed"
 import { type Counted, inOrder, type Tally, tally } from "./tally"
 
 /** Each count's words, after its number. */
@@ -36,36 +40,35 @@ function colourOf(mark: MarkState, color: boolean): string {
   return (color && toneOf(mark)) || "text-foreground"
 }
 
-type Open = (project: ProjectId, pane: PaneState) => void
-
-/** The one thing a Pane shows, by its Project. */
-export type Ahead = { project: ProjectId; thing: string }
+/** Whether the Sidebar shows: with it, the counts say the same. */
+const sidebarOf = (here: Here) => here.sidebar
+/** The one thing the Pane in focus shows, and its Project, each a word:
+ * a move of the focus that keeps them, or between Panes that show none,
+ * draws the counts not. */
+const aheadThingOf = (here: Here) => here.pane?.subject
+const aheadProjectOf = (here: Here) =>
+  here.pane?.subject ? here.pane.project : undefined
 
 /**
- * The sidebar's counts in the bar's middle (ADR 0035): who waits for the
- * Person and who works, each by its mark, as `[bar]` in `sidebar.toml`
- * says. A click lists them; a row opens its Thread, as the sidebar's does.
- * What every module lists it reads from the Window's items.
+ * The sidebar list's counts in the bar's middle (ADR 0035): who waits for
+ * the Person and who works, each by its mark, as `[bar]` in `sidebar.toml`
+ * says. A click lists them in the sidebar's order; a row goes to its
+ * Thread, as the sidebar's does (`pane.pick`). While the Sidebar is
+ * hidden they are the switcher, and name the Thread the Pane in focus
+ * shows, an Agent's (ADR 0065, decision 9). What every module lists it
+ * reads from the Window's items, and where the Person is from Here.
  */
-export function Counts({
-  projects,
-  sidebarShown,
-  ahead,
-  onOpen,
-}: {
-  projects: readonly ProjectSummary[]
-  /** Whether the sidebar shows, and with it the same. */
-  sidebarShown: boolean
-  /** The thing the Pane in front shows: its Thread, an Agent's, is named
-   * while the sidebar is hidden, as the counts are then the switcher (ADR
-   * 0065, decision 9). */
-  ahead?: Ahead
-  onOpen: Open
-}) {
+function Counts({ projects }: WidgetProps) {
+  const sidebarShown = useHere(sidebarOf)
+  const aheadProject = useHere(aheadProjectOf)
+  const aheadThing = useHere(aheadThingOf)
   const lists = useLists()
   const aheadRow =
-    ahead && lists[ahead.project]?.find((listed) => listed.id === ahead.thing)
-  const current = aheadRow?.agent !== undefined ? aheadRow : undefined
+    aheadProject &&
+    aheadThing &&
+    lists[aheadProject]?.find((listed) => listed.id === aheadThing)
+  const current =
+    aheadRow && aheadRow.agent !== undefined ? aheadRow : undefined
   const settings = useLookSidebar().bar
   const snoozes = useSnoozesNow()
   const tallies = useMemo(
@@ -136,29 +139,40 @@ export function Counts({
       <DropdownMenuContent align="center" className="w-96">
         <List
           tallies={tallies}
-          keys={() => keysOf(order(lists, projects, snoozes))}
+          lists={lists}
+          snoozes={snoozes}
           projects={projects}
-          onOpen={onOpen}
         />
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
+/** The counts' widget, the sidebar list's, which the window's own module
+ * lists. */
+export const countsWidget: Widget = {
+  id: "sidebar.counts",
+  about:
+    "Who waits for you and who works, by their marks; click for them in the sidebar's order.",
+  Widget: Counts,
+}
+
 /** What the counts count, drawn only while the list is open, in the
- * sidebar's order, whose `keys` are worked out only then. */
+ * sidebar's order, which is worked out only then. */
 function List({
   tallies,
-  keys,
+  lists,
+  snoozes,
   projects,
-  onOpen,
 }: {
   tallies: readonly Tally[]
-  keys: () => string[]
+  lists: Lists
+  snoozes: Snoozes
   projects: readonly ProjectSummary[]
-  onOpen: Open
 }) {
-  const { waiting, working } = inOrder(tallies, keys())
+  const run = useRun()
+  const keys = keysOf(order(lists, projects, snoozes))
+  const { waiting, working } = inOrder(tallies, keys)
   const named = new Map(projects.map((project) => [project.id, project]))
   const rows = (things: Counted[]) =>
     things.map(({ project, listed }) => {
@@ -167,7 +181,7 @@ function List({
         <DropdownMenuItem
           key={listed.id}
           className="gap-2 py-1.5"
-          onClick={() => onOpen(project, listed.pane)}
+          onClick={() => run("pane.pick", { project, pane: listed.pane })}
         >
           <ThreadMark listed={listed} news={false} />
           <span className="min-w-0 flex-1 truncate">{listed.title}</span>

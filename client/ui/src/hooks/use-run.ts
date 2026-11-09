@@ -14,10 +14,11 @@ export const RunContext = createContext<Run>(() => undefined)
 
 /**
  * Runs an action by its id, the Window's, the Tiling's or an App's, with
- * the Window's Here as it runs: how the sidebar list, the Thread menus and
- * the machine label do what the Person asks, and the Bar's widgets once
- * B4f hands it to them. A widget that must act on its own Tile, not the
- * one in focus, needs a Here of that Tile's then.
+ * the Window's Here as it runs: how the sidebar list, the Thread menus,
+ * the machine label and the Bar's widgets do what the Person asks. No
+ * widget on the Bar has a Tile of its own, so each acts where the Person
+ * is, as a key does; none needs a Here of another Tile's, and none was
+ * built.
  */
 export function useRun(): Run {
   return useContext(RunContext)
