@@ -144,6 +144,19 @@ pub enum Count {
     Working,
 }
 
+/// How another machine shows on its rows (ADR 0095, decision 5).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "sidebar/")]
+pub enum MachineRows {
+    /// Its icon and its name, after the Project.
+    Named,
+    /// Its icon alone.
+    Icon,
+    /// Not at all: its label and its Panes' headers still name it.
+    Off,
+}
+
 /// How the sidebar arranges Threads: a preset, and the keys that change
 /// it. A preset file in sidebars/ takes the same keys; every key is
 /// optional.
@@ -171,6 +184,22 @@ pub struct SidebarSettings {
     /// The Later's presets (ADR 0074). `[snooze]` before ADR 0098 (grace).
     #[serde(default, alias = "snooze")]
     pub later: LaterSettings,
+    /// How machines are named, with another machine in hosts.toml
+    /// (ADR 0095).
+    #[serde(default)]
+    pub machines: MachinesSettings,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct MachinesSettings {
+    /// How another machine shows on its rows: its icon and name, its icon
+    /// alone, or not at all.
+    pub rows: Option<MachineRows>,
+    /// Name this machine too, as the others are: a label over its
+    /// Projects, its rows where no label names it, its Panes' headers.
+    /// Only with another machine in hosts.toml.
+    pub this_too: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
@@ -268,6 +297,20 @@ pub struct Sidebar {
     pub row: Row,
     pub bar: BarCounts,
     pub later: Later,
+    pub machines: Machines,
+}
+
+/// How the window names the machines (ADR 0095): with no other machine
+/// in hosts.toml, it names none.
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "sidebar/")]
+pub struct Machines {
+    /// How another machine shows on its rows.
+    pub rows: MachineRows,
+    /// This machine is named as the others are: a label over its
+    /// Projects, its rows where no label names it, its Panes' headers.
+    pub this_too: bool,
 }
 
 /// The Later's picker (ADR 0074, decision 9).
@@ -440,6 +483,10 @@ impl SidebarSettings {
             later: LaterSettings {
                 presets: self.later.presets.or(under.later.presets),
             },
+            machines: MachinesSettings {
+                rows: self.machines.rows.or(under.machines.rows),
+                this_too: self.machines.this_too.or(under.machines.this_too),
+            },
         }
     }
 
@@ -484,6 +531,10 @@ impl SidebarSettings {
                         .map(|word| Spanned::new(0..0, (*word).to_owned()))
                         .collect(),
                 ),
+            },
+            machines: MachinesSettings {
+                rows: Some(MachineRows::Named),
+                this_too: Some(false),
             },
         }
     }
@@ -538,6 +589,10 @@ impl SidebarSettings {
                 presets: (all.later.presets.unwrap_or_default().into_iter())
                     .map(Spanned::into_inner)
                     .collect(),
+            },
+            machines: Machines {
+                rows: all.machines.rows.unwrap_or(MachineRows::Named),
+                this_too: all.machines.this_too.unwrap_or(false),
             },
         }
     }
@@ -767,6 +822,8 @@ mod tests {
             sidebar.bar.counts,
             [Count::Asking, Count::Done, Count::Working]
         );
+        assert_eq!(sidebar.machines.rows, MachineRows::Named);
+        assert!(!sidebar.machines.this_too, "this machine is not named");
         let names: Vec<_> = sidebar.presets.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(names, ["inbox", "projects", "places"]);
     }
@@ -904,6 +961,36 @@ mod tests {
         assert!(sidebar.bar.words);
         assert!(sidebar.bar.color, "Banda's");
         assert_eq!(sidebar.bar.empty, BarEmpty::Mark, "Banda's");
+    }
+
+    #[test]
+    fn how_the_machines_are_named_is_the_person_s_to_change() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("sidebar.toml"),
+            "preset = \"projects\"\n[machines]\nrows = \"icon\"\nthis-too = true\n",
+        )
+        .unwrap();
+        let (sidebar, problems) = resolved(dir.path());
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(sidebar.machines.rows, MachineRows::Icon);
+        assert!(sidebar.machines.this_too);
+    }
+
+    #[test]
+    fn a_way_to_show_a_machine_that_is_none_is_named_at_its_line() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("sidebar.toml"),
+            "[machines]\nrows = \"chip\"\nthis-too = true\n",
+        )
+        .unwrap();
+        let (sidebar, problems) = resolved(dir.path());
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(problems[0].message.contains("chip"), "{problems:?}");
+        assert_eq!(problems[0].line, Some(2));
+        assert_eq!(sidebar.machines.rows, MachineRows::Named, "left out");
+        assert!(sidebar.machines.this_too, "the rest of the file holds");
     }
 
     #[test]

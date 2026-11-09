@@ -38,6 +38,11 @@
       "description": "The Later's presets (ADR 0074). `[snooze]` before ADR 0098 (grace).",
       "$ref": "#/$defs/LaterSettings",
       "x-class": "shared"
+    },
+    "machines": {
+      "description": "How machines are named, with another machine in hosts.toml\n(ADR 0095).",
+      "$ref": "#/$defs/MachinesSettings",
+      "x-class": "shared"
     }
   },
   "additionalProperties": false,
@@ -388,6 +393,40 @@
         }
       },
       "additionalProperties": false
+    },
+    "MachinesSettings": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "description": "How another machine shows on its rows: its icon and name, its icon\nalone, or not at all.",
+          "$ref": "#/$defs/MachineRows"
+        },
+        "this-too": {
+          "description": "Name this machine too, as the others are: a label over its\nProjects, its rows where no label names it, its Panes' headers.\nOnly with another machine in hosts.toml.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MachineRows": {
+      "description": "How another machine shows on its rows (ADR 0095, decision 5).",
+      "oneOf": [
+        {
+          "description": "Its icon and its name, after the Project.",
+          "type": "string",
+          "const": "named"
+        },
+        {
+          "description": "Its icon alone.",
+          "type": "string",
+          "const": "icon"
+        },
+        {
+          "description": "Not at all: its label and its Panes' headers still name it.",
+          "type": "string",
+          "const": "off"
+        }
+      ]
     }
   }
 }

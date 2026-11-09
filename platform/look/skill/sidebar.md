@@ -65,6 +65,16 @@ preset `spaces`, `by = "space"`, the table `[spaces]`, the part
 name now; write that one.
 A file named as one of Banda's presets wins over it.
 
+## Machines
+
+With another machine in `hosts.toml` (ADR 0095), the window names it by
+the name and icon it gives itself: after the Project on its rows, on a
+label over its Projects in the `projects` preset, and in its Panes'
+headers, always. `[machines]` `rows` says how its rows show it:
+`"named"`, its icon and name (the default), `"icon"` alone, or `"off"`.
+This machine is not named, unless `this-too = true`. With one machine
+nothing is named, and these keys change nothing.
+
 ## Asked for, and what to set
 
 - "Group my Threads by Project": `[group]` `by = "project"`.
@@ -74,6 +84,8 @@ A file named as one of Banda's presets wins over it.
 - "The working Threads in the list, not on a shelf": `[group]`
   `states = ["working", "active"]` and `bottom = ["archived"]`.
 - "Show the archived Threads open": `[group]` `folded = []`.
+- "Only the other machine's icon on its rows": `[machines]` `rows = "icon"`.
+- "Name this machine too": `[machines]` `this-too = true`.
 - "The Later picker offers half an hour and Friday afternoon": `[later]`
   `presets = ["30m", "fri 14"]`. Each is said as the picker's field reads
   it: a while (`45m`, `2h`), a time (`18:00`), or a day and its time

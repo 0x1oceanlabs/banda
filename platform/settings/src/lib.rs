@@ -318,7 +318,9 @@ mod classes {
             "sidebar.toml",
             &[(
                 Shared,
-                &["preset", "group", "sort", "projects", "row", "bar", "later"],
+                &[
+                    "preset", "group", "sort", "projects", "row", "bar", "later", "machines",
+                ],
             )],
         ),
         ("keys.toml", &[(Shared, &["binds"]), (Device, &["mod"])]),
