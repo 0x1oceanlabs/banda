@@ -9,7 +9,7 @@
 //! The bindings are objc2's, which sysinfo builds already: the one call
 //! that needs unsafe code is [`Assertion::take`].
 
-use super::{System, Why};
+use super::{System, Taken, Why};
 use objc2_core_foundation::CFString;
 use objc2_io_kit::{
     IOPMAssertionCreateWithName, IOPMAssertionID, IOPMAssertionRelease, IOReturn,
@@ -28,9 +28,11 @@ impl System for Assertions {
     /// The assertion, unless macOS refused it.
     type Held = Option<Assertion>;
 
-    async fn take(&mut self, why: Why) -> Option<Assertion> {
+    /// macOS answers at once, in this process: what it does not grant it
+    /// refused, so no hold is short.
+    async fn take(&mut self, why: Why) -> Taken<Option<Assertion>> {
         let name = format!("Banda: {}", why.words());
-        match Assertion::take(&name) {
+        let held = match Assertion::take(&name) {
             Ok(assertion) => Some(assertion),
             Err(refused) => {
                 if !std::mem::replace(&mut self.told, true) {
@@ -41,7 +43,8 @@ impl System for Assertions {
                 }
                 None
             }
-        }
+        };
+        Taken { held, short: false }
     }
 
     async fn on_power(&mut self) -> bool {
@@ -107,7 +110,9 @@ mod tests {
     #[tokio::test]
     async fn pmset_lists_banda_s_assertion_while_it_is_held_and_not_after() {
         let mut assertions = Assertions::default();
-        let held = assertions.take(Why::Working).await;
+        let taken = assertions.take(Why::Working).await;
+        assert!(!taken.short);
+        let held = taken.held;
         assert!(held.is_some(), "macOS grants any process one");
         let listed_now = listed("Banda: Agents work").await;
         assert_eq!(listed_now.len(), 1, "{listed_now:?}");

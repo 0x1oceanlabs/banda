@@ -13,12 +13,14 @@
 //!
 //! Banda never asks for interactive authorization, so no password prompt
 //! shows. Outside any session logind's policy may refuse `sleep`, and
-//! where there is no system bus or no logind, as in a container, both are
-//! refused: each is said once in the log, and the engine goes on with
-//! what it was granted. Whether the machine is on power UPower says, else
-//! the kernel's power supplies do.
+//! where there is no logind both are refused: each refusal is said once
+//! in the log, and the engine goes on with what it was granted. A bus
+//! that is not reached, that went, as when its daemon restarts, or that
+//! did not answer in time is no refusal: the hold is short, and its locks
+//! are asked for again in a while, on a bus reached again. Whether the
+//! machine is on power UPower says, else the kernel's power supplies do.
 
-use super::{System, Why};
+use super::{System, Taken, Why};
 use std::collections::HashSet;
 use std::io;
 use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
@@ -34,7 +36,7 @@ const ASKING: Duration = Duration::from_secs(5);
 const FDS_MOST: usize = 1024;
 
 /// The system's own: logind's locks, on a system bus reached when first
-/// needed, and again after it failed.
+/// needed, and again after it went or failed.
 #[derive(Default)]
 pub(super) struct Logind {
     bus: Option<zbus::Connection>,
@@ -50,16 +52,40 @@ impl Logind {
         }
     }
 
-    /// The system bus, reached now if it is not yet.
+    /// The system bus, reached now if it is not yet, or if the one reached
+    /// before went, as when its daemon restarted.
     async fn bus(&mut self) -> Option<zbus::Connection> {
+        if self.bus.as_ref().is_some_and(zbus::Connection::is_closed) {
+            self.bus = None;
+        }
         if self.bus.is_none() {
             match tokio::time::timeout(ASKING, system_bus()).await {
-                Ok(Ok(bus)) => self.bus = Some(bus),
+                Ok(Ok(bus)) => {
+                    self.bus = Some(bus);
+                    // Reached: when it is not, that is said again.
+                    self.told.remove(NO_BUS);
+                }
                 Ok(Err(error)) => self.tell(NO_BUS, &error),
                 Err(_) => self.tell(NO_BUS, &"it did not answer in time"),
             }
         }
         self.bus.clone()
+    }
+
+    /// One lock of `what`, in `mode`, as logind grants it; `block-weak` is
+    /// `block` where logind knows no `block-weak`.
+    async fn lock(
+        bus: &zbus::Connection,
+        what: &str,
+        why: Why,
+        mode: &str,
+    ) -> zbus::Result<OwnedFd> {
+        match Logind::inhibit(bus, what, why, mode).await {
+            Err(error) if mode == "block-weak" && unknown_mode(&error) => {
+                Logind::inhibit(bus, what, why, "block").await
+            }
+            lock => lock,
+        }
     }
 
     /// One lock, `what` in `mode`, as logind grants it.
@@ -98,7 +124,8 @@ impl Logind {
     }
 }
 
-const NO_BUS: &str = "the system bus is not reached: nothing keeps this machine awake";
+const NO_BUS: &str = "the system bus is not reached: nothing keeps this machine awake until it is";
+const NO_ANSWER: &str = "logind did not answer for its locks: they are asked for again in a while";
 const NO_IDLE: &str = "logind refused its idle lock: the machine may idle-sleep while Agents work";
 const NO_SLEEP: &str = "logind refused its sleep lock: only its idle lock keeps the machine awake";
 
@@ -107,32 +134,30 @@ impl System for Logind {
     /// The locks logind granted.
     type Held = Vec<OwnedFd>;
 
-    async fn take(&mut self, why: Why) -> Vec<OwnedFd> {
-        let Some(bus) = self.bus().await else {
-            return Vec::new();
-        };
+    async fn take(&mut self, why: Why) -> Taken<Vec<OwnedFd>> {
         let mut held = Vec::new();
-        match Logind::inhibit(&bus, "idle", why, "block").await {
-            Ok(lock) => held.push(lock),
-            Err(error) => {
-                self.lost(&error);
-                self.tell(NO_IDLE, &error);
-            }
-        }
-        let sleep = match Logind::inhibit(&bus, "sleep", why, "block-weak").await {
-            Err(error) if unknown_mode(&error) => {
-                Logind::inhibit(&bus, "sleep", why, "block").await
-            }
-            sleep => sleep,
+        let Some(bus) = self.bus().await else {
+            return Taken { held, short: true };
         };
-        match sleep {
-            Ok(lock) => held.push(lock),
-            Err(error) => {
-                self.lost(&error);
-                self.tell(NO_SLEEP, &error);
+        for (what, mode, refused) in [
+            ("idle", "block", NO_IDLE),
+            ("sleep", "block-weak", NO_SLEEP),
+        ] {
+            match Logind::lock(&bus, what, why, mode).await {
+                Ok(lock) => held.push(lock),
+                Err(error) if unanswered(&error) => {
+                    // Not on this bus again: the rest waits for the next
+                    // take, on a bus reached again.
+                    self.bus = None;
+                    self.tell(NO_ANSWER, &error);
+                    return Taken { held, short: true };
+                }
+                Err(error) => self.tell(refused, &error),
             }
         }
-        held
+        // Answered: when logind next does not, that is said again.
+        self.told.remove(NO_ANSWER);
+        Taken { held, short: false }
     }
 
     async fn on_power(&mut self) -> bool {
@@ -149,13 +174,19 @@ impl System for Logind {
 impl Logind {
     /// Reaches the bus again next time, when `error` says this one went.
     fn lost(&mut self, error: &zbus::Error) {
-        if matches!(
-            error,
-            zbus::Error::InputOutput(_) | zbus::Error::InvalidReply
-        ) {
+        if unanswered(error) {
             self.bus = None;
         }
     }
+}
+
+/// Whether `error` says the bus went or did not answer in time, as zbus
+/// says both, rather than that the one asked refused.
+fn unanswered(error: &zbus::Error) -> bool {
+    matches!(
+        error,
+        zbus::Error::InputOutput(_) | zbus::Error::InvalidReply
+    )
 }
 
 /// Whether logind refused a mode it does not know, as before systemd 257
@@ -328,6 +359,27 @@ mod tests {
         ours
     }
 
+    /// Waits up to two seconds for logind to list none of ours.
+    async fn none_listed(bus: &zbus::Connection) {
+        for _ in 0..200 {
+            if ours(bus).await.is_empty() {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!("logind still lists them: {:?}", ours(bus).await);
+    }
+
+    #[test]
+    fn a_bus_that_went_or_did_not_answer_in_time_is_no_refusal() {
+        // As zbus says a call that timed out, and a socket that closed.
+        let late = io::Error::new(io::ErrorKind::TimedOut, "timed out");
+        assert!(unanswered(&zbus::Error::from(late)));
+        let closed = io::Error::new(io::ErrorKind::BrokenPipe, "the system bus closed");
+        assert!(unanswered(&zbus::Error::from(closed)));
+        assert!(!unanswered(&zbus::Error::Unsupported));
+    }
+
     /// A real lock of logind's, where this runs with a system bus and a
     /// logind that grants it; it says why it skips where not, as on CI's
     /// runners in a container.
@@ -342,11 +394,13 @@ mod tests {
             eprintln!("skipped: no logind here: {error}");
             return;
         }
-        let held = logind.take(Why::Working).await;
-        if held.is_empty() {
+        let taken = logind.take(Why::Working).await;
+        if taken.held.is_empty() {
             eprintln!("skipped: logind grants this process no lock");
             return;
         }
+        assert!(!taken.short, "logind answered");
+        let held = taken.held;
         for lock in &held {
             let flags = rustix::io::fcntl_getfd(lock).unwrap();
             assert!(flags.contains(FdFlags::CLOEXEC), "{flags:?}");
@@ -363,12 +417,16 @@ mod tests {
         }
 
         drop(held);
-        for _ in 0..200 {
-            if ours(&bus).await.is_empty() {
-                return;
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-        panic!("logind still lists them: {:?}", ours(&bus).await);
+        none_listed(&bus).await;
+
+        // The bus goes, as when its daemon restarts: the next take reaches
+        // it again, and is granted the same.
+        bus.close().await.unwrap();
+        let again = logind.take(Why::Working).await;
+        assert!(!again.short, "logind answered on a bus reached again");
+        let bus = logind.bus().await.unwrap();
+        assert_eq!(ours(&bus).await, modes);
+        drop(again);
+        none_listed(&bus).await;
     }
 }
