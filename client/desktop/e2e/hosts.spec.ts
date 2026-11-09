@@ -12,7 +12,8 @@
  * its host, and the counts list and Alt+U place its Threads where the
  * sidebar list does, among this machine's. A new Thread's picker groups
  * the Projects by machine, in a popped-out Pane's window as in the
- * window. As a Mac, its `uname` says
+ * window; one moved from arc to this machine's Project never names arc,
+ * not for a frame, and starts its Thread here. As a Mac, its `uname` says
  * Darwin, and the window finds its Banda in its Application Support; its
  * engine is this checkout's still, which serves for the follower, as a
  * Mac's does not
@@ -226,10 +227,11 @@ function send(arc: Arc, project: string, text: string) {
   )
 }
 
-/** arc's Threads in `project`, as its engine lists them. */
-function threadsOf(arc: Arc, project: string) {
+/** A machine's Threads in `project`, as its engine lists them: arc's, or
+ * the window's own. */
+function threadsOf(on: Pick<Arc, "banda">, project: string) {
   const { ok } = JSON.parse(
-    arc.banda("call", "agents.threads", "--project", project)
+    on.banda("call", "agents.threads", "--project", project)
   ) as {
     ok: {
       threads: {
@@ -256,9 +258,10 @@ const keptOf = (arc: Arc, project: string, thread: string) =>
     JSON.stringify({ thread })
   )
 
-/** arc's Threads in `project`, each its title and how its turn stands. */
-const states = (arc: Arc, project: string) =>
-  threadsOf(arc, project).map((thread) => [thread.title, thread.latest?.state])
+/** A machine's Threads in `project`, each its title and how its turn
+ * stands. */
+const states = (on: Pick<Arc, "banda">, project: string) =>
+  threadsOf(on, project).map((thread) => [thread.title, thread.latest?.state])
 
 /** The window, its hosts.toml naming arc with `banda`, or with none
  * (`null`) for the window to find it there, and the fake ssh first on its
@@ -904,13 +907,37 @@ test("another machine's Thread is seen, marked unread and archived on its engine
   ).toHaveCount(0)
 })
 
-test("a new Thread's Project picker groups the Projects by machine; one started in arc's Project starts on arc's engine, arc's No Project too, and away arc stays to pick", async () => {
+test("a new Thread's Project picker groups the Projects by machine; one started in arc's Project starts on arc's engine, arc's No Project too, and away arc stays to pick; this machine's No Project, picked on arc, never names arc and starts its Thread here", async () => {
   test.setTimeout(shots ? 300_000 : 180_000)
   arc = newArc()
   const banda = await seed(arc)
   window = await withArc(arc)
   const { page } = window
   const local = await work(window)
+  // What the page asks of the workspaces: every engine it reaches, arc's
+  // too, is a socket of the page's, and from this reload on each goes
+  // through here.
+  const asked: {
+    method?: string
+    params?: {
+      project?: string
+      pane?: string
+      args?: { host?: unknown; scratchCommand?: unknown }
+    }
+  }[] = []
+  await page.routeWebSocket(/.*/, (socket) => {
+    const engine = socket.connectToServer()
+    socket.onMessage((message) => {
+      engine.send(message)
+      const frame = JSON.parse(String(message)) as (typeof asked)[number]
+      if (
+        frame.method === "workspaces.open" ||
+        frame.method === "workspaces.update"
+      )
+        asked.push(frame)
+    })
+  })
+  await page.reload()
   const sidebar = sidebarOf(page)
   await expect(arcOf(page).getByText("Bench window tests")).toBeVisible()
   await page
@@ -1004,12 +1031,16 @@ test("a new Thread's Project picker groups the Projects by machine; one started 
       .getByRole("region", { name: "Scratch on arc", exact: true })
       .getByText("You said: Scratch on arc")
   ).toBeVisible()
-  const made = () =>
+  // A machine's Projects, and its scratch ones: arc's, or the window's own.
+  const projectsOf = (on: Pick<Arc, "banda">) =>
     (
-      JSON.parse(arc!.banda("call", "projects.list")) as {
+      JSON.parse(on.banda("call", "projects.list")) as {
         ok: { id: string; scratch: boolean }[]
       }
-    ).ok.filter((one) => one.scratch)
+    ).ok
+  const scratchOf = (on: Pick<Arc, "banda">) =>
+    projectsOf(on).filter((one) => one.scratch)
+  const made = () => scratchOf(arc!)
   await expect.poll(() => made().length).toBe(1)
   await expect
     .poll(() => states(arc!, made()[0]!.id))
@@ -1069,7 +1100,68 @@ test("a new Thread's Project picker groups the Projects by machine; one started 
     0
   )
   await shot(page, "step4c-4-arc-pane", ASIDE)
-  // This machine's No Project, picked there, is this machine's again.
+  // This machine's No Project, picked there, is this machine's again: what
+  // an arc Pane opens in a Project of this machine's is placed once, by the
+  // hosts' rule (#1004), so what the page asks of the workspaces from the
+  // pick on never names arc. That is the check that fails without the rule;
+  // the Pane is handed only the args of the host it is on, so arc does not
+  // reach the screen even then. That is watched too: each tile drawn anew
+  // from the pick on, for its machine's icon, or "on arc" in its words or
+  // its composer's placeholder, as it shows and as a draw since took it out
+  // or changed it, as an observer hears two draws in one task only after
+  // both.
+  asked.length = 0
+  const problems = {
+    here: window.banda("problems"),
+    arc: arc.banda("problems"),
+  }
+  expect(scratchOf(window)).toEqual([])
+  await page.evaluate(() => {
+    const tiles = () =>
+      document.querySelectorAll<HTMLElement>("section[data-tile]")
+    const before = new Set([...tiles()].map((tile) => tile.dataset.tile))
+    const drawn = { tiles: [] as string[], onArc: [] as string[] }
+    ;(globalThis as { drawn?: typeof drawn }).drawn = drawn
+    const ON_ARC = /\S* on arc\b/
+    const arcIn = (node: Node) =>
+      node instanceof Element &&
+      (node.matches("[data-machine-icon]") ||
+        node.querySelector("[data-machine-icon]"))
+        ? "arc's icon"
+        : ON_ARC.exec(node.textContent ?? "")?.[0]
+    const say = (tile: HTMLElement, said: string | undefined) => {
+      const seen = `${tile.getAttribute("aria-label")}: ${said}`
+      if (said && !drawn.onArc.includes(seen)) drawn.onArc.push(seen)
+    }
+    const anew = (node: Node | null) => {
+      const at = node instanceof Element ? node : node?.parentElement
+      const tile = at?.closest<HTMLElement>("section[data-tile]")
+      return tile && !before.has(tile.dataset.tile) ? tile : undefined
+    }
+    new MutationObserver((records) => {
+      for (const tile of tiles()) {
+        if (!anew(tile)) continue
+        if (!drawn.tiles.includes(tile.dataset.tile!))
+          drawn.tiles.push(tile.dataset.tile!)
+        say(tile, arcIn(tile))
+        for (const one of tile.querySelectorAll("[aria-placeholder]"))
+          say(tile, ON_ARC.exec(one.getAttribute("aria-placeholder")!)?.[0])
+      }
+      for (const record of records) {
+        const tile = anew(record.target)
+        if (!tile) continue
+        for (const node of record.removedNodes) say(tile, arcIn(node))
+        say(tile, ON_ARC.exec(record.oldValue ?? "")?.[0])
+      }
+    }).observe(document, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      characterData: true,
+      attributeOldValue: true,
+      characterDataOldValue: true,
+    })
+  })
   await menu
     .getByRole("menuitemradio", { name: /^No Project/ })
     .first()
@@ -1078,9 +1170,52 @@ test("a new Thread's Project picker groups the Projects by machine; one started 
     draft.getByRole("button", { name: "Project: No Project", exact: true })
   ).toBeVisible()
   expect(await headerShows(draft)).not.toContain("machine")
+  const here = draft.getByRole("textbox", { name: "Message to Fake AI" })
+  await expect(here).toHaveAttribute("aria-placeholder", /^Write to Fake AI\. /)
+  // Sent, its first message makes this machine's scratch folder, and its
+  // Thread runs on this machine's Agent; arc makes none.
+  await here.fill("Started here")
+  await here.press("Enter")
   await expect(
-    draft.getByRole("textbox", { name: "Message to Fake AI" })
-  ).toHaveAttribute("aria-placeholder", /^Write to Fake AI\. /)
+    page
+      .getByRole("region", { name: "Started here", exact: true })
+      .getByText("You said: Started here")
+  ).toBeVisible()
+  await expect.poll(() => scratchOf(window!).length).toBe(1)
+  await expect
+    .poll(() => states(window!, scratchOf(window!)[0]!.id))
+    .toEqual([["Started here", "done"]])
+  expect(made()).toHaveLength(1)
+  const drawn = (await page.evaluate("globalThis.drawn")) as {
+    tiles: string[]
+    onArc: string[]
+  }
+  // What the page asked of the workspaces since the pick, the move's Pane
+  // first, named no host: no open outside arc's Projects, and no update of
+  // a tile drawn since, the scratch command's among them. arc's own Panes,
+  // still open, may update theirs, rightly on arc.
+  const arcs = new Set(projectsOf(arc).map((one) => one.id))
+  const placed = asked.filter((one) =>
+    one.method === "workspaces.open"
+      ? !arcs.has(one.params?.project ?? "")
+      : drawn.tiles.includes(one.params?.pane ?? "")
+  )
+  expect(placed.map((one) => one.method)).toContain("workspaces.open")
+  expect(
+    placed.some(
+      (one) =>
+        one.method === "workspaces.update" &&
+        one.params?.args?.scratchCommand !== undefined
+    )
+  ).toBe(true)
+  expect(placed.filter((one) => one.params?.args?.host !== undefined)).toEqual(
+    []
+  )
+  expect(drawn.tiles.length).toBeGreaterThan(0)
+  expect(drawn.onArc).toEqual([])
+  // Nor did any read for this machine's Project go to arc and fail there.
+  expect(window.banda("problems")).toBe(problems.here)
+  expect(arc.banda("problems")).toBe(problems.arc)
 })
 
 test("a popped-out Pane on arc picks from the window's machines: this machine's Projects first, then arc's under its name", async () => {
