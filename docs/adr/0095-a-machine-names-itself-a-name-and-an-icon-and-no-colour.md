@@ -380,15 +380,29 @@ Each step is its own PR.
      machine is 4c's.
    - **4c, a New Thread on another machine**: the Project picker grouped
      by machine, and a Thread started in another machine's Project
-     opened on that machine's engine (decision 7). The picker holds one
-     engine today (`apps/agents/pane/src/composer/NewThread.tsx:31`), so
-     the window hands a Pane the machines it reaches and their Projects,
-     and the pick reopens the Pane with that machine's `host`
-     (`withHost`). Files: `client/ui/src/pane.ts`;
-     `client/web/src/calls/hosts.ts` and
+     opened on that machine's engine (decision 7). The window hands its
+     Panes the machines it reaches, each with its open Projects and its
+     Host scope's ID, which its No Project is (`MachinesContext` in
+     `client/ui/src/hooks/use-machines.ts`, from `KeptHosts.machines`);
+     a window of its own hands none, and its picker lists its own
+     engine's Projects, as before. The picker lists this machine's
+     Projects with no label, then each other machine's, live or away,
+     under its label, "away" while it is, each with its own No Project;
+     its button names the machine after the Project, "banda ▭ arc". A
+     pick reopens the Pane with that machine's `host` (`withHost`), and
+     what a Pane on another machine opens keeps a `host` of its own
+     (`handleOf`). Moved to another machine, a new Thread drops its
+     Harness and its scratch: a Harness of one machine may not be on
+     another. This machine's Host scope's ID counts with its Projects, so
+     a Pane on arc that picks this machine's No Project opens it here.
+     Add Project shows on this machine's Panes only. Files:
+     `client/ui/src/hooks/use-machines.ts`;
+     `client/web/src/calls/hosts.ts`, `client/web/src/App.tsx` and
      `client/web/src/tiling/PaneFrame.tsx`;
-     `apps/agents/pane/src/composer/NewThread.tsx` and
-     `thread/Thread.tsx` (`:538`).
+     `apps/agents/pane/src/composer/NewThread.tsx`,
+     `settings/ThreadSettings.tsx` and `thread/Thread.tsx`;
+     `client/desktop/e2e/hosts.spec.ts`. `client/ui/src/pane.ts` and
+     `thread.new` stay as they are.
 5. **Settings → Machines**, in two PRs:
    - **PR 3, the section**: This machine, Other machines and Add a
      machine (decision 9). Files: `client/web/src/settings/sections.ts`,

@@ -289,10 +289,11 @@ async function work(window: Window): Promise<string> {
 }
 
 /** A picture of the window for the Person, when they asked for them,
- * once the toasts have gone and the logo has done its move. */
-async function shot(page: Page, name: string) {
+ * once the toasts have gone and the logo has done its move; the pointer
+ * `at` a place where it hovers nothing. */
+async function shot(page: Page, name: string, at = { x: 900, y: 700 }) {
   if (!shots) return
-  await page.mouse.move(900, 700)
+  await page.mouse.move(at.x, at.y)
   await expect(
     page.getByRole("region", { name: "Notifications" }).getByRole("listitem")
   ).toHaveCount(0, { timeout: 30_000 })
@@ -674,6 +675,185 @@ test("another machine's Thread is seen, marked unread and archived on its engine
       .getByRole("region", { name: "Notifications" })
       .getByText("There is no such Thread.")
   ).toHaveCount(0)
+})
+
+test("a new Thread's Project picker groups the Projects by machine; one started in arc's Project starts on arc's engine, arc's No Project too, and away arc stays to pick", async () => {
+  test.setTimeout(shots ? 300_000 : 180_000)
+  arc = newArc()
+  const banda = await seed(arc)
+  window = await withArc(arc)
+  const { page } = window
+  const local = await work(window)
+  const sidebar = sidebarOf(page)
+  await expect(arcOf(page).getByText("Bench window tests")).toBeVisible()
+  await page
+    .getByRole("region", { name: "New Thread" })
+    .getByRole("button", { name: "Close New Thread", exact: true })
+    .click()
+  const draft = page
+    .getByRole("region", { name: "New Thread" })
+    .and(page.locator('[data-focused="true"]'))
+  const menu = page.getByRole("menu")
+  const choices = () => menu.getByRole("menuitemradio")
+  const arcPart = menu.getByRole("group", { name: /^arc/ })
+  // Where the pointer hovers none of the picker's rows in a picture.
+  const ASIDE = { x: 1200, y: 200 }
+
+  // One in Work: its picker lists this machine's Projects with no label,
+  // then arc's under its label, as the sidebar does.
+  const newInWork = sidebar.getByRole("button", { name: "New Thread in Work" })
+  await newInWork.click()
+  await draft.getByRole("button", { name: "Project: Work" }).click()
+  await expect(choices()).toHaveText([
+    /No Project/,
+    /Work/,
+    /No Project/,
+    /banda/,
+  ])
+  await expect(arcPart.getByRole("menuitemradio")).toHaveText([
+    /No Project/,
+    /banda/,
+  ])
+  await expect(arcPart.locator('[data-machine-icon="server"]')).toBeVisible()
+  await expect(arcPart.getByText("away", { exact: true })).toHaveCount(0)
+  await expect(
+    menu.getByRole("menuitem", { name: "Add Project" })
+  ).toBeVisible()
+  await shot(page, "step4c-1-picker", ASIDE)
+
+  // Picked, arc's banda opens it on arc: its header names arc, as every
+  // Pane of arc's does, and its button after the Project.
+  await arcPart.getByRole("menuitemradio", { name: /^banda/ }).click()
+  const onArc = draft.getByRole("button", { name: "Project: banda on arc" })
+  await expect(onArc).toBeVisible()
+  await expect(onArc.locator('[data-machine-icon="server"]')).toBeVisible()
+  expect(await headerShows(draft)).toEqual([
+    "",
+    "New Thread",
+    "machine",
+    "buttons",
+  ])
+  // It writes to arc's Agent, and says so.
+  const composer = draft.getByRole("textbox", { name: "Message to Fake AI" })
+  await expect(composer).toHaveAttribute(
+    "aria-placeholder",
+    "Write to Fake AI on arc. @ files, / commands, $ skills"
+  )
+  await expect(
+    draft.getByText("Write to Fake AI on arc", { exact: true })
+  ).toBeVisible()
+  await shot(page, "step4c-2-on-arc")
+  // Sent, it is arc's Thread, on arc's Agent, and none of this machine's.
+  await composer.fill("Started on arc")
+  await composer.press("Enter")
+  const started = page.getByRole("region", {
+    name: "Started on arc",
+    exact: true,
+  })
+  await expect(started.getByText("You said: Started on arc")).toBeVisible()
+  await expect
+    .poll(() => states(arc!, banda))
+    .toContainEqual(["Started on arc", "done"])
+  const ours = JSON.parse(
+    window.banda("call", "agents.threads", "--project", local)
+  ) as { ok: { threads: { title: string }[] } }
+  expect(ours.ok.threads.map((one) => one.title)).toEqual(["Sidebar for arc"])
+  await expect(
+    arcOf(page).getByRole("button").filter({ hasText: "Started on arc" })
+  ).toBeVisible()
+
+  // arc's No Project: its first message makes its folder there.
+  await newInWork.click()
+  await draft.getByRole("button", { name: "Project: Work" }).click()
+  await arcPart.getByRole("menuitemradio", { name: /^No Project/ }).click()
+  await expect(
+    draft.getByRole("button", { name: "Project: No Project on arc" })
+  ).toBeVisible()
+  const scratch = draft.getByRole("textbox", { name: "Message to Fake AI" })
+  await scratch.fill("Scratch on arc")
+  await scratch.press("Enter")
+  await expect(
+    page
+      .getByRole("region", { name: "Scratch on arc", exact: true })
+      .getByText("You said: Scratch on arc")
+  ).toBeVisible()
+  const made = () =>
+    (
+      JSON.parse(arc!.banda("call", "projects.list")) as {
+        ok: { id: string; scratch: boolean }[]
+      }
+    ).ok.filter((one) => one.scratch)
+  await expect.poll(() => made().length).toBe(1)
+  await expect
+    .poll(() => states(arc!, made()[0]!.id))
+    .toEqual([["Scratch on arc", "done"]])
+
+  // arc goes away with the picker open: its part stays, marked away,
+  // still one to pick, as Send waits there.
+  await newInWork.click()
+  await draft.getByRole("button", { name: "Project: Work" }).click()
+  await expect(arcPart.getByRole("menuitemradio")).toHaveCount(2)
+  arc.down(true)
+  arc.cut()
+  await expect(arcPart.getByText("away", { exact: true })).toBeVisible()
+  await expect(arcPart.getByRole("menuitemradio")).toHaveText([
+    /No Project/,
+    /banda/,
+  ])
+  await shot(page, "step4c-3-away", ASIDE)
+  // Picked while away, it waits for arc: the window says arc is away,
+  // and Send holds what is written until arc is back.
+  await arcPart.getByRole("menuitemradio", { name: /^banda/ }).click()
+  await expect(onArc).toBeVisible()
+  await expect(
+    draft.getByRole("status").filter({ hasText: "arc is away" })
+  ).toBeVisible()
+  const held = draft.getByRole("textbox", { name: /^Message to / })
+  await expect(held).toHaveAttribute(
+    "aria-placeholder",
+    /^Write to .* on arc\. /
+  )
+  await held.fill("Waits for arc")
+  const sending = draft.getByRole("button", { name: "Send", exact: true })
+  await expect(sending).toBeDisabled()
+  await expect(sending).toHaveAttribute(
+    "title",
+    "arc is away. Send once it is back."
+  )
+  await shot(page, "step4c-3b-picked-away")
+  arc.down(false)
+  await expect(arcOf(page).getByText(/^away/)).toHaveCount(0, {
+    timeout: 60_000,
+  })
+
+  // On arc, its picker lists this machine's Projects first, and adds none
+  // there.
+  await onArc.click()
+  await expect(choices()).toHaveText([
+    /No Project/,
+    /Work/,
+    /No Project/,
+    /banda/,
+  ])
+  await expect(
+    arcPart.getByRole("menuitemradio", { name: /^banda/ })
+  ).toHaveAttribute("aria-checked", "true")
+  await expect(menu.getByRole("menuitem", { name: "Add Project" })).toHaveCount(
+    0
+  )
+  await shot(page, "step4c-4-arc-pane", ASIDE)
+  // This machine's No Project, picked there, is this machine's again.
+  await menu
+    .getByRole("menuitemradio", { name: /^No Project/ })
+    .first()
+    .click()
+  await expect(
+    draft.getByRole("button", { name: "Project: No Project", exact: true })
+  ).toBeVisible()
+  expect(await headerShows(draft)).not.toContain("machine")
+  await expect(
+    draft.getByRole("textbox", { name: "Message to Fake AI" })
+  ).toHaveAttribute("aria-placeholder", /^Write to Fake AI\. /)
 })
 
 test("a Mac there, with no banda in hosts.toml: the window finds its Banda in the Mac's Application Support", async () => {

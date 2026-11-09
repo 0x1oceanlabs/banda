@@ -14,10 +14,11 @@ import {
   type ProjectSummary,
 } from "@banda/contract"
 import type { Named } from "@banda/contract/machines"
+import type { Machine } from "@banda/ui/hooks/use-machines"
 import type { Read } from "@banda/ui/hooks/use-read"
 import { followNamed, seenNamed } from "@banda/ui/hooks/use-status"
 import type { Args } from "@banda/ui/module"
-import { shownProjects } from "@banda/ui/lib/projects"
+import { openProjects, shownProjects } from "@banda/ui/lib/projects"
 import {
   type Readable,
   sameData,
@@ -110,6 +111,13 @@ export function otherBuild(state: HostState): string | undefined {
     : `${there} vs ${here}`
 }
 
+/** This machine as the Window lists it: its Projects, as its engine
+ * lists them, and its Host scope's ID, once its engine said it. */
+export type Ours = {
+  machine?: ProjectId
+  projects: readonly ProjectSummary[]
+}
+
 /**
  * The hosts as one Window shows them: their states as the desktop tells
  * them, one engine for each, made as it first goes live and kept for the
@@ -122,12 +130,22 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   readonly #engines = new Map<string, Engine>()
   /** Each host's Projects as its engine listed them last. */
   readonly #listed = new Map<string, readonly ProjectSummary[]>()
-  #ours: ReadonlySet<ProjectId> = new Set()
+  #ourIds: ReadonlySet<ProjectId> = new Set()
+  /** This machine's Projects and Host scope, beside their IDs in `#ourIds`. */
+  #ours: Ours = { projects: NONE }
+  /** Each host's Host scope's ID, as its engine's welcome said it. */
+  readonly #scopes = new Map<string, ProjectId>()
+  readonly #machines = new Store<readonly Machine[]>(machinesOf(this.#ours, []))
   /** The clashes said once in the log, as `host project`. */
   readonly #said = new Set<string>()
 
+  /** This machine and the hosts a new Thread starts on (`machinesOf`),
+   * told again only as what they say changes. */
+  readonly machines: Readable<readonly Machine[]> = this.#machines
+
   constructor(device: HostsDevice) {
     this.#device = device
+    this.#shown.subscribe(() => this.#sayMachines())
   }
 
   readonly get = (): readonly Shown[] => this.#shown.get()
@@ -161,10 +179,15 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     this.#shown.set(this.#placed(this.get()))
   }
 
-  /** Takes this machine's Projects, which win an ID a host has too. */
-  ours(projects: readonly ProjectSummary[]): void {
-    this.#ours = new Set(projects.map((project) => project.id))
+  /** Takes this machine's Projects, which win an ID a host has too, and
+   * its Host scope's ID, `machine`, which a Pane of its No Project is in. */
+  ours(projects: readonly ProjectSummary[], machine?: ProjectId): void {
+    const ids = projects.map((project) => project.id)
+    this.#ourIds = new Set(machine === undefined ? ids : [...ids, machine])
+    this.#ours = { machine, projects }
     this.#shown.set(this.#placed(this.get()))
+    // Said here too, as the hosts' rows may not change with ours.
+    this.#sayMachines()
   }
 
   /**
@@ -183,6 +206,10 @@ export class KeptHosts implements Readable<readonly Shown[]> {
       })
       this.#engines.set(name, engine)
       followNamed(engine, name, (named) => this.#named(name, named))
+      engine.watch((status) => {
+        if (status.state === "open" && status.machine)
+          this.#scope(name, status.machine)
+      })
     }
     return engine
   }
@@ -190,7 +217,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   /** The host a Pane of `project` is on, whose args name host `named`
    * (`hostOfPane`); none for this machine's. */
   hostOf(project: ProjectId, named: string | undefined): string | undefined {
-    return hostOfPane(this.get(), this.#ours, project, named)
+    return hostOfPane(this.get(), this.#ourIds, project, named)
   }
 
   /** `pane` of `project` as a pick opens it (`pane.pick`): its args name
@@ -217,6 +244,19 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     )
   }
 
+  /** Takes host `name`'s Host scope's ID, as its engine said it. */
+  #scope(name: string, machine: ProjectId): void {
+    if (this.#scopes.get(name) === machine) return
+    this.#scopes.set(name, machine)
+    this.#sayMachines()
+  }
+
+  /** Tells the machines again, where they say something new. */
+  #sayMachines(): void {
+    const now = machinesOf(this.#ours, this.get(), this.#scopes)
+    if (!sameData(now, this.#machines.get())) this.#machines.set(now)
+  }
+
   /** Waits until host `name` is live. */
   #live(name: string): Promise<void> {
     return new Promise((done) => {
@@ -235,7 +275,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
    * none archived, and none this machine or a host before it has. Each
    * that shows what it showed keeps its list. */
   #placed(hosts: readonly Shown[]): readonly Shown[] {
-    const taken = new Set(this.#ours)
+    const taken = new Set(this.#ourIds)
     return hosts.map((host) => {
       const listed = this.#listed.get(host.name)
       if (!listed || !holds(host)) return host
@@ -260,6 +300,44 @@ export class KeptHosts implements Readable<readonly Shown[]> {
       `banda: ${host} has a Project of the same ID as one shown before it, ${project}: the window shows the first`
     )
   }
+}
+
+/**
+ * The machines a new Thread starts on (ADR 0095, decision 7): this one
+ * first, unnamed; then each host whose rows the Window shows, live or
+ * away, by its name and icon, with its Host scope's ID from `scopes`
+ * once its engine said it. Each with its open Projects, pinned first:
+ * none archived, none whose folder is missing, none a Thread's own; and
+ * a Project of an ID a machine before it has shows there only.
+ */
+export function machinesOf(
+  ours: Ours,
+  hosts: readonly Shown[],
+  scopes: ReadonlyMap<string, ProjectId> = new Map()
+): Machine[] {
+  const taken = new Set<ProjectId>()
+  const open = (projects: readonly ProjectSummary[]) =>
+    openProjects(shownProjects(projects)).filter((project) => {
+      if (taken.has(project.id)) return false
+      taken.add(project.id)
+      return true
+    })
+  const machines: Machine[] = [
+    { machine: ours.machine, state: "live", projects: open(ours.projects) },
+  ]
+  for (const host of hosts) {
+    const { state } = host.state
+    if (state !== "live" && state !== "away") continue
+    machines.push({
+      host: host.name,
+      named: host.named,
+      machine: scopes.get(host.name),
+      state,
+      away: host.away,
+      projects: open(host.projects),
+    })
+  }
+  return machines
 }
 
 /** A host's Project as this Window draws it: a picture sign shows its
@@ -503,12 +581,21 @@ export function usePaneOn(): (
 }
 
 /** Tells `hosts` this machine's Projects, as `listed` reads them, which
- * win an ID a host has too (`KeptHosts.ours`). */
+ * win an ID a host has too, and its Host scope's ID, `machine`, where
+ * the Window has it (`KeptHosts.ours`). */
 export function useOurs(
   hosts: KeptHosts,
-  listed: Read<ProjectSummary[]>
+  listed: Read<ProjectSummary[]>,
+  machine?: ProjectId
 ): void {
   useEffect(() => {
-    if (listed.state === "ready") hosts.ours(listed.value)
-  }, [hosts, listed])
+    if (listed.state === "ready") hosts.ours(listed.value, machine)
+  }, [hosts, listed, machine])
 }
+
+const allMachines = (machines: readonly Machine[]) => machines
+
+/** The machines a new Thread starts on, as `hosts` tells them
+ * (`KeptHosts.machines`), drawn again as they change. */
+export const useMachinesOf = (hosts: KeptHosts): readonly Machine[] =>
+  useStore(hosts.machines, allMachines)
