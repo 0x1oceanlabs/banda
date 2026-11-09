@@ -4961,14 +4961,14 @@ test("from a far host, a mark shows at once and never flips back as its fact com
   await heard()
   expect(await was()).toEqual([true, false])
 
-  // Archived: off the list at once, its Pane closed once the host took
-  // it, and never back on the list.
+  // Archived: off the list and its Pane closed at once, before the host
+  // answers (#974), and never back on the list.
   was = await followed(page, rowIn("hello"))
   await page.keyboard.press("Alt+S")
+  await expect(thread).toBeHidden(soon)
   await expect(row).toBeHidden(soon)
   await expect(shelf).toBeVisible()
   await expect.poll(() => first().archived).toBeDefined()
-  await expect(thread).toBeHidden()
   await heard()
   expect(await was()).toEqual([true, false])
   // Back, from its row on the shelf.
@@ -4983,24 +4983,26 @@ test("from a far host, a mark shows at once and never flips back as its fact com
   expect(await was()).toEqual([false, true])
 
   // At work on its host, though not yet as the page heard it: the host
-  // refuses the archive, a toast says why, and the row and its Pane stay.
+  // refuses the archive, a toast says why, and the row comes back; its
+  // Pane, put away on the press, stays closed until it is opened again.
   await composer.click()
   await composer.fill("wait for it")
   await composer.press("Enter")
   await expect.poll(() => first().latest.state).toBe("running")
   await page.keyboard.press("Alt+S")
+  await expect(thread).toBeHidden(soon)
   const toasts = page.getByRole("region", { name: "Notifications" })
   await expect(
     toasts.getByText("This Thread is at work: archive it once its turn ends.")
   ).toBeVisible()
-  await expect(
-    sidebar
-      .getByRole("group", { name: "Working" })
-      .getByRole("button", { name: /hello/ })
-  ).toBeVisible()
+  const working = sidebar
+    .getByRole("group", { name: "Working" })
+    .getByRole("button", { name: /hello/ })
+  await expect(working).toBeVisible()
   await expect(shelf).toBeHidden()
-  await expect(thread).toBeVisible()
+  await expect(thread).toBeHidden()
   expect(first().archived).toBeUndefined()
+  await working.click()
   await thread.getByRole("button", { name: "Stop", exact: true }).click()
   await expect.poll(() => first().latest.state).toBe("stopped")
 })

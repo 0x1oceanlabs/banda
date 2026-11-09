@@ -360,9 +360,13 @@ const wake: ItemAction = {
  * Archives the Thread, or brings it back, on its host, which keeps the
  * mark (ADR 0096): the sidebar list's Archive asks it so, with
  * `archived`, as only Threads knows the Thread's commands, and draws its
- * row. Archived, the Thread is put away once its host took it: one it
- * refuses, as a Thread that began a turn there, keeps its Panes, and a
- * toast says why. Without `archived`, nothing.
+ * row. Archived, the Thread is put away at once, as its mark goes, and
+ * nothing waits for the host's answer: an answer that came late would
+ * close a Pane opened since, or one of a Thread brought back meanwhile
+ * (Roma, 2026-11-09, #974). One the host refuses, as a Thread that began
+ * a turn there, or whose host goes before it answers, comes back in the
+ * list and a toast says why; its Panes stay closed. Without `archived`,
+ * nothing.
  */
 const archive: ItemAction = {
   id: "agents.archive-thread",
@@ -384,12 +388,9 @@ const archive: ItemAction = {
     const archived = args?.archived
     if (!at || typeof archived !== "boolean") return
     const thread = at.listed.id as ThreadId
-    void mark(engineOf(window, at), at.project, thread, { archived }).then(
-      (took) => {
-        if (took && archived)
-          window.run("pane.put-away", { project: at.project, item: thread })
-      }
-    )
+    void mark(engineOf(window, at), at.project, thread, { archived })
+    if (archived)
+      window.run("pane.put-away", { project: at.project, item: thread })
   },
 }
 

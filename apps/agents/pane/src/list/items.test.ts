@@ -1,5 +1,5 @@
 import { beforeEach, expect, test, vi } from "vitest"
-import type { Engine, ProjectId } from "@banda/contract"
+import { type Engine, Lost, type ProjectId } from "@banda/contract"
 import type { Here } from "@banda/core/react"
 import {
   cleanTitle,
@@ -339,14 +339,38 @@ test("Snooze… is off while the Thread asks, and Wake now takes its place while
   expect(wake.row(listed(), AT)).toBeNull()
 })
 
-test("Archive goes to the Thread's host with what the sidebar list asks, and puts the Thread away once its host took it", async () => {
+/**
+ * A Window as `fake` makes it, whose engine holds each command until the
+ * test answers it or refuses it, as a far host's answer comes late.
+ */
+function held(item: Listed) {
+  const one = fake(item)
+  const waiting: { answer: () => void; refuse: (error: Error) => void }[] = []
+  const engine = one.engineOf(undefined)
+  Object.assign(engine, {
+    commandAt: (name: string, args: unknown) => {
+      one.sent.push([name, args])
+      return new Promise((resolve, reject) =>
+        waiting.push({
+          answer: () => resolve({ answer: null, at: 3 }),
+          refuse: reject,
+        })
+      )
+    },
+  })
+  /** Whatever the answers start, as their `then`s run. */
+  const heard = () => new Promise((resolve) => setTimeout(resolve))
+  return { ...one, engine, waiting, heard }
+}
+
+test("Archive goes to the Thread's host with what the sidebar list asks, and puts the Thread away at once", async () => {
   const archive = action("agents.archive-thread")
   expect(archive.row(listed(), AT)).toBeNull()
   const at = { project: "s1", item: "t1" }
   const { window, sent, ran } = fake(listed())
   archive.run(window, { ...at, archived: true })
   expect(sent).toEqual([["agents.archive", { thread: "t1" }]])
-  await vi.waitFor(() => expect(ran).toEqual([["pane.put-away", at]]))
+  expect(ran).toEqual([["pane.put-away", at]])
   archive.run(window, { ...at, archived: false })
   expect(sent.at(-1)).toEqual(["agents.unarchive", { thread: "t1" }])
   // Asked for neither, it does nothing.
@@ -356,16 +380,46 @@ test("Archive goes to the Thread's host with what the sidebar list asks, and put
   expect(ran).toHaveLength(1)
 })
 
-test("an archive its host refuses keeps the Thread's Panes, and a toast says why", async () => {
-  // A host that refuses all but a rename, as one where a turn began.
-  const { window, ran } = fake(listed(), new Error("at work"))
-  action("agents.archive-thread").run(window, {
-    project: "s1",
-    item: "t1",
-    archived: true,
-  })
-  await vi.waitFor(() => expect(said.errors).toHaveLength(1))
-  expect(ran).toEqual([])
+test("Archive puts the Thread away on the press, and its answer, however late, closes nothing (#974)", async () => {
+  const archive = action("agents.archive-thread")
+  const at = { project: "s1", item: "t1" }
+
+  // Brought back before the host answered: its Panes, opened again, stay.
+  const back = held(listed())
+  archive.run(back.window, { ...at, archived: true })
+  expect(back.ran).toEqual([["pane.put-away", at]])
+  archive.run(back.window, { ...at, archived: false })
+  back.waiting[0]!.answer()
+  back.waiting[1]!.answer()
+  await back.heard()
+  expect(back.ran).toEqual([["pane.put-away", at]])
+
+  // Opened from Archive before the host answered: its answer puts
+  // nothing away, so that Pane stays.
+  const opened = held(listed())
+  archive.run(opened.window, { ...at, archived: true })
+  expect(opened.ran).toEqual([["pane.put-away", at]])
+  opened.waiting[0]!.answer()
+  await opened.heard()
+  expect(opened.ran).toEqual([["pane.put-away", at]])
+  expect(said.errors).toEqual([])
+})
+
+test("an archive its host refuses, or whose host goes, comes back in the list with a toast; its Panes stay closed", async () => {
+  const at = { project: "s1", item: "t1" }
+  for (const error of [new Error("at work"), new Lost()]) {
+    said.errors = []
+    const { window, ran, engine, waiting, heard } = held(listed())
+    action("agents.archive-thread").run(window, { ...at, archived: true })
+    expect(sendingTo(engine).t1?.archived?.to).toBe(true)
+    expect(ran).toEqual([["pane.put-away", at]])
+    waiting[0]!.refuse(error)
+    await vi.waitFor(() => expect(said.errors).toHaveLength(1))
+    await heard()
+    // Shown as its host lists it again, and nothing opens its Panes.
+    expect(sendingTo(engine)).toEqual({})
+    expect(ran).toEqual([["pane.put-away", at]])
+  }
 })
 
 test("another host's Thread is archived on its own engine", () => {
