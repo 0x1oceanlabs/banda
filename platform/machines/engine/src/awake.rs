@@ -13,7 +13,8 @@
 //! [`why`] is the rule, a plain function. [`keep`] follows the count of
 //! running Turns, `machine.toml` and the power source, and holds the
 //! machine as the rule says, through a [`System`]: the tests give it one
-//! of their own.
+//! of their own. A hold the system did not answer for in full, as when
+//! its bus went, is taken again in a while, the reason the same.
 
 use std::time::Duration;
 use tokio::sync::watch;
@@ -30,6 +31,9 @@ pub const TAIL: Duration = Duration::from_secs(10 * 60);
 
 /// How often the power source is read, while it matters.
 const POWER_EVERY: Duration = Duration::from_secs(30);
+
+/// How soon a hold the system did not answer for in full is taken again.
+const AGAIN_AFTER: Duration = Duration::from_secs(30);
 
 /// When this machine stays awake, as its `machine.toml` says.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -90,11 +94,21 @@ pub(crate) trait System: Send + 'static {
     type Held: Send;
 
     /// Takes a hold named "Banda" that says `why`. What the system refuses
-    /// is said in the log, once, and the hold is what it granted.
-    async fn take(&mut self, why: Why) -> Self::Held;
+    /// is said in the log, once, and the hold is what it granted. What it
+    /// did not answer for leaves the hold short: a refusal stands, but a
+    /// system that did not answer may later.
+    async fn take(&mut self, why: Why) -> Taken<Self::Held>;
 
     /// Whether the machine is on power now: one with no battery always is.
     async fn on_power(&mut self) -> bool;
+}
+
+/// A hold as the system granted it.
+pub(crate) struct Taken<H> {
+    held: H,
+    /// Whether the system did not answer for some of it, so it is taken
+    /// again in a while.
+    short: bool,
 }
 
 /// The hold [`keep`] keeps: let go as it drops, as the engine stops.
@@ -113,6 +127,7 @@ pub fn keep(working: watch::Receiver<usize>, awake: watch::Receiver<Awake>) -> K
     let times = Times {
         tail: TAIL,
         power_every: POWER_EVERY,
+        again_after: AGAIN_AFTER,
     };
     Keeping(tokio::spawn(follow(this_system(), working, awake, times)))
 }
@@ -142,26 +157,33 @@ struct Nothing;
 impl System for Nothing {
     type Held = ();
 
-    async fn take(&mut self, _: Why) {}
+    async fn take(&mut self, _: Why) -> Taken<()> {
+        Taken {
+            held: (),
+            short: false,
+        }
+    }
 
     async fn on_power(&mut self) -> bool {
         true
     }
 }
 
-/// How long the tail is, and how often the power source is read: the
-/// tests' are short.
+/// How long the tail is, how often the power source is read, and how
+/// soon a short hold is taken again: the tests' are short.
 #[derive(Clone, Copy, Debug)]
 struct Times {
     tail: Duration,
     power_every: Duration,
+    again_after: Duration,
 }
 
 /// Follows the count of running Turns, `awake` and, while `awake` says it
 /// matters, the power source, and holds the machine through `system` as
-/// the rule says. One hold at a time: one for another reason is taken
-/// before the last is let go, so the machine is never let go between. It
-/// ends, letting go, as either watch's sender goes.
+/// the rule says. One hold at a time: one for another reason, or one
+/// taken again as the last was short, is taken before the last is let
+/// go, so the machine is never let go between. It ends, letting go, as
+/// either watch's sender goes.
 async fn follow(
     mut system: impl System,
     mut working: watch::Receiver<usize>,
@@ -189,34 +211,57 @@ async fn follow(
         let on_power = power.is_some_and(|(on, _)| on);
         let since_ended = ended.map(|ended| now.saturating_duration_since(ended));
         let wanted = why(said, count, since_ended, times.tail, on_power);
-        held = settle(&mut system, held, wanted).await;
+        held = settle(&mut system, held, wanted, times.again_after).await;
         // What to look again at, besides a change.
         let tail_ends = (ended.map(|ended| ended + times.tail))
             .filter(|end| said.while_working && count == 0 && *end > now);
         let read_again = power.map(|(_, read)| read + times.power_every);
+        let take_again = held.as_ref().and_then(|kept| kept.again);
         tokio::select! {
             changed = working.changed() => if changed.is_err() { return },
             changed = awake.changed() => if changed.is_err() { return },
             () = until(tail_ends) => {}
             () = until(read_again) => {}
+            () = until(take_again) => {}
         }
     }
 }
 
-/// Keeps `held` when it is for `wanted`; else takes a hold for `wanted`,
-/// then lets `held` go, or only lets it go when nothing is wanted.
+/// A hold kept, and why: when it was short, it is taken again `again`.
+struct Kept<H> {
+    why: Why,
+    #[expect(dead_code, reason = "only dropped")]
+    held: H,
+    again: Option<Instant>,
+}
+
+/// Keeps `held` when it is for `wanted`, unless it was short and its time
+/// to be taken again came; else takes a hold for `wanted`, short ones
+/// again `again_after` from now, then lets `held` go, or only lets it go
+/// when nothing is wanted.
 async fn settle<S: System>(
     system: &mut S,
-    held: Option<(Why, S::Held)>,
+    held: Option<Kept<S::Held>>,
     wanted: Option<Why>,
-) -> Option<(Why, S::Held)> {
+    again_after: Duration,
+) -> Option<Kept<S::Held>> {
     match (held, wanted) {
-        (Some((why, hold)), Some(wanted)) if why == wanted => Some((why, hold)),
+        (Some(kept), Some(wanted))
+            if kept.why == wanted && kept.again.is_none_or(|again| Instant::now() < again) =>
+        {
+            Some(kept)
+        }
         (before, Some(wanted)) => {
             let taken = system.take(wanted).await;
-            tracing::info!(why = wanted.words(), "the machine is kept awake");
+            if before.as_ref().is_none_or(|kept| kept.why != wanted) {
+                tracing::info!(why = wanted.words(), "the machine is kept awake");
+            }
             drop(before);
-            Some((wanted, taken))
+            Some(Kept {
+                why: wanted,
+                held: taken.held,
+                again: taken.short.then(|| Instant::now() + again_after),
+            })
         }
         (Some(_), None) => {
             tracing::info!("the machine may sleep again");
@@ -237,6 +282,7 @@ async fn until(at: Option<Instant>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
     const WORKING: Awake = Awake {
@@ -325,19 +371,28 @@ mod tests {
         }
     }
 
-    /// A system whose power source is `power`.
+    /// A system whose power source is `power`, and whose next `short`
+    /// holds come short, as from a bus that did not answer.
     struct Fake {
         asked: Asked,
         power: watch::Receiver<bool>,
+        short: Arc<AtomicUsize>,
     }
 
     #[async_trait::async_trait]
     impl System for Fake {
         type Held = Hold;
 
-        async fn take(&mut self, why: Why) -> Hold {
+        async fn take(&mut self, why: Why) -> Taken<Hold> {
             self.asked.add(format!("take: {}", why.words()));
-            Hold(why, self.asked.clone())
+            let short = self
+                .short
+                .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_sub(1))
+                .is_ok();
+            Taken {
+                held: Hold(why, self.asked.clone()),
+                short,
+            }
         }
 
         async fn on_power(&mut self) -> bool {
@@ -349,6 +404,7 @@ mod tests {
         working: banda_kernel::Working,
         awake: watch::Sender<Awake>,
         power: watch::Sender<bool>,
+        short: Arc<AtomicUsize>,
         asked: Asked,
         keeping: tokio::task::JoinHandle<()>,
     }
@@ -359,15 +415,18 @@ mod tests {
             let (awake, awake_now) = watch::channel(awake);
             let (power, power_now) = watch::channel(true);
             let asked = Asked::default();
+            let short = Arc::default();
             let system = Fake {
                 asked: asked.clone(),
                 power: power_now,
+                short: Arc::clone(&short),
             };
             let keeping = tokio::spawn(follow(system, working.count(), awake_now, times));
             Test {
                 working,
                 awake,
                 power,
+                short,
                 asked,
                 keeping,
             }
@@ -389,6 +448,7 @@ mod tests {
     const SHORT: Times = Times {
         tail: Duration::from_millis(300),
         power_every: Duration::from_millis(50),
+        again_after: Duration::from_millis(50),
     };
 
     #[tokio::test]
@@ -408,6 +468,28 @@ mod tests {
         assert_eq!(test.asked.said(), ["take: Agents work"], "within the tail");
         test.until(&["take: Agents work", "let go: Agents work"])
             .await;
+    }
+
+    #[tokio::test]
+    async fn a_short_hold_is_taken_again_while_the_reason_stays_and_a_whole_one_is_kept() {
+        let test = Test::new(WORKING, SHORT);
+        // The system does not answer for the first two in full.
+        test.short.store(2, Ordering::Relaxed);
+        let turn = test.working.hold();
+        let again = [
+            "take: Agents work",
+            "take: Agents work",
+            "let go: Agents work",
+            "take: Agents work",
+            "let go: Agents work",
+        ];
+        test.until(&again).await;
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        assert_eq!(test.asked.said(), again, "the whole one is kept");
+        drop(turn);
+        let mut after = again.to_vec();
+        after.push("let go: Agents work");
+        test.until(&after).await;
     }
 
     #[tokio::test]
