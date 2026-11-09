@@ -45,6 +45,8 @@ import { planTitle } from "../entries/parts/messageText"
 import { FindBar, useFound } from "./Find"
 import { visualPane } from "../visual/VisualPane"
 import { ModelPicker } from "../composer/ModelPicker"
+import { movesOf, stepped } from "./moves"
+import { useLimitsNow } from "./starts-on"
 import { pickedOf } from "../composer/picker"
 import { ModeMenu } from "../settings/ThreadSettings"
 import { SignIn, Warning } from "./SignIn"
@@ -92,6 +94,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   } = props
   const machine = useMachine(engine)
   const harnesses = useHarnesses(engine)
+  const { limits, now } = useLimitsNow(engine)
   const unplaced = project === machine
   const fence = useFence(engine)
   // Another host's (ADR 0081): what would reach this machine's files, or
@@ -139,6 +142,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     stop,
     retry,
     retryOn,
+    moveTo,
     fork,
     rewind,
     queue,
@@ -147,6 +151,18 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     acted,
   } = useThreadSession(props)
   const picked = useMemo(() => pickedOf(offer.options), [offer.options])
+  // Where a started Thread may move, and whether a move to another
+  // Harness asks first: until its first handoff (ADR 0078, decision 5).
+  const moves = useMemo(() => {
+    if (thread === null || !state || !harness) return undefined
+    const ran = state.turns.flatMap((turn) =>
+      turn.harness ? [turn.harness] : []
+    )
+    const confirm = !state.items.some(
+      (item) => item.body.kind === "moved" && item.body.how.kind !== "same"
+    )
+    return { ...movesOf(harnesses, harness, ran, limits, now), confirm }
+  }, [thread, state, harness, harnesses, limits, now])
   // Learn more, wherever the fence is spoken of: Settings → General, at
   // the Fence row (ADR 0083).
   const learn = () => run?.("settings.open", { link: FENCE_LINK })
@@ -245,6 +261,18 @@ export function Thread(props: PaneProps<ThreadArgs>) {
         }
         setDetailsShown(detailsWanted.current)
         return true
+      },
+      // Ctrl+Shift+↑ and ↓: the previous or next account of its Harness
+      // that is not out (ADR 0078, decision 11).
+      "agents.thread.account-previous": () => {
+        const to = moves && stepped(moves.same, -1)
+        if (to) moveTo(to.harness.id)
+        return !!to
+      },
+      "agents.thread.account-next": () => {
+        const to = moves && stepped(moves.same, 1)
+        if (to) moveTo(to.harness.id)
+        return !!to
       },
       "agents.thread.find": () => {
         setFind((now) => now ?? { query: "", at: 0 })
@@ -568,6 +596,8 @@ export function Thread(props: PaneProps<ThreadArgs>) {
                 starts={starts}
                 onStart={startOn}
                 harnesses={harnesses}
+                moves={moves}
+                onMove={(move) => moveTo(move.harness.id)}
               />
             </>
           )}
