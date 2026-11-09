@@ -6,10 +6,13 @@
  * run, Here nowhere and no machines but its own; two of React would throw
  * at an App's first hook. So with the kit, which gives the Apps what they
  * list, as the Window keeps it, until B7a: two copies would leave a
- * Thread's header no Mark.
+ * Thread's header no Mark. The tests that draw go by the paths of a few
+ * packages; the last goes by every package's, so a second copy fails by
+ * the name of the package that reaches it.
  */
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs"
 import { createRequire } from "node:module"
-import { join } from "node:path"
+import { join, relative } from "node:path"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import type * as CoreReact from "@banda/core/react"
 import {
@@ -25,6 +28,7 @@ import type { Filler } from "@banda/ui/slots"
 import type { ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "vitest"
+import pageConfig from "../vite.config"
 import { newStores } from "./calls/stores"
 import { widgets } from "./registry"
 import { Kept } from "./window/here"
@@ -161,4 +165,132 @@ test("Threads' part of a Pane's header finds its Thread among what the Apps list
       </Kept>
     )
   ).toBe(markup(<ThreadMark listed={listed} />))
+})
+
+/**
+ * The folder of each package of the workspace, from the root: those
+ * `pnpm-workspace.yaml` lists that have a `package.json`. Its globs are
+ * folders and `*`; another kind throws, so a package listed some new way
+ * is not left unread.
+ */
+function workspacePackages(): string[] {
+  const listed = readFileSync(join(root, "pnpm-workspace.yaml"), "utf8")
+  const block = /^packages:\n((?:[ \t].*\n|\n)*)/m.exec(listed)?.[1] ?? ""
+  const globs = [...block.matchAll(/^\s*-\s*["']?([^"'\s]+)/gm)].map(
+    (match) => match[1]!
+  )
+  return globs
+    .flatMap((glob) => {
+      if (!/^(\*|[\w.-]+)(\/(\*|[\w.-]+))*$/.test(glob))
+        throw new Error(
+          `pnpm-workspace.yaml lists ${glob}, read here as no glob`
+        )
+      return glob.split("/").reduce<string[]>(
+        (found, part) =>
+          found.flatMap((folder) => {
+            if (part !== "*") return [join(folder, part)]
+            const at = join(root, folder)
+            if (!existsSync(at)) return []
+            return readdirSync(at, { withFileTypes: true })
+              .filter((entry) => entry.isDirectory())
+              .map((entry) => join(folder, entry.name))
+          }),
+        [""]
+      )
+    })
+    .filter((folder) => existsSync(join(root, folder, "package.json")))
+}
+
+/**
+ * What must be one copy for the whole page, each by an entry that every
+ * package taking it reaches: the kit by the Item, which a second copy
+ * loses first (the kit does not give its `./package.json`).
+ */
+const ONE_COPY = {
+  "@banda/ui": "@banda/ui/hooks/use-item",
+  "@banda/core": "@banda/core/react",
+  react: "react",
+  "react-dom": "react-dom",
+} as const
+type OneCopy = keyof typeof ONE_COPY
+
+test("every package that takes the kit, the core or React reaches one copy of each", () => {
+  const where = (path: string) => relative(root, realpathSync(path))
+  // A package that reaches none, as a node_modules installed before it
+  // took one can leave it, is said by its name, not by a bare error.
+  const reached = (resolve: NodeJS.RequireResolve, specifier: string) => {
+    try {
+      return where(resolve(specifier))
+    } catch {
+      return "none"
+    }
+  }
+  // The one copy: the workspace's own kit and core, and the page's React.
+  const page = createRequire(join(root, "client/web/package.json")).resolve
+  const copy: Record<OneCopy, string> = {
+    "@banda/ui": where(join(root, "client/ui/src/hooks/use-item.ts")),
+    "@banda/core": where(join(root, "client/core/src/react/index.ts")),
+    react: where(page("react")),
+    "react-dom": where(page("react-dom")),
+  }
+  const taking = new Set<string>()
+  const ranged: string[] = []
+  const strays: string[] = []
+  for (const folder of workspacePackages()) {
+    const manifest = JSON.parse(
+      readFileSync(join(root, folder, "package.json"), "utf8")
+    ) as Partial<Record<string, Record<string, string>>>
+    const taken = [
+      "dependencies",
+      "devDependencies",
+      "peerDependencies",
+      "optionalDependencies",
+    ].flatMap((list) => Object.entries(manifest[list] ?? {}))
+    // pnpm links the workspace's own package for a `workspace:` range,
+    // which every package writes `workspace:*`; another kind of range it
+    // looks for in the registry, a copy of its own with a kit of its own.
+    for (const [name, range] of taken)
+      if (name.startsWith("@banda/") && range !== "workspace:*")
+        ranged.push(`${folder}: ${name} ${range}`)
+    const resolve = createRequire(join(root, folder, "package.json")).resolve
+    for (const name of Object.keys(ONE_COPY) as OneCopy[]) {
+      if (!taken.some(([listed]) => listed === name)) continue
+      taking.add(folder)
+      const path = reached(resolve, ONE_COPY[name])
+      if (path !== copy[name]) strays.push(`${folder}: ${name} → ${path}`)
+    }
+  }
+  // The package whose header is at stake is among them, so a list read
+  // wrong cannot pass by checking nothing.
+  expect(taking).toContain("apps/agents/pane")
+  expect(ranged, "the workspace's packages by `workspace:*`").toEqual([])
+  expect(strays, `one copy of each: ${Object.values(copy).join(", ")}`).toEqual(
+    []
+  )
+  // Nor does the page's bundler send them elsewhere, as an alias would,
+  // whatever the packages reach.
+  const aliases = pageConfig.resolve?.alias ?? []
+  const finds = Array.isArray(aliases)
+    ? aliases.map(({ find }) => find)
+    : Object.keys(aliases)
+  const packageOf = (specifier: string) =>
+    specifier
+      .split("/")
+      .slice(0, specifier.startsWith("@") ? 2 : 1)
+      .join("/")
+  // A pattern counts when it takes a package's name or entry, or names
+  // the package in its source, as one for a deeper path of the kit does.
+  const aliased = finds.filter((find) =>
+    typeof find === "string"
+      ? packageOf(find) in ONE_COPY
+      : Object.entries(ONE_COPY).some(
+          ([name, entry]) =>
+            find.test(name) ||
+            find.test(entry) ||
+            new RegExp(`(^|[^\\w@/.-])${name}($|[^\\w.-])`).test(
+              find.source.replaceAll("\\/", "/")
+            )
+        )
+  )
+  expect(aliased, "the page's aliases").toEqual([])
 })
