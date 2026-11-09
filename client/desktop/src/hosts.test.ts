@@ -1143,16 +1143,21 @@ it.live(
 )
 
 it.live(
-  "with no engine running on a Mac the host is away, never stopped, and is tried again until one runs",
+  "with nobody logged in at a Mac the host is away, never stopped, and is tried again until its engine runs",
   () =>
     Effect.gen(function* () {
       const fake = fakeSsh({
         followers: [
-          // Open, then Quit there: its engine stopped as asked.
+          // It runs, then the Person logs out there: its engine stopped.
           [{ out: running("one", 1111) }, { until: "quit" }, { exit: 75 }],
-          // Not open.
-          [{ err: "banda: Banda's engine is not running here", exit: 75 }],
-          // Open again.
+          // Nobody logged in.
+          [
+            {
+              err: "banda: Nobody is logged in at this Mac's screen",
+              exit: 75,
+            },
+          ],
+          // Logged in again: it runs.
           [{ out: running("two", 2222) }],
         ],
       })
@@ -1165,14 +1170,14 @@ it.live(
           name: "devbox",
           ...DEVBOX_AT,
           state: "away",
-          why: `${channel.name} is not running there`,
+          why: `${channel.name} is not running there, or nobody is logged in there`,
         })
-        // No one asks: it comes back as Banda opens there.
+        // No one asks: it comes back as the Person logs in there.
         expect((yield* hosts.address("devbox")).secret).toBe("two")
         expect(fake.runs("follower")).toHaveLength(3)
         expect(seen.map((host) => host.state)).not.toContain("stopped")
         expect(logged).toContain(
-          `banda: devbox is away (${channel.name} is not running there); Banda tries again in 100 ms`
+          `banda: devbox is away (${channel.name} is not running there, or nobody is logged in there); Banda tries again in 100 ms`
         )
       }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
     }),

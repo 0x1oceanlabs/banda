@@ -54,7 +54,8 @@ Add's Connect: it runs `uname`, `banda --version` and `banda status`
 there, which starts nothing, and says the system there and the machine's
 own name and icon. `hostStop` is Stop Banda: that machine's own `banda stop`; the
 host then shows stopped, and Banda starts nothing there until you start
-it, even when the host was away as you stopped it.
+it, or Banda here starts again, even when the host was away as you
+stopped it.
 `sshSuggestions` lists the Hosts of `~/.ssh/config`, with no pattern and
 none already in the file.
 
@@ -64,8 +65,8 @@ none already in the file.
   same build as this one. An engine there that does not speak this
   window's protocol is refused.
 - On Linux, its engine as a service that outlives your ssh session:
-  `loginctl enable-linger $USER`, once. On a Mac, Banda open there (see
-  below).
+  `loginctl enable-linger $USER`, once. On a Mac, you logged in at its
+  screen; locked is fine (see below).
 - Claude Code, or your other Harnesses, signed in there: the Agents run
   there.
 - An ssh that gets in with no question: a key, or Tailscale SSH.
@@ -77,7 +78,8 @@ none already in the file.
 
 Banda runs your system's ssh twice for each host: one runs
 `banda start --with-parent` there, which starts its engine when it does
-not run (on a Mac it starts none) and says where it listens; the other
+not run (on a Mac, while you are logged in at its screen) and says where
+it listens; the other
 forwards a port of this
 machine's loopback to it. Neither takes your agent or X11. The page gets
 the address once that ssh itself listens on the port, never another
@@ -86,10 +88,11 @@ Banda tries again, waiting longer each time, up to a minute. When
 another program holds the port, the forward takes another.
 Quitting Banda ends both; the engine there runs on.
 
-An engine stopped there as asked stays stopped: Banda starts it again
-only when the window asks. A refused host, as one with no Banda found
-or one of another protocol, is tried again every ten minutes, and at
-once when the window asks for it. Each line the other machine prints is
+An engine stopped there as asked stays stopped while Banda runs here:
+Banda starts it again when the window asks, or as Banda here starts
+again. A refused host, as one with no Banda found or one of another
+protocol, is tried again every ten minutes, and at once when the window
+asks for it. Each line the other machine prints is
 read up to 4 KiB.
 
 With Tailscale SSH in check mode, ssh waits for you to sign in at the link
@@ -100,20 +103,27 @@ Banda waits up to ten minutes.
 
 A Mac's engine is a launchd job (ADR 0086, step 7a): it starts as the
 Person logs in at the Mac, unless "Start Banda at login" is off there,
-and Banda there starts it when it does not run. So Banda on another
-machine sees the Mac's Projects and Agents while that engine runs,
-Banda's window open there or not. Until step 7c it starts no engine
-there for itself. While none runs there, or the Mac sleeps, the host
-shows "away" (its tooltip says which), and Banda tries again each
-minute.
+and Banda there starts it when it does not run. Banda on another machine
+starts it too, over ssh, while the Person is logged in at the Mac's
+screen, locked or not (step 7c): the engine runs in that session, with
+the Person's sign-ins, as if started there, and takes its PATH from the
+login shell. It does not open Banda.app there yet: from step 7e it
+opens it hidden, with no window. So Banda on another machine sees the
+Mac's Projects and Agents, Banda's window open there or not. With nobody
+logged in at the Mac's screen, as after a logout, or while the Mac
+sleeps, the host shows "away" (its tooltip says which), and Banda tries
+again each minute. Quit Banda at the Mac stops its engine, and the host
+shows stopped until you start it here, or Banda here starts again.
 
 Here arc is a Linux machine, and m1pro a Mac on the same tailnet, at
 `100.79.149.28`. On the Mac:
 
-1. Banda Dev in `/Applications/Banda Dev.app`, as new as arc's: one
-   from before this section came (2026-11-08) starts an engine of its
-   own over ssh while Banda is closed there, which stops as the link
-   drops. Opened once, and Claude Code signed in: the Agents run there.
+1. Banda Dev in `/Applications/Banda Dev.app`, as new as arc's: what
+   starts the engine over ssh is the Mac's Banda, not arc's. One from
+   before step 7c starts none while Banda is closed there, and the host
+   is away; one from before 2026-11-08 starts an engine of its own over
+   ssh, which stops as the link drops. Opened once, so its copy of
+   `banda` is in place, and Claude Code signed in: the Agents run there.
 2. System Settings → General → Sharing → Remote Login: on. Its ⓘ:
    Allow access for only your user, and leave "Allow full disk access
    for remote users" off, as Banda reads only its own folder there.
