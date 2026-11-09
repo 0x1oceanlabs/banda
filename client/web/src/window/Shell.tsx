@@ -87,7 +87,6 @@ import {
   entries,
   find,
   focused,
-  focusedColumn,
   across,
   focusEntry,
   go,
@@ -99,7 +98,7 @@ import {
   step,
   widthIn,
 } from "../tiling/model"
-import { soloing, unsoloing } from "../tiling/groups"
+import { unsoloing } from "../tiling/groups"
 import { AGENTS_FILE } from "@banda/contract/agents"
 import { useFile } from "@banda/ui/lib/look"
 import { Drawer } from "./Drawer"
@@ -167,7 +166,17 @@ export function Shell({
   const open = useMemo(() => openProjects(projects), [projects])
   // The Tiling: the engine's arrangement, its view and its queue (ADR 0087).
   const machine = useMachine(engine)
-  const tiling = useTiling({ engine, machine, modules, home })
+  // Solo (ADR 0079, decision 2): every Agent's Group on a Project's
+  // workspace is drawn the whole screen wide, and the Strip scrolls
+  // from one to the next.
+  const flow = useFile(AGENTS_FILE).flow
+  const tiling = useTiling({
+    engine,
+    machine,
+    modules,
+    home,
+    solo: flow === "solo",
+  })
   const { ready, aside, workspaces, standing, drawnNow, changing } = tiling
   const { change, update } = tiling
   // A start that drew its workspaces and stayed up went well (ADR 0039).
@@ -633,19 +642,8 @@ export function Shell({
         : startThread(project, ask),
     [startThread, route]
   )
-  // Solo (ADR 0079, decision 2): when the focus comes to another Agent,
-  // its Group fills the screen. Only a move of the focus asks, so Alt+M
-  // still gives the room back by hand. From solo to the row, the room
-  // comes back on the workspace in view.
-  const flow = useFile(AGENTS_FILE).flow
-  const at = focusedColumn(workspaces)
-  const soloAt =
-    flow === "solo" && at.column
-      ? `${at.workspace.id} ${at.column.group ?? at.column.id}`
-      : undefined
-  useEffect(() => {
-    if (soloAt) change((w) => soloing(w, shows.owner))
-  }, [soloAt, change, shows])
+  // Back from solo to the row, a Group that `Alt+M` filled gives the
+  // room back on the workspace in view.
   const flowWas = useRef(flow)
   useEffect(() => {
     if (flowWas.current === "solo" && flow !== "solo") change(unsoloing)

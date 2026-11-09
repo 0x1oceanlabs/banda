@@ -62,6 +62,12 @@ sidebar's to keep, not a second order of the window's.
      comes to fills the screen again.
    - Going from solo to the row gives the room back on the workspace you
      look at.
+   - _Changed_ on 2026-11-09: a Group filling the screen only when the
+     focus came to it was seen to grow under the eye, one Agent after
+     another. Now in solo every Group on a Project's workspace is the
+     whole screen wide at once, and the Strip scrolls from one to the
+     next. It is how the window draws the workspace, not a `fill` in the
+     engine; `Alt+M` changes nothing in solo.
 
 3. **The sidebar's header switches the Flow.**
    - An icon beside "New Thread" draws the Flow it is in. A click opens

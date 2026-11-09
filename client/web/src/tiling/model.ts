@@ -93,6 +93,10 @@ export type Workspace = {
   /** The Group that takes the whole screen, its columns keeping their
    * shares of it (`Alt+M`, ADR 0065). */
   filled?: string
+  /** Solo (ADR 0079, decision 2): every Group here is drawn the whole
+   * screen wide, so the Strip scrolls from one Agent to the next. The
+   * window's, as the Flow is; never the engine's (`soloed`). */
+  solo?: true
   /** The Project whose Agents' Threads open here (ADR 0065, decision 9). */
   project?: ProjectId
 }
@@ -178,7 +182,23 @@ export function runOf(
 /** Whether the column at `c` is in the Group that fills the screen. */
 export function filledAt(workspace: Workspace, c: number): boolean {
   const group = workspace.columns[c]?.group
-  return group !== undefined && workspace.filled === group
+  if (group === undefined) return false
+  return workspace.solo === true || workspace.filled === group
+}
+
+/** The workspaces as solo draws them: each Project's workspace with
+ * every Group the whole screen wide. The same object when none changes. */
+export function soloed(state: Workspaces): Workspaces {
+  if (!state.list.some((one) => one.project !== undefined && !one.solo))
+    return state
+  return {
+    ...state,
+    list: state.list.map((one) =>
+      one.project === undefined || one.solo
+        ? one
+        : { ...one, solo: true as const }
+    ),
+  }
 }
 
 /** Where a column stands in its Group: its first, its last, and whether

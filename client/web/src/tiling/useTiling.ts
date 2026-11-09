@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useLayoutEffect,
   useRef,
   useState,
@@ -16,7 +17,7 @@ import { Store, useStore } from "@banda/core/react"
 import type { PaneState } from "@banda/ui/pane"
 import { groupedOf, startable, widthOf } from "../registry"
 import { type Change, type Plan, send, tidied, viewOf } from "./arrange"
-import { focused } from "./model"
+import { focused, soloed, type Workspaces } from "./model"
 import {
   answered,
   answeredTo,
@@ -43,6 +44,7 @@ function refused(error: unknown): void {
 }
 
 const stateOf = (seen: Seen) => seen.state
+const asIs = (state: Workspaces) => state
 const viewIn = (seen: Seen) => seen.view
 const standingIn = (seen: Seen) => seen.standing
 
@@ -56,18 +58,22 @@ const standingIn = (seen: Seen) => seen.standing
  * before drew (roma-day.spec.ts holds it), and the commands go in that
  * order. It names no App and imports nothing of the Window. `machine`,
  * `modules` and `home` are for the arrangement a window kept before,
- * which moves to the engine once.
+ * which moves to the engine once. With `solo`, every Group on a
+ * Project's workspace is drawn the whole screen wide (ADR 0079): the
+ * engine's arrangement stays as it is.
  */
 export function useTiling({
   engine,
   machine,
   modules,
   home,
+  solo = false,
 }: {
   engine: Engine
   machine: ProjectId | undefined
   modules: readonly string[]
   home: ProjectId
+  solo?: boolean
 }) {
   // The arrangement is the engine's; the view, the window's (ADR 0025).
   const live = useArranged(engine)
@@ -78,7 +84,9 @@ export function useTiling({
   useLayoutEffect(() => {
     if (heard) store.set(hear(store.get(), heard.workspaces, heard.at))
   }, [store, heard])
-  const workspaces = useStore(store, stateOf)
+  // As drawn: in solo, each Project's workspace a Group the screen wide.
+  const drawing = useMemo(() => (solo ? cached(soloed) : asIs), [solo])
+  const workspaces = drawing(useStore(store, stateOf))
   const view = useStore(store, viewIn)
   const standing = useStore(store, standingIn)
   useEffect(() => keepView(view), [view])
@@ -170,14 +178,15 @@ export function useTiling({
   const changing = useCallback(
     (how: Change): Promise<string | undefined> => {
       const seen = store.get()
-      const next = how(seen.state)
-      if (!next || next === seen.state) return Promise.resolve(undefined)
+      const now = drawing(seen.state)
+      const next = how(now)
+      if (!next || next === now) return Promise.resolve(undefined)
       if ("command" in next) return Promise.resolve(sent(next))
       // The view alone.
       store.set(look(seen, viewOf(next)))
       return Promise.resolve(focused(next)?.id)
     },
-    [store, sent]
+    [store, sent, drawing]
   )
   const change = useCallback(
     (how: Change) => changing(how).then(() => undefined),
@@ -212,7 +221,10 @@ export function useTiling({
     [engine, store]
   )
   // The workspaces as last drawn, for what runs between draws.
-  const drawnNow = useCallback(() => store.get().state, [store])
+  const drawnNow = useCallback(
+    () => drawing(store.get().state),
+    [store, drawing]
+  )
   // The workspaces set aside, while they are (ADR 0039, decision 2).
   const aside = (ready && live.view.aside) || null
   return {
@@ -224,5 +236,21 @@ export function useTiling({
     changing,
     change,
     update,
+  }
+}
+
+/** `draw`, kept for the last state it drew, so the same state draws as
+ * the same object. */
+function cached(
+  draw: (state: Workspaces) => Workspaces
+): (state: Workspaces) => Workspaces {
+  let was: Workspaces | undefined
+  let drawn: Workspaces | undefined
+  return (state) => {
+    if (state !== was || drawn === undefined) {
+      was = state
+      drawn = draw(state)
+    }
+    return drawn
   }
 }

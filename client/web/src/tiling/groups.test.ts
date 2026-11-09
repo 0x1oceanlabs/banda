@@ -8,7 +8,6 @@ import {
   ownersOf,
   regrouping,
   shiftingInside,
-  soloing,
   unsoloing,
 } from "./groups"
 import {
@@ -17,6 +16,7 @@ import {
   open,
   runOf,
   send,
+  soloed,
   shift,
   toEdge,
   widthIn,
@@ -139,32 +139,27 @@ describe("a Group", () => {
     })
   })
 
-  test("solo fills the Agent the focus is at, on a Project's workspace", () => {
-    // Every Pane but c1 shows an Item that names an owner.
-    const owner = (entry: { id: string }) =>
-      entry.id !== "c1" ? `agent ${entry.id}` : undefined
-    const project = (state: Workspaces) => {
-      state.list[0].project = "s" as ProjectId
-      return state
-    }
+  test("solo draws every Group of a Project's workspace the screen wide", () => {
+    const state = strip("abcd", "gg.h", 0)
     // Not on a Project's workspace: as it is.
-    expect(soloing(strip("ab", "gg", 0), owner)).toBeUndefined()
-    // A Group fills; a column in none stays.
-    expect(soloing(project(strip("ab", "gg", 1)), owner)?.command).toEqual({
-      method: "workspaces.fill",
-      params: { column: "b", fill: true },
-    })
-    expect(soloing(project(strip("ab", "..", 0)), owner)).toBeUndefined()
-    // One that fills already, or that no one owns, stays.
-    const filled = project(strip("ab", "gg", 0))
+    expect(soloed(state)).toBe(state)
+    state.list[0].project = "s" as ProjectId
+    const drawn = soloed(state)
+    expect(soloed(drawn)).toBe(drawn)
+    const workspace = drawn.list[0]
+    const [a, b, c, d] = workspace.columns
+    // Each Group fills, its columns keeping their shares; a column in
+    // none stays as it is.
+    expect(widthIn(workspace, a)).toBe("0.5")
+    expect(widthIn(workspace, b)).toBe("0.5")
+    expect(widthIn(workspace, c)).toBe("1/2")
+    expect(widthIn(workspace, d)).toBe("1")
+    expect(groupEnds(workspace, 3).pad).toBe(false)
+    // The engine's arrangement is not touched.
+    expect(state.list[0].solo).toBeUndefined()
+    // Back to the row, a Group `Alt+M` filled gives the room back.
+    const filled = strip("ab", "gg", 0)
     filled.list[0].filled = "g"
-    expect(soloing(filled, owner)).toBeUndefined()
-    expect(
-      soloing(project(strip("abc", "ggh", 0)), (e) =>
-        e.id === "c1" ? "agent c1" : undefined
-      )
-    ).toBeUndefined()
-    // Back to the row, the room comes back.
     expect(unsoloing(filled)?.command.params).toEqual({
       column: "a",
       fill: false,
