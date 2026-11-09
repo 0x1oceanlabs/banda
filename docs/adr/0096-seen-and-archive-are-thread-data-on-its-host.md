@@ -111,6 +111,12 @@ machine, next to the snooze. He chose (b).
      machines.
    - A mark taken back by "Mark as unread" stays so until the Person
      leaves the Thread and comes back, as now (ADR 0077, decision 6).
+   - The focus has to rest there, not only pass (amended 2026-11-09): a
+     click or a key with no mod in the Thread's Pane counts at once; a
+     focus that came by scrolling the Strip or by `Alt+arrow` counts once
+     it stays 2.5 s (`thread/looking.ts`). Scrolling past Threads put
+     out their Done, Failed and woke marks before, which hid what was
+     left to see. A Question asks until it is answered, as before.
    - This is the mark every machine reads. Where a Thread opens
      (ADR 0094) stays the device's view, by what was on screen; a window in
      the background still counts there, as ADR 0094 leaves open. What a

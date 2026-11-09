@@ -28,7 +28,7 @@ export function useSeeWoke(
   project: ProjectId,
   thread: ThreadId | null,
   later: Later | undefined,
-  focused: boolean
+  looking: boolean
 ): void {
   const front = useInFront()
   // A clock only while it sleeps till a time: it wakes as that comes.
@@ -39,9 +39,9 @@ export function useSeeWoke(
   const unseen =
     later && !seen && wokeOf(later, now) !== undefined ? later.at : undefined
   useEffect(() => {
-    if (!focused || !front || thread === null || unseen === undefined) return
+    if (!looking || !front || thread === null || unseen === undefined) return
     return markWhenPresent(engine, project, thread, { woke: "seen" })
-  }, [focused, front, thread, unseen, engine, project])
+  }, [looking, front, thread, unseen, engine, project])
 }
 
 /** What woke it early, in a few words; nothing for its time coming. */
