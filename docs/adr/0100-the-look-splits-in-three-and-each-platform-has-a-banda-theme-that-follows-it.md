@@ -56,12 +56,13 @@ Research, the same day: `docs/research/2026-11-09-platform-themes.md`
    behaviour, not a gap. Every machine keeps its own copy, and its engine
    and `banda look` read it. The split is shared, device and machine (that
    ADR's decision 3). Shared: the keys' binds, the sidebar, `[notify]`, the
-   Flow and the Person's theme folders, copied between machines later. The
-   device's grows: which theme, the mode, the glass, `[display.*]`, columns,
-   bar, drawer, overview, groups, motion, font, sound and `mod`. So
-   `look.toml` is the device's file, `[notify]` moves to a shared file of
-   its own, and "which the engine serves" reads "which each machine reads
-   from its own copy". The theme is still worked out by the device._
+   Flow and the Person's theme folders, copied between machines later
+   (that ADR's E14). The device's grows: which theme, the mode, the glass,
+   `[display.*]`, columns, bar, drawer, overview, groups, motion, font,
+   sound and `mod`. So `look.toml` is the device's file, `[notify]` leaves
+   it for a shared file of its own when the sync first copies it, and
+   "which the engine serves" reads "which each machine reads from its own
+   copy". The theme is still worked out by the device._
 
    - `look.toml` keeps only the theme part. The other sections move to
      the Person's settings files, one per subject, as ADR 0016 has them for
@@ -210,10 +211,9 @@ Each step is an issue and a PR.
    loses its slice, as the Mac reads its own keys and sidebar. Its parts
    ride in the slices that need them. Each file's class comes with stage
    2's slice 5, which also brings arc's machine files to the Mac (E4). The
-   mixed files are cut (`mod` and `[notify]` moved, an old file still read
-   and `banda settings check` saying where each key went) by the first PR
-   of that ADR's E14, which copies the shared files between machines. The
-   `look` crate's split and one store in `client/core` go with step 1._
+   mixed files are cut only when the sync (that ADR's E14) first copies
+   them. The `look` crate's split and one store in `client/core` go with
+   step 1._
 1. `theme.toml`, `extends` and `"platform"`; the built-in themes move to
    it. Nothing on screen changes. (ADR 0080 step 1.)
 2. The token list once, in `platform/theme`; CSS and TypeScript written

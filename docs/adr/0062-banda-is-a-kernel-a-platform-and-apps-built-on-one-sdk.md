@@ -395,14 +395,11 @@ resolve. Its answers are decisions 4, 5, 6, 7, 10, 13, 14 and 17 below.
       [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md):
       machines are peers, and there is no home host. The arrangement is the
       machine's whose window shows it, in its engine, as built. The Person's
-      files are a full copy on every machine, copied whole later. An Agent's
-      Pane is placed by each machine whose window sees it, in its own
-      arrangement, and checked again there. Each arrangement places an
-      event once, by one road: where the Agent's machine is the window's,
-      `open_pane` places the Pane at once and moves that arrangement's
-      `placed_through` past its event, so a window that carries it later
-      places nothing more. The bullets below on the home host and on
-      "while the home host is away" go._
+      files are a full copy on every machine, each machine's own until the
+      sync (that ADR's E14), later. An Agent's Pane is placed by each
+      machine whose window sees it, in its own arrangement, once and by one
+      road there, and checked again there. The bullets below on the home
+      host and on "while the home host is away" go._
 
     - **The Person's data is a few documents, only on the home host**
       (Roma, 2026-11-06; ADR 0082, decision 1): the arrangement, keys,

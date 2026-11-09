@@ -42,8 +42,8 @@ What stands in the way today:
    [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md):
    machines are peers, and there is no home host. One writer still holds for
    a Project (its machine), a machine's files and the view. The Person's
-   shared files are a full copy on every machine, copied whole later, last
-   edit wins, the other kept beside; still no CRDT. The arrangement is the
+   shared files are a full copy on every machine, each machine's own until
+   the sync (that ADR's E14), later; still no CRDT. The arrangement is the
    machine's whose window shows it._
 
 2. **One Person across hosts, by keys.** Each host and each device has an
@@ -125,9 +125,8 @@ What stands in the way today:
 
    _Amended 2026-11-09 by
    [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): "the
-   Person's home" row goes. A host in Banda Cloud is one more peer, up more:
-   it keeps a copy of the shared files and may pass copies on while the
-   others sleep. Without it, each machine's own copy is used._
+   Person's home" row goes. A host in Banda Cloud is one more peer, up
+   more; nothing waits for it._
 
    _Open:_ the control plane (`api.banda.so`) on Cloudflare Workers and
    Durable Objects (as T3's relay is) or as a Rust service on the relay's
