@@ -422,6 +422,19 @@ test("an archive its host refuses, or whose host goes, comes back in the list wi
   }
 })
 
+test("an archive whose host is away is not sent, and keeps the Thread's Panes, with a toast", () => {
+  const { window, sent, ran, engineOf } = fake(listed())
+  Object.assign(engineOf(undefined), { status: { state: "lost" } })
+  action("agents.archive-thread").run(window, {
+    project: "s1",
+    item: "t1",
+    archived: true,
+  })
+  expect(sent).toEqual([])
+  expect(ran).toEqual([])
+  expect(said.errors).toHaveLength(1)
+})
+
 test("another host's Thread is archived on its own engine", () => {
   const item = listed({
     pane: { kind: "agents.thread", args: { host: "arc" } },

@@ -365,8 +365,8 @@ const wake: ItemAction = {
  * close a Pane opened since, or one of a Thread brought back meanwhile
  * (Roma, 2026-11-09, #974). One the host refuses, as a Thread that began
  * a turn there, or whose host goes before it answers, comes back in the
- * list and a toast says why; its Panes stay closed. Without `archived`,
- * nothing.
+ * list and a toast says why; its Panes stay closed. One whose host is
+ * away is not sent, and keeps its Panes. Without `archived`, nothing.
  */
 const archive: ItemAction = {
   id: "agents.archive-thread",
@@ -388,8 +388,12 @@ const archive: ItemAction = {
     const archived = args?.archived
     if (!at || typeof archived !== "boolean") return
     const thread = at.listed.id as ThreadId
-    void mark(engineOf(window, at), at.project, thread, { archived })
-    if (archived)
+    const engine = engineOf(window, at)
+    // A host away is sent no mark (decision 8): its Thread stays as it
+    // was, Panes and all, and a toast says why.
+    const goes = engine.status.state === "open"
+    void mark(engine, at.project, thread, { archived })
+    if (archived && goes)
       window.run("pane.put-away", { project: at.project, item: thread })
   },
 }

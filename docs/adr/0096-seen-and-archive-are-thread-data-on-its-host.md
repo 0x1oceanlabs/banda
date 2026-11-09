@@ -127,7 +127,8 @@ machine, next to the snooze. He chose (b).
      once, on the press, as its mark goes, never after the host's answer,
      so a late answer closes no Pane opened since. One the host refuses,
      or whose host goes on the way, comes back in the list with its toast,
-     and its Panes stay closed.
+     and its Panes stay closed. One whose host is away at the press is
+     not sent (decision 8) and keeps its Panes.
 
 5. **Only the Person marks.** The mark commands refuse an Agent, through
    its CLI too, with the same check as `switch`; ADR 0083's fence (F0, its
