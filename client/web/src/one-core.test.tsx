@@ -4,9 +4,9 @@
  * path its own package takes to it, and an App's widget draws on the
  * page's React. Two copies of the core would leave an App the defaults, no
  * run, Here nowhere and no machines but its own; two of React would throw
- * at an App's first hook. So with the kit, which gives the Apps what the
- * Window lists until B7a: two copies would leave a Thread's header no
- * Mark.
+ * at an App's first hook. So with the kit, which gives the Apps what they
+ * list, as the Window keeps it, until B7a: two copies would leave a
+ * Thread's header no Mark.
  */
 import { createRequire } from "node:module"
 import { join } from "node:path"
@@ -136,7 +136,7 @@ test("a new Thread's picker lists the machines the Window gives, by the path its
   expect(drawn).not.toContain("on arc")
 })
 
-test("Threads' part of a Pane's header finds its Thread in what the Window lists, by the path its package takes to the kit", async () => {
+test("Threads' part of a Pane's header finds its Thread among what the Apps list, as the Window gives it, by the path its package takes to the kit", async () => {
   // As the Tiling draws the Slot `pane.header` under the Window's `Kept`;
   // the filler reads the items from the Threads package's kit.
   const { threadHeader } = (await import(

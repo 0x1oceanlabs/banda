@@ -107,8 +107,8 @@ export function useKeptHere(
  * selector: the items and the calls (ADR 0088, decision 7), and Here;
  * and its `run`, steady, by which what it draws runs an action by id.
  * The items go to the Apps too, as what fills a Pane's header finds the
- * Item it shows there (`useItem`): the store, not `itemsOf`, so the
- * snooze clock wakes no header. */
+ * Item it shows there (`useItem`): the store, not `itemsOf`, as a snoozed
+ * Thread waking changes no Item and so runs no header's selector. */
 export function Kept({
   stores,
   here,

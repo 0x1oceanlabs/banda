@@ -32,7 +32,7 @@ const thread = (mark: Listed["mark"], calls?: string, id = "t1"): Listed => ({
 const threadPane = { kind: "agents.thread", args: { thread: "t1" } }
 const terminalPane = { kind: "terminal.terminal", args: {} }
 
-/** What the Window lists, as it keeps it: `listed`, in `project`. */
+/** What the Apps list, as the Window keeps it: `listed`, in `project`. */
 const lists = (project: string, ...listed: Listed[]): Readable<Lists> =>
   new Store<Lists>({ [project as ProjectId]: listed })
 
@@ -44,9 +44,9 @@ const markup = (node: ReactNode) =>
 const forgetting: Names = { seen: keyNamed, follow: () => () => undefined }
 
 /** What the Slot draws with `props`, filled by the modules that run, with
- * what the Window lists, `items`, and its hosts, `hosts`. With no items
- * given, it is drawn where no Window lists any, as in a popped-out Pane's
- * window. */
+ * what the Apps list as the Window gives it, `items`, and its hosts,
+ * `hosts`. With no items given, it is drawn where the window gives none,
+ * as in a popped-out Pane's window. */
 const drawn = (
   props: HeaderProps,
   items?: Readable<Lists>,
@@ -71,7 +71,7 @@ async function engine(): Promise<never> {
   throw new Error("no engine in this test")
 }
 
-test("a Thread's Pane has its Thread's Mark at its header's start, as the Window lists it, faint while nothing runs", () => {
+test("a Thread's Pane has its Thread's Mark at its header's start, as Threads lists it, faint while nothing runs", () => {
   // Threads finds its own among what its Project lists.
   const other = thread("asking", "Run npm test?", "t0")
   const start = (listed: Listed) =>
@@ -117,7 +117,7 @@ test("on its tile in the Overview its Mark is small, with what it asks while it 
   )
 })
 
-test("where the Window lists nothing, as in a popped-out Pane's window, a Thread's Pane has no Mark; nor has a Thread not started, or one listed in another Project", () => {
+test("where the window gives no Items, as a popped-out Pane's window does not, a Thread's Pane has no Mark; nor has a Thread not started, or one listed in another Project", () => {
   for (const at of ["start", "project"] as const)
     expect(drawn({ project: "p1", pane: threadPane, at })).toBe("")
   expect(
