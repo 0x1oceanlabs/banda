@@ -14,6 +14,6 @@ export type Power = {
 battery?: Battery, 
 /**
  * Why the machine is held awake now, as the hold's rule says; none
- * while it may idle-sleep.
+ * while it may idle-sleep, and where nothing holds it.
  */
 awake: AwakeWhy | null, };

@@ -8,15 +8,16 @@
 //! - Linux: UPower's display device on the system bus, and its own
 //!   `OnBattery`, which signals a change; else the kernel's power
 //!   supplies, with no time left.
-//! - Windows says none yet (ADR 0090).
+//! - Windows says none yet (ADR 0090), and no why, as nothing holds it.
 //!
 //! The battery is read only while a window hears `machine.power`: each
 //! minute, and at once as the system says the power changed or the
 //! machine is held awake for another reason; while none hears it, not at
 //! all. What each system says is read by plain functions, which the tests
-//! run on what real machines said. This is also the one place that knows
-//! whether the machine is on power, which the hold reads every 30 s while
-//! it matters (`awake.rs`).
+//! run on what arc's UPower said, and on `pmset -g batt` in the shape
+//! macOS says it, not yet read from a Mac. This is also the one place
+//! that knows whether the machine is on power, which the hold reads every
+//! 30 s while it matters (`awake.rs`).
 
 use crate::awake::Why;
 use banda_kernel::Stream;
@@ -45,7 +46,7 @@ pub struct Power {
     #[ts(optional)]
     pub battery: Option<Battery>,
     /// Why the machine is held awake now, as the hold's rule says; none
-    /// while it may idle-sleep.
+    /// while it may idle-sleep, and where nothing holds it.
     pub awake: Option<Why>,
 }
 

@@ -3,7 +3,7 @@
 //! engine takes one hold at a time, by its system's own means, named
 //! "Banda" with why: macOS's power assertion, as `caffeinate -i` makes
 //! one, and logind's `idle` and `sleep` locks on Linux. Windows takes
-//! none yet (ADR 0090).
+//! none yet (ADR 0090), so it says no why.
 //!
 //! Only idle sleep: the display still sleeps, and the Person's own Sleep,
 //! a closed lid and a low battery still sleep the machine. Banda never
@@ -96,6 +96,10 @@ pub fn why(
 /// own, or a test's.
 #[async_trait::async_trait]
 pub(crate) trait System: Send + 'static {
+    /// Whether it holds the machine at all: where it holds nothing, as on
+    /// Windows yet, no hold is taken and no why is said.
+    const HOLDS: bool = true;
+
     /// The hold: while it is kept, the machine does not idle-sleep; dropped,
     /// it lets go.
     type Held: Send;
@@ -126,7 +130,7 @@ pub struct Keeping {
 
 impl Keeping {
     /// Why the machine is held awake now, kept current; none while it may
-    /// idle-sleep, and once the hold went.
+    /// idle-sleep, where nothing holds it, and once the hold went.
     pub fn why(&self) -> watch::Receiver<Option<Why>> {
         self.why.clone()
     }
@@ -175,6 +179,8 @@ struct Nothing;
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 #[async_trait::async_trait]
 impl System for Nothing {
+    const HOLDS: bool = false;
+
     type Held = ();
 
     async fn take(&mut self, _: Why) -> Taken<()> {
@@ -200,12 +206,13 @@ struct Times {
 
 /// Follows the count of running Turns, `awake` and, while `awake` says it
 /// matters, the power source, and holds the machine through `system` as
-/// the rule says, and tells `told` why. One hold at a time: one for
-/// another reason, or one taken again as the last was short, is taken
-/// before the last is let go, so the machine is never let go between. It
-/// ends, letting go, as either watch's sender goes.
-async fn follow(
-    mut system: impl System,
+/// the rule says, and tells `told` why; where it holds nothing, nothing.
+/// One hold at a time: one for another reason, or one taken again as the
+/// last was short, is taken before the last is let go, so the machine is
+/// never let go between. It ends, letting go, as either watch's sender
+/// goes.
+async fn follow<S: System>(
+    mut system: S,
     mut working: watch::Receiver<usize>,
     mut awake: watch::Receiver<Awake>,
     times: Times,
@@ -235,7 +242,7 @@ async fn follow(
         let now = Instant::now();
         let on_power = power.is_some_and(|(on, _)| on);
         let since_ended = ended.map(|ended| now.saturating_duration_since(ended));
-        let wanted = why(said, count, since_ended, times.tail, on_power);
+        let wanted = why(said, count, since_ended, times.tail, on_power).filter(|_| S::HOLDS);
         // Why the rule holds it, said before the system is asked: what it
         // grants is not waited for, a refusal is the log's to say, once,
         // and a short hold is taken again.
@@ -434,6 +441,24 @@ mod tests {
         }
     }
 
+    /// The same system, holding nothing, as Windows yet.
+    struct Unheld(Fake);
+
+    #[async_trait::async_trait]
+    impl System for Unheld {
+        const HOLDS: bool = false;
+
+        type Held = Hold;
+
+        async fn take(&mut self, why: Why) -> Taken<Hold> {
+            self.0.take(why).await
+        }
+
+        async fn on_power(&mut self) -> bool {
+            self.0.on_power().await
+        }
+    }
+
     struct Test {
         working: banda_kernel::Working,
         awake: watch::Sender<Awake>,
@@ -446,6 +471,15 @@ mod tests {
 
     impl Test {
         fn new(awake: Awake, times: Times) -> Test {
+            Test::with(awake, times, true)
+        }
+
+        /// On a system that holds nothing.
+        fn unheld(awake: Awake, times: Times) -> Test {
+            Test::with(awake, times, false)
+        }
+
+        fn with(awake: Awake, times: Times, holds: bool) -> Test {
             let working = banda_kernel::Working::new();
             let (awake, awake_now) = watch::channel(awake);
             let (power, power_now) = watch::channel(true);
@@ -457,7 +491,12 @@ mod tests {
                 short: Arc::clone(&short),
             };
             let (told, why) = watch::channel(None);
-            let keeping = tokio::spawn(follow(system, working.count(), awake_now, times, told));
+            let count = working.count();
+            let keeping = if holds {
+                tokio::spawn(follow(system, count, awake_now, times, told))
+            } else {
+                tokio::spawn(follow(Unheld(system), count, awake_now, times, told))
+            };
             Test {
                 working,
                 awake,
@@ -646,5 +685,21 @@ mod tests {
         keeping.await.unwrap();
         assert_eq!(*why.borrow_and_update(), None);
         assert!(why.changed().await.is_err(), "nothing more is said");
+    }
+
+    #[tokio::test]
+    async fn a_system_that_holds_nothing_takes_nothing_and_says_no_why() {
+        let plugged = Awake {
+            while_working: true,
+            plugged_in: true,
+        };
+        let test = Test::unheld(plugged, SHORT);
+        let turn = test.working.hold();
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        drop(turn);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(test.asked.said().is_empty(), "{:?}", test.asked.said());
+        assert_eq!(*test.why.borrow(), None);
+        assert!(!test.why.has_changed().unwrap(), "nothing was said");
     }
 }

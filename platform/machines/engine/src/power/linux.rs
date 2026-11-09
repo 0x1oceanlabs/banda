@@ -344,13 +344,13 @@ mod bus {
 pub(crate) mod tests {
     use super::*;
 
-    /// What UPower said on arc, on battery.
+    /// What UPower said on arc, on battery, on 2026-11-09.
     pub(crate) const DISCHARGING: Device = Device {
         kind: 2,
         present: true,
         state: 2,
-        percentage: 42.2,
-        to_empty: 7330,
+        percentage: 96.0,
+        to_empty: 13176,
         to_full: 0,
         on_battery: true,
     };
@@ -368,7 +368,7 @@ pub(crate) mod tests {
     fn upower_says_the_charge_the_state_and_the_time_left() {
         assert_eq!(
             upower(&DISCHARGING),
-            Some(battery_of(42, false, false, Some(122)))
+            Some(battery_of(96, false, false, Some(220)))
         );
         let charging = Device {
             state: 1,
@@ -407,14 +407,14 @@ pub(crate) mod tests {
             to_empty: 0,
             ..DISCHARGING
         };
-        assert_eq!(upower(&unknown), Some(battery_of(42, false, false, None)));
+        assert_eq!(upower(&unknown), Some(battery_of(96, false, false, None)));
         let charging = Device {
             state: 1,
             on_battery: false,
             to_full: 0,
             ..DISCHARGING
         };
-        assert_eq!(upower(&charging), Some(battery_of(42, true, true, None)));
+        assert_eq!(upower(&charging), Some(battery_of(96, true, true, None)));
     }
 
     #[test]
