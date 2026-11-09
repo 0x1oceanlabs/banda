@@ -221,17 +221,32 @@ test("the bar's Mark is every host's lists' loudest, and their turns in all, put
   stop()
 })
 
-test("a host's Listed opens its Pane on that host, with no answer for this machine's engine", () => {
+test("a host's Listed opens its Pane on that host, and each answer goes there, never to this machine's engine", () => {
   const stores = newStores(0)
-  const answers = [{ label: "Allow", action: "agents.answer", args: {} }]
+  const allow = { project: "x", item: "q1", choice: "allow" }
+  const answers = [{ label: "Allow", action: "agents.answer", args: allow }]
   takeLists(stores, { [p]: [thread("a", { answers })] })
-  takeLists(stores, { [r]: [thread("b", { answers })] }, "arc")
+  // What a host says of its own host does not choose where it goes.
+  const said = [{ ...answers[0]!, args: { ...allow, host: "devbox" } }]
+  takeLists(stores, { [r]: [thread("b", { answers: said })] }, "arc")
   const [here] = stores.items.get()[p]!
   const [there] = stores.items.get()[r]!
   expect(here!.pane.args).toEqual({ thread: "a" })
   expect(here!.answers).toEqual(answers)
   expect(there!.pane.args).toEqual({ thread: "b", host: "arc" })
-  expect(there!.answers).toBeUndefined()
+  expect(there!.answers).toEqual([
+    {
+      label: "Allow",
+      action: "agents.answer",
+      args: { ...allow, host: "arc" },
+    },
+  ])
+  // The calls, a toast's buttons, carry them so.
+  const stop = followCalls(stores)
+  takeLists(stores, { [r]: [thread("b", { mark: "asking", answers })] }, "arc")
+  const call = stores.calls.get().list.find((one) => one.about === "b")
+  expect(call?.answers?.[0]?.args).toEqual({ ...allow, host: "arc" })
+  stop()
 })
 
 test("what a host lists and calls for, as Alt+U, a toast, the woke notice and the counts pick it, opens on that host", () => {

@@ -32,9 +32,15 @@ export function App({ engine }: { engine: Engine }) {
   // A Project added here shows at once, as the engine answered it.
   const { listed, put } = useProjects(engine)
   // The names it shows each host by, as this device last saw them, are
-  // the device's to keep (ADR 0081, decision 1).
+  // the device's to keep (ADR 0081, decision 1); this machine's own
+  // Projects are its engine's.
   const [hosts] = useState(
-    () => new KeptHosts(device.hosts, { seen: seenNamed, follow: followNamed })
+    () =>
+      new KeptHosts(
+        device.hosts,
+        { seen: seenNamed, follow: followNamed },
+        engine
+      )
   )
   useEffect(() => hosts.follow(), [hosts])
   useOurs(hosts, listed, machine)

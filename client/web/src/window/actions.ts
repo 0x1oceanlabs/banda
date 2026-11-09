@@ -152,9 +152,6 @@ export type Shell = WindowApi & {
  * of the Window than the API says. */
 export function windowApiOf(shell: Shell): WindowApi {
   return {
-    get engine() {
-      return shell.engine
-    },
     get home() {
       return shell.home
     },

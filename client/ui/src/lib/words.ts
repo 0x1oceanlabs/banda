@@ -1,9 +1,12 @@
 /** Plain words a Pane shows. */
 import { Lost, Refused } from "@banda/contract"
+import { Unreachable } from "@banda/core"
 
-/** What went wrong with a call, for a Person to read. */
+/** What went wrong with a call, for a Person to read: a machine the
+ * Window does not reach now by its words, as "arc is away". */
 export function problem(error: unknown): string {
   if (error instanceof Refused) return error.refusal.message
+  if (error instanceof Unreachable) return error.message
   if (error instanceof Lost)
     return "Banda lost its engine for a moment. Try again."
   return "Something went wrong. Try again."

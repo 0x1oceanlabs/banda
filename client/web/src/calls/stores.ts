@@ -119,14 +119,19 @@ export function takeLists(
 
 /** What host `host` lists, as the Window opens it (ADR 0081): each
  * Pane on that host (`withHost`), so a row, a call or the Banda menu opens
- * it there, and no toast's answer, as its action goes to this machine's
+ * it there, and each toast's answer with the host in its args, so its
+ * action sends it there (`WindowApi.sessionOf`), never to this machine's
  * engine. */
 function onHost(lists: Lists, host: string): Lists {
   const placed: Record<ProjectId, readonly Listed[]> = {}
   for (const [project, listed] of Object.entries(lists))
     placed[project as ProjectId] = listed.map((one) => {
       const there: Listed = { ...one, pane: withHost(one.pane, host) }
-      delete there.answers
+      if (one.answers)
+        there.answers = one.answers.map((answer) => ({
+          ...answer,
+          args: { ...answer.args, host },
+        }))
       return there
     })
   return placed

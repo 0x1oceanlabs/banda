@@ -208,9 +208,15 @@ export class KeptHosts implements Readable<readonly Shown[]> {
    * told again only as what they say changes. */
   readonly machines: Readable<readonly Machine[]> = this.#machines
 
-  constructor(device: HostsDevice, names: Names) {
+  /** This machine's engine, its own Projects' session (`sessionOf`). */
+  readonly #here: Engine | undefined
+
+  /** `here` is this machine's engine; none outside a Window, where no
+   * Project is this machine's to act on. */
+  constructor(device: HostsDevice, names: Names, here?: Engine) {
     this.#device = device
     this.#names = names
+    this.#here = here
     this.#shown.subscribe(() => this.#sayMachines())
   }
 
@@ -295,6 +301,37 @@ export class KeptHosts implements Readable<readonly Shown[]> {
    * (`hostOfPane`); none for this machine's. */
   hostOf(project: ProjectId, named: string | undefined): string | undefined {
     return hostOfPane(this.get(), this.#ourIds, project, named)
+  }
+
+  /**
+   * The session of the machine that owns `project`, or `pane` of it, whose
+   * args, or an act's on it, may name its host (`hostOf`): this machine's
+   * engine for its own Projects; else that host's, one for the Window's
+   * life (`engine`). Every act an App makes goes to it (ADR 0089, decision
+   * 5). It is never this machine's in another's place, so an act never
+   * runs on the wrong machine: a host the Window does not know, or does
+   * not reach now, refuses at once (`Unreachable`) rather than wait to
+   * run by itself once it is back. A Pane `drawn` from it keeps its host's
+   * while that host is out of reach: it shows what it showed, and catches
+   * up once the host is back.
+   */
+  sessionOf(
+    project: ProjectId,
+    pane?: Pick<PaneState, "args">,
+    { drawn = false }: { drawn?: boolean } = {}
+  ): Engine {
+    const host = this.hostOf(project, pane && paneHost(pane))
+    if (host === undefined) {
+      if (!this.#here) throw new Error("This window has no engine of its own.")
+      return this.#here
+    }
+    const shown = this.get().find((one) => one.name === host)
+    if (!shown) {
+      const { name } = this.seen(host)
+      throw new Unreachable(host, `This window does not reach ${name}`)
+    }
+    if (drawn || live(shown)) return this.engine(host)
+    throw new Unreachable(host, reachWords(host, shown, this.seen)!)
   }
 
   /** `pane` of `project` as a pick opens it (`pane.pick`): its args name
@@ -464,6 +501,18 @@ export function machinesOf(ours: Ours, hosts: readonly Shown[]): Machine[] {
     })
   }
   return machines
+}
+
+/** An act refused at once (`KeptHosts.sessionOf`): the machine that owns
+ * its Project, `host`, is one the Window does not reach now, or does not
+ * know. It says so in the words its Panes' pill says (`reachWords`). */
+export class Unreachable extends Error {
+  readonly host: string
+  constructor(host: string, words: string) {
+    super(words)
+    this.name = "Unreachable"
+    this.host = host
+  }
 }
 
 /** A host's Project as this Window draws it: a picture sign shows its

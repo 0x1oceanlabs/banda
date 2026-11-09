@@ -17,7 +17,8 @@ export type Told = {
   /** Its kind, which colours its edge and picks its Mark. */
   kind: Chime
   title: string
-  /** The Project it is of, by name, when the window has more than one. */
+  /** The Project it is of, by name, when the window has more than one;
+   * and the machine it is on, another than this one (`toldOfCall`). */
   project?: string
   /** The Project it is of, by its ID: the window names it, as `project`. */
   in?: string

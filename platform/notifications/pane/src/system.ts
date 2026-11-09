@@ -61,7 +61,8 @@ export const GO_TO = "notifications.go-to"
 
 /**
  * A call as a toast tells it (ADR 0056, decision 2), in the words of its
- * system notification, with a button that goes there.
+ * system notification, with a button that goes there. Where it is follows
+ * its title, as there: its Project, and on another machine that machine.
  */
 export function toldOfCall(
   call: Call,
@@ -73,11 +74,12 @@ export function toldOfCall(
   const goes = { label: answer, action: GO_TO, args: { project, about, pane } }
   // What answers it there and then are its buttons; a click opens it.
   const buttons = answers?.length ? answers.slice(0, 2) : [goes]
+  const where = whereOf(call, projectName)
   return {
     key,
     kind: call.chime,
     title,
-    ...(projectName ? { project: projectName } : {}),
+    ...(where ? { project: where } : {}),
     ...(body ? { body } : {}),
     buttons,
     ...(answers?.length ? { open: goes } : {}),

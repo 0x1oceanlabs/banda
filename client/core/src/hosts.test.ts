@@ -1,4 +1,4 @@
-import type { ProjectId, ProjectSummary, Status } from "@banda/contract"
+import type { Engine, ProjectId, ProjectSummary, Status } from "@banda/contract"
 import type { Named } from "@banda/contract/machines"
 import { afterEach, expect, test, vi } from "vitest"
 import type { HostState } from "./device"
@@ -19,6 +19,7 @@ import {
   runOnHost,
   type Shown,
   shownOf,
+  Unreachable,
 } from "./hosts"
 import type { Args } from "./run"
 
@@ -248,6 +249,73 @@ test("a host's engine asks the desktop where it listens on each connect, once th
   await vi.advanceTimersByTimeAsync(0)
   expect(device.engine).toHaveBeenCalledTimes(3)
   engine.close()
+})
+
+test("an act goes to the session of the machine that owns its Project, and never to this machine's in another's place", () => {
+  vi.stubGlobal("WebSocket", Socket)
+  Socket.opened = []
+  const { device, tell } = desktop()
+  const here = { here: true } as unknown as Engine
+  const hosts = new KeptHosts(device, forgetting, here)
+  hosts.follow()
+  const on = (host: string) => ({ args: { thread: "t1", host } })
+  /** What an act on `project` is refused with, in words; none if sent. */
+  const refused = (project: string, pane?: { args: Args }) => {
+    try {
+      hosts.sessionOf(project as ProjectId, pane)
+      return undefined
+    } catch (error) {
+      expect(error).toBeInstanceOf(Unreachable)
+      return `${(error as Unreachable).host}: ${(error as Error).message}`
+    }
+  }
+
+  // Before the desktop tells its hosts: this machine's own, and none for
+  // a Project of a host it does not know yet, not even this machine's.
+  hosts.ours([project("mine")], "m0" as ProjectId)
+  expect(hosts.sessionOf("mine" as ProjectId)).toBe(here)
+  expect(hosts.sessionOf("m0" as ProjectId, on("arc"))).toBe(here)
+  expect(refused("r1", on("arc"))).toBe("arc: This window does not reach arc")
+  expect(Socket.opened).toEqual([])
+
+  // Live: its host's, by the host its args name, else the one that lists
+  // it; this machine's wins a clash.
+  tell([live])
+  hosts.projects("arc", [project("mine"), project("r1")])
+  const arc = hosts.engine("arc")
+  expect(hosts.sessionOf("r1" as ProjectId, on("arc"))).toBe(arc)
+  expect(hosts.sessionOf("r1" as ProjectId)).toBe(arc)
+  expect(hosts.sessionOf("gone" as ProjectId, on("arc"))).toBe(arc)
+  expect(hosts.sessionOf("mine" as ProjectId, on("arc"))).toBe(here)
+  // A Project no machine lists, its host unsaid, as one just added here.
+  expect(hosts.sessionOf("new" as ProjectId)).toBe(here)
+
+  // Away: an act is refused at once, in the pill's words, and waits for
+  // nothing; a Pane drawn from it keeps arc's, which catches up as arc is
+  // back.
+  tell([away])
+  expect(refused("r1", on("arc"))).toBe("arc: arc is away")
+  expect(refused("r1")).toBe("arc: arc is away")
+  expect(hosts.sessionOf("r1" as ProjectId, on("arc"), { drawn: true })).toBe(
+    arc
+  )
+  tell([{ name: "arc", ssh: "arc", state: "stopped" }])
+  expect(refused("r1", on("arc"))).toBe("arc: Banda is stopped on arc")
+  // Taken out of hosts.toml: none, drawn or not, and never this machine's.
+  tell([])
+  expect(refused("r1", on("arc"))).toBe("arc: This window does not reach arc")
+  expect(() =>
+    hosts.sessionOf("r1" as ProjectId, on("arc"), { drawn: true })
+  ).toThrow(Unreachable)
+  tell([live])
+  expect(hosts.sessionOf("r1" as ProjectId, on("arc"))).toBe(arc)
+  arc.close()
+
+  // Outside a Window, with no engine of this machine's: none here either.
+  const none = new KeptHosts(device, forgetting)
+  expect(() => none.sessionOf("mine" as ProjectId)).toThrow(
+    "This window has no engine of its own."
+  )
 })
 
 test("an engine that said goodbye is made anew as its host is live again", async () => {

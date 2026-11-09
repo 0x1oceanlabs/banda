@@ -41,6 +41,7 @@ export {
   runOnHost,
   type Shown,
   shownOf,
+  Unreachable,
 } from "./hosts"
 export { KeptHere } from "./kept-here"
 export { paneHost, type PaneState, type Place, withHost } from "./pane"

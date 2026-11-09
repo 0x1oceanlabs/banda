@@ -15,7 +15,7 @@ import {
   namedIn,
   type Shown,
 } from "../hosts"
-import { paneHost, type PaneState } from "../pane"
+import type { PaneState } from "../pane"
 import { sameData } from "../store"
 import { useStore } from "./store"
 
@@ -69,15 +69,13 @@ export type Reach =
 
 /**
  * Where a Pane of `project`, whose args name host `named`, reaches its
- * engine (ADR 0081, decision 4): `engine`, this machine's, for its own
- * Projects; else its host's. Drawn again only as the host it is on, or
+ * engine (ADR 0081, decision 4): the session it is drawn from
+ * (`KeptHosts.sessionOf`), this machine's for its own Projects, else its
+ * host's, kept while that host is out of reach; none while the Window
+ * does not know that host yet. Drawn again only as the host it is on, or
  * what the Window knows of that host, changes.
  */
-export function useReach(
-  engine: Engine,
-  project: ProjectId,
-  named: string | undefined
-): Reach {
+export function useReach(project: ProjectId, named: string | undefined): Reach {
   const kept = useContext(HostsContext)
   const on = useCallback(
     () => kept.hostOf(project, named),
@@ -85,8 +83,13 @@ export function useReach(
   )
   const host = useStore(kept, on)
   const shown = useShownOf(host)
-  if (host === undefined) return { engine }
-  return { host, shown, engine: shown && kept.engine(host) }
+  if (host === undefined) return { engine: kept.sessionOf(project) }
+  const pane = { args: { host } }
+  return {
+    host,
+    shown,
+    engine: shown && kept.sessionOf(project, pane, { drawn: true }),
+  }
 }
 
 /** The other host a Pane of `project` is on, whose args name host
@@ -109,19 +112,19 @@ export function useNamedOf(
   return useStore(kept, select, sameData)
 }
 
-/** The engine of a Project, or of `pane` of it, which may name its host
- * (`hostOfPane`): its host's, never this machine's in its place, else
- * this machine's `engine`; the same function while those stay. */
-export function useEngineOf(
-  engine: Engine
-): (project: ProjectId, pane?: PaneState) => Engine {
+/** The session an act on a Project, or on `pane` of it, goes to
+ * (`KeptHosts.sessionOf`): its host's, never this machine's in its
+ * place, refused at once while the Window does not reach that host; the
+ * same function while the Window's hosts stay. */
+export function useEngineOf(): (
+  project: ProjectId,
+  pane?: Pick<PaneState, "args">
+) => Engine {
   const kept = useContext(HostsContext)
   return useCallback(
-    (project: ProjectId, pane?: PaneState) => {
-      const host = kept.hostOf(project, pane && paneHost(pane))
-      return host === undefined ? engine : kept.engine(host)
-    },
-    [kept, engine]
+    (project: ProjectId, pane?: Pick<PaneState, "args">) =>
+      kept.sessionOf(project, pane),
+    [kept]
   )
 }
 

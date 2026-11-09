@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from "vitest"
 import { type Engine, Lost, type ProjectId } from "@banda/contract"
-import type { Here } from "@banda/core/react"
+import { type Here, Unreachable } from "@banda/core/react"
 import {
   cleanTitle,
   namingNow,
@@ -446,4 +446,27 @@ test("another host's Thread is archived on its own engine", () => {
     archived: true,
   })
   expect(asked).toEqual([{ host: "arc", name: "agents.archive" }])
+})
+
+test("another host's Thread the Window does not reach now is renamed, put off to Later, woken, marked and archived nowhere: each is refused at once, in that host's words, and its Panes stay", async () => {
+  const item = listed({
+    seen: true,
+    pane: { kind: "agents.thread", args: { host: "arc" } },
+  })
+  const { window, asked, ran } = fake(item)
+  const away = Object.assign(window, {
+    sessionOf: () => {
+      throw new Unreachable("arc", "arc is away")
+    },
+  })
+  const at = { project: "s1", item: "t1" }
+  action("thread.rename").run(away, { ...at, title: "New" })
+  action("thread.later").run(away, { ...at, until: 9 })
+  action("thread.wake").run(away, at)
+  action("thread.unread").run(away, at)
+  action("agents.archive-thread").run(away, { ...at, archived: true })
+  await vi.waitFor(() => expect(said.errors).toHaveLength(5))
+  expect(new Set(said.errors)).toEqual(new Set(["arc is away"]))
+  expect(asked).toEqual([])
+  expect(ran).toEqual([])
 })

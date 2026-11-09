@@ -302,17 +302,20 @@ export function labelOf(
   )
 }
 
-/** Lets a Pane's module let go of it (`PaneKind.closed`). */
-export function closedOf(engine: Engine, entry: Entry): void {
-  told(
-    () =>
-      kindOf(entry.pane.kind)?.closed?.({
-        engine,
-        project: entry.project,
-        args: entry.pane.args,
-      }),
-    undefined
-  )
+/** Lets a Pane's module let go of it (`PaneKind.closed`), on the session
+ * `engineOf` gives; nothing while that refuses, as for a host out of
+ * reach: nothing waits to run there once it is back. */
+export function closedOf(engineOf: () => Engine, entry: Entry): void {
+  const kind = kindOf(entry.pane.kind)
+  if (!kind?.closed) return
+  let engine: Engine
+  try {
+    engine = engineOf()
+  } catch {
+    return
+  }
+  const { project, pane } = entry
+  told(() => kind.closed?.({ engine, project, args: pane.args }), undefined)
 }
 
 /** Whether `module` runs: always, with no engine part; else while the

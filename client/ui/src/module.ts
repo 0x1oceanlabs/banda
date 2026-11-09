@@ -67,9 +67,6 @@ export type AnyPaneKind = PaneKind<Args>
  * What a module needs that this lacks is added here, not reached around.
  */
 export type WindowApi = {
-  /** The engine, as a module's action asks it: to answer a Question
-   * from its toast. */
-  engine: Engine
   /** The Project a new Thread starts in. */
   home: ProjectId
   /** Shows a new Pane right of the focused one, with its width, and
@@ -119,12 +116,17 @@ export type WindowApi = {
    * would: how one module asks another for what it does, and how it goes
    * to a Pane, by the Window's `pane.pick` (ADR 0087, decision 7). */
   run: (action: string, args?: Args) => void
-  /** The engine a Project is on, or `pane` of it, which may name its host
-   * (ADR 0081): its host's, never this machine's in its place, else this
-   * machine's. The hosts router's answer for an App's own commands, as an
-   * item action's on an Item another host lists; H5's `sessionOf`, given
-   * the Pane until the router knows every host's Projects. */
-  sessionOf: (project: ProjectId, pane?: PaneState) => Engine
+  /**
+   * The session of the machine that owns a Project (ADR 0089, decision
+   * 5), where every act an App makes goes: this machine's engine for its
+   * own Projects, else that host's, never this machine's in its place
+   * (ADR 0081). `pane` of it, or an act's args on it, may name its host,
+   * as `args.host`: an item action's Item another host lists, or a
+   * toast's answer to a Thread there. A host the Window does not reach
+   * now refuses at once: it throws `Unreachable`, in the words its Panes'
+   * pill says, and nothing waits to run by itself once it is back.
+   */
+  sessionOf: (project: ProjectId, pane?: Pick<PaneState, "args">) => Engine
   /** Where the Person looks for `thing` (ADR 0056, decision 1), as the
    * calls part works it out (`sightOf`): from Here and what the Tiles of
    * the workspace on screen show, measured as it is asked (ADR 0087,

@@ -77,17 +77,18 @@ test("a Pane reaches the engine of the host its args name, else of the host list
   vi.stubGlobal("WebSocket", Socket)
   Socket.opened = []
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device, {
-    seen: keyNamed,
-    follow: () => () => undefined,
-  })
-  hosts.follow()
   const here = { here: true } as unknown as Engine
+  const hosts = new KeptHosts(
+    device,
+    { seen: keyNamed, follow: () => () => undefined },
+    here
+  )
+  hosts.follow()
   /** What a Pane of `project`, its args naming host `named`, reaches. */
   const reach = (project: string, named?: string) => {
     let got: Reach | undefined
     const Pane = () => {
-      got = useReach(here, project as ProjectId, named)
+      got = useReach(project as ProjectId, named)
       return null
     }
     renderToStaticMarkup(
@@ -121,15 +122,9 @@ test("a Pane reaches the engine of the host its args name, else of the host list
   expect(reach("x")).toEqual({ engine: here })
   expect(hosts.hostOf("mine" as ProjectId, "arc")).toBeUndefined()
 
-  // Away, the Pane keeps its engine, which catches up as the host returns.
-  tell([away])
-  const gone = reach("r1", "arc")
-  expect(gone.engine).toBe(arc)
-  expect(reachWords("arc", gone.shown, hosts.seen)).toBe("arc is away")
-
   let engineOf: ReturnType<typeof useEngineOf> | undefined
   const Shell = () => {
-    engineOf = useEngineOf(here)
+    engineOf = useEngineOf()
     return null
   }
   renderToStaticMarkup(
@@ -139,10 +134,27 @@ test("a Pane reaches the engine of the host its args name, else of the host list
   )
   expect(engineOf!("r1" as ProjectId)).toBe(arc)
   expect(engineOf!("mine" as ProjectId)).toBe(here)
-  // A Pane goes by the host its args name, never this machine's engine
+  // An act goes by the host its args name, never this machine's engine
   // in its place, but for a clash.
   const on = (host: string) => ({ kind: "agents.thread", args: { host } })
   expect(engineOf!("gone" as ProjectId, on("arc"))).toBe(arc)
   expect(engineOf!("mine" as ProjectId, on("arc"))).toBe(here)
+
+  // Away, the Pane keeps its engine, which catches up as the host
+  // returns; an act there is refused at once, in the pill's words.
+  tell([away])
+  const gone = reach("r1", "arc")
+  expect(gone.engine).toBe(arc)
+  expect(reachWords("arc", gone.shown, hosts.seen)).toBe("arc is away")
+  expect(() => engineOf!("r1" as ProjectId, on("arc"))).toThrow("arc is away")
+  // One the Window does not know: none to draw from, nor to act on.
+  expect(reach("r1", "devbox")).toEqual({
+    host: "devbox",
+    shown: undefined,
+    engine: undefined,
+  })
+  expect(() => engineOf!("r1" as ProjectId, on("devbox"))).toThrow(
+    "This window does not reach devbox"
+  )
   arc.close()
 })

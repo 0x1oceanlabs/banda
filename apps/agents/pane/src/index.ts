@@ -6,7 +6,6 @@
 import type { ProjectId } from "@banda/contract"
 import {
   type Action,
-  type Args,
   defineModule,
   scoped,
   takes,
@@ -24,68 +23,7 @@ import { NEW_THREAD } from "./thread/session"
 import { threadItems } from "./list/items"
 import { threadHeader } from "./list/header"
 import { move } from "./list/marks-moved"
-import { ANSWER, RETRY, SHOW } from "./list/rows"
-
-/** An arg that is a text, or none. */
-const textOf = (args: Args | undefined, key: string) => {
-  const value = args?.[key]
-  return typeof value === "string" ? value : undefined
-}
-
-/**
- * What a Thread's toast's buttons run (ADR 0056, decision 3): answer its
- * Question with a choice, try its failed turn again, or show it, as to
- * sign in there. Unlisted: only a toast runs them.
- */
-const answering: Action[] = [
-  {
-    id: ANSWER,
-    title: "Answer a Question",
-    section: "Threads",
-    unlisted: true,
-    run: (window, args) => {
-      const [project, item, choice] = ["project", "item", "choice"].map((key) =>
-        textOf(args, key)
-      )
-      if (!project || !item || !choice) return
-      void window.engine
-        .command("agents.answer", { item, choice }, project as ProjectId)
-        .catch(() => undefined)
-    },
-  },
-  {
-    id: RETRY,
-    title: "Try a turn again",
-    section: "Threads",
-    unlisted: true,
-    run: (window, args) => {
-      const [project, turn] = ["project", "turn"].map((key) =>
-        textOf(args, key)
-      )
-      if (!project || !turn) return
-      void window.engine
-        .command("agents.retry", { turn }, project as ProjectId)
-        .catch(() => undefined)
-    },
-  },
-  {
-    id: SHOW,
-    title: "Show a Thread",
-    section: "Threads",
-    unlisted: true,
-    run: (window, args) => {
-      const [project, thread, harness] = ["project", "thread", "harness"].map(
-        (key) => textOf(args, key)
-      )
-      if (!project || !thread) return
-      window.open(
-        paneOf(threadPane, { thread, harness: harness ?? "", title: "" }),
-        project as ProjectId,
-        { again: false }
-      )
-    },
-  },
-]
+import { answering } from "./list/answering"
 
 /**
  * A new Thread, in a new column, on this computer's first Harness (ADR
@@ -196,9 +134,10 @@ export const agents = defineModule({
   items: threadItems,
   slots: [threadHeader],
   // This machine's window moves the marks it kept to their host, once
-  // (ADR 0096, decision 9): its own engine's, never another host's.
+  // (ADR 0096, decision 9): its own engine's, never another host's, the
+  // session of its home, a Project of this machine's.
   start: (window) => {
-    move.start(window.engine)
+    move.start(window.sessionOf(window.home))
     return () => undefined
   },
 })
