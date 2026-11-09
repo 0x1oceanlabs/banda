@@ -40,7 +40,9 @@
  * - The client's core has no device, names no App and keeps no state of
  *   its own (ADR 0089, decisions 1 and 11): it imports only itself, the
  *   contract and, in its bindings, React; it reads no global of the
- *   device; and only the Window makes the store that keeps Here.
+ *   device; only the Window makes the stores that keep Here and the
+ *   hosts, and gives them and the machines to what it draws; and an App
+ *   or a platform part takes the core only from `@banda/core/react`.
  * - The bridge's table is the desktop's (ADR 0089, decision 4): the
  *   desktop imports nothing of the page, and the page takes only the
  *   table's type, in the files listed, a list that only falls. No path
@@ -462,12 +464,15 @@ test("only the files listed ask the Window where the Person looks", () => {
  * given another way to go to a Pane: the Window's API has no `goTo`.
  */
 test("one place answers a pick, and only the action reaches it", () => {
+  // The core too, where the hosts store places a pick on its host.
   const places = (pattern: RegExp) =>
-    sources(join(app, "web/src"), { tests: false }).flatMap((file) =>
-      (readFileSync(file, "utf8").match(pattern) ?? []).map(() =>
-        relative(app, file)
+    ["web/src", "core/src"]
+      .flatMap((folder) => sources(join(app, folder), { tests: false }))
+      .flatMap((file) =>
+        (readFileSync(file, "utf8").match(pattern) ?? []).map(() =>
+          relative(app, file)
+        )
       )
-    )
   expect(places(/\bhow: "left"/g)).toEqual(["web/src/window/Shell.tsx"])
   // The Shell answers it as `parts` too: neither is called but by the action.
   expect(places(/\b(?:shell|parts)\.pick\(/g)).toEqual([
@@ -1415,15 +1420,18 @@ test("the core names no App", () => {
 
 /**
  * What the core may keep at a module's top level as an instance, an array
- * or an object, by file and name: constants nothing changes. A context's
- * default is made by `createContext`, not listed.
+ * or an object, by file and name: constants nothing changes, and a
+ * context's default made there, which outside a Window holds nothing to
+ * change.
  */
 const CORE_CONSTANTS = [
   "core/src/hosts.ts: ITEMS_ELSEWHERE",
   "core/src/hosts.ts: NONE",
   "core/src/hosts.ts: RUNS_ELSEWHERE",
+  "core/src/react/here.ts: HereContext",
   "core/src/react/here.ts: NOWHERE",
   "core/src/react/hosts.ts: FORGETTING",
+  "core/src/react/hosts.ts: HostsContext",
   "core/src/react/hosts.ts: NOWHERE",
 ]
 
@@ -1437,14 +1445,27 @@ function made(value: ts.Expression): ts.Expression {
     : value
 }
 
+/** Whether `value` makes an instance, an array or an object: itself, or
+ * what a call it is takes, as `createContext(new Store(…))` does. */
+function makes(value: ts.Expression): boolean {
+  const what = made(value)
+  return (
+    ts.isNewExpression(what) ||
+    ts.isArrayLiteralExpression(what) ||
+    ts.isObjectLiteralExpression(what) ||
+    (ts.isCallExpression(what) && what.arguments.some(makes))
+  )
+}
+
 /**
  * The core keeps no state of its own at a module's top level (ADR 0089,
  * decisions 1 and 5): each store is made by its owner, one per Window,
  * keyed by host as it grows. No `let` or `var` there, and no instance,
- * array or object made there but the constants listed.
+ * array or object made there, by itself or as what a call takes, but the
+ * constants listed.
  */
 test("the core keeps no state of its own at a module's top level", () => {
-  const keeping = coreCode.flatMap((file) =>
+  const top = coreCode.flatMap((file) =>
     ts
       .createSourceFile(
         file,
@@ -1456,19 +1477,17 @@ test("the core keeps no state of its own at a module's top level", () => {
         declarationList.declarations.flatMap((held) => {
           const name = ts.isIdentifier(held.name) ? held.name.text : "{…}"
           const what = `${relative(app, file)}: ${name}`
-          if (!(declarationList.flags & ts.NodeFlags.Const)) return [what]
-          const value = held.initializer && made(held.initializer)
-          return value &&
-            (ts.isNewExpression(value) ||
-              ts.isArrayLiteralExpression(value) ||
-              ts.isObjectLiteralExpression(value)) &&
-            !CORE_CONSTANTS.includes(what)
-            ? [what]
+          if (!(declarationList.flags & ts.NodeFlags.Const))
+            return [{ what, kept: true }]
+          return held.initializer && makes(held.initializer)
+            ? [{ what, kept: !CORE_CONSTANTS.includes(what) }]
             : []
         })
       )
   )
-  expect(keeping).toEqual([])
+  expect(top.filter(({ kept }) => kept).map(({ what }) => what)).toEqual([])
+  // One that goes leaves the list.
+  expect(top.map(({ what }) => what).sort()).toEqual(CORE_CONSTANTS)
 })
 
 /**
@@ -1481,6 +1500,55 @@ test("only the Window makes a KeptHere", () => {
     .filter((file) => /\bnew KeptHere\b/.test(readFileSync(file, "utf8")))
     .map((file) => relative(root, file))
   expect(making).toEqual(["client/web/src/window/here.tsx"])
+})
+
+/**
+ * Only the Window makes the store that keeps the hosts it shows (ADR
+ * 0081, decision 4), handing it this device's memory of their names, and
+ * gives it to what it draws, as it gives Here: its root, and a popped-out
+ * Pane's window. The machines a new Thread starts on, which that store
+ * tells, only its root gives (W0b gives them to a popped-out Pane, #1010).
+ * The core's own store is the default where no Window gives one, with no
+ * host and no memory.
+ */
+test("only the Window makes and gives the hosts, and gives the machines", () => {
+  const naming = (word: RegExp) =>
+    pageCode
+      .flatMap((folder) => sources(folder, { tests: false }))
+      .filter((file) => word.test(readFileSync(file, "utf8")))
+      .map((file) => relative(root, file))
+      .sort()
+  expect(naming(/\bnew KeptHosts\b/)).toEqual([
+    "client/core/src/react/hosts.ts",
+    "client/web/src/App.tsx",
+    "client/web/src/main.tsx",
+  ])
+  expect(naming(/<HostsContext\b|HostsContext\.Provider/)).toEqual([
+    "client/web/src/App.tsx",
+    "client/web/src/main.tsx",
+  ])
+  expect(naming(/<MachinesContext\b|MachinesContext\.Provider/)).toEqual([
+    "client/web/src/App.tsx",
+  ])
+})
+
+/**
+ * An App's view, and a platform part's, takes the core only from
+ * `@banda/core/react` (ADR 0089, decision 11), its tests too: the one
+ * door it reaches what the Window gives by.
+ */
+test("an App or a platform part takes the core only from @banda/core/react", () => {
+  const taking = [...folders.values()]
+    .map((folder) => join(folder, "pane/src"))
+    .filter((folder) => existsSync(folder))
+    .flatMap((folder) => sources(folder))
+    .flatMap((file) =>
+      imports(readFileSync(file, "utf8"))
+        .filter((name) => /^@banda\/core(\/|$)/.test(name))
+        .filter((name) => name !== "@banda/core/react")
+        .map((name) => `${relative(root, file)}: ${name}`)
+    )
+  expect(taking).toEqual([])
 })
 
 /**
@@ -1590,14 +1658,24 @@ test("the page takes the bridge's table only as a type, in the files listed", ()
 })
 
 /**
- * What still stands at a path the core, the bridge's table or the device's
- * adapter left, only re-exporting it from its new place. W0a1 kept five
- * so the open PRs of the time kept building; W0a2 pointed every importer
- * to the new path and took them away. None joins the list.
+ * The paths the core, the bridge's table and the device's adapter left
+ * (W0a1, W0a2). W0a1 kept the first five, only re-exporting from the new
+ * place, so the open PRs of the time kept building; W0a2 pointed every
+ * importer to the new path and took them away. None stands again, and no
+ * file of the kit or the page only re-exports what moved.
  */
-const OLD_PATHS: string[] = []
+const LEFT = [
+  "client/ui/src/here.ts",
+  "client/ui/src/hooks/use-run.ts",
+  "client/ui/src/lib/store.ts",
+  "client/web/src/host.ts",
+  "client/web/src/window/device.ts",
+  "client/ui/src/hooks/use-machines.ts",
+  "client/web/src/calls/hosts.ts",
+]
 
-test("a path the core or the bridge left only re-exports it, as the list holds", () => {
+test("no path the core or the bridge left stands, nor a file that only re-exports what moved", () => {
+  expect(LEFT.filter((path) => existsSync(join(root, path)))).toEqual([])
   const boot = join(app, "web/src/boot")
   const moved = (file: string, name: string) =>
     /^@banda\/(core|core\/react|desktop\/bridge)$/.test(name) ||
@@ -1623,14 +1701,13 @@ test("a path the core or the bridge left only re-exports it, as the list holds",
     })
     .map((file) => relative(root, file))
     .sort()
-  expect(standing).toEqual(OLD_PATHS)
+  expect(standing).toEqual([])
 })
 
 /**
  * What `@banda/ui` names of the core again, by file and name, for the
  * modules that take it from the kit until L3 splits it (ADR 0089,
- * decision 1). The list only falls; a file that only re-exports is in
- * `OLD_PATHS` instead.
+ * decision 1). The list only falls.
  */
 const UI_FROM_CORE = [
   "client/ui/src/lib/projects.ts: openProjects",
@@ -1645,7 +1722,6 @@ const UI_FROM_CORE = [
 test("the kit names the core again only as listed", () => {
   const core = /^@banda\/core(\/react)?$/
   const naming = sources(join(app, "ui/src"), { tests: false })
-    .filter((file) => !OLD_PATHS.includes(relative(root, file)))
     .flatMap((file) => {
       const { statements } = ts.createSourceFile(
         file,
