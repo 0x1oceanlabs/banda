@@ -429,6 +429,23 @@ Each step is its own PR.
      `client/web/src/window/named.tsx`, `client/web/src/calls/hosts.ts`
      (`awayFor`, beside `reachWords`), `client/ui/src/slots.ts` and
      `client/desktop/e2e/hosts.spec.ts`.
+   - **H5a, Send says what the pill says** (#948, #951, #824): one rule
+     of whether the window reaches a machine, its state and its engine
+     being open (`heldWords`, beside `reachWords`). While the machine is
+     not live, Send's tooltip says the pill's words, away with "Send
+     once it is back."; while it is live, "Connecting to arc…" until its
+     engine is open, where 4b counted 3 seconds, or "arc refused this
+     window" once that engine said goodbye. Its engine tries again as the
+     machine is live (`Engine.wake`), so Send turns on as the pill goes.
+     ssh gives up on a machine that does not answer in 10 s, and the
+     forward on a link after about 20 s of silence, so one asleep shows
+     away in 10 to 20 s, not up to 60 s. The follower still waits out a
+     Tailscale sign-in: ssh waits as long for each answer before it is in
+     as it lets a link stay silent.
+     Files: `client/core/src/hosts.ts`,
+     `client/core/src/react/hosts.ts`, `sdk/contract/src/engine.ts`,
+     `client/desktop/src/hosts.ts`, `apps/agents/pane/src/thread/Thread.tsx`
+     and `client/desktop/e2e/hosts.spec.ts`.
 5. **Settings → Machines**, in two PRs:
    - **PR 3, the section**: This machine, Other machines and Add a
      machine (decision 9). Files: `client/web/src/settings/sections.ts`,

@@ -6,12 +6,14 @@
  * ssh does, so main's check that ssh holds the port holds. arc's label
  * shows below this machine's Projects, with its Projects and Threads;
  * stopped there, it says so, and Start brings it back. Its Thread opens
- * from the sidebar on arc's engine, and waits while arc is away; Alt+U
- * and a toast open one there too, as `pane.pick` keeps its host. A new
- * Thread's picker groups the Projects by machine, in a popped-out Pane's
- * window as in the window. As a Mac, its `uname` says Darwin, and the
- * window finds its Banda in its Application Support; its engine is this
- * checkout's still, which serves for the follower, as a Mac's does not
+ * from the sidebar on arc's engine, and waits while arc is away: Send
+ * says why in the pill's words, from the window's start, and turns on as
+ * arc is back. Alt+U and a toast open one there too, as `pane.pick` keeps
+ * its host. A new Thread's picker groups the Projects by machine, in a
+ * popped-out Pane's window as in the window. As a Mac, its `uname` says
+ * Darwin, and the window finds its Banda in its Application Support; its
+ * engine is this checkout's still, which serves for the follower, as a
+ * Mac's does not
  * (engine/src/control.rs).
  * hosts.toml applies as it changes: a machine written there by hand, or
  * added through the bridge as the page will, shows at once, and goes as
@@ -253,8 +255,9 @@ const states = (arc: Arc, project: string) =>
 
 /** The window, its hosts.toml naming arc with `banda`, or with none
  * (`null`) for the window to find it there, and the fake ssh first on its
- * PATH. */
-const withArc = (arc: Arc, banda: string | null = program) =>
+ * PATH; in `dir`, a window's folder before, it opens again on what that
+ * window left. */
+const withArc = (arc: Arc, banda: string | null = program, dir?: string) =>
   startWindow({
     look: 'mode = "dark"\n',
     sidebar: 'preset = "projects"\n',
@@ -262,6 +265,7 @@ const withArc = (arc: Arc, banda: string | null = program) =>
       "config/hosts.toml": `[[hosts]]\nname = "arc"\nssh = "arc"\n${banda ? `banda = ${JSON.stringify(banda)}\n` : ""}`,
     },
     env: { PATH: `${arc.bin}:${process.env.PATH}` },
+    dir,
   })
 
 const sidebarOf = (page: Page) =>
@@ -301,6 +305,36 @@ async function shot(page: Page, name: string, at = { x: 900, y: 700 }) {
   ).toHaveCount(0, { timeout: 30_000 })
   await page.waitForTimeout(3_000)
   await page.screenshot({ path: join(shots, `${name}.png`) })
+}
+
+/** How soon Send turns on after the pill goes, in ms: the engine tries
+ * again as its host is live, and its own wait is up to 5 s. */
+const SOON = 1_500
+
+/** What the pill over `pane` and its Send say at one moment; null where
+ * one says nothing. */
+const wordsOf = (pane: Locator) =>
+  pane.evaluate((own) => ({
+    pill:
+      own.querySelector("[data-machine-pill] [role=status]")?.textContent ??
+      null,
+    send:
+      own.querySelector('button[aria-label="Send"]')?.getAttribute("title") ??
+      null,
+  }))
+
+/** Watches `pane` for `ms`: whenever its pill and its Send both say why
+ * it waits, they say the same, away with when Send goes (ADR 0095,
+ * decision 7), and never "Connecting" beside "away". */
+async function sameWords(pane: Locator, ms: number) {
+  for (const until = Date.now() + ms; Date.now() < until;) {
+    const { pill, send } = await wordsOf(pane)
+    if (pill !== null && send !== null)
+      expect(send).toBe(
+        pill.endsWith(" is away") ? `${pill}. Send once it is back.` : pill
+      )
+    await pane.page().waitForTimeout(100)
+  }
 }
 
 test("another machine's Threads show under its name, below this one's; stopped there, Start brings it back", async () => {
@@ -573,9 +607,9 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   await shot(page, "pr3-2-away")
   arc.down(false)
   await expect(away).toHaveCount(0, { timeout: 60_000 })
-  // The engine connects again on its own wait, which may end after the
-  // pill has gone: Send waits for it, the draft still there.
-  await expect(sending).toBeEnabled({ timeout: 60_000 })
+  // Its engine tries again as arc is live, not on its own wait: Send
+  // turns on as the pill goes, the draft still there.
+  await expect(sending).toBeEnabled({ timeout: SOON })
   await expect(sending).not.toHaveAttribute("title")
   await expect(composer).toHaveText("back again")
   await composer.press("Enter")
@@ -666,6 +700,66 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   expect(ok.threads.map(({ title, snooze }) => [title, snooze])).toEqual([
     ["Sidebar for arc", undefined],
   ])
+})
+
+test("another machine's Thread says on Send what its pill says from the window's start, with arc asleep, then refused; Send turns on as arc is back", async () => {
+  test.setTimeout(180_000)
+  arc = newArc()
+  await seed(arc)
+  window = await withArc(arc)
+  await arcOf(window.page).getByText("Bench window tests").click()
+  const threadIn = (page: Page) =>
+    page.getByRole("region", { name: "Bench window tests", exact: true })
+  await expect(
+    threadIn(window.page).getByText("You said: Bench window tests")
+  ).toBeVisible()
+
+  // arc asleep as the window starts again on what it left: its Thread
+  // says so in the pill, and Send says the same from the first moment.
+  const { dir } = window
+  await window.app.close()
+  arc.down(true)
+  window = await withArc(arc, program, dir)
+  const { page } = window
+  const thread = threadIn(page)
+  const pill = thread.locator("[data-machine-pill] [role=status]")
+  const sending = thread.getByRole("button", { name: "Send", exact: true })
+  await expect(pill).toHaveText("arc is away", { timeout: 30_000 })
+  await expect(sending).toBeVisible()
+  await sameWords(thread, 4_000)
+  await expect(sending).toHaveAttribute(
+    "title",
+    "arc is away. Send once it is back."
+  )
+  await shot(page, "h5a-1-asleep")
+
+  // Back, but with no banda where hosts.toml says: refused, the pill and
+  // Send say why in the same words.
+  const hostsToml = join(dir, "config/hosts.toml")
+  writeFileSync(
+    hostsToml,
+    '[[hosts]]\nname = "arc"\nssh = "arc"\nbanda = "/nowhere/banda"\n'
+  )
+  arc.down(false)
+  const refused = "arc: no /nowhere/banda there; check banda in hosts.toml"
+  await expect(pill).toHaveText(refused, { timeout: 30_000 })
+  await sameWords(thread, 2_000)
+  await expect(sending).toHaveAttribute("title", refused)
+  // Its Harness's name is not known here yet: the box goes by it later.
+  const composer = thread.getByRole("textbox", { name: /^Message to / })
+  await composer.fill("back on arc")
+  await expect(sending).toBeDisabled()
+
+  // Its banda right again, arc is live: Send turns on as the pill goes.
+  writeFileSync(
+    hostsToml,
+    `[[hosts]]\nname = "arc"\nssh = "arc"\nbanda = ${JSON.stringify(program)}\n`
+  )
+  await expect(pill).toHaveCount(0, { timeout: 60_000 })
+  await expect(sending).toBeEnabled({ timeout: SOON })
+  await expect(sending).not.toHaveAttribute("title")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: back on arc")).toBeVisible()
 })
 
 test("another machine's Thread is seen, marked unread and archived on its engine, from its Pane, and never on this one's (ADR 0096)", async () => {

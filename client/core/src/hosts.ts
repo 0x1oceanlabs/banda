@@ -15,6 +15,7 @@ import {
   Engine,
   type ProjectId,
   type ProjectSummary,
+  type Status,
 } from "@banda/contract"
 import type { Named } from "@banda/contract/machines"
 import type { HostState } from "./device"
@@ -203,7 +204,8 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     return this.#device.follow((hosts) => this.take(hosts)) ?? (() => {})
   }
 
-  /** Takes the hosts as the desktop tells them now, at `at`. */
+  /** Takes the hosts as the desktop tells them now, at `at`. A host
+   * live again has its engine try at once, not after its wait. */
   take(hosts: readonly HostState[], at = Date.now()): void {
     const was = new Map(this.get().map((one) => [one.name, one]))
     const now = hosts.map((host) =>
@@ -217,6 +219,9 @@ export class KeptHosts implements Readable<readonly Shown[]> {
         this.#engines.delete(one.name)
     }
     this.#shown.set(this.#placed(now))
+    for (const one of now)
+      if (live(one) && was.get(one.name)?.state.state !== "live")
+        this.#engines.get(one.name)?.wake()
   }
 
   /** Takes host `name`'s Projects, as its engine listed them, while the
@@ -483,6 +488,33 @@ export function reachWords(
     case "refused":
       return `${name}: ${state.why}`
   }
+}
+
+/**
+ * Why Send waits on a Pane on host `host` (ADR 0095, decision 7), by one
+ * rule of whether the Window reaches it: the host as the Window shows it
+ * (`shown`), and its engine's connection (`status`). While the host is
+ * not live, the pill's words (`reachWords`), so the two say the same at
+ * once; away, with when Send goes. While it is live, it connects until
+ * its engine is open, or says its engine refused this window. None once
+ * both are.
+ */
+export function heldWords(
+  host: string,
+  shown: Shown | undefined,
+  status: Status["state"],
+  seen: (key: string) => Named
+): string | undefined {
+  const words = reachWords(host, shown, seen)
+  if (words !== undefined)
+    return shown?.state.state === "away"
+      ? `${words}. Send once it is back.`
+      : words
+  if (status === "open") return undefined
+  const { name } = shown?.named ?? seen(host)
+  return status === "refused"
+    ? `${name} refused this window`
+    : `Connecting to ${name}…`
 }
 
 /** The Window's actions a Pane on another host runs: the page's own

@@ -551,10 +551,11 @@ export function suggestionsOf(text: string, taken: readonly Entry[]): string[] {
   return [...found]
 }
 
-/** What both ssh are given: no terminal, no agent, no X11, no tunnel, no
+/** What every ssh is given: no terminal, no agent, no X11, no tunnel, no
  * command of the config's own, no connection shared with another ssh, no
  * question asked, the log level that shows Tailscale's sign-in link, and
- * a link given up after half a minute of silence. */
+ * a machine that does not answer in 10 s given up, so one asleep shows
+ * away soon (#824). */
 const PLAIN_SSH = [
   "-T",
   "-a",
@@ -572,14 +573,29 @@ const PLAIN_SSH = [
   "-o",
   "ForwardX11=no",
   "-o",
-  "ServerAliveInterval=15",
-  "-o",
-  "ServerAliveCountMax=2",
+  "ConnectTimeout=10",
   "-o",
   "ControlPath=none",
   "-o",
   "ControlMaster=no",
 ]
+
+/** What an ssh that may wait for Tailscale's sign-in is given, the
+ * follower's, Test's and Stop Banda's: it asks the machine every 15 s
+ * whether it is there, which keeps the link open through a router, and
+ * gives up after about 12 minutes of silence. Before it is in, ssh waits
+ * that long for each answer too (OpenSSH), and Tailscale SSH says nothing
+ * while the Person signs in, so it is longer than they are given
+ * (`TIMES.signin`): the window's own waits say when it is late, and the
+ * forward when a live link is gone. */
+const PATIENT = ["-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=48"]
+
+/** What the forward is given: it asks every 5 s and gives up after 3
+ * asks with no answer, so a machine asleep while live shows away in
+ * about 20 s, not 45 (#824). Before it is in, it waits 15 s for each
+ * answer, which is enough: it starts once the follower is in, past any
+ * sign-in. */
+const QUICK = ["-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=3"]
 
 /** What a shell exits with when it finds no program to run. */
 const NOT_FOUND = 127
@@ -651,10 +667,11 @@ export const stopCommand = (
     `exec ${RUNTIME} ${b} stop${force ? " --force" : ""}`,
   ])
 
-/** The arguments of an ssh that runs `remote` on `host`: no forward of
- * the config's either. */
+/** The arguments of an ssh that runs `remote` on `host`, patient for a
+ * sign-in (`PATIENT`): no forward of the config's either. */
 const commandArgs = (host: Entry, remote: string) => [
   ...PLAIN_SSH,
+  ...PATIENT,
   "-o",
   "ClearAllForwardings=yes",
   "--",
@@ -668,10 +685,11 @@ export const followerArgs = (host: Entry) =>
 
 /** The forward's arguments: this machine's loopback port `from` to port
  * `to` on that machine's loopback, and nothing else. It ends when it
- * cannot listen. */
+ * cannot listen, and soon on a link gone silent (`QUICK`). */
 export const forwardArgs = (host: Entry, from: number, to: number) => [
   "-N",
   ...PLAIN_SSH,
+  ...QUICK,
   "-o",
   "ExitOnForwardFailure=yes",
   "-L",
@@ -919,7 +937,8 @@ export type Times = {
   test: number
 }
 
-const TIMES: Times = {
+/** How long a window waits, where a test says nothing else. */
+export const TIMES: Times = {
   first: 2_000,
   longest: 60_000,
   refused: 10 * 60_000,

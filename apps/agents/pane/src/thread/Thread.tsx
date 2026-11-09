@@ -7,15 +7,8 @@ import {
   ContextMenu,
   ContextMenuTrigger,
 } from "@banda/ui/components/context-menu"
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from "react"
-import type { Engine, ProjectId } from "@banda/contract"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import type { ProjectId } from "@banda/contract"
 import {
   Empty,
   EmptyDescription,
@@ -38,7 +31,6 @@ import { paneOf, type PaneProps, withHost } from "@banda/ui/pane"
 import { BotIcon } from "lucide-react"
 import { threadPaneOf } from "../list/rows"
 import { suggested } from "../composer/slash"
-import { heldWords } from "../composer/placeholder"
 import { type Comment, isComment } from "../composer/comments"
 import { Composer, type ComposerHandle } from "../composer/Composer"
 import { QuoteSelection } from "./Quote"
@@ -61,11 +53,13 @@ import { SupervisedLine, useHeardSupervised } from "./Supervised"
 import { FENCE_LINK } from "../settings/fence"
 import {
   holdsWhole,
+  seenNamed,
   useFence,
   useMachine,
   useSeenNamed,
   useStatus,
 } from "@banda/ui/hooks/use-status"
+import { heldWords, useShownOf } from "@banda/core/react"
 import { movedArgs, NewThreadBar } from "../composer/NewThread"
 import { type ThreadArgs, useThreadSession, zoomKey } from "./session"
 import { threadPane } from "../ThreadPane"
@@ -104,10 +98,14 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   // ask its Person there, stays off.
   const { thread, host } = args
   const here = host === undefined
-  // That machine, by the name it says it has; while its engine is not
-  // open, Send waits (ADR 0095, decision 7).
+  // That machine, by the name it says it has. While the window cannot
+  // reach it, Send waits, and says why as its pill does (ADR 0095,
+  // decision 7).
   const on = useSeenNamed(host)?.name
-  const held = useHeld(engine, on)
+  const shown = useShownOf(host)
+  const { state: status } = useStatus(engine)
+  const held =
+    host === undefined ? undefined : heldWords(host, shown, status, seenNamed)
   const {
     live,
     state,
@@ -600,41 +598,6 @@ function Centered({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   )
-}
-
-/** The engines this window has tried: open once, lost or refused once, or
- * connecting longer than `FIRST_TRY`. Kept as long as the window, as its
- * engines are, so a Pane opened anew says what the one before it said. */
-const TRIED = new WeakSet<Engine>()
-
-/** How long an engine's first connect may take before its machine counts
- * as away. */
-const FIRST_TRY = 3_000
-
-/**
- * Why Send waits on `machine`'s Thread while its `engine` is not open
- * (`heldWords`); nothing for this machine's Threads, which name no
- * machine. An engine waits as connecting the whole time its machine is
- * away, so connecting counts as away once the window has tried it.
- */
-function useHeld(engine: Engine, machine: string | undefined) {
-  const { state } = useStatus(engine)
-  const [, redraw] = useReducer((draws: number) => draws + 1, 0)
-  useEffect(() => {
-    if (machine === undefined || TRIED.has(engine)) return
-    if (state !== "connecting") {
-      TRIED.add(engine)
-      return
-    }
-    const timer = setTimeout(() => {
-      TRIED.add(engine)
-      redraw()
-    }, FIRST_TRY)
-    return () => clearTimeout(timer)
-  }, [engine, machine, state])
-  return machine === undefined
-    ? undefined
-    : heldWords(machine, state, TRIED.has(engine))
 }
 
 /** A Thread not yet started: whom it writes to, by its account's emblem,
