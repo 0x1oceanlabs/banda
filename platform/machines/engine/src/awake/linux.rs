@@ -107,21 +107,6 @@ impl Logind {
         let lock: zbus::zvariant::OwnedFd = reply.body().deserialize()?;
         Ok(lock.into())
     }
-
-    /// Whether UPower says the machine is on power.
-    async fn upower(bus: &zbus::Connection) -> zbus::Result<bool> {
-        let reply = bus
-            .call_method(
-                Some("org.freedesktop.UPower"),
-                "/org/freedesktop/UPower",
-                Some("org.freedesktop.DBus.Properties"),
-                "Get",
-                &("org.freedesktop.UPower", "OnBattery"),
-            )
-            .await?;
-        let on_battery: zbus::zvariant::OwnedValue = reply.body().deserialize()?;
-        Ok(!bool::try_from(on_battery)?)
-    }
 }
 
 const NO_BUS: &str = "the system bus is not reached: nothing keeps this machine awake until it is";
@@ -161,13 +146,14 @@ impl System for Logind {
     }
 
     async fn on_power(&mut self) -> bool {
+        use crate::power::linux;
         if let Some(bus) = self.bus().await {
-            match Logind::upower(&bus).await {
+            match linux::on_power_said(&bus).await {
                 Ok(on_power) => return on_power,
                 Err(error) => self.lost(&error),
             }
         }
-        crate::found::linux::on_power(Path::new("/sys/class/power_supply"))
+        linux::on_power(&linux::supplies(Path::new(linux::SUPPLIES)))
     }
 }
 

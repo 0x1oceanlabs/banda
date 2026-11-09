@@ -3,7 +3,7 @@
 id = "machines"
 kind = "platform"
 name = "Machines"
-about = "What this machine is called and drawn by, the same in every window that shows it: a name of up to 16 characters and one of ten icons, as its own machine.toml says, else as Banda finds them from its hostname and what it is (ADR 0095). The engine says them in its welcome, and on the stream machine.named as they change; only the Person changes them. It also keeps the machine from idle sleep while its Agents work, and while on power if the Person says so, as machine.toml says (ADR 0097)."
+about = "What this machine is called and drawn by, the same in every window that shows it: a name of up to 16 characters and one of ten icons, as its own machine.toml says, else as Banda finds them from its hostname and what it is (ADR 0095). The engine says them in its welcome, and on the stream machine.named as they change; only the Person changes them. It also keeps the machine from idle sleep while its Agents work, and while on power if the Person says so, as machine.toml says, and says its battery and why it is awake on the stream machine.power, read only while a window hears it (ADR 0097)."
 version = "0.1.0"
 # The major of the App API it is written to (ADR 0062, ADR 0082).
 api = 1

@@ -3,18 +3,24 @@
 //! it and each change, the settings' `set` writes machine.toml, a change
 //! by hand is heard too, and an Agent names nothing, nor says when the
 //! machine stays awake: its set, reset and rename are refused.
+//! `machine.power` says the battery and why the machine is awake, and
+//! each change of them (ADR 0097).
 
 use banda_kernel::api::OwnerSecret;
 use banda_kernel::{
     AgentId, Caller, Code, CommandId, Kernel, MachineIcon, Named, Participant, PersonId, ProjectId,
+    Working,
 };
 use banda_keys::KeysModule;
+use banda_machines::awake::{self, Why};
+use banda_machines::power::{Battery, Meter, Source};
 use banda_machines::{Machine, Machines};
 use futures::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::Message;
 
 fn found() -> Named {
@@ -24,12 +30,44 @@ fn found() -> Named {
     }
 }
 
+const DISCHARGING: Battery = Battery {
+    percent: 42,
+    charging: false,
+    on_power: false,
+    left: Some(122),
+};
+
+/// A battery the test says, as a machine's system says it.
+struct Said(watch::Receiver<Option<Battery>>);
+
+#[async_trait::async_trait]
+impl Source for Said {
+    async fn read(&mut self) -> Option<Battery> {
+        *self.0.borrow_and_update()
+    }
+
+    async fn changed(&mut self) {
+        if self.0.changed().await.is_err() {
+            std::future::pending().await
+        }
+    }
+}
+
 async fn open(root: &Path, owner: PersonId) -> Arc<Kernel> {
+    let (_, battery) = watch::channel(Some(DISCHARGING));
+    let (_, awake) = watch::channel(None);
+    let meter = Meter::with(Said(battery), awake, Duration::from_secs(60));
+    open_with(root, owner, meter).await
+}
+
+/// The kernel, its `machine.power` read by `meter`.
+async fn open_with(root: &Path, owner: PersonId, meter: Meter) -> Arc<Kernel> {
     let config = root.join("config");
     let machine = Machine::new(&config, found());
     Kernel::builder(root.join("projects"), root.join("data"), owner)
         .machine(root.join("state/machine"))
         .named(machine.named())
+        .power(move || meter.stream())
         .module(Machines::new(machine))
         .module(KeysModule::new(config))
         .open()
@@ -92,13 +130,24 @@ async fn hear(socket: &mut Socket) -> Value {
 
 /// The next piece `machine.named` says.
 async fn piece(socket: &mut Socket) -> Value {
+    piece_of(socket, 1).await
+}
+
+/// The next piece the stream `id` says.
+async fn piece_of(socket: &mut Socket, id: u64) -> Value {
     let frame = next(socket).await;
     assert_eq!(
         (&frame["type"], &frame["stream"]),
-        (&json!("piece"), &json!(1)),
+        (&json!("piece"), &json!(id)),
         "{frame}"
     );
     frame["data"].clone()
+}
+
+/// No frame within a while.
+async fn no_frame(socket: &mut Socket) {
+    let heard = tokio::time::timeout(Duration::from_millis(300), socket.next()).await;
+    assert!(heard.is_err(), "{heard:?}");
 }
 
 /// Calls `method` with `params` as the Person: its result.
@@ -206,6 +255,76 @@ async fn the_welcome_names_the_machine_and_machine_named_says_each_change() {
 }
 
 #[tokio::test]
+async fn machine_power_says_the_battery_and_why_the_machine_is_awake_as_they_change() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    // The engine's own wiring, with a battery of the test's: a Turn
+    // counted by the kernel's Working holds the machine awake, as the
+    // agents module counts each.
+    let machine = Machine::new(root.path().join("config"), found());
+    let working = Working::new();
+    let keeping = awake::keep(working.count(), machine.awake());
+    let (battery, said) = watch::channel(Some(DISCHARGING));
+    let meter = Meter::with(Said(said), keeping.why(), Duration::from_secs(60));
+    let kernel = open_with(root.path(), owner, meter).await;
+    let address = serve(&kernel, owner).await;
+    let (mut socket, _) = connect(address).await;
+
+    let stream = json!({ "type": "stream", "id": 2, "method": "machine.power" });
+    send(&mut socket, stream).await;
+    assert_eq!(next(&mut socket).await["ok"]["stream"], 2);
+    let first = json!({
+        "battery": { "percent": 42, "charging": false, "on_power": false, "left": 122 },
+        "awake": null,
+    });
+    assert_eq!(piece_of(&mut socket, 2).await, first, "as it opens");
+
+    battery.send_replace(Some(Battery {
+        percent: 41,
+        ..DISCHARGING
+    }));
+    let lower = piece_of(&mut socket, 2).await;
+    assert_eq!(lower["battery"]["percent"], 41, "{lower}");
+
+    // Read again, the same words: nothing said.
+    battery.send_modify(|_| {});
+    no_frame(&mut socket).await;
+
+    // A Turn runs: the machine is held awake, and says why.
+    let turn = working.hold();
+    let working_now = piece_of(&mut socket, 2).await;
+    assert_eq!(working_now["awake"], "working", "{working_now}");
+    assert_eq!(working_now["battery"], lower["battery"]);
+    // It ends: held still, for the tail after it.
+    drop(turn);
+    no_frame(&mut socket).await;
+    assert_eq!(*keeping.why().borrow(), Some(Why::Working));
+
+    // Plugged in, and charging, with no time known yet.
+    let charging = Battery {
+        charging: true,
+        on_power: true,
+        left: None,
+        ..DISCHARGING
+    };
+    battery.send_replace(Some(charging));
+    assert_eq!(
+        piece_of(&mut socket, 2).await,
+        json!({
+            "battery": { "percent": 42, "charging": true, "on_power": true },
+            "awake": "working",
+        })
+    );
+
+    // Another window hears it as it is.
+    let (mut later, _) = connect(address).await;
+    let stream = json!({ "type": "stream", "id": 1, "method": "machine.power" });
+    send(&mut later, stream).await;
+    assert_eq!(next(&mut later).await["ok"]["stream"], 1);
+    assert_eq!(piece(&mut later).await["battery"]["charging"], true);
+}
+
+#[tokio::test]
 async fn a_change_by_hand_is_heard_as_the_settings_set_is() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
@@ -289,6 +408,14 @@ async fn an_agent_hears_the_name_and_names_no_machine() {
             .unwrap();
         let heard = named.recv().await.unwrap();
         assert_eq!(heard, json!({ "name": "arc", "icon": "server" }));
+
+        // And the battery, as the name (ADR 0097).
+        let mut power = kernel
+            .stream(caller, "machine.power", None, Value::Null)
+            .await
+            .unwrap();
+        let heard = power.recv().await.unwrap();
+        assert_eq!(heard["battery"]["percent"], 42, "{heard}");
     }
     assert_eq!(machine_toml(root.path()), "");
 }

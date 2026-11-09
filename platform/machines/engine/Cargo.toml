@@ -1,6 +1,6 @@
 [package]
 name = "banda-machines"
-description = "The machines module: what this machine is called and drawn by, from its machine.toml over what Banda finds, in the engine; and its hold that keeps it awake while its Agents work."
+description = "The machines module: what this machine is called and drawn by, from its machine.toml over what Banda finds, in the engine; its hold that keeps it awake while its Agents work; and its battery, as other machines' windows hear it."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -26,8 +26,10 @@ ts-rs.workspace = true
 windows = { workspace = true, features = ["Devices_Power", "System_Power"] }
 
 # logind's locks and UPower, on the system bus, read so a lock comes
-# close-on-exec (src/awake/linux.rs).
+# close-on-exec (src/awake/linux.rs); and UPower's battery, and its
+# changes as a stream (src/power/linux.rs).
 [target.'cfg(target_os = "linux")'.dependencies]
+futures.workspace = true
 rustix = { workspace = true, features = ["net"] }
 zbus.workspace = true
 

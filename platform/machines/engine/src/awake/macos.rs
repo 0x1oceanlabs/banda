@@ -49,7 +49,7 @@ impl System for Assertions {
 
     async fn on_power(&mut self) -> bool {
         let said = crate::found::said("pmset", &["-g", "batt"]).await;
-        said.is_none_or(|said| crate::found::mac::on_power(&said))
+        said.is_none_or(|said| crate::power::mac::on_power(&said))
     }
 }
 

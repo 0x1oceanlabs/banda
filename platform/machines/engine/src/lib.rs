@@ -12,11 +12,15 @@
 //! The file also says when the machine stays awake, which the engine
 //! follows ([`Machine::awake`], [`awake::keep`], ADR 0097); `get` says it
 //! too, and whether the machine has a battery, for Settings → Machines.
+//! The kernel's `machine.power` stream says the battery and why the
+//! machine is awake now to other machines' windows, read only while one
+//! hears it ([`power::Meter`]).
 
 mod about;
 pub mod awake;
 mod file;
 mod found;
+pub mod power;
 
 use banda_kernel::{
     Call, Error, Kind, Module, ModuleProject, Named, Nothing, Refusal, Right, Scope,

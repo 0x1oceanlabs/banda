@@ -187,9 +187,13 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     // says; the system lets the hold go too, should the engine crash.
     let working = Working::new();
     let awake = banda_machines::awake::keep(working.count(), machine.awake());
+    // Its battery and why it is awake, for other machines' windows: read
+    // only while one hears `machine.power`.
+    let power = banda_machines::power::Meter::new(awake.why());
     let builder = Kernel::builder(&places.root, &places.data, owner)
         .machine(places.machine())
         .named(machine.named())
+        .power(move || power.stream())
         // Every Project's programs run on this host, as the Person's own
         // do (ADR 0084), a Harness's behind the fence where it holds (ADR
         // 0083).

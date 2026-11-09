@@ -42,7 +42,8 @@
 //!   `welcome` says and `machine.named` streams ([`KernelBuilder::named`],
 //!   ADR 0095).
 //! - [`Working`] counts the Turns that run on this host, which hold the
-//!   engine's machine awake (ADR 0097).
+//!   engine's machine awake (ADR 0097). Its battery, and why it is held
+//!   awake, `machine.power` streams ([`KernelBuilder::power`]).
 //! - [`api`] serves all of it over WebSocket.
 
 pub mod access;

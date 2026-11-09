@@ -14,7 +14,9 @@
 //! running Turns, `machine.toml` and the power source, and holds the
 //! machine as the rule says, through a [`System`]: the tests give it one
 //! of their own. A hold the system did not answer for in full, as when
-//! its bus went, is taken again in a while, the reason the same.
+//! its bus went, is taken again in a while, the reason the same. What the
+//! rule says now, [`Keeping::why`], `machine.power` says to other
+//! machines' windows (`power.rs`).
 
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -48,7 +50,9 @@ pub struct Awake {
 }
 
 /// Why the machine is held awake.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(export, export_to = "machines/", rename = "AwakeWhy")]
 pub enum Why {
     /// A Turn runs here, or one ended less than [`TAIL`] ago.
     Working,
@@ -115,11 +119,22 @@ pub(crate) struct Taken<H> {
 }
 
 /// The hold [`keep`] keeps: let go as it drops, as the engine stops.
-pub struct Keeping(tokio::task::JoinHandle<()>);
+pub struct Keeping {
+    following: tokio::task::JoinHandle<()>,
+    why: watch::Receiver<Option<Why>>,
+}
+
+impl Keeping {
+    /// Why the machine is held awake now, kept current; none while it may
+    /// idle-sleep, and once the hold went.
+    pub fn why(&self) -> watch::Receiver<Option<Why>> {
+        self.why.clone()
+    }
+}
 
 impl Drop for Keeping {
     fn drop(&mut self) {
-        self.0.abort();
+        self.following.abort();
     }
 }
 
@@ -132,7 +147,9 @@ pub fn keep(working: watch::Receiver<usize>, awake: watch::Receiver<Awake>) -> K
         power_every: POWER_EVERY,
         again_after: AGAIN_AFTER,
     };
-    Keeping(tokio::spawn(follow(this_system(), working, awake, times)))
+    let (told, why) = watch::channel(None);
+    let following = tokio::spawn(follow(this_system(), working, awake, times, told));
+    Keeping { following, why }
 }
 
 #[cfg(target_os = "linux")]
@@ -183,15 +200,16 @@ struct Times {
 
 /// Follows the count of running Turns, `awake` and, while `awake` says it
 /// matters, the power source, and holds the machine through `system` as
-/// the rule says. One hold at a time: one for another reason, or one
-/// taken again as the last was short, is taken before the last is let
-/// go, so the machine is never let go between. It ends, letting go, as
-/// either watch's sender goes.
+/// the rule says, and tells `told` why. One hold at a time: one for
+/// another reason, or one taken again as the last was short, is taken
+/// before the last is let go, so the machine is never let go between. It
+/// ends, letting go, as either watch's sender goes.
 async fn follow(
     mut system: impl System,
     mut working: watch::Receiver<usize>,
     mut awake: watch::Receiver<Awake>,
     times: Times,
+    told: watch::Sender<Option<Why>>,
 ) {
     let mut held = None;
     let mut ended = None;
@@ -218,6 +236,10 @@ async fn follow(
         let on_power = power.is_some_and(|(on, _)| on);
         let since_ended = ended.map(|ended| now.saturating_duration_since(ended));
         let wanted = why(said, count, since_ended, times.tail, on_power);
+        // Why the rule holds it, said before the system is asked: what it
+        // grants is not waited for, a refusal is the log's to say, once,
+        // and a short hold is taken again.
+        told.send_if_modified(|told| std::mem::replace(told, wanted) != wanted);
         held = settle(&mut system, held, wanted, times.again_after).await;
         // What to look again at, besides a change.
         let tail_ends = (ended.map(|ended| ended + times.tail))
@@ -227,14 +249,16 @@ async fn follow(
         tokio::select! {
             changed = working.changed() => match changed {
                 Ok(()) => moved = true,
-                Err(_) => return,
+                Err(_) => break,
             },
-            changed = awake.changed() => if changed.is_err() { return },
+            changed = awake.changed() => if changed.is_err() { break },
             () = until(tail_ends) => {}
             () = until(read_again) => {}
             () = until(take_again) => {}
         }
     }
+    drop(held);
+    told.send_replace(None);
 }
 
 /// A hold kept, and why: when it was short, it is taken again `again`.
@@ -417,6 +441,7 @@ mod tests {
         short: Arc<AtomicUsize>,
         asked: Asked,
         keeping: tokio::task::JoinHandle<()>,
+        why: watch::Receiver<Option<Why>>,
     }
 
     impl Test {
@@ -431,7 +456,8 @@ mod tests {
                 power: power_now,
                 short: Arc::clone(&short),
             };
-            let keeping = tokio::spawn(follow(system, working.count(), awake_now, times));
+            let (told, why) = watch::channel(None);
+            let keeping = tokio::spawn(follow(system, working.count(), awake_now, times, told));
             Test {
                 working,
                 awake,
@@ -439,7 +465,18 @@ mod tests {
                 short,
                 asked,
                 keeping,
+                why,
             }
+        }
+
+        /// Waits up to five seconds for the follower to say it is held
+        /// awake for `why`.
+        async fn until_why(&mut self, why: Option<Why>) {
+            let said = tokio::time::timeout(
+                Duration::from_secs(5),
+                self.why.wait_for(|said| *said == why),
+            );
+            assert!(said.await.is_ok_and(|said| said.is_ok()), "{why:?}");
         }
 
         /// Waits up to five seconds for the system to have been asked
@@ -577,5 +614,37 @@ mod tests {
         drop(working);
         keeping.await.unwrap();
         assert_eq!(asked.said().last().unwrap(), "let go: Agents work");
+    }
+
+    #[tokio::test]
+    async fn why_the_machine_is_held_is_said_as_the_rule_says_whatever_the_system_granted() {
+        let plugged = Awake {
+            while_working: true,
+            plugged_in: true,
+        };
+        let mut test = Test::new(plugged, SHORT);
+        test.until_why(Some(Why::PluggedIn)).await;
+        // The system does not answer for it in full: the rule still holds.
+        test.short.store(1, Ordering::Relaxed);
+        let turn = test.working.hold();
+        test.until_why(Some(Why::Working)).await;
+        drop(turn);
+        test.until_why(Some(Why::PluggedIn)).await;
+        test.power.send(false).unwrap();
+        test.until_why(None).await;
+        test.power.send(true).unwrap();
+        test.until_why(Some(Why::PluggedIn)).await;
+
+        // The engine stops: none, as the hold went.
+        let Test {
+            working,
+            keeping,
+            mut why,
+            ..
+        } = test;
+        drop(working);
+        keeping.await.unwrap();
+        assert_eq!(*why.borrow_and_update(), None);
+        assert!(why.changed().await.is_err(), "nothing more is said");
     }
 }
