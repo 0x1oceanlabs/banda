@@ -113,7 +113,8 @@ Another machine's window shows that battery while the machine is live,
 in its row in Settings → Machines and in the card its label opens in
 the sidebar, with why it is awake; away, it shows none. While Agents
 work there and it is on battery at 20% or less, the window warns once
-with a toast, and again only after it was on power.
+with a toast, and again only after it was on power: seen so, or back on
+battery over 25%, charged while it was out of sight.
 
 ## How it connects
 

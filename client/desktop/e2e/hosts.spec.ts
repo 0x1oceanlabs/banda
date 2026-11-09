@@ -285,9 +285,23 @@ const sidebarOf = (page: Page) =>
   page.getByRole("complementary", { name: "Sidebar" })
 
 /** Whether this machine has a battery of its own, as its engine finds it
- * on Linux: arc's engine runs here, so arc says this machine's. CI's
- * runners have none. */
+ * on Linux and macOS: arc's engine runs here, so arc says this machine's.
+ * CI's runners have none. */
 function batteryHere(): boolean {
+  if (process.platform === "darwin") {
+    let said: string
+    try {
+      said = execFileSync("pmset", ["-g", "batt"], {
+        encoding: "utf8",
+        timeout: 5000,
+      })
+    } catch {
+      return false
+    }
+    const line = said.split("\n").find((one) => one.includes("InternalBattery"))
+    return line !== undefined && !line.includes("present: false")
+  }
+  if (process.platform !== "linux") return false
   const supplies = "/sys/class/power_supply"
   const read = (path: string) => {
     try {

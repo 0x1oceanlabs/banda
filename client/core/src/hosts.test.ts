@@ -974,6 +974,12 @@ test("why a machine is awake: its Agents by this window's count, its switch, or 
     line: "Kept awake: for 10 minutes after its last Turn.",
     short: "For 10 minutes after its last Turn",
   })
+  // A window with none of its lists, as a popped-out one: no count, and
+  // no guess at the 10 minutes.
+  expect(awakeWords("working", undefined)).toEqual({
+    line: "Kept awake: for its Agents.",
+    short: "For its Agents",
+  })
   expect(awakeWords("plugged-in", 2)).toEqual({
     line: "Kept awake: plugged in, its switch on.",
     short: "While plugged in, its switch on",

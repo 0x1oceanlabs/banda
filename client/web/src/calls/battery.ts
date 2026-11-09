@@ -25,6 +25,12 @@ import { type Stores, StoresContext } from "./stores"
  * low. */
 export const LOW = 20
 
+/** The charge, in percent, over which a machine warned of, seen on
+ * battery again, was charged since, out of this window's sight, as while
+ * it slept on power: a new discharge. Over `LOW` by more than its reading
+ * wavers, so 20 and 21 in turn do not warn again. */
+export const CHARGED = LOW + 5
+
 /** How many Agents' Turns run in `lists`: those at work, and those that
  * wait on the Person's Question, as their machine stays awake for both
  * (ADR 0097, decision 1). */
@@ -39,11 +45,17 @@ export function turnsIn(lists: Lists): number {
 export const turnsOn = (stores: Stores, host: string): number =>
   turnsIn(stores.hosts.get(host)?.lists ?? {})
 
-/** `turnsOn`, drawn again as it changes: the "2 Agents work there" of
+/** `turnsOn`, while `stores` hold what host `host`'s Watches said; none
+ * where they hold nothing of it, as in a popped-out window, which keeps
+ * no lists, or before its Watches said. */
+export const turnsSaid = (stores: Stores, host: string): number | undefined =>
+  stores.hosts.has(host) ? turnsOn(stores, host) : undefined
+
+/** `turnsSaid`, drawn again as it changes: the "2 Agents work there" of
  * Settings and of the machine's hover. */
-export function useTurnsOn(host: string): number {
+export function useTurnsOn(host: string): number | undefined {
   const stores = useContext(StoresContext)
-  const select = useCallback(() => turnsOn(stores, host), [stores, host])
+  const select = useCallback(() => turnsSaid(stores, host), [stores, host])
   return useStore(stores.items, select)
 }
 
@@ -74,9 +86,10 @@ export function lowWords({ name, percent, working }: Low): {
  * Which machines to warn of now, from `hosts` as the window shows them
  * and how many Turns run on each (`turns`), after those `warned` already
  * this discharge: each on battery at `LOW` or under, with a Turn running,
- * not warned yet. One on power again may be warned again, and its warning
- * goes (`plugged`); one that says no battery now, as while it is away,
- * stays as it was, so it is not warned again before it was on power.
+ * not warned yet. One on power again, or on battery over `CHARGED`, may be
+ * warned again, and its warning goes (`plugged`); one that says no
+ * battery now, as while it is away, stays as it was, so it is not warned
+ * again before it was on power.
  */
 export function lowNow(
   warned: ReadonlySet<string>,
@@ -97,7 +110,8 @@ export function lowNow(
       continue
     }
     if (warned.has(host)) {
-      now.add(host)
+      if (battery.percent > CHARGED) plugged.push(host)
+      else now.add(host)
       continue
     }
     const working = battery.percent <= LOW ? turns(host) : 0

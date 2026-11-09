@@ -630,23 +630,29 @@ export const agentsWork = (working: number): string =>
  * decision 7): as Settings says it under its Battery line, "Kept awake:
  * 2 Agents work there.", and as its hover says it beside Awake, "While 2
  * Agents work there". Held for Agents with none running, it is the 10
- * minutes after its last Turn.
+ * minutes after its last Turn. A window that has none of its lists
+ * (`undefined`), as a popped-out one, says neither.
  */
 export function awakeWords(
   awake: AwakeWhy | null,
-  working: number
+  working: number | undefined
 ): { line: string; short: string } {
   switch (awake) {
     case "working":
-      return working > 0
+      return working === undefined
         ? {
-            line: `Kept awake: ${agentsWork(working)} there.`,
-            short: `While ${agentsWork(working)} there`,
+            line: "Kept awake: for its Agents.",
+            short: "For its Agents",
           }
-        : {
-            line: "Kept awake: for 10 minutes after its last Turn.",
-            short: "For 10 minutes after its last Turn",
-          }
+        : working > 0
+          ? {
+              line: `Kept awake: ${agentsWork(working)} there.`,
+              short: `While ${agentsWork(working)} there`,
+            }
+          : {
+              line: "Kept awake: for 10 minutes after its last Turn.",
+              short: "For 10 minutes after its last Turn",
+            }
     case "plugged-in":
       return {
         line: "Kept awake: plugged in, its switch on.",
