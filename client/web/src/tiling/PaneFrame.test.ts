@@ -127,3 +127,22 @@ test("a Pane on another host opens what goes to this machine's Project, or its N
   arc.open(thread(), "instead", "m0" as ProjectId)
   expect(open).toHaveBeenLastCalledWith("m0", thread(), "e1", "instead")
 })
+
+test("a Pane this machine took back in a clash lets the other host go as it updates, before its frame does", () => {
+  const { frame, update } = frameOf()
+  const here = handleOf(
+    frame,
+    "e2",
+    "mine" as ProjectId,
+    "agents.thread",
+    undefined,
+    paneOnOf()
+  )
+
+  // Its args still name arc until its frame's effect lets it go.
+  here.update({ thread: "t1", host: "arc" })
+  expect(update).toHaveBeenLastCalledWith("e2", {
+    kind: "agents.thread",
+    args: { thread: "t1" },
+  })
+})
