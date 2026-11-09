@@ -3,6 +3,10 @@ import type { Named } from "@banda/contract/machines"
 import { afterEach, expect, test, vi } from "vitest"
 import type { HostState } from "./device"
 import {
+  agentsWork,
+  awakeWords,
+  batteryWords,
+  cleanPower,
   heldWords,
   type HostsDevice,
   KeptHosts,
@@ -736,4 +740,246 @@ test("a host goes by the name this device remembers until its engine says one, a
   expect(later.seen("arc")).toEqual({ name: "Studio", icon: "server" })
   expect(namedIn(later.get(), "arc", later.seen)).toEqual(studio.named)
   engine.close()
+})
+
+/** What arc's engine says as a window opens: open, with no name. */
+const opened = {
+  type: "welcome",
+  engine: "0.1.0",
+  modules: [],
+  boot: 1,
+}
+
+/** m1pro on battery at 42%, kept awake by its Agents. */
+const discharging = {
+  battery: { percent: 42, charging: false, on_power: false, left: 122 },
+  awake: "working",
+}
+
+/** What `socket` asked for of `machine.power`. */
+const powerAsked = (socket: Socket) =>
+  socket.sent.filter((frame) => frame.method === "machine.power")
+
+test("a live host says its battery on its engine's machine.power; away it says none and is let go, and live again it is heard anew", async () => {
+  vi.useFakeTimers()
+  vi.stubGlobal("WebSocket", Socket)
+  Socket.opened = []
+  const { device, tell } = desktop()
+  const hosts = new KeptHosts(device, forgetting)
+  hosts.follow()
+  tell([live])
+  // Before its engine is made, nothing hears it.
+  expect(hosts.get()[0]!.power).toBeUndefined()
+  const engine = hosts.engine("arc")
+  await vi.advanceTimersByTimeAsync(0)
+  const socket = Socket.opened[0]!
+  socket.say(opened)
+  // A stream of the machine's, which names no Project.
+  const [stream] = powerAsked(socket)
+  expect(stream).toMatchObject({ type: "stream" })
+  expect(stream).not.toHaveProperty("project")
+  socket.say({ type: "piece", stream: stream!.id, data: discharging })
+  const told = hosts.get()[0]!
+  expect(told.power).toEqual(discharging)
+  // The same again draws nothing anew; what changes, does.
+  socket.say({ type: "piece", stream: stream!.id, data: discharging })
+  expect(hosts.get()[0]).toBe(told)
+  const charging = {
+    battery: { percent: 67, charging: true, on_power: true, left: 48 },
+    awake: null,
+  }
+  socket.say({ type: "piece", stream: stream!.id, data: charging })
+  expect(hosts.get()[0]!.power).toEqual(charging)
+  // A new state of the desktop's, live still, keeps it.
+  tell([{ ...live, build: "abc124" }])
+  expect(hosts.get()[0]!.power).toEqual(charging)
+  expect(powerAsked(socket)).toHaveLength(1)
+
+  // Away: the last heard is no longer true, and the stream is let go.
+  tell([away])
+  expect(hosts.get()[0]!.power).toBeUndefined()
+  expect(socket.sent.at(-1)).toMatchObject({
+    type: "unsubscribe",
+    subscription: stream!.id,
+  })
+  socket.say({ type: "piece", stream: stream!.id, data: discharging })
+  expect(hosts.get()[0]!.power).toBeUndefined()
+  // Through the tries after, too.
+  tell([connecting])
+  expect(hosts.get()[0]!.power).toBeUndefined()
+
+  // Live again: heard anew, once.
+  tell([live])
+  expect(powerAsked(socket)).toHaveLength(2)
+  tell([live])
+  expect(powerAsked(socket)).toHaveLength(2)
+  const again = powerAsked(socket)[1]!
+  socket.say({ type: "piece", stream: again.id, data: discharging })
+  expect(hosts.get()[0]!.power).toEqual(discharging)
+  // Taken out of hosts.toml, it is let go too.
+  tell([])
+  expect(socket.sent.at(-1)).toMatchObject({
+    type: "unsubscribe",
+    subscription: again.id,
+  })
+  engine.close()
+})
+
+test("an engine older than machine.power refuses it: no battery and nothing shown, and it is asked again only once its host is live again", async () => {
+  vi.useFakeTimers()
+  vi.stubGlobal("WebSocket", Socket)
+  Socket.opened = []
+  const { device, tell } = desktop()
+  const hosts = new KeptHosts(device, forgetting)
+  hosts.follow()
+  tell([live])
+  const engine = hosts.engine("arc")
+  await vi.advanceTimersByTimeAsync(0)
+  const first = Socket.opened[0]!
+  first.say(opened)
+  const [stream] = powerAsked(first)
+  const shown = hosts.get()[0]!
+  first.say({
+    type: "result",
+    id: stream!.id,
+    error: { code: "invalid", message: 'There is no method "machine.power".' },
+  })
+  expect(hosts.get()[0]).toBe(shown)
+  expect(shown.power).toBeUndefined()
+  // Its connection breaks and is back: not asked again.
+  first.close()
+  await vi.advanceTimersByTimeAsync(300)
+  const second = Socket.opened[1]!
+  second.say(opened)
+  expect(powerAsked(second)).toEqual([])
+  // Away and live again, as after an update there: asked once more.
+  tell([away])
+  tell([live])
+  expect(powerAsked(second)).toHaveLength(1)
+  engine.close()
+})
+
+test("a host's engine made anew after a goodbye has its battery heard on the new one", async () => {
+  vi.useFakeTimers()
+  vi.stubGlobal("WebSocket", Socket)
+  Socket.opened = []
+  const { device, tell } = desktop()
+  const hosts = new KeptHosts(device, forgetting)
+  hosts.follow()
+  tell([live])
+  const engine = hosts.engine("arc")
+  await vi.advanceTimersByTimeAsync(0)
+  Socket.opened[0]!.say(opened)
+  const [stream] = powerAsked(Socket.opened[0]!)
+  Socket.opened[0]!.say({
+    type: "piece",
+    stream: stream!.id,
+    data: discharging,
+  })
+  Socket.opened[0]!.say({
+    type: "goodbye",
+    reason: { code: "refused", message: "an older window" },
+  })
+  tell([away])
+  expect(hosts.get()[0]!.power).toBeUndefined()
+  tell([live])
+  const anew = hosts.engine("arc")
+  expect(anew).not.toBe(engine)
+  await vi.advanceTimersByTimeAsync(0)
+  const socket = Socket.opened.at(-1)!
+  socket.say(opened)
+  expect(powerAsked(socket)).toHaveLength(1)
+  anew.close()
+})
+
+test("what another machine says of its power is taken only as the contract says it", () => {
+  expect(cleanPower(discharging)).toEqual(discharging)
+  // No battery, as a desktop's: none, and its why.
+  expect(cleanPower({ awake: "plugged-in" })).toEqual({ awake: "plugged-in" })
+  // A time not known yet is left out.
+  expect(
+    cleanPower({
+      battery: { percent: 42, charging: false, on_power: false },
+      awake: null,
+    })
+  ).toEqual({
+    battery: { percent: 42, charging: false, on_power: false },
+    awake: null,
+  })
+  // Words that are not one: no battery, no why.
+  for (const said of [
+    null,
+    "42%",
+    { battery: { percent: 142, charging: false, on_power: false } },
+    { battery: { percent: 4.2, charging: false, on_power: false } },
+    { battery: { percent: 42, charging: "no", on_power: false } },
+    { battery: { percent: 42, charging: false } },
+    { awake: "always" },
+  ])
+    expect(cleanPower(said)).toEqual({ awake: null })
+  // A time that is not one is left out, and the rest stays.
+  expect(
+    cleanPower({
+      battery: { percent: 9, charging: false, on_power: false, left: -1 },
+      awake: "working",
+      more: "<b>",
+    })
+  ).toEqual({
+    battery: { percent: 9, charging: false, on_power: false },
+    awake: "working",
+  })
+})
+
+test("a battery says its charge, its state and its time, as decision 7 says them; a time not known yet is left out", () => {
+  const battery = (more: object) => ({
+    percent: 42,
+    charging: false,
+    on_power: false,
+    ...more,
+  })
+  expect(batteryWords(battery({ left: 122 }))).toBe(
+    "42% · on battery · 2:02 left"
+  )
+  expect(batteryWords(battery({ left: 21, percent: 12 }))).toBe(
+    "12% · on battery · 0:21 left"
+  )
+  expect(
+    batteryWords(
+      battery({ percent: 67, charging: true, on_power: true, left: 48 })
+    )
+  ).toBe("67% · charging · 0:48 to full")
+  // Held at 80%, as Optimized Battery Charging holds a Mac.
+  expect(batteryWords(battery({ percent: 80, on_power: true }))).toBe(
+    "80% · on power"
+  )
+  expect(batteryWords(battery({ percent: 80, on_power: true, left: 30 }))).toBe(
+    "80% · on power"
+  )
+  expect(batteryWords(battery({}))).toBe("42% · on battery")
+  expect(batteryWords(battery({ charging: true, on_power: true }))).toBe(
+    "42% · charging"
+  )
+})
+
+test("why a machine is awake: its Agents by this window's count, its switch, or nothing", () => {
+  expect(agentsWork(1)).toBe("1 Agent works")
+  expect(agentsWork(2)).toBe("2 Agents work")
+  expect(awakeWords("working", 2)).toEqual({
+    line: "Kept awake: 2 Agents work there.",
+    short: "While 2 Agents work there",
+  })
+  expect(awakeWords("working", 1).line).toBe("Kept awake: 1 Agent works there.")
+  // Held with none running: the 10 minutes after the last.
+  expect(awakeWords("working", 0)).toEqual({
+    line: "Kept awake: for 10 minutes after its last Turn.",
+    short: "For 10 minutes after its last Turn",
+  })
+  expect(awakeWords("plugged-in", 2)).toEqual({
+    line: "Kept awake: plugged in, its switch on.",
+    short: "While plugged in, its switch on",
+  })
+  expect(awakeWords(null, 2)).toEqual({
+    line: "Sleeps by itself when idle.",
+    short: "Sleeps by itself when idle",
+  })
 })

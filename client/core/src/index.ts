@@ -16,7 +16,11 @@ export {
 } from "./device"
 export type { Here, HereStore } from "./here"
 export {
+  agentsWork,
+  awakeWords,
   awayFor,
+  batteryWords,
+  cleanPower,
   emptyIn,
   heldWords,
   holds,
@@ -29,6 +33,7 @@ export {
   machinesOf,
   namedIn,
   type Names,
+  onBattery,
   otherBuild,
   type Ours,
   ownItem,
