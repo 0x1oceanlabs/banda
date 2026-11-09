@@ -2,16 +2,22 @@
  * Settings → Machines' own rules and words (ADR 0095): the ten icons in
  * the picker's order, how Add numbers a name another machine shown has
  * and moves a server's icon on (decision 3), what a machine's state, its
- * build and a Test say, when a machine stays awake and what its lid does
- * (ADR 0097), and what the Person's acts show while several run. Its
- * state's words are Settings' own small list; the sidebar's label keeps
- * its own (`HostWords`). Pure, so plain tests cover it.
+ * build and a Test say, when a machine stays awake, why another is awake
+ * now and what its lid does (ADR 0097), and what the Person's acts show
+ * while several run. Its state's words are Settings' own small list; the
+ * sidebar's label keeps its own (`HostWords`). Pure, so plain tests cover
+ * it.
  */
-import type { Awake, MachineIcon, Named } from "@banda/contract/machines"
+import type { Awake, MachineIcon, Named, Power } from "@banda/contract/machines"
 import type { Setting } from "@banda/contract/settings"
 import { cleanNamed, cleanText } from "@banda/ui/hooks/use-status"
 import { problem } from "@banda/ui/lib/words"
-import { type HostState, type HostTest, otherBuild } from "@banda/core"
+import {
+  awakeWords,
+  type HostState,
+  type HostTest,
+  otherBuild,
+} from "@banda/core"
 import { ELSEWHERE } from "../boot"
 
 /** The ten icons, in the picker's order (decision 1). */
@@ -392,6 +398,26 @@ export function pluggedInThere(
         ? " A closed lid still sleeps it."
         : " A closed lid does what its own settings say."
   return { on: said.plugged_in, can: true, about: `${set}${lid}` }
+}
+
+/**
+ * The line of another machine's open row that says why it is awake now
+ * (ADR 0097, decision 7), by what it says on `machine.power` (`power`)
+ * and how many of its Agents' Turns run in this window's lists
+ * (`working`), as its hover says it beside Awake: under its Battery,
+ * beside the battery in full, where it has one; else on its own, as
+ * Awake, as a desktop's or a server's. None before its engine says it,
+ * from an engine older than it, or while it is away.
+ */
+export function powerRow(
+  power: Power | undefined,
+  working: number | undefined
+): { key: "battery" | "awake"; title: string; about: string } | undefined {
+  if (!power) return undefined
+  const about = awakeWords(power.awake, working).line
+  return power.battery
+    ? { key: "battery", title: "Battery", about }
+    : { key: "awake", title: "Awake", about }
 }
 
 /** One of the Person's acts while it runs, with what it is doing in
