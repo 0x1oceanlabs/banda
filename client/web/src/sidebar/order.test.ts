@@ -1,11 +1,15 @@
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { DEFAULT_SIDEBAR } from "@banda/contract/sidebar"
+import { HostsContext, KeptHosts, keyNamed } from "@banda/core/react"
 import type { MarkState } from "@banda/ui/components/banda-mark"
 import { callsOf, type Listed, type Lists } from "@banda/ui/pane"
+import { createElement } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "vitest"
 import { nextCall } from "../calls/sight"
+import type { Elsewhere } from "./arrange"
 import { rowKey } from "./hold"
-import { byOrder, keysOf, order } from "./order"
+import { byOrder, keysOf, order, useElsewhere, useOrderNow } from "./order"
 import type { Settings } from "./settings"
 import { inOrder, tally } from "./tally"
 
@@ -49,16 +53,17 @@ function counted(lists: Lists, keys: readonly string[]): string[] {
   )
 }
 
+const byProject: Settings = {
+  ...DEFAULT_SIDEBAR,
+  group: { ...DEFAULT_SIDEBAR.group, by: "project", bottom: [] },
+}
+
 test("the sidebar list draws the order the counts list and Alt+U go by, whatever it folds (ADR 0087, decision 8)", () => {
   const lists = {
     ["a" as ProjectId]: [one("ask", "asking", 3), one("old", "done", 1)],
     ["b" as ProjectId]: [one("broke", "failed", 6), one("run", "running", 7)],
   }
   const projects = [project("a"), project("b")]
-  const byProject: Settings = {
-    ...DEFAULT_SIDEBAR,
-    group: { ...DEFAULT_SIDEBAR.group, by: "project", bottom: [] },
-  }
   for (const settings of [DEFAULT_SIDEBAR, byProject]) {
     const keys = keysOf(order(lists, projects, marks, { settings }))
     // The sidebar list, a section folded: the same rows in the same order.
@@ -75,29 +80,65 @@ test("the sidebar list draws the order the counts list and Alt+U go by, whatever
   }
 })
 
-test("another machine's Threads stand among this one's in the sidebar list, and after them in the counts list and for Alt+U", () => {
-  const away = project("far")
-  const lists = {
-    ["a" as ProjectId]: [one("ask", "asking", 3), one("old", "done", 1)],
-    ["far" as ProjectId]: [one("there", "asking", 5)],
+/** This machine's "a", and "far" on another machine, each with one that
+ * asks, "far"'s the newest. */
+const twoMachines = {
+  ["a" as ProjectId]: [one("ask", "asking", 3), one("old", "done", 1)],
+  ["far" as ProjectId]: [one("there", "asking", 5)],
+}
+
+test("another machine's Threads stand in one place in the sidebar list, the counts list and for Alt+U (ADR 0079, decision 4; #999)", () => {
+  const elsewhere = [{ name: "devbox", projects: [project("far")] }]
+  // Grouped by state, the newest that waits first, wherever it is;
+  // grouped by Project, below this machine's, as its label stands.
+  const placed = [
+    [DEFAULT_SIDEBAR, ["far:there", "a:ask", "a:old"]],
+    [byProject, ["a:ask", "a:old", "far:there"]],
+  ] as const
+  for (const [settings, sidebar] of placed) {
+    const keys = keysOf(
+      order(twoMachines, [project("a")], marks, { settings, elsewhere })
+    )
+    expect(keys).toEqual(sidebar)
+    expect(counted(twoMachines, keys)).toEqual(sidebar)
+    expect(walk(twoMachines, keys)).toEqual(sidebar)
   }
-  const projects = [project("a")]
-  // The sidebar list, grouped by state: the newest that waits first,
-  // wherever it is.
-  const sidebar = keysOf(
-    order(lists, projects, marks, {
-      settings: DEFAULT_SIDEBAR,
-      elsewhere: [{ name: "devbox", projects: [away] }],
-    })
+})
+
+test("the counts and Alt+U take the other machines from the Window's hosts as the sidebar list does, Alt+U as they stand on the key", () => {
+  const kept = new KeptHosts(
+    {
+      follow: () => undefined,
+      engine: () => Promise.reject(new Error("No engine here.")),
+      start: () => undefined,
+    },
+    { seen: keyNamed, follow: () => () => undefined }
   )
-  expect(sidebar).toEqual(["far:there", "a:ask", "a:old"])
-  // The counts and Alt+U hand no other machine: it comes last there.
-  const keys = keysOf(
-    order(lists, projects, marks, { settings: DEFAULT_SIDEBAR })
+  // devbox is live, of this window's build; old is stopped.
+  const build = { build: "abc", version: null }
+  kept.take([
+    { name: "devbox", ssh: "devbox", state: "live", ...build, own: build },
+    { name: "old", ssh: "old", state: "stopped" },
+  ])
+  let drawn: readonly Elsewhere[] = []
+  let orderNow: ReturnType<typeof useOrderNow> | undefined
+  function Reads() {
+    drawn = useElsewhere()
+    orderNow = useOrderNow()
+    return null
+  }
+  renderToStaticMarkup(
+    createElement(HostsContext.Provider, { value: kept }, createElement(Reads))
   )
-  expect(keys).toEqual(["a:ask", "a:old"])
-  expect(counted(lists, keys)).toEqual(["a:ask", "a:old", "far:there"])
-  expect(walk(lists, keys)).toEqual(["a:ask", "a:old", "far:there"])
+  // A machine stopped holds no rows: only devbox is placed.
+  expect(drawn.map((host) => host.name)).toEqual(["devbox"])
+  // devbox lists "far" after the drawing: the key finds it, newest first.
+  kept.projects("devbox", [project("far")])
+  expect(keysOf(orderNow!(twoMachines, [project("a")], marks))).toEqual([
+    "far:there",
+    "a:ask",
+    "a:old",
+  ])
 })
 
 test("things of one place keep their tie, and their order when it ties too", () => {

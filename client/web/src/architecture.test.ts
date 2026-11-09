@@ -960,8 +960,11 @@ function valuesTaken(file: string, module: string): string[] {
  * What calls has one order, the Person's arrangement of the sidebar (ADR
  * 0087, decision 8; the plan's §6.3): the sidebar list, the bar's counts
  * list and Alt+U each take it from `order`, and only `order` works the
- * arrangement out. The counts and Alt+U sort what they show by its keys
- * in `byOrder`: the counts' files sort nothing by themselves, nor does a
+ * arrangement out. Each places another machine's Threads alike (ADR 0079,
+ * decision 4; #999): a file that takes `order` takes the other machines
+ * from `useElsewhere` too, and Alt+U takes them on the key, through
+ * `useOrderNow`. The counts and Alt+U sort what they show by its keys in
+ * `byOrder`: the counts' files sort nothing by themselves, nor does a
  * file that reads a place in it, as Alt+U's start does.
  */
 test("the sidebar list, the counts and Alt+U go by one order", () => {
@@ -973,15 +976,30 @@ test("the sidebar list, the counts and Alt+U go by one order", () => {
     )
     .map((file) => relative(app, file))
   expect(arranging).toEqual(["web/src/sidebar/order.ts"])
-  for (const file of [
-    "web/src/sidebar/Sidebar.tsx",
-    "web/src/sidebar/Counts.tsx",
-    "web/src/window/Shell.tsx",
+  const ordering = files
+    .map((file) => ({
+      file: relative(app, file),
+      taken: valuesTaken(file, join(sidebar, "order")),
+    }))
+    .filter(
+      ({ taken }) => taken.includes("order") || taken.includes("useOrderNow")
+    )
+  expect(ordering).toEqual([
+    {
+      file: "web/src/sidebar/Counts.tsx",
+      taken: expect.arrayContaining(["order", "useElsewhere"]),
+    },
+    {
+      file: "web/src/sidebar/Sidebar.tsx",
+      taken: expect.arrayContaining(["order", "useElsewhere"]),
+    },
+    {
+      file: "web/src/window/Shell.tsx",
+      taken: expect.arrayContaining(["useOrderNow"]),
+    },
   ])
-    expect(
-      valuesTaken(join(app, file), join(sidebar, "order")),
-      file
-    ).toContain("order")
+  for (const { file, taken } of ordering)
+    if (taken.includes("order")) expect(taken, file).toContain("useElsewhere")
   for (const file of ["web/src/sidebar/tally.ts", "web/src/calls/sight.ts"])
     expect(readFileSync(join(app, file), "utf8"), file).toMatch(/\bbyOrder\(/)
   const placing = files.filter((file) =>
