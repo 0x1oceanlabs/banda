@@ -1,15 +1,17 @@
-import { AGENTS_FILE, DEFAULT_AGENTS } from "@banda/contract/agents"
+import { AGENTS_FILE, DEFAULT_AGENTS, type Flow } from "@banda/contract/agents"
 import type { Look } from "@banda/contract/look"
 import { takeLook } from "@banda/ui/lib/look"
 import type { Args } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
 import {
+  type Column,
   entries,
   focused,
   fresh,
   open,
   start,
+  type Workspace,
   type Workspaces,
 } from "../tiling/model"
 import {
@@ -17,6 +19,8 @@ import {
   closingShown,
   opening,
   picking,
+  placeFor,
+  type Placing,
   pickOf,
   runAction,
   type Shell,
@@ -106,8 +110,13 @@ test("a pick goes to the Pane that shows its thing, on any workspace, else opens
   state = open(state, "project-a", hid, right)
   state = open(state, "project-b", thread("t3"), right)
   const [first, second] = entries(state)
+  const placing = (flow: Flow, scratch = false): Placing => ({
+    flow,
+    scratch: () => scratch,
+  })
+  const row = placing("row")
   const focus = (project: string, pane: PaneState) =>
-    focused(picking(state, project, pane) as Workspaces)?.id
+    focused(picking(state, project, pane, row) as Workspaces)?.id
 
   expect(focus("project-a", thread("t1"))).toBe(first!.id)
   // The thing it shows, whatever else its args say: no second Pane.
@@ -115,7 +124,7 @@ test("a pick goes to the Pane that shows its thing, on any workspace, else opens
   // Shown in another Project only: it opens, where its kind's home is,
   // with the args it was picked with.
   const t3 = thread("t3")
-  expect(picking(state, "project-a", t3)).toMatchObject({
+  expect(picking(state, "project-a", t3, row)).toMatchObject({
     command: {
       method: "workspaces.open",
       params: { project: "project-a", kind: "agents.thread", args: t3.args },
@@ -123,16 +132,18 @@ test("a pick goes to the Pane that shows its thing, on any workspace, else opens
   })
   // Where the Flow says: a new column right of the Pane in front in Free,
   // the first on an empty workspace; last on its Project's workspace in
-  // Row, the Flow there is before a look comes.
-  for (const [flow, place] of [
-    ["free", { to: "column", index: 0 }],
-    ["row", { to: "project", project: "project-a" }],
+  // Row, the Flow there is before a look comes; of no Project, on the top
+  // free workspace (ADR 0102, decision 1).
+  for (const [flow, scratch, place] of [
+    ["free", false, { to: "column", index: 0 }],
+    ["row", false, { to: "project", project: "project-a" }],
+    ["row", true, { to: "free" }],
   ] as const) {
     const files = { [AGENTS_FILE.name]: { ...DEFAULT_AGENTS, flow } }
     takeLook({ files } as unknown as Look)
-    expect(picking(start(), "project-a", t3)).toMatchObject({
-      command: { params: { place } },
-    })
+    expect(
+      picking(start(), "project-a", t3, placing(flow, scratch))
+    ).toMatchObject({ command: { params: { place } } })
   }
   // A kind that names no thing: the Pane that is the same one, as its
   // kind names it.
@@ -144,8 +155,60 @@ test("a pick goes to the Pane that shows its thing, on any workspace, else opens
     right
   )
   const shown = entries(used).find((entry) => entry.pane.kind === usage.kind)
-  expect(focused(picking(used, "project-a", usage) as Workspaces)?.id).toBe(
-    shown!.id
+  expect(
+    focused(picking(used, "project-a", usage, row) as Workspaces)?.id
+  ).toBe(shown!.id)
+})
+
+test("a Pane the Person opens goes where the Flow says (ADR 0102, decision 3)", () => {
+  const entry = (id: string, project: string, kind = "terminal.terminal") => ({
+    id,
+    project,
+    pane: { kind, args: {} },
+  })
+  const column = (id: string, project: string, group?: string): Column => ({
+    id,
+    entries: [entry(`${id}-e`, project)],
+    active: 0,
+    ...(group !== undefined && { group }),
+  })
+  const on = (workspace: Partial<Workspace>): Workspaces => ({
+    list: [
+      { id: "w", columns: [], focus: 0, ...workspace },
+      { id: "bottom", columns: [], focus: 0 },
+    ],
+    current: 0,
+  })
+  const terminal = { kind: "terminal.terminal", args: {} }
+  const where = (state: Workspaces, flow: Flow = "row", scratch = false) =>
+    placeFor(state, "a", terminal, { flow, scratch: () => scratch })
+  const mine = on({ project: "a", columns: [column("c", "a")] })
+  const grouped = on({ project: "a", columns: [column("c", "a", "g")] })
+  const theirs = on({ project: "b", columns: [column("c", "b")] })
+  const free = on({ columns: [column("c", "b")] })
+  // Free: right of the Pane in front, wherever it is.
+  expect(where(theirs, "free")).toBe("right")
+  // Its Project's workspace: right of the Pane in front; in a Group of
+  // its Project, into it.
+  expect(where(mine)).toBe("right")
+  expect(where(grouped)).toBe("group")
+  // Another Project's workspace or a Group of another: its own workspace.
+  expect(where(theirs)).toBe("project")
+  expect(where(on({ project: "b", columns: [column("c", "b", "g")] }))).toBe(
+    "project"
+  )
+  // An empty workspace: its own one too.
+  expect(where(on({}))).toBe("project")
+  // A free workspace keeps it, right of the Pane in front, as one of no
+  // Project does anywhere.
+  expect(where(free)).toBe("right")
+  expect(where(theirs, "solo", true)).toBe("right")
+  // A Thread: its Project's workspace, or of no Project the top free one.
+  const thread = { kind: "agents.thread", args: { thread: "t" } }
+  const row = { flow: "row", scratch: () => false } as const
+  expect(placeFor(free, "a", thread, row)).toBe("project")
+  expect(placeFor(free, "a", thread, { ...row, scratch: () => true })).toBe(
+    "free"
   )
 })
 

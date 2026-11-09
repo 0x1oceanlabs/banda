@@ -33,6 +33,9 @@ import {
 import { keepView, loadView, moveOver } from "./store"
 import { useArranged } from "./useArranged"
 
+/** No Project is known to have no Threads. */
+const NONE: readonly ProjectId[] = []
+
 /** A change the engine refused is logged: the window draws what it says.
  * One whose answer was lost may have run: its fact draws it, if it did. */
 function refused(error: unknown): void {
@@ -69,6 +72,7 @@ export function useTiling({
   home,
   solo = false,
   row,
+  gone = NONE,
 }: {
   engine: Engine
   machine: ProjectId | undefined
@@ -77,6 +81,9 @@ export function useTiling({
   solo?: boolean
   /** In solo, the workspace `Alt+M` shows as the row for a while. */
   row?: string
+  /** The Projects known to have no Threads, whose emptied workspace goes;
+   * every other Project's stays (ADR 0102, decision 2). */
+  gone?: readonly ProjectId[]
 }) {
   // The arrangement is the engine's; the view, the window's (ADR 0025).
   const live = useArranged(engine)
@@ -171,12 +178,12 @@ export function useTiling({
   // before it.
   const tidying = useRef("")
   useEffect(() => {
-    const command = ready ? tidied(workspaces) : undefined
+    const command = ready ? tidied(workspaces, gone) : undefined
     const key = command ? JSON.stringify([command, workspaces.list.length]) : ""
     if (key === tidying.current) return
     tidying.current = key
     if (command) sent({ command, focus: false })
-  }, [workspaces, ready, sent])
+  }, [workspaces, ready, sent, gone])
 
   // A change, worked out from what is drawn now and drawn at once; it
   // gives the Pane it focuses. One the engine refuses is drawn no more

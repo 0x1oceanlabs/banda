@@ -276,8 +276,11 @@ function dispatch(
       break
     }
     case "workspaces.tidy": {
-      const { keep } = read((f) => ({ keep: optional(f.keep, id) }))
-      tidy(list, keep)
+      const { keep, projects } = read((f) => ({
+        keep: optional(f.keep, id),
+        projects: optional(f.projects, (v) => listOf(v, id)) ?? [],
+      }))
+      tidy(list, keep, projects)
       break
     }
     case "workspaces.take": {
@@ -405,6 +408,8 @@ function placeOf(value: unknown): Place {
       return { to: "workspace", index: indexOf(f.index) }
     case "project":
       return { to: "project", project: id(f.project) }
+    case "free":
+      return { to: "free" }
     case "group":
       return { to: "group", pane: id(f.pane) }
   }
@@ -580,7 +585,7 @@ function open(list: Arrangement, opening: Opening, seed: Seed): string {
   } else {
     const where: Place = place ?? {
       to: "column",
-      workspace: list[showingProject(list, pane.project, () => true)].id,
+      workspace: list[showingProject(list, pane.project)].id,
       index: LAST,
     }
     put(list, newColumn(pane, width, seed.column), where, undefined, seed)
@@ -642,28 +647,17 @@ function put(
       return
     }
     case "project": {
-      const { project } = place
-      const owned = list.findIndex(
-        (w) => w.project === project && w.columns.length > 0
+      const owned = list.findIndex((w) => w.project === place.project)
+      const w = owned >= 0 ? owned : list.length - 1
+      list[w].project = place.project
+      putLast(list, w, column, seed)
+      return
+    }
+    case "free": {
+      const free = list.findIndex(
+        (w) => w.project === undefined && w.columns.length > 0
       )
-      const w =
-        owned >= 0
-          ? owned
-          : showingProject(
-              list,
-              project,
-              (other) =>
-                other.project === undefined || other.project === project
-            )
-      list[w].project = project
-      const workspace = list[w].id
-      put(
-        list,
-        column,
-        { to: "column", workspace, index: LAST },
-        undefined,
-        seed
-      )
+      putLast(list, free >= 0 ? free : list.length - 1, column, seed)
       return
     }
     case "group": {
@@ -682,17 +676,17 @@ function put(
   }
 }
 
-/** The top workspace that shows a Pane of `project` and is `free`, else
- * the empty one at the bottom. */
-function showingProject(
-  list: Arrangement,
-  project: string,
-  free: (workspace: Workspace) => boolean
-): number {
-  const w = list.findIndex(
-    (workspace) =>
-      free(workspace) &&
-      panesOf(workspace).some((pane) => pane.project === project)
+/** Puts a column last on workspace `w`. */
+function putLast(list: Arrangement, w: number, column: Column, seed: Seed) {
+  const workspace = list[w].id
+  put(list, column, { to: "column", workspace, index: LAST }, undefined, seed)
+}
+
+/** The top workspace that shows a Pane of `project`, else the empty one
+ * at the bottom. */
+function showingProject(list: Arrangement, project: string): number {
+  const w = list.findIndex((workspace) =>
+    panesOf(workspace).some((pane) => pane.project === project)
   )
   return w >= 0 ? w : list.length - 1
 }
@@ -945,10 +939,18 @@ function fill(list: Arrangement, column: string, filling: boolean): void {
 }
 
 /** Lets every empty workspace go but `keep` and the last. */
-function tidy(list: Arrangement, keep: string | undefined): void {
+function tidy(
+  list: Arrangement,
+  keep: string | undefined,
+  projects: readonly string[]
+): void {
   const last = list.at(-1)?.id
   const kept = list.filter(
-    (w) => w.columns.length > 0 || w.id === keep || w.id === last
+    (w) =>
+      w.columns.length > 0 ||
+      w.id === keep ||
+      w.id === last ||
+      (w.project !== undefined && projects.includes(w.project))
   )
   list.splice(0, list.length, ...kept)
 }
@@ -984,7 +986,9 @@ function take(list: Arrangement, taken: Arrangement, seed: Seed): void {
   }
   normalize(all, seed)
   // Of the empty workspaces, only the last stays.
-  tidy(all, undefined)
+  // A Project's workspace, emptied, keeps its place (ADR 0102, decision 2).
+  const projects = all.flatMap((w) => (w.project ? [w.project] : []))
+  tidy(all, undefined, projects)
   list.splice(0, list.length, ...all)
 }
 
@@ -1018,8 +1022,14 @@ function normalize(list: Arrangement, seed: Seed): void {
       delete workspace.filled
     }
   }
+  // A Project's, emptied, is never the empty one at the bottom (ADR 0102,
+  // decision 2).
   const last = list.at(-1)
-  if (last === undefined || last.columns.length > 0) {
+  if (
+    last === undefined ||
+    last.columns.length > 0 ||
+    last.project !== undefined
+  ) {
     list.push(blank(seed.bottom))
   }
 }

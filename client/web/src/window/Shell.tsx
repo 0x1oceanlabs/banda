@@ -17,7 +17,7 @@ import { Toaster, toast } from "@banda/ui/components/sonner"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openProjects } from "@banda/ui/lib/projects"
-import { useEngineOf, usePaneOn, useStore } from "@banda/core/react"
+import { sameEach, useEngineOf, usePaneOn, useStore } from "@banda/core/react"
 import type { PaneState } from "@banda/ui/pane"
 import { Bar } from "../bar/Bar"
 import { tomlOf } from "@banda/contract/settings"
@@ -32,6 +32,7 @@ import {
   listedIn,
   newStores,
   nowOf,
+  threadlessIn,
   workingHere,
 } from "../calls/stores"
 import { keysOf, useOrderNow } from "../sidebar/order"
@@ -60,7 +61,6 @@ import {
 import { modules as known } from "../modules"
 import {
   closedOf,
-  homeOf,
   identityOf,
   minOf,
   runs,
@@ -121,6 +121,9 @@ import {
   closingShown,
   opening,
   picking,
+  placed,
+  placeFor,
+  placingOf,
   runAction,
   settingsAt,
   updating,
@@ -171,7 +174,10 @@ export function Shell({
   const flow = useFile(AGENTS_FILE).flow
   const solo = flow === "solo"
   const [row, setRow] = useState<string>()
-  const tiling = useTiling({ engine, machine, modules, home, solo, row })
+  // A Project with no Threads lets its emptied workspace go.
+  const [stores] = useState(newStores)
+  const gone = useStore(stores.items, threadlessIn, sameEach)
+  const tiling = useTiling({ engine, machine, modules, home, solo, row, gone })
   const { ready, aside, workspaces, standing, drawnNow, changing } = tiling
   const { change, update } = tiling
   const inView = current(workspaces).id
@@ -260,13 +266,11 @@ export function Shell({
     before.current = standing
   }, [engineOf, standing])
 
-  // What the Apps list and what calls the Person, for the Marks, the
-  // rings and Alt+U, kept outside React: a list that changes draws again
-  // only what reads it (ADR 0088, decision 7). The notifications module
-  // tells of what calls (ADR 0056, decision 1). Laters are read by a
-  // clock that moves as the next one wakes (ADR 0074): a Thread that
-  // sleeps calls no one, and calls again as it wakes.
-  const [stores] = useState(newStores)
+  // What the Apps list and what calls the Person (`stores`), for the Marks,
+  // the rings and Alt+U, kept outside React: a list that changes draws
+  // again only what reads it (ADR 0088, decision 7). The notifications
+  // module tells of what calls (ADR 0056, decision 1). Laters are read by a
+  // clock that moves as the next one wakes (ADR 0074).
   useEffect(() => followCalls(stores), [stores])
   const laterClock = useStore(stores.calls, nowOf)
   const orderNow = useOrderNow()
@@ -282,6 +286,7 @@ export function Shell({
   useEffect(() => {
     projectsNow.current = projects
   }, [projects])
+  const placing = useMemo(() => placingOf(flow, projects), [flow, projects])
   // The Person archives a Thread, from its row's menu, the Banda menu or
   // Alt+S, or brings it back. Archived, it is put away: every Pane that
   // shows it closes, on any workspace (ADR 0008, decision 4; ADR 0069).
@@ -506,9 +511,9 @@ export function Shell({
         return (again || !update ? opening : updating)(w, into, pane, {
           ...how,
           ...(at?.from ? { from: at.from } : {}),
-          // What an Agent opens goes into its Thread's Group; an
-          // Agent's Thread, to its Project's workspace.
-          place: at?.from ? "group" : homeOf(pane),
+          // What an Agent opens goes into its Thread's Group; anything
+          // else, where the Flow says (ADR 0102, decision 3).
+          place: at?.from ? "group" : placeFor(w, into, pane, placing),
           ...(again ? { again } : { keep: true }),
         })
       })
@@ -536,11 +541,11 @@ export function Shell({
     // The one answer to `pane.pick` (ADR 0087, decision 7): the Tiling
     // goes to the Pane, or opens it, and it comes to the left once drawn.
     pick: (project, pane) =>
-      void changing((w) => picking(w, project, paneOn(project, pane))).then(
-        (entry) => {
-          if (entry) setReveal({ entry, how: "left" })
-        }
-      ),
+      void changing((w) =>
+        picking(w, project, paneOn(project, pane), placing)
+      ).then((entry) => {
+        if (entry) setReveal({ entry, how: "left" })
+      }),
     look: () => told,
     projects: () => open,
     toggleSidebar,
@@ -622,19 +627,12 @@ export function Shell({
   }, [running, api])
   // The keys run the actions, before any Pane hears them (keys.ts).
   useKeyRouter(parts, keyed, mod)
-  // A row of the menu opens its Pane, where a workspace shows it or in a
-  // new column; a Project gets a new Thread.
-  const openPane = useCallback(
-    (project: ProjectId, pane: PaneState) =>
-      change((w) => opening(w, project, pane, { place: "right" })),
-    [change]
-  )
-  // Pinned, the drawer's Thread is a column of the workspace on screen.
+  // Pinned, the drawer's Thread is a column where the Flow says.
   const pinDrawer = useCallback(() => {
     const entry = drawerNow.current
     closeDrawer()
-    if (entry) openPane(entry.project, entry.pane)
-  }, [closeDrawer, openPane])
+    if (entry) change((w) => placed(w, entry.project, entry.pane, placing))
+  }, [closeDrawer, change, placing])
   // A new Thread is the agents module's, as its key's (`thread.new`).
   const startThread = useCallback(
     (project: ProjectId, ask?: string) =>
@@ -704,9 +702,11 @@ export function Shell({
     (row: Exclude<Choice, Branch | Own>) => {
       switch (row.kind) {
         case "thread":
-          return row.beside
-            ? change((w) => bringing(w, row.project, row.listed.pane))
-            : openPane(row.project, row.listed.pane)
+          return change((w) =>
+            row.beside
+              ? bringing(w, row.project, row.listed.pane)
+              : picking(w, row.project, row.listed.pane, placing)
+          )
         case "action":
           return row.action.run(parts)
         case "ask":
@@ -725,7 +725,7 @@ export function Shell({
           return row.row.run(parts)
       }
     },
-    [change, openPane, newThreadIn, parts, here]
+    [change, placing, newThreadIn, parts, here]
   )
 
   const frame: Frame = useMemo(

@@ -3,7 +3,12 @@
  * 10): the modules' own and the window's (ADR 0022, decision 3). The keys,
  * the Banda menu, its key sheet and `keys.toml` read the same list.
  */
-import type { Engine, JsonValue, ProjectId } from "@banda/contract"
+import type {
+  Engine,
+  JsonValue,
+  ProjectId,
+  ProjectSummary,
+} from "@banda/contract"
 import { toast } from "@banda/ui/components/sonner"
 import { seenNamed } from "@banda/ui/hooks/use-status"
 import { updateProject } from "@banda/ui/lib/projects"
@@ -15,7 +20,7 @@ import {
   takes,
   type WindowApi,
 } from "@banda/ui/module"
-import { IN_PROGRAM, type PaneState, paneOf } from "@banda/ui/pane"
+import { IN_PROGRAM, type PaneState, paneOf, type Place } from "@banda/ui/pane"
 import { RESET_KEY } from "../actions/actions"
 import { chipOf } from "./attach"
 import { device } from "../boot"
@@ -69,6 +74,7 @@ import {
   focusEntry,
   focused,
   focusedColumn,
+  isFree,
   fresh,
   go,
   heighten,
@@ -269,7 +275,9 @@ export function opening(
         ? { to: "group", pane: from }
         : how.place === "project"
           ? { to: "project", project }
-          : undefined,
+          : how.place === "free"
+            ? { to: "free" }
+            : undefined,
     grouped: groupedOf(pane),
   })
   if (!plan) return next
@@ -325,17 +333,63 @@ export function bringing(
   return opened(workspaces, next, { grouped: groupedOf(pane) }) ?? next
 }
 
+/** How the Person works the Panes: the Flow, and whether a Project is a
+ * scratch one, of no Project (ADR 0046). */
+export type Placing = { flow: Flow; scratch: (project: ProjectId) => boolean }
+
+/** How the Person works the Panes in `flow`, the Projects as they are now. */
+export function placingOf(
+  flow: Flow,
+  projects: readonly ProjectSummary[]
+): Placing {
+  return {
+    flow,
+    scratch: (project) =>
+      projects.some((one) => one.id === project && one.scratch),
+  }
+}
+
+/**
+ * Where a Pane the Person opens goes, by the Flow and the Projects as they
+ * are now (`placingOf`; ADR 0102, decision 3).
+ * In the Flow `free`, right of the Pane in front. In the row and solo:
+ * - a Thread, as its kind's `home` says, last on its Project's workspace,
+ *   or, of no Project, on the top free workspace;
+ * - another Pane of no Project, right of the Pane in front;
+ * - a Pane opened from a Group of its Project, into that Group;
+ * - one opened on a free workspace, or on its Project's, right of the Pane
+ *   in front;
+ * - any other, last on its Project's workspace.
+ */
+export function placeFor(
+  workspaces: Workspaces,
+  project: ProjectId,
+  pane: PaneState,
+  { flow, scratch }: Placing
+): Place {
+  if (flow === "free") return "right"
+  const none = scratch(project)
+  if (homeOf(pane) === "project") return none ? "free" : "project"
+  if (none) return "right"
+  const { workspace, column } = focusedColumn(workspaces)
+  const from = column?.entries[column.active]
+  if (column?.group !== undefined && from?.project === project) return "group"
+  return isFree(workspace) || workspace.project === project
+    ? "right"
+    : "project"
+}
+
 /**
  * Goes to the Pane picked (`pane.pick`, ADR 0087, decision 7): to the one
  * a workspace shows, on any workspace, by the thing it shows (`shows`),
  * else by what makes it that Pane; else opens it where the Flow says
- * (`homeOf`): right of the Pane in front, or last on its Project's
- * workspace (ADR 0065, decision 8).
+ * (`placeFor`, ADR 0102, decision 3).
  */
 export function picking(
   workspaces: Workspaces,
   project: ProjectId,
-  pane: PaneState
+  pane: PaneState,
+  placing: Placing
 ): Step {
   const about = showsOf(pane)
   const entry =
@@ -344,7 +398,18 @@ export function picking(
       : showing(workspaces, { project, about }, showsOf)
   return entry
     ? focusEntry(workspaces, entry.id)
-    : opening(workspaces, project, pane, { place: homeOf(pane) })
+    : placed(workspaces, project, pane, placing)
+}
+
+/** Opens the Pane where the Flow says (`placeFor`). */
+export function placed(
+  workspaces: Workspaces,
+  project: ProjectId,
+  pane: PaneState,
+  placing: Placing
+): Step {
+  const place = placeFor(workspaces, project, pane, placing)
+  return opening(workspaces, project, pane, { place })
 }
 
 /** What `pane.pick` is asked: a Project, and the Pane to open in it, its

@@ -3,7 +3,8 @@
  *
  * - The workspaces sit one under another; there is always one empty
  *   workspace at the bottom, and an empty one in the middle goes away once
- *   the Person leaves it.
+ *   the Person leaves it, but a Project's, which the engine keeps while the
+ *   Project has Threads (ADR 0102, decision 2).
  * - A workspace is a Strip: columns side by side that scroll sideways, each
  *   holding Panes one above another.
  * - A Pane belongs to a Project; one workspace can mix Panes of any Projects.
@@ -237,6 +238,12 @@ export function groupEnds(workspace: Workspace, c: number): Ends {
   }
 }
 
+/** Whether `workspace` is a free one, in the row and solo: one no Project
+ * owns that holds a Pane (ADR 0102, decision 1). */
+export function isFree(workspace: Workspace): boolean {
+  return workspace.project === undefined && workspace.columns.length > 0
+}
+
 /** The focused column of the workspace on screen, and its place. */
 export function focusedColumn(state: Workspaces) {
   const workspace = current(state)
@@ -287,7 +294,13 @@ export function inBar(state: Workspaces): InBar[] {
   const last = state.list.length - 1
   return state.list.flatMap((workspace, index) => {
     const empty = workspace.columns.length === 0
-    if (empty && index !== state.current && index !== last) return []
+    if (
+      empty &&
+      !workspace.project &&
+      index !== state.current &&
+      index !== last
+    )
+      return []
     const bottom = index === last
     const project = bottom ? undefined : workspace.project
     return [
@@ -977,19 +990,26 @@ export function send(state: Workspaces, index: number): Workspaces {
 }
 
 /**
- * Keeps the rules of the list: empty workspaces go, except the current one
- * and the one at the bottom, which is always there and always empty.
+ * Keeps the rules of the list: empty workspaces go, except the current one,
+ * a Project's, which the engine lets go when the Project has no Threads
+ * (ADR 0102, decision 2), and the one at the bottom, which is always there
+ * and always empty.
  */
 export function normalize(state: Workspaces): Workspaces {
   const now = state.list[state.current]
   let list = state.list.filter(
-    (workspace) => workspace.columns.length > 0 || workspace === now
+    (workspace) =>
+      workspace.columns.length > 0 ||
+      workspace === now ||
+      workspace.project !== undefined
   )
   const last = list[list.length - 1]
-  if (!last || last.columns.length > 0) {
+  if (!last || last.columns.length > 0 || last.project !== undefined) {
     // The spare at the bottom stays the same one, so it keeps its place.
     const spare = state.list[state.list.length - 1]
-    list = [...list, spare && spare.columns.length === 0 ? spare : blank()]
+    const reused =
+      spare && spare.columns.length === 0 && spare.project === undefined
+    list = [...list, reused ? spare : blank()]
   }
   const at = list.indexOf(now)
   const next = { list, current: at >= 0 ? at : list.length - 1 }

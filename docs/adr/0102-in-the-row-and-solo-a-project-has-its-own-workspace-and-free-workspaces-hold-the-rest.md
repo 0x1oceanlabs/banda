@@ -71,6 +71,14 @@ day.
       workspace, as now.
    5. A Pane of no Project goes to the Sheet (decision 5).
 
+   _Built_ in step 1: a Pane opened on a free workspace stays there,
+   right of the Pane in front (decision 1), and one opened on its own
+   Project's workspace outside a Group goes right of the Pane in front
+   until step 2 gives it the Project's own Group. A Pane that joins a
+   Group from inside it goes last into the Deck right of the Pane it is
+   opened from, as what an Agent opens does. A Pane of no Project other
+   than a Thread opens right of the Pane in front until the Sheet comes.
+
 4. **The Project's own Group.**
    - It holds the Panes the Person opened for the Project and not for an
      Agent: a terminal, a dev server, Files, Git. It stands first on the
