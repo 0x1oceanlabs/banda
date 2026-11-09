@@ -102,8 +102,9 @@ function handOn(
 }
 
 /**
- * The keys run the actions, before any Pane hears them. A dialog keeps
- * its keys, as the Banda menu its New Thread key, but for the menu's own.
+ * The keys run the actions, before any Pane hears them. An open dialog
+ * keeps its keys, as the Banda menu its New Thread key, but for the
+ * menu's own.
  */
 export function useKeyRouter(
   parts: Parts,
@@ -130,9 +131,13 @@ export function useKeyRouter(
       // terminal's program's while no Thread has the focus.
       if (action.when && !action.when(parts)) return
       // A dialog that takes the window's keys, as the overview, has only
-      // the plain ones of its own.
+      // the plain ones of its own. A dialog on its way out, which keeps the
+      // focus while nothing else takes it, as the Banda menu with no Pane
+      // focused (#1065), leaves the window its keys again.
       const inDialog =
-        target?.closest("[role=dialog]:not([data-window-keys])") != null
+        target?.closest(
+          "[role=dialog]:not([data-window-keys]):not([data-closed])"
+        ) != null
       if (inDialog && !action.overDialogs) return
       // A terminal leaves alone a key that was taken.
       event.preventDefault()
