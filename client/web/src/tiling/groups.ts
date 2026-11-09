@@ -73,9 +73,9 @@ export function filling(state: Workspaces): Plan | undefined {
 }
 
 /** Solo (ADR 0079, decision 2): the Agent the focus is at, on a
- * Project's workspace, fills the screen with its Group: a Group that an
- * Item one of its Panes shows names as its owner (`owner`). A column in no
- * Group, or a Group no one owns, stays as it is. */
+ * Project's workspace, fills the screen with its Group, when one of its
+ * Panes shows an Item that names an owner (`owner`). A column in no Group,
+ * or a Group no one owns, stays as it is. */
 export function soloing(
   state: Workspaces,
   owner: (entry: Entry) => Owner | undefined

@@ -217,28 +217,31 @@ const TILING_BANDA_MARK = [
 ]
 
 test("the Tiling takes no more of Banda's mark than the list holds", () => {
-  const taking = sources(join(app, "web/src/tiling")).flatMap((file) =>
+  const files = sources(join(app, "web/src/tiling"))
+  const taking = files.flatMap((file) =>
     [
       ...readFileSync(file, "utf8").matchAll(
-        /\bimport\s+(type\s+)?\{([^}]*)\}\s*from\s*"@banda\/ui\/components\/banda-mark"/g
+        /\bimport\s+(?:type\s+)?\{([^}]*)\}\s*from\s*"@banda\/ui\/components\/banda-mark"/g
       ),
-    ].flatMap(([, all, names]) =>
+    ].flatMap(([, names]) =>
       names
         .split(",")
-        .filter((name) => name.trim())
-        .map((name) => ({
-          name: `${relative(app, file)}: ${name.replace(/^\s*type\s+/, "").trim()}`,
-          type: all !== undefined || /^\s*type\s/.test(name),
-        }))
+        .map((name) => name.replace(/^\s*type\s+/, "").trim())
+        .filter(Boolean)
+        .map((name) => `${relative(app, file)}: ${name}`)
     )
   )
-  expect(taking.map(({ name }) => name).sort()).toEqual(TILING_BANDA_MARK)
-  expect(
-    taking
-      .filter(({ type }) => !type)
-      .map(({ name }) => name)
-      .sort()
-  ).toEqual([
+  expect(taking.sort()).toEqual(TILING_BANDA_MARK)
+  // Its values as TypeScript takes them, so a whole-module import or a
+  // re-export counts too.
+  const values = files.flatMap((file) =>
+    (
+      valuesTaken(readFileSync(file, "utf8"), file)[
+        "@banda/ui/components/banda-mark"
+      ] ?? []
+    ).map((name) => `${relative(app, file)}: ${name}`)
+  )
+  expect(values.sort()).toEqual([
     "web/src/tiling/Tabs.tsx: BandaMark",
     "web/src/tiling/Tabs.tsx: MARK_WORDS",
   ])
@@ -274,16 +277,18 @@ test("the Tiling reads an Item's Mark no more than the list holds", () => {
   expect(asking).toEqual(["web/src/tiling/shows.ts"])
 })
 
-/** The identifiers `source`, the code of `file`, uses, as TypeScript reads
- * it: a comment or a string that names one is not a use. */
-function identifiersIn(source: string, file: string): Set<string> {
-  const found = new Set<string>()
-  const visit = (node: ts.Node): void => {
-    if (ts.isIdentifier(node)) found.add(node.text)
-    ts.forEachChild(node, visit)
-  }
-  visit(ts.createSourceFile(file, source, ts.ScriptTarget.Latest))
-  return found
+/** Whether `file`'s code has a node `is` holds for, as TypeScript reads
+ * it: a comment or a string that names one is not code. */
+function hasNode(file: string, is: (node: ts.Node) => boolean): boolean {
+  const visit = (node: ts.Node): boolean =>
+    is(node) || (ts.forEachChild(node, visit) ?? false)
+  return visit(
+    ts.createSourceFile(
+      file,
+      readFileSync(file, "utf8"),
+      ts.ScriptTarget.Latest
+    )
+  )
 }
 
 /**
@@ -310,48 +315,52 @@ test("the Tiling names what the Apps list no more than the list holds", () => {
     "useLists",
   ]
   const naming = sources(join(app, "web/src/tiling"))
-    .filter((file) => {
-      const used = identifiersIn(readFileSync(file, "utf8"), file)
-      return names.some((name) => used.has(name))
-    })
+    .filter((file) =>
+      hasNode(
+        file,
+        (node) => ts.isIdentifier(node) && names.includes(node.text)
+      )
+    )
     .map((file) => relative(app, file))
   expect(naming).toEqual(TILING_LISTED)
 })
 
 /**
- * The page's files that read the Agent an Item names (`.agent`), but for
- * tests: the fold that puts what a module says of an Agent's Thread on
- * that Thread's row (`attention.ts`); the counts, which name the Thread
- * the Pane in focus shows when it is an Agent's; and the Window's adapter
- * to the Tiling, where a Thread's Agent is its Group's owner. No Tiling
- * file, and not the Window's root: Solo asks the port for an owner. B7a
- * empties the list, as `item@1` names its owner. None joins it, and one
- * that goes leaves it.
+ * The page's files that read the Agent an Item names (`.agent`, `{ agent
+ * }`) or find an Item by it (`listedOf`), but for tests: the fold that
+ * puts what a module says of an Agent's Thread on that Thread's row
+ * (`attention.ts`); `besideOf`, which opens an Agent's Pane beside its
+ * Thread; the counts, which name the Thread the Pane in focus shows when
+ * it is an Agent's; and the Window's adapter to the Tiling, where a
+ * Thread's Agent is its Group's owner. No Tiling file, and not the
+ * Window's root: Solo asks the port for an owner. B7a empties the list,
+ * as `item@1` names its owner. None joins it, and one that goes leaves it.
  */
 const AGENT_READERS = [
   "web/src/bar/attention.ts",
+  "web/src/calls/sight.ts",
   "web/src/sidebar/Counts.tsx",
   "web/src/window/shows.ts",
 ]
 
 test("the page reads an Item's Agent no more than the list holds", () => {
+  const isAgent = (name: ts.Node | undefined) =>
+    name !== undefined && ts.isIdentifier(name) && name.text === "agent"
   const reading = sources(join(app, "web/src"), { tests: false })
-    .filter((file) => {
-      let reads = false
-      const visit = (node: ts.Node): void => {
-        if (ts.isPropertyAccessExpression(node) && node.name.text === "agent")
-          reads = true
-        ts.forEachChild(node, visit)
-      }
-      visit(
-        ts.createSourceFile(
-          file,
-          readFileSync(file, "utf8"),
-          ts.ScriptTarget.Latest
-        )
+    .filter((file) =>
+      hasNode(
+        file,
+        (node) =>
+          (ts.isPropertyAccessExpression(node) && isAgent(node.name)) ||
+          (ts.isObjectBindingPattern(node) &&
+            node.elements.some((one) =>
+              isAgent(one.propertyName ?? one.name)
+            )) ||
+          (ts.isCallExpression(node) &&
+            ts.isIdentifier(node.expression) &&
+            node.expression.text === "listedOf")
       )
-      return reads
-    })
+    )
     .map((file) => relative(app, file))
   expect(reading).toEqual(AGENT_READERS)
 })

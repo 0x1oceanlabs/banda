@@ -3815,38 +3815,44 @@ test("an Agent's Group, its plate and its bars in the map, takes its state, and 
   await groupShots(page, "failed")
 })
 
+/** Where the pictures of a Group go, when a Person asks for them. */
+const shots = process.env.BANDA_E2E_SHOTS
+
 /**
- * Pictures of the Group on screen, as drawn in `state`: its last plate,
- * around the Diff; its handle, with the plate's edge it sits on; and the
- * map. Set beside the same from another build, they show a change of the
- * code that draws them changed none of the pixels.
+ * Pictures of the Group on screen, as drawn in `state`, with
+ * BANDA_E2E_SHOTS set to a folder: its last plate, around the Diff; its
+ * handle, with the plate's edge it sits on; and the map. Set beside the
+ * same from another build, they show a change of the code that draws them
+ * changed none of the pixels.
  */
 async function groupShots(page: Page, state: string) {
+  if (!shots) return
   const plate = (await page
     .locator(`${ON_SCREEN} [data-group-plate]`)
     .last()
     .boundingBox())!
-  await stillShot(page, `group-${state}-plate`, plate)
+  await stillShot(page, shots, `group-${state}-plate`, plate)
   const handle = (await page.locator("[data-group-handle]").boundingBox())!
-  await stillShot(page, `group-${state}-handle`, {
+  await stillShot(page, shots, `group-${state}-handle`, {
     x: handle.x - 8,
     y: handle.y - 8,
     width: handle.width + 16,
     height: handle.height + 16,
   })
   const map = page.locator("[data-map]").first().locator("xpath=..")
-  await stillShot(page, `group-${state}-map`, (await map.boundingBox())!)
+  await stillShot(page, shots, `group-${state}-map`, (await map.boundingBox())!)
 }
 
 /**
- * A picture of the page within `clip`, kept in test-results as
- * `name`.png: taken again until two in a row are the same, as
- * `toHaveScreenshot` waits, since the compositor may draw a few pixels a
- * shade apart from one frame to the next. It never fails a test: it is
- * for a Person to set beside another.
+ * A picture of the page within `clip`, kept in `folder` as `name`.png:
+ * taken again until two in a row are the same, as `toHaveScreenshot`
+ * waits, since the compositor may draw a few pixels a shade apart from
+ * one frame to the next. It never fails a test: it is for a Person to set
+ * beside another.
  */
 async function stillShot(
   page: Page,
+  folder: string,
   name: string,
   clip: { x: number; y: number; width: number; height: number }
 ) {
@@ -3857,8 +3863,8 @@ async function stillShot(
     if (now.equals(was)) break
     was = now
   }
-  mkdirSync("test-results", { recursive: true })
-  writeFileSync(`test-results/${name}.png`, was)
+  mkdirSync(folder, { recursive: true })
+  writeFileSync(join(folder, `${name}.png`), was)
 }
 
 test("a Group's handle carries it, and a Pane dropped inside its end joins it", async () => {

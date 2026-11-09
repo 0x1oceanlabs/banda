@@ -14,12 +14,12 @@ import type { Entry } from "../tiling/model"
 import type { Owner, Shows } from "../tiling/shows"
 
 /** The Tiling's port to `stores`, the same for the Window's life, with
- * `shows` saying what a Pane shows (the registry's `showsOf`). */
+ * `showsOf` saying what a Pane shows (the registry's). */
 export function tilingShows(
   stores: Stores,
-  shows: (pane: PaneState) => string | null
+  showsOf: (pane: PaneState) => string | null
 ): Shows {
-  const listed = (entry: Entry) => listedIn(stores.items.get(), entry, shows)
+  const listed = (entry: Entry) => listedIn(stores.items.get(), entry, showsOf)
   // Each owner's Item, worked out again only as the lists change.
   let indexed: { lists: Lists; owners: ReadonlyMap<Owner, Listed> } | undefined
   const ownersNow = () => {
@@ -35,7 +35,7 @@ export function tilingShows(
       return item && { state: groupState(item.mark), name: item.title }
     },
     called: (entry) =>
-      stores.calls.get().list.find((call) => isShowing(entry, call, shows))
+      stores.calls.get().list.find((call) => isShowing(entry, call, showsOf))
         ?.chime,
     // The calls follow every change of the items, so it hears them alone.
     subscribe: stores.calls.subscribe,
