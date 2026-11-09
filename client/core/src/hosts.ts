@@ -505,7 +505,9 @@ export function machinesOf(ours: Ours, hosts: readonly Shown[]): Machine[] {
 
 /** An act refused at once (`KeptHosts.sessionOf`): the machine that owns
  * its Project, `host`, is one the Window does not reach now, or does not
- * know. It says so in the words its Panes' pill says (`reachWords`). */
+ * know. For one it does not reach now it says so in the words its Panes'
+ * pill says (`reachWords`), as "arc is away"; for one it does not know,
+ * as one taken out of hosts.toml, "This window does not reach arc". */
 export class Unreachable extends Error {
   readonly host: string
   constructor(host: string, words: string) {

@@ -124,7 +124,9 @@ export type WindowApi = {
    * as `args.host`: an item action's Item another host lists, or a
    * toast's answer to a Thread there. A host the Window does not reach
    * now refuses at once: it throws `Unreachable`, in the words its Panes'
-   * pill says, and nothing waits to run by itself once it is back.
+   * pill says ("arc is away"), and nothing waits to run by itself once it
+   * is back. A host the Window does not know, as one taken out of
+   * hosts.toml, refuses so too: "This window does not reach arc".
    */
   sessionOf: (project: ProjectId, pane?: Pick<PaneState, "args">) => Engine
   /** Where the Person looks for `thing` (ADR 0056, decision 1), as the
