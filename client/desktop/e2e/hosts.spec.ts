@@ -537,12 +537,25 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   // The link drops, and arc's engine ends with it: the Pane says so,
   // and its Thread stays as it was. Send waits and says why, Enter sends
   // nothing, and what is written stays. As arc is back, it reads it again
-  // and writes there.
+  // and writes there. The page's clock moves on by hand from here.
+  await page.clock.install()
   arc.down(true)
   arc.cut()
   const away = page.getByRole("status").filter({ hasText: "arc is away" })
   await expect(away).toBeVisible()
   await expect(thread.getByText("You said: hi")).toBeVisible()
+  // Its pill has arc's icon, and says for how long as arc's label does,
+  // by the same clock and rule: nothing under a minute, then minutes,
+  // after what is said as it changes.
+  const pill = page.locator("[data-machine-pill]").filter({ has: away })
+  await expect(pill.locator('[data-machine-icon="server"]')).toBeVisible()
+  await expect(pill).toHaveText("arc is away")
+  const label = arcOf(page)
+  await expect(label.getByText("away", { exact: true })).toBeVisible()
+  await page.clock.fastForward("02:00")
+  await expect(pill).toHaveText("arc is away · 2 min")
+  await expect(away).toHaveText("arc is away")
+  await expect(label.getByText("away · 2 min", { exact: true })).toBeVisible()
   await composer.fill("back again")
   const sending = thread.getByRole("button", { name: "Send", exact: true })
   await expect(sending).toBeDisabled()
@@ -578,6 +591,37 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   // a restart, it opens there again.
   await page.reload()
   await expect(thread.getByText("You said: back again")).toBeVisible()
+
+  // Stopped there, its pill says so, by the name and icon arc says it
+  // has, with Start: the Person's click on it starts Banda there by its
+  // key in hosts.toml, and the Thread writes there again.
+  const machine = join(arc.dir, "config/machine.toml")
+  writeFileSync(machine, 'name = "Studio"\nicon = "tower"\n')
+  const studio = sidebarOf(page).getByRole("group", {
+    name: "Studio",
+    exact: true,
+  })
+  await expect(studio.getByText("Bench window tests")).toBeVisible()
+  expect(
+    await page.evaluate(() =>
+      (globalThis as unknown as Paged).banda.hostStop("arc", false)
+    )
+  ).toBe("stopped")
+  const stopped = page
+    .locator("[data-machine-pill]")
+    .filter({ hasText: "Banda is stopped on Studio" })
+  await expect(stopped.locator('[data-machine-icon="tower"]')).toBeVisible()
+  await expect(stopped).toHaveText("Banda is stopped on Studio·Start")
+  await stopped.getByRole("button", { name: "Start" }).click()
+  await expect(stopped).toHaveCount(0, { timeout: 60_000 })
+  await expect(studio.getByText("Bench window tests")).toBeVisible()
+  writeFileSync(machine, 'name = "arc"\nicon = "server"\n')
+  await expect(arcOf(page).getByText("Bench window tests")).toBeVisible()
+  await composer.fill("after start")
+  // Send waits until arc's engine is connected again.
+  await expect(sending).toBeEnabled({ timeout: 60_000 })
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: after start")).toBeVisible()
   await thread.getByRole("textbox", { name: "Message to Fake AI" }).focus()
 
   // Any other Pane for arc's Project waits for a later step: none reads
