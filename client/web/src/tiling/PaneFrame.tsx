@@ -143,14 +143,14 @@ type Handle = Pick<
 
 /** The handle of the Pane of kind `kind` at `entry` in `project`, a
  * Project of another host's when `host` names one (ADR 0081): what it
- * opens, in any Project, and its own args keep that host, as it knows only
- * that host's Projects, unless what it opens names its own, as a new
- * Thread moved to another machine's Project does (ADR 0095, decision 7);
- * and it takes nothing this machine attaches, as that names this
- * machine's files. Which host what it opens is on, the Window's hosts
- * decide here, once, by their one rule (`paneOn`, `KeptHosts.paneOn`): in
- * a Project this machine has, which wins a clash, it is this machine's
- * from its first frame (#1004). */
+ * opens, and its own args, keep that host, as it knows only that host's
+ * Projects, unless what it opens names its own, as a new Thread moved to
+ * another machine's Project does (ADR 0095, decision 7), or is in a
+ * Project this machine has, as that wins a clash; and it takes nothing
+ * this machine attaches, as that names this machine's files. The
+ * Window's hosts decide that here, once, by their one rule (`paneOn`,
+ * `KeptHosts.paneOn`), so what it opens, or its args a clash took back,
+ * never says another host for a frame (#1004). */
 export function handleOf(
   frame: Frame,
   entry: string,
@@ -168,7 +168,8 @@ export function handleOf(
       const into = other ?? project
       frame.open(into, paneOn(into, there(pane)), entry, place)
     },
-    update: (args) => frame.update(entry, there({ kind, args })),
+    update: (args) =>
+      frame.update(entry, paneOn(project, there({ kind, args }))),
     close: () => frame.close(entry),
     label: (label) => sayLabel(entry, label),
     // Its composer, the same between draws, so the Pane says it once.
