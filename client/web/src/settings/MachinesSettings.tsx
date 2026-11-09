@@ -1,7 +1,8 @@
 /**
  * Settings → Machines (ADR 0095, decision 9): this machine's name and
- * icon, which its own engine writes in its `machine.toml`; each other
- * machine of `hosts.toml`, whose row opens in place, its name and icon
+ * icon, which its own engine writes in its `machine.toml`, and when it
+ * stays awake (ADR 0097); each other machine of `hosts.toml`, whose row
+ * opens in place, its name and icon and whether it stays awake on power
  * written on that machine through its engine while it is live, its
  * address and its `banda` written in `hosts.toml` through the desktop;
  * and Add a machine, which finds it first, then numbers a name and moves
@@ -15,6 +16,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react"
@@ -45,6 +47,7 @@ import {
   PopoverTrigger,
 } from "@banda/ui/components/popover"
 import { Spinner } from "@banda/ui/components/spinner"
+import { Switch } from "@banda/ui/components/switch"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { useRead } from "@banda/ui/hooks/use-read"
 import {
@@ -58,6 +61,7 @@ import { cn } from "@banda/ui/lib/utils"
 import {
   ChevronDownIcon,
   ChevronRightIcon,
+  LaptopIcon,
   PlayIcon,
   PlugZapIcon,
   PowerIcon,
@@ -71,25 +75,35 @@ import {
   useHosts,
 } from "@banda/core/react"
 import { device } from "../boot"
+import { useLookSettings } from "../look"
 import { MachinePicker } from "./MachinePicker"
 import {
   addedWords,
+  AWAKE_ROWS,
+  type AwakeKey,
+  awakeOn,
+  awakeValue,
+  awayWords,
   buildWords,
   ended,
   factsWords,
   failedWords,
   foundNamed,
+  lidWords,
   NAME_MOST,
   NO_ACTS,
+  pluggedInThere,
   renameWords,
   type Settled,
   settle,
   settleWords,
   shownActs,
+  shownOn,
   started,
   stateWords,
   testWords,
   Told,
+  type Wrote,
 } from "./machines"
 import type { SectionProps } from "./sections"
 import { RowFrame } from "./SettingRow"
@@ -98,8 +112,12 @@ import { RowFrame } from "./SettingRow"
 const FILE = "machine.toml"
 
 /** Writes `key` of `engine`'s machine's `machine.toml`, as the Person;
- * none takes it out, and Banda finds it again. */
-const write = (engine: Engine, key: "name" | "icon", value: string | null) =>
+ * none takes it out, and Banda finds it again, or its own is back. */
+const write = (
+  engine: Engine,
+  key: "name" | "icon" | AwakeKey,
+  value: string | boolean | null
+) =>
   value === null
     ? engine.call("keys.settings_reset", { file: FILE, key })
     : engine.call("keys.settings_set", {
@@ -208,8 +226,9 @@ export function MachinesSettings({ engine, lit, run }: SectionProps) {
   )
 }
 
-/** This machine: its icon, which opens the picker; its name; and what
- * it is, as its engine says. */
+/** This machine: its icon, which opens the picker; its name; what it is,
+ * as its engine says; and when it stays awake, as the look reads its
+ * machine.toml, with what its lid does where it has a battery. */
 function ThisMachine({
   engine,
   named,
@@ -226,6 +245,9 @@ function ThisMachine({
   const naming = useRead(read)
   const { listed } = useProjects(engine)
   const { busy, problem, ask } = useAsk()
+  const keyed = useLookSettings()[FILE]
+  // What the Person last set each switch to, until the look hears it.
+  const [wrote, setWrote] = useState<Partial<Record<AwakeKey, Wrote>>>({})
   const got = naming.state === "ready" ? naming.value : undefined
   // What Banda finds, which a key machine.toml leaves out takes; each
   // cleaned as a welcome's is, as a hand edit of machine.toml may say
@@ -248,6 +270,13 @@ function ThisMachine({
       : undefined
   const set = (key: "name" | "icon", value: string | null) =>
     void ask(() => write(engine, key, value))
+  const turn = (key: AwakeKey, on: boolean) => {
+    const was = awakeOn(key, keyed, got)
+    void ask(async () => {
+      await write(engine, key, awakeValue(key, on))
+      setWrote((now) => ({ ...now, [key]: { was, on } }))
+    })
+  }
   // What machine.toml changed of what Banda finds, to take out.
   const changed = found
     ? (["name", "icon"] as const).filter((key) => now[key] !== found[key])
@@ -267,8 +296,8 @@ function ThisMachine({
           icon.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-2 border-t pt-3">
-        <div className="flex flex-wrap items-center gap-3">
+      <CardContent className="flex flex-col border-t px-0 pt-3">
+        <div className="flex flex-wrap items-center gap-3 px-(--card-spacing) pb-3">
           <Popover>
             <PopoverTrigger
               render={
@@ -328,13 +357,68 @@ function ThisMachine({
             )}
           </div>
         </div>
+        {AWAKE_ROWS.map(({ key, title, about }) => (
+          <SwitchRow
+            key={key}
+            dataKey={key}
+            title={title}
+            about={about(now.name)}
+            on={shownOn(awakeOn(key, keyed, got), wrote[key])}
+            onChange={busy ? undefined : (on) => turn(key, on)}
+            className="border-t px-(--card-spacing) py-3 last:pb-0"
+          />
+        ))}
+        {got?.battery === true && (
+          <p className="flex items-center gap-2 border-t px-(--card-spacing) pt-2.5 text-xs text-muted-foreground">
+            <LaptopIcon className="size-3.5 shrink-0" />
+            {lidWords(now.name, got.system)}
+          </p>
+        )}
         {problem && (
-          <p role="alert" className="text-xs text-destructive">
+          <p
+            role="alert"
+            className="px-(--card-spacing) pt-2 text-xs text-destructive"
+          >
             {problem}
           </p>
         )}
       </CardContent>
     </Card>
+  )
+}
+
+/** A setting of a machine.toml as a switch, with what it does; one with no
+ * `onChange` is greyed and takes no click, as while a write runs. */
+function SwitchRow({
+  dataKey,
+  title,
+  about,
+  on,
+  onChange,
+  className,
+}: {
+  dataKey: string
+  title: string
+  about: string
+  on: boolean
+  onChange?: (on: boolean) => void
+  className?: string
+}) {
+  return (
+    <div
+      data-key={dataKey}
+      className={cn("flex items-center gap-3", className)}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium">{title}</div>
+        <div className="text-xs text-muted-foreground">{about}</div>
+      </div>
+      {onChange ? (
+        <Switch label={title} on={on} onChange={onChange} />
+      ) : (
+        <Switch label={title} on={on} disabled />
+      )}
+    </div>
   )
 }
 
@@ -419,10 +503,10 @@ function EntryField({
 
 /**
  * Another machine of `hosts.toml`, which opens in place: as a link names
- * it (`machines/<key>`), or as the Person opens it. Its name and icon
- * are written on it, through its engine, and only while it is live: one
- * sent while it is away would wait for it, and the Person would not see
- * it go.
+ * it (`machines/<key>`), or as the Person opens it. Its name and icon,
+ * and whether it stays awake on power, are written on it, through its
+ * engine, and only while it is live: one sent while it is away would wait
+ * for it, and the Person would not see it go.
  */
 function HostRow({
   host,
@@ -461,17 +545,25 @@ function HostRow({
       setWrote({ was: inState, entry: await device.hosts.set(key, change) })
     )
   // Only while it is live, and its engine with it: a write sent as it
-  // goes would wait for it to come back.
-  const rename = (field: "name" | "icon", value: string | null) =>
-    void ask(async () => {
+  // goes would wait for it to come back. Whether it was written; else
+  // why not, as `away` says it while it is not live.
+  const writeThere = (
+    field: "name" | "icon" | AwakeKey,
+    value: string | boolean | null,
+    away: string
+  ) =>
+    ask(async () => {
       const engine = kept.engine(key)
       if (
         kept.get().find((one) => one.name === key)?.state.state !== "live" ||
         engine.status.state !== "open"
       )
-        throw new Told(renameWords(name))
+        throw new Told(away)
       await write(engine, field, value)
+      return true
     })
+  const rename = (field: "name" | "icon", value: string | null) =>
+    void writeThere(field, value, renameWords(name))
   const test = () =>
     void ask(async () => {
       setTested(undefined)
@@ -581,6 +673,19 @@ function HostRow({
                 </Popover>
               </span>
             </RowFrame>
+            <PluggedIn
+              host={key}
+              name={name}
+              live={live}
+              busy={busy}
+              onTurn={(on) =>
+                writeThere(
+                  "awake-plugged-in",
+                  awakeValue("awake-plugged-in", on),
+                  awayWords(name)
+                )
+              }
+            />
             <RowFrame
               dataKey={`${key}.ssh`}
               title="Address"
@@ -705,6 +810,68 @@ function HostRow({
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+/**
+ * "Stay awake while plugged in" in another machine's row (ADR 0097,
+ * decision 2): as that machine's `machines.get` says, asked as the row
+ * opens while it is live, and turned through `onTurn`, which writes it
+ * there. While the machine is not live, or a write runs, it takes no
+ * click; while it is not live, it is off.
+ */
+function PluggedIn({
+  host,
+  name,
+  live,
+  busy,
+  onTurn,
+}: {
+  /** Its key in `hosts.toml`. */
+  host: string
+  name: string
+  live: boolean
+  busy: boolean
+  /** Whether it was written. */
+  onTurn: (on: boolean) => Promise<boolean | undefined>
+}) {
+  const kept = useContext(HostsContext)
+  const read = useMemo(
+    () => (live ? () => kept.engine(host).call("machines.get", {}) : null),
+    [kept, host, live]
+  )
+  const naming = useRead(read)
+  const answer =
+    naming.state === "ready"
+      ? naming.value
+      : naming.state === "refused"
+        ? null
+        : undefined
+  // What the Person last set it to, over the answer it was set against:
+  // one read again, as the machine is back, says it afresh.
+  const [wrote, setWrote] = useState<{ to: unknown; wrote: Wrote }>()
+  const there = pluggedInThere(name, live, answer)
+  const title = "Stay awake while plugged in"
+  const on =
+    there.can &&
+    shownOn(there.on, wrote && wrote.to === answer ? wrote.wrote : undefined)
+  const turn = (next: boolean) =>
+    void onTurn(next).then(
+      (done) =>
+        done && setWrote({ to: answer, wrote: { was: there.on, on: next } })
+    )
+  return (
+    <RowFrame
+      dataKey={`${host}.awake-plugged-in`}
+      title={title}
+      about={there.about}
+    >
+      {there.can && !busy ? (
+        <Switch label={title} on={on} onChange={turn} />
+      ) : (
+        <Switch label={title} on={on} disabled />
+      )}
+    </RowFrame>
   )
 }
 

@@ -6,8 +6,9 @@ import type { Naming } from "./Naming";
 export type MachinesMethods = { 
 /**
  * This machine's name and icon, as every window shows it, and what
- * Banda found, which a key machine.toml leaves out takes. The
- * settings' `set` changes them, in machine.toml, which only the
- * Person does; the stream `machine.named` says each change.
+ * Banda found, which a key machine.toml leaves out takes; when it
+ * stays awake, and whether it has a battery. The settings' `set`
+ * changes them, in machine.toml, which only the Person does; the
+ * stream `machine.named` says each change of the name and icon.
  */
 get: CallMethod<Nothing, Naming>, };

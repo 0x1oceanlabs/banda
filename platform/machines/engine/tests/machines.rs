@@ -160,7 +160,10 @@ async fn the_welcome_names_the_machine_and_machine_named_says_each_change() {
     let (mut later, welcome) = connect(address).await;
     assert_eq!(welcome["named"], tower, "every window after it is told");
     let got = call(&mut later, 4, "machines.get", json!({})).await;
-    let mut naming = json!({ "name": "studio", "icon": "tower", "found": arc });
+    let mut naming = json!({
+        "name": "studio", "icon": "tower", "found": arc,
+        "awake": { "while_working": true, "plugged_in": false },
+    });
     // And what it is, in words, where the system says.
     let about = banda_machines::about();
     assert!(about.system.is_some(), "every system this runs on says");
@@ -169,7 +172,11 @@ async fn the_welcome_names_the_machine_and_machine_named_says_each_change() {
             naming[key] = json!(said);
         }
     }
-    assert_eq!(got["ok"], naming);
+    // Whether it has a battery is this machine's own: one or the other.
+    let mut got = got["ok"].clone();
+    let battery = got.as_object_mut().unwrap().remove("battery");
+    assert!(battery.is_some_and(|battery| battery.is_boolean()));
+    assert_eq!(got, naming);
 
     // Taken out: what Banda found.
     let params = json!({ "file": "machine.toml", "key": "name" });
@@ -188,6 +195,14 @@ async fn the_welcome_names_the_machine_and_machine_named_says_each_change() {
     let toaster = set(&mut socket, 7, "icon", "\"toaster\"").await;
     assert_eq!(toaster["error"]["code"], "invalid", "{toaster}");
     assert_eq!(machine_toml(root.path()), text);
+
+    // Kept awake on power: `get` says it at once, as another machine's
+    // window reads it back (ADR 0097).
+    let result = set(&mut socket, 8, "awake-plugged-in", "true").await;
+    assert!(result["ok"].is_string(), "{result}");
+    let got = call(&mut later, 9, "machines.get", json!({})).await;
+    let awake = json!({ "while_working": true, "plugged_in": true });
+    assert_eq!(got["ok"]["awake"], awake);
 }
 
 #[tokio::test]

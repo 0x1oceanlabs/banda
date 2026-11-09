@@ -16,9 +16,11 @@
 //! of their own. A hold the system did not answer for in full, as when
 //! its bus went, is taken again in a while, the reason the same.
 
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tokio::sync::watch;
 use tokio::time::Instant;
+use ts_rs::TS;
 
 #[cfg(target_os = "linux")]
 mod linux;
@@ -36,9 +38,10 @@ const POWER_EVERY: Duration = Duration::from_secs(30);
 const AGAIN_AFTER: Duration = Duration::from_secs(30);
 
 /// When this machine stays awake, as its `machine.toml` says.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "machines/")]
 pub struct Awake {
-    /// While its Agents work, and for [`TAIL`] after.
+    /// While its Agents work, and for 10 minutes after ([`TAIL`]).
     pub while_working: bool,
     /// While it is on power, Agents or none.
     pub plugged_in: bool,
