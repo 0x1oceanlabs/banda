@@ -26,7 +26,7 @@ import {
   shownShare,
   widthAt,
 } from "./layout"
-import { type Shows, useShows } from "./shows"
+import { type Shows, useGroups, useShows } from "./shows"
 import { type Frame, PaneFrame } from "./PaneFrame"
 import { aimed, drawnStrip, leftStrip } from "./tiles"
 
@@ -117,7 +117,8 @@ export const Strip = memo(function Strip({
   const focusedGroup = workspace.columns[workspace.focus]?.group
   // Whether each Pane shows an Item, and how it calls; each Group's
   // owner: its state and its name.
-  const { item, called, groups: owned } = useShows(shows, workspace)
+  const { item, called } = useShows(shows, workspace)
+  const owned = useGroups(shows, workspace)
   // Each Group's colour, by its owner's state; its plate moves with it.
   const states = new Map(
     columns.flatMap(({ group }) =>
