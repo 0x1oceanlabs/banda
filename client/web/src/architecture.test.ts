@@ -86,7 +86,8 @@
  * - A Group is its owner's (ADR 0082, decision 9; ADR 0087): the Tiling
  *   reads who owns it, and that owner's Mark, through its port alone,
  *   which the Window fills from the items; it takes only the mark's types
- *   but for a Deck's segment. The Tiling names nothing an App lists;
+ *   but for a Deck's segment. The Tiling names nothing an App lists, and
+ *   takes none of the Window's stores but the calls its numbers read;
  *   what in the page still reads an Item's Agent is listed, only falling.
  * - Where a Thread stands is said once, in `@banda/ui/status` (ADR 0098,
  *   decision 26): what still reads a Later against the clock by itself
@@ -167,18 +168,22 @@ test("a file that no longer reaches a module leaves the list", () => {
  * What the Tiling still imports of the Window, its Bar, the sidebar list,
  * a Thread's titles, the menu, the device's adapter, the keys of the
  * actions, what the window says when it broke, Project trust, the question
- * of sharing and Settings, by file: the Window may import the Tiling,
- * never the other way (ADR 0087, decision 5). None joins the list, and an
- * import that goes leaves it.
+ * of sharing, Settings and the calls part, by file: the Window may import
+ * the Tiling, never the other way (ADR 0087, decision 5). The calls part
+ * holds the Window's stores, so a Tiling file that took them could read
+ * an Item by selector and name no `Listed`: only the workspace numbers
+ * take what calls, until E8b. None joins the list, and an import that
+ * goes leaves it.
  */
 const TILING_STILL: Record<string, string[]> = {
   "web/src/tiling/PaneFrame.tsx": ["../window/attach", "../titles/Title"],
   "web/src/tiling/store.ts": ["../sidebar/width"],
+  "web/src/tiling/widgets.tsx": ["../calls/stores"],
 }
 
 test("the Tiling imports no more of the Window than the list holds", () => {
   const outside =
-    /^\.\.\/(window|bar|sidebar|titles|menu|boot|actions|safe|trust|sharing|settings)(\/|$)/
+    /^\.\.\/(window|bar|sidebar|titles|menu|boot|actions|safe|trust|sharing|settings|calls)(\/|$)/
   const imported = Object.fromEntries(
     sources(join(app, "web/src/tiling")).flatMap((file) => {
       const names = imports(readFileSync(file, "utf8")).filter((name) =>
