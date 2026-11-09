@@ -1,6 +1,7 @@
 /**
  * The client against the real engine (`target/debug/banda`), with the
- * fake agent as the Harness. Run `cargo build` first; `scripts/check.sh` does.
+ * fake agent as the Harness. They run only once both were built from this
+ * checkout's sources, and say which build to run when not (./built.ts).
  */
 import { type ChildProcess, execFileSync, spawn } from "node:child_process"
 import {
@@ -11,9 +12,9 @@ import {
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
-import { join, resolve } from "node:path"
+import { join } from "node:path"
 import { createInterface } from "node:readline"
-import { afterEach, beforeEach, expect, test } from "vitest"
+import { afterEach, beforeAll, beforeEach, expect, test } from "vitest"
 import { decodeFact } from "../src/agents"
 import { seeded } from "../src/workspaces"
 import {
@@ -25,9 +26,12 @@ import {
   Refused,
   type Status,
 } from "../src/index"
+import { program } from "./built"
 
-const repository = resolve(import.meta.dirname, "../../..")
-const binary = (name: string) => join(repository, "target/debug", name)
+beforeAll(() => {
+  program("banda")
+  program("banda-fake-agent")
+})
 
 let dir: string
 let engine: ChildProcess | null = null
@@ -38,7 +42,7 @@ beforeEach(() => {
   mkdirSync(join(dir, "config"))
   writeFileSync(
     join(dir, "config/harnesses.toml"),
-    `[[harness]]\nid = "fake"\nname = "Fake"\ncommand = ${JSON.stringify(binary("banda-fake-agent"))}\n`
+    `[[harness]]\nid = "fake"\nname = "Fake"\ncommand = ${JSON.stringify(program("banda-fake-agent"))}\n`
   )
 })
 
@@ -50,7 +54,7 @@ afterEach(async () => {
 
 /** Starts the engine as a window does, and waits for its first line. */
 function serve(): Promise<void> {
-  const child = spawn(binary("banda"), ["serve", "--with-parent"], {
+  const child = spawn(program("banda"), ["serve", "--with-parent"], {
     env: {
       ...process.env,
       BANDA_ROOT: join(dir, "root"),
@@ -81,7 +85,7 @@ function stop(): Promise<void> {
 /** The engine parts in the list of Apps, in its order, as `banda modules`
  * prints them: the ones with methods. */
 function engineParts(): string[] {
-  return execFileSync(binary("banda"), ["modules"], { encoding: "utf8" })
+  return execFileSync(program("banda"), ["modules"], { encoding: "utf8" })
     .split("\n")
     .filter((line) => line.trim() !== "")
     .map((line) => JSON.parse(line) as { id: string; engine: unknown })
