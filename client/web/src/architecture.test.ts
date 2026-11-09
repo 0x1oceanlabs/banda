@@ -42,7 +42,8 @@
  *   contract and, in its bindings, React; it reads no global of the
  *   device; only the Window makes the stores that keep Here and the
  *   hosts, and gives them and the machines to what it draws; and an App
- *   or a platform part takes the core only from `@banda/core/react`.
+ *   or a platform part takes the core only from `@banda/core/react`, and
+ *   of the hosts only the names listed, a list that grows by review.
  * - The bridge's table is the desktop's (ADR 0089, decision 4): the
  *   desktop imports nothing of the page, and the page takes only the
  *   table's type, in the files listed, a list that only falls. No path
@@ -1957,6 +1958,148 @@ test("an App or a platform part takes the core only from @banda/core/react", () 
         .map((name) => `${relative(root, file)}: ${name}`)
     )
   expect(taking).toEqual([])
+})
+
+/**
+ * What an App or a platform part takes of the hosts from
+ * `@banda/core/react`, its tests too (#1041): what reads them, never the
+ * store that keeps them, its context or what writes it, so no App changes
+ * what the Window keeps of each host. Its acts go to a host through
+ * `WindowApi.sessionOf`, which throws `Unreachable` for one out of reach.
+ * A name joins the list only by review; one no App takes leaves it.
+ */
+const HOSTS_FOR_APPS = [
+  "Machine",
+  "Unreachable",
+  "heldWords",
+  "useMachines",
+  "useShownOf",
+]
+
+/** The names the core's hosts files export: the store, its words and
+ * its hooks, as `@banda/core/react` hands them on. */
+const HOSTS_FILES = ["hosts.ts", "react/hosts.ts", "react/machines.ts"]
+
+/** The names `source` exports of its own, types too. */
+function exported(source: string): string[] {
+  const file = ts.createSourceFile("x.ts", source, ts.ScriptTarget.Latest)
+  return file.statements.flatMap((node) => {
+    if (ts.isExportDeclaration(node) && !node.moduleSpecifier)
+      return node.exportClause && ts.isNamedExports(node.exportClause)
+        ? node.exportClause.elements.map((element) => element.name.text)
+        : []
+    const exports = ts
+      .getModifiers(node as ts.HasModifiers)
+      ?.some((one) => one.kind === ts.SyntaxKind.ExportKeyword)
+    if (!exports) return []
+    if (ts.isVariableStatement(node))
+      return node.declarationList.declarations.flatMap((held) =>
+        ts.isIdentifier(held.name) ? [held.name.text] : []
+      )
+    const named = (node as ts.DeclarationStatement).name
+    return named && ts.isIdentifier(named) ? [named.text] : []
+  })
+}
+
+/** What `source` takes of `module` by name, types too, by the name it has
+ * there, past `as`: imports, re-exports, and `*` for all of it, as a
+ * namespace or a dynamic import takes. */
+function takenFrom(source: string, module: string): string[] {
+  const file = ts.createSourceFile("x.tsx", source, ts.ScriptTarget.Latest)
+  const of = (specifier: ts.Node | undefined) =>
+    specifier !== undefined &&
+    ts.isStringLiteralLike(specifier) &&
+    specifier.text === module
+  const named = (
+    elements: ts.NodeArray<ts.ImportSpecifier | ts.ExportSpecifier>
+  ) => elements.map((element) => (element.propertyName ?? element.name).text)
+  // `import("…").Store.Kind` takes `Store`.
+  const first = (name: ts.EntityName): string =>
+    ts.isIdentifier(name) ? name.text : first(name.left)
+  const taken: string[] = []
+  const visit = (node: ts.Node): void => {
+    if (ts.isImportDeclaration(node) && of(node.moduleSpecifier)) {
+      const bound = node.importClause?.namedBindings
+      if (node.importClause?.name) taken.push("default")
+      if (bound && ts.isNamespaceImport(bound)) taken.push("*")
+      if (bound && ts.isNamedImports(bound))
+        taken.push(...named(bound.elements))
+    } else if (ts.isExportDeclaration(node) && of(node.moduleSpecifier)) {
+      const clause = node.exportClause
+      if (clause && ts.isNamedExports(clause))
+        taken.push(...named(clause.elements))
+      else taken.push("*")
+    } else if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      of(node.arguments[0])
+    )
+      taken.push("*")
+    else if (
+      ts.isImportTypeNode(node) &&
+      ts.isLiteralTypeNode(node.argument) &&
+      of(node.argument.literal)
+    )
+      taken.push(node.qualifier ? first(node.qualifier) : "*")
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  return taken
+}
+
+/** What of the hosts, `hosts`, `source` takes from `@banda/core/react`
+ * past the list. */
+const hostsBeyond = (source: string, hosts: ReadonlySet<string>) =>
+  takenFrom(source, "@banda/core/react").filter(
+    (name) =>
+      (name === "*" || hosts.has(name)) && !HOSTS_FOR_APPS.includes(name)
+  )
+
+test("an App or a platform part takes of the hosts only what reads them (#1041)", () => {
+  const hosts = new Set(
+    HOSTS_FILES.flatMap((file) =>
+      exported(readFileSync(join(core, file), "utf8"))
+    )
+  )
+  expect(hosts).toContain("KeptHosts")
+  expect(hosts).toContain("useMachines")
+  const apps = [...folders.values()]
+    .map((folder) => join(folder, "pane/src"))
+    .filter((folder) => existsSync(folder))
+    .flatMap((folder) => sources(folder))
+  const said = apps.map((file) => ({
+    file: relative(root, file),
+    source: readFileSync(file, "utf8"),
+  }))
+  expect(
+    said.flatMap(({ file, source }) =>
+      hostsBeyond(source, hosts).map((name) => `${file}: ${name}`)
+    )
+  ).toEqual([])
+  const taken = said.flatMap(({ source }) =>
+    takenFrom(source, "@banda/core/react").filter((name) => hosts.has(name))
+  )
+  expect([...new Set(taken)].sort()).toEqual(HOSTS_FOR_APPS)
+
+  // An App that takes the store, its context or a writer, by any name,
+  // is caught.
+  const app = [
+    `import { KeptHosts, HostsContext as Hosts } from "@banda/core/react"`,
+    `import { type Machine, useOurs } from "@banda/core/react"`,
+    `export { useEngineOf as engine } from "@banda/core/react"`,
+    `import * as core from "@banda/core/react"`,
+    `type K = import("@banda/core/react").KeptHosts`,
+    `const later = () => import("@banda/core/react")`,
+  ].join("\n")
+  expect(hostsBeyond(app, hosts)).toEqual([
+    "KeptHosts",
+    "HostsContext",
+    "useOurs",
+    "useEngineOf",
+    "*",
+    "KeptHosts",
+    "*",
+  ])
 })
 
 /**
