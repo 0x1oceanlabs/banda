@@ -66,8 +66,12 @@ test("a title whose Item no App lists, or whose App cannot rename it, is the pla
 })
 
 test("a title finds its Thread itself: its words, as the Pane says them, open the Thread menu", () => {
+  // Beside it, Items their App cannot rename: a title that found one of
+  // them would be plain.
+  const terminal = (id: string) =>
+    thread(id, { pane: { kind: "terminal.terminal", args: {} } })
   const html = drawn("t1", {
-    [p]: [thread("t0", { title: "Another" }), thread("t1")],
+    [p]: [terminal("t0"), thread("t1"), terminal("t2")],
   })
   expect(html).toContain('aria-haspopup="menu"')
   expect(html).not.toContain(`<h2 class="${PLAIN}">`)

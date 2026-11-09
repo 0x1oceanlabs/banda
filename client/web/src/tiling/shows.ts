@@ -2,14 +2,14 @@
  * What the Tiling reads of what its Panes show, as their Apps list it:
  * whether each one shows an Item, how its Thread calls the Person, and
  * each Group's owner, as the Item one of its Panes shows names it, with
- * what that owner's Mark says of the Group. It never holds an Item: the
- * Window gives the port from its items and calls stores
+ * what that owner's Mark says of the Group. It never hands the Tiling an
+ * Item: the Window gives the port from its items and calls stores
  * (`window/shows.ts`), the same object for its life, and the Tiling reads
  * it by selector, so a list that changes draws again only the Strips
- * whose Panes it changes (ADR 0088, decision 7). Each part selects only
- * what it draws: a Strip its Panes and its Groups, a row of the overview
- * its Panes' calls, the map its Groups. The port goes once the Tiling
- * reads the items store by selector itself (B7a or E8b).
+ * whose Panes it changes (ADR 0088, decision 7). The Panes' part and the
+ * Groups' are selected apart: a Strip takes both, a row of the overview
+ * its Panes', the map its Groups'. The port goes once the Tiling reads
+ * the items store by selector itself (B7a or E8b).
  */
 import { useCallback, useMemo } from "react"
 import { sameEach, useSelected } from "@banda/core/react"

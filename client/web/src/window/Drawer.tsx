@@ -36,7 +36,7 @@ export const Drawer = memo(function Drawer({
   height: number
   engine: Engine
   modules: readonly string[]
-  /** Whether its Pane shows an Item, as its App lists it. */
+  /** The Tiling's port: whether its Pane shows an Item. */
   shows: Shows
   projectOf: (id: ProjectId) => ProjectSummary | undefined
   /** The workspaces' frame: what its Pane opens goes there. */
