@@ -25,8 +25,8 @@ const isThread = (listed: Listed | undefined): listed is Listed =>
   listed?.pane.kind === threadPane.kind
 
 function ThreadHeader(props: HeaderProps) {
-  // As Threads lists it; none where the Window lists nothing, as in a
-  // popped-out Pane's window.
+  // As Threads lists it; none where the window gives no Items, as a
+  // popped-out Pane's window does not.
   const listed = useItem(props.project, threadOf(props.pane))
   if (!isThread(listed)) return null
   switch (props.at) {
