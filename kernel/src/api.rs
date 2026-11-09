@@ -36,8 +36,9 @@
 //!    `unsubscribe` stops a stream as it stops a subscription. A stream
 //!    of this machine's names no Project: `window.requests`, where the window
 //!    hears what modules ask it (ADR 0029), `machine.named`, what this host
-//!    is called and drawn by and then each change of it (ADR 0095), or a
-//!    module of the machine's.
+//!    is called and drawn by and then each change of it (ADR 0095),
+//!    `machine.power`, its battery and why it is held awake, and each change
+//!    of them (ADR 0097), or a module of the machine's.
 //!
 //! Unknown fields are ignored on both sides, so either side can be newer.
 
@@ -114,7 +115,7 @@ pub enum ClientFrame {
         #[ts(type = "number")]
         id: u64,
         /// None for a stream of this machine's: `window.requests`,
-        /// `machine.named`, or a module of the machine's.
+        /// `machine.named`, `machine.power`, or a module of the machine's.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         project: Option<ProjectId>,

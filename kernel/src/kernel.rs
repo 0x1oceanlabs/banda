@@ -47,7 +47,13 @@ pub struct Kernel {
     /// What this host is called and drawn by, as it is now; none when the
     /// engine names it nothing.
     named: Option<watch::Receiver<Named>>,
+    /// What opens a `machine.power` stream; none when the engine says no
+    /// power.
+    power: Option<PowerStreams>,
 }
+
+/// What opens a `machine.power` stream, each time a client hears it.
+type PowerStreams = Arc<dyn Fn() -> Stream + Send + Sync>;
 
 /// One of a session's queues of commands, by the scope they run in
 /// ([`Kernel::queue`]).
@@ -157,6 +163,7 @@ pub struct KernelBuilder {
     passes: Option<PathBuf>,
     pass_term: std::time::Duration,
     named: Option<watch::Receiver<Named>>,
+    power: Option<PowerStreams>,
 }
 
 impl KernelBuilder {
@@ -198,6 +205,14 @@ impl KernelBuilder {
     /// keeps it current.
     pub fn named(mut self, named: watch::Receiver<Named>) -> Self {
         self.named = Some(named);
+        self
+    }
+
+    /// What opens each `machine.power` stream a client hears: this host's
+    /// battery and why it is held awake, now and then as they change (ADR
+    /// 0097). The module that reads them reads only while one is heard.
+    pub fn power(mut self, stream: impl Fn() -> Stream + Send + Sync + 'static) -> Self {
+        self.power = Some(Arc::new(stream));
         self
     }
 
@@ -277,6 +292,7 @@ impl KernelBuilder {
             window,
             environment: self.environment,
             named: self.named,
+            power: self.power,
         });
         let mut found: Vec<PathBuf> = std::fs::read_dir(&kernel.projects_data)?
             .filter_map(|entry| entry.ok().map(|e| e.path()))
@@ -616,6 +632,10 @@ fn own_method(method: &str) -> Option<&str> {
 /// is there whatever modules run.
 const NAMED: &str = "machine.named";
 
+/// The stream of this host's battery and why it is held awake (ADR 0097,
+/// decision 6), a stream of the machine's as `machine.named` is.
+const POWER: &str = "machine.power";
+
 /// What `named` is now, then again each time it changes, until the one
 /// who hears it stops.
 fn named_stream(mut named: watch::Receiver<Named>) -> Stream {
@@ -660,6 +680,7 @@ impl Kernel {
             passes: None,
             pass_term: passes::TERM,
             named: None,
+            power: None,
         }
     }
 
@@ -857,7 +878,8 @@ impl Kernel {
 
     /// Opens a module's stream in a Project, or this machine's for a module
     /// of the machine, which names none, once the access decision allows
-    /// it. `window.requests` and `machine.named` name none either.
+    /// it. `window.requests`, `machine.named` and `machine.power` name none
+    /// either.
     pub async fn stream(
         &self,
         caller: impl Into<Caller>,
@@ -881,6 +903,12 @@ impl Kernel {
         {
             access::decide(&participant, Right::Read, self.owner)?;
             return Ok(named_stream(named.clone()));
+        }
+        if method == POWER
+            && let Some(power) = &self.power
+        {
+            access::decide(&participant, Right::Read, self.owner)?;
+            return Ok(power());
         }
         let (module, rest, right) = self.method(method)?;
         let (project, wall) = self.place(&**module, method, project, only).await?;
