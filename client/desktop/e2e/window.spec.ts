@@ -6589,6 +6589,17 @@ test("Alt+` drops the drawer: a Thread over the workspace that stays as it was, 
   await ask.fill("quick one")
   await ask.press("Enter")
   await expect(drawer.getByText("You said: quick one")).toBeVisible()
+  // Its header is a Thread's, as in a column: Threads' Mark in the icon's
+  // place, its Project, and its title, which opens the Thread menu.
+  await expect
+    .poll(() => headerShows(drawer))
+    .toEqual(["mark", "project", "quick one", "buttons"])
+  await expect(
+    drawer
+      .locator("header")
+      .first()
+      .getByRole("button", { name: "quick one", exact: true })
+  ).toHaveAttribute("aria-haspopup", "menu")
   await page.screenshot({ path: "test-results/8b-drawer.png" })
 
   // Esc lifts it, and the focus goes back to the workspace.
@@ -6659,6 +6670,11 @@ test("a Pane pops out into a window of its own, its place keeps a stand-in, and 
   await expect(alone.locator("header > svg").first()).toHaveClass(
     /\blucide-message-square\b/
   )
+  // Its title is plain words, with no Thread menu under it.
+  await expect(alone.locator("header h2").first()).toHaveText("hello")
+  await expect(
+    alone.locator("header").first().locator('[aria-haspopup="menu"]')
+  ).toHaveCount(0)
   const ask = popped.getByRole("textbox", { name: "Message to Fake AI" })
   await ask.fill("again")
   await ask.press("Enter")
