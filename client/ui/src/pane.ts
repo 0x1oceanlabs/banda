@@ -302,6 +302,8 @@ export type ListedSnooze = {
     at: number
     by: "question" | "failure" | "message" | "done" | "woken"
   }
+  /** Its Person saw it wake by itself, as its host keeps the mark. */
+  wokeSeen?: true
 }
 
 /** What every module lists for each Project, for the sidebar. */
@@ -334,25 +336,6 @@ const CHIMES: Partial<Record<MarkState, Chime>> = {
   done: "done",
   asking: "asking",
   failed: "failed",
-}
-
-/**
- * When a Thread under `snooze` woke by itself, at `now`: its time came, or
- * what calls its Person woke it early. Nothing while it sleeps, or when
- * its Person woke it, by hand or by writing to it.
- */
-export function wokeOf(
-  snooze: Pick<ListedSnooze, "until" | "woke"> | undefined,
-  now: number
-): number | undefined {
-  if (!snooze) return undefined
-  if (snooze.woke)
-    return snooze.woke.by === "woken" || snooze.woke.by === "message"
-      ? undefined
-      : snooze.woke.at
-  return snooze.until !== undefined && snooze.until <= now
-    ? snooze.until
-    : undefined
 }
 
 /** Whether `listed` sleeps at `now`. */

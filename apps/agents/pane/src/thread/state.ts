@@ -336,6 +336,7 @@ function project(state: ThreadState, event: Event): ThreadState {
     // A Thread's snooze is the list's for now (ADR 0074).
     case "thread.snoozed":
     case "thread.woke":
+    case "thread.woke_seen":
     case "thread.seen":
     case "thread.unseen":
     case "thread.archived":

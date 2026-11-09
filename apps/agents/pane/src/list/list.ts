@@ -40,6 +40,7 @@ export const THREADS_FILTER = {
     "question.closed",
     "thread.snoozed",
     "thread.woke",
+    "thread.woke_seen",
     "thread.switched",
     "thread.seen",
     "thread.unseen",
@@ -182,6 +183,14 @@ function applied(state: ThreadList, event: Event): ThreadList {
       return change(state, event, (thread) =>
         thread.snooze
           ? { ...thread, snooze: { ...thread.snooze, woke } }
+          : thread
+      )
+    }
+    case "thread.woke_seen": {
+      const { seen } = fact.payload
+      return change(state, event, (thread) =>
+        thread.snooze
+          ? { ...thread, snooze: { ...thread.snooze, woke_seen: seen } }
           : thread
       )
     }

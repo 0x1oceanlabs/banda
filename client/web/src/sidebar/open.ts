@@ -2,7 +2,6 @@ import { createContext, useContext } from "react"
 import type { ProjectId } from "@banda/contract"
 import { type Run, useRun } from "@banda/core/react"
 import type { Row } from "./arrange"
-import { seeWoke } from "./snoozed"
 
 /**
  * How the Sidebar shown over the Strip lets itself go, for its parts that
@@ -42,12 +41,10 @@ export function newThread(open: Run, project: ProjectId, missing = false) {
 /**
  * Opens the Pane a row stands for, as `pane.pick` does: where a workspace
  * shows it, or in a new column of the current one. A Thread that woke is
- * seen as it opens (ADR 0074).
+ * seen as its Pane shows it to its Person (ADR 0074).
  */
 export function useOpenRow(row: Row): () => void {
   const open = useOpen()
-  return () => {
-    seeWoke(row.listed)
+  return () =>
     open("pane.pick", { project: row.project.id, pane: row.listed.pane })
-  }
 }

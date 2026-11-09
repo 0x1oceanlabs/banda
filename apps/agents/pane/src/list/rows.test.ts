@@ -162,3 +162,18 @@ test("a Thread is archived while its host's archive holds: nothing happened sinc
   expect(listedOf(asking, "").archived).toBeUndefined()
   expect(listedOf(done, "").archived).toBeUndefined()
 })
+
+test("a snoozed Thread lists its snooze, and whether its Person saw it wake", () => {
+  const person = { kind: "person", id: "p1" } as const
+  const snooze = { at: 1, by: person, until: 9 }
+  expect(listedOf(thread({ snooze }), "Claude").snooze).toEqual({
+    at: 1,
+    until: 9,
+  })
+  const seen = thread({ snooze: { ...snooze, woke_seen: "dismissed" } })
+  expect(listedOf(seen, "Claude").snooze).toEqual({
+    at: 1,
+    until: 9,
+    wokeSeen: true,
+  })
+})

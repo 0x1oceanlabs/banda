@@ -5190,6 +5190,81 @@ async fn its_persons_message_or_a_failure_wakes_a_snoozed_thread() {
 }
 
 #[tokio::test]
+async fn its_person_sees_a_thread_that_woke_by_itself_once_then_dismisses_it() {
+    use banda_agents::model::WokeSeen;
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (_, writing) = world.finish(None, "hello").await;
+    let (thread, _) = world.finish(None, "hi there").await;
+    let person = world.person();
+    let see = |seen: &str| json!({ "thread": thread, "seen": seen });
+    let seen_of = |snooze: Option<banda_agents::model::Snooze>| snooze.unwrap().woke_seen;
+
+    // Asleep, there is nothing to see.
+    world
+        .snooze(person, &thread, Some(in_an_hour()))
+        .await
+        .unwrap();
+    world
+        .call(person, "agents.see_woke", see("seen"))
+        .await
+        .unwrap();
+    assert_eq!(seen_of(world.snooze_of(&thread).await), None);
+
+    // Woken by its Person's own message, they know already.
+    world.send(Some(&thread), "one more thing").await;
+    world.until(&thread, settled(2)).await;
+    world
+        .call(person, "agents.see_woke", see("seen"))
+        .await
+        .unwrap();
+    assert_eq!(seen_of(world.snooze_of(&thread).await), None);
+
+    // Woken by a failure, it is seen, then dismissed, and never back.
+    world
+        .snooze(person, &thread, Some(in_an_hour()))
+        .await
+        .unwrap();
+    world
+        .write(agent_of(&writing), Some(&thread), "fail now")
+        .await
+        .unwrap();
+    world.until(&thread, settled(3)).await;
+    assert_eq!(world.woke(&thread).await, Some(Wake::Failure));
+    let refused = world
+        .call(agent_of(&writing), "agents.see_woke", see("seen"))
+        .await;
+    assert!(refused.is_err(), "only a Person marks a Thread");
+    world
+        .call(person, "agents.see_woke", see("seen"))
+        .await
+        .unwrap();
+    assert_eq!(
+        seen_of(world.snooze_of(&thread).await),
+        Some(WokeSeen::Seen)
+    );
+    world
+        .call(person, "agents.see_woke", see("dismissed"))
+        .await
+        .unwrap();
+    world
+        .call(person, "agents.see_woke", see("seen"))
+        .await
+        .unwrap();
+    assert_eq!(
+        seen_of(world.snooze_of(&thread).await),
+        Some(WokeSeen::Dismissed)
+    );
+
+    // A new snooze has seen nothing of its own waking.
+    world
+        .snooze(person, &thread, Some(in_an_hour()))
+        .await
+        .unwrap();
+    assert_eq!(seen_of(world.snooze_of(&thread).await), None);
+}
+
+#[tokio::test]
 async fn an_agent_snoozes_only_its_own_thread() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;

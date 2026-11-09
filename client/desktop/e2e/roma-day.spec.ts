@@ -110,6 +110,7 @@ function threadNamed(window: Window, title: string) {
       id: string
       title: string
       latest: { turn: string; state: string }
+      snooze?: { woke_seen?: string }
     }[]
   }
   return threads.find((thread) => thread.title === title)
@@ -536,10 +537,14 @@ test("a Thread at work snoozed until it's done comes back as its turn ends, with
   await expect(shelf).toBeHidden()
   await expect(row.getByRole("img", { name: "Woke" })).toBeVisible()
 
-  // Open goes there, and the clock goes once its Person looks.
+  // Open goes there, and the clock goes once its Person looks: its host
+  // keeps that they saw it, for every window and machine (ADR 0096).
   await woke.getByRole("button", { name: "Open" }).click()
   await expect(a).toHaveAttribute("data-focused", "true")
   await expect(row.getByRole("img", { name: "Woke" })).toBeHidden()
+  await expect
+    .poll(() => threadNamed(window, "wait a")!.snooze?.woke_seen)
+    .toBe("seen")
 })
 
 test("ten tiling keys pressed faster than the Window draws land in order, each on what the one before did", async () => {

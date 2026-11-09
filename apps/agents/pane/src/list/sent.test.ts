@@ -102,12 +102,14 @@ test("each mark goes to its host as its command, sent once", () => {
   void mark(engine, PROJECT, "t3", { seen: null })
   void mark(engine, PROJECT, "t4", { archived: true })
   void mark(engine, PROJECT, "t5", { archived: false })
+  void mark(engine, PROJECT, "t6", { woke: "seen" })
   expect(asked.map(({ method, params }) => [method, params])).toEqual([
     ["agents.read", { thread: "t1", turn: "u1" }],
     ["agents.read", { thread: "t2" }],
     ["agents.unread", { thread: "t3" }],
     ["agents.archive", { thread: "t4" }],
     ["agents.unarchive", { thread: "t5" }],
+    ["agents.see_woke", { thread: "t6", seen: "seen" }],
   ])
   // None goes again after a break, to land once its toast said it failed
   // (decision 8).
@@ -392,4 +394,25 @@ test("the bar's Mark, the waiting count and the rows follow what was sent, as th
     waiting: 1,
     marks: ["done", "failed"],
   })
+})
+
+test("what its Person saw of a Thread waking shows at once, forward only", async () => {
+  const { engine, asked } = engineIn()
+  const person = { kind: "person", id: "p1" } as const
+  const snooze = { at: 1, by: person, until: 2 }
+  void mark(engine, PROJECT, "t1", { woke: "seen" })
+  expect(shownOf(engine, list(1, thread({ snooze }))).snooze).toEqual({
+    ...snooze,
+    woke_seen: "seen",
+  })
+  // Nothing to see without a snooze, and a dismissal is never taken back.
+  const quiet = thread()
+  expect(shownOf(engine, list(1, quiet))).toBe(quiet)
+  const dismissed = thread({ snooze: { ...snooze, woke_seen: "dismissed" } })
+  expect(shownOf(engine, list(1, dismissed))).toBe(dismissed)
+  // Once the list heard its command, the host's mark is all there is.
+  asked[0].answer(7)
+  await vi.waitFor(() => expect(sendingTo(engine).t1?.woke?.at).toBe(7))
+  settle(engine, list(7, thread({ snooze })))
+  expect(sendingTo(engine).t1).toBeUndefined()
 })

@@ -126,12 +126,13 @@ export function listedOf(
 }
 
 /** A Thread's snooze as the sidebar reads it (ADR 0074). */
-function snoozeOf({ at, until, by, woke }: Snooze): ListedSnooze {
+function snoozeOf({ at, until, by, woke, woke_seen }: Snooze): ListedSnooze {
   return {
     at,
     ...(until === undefined ? {} : { until }),
     ...(by.kind === "agent" ? { byAgent: true } : {}),
     ...(woke ? { woke } : {}),
+    ...(woke_seen ? { wokeSeen: true } : {}),
   }
 }
 

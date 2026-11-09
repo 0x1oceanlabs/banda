@@ -55,6 +55,8 @@ export type { Snooze } from "./generated/agents/Snooze"
 export type { SnoozeAsk } from "./generated/agents/SnoozeAsk"
 export type { Wake } from "./generated/agents/Wake"
 export type { Woke } from "./generated/agents/Woke"
+export type { WokeSeen } from "./generated/agents/WokeSeen"
+export type { SeeWokeAsk } from "./generated/agents/SeeWokeAsk"
 export type { StepState } from "./generated/agents/StepState"
 export type { ThreadId } from "./generated/agents/ThreadId"
 export type { ThreadList } from "./generated/agents/ThreadList"
@@ -97,6 +99,7 @@ const KINDS: ReadonlySet<string> = new Set(
     "thread.held": true,
     "thread.snoozed": true,
     "thread.woke": true,
+    "thread.woke_seen": true,
     "thread.seen": true,
     "thread.unseen": true,
     "thread.archived": true,

@@ -83,6 +83,14 @@ defaults and stay his to change.
      it with now, and the moment it woke is that time.
    - "Woke" lasts until the Person opens the Thread, as a finished turn
      lasts until it is seen.
+   - _Changed on 2026-11-09, as ADR 0096 holds._ What the Person saw of a
+     Thread waking by itself is kept on its host, on the snooze, as
+     `woke_seen`: `seen` once its Pane, focused in the window in front,
+     is looked at, and `dismissed` once its "Woke at" line is dismissed
+     (decision 7). It moves forward only, and `agents.see_woke` sets it,
+     for a Person only. Each window kept both marks in its own storage
+     before, so a Thread seen on one machine still said it woke on
+     another, and the sidebar's mark and the Pane's line were apart.
 
 4. **Snoozing closes the Thread's Panes** (_decided_).
    - As archiving does (ADR 0069, decision 4): every Pane that shows the

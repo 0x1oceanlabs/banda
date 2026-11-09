@@ -1,7 +1,7 @@
 /**
  * The Person's marks on a Thread, as this window sends them to the
  * Thread's host (ADR 0096): what they saw of it, unread and read, archived
- * and back. The host keeps each one, beside the snooze, and every window
+ * and back, and that they saw it wake by itself (ADR 0074). The host keeps each one, beside the snooze, and every window
  * and machine reads it there, in the Thread's list. Only this file sends
  * them (architecture.test.ts), so none goes around what follows.
  *
@@ -37,6 +37,7 @@ import type {
   ThreadId,
   ThreadList,
   TurnId,
+  WokeSeen,
 } from "@banda/contract/agents"
 import { toast } from "@banda/ui/components/sonner"
 import { Store, useStore } from "@banda/core/react"
@@ -47,11 +48,13 @@ import { archiveHolds, without } from "./list"
 /**
  * A mark the Person gives a Thread, not Banda's Mark that shows what it
  * calls them for: the turn they saw end; `latest`, the latest that ended,
- * as "Mark as read" has it; none, as "Mark as unread" does; or archived,
- * or brought back.
+ * as "Mark as read" has it; none, as "Mark as unread" does; archived, or
+ * brought back; or what they saw of it waking by itself.
  */
 export type PersonMark =
-  { seen: TurnId | "latest" | null } | { archived: boolean }
+  | { seen: TurnId | "latest" | null }
+  | { archived: boolean }
+  | { woke: WokeSeen }
 
 /** A mark on its way: what it says, the command that carries it, and,
  * once the host answered, where in its log that command wrote. */
@@ -61,6 +64,7 @@ type Part<T> = { to: T; command: string; at?: number }
 export type Sending = {
   seen?: Part<TurnId | "latest" | null>
   archived?: Part<boolean>
+  woke?: Part<WokeSeen>
 }
 
 /** What is on its way of each Thread of one host, by its ID. */
@@ -110,7 +114,7 @@ function change(
   if (part) Object.assign(now, { [which]: part })
   else delete now[which]
   const next = { ...sendings }
-  if (now.seen || now.archived) next[thread] = now
+  if (now.seen || now.archived || now.woke) next[thread] = now
   else delete next[thread]
   keep(engine, next)
 }
@@ -139,9 +143,13 @@ export async function mark(
     return false
   }
   if (engine.status.state !== "open") return failed(new Lost())
-  const which: Which = "seen" in mark ? "seen" : "archived"
+  const [which, to]: [Which, unknown] =
+    "seen" in mark
+      ? ["seen", mark.seen]
+      : "archived" in mark
+        ? ["archived", mark.archived]
+        : ["woke", mark.woke]
   const command = newId()
-  const to = "seen" in mark ? mark.seen : mark.archived
   change(engine, thread, which, () => ({ to, command }))
   // This mark's part, and no later one's, which took its place.
   const own = (part: Part<unknown> | undefined) => part?.command === command
@@ -186,6 +194,8 @@ function commandOf(
     return mark.archived
       ? send("agents.archive", { thread })
       : send("agents.unarchive", { thread })
+  if ("woke" in mark)
+    return send("agents.see_woke", { thread, seen: mark.woke })
   const { seen } = mark
   if (seen === null) return send("agents.unread", { thread })
   return send(
@@ -224,6 +234,12 @@ function markedBy(thread: ListedThread, sending: Sending): ListedThread {
   if (sending.archived?.to === false) now = without(now, "archived")
   else if (sending.archived && !archiveHolds(now))
     now = { ...now, archived: { at: now.updated_at } }
+  // What it saw of its waking moves forward only, as its host keeps it.
+  const woke = sending.woke?.to
+  const { snooze } = now
+  const was = snooze?.woke_seen
+  if (woke && snooze && was !== "dismissed" && was !== woke)
+    now = { ...now, snooze: { ...snooze, woke_seen: woke } }
   return now
 }
 
@@ -274,11 +290,21 @@ function settled(
     part?.at !== undefined && part.at <= at ? undefined : part
   let seen = heard(sending.seen)
   const archived = heard(sending.archived)
+  const woke = heard(sending.woke)
   if (seen?.to === "latest") {
     const latest = seenOf(thread, "latest")
     seen = latest ? { ...seen, to: latest } : undefined
   }
-  if (seen === sending.seen && archived === sending.archived) return sending
-  if (!seen && !archived) return undefined
-  return { ...(seen && { seen }), ...(archived && { archived }) }
+  if (
+    seen === sending.seen &&
+    archived === sending.archived &&
+    woke === sending.woke
+  )
+    return sending
+  if (!seen && !archived && !woke) return undefined
+  return {
+    ...(seen && { seen }),
+    ...(archived && { archived }),
+    ...(woke && { woke }),
+  }
 }

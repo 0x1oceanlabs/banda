@@ -33,7 +33,7 @@ import { settledTurn } from "../list/marks"
 import { useImageReader } from "../entries/parts/MessageImages"
 import { base64Of, dataUrl } from "../composer/images"
 import type { QueueActions } from "./Queue"
-import { mark } from "../list/sent"
+import { mark, type PersonMark } from "../list/sent"
 import { type WhenPresent, whenPresent } from "./presence"
 import {
   asked,
@@ -107,6 +107,22 @@ export function seeWhenPresent(
   turn: TurnId,
   when: WhenPresent = whenPresent
 ): () => void {
+  return markWhenPresent(engine, project, thread, { seen: turn }, when)
+}
+
+/**
+ * Sends `seen`, a mark the window gives by itself as its Person looks at
+ * the Thread, once they are at the window, as `seeWhenPresent` sends a
+ * turn seen: quietly, and again once a host that was away is back. Gives
+ * back how to call that off.
+ */
+export function markWhenPresent(
+  engine: Engine,
+  project: ProjectId,
+  thread: ThreadId,
+  seen: PersonMark,
+  when: WhenPresent = whenPresent
+): () => void {
   let off = false
   // What calls off the wait now: for the Person, or for the host.
   let stop = () => {}
@@ -114,14 +130,12 @@ export function seeWhenPresent(
     // A wait for the Person armed as the host came back, and not called
     // off with the rest, sends nothing for a Thread no longer on screen.
     if (off) return
-    void mark(engine, project, thread, { seen: turn }, { quiet: true }).then(
-      (took) => {
-        // A refusal comes while the host is there; only a seen not sent,
-        // or lost on its way, waits for it to come back.
-        if (took || off || engine.status.state === "open") return
-        stop = whenOpen(engine, () => (stop = when(see)))
-      }
-    )
+    void mark(engine, project, thread, seen, { quiet: true }).then((took) => {
+      // A refusal comes while the host is there; only a seen not sent,
+      // or lost on its way, waits for it to come back.
+      if (took || off || engine.status.state === "open") return
+      stop = whenOpen(engine, () => (stop = when(see)))
+    })
   }
   stop = when(see)
   return () => {

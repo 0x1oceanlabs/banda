@@ -1,7 +1,7 @@
 //! A snooze's rules (ADR 0074): when a Thread may be snoozed, and what
 //! wakes one before its time. Pure: the caller brings the time.
 
-use crate::model::{Fact, Snooze, TurnState, Wake};
+use crate::model::{Fact, Snooze, TurnState, Wake, WokeSeen};
 use banda_kernel::{Participant, Refusal};
 use banda_look::snooze::LONGEST;
 
@@ -31,6 +31,22 @@ pub fn may_snooze(asks: bool, works: bool, until: Option<i64>, now: i64) -> Resu
 /// its time has not come.
 pub fn asleep(snooze: &Snooze, now: i64) -> bool {
     snooze.woke.is_none() && snooze.until.is_none_or(|until| until > now)
+}
+
+/// Whether a Thread under `snooze` woke by itself at `now`: its time
+/// came, or what calls its Person woke it early. One its Person woke, by
+/// hand or by writing to it, did not: they know already.
+pub fn woke_by_itself(snooze: &Snooze, now: i64) -> bool {
+    match snooze.woke {
+        Some(woke) => !matches!(woke.by, Wake::Woken | Wake::Message),
+        None => !asleep(snooze, now),
+    }
+}
+
+/// Whether its Person seeing `seen` of a Thread under `snooze` at `now`
+/// marks anything: it woke by itself, and the mark moves forward.
+pub fn sees(snooze: &Snooze, seen: WokeSeen, now: i64) -> bool {
+    woke_by_itself(snooze, now) && snooze.woke_seen.is_none_or(|was| seen > was)
 }
 
 /// Whether `snooze` is its Person's that goes on by itself (ADR 0074,
@@ -82,6 +98,7 @@ mod tests {
             until,
             woke: None,
             resume: None,
+            woke_seen: None,
         }
     }
 
@@ -162,6 +179,39 @@ mod tests {
             ..until(None)
         };
         assert!(!asleep(&woken, NOW));
+    }
+
+    #[test]
+    fn what_woke_by_itself_is_seen_once_then_dismissed() {
+        let timed = until(Some(NOW + 60));
+        assert!(!woke_by_itself(&timed, NOW), "it sleeps");
+        assert!(woke_by_itself(&timed, NOW + 60), "its time came");
+        assert!(!sees(&timed, WokeSeen::Seen, NOW), "nothing to see yet");
+        assert!(sees(&timed, WokeSeen::Seen, NOW + 60));
+        let seen = Snooze {
+            woke_seen: Some(WokeSeen::Seen),
+            ..timed.clone()
+        };
+        assert!(!sees(&seen, WokeSeen::Seen, NOW + 60), "seen once");
+        assert!(sees(&seen, WokeSeen::Dismissed, NOW + 60), "then dismissed");
+        let dismissed = Snooze {
+            woke_seen: Some(WokeSeen::Dismissed),
+            ..timed.clone()
+        };
+        assert!(!sees(&dismissed, WokeSeen::Seen, NOW + 60), "never back");
+        for (by, itself) in [
+            (Wake::Question, true),
+            (Wake::Failure, true),
+            (Wake::Done, true),
+            (Wake::Message, false),
+            (Wake::Woken, false),
+        ] {
+            let woke = Snooze {
+                woke: Some(Woke { at: NOW, by }),
+                ..timed.clone()
+            };
+            assert_eq!(woke_by_itself(&woke, NOW), itself, "{by:?}");
+        }
     }
 
     /// What `fact` by `author` wakes a Thread under `snooze` for.

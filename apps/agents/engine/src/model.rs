@@ -874,6 +874,24 @@ pub struct Snooze {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resume: Option<TurnId>,
+    /// What its Person has seen of it waking by itself (ADR 0074,
+    /// decisions 3 and 7; ADR 0096): kept here, beside the snooze, so
+    /// every window and machine reads the same.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub woke_seen: Option<WokeSeen>,
+}
+
+/// What a Person has seen of a Thread that woke by itself. It moves
+/// forward only: `seen`, then `dismissed`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "agents/")]
+pub enum WokeSeen {
+    /// They looked at it: the sidebar's row no longer says it woke.
+    Seen,
+    /// They dismissed its Pane's "Woke at" line too.
+    Dismissed,
 }
 
 /// What woke a snoozed Thread before its time, and when.
@@ -1040,6 +1058,11 @@ pub enum Fact {
     /// nothing.
     #[serde(rename = "thread.woke")]
     ThreadWoke { thread: ThreadId, by: Wake },
+    /// The Person saw the Thread wake by itself, or dismissed that it
+    /// did: its snooze's `woke_seen` is `seen` now. Like each of the
+    /// Person's marks below, it moves the Thread nowhere in a list.
+    #[serde(rename = "thread.woke_seen")]
+    ThreadWokeSeen { thread: ThreadId, seen: WokeSeen },
     /// The Person saw `turn`, which ended, settled (ADR 0096): it is the
     /// Thread's `seen` now. Like each of the Person's marks below, it
     /// moves the Thread nowhere in a list.

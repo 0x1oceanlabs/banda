@@ -4,8 +4,8 @@
 //! from it ([`crate::rules::snooze`]): what calls its Person wakes it
 //! early as that fact is written ([`heard`]), and its time needs no timer.
 
-use crate::model::{Fact, Snooze, ThreadId, TurnState, Wake, Woke};
-use crate::rules::snooze::{asleep, goes_on, may_snooze, wake_of, wakes};
+use crate::model::{Fact, Snooze, ThreadId, TurnState, Wake, Woke, WokeSeen};
+use crate::rules::snooze::{asleep, goes_on, may_snooze, sees, wake_of, wakes};
 use crate::{emit, store};
 use banda_kernel::{Error, EventFilter, Listener, Participant, Refusal, Tx, now_ms};
 use schemars::JsonSchema;
@@ -36,6 +36,18 @@ pub struct SnoozeAsk {
     #[ts(as = "Option<bool>", optional)]
     #[schemars(skip)]
     pub resume: bool,
+}
+
+/// What `agents.see_woke` is asked: a Thread, and whether its Person
+/// dismissed that it woke, or only saw it.
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
+pub struct SeeWokeAsk {
+    /// The Thread's ID, as `threads` lists it.
+    pub thread: ThreadId,
+    /// `seen`, as they look at it, or `dismissed`, as they dismiss its
+    /// Pane's line.
+    pub seen: WokeSeen,
 }
 
 /// What `agents.wake` is asked: a Thread.
@@ -104,6 +116,7 @@ pub fn snooze(tx: &mut Tx<'_>, author: Participant, ask: SnoozeAsk) -> Result<()
         until,
         woke: None,
         resume,
+        woke_seen: None,
     };
     store::set_snooze(tx.sql(), thread, &snooze)?;
     let snoozed = Fact::ThreadSnoozed {
@@ -155,6 +168,35 @@ pub fn wake(tx: &mut Tx<'_>, author: Participant, thread: Option<ThreadId>) -> R
         Some(snooze) if asleep(&snooze, now) => woke(tx, author, thread, snooze, Wake::Woken),
         _ => Ok(()),
     }
+}
+
+/// Marks what its Person has seen of `thread` waking by itself (ADR 0074,
+/// decisions 3 and 7), on its host, so every window and machine reads the
+/// same (ADR 0096). It moves forward only, and only on a Thread that woke
+/// by itself: anything else writes nothing, as `agents.read` does.
+pub fn see_woke(
+    tx: &mut Tx<'_>,
+    author: Participant,
+    SeeWokeAsk { thread, seen }: SeeWokeAsk,
+) -> Result<(), Error> {
+    store::thread(tx.sql(), thread)?
+        .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+    let Some(snooze) = store::snooze(tx.sql(), thread)? else {
+        return Ok(());
+    };
+    if !sees(&snooze, seen, tx.now()) {
+        return Ok(());
+    }
+    let woke_seen = Some(seen);
+    store::set_snooze(
+        tx.sql(),
+        thread,
+        &Snooze {
+            woke_seen,
+            ..snooze
+        },
+    )?;
+    emit(tx, author, thread, &Fact::ThreadWokeSeen { thread, seen })
 }
 
 /// Wakes `thread` if `fact`, which `author` just wrote, calls its Person:

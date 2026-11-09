@@ -2,6 +2,7 @@
 import type { Participant } from "../Participant";
 import type { TurnId } from "./TurnId";
 import type { Woke } from "./Woke";
+import type { WokeSeen } from "./WokeSeen";
 
 /**
  * A Thread put away by its Person, or by its own Agent, until a time or
@@ -27,4 +28,10 @@ woke?: Woke,
  * The failed turn that goes again as its time comes: a usage limit's
  * reset (ADR 0074, decision 8). Cleared once it went.
  */
-resume?: TurnId, };
+resume?: TurnId, 
+/**
+ * What its Person has seen of it waking by itself (ADR 0074,
+ * decisions 3 and 7; ADR 0096): kept here, beside the snooze, so
+ * every window and machine reads the same.
+ */
+woke_seen?: WokeSeen, };
