@@ -7,8 +7,8 @@ date: 2026-11-09
 
 _Proposed on 2026-11-09; Roma accepts it. It amends what ADRs 0062, 0080,
 0081, 0082, 0083, 0087, 0088, 0089 and 0100 say of a home host, each part
-listed under "What it amends", and leaves ADR 0068 as it is, with a note
-for the sync. Code is cited from main at `6c8024f3`._
+listed under "What it amends", and leaves ADR 0068 as it is, with two
+notes for the sync. Code is cited from main at `6c8024f3`._
 
 Roma, on 2026-11-09 (translated): "We have no central machine, just
 computers joined together, on different platforms", and "we are just
@@ -129,7 +129,8 @@ their own ADR (Later).
 
 4. **Keys stay each machine's for now** (call 14). Each machine keeps its
    own `keys.toml`, its `mod` and its `[binds]`, as today, and ADR 0068
-   holds as it is. Shared binds come with the sync (Later).
+   holds as it is. Decision 3's split, the binds shared and the mod each
+   device's, takes effect only with the sync (Later).
 
 5. **The arrangement is the machine's whose window shows it, as built.**
    - The workspaces, columns, Groups and widths are the `workspaces`
@@ -151,9 +152,10 @@ their own ADR (Later).
 6. **A Pane an Agent opens is placed by each machine whose window sees
    it, in its own arrangement.**
    - In the end shape (H6) the Agent writes `show.requested@1` into its
-     Project (ADR 0082, decision 7). Each machine whose window follows that
-     Project places it into the Thread's Group (ADR 0065), and its engine
-     checks it again, as ADR 0082 decision 15 had the home host do.
+     Project (ADR 0082, decision 7). Each machine whose window sees it
+     (which windows: Open question 2) places it into the Thread's Group
+     (ADR 0065), and its engine checks it again, as ADR 0082 decision 15
+     had the home host do.
    - Each arrangement places an event once, by its own `placed_through`,
      from the log's head when it first follows a Project. A placed Pane's
      id comes from the event and the placing machine, and its
@@ -245,7 +247,7 @@ their own ADR (Later).
 | 0082 | decision 17 | no home host serves the PWA; which machines do is decided with the web |
 | 0082 | plan steps 1, 6 and 15, Consequences, Changes | two scopes; each file's class; placements in each window's own machine; a write to the Person's files never waits; the ADR 0005, 0025, 0032 and 0071 entries lose the home host |
 | 0083 | decision 6 | the chain signs the members only |
-| 0083 | decision 8 | no home host serves the page; which machines do, and the trust, are decided with the web |
+| 0083 | decision 8, Changes | no home host serves the page; which machines do, and the trust, are decided with the web |
 | 0087 | decisions 1 and 10 | the arrangement and its placement policy are in the engine of the window's machine; `flow` is shared |
 | 0088 | decision 11, plan step 7 | the authority is the engine that holds the arrangement; T2 waits for stage 4 |
 | 0089 | decision 6 | "looked at" stays the device's |
@@ -282,7 +284,8 @@ Each step is its own PR.
 1. The words, once accepted: `GLOSSARY.md` (Home host goes; Peer, Shared,
    Device and Machine file come); dated notes on the vision (the parts
    above, §4.6, §4.7, §8, the risks), the client research, `docs/sdk/`,
-   `platform/skill/SKILL.md`'s file table and the roadmap's stage 2.
+   `platform/skill/SKILL.md`'s file table and the roadmap's stage 2 and
+   risks.
 2. Each file's class in its `SettingsFile` (decision 3), with stage 2's
    slice 5.
 3. H6's placements, by each machine (decision 6).
