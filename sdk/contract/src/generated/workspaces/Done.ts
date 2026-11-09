@@ -3,7 +3,7 @@
 /**
  * What a change answers: nothing of its own, as the kernel's answer
  * carries where its event stands in the log (ADR 0082, decision 4).
- * Braced, so it is `{}`, not null: a window takes an answer as the change
- * done (`client/web/src/safe/Broke.tsx`).
+ * Braced, so it is `{}`, not null: a window takes any answer as the
+ * change done.
  */
 export type Done = Record<symbol, never>;

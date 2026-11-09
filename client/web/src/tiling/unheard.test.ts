@@ -372,9 +372,15 @@ describe.each(traces)("%s, as a window lives it", (_, trace) => {
   test("drawn whole at once, then each fact heard after its answer", () => {
     let seen = sentAll()
     expect(text(seen.predicted)).toBe(last)
+    let before = text(trace.start)
     for (const [i, step] of trace.steps.entries()) {
+      // One that changed nothing writes no fact and has no place in the
+      // log, as the engine answers it (#880).
+      const now = text(step.after)
       if (step.refused !== undefined) seen = dropped(seen, step.seed)
+      else if (now === before) seen = answered(seen, step.seed, null)
       else seen = hear(answered(seen, step.seed, i + 1), step.after, i + 1)
+      before = now
       expect(text(seen.predicted), `after step ${i + 1}`).toBe(last)
     }
     expect(seen.unheard).toEqual([])
