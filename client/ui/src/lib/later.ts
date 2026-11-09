@@ -1,8 +1,9 @@
 /**
  * How a put-off Thread is read against a clock (ADR 0074): whether it
- * sleeps, and when it woke by itself. The engine keeps the Later and
- * fires nothing at its time, so every reader works it out here. Pure, so
- * a Thread's parts read it without the Pane's API.
+ * sleeps, and when it woke by itself. The host writes `thread.woke` by
+ * `time` as its time comes; until that fact comes, a reader whose clock
+ * is past the time takes it as awake already. Pure, so a Thread's parts
+ * read it without the Pane's API.
  */
 import type { ListedLater } from "../pane"
 

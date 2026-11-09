@@ -5074,6 +5074,34 @@ impl World {
 }
 
 #[tokio::test]
+async fn the_host_wakes_a_thread_as_its_time_comes_once_with_that_time() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, _) = world.finish(None, "hello").await;
+    let until = banda_kernel::now_ms() + 300;
+    world
+        .later(world.person(), &thread, Some(until))
+        .await
+        .unwrap();
+    let mut woke = None;
+    for _ in 0..100 {
+        woke = world.later_of(&thread).await.unwrap().woke;
+        if woke.is_some() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let woke = woke.expect("its time woke it");
+    assert_eq!((woke.by, woke.at), (Wake::Time, until));
+    let facts = world.facts("thread.woke").await;
+    let payloads: Vec<_> = facts.into_iter().map(|event| event.payload).collect();
+    assert_eq!(
+        payloads,
+        [json!({ "thread": thread, "by": "time", "at": until })]
+    );
+}
+
+#[tokio::test]
 async fn a_later_puts_a_thread_away_until_its_time_and_the_list_says_so() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
@@ -5471,6 +5499,11 @@ async fn a_later_that_goes_on_tries_its_failed_turn_again_as_its_time_comes() {
     assert_eq!(view.turns[0].state, TurnState::Failed);
     let later = world.later_of(thread).await.unwrap();
     assert_eq!(later.resume, None, "it went on once");
+    assert_eq!(
+        later.woke.map(|w| w.by),
+        Some(Wake::Time),
+        "and its time woke it"
+    );
     let (done, _) = world.finish(None, "hello").await;
     let nothing_failed =
         json!({ "thread": done, "resume": true, "until": banda_kernel::now_ms() + 60_000 });

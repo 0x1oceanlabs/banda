@@ -26,7 +26,7 @@ until?: number,
  */
 someday?: boolean, 
 /**
- * What woke it before its time, and when.
+ * What woke it, and when: its time, or what came first.
  */
 woke?: Woke, 
 /**

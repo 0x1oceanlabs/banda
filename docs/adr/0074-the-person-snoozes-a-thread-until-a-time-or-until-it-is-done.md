@@ -91,6 +91,18 @@ defaults and stay his to change.
      for a Person only. Each window kept both marks in its own storage
      before, so a Thread seen on one machine still said it woke on
      another, and the sidebar's mark and the Pane's line were apart.
+   - _Changed on 2026-11-09 (#1104)._ The time has a fact too: the
+     host, which keeps the Later, is its one clock. As the time comes it
+     writes `thread.woke` by `time`, once, as the one who put it off, and
+     with `at`, the time that came. It is the timer "Go on by itself"
+     (decision 8) had, now for every Later with a time. A time that passed
+     while the engine was off is written as it starts, with that same
+     `at`, so it wakes nothing twice and says the right moment. A reader
+     whose clock is ahead of the fact still takes the Thread as awake, so
+     the list does not wait on it. Each window worked the waking out on
+     its own before, so two windows, or two machines, told of the same one
+     at the same moment; the toast and the notification (decision 7) are
+     to wait for the fact and say it once, as the window's own step.
 
 4. **Snoozing closes the Thread's Panes** (_decided_).
    - As archiving does (ADR 0069, decision 4): every Pane that shows the
@@ -217,9 +229,10 @@ defaults and stay his to change.
 - An Agent can take its Thread out of the Person's sight. Anything that
   needs the Person wakes it, and the Agent's own snooze shows as the
   Agent's in the Thread's line ("Snoozed by its Agent until 22:40").
-- Nothing has to fire at a time to wake a Thread, so a sleeping laptop or
-  a stopped engine wakes nothing late or twice. Only "Go on by itself"
-  does, and it tries again on start.
+- Nothing has to fire at a time for a reader to see a Thread awake, so a
+  sleeping laptop or a stopped engine hides nothing. The host's one timer
+  writes the fact (changed on 2026-11-09): late, it is written as the
+  engine starts, with the time that came, and once.
 - `Alt+Z` is taken. ADR 0025 moved the zoom to `Alt+Shift+F`, so it was
   free.
 

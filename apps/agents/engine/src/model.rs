@@ -870,7 +870,7 @@ pub struct Later {
     #[ts(as = "Option<bool>", optional)]
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub someday: bool,
-    /// What woke it before its time, and when.
+    /// What woke it, and when: its time, or what came first.
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub woke: Option<Woke>,
@@ -933,7 +933,7 @@ pub enum WokeSeen {
     Dismissed,
 }
 
-/// What woke a put-off Thread before its time, and when.
+/// What woke a put-off Thread, and when.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct Woke {
@@ -942,7 +942,8 @@ pub struct Woke {
     pub by: Wake,
 }
 
-/// Why a put-off Thread woke before its time (ADR 0074, decision 3).
+/// Why a put-off Thread woke: its time came, or what came first (ADR
+/// 0074, decision 3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "agents/")]
@@ -957,6 +958,8 @@ pub enum Wake {
     Done,
     /// Someone woke it with `agents.wake`.
     Woken,
+    /// Its time came: the host wrote it, as the one who put it off.
+    Time,
 }
 
 /// How much of a message a list keeps.
@@ -1098,10 +1101,18 @@ pub enum Fact {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         resume: Option<TurnId>,
     },
-    /// A put-off Thread woke before its time. One whose time came says
-    /// nothing.
+    /// A put-off Thread woke, before its time or as it came.
     #[serde(rename = "thread.woke")]
-    ThreadWoke { thread: ThreadId, by: Wake },
+    ThreadWoke {
+        thread: ThreadId,
+        by: Wake,
+        /// When it woke: for its time, the time that came, though the
+        /// fact may be written late, as the engine starts. Older facts
+        /// have none, and woke at their own moment.
+        #[ts(optional, type = "number")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        at: Option<i64>,
+    },
     /// The Person saw the Thread wake by itself, or dismissed that it
     /// did: its Later's `woke_seen` is `seen` now. Like each of the
     /// Person's marks below, it moves the Thread nowhere in a list.

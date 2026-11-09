@@ -297,10 +297,10 @@ export type ListedLater = {
   until?: number
   /** Its own Agent put it off, not its Person. */
   byAgent?: boolean
-  /** What woke it before its time, and when. */
+  /** What woke it, and when: its time, or what came first. */
   woke?: {
     at: number
-    by: "question" | "failure" | "message" | "done" | "woken"
+    by: "question" | "failure" | "message" | "done" | "woken" | "time"
   }
   /** Its Person saw it wake by itself, as its host keeps the mark. */
   wokeSeen?: true
