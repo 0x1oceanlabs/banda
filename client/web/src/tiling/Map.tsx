@@ -8,9 +8,9 @@ import { cn } from "@banda/ui/lib/utils"
 import type { Listed } from "@banda/ui/pane"
 import { type GroupState, groupState } from "@banda/ui/components/banda-mark"
 import { useLookColumns } from "../look"
-import { agentsOf } from "../tiling/groups"
-import { type Shows, useShows } from "../tiling/shows"
-import { type Entry, share, widthIn, type Workspace } from "../tiling/model"
+import { agentsOf } from "./groups"
+import { type Shows, useShows } from "./shows"
+import { type Entry, share, widthIn, type Workspace } from "./model"
 
 /** A column of the map: its share of the screen, its Group, if any, and
  * that Group's state. */

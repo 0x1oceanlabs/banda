@@ -7,7 +7,7 @@ import { type ComponentType, memo, type ReactNode, useMemo } from "react"
 import { useLookBar, useLookSettings } from "../look"
 import { runs, widgets } from "../registry"
 import { AsidePill } from "../safe/AsidePill"
-import { type Ahead, Counts } from "./Counts"
+import { type Ahead, Counts } from "../sidebar/Counts"
 import type { Layout } from "./arrange"
 import { type Known, PARTS, type Part, placed, WORKSPACES } from "./placed"
 
