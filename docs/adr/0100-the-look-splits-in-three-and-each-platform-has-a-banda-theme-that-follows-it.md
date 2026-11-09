@@ -212,8 +212,8 @@ Each step is an issue and a PR.
    ride in the slices that need them. Each file's class comes with stage
    2's slice 5, which also brings arc's machine files to the Mac (E4). The
    mixed files are cut only when the sync (that ADR's E14) first copies
-   them. The `look` crate's split and one store in `client/core` go with
-   step 1._
+   them. The `look` crate's split is step 0a (below), and one store in
+   `client/core` goes with step 1._
 1. `theme.toml`, `extends` and `"platform"`; the built-in themes move to
    it. Nothing on screen changes. (ADR 0080 step 1.)
 2. The token list once, in `platform/theme`; CSS and TypeScript written
