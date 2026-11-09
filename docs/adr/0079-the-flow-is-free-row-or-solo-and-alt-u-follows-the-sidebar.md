@@ -67,7 +67,10 @@ sidebar's to keep, not a second order of the window's.
      another. Now in solo every Group on a Project's workspace is the
      whole screen wide at once, and the Strip scrolls from one to the
      next. It is how the window draws the workspace, not a `fill` in the
-     engine; `Alt+M` changes nothing in solo.
+     engine. `Alt+M` in solo shows the workspace in view as the row for a
+     while, the focus where it was, and pressed again goes back to solo;
+     it writes nothing to `agents.toml`, and going to another workspace
+     or another Flow ends it. `Alt+Shift+M` is the Flow itself.
 
 3. **The sidebar's header switches the Flow.**
    - An icon beside "New Thread" draws the Flow it is in. A click opens

@@ -59,8 +59,8 @@ const standingIn = (seen: Seen) => seen.standing
  * order. It names no App and imports nothing of the Window. `machine`,
  * `modules` and `home` are for the arrangement a window kept before,
  * which moves to the engine once. With `solo`, every Group on a
- * Project's workspace is drawn the whole screen wide (ADR 0079): the
- * engine's arrangement stays as it is.
+ * Project's workspace is drawn the whole screen wide (ADR 0079), but on
+ * the workspace `row` names: the engine's arrangement stays as it is.
  */
 export function useTiling({
   engine,
@@ -68,12 +68,15 @@ export function useTiling({
   modules,
   home,
   solo = false,
+  row,
 }: {
   engine: Engine
   machine: ProjectId | undefined
   modules: readonly string[]
   home: ProjectId
   solo?: boolean
+  /** In solo, the workspace `Alt+M` shows as the row for a while. */
+  row?: string
 }) {
   // The arrangement is the engine's; the view, the window's (ADR 0025).
   const live = useArranged(engine)
@@ -85,7 +88,10 @@ export function useTiling({
     if (heard) store.set(hear(store.get(), heard.workspaces, heard.at))
   }, [store, heard])
   // As drawn: in solo, each Project's workspace a Group the screen wide.
-  const drawing = useMemo(() => (solo ? cached(soloed) : asIs), [solo])
+  const drawing = useMemo(
+    () => (solo ? cached((state) => soloed(state, row)) : asIs),
+    [solo, row]
+  )
   const workspaces = drawing(useStore(store, stateOf))
   const view = useStore(store, viewIn)
   const standing = useStore(store, standingIn)

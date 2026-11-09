@@ -187,16 +187,15 @@ export function filledAt(workspace: Workspace, c: number): boolean {
 }
 
 /** The workspaces as solo draws them: each Project's workspace with
- * every Group the whole screen wide. The same object when none changes. */
-export function soloed(state: Workspaces): Workspaces {
-  if (!state.list.some((one) => one.project !== undefined && !one.solo))
-    return state
+ * every Group the whole screen wide, but `row`, the one `Alt+M` shows as
+ * the row for a while. The same object when none changes. */
+export function soloed(state: Workspaces, row?: string): Workspaces {
+  const wide = (one: Workspace) => one.project !== undefined && one.id !== row
+  if (!state.list.some((one) => wide(one) && !one.solo)) return state
   return {
     ...state,
     list: state.list.map((one) =>
-      one.project === undefined || one.solo
-        ? one
-        : { ...one, solo: true as const }
+      wide(one) && !one.solo ? { ...one, solo: true as const } : one
     ),
   }
 }
