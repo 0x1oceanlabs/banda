@@ -35,7 +35,7 @@ icu_normalizer = { version = "2.4.0", default-features = false, features = ["com
 # decoder is C (dav1d), nor the formats no camera nor screen writes.
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "tiff"] }
 ignore = "0.4.25"
-infer = "0.19"
+infer = "0.22"
 # A picture's EXIF, for Files' info (BSD-2-Clause).
 kamadak-exif = "0.6.2"
 # Landlock's scopes for the fence around a Harness's programs (ADR 0083,
