@@ -5104,6 +5104,7 @@ test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts on
   await composer.fill("hello")
   await composer.press("Enter")
   await expect(thread).not.toHaveAccessibleName("New Thread")
+  const hello = await ownTile(page, thread)
 
   // The sidebar's field opens it, and Esc closes it.
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
@@ -5132,6 +5133,16 @@ test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts on
   await page.keyboard.press("Alt+Enter")
   await expect(menu).toBeHidden()
   await expect(page.getByText("You said: write a poem")).toBeVisible()
+
+  // A row that opens a Pane leaves the focus where that Pane puts it, in
+  // its message box, once the menu has gone too: the menu gives the focus
+  // back only where none is (#946).
+  await page.keyboard.press("Alt+Space")
+  await search.fill("hello")
+  await expect(menu.getByRole("option").first()).toContainText("hello")
+  await page.keyboard.press("Enter")
+  await expect(page.locator("[data-slot=dialog-content]")).toHaveCount(0)
+  await expect(hello.composer).toBeFocused()
 
   // Alt+K opens it at its Actions, each with its key; Alt+K again closes it.
   await page.keyboard.press("Alt+K")
