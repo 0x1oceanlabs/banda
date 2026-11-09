@@ -161,8 +161,10 @@ mod build {
         }
     }
 
+    /// The Pane kinds that open as a Group of their own, as the window
+    /// parts say (ADR 0065, decision 7).
     pub fn workspaces(_: &HostContext<'_>) -> Workspaces {
-        Workspaces::new()
+        Workspaces::new().grouped_kinds(crate::modules::grouped_kinds())
     }
 }
 

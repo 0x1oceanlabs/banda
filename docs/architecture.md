@@ -629,7 +629,9 @@ contract. It is one folder: an App's in `apps/`, the platform's in
   pane/        React package: its window part, one defineModule
   app.toml     id, kind, name, version, api, from Banda, settings files,
                legacy table prefixes, needs (empty yet), unstable marks
-  window.json  its window part as the engine reads it, written by the window's tests
+  window.json  its window part as the engine reads it, written by the window's tests:
+               what `banda modules` prints, and the Pane kinds that open as
+               a Group of their own
 ```
 
 A module declares itself in its code and a short `app.toml` (ADR 0022,
@@ -675,9 +677,15 @@ declares itself in `client/web/app.toml` too, with no `kind`, `api` or
 decision 1).
 `banda modules` prints the three as one JSON per module
 (`engine/src/modules.rs`), and the skill's `modules` topic is written
-from it. A path a module takes that the contract lacks is an unstable mark
-in its `app.toml`, with why; the tests hold the count at a ceiling that
-only falls, and `scripts/check.sh` prints them.
+from it. The serving engine reads the window parts too: the keys in
+force take their actions and scopes (ADR 0071, decision 2), and the
+workspaces, as they start, the Pane kinds that open as a Group of their
+own (`PaneKind.grouped`), so a Thread is a Group from its opening whoever
+opens it (ADR 0065, decision 7). For those kinds, a window part it
+cannot read it logs and leaves out. A path a module takes that the
+contract lacks is an unstable mark in its `app.toml`, with why; the tests
+hold the count at a ceiling that only falls, and `scripts/check.sh`
+prints them.
 
 **One list of Apps.** `engine/build.rs` scans the folders of `apps/` and
 `platform/` with an `app.toml`, Apps first, each bucket by name. It

@@ -9,13 +9,18 @@
 //! - its window part's `defineModule`, when it has one, which the window's
 //!   tests copy into `window.json` beside the manifest, as the engine
 //!   has no window.
+//!
+//! The serving engine reads from here which Pane kinds open as a Group
+//! of their own, for the workspaces (ADR 0065, decision 7); the keys read
+//! the actions and their scopes through `banda_settings` (ADR 0071,
+//! decision 2).
 
 use crate::apps::{APPS, MANIFEST, Part, WINDOW};
 use banda_kernel::Method;
 use banda_look::keys::{Action, Scope};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// How many unstable marks the modules hold (ADR 0022, decision 6). A
 /// mark more fails the tests until a PR raises this and says why; a mark
@@ -94,7 +99,7 @@ pub struct Offer {
 #[serde(deny_unknown_fields)]
 struct Window {
     #[serde(default)]
-    panes: Vec<String>,
+    panes: Vec<PaneKind>,
     actions: Vec<Action>,
     /// The scopes its actions' keys work in (ADR 0071, decision 1).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -106,6 +111,18 @@ struct Window {
     /// Its widgets on the bar, which the look's `[bar]` places by id.
     #[serde(default)]
     bar: Vec<Widget>,
+}
+
+/// A kind of Pane a window part offers (`PaneKind`), with what the host
+/// needs of it (ADR 0087, decision 13).
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PaneKind {
+    kind: String,
+    /// It opens as a Group of its own, as a Thread does (`PaneKind.grouped`;
+    /// ADR 0065, decision 7).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    grouped: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -132,6 +149,37 @@ fn offer(part: &Part) -> Offer {
                 .unwrap_or_else(|error| panic!("{id}'s window.json: {error}"))
         }),
     }
+}
+
+/// The Pane kinds that open as a Group of their own, as the window parts
+/// in the list of Apps say: the workspaces take them as the engine
+/// starts. A window part that does not read is logged and left out, and
+/// its kinds open in no Group: where a Pane opens never stops the engine,
+/// and its tests catch the wrong file.
+pub fn grouped_kinds() -> BTreeSet<String> {
+    grouped_in(APPS)
+}
+
+fn grouped_in(parts: &[Part]) -> BTreeSet<String> {
+    let mut kinds = BTreeSet::new();
+    for part in parts {
+        let Some(window) = part.window else {
+            continue;
+        };
+        match serde_json::from_str::<Window>(window) {
+            Ok(window) => kinds.extend(
+                (window.panes.into_iter())
+                    .filter(|pane| pane.grouped)
+                    .map(|pane| pane.kind),
+            ),
+            Err(error) => tracing::error!(
+                %error,
+                app = part.id,
+                "a window.json does not read: its Panes open in no Group of their own"
+            ),
+        }
+    }
+    kinds
 }
 
 /// The unstable marks: `module.mark`, and why.
@@ -333,6 +381,41 @@ mod tests {
                 .unwrap_or_default();
             assert_eq!(legacy_prefixes, &reached, "{id}'s {MANIFEST}");
         }
+    }
+
+    /// What the workspaces open as a Group of its own is what the window's
+    /// code says, through the files its tests write: a Thread's Pane alone
+    /// (ADR 0065, decision 7).
+    #[test]
+    fn a_threads_pane_alone_opens_as_a_group_of_its_own() {
+        assert_eq!(
+            grouped_kinds(),
+            BTreeSet::from(["agents.thread".to_owned()])
+        );
+    }
+
+    /// A window part that does not read groups nothing, and the engine
+    /// still starts; the others' kinds still count.
+    #[test]
+    fn a_window_part_that_does_not_read_is_left_out_of_the_grouped_kinds() {
+        let part = |id, window| Part {
+            id,
+            manifest: "",
+            window: Some(window),
+            methods: None,
+        };
+        let parts = [
+            part("broken", "{"),
+            part(
+                "other",
+                r#"{ "panes": [{ "kind": "broken.pane", "grouped": 1 }], "actions": [] }"#,
+            ),
+            part(
+                "a",
+                r#"{ "panes": [{ "kind": "a.one", "grouped": true }, { "kind": "a.two" }], "actions": [] }"#,
+            ),
+        ];
+        assert_eq!(grouped_in(&parts), BTreeSet::from(["a.one".to_owned()]));
     }
 
     #[test]

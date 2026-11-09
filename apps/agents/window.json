@@ -1,7 +1,12 @@
 {
   "panes": [
-    "agents.thread",
-    "agents.visual"
+    {
+      "kind": "agents.thread",
+      "grouped": true
+    },
+    {
+      "kind": "agents.visual"
+    }
   ],
   "actions": [
     {

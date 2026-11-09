@@ -9,7 +9,10 @@
 //! What needs the module's store stays in the module: that it takes a
 //! window's arrangement once, the workspaces set aside, the Agents' tools
 //! behind their walls, the arrangement's upgrades as it is read, and the
-//! events.
+//! events. So does what it knows of the kinds of Pane: its handler of
+//! `open` fills `grouped` from the kind when it is left out, and `apply`
+//! takes it as sent. A window sends it for each kind that opens grouped
+//! (`PaneKind.grouped`), so its copy of the model knows no kind.
 
 use crate::model::{
     self, Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Toward, WorkspaceId,
@@ -71,6 +74,7 @@ pub struct Open {
     /// A new Pane's column is in a Group from the start: the one the place
     /// puts it in, else a Group of its own, as a Thread opens, so what its
     /// Agent opens joins a Group already there (ADR 0065, decision 7).
+    /// Left out, as its kind declares.
     #[serde(default)]
     #[ts(optional)]
     pub grouped: Option<bool>,
