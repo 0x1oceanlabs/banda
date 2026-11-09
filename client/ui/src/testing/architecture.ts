@@ -2,13 +2,14 @@
  * What the architecture tests read (docs/architecture.md, "Checks that
  * hold the shape"): the Apps' and platform parts' folders, the source
  * files of a folder, the modules each one names, the Apps each one names,
- * where each one reads the desktop's bridge, what each one animates and
- * the code its components take as props.
+ * what each one takes of a module as values, where each one reads the
+ * desktop's bridge, what each one animates and the props its components
+ * take, those that are code and all of them.
  * For tests alone: it reads the disk.
  */
 /// <reference types="node" />
 import { existsSync, readdirSync } from "node:fs"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import ts from "typescript"
 
 /**
@@ -209,17 +210,19 @@ export function layoutMotion(source: string): string[] {
 }
 
 /**
- * The props of each component of `source`, the code of `file`, that are
- * code rather than data (ADR 0087, B4e), by the component's name: those
- * whose type is a function, also when optional or behind a type alias or
- * an interface of the file. A component is a function whose name starts
- * with a capital, declared or held by a `const`. What its props' type
- * takes from elsewhere, as `Omit<ComponentProps<typeof Row>, …>` takes
- * Row's, is not read here: read the file that declares it.
+ * The props of each component of `source`, the code of `file`, by the
+ * component's name: with `code`, those whose type is a function, also
+ * when optional or behind a type alias or an interface of the file, and
+ * otherwise every one, whatever its type, and each it takes apart by
+ * name. A component is a function whose name starts with a capital,
+ * declared or held by a `const`, wrapped or not, as by `memo`. What its
+ * props' type takes from elsewhere, as `Omit<ComponentProps<typeof Row>,
+ * …>` takes Row's, is not read here: read the file that declares it.
  */
-export function functionProps(
+function componentProps(
   source: string,
-  file: string
+  file: string,
+  code: boolean
 ): Record<string, string[]> {
   const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest)
   const declared = new Map<string, ts.Node>()
@@ -229,11 +232,16 @@ export function functionProps(
   // What a type stands for, through the file's aliases, once each.
   const resolved = (type: ts.Node, seen: Set<string>): ts.Node => {
     if (ts.isParenthesizedTypeNode(type)) return resolved(type.type, seen)
-    if (ts.isTypeReferenceNode(type) && ts.isIdentifier(type.typeName)) {
-      const name = type.typeName.text
-      const target = declared.get(name)
-      if (target && !seen.has(name))
-        return resolved(target, new Set([...seen, name]))
+    // A name, as a type or as what an interface extends.
+    const named = ts.isTypeReferenceNode(type)
+      ? type.typeName
+      : ts.isExpressionWithTypeArguments(type)
+        ? type.expression
+        : undefined
+    if (named && ts.isIdentifier(named)) {
+      const target = declared.get(named.text)
+      if (target && !seen.has(named.text))
+        return resolved(target, new Set([...seen, named.text]))
     }
     return type
   }
@@ -242,38 +250,160 @@ export function functionProps(
     if (ts.isFunctionTypeNode(node)) return true
     return ts.isUnionTypeNode(node) && node.types.some(isFunction)
   }
+  // A name, bare or quoted: `onPin` or `"onPin"`.
+  const nameOf = (name: ts.Node | undefined): string[] =>
+    name && (ts.isIdentifier(name) || ts.isStringLiteral(name))
+      ? [name.text]
+      : []
   const members = (type: ts.Node): string[] => {
     const node = resolved(type, new Set())
     if (ts.isIntersectionTypeNode(node)) return node.types.flatMap(members)
     if (!ts.isTypeLiteralNode(node) && !ts.isInterfaceDeclaration(node))
       return []
-    return node.members.flatMap((member) => {
-      if (!member.name || !ts.isIdentifier(member.name)) return []
-      if (ts.isMethodSignature(member)) return [member.name.text]
+    // An interface of the file takes the members of those it extends.
+    const extended = ts.isInterfaceDeclaration(node)
+      ? (node.heritageClauses ?? []).flatMap((clause) =>
+          clause.types.flatMap(members)
+        )
+      : []
+    const own = node.members.flatMap((member) => {
+      if (!code || ts.isMethodSignature(member)) return nameOf(member.name)
       return ts.isPropertySignature(member) &&
         member.type &&
         isFunction(member.type)
-        ? [member.name.text]
+        ? nameOf(member.name)
         : []
     })
+    return [...extended, ...own]
   }
+  // What a component takes apart by name, its type read here or not.
+  const apart = (props: ts.ParameterDeclaration | undefined): string[] =>
+    props && ts.isObjectBindingPattern(props.name)
+      ? props.name.elements.flatMap((element) =>
+          element.dotDotDotToken
+            ? []
+            : nameOf(element.propertyName ?? element.name)
+        )
+      : []
   const found: Record<string, string[]> = {}
   const component = (name: string, fn: ts.SignatureDeclaration) => {
     if (!/^[A-Z]/.test(name)) return
-    const type = fn.parameters[0]?.type
-    found[name] = type ? members(type) : []
+    const props = fn.parameters[0]
+    const typed = props?.type ? members(props.type) : []
+    found[name] = [...new Set(code ? typed : [...typed, ...apart(props)])]
+  }
+  // The function a `const` holds, also inside a call such as `memo(…)`.
+  const held = (node: ts.Expression): ts.SignatureDeclaration | undefined => {
+    if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) return node
+    if (ts.isCallExpression(node) && node.arguments[0])
+      return held(node.arguments[0])
+    return undefined
   }
   for (const node of tree.statements)
     if (ts.isFunctionDeclaration(node) && node.name)
       component(node.name.text, node)
     else if (ts.isVariableStatement(node))
-      for (const held of node.declarationList.declarations)
-        if (
-          ts.isIdentifier(held.name) &&
-          held.initializer &&
-          (ts.isArrowFunction(held.initializer) ||
-            ts.isFunctionExpression(held.initializer))
-        )
-          component(held.name.text, held.initializer)
+      for (const declaration of node.declarationList.declarations) {
+        const fn = declaration.initializer && held(declaration.initializer)
+        if (ts.isIdentifier(declaration.name) && fn)
+          component(declaration.name.text, fn)
+      }
+  return found
+}
+
+/**
+ * The props of each component of `source`, the code of `file`, that are
+ * code rather than data (ADR 0087, B4e), by the component's name: those
+ * whose type is a function, also when optional or behind a type alias or
+ * an interface of the file (`componentProps` says what a component is
+ * and what is read).
+ */
+export function functionProps(
+  source: string,
+  file: string
+): Record<string, string[]> {
+  return componentProps(source, file, true)
+}
+
+/**
+ * Every prop of each component of `source`, the code of `file`, by the
+ * component's name, whatever its type: its props' type's members, through
+ * the file's aliases and interfaces, and each it takes apart by name. A
+ * prop typed by a name from elsewhere, as `VoidFunction` or
+ * `Dispatch<…>`, which `functionProps` cannot tell for code, is here too.
+ */
+export function propNames(
+  source: string,
+  file: string
+): Record<string, string[]> {
+  return componentProps(source, file, false)
+}
+
+/**
+ * What `source`, the code of `file`, takes of each module it names, as a
+ * value rather than a type, by the module: a relative one as the path it
+ * stands for, without its extension, any other as written. A name is
+ * taken as the module exports it, so `a` for `import { a as b }`, and
+ * `default` for a default import; `*` takes the module whole (`import *
+ * as m`, `export *`, `import("…")`). A re-export takes what it hands on,
+ * as an import does; a type-only one, as `import type`, takes nothing.
+ * Read as TypeScript reads it, so neither a comment nor a string is taken
+ * for an import.
+ */
+export function valuesTaken(
+  source: string,
+  file: string
+): Record<string, string[]> {
+  const found: Record<string, string[]> = {}
+  const take = (from: ts.Node | undefined, names: string[]) => {
+    if (!from || !ts.isStringLiteralLike(from)) return
+    const module = from.text.startsWith(".")
+      ? join(dirname(file), from.text).replace(/\.[cm]?[jt]sx?$/, "")
+      : from.text
+    found[module] = [...(found[module] ?? []), ...names]
+  }
+  const named = (
+    elements: ts.NodeArray<ts.ImportSpecifier | ts.ExportSpecifier>
+  ): string[] =>
+    elements
+      .filter((element) => !element.isTypeOnly)
+      .map((element) => (element.propertyName ?? element.name).text)
+  const visit = (node: ts.Node): void => {
+    if (ts.isImportDeclaration(node)) {
+      const clause = node.importClause
+      if (clause?.phaseModifier === ts.SyntaxKind.TypeKeyword) return
+      // `import "./x"` runs the module and takes nothing of it.
+      if (!clause) return take(node.moduleSpecifier, [])
+      const bound = clause.namedBindings
+      take(node.moduleSpecifier, [
+        ...(clause.name ? ["default"] : []),
+        ...(bound && ts.isNamespaceImport(bound) ? ["*"] : []),
+        ...(bound && ts.isNamedImports(bound) ? named(bound.elements) : []),
+      ])
+      return
+    }
+    if (ts.isExportDeclaration(node)) {
+      if (node.isTypeOnly) return
+      const clause = node.exportClause
+      take(
+        node.moduleSpecifier,
+        !clause || ts.isNamespaceExport(clause) ? ["*"] : named(clause.elements)
+      )
+      return
+    }
+    if (
+      ts.isImportEqualsDeclaration(node) &&
+      !node.isTypeOnly &&
+      ts.isExternalModuleReference(node.moduleReference)
+    )
+      take(node.moduleReference.expression, ["*"])
+    else if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword
+    )
+      take(node.arguments[0], ["*"])
+    ts.forEachChild(node, visit)
+  }
+  visit(ts.createSourceFile(file, source, ts.ScriptTarget.Latest))
   return found
 }
