@@ -1,11 +1,12 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-09
 ---
 
 # Machines are peers, and there is no home host
 
-_Proposed on 2026-11-09; Roma accepts it. It amends what ADRs 0062, 0080,
+_Accepted by Roma on 2026-11-10, with each Open question as recommended
+(Roma's calls, at the end). It amends what ADRs 0062, 0080,
 0081, 0082, 0083, 0087, 0088, 0089 and 0100 say of a home host, each part
 listed under "What it amends", and leaves ADR 0068 as it is, with two
 notes for the sync. Code is cited from main at `6c8024f3`._
@@ -153,7 +154,7 @@ their own ADR (Later).
    it, in its own arrangement.**
    - In the end shape (H6) the Agent writes `show.requested@1` into its
      Project (ADR 0082, decision 7). Each machine whose window sees it
-     (which windows: Open question 2) places it into the Thread's Group
+     (only those where its Thread shows: Roma's call 2) places it into the Thread's Group
      (ADR 0065), and its engine checks it again, as ADR 0082 decision 15
      had the home host do.
    - Each arrangement places an event once, by its own `placed_through`,
@@ -290,16 +291,15 @@ Each step is its own PR.
    slice 5.
 3. H6's placements, by each machine (decision 6).
 
-## Open
+## Roma's calls (2026-11-10)
 
-1. **Is the sync wanted at all, or are each machine's files its own for
-   good?** Recommended: build it later as E14, only when the Person feels
-   the need. Nothing now depends on it; decisions 1 to 7 hold either way.
-2. **An Agent's Pane on every machine whose window follows its Project, or
-   only where its Thread shows?** Recommended: only where its Thread
-   shows. A window without it is not watching that Agent, and would get
-   the Pane where a Pane with no place goes (ADR 0065). The Agent's own
-   machine places it as built.
-3. **Decision 3's rows taken by "when in doubt"** (sound, the drawer, the
-   overview, groups, how Files shows things): should any move to shared?
-   Recommended: leave them the device's; moving one later only adds.
+All three as recommended:
+
+1. **The sync comes later**, as E14, only when the Person feels the need.
+   Nothing now depends on it; decisions 1 to 7 hold either way.
+2. **An Agent's Pane shows only where its Thread shows.** A window
+   without the Thread is not watching that Agent. The Agent's own machine
+   places it as built.
+3. **Decision 3's "when in doubt" rows stay the device's** (sound, the
+   drawer, the overview, groups, how Files shows things). Moving one to
+   shared later only adds.
