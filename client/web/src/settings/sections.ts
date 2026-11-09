@@ -75,7 +75,7 @@ export type Section = {
   title: string
   icon: LucideIcon
   /** The files its rows are in, its own first: the one it opens, and
-   * the one its Body draws. None for Files, which lists them. */
+   * the one its Body draws. None for Settings files, which lists them. */
   files?: SectionFile[]
   /** What it holds, under its title. */
   about: string
@@ -226,8 +226,10 @@ export const SECTIONS: Section[] = [
     Foot: SharingSettings,
   },
   {
-    id: "files",
-    title: "Files",
+    // Not `files`: that is the Files App's section above, and a link
+    // opens the first section with its id.
+    id: "settings-files",
+    title: "Settings files",
     icon: FileCogIcon,
     about:
       "Every file Banda reads its settings from, and whether it reads. Edit one by hand and this window follows.",
