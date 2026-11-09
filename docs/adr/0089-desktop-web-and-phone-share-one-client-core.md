@@ -157,6 +157,12 @@ desktop, web and the PWA now.
    path once bytes, settings and the look come from the host (E1, E4, E5),
    and names no App once the capabilities replace each App's desktop
    part.
+   _Amended 2026-11-09 by
+   [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): bytes
+   and a machine's own settings come from its host (E1, E4). The Person's
+   files and the theme folders come from the window's own machine's copy,
+   and the device works the theme out (ADR 0100), so the vision's E5
+   narrows to the web page's look._
 
 10. **The catalogue's code stays where the vision put it,** `sdk/kit` as
     `@banda/kit` (L3). The Tree runtime goes in the core; the web renderer
@@ -178,6 +184,11 @@ Hermes; an asynchronous storage port and a scheduler port that only React
 Native would need; the core in a worker; popped-out Panes on the web; the
 look resolver on the device (E5 resolves it on the host for v1); a
 screencast backend for the browser's page on the web.
+_Amended 2026-11-09 by
+[ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): the
+device works the theme out (ADR 0100), from its own machine's theme
+folders; where the web page does is decided with the web (stage 4), as
+ADR 0100 has it. That is what is left of E5._
 
 **Plan.** Each step its own PR; `scripts/check.sh` passes after each. Ids
 are the research's §9 and the vision's §9.3.

@@ -242,7 +242,7 @@ What stands in the way today:
    _Amended 2026-11-09 by
    [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): one
    client over several machines, the merged Inbox. Copying the shared files
-   is that ADR's E5._
+   is that ADR's E14._
 7. Calls on the host, the devices' register, the road to a device.
 8. The web client, served by the host, as a PWA with Web Push.
 9. Banda Cloud, a service at a time: `auth` and `api`, the relay, push,

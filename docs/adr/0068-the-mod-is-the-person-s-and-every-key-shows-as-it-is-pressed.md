@@ -37,10 +37,11 @@ is refused.
 
 1. **The mod is a line of `keys.toml`: `mod = "Alt"`.**
    _Amended 2026-11-09 by
-   [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): once
-   machines copy `keys.toml`, its binds are shared and `mod` is each
-   device's, in the device's file (ADR 0100, step 0a). The rest stands: Alt
-   by default everywhere, ⌘ alone refused._
+   [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): until
+   machines copy the Person's files (that ADR's E14), `keys.toml` stays
+   each machine's, whole. With the copy, its binds are shared and `mod` is
+   each device's, in the device's own file. The rest stands: Alt by default
+   everywhere, ⌘ alone refused._
    - It is one or two of Alt, Ctrl and Super. On a Mac, Alt is ⌥ and
      Super is ⌘. Alt is Banda's own, on every system, as the window
      holds it today.
@@ -115,6 +116,17 @@ is refused.
      as that key is no longer Banda's. "Keep as they are" leaves them.
    - The mod changed by hand: the window names each line that still
      holds the old one, as a Problem at its line.
+   - _Amended 2026-11-09 by
+     [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md),
+     decision 4: this holds until machines copy the Person's files (that
+     ADR's E14). With the copy, the binds are shared and each device has
+     its own mod, so a shared line names its level, as Banda's own keys do
+     in the code: `"Mod+M"`, `"Mod+Shift+M"`, `"Mod+More+M"`. Every menu
+     still shows the key as pressed (decision 4). Changing a device's mod
+     rewrites nothing shared. A shared bind that clashes on a device with
+     its mod, or that its platform keeps, is skipped there, with a Problem
+     at its line on that device. Whether to pay this, or keep a keys file
+     per machine for good, is open in that ADR._
 
 6. **`Ctrl+Alt+Shift+K` stays no file's, whatever the mod** (ADR 0005,
    decision 11). It brings back Alt and Banda's own keys until

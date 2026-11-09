@@ -24,7 +24,7 @@ _Amended 2026-11-09 by
 [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): machines
 are peers, and there is no home host. Roma's decisions 4 and 15 in the
 list below now read: the Person's files are a full copy on every machine,
-and any machine the browser reaches serves the PWA._
+and a machine the browser reaches over `direct` serves the PWA._
 
 ADR 0062 makes Banda a kernel, a platform and Apps built on one SDK.
 ADR 0081 runs Banda on several machines: hosts run the work, and clients
@@ -413,6 +413,11 @@ Roma, 2026-11-06, among the vision's decisions:
       (decision 5).
     - **The Person's documents.** A `rev` each, fields only added
       (decision 1).
+      _Amended 2026-11-09 by
+      [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): they
+      are shared files, a copy on every machine, each with the stamp that
+      ADR's decision 7 gives it, not a `rev`. A key an older Banda does not
+      know is a word in Problems, not a refusal._
     - **The catalogue**, the components a client draws an App's view
       with, as ADR 0062 decision 7 has it. `hello` says the client's
       version, and each view names the version it needs. For an older
@@ -424,6 +429,10 @@ Roma, 2026-11-06, among the vision's decisions:
     - An Address is `{scope: Project(id) | Person | Host(key), app, id}`.
       Only a Host's thing, which cannot move, names a host. Panes, intents
       and published facts name things by Address.
+      _Amended 2026-11-09 by
+      [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): there
+      is no Person scope, so an Address is `{scope: Project(id) | Host(key),
+      app, id}`._
     - **Hosts never talk to each other.** An Agent on one host does not
       act on another.
     - **The directory is the client's cache**, made from each paired
@@ -445,12 +454,18 @@ Roma, 2026-11-06, among the vision's decisions:
       clients place a Pane once, and a Pane already closed is skipped. A
       Pane appears once a client is open, the only time anyone sees it.
       _Amended 2026-11-09 by
-      [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): it
-      sends it to its own machine's engine, which places it once in that
-      machine's arrangement, by `placed_through`, and checks it again there,
-      as below. `not_home` goes: an Agent writes a shared file on its own
-      machine only, as a proposal where ADR 0083 decision 3 asks one, and
-      the copy between machines carries it._
+      [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md),
+      decision 6: it sends it to its own machine's engine, which places it
+      once in that machine's arrangement, by `placed_through`, and checks
+      it again there, as below. A machine that first follows a Project
+      starts at the log's head. Where the Agent's machine is the window's,
+      `open_pane` places the Pane directly and moves `placed_through` past
+      its event, so each arrangement has one road. The new Pane's id is
+      derived from the event and the placing machine; its `pane.left@1`
+      ends that placement only, and the Agent's read of its Panes lists
+      them by machine. `not_home` goes: an Agent writes a shared file on its
+      own machine only, as a proposal where ADR 0083 decision 3 asks one,
+      and the copy between machines carries it._
     - **The home host checks every placement again**, since another host
       is only semi-trusted and the client only carries the placement: the
       Pane's kind is in the home host's registry, it does not run as the
@@ -507,10 +522,14 @@ Roma, 2026-11-06, among the vision's decisions:
     - **The phone's v1 is a PWA the home host serves; a native app comes
       later** (Roma, 2026-11-06, the vision's decision 15).
       _Amended 2026-11-09 by
-      [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): any
-      machine reached over `direct` serves it from the binary it runs, and
-      the page connects to the others from there. Which machine a phone
-      opens first is the Person's pick._
+      [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md),
+      decision 8: a machine reached over `direct` serves it from the binary
+      it runs, and the page connects to the others from there. Each
+      serving machine is an origin of its own; a phone's PWA is one origin,
+      the machine the Person picked, with its device settings and push
+      subscription there. How another machine's push reaches it is decided
+      with the web (stage 4), and which machines may serve the page is open
+      in that ADR._
     - A PWA needs a secure context for its Service Worker and Web Push.
       So the phone's v1 route is `direct` over a tailnet, or a LAN name
       with a trusted certificate, and every host the PWA joins needs a
@@ -528,6 +547,9 @@ lists there.
 
 1. This ADR; GLOSSARY's new words; in `docs/architecture.md`, the three
    scopes, the command path and the device road.
+   _Amended 2026-11-09 by
+   [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): two
+   scopes, Project and Host._
 2. A receipt for every command: final refusals only, the params' hash;
    `banda mcp`'s CommandId per request (A3, A6).
 3. The router's queue per session and scope; receipts carry `at` (A8).
@@ -538,9 +560,9 @@ lists there.
    with a `rev`; the old state migrated (A2).
    _Amended 2026-11-09 by
    [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): each
-   settings file's class (shared, device or machine), and for the copy
-   between machines, the hashes each machine last agreed on. Nothing
-   splits._
+   settings file's class (shared, device or machine), with the roadmap's
+   stage 2, slice 5. Nothing splits. The copy between machines and its
+   bookkeeping are that ADR's E14._
 7. `agents` becomes `threads`, with aliases (T0): ADR 0085's step 1.
 8. `facts!`: published and private facts, with `gate`, `item@1` and
    `call@1` (B7); the deltas leave the log (B12).

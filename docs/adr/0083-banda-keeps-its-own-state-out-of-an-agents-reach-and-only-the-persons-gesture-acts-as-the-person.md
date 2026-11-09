@@ -226,8 +226,12 @@ wall).
    - _Amended 2026-11-09 by
      [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): there
      is no home host. The code comes from the signed binary of the machine
-     that serves it, never from a disk an Agent can edit; any machine
-     reached over `direct` may serve it._
+     that serves it, never from a disk an Agent can edit. The reason above,
+     "no new place to trust", no longer holds: each machine that may serve
+     the page is a place whose code acts as the Person's device toward the
+     others. Which machines may (only those the Person marks, one origin
+     per machine for v1 as `critic-security.md` W6 has it, or every machine
+     reached over `direct`) is open in that ADR._
 
 **Plan.** Each step its own PR; `scripts/check.sh` passes after each. The
 IDs are the vision's (§9.3).
