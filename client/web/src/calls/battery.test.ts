@@ -3,7 +3,15 @@ import type { Battery } from "@banda/contract/machines"
 import { type Shown, Store } from "@banda/core"
 import type { Listed } from "@banda/ui/pane"
 import { expect, test } from "vitest"
-import { type Low, lowNow, lowWords, tellLow, turnsIn } from "./battery"
+import {
+  type Low,
+  lowNow,
+  lowWords,
+  tellLow,
+  turnsIn,
+  turnsOn,
+  turnsSaid,
+} from "./battery"
 import { newStores, takeLists } from "./stores"
 
 const p = "p" as ProjectId
@@ -86,11 +94,13 @@ test("a machine on battery at 20% or less, its Agents at work, is warned of once
   expect(now.tell).toEqual([
     { host: "m1pro", name: "m1pro", percent: 20, working: 2 },
   ])
-  // Lower still, away and back, still on battery: not again.
+  // Lower still, away and back still low, on battery, and a reading a
+  // little over 20, as a battery's wavers: not again.
   for (const hosts of [
     [m1pro({ percent: 12 })],
     [away()],
-    [m1pro()],
+    [m1pro({ percent: 12 })],
+    [m1pro({ percent: 25 })],
     [m1pro({ percent: 9 })],
   ]) {
     now = lowNow(now.warned, hosts, two)
@@ -107,6 +117,29 @@ test("a machine on battery at 20% or less, its Agents at work, is warned of once
   expect(now.tell).toEqual([
     { host: "m1pro", name: "m1pro", percent: 15, working: 2 },
   ])
+  // Charged while away, as while it slept on power, and back on battery
+  // well over 20: a new discharge, so its warning goes and it may warn
+  // again.
+  now = lowNow(now.warned, [away()], two)
+  expect(now.warned.has("m1pro")).toBe(true)
+  now = lowNow(now.warned, [m1pro({ percent: 50 })], two)
+  expect(now.plugged).toEqual(["m1pro"])
+  expect(now.warned.size).toBe(0)
+  now = lowNow(now.warned, [m1pro({ percent: 18 })], two)
+  expect(now.tell).toEqual([
+    { host: "m1pro", name: "m1pro", percent: 18, working: 2 },
+  ])
+})
+
+test("Settings and the hover count a machine's Turns only where the window holds its lists", () => {
+  const stores = newStores(0)
+  // A popped-out window's stores, or before its Watches said: no count.
+  expect(turnsSaid(stores, "m1pro")).toBeUndefined()
+  expect(turnsOn(stores, "m1pro")).toBe(0)
+  takeLists(stores, {}, "m1pro")
+  expect(turnsSaid(stores, "m1pro")).toBe(0)
+  takeLists(stores, { [q]: [thread("a", "running")] }, "m1pro")
+  expect(turnsSaid(stores, "m1pro")).toBe(1)
 })
 
 test("each machine is warned of by itself; one with no battery never, and one taken out of hosts.toml has its warning go", () => {
