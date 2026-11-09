@@ -246,7 +246,7 @@ test("in free a new Thread opens on the workspace the Person is on; in solo, as 
   await expect(threads).toHaveCount(2)
 })
 
-test("in solo the Agent the focus comes to fills the screen and the one before gives the room back; Alt+M gives it back by hand (ADR 0079)", async () => {
+test("in solo every Agent is the whole screen wide at once, and the Strip scrolls from one to the next (ADR 0079)", async () => {
   window = await startWindow({ look: HALVES })
   const { page } = window
   const [a, b, c] = await agents(window, "hello a", "hello b", "hello c")
@@ -255,33 +255,25 @@ test("in solo the Agent the focus comes to fills the screen and the one before g
   await expect.poll(shares).toEqual([50, 50, 50])
   await expect(c).toHaveAttribute("data-focused", "true")
 
-  // Solo: the Agent in front fills the screen.
+  // Solo: every Agent fills the screen, not only the one in front.
   await page.keyboard.press("Alt+Shift+KeyM")
-  await expect.poll(shares).toEqual([50, 50, 100])
+  await expect.poll(shares).toEqual([100, 100, 100])
   await expect(c).toBeInViewport({ ratio: 0.99 })
 
-  // The focus past its Group's edge takes the room to the next Agent.
+  // The focus past its Group's edge scrolls to the next Agent, already
+  // as wide: nothing grows or shrinks.
   await page.keyboard.press("Alt+ArrowLeft")
   await expect(b).toHaveAttribute("data-focused", "true")
-  await expect.poll(shares).toEqual([50, 100, 50])
   await expect(b).toBeInViewport({ ratio: 0.99 })
-
-  // Alt+M gives the room back by hand; the next Agent takes it again.
-  await page.keyboard.press("Alt+KeyM")
-  await expect.poll(shares).toEqual([50, 50, 50])
+  expect(await shares()).toEqual([100, 100, 100])
   await page.keyboard.press("Alt+ArrowLeft")
   await expect(a).toHaveAttribute("data-focused", "true")
-  await expect.poll(shares).toEqual([100, 50, 50])
+  await expect(a).toBeInViewport({ ratio: 0.99 })
+  expect(await shares()).toEqual([100, 100, 100])
 
-  // A New Thread, not started yet, fills nothing.
-  await page.keyboard.press("Alt+Enter")
-  const draft = page.getByRole("region", { name: "New Thread" })
-  await expect(draft).toHaveAttribute("data-focused", "true")
-  await expect.poll(() => sharesOf(draft)).toEqual([50])
-
-  // Back to the row, the room comes back on the workspace in view.
+  // Back to the row, the room comes back.
   await page.keyboard.press("Alt+Shift+KeyM")
-  await expect.poll(() => sharesOf(a, b, c, draft)).toEqual([50, 50, 50, 50])
+  await expect.poll(shares).toEqual([50, 50, 50])
 })
 
 test("ten Agents of a Project work side by side on its workspace, and a pick brings one to the Strip's left, filled in solo (ADR 0065, ADR 0079)", async () => {
@@ -333,16 +325,16 @@ test("ten Agents of a Project work side by side on its workspace, and a pick bri
   await expect.poll(() => fromLeft(page, five)).toBeLessThan(3)
   expect(await layoutOf(page)).toEqual(ids.map((id) => [id]))
 
-  // In solo the Agent in front fills the screen, the next one as the
-  // focus moves to it, and a pick's too.
+  // In solo every Agent is the screen wide; the focus and a pick scroll
+  // to one.
   await page.keyboard.press("Alt+Shift+KeyM")
-  await expect.poll(() => sharesOf(five, six)).toEqual([100, 50])
+  await expect.poll(() => sharesOf(five, six)).toEqual([100, 100])
   await page.keyboard.press("Alt+ArrowRight")
   await expect(six).toHaveAttribute("data-focused", "true")
-  await expect.poll(() => sharesOf(five, six)).toEqual([50, 100])
+  await expect(six).toBeInViewport({ ratio: 0.99 })
   await row("wait one").click()
   await expect(one).toHaveAttribute("data-focused", "true")
-  await expect.poll(() => sharesOf(one, six)).toEqual([100, 50])
+  await expect.poll(() => sharesOf(one, six)).toEqual([100, 100])
   await expect(one).toBeInViewport({ ratio: 0.99 })
 })
 
@@ -599,12 +591,12 @@ test("an Agent that finishes behind the Group that fills the screen in solo gets
   window = await startWindow({ look: HALVES })
   const { page } = window
   const [a, b] = await agents(window, "wait a", "hello b")
-  // In the row both show. In solo the Agent in front fills the Strip from
-  // its left edge, and the other is past that edge, on the workspace on
-  // screen.
+  // In the row both show. In solo each Agent fills the Strip: the one in
+  // front from its left edge, and the other past that edge, on the
+  // workspace on screen.
   await expect(a).toBeInViewport({ ratio: 0.99 })
   await page.keyboard.press("Alt+Shift+KeyM")
-  await expect.poll(() => sharesOf(a, b)).toEqual([50, 100])
+  await expect.poll(() => sharesOf(a, b)).toEqual([100, 100])
   await expect.poll(() => fromLeft(page, b)).toBeLessThan(3)
   await toastedOutOfView(window, "wait a", ["hello b"])
 })

@@ -72,28 +72,8 @@ export function filling(state: Workspaces): Plan | undefined {
   return fillPlan(column.id, workspace.filled !== column.group)
 }
 
-/** Solo (ADR 0079, decision 2): the Agent the focus is at, on a
- * Project's workspace, fills the screen with its Group, when one of its
- * Panes shows an Item that names an owner (`owner`). A column in no Group,
- * or a Group no one owns, stays as it is. */
-export function soloing(
-  state: Workspaces,
-  owner: (entry: Entry) => Owner | undefined
-): Plan | undefined {
-  const { workspace, c, column } = focusedColumn(state)
-  if (column?.group === undefined || workspace.project === undefined) {
-    return undefined
-  }
-  if (filledAt(workspace, c)) return undefined
-  const { start, end } = runOf(workspace.columns, c)
-  const owned = workspace.columns
-    .slice(start, end)
-    .some((one) => one.entries.some((entry) => owner(entry) !== undefined))
-  return owned ? fillPlan(column.id, true) : undefined
-}
-
-/** Back from solo to the row: the Group that fills the workspace in view
- * gives the room back. */
+/** Back from solo to the row: a Group `Alt+M` filled on the workspace in
+ * view gives the room back. */
 export function unsoloing(state: Workspaces): Plan | undefined {
   const workspace = current(state)
   const column = workspace.columns.find((_, c) => filledAt(workspace, c))
