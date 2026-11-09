@@ -42,13 +42,19 @@ const project = (id: string, more: Partial<ProjectSummary> = {}) =>
 const own = { build: "def456", version: "0.1.0-dev.421" }
 const live: HostState = {
   name: "arc",
+  ssh: "arc",
   state: "live",
   build: "abc123",
   version: "0.1.0-dev.421",
   own: { build: "abc123", version: "0.1.0-dev.421" },
 }
-const away: HostState = { name: "arc", state: "away", why: "ssh ended" }
-const connecting: HostState = { name: "arc", state: "connecting" }
+const away: HostState = {
+  name: "arc",
+  ssh: "arc",
+  state: "away",
+  why: "ssh ended",
+}
+const connecting: HostState = { name: "arc", ssh: "arc", state: "connecting" }
 /** arc before its first welcome on this device: its key. */
 const unnamed = { name: "arc", icon: "desktop" }
 
@@ -99,9 +105,19 @@ test("a host that goes away stays away through the tries after, its rows standin
   })
   // Stopped, signing in or refused, it shows none.
   for (const now of [
-    { name: "arc", state: "stopped" },
-    { name: "arc", state: "signin", url: "https://login.tailscale.com/a" },
-    { name: "arc", state: "refused", why: "no banda-dev found on arc" },
+    { name: "arc", ssh: "arc", state: "stopped" },
+    {
+      name: "arc",
+      ssh: "arc",
+      state: "signin",
+      url: "https://login.tailscale.com/a",
+    },
+    {
+      name: "arc",
+      ssh: "arc",
+      state: "refused",
+      why: "no banda-dev found on arc",
+    },
   ] satisfies HostState[])
     expect(shownOf(lost, now, 40)).toEqual({
       name: "arc",
@@ -126,7 +142,7 @@ test("a host's Projects are its engine's, none archived, and never one shown bef
   const { device, tell } = desktop()
   const hosts = new KeptHosts(device)
   hosts.follow()
-  const devbox: HostState = { ...live, name: "devbox" }
+  const devbox: HostState = { ...live, name: "devbox", ssh: "devbox" }
   tell([live, devbox])
   hosts.ours([project("mine")])
   hosts.projects("arc", [
@@ -149,7 +165,7 @@ test("a host's Projects are its engine's, none archived, and never one shown bef
 
   // A host that stops shows none, and lists none until it is live again:
   // the one after it shows what it no longer does.
-  tell([{ name: "arc", state: "stopped" }, devbox])
+  tell([{ name: "arc", ssh: "arc", state: "stopped" }, devbox])
   hosts.projects("arc", [project("r1")])
   expect(ids()).toEqual([[], ["r1", "d1"]])
   hosts.start("arc")
@@ -351,15 +367,15 @@ test("a Pane says why it cannot reach its host in the window's own words, by the
   const words = (state: HostState) =>
     reachWords("arc", shownOf(undefined, state, 0))
   expect(words(connecting)).toBe("Connecting to arc")
-  expect(words({ name: "arc", state: "signin", url: "https://x" })).toBe(
-    "Sign in to Tailscale to reach arc"
-  )
-  expect(words({ name: "arc", state: "stopped" })).toBe(
+  expect(
+    words({ name: "arc", ssh: "arc", state: "signin", url: "https://x" })
+  ).toBe("Sign in to Tailscale to reach arc")
+  expect(words({ name: "arc", ssh: "arc", state: "stopped" })).toBe(
     "Banda is stopped on arc"
   )
-  expect(words({ name: "arc", state: "refused", why: "an older window" })).toBe(
-    "arc: an older window"
-  )
+  expect(
+    words({ name: "arc", ssh: "arc", state: "refused", why: "an older window" })
+  ).toBe("arc: an older window")
   // Named, it goes by that name, not by its key.
   const studio = (state: HostState) =>
     reachWords("arc", {
@@ -367,11 +383,16 @@ test("a Pane says why it cannot reach its host in the window's own words, by the
       named: { name: "Studio", icon: "desktop" },
     })
   expect(studio(away)).toBe("Studio is away")
-  expect(studio({ name: "arc", state: "stopped" })).toBe(
+  expect(studio({ name: "arc", ssh: "arc", state: "stopped" })).toBe(
     "Banda is stopped on Studio"
   )
   expect(
-    studio({ name: "arc", state: "refused", why: "an older window" })
+    studio({
+      name: "arc",
+      ssh: "arc",
+      state: "refused",
+      why: "an older window",
+    })
   ).toBe("Studio: an older window")
 })
 
@@ -445,7 +466,7 @@ test("a host goes by the name and icon its engine says, cleaned, from its welcom
   const hosts = new KeptHosts(device)
   hosts.follow()
   // Its own key here, apart from arc's in the tests before.
-  const mini: HostState = { ...live, name: "mini" }
+  const mini: HostState = { ...live, name: "mini", ssh: "mini" }
   tell([mini])
   expect(hosts.get()[0]!.named).toEqual({ name: "mini", icon: "desktop" })
   expect(namedIn(hosts.get(), "mini")).toEqual({

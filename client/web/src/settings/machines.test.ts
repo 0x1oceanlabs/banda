@@ -104,17 +104,21 @@ const live = (version: string | null, build = "abc1234ff"): HostState => ({
 test("a machine's state, in Settings' own words", () => {
   expect(stateWords(live("0.1.0-dev.421"))).toBe("live · same build")
   expect(stateWords(live("0.1.0-dev.418", "def"))).toBe("live · other build")
-  expect(stateWords({ name: "arc", state: "connecting" })).toBe("connecting")
-  expect(stateWords({ name: "arc", state: "signin", url: "https://x" })).toBe(
-    "sign in to Tailscale"
+  expect(stateWords({ name: "arc", ssh: "arc", state: "connecting" })).toBe(
+    "connecting"
   )
-  expect(stateWords({ name: "arc", state: "away", why: "ssh ended" })).toBe(
-    "away"
+  expect(
+    stateWords({ name: "arc", ssh: "arc", state: "signin", url: "https://x" })
+  ).toBe("sign in to Tailscale")
+  expect(
+    stateWords({ name: "arc", ssh: "arc", state: "away", why: "ssh ended" })
+  ).toBe("away")
+  expect(stateWords({ name: "arc", ssh: "arc", state: "stopped" })).toBe(
+    "stopped"
   )
-  expect(stateWords({ name: "arc", state: "stopped" })).toBe("stopped")
-  expect(stateWords({ name: "arc", state: "refused", why: "no banda" })).toBe(
-    "refused"
-  )
+  expect(
+    stateWords({ name: "arc", ssh: "arc", state: "refused", why: "no banda" })
+  ).toBe("refused")
 })
 
 test("a live machine's build says whether it is this window's; none is known while it is not live", () => {
@@ -122,7 +126,9 @@ test("a live machine's build says whether it is this window's; none is known whi
   expect(buildWords(live("0.1.0-dev.418", "def"))).toBe("dev.418 vs dev.421")
   // One that says no version is told by its build.
   expect(buildWords(live(null, "abc1234ff"))).toBe("abc1234 vs dev.421")
-  expect(buildWords({ name: "arc", state: "stopped" })).toBeUndefined()
+  expect(
+    buildWords({ name: "arc", ssh: "arc", state: "stopped" })
+  ).toBeUndefined()
 })
 
 test("a Test says what it found, cleaned, or why it found nothing", () => {

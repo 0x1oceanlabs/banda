@@ -438,12 +438,12 @@ function HostRow({
   const live = state.state === "live"
   // Its entry as hosts.toml has it: as main last wrote it, until its
   // state says it (a machine connecting again keeps its last state).
-  const inState = `${state.ssh ?? ""}\n${state.banda ?? ""}`
+  const inState = `${state.ssh}\n${state.banda ?? ""}`
   const [wrote, setWrote] = useState<{ was: string; entry: HostEntry }>()
   const entry =
     wrote?.was === inState
       ? wrote.entry
-      : { ssh: state.ssh ?? "", banda: state.banda }
+      : { ssh: state.ssh, banda: state.banda }
   const { ssh, banda } = entry
   const set = (change: { ssh?: string; banda?: string }) =>
     void ask(async () =>
