@@ -197,10 +197,11 @@ What Apps give never talk to each other.
 ## 3. Here: the context, like `$PWD`
 
 Every rule here binds from B4c, which built Here. A Widget reads it with
-`useHere(select)` from `@banda/ui/here`; an act reads it as it runs,
-`window.here.get()`, so it acts where the Person is at its gesture. Until
-Addresses come with `item@1` (B7), `subject` is the id the App lists the
-thing with (`PaneKind.shows`).
+`useHere(select)` from `@banda/core/react` (`@banda/ui/here` hands it on
+until W0a2); an act reads it as it runs, `window.here.get()`, so it acts
+where the Person is at its gesture. Until Addresses come with `item@1`
+(B7), `subject` is the id the App lists the thing with
+(`PaneKind.shows`).
 
 ```ts
 type Here = {
