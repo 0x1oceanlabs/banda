@@ -198,6 +198,11 @@ for Apps from elsewhere waits for the Tree renderer.
    `order()` (today `client/web/src/sidebar/order.ts:15-31`). The counts
    list stops sorting loudest first (`client/web/src/bar/tally.ts:60-77`).
    _For Roma_ (it changes what the Person sees).
+   _Changed on 2026-11-09 (Roma, #999):_ the counts list and Alt+U place
+   another machine's Threads where the sidebar list does, among this
+   machine's by its grouping, not after them all, as ADR 0079, decision 4,
+   says. All three take the other machines from one place,
+   `client/web/src/sidebar/order.ts`; Alt+U as they stand on its key.
 
 9. **"On screen" is what the screen shows.** A Pane counts as on screen
    when at least half of its Tile shows inside the Strip's clip; in Solo,

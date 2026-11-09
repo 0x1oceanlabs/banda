@@ -36,7 +36,6 @@ import { ScrollArea } from "@banda/ui/components/scroll-area"
 import { toast } from "@banda/ui/components/sonner"
 import { trustProject } from "@banda/ui/lib/projects"
 import {
-  holds,
   HostsContext,
   namedIn,
   otherBuild,
@@ -76,14 +75,9 @@ import {
   SquarePenIcon,
 } from "lucide-react"
 import { LOCATE } from "../menu/menu"
-import {
-  type Elsewhere,
-  type Row as Arranged,
-  type Section,
-  type ProjectLine,
-} from "./arrange"
+import { type Row as Arranged, type Section, type ProjectLine } from "./arrange"
 import { useLookSidebar } from "../look"
-import { order } from "./order"
+import { order, useElsewhere } from "./order"
 import { Row } from "./Row"
 import { ThreadRows } from "../titles/ThreadMenu"
 import { TitleField } from "../titles/Title"
@@ -177,9 +171,10 @@ export function Sidebar({
   const archived = useIsArchived()
   const { asleep, woke } = useSnoozesNow()
   // The other machines of `hosts.toml`, below this one's (ADR 0081): the
-  // rows of those live or away, each host's state by its name.
+  // rows of those the order places, as the counts and Alt+U place them,
+  // and each host's state by its name.
   const hosts = useHosts()
-  const elsewhere = useMemo((): Elsewhere[] => hosts.filter(holds), [hosts])
+  const elsewhere = useElsewhere()
   const fresh = useMemo(
     () =>
       order(

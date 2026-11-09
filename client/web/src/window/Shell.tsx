@@ -34,7 +34,7 @@ import {
   nowOf,
   workingHere,
 } from "../calls/stores"
-import { keysOf, order } from "../sidebar/order"
+import { keysOf, useOrderNow } from "../sidebar/order"
 import { WELL, wentWell } from "../safe/starts"
 import { useProblemNews } from "../problems/news"
 import { lookingInto } from "../problems/look"
@@ -256,6 +256,7 @@ export function Shell({
   const [stores] = useState(newStores)
   useEffect(() => followCalls(stores), [stores])
   const snoozes = useSnoozesAt(useStore(stores.calls, nowOf))
+  const orderNow = useOrderNow()
   // What the Tiling reads of them, the same for the Window's life. The
   // calls follow every change of the items, so it hears them alone.
   const [shows] = useState((): Shows => ({
@@ -546,9 +547,9 @@ export function Shell({
     popOut: togglePopOut,
     center: toCenter,
     // Alt+U: the next call below the Thread in front, as the sidebar lists
-    // them (ADR 0079, decision 4), picked.
+    // them, another machine's among this one's (ADR 0079, decision 4), picked.
     answer: () => {
-      const keys = keysOf(order(stores.items.get(), projects, snoozes))
+      const keys = keysOf(orderNow(stores.items.get(), projects, snoozes))
       const { pane } = here.get()
       const at = pane?.subject ? `${pane.project}:${pane.subject}` : undefined
       const call = nextCall(stores.calls.get().list, keys, at)
