@@ -29,6 +29,8 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - The Thread at its own size (`agents.thread.zoom-reset`), Ctrl+0, `[binds.thread]`
 - Show or hide the Thread's details (`agents.thread.details`), Ctrl+Shift+B, `[binds.thread]`; takes `part` (a part of its rows to open, as git's branch picker, git.branch)
 - Find in the Thread (`agents.thread.find`), Ctrl+F, `[binds.thread]`
+- Move the Thread to the previous account of its Harness (`agents.thread.account-previous`), Ctrl+Shift+Up, `[binds.thread]`
+- Move the Thread to the next account of its Harness (`agents.thread.account-next`), Ctrl+Shift+Down, `[binds.thread]`
 - Zoom the Visual in (`agents.visual.zoom-in`), Ctrl+= or Ctrl+Shift+=, `[binds.visual]`
 - Zoom the Visual out (`agents.visual.zoom-out`), Ctrl+-, `[binds.visual]`
 - The Visual at its own size (`agents.visual.zoom-reset`), Ctrl+0, `[binds.visual]`
