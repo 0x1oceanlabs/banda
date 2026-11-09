@@ -70,14 +70,24 @@ pub struct AgentsSettings {
     /// The Flow (ADR 0079). `workspaces` before ADR 0079 (grace).
     #[serde(alias = "workspaces")]
     pub flow: Option<Flow>,
+    /// How many seconds the focus stays on a Thread it only came to, by
+    /// the Strip's scroll or `Alt+arrow`, before its mark counts as seen:
+    /// 0 at once. A click or a key in it counts at once (ADR 0096,
+    /// decision 3).
+    pub seen_after: Option<f64>,
 }
 
+/// How long the focus stays on a Thread before it is seen, by default.
+pub const SEEN_AFTER: f64 = 2.5;
+
 /// How messages to an Agent are sent, every key resolved.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct Agents {
     pub enter: Enter,
     pub flow: Flow,
+    /// Seconds the focus stays on a Thread before it is seen; 0 at once.
+    pub seen_after: f64,
     /// The account a new Thread starts on, by its entry's ID: none, the
     /// first one on (ADR 0093, decision 7).
     #[ts(optional)]
@@ -125,6 +135,7 @@ impl OneFile for AgentsSettings {
             enter: Some(Enter::default()),
             start: None,
             flow: Some(Flow::default()),
+            seen_after: Some(SEEN_AFTER),
         }
     }
 
@@ -133,6 +144,7 @@ impl OneFile for AgentsSettings {
             enter: self.enter.or(under.enter),
             start: self.start.or(under.start),
             flow: self.flow.or(under.flow),
+            seen_after: self.seen_after.or(under.seen_after),
         }
     }
 
@@ -141,6 +153,12 @@ impl OneFile for AgentsSettings {
         Agents {
             enter: self.enter.unwrap_or_default(),
             flow: self.flow.unwrap_or_default(),
+            // Less than none, or no number, is none.
+            seen_after: self
+                .seen_after
+                .filter(|seconds| seconds.is_finite())
+                .unwrap_or(SEEN_AFTER)
+                .max(0.0),
             account: start.account,
             fallback: start.fallback,
         }
@@ -236,6 +254,20 @@ mod tests {
         let (agents, keyed, _) = resolved(Some("\nenter = \"queue\"\n"));
         assert_eq!(agents.enter, Enter::Queue);
         assert_eq!(keyed["enter"].from.line, Some(2));
+    }
+
+    #[test]
+    fn a_thread_is_seen_after_the_focus_rests_on_it_as_the_file_says() {
+        let (agents, _, _) = resolved(None);
+        assert_eq!(agents.seen_after, SEEN_AFTER);
+        let (agents, keyed, problems) = resolved(Some("seen-after = 0\n"));
+        assert_eq!(agents.seen_after, 0.0);
+        assert_eq!(keyed["seen-after"].from.line, Some(1));
+        assert!(problems.is_empty());
+        let (agents, _, _) = resolved(Some("seen-after = 1.5\n"));
+        assert_eq!(agents.seen_after, 1.5);
+        let (agents, _, _) = resolved(Some("seen-after = -3.0\n"));
+        assert_eq!(agents.seen_after, 0.0, "less than none is none");
     }
 
     #[test]

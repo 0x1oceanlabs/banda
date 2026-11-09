@@ -145,7 +145,11 @@ export function decodeFact(event: Event): Fact | null {
 
 /** How messages are sent with no `agents.toml`, as `banda look` gives it:
  * for before the first look. */
-export const DEFAULT_AGENTS: Agents = { enter: "steer", flow: "row" }
+export const DEFAULT_AGENTS: Agents = {
+  enter: "steer",
+  flow: "row",
+  seen_after: 2.5,
+}
 
 /** The agents module's `agents.toml`. */
 export const AGENTS_FILE: ModuleFile<Agents> = {

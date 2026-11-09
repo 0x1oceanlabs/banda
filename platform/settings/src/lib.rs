@@ -229,7 +229,7 @@ mod tests {
         let look = resolved.look;
         assert_eq!(
             look.files["agents.toml"],
-            serde_json::json!({"enter": "queue", "flow": "row"})
+            serde_json::json!({"enter": "queue", "flow": "row", "seen_after": 2.5})
         );
         assert_eq!(look.settings["agents.toml"]["enter"].from.layer, "file");
         assert!(

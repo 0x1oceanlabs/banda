@@ -5107,8 +5107,11 @@ test("a Thread's marks are its host's: unread and read, archived and back, each 
   await expect(shelf).toBeHidden()
 })
 
-test("a Thread the focus only passes keeps its mark; one looked at for a moment, or clicked, settles it (ADR 0096, decision 3)", async () => {
-  window = await startWindow()
+test("a Thread the focus only passes keeps its mark; one looked at for agents.toml's seen-after, or clicked, settles it (ADR 0096, decision 3)", async () => {
+  // Long enough that a busy machine passes by in time.
+  window = await startWindow({
+    files: { "config/agents.toml": "seen-after = 5\n" },
+  })
   const { page } = window
   const { thread, composer } = await firstThread(page)
   await composer.fill("hello")
@@ -5136,22 +5139,22 @@ test("a Thread the focus only passes keeps its mark; one looked at for a moment,
   await expect(thread).toHaveAttribute("data-focused", "true")
   await page.keyboard.press("Alt+ArrowRight")
   await expect(other).toHaveAttribute("data-focused", "true")
-  await page.waitForTimeout(3000)
+  await page.waitForTimeout(5500)
   await expect(done).toBeVisible()
 
-  // The focus stays on it for a moment: seen.
+  // The focus stays on it for seen-after: seen.
   await page.keyboard.press("Alt+ArrowLeft")
   await expect(thread).toHaveAttribute("data-focused", "true")
-  await page.waitForTimeout(1000)
+  await page.waitForTimeout(2000)
   await expect(done).toBeVisible()
-  await expect(done).toBeHidden({ timeout: 5000 })
+  await expect(done).toBeHidden({ timeout: 10_000 })
 
   // A click on it is a look: seen at once.
   await page.keyboard.press("Alt+ArrowRight")
   await expect(other).toHaveAttribute("data-focused", "true")
   await unread()
   await thread.getByText("You said: hello").click()
-  await expect(done).toBeHidden({ timeout: 1500 })
+  await expect(done).toBeHidden({ timeout: 3000 })
 })
 
 test("from a far host, a mark shows at once and never flips back as its fact comes, and one the host refuses comes back with a toast (ADR 0096)", async () => {

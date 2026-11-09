@@ -114,7 +114,8 @@ machine, next to the snooze. He chose (b).
    - The focus has to rest there, not only pass (amended 2026-11-09): a
      click or a key with no mod in the Thread's Pane counts at once; a
      focus that came by scrolling the Strip or by `Alt+arrow` counts once
-     it stays 2.5 s (`thread/looking.ts`). Scrolling past Threads put
+     it stays `seen-after` seconds, 2.5 by default, in agents.toml
+     (`thread/looking.ts`). Scrolling past Threads put
      out their Done, Failed and woke marks before, which hid what was
      left to see. A Question asks until it is answered, as before.
    - This is the mark every machine reads. Where a Thread opens
