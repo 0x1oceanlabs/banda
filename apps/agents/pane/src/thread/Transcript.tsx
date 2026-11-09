@@ -2,12 +2,7 @@
  * follows the live edge (ADR 0058, ADR 0091). A sub-agent's Pane draws its
  * lane with it (ADR 0103, decision 21). */
 import { useMemo, useRef } from "react"
-import type {
-  Item,
-  Subagent,
-  SubagentId,
-  TurnView,
-} from "@banda/contract/agents"
+import type { Subagent, SubagentId } from "@banda/contract/agents"
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -26,14 +21,11 @@ import {
 } from "@banda/ui/components/trace"
 import { ArrowDownIcon } from "lucide-react"
 import {
-  firstTurnOf,
   type Listing,
   steerable,
   threadOf,
   type Waiting,
   working,
-  writerOf,
-  writing,
 } from "./state"
 import { Writer } from "../entries/parts/Messages"
 import type { SubagentRow } from "../entries/types"
@@ -41,7 +33,8 @@ import { modelNow } from "../composer/picker"
 import type { Lanes } from "./findIn"
 import type { Followed } from "./live-thread"
 import { byId, rowOf } from "./subagents"
-import { awaiting, laneTimeline, thoughtTimes, timeline } from "./timeline"
+import { laneTimeline, timeline } from "./timeline"
+import { factsOf, knownOf } from "./entry-facts"
 import { key, LineOf } from "../lines"
 import type { LineFacts } from "../lines/types"
 import { Queue, type QueueActions } from "./Queue"
@@ -117,10 +110,7 @@ export function Transcript({
     () => (ofLane ? laneTimeline(state) : timeline(state, short)),
     [state, short, ofLane]
   )
-  const asks = useMemo(() => awaiting(state), [state])
-  const thoughts = useMemo(() => thoughtTimes(state), [state])
   const last = state.items.at(-1)
-  const growing = writing(state)
   // Its sub-agents, and the model it runs on, which their rows name only
   // when theirs is another (ADR 0103, decision 15).
   const model = useMemo(
@@ -142,28 +132,15 @@ export function Transcript({
     () => rowsOf(state, lanes, short, now, top),
     [state, lanes, short, now, top]
   )
-  const turns = useMemo(
-    () => new Map(state.turns.map((one) => [one.id, one])),
-    [state.turns]
-  )
   // What the Thread knows that its lines show (ADR 0091, decision 3).
-  const turnState = (id: string | undefined) =>
-    id === undefined ? undefined : turns.get(id)?.state
+  const known = useMemo(() => knownOf(state), [state])
+  const of = useMemo(
+    () => factsOf(known, writers, rows),
+    [known, writers, rows]
+  )
   const facts: LineFacts = {
-    of: (item) => ({
-      turn: turnState(item.turn),
-      asks: asks.has(item.id),
-      took: thoughts.get(item.id),
-      live: turn?.state === "running" && item === growing,
-      writer: writerOf(writers, item),
-      forks: forkAt(turns, item),
-      edits: editAt(state.turns, item),
-      subagentRow:
-        item.body.kind === "subagent"
-          ? rows.get(item.body.subagent)
-          : undefined,
-    }),
-    turnState,
+    of,
+    turnState: known.turnState,
     finding,
     lanes,
     name,
@@ -353,18 +330,4 @@ function ScrollToEnd({ queued, forYou }: { queued: number; forYou: boolean }) {
       )}
     </MessageScrollerButton>
   )
-}
-
-/** A reply's turn, to fork the Thread at its end; null while it may not. */
-function forkAt(turns: Map<string, TurnView>, item: Item) {
-  const its = item.turn === undefined ? undefined : turns.get(item.turn)
-  return its && (its.can.fork ? its : null)
-}
-
-/** The turn that ran a Person's message first, to edit it from; null while
- * it may not. */
-function editAt(turns: TurnView[], item: Item) {
-  if (item.author.kind !== "person") return undefined
-  const its = firstTurnOf(turns, item.id)
-  return its && (its.can.rewind ? its : null)
 }
