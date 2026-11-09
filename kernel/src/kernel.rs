@@ -678,6 +678,17 @@ impl Kernel {
         self.passes.holder(pass, Audience::Ws)
     }
 
+    /// Who calls with a pass, when the API takes it, or `None`: its Agent,
+    /// walled in its Project, and the Thread whose session it was made
+    /// for, as the store keeps them (ADR 0083, decision 2).
+    pub fn caller(&self, pass: &str) -> Option<Caller> {
+        let holder = self.passes.named(pass, Audience::Ws)?;
+        Some(Caller {
+            thread: holder.thread,
+            ..Caller::agent(holder.agent, holder.project)
+        })
+    }
+
     /// The engine stops: the passes its sessions hold get a whole term, for
     /// the sessions that go on past the restart, and none is revoked as
     /// what holds it goes from here on (ADR 0083, decision 2).
@@ -751,7 +762,11 @@ impl Kernel {
         params: Value,
     ) -> Result<Answer, Refusal> {
         let plain = |value| Answer { value, at: None };
-        let Caller { participant, only } = caller.into();
+        let Caller {
+            participant,
+            only,
+            thread,
+        } = caller.into();
         if let Some(own) = method.strip_prefix("window.")
             && let Some(right) = Window::right(own)
         {
@@ -778,7 +793,7 @@ impl Kernel {
         let scope = project.module(module.name());
         if kind != Kind::Command {
             access::decide(&participant, right, project.owner())?;
-            let call = Call::new(participant, scope, method.to_owned(), None, wall);
+            let call = Call::new(participant, scope, method.to_owned(), None, wall, thread);
             return module.call(call, rest, params).await.map(plain);
         }
         let command = command.ok_or_else(|| needs_command_id(method))?;
@@ -791,7 +806,14 @@ impl Kernel {
         // too (ADR 0002, decision 2).
         let answer = match access::decide(&participant, right, project.owner()) {
             Ok(()) => {
-                let call = Call::new(participant, scope, method.to_owned(), Some(receipt), wall);
+                let call = Call::new(
+                    participant,
+                    scope,
+                    method.to_owned(),
+                    Some(receipt),
+                    wall,
+                    thread,
+                );
                 module.call(call, rest, params).await
             }
             Err(refusal) => Err(refusal),
@@ -843,7 +865,11 @@ impl Kernel {
         project: Option<ProjectId>,
         params: Value,
     ) -> Result<Stream, Refusal> {
-        let Caller { participant, only } = caller.into();
+        let Caller {
+            participant,
+            only,
+            thread,
+        } = caller.into();
         if let Some(own) = method.strip_prefix("window.")
             && let Some(right) = Window::right(own)
         {
@@ -865,6 +891,7 @@ impl Kernel {
             method.to_owned(),
             None,
             wall,
+            thread,
         );
         module.stream(call, rest, params).await
     }
@@ -889,7 +916,9 @@ impl Kernel {
         caller: impl Into<Caller>,
         project: ProjectId,
     ) -> Result<Arc<Project>, Refusal> {
-        let Caller { participant, only } = caller.into();
+        let Caller {
+            participant, only, ..
+        } = caller.into();
         let project = match &self.machine {
             Some(machine) if machine.id() == project => {
                 // Its log holds every Project's Panes: no pass follows it.

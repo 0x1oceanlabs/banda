@@ -9,6 +9,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::time::Duration;
 use tokio::sync::mpsc;
+use uuid::Uuid;
 
 /// What a module says now and keeps nowhere, such as a terminal's output:
 /// pieces in order, until its sender drops. Only those who hear it now get
@@ -180,6 +181,7 @@ pub struct Call {
     method: String,
     receipt: Option<Receipt>,
     wall: Option<Wall>,
+    thread: Option<Uuid>,
 }
 
 impl Call {
@@ -189,6 +191,7 @@ impl Call {
         method: String,
         receipt: Option<Receipt>,
         wall: Option<Wall>,
+        thread: Option<Uuid>,
     ) -> Self {
         Self {
             participant,
@@ -196,6 +199,7 @@ impl Call {
             method,
             receipt,
             wall,
+            thread,
         }
     }
 
@@ -206,6 +210,14 @@ impl Call {
     /// The wall its caller's pass keeps it behind; none for the owner.
     pub fn wall(&self) -> Option<Wall> {
         self.wall
+    }
+
+    /// The Thread whose session its caller's pass was made for; none for
+    /// the owner and for a Harness process's shared pass (ADR 0083,
+    /// decision 2). The module that asked for the pass named it, so the
+    /// Agent never does.
+    pub fn thread(&self) -> Option<Uuid> {
+        self.thread
     }
 
     pub fn project(&self) -> &ModuleProject {

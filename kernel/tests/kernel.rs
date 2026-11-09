@@ -17,13 +17,15 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio_tungstenite::tungstenite::Message;
+use uuid::Uuid;
 
 /// Notes: `add` writes a note and queues `publish`, keyed by one feed,
 /// after the wait it is given, as a slow change takes. `stamp` is a
 /// command that acts outside the store and writes nothing there, as a
 /// file's rename does; `linger` is a `stamp` that runs on past one write,
 /// as a sign-in does; `post` writes a note, then answers other than its
-/// change; `touch` is a call that acts and keeps no receipt.
+/// change; `touch` is a call that acts and keeps no receipt; `whose`
+/// answers the Thread its caller's pass names, as `stamp` does too.
 #[derive(Clone, Default)]
 struct Notes {
     published: Arc<Mutex<Vec<String>>>,
@@ -81,7 +83,7 @@ impl Module for Notes {
             "list" => Some(Right::Read),
             "purge" => Some(Right::Manage),
             "count" => Some(Right::Read),
-            "pass" => Some(Right::Read),
+            "pass" | "whose" => Some(Right::Read),
             "show" => Some(Right::Read),
             _ => None,
         }
@@ -90,7 +92,7 @@ impl Module for Notes {
     fn kind(&self, method: &str) -> Option<Kind> {
         match method {
             "add" | "purge" | "stamp" | "linger" | "post" => Some(Kind::Command),
-            "list" | "pass" | "show" | "touch" => Some(Kind::Call),
+            "list" | "pass" | "whose" | "show" | "touch" => Some(Kind::Call),
             "count" => Some(Kind::Stream),
             _ => None,
         }
@@ -144,9 +146,10 @@ impl Module for Notes {
                 self.stamp_began.notify_one();
                 let _held = self.stamp_held.read().await;
                 let stamp = self.stamped.fetch_add(1, Ordering::SeqCst) + 1;
+                let thread = call.thread();
                 match self.stamp_refusals.lock().unwrap().pop_front() {
                     Some(refusal) => Err(refusal),
-                    None => Ok(json!({ "stamp": stamp, "params": params })),
+                    None => Ok(json!({ "stamp": stamp, "params": params, "thread": thread })),
                 }
             }
             "post" => {
@@ -163,11 +166,14 @@ impl Module for Notes {
                 }
             }
             "touch" => Ok(json!(self.touched.fetch_add(1, Ordering::SeqCst) + 1)),
-            // The pass of the Agent `agent` in this Project, as the agents
-            // module asks for one when it opens a session.
+            "whose" => Ok(json!({ "thread": call.thread() })),
+            // The pass of the Agent `agent` in this Project, and in the
+            // session of `thread` when it names one, as the agents module
+            // asks for one when it opens a session.
             "pass" => {
                 let agent: AgentId = decode(params["agent"].clone())?;
-                let pass = call.project().pass(agent)?;
+                let thread: Option<Uuid> = decode(params["thread"].clone())?;
+                let pass = call.project().pass(agent, thread)?;
                 let secret = pass.secret().to_owned();
                 self.passes.lock().unwrap().push(pass);
                 Ok(json!(secret))
@@ -2333,6 +2339,55 @@ async fn a_pass_connects_as_its_agent_and_only_in_its_project() {
     );
 }
 
+/// A pass made for a Thread's session names that Thread to the module a
+/// call or a command under it reaches; a pass made for none, and the
+/// owner, name none. What the caller sends never names it.
+#[tokio::test]
+async fn a_call_under_a_sessions_pass_names_its_thread_and_the_owners_none() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let work = create(&kernel, owner, "Work").await;
+    let (agent, thread) = (AgentId::new(), Uuid::now_v7());
+    let person = Participant::Person(owner);
+    let pass = async |ask: Value| {
+        let pass = kernel.call(person, "notes.pass", Some(work.id), None, ask);
+        pass.await.unwrap()
+    };
+    let session = pass(json!({ "agent": agent, "thread": thread })).await;
+    let process = pass(json!({ "agent": agent })).await;
+    let address = serve(&kernel, owner).await;
+    // A call and a command ask, each sending a Thread of its own, which
+    // the kernel never reads.
+    let whose = async |token: Value| {
+        let hello = json!({ "type": "hello", "protocol": 1, "token": token });
+        let (mut socket, welcome) = connect(address, hello).await;
+        assert_eq!(welcome["type"], "welcome");
+        let mut named = Vec::new();
+        let asks = [
+            ("notes.whose", None),
+            ("notes.stamp", Some(CommandId::new())),
+        ];
+        for (id, (method, command)) in (1..).zip(asks) {
+            let ask = json!({
+                "type": "call", "id": id, "method": method, "project": work.id,
+                "command": command, "thread": Uuid::now_v7(),
+                "params": { "thread": Uuid::now_v7() }
+            });
+            socket.send(Message::text(ask.to_string())).await.unwrap();
+            let answer = next(&mut socket).await;
+            assert!(answer["error"].is_null(), "{answer}");
+            named.push(answer["ok"]["thread"].clone());
+        }
+        named
+    };
+    assert_eq!(whose(session).await, vec![json!(thread); 2]);
+    let none = vec![Value::Null; 2];
+    assert_eq!(whose(process).await, none, "a process's names none");
+    assert_eq!(whose(json!("secret")).await, none, "nor the owner");
+}
+
 #[tokio::test]
 async fn a_pass_outlives_a_restart_until_its_session_ends_or_it_expires() {
     let dir = tempfile::tempdir().unwrap();
@@ -2349,17 +2404,18 @@ async fn a_pass_outlives_a_restart_until_its_session_ends_or_it_expires() {
     let notes = Notes::default();
     let kernel = open(&notes).await.unwrap();
     let work = create(&kernel, owner, "Work").await;
-    let agent = AgentId::new();
-    let issue = async |kernel: &Kernel| {
-        let ask = json!({ "agent": agent });
+    let (agent, thread) = (AgentId::new(), Uuid::now_v7());
+    let issue = async |kernel: &Kernel, thread: Option<Uuid>| {
+        let ask = json!({ "agent": agent, "thread": thread });
         let pass = kernel.call(person, "notes.pass", Some(work.id), None, ask);
         pass.await.unwrap().as_str().unwrap().to_owned()
     };
-    let going_on = issue(&kernel).await;
-    let ended = issue(&kernel).await;
+    let in_thread = Caller::agent(agent, work.id).in_thread(thread);
+    let going_on = issue(&kernel, Some(thread)).await;
+    let ended = issue(&kernel, Some(thread)).await;
     // The second session ends: its pass is revoked as it lets go of it.
     drop(notes.passes.lock().unwrap().remove(1));
-    assert_eq!(kernel.holder(&going_on), Some((agent, work.id)));
+    assert_eq!(kernel.caller(&going_on), Some(in_thread));
     assert_eq!(kernel.holder(&ended), None);
 
     // The engine stops, and what held the passes goes with it: the next
@@ -2369,7 +2425,7 @@ async fn a_pass_outlives_a_restart_until_its_session_ends_or_it_expires() {
     let_go(kernel, &dir.path().join("data"), &[]).await;
     notes.passes.lock().unwrap().clear();
     let kernel = open(&Notes::default()).await.unwrap();
-    assert_eq!(kernel.holder(&going_on), Some((agent, work.id)));
+    assert_eq!(kernel.caller(&going_on), Some(in_thread), "with its Thread");
     assert_eq!(kernel.holder(&ended), None);
     let address = serve(&kernel, owner).await;
     let hello = |token: &str| json!({ "type": "hello", "protocol": 1, "token": token });
@@ -2389,7 +2445,7 @@ async fn a_pass_outlives_a_restart_until_its_session_ends_or_it_expires() {
     );
 
     // A Project removed takes its passes with it, held or not.
-    let held = issue(&kernel).await;
+    let held = issue(&kernel, None).await;
     assert!(kernel.holder(&held).is_some());
     let remove = json!({ "project": work.id });
     let removed = kernel.call(
@@ -2512,10 +2568,7 @@ async fn a_module_of_the_machine_names_no_project_and_keeps_its_own_log() {
     assert_eq!(kinds, ["opened"]);
 
     // An Agent's pass is for its Project: the machine is past its wall.
-    let agent = Caller {
-        participant: Participant::Agent(AgentId::new()),
-        only: Some(work.id),
-    };
+    let agent = Caller::agent(AgentId::new(), work.id);
     let by_agent = kernel.call(agent, "desk.list", None, None, Value::Null);
     assert_eq!(by_agent.await.unwrap_err().code, Code::Forbidden);
 
@@ -2902,10 +2955,7 @@ async fn a_project_is_trusted_unless_its_folder_looks_foreign_and_only_the_perso
 
     // An Agent reads its Project's trust, and never changes it or looks
     // past its wall.
-    let agent = Caller {
-        participant: Participant::Agent(AgentId::new()),
-        only: Some(cloned.id),
-    };
+    let agent = Caller::agent(AgentId::new(), cloned.id);
     let listed = (kernel.call(agent, "projects.list", None, None, Value::Null)).await;
     assert_eq!(listed.unwrap()[0]["trusted"], json!(false));
     let trust = json!({ "project": cloned.id, "trusted": true });

@@ -569,8 +569,9 @@ async fn work(
         .await;
     // Another account of the same Harness goes on with the same session.
     let kin = |other: &str| (harnesses.find(other)).is_some_and(|o| o.shares_sessions(&harness));
-    // A session that opens reaches Banda with a pass of its own (ADR 0019).
-    let banda = || live.banda(project, turn.agent);
+    // A session that opens reaches Banda with a pass of its own, which
+    // names its Thread (ADR 0019; ADR 0083, decision 2).
+    let banda = || live.banda(project, turn.agent, thread);
     let (session, opened) = connection
         .session(
             thread,

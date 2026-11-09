@@ -977,7 +977,9 @@ async fn an_idle_harness_is_let_go_and_its_threads_resume() {
 /// The `banda` an Agent runs in its shell acts under a pass walled to its
 /// Project: its process's, the same through the process's restarts, and
 /// a Thread's session's own, new each time it opens, which its request
-/// hands Claude Code's adapter for the session's shell.
+/// hands Claude Code's adapter for the session's shell. The session's
+/// names its Thread; the process's, which every Thread's shell shares,
+/// names none (ADR 0083, decision 2).
 #[tokio::test]
 async fn an_agents_shell_gets_a_pass_walled_to_its_project() {
     let root = tempfile::tempdir().unwrap();
@@ -1002,12 +1004,15 @@ async fn an_agents_shell_gets_a_pass_walled_to_its_project() {
         assert_eq!(project, world.project, "its Project's");
         pass.to_owned()
     };
+    let thread_of = |pass: &str| json!(world.kernel.caller(pass).and_then(|caller| caller.thread));
 
     let (thread, (opened_as, _)) = ask_session(&world, None).await;
     let opened = told();
     let process = walled(&opened["process"]);
     let session = walled(&opened["session"]);
     assert_ne!(session, process, "a Thread's session has its own");
+    assert_eq!(thread_of(&session), thread, "which names its Thread");
+    assert_eq!(thread_of(&process), Value::Null, "and the process's none");
 
     // A session aside, as for a title, is no Thread's: its shell has the
     // process's.
@@ -1027,6 +1032,7 @@ async fn an_agents_shell_gets_a_pass_walled_to_its_project() {
     );
     let again = walled(&resumed["session"]);
     assert_ne!(again, session, "a session opened again gets a new one");
+    assert_eq!(thread_of(&again), thread, "for the same Thread");
 }
 
 /// Sends `text` in a new Thread and waits for its turn to fail.
@@ -4223,8 +4229,8 @@ async fn an_agent_writes_neither_over_a_persons_question_nor_into_another_projec
 
     // A pass keeps its Agent in its own Project, whatever it calls.
     let walled = Caller {
-        participant: agent,
         only: Some(ProjectId::new()),
+        ..Caller::from(agent)
     };
     let params = json!({ "harness": "fake", "text": "elsewhere" });
     let command = Some(CommandId::new());

@@ -128,17 +128,23 @@ impl Live {
         &self.touches
     }
 
-    /// `banda mcp` as a session of `agent`'s in `project` starts it, with a
-    /// new pass (ADR 0019), which the session's process holds while the
-    /// session is open in it.
-    pub fn banda(&self, project: &ModuleProject, agent: AgentId) -> Option<(Program, Pass)> {
-        self.pipe.as_ref()?.program(project, agent)
+    /// `banda mcp` as `agent`'s session of `thread` in `project` starts it,
+    /// with a new pass that names the Thread (ADR 0019; ADR 0083, decision
+    /// 2), which the session's process holds while the session is open in
+    /// it.
+    pub fn banda(
+        &self,
+        project: &ModuleProject,
+        agent: AgentId,
+        thread: ThreadId,
+    ) -> Option<(Program, Pass)> {
+        self.pipe.as_ref()?.program(project, agent, thread)
     }
 
     /// The variables that hand the `banda` in every shell of `harness`'s
-    /// process in `project` a pass for its Agents, walled in `project`:
-    /// made the first time it is asked for in this run of the engine. None
-    /// without a pipe.
+    /// process in `project` a pass for its Agents, walled in `project` and
+    /// naming no Thread: made the first time it is asked for in this run
+    /// of the engine. None without a pipe.
     fn process_pass(&self, project: &ModuleProject, harness: &Harness) -> BTreeMap<String, String> {
         let Some(pipe) = &self.pipe else {
             return BTreeMap::new();
@@ -148,7 +154,7 @@ impl Live {
         if let Some((variables, _)) = passes.get(&key) {
             return variables.clone();
         }
-        let Some((variables, pass)) = pipe.variables(project, AgentId::new()) else {
+        let Some((variables, pass)) = pipe.variables(project, AgentId::new(), None) else {
             return BTreeMap::new();
         };
         passes.insert(key, (variables.clone(), pass));

@@ -4,7 +4,8 @@
 //! [`Module::right`](crate::Module::right) (ADR 0002, decision 9). The
 //! kernel asks here before it runs any of them.
 
-use crate::{Participant, PersonId, ProjectId, Refusal};
+use crate::{AgentId, Participant, PersonId, ProjectId, Refusal};
+use uuid::Uuid;
 
 /// What a method needs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
@@ -47,12 +48,35 @@ pub fn decide(participant: &Participant, right: Right, owner: PersonId) -> Resul
     }
 }
 
-/// Who calls: a Participant, and the one Project a pass keeps them in. The
-/// owner's secret keeps them in none.
+/// Who calls: a Participant, the one Project a pass keeps them in, and the
+/// Thread whose session the pass was made for (ADR 0083, decision 2). The
+/// owner's secret keeps them in none and names none. The Thread is the
+/// pass's, as the engine made it: nothing the caller sends names it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Caller {
     pub participant: Participant,
     pub only: Option<ProjectId>,
+    pub thread: Option<Uuid>,
+}
+
+impl Caller {
+    /// `agent` under a pass that keeps it in `project`, and names no
+    /// Thread, as a Harness process's.
+    pub fn agent(agent: AgentId, project: ProjectId) -> Caller {
+        Caller {
+            participant: Participant::Agent(agent),
+            only: Some(project),
+            thread: None,
+        }
+    }
+
+    /// This caller, under a pass made for the session of `thread`.
+    pub fn in_thread(self, thread: Uuid) -> Caller {
+        Caller {
+            thread: Some(thread),
+            ..self
+        }
+    }
 }
 
 impl From<Participant> for Caller {
@@ -60,6 +84,7 @@ impl From<Participant> for Caller {
         Caller {
             participant,
             only: None,
+            thread: None,
         }
     }
 }
@@ -81,7 +106,7 @@ pub fn within(only: Option<ProjectId>, project: Option<ProjectId>) -> Result<(),
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AgentId, Code};
+    use crate::Code;
 
     #[test]
     fn the_owner_may_do_everything() {

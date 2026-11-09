@@ -28,6 +28,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::sync::{broadcast, watch};
+use uuid::Uuid;
 
 pub(crate) const MANIFEST: &str = "project.json";
 pub(crate) const LOCK: &str = "project.lock";
@@ -757,11 +758,14 @@ impl ModuleProject {
     }
 
     /// A new pass that names `agent` in this Project, and works only in it:
-    /// for a session's `banda mcp` and shell, or for the shells of a Harness
-    /// process's Agents (ADR 0019, decision 2). Its session holds it, and
-    /// lets it go as it ends: dropped, it is revoked.
-    pub fn pass(&self, agent: AgentId) -> Result<Pass, Error> {
-        self.project.passes.issue(agent, self.project.id)
+    /// for a session's `banda mcp` and shell, which names the session's
+    /// `thread`, or for the shells of a Harness process's Agents, which
+    /// names none (ADR 0019, decision 2; ADR 0083, decision 2). A call
+    /// under it reads the Thread as [`Call::thread`](crate::Call::thread).
+    /// Its session holds it, and lets it go as it ends: dropped, it is
+    /// revoked.
+    pub fn pass(&self, agent: AgentId, thread: Option<Uuid>) -> Result<Pass, Error> {
+        self.project.passes.issue(agent, self.project.id, thread)
     }
 
     /// Asks the window `what`, under this module's name, for `by` in this

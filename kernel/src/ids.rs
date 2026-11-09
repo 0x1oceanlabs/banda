@@ -11,7 +11,8 @@ use ts_rs::TS;
 /// wire, and that `new()` makes as a UUIDv7. A module uses it for its own IDs. The crate that uses it depends on
 /// `serde`, `ts-rs`, `uuid` and `rusqlite`. Its JSON Schema, for a tool's
 /// params, is a string. Pass `export_to = "<dir>/"` to
-/// put its TypeScript type in a module's folder.
+/// put its TypeScript type in a module's folder. It turns into a bare
+/// `Uuid` for the kernel to keep without reading it, as a pass's Thread.
 #[macro_export]
 macro_rules! id {
     ($(#[$doc:meta])* $name:ident $(, export_to = $dir:literal)?) => {
@@ -46,6 +47,12 @@ macro_rules! id {
             type Err = ::uuid::Error;
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 ::uuid::Uuid::parse_str(s).map(Self)
+            }
+        }
+
+        impl From<$name> for ::uuid::Uuid {
+            fn from(id: $name) -> Self {
+                id.0
             }
         }
 

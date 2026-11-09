@@ -280,16 +280,13 @@ fn origin_allowed(origin: Option<&str>) -> bool {
     }
 }
 
-/// Who a `hello`'s token names, and the one Project a pass keeps it in.
+/// Who a `hello`'s token names, the one Project a pass keeps it in, and
+/// the Thread whose session the pass was made for.
 fn identify(api: &Api, token: &str) -> Option<Caller> {
     if let Some(participant) = api.identity.identify(token) {
         return Some(participant.into());
     }
-    let (agent, project) = api.kernel.holder(token)?;
-    Some(Caller {
-        participant: Participant::Agent(agent),
-        only: Some(project),
-    })
+    api.kernel.caller(token)
 }
 
 fn same_secret(a: &str, b: &str) -> bool {
