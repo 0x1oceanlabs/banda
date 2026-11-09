@@ -87,10 +87,8 @@ export type Note = { version: string; text: string }
  */
 export type HostState = {
   name: string
-  /** Where ssh goes, as `hosts.toml` says it. Main always says it; it is
-   * optional only so a state the page makes up, as its tests do, may
-   * leave it out. */
-  ssh?: string
+  /** Where ssh goes, as `hosts.toml` says it. */
+  ssh: string
   /** The `banda` it runs there; none to find this build's own there. */
   banda?: string
 } & (

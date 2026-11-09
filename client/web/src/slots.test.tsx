@@ -146,6 +146,7 @@ test("what fills the Slots is what the modules that run put there, in their orde
 
 const arc: HostState = {
   name: "arc",
+  ssh: "arc",
   state: "live",
   build: "abc123",
   version: "0.1.0-dev.421",
