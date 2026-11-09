@@ -228,13 +228,13 @@ impl Harness {
 
     /// Makes its home a shadow of its Harness's, when it is a Codex account
     /// with a home of its own, before its process starts.
+    /// None where links need the Person's leave ([`shadow::LINKS`]).
     pub async fn make_shadow(&self) -> std::io::Result<()> {
-        let (true, Some(shared), Some(home)) =
-            (shadow::LINKS, self.shadows.clone(), shadow::home(&self.env))
-        else {
-            return Ok(());
-        };
-        tokio::task::spawn_blocking(move || shadow::make(&home, &shared)).await?
+        #[cfg(unix)]
+        if let (Some(shared), Some(home)) = (self.shadows.clone(), shadow::home(&self.env)) {
+            tokio::task::spawn_blocking(move || shadow::make(&home, &shared)).await??;
+        }
+        Ok(())
     }
 
     /// Readies `session` to go on here, as it moves from the entry `from`,
