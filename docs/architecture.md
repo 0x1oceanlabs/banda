@@ -1274,6 +1274,7 @@ module reaches a Harness through an adapter:
 client/desktop                      Electron main: starts the engine, serves the page, hands it the address
 client/desktop-kit                  what a module's part in main may use of main: its services, dialogs, errors, the bridge's answers, the byte host
 client/web                          the page: the bar, the sidebar, the workspaces and the overview; the actions; the Pane registry
+client/core                         the core every client shares, with no DOM: Here, the stores read by selector, what an action runs with, the device's words
 client/ui                           shadcn/ui (preset b0, on Base UI), Banda's Mark and sounds, and the Pane contract
 client/ghostty                      T3 Code's Ghostty adapter: a terminal on a canvas
 apps/*/pane, platform/*/pane        each module's Panes
@@ -1361,10 +1362,15 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   (`client/web/src/tiling/`): the workspaces, or the overview over them
   (ADR 0005, decisions 7–9; ADR 0087). A popped-out Pane's window is the
   Window's too (`window/Popped.tsx`). The Window routes the keys
-  (`window/keys.ts`), and reaches the desktop only through its device
-  part (`window/device.ts`), which W0 replaces with the device port, whose
-  desktop adapter, `boot/desktop.ts`, is then the only reader of
-  `window.banda` (ADR 0089, decisions 2 and 11). The Window may import
+  (`window/keys.ts`), and reaches the desktop only through the device's
+  desktop adapter, `boot/desktop.ts`, by `boot/index.ts`; at last the
+  adapter is the only reader of `window.banda` (ADR 0089, decisions 2
+  and 11). What every client shares is `client/core` (`@banda/core`,
+  and `@banda/core/react` for what reads it from React): Here and the
+  store the Window keeps it in, the store read by selector, what an
+  action runs with, and the words the page and the desktop say to each
+  other. It has no DOM, reads no device and names no App (decision 1).
+  The Window may import
   the Tiling; what the Tiling still imports of the Window, the
   architecture test lists, and the list only falls.
 - **The workspaces** follow niri (`client/web/src/tiling/model.ts`); every
@@ -1527,7 +1533,7 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
 - **Only `window.banda` ties the page to the desktop.** It names no
   Electron API, so a browser can host it later; for now the engine lets in
   only `app://banda` and pages on localhost. Its channels are one table,
-  `BRIDGE` in `client/web/src/host.ts`, each named by its path (ADR 0028):
+  `BRIDGE` in `client/desktop/src/bridge.ts`, each named by its path (ADR 0028):
   the preload builds `window.banda` from it, and in main each channel
   answers Banda's page alone, decodes its arguments with a `Schema` and
   runs one effect (`serve` in `@banda/desktop-kit`, ADR 0020). A module
@@ -1744,9 +1750,13 @@ images. Sweeps retain images still referenced by a fork after a rewind.
   its model (decision 9). The parts the Window draws on every move, each
   Tile and its Pane, each Strip and the widgets, stay memoized (ADR 0088,
   decision 7). The Window and the Tiling read `window.banda` only in
-  `window/device.ts`, and what else in the page reads it, its own code,
-  `@banda/ui`'s and the modules' Pane parts, the test lists by file, a
-  list that only falls (ADR 0089, decisions 2 and 11).
+  `boot/desktop.ts`, and what else in the page reads it, its own code,
+  the core's, `@banda/ui`'s and the modules' Pane parts, the test lists
+  by file, a list that only falls (ADR 0089, decisions 2 and 11). The
+  core imports only itself, the contract and, in its bindings, React,
+  reads no device, names no App and keeps no state at a module's top
+  level; the desktop imports nothing of the page, which takes the
+  bridge's table only as a type (decisions 1, 4 and 11).
 - **Module tests** run through the module's interface: commands go in and
   events come out. Nothing past the interface is mocked.
 - **Checkpoints** (ADR 0014, decision 3). With `BANDA_CHECKPOINTS` set,

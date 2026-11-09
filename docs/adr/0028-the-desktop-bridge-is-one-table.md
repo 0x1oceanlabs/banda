@@ -39,6 +39,11 @@ Issue #161, from the architecture review of 2026-11-02 (#168).
      and nothing that calls `window.banda` changes.
    - The table is types and names, without Effect (ADR 0020, decision 1).
      Its helpers are in `@banda/contract/bridge`.
+   - _Changed by ADR 0089, decision 4:_ `BRIDGE` and `Host` are in
+     `client/desktop/src/bridge.ts`, exported as `@banda/desktop/bridge`,
+     so main and the preload no longer import the page. The page takes
+     only the type `Host` from it, and the words its channels carry
+     (`HostState`, `PoppedAsk`, `Update`…) are `@banda/core`'s.
 
 2. **The preload builds `window.banda` from the table.** It walks
    `BRIDGE` and makes each leaf an `ipcRenderer.invoke`, `send`, or a
@@ -59,6 +64,9 @@ Issue #161, from the architecture review of 2026-11-02 (#168).
    - The browser's leaves are `BROWSER_BRIDGE`, in its
      `modules/browser/pane/src/desktop.ts`, which `BRIDGE` takes in under
      `browser`.
+   - _Changed by ADR 0089, decision 4:_ `BRIDGE` takes the modules' parts
+     in `client/desktop`, which depends on their packages for them, so the
+     page imports no module's part for main.
    - Its answers come with its part in main (below), and main puts them
      under `browser` without naming its channels.
    - The browser's main-process code (`browser.ts`, `cdp.ts`, `tabs.ts`,

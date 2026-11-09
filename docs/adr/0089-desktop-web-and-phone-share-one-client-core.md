@@ -55,6 +55,16 @@ desktop, web and the PWA now.
      later.
    - A lint keeps `document`, `window`, `localStorage` and Electron out of
      it.
+   - _Changed on 2026-11-09 (Roma):_ W0 is narrowed. It brings Here (with
+     `KeptHere`, the store the Window keeps it in), the store read by
+     selector and its hooks, what an action runs with (`Run`, `Args`,
+     `useRun`), and the device port's vocabulary: the words the page and
+     main share. The device object and its desktop adapter stay in
+     `client/web/src/boot/` until W1 gives the port a second reader. The
+     hosts store, `KeptHosts`, joins the core at W0 (W0a2), not at H5. The
+     items and calls stores come with B7a and E8b, the action matcher with
+     W1, and no marks store is made: ADR 0096 made a Thread's seen and
+     archived its host's. Plan step 2 shrinks with it.
 
 2. **The device port is the only way to the device.**
    - It carries ADR 0082 d12's closed list (`notify`, `sound`,
