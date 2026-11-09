@@ -41,7 +41,7 @@ export async function moveOver(
     parse(parsed(read(WORKSPACES))) ?? (first && startWith(project, first))
   if (!kept) return undefined
   const taken = await engine
-    .command("workspaces.take", { workspaces: keptOf(kept) })
+    .commandAt("workspaces.take", { workspaces: keptOf(kept) })
     .catch((error: unknown) => {
       if (error instanceof Refused && error.refusal.code === "conflict")
         return null
