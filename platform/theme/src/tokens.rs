@@ -5,7 +5,7 @@
 //! `--primary` and `--ring`. shadcn's `--accent` is something else, the
 //! background of a row under the pointer.
 
-use crate::color::mix;
+use crate::color::{is_css_color, is_hex, mix};
 use crate::palette::{ANSI, Palette};
 use std::collections::BTreeMap;
 
@@ -72,6 +72,60 @@ pub fn derive(palette: &Palette) -> BTreeMap<String, String> {
         put(&format!("ansi-{n}"), &get(key));
     }
     tokens
+}
+
+/// One theme's colours as CSS variables, `--` included: its palette
+/// under the `colors` the layers replace, each a palette name or hex,
+/// derived into tokens, under the `tokens` they replace, each a palette
+/// name, a token's name or a CSS colour. Last the focus: the focused
+/// tile's `border` and every other's, named so, else `primary` and
+/// `border`.
+pub fn scheme<'a>(
+    palette: &Palette,
+    colors: impl IntoIterator<Item = (&'a str, &'a str)>,
+    tokens: impl IntoIterator<Item = (&'a str, &'a str)>,
+    border: Option<&str>,
+    inactive_border: Option<&str>,
+) -> BTreeMap<String, String> {
+    let base = palette.clone().complete();
+    let mut palette = base.clone();
+    for (key, value) in colors {
+        let resolved = base
+            .get(value)
+            .map(str::to_owned)
+            .or_else(|| is_hex(value).then(|| value.to_owned()));
+        if let Some(resolved) = resolved {
+            palette.set(key, resolved);
+        }
+    }
+    let palette = palette.complete();
+    let mut derived = derive(&palette);
+    let refer = |derived: &BTreeMap<String, String>, value: &str| -> Option<String> {
+        palette
+            .get(value)
+            .map(str::to_owned)
+            .or_else(|| derived.get(value).cloned())
+            .or_else(|| is_css_color(value).then(|| value.to_owned()))
+    };
+    for (key, value) in tokens {
+        if let Some(resolved) = refer(&derived, value) {
+            derived.insert(key.to_owned(), resolved);
+        }
+    }
+    let focus = |value: Option<&str>, fallback: &str| {
+        value
+            .and_then(|v| refer(&derived, v))
+            .or_else(|| derived.get(fallback).cloned())
+            .unwrap_or_default()
+    };
+    let active = focus(border, "primary");
+    let inactive = focus(inactive_border, "border");
+    derived.insert("focus".to_owned(), active);
+    derived.insert("focus-inactive".to_owned(), inactive);
+    derived
+        .into_iter()
+        .map(|(k, v)| (format!("--{k}"), v))
+        .collect()
 }
 
 #[cfg(test)]

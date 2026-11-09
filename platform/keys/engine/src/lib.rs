@@ -257,7 +257,7 @@ pub fn set_mod(config: &Path, set: &SetMod) -> Result<String, Vec<Problem>> {
 /// The Person's keys and what is wrong in them, read as the look reads
 /// them, with every manifest's actions.
 fn resolved(config: &Path) -> (Keys, Vec<Problem>) {
-    let places = banda_look::theme::Places::at(config);
+    let places = banda_look::Places::at(config);
     let mut problems = Vec::new();
     let (keys, _) = look::resolve(
         &places,

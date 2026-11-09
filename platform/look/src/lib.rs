@@ -3,9 +3,10 @@
 //!
 //! The look comes from four layers, each over the one before: Banda's
 //! defaults, the theme's `banda.toml`, Hyprland's own window settings and
-//! the Person's `~/.config/banda/look.toml`. A theme's colours are an
-//! Omarchy palette, and [`tokens::derive`] turns them into shadcn/ui's
-//! tokens.
+//! the Person's `~/.config/banda/look.toml`. The theme is
+//! [`banda_theme`]'s: it finds the theme, and turns its Omarchy palette
+//! into shadcn/ui's tokens; this crate lays its `banda.toml` and the
+//! Person's settings over it (ADR 0100, decision 1).
 //!
 //! It is the window's machine's, not a Project's, so it is no module of the
 //! engine: `banda look` prints it, and `banda look --follow` prints it
@@ -15,29 +16,24 @@
 //! own file the window reads, as the browser's `browser.toml`, comes in
 //! [`Look::files`], by its name ([`file`]); the module describes it.
 
-pub mod color;
 pub mod columns;
 pub mod file;
-pub mod fonts;
-pub mod hyprland;
 pub mod keyed;
 pub mod keys;
 pub mod later;
 pub mod motion;
 pub mod notify;
-pub mod palette;
 pub mod settings;
 pub mod sidebar;
 pub mod sound;
-pub mod theme;
-pub mod tokens;
-mod wallpaper;
 
-use color::{is_css_color, is_hex};
+use banda_theme::color::{is_css_color, is_hex};
+pub use banda_theme::hyprland::{Hyprland, Windows};
+use banda_theme::palette::Palette;
+use banda_theme::{Mode, Theme, fonts, theme, tokens, wallpaper};
+pub use banda_theme::{Origin, Places, path_of};
 pub use file::{OneFile, SettingsFile};
-use hyprland::Windows;
 use motion::Motion;
-use palette::Palette;
 use serde::Serialize;
 use settings::{Corner, Material, ModeChoice, Settings, SidebarStyle, ThemeChoice, Workspaces};
 use std::borrow::Cow;
@@ -46,19 +42,8 @@ use std::fmt;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use theme::{Places, Theme};
 use toml::Spanned;
 use ts_rs::TS;
-pub use wallpaper::path_of;
-
-/// Light or dark.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS)]
-#[serde(rename_all = "lowercase")]
-#[ts(export, export_to = "look/")]
-pub enum Mode {
-    Light,
-    Dark,
-}
 
 /// Which scheme the window shows: one, or the system's choice.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS)]
@@ -227,7 +212,7 @@ pub struct Source {
     pub name: Option<String>,
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub origin: Option<theme::Origin>,
+    pub origin: Option<Origin>,
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
@@ -537,7 +522,7 @@ pub fn resolve(
         .unwrap_or_else(|| ThemeChoice::One(default_theme.to_owned()));
 
     let load =
-        |name: &str, problems: &mut Vec<Problem>, watched: &mut Vec<PathBuf>| -> Option<Theme> {
+        |name: &str, problems: &mut Vec<Problem>, watched: &mut Vec<PathBuf>| -> Option<Laid> {
             if name == "omarchy" {
                 if let Some(current) = &places.omarchy_current {
                     watched.push(current.join("colors.toml"));
@@ -549,7 +534,7 @@ pub fn resolve(
                     watched.push(folder.join("banda.toml"));
                 }
             }
-            places.theme(name, problems)
+            laid(places, name, problems)
         };
     let missing = |name: &str, problems: &mut Vec<Problem>| {
         let words = if name == "omarchy" {
@@ -565,8 +550,8 @@ pub fn resolve(
     // A pair of Banda's own, `<name>-light` and `<name>-dark`: banda, macos.
     let pair = |name: &str, problems: &mut Vec<Problem>| {
         (
-            places.theme(&format!("{name}-light"), problems),
-            places.theme(&format!("{name}-dark"), problems),
+            laid(places, &format!("{name}-light"), problems),
+            laid(places, &format!("{name}-dark"), problems),
         )
     };
 
@@ -658,7 +643,7 @@ pub fn resolve(
     if mine.hyprland.or(layers.hyprland) == Some(true)
         && let Some(found) = windows()
     {
-        let found = found.layer();
+        let found = Settings::of_hyprland(found);
         keyed_layers.push(keyed::Layer::new("hyprland", &found, None));
         layers = found.over(layers);
         sources.push(Source {
@@ -885,49 +870,69 @@ fn shown_of(wanted: ModeChoice) -> Shown {
 }
 
 /// One theme's colours as CSS variables: its palette under the colours
-/// the layers replace, derived into tokens, under the tokens they replace.
-fn scheme(theme: &Theme, mine: &Settings, all: &Settings) -> BTreeMap<String, String> {
-    let base = theme.palette.clone().complete();
-    let mut palette = base.clone();
-    for (key, value) in theme.settings.colors.iter().chain(&mine.colors) {
-        let value = value.get_ref();
-        let resolved = base
-            .get(value)
-            .map(str::to_owned)
-            .or_else(|| is_hex(value).then(|| value.clone()));
-        if let Some(resolved) = resolved {
-            palette.set(key, resolved);
-        }
+/// its `banda.toml` and `look.toml` replace, derived into tokens, under
+/// the tokens they replace ([`tokens::scheme`]).
+fn scheme(theme: &Laid, mine: &Settings, all: &Settings) -> BTreeMap<String, String> {
+    fn named<'a>((key, value): (&'a String, &'a Spanned<String>)) -> (&'a str, &'a str) {
+        (key, value.get_ref())
     }
-    let palette = palette.complete();
-    let mut tokens = tokens::derive(&palette);
-    let refer = |tokens: &BTreeMap<String, String>, value: &str| -> Option<String> {
-        palette
-            .get(value)
-            .map(str::to_owned)
-            .or_else(|| tokens.get(value).cloned())
-            .or_else(|| is_css_color(value).then(|| value.to_owned()))
-    };
-    for (key, value) in theme.settings.tokens.iter().chain(&mine.tokens) {
-        if let Some(resolved) = refer(&tokens, value.get_ref()) {
-            tokens.insert(key.clone(), resolved);
-        }
+    fn focus(value: &Option<Spanned<String>>) -> Option<&str> {
+        value.as_ref().map(|v| v.get_ref().as_str())
     }
-    let focus = |value: &Option<Spanned<String>>, fallback: &str| {
-        value
-            .as_ref()
-            .and_then(|v| refer(&tokens, v.get_ref()))
-            .or_else(|| tokens.get(fallback).cloned())
-            .unwrap_or_default()
+    tokens::scheme(
+        &theme.palette,
+        theme.settings.colors.iter().chain(&mine.colors).map(named),
+        theme.settings.tokens.iter().chain(&mine.tokens).map(named),
+        focus(&all.focus.border),
+        focus(&all.focus.inactive_border),
+    )
+}
+
+/// A theme, read: its palette, and what Banda and its `banda.toml` say of
+/// it, a layer in `look.toml`'s schema.
+struct Laid {
+    name: String,
+    origin: Origin,
+    folder: Option<PathBuf>,
+    palette: Palette,
+    settings: Settings,
+    /// The `banda.toml` its settings were read from, so each key is known
+    /// by its line; none for Banda's own, or with no file.
+    banda_toml: Option<(PathBuf, String)>,
+}
+
+/// Reads the theme `name` and its `banda.toml`. Problems in its files go
+/// to `problems`; `None` when there is no such theme.
+fn laid(places: &Places, name: &str, problems: &mut Vec<Problem>) -> Option<Laid> {
+    let Theme {
+        name,
+        origin,
+        folder,
+        palette,
+        inside,
+        banda_toml,
+    } = match places.theme(name)? {
+        Ok(theme) => theme,
+        Err(unread) => {
+            problems.push(Problem::toml(&unread.path, &unread.text, &unread.error).left_out());
+            return None;
+        }
     };
-    let active = focus(&all.focus.border, "primary");
-    let inactive = focus(&all.focus.inactive_border, "border");
-    tokens.insert("focus".to_owned(), active);
-    tokens.insert("focus-inactive".to_owned(), inactive);
-    tokens
-        .into_iter()
-        .map(|(k, v)| (format!("--{k}"), v))
-        .collect()
+    let inside: Settings = inside
+        .map(|text| toml::from_str(text).expect("Banda's own banda.toml parses"))
+        .unwrap_or_default();
+    let file = banda_toml
+        .as_ref()
+        .and_then(|(path, text)| read_settings(path, text, problems))
+        .unwrap_or_default();
+    Some(Laid {
+        name,
+        origin,
+        folder,
+        palette,
+        settings: file.over(inside),
+        banda_toml,
+    })
 }
 
 /// The sizes as CSS variables, in pixels.
@@ -988,7 +993,7 @@ fn thousandths(v: f64) -> f64 {
 /// broken file keeps the last good look in force, with the new problems.
 pub fn follow(
     places: &Places,
-    hyprland: Option<hyprland::Hyprland>,
+    hyprland: Option<Hyprland>,
     also: &[SettingsFile],
     manifests: &keys::Manifests,
     mut emit: impl FnMut(&Look) -> bool,
@@ -1092,8 +1097,6 @@ fn targets(links: &[PathBuf]) -> Vec<Option<(PathBuf, u64, Option<std::time::Sys
         })
         .collect()
 }
-
-pub use theme::Listed;
 
 /// The line, from 1, that byte `offset` of `text` is on.
 pub(crate) fn line_at(text: &str, offset: usize) -> u32 {

@@ -7,9 +7,9 @@
 //! [`OneFile`], and [`resolve`] resolves every such file the same way, so
 //! the look carries a module's file by its name, a value and its keys.
 
+use crate::Places;
 use crate::Problem;
 use crate::keyed::{self, Keyed, Layer};
-use crate::theme::Places;
 use schemars::generate::SchemaSettings;
 use schemars::transform::RecursiveTransform;
 use schemars::{JsonSchema, Schema};

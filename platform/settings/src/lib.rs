@@ -6,8 +6,8 @@
 //! an editor completes and checks the file with. A new key appears in all
 //! of them, with no list kept by hand.
 
+use banda_look::Places;
 use banda_look::keys::Manifests;
-use banda_look::theme::Places;
 use banda_look::{Problem, SettingsFile};
 use std::path::{Path, PathBuf};
 

@@ -7,9 +7,9 @@
 //! with the look, watches its files with the look's, and names its
 //! problems in the same list. The window only draws what it says.
 
+use crate::Places;
 use crate::Problem;
 use crate::keyed::{self, Keyed, Layer, Renamed};
-use crate::theme::Places;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -607,7 +607,7 @@ pub fn resolve(
     problems: &mut Vec<Problem>,
     watched: &mut Vec<PathBuf>,
 ) -> (Sidebar, Keyed) {
-    let file = places.sidebar_file();
+    let file = places.config.join("sidebar.toml");
     watched.push(file.clone());
     let mine_file = std::fs::read_to_string(&file)
         .ok()
@@ -617,7 +617,7 @@ pub fn resolve(
         .and_then(|(path, text)| read_sidebar(path, text, false, problems))
         .unwrap_or_default();
 
-    let folder = places.own_sidebars();
+    let folder = places.config.join("sidebars");
     watched.push(folder.clone());
     let yours = own_presets(&folder);
     watched.extend(yours.iter().cloned());

@@ -854,8 +854,8 @@ fn skill(topic: Option<String>, export: Option<PathBuf>) -> ExitCode {
 }
 
 /// The look's places, in this Banda's config folder.
-fn look_places() -> Result<banda_look::theme::Places, Failure> {
-    Places::from_env().map(|places| banda_look::theme::Places::from_env(places.config))
+fn look_places() -> Result<banda_look::Places, Failure> {
+    Places::from_env().map(|places| banda_look::Places::from_env(places.config))
 }
 
 /// Under an Agent's pass, a change to Banda's settings goes to the engine
@@ -1050,7 +1050,7 @@ fn report(problems: Vec<banda_look::Problem>) -> ExitCode {
 
 /// `banda look`: no engine, no runtime, only files and Hyprland's socket.
 fn look(what: Option<LookCommand>, follow: bool, with_parent: bool) -> ExitCode {
-    use banda_look::hyprland::Hyprland;
+    use banda_look::Hyprland;
     let places = match look_places() {
         Ok(places) => places,
         Err(failure) => return failure.exit(),

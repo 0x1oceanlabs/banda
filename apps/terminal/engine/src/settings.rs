@@ -143,7 +143,7 @@ impl OneFile for TerminalSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use banda_look::theme::Places;
+    use banda_look::Places;
 
     fn resolved(text: Option<&str>) -> (Writing, Vec<Problem>) {
         let folder = tempfile::tempdir().unwrap();

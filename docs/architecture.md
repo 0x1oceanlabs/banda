@@ -122,13 +122,16 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
 - **The look is the window's machine's** (ADR 0007). `banda look`
   reads Omarchy's theme, Hyprland's windows and `~/.config/banda/look.toml`
   and prints the CSS variables as JSON, with no engine; `--follow` prints
-  each change, and `check` names a broken file's line. Its `[sound]` says
-  which sounds the window plays (ADR 0009) and its `[notify]` where the
-  window tells of a call (ADR 0011); the look's layers apply to them as
-  to every other key. The sidebar's arrangement comes with it (ADR
-  0008): `~/.config/banda/sidebar.toml` over the preset it names, Banda's
-  or `sidebars/<name>.toml`, over the defaults. The view menu asks the
-  desktop to write the preset into the file. The browser's
+  each change, and `check` names a broken file's line. The theme is
+  `platform/theme`'s: where a theme is found, its palette worked into
+  tokens, its fonts, the wallpaper and Hyprland's windows; `platform/look`
+  lays a theme's `banda.toml` and the Person's files over it (ADR 0100).
+  The look's `[sound]` says which sounds the window plays (ADR 0009) and
+  its `[notify]` where the window tells of a call (ADR 0011); the look's
+  layers apply to them as to every other key. The sidebar's arrangement
+  comes with it (ADR 0008): `~/.config/banda/sidebar.toml` over the
+  preset it names, Banda's or `sidebars/<name>.toml`, over the defaults.
+  The view menu asks the desktop to write the preset into the file. The browser's
   `~/.config/banda/browser.toml` comes with it too (ADR 0013), and the
   browser's switch and its pins ask the desktop to write `tabs` and
   `pinned` into it, through `banda settings set`; its `blocker` turns

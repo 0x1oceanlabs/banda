@@ -1,0 +1,22 @@
+[package]
+name = "banda-theme"
+description = "The theme (ADR 0100): where themes are found, their palettes worked out into tokens, the fonts, and what the device says of itself: the wallpaper, Hyprland's windows. The look lays it under the Person's settings."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+banda-kernel = { path = "../../kernel" }
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+ts-rs.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

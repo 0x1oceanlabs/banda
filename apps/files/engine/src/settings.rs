@@ -129,7 +129,7 @@ impl OneFile for FilesSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use banda_look::theme::Places;
+    use banda_look::Places;
 
     fn resolved(text: Option<&str>) -> (Finder, Vec<Problem>) {
         let folder = tempfile::tempdir().unwrap();

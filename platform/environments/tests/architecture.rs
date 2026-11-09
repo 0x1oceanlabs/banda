@@ -98,12 +98,12 @@ const ON_THE_HOST: [(&str, usize, &str); 13] = [
         "files a Problem in Banda's own repository with the Person's `gh`",
     ),
     (
-        "platform/look/src/fonts.rs",
+        "platform/theme/src/fonts.rs",
         1,
         "asks fontconfig which font a family is",
     ),
     (
-        "platform/look/src/wallpaper.rs",
+        "platform/theme/src/wallpaper.rs",
         1,
         "asks the desktop which wallpaper it shows",
     ),

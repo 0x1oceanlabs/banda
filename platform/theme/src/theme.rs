@@ -1,10 +1,9 @@
 //! Where themes are found, and what one holds: a folder with Omarchy's
 //! `colors.toml` and, if its author wants, a `banda.toml` in the schema of
-//! `look.toml` (ADR 0007, decisions 2 and 3).
+//! `look.toml` (ADR 0007, decisions 2 and 3), which the look reads.
 
 use crate::palette::Palette;
-use crate::settings::{Material, Settings};
-use crate::{Mode, Problem};
+use crate::{Material, Mode};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use ts_rs::TS;
@@ -131,21 +130,6 @@ impl Places {
     pub fn own_themes(&self) -> PathBuf {
         self.config.join("themes")
     }
-
-    /// The sidebar's arrangement (ADR 0008).
-    pub fn sidebar_file(&self) -> PathBuf {
-        self.config.join("sidebar.toml")
-    }
-
-    /// The keys the Person binds (ADR 0005, decision 11).
-    pub fn keys_file(&self) -> PathBuf {
-        self.config.join("keys.toml")
-    }
-
-    /// The Person's sidebar presets, `<name>.toml`.
-    pub fn own_sidebars(&self) -> PathBuf {
-        self.config.join("sidebars")
-    }
 }
 
 /// Where a theme comes from.
@@ -171,10 +155,28 @@ pub struct Theme {
     /// Its folder; none for Banda's own.
     pub folder: Option<PathBuf>,
     pub palette: Palette,
-    pub settings: Settings,
-    /// Its `banda.toml` and the text its settings were read from, so each
-    /// key is known by its line; none for Banda's own, or with no file.
+    /// What Banda says of it before its `banda.toml`, in the same schema:
+    /// all a theme of Banda's own says, and Omarchy's current one's shape.
+    pub inside: Option<&'static str>,
+    /// Its `banda.toml` and its text, for the look to read in the schema
+    /// of `look.toml`, so each key is known by its line (ADR 0007,
+    /// decision 3); none for Banda's own, or with no file.
     pub banda_toml: Option<(PathBuf, String)>,
+}
+
+/// Under Omarchy's current theme's own `banda.toml`: Hyprland's
+/// rounding, border and gaps are its shape, and its border is the focus,
+/// as its windows show it, with no shadow beside it (ADR 0075, decisions
+/// 3 and 5).
+const OMARCHY: &str = "hyprland = true\n\n[focus]\nshadow = 0\n";
+
+/// A theme's `colors.toml` that is no TOML: the theme is not read, and
+/// the look names it, where it is.
+#[derive(Debug)]
+pub struct Unread {
+    pub path: PathBuf,
+    pub text: String,
+    pub error: toml::de::Error,
 }
 
 /// Banda's own themes: files in this crate, so they are examples too.
@@ -236,36 +238,33 @@ impl Places {
     }
 
     /// Reads the theme `name`: `omarchy` is Omarchy's current one, then
-    /// Banda's own, the Person's and Omarchy's by name. Problems in its
-    /// files go to `problems`; `None` when there is no such theme.
-    pub fn theme(&self, name: &str, problems: &mut Vec<Problem>) -> Option<Theme> {
+    /// Banda's own, the Person's and Omarchy's by name. `None` when
+    /// there is no such theme; [`Unread`] when its palette is no TOML.
+    pub fn theme(&self, name: &str) -> Option<Result<Theme, Box<Unread>>> {
         if name == "omarchy" {
-            let folder = self.omarchy_current.clone()?;
-            let mut theme = read_folder("omarchy", Origin::Current, &folder, problems)?;
-            // Hyprland's rounding, border and gaps are this theme's shape,
-            // and its border is the focus, as its windows show it, with no
-            // shadow beside it (ADR 0075, decisions 3 and 5). Its own
-            // banda.toml may say otherwise.
-            theme.settings.hyprland.get_or_insert(true);
-            theme.settings.focus.shadow.get_or_insert(0.0);
-            return Some(theme);
+            let folder = self.omarchy_current.as_ref()?;
+            return read_folder("omarchy", Origin::Current, folder).map(|read| {
+                read.map(|theme| Theme {
+                    inside: Some(OMARCHY),
+                    ..theme
+                })
+            });
         }
         if let Some((_, colors, banda)) = BUILT_IN.iter().find(|(n, _, _)| *n == name) {
             let palette = Palette::parse(colors).expect("Banda's own palettes parse");
-            let settings = toml::from_str(banda).expect("Banda's own banda.toml parses");
-            return Some(Theme {
+            return Some(Ok(Theme {
                 name: name.to_owned(),
                 origin: Origin::Banda,
                 folder: None,
                 palette,
-                settings,
+                inside: Some(banda),
                 banda_toml: None,
-            });
+            }));
         }
         self.candidates(name)
             .into_iter()
             .find(|(_, folder)| folder.join("colors.toml").is_file())
-            .and_then(|(origin, folder)| read_folder(name, origin, &folder, problems))
+            .and_then(|(origin, folder)| read_folder(name, origin, &folder))
     }
 
     /// Every theme there is, Banda's first.
@@ -320,37 +319,31 @@ impl Places {
     }
 }
 
-fn read_folder(
-    name: &str,
-    origin: Origin,
-    folder: &Path,
-    problems: &mut Vec<Problem>,
-) -> Option<Theme> {
+fn read_folder(name: &str, origin: Origin, folder: &Path) -> Option<Result<Theme, Box<Unread>>> {
     let colors_path = folder.join("colors.toml");
     let text = std::fs::read_to_string(&colors_path).ok()?;
     let palette = match Palette::parse(&text) {
         Ok(palette) => palette,
         Err(error) => {
-            problems.push(Problem::toml(&colors_path, &text, &error).left_out());
-            return None;
+            return Some(Err(Box::new(Unread {
+                path: colors_path,
+                text,
+                error,
+            })));
         }
     };
     let banda_path = folder.join("banda.toml");
     let banda_toml = std::fs::read_to_string(&banda_path)
         .ok()
         .map(|text| (banda_path, text));
-    let settings = banda_toml
-        .as_ref()
-        .and_then(|(path, text)| crate::read_settings(path, text, problems))
-        .unwrap_or_default();
-    Some(Theme {
+    Some(Ok(Theme {
         name: name.to_owned(),
         origin,
         folder: Some(folder.to_owned()),
         palette,
-        settings,
+        inside: None,
         banda_toml,
-    })
+    }))
 }
 
 /// The system's program `name`, as the PATH finds it: on Linux one only
