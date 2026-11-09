@@ -66,8 +66,8 @@ export const METHODS: readonly Command["method"][] = [
   "workspaces.take",
 ]
 
-/** What a command answers, as the engine does but for where its event
- * stands in the log: the Pane for `open`, and whether it is new. */
+/** What a command answers, as the engine does: the Pane for `open`, and
+ * whether it is new. */
 export type Answer = { pane?: string; new?: boolean }
 
 /** What a command comes to: the workspaces after it and its answer, or

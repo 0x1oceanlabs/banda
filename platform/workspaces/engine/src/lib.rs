@@ -354,19 +354,15 @@ pub struct Opened {
     pub pane: PaneId,
     /// False when the workspaces showed it already.
     pub new: bool,
-    /// Where its event stands in the log, as `Done`'s.
-    #[ts(type = "number | null")]
-    pub at: Option<i64>,
 }
 
-/// What a change answers: where its event stands in the log, so a window
-/// draws it before it works out the next; none when nothing changed.
+/// What a change answers: nothing of its own, as the kernel's answer
+/// carries where its event stands in the log (ADR 0082, decision 4).
+/// Braced, so it is `{}`, not null: a window takes an answer as the change
+/// done (`client/web/src/safe/Broke.tsx`).
 #[derive(Serialize, Deserialize, TS)]
 #[ts(export_to = "workspaces/")]
-pub struct Done {
-    #[ts(type = "number | null")]
-    pub at: Option<i64>,
-}
+pub struct Done {}
 
 #[async_trait::async_trait]
 impl Module for Workspaces {
@@ -447,7 +443,7 @@ impl Workspaces {
             keep_aside(tx, &aside)
         })
         .await
-        .map(|((), at)| Done { at })
+        .map(|()| Done {})
     }
 
     async fn bring_back(&self, call: Call, _: Nothing) -> Result<Done, Refusal> {
@@ -462,15 +458,15 @@ impl Workspaces {
             keep_aside(tx, &[])
         })
         .await
-        .map(|((), at)| Done { at })
+        .map(|()| Done {})
     }
 
     async fn open(&self, call: Call, open: Open) -> Result<Opened, Refusal> {
-        let ((pane, new), at) = change(&call, "opened", None, Say::Whole, move |list, _, seed| {
+        let (pane, new) = change(&call, "opened", None, Say::Whole, move |list, _, seed| {
             Ok(commands::open(list, open, seed)?)
         })
         .await?;
-        Ok(Opened { pane, new, at })
+        Ok(Opened { pane, new })
     }
 
     async fn close(&self, call: Call, one: OnePane) -> Result<Done, Refusal> {
@@ -611,7 +607,7 @@ impl Workspaces {
             Ok(())
         })
         .await
-        .map(|((), at)| Done { at })
+        .map(|()| Done {})
     }
 
     async fn take(&self, call: Call, take: Take) -> Result<Done, Refusal> {
@@ -634,7 +630,7 @@ impl Workspaces {
             Ok(model::take(list, take.workspaces, seed)?)
         })
         .await
-        .map(|((), at)| Done { at })
+        .map(|()| Done {})
     }
 }
 
@@ -687,7 +683,7 @@ impl Workspaces {
             args: open.args,
         };
         let beside = open.beside;
-        let ((pane, new), at) = change(&call, "opened", None, Say::Whole, move |list, _, seed| {
+        let (pane, new) = change(&call, "opened", None, Say::Whole, move |list, _, seed| {
             let place = beside.map(|b| b.place(list, wall)).transpose()?;
             if let Some(shown) = model::showing_asked(list, &shows) {
                 return Ok((shown.id, false));
@@ -701,7 +697,7 @@ impl Workspaces {
             Ok((pane, true))
         })
         .await?;
-        Ok(Opened { pane, new, at })
+        Ok(Opened { pane, new })
     }
 
     async fn move_own(&self, call: Call, moving: MoveOwn) -> Result<Done, Refusal> {
@@ -783,7 +779,7 @@ enum Say {
     Aside,
 }
 
-/// A change about one thing, which answers only where it stands.
+/// A change about one thing, which answers nothing of its own.
 async fn done(
     call: &Call,
     kind: &'static str,
@@ -792,21 +788,21 @@ async fn done(
     how: impl FnOnce(&mut Arrangement, &mut Tx<'_>, &Seed) -> Result<(), Error> + Send + 'static,
 ) -> Result<Done, Refusal> {
     let subject = Some(subject.to_string());
-    let ((), at) = change(call, kind, subject, say, how).await?;
-    Ok(Done { at })
+    change(call, kind, subject, say, how).await?;
+    Ok(Done {})
 }
 
 /// Runs a command on the arrangement, and keeps and says it when it
-/// changed, with where its event stands in the log; one no change touched
-/// says nothing. What it makes takes IDs derived from its command's ID,
-/// and one whose IDs the workspaces hold already ran.
+/// changed; one no change touched says nothing, so the kernel answers it
+/// with no place in the log. What it makes takes IDs derived from its
+/// command's ID, and one whose IDs the workspaces hold already ran.
 async fn change<T>(
     call: &Call,
     kind: &'static str,
     subject: Option<String>,
     say: Say,
     how: impl FnOnce(&mut Arrangement, &mut Tx<'_>, &Seed) -> Result<T, Error> + Send + 'static,
-) -> Result<(T, Option<i64>), Refusal>
+) -> Result<T, Refusal>
 where
     T: Serialize + DeserializeOwned + Send + 'static,
 {
@@ -818,7 +814,7 @@ where
         let mut list = before.clone();
         let answer = how(&mut list, tx, &seed)?;
         if list == before {
-            return Ok((answer, None));
+            return Ok(answer);
         }
         keep(tx, &list)?;
         let said = match say {
@@ -832,8 +828,8 @@ where
                 workspaces: list,
             },
         };
-        let event = tx.emit(kind, VERSION, subject.as_deref(), author, &said)?;
-        Ok((answer, Some(event.seq)))
+        tx.emit(kind, VERSION, subject.as_deref(), author, &said)?;
+        Ok(answer)
     })
     .await
 }
