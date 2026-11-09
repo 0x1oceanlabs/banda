@@ -17,8 +17,8 @@ import { useMemo, useState } from "react"
 import { useLists, useSnoozesNow } from "../calls/stores"
 import { useLookSidebar } from "../look"
 import { ThreadMark, toneOf } from "@banda/ui/components/banda-mark"
-import { sidebarOrder } from "../sidebar/order"
-import { Status } from "../sidebar/Row"
+import { sidebarOrder } from "./order"
+import { Status } from "./Row"
 import { type Counted, inOrder, type Tally, tally } from "./tally"
 
 /** Each count's words, after its number. */

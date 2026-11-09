@@ -4,8 +4,8 @@ import { DEFAULT_SIDEBAR } from "@banda/contract/sidebar"
 import type { MarkState } from "@banda/ui/components/banda-mark"
 import { callsOf, type Listed } from "@banda/ui/pane"
 import { nextCall } from "../calls/sight"
-import { sidebarOrder } from "../sidebar/order"
-import type { Settings } from "../sidebar/settings"
+import { sidebarOrder } from "./order"
+import type { Settings } from "./settings"
 import { type Counted, inOrder, tally } from "./tally"
 
 const one = (id: string, mark: MarkState, changed = 0): Listed => ({

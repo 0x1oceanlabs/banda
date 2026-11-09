@@ -34,7 +34,7 @@ import { ProjectSign } from "@banda/ui/components/project-sign"
 /** A workspace as the bar shows it: a Project's by its badge (ADR 0065,
  * decision 9). */
 export type BarWorkspace = InBar & { owner?: ProjectSummary }
-import { BarMotion } from "./motion"
+import { BarMotion } from "../tiling/bar-motion"
 import { type Layout, moved, same, written } from "./arrange"
 import { PARTS, type Part, WORKSPACES } from "./placed"
 import { UpdateWidget } from "./Update"

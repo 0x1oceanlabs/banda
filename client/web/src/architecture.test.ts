@@ -174,10 +174,13 @@ test("nothing in the Tiling draws a Thread's Mark", () => {
 /**
  * What the Tiling still takes of Banda's mark, by file and name: a Deck's
  * segment draws the mark of a Thread that calls (`Tabs.tsx`, #942), and a
- * Group's plate takes its Agent's state, which T-a reads by the Group's
- * owner. None joins the list, and one that goes leaves it.
+ * Group's plate and its bar in the Group map take its Agent's state, which
+ * T-a reads by the Group's owner (the map came from the Bar with B4f). None
+ * joins the list, and one that goes leaves it.
  */
 const TILING_BANDA_MARK = [
+  "web/src/tiling/Map.tsx: GroupState",
+  "web/src/tiling/Map.tsx: groupState",
   "web/src/tiling/Strip.tsx: groupState",
   "web/src/tiling/Tabs.tsx: BandaMark",
   "web/src/tiling/Tabs.tsx: MARK_WORDS",
@@ -204,12 +207,16 @@ test("the Tiling takes no more of Banda's mark than the list holds", () => {
 
 /**
  * What the Tiling still reads of an Item's Mark or what it calls, by file,
- * once for each place: a Group's plate takes its Agent's colour, which T-a
- * reads by the Group's owner instead. A Pane's header and its tile in the
- * Overview read none: what an App shows there is its part of the Slot.
- * None joins the list, and one that goes leaves it.
+ * once for each place: a Group's plate and its bar in the Group map take
+ * its Agent's colour, which T-a reads by the Group's owner instead. A
+ * Pane's header and its tile in the Overview read none: what an App shows
+ * there is its part of the Slot. None joins the list, and one that goes
+ * leaves it.
  */
-const TILING_MARKS = ["web/src/tiling/Strip.tsx: mark"]
+const TILING_MARKS = [
+  "web/src/tiling/Map.tsx: mark",
+  "web/src/tiling/Strip.tsx: mark",
+]
 
 test("the Tiling reads an Item's Mark no more than the list holds", () => {
   const reading = sources(join(app, "web/src/tiling"), {

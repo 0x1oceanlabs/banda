@@ -2,7 +2,7 @@ import type { ProjectId } from "@banda/contract"
 import { DEFAULT_COLUMNS } from "@banda/contract/look"
 import type { Listed, PaneState } from "@banda/ui/pane"
 import { expect, test } from "vitest"
-import type { Workspace } from "../tiling/model"
+import type { Workspace } from "./model"
 import { mapOf } from "./Map"
 
 test("the map draws each column by its share, a Group's by its Agent's state", () => {

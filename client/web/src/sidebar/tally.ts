@@ -12,7 +12,7 @@ import {
   works,
 } from "@banda/ui/components/banda-mark"
 import type { Listed, Lists } from "@banda/ui/pane"
-import { placeIn } from "../sidebar/order"
+import { placeIn } from "./order"
 
 /** A Thread counted, with the Project it is in. */
 export type Counted = { project: ProjectId; listed: Listed }
