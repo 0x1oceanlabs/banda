@@ -8,6 +8,26 @@
       "title": "Usage",
       "section": "Harnesses",
       "keys": []
+    },
+    {
+      "id": "harnesses.limits.look",
+      "title": "Show the usage limits as",
+      "section": "Harnesses",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "look": {
+            "type": "string",
+            "description": "how the widget shows them: icon, meter, number, providers"
+          }
+        },
+        "required": [
+          "look"
+        ],
+        "additionalProperties": false
+      }
     }
   ],
   "sources": [],

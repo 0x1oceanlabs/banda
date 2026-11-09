@@ -9,7 +9,8 @@ import {
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
 import { ProjectSign } from "@banda/ui/components/project-sign"
-import type { WidgetProps, WindowApi } from "@banda/ui/module"
+import { useRun } from "@banda/ui/hooks/use-run"
+import type { WidgetProps } from "@banda/ui/module"
 import { GlobeIcon, SquareIcon } from "lucide-react"
 import type { MouseEvent } from "react"
 import { useCallback, useEffect, useState } from "react"
@@ -22,7 +23,7 @@ import { arrived, type Placed } from "./arrived"
  * the Person's browser, and its square stops it. It draws nothing while
  * no Project has a server.
  */
-export function ServersWidget({ engine, projects, window }: WidgetProps) {
+export function ServersWidget({ engine, projects }: WidgetProps) {
   const [placed, setPlaced] = useState<Placed[]>([])
   const heard = useCallback(
     (project: ProjectId, servers: readonly Server[]) =>
@@ -42,12 +43,7 @@ export function ServersWidget({ engine, projects, window }: WidgetProps) {
     <>
       {listening}
       {placed.length > 0 && (
-        <List
-          placed={placed}
-          projects={projects}
-          engine={engine}
-          window={window}
-        />
+        <List placed={placed} projects={projects} engine={engine} />
       )}
     </>
   )
@@ -57,12 +53,10 @@ function List({
   placed,
   projects,
   engine,
-  window,
 }: {
   placed: readonly Placed[]
   projects: readonly ProjectSummary[]
   engine: Engine
-  window: WindowApi
 }) {
   const first = placed[0]!
   const words = placed.map(({ server }) => address(server.port)).join(" · ")
@@ -93,7 +87,6 @@ function List({
               placed={each}
               project={named.get(each.project)}
               engine={engine}
-              window={window}
             />
           ))}
         </DropdownMenuGroup>
@@ -106,18 +99,17 @@ function Row({
   placed: { project, server },
   project: named,
   engine,
-  window,
 }: {
   placed: Placed
   project: ProjectSummary | undefined
   engine: Engine
-  window: WindowApi
 }) {
+  const run = useRun()
   const url = `http://${address(server.port)}`
   const open = (event: MouseEvent) => {
     if (event.ctrlKey || event.metaKey)
       globalThis.open(url, "_blank", "noopener")
-    else window.run("browser.open", { address: url, project })
+    else run("browser.open", { address: url, project })
   }
   // One that ended meanwhile is gone at the next look.
   const stop = () =>
