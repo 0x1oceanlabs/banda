@@ -759,7 +759,7 @@ export function Shell({
         if (!workspace || !column) return undefined
         const look = columnsOf()
         const shown = column.entries[spot.entry]
-        const listed = shown && shows.listed(shown)
+        const listed = shown && listedIn(stores.items.get(), shown, showsOf)
         return {
           width: share(widthIn(workspace, column, look)) ?? 0.5,
           full: column.full === true,
@@ -781,7 +781,7 @@ export function Shell({
         }
       },
     }),
-    [change, update, parts, popOut, shows, drawnNow]
+    [change, update, parts, popOut, stores, drawnNow]
   )
   // What a Pane in its own window asks, the window does, as for its own.
   useEffect(
