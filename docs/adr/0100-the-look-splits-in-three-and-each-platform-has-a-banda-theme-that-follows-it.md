@@ -207,11 +207,13 @@ Each step is an issue and a PR.
    theme.
    _Amended 2026-11-09 by
    [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): step 0
-   waits for no stage. 0a is the split on each machine alone: each file's
-   class, the mixed files cut, `mod` and `[notify]` moved, an old file still
-   read and `banda settings check` saying where each key went; nothing on
-   screen changes. 0b, copying the shared files between machines, is that
-   ADR's E5. arc's machine files from the Mac are stage 2's slice 5 (E4)._
+   loses its slice, as the Mac reads its own keys and sidebar. Its parts
+   ride in the slices that need them. Each file's class comes with stage
+   2's slice 5, which also brings arc's machine files to the Mac (E4). The
+   mixed files are cut (`mod` and `[notify]` moved, an old file still read
+   and `banda settings check` saying where each key went) by the first PR
+   of that ADR's E14, which copies the shared files between machines. The
+   `look` crate's split and one store in `client/core` go with step 1._
 1. `theme.toml`, `extends` and `"platform"`; the built-in themes move to
    it. Nothing on screen changes. (ADR 0080 step 1.)
 2. The token list once, in `platform/theme`; CSS and TypeScript written

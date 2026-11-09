@@ -210,7 +210,7 @@ Each step is an issue and a PR. They start after ADR 0062's first step
 - The Person's theme choice and files synced across their machines.
   _Amended 2026-11-09 by
   [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): the
-  theme folders are copied with the other shared files (its E5); the choice
+  theme folders are copied with the other shared files (its E14); the choice
   stays each device's._
 - The resolver as WebAssembly, with the web client (ADR 0062).
 

@@ -233,7 +233,9 @@ settles.
     - _Amended 2026-11-09 by
       [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): the
       authority is in the engine that holds the arrangement, the window's
-      own machine._
+      own machine. Only a browser tab's engine is on another machine, so
+      the overlay (T2) waits for stage 4's decision on the web and is not
+      built for the desktop; plan step 7 ends with T1._
 
 12. **Device views follow; they do not poll.** The page layer stays a
     fixed layer (ADR 0013 d1). Its box sits inside a still clip
