@@ -16,13 +16,13 @@
     "@banda/contract": "workspace:*",
     "@banda/desktop-kit": "workspace:*",
     "@banda/notifications-pane": "workspace:*",
-    "@effect/platform-node": "4.1.1",
-    "effect": "4.1.1"
+    "@effect/platform-node": "4.1.2",
+    "effect": "4.1.2"
   },
   "devDependencies": {
     "@banda/ui": "workspace:*",
     "@types/node": "^24",
-    "electron": "45.1.0",
+    "electron": "45.2.3",
     "typescript": "~6.0.2",
     "vitest": "^5.0.5"
   }
