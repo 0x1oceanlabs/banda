@@ -71,8 +71,8 @@ pub struct AgentsSettings {
     #[serde(alias = "workspaces")]
     pub flow: Option<Flow>,
     /// How many seconds the focus stays on a Thread it only came to, by
-    /// the Strip's scroll or `Alt+arrow`, before its mark counts as seen:
-    /// 0 at once. A click or a key in it counts at once (ADR 0096,
+    /// the Strip's scroll or a key that moves the focus, before its mark
+    /// counts as seen: 0 at once. A click or a key in it counts at once (ADR 0096,
     /// decision 3).
     pub seen_after: Option<f64>,
 }
