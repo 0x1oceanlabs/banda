@@ -28,7 +28,7 @@ import {
 } from "react"
 import { useCalling } from "../calls/stores"
 import { useLookBar } from "../look"
-import { AsidePill } from "../safe/AsidePill"
+import { AsidePill } from "./AsidePill"
 import type { Change } from "./arrange"
 import { BarMotion } from "./bar-motion"
 import { WorkspaceMap } from "./Map"
