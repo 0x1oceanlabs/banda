@@ -248,7 +248,8 @@ Roma decided on 2026-11-04:
    - 7c. arc starts the Mac's engine over ssh while the Person is logged
      in at the Mac's screen.
    - 7d. `banda status --follow` (step 4's command, built here first, so
-     the menu bar and Omarchy's plugin read one source).
+     the menu bar and Omarchy's plugin read one source). ADR 0097 (keep
+     awake, battery) comes first.
    - 7e. The menu bar icon and its menu, the Dock icon only while a
      window shows, the one set of Quit words, as the accepted mock, and
      an engine with no app opens Banda.app hidden.
