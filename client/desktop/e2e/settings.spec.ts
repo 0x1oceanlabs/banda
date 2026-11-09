@@ -264,6 +264,45 @@ test("General, the sidebar's presets, and hearing a sound", async () => {
   ).toHaveAttribute("aria-checked", "true")
 })
 
+test("Settings files lists every settings file and whether it reads, apart from the Files App's section (ADR 0016)", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeVisible()
+  const settings = await openSettings(page)
+  const sections = settings.getByRole("navigation", {
+    name: "Settings sections",
+  })
+  await sections
+    .getByRole("button", { name: "Settings files", exact: true })
+    .click()
+  await expect(
+    settings.getByRole("heading", { name: "Settings files" })
+  ).toBeVisible()
+  // look.toml's row: the innermost block with its name and an Open.
+  const look = settings
+    .getByRole("main")
+    .locator("div")
+    .filter({ has: page.getByText("look.toml", { exact: true }) })
+    .filter({ has: page.getByRole("button", { name: "Open", exact: true }) })
+    .last()
+  await expect(look.getByRole("button", { name: "Open" })).toBeVisible()
+  await page.screenshot({ path: "test-results/settings-files.png" })
+
+  // A file that does not read says its first problem in its row.
+  writeFileSync(join(dir, "config/look.toml"), 'radius = "round"\n')
+  await expect(look).toContainText("look.toml:1")
+
+  // The Files App's section keeps its own name and file.
+  await sections.getByRole("button", { name: /^Files/ }).click()
+  await expect(
+    settings.getByRole("heading", { name: "Files", exact: true })
+  ).toBeVisible()
+  await expect(
+    sections.getByRole("button", { name: /^Files/ })
+  ).toHaveAttribute("aria-current", "page")
+})
+
 test("Keys: the lines of keys.toml, a key changed and taken out, and the reset chord (ADR 0005, decision 11)", async () => {
   window = await startWindow({
     files: {
