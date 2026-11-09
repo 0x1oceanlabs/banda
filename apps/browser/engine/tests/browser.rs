@@ -30,10 +30,7 @@ async fn open(root: &std::path::Path, owner: PersonId) -> (Arc<Kernel>, ProjectI
 
 /// An Agent whose pass is for `project`.
 fn agent(project: ProjectId) -> Caller {
-    Caller {
-        participant: Participant::Agent(AgentId::new()),
-        only: Some(project),
-    }
+    Caller::agent(AgentId::new(), project)
 }
 
 /// The owner's window, holding the road.

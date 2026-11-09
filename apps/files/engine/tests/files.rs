@@ -107,10 +107,7 @@ async fn the_person_lists_any_folder_and_an_agent_only_the_projects() {
     ] {
         let refused = match method {
             "files.watch" => {
-                let agent = Caller {
-                    participant: Participant::Agent(AgentId::new()),
-                    only: Some(world.project),
-                };
+                let agent = Caller::agent(AgentId::new(), world.project);
                 world.kernel.stream(agent, method, None, params).await.err()
             }
             _ => world.call_as_agent(method, params).await.err(),

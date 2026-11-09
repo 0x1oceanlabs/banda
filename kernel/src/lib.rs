@@ -20,9 +20,10 @@
 //!   work is done, and looks before it acts (ADR 0082, decision 6).
 //! - [`access::decide`] is the one place that says whether a Participant may
 //!   do something, and [`access::within`] keeps an Agent in its Project.
-//! - A pass names an Agent's session in its Project, for `banda mcp`
-//!   ([`ModuleProject::pass`]). The host keeps it hashed, so it outlives
-//!   an engine restart, until its session ends or it expires.
+//! - A pass names an Agent's session in its Project, and the session's
+//!   Thread, for `banda mcp` ([`ModuleProject::pass`], [`Call::thread`]).
+//!   The host keeps it hashed, so it outlives an engine restart, until
+//!   its session ends or it expires.
 //! - The window's road lets a module ask the window and await its answer
 //!   ([`Call::ask_window`]).
 //! - [`Reach`] is the path guard: where a path a call names is, and

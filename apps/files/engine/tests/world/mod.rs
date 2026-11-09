@@ -95,10 +95,7 @@ impl World {
 
     /// The call as an Agent's, whose pass walls it in the Project.
     pub async fn call_as_agent(&self, method: &str, params: Value) -> Result<Value, Refusal> {
-        let agent = Caller {
-            participant: Participant::Agent(AgentId::new()),
-            only: Some(self.project),
-        };
+        let agent = Caller::agent(AgentId::new(), self.project);
         self.kernel.call(agent, method, None, None, params).await
     }
 
@@ -108,10 +105,7 @@ impl World {
 
     /// The Agent's command, which its pass walls in the Project.
     pub async fn command_as_agent(&self, method: &str, params: Value) -> Result<Value, Refusal> {
-        let agent = Caller {
-            participant: Participant::Agent(AgentId::new()),
-            only: Some(self.project),
-        };
+        let agent = Caller::agent(AgentId::new(), self.project);
         (self.kernel)
             .call(agent, method, None, Some(CommandId::new()), params)
             .await
@@ -147,10 +141,7 @@ impl World {
 
     /// A stream asked as an Agent, whose pass walls it in the Project.
     pub async fn stream_as_agent(&self, method: &str, params: Value) -> Result<Stream, Refusal> {
-        let agent = Caller {
-            participant: Participant::Agent(AgentId::new()),
-            only: Some(self.project),
-        };
+        let agent = Caller::agent(AgentId::new(), self.project);
         self.kernel.stream(agent, method, None, params).await
     }
 }

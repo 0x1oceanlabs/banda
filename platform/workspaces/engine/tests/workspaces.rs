@@ -91,10 +91,7 @@ impl Machine {
         method: &str,
         params: Value,
     ) -> Result<Answer, Refusal> {
-        let caller = Caller {
-            participant: Participant::Agent(agent),
-            only: Some(project),
-        };
+        let caller = Caller::agent(agent, project);
         self.kernel
             .answer(caller, method, None, Some(command), params)
             .await

@@ -231,14 +231,11 @@ async fn an_agent_hears_the_name_and_names_no_machine() {
         work,
     );
     let work: ProjectId = serde_json::from_value(work.await.unwrap()["id"].clone()).unwrap();
-    let agent = Participant::Agent(AgentId::new());
+    let agent = AgentId::new();
     let callers = [
-        Caller::from(agent),
+        Caller::from(Participant::Agent(agent)),
         // Under a pass, walled in its Project.
-        Caller {
-            participant: agent,
-            only: Some(work),
-        },
+        Caller::agent(agent, work),
     ];
     for caller in callers {
         let changes = [

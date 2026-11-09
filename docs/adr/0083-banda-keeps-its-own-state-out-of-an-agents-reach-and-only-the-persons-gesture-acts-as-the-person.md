@@ -88,6 +88,9 @@ wall).
      Agent's session, never owner access.
    - A pass names its Agent, Thread and Project. Its scopes are its
      tools, named by App; its wall is its Project.
+     - _Built in part on 2026-11-09:_ the pass a Thread's session holds
+       names that Thread, and a module reads it as `Call::thread`. The
+       pass a Harness process's shells share names none.
    - It has an audience: `ws` (the API), `gateway` (MCP over HTTP) or
      `door` (an isolated Project's way in, ADR 0084). Anywhere else it is
      refused.

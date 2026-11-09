@@ -451,23 +451,26 @@ The kernel holds only what every module needs, and it names no module.
   `settings_rename`), which refuses under a pass what only the Person
   changes (`banda_settings::only_the_person`).
 - **Passes** (ADR 0083, decision 2). A module asks its `ModuleProject` for
-  a new pass of an Agent (`pass(agent)`), 32 random bytes in hex; the
-  agents module asks as a session opens. The kernel keeps passes in the
-  host's own store, `passes.sqlite3` in the engine's state, until the
-  Host scope has its store: hashed, so the store holds no pass, each with
-  its Agent, its Project, its audience (`ws`, the API, today) and when it
-  expires. What a module gets is a `Pass` its session holds: dropped, as
-  the session ends, it is revoked. The agents module's process holds a
-  session's pass while the session is open in it, and the module holds
-  each process's pass while its Project is open. A pass a session holds
-  is renewed an hour ahead every quarter of an hour; one no session of
-  this run holds, as one of the run before, lasts until the hour its
-  last holder gave it ends, and a use does not renew it. As the engine
-  stops it revokes none, and gives every pass its sessions hold a whole
-  hour, so a restart keeps the passes of the sessions that go on. A
-  Project removed takes its passes with it. A store that does not open
-  is put aside, and a new one made. A `hello` with a pass connects as
-  that Agent, in that Project.
+  a new pass of an Agent (`pass(agent, thread)`), 32 random bytes in hex;
+  the agents module asks as a session opens, naming the session's Thread,
+  and for each Harness process's shells, naming none. The kernel keeps
+  passes in the host's own store, `passes.sqlite3` in the engine's state,
+  until the Host scope has its store: hashed, so the store holds no pass,
+  each with its Agent, its Project, its Thread, its audience (`ws`, the
+  API, today) and when it expires. What a module gets is a `Pass` its
+  session holds: dropped, as the session ends, it is revoked. The agents
+  module's process holds a session's pass while the session is open in
+  it, and the module holds each process's pass while its Project is
+  open. A pass a session holds is renewed an hour ahead every quarter of
+  an hour; one no session of this run holds, as one of the run before,
+  lasts until the hour its last holder gave it ends, and a use does not
+  renew it. As the engine stops it revokes none, and gives every pass
+  its sessions hold a whole hour, so a restart keeps the passes of the
+  sessions that go on. A Project removed takes its passes with it. A
+  store that does not open is put aside, and a new one made. A `hello`
+  with a pass connects as that Agent, in that Project, and a module
+  reads the pass's Thread as `Call::thread`: the module that asked for
+  the pass named it, never the Agent.
 - **Module registry and API.** The registry routes commands to their
   module, delivers events to subscribers, and serves the API. `welcome`
   lists the engine's modules, so a window shows only what the engine has,
