@@ -65,8 +65,8 @@ export class Refused extends Error {
   }
 }
 
-/** What a call, or a stream heard `once`, says when the connection broke
- * before the engine answered. */
+/** What a call, a command sent `once` or a stream heard `once` says when
+ * the connection broke before the engine answered. */
 const LOST = "The engine went away before it answered."
 
 /** The connection broke before the engine answered. */
@@ -110,9 +110,10 @@ export type CommandOptions = {
    * fails with `Lost` at once and is not sent again once the engine is
    * back. For what must not land later than its caller said it failed,
    * as a Person's mark (ADR 0096, decision 8). One that reached the
-   * engine before the break may still have run: its fact then says so.
-   * A command made while the engine is away still waits for it, and goes
-   * then.
+   * engine before the break may still run, even after commands sent once
+   * the engine is back, so it keeps no place in their order (ADR 0082,
+   * decision 4): its fact then says so. A command made while the engine
+   * is away still waits for it, and goes then.
    */
   once?: boolean
 }
@@ -137,7 +138,8 @@ type Hearing = {
   sent: boolean
 }
 
-/** A command breaks off at most this often before its caller hears why. */
+/** A command breaks off at most this often before its caller hears why;
+ * one sent `once`, at the first break. */
 const ATTEMPTS = 3
 const FIRST_WAIT = 250
 const LONGEST_WAIT = 5000
@@ -248,7 +250,9 @@ export class Engine {
    * commands to one scope commit in the order sent, and one sent again
    * after the connection broke goes in that order too, before any sent
    * since, so the `at`s of those that have one rise in the order sent.
-   * One sent `once` (`options`) is not sent again.
+   * One sent `once` is not sent again, so it keeps no place in that
+   * order: one that reached the engine before the break may run after
+   * those sent since.
    */
   async commandAt<M extends MethodOf<"command">>(
     method: M,

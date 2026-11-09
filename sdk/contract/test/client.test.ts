@@ -107,29 +107,44 @@ test("a command sent once fails as the connection breaks and is not sent again, 
     { once: true }
   )
   const plain = engine.commandAt("agents.send", { text: "hi" }, "project")
-  // Settled or not, as the break leaves it, without an unheard rejection.
-  const onceEnded = once.then(
-    () => "answered",
-    (error: unknown) => error
+  // How the break leaves it, without an unheard rejection.
+  let ended: unknown = "waiting"
+  void once.then(
+    () => (ended = "answered"),
+    (error: unknown) => (ended = error)
   )
   await flush()
   const [read, send] = first.sent.slice(1)
   expect(read).toMatchObject({ type: "call", method: "agents.read" })
   expect(send).toMatchObject({ type: "call", method: "agents.send" })
   first.close()
+  await flush()
+  // It fails as the connection breaks, not once the engine is back.
+  expect(ended).toBeInstanceOf(Lost)
+  // One made while the engine is away waits for it, as any call does.
+  const away = engine.commandAt(
+    "agents.unread",
+    { thread: "t1" },
+    "project",
+    undefined,
+    { once: true }
+  )
 
   await vi.advanceTimersByTimeAsync(250)
   const second = Socket.made[1]
   second.welcome()
   await flush()
-  // Only the plain one goes again, with its own command ID.
+  // The plain one goes again, with its own command ID; the one sent
+  // once does not.
   const again = second.sent.slice(1)
   expect(again).toEqual([
     expect.objectContaining({ method: "agents.send", command: send.command }),
+    expect.objectContaining({ method: "agents.unread" }),
   ])
-  expect(await onceEnded).toBeInstanceOf(Lost)
   second.say({ type: "result", id: again[0].id, ok: { thread: "t2" }, at: 3 })
   await expect(plain).resolves.toEqual({ answer: { thread: "t2" }, at: 3 })
+  second.say({ type: "result", id: again[1].id, ok: null, at: 4 })
+  await expect(away).resolves.toEqual({ answer: null, at: 4 })
   engine.close()
 })
 

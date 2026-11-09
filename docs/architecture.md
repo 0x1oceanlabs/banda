@@ -510,7 +510,9 @@ command (with its ID)
   still running after thirty seconds, which only one that hangs does,
   gives up its place, and the next starts beside it; the log says so. A
   session is one connection: order holds across a reconnect as the
-  client sends its unanswered commands again, in order, first.
+  client sends its unanswered commands again, in order, first. One sent
+  `once`, as a Person's mark (ADR 0096), is not sent again, so it keeps
+  no place in that order.
 
 - An effect's end and what its module writes of it, such as how a turn
   ended, commit together. A write that fails is tried again; one that
