@@ -70,7 +70,28 @@ test("on another machine, the picker has that machine's No Project as soon as it
   ])
 })
 
-test("outside a Window, as in a window of its own, the picker has its own engine's Projects alone", () => {
+test("on another machine whose engine names a No Project of an ID the Window shows already, as this machine's, the picker offers it there only", () => {
+  // arc is a copy of this machine's Banda: the Window withheld its No
+  // Project, which a pick would open here.
+  const machines: Machine[] = [
+    { machine: "m0" as ProjectId, state: "live", projects: [project("work")] },
+    { host: "arc", named: arc, state: "live", projects: [project("banda")] },
+  ]
+  const own = {
+    host: "arc",
+    away: false,
+    machine: "m0" as ProjectId,
+    projects: [],
+  }
+  expect(
+    groupsOf(machines, own).map(({ host, machine }) => [host, machine])
+  ).toEqual([
+    [undefined, "m0"],
+    ["arc", undefined],
+  ])
+})
+
+test("outside a Window the picker has its own engine's Projects alone", () => {
   const own = {
     host: "arc",
     away: false,

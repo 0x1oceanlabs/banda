@@ -1507,7 +1507,7 @@ test("only the Window makes a KeptHere", () => {
  * 0081, decision 4), handing it this device's memory of their names, and
  * gives it to what it draws, as it gives Here: its root, and a popped-out
  * Pane's window. The machines a new Thread starts on, which that store
- * tells, only its root gives (W0b gives them to a popped-out Pane, #1010).
+ * tells, both give through one wrapper, `window/machines.tsx` (#1010).
  * The core's own store is the default where no Window gives one, with no
  * host and no memory.
  */
@@ -1528,8 +1528,43 @@ test("only the Window makes and gives the hosts, and gives the machines", () => 
     "client/web/src/main.tsx",
   ])
   expect(naming(/<MachinesContext\b|MachinesContext\.Provider/)).toEqual([
-    "client/web/src/App.tsx",
+    "client/web/src/window/machines.tsx",
   ])
+  expect(naming(/<Machines\b/)).toEqual([
+    "client/web/src/App.tsx",
+    "client/web/src/window/Popped.tsx",
+  ])
+})
+
+/**
+ * A popped-out Pane's window is a chunk of the page's build of its own,
+ * which `main.tsx` imports apart from `App.tsx` (ADR 0025, decision 9):
+ * what it takes in, file by file, reaches neither `App.tsx` nor the
+ * Window's root, `Shell.tsx`. The machines it gives come from the wrapper
+ * the root's window gives them by too (#1010).
+ */
+test("a popped-out Pane's window takes in neither App.tsx nor the Shell", () => {
+  const taken = new Set<string>()
+  const take = (file: string) => {
+    if (taken.has(file)) return
+    taken.add(file)
+    for (const name of imports(readFileSync(file, "utf8"))) {
+      if (!/^\.\.?\//.test(name)) continue
+      const base = join(dirname(file), name)
+      const found = ["", ".ts", ".tsx", "/index.ts", "/index.tsx"]
+        .map((end) => base + end)
+        .find((path) => /\.tsx?$/.test(path) && existsSync(path))
+      if (found) take(found)
+    }
+  }
+  take(join(app, "web/src/window/Popped.tsx"))
+  const files = [...taken].map((file) => relative(app, file))
+  expect(files).toContain("web/src/window/machines.tsx")
+  expect(
+    files.filter((file) =>
+      ["web/src/App.tsx", "web/src/window/Shell.tsx"].includes(file)
+    )
+  ).toEqual([])
 })
 
 /**

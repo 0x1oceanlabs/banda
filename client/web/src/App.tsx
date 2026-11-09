@@ -1,13 +1,7 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type { Engine } from "@banda/contract"
 import { Spinner } from "@banda/ui/components/spinner"
-import {
-  HostsContext,
-  KeptHosts,
-  MachinesContext,
-  useMachinesOf,
-  useOurs,
-} from "@banda/core/react"
+import { HostsContext, KeptHosts, useOurs } from "@banda/core/react"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { Previewers } from "@banda/ui/lib/previewers"
 import {
@@ -21,6 +15,7 @@ import { shownProjects } from "@banda/ui/lib/projects"
 import { Slots } from "@banda/ui/slots"
 import { previewers, slotsOf } from "./registry"
 import { device } from "./boot"
+import { Machines } from "./window/machines"
 import { Shell } from "./window/Shell"
 import { AskToShare } from "./sharing/AskToShare"
 
@@ -86,19 +81,5 @@ export function App({ engine }: { engine: Engine }) {
       </Slots>
       {projects.length > 0 && <AskToShare engine={engine} />}
     </Previewers>
-  )
-}
-
-/** The machines a new Thread starts on, for the Panes' pickers (ADR 0095,
- * decision 7): drawn again as they change, and the window not with them. */
-function Machines({
-  hosts,
-  children,
-}: {
-  hosts: KeptHosts
-  children: ReactNode
-}) {
-  return (
-    <MachinesContext value={useMachinesOf(hosts)}>{children}</MachinesContext>
   )
 }

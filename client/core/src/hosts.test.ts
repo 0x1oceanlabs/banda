@@ -297,7 +297,7 @@ test("a pick of another host's Thread opens it on that host, never on this machi
   expect(on("x", mine)).toBe(mine)
 })
 
-test("a new Thread's machines: this one first and unnamed, then each host live or away, each with its open Projects, and an ID two have shows on the first", () => {
+test("a new Thread's machines: this one first and unnamed, then each host live or away, each with its Host scope and its open Projects as the Window placed them", () => {
   const studio = { name: "Studio", icon: "server" } as const
   const shown = (
     state: HostState,
@@ -314,24 +314,24 @@ test("a new Thread's machines: this one first and unnamed, then each host live o
       project("scratch", { scratch: true }),
     ],
   }
-  const machines = machinesOf(
-    ours,
-    [
-      shown(live, [
-        project("mine"),
+  const machines = machinesOf(ours, [
+    shown(
+      live,
+      [
         project("r1"),
+        project("r2", { missing: true }),
         project("s1", { scratch: true }),
-      ]),
-      shown(
-        { name: "devbox", ssh: "devbox", state: "away", why: "ssh ended" },
-        [project("r1"), project("d1")],
-        { away: 5 }
-      ),
-      shown({ name: "mini", ssh: "mini", state: "stopped" }, []),
-      shown({ name: "pi", ssh: "pi", state: "connecting" }, []),
-    ],
-    new Map([["arc", "m1" as ProjectId]])
-  )
+      ],
+      { machine: "m1" as ProjectId }
+    ),
+    shown(
+      { name: "devbox", ssh: "devbox", state: "away", why: "ssh ended" },
+      [project("d1")],
+      { away: 5 }
+    ),
+    shown({ name: "mini", ssh: "mini", state: "stopped" }, []),
+    shown({ name: "pi", ssh: "pi", state: "connecting" }, []),
+  ])
   expect(
     machines.map(({ host, named, machine, state, away, projects }) => [
       host,
@@ -347,6 +347,95 @@ test("a new Thread's machines: this one first and unnamed, then each host live o
     // Its engine has not said its Host scope yet: no No Project there.
     ["devbox", "Studio", undefined, "away", 5, ["d1"]],
   ])
+})
+
+test("one clash rule: an ID shows on the first machine that has it, this one with every ID it knows, in the sidebar's rows and a new Thread's machines alike", async () => {
+  vi.useFakeTimers()
+  vi.stubGlobal("WebSocket", Socket)
+  vi.spyOn(console, "warn").mockImplementation(() => undefined)
+  Socket.opened = []
+  const { device, tell } = desktop()
+  const hosts = new KeptHosts(device, forgetting)
+  hosts.follow()
+  const devbox: HostState = { ...live, name: "devbox", ssh: "devbox" }
+  tell([live, devbox])
+  // This machine knows its open Project, and an archived, a missing and a
+  // scratch one, and its Host scope.
+  hosts.ours(
+    [
+      project("mine"),
+      project("old", { archived: true }),
+      project("lost", { missing: true }),
+      project("s0", { scratch: true }),
+    ],
+    "m0" as ProjectId
+  )
+  // arc has each of those Projects' IDs too, as a copy of this machine's
+  // Banda has, and one of its own; devbox one of arc's, and one of its
+  // own.
+  hosts.projects("arc", [
+    project("mine"),
+    project("old"),
+    project("lost"),
+    project("s0"),
+    project("r1"),
+  ])
+  hosts.projects("devbox", [project("r1"), project("d1")])
+  // Their engines say their Host scopes: arc this machine's, devbox one
+  // of its own.
+  const welcome = (machine: string) => ({
+    type: "welcome",
+    engine: "0.1.0",
+    modules: [],
+    machine,
+    boot: 1,
+  })
+  const arc = hosts.engine("arc")
+  const box = hosts.engine("devbox")
+  await vi.advanceTimersByTimeAsync(0)
+  Socket.opened[0]!.say(welcome("m0"))
+  Socket.opened[1]!.say(welcome("m9"))
+
+  // The sidebar's rows: arc shows only its own, devbox not arc's.
+  const rows = () =>
+    hosts
+      .get()
+      .map((host) => [
+        host.name,
+        host.machine,
+        host.projects.map((one) => one.id),
+      ])
+  expect(rows()).toEqual([
+    ["arc", undefined, ["r1"]],
+    ["devbox", "m9", ["d1"]],
+  ])
+  // A new Thread's machines say the same: arc has no No Project of its
+  // own to offer, as one there would open this machine's.
+  expect(
+    hosts.machines
+      .get()
+      .map(({ host, machine, projects }) => [
+        host,
+        machine,
+        projects.map((one) => one.id),
+      ])
+  ).toEqual([
+    [undefined, "m0", ["mine"]],
+    ["arc", undefined, ["r1"]],
+    ["devbox", "m9", ["d1"]],
+  ])
+  // And each of them opens where it shows.
+  for (const id of ["mine", "old", "lost", "s0", "m0"])
+    expect(hosts.hostOf(id as ProjectId, "arc")).toBeUndefined()
+  expect(hosts.hostOf("r1" as ProjectId, undefined)).toBe("arc")
+  expect(hosts.hostOf("m9" as ProjectId, "devbox")).toBe("devbox")
+
+  // This machine lets an ID go: arc's shows there from then on.
+  hosts.ours([project("mine")], "m5" as ProjectId)
+  expect(rows()[0]).toEqual(["arc", "m0", ["old", "lost", "s0", "r1"]])
+  expect(hosts.machines.get()[1]?.machine).toBe("m0")
+  arc.close()
+  box.close()
 })
 
 test("the Window's machines follow its hosts, told again only as they say something new; this machine's No Project is its own from a Pane on another host too", () => {

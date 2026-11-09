@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react"
 import type { Engine } from "@banda/contract"
-import { useModules } from "@banda/ui/hooks/use-status"
+import { useMachine, useModules } from "@banda/ui/hooks/use-status"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { paneHost, type PaneState } from "@banda/ui/pane"
 import { HostsContext, useNamedOf, useOurs } from "@banda/core/react"
@@ -8,6 +8,7 @@ import { labelOf, previewers, slotsOf } from "../registry"
 import { closing } from "./actions"
 import { device } from "../boot"
 import { useKeys, usePoppedKeys } from "./keys"
+import { Listed, Machines } from "./machines"
 import type { Workspace as Kept } from "@banda/contract/workspaces"
 import { send } from "../tiling/arrange"
 import { useArranged } from "../tiling/useArranged"
@@ -28,8 +29,10 @@ export function Popped({ engine, pane }: { engine: Engine; pane: string }) {
   const modules = useModules(engine)
   const slots = useMemo(() => slotsOf(modules), [modules])
   const { listed: projects } = useProjects(engine)
-  // This machine's Projects win an ID a host has too, as in the window.
-  useOurs(useContext(HostsContext), projects)
+  // This machine's Projects and its Host scope win an ID a host has too,
+  // as in the window, and its picker lists the window's machines.
+  const hosts = useContext(HostsContext)
+  useOurs(hosts, projects, useMachine(engine))
   const live = useArranged(engine)
   const kept = live.state === "ready" ? live.view : undefined
   // Its args as it asked for them, drawn until the engine's event is.
@@ -107,22 +110,26 @@ export function Popped({ engine, pane }: { engine: Engine; pane: string }) {
     <KeysInForce.Provider value={keys}>
       <div className="flex h-svh bg-desk text-foreground">
         {entry ? (
-          // Its Pane draws a file with the modules' previewers, and what
-          // the modules fill the Slots with.
+          // Its Pane draws a file with the modules' previewers, what the
+          // modules fill the Slots with, and a new Thread's picker the
+          // machines, as in the window.
           <Previewers value={previewers}>
             <Slots value={slots}>
-              <PaneFrame
-                entry={entry}
-                engine={engine}
-                modules={modules}
-                focused
-                marked={false}
-                listed={undefined}
-                project={project}
-                mixed={false}
-                frame={frame}
-                alone
-              />
+              <Machines hosts={hosts}>
+                <PaneFrame
+                  entry={entry}
+                  engine={engine}
+                  modules={modules}
+                  focused
+                  marked={false}
+                  listed={undefined}
+                  project={project}
+                  mixed={false}
+                  frame={frame}
+                  alone
+                />
+              </Machines>
+              <Listed />
             </Slots>
           </Previewers>
         ) : (

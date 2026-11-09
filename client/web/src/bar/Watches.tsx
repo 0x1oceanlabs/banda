@@ -7,7 +7,6 @@ import {
   useState,
 } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
-import { useProjects } from "@banda/ui/hooks/use-projects"
 import { useModules } from "@banda/ui/hooks/use-status"
 import { openProjects } from "@banda/ui/lib/projects"
 import {
@@ -27,6 +26,7 @@ import {
   takeLists,
 } from "../calls/stores"
 import { runs, watches } from "../registry"
+import { useListedOn } from "../window/machines"
 import { combine, folded } from "./attention"
 
 /**
@@ -138,12 +138,8 @@ function Elsewhere() {
 
 /** A live host's Watches, on its Projects as its engine lists them. */
 function Remote({ hosts, name }: { hosts: KeptHosts; name: string }) {
-  const engine = hosts.engine(name)
+  const engine = useListedOn(hosts, name)
   const modules = useModules(engine)
-  const { listed } = useProjects(engine)
-  useEffect(() => {
-    if (listed.state === "ready") hosts.projects(name, listed.value)
-  }, [hosts, name, listed])
   const select = useCallback(
     (all: readonly Shown[]) =>
       all.find((one) => one.name === name)?.projects ?? NONE,

@@ -74,6 +74,10 @@ export type Shown = {
   /** Its Projects while it is live or away, as its engine lists them,
    * none archived; never one this machine, or a host before it, has. */
   projects: readonly ProjectSummary[]
+  /** Its Host scope's ID, where a Thread in its No Project starts, once
+   * its engine said it, while the Window shows its rows; none while this
+   * machine, or a host before it, has that ID. */
+  machine?: ProjectId
 }
 
 const NONE: readonly ProjectSummary[] = []
@@ -159,8 +163,8 @@ export type Ours = {
 /**
  * The hosts as one Window shows them: their states as the desktop tells
  * them, one engine for each, made as it first goes live and kept for the
- * Window's life, and each one's Projects as its engine lists them. This
- * machine's Projects win an ID one of them has too.
+ * Window's life, and each one's Projects and Host scope as its engine
+ * says them. An ID shows on one machine only, this one first (`#placed`).
  */
 export class KeptHosts implements Readable<readonly Shown[]> {
   readonly #device: HostsDevice
@@ -293,12 +297,12 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   #scope(name: string, machine: ProjectId): void {
     if (this.#scopes.get(name) === machine) return
     this.#scopes.set(name, machine)
-    this.#sayMachines()
+    this.#shown.set(this.#placed(this.get()))
   }
 
   /** Tells the machines again, where they say something new. */
   #sayMachines(): void {
-    const now = machinesOf(this.#ours, this.get(), this.#scopes)
+    const now = machinesOf(this.#ours, this.get())
     if (!sameData(now, this.#machines.get())) this.#machines.set(now)
   }
 
@@ -316,33 +320,51 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     })
   }
 
-  /** `hosts` with each one's Projects as it shows them: those it holds,
-   * none archived, and none this machine or a host before it has. Each
-   * that shows what it showed keeps its list. */
+  /**
+   * `hosts` placed by the one clash rule: an ID shows on the first
+   * machine that has it, and on no other, in the sidebar and in a new
+   * Thread's picker alike (`machinesOf`). This machine is first, and has
+   * every ID it knows (`#ourIds`): its Projects, the archived, missing
+   * and scratch ones too, and its Host scope's. A Pane of any of them
+   * opens here (`hostOfPane`), so another machine's Project or No
+   * Project of one of those IDs, shown, would open this machine's. Then
+   * each host whose rows the Window shows, in the order of `hosts.toml`,
+   * has its Host scope's ID, once its engine said it, and its Projects
+   * as it shows them: those it holds, none archived. Each that shows
+   * what it showed stays as it was.
+   */
   #placed(hosts: readonly Shown[]): readonly Shown[] {
     const taken = new Set(this.#ourIds)
+    const free = (host: string, id: ProjectId) => {
+      if (taken.has(id)) {
+        this.#clash(host, id)
+        return false
+      }
+      taken.add(id)
+      return true
+    }
     return hosts.map((host) => {
-      const listed = this.#listed.get(host.name)
-      if (!listed || !holds(host)) return host
-      const mine = [
+      if (!holds(host)) return host
+      const { name } = host
+      const said = this.#scopes.get(name)
+      const machine = said !== undefined && free(name, said) ? said : undefined
+      const listed = this.#listed.get(name) ?? NONE
+      const projects = [
         ...shownProjects(listed),
         ...listed.filter((project) => project.scratch && !project.archived),
-      ].filter((project) => {
-        if (!taken.has(project.id)) return true
-        this.#clash(host.name, project.id)
-        return false
-      })
-      for (const project of mine) taken.add(project.id)
-      return sameEach(mine, host.projects) ? host : { ...host, projects: mine }
+      ].filter((project) => free(name, project.id))
+      return machine === host.machine && sameEach(projects, host.projects)
+        ? host
+        : { ...host, machine, projects }
     })
   }
 
-  #clash(host: string, project: ProjectId): void {
-    const key = `${host} ${project}`
+  #clash(host: string, id: ProjectId): void {
+    const key = `${host} ${id}`
     if (this.#said.has(key)) return
     this.#said.add(key)
     console.warn(
-      `banda: ${host} has a Project of the same ID as one shown before it, ${project}: the window shows the first`
+      `banda: ${host} has a Project or a Host scope of an ID shown before it, ${id}: the window shows the first`
     )
   }
 }
@@ -350,23 +372,15 @@ export class KeptHosts implements Readable<readonly Shown[]> {
 /**
  * The machines a new Thread starts on (ADR 0095, decision 7): this one
  * first, unnamed; then each host whose rows the Window shows, live or
- * away, by its name and icon, with its Host scope's ID from `scopes`
- * once its engine said it. Each with its open Projects, pinned first:
- * none archived, none whose folder is missing, none a Thread's own; and
- * a Project of an ID a machine before it has shows there only.
+ * away, by its name and icon. Each with its Host scope's ID, once its
+ * engine said it, and its open Projects, pinned first: none archived,
+ * none whose folder is missing, none a Thread's own. `hosts` are as the
+ * Window places them (`KeptHosts`), so an ID this machine, or a host
+ * before, has shows on that one only, as in the sidebar.
  */
-export function machinesOf(
-  ours: Ours,
-  hosts: readonly Shown[],
-  scopes: ReadonlyMap<string, ProjectId> = new Map()
-): Machine[] {
-  const taken = new Set<ProjectId>()
+export function machinesOf(ours: Ours, hosts: readonly Shown[]): Machine[] {
   const open = (projects: readonly ProjectSummary[]) =>
-    openProjects(shownProjects(projects)).filter((project) => {
-      if (taken.has(project.id)) return false
-      taken.add(project.id)
-      return true
-    })
+    openProjects(shownProjects(projects))
   const machines: Machine[] = [
     { machine: ours.machine, state: "live", projects: open(ours.projects) },
   ]
@@ -376,7 +390,7 @@ export function machinesOf(
     machines.push({
       host: host.name,
       named: host.named,
-      machine: scopes.get(host.name),
+      machine: host.machine,
       state,
       away: host.away,
       projects: open(host.projects),
