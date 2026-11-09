@@ -1481,20 +1481,24 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
   )
   await expect(row).toContainText("same as here")
   // Its battery while it is live: the percent in its header, and a line
-  // in full with why it is awake; where it has none, neither (ADR 0097).
+  // in full with why it is awake; where it has none, no percent, and why
+  // it is awake on its own line, as Awake (ADR 0097).
   const top = row.getByRole("button", { expanded: true })
   const battery = row.locator('[data-key="arc.battery"]')
+  const awakeRow = row.locator('[data-key="arc.awake"]')
+  const why = /Kept awake: |Sleeps by itself when idle\./
   const withBattery = batteryHere()
   if (withBattery) {
     await expect(top).toContainText(/\d+% ·/)
     await expect(battery).toContainText("Battery")
     await expect(battery).toContainText(/\d+% · (on battery|charging|on power)/)
-    await expect(battery).toContainText(
-      /Kept awake: |Sleeps by itself when idle\./
-    )
+    await expect(battery).toContainText(why)
+    await expect(awakeRow).toHaveCount(0)
   } else {
     await expect(battery).toHaveCount(0)
     await expect(top).not.toContainText("%")
+    await expect(awakeRow).toContainText("Awake")
+    await expect(awakeRow).toContainText(why)
   }
   await expect(
     row.getByRole("button", { name: "Stop Banda on arc" })
@@ -1559,9 +1563,10 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
   await expect(row.getByRole("button", { expanded: true })).toContainText(
     "away"
   )
-  // Away, no battery: the last heard is no longer true.
+  // Away, no battery and no why: the last heard is no longer true.
   await expect(top).not.toContainText("%")
   await expect(battery).toHaveCount(0)
+  await expect(awakeRow).toHaveCount(0)
   await expect(row.getByRole("button", { name: "Edit" })).toBeDisabled()
   await expect(row).toContainText("Rename arc when it is back.")
   // Away, it is off and still: what arc said is no longer known.
@@ -1579,6 +1584,7 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
   )
   // Back, it is heard again.
   await expect(battery).toHaveCount(withBattery ? 1 : 0)
+  await expect(awakeRow).toHaveCount(withBattery ? 0 : 1)
   // Back, as arc says it; turned off there, its line goes.
   await expect(awake).toHaveAttribute("aria-checked", "true")
   await awake.click()

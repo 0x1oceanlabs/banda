@@ -18,6 +18,7 @@ import {
   NO_ACTS,
   numbered,
   pluggedInThere,
+  powerRow,
   settle,
   settleWords,
   shownActs,
@@ -391,4 +392,30 @@ test("another machine's switch is set there while it is live, as its engine says
       can: false,
       about: "Update Banda on m1pro to set it here.",
     })
+})
+
+test("another machine says why it is awake under its Battery, or on its own as Awake where it has none", () => {
+  const battery = { percent: 42, charging: false, on_power: false, left: 122 }
+  expect(powerRow({ battery, awake: "working" }, 2)).toEqual({
+    key: "battery",
+    title: "Battery",
+    about: "Kept awake: 2 Agents work there.",
+  })
+  // A desktop, a server: the same line, as Awake.
+  expect(powerRow({ awake: "working" }, 2)).toEqual({
+    key: "awake",
+    title: "Awake",
+    about: "Kept awake: 2 Agents work there.",
+  })
+  expect(powerRow({ awake: "plugged-in" }, 0)?.about).toBe(
+    "Kept awake: plugged in, its switch on."
+  )
+  // Held by nothing: it says so, as its hover does.
+  expect(powerRow({ awake: null }, 0)).toEqual({
+    key: "awake",
+    title: "Awake",
+    about: "Sleeps by itself when idle.",
+  })
+  // Before its engine says it, from one older than it, or away: none.
+  expect(powerRow(undefined, 2)).toBeUndefined()
 })
