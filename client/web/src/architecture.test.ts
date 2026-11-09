@@ -152,9 +152,10 @@ test("a file that no longer reaches a module leaves the list", () => {
 
 /**
  * What the Tiling still imports of the Window, its Bar, the sidebar list,
- * a Thread's titles and the menu, by file: the Window may import the
- * Tiling, never the other way (ADR 0087, decision 5). None joins the list,
- * and an import that goes leaves it.
+ * a Thread's titles, the menu, the device's adapter, what the window says
+ * when it broke and Settings, by file: the Window may import the Tiling,
+ * never the other way (ADR 0087, decision 5). None joins the list, and an
+ * import that goes leaves it.
  */
 const TILING_STILL: Record<string, string[]> = {
   "web/src/tiling/PaneFrame.tsx": ["../window/attach", "../titles/Title"],
@@ -162,7 +163,8 @@ const TILING_STILL: Record<string, string[]> = {
 }
 
 test("the Tiling imports no more of the Window than the list holds", () => {
-  const outside = /^\.\.\/(window|bar|sidebar|titles|menu|boot)(\/|$)/
+  const outside =
+    /^\.\.\/(window|bar|sidebar|titles|menu|boot|safe|settings)(\/|$)/
   const imported = Object.fromEntries(
     sources(join(app, "web/src/tiling")).flatMap((file) => {
       const names = imports(readFileSync(file, "utf8")).filter((name) =>
