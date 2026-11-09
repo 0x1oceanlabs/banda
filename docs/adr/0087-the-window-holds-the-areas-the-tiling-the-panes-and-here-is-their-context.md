@@ -59,6 +59,10 @@ for Apps from elsewhere waits for the Tree renderer.
      Tile and a Configure (ADR 0088). It knows Panes, never what they
      show. It lives in `client/web/src/tiling/` and `platform/workspaces`.
      It is optional: a phone in v1 and a popped-out Pane have none.
+     _Amended 2026-11-09 by
+     [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): the
+     arrangement is in the engine of the window's own machine; there is no
+     home host._
    - **Apps and platform parts fill the areas**: Panes in the middle,
      Widgets on the Bar, the sidebar list in the Sidebar, Items in
      Slots. Each names an action for every verb.
@@ -232,6 +236,11 @@ for Apps from elsewhere waits for the Tree renderer.
       the model reads it when it places. The client reads it through one
       accessor. It leaves `agents.toml` for the Tiling's own settings when
       `agents` becomes `threads` (T0), under ADR 0069's grace.
+    - _Amended 2026-11-09 by
+      [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): the
+      placement policy runs in the engine of the window's own machine, and
+      `flow` is a shared file that each machine's model reads from its own
+      copy._
 
 11. **One widget contract for everyone.**
     - `{id, about, Widget, compact?}`, with props `{engine, projects}`;

@@ -184,6 +184,9 @@ wall).
      device is lost.
    - It signs a short chain that only grows: the members (devices and
      hosts) and which host is home.
+     _Amended 2026-11-09 by
+     [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): the
+     members only; there is no home host._
    - Each host keeps a copy of the signed member list in its own store
      and checks every update against the Person key. It is the host's
      record of whom it accepts, not the Person's data.
@@ -220,6 +223,11 @@ wall).
    - From there the client connects to the Person's other hosts.
    - Once Banda Cloud exists, a static build whose hash is published
      may serve it.
+   - _Amended 2026-11-09 by
+     [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): there
+     is no home host. The code comes from the signed binary of the machine
+     that serves it, never from a disk an Agent can edit; any machine
+     reached over `direct` may serve it._
 
 **Plan.** Each step its own PR; `scripts/check.sh` passes after each. The
 IDs are the vision's (§9.3).
@@ -325,6 +333,9 @@ MCP frames in the gateway (V6). Decision 8 lands with the web client, ADR
 - ADR 0081 decision 4 and plan step 8: the web client's code comes only
   from the home host's signed binary, and later from a build whose hash
   is published (decision 8).
+  _Amended 2026-11-09 by
+  [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): from the
+  signed binary of the machine that serves it._
 - ADR 0081's plan: the fence before step 2; no listener beyond loopback
   (step 5) before the fence, B14, F1 and F2 (decision 7).
 - Decisions 1 and 2, as F0-3a built them (2026-11-08):

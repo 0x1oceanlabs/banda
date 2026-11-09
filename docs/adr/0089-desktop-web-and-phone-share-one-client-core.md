@@ -113,6 +113,11 @@ desktop, web and the PWA now.
    that host is away fails, and nothing waits on the device.
    Device storage keeps only conveniences: the view, widths, an unsent
    draft, recent toasts.
+   _Amended 2026-11-09 by
+   [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): there
+   is no home host. "Looked at", the mark on a Pane an Agent opened until
+   the Person looks (`client/web/src/window/Shell.tsx:223-233`), stays the
+   device's, by the Pane's id in its machine's arrangement._
 
 7. **Three forms, from the device's display.** Wide, narrow and phone
    come from the width in look units, the pointer and the keyboard. Only
@@ -123,6 +128,9 @@ desktop, web and the PWA now.
 8. **The phone in v1 shows the sidebar and Threads, and never writes the
    arrangement.**
    - Home is the sidebar list, as `sidebar.toml` arranges it.
+     _Amended 2026-11-09 by
+     [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): the
+     `sidebar.toml` of the machine that served the phone._
    - A Thread screen shows the Thread with Stop, the Message box, its
      Questions, and a Next button in its header, the phone's Alt+U.
    - New Thread asks for the Project, or takes it from the section it

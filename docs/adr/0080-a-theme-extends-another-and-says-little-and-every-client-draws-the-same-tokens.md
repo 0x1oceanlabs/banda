@@ -45,6 +45,10 @@ each display its own; a phone is not a Mac.
    the device knows its system's mode, accent, font, material and window
    manager. So a Mac and a phone show one Person's theme, each on its own
    platform.
+   _Amended 2026-11-09 by
+   [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md), through
+   ADR 0100: there is no home machine. The Person's theme folders are
+   shared, a copy on every machine; which theme is each device's._
 
 2. **One resolver, a pure function.** Theme files and the device's inputs
    go in, tokens come out. It stays the `look` crate. The desktop runs it
@@ -204,6 +208,10 @@ Each step is an issue and a PR. They start after ADR 0062's first step
 - `gnome`, `kde`, `windows` and `niri` themes of their own.
 - Colour themes (Ocean, Moss…) extending `"platform"`.
 - The Person's theme choice and files synced across their machines.
+  _Amended 2026-11-09 by
+  [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): the
+  theme folders are copied with the other shared files (its E5); the choice
+  stays each device's._
 - The resolver as WebAssembly, with the web client (ADR 0062).
 
 ## Changes

@@ -311,6 +311,10 @@ resolve. Its answers are decisions 4, 5, 6, 7, 10, 13, 14 and 17 below.
      `navigator.setAppBadge`), whether Agents may read or drive it
      (`none` by default), its width. It is the Person's data, on the home
      host (decision 13).
+     _Amended 2026-11-09 by
+     [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): there
+     is no home host; a Web App's manifest is a shared file, a copy on every
+     machine._
    - "Make an App" on any tab fills it from the site's web app manifest.
      Banda ships a few ready ones.
    - Its notifications go through the notifications module, its badge
@@ -386,6 +390,15 @@ resolve. Its answers are decisions 4, 5, 6, 7, 10, 13, 14 and 17 below.
       | The work | Threads, turns, and what an Agent opened ("this Thread opened that page") | the Agent's host, in its Project | the Agent, the CLI, the Person |
       | The arrangement | workspaces, columns, Groups, widths | the `workspaces` module, in the Person's documents on the **home host** | the Person, the CLI; an Agent only through what it opened |
       | The view | the focus, the scroll, the zoom, the overview, which workspace is on screen, the theme as worked out | each client | that client |
+
+      _Amended 2026-11-09 by
+      [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md):
+      machines are peers, and there is no home host. The arrangement is the
+      machine's whose window shows it, in its engine, as built. The Person's
+      files are a full copy on every machine, copied whole later. An Agent's
+      Pane is placed by each machine whose window sees it, in its own
+      arrangement, and checked again there. The bullets below on the home
+      host and on "while the home host is away" go._
 
     - **The Person's data is a few documents, only on the home host**
       (Roma, 2026-11-06; ADR 0082, decision 1): the arrangement, keys,
@@ -474,6 +487,11 @@ resolve. Its answers are decisions 4, 5, 6, 7, 10, 13, 14 and 17 below.
     - The model is one Rust crate. On the home host it is the authority.
       Each client runs the same crate, compiled to WebAssembly, to work
       out what a key does, and draws that frame at once.
+      _Amended 2026-11-09 by
+      [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): the
+      authority is the engine of the machine whose arrangement it is, the
+      window's own. Only a client whose engine is on another machine, a
+      browser tab, could need the overlay._
     - A client sends intent commands ("move this Pane right"), not the
       states it worked out. The home host applies each to the state it
       has, in the order sent, and says what changed. The client takes
@@ -500,6 +518,11 @@ resolve. Its answers are decisions 4, 5, 6, 7, 10, 13, 14 and 17 below.
       among the Person's documents, on the home host (decision 13).
       Working a theme out (the mode, the system's accent, the fonts, the
       glass) is each device's, as the view is (decision 13).
+      _Amended 2026-11-09 by
+      [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): the
+      Person's theme folders are shared files, a copy on every machine;
+      which theme, the mode, the glass and which display takes which are the
+      device's._
     - That working out is one pure function in Rust, a theme's files and
       the device's facts in, tokens out. Every client takes it as a
       library or as WebAssembly.
@@ -565,6 +588,12 @@ _Several hosts_, with ADR 0081's plan:
 7. The client integrates (H6): the directory, Agents' placements carried
    to the home host and checked there, the merged Inbox and sidebar.
    ADR 0082's step 15.
+   _Amended 2026-11-09 by
+   [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): there
+   is no home host, so step 1's words drop it; step 6's gate is measured
+   against the engine that holds the arrangement, local for a desktop
+   window; step 7's placements go to each window's own machine and are
+   checked there._
 
 _The SDK's own road._
 
@@ -601,6 +630,10 @@ a native phone's renderer.
   of the Person's documents on the home host. What moves is what an Agent
   opened, into its Project, and the tiling's rules, into one Rust model
   that the home host and every client run.
+  _Amended 2026-11-09 by
+  [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): the
+  arrangement stays the machine's whose window shows it, and that machine's
+  engine runs the model._
 - Third-party code runs on the host, in a worker with its App's pass
   (and in WebAssembly later), or in a sandboxed frame on the device. None
   of it runs in a client's page, in Electron main or in a phone's own
@@ -643,6 +676,10 @@ a native phone's renderer.
   puts it into the Agent's Group (decision 13). The kinds that run
   something as the Person stay refused to it, checked on its host and
   again on the home host.
+  _Amended 2026-11-09 by
+  [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): each
+  machine whose window sees it places it and checks it again, in place of
+  the home host._
 - ADR 0056, decision 1: what calls the Person is worked out on the host,
   not in the window (ADR 0081, decision 6). A client keeps where the
   Person looks and tells on its device.

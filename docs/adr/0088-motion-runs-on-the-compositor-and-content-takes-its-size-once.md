@@ -230,6 +230,10 @@ settles.
       instead.)
     - The WebAssembly model (T1) then deletes the TypeScript one, keeping
       the arrangement in its own memory; the overlay (T2) follows.
+    - _Amended 2026-11-09 by
+      [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): the
+      authority is in the engine that holds the arrangement, the window's
+      own machine._
 
 12. **Device views follow; they do not poll.** The page layer stays a
     fixed layer (ADR 0013 d1). Its box sits inside a still clip
