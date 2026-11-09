@@ -9,11 +9,11 @@ import { createContext, useCallback, useContext, useEffect } from "react"
 import {
   type HostsDevice,
   KeptHosts,
+  keyNamed,
   type Machine,
   type Names,
   namedIn,
   type Shown,
-  unseen,
 } from "../hosts"
 import { paneHost, type PaneState } from "../pane"
 import { sameData } from "../store"
@@ -28,7 +28,7 @@ const NOWHERE: HostsDevice = {
 
 /** No memory of names, as where no Window keeps one: each host by its
  * key. */
-const FORGETTING: Names = { seen: unseen, follow: () => () => undefined }
+const FORGETTING: Names = { seen: keyNamed, follow: () => () => undefined }
 
 /** The Window's hosts, for what it draws; none outside one. */
 export const HostsContext = createContext<KeptHosts>(

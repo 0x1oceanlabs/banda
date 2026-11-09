@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
 import { sleeps } from "./lib/snooze"
-import { callsOf, type Listed, paneHost, wokeOf, withHost } from "./pane"
+import { callsOf, type Listed, wokeOf } from "./pane"
 
 const pane = { kind: "agents.thread", args: {} }
 
@@ -60,21 +60,4 @@ test("a Thread woke by itself when its time came or a call woke it", () => {
     "it was written to"
   ).toBeUndefined()
   expect(sleeps({}, 1e12), "until done").toBe(true)
-})
-
-test("a Pane names another host only by a host in its args, and keeps its object when that stays", () => {
-  const pane = { kind: "agents.thread", args: { thread: "t1" } }
-  expect(paneHost(pane)).toBeUndefined()
-  expect(
-    paneHost({ ...pane, args: { thread: "t1", host: "" } })
-  ).toBeUndefined()
-  expect(paneHost({ ...pane, args: { thread: "t1", host: 1 } })).toBeUndefined()
-  const there = withHost(pane, "arc")
-  expect(there.args).toEqual({ thread: "t1", host: "arc" })
-  expect(paneHost(there)).toBe("arc")
-  expect(withHost(there, "arc")).toBe(there)
-  expect(withHost(pane, undefined)).toBe(pane)
-  // Back on this machine, the host is gone, not left empty.
-  expect(withHost(there, undefined).args).toEqual({ thread: "t1" })
-  expect(pane.args).toEqual({ thread: "t1" })
 })

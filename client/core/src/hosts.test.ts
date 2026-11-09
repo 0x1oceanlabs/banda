@@ -5,6 +5,7 @@ import type { HostState } from "./device"
 import {
   type HostsDevice,
   KeptHosts,
+  keyNamed,
   machinesOf,
   type Names,
   namedIn,
@@ -13,7 +14,6 @@ import {
   runOnHost,
   type Shown,
   shownOf,
-  unseen,
 } from "./hosts"
 import type { Args } from "./run"
 
@@ -75,7 +75,7 @@ function desktop() {
 }
 
 /** A device that remembers no name: each host goes by its key. */
-const forgetting: Names = { seen: unseen, follow: () => () => undefined }
+const forgetting: Names = { seen: keyNamed, follow: () => () => undefined }
 
 test("a host that goes away stays away through the tries after, its rows standing as they were", () => {
   const first = shownOf(undefined, connecting, 0)
@@ -386,7 +386,7 @@ test("the Window's machines follow its hosts, told again only as they say someth
 
 test("a Pane says why it cannot reach its host in the window's own words, by the name the host says it has", () => {
   const words = (state: HostState) =>
-    reachWords("arc", shownOf(undefined, state, 0), unseen)
+    reachWords("arc", shownOf(undefined, state, 0), keyNamed)
   expect(words(connecting)).toBe("Connecting to arc")
   expect(
     words({ name: "arc", ssh: "arc", state: "signin", url: "https://x" })
@@ -405,7 +405,7 @@ test("a Pane says why it cannot reach its host in the window's own words, by the
         ...shownOf(undefined, state, 0),
         named: { name: "Studio", icon: "desktop" },
       },
-      unseen
+      keyNamed
     )
   expect(studio(away)).toBe("Studio is away")
   expect(studio({ name: "arc", ssh: "arc", state: "stopped" })).toBe(
@@ -493,7 +493,7 @@ test("a host goes by the name this device remembers until its engine says one, a
   const followed: string[] = []
   let say: (named: Named) => void = () => undefined
   const names: Names = {
-    seen: (key) => memory.get(key) ?? unseen(key),
+    seen: (key) => memory.get(key) ?? keyNamed(key),
     follow: (_engine, key, take) => {
       followed.push(key)
       say = (named) => {

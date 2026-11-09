@@ -10,6 +10,8 @@ import { expect, test } from "vitest"
 
 const PANE = [
   /^@banda\/contract(\/(git|agents))?$/,
+  // The client's core, by the one door an App takes to it (ADR 0089).
+  /^@banda\/core\/react$/,
   /^@banda\/ui\//,
   /^react$/,
   /^lucide-react$/,
@@ -18,7 +20,7 @@ const PANE = [
 /** A test may also read files and use its runner. */
 const TEST = [...PANE, /^node:/, /^vitest$/]
 
-test("the git Panes import only the API, client/ui and React", () => {
+test("the git Panes import only the API, the core, client/ui and React", () => {
   const folder = import.meta.dirname
   // This file names imports as examples; it is not a Pane.
   const panes = sources(folder).filter((file) => file !== import.meta.filename)

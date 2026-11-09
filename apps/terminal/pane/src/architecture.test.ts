@@ -22,7 +22,7 @@ const PANE = [
 /** A test may also read files and use its runner. */
 const TEST = [...PANE, /^node:/, /^vitest$/]
 
-test("the terminal Pane imports only the API, client/ui, Ghostty and React", () => {
+test("the terminal Pane imports only the API, the core, client/ui, Ghostty and React", () => {
   const folder = import.meta.dirname
   // This file names imports as examples; it is not a Pane.
   const panes = sources(folder).filter((file) => file !== import.meta.filename)

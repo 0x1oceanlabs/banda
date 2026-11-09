@@ -11,8 +11,8 @@ import {
   HostsContext,
   type HostState,
   KeptHosts,
+  keyNamed,
   type Names,
-  unseen,
 } from "@banda/core/react"
 import { slotsOf } from "./registry"
 import { PaneSlot } from "./tiling/PaneSlot"
@@ -34,7 +34,7 @@ const markup = (node: ReactNode) =>
   renderToStaticMarkup(node).replace(/banda-mark-[\w-]+/g, "banda-mark-id")
 
 /** A device that remembers no name: each host goes by its key. */
-const forgetting: Names = { seen: unseen, follow: () => () => undefined }
+const forgetting: Names = { seen: keyNamed, follow: () => () => undefined }
 
 /** What the Slot draws with `props`, filled by the modules that run, with
  * the Window's hosts `hosts`. */

@@ -13,6 +13,8 @@ const PANE = [
   // the files their turns work on, and the Harnesses' colours (ADR 0073,
   // decision 9).
   /^@banda\/contract(\/files|\/settings|\/agents|\/harnesses)?$/,
+  // The client's core, by the one door an App takes to it (ADR 0089).
+  /^@banda\/core\/react$/,
   /^@banda\/ui\//,
   /^react$/,
   /^lucide-react$/,
@@ -24,7 +26,7 @@ const PANE = [
 /** A test may also read files and use its runner. */
 const TEST = [...PANE, /^node:/, /^vitest$/]
 
-test("the files Panes import only the API, client/ui, React and PDF.js", () => {
+test("the files Panes import only the API, the core, client/ui, React and PDF.js", () => {
   const folder = import.meta.dirname
   // This file names imports as examples; it is not a Pane.
   const panes = sources(folder).filter((file) => file !== import.meta.filename)
