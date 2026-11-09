@@ -29,8 +29,12 @@ export type HeaderProps = {
   | {
       /** At the header's start, in the icon's place of a Pane that shows
        * an Item; or after the Project's name, where the header says where
-       * the Pane is, at its end when it names no Project. */
-      at: "start" | "project"
+       * the Pane is, at its end when it names no Project; or in the pill,
+       * which is drawn over the Pane's body, not in its header, while the
+       * Pane cannot reach the machine it is on: away, stopped or still
+       * connecting (ADR 0095, decision 7). A filler draws nothing at a
+       * place it does not know. */
+      at: "start" | "project" | "pill"
     }
   | {
       /** On the Pane's tile in the Overview, at a size to read. */
@@ -44,8 +48,8 @@ export type HeaderProps = {
 export type SlotProps = {
   /** A Thread's details card (ADR 0034, decision 4): Threads'. */
   "thread.details": DetailsProps
-  /** A Pane's header, and its tile's label in the Overview: the
-   * Tiling's. */
+  /** A Pane's header, the pill over its body, and its tile's label in
+   * the Overview: the Tiling's. */
   "pane.header": HeaderProps
 }
 

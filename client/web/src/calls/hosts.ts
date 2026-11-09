@@ -405,6 +405,18 @@ export function namedIn(hosts: readonly Shown[], host: string): Named {
   return hosts.find((one) => one.name === host)?.named ?? seenNamed(host)
 }
 
+/** How long a host has been away at `now`, since `since` (`Shown.away`),
+ * as its label says it after "away": nothing under a minute, then
+ * minutes, then hours. */
+export function awayFor(
+  since: number | undefined,
+  now: number
+): string | undefined {
+  const minutes = since === undefined ? 0 : Math.floor((now - since) / 60_000)
+  if (minutes < 1) return undefined
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h`
+}
+
 /** What a Pane on host `host` says while it cannot reach it, as the
  * Window shows that host (`shown`), by the name it says it has; none
  * while it is live. Not known yet, as before the desktop first tells the

@@ -403,6 +403,19 @@ Each step is its own PR.
      `settings/ThreadSettings.tsx` and `thread/Thread.tsx`;
      `client/desktop/e2e/hosts.spec.ts`. `client/ui/src/pane.ts` and
      `thread.new` stay as they are.
+   - **The pill, after B4i**: its icon; how long the machine has been
+     away, by its label's clock and rule ("arc is away · 2 min" beside
+     "away · 2 min"); and Start while Banda is stopped there, the
+     Person's click alone. It sits in a band of its own under the Pane's
+     header, so it covers none of the Pane (#955). The Tiling draws the
+     band, and the Window the pill, in the Slot `pane.header` at `pill`.
+     "arc runs another build" waits to come with its "Update arc"
+     (#775): with nothing to press, it would put the band on every Pane
+     there for as long as the builds differ, and the label says it
+     already. Files: `client/web/src/tiling/PaneFrame.tsx`,
+     `client/web/src/window/named.tsx`, `client/web/src/calls/hosts.ts`
+     (`awayFor`, beside `reachWords`), `client/ui/src/slots.ts` and
+     `client/desktop/e2e/hosts.spec.ts`.
 5. **Settings → Machines**, in two PRs:
    - **PR 3, the section**: This machine, Other machines and Add a
      machine (decision 9). Files: `client/web/src/settings/sections.ts`,

@@ -237,6 +237,9 @@ export const PaneFrame = memo(function PaneFrame({
   const reach = useReach(engine, entry.project, named)
   const there = reach.host
   const words = there === undefined ? undefined : reachWords(there, reach.shown)
+  // Its host out of reach while the Pane shows: a pill under its header
+  // says so, in a band of its own, so it covers none of the Pane (#955).
+  const pill = !away && reach.engine !== undefined && words !== undefined
   // Another machine, by its name under its icon where its Pane cannot
   // show (ADR 0095, decision 7); its header names it in the Slot.
   const machine =
@@ -448,7 +451,10 @@ export const PaneFrame = memo(function PaneFrame({
               )}
             </PaneHeader>
           )}
-          <div className="relative min-h-0 flex-1">
+          <div
+            data-pill={pill || undefined}
+            className="relative min-h-0 flex-1 data-pill:pt-8"
+          >
             {away ? (
               <button
                 type="button"
@@ -485,14 +491,12 @@ export const PaneFrame = memo(function PaneFrame({
               </p>
             )}
             {/* Its host out of reach, it shows what it showed, and
-                catches up once that host is back. */}
-            {!away && reach.engine && words && (
-              <p
-                role="status"
-                className="pointer-events-none absolute top-2 left-1/2 z-10 -translate-x-1/2 rounded-full border bg-tile px-2.5 py-0.5 text-xs whitespace-nowrap text-muted-foreground shadow-sm"
-              >
-                {words}
-              </p>
+                catches up once that host is back. What the pill says and
+                does is the Window's, in the Slot: it knows the machines. */}
+            {pill && (
+              <div className="pointer-events-none absolute inset-x-2 top-1 z-10 flex justify-center">
+                <PaneSlot {...slot} at="pill" />
+              </div>
             )}
           </div>
         </HeaderSlot>

@@ -35,7 +35,7 @@ function ThreadHeader(props: HeaderProps) {
           )}
         </>
       )
-    case "project":
+    default:
       return null
   }
 }
