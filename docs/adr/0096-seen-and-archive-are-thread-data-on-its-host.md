@@ -282,7 +282,9 @@ Each step is its own PR.
      took it. The move starts with the module's `start`, and each Threads
      list of this machine's first read waits for it, a few seconds at
      most, so no first list shows the Archive's Threads in the list before
-     the move; another host's list waits for none of it.
+     the move; another host's list waits for none of it. A Project the
+     start did not move, as one missing then and located since, moves
+     alone before its list's first read, once in a session.
      From 2a, a Pane told the host what the Person saw, but "Mark as
      unread" took the mark back from the window's storage alone, which
      the import cannot say, as it moves seen forward only. So, after the

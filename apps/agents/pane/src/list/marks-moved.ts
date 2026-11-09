@@ -25,6 +25,8 @@
  * The module's start moves them once (`Move.start`), on this machine's
  * engine alone, and the Threads lists read their host's once it is over
  * (`Move.over`), so the first list the Person sees has the marks moved.
+ * A Project the start did not move, as one missing then and located
+ * since, moves alone as its list first reads.
  */
 import type { Engine, ProjectId } from "@banda/contract"
 import type {
@@ -215,27 +217,69 @@ function movedOf(storage: Storage): Set<string> {
 }
 
 /**
+ * The old marks, the cutoff held first (`holdCutoff`); none from a window
+ * that kept nothing, as a new one, which has nothing to read for.
+ */
+function keptOf(storage: Storage): OldMarks | undefined {
+  holdCutoff(storage, Date.now())
+  const old = oldMarks(storage)
+  const kept =
+    old.seenKept || Object.keys(old.says).length > 0 || old.before > 0
+  return kept ? old : undefined
+}
+
+/**
+ * Moves `old`, the marks this window kept, of `project` to its host,
+ * `engine`, and keeps the Project in `banda.marks.moved` once its move
+ * went. The seen this window took back go after the import, as a Thread
+ * marked unread takes no archive from it (#898). Resolves how many marks
+ * moved; throws when the Project could not be read or its host refused.
+ */
+async function moveProject(
+  engine: Engine,
+  project: ProjectId,
+  old: OldMarks,
+  storage: Storage
+): Promise<number> {
+  let count = 0
+  const { threads } = await engine.call("agents.threads", {}, { project })
+  const marks = marksOf(threads, old)
+  if (Object.keys(marks.seen).length > 0 || marks.archived.length > 0)
+    count += (await engine.command("agents.import_marks", marks, project)).count
+  const unread = unreadOf(threads, old)
+  const took = await Promise.all(
+    unread.map((thread) =>
+      mark(engine, project, thread, { seen: null }, { quiet: true })
+    )
+  )
+  count += took.filter(Boolean).length
+  // One the host did not take goes again.
+  if (took.includes(false)) return count
+  // Read again, as another Project's move may have kept its own since.
+  const moved = movedOf(storage)
+  moved.add(project)
+  storage.setItem(MOVED, JSON.stringify([...moved]))
+  return count
+}
+
+/**
  * Moves the old marks of each Project of this machine, `engine`'s, to it,
  * once: a Project whose move went is kept in `banda.marks.moved`, and one
- * that did not goes again at the next start. A Project whose marks went
- * before is left alone; the host skips a Thread its Person changed since
- * too, so one sent twice undoes nothing. The seen this window took back
- * go after the import, as a Thread marked unread takes no archive from it
- * (#898). Resolves how many marks moved.
+ * that did not goes again, alone as its list first reads (`Move.over`) and
+ * at the next start. A Project whose marks went before is left alone; the
+ * host skips a Thread its Person changed since too, so one sent twice
+ * undoes nothing. Resolves how many marks moved.
  */
 export async function moveMarks(
   engine: Engine,
   storage: Storage = localStorage
 ): Promise<number> {
-  holdCutoff(storage, Date.now())
-  const old = oldMarks(storage)
-  // A window that kept nothing, as a new one, has nothing to read for.
-  const kept =
-    old.seenKept || Object.keys(old.says).length > 0 || old.before > 0
-  if (!kept) return 0
+  const old = keptOf(storage)
+  if (!old) return 0
   let projects: ProjectId[]
   try {
-    // A missing one is read once the Person locates it.
+    // A missing one moves once the Person locates it, as its list first
+    // reads (`Move.over`).
     const listed = await engine.call("projects.list", {})
     projects = openProjects(listed).map(({ id }) => id)
   } catch {
@@ -246,25 +290,10 @@ export async function moveMarks(
   for (const project of projects) {
     if (moved.has(project)) continue
     try {
-      const { threads } = await engine.call("agents.threads", {}, { project })
-      const marks = marksOf(threads, old)
-      if (Object.keys(marks.seen).length > 0 || marks.archived.length > 0)
-        count += (await engine.command("agents.import_marks", marks, project))
-          .count
-      const unread = unreadOf(threads, old)
-      const took = await Promise.all(
-        unread.map((thread) =>
-          mark(engine, project, thread, { seen: null }, { quiet: true })
-        )
-      )
-      count += took.filter(Boolean).length
-      // One the host did not take goes again at the next start.
-      if (took.includes(false)) continue
-      moved.add(project)
-      storage.setItem(MOVED, JSON.stringify([...moved]))
+      count += await moveProject(engine, project, old, storage)
     } catch {
-      // Its Project could not be read, or its host refused: it goes again
-      // at the next start, which the flag above leaves it to.
+      // Its Project could not be read, or its host refused: it goes again,
+      // as `banda.marks.moved` does not keep it.
     }
   }
   return count
@@ -301,6 +330,8 @@ export class Move {
   readonly #starts = new Set<() => void>()
   /** No move started within the wait: no list waits for one again. */
   #none = false
+  /** The Projects the start did not move, each moving alone, once. */
+  readonly #alone = new Map<ProjectId, Promise<unknown>>()
 
   constructor(storage: () => Storage, wait = MOVE_WAIT) {
     this.#storage = storage
@@ -319,8 +350,9 @@ export class Move {
    * Resolves once `project` of `engine` may be read: at once for another
    * host's, by its name in `hosts.toml`, and for a Project whose marks
    * moved; for another engine's once the move started; else once the
-   * move is over, as it went. It waits for the move to start, and then
-   * for it to end, at most `MOVE_WAIT` each.
+   * move is over, as it went, and the Project moved alone if the move did
+   * not take it. It waits for the move to start, then for it to end, then
+   * for the Project's own, at most `MOVE_WAIT` each.
    */
   async over(engine: Engine, project: ProjectId, host?: string): Promise<void> {
     // Another host's marks are its own window's to move (decision 9).
@@ -340,7 +372,22 @@ export class Move {
       }
     }
     const move = this.#move
-    if (move?.engine === engine) await within(move.over, this.#wait)
+    if (move?.engine !== engine) return
+    if (!(await within(move.over, this.#wait))) return
+    const storage = this.#storage()
+    if (movedOf(storage).has(project)) return
+    // One the move did not take, as one missing at the start and located
+    // since, or one whose move failed: once, as a failure goes again at
+    // the next start, not in a loop.
+    let alone = this.#alone.get(project)
+    if (!alone) {
+      const old = keptOf(storage)
+      alone = old
+        ? moveProject(engine, project, old, storage).catch(() => 0)
+        : Promise.resolve(0)
+      this.#alone.set(project, alone)
+    }
+    await within(alone, this.#wait)
   }
 }
 
