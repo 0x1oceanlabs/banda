@@ -10,13 +10,13 @@ const CORE = "client/core/src/**/*.{ts,tsx}"
 
 /** What the core never imports (ADR 0089, decision 11): no DOM renderer,
  * no Electron or Node, no kit, no page, no desktop, no App or platform
- * part. It takes the contract, and React only in its bindings. */
+ * part. It takes the contract, and React only in its bindings. Each block
+ * adds the DOM renderer's rule, which a test of the bindings bends. */
 const NO_DOM = {
   regex: "^react-dom(/.*)?$",
   message: "The core draws nothing: no react-dom (ADR 0089).",
 }
 const CORE_BORDERS = [
-  NO_DOM,
   {
     regex: "^(electron(/.*)?|node:.*)$",
     message: "The core runs on every client: no Electron or Node (ADR 0089).",
@@ -88,7 +88,10 @@ export default defineConfig([
             "The core has no device: the Window's device port has it (ADR 0089).",
         })),
       ],
-      "no-restricted-imports": ["error", { patterns: CORE_BORDERS }],
+      "no-restricted-imports": [
+        "error",
+        { patterns: [NO_DOM, ...CORE_BORDERS] },
+      ],
     },
   },
   {
@@ -101,6 +104,7 @@ export default defineConfig([
         "error",
         {
           patterns: [
+            NO_DOM,
             ...CORE_BORDERS,
             {
               regex: "^react(/.*)?$",
@@ -118,11 +122,10 @@ export default defineConfig([
       "no-restricted-imports": [
         "error",
         {
-          patterns: CORE_BORDERS.map((border) =>
-            border === NO_DOM
-              ? { ...border, regex: "^react-dom(?!/server$)(/.*)?$" }
-              : border
-          ),
+          patterns: [
+            { ...NO_DOM, regex: "^react-dom(?!/server$)(/.*)?$" },
+            ...CORE_BORDERS,
+          ],
         },
       ],
     },

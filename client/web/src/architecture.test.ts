@@ -45,7 +45,8 @@
  *   desktop imports nothing of the page, and the page takes only the
  *   table's type, in the files listed, a list that only falls. What still
  *   stands at a path the core or the bridge left, re-exporting it, is
- *   listed too, until W0a2 points its importers to the new path.
+ *   listed too, until W0a2 points its importers to the new path, and so
+ *   is what the kit names of the core again until L3.
  * - Only the Window keeps Here (ADR 0087, decision 4): one place gives it
  *   to what the Window draws, and only the Window gives the `run` its parts
  *   run an action by. Where the Person looks is the calls part's to work
@@ -1414,17 +1415,28 @@ test("the core names no App", () => {
 })
 
 /**
- * What the core may keep at a module's top level as an instance, by file
- * and name: constants nothing changes. A context's default is made by
- * `createContext`, not listed. W0a2 brings the hosts store's sets.
+ * What the core may keep at a module's top level as an instance, an array
+ * or an object, by file and name: constants nothing changes. A context's
+ * default is made by `createContext`, not listed. W0a2 brings the hosts
+ * store's.
  */
-const CORE_CONSTANTS: string[] = []
+const CORE_CONSTANTS = ["core/src/react/here.ts: NOWHERE"]
+
+/** What `value` makes, past a cast: `new Map() as Kept` makes a Map. */
+function made(value: ts.Expression): ts.Expression {
+  return ts.isAsExpression(value) ||
+    ts.isSatisfiesExpression(value) ||
+    ts.isParenthesizedExpression(value) ||
+    ts.isNonNullExpression(value)
+    ? made(value.expression)
+    : value
+}
 
 /**
  * The core keeps no state of its own at a module's top level (ADR 0089,
  * decisions 1 and 5): each store is made by its owner, one per Window,
- * keyed by host as it grows. No `let` or `var` there, and no instance
- * made there but the constants listed.
+ * keyed by host as it grows. No `let` or `var` there, and no instance,
+ * array or object made there but the constants listed.
  */
 test("the core keeps no state of its own at a module's top level", () => {
   const keeping = coreCode.flatMap((file) =>
@@ -1440,8 +1452,11 @@ test("the core keeps no state of its own at a module's top level", () => {
           const name = ts.isIdentifier(held.name) ? held.name.text : "{…}"
           const what = `${relative(app, file)}: ${name}`
           if (!(declarationList.flags & ts.NodeFlags.Const)) return [what]
-          return held.initializer &&
-            ts.isNewExpression(held.initializer) &&
+          const value = held.initializer && made(held.initializer)
+          return value &&
+            (ts.isNewExpression(value) ||
+              ts.isArrayLiteralExpression(value) ||
+              ts.isObjectLiteralExpression(value)) &&
             !CORE_CONSTANTS.includes(what)
             ? [what]
             : []
@@ -1485,18 +1500,24 @@ test("only boot/index.ts takes in the device's desktop adapter", () => {
 
 /**
  * Electron main, the preload and the desktop's tests import nothing of the
- * page (ADR 0089, decisions 4 and 11): the bridge's table is the
- * desktop's, and the page takes its type from there.
+ * page (ADR 0089, decisions 4 and 11), by its package or by a path into
+ * it: the bridge's table is the desktop's, and the page takes its type
+ * from there.
  */
 test("the desktop imports nothing of the page", () => {
   const desktop = join(app, "desktop")
+  const page = join(app, "web")
   const files = ["src", "e2e", "trials"].flatMap((folder) =>
     sources(join(desktop, folder))
   )
   expect(files).toContain(join(desktop, "src/bridge.ts"))
   const naming = files.flatMap((file) =>
     imports(readFileSync(file, "utf8"))
-      .filter((name) => /^@banda\/web(\/|$)/.test(name))
+      .filter(
+        (name) =>
+          /^@banda\/web(\/|$)/.test(name) ||
+          (/^\.\.?\//.test(name) && inside(page, join(dirname(file), name)))
+      )
       .map((name) => `${relative(app, file)}: ${name}`)
   )
   expect(naming).toEqual([])
@@ -1605,4 +1626,59 @@ test("a path the core or the bridge left only re-exports it, as the list holds",
     .map((file) => relative(root, file))
     .sort()
   expect(standing).toEqual(OLD_PATHS)
+})
+
+/**
+ * What `@banda/ui` names of the core again, by file and name, for the
+ * modules that take it from the kit until L3 splits it (ADR 0089,
+ * decision 1). The list only falls; a file that only re-exports is in
+ * `OLD_PATHS` instead.
+ */
+const UI_FROM_CORE = [
+  "client/ui/src/module.ts: Args",
+  "client/ui/src/pane.ts: PaneState",
+  "client/ui/src/pane.ts: Place",
+]
+
+test("the kit names the core again only as listed", () => {
+  const core = /^@banda\/core(\/react)?$/
+  const naming = sources(join(app, "ui/src"), { tests: false })
+    .filter((file) => !OLD_PATHS.includes(relative(root, file)))
+    .flatMap((file) => {
+      const { statements } = ts.createSourceFile(
+        file,
+        readFileSync(file, "utf8"),
+        ts.ScriptTarget.Latest
+      )
+      const fromCore = (node: ts.Expression | undefined) =>
+        !!node && ts.isStringLiteral(node) && core.test(node.text)
+      const taken = new Set(
+        statements
+          .filter(ts.isImportDeclaration)
+          .filter(({ moduleSpecifier }) => fromCore(moduleSpecifier))
+          .flatMap(({ importClause }) => {
+            const named = importClause?.namedBindings
+            return named && ts.isNamedImports(named)
+              ? named.elements.map(({ name }) => name.text)
+              : []
+          })
+      )
+      return statements
+        .filter(ts.isExportDeclaration)
+        .flatMap(({ exportClause, moduleSpecifier }) =>
+          exportClause && ts.isNamedExports(exportClause)
+            ? exportClause.elements
+                .filter(({ name, propertyName }) =>
+                  moduleSpecifier
+                    ? fromCore(moduleSpecifier)
+                    : taken.has((propertyName ?? name).text)
+                )
+                .map(({ name }) => `${relative(root, file)}: ${name.text}`)
+            : fromCore(moduleSpecifier)
+              ? [`${relative(root, file)}: *`]
+              : []
+        )
+    })
+    .sort()
+  expect(naming).toEqual(UI_FROM_CORE)
 })

@@ -3,9 +3,10 @@
  * decision 2): what the bridge's channels carry, which the page's device
  * adapter (`client/web/src/boot/desktop.ts`) and Electron main both read.
  * The channels themselves are the desktop's table (`BRIDGE`, in
- * `client/desktop/src/bridge.ts`); the device object the Window reaches
- * them by stays in `client/web/src/boot/` until a second client reads it
- * (W1).
+ * `client/desktop/src/bridge.ts`). The port's interface (`Device`) joins
+ * the core at W1, with its second reader; the device object the Window
+ * reaches them by, and its desktop adapter, stay in `client/web/src/boot/`
+ * (decision 4).
  */
 import type { Named, ProjectId } from "@banda/contract"
 import type { PaneState, Place } from "./pane"
