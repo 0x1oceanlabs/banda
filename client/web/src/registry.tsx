@@ -41,6 +41,7 @@ import { modules } from "./modules"
 import { keepProblem } from "./problems/keep"
 import { settingsPane } from "./settings/pane"
 import type { Entry, Width } from "./tiling/model"
+import { tilingWidgets } from "./tiling/widgets"
 
 type Args = { [key: string]: JsonValue }
 
@@ -79,8 +80,9 @@ const opening = (id: string, title: string, shift: boolean) =>
   })
 
 /** The window's own things, as a module of their own: the launcher, its
- * letters, the settings and their search (ADR 0016), and another
- * machine's name in a Pane's header (ADR 0095, decision 7). */
+ * letters, the settings and their search (ADR 0016), another machine's
+ * name in a Pane's header (ADR 0095, decision 7), and the Tiling's widgets
+ * on the Bar (ADR 0087, decision 5). */
 export const windowModule = defineModule({
   id: "window",
   engine: false,
@@ -97,6 +99,7 @@ export const windowModule = defineModule({
   ],
   scopes: [LAUNCHER, SETTINGS],
   slots: [machineHeader],
+  bar: tilingWidgets,
 })
 
 const all: readonly Module[] = [windowModule, ...modules]
