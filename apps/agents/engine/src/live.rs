@@ -1,7 +1,9 @@
 //! What runs now, in memory: the Harness processes ([`Hosts`]), the turns
 //! they run and the Questions they wait on. A restart loses it, and the
 //! outbox settles what that cut short. A turn is held from [`Live::open`]
-//! until its [`TurnRun`] is let go, however its task ends.
+//! until its [`TurnRun`] is let go, however its task ends, and is counted
+//! as at work for that long, waiting on its Person's Question too: the
+//! engine keeps its machine awake while any is (ADR 0097, decision 1).
 //!
 //! One lock holds the running turns, the cancels and the Questions
 //! together, so a stop that comes while a turn starts, or while it asks, is
@@ -34,7 +36,9 @@ use crate::touching::Touches;
 use crate::{Pipe, kept};
 use banda_harnesses::hosts::Hosts;
 use banda_harnesses::{Failed, Harness};
-use banda_kernel::{AgentId, Holes, Listener, ModuleProject, Pass, Program, ProjectId};
+use banda_kernel::{
+    AgentId, AtWork, Holes, Listener, ModuleProject, Pass, Program, ProjectId, Working,
+};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -56,6 +60,9 @@ pub struct Live {
     passes: Mutex<HashMap<(ProjectId, String), ProcessPass>>,
     /// The file each running turn works on now.
     touches: Arc<Touches>,
+    /// The count of the turns that run, which each [`TurnRun`] holds one
+    /// of.
+    working: Working,
 }
 
 /// The variables that hand a Harness process's Agents' shells their pass,
@@ -101,8 +108,9 @@ impl Turns {
 impl Live {
     /// Hosts let go after `idle` with nothing to do; a turn the Agent
     /// went on with by itself ends after `quiet` with nothing said; each
-    /// session gets `banda mcp` through `pipe`.
-    pub fn new(idle: Duration, quiet: Duration, pipe: Option<Pipe>) -> Live {
+    /// session gets `banda mcp` through `pipe`; each turn counts in
+    /// `working` while it runs.
+    pub fn new(idle: Duration, quiet: Duration, pipe: Option<Pipe>, working: Working) -> Live {
         Live {
             hosts: Hosts::new(idle),
             turns: Mutex::default(),
@@ -111,6 +119,7 @@ impl Live {
             pipe,
             passes: Mutex::default(),
             touches: Arc::default(),
+            working,
         }
     }
 
@@ -258,11 +267,13 @@ impl Live {
     }
 
     /// A turn the engine runs, from now until the returned run is let go:
-    /// what memory holds of it goes then.
+    /// what memory holds of it goes then, and it no longer counts as at
+    /// work.
     pub fn open(self: &Arc<Self>, turn: TurnId) -> TurnRun {
         TurnRun {
             live: self.clone(),
             turn,
+            _at_work: self.working.hold(),
         }
     }
 
@@ -338,6 +349,8 @@ impl Live {
 pub struct TurnRun {
     live: Arc<Live>,
     turn: TurnId,
+    /// Counted as at work while it runs, a Question it waits on too.
+    _at_work: AtWork,
 }
 
 impl TurnRun {
@@ -412,10 +425,15 @@ mod tests {
     use super::*;
 
     fn live() -> Arc<Live> {
+        live_counted(Working::new())
+    }
+
+    fn live_counted(working: Working) -> Arc<Live> {
         Arc::new(Live::new(
             Duration::from_secs(60),
             Duration::from_secs(60),
             None,
+            working,
         ))
     }
 
@@ -445,5 +463,21 @@ mod tests {
         let run = live.open(turn);
         let (answer, _) = oneshot::channel();
         assert!(run.ask(ItemId::new(), answer), "memory let go of the stop");
+    }
+
+    #[tokio::test]
+    async fn a_turn_counts_as_at_work_until_it_is_let_go_its_question_too() {
+        let working = Working::new();
+        let count = working.count();
+        let live = live_counted(working);
+        let run = live.open(TurnId::new());
+        let other = live.open(TurnId::new());
+        assert_eq!(*count.borrow(), 2);
+        let (answer, _) = oneshot::channel();
+        assert!(run.ask(ItemId::new(), answer));
+        drop(other);
+        assert_eq!(*count.borrow(), 1, "it waits on its Person, at work");
+        drop(run);
+        assert_eq!(*count.borrow(), 0);
     }
 }

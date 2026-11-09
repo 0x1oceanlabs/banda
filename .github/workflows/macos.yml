@@ -37,6 +37,7 @@ on:
       - platform/harnesses/engine/**
       - platform/keys/engine/**
       - platform/look/**
+      - platform/machines/engine/**
       - kernel/**
       # The adapters the engine's tests build and start.
       - platform/harnesses/adapters/**
@@ -58,6 +59,7 @@ on:
       - platform/harnesses/engine/**
       - platform/keys/engine/**
       - platform/look/**
+      - platform/machines/engine/**
       - kernel/**
       - platform/harnesses/adapters/**
   workflow_dispatch:
@@ -134,8 +136,8 @@ jobs:
         if: github.event_name == 'pull_request'
         run: >-
           cargo test --no-fail-fast -p banda-files -p banda-terminal -p banda
-          -p banda-harnesses -p banda-keys -p banda-look -p banda-kernel
-          -- $SKIP
+          -p banda-harnesses -p banda-keys -p banda-look -p banda-machines
+          -p banda-kernel -- $SKIP
       - name: test the workspace
         if: github.event_name != 'pull_request'
         run: cargo test --no-fail-fast --workspace -- $SKIP

@@ -51,6 +51,11 @@ mime_guess = "2.0.5"
 nix = { version = "0.31.3", default-features = false, features = ["user"] }
 notify-debouncer-full = "0.7"
 nucleo-matcher = "0.3.1"
+# macOS's power assertion, which keeps a Mac from idle sleep while its
+# Agents work, and the CFString that names it (ADR 0097): sysinfo builds
+# both there already.
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFString"] }
+objc2-io-kit = { version = "0.3.2", default-features = false, features = ["std", "libc", "pwr_mgt"] }
 percent-encoding = "2.3"
 # A freedesktop thumbnail is a PNG that says its file's URI and time.
 png = "0.18.1"
@@ -97,6 +102,8 @@ windows = { version = "0.62.2", default-features = false, features = ["Win32_Sys
 windows-registry = "0.6.1"
 # The Secret Service on the session bus, where gh keeps the Person's GitHub
 # token on Linux: read with no program run (ADR 0083, kernel/src/gh.rs).
+# logind's locks and UPower on the system bus, which keep a machine awake
+# while its Agents work (ADR 0097).
 zbus = { version = "5.19.0", default-features = false, features = ["tokio"] }
 zip = { version = "9.4.1", default-features = false }
 

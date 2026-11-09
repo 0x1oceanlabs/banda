@@ -8,8 +8,12 @@
 //! the settings' `set`, which only the Person calls for this file, or as
 //! the file changes by hand. This module follows the file for it, and
 //! answers `get` for Settings.
+//!
+//! The file also says when the machine stays awake, which the engine
+//! follows ([`Machine::awake`], [`awake::keep`], ADR 0097).
 
 mod about;
+pub mod awake;
 mod file;
 mod found;
 
@@ -24,6 +28,7 @@ use tokio::sync::watch;
 use ts_rs::TS;
 
 pub use about::{About, about};
+pub use awake::Awake;
 pub use found::found;
 
 /// The module's settings files in `~/.config/banda` (ADR 0016).
@@ -42,6 +47,8 @@ struct Held {
     now: watch::Sender<Named>,
     /// Whether Banda starts at login here, as the file says.
     at_login: watch::Sender<bool>,
+    /// When the machine stays awake, as the file says.
+    awake: watch::Sender<Awake>,
     /// The file as last read, none while it is not there: what it holds,
     /// not its time, tells a change, as the look's files do, so a change
     /// of another file of the folder logs nothing again.
@@ -61,6 +68,7 @@ impl Machine {
             found,
             now: watch::Sender::new(said.named),
             at_login: watch::Sender::new(said.at_login),
+            awake: watch::Sender::new(said.awake),
             read: Mutex::new(held),
         }))
     }
@@ -76,6 +84,12 @@ impl Machine {
     /// login, or not, as it changes (ADR 0086, decision 1).
     pub fn starts_at_login(&self) -> watch::Receiver<bool> {
         self.0.at_login.subscribe()
+    }
+
+    /// When this machine stays awake, kept current: while its Agents work,
+    /// and while it is on power, as `machine.toml` says (ADR 0097).
+    pub fn awake(&self) -> watch::Receiver<Awake> {
+        self.0.awake.subscribe()
     }
 
     fn now(&self) -> Named {
@@ -101,6 +115,11 @@ impl Machine {
         self.0.at_login.send_if_modified(|at_login| {
             let changed = *at_login != said.at_login;
             *at_login = said.at_login;
+            changed
+        });
+        self.0.awake.send_if_modified(|awake| {
+            let changed = *awake != said.awake;
+            *awake = said.awake;
             changed
         });
     }
@@ -264,5 +283,43 @@ mod tests {
         .unwrap();
         machine.reread();
         assert!(!at_login.has_changed().unwrap());
+    }
+
+    #[test]
+    fn when_the_machine_stays_awake_follows_the_file() {
+        let config = tempfile::tempdir().unwrap();
+        let found = Named {
+            name: "m1pro".to_owned(),
+            icon: MachineIcon::Laptop,
+        };
+        let machine = Machine::new(config.path(), found);
+        let mut awake = machine.awake();
+        let by_default = Awake {
+            while_working: true,
+            plugged_in: false,
+        };
+        assert_eq!(*awake.borrow_and_update(), by_default, "with no file");
+
+        std::fs::write(config.path().join(file::NAME), "awake-plugged-in = true\n").unwrap();
+        machine.reread();
+        assert!(awake.has_changed().unwrap());
+        let plugged = Awake {
+            plugged_in: true,
+            ..by_default
+        };
+        assert_eq!(*awake.borrow_and_update(), plugged);
+
+        // A change of the name alone says nothing new of it.
+        std::fs::write(
+            config.path().join(file::NAME),
+            "name = \"studio\"\nawake-plugged-in = true\n",
+        )
+        .unwrap();
+        machine.reread();
+        assert!(!awake.has_changed().unwrap());
+
+        std::fs::remove_file(config.path().join(file::NAME)).unwrap();
+        machine.reread();
+        assert_eq!(*awake.borrow_and_update(), by_default, "taken out");
     }
 }

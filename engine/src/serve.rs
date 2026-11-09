@@ -18,6 +18,9 @@
 //! lock, and where it started again after a crash three times within a
 //! minute. On macOS it keeps its job's plist where "Start Banda at login"
 //! says, the job or not.
+//!
+//! While its Agents work, and while plugged in if the Person says so, it
+//! keeps its machine from idle sleep, until it stops (ADR 0097).
 
 use crate::apps::{self, HostContext};
 use crate::places::{FOLDER, HOST, Places, Running, from_checkout};
@@ -28,7 +31,7 @@ use banda_agents::Pipe;
 use banda_harnesses::Harnesses;
 use banda_harnesses::carried::{Carried, Here};
 use banda_kernel::api::{self, OwnerSecret};
-use banda_kernel::{Kernel, PROTOCOL};
+use banda_kernel::{Kernel, PROTOCOL, Working};
 use banda_machines::Machine;
 use std::fs::{File, TryLockError};
 use std::path::Path;
@@ -180,6 +183,10 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     if cfg!(target_os = "macos") {
         launchd::follow_login(&places, machine.starts_at_login());
     }
+    // The Turns that run, which hold the machine awake as machine.toml
+    // says; the system lets the hold go too, should the engine crash.
+    let working = Working::new();
+    let awake = banda_machines::awake::keep(working.count(), machine.awake());
     let builder = Kernel::builder(&places.root, &places.data, owner)
         .machine(places.machine())
         .named(machine.named())
@@ -195,6 +202,7 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         pipe: &pipe,
         kept: &kept,
         machine: &machine,
+        working: &working,
     };
     let opening = apps::serve(builder, &host).open();
     let kernel = tokio::select! {
@@ -232,6 +240,7 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         .with_graceful_shutdown(stop)
         .await;
     kernel.stopping();
+    drop(awake);
     places.withdraw();
     // Before the lock goes, as the next engine may take it at once.
     #[cfg(target_os = "macos")]

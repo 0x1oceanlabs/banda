@@ -551,6 +551,9 @@ dependencies = [
  "banda-look",
  "dunce",
  "futures",
+ "objc2-core-foundation",
+ "objc2-io-kit",
+ "rustix",
  "schemars 1.2.3",
  "serde",
  "serde_json",
@@ -561,6 +564,7 @@ dependencies = [
  "tracing",
  "ts-rs",
  "windows",
+ "zbus",
 ]
 
 [[package]]

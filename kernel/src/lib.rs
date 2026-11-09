@@ -40,6 +40,8 @@
 //! - [`Named`] is what this host is called and drawn by, which its
 //!   `welcome` says and `machine.named` streams ([`KernelBuilder::named`],
 //!   ADR 0095).
+//! - [`Working`] counts the Turns that run on this host, which hold the
+//!   engine's machine awake (ADR 0097).
 //! - [`api`] serves all of it over WebSocket.
 
 pub mod access;
@@ -70,6 +72,7 @@ mod store;
 mod tables;
 mod watching;
 mod window;
+mod working;
 
 pub use access::{Caller, Right};
 pub use cursors::{Ack, Listener};
@@ -95,6 +98,7 @@ pub use started::Started;
 pub use store::{Answer, Tx};
 pub use watching::{Changed, Watch};
 pub use window::{WindowAnswer, WindowRequest};
+pub use working::{AtWork, Working};
 
 /// The variable that names its Project in the environment of what Banda
 /// starts in one, a terminal's program or a Harness's process, which all

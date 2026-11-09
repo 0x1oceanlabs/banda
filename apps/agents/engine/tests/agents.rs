@@ -14,7 +14,7 @@ use banda_harnesses::{Cli, Harness, Harnesses, HarnessesModule, account_changed}
 use banda_kernel::Whose;
 use banda_kernel::{
     AgentId, Caller, Code, CommandId, EventFilter, Fence, FenceLayer, FenceWhy, Holes, Kernel,
-    Participant, PersonId, ProjectId,
+    Participant, PersonId, ProjectId, Working,
 };
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -574,6 +574,63 @@ async fn the_list_says_where_each_threads_work_stands() {
     let listed = world.threads().await.threads.remove(0);
     assert_eq!(listed.latest.map(|l| l.state), Some(TurnState::Done));
     assert!(listed.asking.is_empty(), "the answer was all it asked");
+}
+
+/// Each turn that runs counts in the engine's count of what is at work,
+/// which keeps the machine awake: one that waits for a message, and one
+/// that waits on its Person's Question, until each ends (ADR 0097,
+/// decision 1).
+#[tokio::test]
+async fn a_turn_counts_as_at_work_while_it_waits_on_its_person_until_it_ends() {
+    let root = tempfile::tempdir().unwrap();
+    let working = Working::new();
+    let mut count = working.count();
+    let agents = Agents::new(harnesses()).counted_in(working);
+    let world = World::new_with(root.path(), agents).await;
+    assert_eq!(*count.borrow_and_update(), 0);
+
+    let waits = world.send(None, "wait").await;
+    world
+        .until(&waits["thread"], |v| {
+            texts(v).contains(&"message: Waiting.".to_owned())
+        })
+        .await;
+    let asks = world.send(None, "please ask first").await;
+    let view = world.until(&asks["thread"], asking).await;
+    let (question, _) = open(&view).unwrap();
+    assert_eq!(*count.borrow_and_update(), 2, "both run, waiting");
+
+    world
+        .call(
+            world.person(),
+            "agents.answer",
+            json!({ "item": question, "choice": "allow" }),
+        )
+        .await
+        .unwrap();
+    let at_most = |n: usize| {
+        let mut count = count.clone();
+        async move {
+            let counted = count.wait_for(|count| *count <= n);
+            tokio::time::timeout(Duration::from_secs(10), counted)
+                .await
+                .expect("the count falls")
+                .map(|count| *count)
+                .unwrap()
+        }
+    };
+    assert_eq!(at_most(1).await, 1, "the answered turn ended");
+    world
+        .call(
+            world.person(),
+            "agents.stop",
+            json!({ "turn": waits["turn"] }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(at_most(0).await, 0, "the stopped one too");
+    let view = world.thread(&asks["thread"]).await;
+    assert_eq!(state(&view, &asks["turn"]), Some(TurnState::Done));
 }
 
 #[tokio::test]
