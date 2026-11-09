@@ -139,6 +139,42 @@ Research, the same day: `docs/research/2026-11-09-platform-themes.md`
    watch the Person. It is web and desktop only; a phone takes the
    tokens.
 
+_Decisions 8 to 11 were added on 2026-11-09, after a review of this plan
+with Roma._
+
+8. **The resolver keeps every theme readable.**
+   - Under glass the wallpaper is not known. So `check` measures the
+     contrast of text on each glass surface over the worst backdrops,
+     white, black and a mid grey. Where text would not read, the resolver
+     makes that surface's tint denser until it does.
+   - The system's accent may be any colour, a pale yellow too. The
+     resolver works out the text on the accent (`primary-foreground`), and
+     where the accent is a line or text, it darkens or lightens it until
+     it reads on the background.
+   - CI runs `banda theme check` over every built-in theme, and over
+     Omarchy's own themes kept as test fixtures: dozens of palettes, each
+     in four.
+
+9. **A platform theme nobody has tried on its system is marked beta.**
+   The menu says "beta" beside it until it has been looked at on a real
+   machine of that system (step 7). Today that is GNOME, KDE and niri. A
+   beta theme is still picked by `"platform"`: it stands on the portal
+   and `banda`, so it cannot look worse than `banda`.
+
+10. **Token names are an API.** A Person's theme names tokens in
+    `[tokens]`, so renaming one would break it. A renamed token keeps its
+    old name as an alias, and `check` names the new one. The same will
+    hold for `theme.css`'s slots (decision 7).
+
+11. **Banda's shape against the system's is open.** Three ways stand: A,
+    a platform theme takes the system's shape whole (on a square
+    Hyprland, Banda is square); B, the window and the tiles take the
+    system's radius, and inside (cards, controls, the composer) stays
+    Banda's, soft and large; C, the shape is always Banda's and the
+    system gives colours, accent and font. Roma decides after trying them
+    in a sandbox page. Step 3 builds the five levels so that any
+    of the three is a choice in the base themes' files, not code.
+
 ## Steps
 
 Each step is an issue and a PR.
@@ -164,6 +200,17 @@ Each step is an issue and a PR.
    new | show | check | shot`, the skill topic.
 7. Each theme tuned on its hardware: arc, the Mac, Win11; GNOME and KDE
    when a machine runs them.
+
+_Amended 2026-11-09, after the review:_ the steps wait for no work on
+machines. Step 0's slice goes as ADR 0101 (proposed) has it, and a step
+**0a** comes first: the theme's code leaves the `look` crate for a crate
+of its own, `platform/theme` (the resolver, the tokens, the palette,
+colours, fonts, the wallpaper and Hyprland's reader, and the built-in
+themes), and `look` uses it. Nothing on screen changes, and no file
+changes owner: which file is whose is ADR 0101's. Then steps 1 to 4 go
+in order. Step 4 adds decision 8's checks; step 6 marks beta themes
+(decision 9); step 2 keeps old token names (decision 10); step 3 waits
+for Roma's call on decision 11 only for the numbers in the base themes.
 
 Later: `theme.css` (its own ADR, decision 7); colour themes (Ocean,
 Moss…); where the web works a theme out.
