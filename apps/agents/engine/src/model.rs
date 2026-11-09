@@ -849,10 +849,10 @@ pub struct Archived {
     pub at: i64,
 }
 
-/// A Thread put away by its Person, or by its own Agent, until a time or
-/// until the turn that ran ended (ADR 0074). It sleeps until `until`
-/// comes, unless `woke` says what woke it first: a reader compares
-/// `until` with now, and no fact says that the time came.
+/// A Thread put away by its Person, or by its own Agent, until a time,
+/// until the turn that ran ended, or, its Person's, Someday (ADR 0074;
+/// ADR 0098, decision 12). It sleeps until it ends, unless `woke` says what woke it first: a reader compares `until` with
+/// now, and no fact says that the time came.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct Later {
@@ -861,10 +861,15 @@ pub struct Later {
     pub at: i64,
     pub by: Participant,
     /// When it wakes, in milliseconds since the epoch; none: when the turn
-    /// that ran ends.
+    /// that ran ends, or, with `someday`, never by itself.
     #[ts(optional, type = "number")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub until: Option<i64>,
+    /// Someday (ADR 0098, decision 12): no time, and it never wakes by
+    /// itself, only as something calls its Person or they wake it.
+    #[ts(as = "Option<bool>", optional)]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub someday: bool,
     /// What woke it before its time, and when.
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -880,6 +885,40 @@ pub struct Later {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub woke_seen: Option<WokeSeen>,
+}
+
+/// When a [`Later`] ends.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Until {
+    /// At a moment, in milliseconds since the epoch.
+    At(i64),
+    /// When the turn that ran ends.
+    Done,
+    /// Never by itself (ADR 0098, decision 12).
+    Someday,
+}
+
+impl Later {
+    /// When it ends.
+    pub fn ends(&self) -> Until {
+        match (self.until, self.someday) {
+            (Some(at), _) => Until::At(at),
+            (None, true) => Until::Someday,
+            (None, false) => Until::Done,
+        }
+    }
+}
+
+impl Until {
+    /// `Later.until` and `Later.someday`, as kept: the other way of
+    /// [`Later::ends`].
+    pub fn kept(self) -> (Option<i64>, bool) {
+        match self {
+            Until::At(at) => (Some(at), false),
+            Until::Done => (None, false),
+            Until::Someday => (None, true),
+        }
+    }
 }
 
 /// What a Person has seen of a Thread that woke by itself. It moves
@@ -1050,6 +1089,10 @@ pub enum Fact {
         #[ts(optional, type = "number")]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         until: Option<i64>,
+        /// Someday: no time, and it never wakes by itself.
+        #[ts(as = "Option<bool>", optional)]
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        someday: bool,
         /// The failed turn that goes again as `until` comes.
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]

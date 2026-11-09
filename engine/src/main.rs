@@ -313,8 +313,8 @@ enum ProjectCommand {
 
 #[derive(Subcommand)]
 enum ThreadCommand {
-    /// Puts a Thread off for a while, or until a moment; with neither, a
-    /// Thread at work until its turn ends. Anything that needs its Person
+    /// Puts a Thread off for a while, until a moment, or Someday; with
+    /// none, a Thread at work until its turn ends. Anything that needs its Person
     /// wakes it early. In a Thread, an Agent's own is the default.
     #[command(alias = "snooze")]
     Later {
@@ -327,8 +327,11 @@ enum ThreadCommand {
         #[arg(long, conflicts_with = "until")]
         after: Option<String>,
         /// When it comes back, in milliseconds since the epoch.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "someday")]
         until: Option<i64>,
+        /// Someday: no time, and it never wakes by itself.
+        #[arg(long, conflicts_with = "after")]
+        someday: bool,
     },
     /// Wakes a put-off Thread now; one awake stays so. In a Thread, an
     /// Agent's own is the default.
@@ -718,8 +721,11 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
                     project,
                     after,
                     until,
+                    someday,
                 } => {
-                    let params = json!({ "thread": thread, "after": after, "until": until });
+                    let params = json!({
+                        "thread": thread, "after": after, "until": until, "someday": someday,
+                    });
                     ("agents.later", project, params)
                 }
                 ThreadCommand::Wake { thread, project } => {

@@ -438,9 +438,11 @@ banda_kernel::methods! {
         /// Anything that needs your Person wakes it early, and so does
         /// their message. It does not wake you or start a turn. Use it
         /// when you wait on something slow and have nothing for your
-        /// Person meanwhile. A Thread that asks cannot be put off, nor
-        /// one your Person put off to go on by itself. A Person puts off
-        /// any Thread (ADR 0074).
+        /// Person meanwhile. A Thread that asks may be put off: it comes
+        /// back with the same question, and a new one wakes it early. One
+        /// your Person put off to go on by itself cannot be. A Person
+        /// puts off any Thread, and also Someday, which never wakes by
+        /// itself (ADR 0074; ADR 0098, decisions 11 and 12).
         command later(LaterAsk) -> (), Write, tool "later";
         /// Brings your own put-off Thread back to your Person's list now,
         /// as when what you waited on came early. One awake stays so. A

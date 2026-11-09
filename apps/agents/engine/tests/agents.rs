@@ -5109,15 +5109,34 @@ async fn a_later_puts_a_thread_away_until_its_time_and_the_list_says_so() {
 }
 
 #[tokio::test]
-async fn a_thread_that_asks_cannot_be_put_off_and_a_question_wakes_one_early() {
+async fn a_thread_that_asks_may_be_put_off_and_a_new_question_wakes_one_early() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     let sent = world.send(None, "please ask first").await;
-    world.until(&sent["thread"], asking).await;
-    let refused = world
-        .later(world.person(), &sent["thread"], Some(in_an_hour()))
-        .await;
-    assert!(refused.is_err(), "what calls its Person is never put away");
+    let asks = &sent["thread"];
+    world.until(asks, asking).await;
+    // Put off while it asks (ADR 0098, decision 11), it sleeps with the
+    // same question, and still cannot be archived.
+    world
+        .later(world.person(), asks, Some(in_an_hour()))
+        .await
+        .unwrap();
+    let later = world.later_of(asks).await.unwrap();
+    assert_eq!((later.until.is_some(), later.woke), (true, None));
+    let archived = world.archive(world.person(), asks, true).await;
+    assert!(archived.is_err(), "a Thread that asks is never archived");
+    // Its Agent does not hide its own question; its Person's answer wakes
+    // it.
+    let view = world.until(asks, asking).await;
+    let hides = world.later(agent_of(&view), asks, None).await;
+    assert!(hides.is_err(), "its Agent leaves its question in sight");
+    let question = open(&view).unwrap().0;
+    let answer = json!({ "item": question, "choice": "allow" });
+    world
+        .call(world.person(), "agents.answer", answer)
+        .await
+        .unwrap();
+    assert_eq!(world.woke(asks).await, Some(Wake::Message));
 
     // Another Thread's Agent writes to a sleeping one, which then asks.
     let (writer, writing) = world.finish(None, "hello").await;
@@ -5133,6 +5152,49 @@ async fn a_thread_that_asks_cannot_be_put_off_and_a_question_wakes_one_early() {
     world.until(&sleeper, asking).await;
     assert_eq!(world.woke(&sleeper).await, Some(Wake::Question));
     assert!(world.later_of(&writer).await.is_none());
+}
+
+#[tokio::test]
+async fn someday_is_a_persons_and_the_end_of_its_turn_leaves_it_asleep() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "wait for me").await;
+    let thread = &sent["thread"];
+    world
+        .until(thread, |v| {
+            state(v, &sent["turn"]) == Some(TurnState::Running)
+        })
+        .await;
+    let (_, view) = world.finish(None, "hello").await;
+    let own = json!({ "someday": true });
+    let agents = world.call(agent_of(&view), "agents.later", own).await;
+    assert!(agents.is_err(), "Someday is its Person's");
+    let someday = json!({ "thread": thread, "someday": true });
+    let both = json!({ "thread": thread, "someday": true, "after": "1h" });
+    let both = world.call(world.person(), "agents.later", both).await;
+    assert!(both.is_err(), "Someday has no time");
+    world
+        .call(world.person(), "agents.later", someday)
+        .await
+        .unwrap();
+    let later = world.later_of(thread).await.unwrap();
+    assert_eq!((later.someday, later.until), (true, None));
+    world
+        .call(
+            world.person(),
+            "agents.stop",
+            json!({ "turn": sent["turn"] }),
+        )
+        .await
+        .unwrap();
+    world.until(thread, settled(1)).await;
+    assert_eq!(
+        world.woke(thread).await,
+        None,
+        "Someday never wakes by itself"
+    );
+    let later = world.facts("thread.later").await;
+    assert_eq!(later.last().unwrap().payload["someday"], json!(true));
 }
 
 #[tokio::test]

@@ -1,26 +1,37 @@
 //! A Later's rules (ADR 0074): when a Thread may be put off, and what
 //! wakes one before its time. Pure: the caller brings the time.
 
-use crate::model::{Fact, Later, TurnState, Wake, WokeSeen};
+use crate::model::{Fact, Later, TurnState, Until, Wake, WokeSeen};
 use banda_kernel::{Participant, Refusal};
 use banda_look::later::LONGEST;
 
-/// Whether a Thread may be put off until `until`, or, without it, until
-/// the turn that runs ends, at `now`. One that `asks` may not be: what
-/// calls its Person is never put away. One put off until its turn ends
-/// needs a turn that `works`, and none sleeps longer than a year.
-pub fn may_put_off(asks: bool, works: bool, until: Option<i64>, now: i64) -> Result<(), Refusal> {
-    if asks {
+/// Whether a Thread may be put off until `until` at `now`. One that asks
+/// may (ADR 0098, decision 11): its Agent waits, and it comes back with
+/// the same question; a new call still wakes it early. One put off until
+/// its turn ends needs a turn that `works`, and none sleeps longer than a
+/// year. Only a Person puts one off Someday (decision 12), or one that
+/// asks: its Agent would hide its own question.
+pub fn may_put_off(
+    by: Participant,
+    asks: bool,
+    works: bool,
+    until: Until,
+    now: i64,
+) -> Result<(), Refusal> {
+    if asks && by.agent().is_some() {
         return Err(Refusal::conflict(
-            "This Thread asks its Person: answer it before putting it off.",
+            "Your Person has yet to answer: a Thread that asks is theirs to put off.",
         ));
     }
     match until {
-        Some(until) if until <= now => Err(Refusal::invalid("That time has passed.")),
-        Some(until) if until.saturating_sub(now) > LONGEST => {
+        Until::Someday if by.agent().is_some() => Err(Refusal::forbidden(
+            "Only a Person puts a Thread off Someday.",
+        )),
+        Until::At(at) if at <= now => Err(Refusal::invalid("That time has passed.")),
+        Until::At(at) if at.saturating_sub(now) > LONGEST => {
             Err(Refusal::invalid("A Later lasts a year at most."))
         }
-        None if !works => Err(Refusal::conflict(
+        Until::Done if !works => Err(Refusal::conflict(
             "Only a Thread at work can be put off until it is done.",
         )),
         _ => Ok(()),
@@ -30,6 +41,7 @@ pub fn may_put_off(asks: bool, works: bool, until: Option<i64>, now: i64) -> Res
 /// Whether a Thread sleeps at `now` under `later`: nothing woke it, and
 /// its time has not come.
 pub fn asleep(later: &Later, now: i64) -> bool {
+    // Until done and Someday keep no time, and sleep on.
     later.woke.is_none() && later.until.is_none_or(|until| until > now)
 }
 
@@ -49,11 +61,13 @@ pub fn sees(later: &Later, seen: WokeSeen, now: i64) -> bool {
     woke_by_itself(later, now) && later.woke_seen.is_none_or(|was| seen > was)
 }
 
-/// Whether `later` is its Person's that goes on by itself (ADR 0074,
-/// decision 8), and has not yet: nothing woke it, and its turn has not
-/// gone again. While it is, it stays theirs to change.
-pub fn goes_on(later: &Later) -> bool {
-    matches!(later.by, Participant::Person(_)) && later.woke.is_none() && later.resume.is_some()
+/// Whether `later` is its Person's own while nothing woke it: one that
+/// goes on by itself (ADR 0074, decision 8) or Someday (ADR 0098,
+/// decision 12). While it is, only they change it or wake it.
+pub fn persons_own(later: &Later) -> bool {
+    matches!(later.by, Participant::Person(_))
+        && later.woke.is_none()
+        && (later.resume.is_some() || later.someday)
 }
 
 /// What `fact`, by `author`, would wake a put-off Thread for: what
@@ -68,7 +82,10 @@ pub fn wake_of(fact: &Fact, author: Participant) -> Option<Wake> {
         } => Some(Wake::Failure),
         // A message taken back never began a turn.
         Fact::TurnEnded { state, .. } if *state != TurnState::Withdrawn => Some(Wake::Done),
-        Fact::MessagePosted { .. } | Fact::MessageSteered { .. }
+        // Its Person writes to it, or answers what it asked.
+        Fact::MessagePosted { .. }
+        | Fact::MessageSteered { .. }
+        | Fact::QuestionAnswered { .. }
             if matches!(author, Participant::Person(_)) =>
         {
             Some(Wake::Message)
@@ -80,7 +97,7 @@ pub fn wake_of(fact: &Fact, author: Participant) -> Option<Wake> {
 /// Whether `by` wakes a Thread under `later` at `now`: it sleeps, and
 /// the end of a turn wakes only one put off until it is done.
 pub fn wakes(later: &Later, by: Wake, now: i64) -> bool {
-    asleep(later, now) && (by != Wake::Done || later.until.is_none())
+    asleep(later, now) && (by != Wake::Done || later.ends() == Until::Done)
 }
 
 #[cfg(test)]
@@ -96,9 +113,17 @@ mod tests {
             at: NOW - 10,
             by: Participant::Person(PersonId::new()),
             until,
+            someday: false,
             woke: None,
             resume: None,
             woke_seen: None,
+        }
+    }
+
+    fn someday() -> Later {
+        Later {
+            someday: true,
+            ..until(None)
         }
     }
 
@@ -123,33 +148,53 @@ mod tests {
     }
 
     #[test]
-    fn a_thread_that_asks_or_a_time_gone_cannot_be_put_off() {
-        assert!(may_put_off(false, false, Some(NOW + 1), NOW).is_ok());
-        assert!(may_put_off(true, true, Some(NOW + 1), NOW).is_err());
-        assert!(may_put_off(false, false, Some(NOW), NOW).is_err());
-        assert!(may_put_off(false, true, None, NOW).is_ok());
+    fn a_time_gone_or_past_a_year_cannot_be_put_off_to_nor_by_an_agent_someday_or_asking() {
+        let person = Participant::Person(PersonId::new());
+        let agent = Participant::Agent(AgentId::new());
+        assert!(may_put_off(person, false, false, Until::At(NOW + 1), NOW).is_ok());
+        assert!(may_put_off(person, false, false, Until::At(NOW), NOW).is_err());
+        assert!(may_put_off(person, false, true, Until::Done, NOW).is_ok());
         assert!(
-            may_put_off(false, false, None, NOW).is_err(),
+            may_put_off(person, false, false, Until::Done, NOW).is_err(),
             "until done needs work"
         );
-        assert!(may_put_off(false, false, Some(NOW + LONGEST), NOW).is_ok());
+        assert!(may_put_off(person, false, false, Until::Someday, NOW).is_ok());
+        assert!(may_put_off(agent, false, false, Until::Someday, NOW).is_err());
+        assert!(may_put_off(agent, false, false, Until::At(NOW + 1), NOW).is_ok());
+        assert!(
+            may_put_off(person, true, true, Until::Done, NOW).is_ok(),
+            "decision 11"
+        );
+        assert!(may_put_off(agent, true, true, Until::Done, NOW).is_err());
+        assert!(may_put_off(person, false, false, Until::At(NOW + LONGEST), NOW).is_ok());
         for later in [NOW + LONGEST + 1, i64::MAX] {
             assert!(
-                may_put_off(false, false, Some(later), NOW).is_err(),
+                may_put_off(person, false, false, Until::At(later), NOW).is_err(),
                 "a year at most"
             );
         }
     }
 
     #[test]
-    fn only_the_persons_later_that_has_yet_to_go_on_goes_on() {
+    fn someday_sleeps_through_any_time_and_the_end_of_a_turn() {
+        let later = someday();
+        assert_eq!(later.ends(), Until::Someday);
+        assert!(asleep(&later, i64::MAX));
+        assert!(!wakes(&later, Wake::Done, NOW));
+        assert!(wakes(&later, Wake::Question, NOW));
+        assert!(wakes(&later, Wake::Woken, NOW));
+    }
+
+    #[test]
+    fn only_the_persons_later_that_goes_on_or_someday_is_their_own() {
         let turn = Some(TurnId::new());
         let going = Later {
             resume: turn,
             ..until(Some(NOW + 60))
         };
-        assert!(goes_on(&going));
-        assert!(!goes_on(&until(Some(NOW + 60))), "it only sleeps");
+        assert!(persons_own(&going));
+        assert!(persons_own(&someday()));
+        assert!(!persons_own(&until(Some(NOW + 60))), "it only sleeps");
         let woken = Woke {
             at: NOW,
             by: Wake::Message,
@@ -158,12 +203,12 @@ mod tests {
             woke: Some(woken),
             ..going.clone()
         };
-        assert!(!goes_on(&woke), "woken, it goes on no more");
+        assert!(!persons_own(&woke), "woken, it goes on no more");
         let agents = Later {
             by: Participant::Agent(AgentId::new()),
             ..going
         };
-        assert!(!goes_on(&agents), "an Agent's starts no turn");
+        assert!(!persons_own(&agents), "an Agent's starts no turn");
     }
 
     #[test]

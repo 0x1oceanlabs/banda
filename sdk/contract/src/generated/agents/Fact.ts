@@ -54,6 +54,10 @@ harness?: string, } } | { "kind": "turn.ended", "payload": { turn: TurnId, state
  */
 note?: string, } } | { "kind": "turn.queued", "payload": { turn: TurnId, message: ItemId, } } | { "kind": "thread.held", "payload": { thread: ThreadId, held: boolean, } } | { "kind": "thread.later", "payload": { thread: ThreadId, until?: number, 
 /**
+ * Someday: no time, and it never wakes by itself.
+ */
+someday?: boolean, 
+/**
  * The failed turn that goes again as `until` comes.
  */
 resume?: TurnId, } } | { "kind": "thread.woke", "payload": { thread: ThreadId, by: Wake, } } | { "kind": "thread.woke_seen", "payload": { thread: ThreadId, seen: WokeSeen, } } | { "kind": "thread.seen", "payload": { thread: ThreadId, turn: TurnId, } } | { "kind": "thread.unseen", "payload": { thread: ThreadId, } } | { "kind": "thread.archived", "payload": { thread: ThreadId, } } | { "kind": "thread.unarchived", "payload": { thread: ThreadId, } } | { "kind": "marks.moved", "payload": Record<symbol, never> } | { "kind": "thread.rewound", "payload": { thread: ThreadId, turn: TurnId, } } | { "kind": "thread.renamed", "payload": { thread: ThreadId, title: string, was: string, } } | { "kind": "thread.switched", "payload": { thread: ThreadId, harness: string, was: string, } } | { "kind": "thread.configured", "payload": { thread: ThreadId, settings: Settings, supervised?: WhySupervised, } } | { "kind": "thread.offered", "payload": { thread: ThreadId, offer: Offer, } } | { "kind": "reply.grew", "payload": { item: ItemId, turn: TurnId, text: string, } } | { "kind": "thought.grew", "payload": { item: ItemId, turn: TurnId, text: string, } } | { "kind": "tool.started", "payload": { item: ItemId, turn: TurnId, title: string, tool: ToolKind, status: ToolStatus, content: Array<ToolContent>, } } | { "kind": "tool.changed", "payload": { item: ItemId, title?: string, status?: ToolStatus, content?: Array<ToolContent>, 
