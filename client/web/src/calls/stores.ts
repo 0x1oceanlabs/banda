@@ -214,6 +214,15 @@ export function itemsOf({ items, calls }: Stores): Readable<Lists> {
   }
 }
 
+/** What `project`'s Apps list as `thing` in `lists`, if they list it. */
+export function itemIn(
+  lists: Lists,
+  project: ProjectId,
+  thing: string
+): Listed | undefined {
+  return lists[project]?.find((listed) => listed.id === thing)
+}
+
 /** What a Pane shows, as its App lists it in `lists`. */
 export function listedIn(
   lists: Lists,
@@ -221,9 +230,7 @@ export function listedIn(
   shows: (pane: PaneState) => string | null
 ): Listed | undefined {
   const thing = shows(entry.pane)
-  return thing
-    ? lists[entry.project]?.find((listed) => listed.id === thing)
-    : undefined
+  return thing ? itemIn(lists, entry.project, thing) : undefined
 }
 
 /** How many of what the Apps list work now: the Agents at work, Later or

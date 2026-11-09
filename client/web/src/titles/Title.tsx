@@ -22,7 +22,7 @@ import {
 import { cn } from "@banda/ui/lib/utils"
 import { focusedTile, type Listed, type Lists } from "@banda/ui/pane"
 import { ChevronDownIcon, SparklesIcon } from "lucide-react"
-import { useItems } from "../calls/stores"
+import { itemIn, useItems } from "../calls/stores"
 import { itemActionOf } from "../sidebar/items"
 import { ThreadRows } from "./ThreadMenu"
 
@@ -58,7 +58,7 @@ export function Title({
 }) {
   const listed = useItems(
     useCallback(
-      (lists: Lists) => lists[project]?.find((one) => one.id === thing),
+      (lists: Lists) => itemIn(lists, project, thing),
       [project, thing]
     )
   )

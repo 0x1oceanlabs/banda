@@ -75,6 +75,9 @@ test("each Group's owner gives its state and name, as its Agent's Thread did bef
       thread("a", { mark: "asking" }),
       thread("b", { mark: "done" }),
       thread("c", { mark: "idle" }),
+      // An Item that names no Agent: its Pane shows an Item, and its
+      // Group has no owner.
+      thread("d", { mark: "asking", agent: undefined }),
     ],
   })
   // Another machine's Thread, which the Window opens there.
@@ -92,6 +95,8 @@ test("each Group's owner gives its state and name, as its Agent's Thread did bef
     column("6", "k", q, "x"),
     // No owner: a terminal, and a New Thread not listed yet.
     column("7", "n", p, "-", "new"),
+    // No owner: an Item that names no Agent.
+    column("8", "m", p, "d"),
   ]
   const shows = tilingShows(stores, showsOf)
   const before = agentsBefore(columns, (entry) =>
@@ -130,6 +135,7 @@ test("each Group's owner gives its state and name, as its Agent's Thread did bef
     true,
     false,
     false,
+    true,
   ])
   // The owner each Pane's Item names, which gives its Group its owner.
   expect(columns.flatMap((one) => one.entries).map(shows.owner)).toEqual([
@@ -140,6 +146,7 @@ test("each Group's owner gives its state and name, as its Agent's Thread did bef
     "agent c",
     "agent c",
     "agent x",
+    undefined,
     undefined,
     undefined,
   ])
