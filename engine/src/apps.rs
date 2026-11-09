@@ -15,7 +15,7 @@ use banda_files::Files;
 use banda_git::Git;
 use banda_harnesses::{Harnesses, HarnessesModule};
 use banda_kernel::methods::MethodTable;
-use banda_kernel::{KernelBuilder, Method};
+use banda_kernel::{KernelBuilder, Method, Working};
 use banda_keys::KeysModule;
 use banda_machines::{Machine, Machines};
 use banda_problems::Problems;
@@ -54,6 +54,9 @@ pub struct HostContext<'a> {
     /// What this machine is called and drawn by, which the machines
     /// module keeps current and the engine's `welcome` says.
     pub machine: &'a Machine,
+    /// The count of the Turns that run, which each holds one of while it
+    /// runs and the engine keeps its machine awake by (ADR 0097).
+    pub working: &'a Working,
 }
 
 include!(concat!(env!("OUT_DIR"), "/apps.rs"));
@@ -82,6 +85,7 @@ mod build {
             .config_in(host.places.config.clone())
             .modes_chosen_in(host.places.modes_chosen())
             .piped(host.pipe.clone())
+            .counted_in(host.working.clone())
     }
 
     pub fn browser(_: &HostContext<'_>) -> Browser {
@@ -184,6 +188,7 @@ pub(crate) fn on_a_test_host<R>(with: impl FnOnce(&HostContext<'_>) -> R) -> R {
         pipe: &pipe,
         kept: &[],
         machine: &machine,
+        working: &Working::new(),
     })
 }
 

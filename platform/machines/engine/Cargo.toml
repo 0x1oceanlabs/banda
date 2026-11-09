@@ -25,6 +25,17 @@ ts-rs.workspace = true
 [target.'cfg(windows)'.dependencies]
 windows = { workspace = true, features = ["Devices_Power", "System_Power"] }
 
+# logind's locks and UPower, on the system bus, read so a lock comes
+# close-on-exec (src/awake/linux.rs).
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { workspace = true, features = ["net"] }
+zbus.workspace = true
+
+# The power assertion (src/awake/macos.rs).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-core-foundation.workspace = true
+objc2-io-kit.workspace = true
+
 [dev-dependencies]
 axum.workspace = true
 # The settings' `set`, which writes machine.toml in the tests as the
@@ -34,5 +45,12 @@ futures.workspace = true
 tempfile.workspace = true
 tokio-tungstenite.workspace = true
 
-[lints]
-workspace = true
+# Not the workspace's lints: macOS's power assertion is made by a call Rust
+# cannot make safe, in one function that allows it
+# (`src/awake/macos.rs`, `Assertion::take`). Everywhere else `unsafe`
+# stays forbidden.
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

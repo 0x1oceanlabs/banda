@@ -59,7 +59,8 @@ use banda_harnesses::hosts::IDLE;
 use banda_harnesses::{Harness, Harnesses};
 use banda_kernel::{
     AgentId, Call, Effect, Error, Fence, Holes, Kind, Module, ModuleProject, Nothing, OnRestart,
-    Outcome, Participant, Pass, Picture, Program, Refusal, Right, Settled, Tool, Tx, pass_env,
+    Outcome, Participant, Pass, Picture, Program, Refusal, Right, Settled, Tool, Tx, Working,
+    pass_env,
 };
 use banda_look::OneFile as _;
 use base64::Engine as _;
@@ -108,6 +109,9 @@ pub struct Agents {
     idle: Duration,
     quiet: Duration,
     pipe: Option<Pipe>,
+    /// The count each running turn holds one of: the engine's, which keeps
+    /// its machine awake while it is above nothing (ADR 0097).
+    working: Working,
 }
 
 /// How an Agent reaches Banda from its session: the engine's own program
@@ -177,14 +181,16 @@ impl Pipe {
 
 impl Agents {
     pub fn new(harnesses: Harnesses) -> Self {
+        let working = Working::new();
         Self {
             harnesses,
             config: None,
             modes: None,
-            live: Arc::new(Live::new(IDLE, between::QUIET, None)),
+            live: Arc::new(Live::new(IDLE, between::QUIET, None, working.clone())),
             idle: IDLE,
             quiet: between::QUIET,
             pipe: None,
+            working,
         }
     }
 
@@ -216,6 +222,13 @@ impl Agents {
         .live_again()
     }
 
+    /// Counts each turn in `working` while it runs, a Question it waits on
+    /// too: the engine's count, which keeps its machine awake (ADR 0097,
+    /// decision 1).
+    pub fn counted_in(self, working: Working) -> Self {
+        Self { working, ..self }.live_again()
+    }
+
     /// Lets a Harness process go after `idle` with nothing to do, instead
     /// of half an hour.
     pub fn idle_after(self, idle: Duration) -> Self {
@@ -229,7 +242,12 @@ impl Agents {
     }
 
     fn live_again(mut self) -> Self {
-        self.live = Arc::new(Live::new(self.idle, self.quiet, self.pipe.clone()));
+        self.live = Arc::new(Live::new(
+            self.idle,
+            self.quiet,
+            self.pipe.clone(),
+            self.working.clone(),
+        ));
         self
     }
 

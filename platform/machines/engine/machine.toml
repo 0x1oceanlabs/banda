@@ -1,8 +1,8 @@
 #:schema ./schemas/machine.schema.json
 # This machine's name and icon, as every window shows it beside its
-# Projects and Threads, and whether Banda starts at login here.
-# Settings → Machines writes it, here or from another machine through
-# this one's engine. Check a change with: banda settings check
+# Projects and Threads, whether Banda starts at login here, and when it
+# stays awake. Settings → Machines writes it, here or from another machine
+# through this one's engine. Check a change with: banda settings check
 
 # Its name, up to 16 characters. Left out, or empty, it is the hostname,
 # or a word for a hostname the system made up, as DESKTOP-4F2K9XX.
@@ -18,3 +18,15 @@
 # and other machines find it running. false: it starts as you open
 # Banda. macOS has it so far, Linux next.
 # start-at-login = true
+
+# Stay awake while Agents work: the machine does not idle-sleep while a
+# Turn runs here, and for 10 minutes after, so a message from another
+# machine finds it awake. Its display still sleeps, and closing a
+# MacBook's lid still sleeps it. Banda never changes the system's power
+# settings. macOS and Linux have it so far.
+# awake-while-working = true
+
+# Stay awake while plugged in: on power, the machine does not idle-sleep,
+# Agents or none, so other machines reach it. One with no battery is
+# always on power.
+# awake-plugged-in = false

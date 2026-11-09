@@ -1,8 +1,8 @@
 //! The machines module through the kernel and its API, as a window uses
 //! it (ADR 0095): the welcome names the machine, `machine.named` streams
 //! it and each change, the settings' `set` writes machine.toml, a change
-//! by hand is heard too, and an Agent names nothing: its set, reset and
-//! rename are refused.
+//! by hand is heard too, and an Agent names nothing, nor says when the
+//! machine stays awake: its set, reset and rename are refused.
 
 use banda_kernel::api::OwnerSecret;
 use banda_kernel::{
@@ -247,6 +247,11 @@ async fn an_agent_hears_the_name_and_names_no_machine() {
                 json!({ "key": "name", "value": "\"m1pro\"" }),
             ),
             ("keys.settings_reset", json!({ "key": "icon" })),
+            // Nor keeps it awake on power (ADR 0097, decision 2).
+            (
+                "keys.settings_set",
+                json!({ "key": "awake-plugged-in", "value": "true" }),
+            ),
             (
                 "keys.settings_rename",
                 json!({ "key": "name", "to": "icon" }),

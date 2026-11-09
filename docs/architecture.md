@@ -91,6 +91,16 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   protocol this one does not speak, says so, and runs until Banda quits;
   an update stops the engine as it restarts the window, until the engine
   updates by itself (plan step 6).
+- **It keeps its machine from idle sleep while its Agents work**
+  (ADR 0097): from the first Turn that starts, in any Project, until 10
+  minutes after the last one ends, and while on power if the Person set
+  `machine.toml`'s `awake-plugged-in`. Each running Turn holds one of the
+  kernel's counted guards (`kernel/src/working.rs`), and the engine holds
+  one hold by the system's own means: a power assertion on macOS,
+  logind's `idle` and `sleep` locks on Linux, none yet on Windows
+  (`platform/machines/engine/src/awake.rs`). It never changes the
+  system's power settings, and the system lets the hold go as the engine
+  ends.
 - **It knows how the last run left, and is whole before clients find it**
   (`engine/src/run.rs`). `run.json` in its state says on which port the
   engine listens, and how it left: `stopping` as soon as it is asked to

@@ -74,6 +74,33 @@ none already in the file.
   your ssh config. Banda refuses such a host, as it would have to drop its
   own forward with them.
 
+## What keeps a machine awake
+
+While an Agent's Turn runs on a machine, in any Project, and for 10
+minutes after the last one ends, its engine keeps it from idle sleep, so
+the message you send next, from another machine, finds it awake. A Turn
+that waits on your Question still runs. That is `awake-while-working` in
+the machine's own `machine.toml`, on by default. `awake-plugged-in`, off
+by default, keeps it from idle sleep whenever it is on power, Agents or
+none, so other machines reach it; a machine with no battery is always on
+power (ADR 0097).
+
+Only idle sleep. The display still dims and sleeps, and your own Sleep,
+a low battery and a closed lid still sleep the machine. A MacBook sleeps
+as its lid closes, whatever any app holds, unless it runs closed with
+power and a display. On Linux, logind's lid settings decide
+(`HandleLidSwitch…`, and `LidSwitchIgnoreInhibited`, which is on by
+default and passes over Banda's locks). Banda never changes the system's
+power settings: it runs no `pmset` and edits no `logind.conf`. A machine
+that sleeps shows away on the others.
+
+To see the hold: on a Mac, `pmset -g assertions` lists Banda's
+`PreventUserIdleSystemSleep`, named "Banda: Agents work" or "Banda:
+Plugged in"; on Linux, `systemd-inhibit --list` lists Banda's `idle` and
+`sleep` locks, with the same why. An engine that lingers with nobody
+logged in may be granted only `idle`, and its log says so once. Windows
+holds none yet.
+
 ## How it connects
 
 Banda runs your system's ssh twice for each host: one runs

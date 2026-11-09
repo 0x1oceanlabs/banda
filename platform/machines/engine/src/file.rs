@@ -1,10 +1,12 @@
 //! `machine.toml`: this machine's name and icon (ADR 0095, decision 2),
-//! and whether Banda starts at login here (ADR 0086, decision 1). It is
-//! a file of the host's (ADR 0081, decision 12): only this machine reads
-//! it, and a window elsewhere changes it through this machine's engine.
+//! whether Banda starts at login here (ADR 0086, decision 1), and when it
+//! stays awake (ADR 0097, decisions 1 and 2). It is a file of the host's
+//! (ADR 0081, decision 12): only this machine reads it, and a window
+//! elsewhere changes it through this machine's engine.
 //! The settings know it as every file (ADR 0016): its schema, the text it
 //! starts as, and its check; this says what it makes of what Banda found.
 
+use crate::awake::Awake;
 use banda_kernel::{MachineIcon, NAME_MOST, Named};
 use banda_look::{Problem, SettingsFile};
 use schemars::JsonSchema;
@@ -19,8 +21,8 @@ pub const NAME: &str = "machine.toml";
 pub const FILE: SettingsFile = SettingsFile::new::<MachineFile>(NAME, template, check);
 
 /// This machine's name and icon, as every window shows it beside its
-/// Projects and Threads, and whether Banda starts at login here. Each key
-/// is optional: Banda finds what is left out.
+/// Projects and Threads, whether Banda starts at login here, and when it
+/// stays awake. Each key is optional: Banda finds what is left out.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(crate) struct MachineFile {
@@ -35,6 +37,16 @@ pub(crate) struct MachineFile {
     /// Agents and other machines find it running. Off, it starts as you
     /// open Banda. On by default; macOS has it so far, Linux next.
     pub start_at_login: Option<bool>,
+    /// Stay awake while Agents work: this machine does not idle-sleep
+    /// while a Turn runs here, and for 10 minutes after, so a message
+    /// from another machine finds it awake. Its display still sleeps, and
+    /// closing a MacBook's lid still sleeps it. On by default; macOS and
+    /// Linux have it so far.
+    pub awake_while_working: Option<bool>,
+    /// Stay awake while plugged in: on power, this machine does not
+    /// idle-sleep, Agents or none, so other machines reach it. One with
+    /// no battery is always on power. Off by default.
+    pub awake_plugged_in: Option<bool>,
 }
 
 /// What `machine.toml` says, over what Banda found.
@@ -44,6 +56,8 @@ pub(crate) struct Said {
     pub named: Named,
     /// Whether Banda starts at login: unless the file says it does not.
     pub at_login: bool,
+    /// When the machine stays awake.
+    pub awake: Awake,
 }
 
 fn template() -> String {
@@ -105,12 +119,22 @@ pub(crate) fn said(path: &Path, held: Option<&[u8]>, found: &Named) -> Said {
             icon: file.icon.unwrap_or(found.icon),
         },
         at_login: at_login(&file),
+        awake: awake(&file),
     }
 }
 
 /// Whether Banda starts at login, as `file` says: unless it says not.
 pub(crate) fn at_login(file: &MachineFile) -> bool {
     file.start_at_login.unwrap_or(true)
+}
+
+/// When the machine stays awake, as `file` says: while Agents work unless
+/// it says not, and while plugged in only where it says so.
+pub(crate) fn awake(file: &MachineFile) -> Awake {
+    Awake {
+        while_working: file.awake_while_working.unwrap_or(true),
+        plugged_in: file.awake_plugged_in.unwrap_or(false),
+    }
 }
 
 /// What `held`, the file at `path`, holds: nothing with no file, or one
@@ -227,6 +251,40 @@ mod tests {
     }
 
     #[test]
+    fn the_machine_stays_awake_while_agents_work_and_plugged_in_only_as_the_file_says() {
+        let path = Path::new("/c/machine.toml");
+        let awake = |text: &str| said(path, Some(text.as_bytes()), &found()).awake;
+        let default = Awake {
+            while_working: true,
+            plugged_in: false,
+        };
+        assert_eq!(said(path, None, &found()).awake, default, "with no file");
+        assert_eq!(awake(&template()), default);
+        assert_eq!(awake("name = \"studio\"\n"), default);
+        assert_eq!(
+            awake("awake-while-working = false\nawake-plugged-in = true\n"),
+            Awake {
+                while_working: false,
+                plugged_in: true
+            }
+        );
+        assert_eq!(
+            awake("awake-plugged-in = true\n"),
+            Awake {
+                while_working: true,
+                plugged_in: true
+            }
+        );
+        // A file that does not read leaves both as they are by default,
+        // and is named.
+        assert_eq!(awake("awake-plugged-in = \"yes\"\n"), default);
+        let (_, problems) = read_text("awake-plugged-in = \"yes\"\n");
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        let (_, problems) = read_text("awake-plugged-in = true\nawake-while-working = false\n");
+        assert!(problems.is_empty(), "{problems:?}");
+    }
+
+    #[test]
     fn its_schema_offers_the_ten_icons_and_bounds_the_name() {
         let schema = serde_json::to_value(FILE.schema()).unwrap();
         assert_eq!(schema["title"], NAME);
@@ -243,5 +301,13 @@ mod tests {
                 .unwrap()
                 .starts_with("Start Banda at login")
         );
+        for (key, words) in [
+            ("awake-while-working", "Stay awake while Agents work"),
+            ("awake-plugged-in", "Stay awake while plugged in"),
+        ] {
+            let key = &schema["properties"][key];
+            assert_eq!(key["type"], "boolean", "{key}");
+            assert!(key["description"].as_str().unwrap().starts_with(words));
+        }
     }
 }

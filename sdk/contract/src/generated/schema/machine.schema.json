@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "machine.toml",
-  "description": "This machine's name and icon, as every window shows it beside its\nProjects and Threads, and whether Banda starts at login here. Each key\nis optional: Banda finds what is left out.",
+  "description": "This machine's name and icon, as every window shows it beside its\nProjects and Threads, whether Banda starts at login here, and when it\nstays awake. Each key is optional: Banda finds what is left out.",
   "type": "object",
   "properties": {
     "name": {
@@ -15,6 +15,14 @@
     },
     "start-at-login": {
       "description": "Start Banda at login: its engine starts as you log in, so its\nAgents and other machines find it running. Off, it starts as you\nopen Banda. On by default; macOS has it so far, Linux next.",
+      "type": "boolean"
+    },
+    "awake-while-working": {
+      "description": "Stay awake while Agents work: this machine does not idle-sleep\nwhile a Turn runs here, and for 10 minutes after, so a message\nfrom another machine finds it awake. Its display still sleeps, and\nclosing a MacBook's lid still sleeps it. On by default; macOS and\nLinux have it so far.",
+      "type": "boolean"
+    },
+    "awake-plugged-in": {
+      "description": "Stay awake while plugged in: on power, this machine does not\nidle-sleep, Agents or none, so other machines reach it. One with\nno battery is always on power. Off by default.",
       "type": "boolean"
     }
   },

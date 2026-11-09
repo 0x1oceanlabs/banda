@@ -228,7 +228,7 @@ const ASKING: std::time::Duration = std::time::Duration::from_secs(1);
 /// [`ASKING`], and then it is killed. Its exit status is not asked:
 /// `systemd-detect-virt` says `none` and fails.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-async fn said(program: &str, args: &[&str]) -> Option<String> {
+pub(crate) async fn said(program: &str, args: &[&str]) -> Option<String> {
     let mut command = banda_kernel::host::own(program).ok()?;
     let output = (command.args(args))
         .stdin(std::process::Stdio::null())
@@ -267,7 +267,7 @@ fn battery() -> bool {
 }
 
 #[cfg(any(target_os = "linux", test))]
-mod linux {
+pub(crate) mod linux {
     use super::{Facts, System};
     use std::path::Path;
 
@@ -306,6 +306,20 @@ mod linux {
     /// Whether a power supply in `supplies` is the machine's own battery:
     /// a wireless mouse's or a headset's says it is a device's.
     fn battery(supplies: &Path) -> bool {
+        supplied(supplies, |kind, _| kind == "Battery")
+    }
+
+    /// Whether the machine whose power supplies are in `supplies`, as
+    /// `/sys/class/power_supply`, is on power: one of its own supplies
+    /// that is no battery, as its charger or a USB-C port, is online, or
+    /// it has no battery at all.
+    pub(crate) fn on_power(supplies: &Path) -> bool {
+        !battery(supplies) || supplied(supplies, |kind, online| kind != "Battery" && online)
+    }
+
+    /// Whether one of the machine's own supplies in `supplies`, not a
+    /// device's, is as `such` says by its type and whether it is online.
+    fn supplied(supplies: &Path, such: impl Fn(&str, bool) -> bool) -> bool {
         let Ok(entries) = std::fs::read_dir(supplies) else {
             return false;
         };
@@ -313,7 +327,8 @@ mod linux {
             let read = |file: &str| std::fs::read_to_string(entry.path().join(file));
             let kind = read("type").unwrap_or_default();
             let scope = read("scope").unwrap_or_default();
-            kind.trim() == "Battery" && scope.trim() != "Device"
+            let online = read("online").is_ok_and(|online| online.trim() == "1");
+            scope.trim() != "Device" && such(kind.trim(), online)
         })
     }
 
@@ -326,7 +341,7 @@ mod linux {
 }
 
 #[cfg(any(target_os = "macos", test))]
-mod mac {
+pub(crate) mod mac {
     use super::{Facts, System};
 
     /// This Mac's facts: its local name, as Sharing sets it and Bonjour
@@ -357,6 +372,14 @@ mod mac {
             battery: power.is_some_and(|said| said.contains("InternalBattery")),
             boxed: vmm.is_some_and(|said| said.trim() == "1"),
         }
+    }
+
+    /// Whether a Mac is on power, as `pmset -g batt` says on its first
+    /// line: `Now drawing from 'AC Power'`, or `'Battery Power'`. A Mac
+    /// with no battery draws from AC; what does not read so is on power.
+    pub(crate) fn on_power(power: &str) -> bool {
+        let first = power.lines().next().unwrap_or_default();
+        !first.contains("'Battery Power'")
     }
 }
 
@@ -503,6 +526,61 @@ mod tests {
         assert_eq!(facts.system_name.as_deref(), Some("Ubuntu"));
         assert_eq!(of(&facts).icon, MachineIcon::Server);
         assert!(!Root::new().facts(None).battery, "no power_supply at all");
+    }
+
+    #[test]
+    fn a_linux_is_on_power_by_its_charger_or_with_no_battery() {
+        let supplies = |root: &Root| linux::on_power(&root.path().join("sys/class/power_supply"));
+        let laptop = Root::new();
+        laptop
+            .write("sys/class/power_supply/AC/type", "Mains\n")
+            .write("sys/class/power_supply/AC/online", "1\n")
+            .write("sys/class/power_supply/BAT0/type", "Battery\n")
+            .write("sys/class/power_supply/BAT0/online", "1\n")
+            .write("sys/class/power_supply/BAT0/scope", "System\n");
+        assert!(supplies(&laptop), "its charger is in");
+        laptop.write("sys/class/power_supply/AC/online", "0\n");
+        assert!(!supplies(&laptop), "on battery");
+        laptop
+            .write(
+                "sys/class/power_supply/ucsi-source-psy-USBC000:001/type",
+                "USB\n",
+            )
+            .write(
+                "sys/class/power_supply/ucsi-source-psy-USBC000:001/online",
+                "1\n",
+            );
+        assert!(supplies(&laptop), "charged through USB-C");
+
+        // A mouse's charger is not the machine's.
+        let unplugged = Root::new();
+        unplugged
+            .write("sys/class/power_supply/BAT0/type", "Battery\n")
+            .write("sys/class/power_supply/hidpp_battery_0/type", "Battery\n")
+            .write("sys/class/power_supply/hidpp_battery_0/scope", "Device\n")
+            .write("sys/class/power_supply/dock/type", "Mains\n")
+            .write("sys/class/power_supply/dock/scope", "Device\n")
+            .write("sys/class/power_supply/dock/online", "1\n");
+        assert!(!supplies(&unplugged));
+
+        let desktop = Root::new();
+        desktop
+            .write("sys/class/power_supply/hidpp_battery_0/type", "Battery\n")
+            .write("sys/class/power_supply/hidpp_battery_0/scope", "Device\n");
+        assert!(supplies(&desktop), "no battery of its own");
+        assert!(supplies(&Root::new()), "no power_supply at all");
+    }
+
+    #[test]
+    fn a_mac_is_on_power_unless_pmset_says_it_draws_from_its_battery() {
+        assert!(mac::on_power(
+            "Now drawing from 'AC Power'\n -InternalBattery-0 (id=4653155)\t80%; AC attached; not charging present: true"
+        ));
+        assert!(!mac::on_power(
+            "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=4653155)\t42%; discharging; 2:02 remaining present: true"
+        ));
+        assert!(mac::on_power("Now drawing from 'AC Power'"), "a Mac mini");
+        assert!(mac::on_power(""), "pmset said nothing");
     }
 
     #[test]

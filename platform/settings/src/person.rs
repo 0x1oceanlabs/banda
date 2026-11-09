@@ -157,8 +157,8 @@ const SHARING_WORDS: &str = "Only your Person says what Banda sends. Give them t
                              it themselves.";
 
 const MACHINE_WORDS: &str = "Only your Person names this machine, which every window shows, and \
-                             says whether Banda starts at login on it. Give them the line, to set \
-                             it themselves.";
+                             says whether Banda starts at login on it and when it stays awake. \
+                             Give them the line, to set it themselves.";
 
 #[cfg(test)]
 mod tests {
@@ -214,6 +214,8 @@ mod tests {
             ("machine.toml", "name", Some("\"m1pro\"")),
             ("machine.toml", "icon", None),
             ("machine.toml", "start-at-login", Some("false")),
+            ("machine.toml", "awake-while-working", Some("false")),
+            ("machine.toml", "awake-plugged-in", Some("true")),
             ("look.toml", "tile..border", Some("2")),
         ] {
             assert!(only_the_person(name, key, value).is_some(), "{name} {key}");
