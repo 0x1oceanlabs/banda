@@ -15,6 +15,7 @@ import { nameAndFolder } from "@banda/ui/lib/paths"
 import type { FindProps, MenuRow, Source } from "@banda/ui/module"
 import { FileIcon } from "lucide-react"
 import { openFile, peekFile } from "./FilePane"
+import { fits } from "./fits"
 import { openTree } from "./TreePane"
 
 const OPEN: Key = { code: "Enter" }
@@ -37,15 +38,18 @@ function FindFiles({ words: typed, at, found }: FindProps) {
   const { path: words, line = null } = named(typed)
   const alone = only === filesSource.id
   const look = !entered && (words !== "" || alone) && folder !== undefined
-  // The paths found last stay while the next are asked for.
-  const [paths, setPaths] = useState<string[]>()
+  const [answer, setAnswer] = useState<Answer>()
+  // Not looking, it lets go of the last answer: opened again, quick open
+  // would show what an older search found before any word is typed, and
+  // Enter would open it.
+  if (!look && answer) setAnswer(undefined)
   useEffect(() => {
     if (!look) return
     let gone = false
     const timer = setTimeout(() => {
       engine.call("files.find", { query: words }, { project }).then(
-        (found) => gone || setPaths(found.paths),
-        () => gone || setPaths([])
+        (found) => gone || setAnswer({ project, words, paths: found.paths }),
+        () => gone || setAnswer({ project, words, paths: [] })
       )
     }, WAIT)
     return () => {
@@ -53,7 +57,17 @@ function FindFiles({ words: typed, at, found }: FindProps) {
       clearTimeout(timer)
     }
   }, [engine, project, words, look])
-  const shown = look ? paths : undefined
+  // The paths found last stay while the next are asked for, those that
+  // fit the words typed since: Enter opens the first one shown.
+  const shown = useMemo(
+    () =>
+      !look || answer?.project !== project
+        ? undefined
+        : answer.words === words
+          ? answer.paths
+          : answer.paths.filter(fits(words)),
+    [look, answer, project, words]
+  )
   const rows = useMemo(
     (): MenuRow[] =>
       (shown ?? []).slice(0, alone ? ALONE : SHOWN).map((path) => {
@@ -94,3 +108,6 @@ function FindFiles({ words: typed, at, found }: FindProps) {
   useLayoutEffect(() => found(rows), [found, rows])
   return null
 }
+
+/** What `files.find` answered, and for what. */
+type Answer = { project: string; words: string; paths: string[] }
