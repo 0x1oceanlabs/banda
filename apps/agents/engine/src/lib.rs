@@ -491,11 +491,16 @@ banda_kernel::methods! {
         /// small model writes in a short run no Thread shows, as `write`
         /// runs. It renames nothing: the window renames the Thread with it.
         command suggest_title(OneThread) -> String, Write;
-        /// Moves a Thread to another account of its Harness, by its entry's
-        /// ID: from its next turn it runs there, in the same session. Only a
-        /// Person moves a Thread, and only to an account that goes on with
-        /// its session (ADR 0078, decision 4).
+        /// Moves a Thread to another account, by its entry's ID: from its
+        /// next turn it runs there, in the same session on an account of its
+        /// Harness, else with its history (ADR 0078, decisions 4 and 5). Only
+        /// a Person moves a Thread.
         command switch(Switch) -> (), Write;
+        /// Goes on with a turn a usage limit stopped on account `harness`,
+        /// as a limit's card does (ADR 0078, decision 6): its Thread wakes
+        /// if it was put off, moves there, and the turn's message goes
+        /// again, at once. Only a Person moves a Thread.
+        command go_on(GoOn) -> Option<Sent>, Write;
     }
 }
 
@@ -746,6 +751,15 @@ struct Rename {
 #[ts(export_to = "agents/")]
 struct Switch {
     thread: ThreadId,
+    harness: String,
+}
+
+/// What `agents.go_on` is asked: the stopped turn, and the account it
+/// goes on with.
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
+struct GoOn {
+    turn: TurnId,
     harness: String,
 }
 
@@ -1224,6 +1238,30 @@ impl Agents {
         self.harness(&harness)?;
         call.command(move |tx| switching::switch(tx, author, thread, was, harness))
             .await
+    }
+
+    async fn go_on(
+        &self,
+        call: Call,
+        GoOn { turn, harness }: GoOn,
+    ) -> Result<Option<Sent>, Refusal> {
+        let author = call.participant();
+        if author.agent().is_some() {
+            return Err(Refusal::forbidden(
+                "Only a Person moves a Thread to another account.",
+            ));
+        }
+        self.harness(&harness)?;
+        call.command(move |tx| {
+            let thread = turn_of(tx, turn)?.thread;
+            let was = (store::thread(tx.sql(), thread)?)
+                .ok_or_else(|| Refusal::not_found("There is no such Thread."))?
+                .harness;
+            laters::wake(tx, author, Some(thread))?;
+            switching::switch(tx, author, thread, was, harness)?;
+            retry(tx, author, turn)
+        })
+        .await
     }
 
     async fn suggest_title(

@@ -19,19 +19,23 @@ export function MovedEntry({ item }: EntryProps<"moved">) {
   const was = emblemOf(harnesses, from)
   const now = emblemOf(harnesses, to)
   const handed = how.kind === "same" ? undefined : how
+  // A Thread with nothing before its move hands nothing: a new session.
+  const unfolds = how.kind === "handoff" && how.messages + how.tools > 0
   const what =
     how.kind === "same"
       ? "same session"
       : how.kind === "back"
         ? `back to its session · ${plural(how.messages + how.tools, "new entry", "new entries")}`
-        : `handed ${plural(how.messages, "message", "messages")}`
+        : unfolds
+          ? `handed ${plural(how.messages, "message", "messages")}`
+          : "a new session"
   const line = (
     <>
       <Emblem of={was} named />
       <ArrowRightIcon className="size-3 text-muted-foreground/70" />
       <Emblem of={now} named />
       <span className="text-muted-foreground/70">· {what}</span>
-      {how.kind === "handoff" && (
+      {unfolds && (
         <span className="text-muted-foreground/70">{open ? "▾" : "▸"}</span>
       )}
     </>
@@ -39,7 +43,7 @@ export function MovedEntry({ item }: EntryProps<"moved">) {
   return (
     <div className="my-1">
       <div className="flex items-center gap-2.5 text-xs text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
-        {how.kind === "handoff" ? (
+        {unfolds ? (
           <button
             type="button"
             aria-expanded={open}
@@ -53,7 +57,9 @@ export function MovedEntry({ item }: EntryProps<"moved">) {
             title={
               how.kind === "same"
                 ? "Its first turn here reads the Thread without the cache."
-                : `${was.name} went on with its own session, and read only what it missed.`
+                : how.kind === "handoff"
+                  ? `${now.name} started a session of its own: there was nothing before to hand it.`
+                  : `${was.name} went on with its own session, and read only what it missed.`
             }
             className="inline-flex items-center gap-1.5 px-2 py-0.5 whitespace-nowrap"
           >

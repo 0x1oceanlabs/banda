@@ -12,6 +12,7 @@ import type { Defaults } from "./Defaults";
 import type { DraftIssue } from "./DraftIssue";
 import type { Edit } from "./Edit";
 import type { Forked } from "./Forked";
+import type { GoOn } from "./GoOn";
 import type { Image } from "./Image";
 import type { ImageData } from "./ImageData";
 import type { ImportMarks } from "./ImportMarks";
@@ -292,9 +293,16 @@ rename: CommandMethod<Rename, null>,
  */
 suggest_title: CommandMethod<OneThread, string>, 
 /**
- * Moves a Thread to another account of its Harness, by its entry's
- * ID: from its next turn it runs there, in the same session. Only a
- * Person moves a Thread, and only to an account that goes on with
- * its session (ADR 0078, decision 4).
+ * Moves a Thread to another account, by its entry's ID: from its
+ * next turn it runs there, in the same session on an account of its
+ * Harness, else with its history (ADR 0078, decisions 4 and 5). Only
+ * a Person moves a Thread.
  */
-switch: CommandMethod<Switch, null>, };
+switch: CommandMethod<Switch, null>, 
+/**
+ * Goes on with a turn a usage limit stopped on account `harness`,
+ * as a limit's card does (ADR 0078, decision 6): its Thread wakes
+ * if it was put off, moves there, and the turn's message goes
+ * again, at once. Only a Person moves a Thread.
+ */
+go_on: CommandMethod<GoOn, Sent | null>, };

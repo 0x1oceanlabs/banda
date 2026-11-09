@@ -1462,12 +1462,14 @@ test("the page keeps no more stores in a module than the list holds", () => {
 
 /**
  * Each Slot is read in one place, by its owner (ADR 0082, decision 8):
- * Threads draws its details card, and the Tiling a Pane's header and its
- * tile's label in the Overview, through one part. Only the Window gives
+ * Threads draws its details card, the Tiling a Pane's header and its
+ * tile's label in the Overview, through one part, and Harnesses a spent
+ * account in the limits widget. Only the Window gives
  * what fills them, as it gives the previewers; no module gives a Slot's
  * fillers a field of its own, as `threadDetails` was.
  */
 const SLOT_READERS = {
+  "limits.account": "platform/harnesses/pane/src/LimitsWidget.tsx",
   "pane.header": "client/web/src/tiling/PaneSlot.tsx",
   "thread.details": "apps/agents/pane/src/thread/Details.tsx",
 }

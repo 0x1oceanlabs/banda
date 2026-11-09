@@ -27,7 +27,7 @@ test("while the default is out, a new Thread starts on the fallback, if it has r
   expect(startsOn(harnesses, agents, out, NOW)).toEqual({
     id: "codex",
     default: "work",
-    out: { until: NOW + 60_000 },
+    out: { until: NOW + 60_000, window: "Weekly" },
     fallback: true,
   })
   const both = [...out, limits("codex", 100)]
@@ -43,7 +43,7 @@ test("while the default is out, a new Thread starts on the fallback, if it has r
 test("an account is out while a window of it is spent, till its last reset", () => {
   expect(outOf(undefined, NOW)).toBeUndefined()
   expect(outOf(limits("a", 99, NOW + 1), NOW)).toBeUndefined()
-  expect(outOf(limits("a", 100), NOW)).toEqual({})
+  expect(outOf(limits("a", 100), NOW)).toEqual({ window: "Weekly" })
   expect(outOf(limits("a", 100, NOW - 1), NOW)).toBeUndefined()
 })
 

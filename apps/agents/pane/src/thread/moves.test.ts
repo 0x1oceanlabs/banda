@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import type { HarnessView, Limits } from "@banda/contract/harnesses"
-import { movesOf, stepped } from "./moves"
+import { movesOf, stepped, waysOn } from "./moves"
 
 const entry = (id: string, sessions: string, enabled = true): HarnessView => ({
   id,
@@ -64,5 +64,34 @@ describe("stepped", () => {
     expect(
       stepped(movesOf([entry("a", "c")], "a", [], [], 0).same, 1)
     ).toBeUndefined()
+  })
+})
+
+describe("waysOn", () => {
+  const four = [...list, entry("home", "claude")]
+  const out = [limits("claude", 100), limits("work", 60), limits("home", 20)]
+  const ids = (ways: ReturnType<typeof waysOn>) =>
+    ways.map((move) => move.harness.id)
+
+  test("the account of its Harness with the most room first, then another Harness", () => {
+    const { same, others } = movesOf(four, "claude", [], out, 1_000)
+    expect(ids(waysOn(same, others))).toEqual(["home", "codex"])
+  })
+
+  test("the fallback first, when it has room", () => {
+    const { same, others } = movesOf(four, "claude", [], out, 1_000)
+    expect(ids(waysOn(same, others, "codex"))).toEqual(["codex", "home"])
+    expect(ids(waysOn(same, others, "claude"))).toEqual(["home", "codex"])
+  })
+
+  test("another Harness when every account of its own is out", () => {
+    const { same, others } = movesOf(
+      list,
+      "claude",
+      [],
+      [limits("claude", 100), limits("work", 100)],
+      1_000
+    )
+    expect(ids(waysOn(same, others))).toEqual(["codex"])
   })
 })

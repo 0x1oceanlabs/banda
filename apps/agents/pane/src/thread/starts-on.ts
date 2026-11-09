@@ -33,17 +33,20 @@ export type StartsOn = {
 }
 
 /** When an account is out, a window of it spent: the last of its spent
- * windows' resets, or none when one says none. Not out: undefined. */
+ * windows' resets, or none when one says none, and that window's name.
+ * Not out: undefined. */
 export function outOf(
   limits: Limits | undefined,
   now: number
-): { until?: number } | undefined {
+): { until?: number; window?: string } | undefined {
   const spent = (limits?.windows ?? []).filter(
     (w) => w.used >= 100 && !(w.resets_at !== undefined && w.resets_at <= now)
   )
   if (spent.length === 0) return undefined
-  if (spent.some((w) => w.resets_at === undefined)) return {}
-  return { until: Math.max(...spent.map((w) => w.resets_at!)) }
+  const never = spent.find((w) => w.resets_at === undefined)
+  if (never) return { window: never.label }
+  const last = spent.reduce((a, b) => (b.resets_at! > a.resets_at! ? b : a))
+  return { until: last.resets_at, window: last.label }
 }
 
 /**
