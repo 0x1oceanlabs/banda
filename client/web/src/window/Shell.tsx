@@ -646,15 +646,8 @@ export function Shell({
       ? `${at.workspace.id} ${at.column.group ?? at.column.id}`
       : undefined
   useEffect(() => {
-    if (!soloAt) return
-    const lists = stores.items.get()
-    change((w) =>
-      soloing(
-        w,
-        (entry) => listedIn(lists, entry, showsOf)?.agent !== undefined
-      )
-    )
-  }, [soloAt, change, stores])
+    if (soloAt) change((w) => soloing(w, shows.owner))
+  }, [soloAt, change, shows])
   const flowWas = useRef(flow)
   useEffect(() => {
     if (flowWas.current === "solo" && flow !== "solo") change(unsoloing)
