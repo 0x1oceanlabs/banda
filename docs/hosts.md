@@ -91,7 +91,8 @@ as its lid closes, whatever any app holds, unless it runs closed with
 power and a display. On Linux, logind's lid settings decide
 (`HandleLidSwitch…`, and `LidSwitchIgnoreInhibited`, which is on by
 default and passes over Banda's locks). Banda never changes the system's
-power settings: it runs no `pmset` and edits no `logind.conf`. A machine
+power settings: it only reads `pmset -g batt`, sets nothing with
+`pmset` and edits no `logind.conf`. A machine
 that sleeps shows away on the others.
 
 To see the hold: on a Mac, `pmset -g assertions` lists Banda's

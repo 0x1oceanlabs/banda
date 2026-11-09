@@ -221,7 +221,7 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 
 ## Machines (`machines`)
 
-What this machine is called and drawn by, the same in every window that shows it: a name of up to 16 characters and one of ten icons, as its own machine.toml says, else as Banda finds them from its hostname and what it is (ADR 0095). The engine says them in its welcome, and on the stream machine.named as they change; only the Person changes them.
+What this machine is called and drawn by, the same in every window that shows it: a name of up to 16 characters and one of ten icons, as its own machine.toml says, else as Banda finds them from its hostname and what it is (ADR 0095). The engine says them in its welcome, and on the stream machine.named as they change; only the Person changes them. It also keeps the machine from idle sleep while its Agents work, and while on power if the Person says so, as machine.toml says (ADR 0097).
 
 Its settings: `machine.toml`.
 

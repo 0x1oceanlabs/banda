@@ -192,16 +192,20 @@ async fn follow(
 ) {
     let mut held = None;
     let mut ended = None;
-    let mut was = 0;
     // What the power source said last, and when.
     let mut power: Option<(bool, Instant)> = None;
+    // Whether the count changed since it was read last: a change to
+    // nothing is a Turn that ended, even one that started and ended in
+    // between. Waking on it marks it seen, hence the flag.
+    let mut moved = false;
     loop {
+        moved |= working.has_changed().unwrap_or(false);
         let count = *working.borrow_and_update();
         let said = *awake.borrow_and_update();
-        if count == 0 && was > 0 {
+        if count == 0 && moved {
             ended = Some(Instant::now());
         }
-        was = count;
+        moved = false;
         if !said.plugged_in {
             power = None;
         } else if power.is_none_or(|(_, read)| read.elapsed() >= times.power_every) {
@@ -218,7 +222,10 @@ async fn follow(
         let read_again = power.map(|(_, read)| read + times.power_every);
         let take_again = held.as_ref().and_then(|kept| kept.again);
         tokio::select! {
-            changed = working.changed() => if changed.is_err() { return },
+            changed = working.changed() => match changed {
+                Ok(()) => moved = true,
+                Err(_) => return,
+            },
             changed = awake.changed() => if changed.is_err() { return },
             () = until(tail_ends) => {}
             () = until(read_again) => {}
@@ -466,6 +473,16 @@ mod tests {
         drop(third);
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert_eq!(test.asked.said(), ["take: Agents work"], "within the tail");
+        test.until(&["take: Agents work", "let go: Agents work"])
+            .await;
+    }
+
+    #[tokio::test]
+    async fn a_turn_that_started_and_ended_between_two_reads_starts_the_tail() {
+        let test = Test::new(WORKING, SHORT);
+        // Before the follower first reads the count.
+        drop(test.working.hold());
+        test.until(&["take: Agents work"]).await;
         test.until(&["take: Agents work", "let go: Agents work"])
             .await;
     }
