@@ -1,4 +1,5 @@
-import type { ProjectId } from "@banda/contract"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
+import { KeptHosts, keyNamed } from "@banda/core/react"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
 import { type Frame, handleOf } from "./PaneFrame"
@@ -23,10 +24,41 @@ const thread = (args: PaneState["args"] = {}): PaneState => ({
   args: { thread: null, ...args },
 })
 
+/** This machine's Project `mine`. */
+const mine = {
+  id: "mine",
+  name: "mine",
+  folder: "/mine",
+  pinned: false,
+  archived: false,
+  sees_others: false,
+  sign: { kind: "letters", text: "M", picked: false },
+  trusted: true,
+  scratch: false,
+  missing: false,
+} satisfies ProjectSummary
+
+/** Where the Window's hosts place a Pane of a Project (`KeptHosts.paneOn`),
+ * as the Window gives it: this machine has `mine` and its Host scope
+ * `m0`, and no host is shown. */
+function paneOnOf() {
+  const kept = new KeptHosts(
+    {
+      follow: () => undefined,
+      engine: () => Promise.reject(new Error("not here")),
+      start: () => undefined,
+    },
+    { seen: keyNamed, follow: () => () => undefined }
+  )
+  kept.ours([mine], "m0" as ProjectId)
+  return (project: ProjectId, pane: PaneState) => kept.paneOn(project, pane)
+}
+
 test("a Pane on another host opens on that host what names none, and what names its own where it names it", () => {
   const { frame, open, update } = frameOf()
   const project = "banda" as ProjectId
-  const arc = handleOf(frame, "e1", project, "agents.thread", "arc")
+  const paneOn = paneOnOf()
+  const arc = handleOf(frame, "e1", project, "agents.thread", "arc", paneOn)
 
   // What it opens in its own Project or another of arc's is arc's.
   arc.open(thread(), "instead")
@@ -53,7 +85,14 @@ test("a Pane on another host opens on that host what names none, and what names 
   })
 
   // This machine's Pane opens what it names as it names it.
-  const here = handleOf(frame, "e2", project, "agents.thread", undefined)
+  const here = handleOf(
+    frame,
+    "e2",
+    project,
+    "agents.thread",
+    undefined,
+    paneOn
+  )
   here.open(thread({ host: "arc" }), "instead", "r1" as ProjectId)
   expect(open).toHaveBeenLastCalledWith(
     "r1",
@@ -63,4 +102,28 @@ test("a Pane on another host opens on that host what names none, and what names 
   )
   here.open(thread())
   expect(open).toHaveBeenLastCalledWith(project, thread(), "e2", undefined)
+})
+
+test("a Pane on another host opens what goes to this machine's Project, or its No Project, on this machine from the first frame (#1004)", () => {
+  const { frame, open } = frameOf()
+  const arc = handleOf(
+    frame,
+    "e1",
+    "banda" as ProjectId,
+    "agents.thread",
+    "arc",
+    paneOnOf()
+  )
+
+  // A new Thread moved to this machine's Project names no host, and
+  // takes none of arc's, so it never says arc.
+  arc.open(thread(), "instead", "mine" as ProjectId)
+  expect(open).toHaveBeenLastCalledWith("mine", thread(), "e1", "instead")
+  // Nor does one that names arc: this machine wins the ID.
+  arc.open(thread({ host: "arc" }), "instead", "mine" as ProjectId)
+  expect(open).toHaveBeenLastCalledWith("mine", thread(), "e1", "instead")
+  // Its No Project, which this machine's Host scope is, is this machine's
+  // too.
+  arc.open(thread(), "instead", "m0" as ProjectId)
+  expect(open).toHaveBeenLastCalledWith("m0", thread(), "e1", "instead")
 })

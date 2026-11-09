@@ -56,7 +56,13 @@ import {
   showsOf,
   useLabel,
 } from "../registry"
-import { reachWords, runOnHost, useReach, useShownNow } from "@banda/core/react"
+import {
+  reachWords,
+  runOnHost,
+  usePaneOn,
+  useReach,
+  useShownNow,
+} from "@banda/core/react"
 import { sayComposer } from "../window/attach"
 import { heightAt } from "./layout"
 import type { Plan } from "./arrange"
@@ -141,21 +147,27 @@ type Handle = Pick<
  * that host's Projects, unless what it opens names its own, as a new
  * Thread moved to another machine's Project does (ADR 0095, decision 7);
  * and it takes nothing this machine attaches, as that names this
- * machine's files. */
+ * machine's files. Which host what it opens is on, the Window's hosts
+ * decide here, once, by their one rule (`paneOn`, `KeptHosts.paneOn`): in
+ * a Project this machine has, which wins a clash, it is this machine's
+ * from its first frame (#1004). */
 export function handleOf(
   frame: Frame,
   entry: string,
   project: ProjectId,
   kind: string,
-  host: string | undefined
+  host: string | undefined,
+  paneOn: (project: ProjectId, pane: PaneState) => PaneState
 ): Handle {
   const there = (pane: PaneState) =>
     host === undefined || paneHost(pane) !== undefined
       ? pane
       : withHost(pane, host)
   return {
-    open: (pane, place, other) =>
-      frame.open(other ?? project, there(pane), entry, place),
+    open: (pane, place, other) => {
+      const into = other ?? project
+      frame.open(into, paneOn(into, there(pane)), entry, place)
+    },
     update: (args) => frame.update(entry, there({ kind, args })),
     close: () => frame.close(entry),
     label: (label) => sayLabel(entry, label),
@@ -245,9 +257,12 @@ export const PaneFrame = memo(function PaneFrame({
   // show (ADR 0095, decision 7); its header names it in the Slot.
   const machine =
     there === undefined ? undefined : (reach.shown?.named ?? seenNamed(there))
+  // The same function while the Window's hosts stay, so the handle does.
+  const paneOn = usePaneOn()
   const handle = useMemo(
-    () => handleOf(frame, entry.id, entry.project, entry.pane.kind, there),
-    [frame, entry.id, entry.project, entry.pane.kind, there]
+    () =>
+      handleOf(frame, entry.id, entry.project, entry.pane.kind, there, paneOn),
+    [frame, entry.id, entry.project, entry.pane.kind, there, paneOn]
   )
   const { close } = handle
   // What it runs of the Window's, there only what reaches neither this
