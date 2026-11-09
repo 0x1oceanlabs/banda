@@ -403,6 +403,19 @@ pub fn showing_asked<'a>(list: &'a Arrangement, asked: &Shown) -> Option<&'a Pan
     })
 }
 
+/// Where a Pane an Agent opens with no place goes: into its Thread's
+/// Group, as a Diff opened from the Thread goes (ADR 0065, decision 7),
+/// and a Thread in no Group starts one for it. Only the Thread's Pane of
+/// `project` counts; with none on a workspace, it has no place here.
+pub fn agents_place(list: &Arrangement, project: ProjectId, thread: Uuid) -> Option<Place> {
+    let asked = Shown {
+        project,
+        kind: "agents.thread".into(),
+        args: serde_json::json!({ "thread": thread.to_string() }),
+    };
+    showing_asked(list, &asked).map(|pane| Place::Group { pane: pane.id })
+}
+
 /// A Pane to open: what it shows, and how.
 pub struct Opening {
     pub shown: Shown,
@@ -1781,6 +1794,124 @@ mod tests {
         assert_eq!(grouping(&list)[0], [0]);
         assert_eq!(layout(&list)[1], [vec![1], vec![2], vec![4]]);
         assert_eq!(list[1].columns[2].panes[0].id, fourth);
+    }
+
+    /// The Pane of `thread`, numbered `n` as `shown`'s are.
+    fn on_thread(project: ProjectId, n: u32, thread: Uuid) -> Shown {
+        Shown {
+            project,
+            kind: "agents.thread".into(),
+            args: json!({ "n": n, "thread": thread.to_string() }),
+        }
+    }
+
+    #[test]
+    fn what_an_agent_opens_with_no_place_goes_into_its_threads_group_as_a_deck() {
+        let mut list = start();
+        let work = ProjectId::new();
+        let thread = Uuid::now_v7();
+        let pane = opened(&mut list, on_thread(work, 1, thread), None);
+        group_pane(&mut list, pane, &seed()).unwrap();
+        opened(&mut list, shown(work, "a.a", 2), None);
+        let place = agents_place(&list, work, thread);
+        assert_eq!(place, Some(Place::Group { pane }));
+        // A Deck right of the Thread, in its Group.
+        opened(&mut list, shown(work, "git.diff", 3), place);
+        assert_eq!(layout(&list)[0], [vec![1], vec![3], vec![2]]);
+        assert_eq!(grouping(&list)[0], [1, 1, 0]);
+        assert_eq!(list[0].columns[1].display, Some(Display::Deck));
+        // The next goes into that Deck.
+        let place = agents_place(&list, work, thread);
+        opened(&mut list, shown(work, "browser.browser", 4), place);
+        assert_eq!(layout(&list)[0], [vec![1], vec![3, 4], vec![2]]);
+        assert_eq!(grouping(&list)[0], [1, 1, 0]);
+    }
+
+    #[test]
+    fn an_agents_thread_on_another_workspace_takes_what_it_opens_there() {
+        let mut list = start();
+        let (work, home) = (ProjectId::new(), ProjectId::new());
+        let thread = Uuid::now_v7();
+        let theirs = opened(&mut list, shown(home, "a.a", 1), None);
+        opened(
+            &mut list,
+            shown(work, "a.a", 2),
+            beside(theirs, Side::Right),
+        );
+        let pane = opened(
+            &mut list,
+            on_thread(work, 3, thread),
+            Some(Place::Workspace { index: 1 }),
+        );
+        group_pane(&mut list, pane, &seed()).unwrap();
+        // Not where a Pane of its Project with no place goes, the top
+        // workspace that shows one, but beside its Thread.
+        let place = agents_place(&list, work, thread);
+        opened(&mut list, shown(work, "git.diff", 4), place);
+        assert_eq!(
+            layout(&list),
+            [vec![vec![1], vec![2]], vec![vec![3], vec![4]], EMPTY]
+        );
+        assert_eq!(grouping(&list), [vec![0, 0], vec![1, 1], vec![]]);
+    }
+
+    #[test]
+    fn a_thread_in_no_group_starts_one_for_what_its_agent_opens() {
+        // The Person took it out of its Group, or it is from before Groups:
+        // as a Diff opened from it, what its Agent opens makes one around
+        // it, and the Group beside it stays apart.
+        let mut list = start();
+        let work = ProjectId::new();
+        let thread = Uuid::now_v7();
+        opened(&mut list, on_thread(work, 1, thread), None);
+        opened(&mut list, shown(work, "a.a", 2), None);
+        let column = list[0].columns[1].id;
+        group(&mut list, column, &seed()).unwrap();
+        assert_eq!(grouping(&list)[0], [0, 1]);
+        let place = agents_place(&list, work, thread);
+        opened(&mut list, shown(work, "git.diff", 3), place);
+        assert_eq!(layout(&list)[0], [vec![1], vec![3], vec![2]]);
+        assert_eq!(grouping(&list)[0], [1, 1, 2]);
+    }
+
+    #[test]
+    fn a_thread_stacked_with_the_persons_panes_takes_its_whole_column_into_the_group() {
+        // The Thread under a Pane of the Person's, in one column in no
+        // Group: the column is the Group's first, the Deck right of it.
+        let mut list = start();
+        let work = ProjectId::new();
+        let thread = Uuid::now_v7();
+        let theirs = opened(&mut list, shown(work, "a.a", 1), None);
+        opened(
+            &mut list,
+            on_thread(work, 2, thread),
+            beside(theirs, Side::Below),
+        );
+        let place = agents_place(&list, work, thread);
+        opened(&mut list, shown(work, "git.diff", 3), place);
+        assert_eq!(layout(&list)[0], [vec![1, 2], vec![3]]);
+        assert_eq!(grouping(&list)[0], [1, 1]);
+        assert_eq!(list[0].columns[1].display, Some(Display::Deck));
+    }
+
+    #[test]
+    fn an_agents_thread_on_no_workspace_or_another_projects_gives_no_place() {
+        let mut list = start();
+        let (work, home) = (ProjectId::new(), ProjectId::new());
+        let thread = Uuid::now_v7();
+        assert_eq!(agents_place(&list, work, thread), None);
+        // The same ID in another Project, or another Thread of its own.
+        opened(&mut list, on_thread(home, 1, thread), None);
+        opened(&mut list, on_thread(work, 2, Uuid::now_v7()), None);
+        assert_eq!(agents_place(&list, work, thread), None);
+        // Its Thread, once shown and closed again.
+        let pane = opened(&mut list, on_thread(work, 3, thread), None);
+        assert_eq!(
+            agents_place(&list, work, thread),
+            Some(Place::Group { pane })
+        );
+        close(&mut list, pane, &seed()).unwrap();
+        assert_eq!(agents_place(&list, work, thread), None);
     }
 
     #[test]

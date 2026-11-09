@@ -10,6 +10,7 @@ use banda_workspaces::model::{ColumnId, PaneId, Seed, WorkspaceId};
 use serde_json::{Value, json};
 use std::path::Path;
 use std::sync::Arc;
+use uuid::Uuid;
 
 struct Machine {
     kernel: Arc<Kernel>,
@@ -54,9 +55,7 @@ impl Machine {
         params: Value,
     ) -> Result<Answer, Refusal> {
         let person = Participant::Person(self.owner);
-        self.kernel
-            .answer(person, method, None, Some(command), params)
-            .await
+        self.answer_from(command, person, method, params).await
     }
 
     /// A command by an Agent whose pass is for `project`.
@@ -95,9 +94,30 @@ impl Machine {
         params: Value,
     ) -> Result<Answer, Refusal> {
         let caller = Caller::agent(agent, project);
+        self.answer_from(command, caller, method, params).await
+    }
+
+    /// A command `caller` sends under the ID `command`, with where the
+    /// kernel says it stands in the log, as `answer`.
+    async fn answer_from(
+        &self,
+        command: CommandId,
+        caller: impl Into<Caller>,
+        method: &str,
+        params: Value,
+    ) -> Result<Answer, Refusal> {
         self.kernel
             .answer(caller, method, None, Some(command), params)
             .await
+    }
+
+    /// The arrangement, once the last event said it, as a Pane opened.
+    async fn opened(&self) -> Value {
+        let list = self.list().await;
+        let (kind, said) = self.events().await.pop().unwrap();
+        assert_eq!(kind, "opened");
+        assert_eq!(said["workspaces"], list["workspaces"]);
+        list
     }
 
     async fn project(&self, name: &str) -> ProjectId {
@@ -120,6 +140,12 @@ impl Machine {
         let events = log.events_after(0, Default::default(), 100).await.unwrap();
         events.into_iter().map(|e| (e.kind, e.payload)).collect()
     }
+}
+
+/// An Agent's pass for `project`, made for the session of `thread`, as
+/// `banda mcp` carries it (ADR 0083, decision 2).
+fn agent_in(agent: AgentId, project: ProjectId, thread: Uuid) -> Caller {
+    Caller::agent(agent, project).in_thread(thread)
 }
 
 /// The answer to a command that changed nothing: it said nothing, so the
@@ -671,6 +697,27 @@ fn group_of(list: &Value, pane: &Value) -> Value {
     column_of(list, pane)["group"].clone()
 }
 
+/// The last column of the top workspace.
+fn last_column(list: &Value) -> Value {
+    let columns = list["workspaces"][0]["columns"].as_array().unwrap();
+    columns.last().unwrap().clone()
+}
+
+/// What an Agent opens to show `kind` with `args`, and no place.
+fn showing(kind: &str, args: Value) -> Value {
+    json!({ "kind": kind, "args": args })
+}
+
+/// The Diff of what changed, as an Agent asks for it.
+fn changes() -> Value {
+    showing("git.diff", json!({ "scope": { "kind": "changes" } }))
+}
+
+/// The Pane of `thread`, as an Agent asks for it.
+fn on_thread(thread: Uuid) -> Value {
+    showing("agents.thread", json!({ "thread": thread }))
+}
+
 #[tokio::test]
 async fn a_thread_opens_as_a_group_of_its_own_as_its_kind_says() {
     let root = tempfile::tempdir().unwrap();
@@ -812,17 +859,157 @@ async fn another_kind_an_agent_opens_goes_where_a_pane_with_no_place_goes() {
     let work = machine.project("Work").await;
     let agent = AgentId::new();
     let as_agent = |params| machine.agent(agent, work, "workspaces.open_pane", params);
-    let thread = json!({ "kind": "agents.thread", "args": { "thread": uuid::Uuid::now_v7() } });
-    as_agent(thread).await.unwrap();
+    as_agent(on_thread(Uuid::now_v7())).await.unwrap();
 
-    // The Diff: last on the workspace, in no Group.
-    let diff = json!({ "kind": "git.diff", "args": { "scope": { "kind": "changes" } } });
-    let opened = as_agent(diff).await.unwrap();
-    let list = machine.list().await;
-    let columns = list["workspaces"][0]["columns"].as_array().unwrap();
-    let last = columns.last().unwrap();
+    // The Diff, under a pass that names no Thread, as the one a Harness
+    // process's shells share: last on the workspace, in no Group.
+    let opened = as_agent(changes()).await.unwrap();
+    let last = last_column(&machine.list().await);
     assert_eq!(last["panes"][0]["id"], opened["pane"]);
     assert_eq!(last["group"], Value::Null);
+}
+
+#[tokio::test]
+async fn what_an_agent_opens_with_no_place_goes_into_its_threads_group_as_a_deck() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let work = machine.project("Work").await;
+    let thread = Uuid::now_v7();
+    let agent = agent_in(AgentId::new(), work, thread);
+    let open =
+        |params| machine.answer_from(CommandId::new(), agent, "workspaces.open_pane", params);
+    // The window shows the Thread, a Group of its own, with what it keeps
+    // beside its ID; the Person's page after it.
+    let args = json!({ "thread": thread, "harness": "fake", "title": "Fix" });
+    let shows = json!({ "project": work, "kind": "agents.thread", "args": args });
+    let shown = machine.command("workspaces.open", shows).await.unwrap();
+    let page = json!({ "project": work, "kind": "browser.browser", "args": { "url": "a" } });
+    let person = machine.command("workspaces.open", page).await.unwrap();
+    let group = group_of(&machine.list().await, &shown["pane"]);
+    assert!(group.is_string());
+
+    // The Diff: a Deck right of the Thread, in its Group.
+    let diff = open(changes()).await.unwrap().value;
+    assert_eq!(diff["new"], true);
+    let list = machine.opened().await;
+    let deck = &list["workspaces"][0]["columns"][1];
+    assert_eq!(deck["panes"][0]["id"], diff["pane"]);
+    assert_eq!((&deck["group"], &deck["display"]), (&group, &json!("deck")));
+    assert_eq!(column_of(&list, &person["pane"])["group"], Value::Null);
+    // A browser goes into that Deck, last.
+    let site = showing("browser.browser", json!({ "url": "https://a.test" }));
+    let browser = open(site).await.unwrap().value;
+    let list = machine.opened().await;
+    let deck = &list["workspaces"][0]["columns"][1];
+    let ids: Vec<_> = (deck["panes"].as_array().unwrap().iter())
+        .map(|pane| pane["id"].clone())
+        .collect();
+    assert_eq!(ids, [diff["pane"].clone(), browser["pane"].clone()]);
+    assert_eq!(deck["group"], group);
+
+    // One shown already is named: nothing moves, nothing is said.
+    let (before, said) = (machine.list().await, machine.events().await);
+    let again = open(changes()).await.unwrap();
+    let same = json!({ "pane": diff["pane"], "new": false });
+    assert_eq!(again, unplaced(same));
+    assert_eq!(machine.list().await, before);
+    assert_eq!(machine.events().await, said);
+
+    // A place given is followed: right of the Person's page, in no Group.
+    let beside = json!({ "pane": person["pane"], "side": "right" });
+    let mut file = showing("files.file", json!({ "path": "a.md" }));
+    file["beside"] = beside;
+    let opened = open(file).await.unwrap().value;
+    let last = last_column(&machine.opened().await);
+    assert_eq!(last["panes"][0]["id"], opened["pane"]);
+    assert_eq!(last["group"], Value::Null);
+}
+
+#[tokio::test]
+async fn what_an_agent_opens_goes_beside_its_thread_on_its_workspace_and_only_its_own() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let (work, home) = (machine.project("Work").await, machine.project("Home").await);
+    let thread = Uuid::now_v7();
+    let agent = agent_in(AgentId::new(), work, thread);
+    let open =
+        |params| machine.answer_from(CommandId::new(), agent, "workspaces.open_pane", params);
+    let page = json!({ "project": work, "kind": "browser.browser", "args": { "url": "a" } });
+    let person = machine.command("workspaces.open", page).await.unwrap();
+
+    // Its Thread on no workspace: where a Pane with no place goes.
+    let diff = open(changes()).await.unwrap().value;
+    let list = machine.opened().await;
+    assert_eq!(last_column(&list)["panes"][0]["id"], diff["pane"]);
+    assert_eq!(group_of(&list, &diff["pane"]), Value::Null);
+    // Nor is another Project's Pane on the same ID its Thread.
+    let args = json!({ "thread": thread });
+    let theirs = json!({ "project": home, "kind": "agents.thread", "args": args });
+    let other = machine.command("workspaces.open", theirs).await.unwrap();
+    let file = open(showing("files.file", json!({ "path": "a.md" })));
+    let file = file.await.unwrap().value;
+    let list = machine.opened().await;
+    assert_eq!(last_column(&list)["panes"][0]["id"], file["pane"]);
+    assert_eq!(group_of(&list, &file["pane"]), Value::Null);
+    let theirs = list["workspaces"][1]["columns"].as_array().unwrap();
+    assert_eq!(theirs.len(), 1);
+    assert_eq!(theirs[0]["panes"][0]["id"], other["pane"]);
+
+    // Its Thread on a workspace under the one the Project's Panes are on:
+    // what it opens goes there, into its Group.
+    let mine = json!({
+        "project": work,
+        "kind": "agents.thread",
+        "args": args,
+        "place": { "to": "workspace", "index": 1 },
+    });
+    let shown = machine.command("workspaces.open", mine).await.unwrap();
+    let site = showing("browser.browser", json!({ "url": "https://a.test" }));
+    let browser = open(site).await.unwrap().value;
+    let list = machine.opened().await;
+    let below = &list["workspaces"][1]["columns"];
+    assert_eq!(below[0]["panes"][0]["id"], shown["pane"]);
+    assert_eq!(below[1]["panes"][0]["id"], browser["pane"]);
+    let group = group_of(&list, &shown["pane"]);
+    assert!(group.is_string());
+    assert_eq!(group_of(&list, &browser["pane"]), group);
+    assert_eq!(group_of(&list, &person["pane"]), Value::Null);
+}
+
+#[tokio::test]
+async fn a_thread_an_agent_opens_starts_a_group_of_its_own_never_in_its_threads() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let work = machine.project("Work").await;
+    let thread = Uuid::now_v7();
+    let agent = agent_in(AgentId::new(), work, thread);
+    let open =
+        |params| machine.answer_from(CommandId::new(), agent, "workspaces.open_pane", params);
+    let its = open(on_thread(thread)).await.unwrap().value;
+    let diff = open(changes()).await.unwrap().value;
+    let list = machine.list().await;
+    let group = group_of(&list, &its["pane"]);
+    assert_eq!(group_of(&list, &diff["pane"]), group);
+
+    // Another Thread goes where a Pane with no place goes, a Group of its
+    // own: the Group's first column, never in the Deck.
+    let another = open(on_thread(Uuid::now_v7())).await.unwrap().value;
+    let list = machine.opened().await;
+    let columns = list["workspaces"][0]["columns"].as_array().unwrap();
+    let order: Vec<_> = (columns.iter())
+        .map(|column| column["panes"][0]["id"].clone())
+        .collect();
+    assert_eq!(
+        order,
+        [
+            its["pane"].clone(),
+            diff["pane"].clone(),
+            another["pane"].clone()
+        ]
+    );
+    let theirs = group_of(&list, &another["pane"]);
+    assert!(theirs.is_string());
+    assert_ne!(theirs, group);
 }
 
 #[tokio::test]

@@ -636,6 +636,18 @@ fn an_agent_reaches_banda_through_banda_mcp() {
     let column = &arranged["workspaces"][0]["columns"][0];
     assert_eq!(column["panes"][0]["id"], pane["id"]);
     assert!(column["group"].is_string(), "{column}");
+    // What it opens with no place goes into that Group, as a Deck right of
+    // the Thread: its session's pass names the Thread (ADR 0065, decision
+    // 7; ADR 0083, decision 2).
+    let changes = json!({ "kind": "git.diff", "args": { "scope": { "kind": "changes" } } });
+    let (error, said) = mcp.call(19, "open_pane", changes);
+    assert!(!error, "{said}");
+    let diff = serde_json::from_str::<Value>(&said).unwrap()["pane"].clone();
+    let arranged = places.ok("workspaces.list", None, json!({}));
+    let deck = &arranged["workspaces"][0]["columns"][1];
+    assert_eq!(deck["panes"][0]["id"], diff, "{arranged}");
+    assert_eq!(deck["group"], column["group"], "{deck}");
+    assert_eq!(deck["display"], "deck", "{deck}");
     let (error, said) = mcp.call(
         14,
         "open_pane",

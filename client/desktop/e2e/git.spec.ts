@@ -1,32 +1,19 @@
-import { execFileSync } from "node:child_process"
 import { chmodSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, test } from "@playwright/test"
-import { firstThread, setInFront, startWindow, type Window } from "./window"
+import {
+  firstThread,
+  git,
+  setInFront,
+  startWindow,
+  type Window,
+} from "./window"
 
 let window: Window
 
 test.afterEach(async () => {
   await window?.close()
 })
-
-/** Runs git in `folder`, as one who has no config of their own, and says
- * what it printed. */
-function git(folder: string, ...args: string[]): string {
-  return execFileSync("git", args, {
-    encoding: "utf8",
-    cwd: folder,
-    env: {
-      ...process.env,
-      GIT_CONFIG_GLOBAL: "/dev/null",
-      GIT_CONFIG_NOSYSTEM: "1",
-      GIT_AUTHOR_NAME: "Roma",
-      GIT_AUTHOR_EMAIL: "roma@banda.so",
-      GIT_COMMITTER_NAME: "Roma",
-      GIT_COMMITTER_EMAIL: "roma@banda.so",
-    },
-  })
-}
 
 test("the Diff shows a Project's changes by scope, as T3 Code's, and reads again as the window comes back", async () => {
   window = await startWindow()

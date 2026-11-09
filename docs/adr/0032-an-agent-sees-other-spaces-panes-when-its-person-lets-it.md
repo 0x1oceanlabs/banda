@@ -86,5 +86,7 @@ defaults and stay Roma's to change.
   mark is the tile's border and a dot, in the attention colour, until the
   Person has the Pane in focus with the window in front. The Person sets
   `sees_others` with `banda call spaces.update` until the Space's
-  settings come (ADR 0026, step 6).
+  settings come (ADR 0026, step 6). _Changed on 2026-11-09, by ADR
+  0065, decision 7:_ without `beside`, the Pane goes into the Group of
+  the Agent's Thread when that Thread is on a workspace.
 - A Space made from now on, and every Space today, has it off.

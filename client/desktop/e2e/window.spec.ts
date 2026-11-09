@@ -20,6 +20,7 @@ import {
   desktopOf,
   firstThread,
   fromLeft,
+  git,
   GLASS,
   headerShows,
   layoutOf,
@@ -2558,6 +2559,78 @@ test("an Agent opens a Pane beside its Thread without the focus, marked until th
   await expect(opened).toHaveCount(0)
   await expect(hello).toBeVisible()
   site.close()
+})
+
+test("what an Agent opens with no place goes into its Thread's Group as a Deck, marked, and moves neither the Thread nor the focus (ADR 0065, decision 7)", async () => {
+  // A third each, so the three fit in view.
+  window = await startWindow({
+    look: '[columns]\nmin = 10\ndefault = "1/3"\n',
+  })
+  const { page, dir } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  // The Project's notes, changed since their commit, for its Diff.
+  const project = join(dir, "root", "Work")
+  writeFileSync(join(project, "notes.md"), "one\ntwo\nthree\n")
+  git(project, "init", "-q")
+  git(project, "add", "notes.md")
+  git(project, "commit", "-qm", "Notes")
+  writeFileSync(join(project, "notes.md"), "one\n2\nthree\nfour\n")
+  // The Person's launcher, left of the Thread, has the focus.
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+Shift+Home")
+  const x = async (tile: Locator) => (await tile.boundingBox())!.x
+  await expect
+    .poll(async () => (await x(launcher)) < (await x(thread)))
+    .toBe(true)
+  await settled(launcher, thread)
+  const before = [await x(launcher), await x(thread)]
+  const ids = await Promise.all(
+    [launcher, thread].map((tile) => tile.getAttribute("data-tile"))
+  )
+  const plate = (tile: Locator) =>
+    tile.locator("xpath=ancestor::*[@data-column][1]/*[@data-group-plate]")
+
+  // The Diff: a Deck right of the Thread, on the Thread's plate, out of
+  // focus and marked.
+  const { pane: diff } = await agentAnswers(window, "open_pane", {
+    kind: "git.diff",
+    args: { scope: { kind: "changes" } },
+  })
+  const shown = page.locator(`[data-tile="${diff}"]`)
+  await expect(shown).toHaveAttribute("data-marked", "true")
+  await expect.poll(() => layoutOf(page)).toEqual([[ids[0]], [ids[1]], [diff]])
+  const group = await plate(thread).getAttribute("data-group-plate")
+  expect(group).toBeTruthy()
+  await expect(plate(shown)).toHaveAttribute("data-group-plate", group!)
+  await expect(plate(launcher)).toHaveCount(0)
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  await settled(launcher, thread, shown)
+  expect([await x(launcher), await x(thread)]).toEqual(before)
+
+  // A file goes into that Deck, behind the Diff, marked on its name.
+  const { pane: file } = await agentAnswers(window, "open_pane", {
+    kind: "files.file",
+    args: { path: "notes.md" },
+  })
+  await expect
+    .poll(() => layoutOf(page))
+    .toEqual([[ids[0]], [ids[1]], [diff, file]])
+  const tabs = page
+    .locator(`[data-column]:has([data-tile="${diff}"])`)
+    .getByRole("tab")
+  await expect(tabs).toHaveCount(2)
+  await expect(tabs.first()).toHaveAttribute("aria-selected", "true")
+  await expect(tabs.last().getByRole("status")).toHaveText("Opened by an Agent")
+  await expect(page.locator(`[data-tile="${file}"]`)).toBeHidden()
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  await settled(launcher, thread, shown)
+  expect([await x(launcher), await x(thread)]).toEqual(before)
+  await page.screenshot({ path: "test-results/agent-deck.png" })
 })
 
 test("an answer that comes while its Thread works waits in the queue, named by the Thread it comes from", async () => {

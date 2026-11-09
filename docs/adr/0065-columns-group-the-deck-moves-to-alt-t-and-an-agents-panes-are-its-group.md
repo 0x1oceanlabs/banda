@@ -209,6 +209,15 @@ for any Panes, and an Agent's Panes are simply its Group.
      `false` keeps it out. The window still sends `grouped`, so its
      copy of the model needs no kinds. A Thread an Agent puts into
      another Pane's column makes no Group of it.
+   - _Changed on 2026-11-09._ A Pane an Agent opens with its tool and
+     no place goes into its Thread's Group, as a Diff opened from the
+     Thread does: last into the Deck right of the Thread, or into a new
+     Deck there. The engine knows the Thread from the Agent's pass (ADR
+     0083, decision 2). With the Thread on no workspace, the Pane goes
+     where a Pane with no place goes. A Thread in no Group, taken out by
+     the Person or kept from before, starts one for it, as it does for
+     that Diff. A Thread an Agent opens starts a Group of its own and
+     never joins the opener's.
 
 8. **A picked Agent comes to the left.**
    - A pick from the Inbox, the bar's widget or `Alt+U` (go to what

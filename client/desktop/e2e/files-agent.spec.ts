@@ -1,8 +1,7 @@
-import { execFileSync } from "node:child_process"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, type Locator, test } from "@playwright/test"
-import { firstThread, startWindow, type Window } from "./window"
+import { firstThread, git, startWindow, type Window } from "./window"
 
 let window: Window
 
@@ -14,22 +13,6 @@ test.afterEach(async () => {
 function put(folder: string, path: string, text: string) {
   mkdirSync(join(folder, path, ".."), { recursive: true })
   writeFileSync(join(folder, path), text)
-}
-
-/** Runs git in `folder`, as one who has no config of their own. */
-function git(folder: string, ...args: string[]) {
-  execFileSync("git", args, {
-    cwd: folder,
-    env: {
-      ...process.env,
-      GIT_CONFIG_GLOBAL: "/dev/null",
-      GIT_CONFIG_NOSYSTEM: "1",
-      GIT_AUTHOR_NAME: "Roma",
-      GIT_AUTHOR_EMAIL: "roma@banda.so",
-      GIT_COMMITTER_NAME: "Roma",
-      GIT_COMMITTER_EMAIL: "roma@banda.so",
-    },
-  })
 }
 
 /** The animation a row wears: `banda-pulse` while an Agent works on its
