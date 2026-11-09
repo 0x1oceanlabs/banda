@@ -99,10 +99,11 @@ test("Files makes a file, renames in place, duplicates, pastes with a clash kept
   await expect.poll(() => pickedIn(renaming)).toBe("untitled")
   await page.keyboard.type("made.md")
   await page.keyboard.press("Enter")
+  // The row is named at once; the file once its toast says so.
   await expect(row("made.md")).toBeVisible()
+  await expect(page.getByText("Made “made.md”")).toBeVisible()
   expect(existsSync(join(project, "docs/made.md"))).toBe(true)
   expect(existsSync(join(project, "docs/untitled"))).toBe(false)
-  await expect(page.getByText("Made “made.md”")).toBeVisible()
 
   // F2 renames in place, the name before its extension picked.
   await row("made.md").click()
@@ -114,8 +115,8 @@ test("Files makes a file, renames in place, duplicates, pastes with a clash kept
   await page.keyboard.type("notes")
   await page.keyboard.press("Enter")
   await expect(row("notes.md")).toBeVisible()
-  expect(existsSync(join(project, "docs/notes.md"))).toBe(true)
   await expect(page.getByText("Renamed “made.md” to “notes.md”")).toBeVisible()
+  expect(existsSync(join(project, "docs/notes.md"))).toBe(true)
   // Ctrl+Z names it back.
   await row("notes.md").click()
   await page.keyboard.press("Control+z")
