@@ -237,6 +237,52 @@ impl Client {
         }
     }
 
+    /// Follows `project`'s events after `after`, beside what else this
+    /// client follows: they come as [`Client::heard`] frames of the
+    /// subscription this returns. A refusal comes as a `result` of it.
+    pub async fn subscribe(
+        &mut self,
+        project: ProjectId,
+        after: i64,
+        filter: EventFilter,
+    ) -> Result<u64, Failure> {
+        let id = self.next_id();
+        let frame = ClientFrame::Subscribe {
+            id,
+            project,
+            after,
+            filter,
+        };
+        self.send(&frame).await.map(|()| id)
+    }
+
+    /// Stops a subscription or a stream.
+    pub async fn unsubscribe(&mut self, subscription: u64) -> Result<(), Failure> {
+        let id = self.next_id();
+        let frame = ClientFrame::Unsubscribe { id, subscription };
+        self.send(&frame).await
+    }
+
+    /// Hears one of this machine's streams, such as `machine.named`, beside
+    /// what else this client follows: its pieces come as [`Client::heard`]
+    /// frames of the stream this returns.
+    pub async fn stream(&mut self, method: &str) -> Result<u64, Failure> {
+        let id = self.next_id();
+        let frame = ClientFrame::Stream {
+            id,
+            project: None,
+            method: method.to_owned(),
+            params: Value::Null,
+        };
+        self.send(&frame).await.map(|()| id)
+    }
+
+    /// The next frame the engine sends; an error once it closed the
+    /// connection. One a caller stops waiting for is not lost.
+    pub async fn heard(&mut self) -> Result<EngineFrame, Failure> {
+        self.receive().await
+    }
+
     /// Hands each event of `project` after `after` to `each`, until the
     /// engine closes the connection.
     pub async fn follow(

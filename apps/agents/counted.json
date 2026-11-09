@@ -1,0 +1,404 @@
+{
+  "about": "What each Thread counts as in the bar at `now` (ADR 0035), null when it is not counted: the window's rule (markOf, then the bar's tally, which leaves out what is asleep or archived), which the engine takes as it is (apps/agents/engine/src/counts.rs). The engine's tests read these cases; the window's are to read them too.",
+  "now": 1000,
+  "cases": [
+    {
+      "case": "a Thread with no turn rests",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "asking": []
+      },
+      "counted": null
+    },
+    {
+      "case": "a turn runs",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "running",
+          "began": 100
+        },
+        "asking": []
+      },
+      "counted": "working"
+    },
+    {
+      "case": "a Question waits while its turn runs",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "running",
+          "began": 100
+        },
+        "asking": [
+          { "item": "019a0000-0000-7000-8000-000000000020", "title": "Run it?" }
+        ]
+      },
+      "counted": "asking"
+    },
+    {
+      "case": "a turn ended well, not seen",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "done",
+          "began": 100
+        },
+        "asking": []
+      },
+      "counted": "done"
+    },
+    {
+      "case": "a turn failed, not seen",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "failed",
+          "began": 100
+        },
+        "asking": []
+      },
+      "counted": "failed"
+    },
+    {
+      "case": "Banda stopped while the turn ran, not seen",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "interrupted",
+          "began": 100
+        },
+        "asking": []
+      },
+      "counted": "failed"
+    },
+    {
+      "case": "its Person stopped the turn",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "stopped",
+          "began": 100
+        },
+        "asking": []
+      },
+      "counted": null
+    },
+    {
+      "case": "a turn that ended well, seen",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "done",
+          "began": 100
+        },
+        "asking": [],
+        "seen": "019a0000-0000-7000-8000-000000000010"
+      },
+      "counted": null
+    },
+    {
+      "case": "a turn that failed, seen",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "failed",
+          "began": 100
+        },
+        "asking": [],
+        "seen": "019a0000-0000-7000-8000-000000000010"
+      },
+      "counted": null
+    },
+    {
+      "case": "an earlier turn seen, the latest not",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000011",
+          "state": "done",
+          "began": 100
+        },
+        "asking": [],
+        "seen": "019a0000-0000-7000-8000-000000000010"
+      },
+      "counted": "done"
+    },
+    {
+      "case": "seen, and a Question still asks",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "done",
+          "began": 100
+        },
+        "asking": [
+          { "item": "019a0000-0000-7000-8000-000000000020", "title": "Which?" }
+        ],
+        "seen": "019a0000-0000-7000-8000-000000000010"
+      },
+      "counted": "asking"
+    },
+    {
+      "case": "put off until a time to come",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "done",
+          "began": 100
+        },
+        "asking": [],
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "until": 2000
+        }
+      },
+      "counted": null
+    },
+    {
+      "case": "put off until its turn ends, at work",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "running",
+          "began": 100
+        },
+        "asking": [],
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "agent",
+            "id": "019a0000-0000-7000-8000-000000000002"
+          }
+        }
+      },
+      "counted": null
+    },
+    {
+      "case": "put off until a time that came",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "done",
+          "began": 100
+        },
+        "asking": [],
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "until": 900
+        }
+      },
+      "counted": "done"
+    },
+    {
+      "case": "put off, and a Question woke it early",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 300,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "running",
+          "began": 100
+        },
+        "asking": [
+          { "item": "019a0000-0000-7000-8000-000000000020", "title": "Run it?" }
+        ],
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "until": 2000,
+          "woke": { "at": 300, "by": "question" }
+        }
+      },
+      "counted": "asking"
+    },
+    {
+      "case": "it asks, and its Person put it off",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 300,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "running",
+          "began": 100
+        },
+        "asking": [
+          { "item": "019a0000-0000-7000-8000-000000000020", "title": "Run it?" }
+        ],
+        "later": {
+          "at": 400,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "until": 2000
+        }
+      },
+      "counted": null
+    },
+    {
+      "case": "put off Someday",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "done",
+          "began": 100
+        },
+        "asking": [],
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "someday": true
+        }
+      },
+      "counted": null
+    },
+    {
+      "case": "archived, with nothing new since",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 400,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "done",
+          "began": 100
+        },
+        "asking": [],
+        "archived": { "at": 500 }
+      },
+      "counted": null
+    },
+    {
+      "case": "archived, and something new since",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 600,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000011",
+          "state": "done",
+          "began": 550
+        },
+        "asking": [],
+        "archived": { "at": 500 }
+      },
+      "counted": "done"
+    },
+    {
+      "case": "archived, and at work again",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 400,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "running",
+          "began": 100
+        },
+        "asking": [],
+        "archived": { "at": 500 }
+      },
+      "counted": "working"
+    }
+  ]
+}

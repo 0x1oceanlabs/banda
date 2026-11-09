@@ -37,11 +37,11 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   SQLite writer per Project. Modules are crates in one binary.
 - **One program, `banda`.** `banda serve` runs the engine. It listens
   on 127.0.0.1 only, on the port it listened on last when that is free,
-  and writes its port, a fresh secret, its build id, version, process and
-  since when it runs to `engine.json` in its state folder, a file only
-  this user can read. A second engine with the same state folder refuses
-  to start. `banda --version` names the build id too (ADR 0086, decision
-  2).
+  and writes its port, a fresh secret, its build id, version, channel,
+  process and since when it runs to `engine.json` in its state folder, a
+  file only this user can read. A second engine with the same state
+  folder refuses to start. `banda --version` names the build id too (ADR
+  0086, decision 2).
 - **The engine is the machine's, and outlives the window** (ADR 0086,
   decisions 1 and 3). On Linux it is a systemd user unit of the Person's
   session, `<folder>-engine` (`banda-engine`, `banda-dev-engine`; a state
@@ -91,6 +91,43 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   protocol this one does not speak, says so, and runs until Banda quits;
   an update stops the engine as it restarts the window, until the engine
   updates by itself (plan step 6).
+- **The bar outside the window reads `banda status`** (ADR 0086,
+  decision 4; `engine/src/status.rs`). It prints one JSON line,
+  `EngineStatus` in the contract: whether the engine runs, its version,
+  build and channel, what this machine is, and `agents`, who works and
+  who waits on this machine alone, by the agents module's rule
+  (`apps/agents/engine/src/counts.rs`), the bar's counter (ADR 0035) as
+  the window has it, over the Projects the window shows: a Thread asleep
+  under a Later or archived is not counted. `working`, `waiting`,
+  `asking` and `done` are the bar's counts of those names (`[bar]
+  counts`): `asking` is what asks its Person or failed, `failed` is how
+  many of those failed, which turns it red, and `waiting` is `asking` and
+  `done`. `threads` are the rows of the panel, what waits first, the one
+  that waited longest first, then what works by when it began. Where it
+  cannot read what the engine lists, as from an engine of another build,
+  it leaves `agents` out rather than say nobody works. It starts no
+  engine: with none, `{"running":false}` and what the machine is, exit 0.
+  `--follow` prints the line again on each change, the current one first:
+  it reads a Project's list again on each fact that may change it, and
+  the Projects every 2 s. It runs until its reader goes, or with
+  `--with-parent` until its stdin closes, as the window's children do:
+  a bar that starts it so keeps stdin open (Quickshell's `Process`:
+  `stdinEnabled`). With no engine, and once one goes, it says so and
+  looks for one each second, so a widget keeps one process, shows no
+  icon, and picks Banda up as it starts. Under an Agent's pass, `banda
+  status` leaves `agents` out, and `--follow` is refused. A line, folded:
+
+  ```json
+  {"running":true,"protocol":1,"version":"0.4.0-dev.131","build":"dfbad2fa…",
+   "channel":"dev","since":1794266364499,"pid":3565498,"unit":"banda-dev-engine",
+   "fence":{"fence":"holds","layers":["namespaces","landlock"]},
+   "system":"Omarchy 4.5.0","named":{"name":"arc","icon":"laptop"},
+   "agents":{"working":1,"waiting":2,"asking":1,"failed":0,"done":1,"threads":[
+     {"thread":"01a1c29c-…","title":"Run the tests?","project":"01a1c29c-…","project_name":"banda","state":"asking"},
+     {"thread":"01a1c29c-…","title":"Tidy the docs","project":"01a1c29c-…","project_name":"No Project","state":"done"},
+     {"thread":"01a1c29c-…","title":"Port the menu","project":"01a1c29c-…","project_name":"banda","state":"working"}]}}
+  ```
+
 - **It keeps its machine from idle sleep while its Agents work**
   (ADR 0097): from the first Turn that starts, in any Project, until 10
   minutes after the last one ends, and while on power if the Person set

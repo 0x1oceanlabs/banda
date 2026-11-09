@@ -163,6 +163,7 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         secret: banda_kernel::secret().map_err(Failure::broken)?,
         build: build_id::own(),
         version: Some(env!("BANDA_VERSION").to_owned()),
+        channel: Some(crate::places::channel().to_owned()),
         since: Some(banda_kernel::now_ms()),
         pid: Some(std::process::id()),
         unit: own_unit().or_else(|| job.then(|| launchd::label_of(&places))),

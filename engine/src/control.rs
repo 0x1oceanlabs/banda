@@ -1,7 +1,8 @@
 //! The engine's life as its clients see it (ADR 0086, decisions 1 and 3):
 //! every command that reaches the engine starts it when none answers,
-//! `banda start` does only that, `banda status` says whether it runs, since
-//! when and its build, and `banda stop` is Quit Banda.
+//! `banda start` does only that, and `banda stop` is Quit Banda.
+//! `banda status`, which says whether it runs, starts nothing
+//! (`status.rs`).
 //!
 //! The window runs `banda start --with-parent`: it prints where the engine
 //! listens, as `serve --with-parent` does, then follows the engine until
@@ -30,16 +31,15 @@
 //! (`Failure::Later`): that window tries again, and sees this machine once
 //! Banda runs here.
 
-use crate::client::{Client, Pass};
+use crate::client::Client;
 use crate::places::{Places, Running};
 use crate::run::{self, Before};
 use crate::serve::Serving;
 use crate::service::launchd::{self, Launchctl, Launchd};
 use crate::service::{self, Manager, Service, User, Way, Why};
 use crate::{Failure, build_id, parent, serve};
-use banda_kernel::{Code, CommandId, ENGINE_VARIABLE, Named, PROTOCOL, Refusal};
-use banda_machines::Machine;
-use serde_json::{Value, json};
+use banda_kernel::{Code, CommandId, ENGINE_VARIABLE, Refusal};
+use serde_json::json;
 use std::fs::{File, TryLockError};
 use std::io::{BufRead, IsTerminal, Write};
 use std::time::{Duration, Instant};
@@ -111,10 +111,10 @@ const STOPS_WITHIN: Duration = Duration::from_secs(20);
 
 /// How long a client waits for the engine `engine.json` names to say
 /// welcome: one that takes connections and does not answer is none.
-const ANSWERS_WITHIN: Duration = Duration::from_secs(3);
+pub(crate) const ANSWERS_WITHIN: Duration = Duration::from_secs(3);
 
 /// Says that no engine answers where `engine.json` says one listens.
-const NOWHERE: &str = "Banda's engine does not answer. Start it with: banda serve";
+pub(crate) const NOWHERE: &str = "Banda's engine does not answer. Start it with: banda serve";
 
 /// A client of the running engine, as its owner: one that answers, or else
 /// one this starts as the session's service where it runs as one. Where
@@ -136,7 +136,7 @@ pub async fn connect(places: &Places) -> Result<Client, Failure> {
 /// within [`ANSWERS_WITHIN`]; else why not: none runs, none answers, or
 /// it refused, as one of another build that does not speak this program's
 /// protocol does, which says so.
-async fn answering(places: &Places) -> Result<(Running, Client), Failure> {
+pub(crate) async fn answering(places: &Places) -> Result<(Running, Client), Failure> {
     let running = places.running()?;
     let url = running.url();
     let hello = Client::hello(&url, running.secret.clone(), NOWHERE);
@@ -229,7 +229,7 @@ pub async fn start(
         let session = || Launchctl.session();
         return follow(&places, found, starts, way, session).await;
     }
-    println!("{}", said(&found.0));
+    println!("{}", crate::status::said(&found.0));
     Ok(())
 }
 
@@ -314,103 +314,6 @@ async fn logged_out(session: impl Fn() -> bool, within: Duration) -> bool {
         }
         tokio::time::sleep(Duration::from_millis(250)).await;
     }
-}
-
-/// `banda status`: whether the engine runs, since when, its build, and
-/// whether the fence around its Harnesses holds as it said in its
-/// welcome, as one JSON line. It starts nothing. An engine of another
-/// build, which this program cannot speak with, runs too.
-///
-/// It says what this machine is too, for another machine's Test (ADR
-/// 0095, decision 9): the system it runs (`system`), and its own name and
-/// icon (`named`), as the engine said them in its welcome, else as
-/// `machine.toml` says them over what Banda finds here.
-///
-/// Under an Agent's pass it says of the engine that gave the pass, what
-/// that engine says: behind the fence the file that names where an
-/// engine runs, and since when, is hidden, and so may `machine.toml` be.
-pub async fn status(places: &Places) -> Result<(), Failure> {
-    let pass = Pass::from_env()?.is_some();
-    println!("{}", status_line(places, pass).await?);
-    Ok(())
-}
-
-/// What `banda status` says, under an Agent's pass (`pass`) or not.
-async fn status_line(places: &Places, pass: bool) -> Result<Value, Failure> {
-    let (line, named) = if pass {
-        match tokio::time::timeout(ANSWERS_WITHIN, Client::connect(places)).await {
-            Ok(Ok(client)) => (
-                fenced(json!({ "running": true, "protocol": PROTOCOL }), &client)?,
-                client.named().cloned(),
-            ),
-            Ok(Err(refused @ Failure::Refused(_))) => return Err(refused),
-            _ => (json!({ "running": false }), None),
-        }
-    } else {
-        match answering(places).await {
-            Ok((running, client)) => (fenced(said(&running), &client)?, client.named().cloned()),
-            Err(Failure::Refused(refusal)) if refusal.code == Code::Protocol => {
-                (said(&places.running()?), None)
-            }
-            Err(refused @ Failure::Refused(_)) => return Err(refused),
-            Err(_) => (json!({ "running": false }), None),
-        }
-    };
-    let named = match named {
-        None if !pass => Some(named_here(places).await),
-        named => named,
-    };
-    Ok(this_machine(
-        line,
-        banda_machines::about().system,
-        named.as_ref(),
-    ))
-}
-
-/// This machine's name and icon as `machine.toml` says them over what
-/// Banda finds here, as its engine would, starting none.
-async fn named_here(places: &Places) -> Named {
-    let machine = Machine::new(&places.config, banda_machines::found().await);
-    machine.named().borrow().clone()
-}
-
-/// `line`, with what this machine is: the `system` it runs, and its own
-/// name and icon, `named`, each where there is one.
-fn this_machine(mut line: Value, system: Option<String>, named: Option<&Named>) -> Value {
-    if let Some(system) = system {
-        line["system"] = system.into();
-    }
-    if let Some(named) = named {
-        line["named"] = json!(named);
-    }
-    line
-}
-
-/// `line`, with the fence as the engine said it in its welcome, never as
-/// a file says.
-fn fenced(mut line: Value, client: &Client) -> Result<Value, Failure> {
-    if let Some(fence) = client.fence() {
-        line["fence"] = serde_json::to_value(fence).map_err(Failure::broken)?;
-    }
-    Ok(line)
-}
-
-/// What `banda status` says of a running engine.
-fn said(running: &Running) -> Value {
-    let mut line = json!({ "running": true, "protocol": running.protocol });
-    for (key, value) in [
-        ("version", running.version.clone().map(Value::from)),
-        ("build", running.build.clone().map(Value::from)),
-        ("since", running.since.map(Value::from)),
-        ("pid", running.pid.map(Value::from)),
-        ("unit", running.unit.clone().map(Value::from)),
-        ("child", running.child.clone().map(Value::from)),
-    ] {
-        if let Some(value) = value {
-            line[key] = value;
-        }
-    }
-    line
 }
 
 /// `banda stop`: Quit Banda. It asks first when Agents are working, unless
@@ -627,89 +530,6 @@ mod tests {
     fn quit_asks_in_plain_words_how_many_agents_work() {
         assert_eq!(question(1), "An Agent is working. Stop it and quit?");
         assert_eq!(question(2), "2 Agents are working. Stop them and quit?");
-    }
-
-    #[test]
-    fn status_says_what_the_engine_says_of_itself() {
-        let running = Running {
-            protocol: 1,
-            port: 4100,
-            secret: "never said".into(),
-            build: Some("16da2821".into()),
-            version: Some("0.3.0".into()),
-            since: Some(1_794_000_000_000),
-            pid: Some(42),
-            unit: Some("banda-engine".into()),
-            ..Running::default()
-        };
-        let line = said(&running);
-        assert_eq!(
-            line,
-            json!({
-                "running": true, "protocol": 1, "version": "0.3.0", "build": "16da2821",
-                "since": 1_794_000_000_000_i64, "pid": 42, "unit": "banda-engine",
-            })
-        );
-        assert!(!line.to_string().contains("never said"), "no secret");
-        let bare = said(&Running::default());
-        assert_eq!(bare, json!({ "running": true, "protocol": 0 }));
-        // A window's child where launchd or systemd did not start it says
-        // why.
-        let child = Running {
-            child: Some("launchd did not start Banda's engine".into()),
-            ..Running::default()
-        };
-        assert_eq!(
-            said(&child)["child"],
-            "launchd did not start Banda's engine"
-        );
-    }
-
-    #[tokio::test]
-    async fn status_says_what_this_machine_is_and_its_own_name_with_no_engine() {
-        let base = tempfile::tempdir().unwrap();
-        let places = Places::under(base.path());
-        std::fs::create_dir_all(&places.config).unwrap();
-        std::fs::write(
-            places.config.join("machine.toml"),
-            "name = \"studio\"\nicon = \"tower\"\n",
-        )
-        .unwrap();
-        let Ok(line) = status_line(&places, false).await else {
-            panic!("status should say");
-        };
-        assert_eq!(line["running"], false);
-        assert_eq!(line["named"], json!({ "name": "studio", "icon": "tower" }));
-        assert_eq!(line["system"], json!(banda_machines::about().system));
-        assert!(line["system"].is_string(), "{line}");
-        // It started nothing: no engine's state was written.
-        assert!(!base.path().join("state").exists());
-    }
-
-    #[test]
-    fn what_this_machine_is_goes_in_only_where_it_is_known() {
-        let named = Named {
-            name: "arc".into(),
-            icon: banda_kernel::MachineIcon::Server,
-        };
-        let line = this_machine(
-            json!({ "running": true }),
-            Some("Arch Linux".into()),
-            Some(&named),
-        );
-        assert_eq!(
-            line,
-            json!({
-                "running": true, "system": "Arch Linux",
-                "named": { "name": "arc", "icon": "server" },
-            })
-        );
-        let bare = this_machine(json!({ "running": false }), None, None);
-        assert_eq!(
-            bare,
-            json!({ "running": false }),
-            "older readers parse it as before"
-        );
     }
 
     #[test]

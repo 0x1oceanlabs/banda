@@ -28,6 +28,7 @@ mod aside;
 mod between;
 mod changes;
 pub mod chosen_modes;
+pub mod counts;
 mod drive;
 mod effects;
 mod full_access;
