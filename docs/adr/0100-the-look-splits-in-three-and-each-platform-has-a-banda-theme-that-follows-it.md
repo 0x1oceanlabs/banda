@@ -234,7 +234,7 @@ Each step is an issue and a PR.
    when a machine runs them.
 
 _Amended 2026-11-09, after the review:_ the steps wait for no work on
-machines. Step 0's slice goes as ADR 0101 (proposed) has it, and a step
+machines. Step 0's slice goes as ADR 0101 has it, and a step
 **0a** comes first: the theme's code leaves the `look` crate for a crate
 of its own, `platform/theme` (the resolver, the tokens, the palette,
 colours, fonts, the wallpaper and Hyprland's reader, and the built-in
