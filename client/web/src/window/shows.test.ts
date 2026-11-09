@@ -131,7 +131,7 @@ test("each Group's owner gives its state and name, as its Agent's Thread did bef
     false,
     false,
   ])
-  // Solo fills a Group a Pane in which shows an owner's Item.
+  // The owner each Pane's Item names, which gives its Group its owner.
   expect(columns.flatMap((one) => one.entries).map(shows.owner)).toEqual([
     "agent a",
     undefined,
