@@ -3,6 +3,9 @@ import { defineConfig } from "@playwright/test"
 // The window runs one at a time: each test starts the app and its engine.
 export default defineConfig({
   testDir: "e2e",
+  // Each test starts the engine and the fake agent from target/debug: none
+  // runs unless both were built from this checkout's sources.
+  globalSetup: "../../sdk/contract/test/built.ts",
   timeout: 60_000,
   expect: { timeout: 15_000 },
   workers: 1,

@@ -17,6 +17,7 @@ import {
   shown,
 } from "../src/look"
 import { DEFAULT_SIDEBAR } from "../src/sidebar"
+import { program } from "./built"
 
 const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
   mode,
@@ -79,22 +80,17 @@ test("a theme with one scheme shows it whatever the system says", () => {
 })
 
 test("the window's own motion, columns and bar are what banda look gives with no files", () => {
-  const repository = join(import.meta.dirname, "../../..")
-  const printed = execFileSync(
-    join(repository, "target/debug/banda"),
-    ["look"],
-    {
-      env: {
-        ...process.env,
-        BANDA_CONFIG: mkdtempSync(join(tmpdir(), "banda-look-")),
-        BANDA_OMARCHY: "",
-        XDG_CURRENT_DESKTOP: "",
-        BANDA_FONTCONFIG: "",
-        HYPRLAND_INSTANCE_SIGNATURE: "",
-      },
-      encoding: "utf8",
-    }
-  )
+  const printed = execFileSync(program("banda"), ["look"], {
+    env: {
+      ...process.env,
+      BANDA_CONFIG: mkdtempSync(join(tmpdir(), "banda-look-")),
+      BANDA_OMARCHY: "",
+      XDG_CURRENT_DESKTOP: "",
+      BANDA_FONTCONFIG: "",
+      HYPRLAND_INSTANCE_SIGNATURE: "",
+    },
+    encoding: "utf8",
+  })
   const look = JSON.parse(printed) as Look
   expect(look.motion).toEqual(DEFAULT_MOTION)
   expect(look.columns).toEqual(DEFAULT_COLUMNS)
@@ -104,22 +100,17 @@ test("the window's own motion, columns and bar are what banda look gives with no
 })
 
 test("the window's own module files are what banda look gives with none", () => {
-  const repository = join(import.meta.dirname, "../../..")
   const config = mkdtempSync(join(tmpdir(), "banda-browser-"))
-  const printed = execFileSync(
-    join(repository, "target/debug/banda"),
-    ["look"],
-    {
-      env: {
-        ...process.env,
-        BANDA_CONFIG: config,
-        BANDA_OMARCHY: "",
-        XDG_CURRENT_DESKTOP: "",
-        HYPRLAND_INSTANCE_SIGNATURE: "",
-      },
-      encoding: "utf8",
-    }
-  )
+  const printed = execFileSync(program("banda"), ["look"], {
+    env: {
+      ...process.env,
+      BANDA_CONFIG: config,
+      BANDA_OMARCHY: "",
+      XDG_CURRENT_DESKTOP: "",
+      HYPRLAND_INSTANCE_SIGNATURE: "",
+    },
+    encoding: "utf8",
+  })
   const { files } = JSON.parse(printed) as Look
   expect(files[BROWSER_FILE.name]).toEqual(BROWSER_FILE.before)
   expect(files[AGENTS_FILE.name]).toEqual(AGENTS_FILE.before)
