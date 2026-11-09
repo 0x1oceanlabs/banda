@@ -475,6 +475,11 @@ export type Widget = {
    * how the Person tells which id to write in `[bar]`. */
   about: string
   Widget: ComponentType<WidgetProps>
+  /** It has a form that stays in a narrow Bar and in a phone's header
+   * (ADR 0087, decision 11); a widget without it is reached there by its
+   * action. Nothing reads it yet: the forms that do come with the phone
+   * (W4). */
+  compact?: true
 }
 
 export type Module = {

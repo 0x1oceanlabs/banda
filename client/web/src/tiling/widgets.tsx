@@ -126,12 +126,15 @@ export const tilingWidgets: readonly Widget[] = [
     about:
       "The workspaces, as numbers or dots, and the one on screen's Groups; click one to go there, or the one on screen for the overview.",
     Widget: WorkspacesWidget,
+    compact: true,
   },
   {
     id: ASIDE,
     about:
       "Says the workspaces are set aside after a start that went wrong, and brings them back.",
     Widget: AsideWidget,
+    // No action brings the workspaces back, only its button: it stays.
+    compact: true,
   },
 ]
 
