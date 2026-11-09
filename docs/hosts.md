@@ -102,12 +102,12 @@ Plugged in"; on Linux, `systemd-inhibit --list` lists Banda's `idle` and
 logged in may be granted only `idle`, and its log says so once. Windows
 holds none yet.
 
-Another machine's window shows this machine's battery while it is live
-there: its charge, whether it charges or is on power, the time left
-where the system knows it, and why it is kept awake now (the stream
-`machine.power`). Its engine reads the battery each minute while a window
-listens, and not at all while none does. A machine with no battery says
-none, and Windows says none yet.
+The engine also says its battery, and why it is kept awake now, in the
+stream `machine.power`: the charge, whether it charges or is on power,
+and the time left where the system knows it. It reads the battery each
+minute while a window listens, and not at all while none does. A
+machine with no battery says none, and Windows says no battery and no
+why yet.
 
 ## How it connects
 

@@ -76,7 +76,8 @@ fn remaining(said: &str) -> Option<u32> {
 mod tests {
     use super::*;
 
-    /// What `pmset -g batt` said on m1pro, a MacBookPro18,3, and others.
+    /// `pmset -g batt` in the shape macOS says it, written for the tests:
+    /// none was read from a Mac yet.
     const DISCHARGING: &str = "Now drawing from 'Battery Power'
  -InternalBattery-0 (id=4653155)\t42%; discharging; 2:02 remaining present: true";
     const CHARGING: &str = "Now drawing from 'AC Power'
