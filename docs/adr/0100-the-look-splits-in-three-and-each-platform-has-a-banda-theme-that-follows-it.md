@@ -148,8 +148,8 @@ Research, the same day: `docs/research/2026-11-09-platform-themes.md`
    _Amended 2026-11-09 by
    [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): the
    folder is shared, a copy on every machine; the `theme =` line and glass
-   are the device's. A theme whose folder has not reached this machine yet
-   falls back to `"platform"`, and Problems says so._
+   are the device's. A theme whose folder is not on this machine falls
+   back to `"platform"`, and Problems says so._
 
 6. **The surface stays three things:** the theme, the mode and the glass,
    in the sidebar foot's menu (ADR 0067), each theme as a small preview.
