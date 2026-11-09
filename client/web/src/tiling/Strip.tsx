@@ -115,8 +115,9 @@ export const Strip = memo(function Strip({
   const groups = useLookGroups()
   const columns = drawnColumns(workspace, look)
   const focusedGroup = workspace.columns[workspace.focus]?.group
-  // What each Pane shows, and each Group's owner: its state and its name.
-  const { listed, called, groups: owned } = useShows(shows, workspace)
+  // Whether each Pane shows an Item, and how it calls; each Group's
+  // owner: its state and its name.
+  const { item, called, groups: owned } = useShows(shows, workspace)
   // Each Group's colour, by its owner's state; its plate moves with it.
   const states = new Map(
     columns.flatMap(({ group }) =>
@@ -421,7 +422,7 @@ export const Strip = memo(function Strip({
                 away={away.has(entry.id)}
                 zoomed={entry.id === zoomed}
                 height={column.decked ? undefined : column.heights[e]}
-                listed={listed(entry)}
+                item={item(entry)}
                 project={projectOf(entry.project)}
                 mixed={mixed}
                 frame={frame}

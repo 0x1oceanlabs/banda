@@ -111,6 +111,26 @@ test("each Group's owner gives its state and name, as its Agent's Thread did bef
       ["k", { state: "failed", name: "Thread x" }],
     ])
   )
+  // A Pane shows an Item where an App lists what it shows, in its
+  // Project, on any machine: a header that names its Project before the
+  // title, as the Listed said before T-a.
+  const entries = columns.flatMap((one) => one.entries)
+  expect(entries.map(shows.item)).toEqual(
+    entries.map(
+      (entry) => listedIn(stores.items.get(), entry, showsOf) !== undefined
+    )
+  )
+  expect(entries.map(shows.item)).toEqual([
+    true,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+  ])
   // Solo fills a Group a Pane in which shows an owner's Item.
   expect(columns.flatMap((one) => one.entries).map(shows.owner)).toEqual([
     "agent a",

@@ -1,18 +1,17 @@
 /**
  * What the Tiling reads of what its Panes show, as their Apps list it:
- * each one's Listed, how its Thread calls the Person, and each Group's
- * owner, as the Item one of its Panes shows names it, with what that
- * owner's Mark says of the Group. The Window gives it from its items and
- * calls stores (`window/shows.ts`), the same object for its life; the
- * Tiling reads it by selector, so a list that changes draws again only
- * the Strips whose Panes it changes (ADR 0088, decision 7). The Listed
- * goes with T-a; the port, once the Tiling reads the items store by
- * selector itself (B7a or E8b).
+ * whether each one shows an Item, how its Thread calls the Person, and
+ * each Group's owner, as the Item one of its Panes shows names it, with
+ * what that owner's Mark says of the Group. It never holds an Item: the
+ * Window gives the port from its items and calls stores
+ * (`window/shows.ts`), the same object for its life, and the Tiling reads
+ * it by selector, so a list that changes draws again only the Strips
+ * whose Panes it changes (ADR 0088, decision 7). The port goes once the
+ * Tiling reads the items store by selector itself (B7a or E8b).
  */
 import { useCallback, useMemo } from "react"
 import { sameEach, useSelected } from "@banda/core/react"
 import type { GroupState } from "@banda/ui/components/banda-mark"
-import type { Listed } from "@banda/ui/pane"
 import type { Chime } from "@banda/ui/sound"
 import { ownersOf } from "./groups"
 import type { Column, Entry, Workspace } from "./model"
@@ -26,8 +25,9 @@ export type Owner = string
 export type Owned = { state: GroupState | undefined; name: string }
 
 export type Shows = {
-  /** The listed thing an entry's Pane shows, if it shows one. */
-  listed: (entry: Entry) => Listed | undefined
+  /** Whether an App lists what an entry's Pane shows: its header then
+   * has an Item's places for its Project and its title. */
+  item: (entry: Entry) => boolean
   /** The owner the Item an entry's Pane shows names, if it names one. */
   owner: (entry: Entry) => Owner | undefined
   /** What a Group `owner` owns shows of it: its state and name, while an
@@ -72,13 +72,13 @@ export function groupsIn(
 /**
  * What `shows` says of the Panes of `workspace`, drawn again only when
  * that changes: what one Strip, one row of the overview or the map
- * reads. Each Pane's Listed and call, side by side, then its owned
- * Groups, in one selection.
+ * reads. Whether each Pane shows an Item, and its call, side by side,
+ * then its owned Groups, in one selection.
  */
 export function useShows(
   shows: Shows,
   workspace: Workspace
-): Pick<Shows, "listed" | "called"> & {
+): Pick<Shows, "item" | "called"> & {
   /** Each owned Group's state and name, by its id. */
   groups: ReadonlyMap<string, Owned>
 } {
@@ -88,7 +88,7 @@ export function useShows(
   )
   const read = useCallback(
     () => [
-      ...entries.flatMap((entry) => [shows.listed(entry), shows.called(entry)]),
+      ...entries.flatMap((entry) => [shows.item(entry), shows.called(entry)]),
       ...ownedIn(shows, workspace.columns),
     ],
     [shows, entries, workspace]
@@ -101,21 +101,18 @@ export function useShows(
       return i === undefined ? undefined : shown[i + side]
     }
     return {
-      listed: (entry) => of(entry, 0) as Listed | undefined,
+      item: (entry) => of(entry, 0) === true,
       called: (entry) => of(entry, 1) as Chime | undefined,
       groups: groupsIn(shown.slice(2 * entries.length)),
     }
   }, [entries, shown])
 }
 
-/** The listed thing `entry`'s Pane shows, drawn again only as it changes:
- * what a Pane alone, as the drawer's, reads. */
-export function useListed(
-  shows: Shows,
-  entry: Entry | undefined
-): Listed | undefined {
+/** Whether an App lists what `entry`'s Pane shows, drawn again only as
+ * that changes: what a Pane alone, as the drawer's, reads. */
+export function useItemShown(shows: Shows, entry: Entry | undefined): boolean {
   const read = useCallback(
-    () => (entry ? shows.listed(entry) : undefined),
+    () => (entry ? shows.item(entry) : false),
     [shows, entry]
   )
   return useSelected(shows.subscribe, read)

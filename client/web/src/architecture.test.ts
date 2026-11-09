@@ -86,8 +86,8 @@
  * - A Group is its owner's (ADR 0082, decision 9; ADR 0087): the Tiling
  *   reads who owns it, and that owner's Mark, through its port alone,
  *   which the Window fills from the items; it takes only the mark's types
- *   but for a Deck's segment. What in the Tiling still names an Item, and
- *   what in the page still reads an Item's Agent, is listed, only falling.
+ *   but for a Deck's segment. The Tiling names nothing an App lists;
+ *   what in the page still reads an Item's Agent is listed, only falling.
  * - Where a Thread stands is said once, in `@banda/ui/status` (ADR 0098,
  *   decision 26): what still reads a Later against the clock by itself
  *   is listed, and the list only falls.
@@ -295,20 +295,14 @@ function hasNode(file: string, is: (node: ts.Node) => boolean): boolean {
 }
 
 /**
- * The Tiling's files, their tests too, that still name what an App lists
+ * No file of the Tiling, its tests neither, names what an App lists
  * (`Listed`, `Lists`) or a way to find it (`listedIn`, `listedOf`,
- * `useItems`, `useLists`): a Pane's frame puts an Item's Project before its
- * title and the Thread menu on it, and the port hands it the Listed, until
- * a header knows only that its Pane shows an Item (T-a's last step). A
- * Group's owner and its Mark come through the port alone (ADR 0087). None
- * joins the list, and one that goes leaves it.
+ * `useItems`, `useLists`), as TypeScript reads it: a Pane's header knows
+ * only that its Pane shows an Item, and its title finds the Item itself
+ * (`titles/Title.tsx`); a Group's owner and its Mark come through the
+ * port alone (ADR 0087, T-a).
  */
-const TILING_LISTED = [
-  "web/src/tiling/PaneFrame.tsx",
-  "web/src/tiling/shows.ts",
-]
-
-test("the Tiling names what the Apps list no more than the list holds", () => {
+test("the Tiling names nothing the Apps list", () => {
   const names = [
     "Listed",
     "Lists",
@@ -325,7 +319,7 @@ test("the Tiling names what the Apps list no more than the list holds", () => {
       )
     )
     .map((file) => relative(app, file))
-  expect(naming).toEqual(TILING_LISTED)
+  expect(naming).toEqual([])
 })
 
 /**
