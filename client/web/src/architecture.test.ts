@@ -36,6 +36,16 @@
  * - The Window and the Tiling reach the desktop only through the device's
  *   adapter, `boot/desktop.ts` (ADR 0089, decision 2): what else in the
  *   page reads the desktop's bridge is listed, and the list only falls.
+ *   Only `boot/index.ts` takes the adapter in, for its callers.
+ * - The client's core has no device, names no App and keeps no state of
+ *   its own (ADR 0089, decisions 1 and 11): it imports only itself, the
+ *   contract and, in its bindings, React; it reads no global of the
+ *   device; and only the Window makes the store that keeps Here.
+ * - The bridge's table is the desktop's (ADR 0089, decision 4): the
+ *   desktop imports nothing of the page, and the page takes only the
+ *   table's type, in the files listed, a list that only falls. What still
+ *   stands at a path the core or the bridge left, re-exporting it, is
+ *   listed too, until W0a2 points its importers to the new path.
  * - Only the Window keeps Here (ADR 0087, decision 4): one place gives it
  *   to what the Window draws, and only the Window gives the `run` its parts
  *   run an action by. Where the Person looks is the calls part's to work
@@ -70,7 +80,7 @@
  *   one stable release.
  */
 import { existsSync, readFileSync } from "node:fs"
-import { dirname, join, relative } from "node:path"
+import { dirname, join, relative, sep } from "node:path"
 import {
   appStrings,
   desktopReads,
@@ -81,6 +91,7 @@ import {
   parts,
   sources,
 } from "@banda/ui/testing/architecture"
+import ts from "typescript"
 import { expect, test } from "vitest"
 import { modules } from "./modules"
 import { widgets, windowModule } from "./registry"
@@ -1299,4 +1310,299 @@ test("only the move names the window's old marks' keys", () => {
     .filter((file) => old.test(readFileSync(file, "utf8")))
     .map((file) => relative(root, file))
   expect(naming.sort()).toEqual(OLD_MARKS)
+})
+
+/** The client's core (ADR 0089, decision 1), its code and its tests. */
+const core = join(app, "core/src")
+const coreFiles = sources(core)
+const coreCode = sources(core, { tests: false })
+const isTest = (file: string) => /\.test\.tsx?$/.test(file)
+/** Whether `file` is in `folder`, at any depth. */
+const inside = (folder: string, file: string) => file.startsWith(folder + sep)
+
+/**
+ * The core imports itself, the contract and, in its bindings, React,
+ * nothing more (ADR 0089, decision 11), as the lint holds it too: no kit,
+ * no page, no desktop, no App, no Node. Its main files never import its
+ * bindings, and its bindings import its main files, not their barrel. A
+ * test may use its runner, and one of the bindings may draw to text.
+ */
+test("the core imports only itself, the contract, and React in its bindings", () => {
+  const bindings = join(core, "react")
+  expect(coreFiles).toContain(join(core, "index.ts"))
+  const outside = coreFiles.flatMap((file) => {
+    const binding = inside(bindings, file)
+    const allowed = (name: string) => {
+      if (/^\.\.?\//.test(name)) {
+        const to = join(dirname(file), name)
+        return (
+          inside(core, to) &&
+          (binding || !(to === bindings || inside(bindings, to))) &&
+          !(binding && to === join(core, "index"))
+        )
+      }
+      return (
+        /^@banda\/contract(\/[\w-]+)?$/.test(name) ||
+        (binding && name === "react") ||
+        (isTest(file) && name === "vitest") ||
+        (isTest(file) && binding && name === "react-dom/server")
+      )
+    }
+    return imports(readFileSync(file, "utf8"))
+      .filter((name) => !allowed(name))
+      .map((name) => `${relative(app, file)}: ${name}`)
+  })
+  // The bindings' barrel re-exports the core whole: its one way to it.
+  expect(outside).toEqual(["core/src/react/index.ts: ../index"])
+})
+
+/** Where `source`, the code of `file`, reads a global only a device has,
+ * by its name, once for each place: `window.…`, `document.…`,
+ * `localStorage.…` and the like, as TypeScript reads it, so a comment
+ * that names one is not a place. */
+function deviceGlobals(source: string, file: string): string[] {
+  const device = new Set([
+    "window",
+    "document",
+    "localStorage",
+    "sessionStorage",
+    "navigator",
+    "location",
+  ])
+  const found: string[] = []
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isPropertyAccessExpression(node) ||
+        ts.isElementAccessExpression(node)) &&
+      ts.isIdentifier(node.expression) &&
+      device.has(node.expression.text)
+    )
+      found.push(node.expression.text)
+    ts.forEachChild(node, visit)
+  }
+  visit(ts.createSourceFile(file, source, ts.ScriptTarget.Latest))
+  return found
+}
+
+/**
+ * The core reads no device (ADR 0089, decision 1): no `window.banda`, and
+ * no global only a browser or the desktop has. What it needs of the device
+ * comes through the Window's port.
+ */
+test("the core reads no device", () => {
+  const reading = coreFiles.flatMap((file) => {
+    const source = readFileSync(file, "utf8")
+    return [
+      ...(desktopReads(source, file) > 0 ? ["window.banda"] : []),
+      ...deviceGlobals(source, file),
+    ].map((what) => `${relative(app, file)}: ${what}`)
+  })
+  expect(reading).toEqual([])
+})
+
+/** The core names no App (ADR 0089, decision 11): no App's string, and no
+ * module's package. */
+test("the core names no App", () => {
+  const naming = coreCode.flatMap((file) => {
+    const source = readFileSync(file, "utf8")
+    return [
+      ...appStrings(source, file),
+      ...imports(source).filter(reachesModule),
+    ].map((what) => `${relative(app, file)}: ${what}`)
+  })
+  expect(naming).toEqual([])
+})
+
+/**
+ * What the core may keep at a module's top level as an instance, by file
+ * and name: constants nothing changes. A context's default is made by
+ * `createContext`, not listed. W0a2 brings the hosts store's sets.
+ */
+const CORE_CONSTANTS: string[] = []
+
+/**
+ * The core keeps no state of its own at a module's top level (ADR 0089,
+ * decisions 1 and 5): each store is made by its owner, one per Window,
+ * keyed by host as it grows. No `let` or `var` there, and no instance
+ * made there but the constants listed.
+ */
+test("the core keeps no state of its own at a module's top level", () => {
+  const keeping = coreCode.flatMap((file) =>
+    ts
+      .createSourceFile(
+        file,
+        readFileSync(file, "utf8"),
+        ts.ScriptTarget.Latest
+      )
+      .statements.filter(ts.isVariableStatement)
+      .flatMap(({ declarationList }) =>
+        declarationList.declarations.flatMap((held) => {
+          const name = ts.isIdentifier(held.name) ? held.name.text : "{…}"
+          const what = `${relative(app, file)}: ${name}`
+          if (!(declarationList.flags & ts.NodeFlags.Const)) return [what]
+          return held.initializer &&
+            ts.isNewExpression(held.initializer) &&
+            !CORE_CONSTANTS.includes(what)
+            ? [what]
+            : []
+        })
+      )
+  )
+  expect(keeping).toEqual([])
+})
+
+/**
+ * Only the Window makes the store that keeps its Here (ADR 0087, decision
+ * 4): what the Window draws reads it, and nothing else writes one.
+ */
+test("only the Window makes a KeptHere", () => {
+  const making = pageCode
+    .flatMap((folder) => sources(folder, { tests: false }))
+    .filter((file) => /\bnew KeptHere\b/.test(readFileSync(file, "utf8")))
+    .map((file) => relative(root, file))
+  expect(making).toEqual(["client/web/src/window/here.tsx"])
+})
+
+/**
+ * The device's desktop adapter is taken in by one file, `boot/index.ts`,
+ * the one import of its callers, which W1 makes pick a browser's adapter
+ * where the desktop is not (ADR 0089, decision 4). Its tests read it as
+ * it is.
+ */
+test("only boot/index.ts takes in the device's desktop adapter", () => {
+  const adapter = join(app, "web/src/boot/desktop")
+  const taking = sources(join(app, "web/src"), { tests: false })
+    .filter((file) =>
+      imports(readFileSync(file, "utf8")).some(
+        (name) =>
+          /^\.\.?\//.test(name) &&
+          join(dirname(file), name).replace(/\.tsx?$/, "") === adapter
+      )
+    )
+    .map((file) => relative(app, file))
+  expect(taking).toEqual(["web/src/boot/index.ts"])
+})
+
+/**
+ * Electron main, the preload and the desktop's tests import nothing of the
+ * page (ADR 0089, decisions 4 and 11): the bridge's table is the
+ * desktop's, and the page takes its type from there.
+ */
+test("the desktop imports nothing of the page", () => {
+  const desktop = join(app, "desktop")
+  const files = ["src", "e2e", "trials"].flatMap((folder) =>
+    sources(join(desktop, folder))
+  )
+  expect(files).toContain(join(desktop, "src/bridge.ts"))
+  const naming = files.flatMap((file) =>
+    imports(readFileSync(file, "utf8"))
+      .filter((name) => /^@banda\/web(\/|$)/.test(name))
+      .map((name) => `${relative(app, file)}: ${name}`)
+  )
+  expect(naming).toEqual([])
+  const manifest = JSON.parse(
+    readFileSync(join(desktop, "package.json"), "utf8")
+  ) as Record<string, Record<string, string> | undefined>
+  const depending = ["dependencies", "devDependencies", "peerDependencies"]
+    .flatMap((field) => Object.keys(manifest[field] ?? {}))
+    .filter((name) => name === "@banda/web")
+  expect(depending).toEqual([])
+})
+
+/**
+ * The page takes the bridge's table only as a type, `Host` (ADR 0089,
+ * decision 4), so none of main's code nor the modules' parts of the table
+ * come into its build: `import type` or `export type`, never an import
+ * that stays, as `import { type Host }` does. The files that take it are
+ * listed, and the list only falls: at last only the device's adapter.
+ */
+const BRIDGE_TYPES = [
+  "web/src/accent.ts",
+  "web/src/boot/desktop.ts",
+  "web/src/enter-key.ts",
+  "web/src/frame.ts",
+  "web/src/host.ts",
+  "web/src/look.ts",
+]
+
+test("the page takes the bridge's table only as a type, in the files listed", () => {
+  const fromDesktop = (node: ts.Expression | undefined) =>
+    !!node &&
+    ts.isStringLiteral(node) &&
+    /^@banda\/desktop(\/|$)/.test(node.text)
+  const taking = new Set<string>()
+  const values: string[] = []
+  for (const file of sources(join(app, "web/src"))) {
+    const at = relative(app, file)
+    const visit = (node: ts.Node): void => {
+      if (
+        (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+        fromDesktop(node.moduleSpecifier)
+      ) {
+        taking.add(at)
+        const typeOnly = ts.isImportDeclaration(node)
+          ? !!node.importClause?.isTypeOnly
+          : node.isTypeOnly
+        if (!typeOnly) values.push(at)
+      } else if (
+        ts.isCallExpression(node) &&
+        node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+        fromDesktop(node.arguments[0])
+      )
+        values.push(at)
+      ts.forEachChild(node, visit)
+    }
+    visit(
+      ts.createSourceFile(
+        file,
+        readFileSync(file, "utf8"),
+        ts.ScriptTarget.Latest
+      )
+    )
+  }
+  expect(values).toEqual([])
+  expect([...taking].sort()).toEqual(BRIDGE_TYPES)
+})
+
+/**
+ * What still stands at a path the core, the bridge's table or the device's
+ * adapter left in W0a1, only re-exporting it from its new place, so what
+ * imports the old path, open PRs among them, keeps building. W0a2 points
+ * every importer to the new path and empties the list; none joins it.
+ */
+const OLD_PATHS = [
+  "client/ui/src/here.ts",
+  "client/ui/src/hooks/use-run.ts",
+  "client/ui/src/lib/store.ts",
+  "client/web/src/host.ts",
+  "client/web/src/window/device.ts",
+]
+
+test("a path the core or the bridge left only re-exports it, as the list holds", () => {
+  const boot = join(app, "web/src/boot")
+  const moved = (file: string, name: string) =>
+    /^@banda\/(core|core\/react|desktop\/bridge)$/.test(name) ||
+    (/^\.\.?\//.test(name) && join(dirname(file), name) === boot)
+  const standing = [join(app, "ui/src"), join(app, "web/src")]
+    .flatMap((folder) => sources(folder, { tests: false }))
+    .filter((file) => {
+      const { statements } = ts.createSourceFile(
+        file,
+        readFileSync(file, "utf8"),
+        ts.ScriptTarget.Latest
+      )
+      return (
+        statements.length > 0 &&
+        statements.every(
+          (statement) =>
+            ts.isExportDeclaration(statement) &&
+            !!statement.moduleSpecifier &&
+            ts.isStringLiteral(statement.moduleSpecifier) &&
+            moved(file, statement.moduleSpecifier.text)
+        )
+      )
+    })
+    .map((file) => relative(root, file))
+    .sort()
+  expect(standing).toEqual(OLD_PATHS)
 })
