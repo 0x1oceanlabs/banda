@@ -140,25 +140,29 @@ describe("a Group", () => {
   })
 
   test("solo fills the Agent the focus is at, on a Project's workspace", () => {
-    const agent = (entry: { id: string }) => entry.id !== "c1"
+    // Every Pane but c1 shows an Item that names an owner.
+    const owner = (entry: { id: string }) =>
+      entry.id !== "c1" ? `agent ${entry.id}` : undefined
     const project = (state: Workspaces) => {
       state.list[0].project = "s" as ProjectId
       return state
     }
     // Not on a Project's workspace: as it is.
-    expect(soloing(strip("ab", "gg", 0), agent)).toBeUndefined()
+    expect(soloing(strip("ab", "gg", 0), owner)).toBeUndefined()
     // A Group fills; a column in none stays.
-    expect(soloing(project(strip("ab", "gg", 1)), agent)?.command).toEqual({
+    expect(soloing(project(strip("ab", "gg", 1)), owner)?.command).toEqual({
       method: "workspaces.fill",
       params: { column: "b", fill: true },
     })
-    expect(soloing(project(strip("ab", "..", 0)), agent)).toBeUndefined()
-    // One that fills already, or with no Agent in it, stays.
+    expect(soloing(project(strip("ab", "..", 0)), owner)).toBeUndefined()
+    // One that fills already, or that no one owns, stays.
     const filled = project(strip("ab", "gg", 0))
     filled.list[0].filled = "g"
-    expect(soloing(filled, agent)).toBeUndefined()
+    expect(soloing(filled, owner)).toBeUndefined()
     expect(
-      soloing(project(strip("abc", "ggh", 0)), (e) => e.id === "c1")
+      soloing(project(strip("abc", "ggh", 0)), (e) =>
+        e.id === "c1" ? "agent c1" : undefined
+      )
     ).toBeUndefined()
     // Back to the row, the room comes back.
     expect(unsoloing(filled)?.command.params).toEqual({

@@ -86,8 +86,8 @@
  * - A Group is its owner's (ADR 0082, decision 9; ADR 0087): the Tiling
  *   reads who owns it, and that owner's Mark, through its port alone,
  *   which the Window fills from the items; it takes only the mark's types
- *   but for a Deck's segment. What in the Tiling still names an Item is
- *   listed, only falling.
+ *   but for a Deck's segment. What in the Tiling still names an Item, and
+ *   what in the page still reads an Item's Agent, is listed, only falling.
  */
 import { existsSync, readFileSync } from "node:fs"
 import { dirname, join, relative, sep } from "node:path"
@@ -316,6 +316,44 @@ test("the Tiling names what the Apps list no more than the list holds", () => {
     })
     .map((file) => relative(app, file))
   expect(naming).toEqual(TILING_LISTED)
+})
+
+/**
+ * The page's files that read the Agent an Item names (`.agent`), but for
+ * tests: the fold that puts what a module says of an Agent's Thread on
+ * that Thread's row (`attention.ts`); the counts, which name the Thread
+ * the Pane in focus shows when it is an Agent's; and the Window's adapter
+ * to the Tiling, where a Thread's Agent is its Group's owner. No Tiling
+ * file, and not the Window's root: Solo asks the port for an owner. B7a
+ * empties the list, as `item@1` names its owner. None joins it, and one
+ * that goes leaves it.
+ */
+const AGENT_READERS = [
+  "web/src/bar/attention.ts",
+  "web/src/sidebar/Counts.tsx",
+  "web/src/window/shows.ts",
+]
+
+test("the page reads an Item's Agent no more than the list holds", () => {
+  const reading = sources(join(app, "web/src"), { tests: false })
+    .filter((file) => {
+      let reads = false
+      const visit = (node: ts.Node): void => {
+        if (ts.isPropertyAccessExpression(node) && node.name.text === "agent")
+          reads = true
+        ts.forEachChild(node, visit)
+      }
+      visit(
+        ts.createSourceFile(
+          file,
+          readFileSync(file, "utf8"),
+          ts.ScriptTarget.Latest
+        )
+      )
+      return reads
+    })
+    .map((file) => relative(app, file))
+  expect(reading).toEqual(AGENT_READERS)
 })
 
 /**
