@@ -7065,3 +7065,44 @@ async fn a_window_that_moves_its_marks_again_undoes_nothing_its_person_chose() {
     world.read(person, &first, None).await.unwrap();
     assert_eq!(world.seen(&first).await, Some(first_turn));
 }
+
+#[tokio::test]
+async fn a_turn_a_limit_stopped_goes_on_with_another_account_at_once() {
+    let root = tempfile::tempdir().unwrap();
+    let other = Harness {
+        id: "other".into(),
+        name: "Other".into(),
+        ..fake_with(&[])
+    };
+    let agents = Agents::new(Harnesses::new(vec![fake_with(&[]), other]));
+    let world = World::new_with(root.path(), agents).await;
+    let (sent, _) = failing(&world, "over the limit").await;
+    let (thread, turn) = (&sent["thread"], &sent["turn"]);
+    // Put off till the reset, to go on by itself.
+    let until = banda_kernel::now_ms() + 3_600_000;
+    let later = json!({ "thread": thread, "resume": true, "until": until });
+    (world.call(world.person(), "agents.later", later).await).unwrap();
+
+    let go_on = json!({ "turn": turn, "harness": "other" });
+    let by_agent = world
+        .call(world.agent(), "agents.go_on", go_on.clone())
+        .await;
+    assert!(by_agent.is_err(), "only a Person moves a Thread");
+    (world
+        .call(world.person(), "agents.go_on", go_on.clone())
+        .await)
+        .unwrap();
+
+    // The same words meet the fake agent's limit again: it ran there.
+    let view = world
+        .until(thread, |v| {
+            v.turns.len() == 2 && v.turns[1].state == TurnState::Failed
+        })
+        .await;
+    assert_eq!(view.thread.harness, "other");
+    assert_eq!(view.turns[1].harness.as_deref(), Some("other"));
+    let later = world.later_of(thread).await.unwrap();
+    assert!(later.woke.is_some(), "the move woke it");
+    let again = world.call(world.person(), "agents.go_on", go_on).await;
+    assert_eq!(again.unwrap(), Value::Null, "it went on already");
+}

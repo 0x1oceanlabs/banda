@@ -41,6 +41,8 @@ export type ThreadActs = {
   /** Puts the Thread off until a time, and with `resume` tries the turn
    * again then (ADR 0074, decision 8); none where it cannot. */
   putOff?: (until: number, resume: boolean) => void
+  /** Opens the accounts, in Settings → Agents; none where it cannot. */
+  accounts?: () => void
   /** How its Person signs in again, below a turn that failed for that. */
   signIn: (turn: TurnView) => React.ReactNode
 }
@@ -82,6 +84,7 @@ export function ThreadAroundProvider({
     latest.current = acts
   })
   const canPutOff = acts.putOff !== undefined
+  const canSet = acts.accounts !== undefined
   const stable = useMemo<ThreadActs>(
     () => ({
       openDiff: (turn, path) => latest.current.openDiff(turn, path),
@@ -94,9 +97,10 @@ export function ThreadAroundProvider({
       putOff: canPutOff
         ? (until, resume) => latest.current.putOff?.(until, resume)
         : undefined,
+      accounts: canSet ? () => latest.current.accounts?.() : undefined,
       signIn: (turn) => latest.current.signIn(turn),
     }),
-    [canPutOff]
+    [canPutOff, canSet]
   )
   const around = useMemo(
     () => ({ engine, project, thread, host, reader, acts: stable }),

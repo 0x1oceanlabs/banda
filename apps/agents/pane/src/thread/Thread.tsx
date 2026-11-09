@@ -306,6 +306,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
       run &&
       ((until, resume) =>
         run("thread.later", { project, item: thread, until, resume })),
+    accounts: run && (() => run("settings.open", { link: "agents" })),
     signIn: (turn) =>
       here ? (
         <SignIn
@@ -469,6 +470,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
                   answering={acting}
                   writers={writers}
                   queue={queue}
+                  moves={moves}
                 />
               </ThreadAroundProvider>
             </MarkdownFiles>

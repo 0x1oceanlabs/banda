@@ -3,13 +3,15 @@
  * thing that other Apps fill, as a file manager asks a provider for a
  * column. A module says in its `slots` what it puts in each, and draws it
  * there with the props the Slot gives; the Slot's owner reads who fills
- * it in one place (`useSlot`) and draws them in the modules' order. Two
- * in v1: a Thread's details card, Threads', which Git fills, and a Pane's
+ * it in one place (`useSlot`) and draws them in the modules' order. Three
+ * in v1: a Thread's details card, Threads', which Git fills; a Pane's
  * header, the Tiling's, which Threads fills with a Thread's Mark and the
- * Window with another machine's name and icon. Code, until an App's view
- * answers a Tree (V2).
+ * Window with another machine's name and icon; and a spent account in the
+ * limits widget, Harnesses', which Threads fills with the Threads that
+ * wait on it. Code, until an App's view answers a Tree (V2).
  */
-import type { ProjectId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
+import type { Limits } from "@banda/contract/harnesses"
 import { type ComponentType, createContext, useContext } from "react"
 import type { DetailsProps } from "./components/thread-details"
 import type { PaneState } from "./pane"
@@ -43,6 +45,19 @@ export type HeaderProps = {
     }
 )
 
+/**
+ * What a spent account in the limits widget's popover gives what fills it
+ * (ADR 0078, decision 7): the account, and the limits read with the clock
+ * they were read by, so a filler offers a way on that has room.
+ */
+export type SpentProps = {
+  engine: Engine
+  /** The account, by its entry's id. */
+  account: string
+  limits: readonly Limits[]
+  now: number
+}
+
 /** Each Slot by its name, with the props it gives what fills it. */
 export type SlotProps = {
   /** A Thread's details card (ADR 0034, decision 4): Threads'. */
@@ -50,6 +65,8 @@ export type SlotProps = {
   /** A Pane's header, the pill over its body, and its tile's label in
    * the Overview: the Tiling's. */
   "pane.header": HeaderProps
+  /** A spent account in the limits widget: Harnesses'. */
+  "limits.account": SpentProps
 }
 
 export type Slot = keyof SlotProps

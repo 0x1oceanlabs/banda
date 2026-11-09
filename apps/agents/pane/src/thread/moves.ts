@@ -21,9 +21,14 @@ export type Move = {
   /** How full its fullest limit window is, in percent; none without
    * limits, as an API key's. */
   fullest?: number
-  /** It is out: a window spent, till `until` when that is said. */
-  out?: { until?: number }
+  /** It is out: a window spent, named `window`, till `until` when that
+   * is said. */
+  out?: { until?: number; window?: string }
 }
+
+/** Where a started Thread may move, and whether a move to another
+ * Harness asks first: until its first handoff (ADR 0078, decision 5). */
+export type Moves = { same: Move[]; others: Move[]; confirm: boolean }
 
 /** The moves of a Thread on `current`, which ran on the entries `ran`:
  * its Harness's accounts first, then the other Harnesses' entries, each
@@ -73,4 +78,31 @@ export function stepped(same: readonly Move[], step: 1 | -1): Move | undefined {
     if (!move.out) return move
   }
   return undefined
+}
+
+/** The ways on a limit's card offers a Thread that is out (ADR 0078,
+ * decision 6; ADR 0093, decision 8), first the main one: the fallback,
+ * when it has room, else the account of its Harness with the most room,
+ * else another Harness's. Then the best of each kind that is not first.
+ * An account without limits, as an API key's, has all the room. */
+export function waysOn(
+  same: readonly Move[],
+  others: readonly Move[],
+  fallback?: string
+): Move[] {
+  const free = (move: Move) => !move.on && !move.out
+  const best = (moves: readonly Move[]) =>
+    moves
+      .filter(free)
+      .reduce<Move | undefined>(
+        (a, b) => (a && (a.fullest ?? 0) <= (b.fullest ?? 0) ? a : b),
+        undefined
+      )
+  const kinds = [best(same), best(others)]
+  const first = [...same, ...others].find(
+    (move) => move.harness.id === fallback && free(move)
+  )
+  return [...new Set([first, ...kinds])].filter(
+    (move): move is Move => move !== undefined
+  )
 }

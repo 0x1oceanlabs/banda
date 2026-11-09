@@ -32,6 +32,8 @@ import { useRun } from "@banda/core/react"
 import { cn } from "@banda/ui/lib/utils"
 import { MINUTE, ago, fullDate, problem } from "@banda/ui/lib/words"
 import type { WidgetProps } from "@banda/ui/module"
+import { useSlot } from "@banda/ui/slots"
+import type { Engine } from "@banda/contract"
 import { GaugeIcon } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import {
@@ -149,7 +151,7 @@ export function LimitsWidget({ engine }: WidgetProps) {
           </PopoverTrigger>
           <PopoverContent className="max-h-[min(36rem,80vh)] w-[min(340px,calc(100vw-2rem))] gap-0 overflow-y-auto p-0">
             <PopoverTitle className="sr-only">Usage limits</PopoverTitle>
-            <Accounts limits={limits} now={now} warn={warn} />
+            <Accounts engine={engine} limits={limits} now={now} warn={warn} />
             {error && (
               <p
                 role="alert"
@@ -247,10 +249,12 @@ export function Look({
 
 /** Every account, by Harness (ADR 0055, decision 3). */
 function Accounts({
+  engine,
   limits,
   now,
   warn,
 }: {
+  engine: Engine
   limits: readonly Limits[]
   now: number
   warn: number
@@ -264,6 +268,8 @@ function Accounts({
       .map((each) => (
         <Account
           key={each.limits.harness}
+          engine={engine}
+          all={limits}
           limits={each.limits}
           colour={colourOf(each.place)}
           mostRoom={room.has(each.limits.harness)}
@@ -275,12 +281,17 @@ function Accounts({
 }
 
 function Account({
+  engine,
+  all,
   limits,
   colour,
   mostRoom,
   now,
   warn,
 }: {
+  engine: Engine
+  /** Every account's limits, for what fills a spent one's Slot. */
+  all: readonly Limits[]
   limits: Limits
   colour: string
   mostRoom: boolean
@@ -288,6 +299,9 @@ function Account({
   warn: number
 }) {
   const out = limits.windows.length > 0 && fullestOf(limits, now) >= 100
+  // Beside a spent account, what the modules say waits on it: Threads'
+  // "Move all" (ADR 0078, decision 7).
+  const spent = useSlot("limits.account")
   const pace = limits.windows
     .map((w) => paceWords(w, now))
     .find((words) => words !== undefined)
@@ -343,6 +357,16 @@ function Account({
           {limits.failed.why}
         </p>
       )}
+      {out &&
+        spent.map(({ id, Fill }) => (
+          <Fill
+            key={id}
+            engine={engine}
+            account={limits.harness}
+            limits={all}
+            now={now}
+          />
+        ))}
     </section>
   )
 }

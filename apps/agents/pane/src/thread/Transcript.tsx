@@ -36,6 +36,7 @@ import { Queue, type QueueActions } from "./Queue"
 import { PEEK, ScrollPlace } from "./ScrollPlace"
 import { Minimap } from "./Minimap"
 import { useThreadAround } from "./context"
+import type { Moves } from "./moves"
 
 type Answering = {
   /** Whether a command is on its way; what acts waits for it. A Question
@@ -52,6 +53,7 @@ export function Transcript({
   queue,
   writers,
   answering,
+  moves,
 }: Answering & {
   writers: Listing
   /** The Thread waits for its Person: a Question, or a plan. */
@@ -63,6 +65,8 @@ export function Transcript({
   waits: Waiting[]
   name: string
   queue: QueueActions
+  /** Where the Thread may move, for a limit's card. */
+  moves?: Moves
 }) {
   const { thread, reader, acts } = useThreadAround()
   // Its Later, to put it off until a usage limit's reset (ADR 0074).
@@ -95,6 +99,7 @@ export function Transcript({
     harness: state.harness,
     answering,
     later,
+    moves,
   }
   const forkedFrom = useMemo(
     () => state.forkedFrom && threadOf(writers, state.forkedFrom),

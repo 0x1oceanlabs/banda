@@ -90,10 +90,19 @@ The points Roma decided are marked _decided_.
 
    Each way on continues the stopped turn (`agents.retry`) on the new account.
 
+   As built (step 7):
+   - The card replaces the red line wherever the stopped turn can go again. The ways on are the fallback when it has room, else the account of the Thread's Harness with the most room, else another Harness's. Then come the best of each kind that is not first.
+   - Another Harness asks with the picker's confirmation until the Thread's first handoff.
+   - Each way on is one command, `agents.go_on`: the Thread wakes if it was put off, moves, and the stopped turn goes again, in one write.
+   - "Wait until 14:20" puts the Thread off and has it go on by itself. While it waits, the card says so and offers "Go on now with …". The Later line above the composer wakes it.
+   - The ⋯ menu holds "Try again here", "Move all N Threads of Work to Personal" (when more than one waits) and "Accounts…", which opens Settings → Agents.
+   - The API account with the price of a turn waits for step 8, which adds API accounts.
+
 7. **Banda never moves a Thread by itself** (_decided_).
    - Every move is the Person's click or key. That keeps within each vendor's "ordinary, individual use" (research part 3).
    - "Move all" (_decided_) is in the card's ⋯ and in the limits widget's popover, beside a spent account. It is still one click by the Person.
    - Whether an Agent may move its own Thread is not decided here.
+   - As built (step 7): "Move all" moves the Threads of every Project on the machine whose latest turn the account's limit ended. Each goes on through `agents.go_on`, as the card's way on does. The widget's popover shows "N Threads wait · Move to Personal" under a spent account. That row is a Slot of the limits widget, `limits.account`, which Threads fills (ADR 0082, decision 8), so the Harnesses' widget knows nothing of Threads. "Move all" goes only to an account of the same Harness, where each Thread keeps its session.
 
 8. **A new Thread starts on the Harness's default account** (_decided_). Replaced by [ADR 0093](0093-an-account-has-an-emblem-the-person-picks-and-a-new-thread-has-a-fallback-account.md), decision 7: while the default is out, a new Thread starts on the fallback. If that account is spent, the chip shows the warning dot and its popover names the reset. Banda does not pick another account for it.
 

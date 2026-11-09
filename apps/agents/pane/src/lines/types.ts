@@ -2,6 +2,7 @@
 import type { ComponentType } from "react"
 import type { Item, Later, TurnState } from "@banda/contract/agents"
 import type { EntryFacts } from "../entries/types"
+import type { Moves } from "../thread/moves"
 import type { Line } from "../thread/timeline"
 
 /** What the Thread knows that its lines show, the same for a line and
@@ -21,6 +22,8 @@ export type LineFacts = {
   answering: boolean
   /** The Thread's Later, if it sleeps. */
   later?: Later
+  /** Where the Thread may move, for a limit's card (ADR 0078). */
+  moves?: Moves
 }
 
 export type LineProps<K extends Line["kind"]> = {

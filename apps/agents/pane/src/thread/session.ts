@@ -483,13 +483,12 @@ export function useThreadSession({
       if (thread === null) return
       await engine.command("agents.switch", { thread, harness }, project)
     })
+  // Wakes, moves and sends again in one command (ADR 0078, decision 6).
   const retryOn = (turn: TurnView, harness: string) =>
     void acting.act(
-      named(`Go on with ${harnessName(harnesses, harness)}`, async () => {
-        if (thread === null) return
-        await engine.command("agents.switch", { thread, harness }, project)
-        await engine.command("agents.retry", { turn: turn.id }, project)
-      })
+      named(`Go on with ${harnessName(harnesses, harness)}`, () =>
+        engine.command("agents.go_on", { turn: turn.id, harness }, project)
+      )
     )
   // The fork opens here, as a Thread picked in the sidebar does.
   const fork = (turn: TurnView) =>
