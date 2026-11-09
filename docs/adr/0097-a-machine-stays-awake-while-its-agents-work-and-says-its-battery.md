@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-09
 ---
 
@@ -286,18 +286,13 @@ Each is an issue:
   their lists (ADR 0086, decision 3).
 - `banda status` says the battery too.
 
-## Open
+## Roma's calls on the mock
 
-These are this ADR's, not Roma's; the mock puts them to him.
+On 2026-11-09 Roma accepted the four points this ADR put to him, as
+written above:
 
-- **The 10-minute tail** (decision 1). Without one, m1pro on battery
-  sleeps a minute after a Turn ends, before the Person answers from arc.
-  Ten minutes is a guess.
-- **A switch for "while Agents work"** (decision 2). Roma named one
-  setting. "On by default" means it can be off, so it has a key; the
-  mock gives it a switch under This machine only.
-- **20%** (decision 8). Roma's example says 12%. At 20% the toast comes
-  with time left to plug in.
-- **A toast only** (decision 8): no sound, no system notification. The
-  bell keeps it (ADR 0048, decision 2), but a window behind others may
-  miss it.
+- **The 10-minute tail** (decision 1).
+- **A switch for "while Agents work"**, on by default, under This
+  machine only (decision 2).
+- **20%** (decision 8).
+- **A toast only**: no sound, no system notification (decision 8).
