@@ -1414,8 +1414,16 @@ test("another machine's Thread that asks has its toast name arc, and Allow and T
   await expect(arcOf(page).getByText("away", { exact: true })).toHaveCount(0, {
     timeout: 60_000,
   })
-  // Back, nothing it was refused runs there by itself.
-  expect(questionsOf("ask once more")).not.toContain("answered")
+  // Back, and heard again, as a Thread it starts now shows in its list:
+  // nothing it was refused runs there by itself, a while after either.
+  send(arc, banda, "back on arc")
+  await expect(arcOf(page).getByText("back on arc")).toBeVisible({
+    timeout: 30_000,
+  })
+  for (const until = Date.now() + 5_000; Date.now() < until;) {
+    expect(questionsOf("ask once more")).not.toContain("answered")
+    await page.waitForTimeout(250)
+  }
 })
 
 test("the counts list and Alt+U place arc's Threads where the sidebar list does, among this machine's (ADR 0079, decision 4; #999)", async () => {

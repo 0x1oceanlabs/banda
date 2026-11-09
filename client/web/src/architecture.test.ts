@@ -2001,11 +2001,11 @@ function exported(source: string): string[] {
   })
 }
 
-/** What `source` takes of `module` by name, types too, by the name it has
- * there, past `as`: imports, re-exports, and `*` for all of it, as a
- * namespace or a dynamic import takes. */
-function takenFrom(source: string, module: string): string[] {
-  const file = ts.createSourceFile("x.tsx", source, ts.ScriptTarget.Latest)
+/** What `source`, the text of `file`, takes of `module` by name, types
+ * too, by the name it has there, past `as`: imports, re-exports, and `*`
+ * for all of it, as a namespace or a dynamic import takes. It is read as
+ * its own kind, so `<T>` in a .ts file is no JSX that hides what follows. */
+function takenFrom(source: string, file: string, module: string): string[] {
   const of = (specifier: ts.Node | undefined) =>
     specifier !== undefined &&
     ts.isStringLiteralLike(specifier) &&
@@ -2043,14 +2043,18 @@ function takenFrom(source: string, module: string): string[] {
       taken.push(node.qualifier ? first(node.qualifier) : "*")
     ts.forEachChild(node, visit)
   }
-  visit(file)
+  visit(ts.createSourceFile(file, source, ts.ScriptTarget.Latest))
   return taken
 }
 
-/** What of the hosts, `hosts`, `source` takes from `@banda/core/react`
- * past the list. */
-const hostsBeyond = (source: string, hosts: ReadonlySet<string>) =>
-  takenFrom(source, "@banda/core/react").filter(
+/** What of the hosts, `hosts`, `source`, the text of `file`, takes from
+ * `@banda/core/react` past the list. */
+const hostsBeyond = (
+  source: string,
+  file: string,
+  hosts: ReadonlySet<string>
+) =>
+  takenFrom(source, file, "@banda/core/react").filter(
     (name) =>
       (name === "*" || hosts.has(name)) && !HOSTS_FOR_APPS.includes(name)
   )
@@ -2073,11 +2077,13 @@ test("an App or a platform part takes of the hosts only what reads them (#1041)"
   }))
   expect(
     said.flatMap(({ file, source }) =>
-      hostsBeyond(source, hosts).map((name) => `${file}: ${name}`)
+      hostsBeyond(source, file, hosts).map((name) => `${file}: ${name}`)
     )
   ).toEqual([])
-  const taken = said.flatMap(({ source }) =>
-    takenFrom(source, "@banda/core/react").filter((name) => hosts.has(name))
+  const taken = said.flatMap(({ file, source }) =>
+    takenFrom(source, file, "@banda/core/react").filter((name) =>
+      hosts.has(name)
+    )
   )
   expect([...new Set(taken)].sort()).toEqual(HOSTS_FOR_APPS)
 
@@ -2091,7 +2097,7 @@ test("an App or a platform part takes of the hosts only what reads them (#1041)"
     `type K = import("@banda/core/react").KeptHosts`,
     `const later = () => import("@banda/core/react")`,
   ].join("\n")
-  expect(hostsBeyond(app, hosts)).toEqual([
+  expect(hostsBeyond(app, "app.tsx", hosts)).toEqual([
     "KeptHosts",
     "HostsContext",
     "useOurs",
@@ -2100,6 +2106,12 @@ test("an App or a platform part takes of the hosts only what reads them (#1041)"
     "KeptHosts",
     "*",
   ])
+  // A .ts file is read as one: a generic arrow there hides no later take.
+  const generic = [
+    `const g = <T>(x: T) => x`,
+    `export { useOurs } from "@banda/core/react"`,
+  ].join("\n")
+  expect(hostsBeyond(generic, "app.ts", hosts)).toEqual(["useOurs"])
 })
 
 /**
