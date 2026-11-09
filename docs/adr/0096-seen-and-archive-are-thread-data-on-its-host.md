@@ -123,6 +123,11 @@ machine, next to the snooze. He chose (b).
    - Archiving wakes a snoozed Thread, and snoozing clears the archive,
      both in the engine, each in one transaction (ADR 0074, decision 4).
    - The window that archives closes the Thread's Panes, as now.
+     _Changed on 2026-11-09 (Roma, #974):_ archive puts the Thread away at
+     once, on the press, as its mark goes, never after the host's answer,
+     so a late answer closes no Pane opened since. One the host refuses,
+     or whose host goes on the way, comes back in the list with its toast,
+     and its Panes stay closed.
 
 5. **Only the Person marks.** The mark commands refuse an Agent, through
    its CLI too, with the same check as `switch`; ADR 0083's fence (F0, its
@@ -278,13 +283,14 @@ Each step is its own PR.
      `sidebar.archive` as it reaches an App's item actions, each on an
      Item of its own host alone (`ownItem`), not through `RUNS_ELSEWHERE`,
      which would take any Item; `sidebar.archive` sends the Thread's App's
-     own `agents.archive-thread`, which puts the Thread away once its host
-     took it. The move starts with the module's `start`, and the first
-     read of each of this machine's Threads lists waits for it, a few
-     seconds at most, so no first list shows the Archive's Threads in the
-     list before the move; another host's list waits for none of it. A
-     Project the start did not move, as one missing then and located
-     since, moves alone as its list reads, once in a session.
+     own `agents.archive-thread`, which put the Thread away once its host
+     took it (at once since #974, decision 4). The move starts with the
+     module's `start`, and the first read of each of this machine's
+     Threads lists waits for it, a few seconds at most, so no first list
+     shows the Archive's Threads in the list before the move; another
+     host's list waits for none of it. A Project the start did not move,
+     as one missing then and located since, moves alone as its list
+     reads, once in a session.
      From 2a, a Pane told the host what the Person saw, but "Mark as
      unread" took the mark back from the window's storage alone, which
      the import cannot say, as it moves seen forward only. So, after the
