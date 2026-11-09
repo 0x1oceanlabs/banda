@@ -100,6 +100,8 @@ export type Workspace = {
   solo?: true
   /** The Project whose Agents' Threads open here (ADR 0065, decision 9). */
   project?: ProjectId
+  /** The Project's own Group, first here (ADR 0102, decision 4). */
+  own?: string
 }
 
 export type Workspaces = {

@@ -107,6 +107,7 @@ export function resolve(
     }
     if (workspace.filled !== undefined) next.filled = workspace.filled
     if (workspace.project !== undefined) next.project = workspace.project
+    if (workspace.own !== undefined) next.own = workspace.own
     return same(was.workspaces.get(workspace.id), next)
   })
   const shows = held(aimed.current, list, "stay")
@@ -302,6 +303,7 @@ export function keptOf(state: Workspaces): Kept[] {
     })),
     ...(workspace.filled !== undefined && { filled: workspace.filled }),
     ...(workspace.project !== undefined && { project: workspace.project }),
+    ...(workspace.own !== undefined && { own: workspace.own }),
   }))
 }
 

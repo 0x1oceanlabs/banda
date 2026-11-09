@@ -266,15 +266,16 @@ export function opening(
     ...how,
     width: widthOf(pane),
   })
-  // In a Group: the Group of the Pane it opens from; on a Project's
-  // workspace: its Project's (ADR 0065).
+  // As `placeFor` says (ADR 0102, decision 3): in the Group of the Pane it
+  // opens from, last on its Project's workspace, into its own Group there,
+  // or on the top free workspace.
   const from = how.from ?? focused(workspaces)?.id
   const plan = opened(workspaces, next, {
     place:
       how.place === "group" && from
         ? { to: "group", pane: from }
-        : how.place === "project"
-          ? { to: "project", project }
+        : how.place === "project" || how.place === "own"
+          ? { to: how.place, project }
           : how.place === "free"
             ? { to: "free" }
             : undefined,
@@ -353,30 +354,34 @@ export function placingOf(
  * Where a Pane the Person opens goes, by the Flow and the Projects as they
  * are now (`placingOf`; ADR 0102, decision 3).
  * In the Flow `free`, right of the Pane in front. In the row and solo:
+ * - one an Agent opens with its Thread not shown (`agent`), last on its
+ *   Project's workspace;
  * - a Thread, as its kind's `home` says, last on its Project's workspace,
  *   or, of no Project, on the top free workspace;
  * - another Pane of no Project, right of the Pane in front;
  * - a Pane opened from a Group of its Project, into that Group;
- * - one opened on a free workspace, or on its Project's, right of the Pane
- *   in front;
- * - any other, last on its Project's workspace.
+ * - one opened on a free workspace, right of the Pane in front;
+ * - any other, last into its Project's own Group, first on its workspace.
  */
 export function placeFor(
   workspaces: Workspaces,
   project: ProjectId,
   pane: PaneState,
-  { flow, scratch }: Placing
+  { flow, scratch }: Placing,
+  agent = false
 ): Place {
   if (flow === "free") return "right"
+  if (agent) return "project"
   const none = scratch(project)
   if (homeOf(pane) === "project") return none ? "free" : "project"
   if (none) return "right"
   const { workspace, column } = focusedColumn(workspaces)
   const from = column?.entries[column.active]
+  // From the Project's own Group, last into it, not stacked in a Deck.
+  if (column?.group !== undefined && column.group === workspace.own)
+    return "own"
   if (column?.group !== undefined && from?.project === project) return "group"
-  return isFree(workspace) || workspace.project === project
-    ? "right"
-    : "project"
+  return isFree(workspace) ? "right" : "own"
 }
 
 /**

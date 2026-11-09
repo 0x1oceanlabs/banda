@@ -555,6 +555,30 @@ fn project_row() -> Tracing {
     t
 }
 
+fn own_group() -> Tracing {
+    let mut t = Tracing::new(
+        13,
+        "own-group",
+        "A Project's own Panes open last into its own Group, first on its workspace: the \
+         Group is made at the start when there is none, and goes with its last Pane.",
+    );
+    let row = |project: &str| json!({ "place": { "to": "project", "project": project } });
+    let own = |project: &str| json!({ "place": { "to": "own", "project": project } });
+    t.ok("open", and(shows(WORK, "agents.thread", 1), row(WORK)));
+    t.ok("open", and(shows(WORK, "terminal.terminal", 2), own(WORK)));
+    t.ok("open", and(shows(WORK, "terminal.terminal", 3), own(WORK)));
+    assert_eq!(t.layout()[0], [vec![2], vec![3], vec![1]]);
+    assert_eq!(t.grouping()[0][..2], [1, 1]);
+    // A Project with no workspace: the bottom one, its own Group on it.
+    t.ok("open", and(shows(HOME, "files.files", 4), own(HOME)));
+    assert_eq!(t.layout()[1], [vec![4]]);
+    let four = t.pane(1, 0, 0);
+    t.ok("close", json!({ "pane": four }));
+    t.ok("open", and(shows(HOME, "files.files", 5), own(HOME)));
+    assert_eq!(t.layout()[1], [vec![5]]);
+    t
+}
+
 fn thread_groups() -> Tracing {
     let mut t = Tracing::new(
         6,
@@ -1022,6 +1046,7 @@ fn the_traces_the_clients_copy_replays_are_what_the_engine_does() {
         take_over(),
         ran_before(),
         update(),
+        own_group(),
     ];
     let steps = || traces.iter().flat_map(|t| &t.trace.steps);
 
@@ -1057,6 +1082,8 @@ fn the_traces_the_clients_copy_replays_are_what_the_engine_does() {
         "place beside",
         "place workspace",
         "place project",
+        "place own",
+        "place free",
         "place group",
         "side above",
         "side below",

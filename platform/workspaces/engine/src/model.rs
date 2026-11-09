@@ -148,6 +148,12 @@ pub struct Workspace {
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "space")]
     #[ts(optional)]
     pub project: Option<ProjectId>,
+    /// The Project's own Group, first here: the Panes the Person opened for
+    /// the Project and not for an Agent (ADR 0102, decision 4). Left out,
+    /// none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub own: Option<GroupId>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -286,6 +292,10 @@ pub enum Place {
         #[serde(alias = "space")]
         project: ProjectId,
     },
+    /// Last into the Project's own Group, first on its workspace (ADR 0102,
+    /// decision 4): the workspace as `Project` finds it; the Group made
+    /// there at the start when it has none.
+    Own { project: ProjectId },
     /// Last on the top free workspace, one no Project owns that holds a
     /// Pane, as a Thread of no Project opens (ADR 0102, decision 1); else
     /// the empty one at the bottom, which is free then.
@@ -327,6 +337,7 @@ fn blank(id: WorkspaceId) -> Workspace {
         columns: Vec::new(),
         filled: None,
         project: None,
+        own: None,
     }
 }
 
@@ -562,10 +573,25 @@ fn put(
             list.insert(above_empty(list, index), workspace);
         }
         Place::Project { project } => {
-            let w =
-                (list.iter().position(|w| w.project == Some(project))).unwrap_or(list.len() - 1);
-            list[w].project = Some(project);
+            let w = project_workspace(list, project);
             put_last(list, w, column, seed)?;
+        }
+        Place::Own { project } => {
+            let w = project_workspace(list, project);
+            let own = list[w].own;
+            let columns = &mut list[w].columns;
+            let at = own
+                .and_then(|g| columns.iter().rposition(|c| c.group == Some(g)))
+                .map_or(0, |last| last + 1);
+            let group = own.unwrap_or_else(|| seed.group());
+            columns.insert(
+                at,
+                Column {
+                    group: Some(group),
+                    ..column
+                },
+            );
+            list[w].own = Some(group);
         }
         Place::Free => {
             let w = (list.iter())
@@ -592,6 +618,14 @@ fn put(
         }
     }
     Ok(())
+}
+
+/// The workspace `project` owns, even emptied; else the empty one at the
+/// bottom, which it owns then (ADR 0102, decision 1).
+fn project_workspace(list: &mut Arrangement, project: ProjectId) -> usize {
+    let w = (list.iter().position(|w| w.project == Some(project))).unwrap_or(list.len() - 1);
+    list[w].project = Some(project);
+    w
 }
 
 /// Puts a column last on workspace `w`.
@@ -1025,10 +1059,13 @@ fn normalize(list: &mut Arrangement, seed: &Seed) {
             }
             before = column.group;
         }
-        if let Some(filled) = workspace.filled
-            && !workspace.columns.iter().any(|c| c.group == Some(filled))
-        {
+        // A Group the workspace names, gone from it, is named no more.
+        let holds = |w: &Workspace, g: GroupId| w.columns.iter().any(|c| c.group == Some(g));
+        if workspace.filled.is_some_and(|g| !holds(workspace, g)) {
             workspace.filled = None;
+        }
+        if workspace.own.is_some_and(|g| !holds(workspace, g)) {
+            workspace.own = None;
         }
     }
     // A Project's, emptied, is never the empty one at the bottom (ADR 0102,
@@ -1746,6 +1783,36 @@ mod tests {
     }
 
     #[test]
+    fn a_projects_own_panes_open_in_its_own_group_first_on_its_workspace() {
+        let mut list = start();
+        let (work, home) = (ProjectId::new(), ProjectId::new());
+        let own = |project| Some(Place::Own { project });
+        opened(
+            &mut list,
+            shown(work, "agents.thread", 1),
+            Some(Place::Project { project: work }),
+        );
+        // The first starts the Group, at the start of the workspace.
+        opened(&mut list, shown(work, "terminal.terminal", 2), own(work));
+        opened(&mut list, shown(work, "terminal.terminal", 3), own(work));
+        assert_eq!(layout(&list)[0], [vec![2], vec![3], vec![1]]);
+        let group = list[0].columns[0].group;
+        assert!(group.is_some());
+        assert_eq!(list[0].own, group);
+        assert_eq!(list[0].columns[1].group, group);
+        assert_ne!(list[0].columns[2].group, group);
+        // A Project with no workspace gets one, its own Group on it.
+        opened(&mut list, shown(home, "files.files", 4), own(home));
+        assert_eq!(layout(&list)[1], [vec![4]]);
+        assert_eq!(list[1].project, Some(home));
+        assert!(list[1].own.is_some());
+        // Its last Pane gone, the workspace has no own Group.
+        let four = list[1].columns[0].panes[0].id;
+        close(&mut list, four, &seed()).unwrap();
+        assert_eq!(list[1].own, None);
+    }
+
+    #[test]
     fn a_thread_of_no_project_opens_on_the_top_free_workspace() {
         let mut list = start();
         let (work, none) = (ProjectId::new(), ProjectId::new());
@@ -2092,6 +2159,7 @@ mod tests {
             columns,
             filled: None,
             project: None,
+            own: None,
         };
         let window = vec![
             workspace(vec![column(vec![pane(1), pane(2)])]),

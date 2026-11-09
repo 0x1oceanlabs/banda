@@ -511,9 +511,9 @@ export function Shell({
         return (again || !update ? opening : updating)(w, into, pane, {
           ...how,
           ...(at?.from ? { from: at.from } : {}),
-          // What an Agent opens goes into its Thread's Group; anything
-          // else, where the Flow says (ADR 0102, decision 3).
-          place: at?.from ? "group" : placeFor(w, into, pane, placing),
+          // What an Agent opens goes into its Thread's Group, else where
+          // the Flow says (ADR 0102, decision 3).
+          place: at?.from ? "group" : placeFor(w, into, pane, placing, !!at),
           ...(again ? { again } : { keep: true }),
         })
       })

@@ -188,17 +188,20 @@ test("a Pane the Person opens goes where the Flow says (ADR 0102, decision 3)", 
   const free = on({ columns: [column("c", "b")] })
   // Free: right of the Pane in front, wherever it is.
   expect(where(theirs, "free")).toBe("right")
-  // Its Project's workspace: right of the Pane in front; in a Group of
-  // its Project, into it.
-  expect(where(mine)).toBe("right")
+  // In a Group of its Project, into it; anywhere else on a Project's
+  // workspace, its own or another's, into its Project's own Group.
   expect(where(grouped)).toBe("group")
-  // Another Project's workspace or a Group of another: its own workspace.
-  expect(where(theirs)).toBe("project")
+  expect(where(mine)).toBe("own")
+  expect(where(theirs)).toBe("own")
   expect(where(on({ project: "b", columns: [column("c", "b", "g")] }))).toBe(
-    "project"
+    "own"
   )
-  // An empty workspace: its own one too.
-  expect(where(on({}))).toBe("project")
+  // An empty workspace: its own Group too.
+  expect(where(on({}))).toBe("own")
+  // From inside its own Group, last into it.
+  expect(
+    where(on({ project: "a", own: "g", columns: [column("c", "a", "g")] }))
+  ).toBe("own")
   // A free workspace keeps it, right of the Pane in front, as one of no
   // Project does anywhere.
   expect(where(free)).toBe("right")
