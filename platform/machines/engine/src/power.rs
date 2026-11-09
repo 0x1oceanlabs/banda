@@ -115,12 +115,11 @@ pub trait Source: Send + 'static {
 }
 
 /// This machine's power as `machine.power` says it: read while a window
-/// hears it, and not at all while none does. A clone is the same; the
-/// reading ends as the last one drops.
-#[derive(Clone)]
+/// hears it, and not at all while none does. The reading ends as it
+/// drops.
 pub struct Meter {
     told: Arc<Told>,
-    _reading: Arc<Reading>,
+    _reading: Reading,
 }
 
 struct Told {
@@ -161,7 +160,7 @@ impl Meter {
         let reading = tokio::spawn(read(source, told.clone(), awake, every));
         Meter {
             told,
-            _reading: Arc::new(Reading(reading)),
+            _reading: Reading(reading),
         }
     }
 
