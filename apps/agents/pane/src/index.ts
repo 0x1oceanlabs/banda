@@ -123,6 +123,18 @@ export const agents = defineModule({
     ...zoomActions(THREAD, "agents.thread", "the Thread", "Thread"),
     details,
     thread("find", "Find in the Thread", { code: "KeyF", primary: true }),
+    // T3 Code's keys for the provider, on Ctrl (⌘): Banda's Mod+Shift+↑/↓
+    // move the Pane (ADR 0078, decision 11).
+    thread(
+      "account-previous",
+      "Move the Thread to the previous account of its Harness",
+      { code: "ArrowUp", primary: true, shift: true }
+    ),
+    thread(
+      "account-next",
+      "Move the Thread to the next account of its Harness",
+      { code: "ArrowDown", primary: true, shift: true }
+    ),
     ...zoomActions(VISUAL, "agents.visual", "the Visual", "Visual preview"),
   ],
   scopes: [

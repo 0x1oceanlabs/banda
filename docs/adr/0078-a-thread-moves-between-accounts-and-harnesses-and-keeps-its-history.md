@@ -118,6 +118,8 @@ The points Roma decided are marked _decided_.
     - A fifth account and later take the colours again from the first. Their letter still tells them apart. An account's colour can be picked in Add account and in its ⋯.
 
 11. **`Mod+Shift+↑` and `Mod+Shift+↓` move the Thread to the previous or next account of its Harness** (_decided_). They are the actions `thread.account.previous` and `thread.account.next` (ADR 0071).
+    - As built (step 6): T3 Code's Mod is Ctrl (⌘), and Banda's Mod+Shift+↑/↓ (Alt) already move a Pane (ADR 0025). So the keys are Ctrl+Shift+↑/↓ (⌘⇧↑/↓) in the Thread's scope, the actions `agents.thread.account-previous` and `agents.thread.account-next`. An account that is out is passed over.
+    - The confirmation of decision 5 shows until the Thread's first handoff: a Thread that moved to another Harness once moves without it.
 
 ## Consequences
 

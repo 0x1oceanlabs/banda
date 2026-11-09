@@ -212,6 +212,32 @@
       "scope": "thread"
     },
     {
+      "id": "agents.thread.account-previous",
+      "title": "Move the Thread to the previous account of its Harness",
+      "section": "Thread",
+      "keys": [
+        {
+          "code": "ArrowUp",
+          "primary": true,
+          "shift": true
+        }
+      ],
+      "scope": "thread"
+    },
+    {
+      "id": "agents.thread.account-next",
+      "title": "Move the Thread to the next account of its Harness",
+      "section": "Thread",
+      "keys": [
+        {
+          "code": "ArrowDown",
+          "primary": true,
+          "shift": true
+        }
+      ],
+      "scope": "thread"
+    },
+    {
       "id": "agents.visual.zoom-in",
       "title": "Zoom the Visual in",
       "section": "Visual preview",
