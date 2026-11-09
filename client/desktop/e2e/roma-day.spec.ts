@@ -488,6 +488,20 @@ test("Alt+Z snoozes the Thread in front until the time typed, its Pane closes, U
   await expect(shelf).toBeHidden()
   await expect(row).toBeVisible()
   await expect(row).not.toContainText("·")
+
+  // Opened while it sleeps, its picker wakes it too.
+  await row.click()
+  await page.keyboard.press("Alt+KeyZ")
+  await field.fill("45m")
+  await field.press("Enter")
+  await expect(row).toContainText(/ · 4\dm/)
+  await row.click()
+  await page.keyboard.press("Alt+KeyZ")
+  await picker.getByText("Wake now").click()
+  await expect(picker).toBeHidden()
+  await leaveSidebar(page)
+  await expect(shelf).toBeHidden()
+  await expect(row).not.toContainText("·")
 })
 
 test("a Thread at work snoozed until it's done comes back as its turn ends, with a toast that opens it (ADR 0074)", async () => {
