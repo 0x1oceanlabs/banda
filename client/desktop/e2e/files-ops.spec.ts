@@ -122,10 +122,11 @@ test("Files makes a file, renames in place, duplicates, pastes with a clash kept
   await expect(row("made.md")).toBeVisible()
   expect(existsSync(join(project, "docs/notes.md"))).toBe(false)
 
-  // Ctrl+D duplicates beside it, the copy picked.
+  // Ctrl+D duplicates beside it, the copy picked, alone.
   await row("b.txt").click()
   await page.keyboard.press("Control+d")
   await expect(row("b 2.txt")).toHaveAttribute("aria-selected", "true")
+  await expect(row("b.txt")).toHaveAttribute("aria-selected", "false")
   expect(textOf(join(project, "docs/b 2.txt"))).toBe("b")
   await expect(page.getByText("Duplicated “b.txt” as “b 2.txt”")).toBeVisible()
 
