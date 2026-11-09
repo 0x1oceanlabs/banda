@@ -1,4 +1,10 @@
-import type { CommandOptions, Engine, ProjectId, Status } from "@banda/contract"
+import {
+  type CommandOptions,
+  type Engine,
+  Lost,
+  type ProjectId,
+  type Status,
+} from "@banda/contract"
 import type { ListedThread, ThreadList } from "@banda/contract/agents"
 import { beforeEach, expect, test, vi } from "vitest"
 import { applyThreads } from "./list"
@@ -264,7 +270,7 @@ test("a host away is sent nothing and keeps nothing: a menu's mark says so, the 
   ])
 })
 
-test("a host that goes before it answers takes the mark back, and is not sent it again once back", async () => {
+test("a host that goes before it answers takes the mark back, and says so once", async () => {
   const { engine, asked, go } = engineIn()
   const sent = mark(engine, PROJECT, "t1", { seen: null })
   expect(sendingTo(engine).t1).toBeDefined()
@@ -274,14 +280,14 @@ test("a host that goes before it answers takes the mark back, and is not sent it
   expect(said.errors).toEqual([
     "Banda lost its engine for a moment. Try again.",
   ])
-  // Sent once, it does not go again as the host comes back, so the mark
-  // the toast called failed does not land later (decision 8). One that
-  // reached the host before it went may have landed all the same: its
-  // fact shows it then, not this window.
+  // Sent once, its command fails too, as the engine does not send it
+  // again once the host is back: the mark the toast called failed does
+  // not land later (decision 8). That Lost changes nothing here.
+  asked[0]!.refuse(new Lost())
   go("open")
   await Promise.resolve()
-  expect(asked.map(({ options }) => options)).toEqual([{ once: true }])
   expect(sendingTo(engine)).toEqual({})
+  expect(said.errors).toHaveLength(1)
 
   // The window's own seen goes as quietly.
   const quiet = engineIn()
