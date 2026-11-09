@@ -19,7 +19,7 @@ import {
   useState,
 } from "react"
 import type { Problem } from "@banda/contract/look"
-import { attentionOf, useCalls, useWorkingHere } from "../calls/stores"
+import { barAttention, useCalls, useWorkingHere } from "../calls/stores"
 import { useLookProblems } from "../look"
 import { type Layout, moved, same, written } from "./arrange"
 import { PARTS, type Part } from "./placed"
@@ -62,7 +62,7 @@ export function Bar({
   const keyFor = useKeyLabel()
   // What the modules' work calls the Person for, for the mark to show,
   // and how many Threads work now, which a restart into an update stops.
-  const attention = useCalls(attentionOf)
+  const attention = useCalls(barAttention)
   const working = useWorkingHere()
   const mark = loudest([attention.mark, markOf(status)])
   const { waiting } = attention

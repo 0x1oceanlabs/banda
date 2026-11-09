@@ -88,8 +88,11 @@
  *   which the Window fills from the items; it takes only the mark's types
  *   but for a Deck's segment. What in the Tiling still names an Item, and
  *   what in the page still reads an Item's Agent, is listed, only falling.
+ * - Where a Thread stands is said once, in `@banda/ui/status` (ADR 0098,
+ *   decision 26): what still reads a Later against the clock by itself
+ *   is listed, and the list only falls.
  */
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { dirname, join, relative, sep } from "node:path"
 import {
   appStrings,
@@ -329,7 +332,7 @@ test("the Tiling names what the Apps list no more than the list holds", () => {
  * The page's files that read the Agent an Item names (`.agent`, `{ agent
  * }`) or find an Item by it (`listedOf`), but for tests: the fold that
  * puts what a module says of an Agent's Thread on that Thread's row
- * (`attention.ts`); `besideOf`, which opens an Agent's Pane beside its
+ * (`fold.ts`); `besideOf`, which opens an Agent's Pane beside its
  * Thread; the counts, which name the Thread the Pane in focus shows when
  * it is an Agent's; and the Window's adapter to the Tiling, where a
  * Thread's Agent is its Group's owner. No Tiling file, and not the
@@ -337,7 +340,7 @@ test("the Tiling names what the Apps list no more than the list holds", () => {
  * as `item@1` names its owner. None joins it, and one that goes leaves it.
  */
 const AGENT_READERS = [
-  "web/src/bar/attention.ts",
+  "web/src/bar/fold.ts",
   "web/src/calls/sight.ts",
   "web/src/sidebar/Counts.tsx",
   "web/src/window/shows.ts",
@@ -1070,9 +1073,9 @@ test("only the terminal's renderer draws on its canvas", () => {
  */
 const RANKING = [
   // `loudest`
-  "client/ui/src/components/banda-mark.tsx",
+  "client/ui/src/lib/mark-state.ts",
   // the loudest of what an Agent's Thread calls about
-  "client/web/src/bar/attention.ts",
+  "client/web/src/bar/fold.ts",
   // the loudest chime, and whether it is louder than the last
   "platform/notifications/pane/src/sound.ts",
   "platform/notifications/pane/src/sound.ts",
@@ -2117,4 +2120,38 @@ test("the kit names the core again only as listed", () => {
     })
     .sort()
   expect(naming).toEqual(UI_FROM_CORE)
+})
+
+/**
+ * The files, tests aside, that still read a Later against the clock by
+ * themselves (`sleeps`, `wokeOf`), not through `@banda/ui/status`: a
+ * Thread's own lines of its Later, read off its own events. None joins
+ * the list, and one that goes leaves it.
+ */
+const LATER_READERS = [
+  "apps/agents/pane/src/lines/ended.tsx",
+  "apps/agents/pane/src/thread/Later.tsx",
+]
+
+test("where a Thread stands is read from status.ts, and no more files read a Later themselves", () => {
+  const said = ["client/ui/src/status.ts", "client/ui/src/lib/later.ts"].map(
+    (file) => join(root, file)
+  )
+  const folders = [
+    join(app, "web/src"),
+    join(app, "ui/src"),
+    ...["apps", "platform"].flatMap((top) =>
+      readdirSync(join(root, top), { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => join(root, top, entry.name, "pane/src"))
+        .filter((folder) => existsSync(folder))
+    ),
+  ]
+  const reading = folders
+    .flatMap((folder) => sources(folder, { tests: false }))
+    .filter((file) => !said.includes(file))
+    .filter((file) => /\b(sleeps|wokeOf)\(/.test(readFileSync(file, "utf8")))
+    .map((file) => relative(root, file))
+    .sort()
+  expect(reading).toEqual(LATER_READERS)
 })

@@ -1,6 +1,6 @@
 import type { ListedThread, TurnView } from "@banda/contract/agents"
 import { expect, test } from "vitest"
-import { attentionOf, markOf, settledTurn } from "./marks"
+import { markOf, settledTurn } from "./marks"
 import { NOTHING } from "../thread/state"
 
 function thread(more: Partial<ListedThread> = {}): ListedThread {
@@ -43,21 +43,6 @@ test("a turn its host keeps seen settles; a Question still asks", () => {
   expect(
     markOf({ ...seen("done"), asking: [{ item: "q1", title: "Which?" }] })
   ).toBe("asking")
-})
-
-test("a Project calls with its loudest Thread, and counts who waits", () => {
-  const threads = [
-    ended("running"),
-    { ...ended("failed"), id: "t2" },
-    { ...ended("done"), id: "t3" },
-    { ...thread({ asking: [{ item: "q", title: "Which?" }] }), id: "t4" },
-  ]
-  expect(attentionOf(threads)).toEqual({ mark: "failed", waiting: 2 })
-  const seen = threads.map((one) =>
-    one.id === "t2" ? { ...one, seen: "u1" } : one
-  )
-  expect(attentionOf(seen)).toEqual({ mark: "asking", waiting: 1 })
-  expect(attentionOf([])).toEqual({ mark: "rest", waiting: 0 })
 })
 
 test("the turn a Person sees settled is the latest that began and ended", () => {

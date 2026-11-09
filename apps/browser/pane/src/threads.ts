@@ -250,8 +250,7 @@ function WaitsWatch({ project, report }: WatchProps) {
       const said = JSON.stringify(listed)
       if (said === was) return
       was = said
-      const mark = listed.length ? "asking" : "rest"
-      report({ mark, waiting: listed.length, listed })
+      report({ listed })
     }
     check()
     // A Thread's title and Project are the lists'; the rest, the waits'.

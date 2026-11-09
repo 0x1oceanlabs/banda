@@ -47,7 +47,7 @@ test("a Thread's item actions are Threads', then the sidebar list's Archive", ()
 })
 
 test("the Thread menu's rows, as it stands", () => {
-  const at = { now: 10, archived: false }
+  const at = { now: 10 }
   const titles = (listed: Listed, more = {}) =>
     rowsOf(listed, { ...at, ...more }).map(({ row }) =>
       row.off ? `${row.title} (off)` : row.title
@@ -72,7 +72,7 @@ test("the Thread menu's rows, as it stands", () => {
     "Archive thread (off)",
   ])
   expect(
-    titles(thread({ later: { at: 1, until: 20 } }), { archived: true })
+    titles(thread({ later: { at: 1, until: 20 }, archived: true }))
   ).toEqual(["Rename…", "Suggest a title", "Wake now", "Unarchive thread"])
 })
 

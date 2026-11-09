@@ -19,21 +19,16 @@ import {
   useHostsBy,
 } from "@banda/core/react"
 import type { Listed, Report, Watch } from "@banda/ui/pane"
-import {
-  dropHost,
-  StoresContext,
-  takeAttention,
-  takeLists,
-} from "../calls/stores"
+import { dropHost, StoresContext, takeLists } from "../calls/stores"
 import { useLowBattery } from "../calls/battery"
 import { runs, watches } from "../registry"
 import { useListedOn } from "../window/machines"
-import { combine, folded } from "./attention"
+import { folded } from "./fold"
 
 /**
  * Draws every module's Watch for every Project, while the engine runs the
- * module, and keeps what they call the Person for together and what each
- * Project lists in the Window's stores. It shows nothing: the bar and the
+ * module, and keeps what each Project lists in the Window's stores, where
+ * what calls the Person is read from it (`status.ts`). It shows nothing: the bar and the
  * sidebar show what it says, and the notifications module tells of what
  * calls (ADR 0056). This machine's draws one more for each other host
  * that is live (`Elsewhere`). Drawn again only as its own props change.
@@ -63,7 +58,7 @@ export const Watches = memo(function Watches({
     if (heard) setTold(true)
     setReports((reports) => {
       const before = reports[key]
-      if (before && heard && same(before, heard)) return reports
+      if (before && heard && before.listed === heard.listed) return reports
       if (!before && !heard) return reports
       const next = { ...reports }
       if (heard) next[key] = heard
@@ -72,13 +67,6 @@ export const Watches = memo(function Watches({
     })
   }, [])
 
-  const { mark, waiting } = useMemo(
-    () => combine(Object.values(reports)),
-    [reports]
-  )
-  useEffect(() => {
-    if (says) takeAttention(stores, { mark, waiting }, host)
-  }, [stores, mark, waiting, host, says])
   const lists = useMemo(() => {
     const lists: Record<ProjectId, readonly Listed[]> = {}
     for (const { project, listed } of Object.values(reports)) {
@@ -162,10 +150,6 @@ const NONE: readonly ProjectSummary[] = []
 /** What one Watch said about one Project. */
 type Heard = Report & { project: ProjectId }
 
-function same(a: Heard, b: Heard): boolean {
-  return a.mark === b.mark && a.waiting === b.waiting && a.listed === b.listed
-}
-
 /** One Watch on one Project; what it said goes with it. */
 function One({
   id,
@@ -186,8 +170,7 @@ function One({
     (report: Report) => hear(id, { ...report, project }),
     [hear, id, project]
   )
-  // It says what it calls for itself, once drawn; leaving, it calls for
-  // nothing.
+  // It says what it lists itself, once drawn; leaving, it lists nothing.
   useEffect(() => () => hear(id), [hear, id])
   const Watched = watch.Watch
   return (

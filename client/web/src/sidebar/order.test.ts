@@ -2,7 +2,8 @@ import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { DEFAULT_SIDEBAR } from "@banda/contract/sidebar"
 import { HostsContext, KeptHosts, keyNamed } from "@banda/core/react"
 import type { MarkState } from "@banda/ui/components/banda-mark"
-import { callsOf, type Listed, type Lists } from "@banda/ui/pane"
+import type { Listed, Lists } from "@banda/ui/pane"
+import { callsOf } from "@banda/ui/status"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "vitest"
@@ -34,9 +35,6 @@ const one = (id: string, mark: MarkState, changed: number): Listed => ({
   pane: { kind: "thread", args: { thread: id } },
 })
 
-const none = () => false
-const marks = { archived: none, asleep: none, woke: () => undefined }
-
 /** Every call, walked with Alt+U once each from no Thread in front. */
 function walk(lists: Lists, keys: readonly string[]): string[] {
   const calls = callsOf(lists, 0)
@@ -48,7 +46,7 @@ function walk(lists: Lists, keys: readonly string[]): string[] {
 
 /** What waits in the counts' list, top down. */
 function counted(lists: Lists, keys: readonly string[]): string[] {
-  return inOrder(tally(lists, ["waiting"], none), keys).waiting.map(
+  return inOrder(tally(lists, ["waiting"], 0), keys).waiting.map(
     ({ project, listed }) => `${project}:${listed.id}`
   )
 }
@@ -65,9 +63,9 @@ test("the sidebar list draws the order the counts list and Alt+U go by, whatever
   }
   const projects = [project("a"), project("b")]
   for (const settings of [DEFAULT_SIDEBAR, byProject]) {
-    const keys = keysOf(order(lists, projects, marks, { settings }))
+    const keys = keysOf(order(lists, projects, 0, { settings }))
     // The sidebar list, a section folded: the same rows in the same order.
-    const drawn = order(lists, projects, marks, {
+    const drawn = order(lists, projects, 0, {
       settings,
       toggled: new Set(["a", "active"]),
     })
@@ -99,7 +97,7 @@ test("another machine's Threads stand in one place in the sidebar list, the coun
   ] as const
   for (const [settings, sidebar] of placed) {
     const keys = keysOf(
-      order(twoMachines, [project("a")], marks, { settings, elsewhere })
+      order(twoMachines, [project("a")], 0, { settings, elsewhere })
     )
     expect(keys).toEqual(sidebar)
     expect(counted(twoMachines, keys)).toEqual(sidebar)
@@ -137,7 +135,7 @@ test("the counts and Alt+U take the other machines from the Window's hosts as th
   expect(drawn.map((host) => host.name)).toEqual(["devbox", "lost"])
   // devbox lists "far" after the drawing: the key finds it, newest first.
   kept.projects("devbox", [project("far")])
-  expect(keysOf(orderNow!(twoMachines, [project("a")], marks))).toEqual([
+  expect(keysOf(orderNow!(twoMachines, [project("a")], 0))).toEqual([
     "far:there",
     "a:ask",
     "a:old",

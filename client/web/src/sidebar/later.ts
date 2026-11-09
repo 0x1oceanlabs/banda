@@ -1,12 +1,11 @@
 /**
- * How the sidebar reads a Thread's Later (ADR 0074). The engine keeps the
- * Later, and what its Person saw of it waking beside it (ADR 0096);
- * whether the Thread sleeps now is worked out here, against the clock.
+ * The Later clock (ADR 0074): when it moves next. The engine keeps the
+ * Later and fires nothing at its time, so the window moves its clock as
+ * the next one wakes, and reads where each Thread stands by it
+ * (`status.ts`).
  */
-import { useMemo } from "react"
-import { wokeOf } from "@banda/ui/lib/later"
-import { asleep, type Listed, type Lists } from "@banda/ui/pane"
-import { useIsArchived } from "./archived"
+import type { Lists } from "@banda/ui/pane"
+import { asleep } from "@banda/ui/status"
 
 /** When the first Thread of `lists` that sleeps at `now` wakes by its
  * time; none when none sleeps till a time. */
@@ -27,37 +26,4 @@ const LONGEST = 2 ** 31 - 1
  * past it, so it has woken by then. */
 export function wakeAfter(next: number): number {
   return Math.min(Math.max(0, next - Date.now()) + 50, LONGEST)
-}
-
-/** What the sidebar knows of Laters now, kept current. */
-export type Laters = {
-  /** The clock they are read by: it moves as the next one wakes. */
-  now: number
-  /** Whether a Thread sleeps. */
-  asleep: (listed: Listed) => boolean
-  /** When a Thread woke by itself, while its Person has not seen it. */
-  woke: (listed: Listed) => number | undefined
-  /** Whether a Thread is put away now, asleep or archived: what the bar's
-   * counts leave out. */
-  away: (listed: Listed) => boolean
-  /** Whether the Person archived a Thread (ADR 0069). */
-  archived: (listed: Listed) => boolean
-}
-
-/** The Laters read against `now`: the calls store's clock, which moves
- * only as the next of them wakes by its time, so nothing ticks while none
- * sleeps (`followCalls`). */
-export function useLatersAt(now: number): Laters {
-  const archived = useIsArchived()
-  return useMemo(
-    () => ({
-      now,
-      asleep: (listed) => asleep(listed, now),
-      woke: (listed) =>
-        listed.later?.wokeSeen ? undefined : wokeOf(listed.later, now),
-      away: (listed) => asleep(listed, now) || archived(listed),
-      archived,
-    }),
-    [now, archived]
-  )
 }

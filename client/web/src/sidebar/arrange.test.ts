@@ -1,6 +1,6 @@
 import type { ProjectSummary } from "@banda/contract"
 import type { MarkState } from "@banda/ui/components/banda-mark"
-import type { Listed } from "@banda/ui/pane"
+import type { Listed, Lists } from "@banda/ui/pane"
 import { expect, test } from "vitest"
 import { arrange, type Arranged } from "./arrange"
 import { DEFAULT_SIDEBAR } from "@banda/contract/sidebar"
@@ -44,6 +44,20 @@ const lists = {
   ],
 }
 
+/** The Later clock the tests read by. */
+const NOW = 100
+
+/** `lists` with the Threads of `ids` archived, as their host lists them. */
+const archive = (lists: Lists, ids: readonly string[]): Lists =>
+  Object.fromEntries(
+    Object.entries(lists).map(([key, held]) => [
+      key,
+      held.map((one) =>
+        ids.includes(one.id) ? { ...one, archived: true } : one
+      ),
+    ])
+  )
+
 const ids = (arranged: Arranged, where: "sections" | "shelves" = "sections") =>
   arranged[where].map((s) => [s.key, s.rows.map((r) => r.listed.id)])
 
@@ -80,9 +94,14 @@ const of = (
   toggled?: Set<string>,
   archived: readonly string[] = []
 ) =>
-  arrange(lists, projects, resolve(preset, keys), only, toggled, {
-    archived: (listed) => archived.includes(listed.id),
-  })
+  arrange(
+    archive(lists, archived),
+    projects,
+    resolve(preset, keys),
+    NOW,
+    only,
+    toggled
+  )
 
 test("inbox: one list, what waits first; the working and the archived on shelves", () => {
   const inbox = of("inbox")
@@ -159,13 +178,14 @@ test("the Person's keys win over the preset", () => {
 })
 
 test("empty sections hide unless the settings show them", () => {
-  const none = arrange({}, projects, resolve("inbox"))
+  const none = arrange({}, projects, resolve("inbox"), NOW)
   expect(none.sections).toEqual([])
   expect(none.shelves).toEqual([])
   const shown = arrange(
     {},
     projects,
-    resolve("inbox", { group: { empty: "show" } })
+    resolve("inbox", { group: { empty: "show" } }),
+    NOW
   )
   expect(shown.sections.map((s) => s.key)).toEqual(["active"])
   expect(shown.shelves.map((s) => s.key)).toEqual([
@@ -206,12 +226,10 @@ test("scratch Threads follow grouping, sorting, shelves and filtering like other
       projects: { list: true },
     })
     const result = arrange(
-      allLists,
+      archive(allLists, ["old"]),
       allProjects,
       settings,
-      undefined,
-      new Set(),
-      { archived: (row) => row.id === "old" }
+      NOW
     )
     expect(result.projects?.some((line) => line.project.scratch)).toBe(false)
     if (by === "project") {
@@ -238,7 +256,7 @@ test("scratch Threads follow grouping, sorting, shelves and filtering like other
           result.sections[0].rows.findIndex((r) => r.listed.id === "loose")
         )
     }
-    const filtered = arrange(allLists, allProjects, settings, landing.id)
+    const filtered = arrange(allLists, allProjects, settings, NOW, landing.id)
     expect(
       [...filtered.sections, ...filtered.shelves]
         .flatMap((s) => s.rows)
@@ -272,17 +290,12 @@ test("a put-off Thread waits on its shelf above Archive, by when it wakes", () =
       sleeping(one) ? { ...one, later: { at: 0, until: wakes[one.id] } } : one
     ),
   }
+  // Archived too, it is put off: a Later outranks the archive.
   const shown = arrange(
-    asleep,
+    archive(asleep, ["logo"]),
     projects,
     resolve("inbox"),
-    undefined,
-    new Set(),
-    {
-      asleep: sleeping,
-      // Archived too, it is put off: a Later outranks the archive.
-      archived: (listed) => listed.id === "logo",
-    }
+    NOW
   )
   expect(ids(shown)).toEqual([["active", ["migration", "form"]]])
   expect(ids(shown, "shelves")).toEqual([
@@ -299,16 +312,13 @@ test("a put-off Thread waits on its shelf above Archive, by when it wakes", () =
 })
 
 test("a Thread that woke stands with what calls, as of when it woke", () => {
-  const woke = arrange(
-    lists,
-    projects,
-    resolve("inbox"),
-    undefined,
-    new Set(),
-    {
-      woke: (listed) => (listed.id === "logo" ? 10 : undefined),
-    }
-  )
+  const wokeAt10 = {
+    ...lists,
+    s1: lists.s1.map((one) =>
+      one.id === "logo" ? { ...one, later: { at: 0, until: 10 } } : one
+    ),
+  }
+  const woke = arrange(wokeAt10, projects, resolve("inbox"), NOW)
   expect(ids(woke)).toEqual([
     ["active", ["logo", "letters", "migration", "form"]],
   ])
@@ -325,15 +335,15 @@ const withArc = {
   r2: [listed("idea", "asking", 9)],
 }
 const elsewhere = (preset: Preset, keys?: Keys) =>
-  arrange(withArc, projects, resolve(preset, keys), undefined, undefined, {}, [
+  arrange(withArc, projects, resolve(preset, keys), NOW, undefined, undefined, [
     arc,
   ])
 
 test("with no other host, every preset arranges as it did, and no row names one", () => {
   for (const preset of Object.keys(PRESETS) as Preset[]) {
-    const none = arrange(lists, projects, resolve(preset))
+    const none = arrange(lists, projects, resolve(preset), NOW)
     expect(
-      arrange(lists, projects, resolve(preset), undefined, new Set(), {}, [])
+      arrange(lists, projects, resolve(preset), NOW, undefined, new Set(), [])
     ).toEqual(none)
     expect(JSON.stringify(none)).not.toContain('"host"')
   }
@@ -362,9 +372,9 @@ test("grouped by Project, another host's sections follow this machine's, under i
     withArc,
     projects,
     resolve("projects"),
+    NOW,
     undefined,
     new Set(["arc/r1"]),
-    {},
     [arc]
   )
   expect(folded.sections.map((s) => [s.key, s.folded])).toEqual([

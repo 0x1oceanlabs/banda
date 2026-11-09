@@ -43,7 +43,7 @@ export function turnsIn(lists: Lists): number {
 /** How many Agents' Turns run on host `host`, as its Watches list them
  * in `stores`. */
 export const turnsOn = (stores: Stores, host: string): number =>
-  turnsIn(stores.hosts.get(host)?.lists ?? {})
+  turnsIn(stores.hosts.get(host) ?? {})
 
 /** `turnsOn`, while `stores` hold what host `host`'s Watches said; none
  * where they hold nothing of it, as in a popped-out window, which keeps

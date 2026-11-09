@@ -1,18 +1,9 @@
 /**
- * What the bar's mark shows: the loudest of what every module's Watch says
- * every Project calls for, and how many things wait for the Person in all.
+ * How a Project's list is drawn from what every module's Watch says of it.
  * Pure, so plain tests cover it.
  */
-import { loudest, MARK_ORDER } from "@banda/ui/components/banda-mark"
-import type { Attention, Listed } from "@banda/ui/pane"
-
-export function combine(reports: Iterable<Attention>): Attention {
-  const all = [...reports]
-  return {
-    mark: loudest(all.map((report) => report.mark)),
-    waiting: all.reduce((sum, report) => sum + report.waiting, 0),
-  }
-}
+import { MARK_ORDER } from "@banda/ui/components/banda-mark"
+import type { Listed } from "@banda/ui/pane"
 
 /**
  * A Project's list as the sidebar draws it: what a module says of another's

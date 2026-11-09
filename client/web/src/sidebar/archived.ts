@@ -6,28 +6,8 @@
  * it brings it back, as a reply brings a letter back in Gmail.
  */
 import type { ProjectId } from "@banda/contract"
-import { works } from "@banda/ui/components/banda-mark"
-import type { Listed, Lists } from "@banda/ui/pane"
-
-/** Whether the Person may archive `listed`: not at work, not asking. */
-export function archivable(listed: Listed): boolean {
-  return !works(listed.mark) && listed.mark !== "asking"
-}
-
-/** Whether `listed` is archived, as its App lists it from its host. */
-export function isArchived(listed: Listed): boolean {
-  return listed.archived === true
-}
-
-/** Whether a Thread is archived, for what is drawn. */
-export function useIsArchived(): (listed: Listed) => boolean {
-  return isArchived
-}
-
-/** Whether a Thread is archived now, as an act asks outside React. */
-export function archivedNow(listed: Listed): boolean {
-  return isArchived(listed)
-}
+import type { Lists } from "@banda/ui/pane"
+import { mayArchive } from "@banda/ui/status"
 
 /**
  * What Alt+S makes the row of `project` that is `thing`: archived, or back
@@ -41,6 +21,6 @@ export function toggled(
 ): boolean | undefined {
   const listed = lists[project]?.find((row) => row.id === thing)
   if (!listed) return undefined
-  if (archivedNow(listed)) return false
-  return archivable(listed) ? true : undefined
+  if (listed.archived) return false
+  return mayArchive(listed) ? true : undefined
 }

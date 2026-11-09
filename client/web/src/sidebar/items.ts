@@ -19,7 +19,8 @@ import { ArchiveIcon, ArchiveRestoreIcon } from "lucide-react"
 import { itemsOf } from "../registry"
 import type { StandRow } from "../tiling/PaneMenu"
 import type { Shell } from "../window/actions"
-import { archivable, archivedNow, toggled } from "./archived"
+import { mayArchive } from "@banda/ui/status"
+import { toggled } from "./archived"
 
 /**
  * Archive thread, or Unarchive thread (ADR 0069; ADR 0008, decision 4):
@@ -39,14 +40,14 @@ export const archiving: ItemAction<Shell> = {
   group: "other",
   does: "archive",
   offered: ["menu"],
-  row: (item, at) =>
-    at.archived
+  row: (item) =>
+    item.archived
       ? { title: "Unarchive thread", icon: ArchiveRestoreIcon }
       : {
           title: "Archive thread",
           icon: ArchiveIcon,
           // Not while it works or asks.
-          ...(archivable(item) ? {} : { off: true }),
+          ...(mayArchive(item) ? {} : { off: true }),
         },
   run: (shell, args) => {
     const at = itemOf(shell, args)
@@ -73,12 +74,6 @@ export function itemActionOf(
   does: NonNullable<ItemAction["does"]>
 ): ItemAction<Shell> | undefined {
   return itemActionsOf(listed).find((action) => action.does === does)
-}
-
-/** How `listed` stands for its rows, as an act reads it outside React:
- * in `project`, archived or not, now. */
-function itemAt(listed: Listed, project: ProjectSummary | undefined): ItemAt {
-  return { project, now: Date.now(), archived: archivedNow(listed) }
 }
 
 /** An item action with its row for one Item. */
@@ -111,10 +106,10 @@ export function paneRowsOf(
   project: ProjectId,
   projects: readonly ProjectSummary[]
 ): StandRow[] {
-  const at = itemAt(
-    listed,
-    projects.find((one) => one.id === project)
-  )
+  const at: ItemAt = {
+    project: projects.find((one) => one.id === project),
+    now: Date.now(),
+  }
   return offeredOf(listed, at, "pane").map(({ action, row }) => ({
     id: action.id,
     title: row.title,

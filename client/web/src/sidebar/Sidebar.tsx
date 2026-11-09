@@ -50,8 +50,9 @@ import { clock, problem } from "@banda/ui/lib/words"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
 import { seenNamed } from "@banda/ui/hooks/use-status"
-import { type Listed, type PaneState, mayPutOff } from "@banda/ui/pane"
-import { useLists, useLatersNow } from "../calls/stores"
+import type { Listed, PaneState } from "@banda/ui/pane"
+import { mayPutOff } from "@banda/ui/status"
+import { useLaterClock, useLists } from "../calls/stores"
 import {
   AlarmClockIcon,
   BadgeCheckIcon,
@@ -86,7 +87,6 @@ import { useNaming } from "@banda/ui/lib/naming"
 import { device } from "../boot"
 import { PRESET_WORDS, type Settings } from "./settings"
 import { type Held, held, hold, rowKey } from "./hold"
-import { useIsArchived } from "./archived"
 import { Dismiss, dismissing, newThread, useOpen } from "./open"
 import { itemActionOf } from "./items"
 import { pickLater } from "./LaterPicker"
@@ -146,8 +146,7 @@ export function Sidebar({
   isCurrent: (project: ProjectId, pane: PaneState) => boolean
 }) {
   const keyFor = useKeyLabel()
-  // What every module lists, from the Window's items, and its Laters by
-  // the calls' clock.
+  // What every module lists, from the Window's items.
   const lists = useLists()
   const open = dismissing(useRun(), onDismiss)
   const settings = useLookSidebar()
@@ -167,34 +166,16 @@ export function Sidebar({
     setMore(new Set())
     setFolded(new Set())
   }
-  // The Threads the Person archived (ADR 0069), and those that sleep or
-  // woke (ADR 0074).
-  const archived = useIsArchived()
-  const { asleep, woke } = useLatersNow()
+  // Where each Thread stands is read by the Later clock (ADR 0074).
+  const now = useLaterClock()
   // The other machines of `hosts.toml`, below this one's (ADR 0081): the
   // rows of those the order places, as the counts and Alt+U place them,
   // and each host's state by its name.
   const hosts = useHosts()
   const elsewhere = useElsewhere()
   const fresh = useMemo(
-    () =>
-      order(
-        lists,
-        projects,
-        { archived, asleep, woke },
-        { settings, only, toggled, elsewhere }
-      ),
-    [
-      lists,
-      projects,
-      settings,
-      only,
-      toggled,
-      archived,
-      asleep,
-      woke,
-      elsewhere,
-    ]
+    () => order(lists, projects, now, { settings, only, toggled, elsewhere }),
+    [lists, projects, now, settings, only, toggled, elsewhere]
   )
   // Under the pointer, the rows hold still; what would move or come
   // waits as updates, taken in by the pill or as the pointer leaves
@@ -581,7 +562,7 @@ function SectionView({
               current={isCurrent(row.project.id, row.listed.pane)}
               named={!mine}
               action={
-                row.state === "later" ? (
+                row.stand === "later" ? (
                   <Button variant="ghost" size="xs" onClick={() => wake(row)}>
                     <AlarmClockIcon />
                     Wake

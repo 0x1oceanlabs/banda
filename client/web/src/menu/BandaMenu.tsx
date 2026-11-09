@@ -10,7 +10,8 @@ import {
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import type { Bind } from "@banda/contract/look"
 import { ProjectSign } from "@banda/ui/components/project-sign"
-import { MARK_WORDS, waits } from "@banda/ui/components/banda-mark"
+import { MARK_WORDS } from "@banda/ui/components/banda-mark"
+import { calls } from "@banda/ui/status"
 import { MachineIcon, MachineMark } from "@banda/ui/components/machine-icon"
 import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
 import { Kbd, KbdGroup } from "@banda/ui/components/kbd"
@@ -67,7 +68,6 @@ import { runs, sources as allSources } from "../registry"
 import type { Shell } from "../window/actions"
 import { ThreadMark } from "@banda/ui/components/banda-mark"
 import { PRESET_WORDS } from "../sidebar/settings"
-import { useIsArchived } from "../sidebar/archived"
 import { itemActionsOf } from "../sidebar/items"
 import {
   type Act,
@@ -348,7 +348,6 @@ function Menu({
   // New Thread's key in force starts one with the words.
   const ask = useKeyOf()("thread.new")
   const { preset, presets } = useLookSidebar()
-  const archived = useIsArchived()
   const uses = useOpened()
   const [now] = useState(Date.now)
   const { at } = opening
@@ -388,7 +387,6 @@ function Menu({
       projects,
       actions,
       presets: { names: presets.map((one) => one.name), current: preset },
-      archived,
       now: laterClock,
       items: itemActionsOf,
       found: machines ? [...found, machines] : found,
@@ -401,7 +399,6 @@ function Menu({
       actions,
       presets,
       preset,
-      archived,
       laterClock,
       found,
       machines,
@@ -839,7 +836,7 @@ function RowView({
         inside?.kind === "project"
           ? undefined
           : listing?.find((one) => one.id === row.project)
-      const waiting = waits(listed.mark) && MARK_WORDS[listed.mark]
+      const waiting = calls(listed.mark) && MARK_WORDS[listed.mark]
       return (
         <>
           <ThreadMark listed={listed} />

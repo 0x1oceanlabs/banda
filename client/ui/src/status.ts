@@ -1,0 +1,124 @@
+/**
+ * Where a Thread stands for its Person, said once (ADR 0098, decision 26):
+ * the sidebar, the bar's Mark and counts, `Alt+U`, the notifications and
+ * the workspaces' dots all read it here, so they never disagree. Its turn,
+ * open, at work, put off until Later, or archived. Pure, read against the
+ * Later clock, so plain tests cover it.
+ */
+import type { ProjectId } from "@banda/contract"
+import { loudest, type MarkState, works } from "./lib/mark-state"
+import { sleeps, wokeOf } from "./lib/later"
+import type { Attention, Call, Listed, Lists } from "./pane"
+import type { Chime } from "./sound/families"
+
+/**
+ * Where a Thread stands:
+ * - `turn`: it calls its Person: it asks, it failed, it finished and they
+ *   have not seen it, or it woke from Later by itself;
+ * - `open`: nothing runs in it and nothing calls;
+ * - `working`: its Agent is at work;
+ * - `later`: put off, it sleeps;
+ * - `archived`: the Person put it away (ADR 0096).
+ */
+export type Stand = "turn" | "open" | "working" | "later" | "archived"
+
+/** Each place's words, as a tab or a heading names it. */
+export const STAND_WORDS: Readonly<Record<Stand, string>> = {
+  turn: "Your turn",
+  open: "Open",
+  working: "Working",
+  later: "Later",
+  archived: "Archive",
+}
+
+/** The marks that call their Person, and their calls (ADR 0011): with a
+ * Thread that woke by itself, what "waiting" means. */
+const CHIMES: Partial<Record<MarkState, Chime>> = {
+  done: "done",
+  asking: "asking",
+  failed: "failed",
+}
+
+/** Whether `mark` calls its Person to look or act. */
+export function calls(mark: MarkState): boolean {
+  return CHIMES[mark] !== undefined
+}
+
+/** Whether `listed` sleeps at `now`, put off until Later (ADR 0074). */
+export function asleep(listed: Listed, now: number): boolean {
+  return sleeps(listed.later, now)
+}
+
+/** When `listed` woke from Later by itself, while its Person has not seen
+ * it; none otherwise. */
+export function wokeAt(listed: Listed, now: number): number | undefined {
+  return listed.later?.wokeSeen ? undefined : wokeOf(listed.later, now)
+}
+
+/** Where `listed` stands at `now`. A Later outranks the rest: one put off
+ * calls no one while it sleeps (ADR 0074); then work; then the archive,
+ * which holds only what neither works nor asks. */
+export function standOf(listed: Listed, now: number): Stand {
+  if (asleep(listed, now)) return "later"
+  if (works(listed.mark)) return "working"
+  if (listed.archived) return "archived"
+  return calls(listed.mark) || wokeAt(listed, now) !== undefined
+    ? "turn"
+    : "open"
+}
+
+/** Whether a Thread that stands at `stand` is put away, Later or
+ * archived: what the bar's Mark, its counts and dots leave out. */
+export function isAway(stand: Stand): boolean {
+  return stand === "later" || stand === "archived"
+}
+
+/** Whether the Person may archive `listed`: not at work, not asking. */
+export function mayArchive({ mark }: Pick<Listed, "mark">): boolean {
+  return !works(mark) && mark !== "asking"
+}
+
+/** Whether the Person may put off `listed`: it does not ask (ADR 0074). */
+export function mayPutOff({ mark }: Pick<Listed, "mark">): boolean {
+  return mark !== "asking"
+}
+
+/** The bar's Mark over every list at `now`: the loudest mark of what is
+ * not put away, and how many are the Person's turn. */
+export function attentionOf(lists: Lists, now: number): Attention {
+  const marks: MarkState[] = []
+  let waiting = 0
+  for (const listed of Object.values(lists).flat()) {
+    const stand = standOf(listed, now)
+    if (isAway(stand)) continue
+    marks.push(listed.mark)
+    if (stand === "turn") waiting++
+  }
+  return { mark: loudest(marks), waiting }
+}
+
+/** The things in the lists that call their Person now, each a Call (ADR
+ * 0011): those whose turn it is by their mark. One put off or archived
+ * calls no one. */
+export function callsOf(lists: Lists, now = Date.now()): Call[] {
+  return Object.entries(lists).flatMap(([project, listed]) =>
+    (listed ?? []).flatMap((thing): Call[] => {
+      const chime = CHIMES[thing.mark]
+      if (!chime || standOf(thing, now) !== "turn") return []
+      const detail = thing.calls ?? thing.said
+      return [
+        {
+          key: `${project}:${thing.id}`,
+          project: project as ProjectId,
+          about: thing.id,
+          chime,
+          title: thing.title,
+          ...(detail ? { detail } : {}),
+          pane: thing.pane,
+          since: thing.changed,
+          ...(thing.answers?.length ? { answers: thing.answers } : {}),
+        },
+      ]
+    })
+  )
+}

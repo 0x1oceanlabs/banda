@@ -9,7 +9,7 @@
  */
 import type { ProjectId } from "@banda/contract"
 import type { Choice, ListedThread, Later } from "@banda/contract/agents"
-import { works } from "@banda/ui/components/banda-mark"
+import { mayArchive } from "@banda/ui/status"
 import {
   type Answering,
   type Listed,
@@ -104,7 +104,7 @@ export function listedOf(
       : undefined
   // Archived while it may be and nothing happened in it since, both by
   // its host's times (ADR 0096, decision 4).
-  const archived = archiveHolds(thread) && !works(mark) && mark !== "asking"
+  const archived = archiveHolds(thread) && mayArchive({ mark })
   return {
     id: thread.id,
     title: thread.title || "New Thread",
