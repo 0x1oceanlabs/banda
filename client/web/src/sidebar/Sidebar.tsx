@@ -76,13 +76,13 @@ import {
 } from "lucide-react"
 import { LOCATE } from "../menu/menu"
 import {
-  arrange,
   type Elsewhere,
   type Row as Arranged,
   type Section,
   type ProjectLine,
 } from "./arrange"
 import { useLookSidebar } from "../look"
+import { order } from "./order"
 import { Row } from "./Row"
 import { ThreadRows } from "../titles/ThreadMenu"
 import { TitleField } from "../titles/Title"
@@ -181,13 +181,12 @@ export function Sidebar({
   const elsewhere = useMemo((): Elsewhere[] => hosts.filter(holds), [hosts])
   const fresh = useMemo(
     () =>
-      arrange(
+      order(
         lists,
         projects,
-        settings,
-        only,
-        toggled,
         { archived, asleep, woke },
+        settings,
+        { only, toggled },
         elsewhere
       ),
     [

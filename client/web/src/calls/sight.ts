@@ -8,7 +8,7 @@ import type { ProjectId } from "@banda/contract"
 import type { Columns } from "@banda/contract/look"
 import type { Sight } from "@banda/ui/module"
 import { type Call, type Lists, listedOf, type PaneState } from "@banda/ui/pane"
-import { placeIn } from "../sidebar/order"
+import { byOrder, placeIn } from "../sidebar/order"
 import {
   type Column,
   current,
@@ -135,10 +135,13 @@ export function nextCall(
   order: readonly string[],
   here?: string
 ): Call | undefined {
+  const sorted = byOrder(
+    calling.filter((call) => call.key !== here),
+    order,
+    (call) => call.key,
+    (a, b) => a.since - b.since
+  )
   const at = placeIn(order)
-  const sorted = calling
-    .filter((call) => call.key !== here)
-    .sort((a, b) => at(a.key) - at(b.key) || a.since - b.since)
   const from = here === undefined ? -1 : at(here)
   return sorted.find((call) => at(call.key) > from) ?? sorted[0]
 }

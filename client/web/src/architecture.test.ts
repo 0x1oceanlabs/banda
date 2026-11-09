@@ -27,9 +27,10 @@
  *   gate's one observer (ADR 0088, decision 5): what else observes a size
  *   is listed with what it measures, and what still sizes a Pane's
  *   content by itself only falls.
- * - What calls has one order, the sidebar's (ADR 0087, decision 8): a
- *   mark's rank is read only to pick the loudest, on the lines listed,
- *   and no list sorts by it.
+ * - What calls has one order, the sidebar's (ADR 0087, decision 8): the
+ *   sidebar list, the counts and Alt+U take it from one `order`, a mark's
+ *   rank is read only to pick the loudest, on the lines listed, and no
+ *   list sorts by it.
  * - The calls part reads no page, and of the Tiling only its model (ADR
  *   0087, decision 9).
  * - The Window and the Tiling reach the desktop only through the Window's
@@ -69,7 +70,7 @@
  *   one stable release.
  */
 import { existsSync, readFileSync } from "node:fs"
-import { join, relative } from "node:path"
+import { dirname, join, relative } from "node:path"
 import {
   appStrings,
   desktopReads,
@@ -844,6 +845,66 @@ test("a mark's rank is read only to pick the loudest, where the list holds", () 
     )
     .sort()
   expect(reading).toEqual(RANKING)
+})
+
+/** What `file` takes of the module at `module`, by name, not as a type:
+ * `import { a, type B } from "./x"` takes `a`. */
+function valuesTaken(file: string, module: string): string[] {
+  return [
+    ...readFileSync(file, "utf8").matchAll(
+      /^import\s+\{([^}]*)\}\s*from\s*"(\.[^"]*)"/gm
+    ),
+  ]
+    .filter(([, , from]) => join(dirname(file), from) === module)
+    .flatMap(([, names]) =>
+      names
+        .split(",")
+        .map((name) => name.trim())
+        .filter((name) => name && !name.startsWith("type "))
+    )
+}
+
+/**
+ * What calls has one order, the Person's arrangement of the sidebar (ADR
+ * 0087, decision 8; the plan's §6.3): the sidebar list, the bar's counts
+ * list and Alt+U each take it from `order`, and only `order` works the
+ * arrangement out. The counts and Alt+U sort what they show by its keys
+ * in `byOrder`: the counts' files sort nothing by themselves, nor does a
+ * file that reads a place in it, as Alt+U's start does.
+ */
+test("the sidebar list, the counts and Alt+U go by one order", () => {
+  const sidebar = join(app, "web/src/sidebar")
+  const files = sources(join(app, "web/src"), { tests: false })
+  const arranging = files
+    .filter((file) =>
+      valuesTaken(file, join(sidebar, "arrange")).includes("arrange")
+    )
+    .map((file) => relative(app, file))
+  expect(arranging).toEqual(["web/src/sidebar/order.ts"])
+  for (const file of [
+    "web/src/sidebar/Sidebar.tsx",
+    "web/src/sidebar/Counts.tsx",
+    "web/src/window/Shell.tsx",
+  ])
+    expect(
+      valuesTaken(join(app, file), join(sidebar, "order")),
+      file
+    ).toContain("order")
+  for (const file of ["web/src/sidebar/tally.ts", "web/src/calls/sight.ts"])
+    expect(readFileSync(join(app, file), "utf8"), file).toMatch(/\bbyOrder\(/)
+  const placing = files.filter((file) =>
+    valuesTaken(file, join(sidebar, "order")).includes("placeIn")
+  )
+  expect(placing.map((file) => relative(app, file))).toEqual([
+    "web/src/calls/sight.ts",
+  ])
+  const counting = ["sidebar/tally.ts", "sidebar/Counts.tsx"].map((file) =>
+    join(app, "web/src", file)
+  )
+  for (const file of [...counting, ...placing])
+    expect(readFileSync(file, "utf8"), relative(app, file)).not.toMatch(
+      /\.(?:sort|toSorted)\(/
+    )
 })
 
 /**

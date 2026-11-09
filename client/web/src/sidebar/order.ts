@@ -1,45 +1,72 @@
 /**
- * The sidebar's order of its rows, as `project:thing` keys: the one order
- * of what calls, which `Alt+U` walks and the bar's counts list follows
- * (ADR 0079, decision 4; ADR 0087, decision 8). It is worked out as the
- * sidebar arranges, with no filter nor fold, so it holds while the
- * sidebar is hidden; and only when asked, on the key or as the counts'
- * list opens.
+ * The one order of what calls (ADR 0079, decision 4; ADR 0087, decision
+ * 8): the Person's arrangement of the sidebar. The sidebar list draws it,
+ * the bar's counts list and `Alt+U` go by its rows' `project:thing` keys,
+ * and only `order` works it out. The counts and Alt+U take it with no
+ * filter nor fold, so it holds while the Sidebar is hidden, and only when
+ * asked, on the key or as the counts' list opens.
  */
-import type { ProjectSummary } from "@banda/contract"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { DEFAULT_SIDEBAR } from "@banda/contract/sidebar"
 import { currentLook } from "@banda/ui/lib/look"
 import type { Lists } from "@banda/ui/pane"
-import { arrange } from "./arrange"
+import { type Arranged, arrange, type Elsewhere, type Marks } from "./arrange"
 import { rowKey } from "./hold"
 import type { Settings } from "./settings"
-import type { Snoozes } from "./snoozed"
 
-/** @param settings the look's, as the Person arranged the sidebar; a test
- * hands its own. */
-export function sidebarOrder(
+/** What of the order the sidebar list shows: one Project's rows alone, as
+ * a click in the list of Projects asks, and the sections the Person
+ * folded or opened. The counts and Alt+U take it whole. */
+export type View = { only?: ProjectId; toggled?: ReadonlySet<string> }
+
+/**
+ * The sidebar's arrangement of every Project's list, as the Person's
+ * settings and marks say.
+ *
+ * @param marks what the Person's marks say of each row now
+ * @param settings the look's, as the Person arranged the sidebar; a test
+ * hands its own
+ * @param elsewhere the other machines' Projects, whose rows the sidebar
+ * list places among its own. The counts and Alt+U hand none, so another
+ * machine's Thread stands after all of this one's there.
+ */
+export function order(
   lists: Lists,
   projects: readonly ProjectSummary[],
-  { archived, asleep, woke }: Snoozes,
-  settings: Settings = currentLook()?.sidebar ?? DEFAULT_SIDEBAR
-): string[] {
-  const { sections, shelves } = arrange(
-    lists,
-    projects,
-    settings,
-    undefined,
-    undefined,
-    { archived, asleep, woke }
-  )
+  marks: Marks,
+  settings: Settings = currentLook()?.sidebar ?? DEFAULT_SIDEBAR,
+  { only, toggled }: View = {},
+  elsewhere: readonly Elsewhere[] = []
+): Arranged {
+  return arrange(lists, projects, settings, only, toggled, marks, elsewhere)
+}
+
+/** The `project:thing` key of each row of `arranged`, top down, the
+ * shelves' last. */
+export function keysOf({ sections, shelves }: Arranged): string[] {
   return [...sections, ...shelves].flatMap((section) =>
     section.rows.map(rowKey)
   )
 }
 
-/** Where a `project:thing` key stands in `order`: one the sidebar lists
- * nowhere stands after them all. The counts' list and `Alt+U` place by
- * it alike. */
-export function placeIn(order: readonly string[]): (key: string) => number {
-  const place = new Map(order.map((key, i) => [key, i]))
-  return (key) => place.get(key) ?? order.length
+/** Where a `project:thing` key stands in `keys`: one the sidebar lists
+ * nowhere stands after them all. */
+export function placeIn(keys: readonly string[]): (key: string) => number {
+  const place = new Map(keys.map((key, i) => [key, i]))
+  return (key) => place.get(key) ?? keys.length
+}
+
+/**
+ * `things` in the order of `keys`, each by its `project:thing` key: the
+ * counts' list and `Alt+U` sort what they show by it alike. Those of one
+ * place, as those the sidebar lists nowhere, go by `tie`.
+ */
+export function byOrder<T>(
+  things: readonly T[],
+  keys: readonly string[],
+  keyOf: (thing: T) => string,
+  tie: (a: T, b: T) => number
+): T[] {
+  const at = placeIn(keys)
+  return [...things].sort((a, b) => at(keyOf(a)) - at(keyOf(b)) || tie(a, b))
 }

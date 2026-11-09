@@ -17,7 +17,7 @@ import { useMemo, useState } from "react"
 import { useLists, useSnoozesNow } from "../calls/stores"
 import { useLookSidebar } from "../look"
 import { ThreadMark, toneOf } from "@banda/ui/components/banda-mark"
-import { sidebarOrder } from "./order"
+import { keysOf, order } from "./order"
 import { Status } from "./Row"
 import { type Counted, inOrder, type Tally, tally } from "./tally"
 
@@ -136,7 +136,7 @@ export function Counts({
       <DropdownMenuContent align="center" className="w-96">
         <List
           tallies={tallies}
-          order={() => sidebarOrder(lists, projects, snoozes)}
+          keys={() => keysOf(order(lists, projects, snoozes))}
           projects={projects}
           onOpen={onOpen}
         />
@@ -146,19 +146,19 @@ export function Counts({
 }
 
 /** What the counts count, drawn only while the list is open, in the
- * sidebar's `order`, which is worked out only then. */
+ * sidebar's order, whose `keys` are worked out only then. */
 function List({
   tallies,
-  order,
+  keys,
   projects,
   onOpen,
 }: {
   tallies: readonly Tally[]
-  order: () => string[]
+  keys: () => string[]
   projects: readonly ProjectSummary[]
   onOpen: Open
 }) {
-  const { waiting, working } = inOrder(tallies, order())
+  const { waiting, working } = inOrder(tallies, keys())
   const named = new Map(projects.map((project) => [project.id, project]))
   const rows = (things: Counted[]) =>
     things.map(({ project, listed }) => {

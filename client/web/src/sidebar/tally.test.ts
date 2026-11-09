@@ -4,7 +4,7 @@ import { DEFAULT_SIDEBAR } from "@banda/contract/sidebar"
 import type { MarkState } from "@banda/ui/components/banda-mark"
 import { callsOf, type Listed } from "@banda/ui/pane"
 import { nextCall } from "../calls/sight"
-import { sidebarOrder } from "./order"
+import { keysOf, order } from "./order"
 import type { Settings } from "./settings"
 import { type Counted, inOrder, tally } from "./tally"
 
@@ -104,23 +104,20 @@ test("the list is what Alt+U walks from the top, as the Person arranges the side
   const keys = (things: Counted[]) =>
     things.map((t) => `${t.project}:${t.listed.id}`)
   const listedIn = (settings: Settings) => {
-    const order = sidebarOrder(
-      day,
-      [project("a"), project("b")],
-      snoozes,
-      settings
+    const sidebar = keysOf(
+      order(day, [project("a"), project("b")], snoozes, settings)
     )
-    const listed = inOrder(tally(day, ["waiting", "working"], none), order)
+    const listed = inOrder(tally(day, ["waiting", "working"], none), sidebar)
     const waiting = keys(listed.waiting)
     const working = keys(listed.working)
     // Alt+U, once for each call, from no Thread in front.
     const calls = callsOf(day, 0)
     const walked: string[] = []
     while (walked.length < calls.length)
-      walked.push(nextCall(calls, order, walked.at(-1))!.key)
+      walked.push(nextCall(calls, sidebar, walked.at(-1))!.key)
     expect(waiting).toEqual(walked)
     // What works keeps the sidebar's order too, wherever its rows stand.
-    expect(working).toEqual(order.filter((key) => working.includes(key)))
+    expect(working).toEqual(sidebar.filter((key) => working.includes(key)))
     return { waiting, working }
   }
   // The `inbox` preset: what waits first, the latest first, then what

@@ -12,7 +12,7 @@ import {
   works,
 } from "@banda/ui/components/banda-mark"
 import type { Listed, Lists } from "@banda/ui/pane"
-import { placeIn } from "./order"
+import { byOrder } from "./order"
 
 /** A Thread counted, with the Project it is in. */
 export type Counted = { project: ProjectId; listed: Listed }
@@ -58,7 +58,7 @@ export function tally(
  * each in the sidebar's `order` of `project:thing` keys, the one order of
  * what calls, which Alt+U walks (ADR 0087, decision 8). A thing the
  * sidebar lists nowhere comes last, the one that changed first first, as
- * Alt+U takes it (`placeIn`).
+ * Alt+U takes it (`byOrder`).
  */
 export function inOrder(
   tallies: readonly Tally[],
@@ -71,9 +71,11 @@ export function inOrder(
   const seen = new Map<string, Counted>()
   for (const { things } of tallies)
     for (const thing of things) seen.set(key(thing), thing)
-  const at = placeIn(order)
-  const sorted = [...seen.values()].sort(
-    (a, b) => at(key(a)) - at(key(b)) || a.listed.changed - b.listed.changed
+  const sorted = byOrder(
+    [...seen.values()],
+    order,
+    key,
+    (a, b) => a.listed.changed - b.listed.changed
   )
   return {
     waiting: sorted.filter((t) => !works(t.listed.mark)),

@@ -45,7 +45,7 @@ export type Calls = {
   /** The clock snoozes are read by (ADR 0074): it moves only as the next
    * one wakes by its time. */
   now: number
-  /** Every App's Calls, the Inbox, in no order: `sidebarOrder` orders
+  /** Every App's Calls, the Inbox, in no order: the sidebar's `order` orders
    * them. One snoozed calls no one while it sleeps. */
   list: readonly Call[]
 }

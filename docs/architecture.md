@@ -1449,9 +1449,9 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   failed calls the Person (`callsOf` in `client/ui/src/pane.ts`). The window
   knows what calls, for the Marks, the rings and `Alt+U`; and where the
   Person looks (`client/web/src/calls`). What calls has one order, the
-  sidebar's as the Person arranged it (`client/web/src/sidebar/order.ts`):
-  `Alt+U` walks it, and the bar's counts list follows it (ADR 0079, ADR
-  0087). The window knows nothing of Threads: a Pane kind's `shows` names
+  sidebar's as the Person arranged it (`order` in
+  `client/web/src/sidebar/order.ts`): the sidebar list draws it, `Alt+U`
+  walks it, and the bar's counts list follows it (ADR 0079, ADR 0087). The window knows nothing of Threads: a Pane kind's `shows` names
   the thing it shows, so the window knows when the Person looks at it (its
   Pane has the focus and the window is in front), sees it on screen, or
   is elsewhere.
