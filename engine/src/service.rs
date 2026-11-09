@@ -25,15 +25,17 @@
 //!
 //! On macOS it runs as a launchd job in the Person's gui domain,
 //! `<bundle id>.engine`, which launchd starts at login while "Start Banda
-//! at login" is on, and any client starts when no engine answers
-//! ([`launchd`]).
+//! at login" is on, and any client starts when no engine answers, another
+//! machine's window over ssh too ([`launchd`]).
 //!
 //! Where neither answers (a Mac with nobody logged in at its screen;
 //! Windows, until its own; a container; CI), or where the unit or the job
-//! does not start, the engine stays the window's child, as before, and the
-//! log and `banda status` say why. So does a checkout's, Banda Local,
-//! which an Agent's test runs must leave nothing of behind, unless
-//! `BANDA_ENGINE_AS` says `service`, as a test of the service does.
+//! does not start, the engine stays this machine's window's child, as
+//! before, and the log and `banda status` say why. So does a checkout's,
+//! Banda Local, which an Agent's test runs must leave nothing of behind,
+//! unless `BANDA_ENGINE_AS` says `service`, as a test of the service does.
+//! Off Linux, another machine's window never gets the engine as its child
+//! (`control.rs`).
 //!
 //! Every call to systemd goes through [`Systemd`], and to launchd through
 //! [`launchd::Launchd`], so tests give their own; what a client asks of

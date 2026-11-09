@@ -246,12 +246,12 @@ Roma decided on 2026-11-04:
    - 7b. Cleanup after a crash: the next engine stops the Harnesses and
      Terminals a crashed one left, before it listens.
    - 7c. arc starts the Mac's engine over ssh while the Person is logged
-     in at the Mac's screen, and an engine with no app opens Banda.app
-     hidden.
+     in at the Mac's screen.
    - 7d. `banda status --follow` (step 4's command, built here first, so
      the menu bar and Omarchy's plugin read one source).
    - 7e. The menu bar icon and its menu, the Dock icon only while a
-     window shows, and the one set of Quit words, as the accepted mock.
+     window shows, the one set of Quit words, as the accepted mock, and
+     an engine with no app opens Banda.app hidden.
    - 7f. Updates: the engine restarts on the new version once no Turn
      runs, Restart now with its warning, and a cask that never quits
      Banda (what step 6 has not built yet comes here).
@@ -343,6 +343,17 @@ starts at login too, later.
   while Agents work, then restarts it anyway if the Person confirms.
   brew's cask never quits Banda, and its zap removes the job. Plan step
   7 is six PRs, 7a to 7f, and Linux login start is step 8.
+- Decision 1 on macOS, as step 7c built it (2026-11-09): once the Mac's
+  job stops as asked, another machine's window tells a Quit at the Mac
+  from a logout by the Person's gui domain there. Still there 10 s on,
+  Banda quit at the Mac: the host shows stopped, and is not started
+  again until the Person starts it from that window, or that window's
+  Banda starts again. Gone, they logged out: the host is away, and that
+  window tries again each minute.
+- Plan step 7c (2026-11-09): an engine with no app opening Banda.app
+  hidden moves from 7c to 7e. Until 7e the app shows its window, in
+  front, as it opens, so opened from another machine it would come up
+  at the Mac's screen. 7e opens it with no window and turns this on.
 - The draft in PR #460, decision 6: the engine's own `hello` with a
   "generation" gives way to ADR 0082's `challenge`, `hello` with a
   range, and `welcome`.

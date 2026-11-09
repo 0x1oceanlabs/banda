@@ -10,10 +10,11 @@
  *
  * - the follower runs `banda start --with-parent` there, which starts that
  *   machine's engine when it does not run and prints where it listens, as
- *   the window's own does here (engine.ts), then follows it. On a Mac,
- *   until it may start the Mac's launchd job over ssh (ADR 0086, plan step
- *   7c), it starts none: it follows the engine that runs there, started
- *   at login or by Banda there, and while none runs the host is away;
+ *   the window's own does here (engine.ts), then follows it. On a Mac it
+ *   starts the engine's launchd job while the Person is logged in at its
+ *   screen, locked or not, and the engine runs in that session as if
+ *   started there (ADR 0086, plan step 7c); with nobody logged in it
+ *   starts none, and the host is away;
  * - the forward carries a port of this machine's loopback to the port
  *   that engine listens on, on that machine's loopback.
  *
@@ -34,9 +35,9 @@
  * icon, as its `banda status` says them, cleaned as the page cleans a
  * Welcome's (decision 2). An engine
  * that stops there as asked leaves this Banda running, and is started
- * again only when the page asks; so is one Stop Banda stopped, whether the
- * host was live then or not. A refused host is tried again every ten
- * minutes, or when the page asks. Quitting Banda ends both ssh; the engine
+ * again only when the page asks, or as this Banda starts again; so is one
+ * Stop Banda stopped, whether the host was live then or not. A refused
+ * host is tried again every ten minutes, or when the page asks. Quitting Banda ends both ssh; the engine
  * there runs on, as that machine's service.
  *
  * Test asks what is at an address and starts nothing there (#837): what
@@ -583,8 +584,9 @@ const PLAIN_SSH = [
 /** What a shell exits with when it finds no program to run. */
 const NOT_FOUND = 127
 /** What `banda start --with-parent` exits with there while no engine runs
- * on a machine where it starts none for this window, as a Mac until plan
- * step 7c (engine/src/control.rs): the window tries again as after any
+ * on a machine where it starts none for this window, as a Mac with nobody
+ * logged in at its screen, or once a Mac's engine stops as the Person logs
+ * out there (engine/src/control.rs): the window tries again as after any
  * end. */
 const NOT_OPEN = 75
 
@@ -623,8 +625,8 @@ const throughSh = (
 }
 
 /** What the follower runs there (`throughSh`): `banda start
- * --with-parent`, with `BANDA_OVER_SSH`, so a Mac's starts no engine that
- * lives only as long as the link. */
+ * --with-parent`, with `BANDA_OVER_SSH`, so a Mac's starts its launchd
+ * job, never an engine that lives only as long as the link. */
 export const remoteCommand = (banda: string | undefined, own: Own = channel) =>
   throughSh(banda, own, (b) => [
     `exec ${RUNTIME} BANDA_OVER_SSH=1 ${b} start --with-parent`,
@@ -1626,12 +1628,15 @@ const sshEnded = (host: Entry, code: number) =>
 
 /** How the follower's end leaves the host: code 0 is its engine stopped
  * as asked, 255 ssh's own failure, 127 no `banda` there, 75 no engine
- * running there, none a signal. */
+ * running there or nobody logged in there, none a signal. */
 function endOf(host: Entry, code: number): Ended {
   if (code === 0) return { state: "stopped" }
   const ssh = sshEnded(host, code)
   if (ssh) return away(ssh)
-  if (code === NOT_OPEN) return away(`${channel.name} is not running there`)
+  if (code === NOT_OPEN)
+    return away(
+      `${channel.name} is not running there, or nobody is logged in there`
+    )
   if (code === NOT_FOUND) return { state: "refused", why: notFound(host) }
   return away(`the link to ${host.ssh} ended (code ${code})`)
 }
