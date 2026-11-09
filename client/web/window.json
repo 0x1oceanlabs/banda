@@ -1106,6 +1106,26 @@
       "unlisted": true
     },
     {
+      "id": "workspace.go",
+      "title": "Go to a workspace",
+      "section": "Workspaces",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "number",
+            "description": "its place from the top, from 0"
+          }
+        },
+        "required": [
+          "index"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
       "id": "workspace.go-1",
       "title": "Go to workspace 1",
       "section": "Workspaces",

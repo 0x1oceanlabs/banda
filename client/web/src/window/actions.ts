@@ -1160,6 +1160,21 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     unlisted: true,
     run: (shell) => shell.showSidebar(),
   },
+  {
+    // A number on the Bar, past the ninth too, where the keys stop.
+    id: "workspace.go",
+    args: takes({ index: { number: "its place from the top, from 0" } }, [
+      "index",
+    ]),
+    section: "Workspaces",
+    title: "Go to a workspace",
+    unlisted: true,
+    run: (shell, args) => {
+      const index = args?.index
+      if (typeof index === "number" && Number.isInteger(index))
+        shell.change((w) => go(w, index))
+    },
+  },
   ...NUMBERS.map((n) => ({
     id: `workspace.go-${n}`,
     section: "Workspaces",

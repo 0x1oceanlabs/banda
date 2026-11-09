@@ -4,8 +4,16 @@ import { takeLook } from "@banda/ui/lib/look"
 import type { Args } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
-import { entries, focused, open, start, type Workspaces } from "../tiling/model"
 import {
+  entries,
+  focused,
+  fresh,
+  open,
+  start,
+  type Workspaces,
+} from "../tiling/model"
+import {
+  ACTIONS,
   closingShown,
   opening,
   picking,
@@ -231,4 +239,34 @@ test("flow.pick writes the Flow it names into agents.toml, as flow.solo does fro
     ])
   )
   error.mockRestore()
+})
+
+test("workspace.go goes to a workspace by its place, past the ninth too, and only a number on the Bar runs it: unlisted, with no key", () => {
+  let state = start()
+  for (let n = 1; n <= 11; n++)
+    state = open(fresh(state), "project-a", thread(`t${n}`), { place: "right" })
+  const change = vi.fn((how: (state: Workspaces) => Workspaces | undefined) => {
+    state = how(state) ?? state
+    return Promise.resolve()
+  })
+  const shell = { change } as unknown as Shell
+
+  runAction(shell, "workspace.go", { index: 10 })
+  expect(state.current).toBe(10)
+  expect(focused(state)?.pane).toEqual(thread("t11"))
+  runAction(shell, "workspace.go", { index: 0 })
+  expect(focused(state)?.pane).toEqual(thread("t1"))
+  // Not a place: nothing moves.
+  const wrong: (Args | undefined)[] = [
+    undefined,
+    {},
+    { index: "3" },
+    { index: 1.5 },
+  ]
+  for (const args of wrong) runAction(shell, "workspace.go", args)
+  expect(change).toHaveBeenCalledTimes(2)
+
+  const action = ACTIONS.find((action) => action.id === "workspace.go")
+  expect(action?.unlisted).toBe(true)
+  expect(action?.keys).toBeUndefined()
 })
