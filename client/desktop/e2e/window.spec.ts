@@ -6280,6 +6280,82 @@ test("the sidebar over the Strip goes once it opened a menu, a Thread or the set
   ).toBeVisible()
 })
 
+test("with no Pane in focus, the window's keys work as the Banda menu fades", async () => {
+  window = await startWindow()
+  const { app, page } = window
+  // An empty workspace: no Pane's tile takes the focus as the menu closes.
+  await page
+    .getByRole("region", { name: "New Thread" })
+    .getByRole("button", { name: "Close New Thread", exact: true })
+    .click()
+  await expect(
+    page
+      .getByRole("main")
+      .getByRole("paragraph")
+      .filter({ hasText: "This workspace is empty." })
+  ).toBeVisible()
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]?.setContentSize(700, 800)
+  )
+  await page.setViewportSize({ width: 700, height: 800 })
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await expect(sidebar).toBeHidden()
+
+  // The menu's fade, a tenth of a second, held until let go: Base UI keeps
+  // a closing dialog until its animation ends.
+  const hold = await page.addStyleTag({
+    content:
+      "[data-slot=dialog-content][data-closed] { animation-duration: 600s !important }",
+  })
+  const holding = (on: boolean) =>
+    hold.evaluate((style, on) => {
+      ;(style as HTMLStyleElement).disabled = !on
+    }, on)
+  const fading = page.locator("[role=dialog][data-closed]")
+  // The sidebar's Search opens the menu, and the sidebar goes. Esc closes
+  // it, and the focus, which nothing else takes, is back in it as it fades.
+  const searchAndShut = async () => {
+    await holding(true)
+    await sidebar.getByRole("button", { name: /Search/ }).click()
+    await expect(
+      page.getByRole("dialog", { name: "Banda menu" }).getByRole("combobox")
+    ).toBeFocused()
+    await expect(sidebar).toBeHidden()
+    await page.keyboard.press("Escape")
+    await expect(fading).toHaveCount(1)
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            document.activeElement?.closest("[role=dialog][data-closed]") !=
+            null
+        )
+      )
+      .toBe(true)
+  }
+  const letGo = async () => {
+    await holding(false)
+    await expect(fading).toHaveCount(0)
+  }
+
+  // Alt+A shows the sidebar again while the menu fades (#1065).
+  await page.keyboard.press("Alt+A")
+  await expect(sidebar).toBeVisible()
+  await searchAndShut()
+  await page.keyboard.press("Alt+A")
+  await expect(sidebar).toBeVisible()
+  await expect(fading).toHaveCount(1)
+  await letGo()
+
+  // Alt+O opens the overview the same way.
+  await searchAndShut()
+  await page.keyboard.press("Alt+KeyO")
+  const overview = page.getByRole("dialog", { name: "Overview" })
+  await expect(overview).toBeFocused()
+  await expect(fading).toHaveCount(1)
+  await letGo()
+})
+
 test("the sidebar's New Thread buttons and a Project's menu start a Thread where each stands, and the row in focus is marked", async () => {
   window = await startWindow()
   const { page } = window
