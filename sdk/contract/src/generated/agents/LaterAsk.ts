@@ -19,6 +19,11 @@ after?: string,
  */
 until?: number, 
 /**
+ * Someday: no time, and it never wakes by itself; a Person's only
+ * (ADR 0098, decision 12).
+ */
+someday?: boolean, 
+/**
  * As `until` comes, its latest turn, failed, goes again, as after a
  * usage limit resets (ADR 0074, decision 8).
  */

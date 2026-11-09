@@ -1,11 +1,11 @@
-//! A Thread put away until a time, or until the turn that runs ends (ADR
-//! 0074). The Later is the Thread's, kept on it, so every window, machine
+//! A Thread put away until a time, until the turn that runs ends, or
+//! Someday (ADR 0074; ADR 0098, decisions 11 and 12). The Later is the Thread's, kept on it, so every window, machine
 //! and Agent sees the same one. Whether it still sleeps is worked out
 //! from it ([`crate::rules::later`]): what calls its Person wakes it
 //! early as that fact is written ([`heard`]), and its time needs no timer.
 
-use crate::model::{Fact, Later, ThreadId, TurnId, TurnState, Wake, Woke, WokeSeen};
-use crate::rules::later::{asleep, goes_on, may_put_off, sees, wake_of, wakes};
+use crate::model::{Fact, Later, ThreadId, TurnId, TurnState, Until, Wake, Woke, WokeSeen};
+use crate::rules::later::{asleep, may_put_off, persons_own, sees, wake_of, wakes};
 use crate::{emit, store};
 use banda_kernel::{Error, Participant, Refusal, Tx};
 use schemars::JsonSchema;
@@ -29,6 +29,12 @@ pub struct LaterAsk {
     #[serde(default)]
     #[ts(optional, type = "number")]
     pub until: Option<i64>,
+    /// Someday: no time, and it never wakes by itself; a Person's only
+    /// (ADR 0098, decision 12).
+    #[serde(default)]
+    #[ts(as = "Option<bool>", optional)]
+    #[schemars(skip)]
+    pub someday: bool,
     /// As `until` comes, its latest turn, failed, goes again, as after a
     /// usage limit resets (ADR 0074, decision 8).
     #[serde(default)]
@@ -59,51 +65,59 @@ pub struct WakeAsk {
     pub thread: Option<ThreadId>,
 }
 
-/// Puts off `thread` for `author`, in place of a Later it had. An Agent
-/// puts off only its own Thread, never so that it goes on by itself, and
-/// not while its Person's goes on.
+/// Puts off `thread` for `author`, in place of a Later it had, even while
+/// it asks (ADR 0098, decision 11). An Agent puts off only its own
+/// Thread, never Someday or so that it goes on by itself, and not while
+/// its Person's goes on.
 pub fn later(tx: &mut Tx<'_>, author: Participant, ask: LaterAsk) -> Result<(), Error> {
     let thread = thread_of(tx, author, ask.thread)?;
     may_touch(tx, author, thread)?;
-    let until = until_of(tx.now(), ask.after.as_deref(), ask.until)?;
-    let resume = match ask.resume {
-        false => None,
-        true => Some(resumed(tx, author, thread, until)?),
-    };
+    let at = tx.now();
+    let ends = until_of(at, &ask)?;
     let works = store::running(tx.sql(), thread)?.is_some();
     let asks = store::asks(tx.sql(), thread)?;
-    let at = tx.now();
-    may_put_off(asks, works, until, at)?;
+    may_put_off(author, asks, works, ends, at)?;
+    let resume = match ask.resume {
+        false => None,
+        true => Some(resumed(tx, author, thread, ends)?),
+    };
     // Put off, an archived Thread leaves Archive, whoever put it off (ADR
     // 0074, decision 4).
     crate::marks::unarchived(tx, author, thread)?;
+    let (until, someday) = ends.kept();
     let later = Later {
         at,
         by: author,
         until,
+        someday,
         woke: None,
         resume,
         woke_seen: None,
     };
     store::set_later(tx.sql(), thread, &later)?;
-    let later = Fact::ThreadLater {
+    let fact = Fact::ThreadLater {
         thread,
         until,
+        someday,
         resume,
     };
-    emit(tx, author, thread, &later)
+    emit(tx, author, thread, &fact)
 }
 
-/// When a Later asked at `now` ends: `after` a while, at `until`, or with
-/// neither, when the turn that runs ends.
-fn until_of(now: i64, after: Option<&str>, until: Option<i64>) -> Result<Option<i64>, Refusal> {
-    match (after, until) {
-        (Some(_), Some(_)) => Err(Refusal::invalid("Give `after` or `until`, not both.")),
-        (Some(after), None) => now
+/// When a Later asked at `now` ends: `after` a while, at `until`,
+/// Someday, or with none of them, when the turn that runs ends.
+fn until_of(now: i64, ask: &LaterAsk) -> Result<Until, Refusal> {
+    match (ask.after.as_deref(), ask.until, ask.someday) {
+        (Some(after), None, false) => now
             .checked_add(while_of(after)?)
-            .map(Some)
+            .map(Until::At)
             .ok_or_else(|| Refusal::invalid("That while ends past any time Banda can keep.")),
-        (None, until) => Ok(until),
+        (None, Some(at), false) => Ok(Until::At(at)),
+        (None, None, true) => Ok(Until::Someday),
+        (None, None, false) => Ok(Until::Done),
+        _ => Err(Refusal::invalid(
+            "Give one of `after`, `until` and `someday`.",
+        )),
     }
 }
 
@@ -114,7 +128,7 @@ fn resumed(
     tx: &Tx<'_>,
     author: Participant,
     thread: ThreadId,
-    until: Option<i64>,
+    until: Until,
 ) -> Result<TurnId, Error> {
     if author.agent().is_some() {
         return Err(Refusal::forbidden(
@@ -122,7 +136,7 @@ fn resumed(
         )
         .into());
     }
-    if until.is_none() {
+    if !matches!(until, Until::At(_)) {
         return Err(Refusal::invalid("A turn goes on by itself at a time: give `until`.").into());
     }
     let failed = store::turns_in(tx.sql(), thread, TurnState::Failed)?.pop();
@@ -237,9 +251,9 @@ fn may_touch(tx: &Tx<'_>, author: Participant, thread: ThreadId) -> Result<(), E
     if agent != its {
         return Err(Refusal::forbidden("An Agent puts off or wakes only its own Thread.").into());
     }
-    if store::later(tx.sql(), thread)?.is_some_and(|later| goes_on(&later)) {
+    if store::later(tx.sql(), thread)?.is_some_and(|later| persons_own(&later)) {
         return Err(Refusal::forbidden(
-            "Your Person put this Thread off to go on by itself: only they change that Later.",
+            "Your Person put this Thread off to go on by itself, or Someday: only they change that Later.",
         )
         .into());
     }
@@ -248,20 +262,32 @@ fn may_touch(tx: &Tx<'_>, author: Participant, thread: ThreadId) -> Result<(), E
 
 #[cfg(test)]
 mod tests {
-    use super::until_of;
+    use super::{LaterAsk, until_of};
+    use crate::model::Until;
+
+    fn ask(after: Option<&str>, until: Option<i64>, someday: bool) -> LaterAsk {
+        LaterAsk {
+            thread: None,
+            after: after.map(Into::into),
+            until,
+            someday,
+            resume: false,
+        }
+    }
 
     #[test]
-    fn a_later_ends_after_a_while_at_a_moment_or_with_its_turn() {
-        assert_eq!(until_of(1_000, Some("1m"), None), Ok(Some(61_000)));
-        assert_eq!(until_of(1_000, None, Some(5_000)), Ok(Some(5_000)));
-        assert_eq!(until_of(1_000, None, None), Ok(None), "until done");
+    fn a_later_ends_after_a_while_at_a_moment_with_its_turn_or_someday() {
+        let ends = |after, until, someday| until_of(1_000, &ask(after, until, someday));
+        assert_eq!(ends(Some("1m"), None, false), Ok(Until::At(61_000)));
+        assert_eq!(ends(None, Some(5_000), false), Ok(Until::At(5_000)));
+        assert_eq!(ends(None, None, false), Ok(Until::Done));
+        assert_eq!(ends(None, None, true), Ok(Until::Someday));
+        assert!(ends(Some("1m"), Some(5_000), false).is_err(), "one only");
+        assert!(ends(None, Some(5_000), true).is_err(), "one only");
+        assert!(ends(Some("1m"), None, true).is_err(), "one only");
+        assert!(ends(Some("soon"), None, false).is_err());
         assert!(
-            until_of(1_000, Some("1m"), Some(5_000)).is_err(),
-            "not both"
-        );
-        assert!(until_of(1_000, Some("soon"), None).is_err());
-        assert!(
-            until_of(i64::MAX, Some("1m"), None).is_err(),
+            until_of(i64::MAX, &ask(Some("1m"), None, false)).is_err(),
             "past any time"
         );
     }

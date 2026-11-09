@@ -175,6 +175,7 @@ function applied(state: ThreadList, event: Event): ThreadList {
         at: event.at,
         by: event.author,
         until: fact.payload.until,
+        someday: fact.payload.someday,
       }
       return change(state, event, (thread) => ({ ...thread, later }))
     }

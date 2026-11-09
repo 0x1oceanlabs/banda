@@ -5,10 +5,10 @@ import type { Woke } from "./Woke";
 import type { WokeSeen } from "./WokeSeen";
 
 /**
- * A Thread put away by its Person, or by its own Agent, until a time or
- * until the turn that ran ended (ADR 0074). It sleeps until `until`
- * comes, unless `woke` says what woke it first: a reader compares
- * `until` with now, and no fact says that the time came.
+ * A Thread put away by its Person, or by its own Agent, until a time,
+ * until the turn that ran ended, or, its Person's, Someday (ADR 0074;
+ * ADR 0098, decision 12). It sleeps until it ends, unless `woke` says what woke it first: a reader compares `until` with
+ * now, and no fact says that the time came.
  */
 export type Later = { 
 /**
@@ -17,9 +17,14 @@ export type Later = {
 at: number, by: Participant, 
 /**
  * When it wakes, in milliseconds since the epoch; none: when the turn
- * that ran ends.
+ * that ran ends, or, with `someday`, never by itself.
  */
 until?: number, 
+/**
+ * Someday (ADR 0098, decision 12): no time, and it never wakes by
+ * itself, only as something calls its Person or they wake it.
+ */
+someday?: boolean, 
 /**
  * What woke it before its time, and when.
  */
