@@ -83,6 +83,11 @@
  * - The Person's marks are the Thread's host's (ADR 0096): only the move
  *   names the keys the window kept them under, which stay to be read for
  *   one stable release.
+ * - A Group is its owner's (ADR 0082, decision 9; ADR 0087): the Tiling
+ *   reads who owns it, and that owner's Mark, through its port alone,
+ *   which the Window fills from the items; it takes only the mark's types
+ *   but for a Deck's segment. What in the Tiling still names an Item is
+ *   listed, only falling.
  */
 import { existsSync, readFileSync } from "node:fs"
 import { dirname, join, relative, sep } from "node:path"
@@ -196,18 +201,18 @@ test("nothing in the Tiling draws a Thread's Mark", () => {
 
 /**
  * What the Tiling still takes of Banda's mark, by file and name: a Deck's
- * segment draws the mark of a Thread that calls (`Tabs.tsx`, #942), and a
- * Group's plate and its bar in the Group map take its Agent's state, which
- * T-a reads by the Group's owner (the map came from the Bar with B4f). None
- * joins the list, and one that goes leaves it.
+ * segment draws the mark of a Thread that calls (`Tabs.tsx`, #942), and
+ * the Group's state its port says, which a Group's plate and its bar in
+ * the Group map take, is the mark's type (T-a: the Window's adapter turns
+ * the owner's Mark into it). Of the mark, the Tiling takes only types but
+ * for the Deck's two. None joins the list, and one that goes leaves it.
  */
 const TILING_BANDA_MARK = [
   "web/src/tiling/Map.tsx: GroupState",
-  "web/src/tiling/Map.tsx: groupState",
-  "web/src/tiling/Strip.tsx: groupState",
   "web/src/tiling/Tabs.tsx: BandaMark",
   "web/src/tiling/Tabs.tsx: MARK_WORDS",
   "web/src/tiling/plates.ts: GroupState",
+  "web/src/tiling/shows.ts: GroupState",
   "web/src/tiling/usePlates.ts: GroupState",
 ]
 
@@ -215,39 +220,46 @@ test("the Tiling takes no more of Banda's mark than the list holds", () => {
   const taking = sources(join(app, "web/src/tiling")).flatMap((file) =>
     [
       ...readFileSync(file, "utf8").matchAll(
-        /\bimport\s+(?:type\s+)?\{([^}]*)\}\s*from\s*"@banda\/ui\/components\/banda-mark"/g
+        /\bimport\s+(type\s+)?\{([^}]*)\}\s*from\s*"@banda\/ui\/components\/banda-mark"/g
       ),
-    ].flatMap(([, names]) =>
+    ].flatMap(([, all, names]) =>
       names
         .split(",")
-        .map((name) => name.replace(/^\s*type\s+/, "").trim())
-        .filter(Boolean)
-        .map((name) => `${relative(app, file)}: ${name}`)
+        .filter((name) => name.trim())
+        .map((name) => ({
+          name: `${relative(app, file)}: ${name.replace(/^\s*type\s+/, "").trim()}`,
+          type: all !== undefined || /^\s*type\s/.test(name),
+        }))
     )
   )
-  expect(taking.sort()).toEqual(TILING_BANDA_MARK)
+  expect(taking.map(({ name }) => name).sort()).toEqual(TILING_BANDA_MARK)
+  expect(
+    taking
+      .filter(({ type }) => !type)
+      .map(({ name }) => name)
+      .sort()
+  ).toEqual([
+    "web/src/tiling/Tabs.tsx: BandaMark",
+    "web/src/tiling/Tabs.tsx: MARK_WORDS",
+  ])
 })
 
 /**
  * What the Tiling still reads of an Item's Mark or what it calls, by file,
- * once for each place: a Group's plate and its bar in the Group map take
- * its Agent's colour, which T-a reads by the Group's owner instead; and a
- * Project's workspace number has a dot while one of its Threads calls
- * (`useCalling`), as it had on the Bar before the numbers became the
- * Tiling's widget. A Pane's header and its tile in the Overview read none:
- * what an App shows there is its part of the Slot. None joins the list,
- * and one that goes leaves it.
+ * once for each place: a Project's workspace number has a dot while one of
+ * its Threads calls (`useCalling`), as it had on the Bar before the numbers
+ * became the Tiling's widget, until E8b. A Group's plate and its bar in the
+ * Group map take its owner's state through the Tiling's port, which asks
+ * for it in one file, `shows.ts` (`shows.mark(owner)`, T-a). A Pane's
+ * header and its tile in the Overview read none: what an App shows there
+ * is its part of the Slot. None joins the list, and one that goes leaves
+ * it.
  */
-const TILING_MARKS = [
-  "web/src/tiling/Map.tsx: mark",
-  "web/src/tiling/Strip.tsx: mark",
-  "web/src/tiling/widgets.tsx: useCalling",
-]
+const TILING_MARKS = ["web/src/tiling/widgets.tsx: useCalling"]
 
 test("the Tiling reads an Item's Mark no more than the list holds", () => {
-  const reading = sources(join(app, "web/src/tiling"), {
-    tests: false,
-  }).flatMap((file) =>
+  const files = sources(join(app, "web/src/tiling"), { tests: false })
+  const reading = files.flatMap((file) =>
     [
       ...readFileSync(file, "utf8").matchAll(
         /\.(mark|calls)\b(?!\s*\()|\b(useCalling)\(/g
@@ -255,6 +267,55 @@ test("the Tiling reads an Item's Mark no more than the list holds", () => {
     ].map(([, what, hook]) => `${relative(app, file)}: ${what ?? hook}`)
   )
   expect(reading).toEqual(TILING_MARKS)
+  // The owner's Mark, through the port, in one place.
+  const asking = files
+    .filter((file) => /\.mark\s*\(/.test(readFileSync(file, "utf8")))
+    .map((file) => relative(app, file))
+  expect(asking).toEqual(["web/src/tiling/shows.ts"])
+})
+
+/** The identifiers `source`, the code of `file`, uses, as TypeScript reads
+ * it: a comment or a string that names one is not a use. */
+function identifiersIn(source: string, file: string): Set<string> {
+  const found = new Set<string>()
+  const visit = (node: ts.Node): void => {
+    if (ts.isIdentifier(node)) found.add(node.text)
+    ts.forEachChild(node, visit)
+  }
+  visit(ts.createSourceFile(file, source, ts.ScriptTarget.Latest))
+  return found
+}
+
+/**
+ * The Tiling's files, their tests too, that still name what an App lists
+ * (`Listed`, `Lists`) or a way to find it (`listedIn`, `listedOf`,
+ * `useItems`, `useLists`): a Pane's frame puts an Item's Project before its
+ * title and the Thread menu on it, and the port hands it the Listed, until
+ * a header knows only that its Pane shows an Item (T-a's last step). A
+ * Group's owner and its Mark come through the port alone (ADR 0087). None
+ * joins the list, and one that goes leaves it.
+ */
+const TILING_LISTED = [
+  "web/src/tiling/PaneFrame.tsx",
+  "web/src/tiling/shows.ts",
+]
+
+test("the Tiling names what the Apps list no more than the list holds", () => {
+  const names = [
+    "Listed",
+    "Lists",
+    "listedIn",
+    "listedOf",
+    "useItems",
+    "useLists",
+  ]
+  const naming = sources(join(app, "web/src/tiling"))
+    .filter((file) => {
+      const used = identifiersIn(readFileSync(file, "utf8"), file)
+      return names.some((name) => used.has(name))
+    })
+    .map((file) => relative(app, file))
+  expect(naming).toEqual(TILING_LISTED)
 })
 
 /**

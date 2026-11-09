@@ -26,8 +26,6 @@ import {
   shownShare,
   widthAt,
 } from "./layout"
-import { groupState } from "@banda/ui/components/banda-mark"
-import { agentsOf } from "./groups"
 import { type Shows, useShows } from "./shows"
 import { type Frame, PaneFrame } from "./PaneFrame"
 import { aimed, drawnStrip, leftStrip } from "./tiles"
@@ -117,13 +115,12 @@ export const Strip = memo(function Strip({
   const groups = useLookGroups()
   const columns = drawnColumns(workspace, look)
   const focusedGroup = workspace.columns[workspace.focus]?.group
-  const { listed, called } = useShows(shows, workspace)
-  // Each Group's Agent, by the Thread in it: its state and its name.
-  const agents = agentsOf(columns, listed)
-  // Each Group's colour, by its Agent's state; its plate moves with it.
+  // What each Pane shows, and each Group's owner: its state and its name.
+  const { listed, called, groups: owned } = useShows(shows, workspace)
+  // Each Group's colour, by its owner's state; its plate moves with it.
   const states = new Map(
     columns.flatMap(({ group }) =>
-      group === undefined ? [] : [[group, groupState(agents.get(group)?.mark)]]
+      group === undefined ? [] : [[group, owned.get(group)?.state]]
     )
   )
   usePlates(scroller, states, groups.working === "sheen")
@@ -395,7 +392,7 @@ export const Strip = memo(function Strip({
             {group !== undefined && ends.first && groups.handle && !zooms && (
               <GroupHandle
                 group={group}
-                name={agents.get(group)?.title}
+                name={owned.get(group)?.name}
                 pane={column.entries[0]?.id}
                 panes={columns
                   .slice(c, runOf(columns, c).end)
@@ -455,7 +452,7 @@ function GroupHandle({
 }: {
   group: string
   /** Its first Pane, which the carrying names it by. */
-  /** Its Agent's Thread's title; left out, a Group with no Agent. */
+  /** Its owner's name; left out, a Group no one owns. */
   name?: string
   pane: string | undefined
   panes: number

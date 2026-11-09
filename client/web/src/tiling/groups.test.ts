@@ -5,6 +5,7 @@ import { columnMoved, opened } from "./arrange"
 import {
   filling,
   grouping,
+  ownersOf,
   regrouping,
   shiftingInside,
   soloing,
@@ -165,6 +166,31 @@ describe("a Group", () => {
       fill: false,
     })
     expect(unsoloing(strip("ab", "gg", 0))).toBeUndefined()
+  })
+
+  test("a Group's owner is the first its Panes' Items name, left to right and top down", () => {
+    const { columns } = strip("abcdef", "gghh.k", 0).list[0]
+    // c holds a second Pane, under its first.
+    columns[2].entries.push({ ...columns[2].entries[0], id: "c2" })
+    // What each Pane's Item names: a's and f's, nothing, as a terminal's.
+    const named = new Map([
+      ["b1", "agent b"],
+      ["c1", "agent c"],
+      ["c2", "agent c2"],
+      ["d1", "agent d"],
+      ["e1", "agent e"],
+    ])
+    const owner = (entry: { id: string }) => named.get(entry.id)
+    // g's first Pane names no one, its second does; in h the first Pane
+    // that names one wins, above the one under it and the next column's;
+    // e is in no Group, and no Pane of k names anyone.
+    expect(ownersOf(columns, owner)).toEqual(
+      new Map([
+        ["g", "agent b"],
+        ["h", "agent c"],
+      ])
+    )
+    expect(ownersOf(columns, () => undefined)).toEqual(new Map())
   })
 
   test("filling the screen, its columns keep their shares", () => {

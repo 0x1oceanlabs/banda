@@ -76,9 +76,9 @@ import { useWokeNote } from "../calls/woke"
 import { paneRowsOf } from "../sidebar/items"
 import { attachTo, focusedOn } from "./attach"
 import { Kept, useKeptHere } from "./here"
+import { tilingShows } from "./shows"
 import { useNarrow } from "./narrow"
 import { floorOf, type Reveal, shownOf } from "../tiling/layout"
-import type { Shows } from "../tiling/shows"
 import { useTiling } from "../tiling/useTiling"
 import {
   current,
@@ -257,15 +257,8 @@ export function Shell({
   useEffect(() => followCalls(stores), [stores])
   const snoozes = useSnoozesAt(useStore(stores.calls, nowOf))
   const orderNow = useOrderNow()
-  // What the Tiling reads of them, the same for the Window's life. The
-  // calls follow every change of the items, so it hears them alone.
-  const [shows] = useState((): Shows => ({
-    listed: (entry) => listedIn(stores.items.get(), entry, showsOf),
-    called: (entry) =>
-      stores.calls.get().list.find((call) => isShowing(entry, call, showsOf))
-        ?.chime,
-    subscribe: stores.calls.subscribe,
-  }))
+  // What the Tiling reads of them, the same for the Window's life.
+  const [shows] = useState(() => tilingShows(stores, showsOf))
   // Alt+C's column to the middle, and a Pane picked, from a row, a call
   // or Alt+U, to the left (ADR 0065, decision 8): once each.
   const [reveal, setReveal] = useState<Reveal>()
