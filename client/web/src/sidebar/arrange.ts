@@ -11,22 +11,18 @@
  */
 import { NO_PROJECT } from "@banda/ui/lib/projects"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
-import {
-  loudest,
-  type MarkState,
-  waits,
-  works,
-} from "@banda/ui/components/banda-mark"
+import { loudest, type MarkState } from "@banda/ui/components/banda-mark"
 import type { Listed } from "@banda/ui/pane"
+import { STAND_WORDS, type Stand, standOf, wokeAt } from "@banda/ui/status"
 import type { Settings, State } from "./settings"
 
-/** One row: what a module listed, the Project it is in, where it stands,
- * when it woke from a Later while its Person has not seen it, and the
- * other host its Project is on. */
+/** One row: what a module listed, the Project it is in, where it stands
+ * (`status.ts`), when it woke from a Later while its Person has not seen
+ * it, and the other host its Project is on. */
 export type Row = {
   project: ProjectSummary
   listed: Listed
-  state: State
+  stand: Stand
   woke?: number
   host?: string
 }
@@ -35,13 +31,6 @@ export type Row = {
 export type Elsewhere = {
   name: string
   projects: readonly ProjectSummary[]
-}
-
-/** What the Person's marks say of a row now: archived, asleep, woke. */
-export type Marks = {
-  archived?: (listed: Listed) => boolean
-  asleep?: (listed: Listed) => boolean
-  woke?: (listed: Listed) => number | undefined
 }
 
 export type Section = {
@@ -81,26 +70,25 @@ export type Arranged = {
 /** The sections' headings: the active list has none, as T3 Code's. */
 export const STATE_WORDS: Record<State, string> = {
   active: "",
-  working: "Working",
-  later: "Later",
-  archived: "Archive",
+  working: STAND_WORDS.working,
+  later: STAND_WORDS.later,
+  archived: STAND_WORDS.archived,
 }
 
-/** Where a row stands: asleep, at work, archived as the Person's marks
- * say, or active. A Later outranks the rest (ADR 0074). */
-function stateOf(listed: Listed, marks: Marks): State {
-  if (marks.asleep?.(listed)) return "later"
-  if (works(listed.mark)) return "working"
-  return marks.archived?.(listed) ? "archived" : "active"
+/** The section of `group.by = "state"` a row goes in: the Person's turn
+ * and the open ones are both active. */
+function stateOf(stand: Stand): State {
+  return stand === "turn" || stand === "open" ? "active" : stand
 }
 
-/** The attention order: what waits or woke first, then work, the rest,
- * the Later, the archived. */
-function rank(row: Row): number {
-  if (row.state === "archived") return 4
-  if (row.state === "later") return 3
-  if (row.state === "working") return 1
-  return waits(row.listed.mark) || row.woke !== undefined ? 0 : 2
+/** The attention order: the Person's turn first, then work, the open
+ * ones, the Later, the archived. */
+const RANK: Readonly<Record<Stand, number>> = {
+  turn: 0,
+  working: 1,
+  open: 2,
+  later: 3,
+  archived: 4,
 }
 
 /** When a row last changed: a Thread that woke changed as it woke. */
@@ -115,11 +103,11 @@ function wakesAt(row: Row): number {
 
 /**
  * @param lists what each Project lists
+ * @param now the Later clock, by which each row stands where it does
  * @param only shows only this Project's rows, as a click in the list of
  * Projects asks
  * @param toggled the sections the Person folded or opened, against what
  * the settings start with
- * @param marks what the Person's marks say of each row now
  * @param elsewhere the other hosts' Projects, whose lists are in `lists`
  * too
  */
@@ -127,9 +115,9 @@ export function arrange(
   lists: Readonly<Record<ProjectId, readonly Listed[]>>,
   projects: readonly ProjectSummary[],
   settings: Settings,
+  now: number,
   only?: ProjectId,
   toggled: ReadonlySet<string> = new Set(),
-  marks: Marks = {},
   elsewhere: readonly Elsewhere[] = []
 ): Arranged {
   const namedIn = (held: readonly ProjectSummary[]) =>
@@ -137,12 +125,11 @@ export function arrange(
   const rowsOf = (held: readonly ProjectSummary[], host?: string): Row[] =>
     held.flatMap((project) =>
       (lists[project.id] ?? []).map((listed) => {
-        const state = stateOf(listed, marks)
-        const woke = marks.woke?.(listed)
+        const woke = wokeAt(listed, now)
         return {
           project,
           listed,
-          state,
+          stand: standOf(listed, now),
           ...(woke === undefined ? {} : { woke }),
           ...(host === undefined ? {} : { host }),
         }
@@ -174,7 +161,7 @@ export function arrange(
     project?: ProjectSummary,
     name?: string
   ): Section => {
-    const asleep = held.filter((row) => row.state === "later")
+    const asleep = held.filter((row) => row.stand === "later")
     const next = Math.min(...asleep.map(wakesAt))
     return {
       key,
@@ -262,7 +249,7 @@ export function arrange(
       const { states, bottom } = settings.group
       // The Laters by when they wake; the rest as the settings sort.
       const of = (state: State) => {
-        const held = rows.filter((row) => row.state === state)
+        const held = rows.filter((row) => stateOf(row.stand) === state)
         return state === "later"
           ? held.sort((a, b) => wakesAt(a) - wakesAt(b))
           : held
@@ -273,7 +260,7 @@ export function arrange(
       // A state the settings name nowhere goes to the last section, so no
       // row is ever hidden.
       const placed = new Set<State>([...states, ...bottom])
-      const rest = rows.filter((row) => !placed.has(row.state))
+      const rest = rows.filter((row) => !placed.has(stateOf(row.stand)))
       if (rest.length > 0) {
         const last = sections.at(-1)
         if (last) {
@@ -302,7 +289,7 @@ function order(by: Settings["sort"]["by"]): (a: Row, b: Row) => number {
   const latest = (a: Row, b: Row) => changedOf(b) - changedOf(a)
   switch (by) {
     case "attention":
-      return (a, b) => rank(a) - rank(b) || latest(a, b)
+      return (a, b) => RANK[a.stand] - RANK[b.stand] || latest(a, b)
     case "title":
       return (a, b) =>
         a.listed.title.localeCompare(b.listed.title) || latest(a, b)
@@ -314,12 +301,7 @@ function order(by: Settings["sort"]["by"]): (a: Row, b: Row) => number {
 function rollup(rows: readonly Row[]): { mark: MarkState; waiting: number } {
   return {
     mark: loudest(rows.map((row) => row.listed.mark)),
-    waiting: rows.filter(
-      (row) =>
-        row.state !== "archived" &&
-        row.state !== "later" &&
-        waits(row.listed.mark)
-    ).length,
+    waiting: rows.filter((row) => row.stand === "turn").length,
   }
 }
 

@@ -2,7 +2,8 @@ import { expect, test } from "vitest"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { DEFAULT_SIDEBAR } from "@banda/contract/sidebar"
 import type { MarkState } from "@banda/ui/components/banda-mark"
-import { callsOf, type Listed } from "@banda/ui/pane"
+import type { Listed } from "@banda/ui/pane"
+import { callsOf } from "@banda/ui/status"
 import { nextCall } from "../calls/sight"
 import { keysOf, order } from "./order"
 import type { Settings } from "./settings"
@@ -28,21 +29,26 @@ const lists = {
     one("quiet", "rest"),
   ],
 }
-const none = () => false
 
 test("each count takes its marks, the loudest shows, and a count of none is left out", () => {
-  const counts = tally(lists, ["asking", "done", "working"], none)
+  const counts = tally(lists, ["asking", "done", "working"], 0)
   expect(counts.map((c) => [c.count, c.mark, c.things.length])).toEqual([
     ["asking", "failed", 2],
     ["done", "done", 2],
     ["working", "running", 1],
   ])
   const calm = { ["a" as ProjectId]: [one("run", "running")] }
-  expect(tally(calm, ["asking", "done", "working"], none)).toHaveLength(1)
+  expect(tally(calm, ["asking", "done", "working"], 0)).toHaveLength(1)
 })
 
 test("waiting takes what asks and what is done, and archived Threads are not counted", () => {
-  const counts = tally(lists, ["waiting"], (l) => l.id === "old")
+  const archived = {
+    ...lists,
+    ["a" as ProjectId]: lists["a" as ProjectId].map((l) =>
+      l.id === "old" ? { ...l, archived: true as const } : l
+    ),
+  }
+  const counts = tally(archived, ["waiting"], 0)
   expect(counts[0].things.map((t) => t.listed.id).sort()).toEqual([
     "ask",
     "broke",
@@ -53,7 +59,7 @@ test("waiting takes what asks and what is done, and archived Threads are not cou
 test("the list goes in the sidebar's order, not the loudest first, what waits before what works, and one the sidebar lists nowhere last (ADR 0087, decision 8)", () => {
   const order = ["a:old", "b:new", "a:run", "a:ask", "b:quiet"]
   const { waiting, working } = inOrder(
-    tally(lists, ["asking", "done", "waiting", "working"], none),
+    tally(lists, ["asking", "done", "waiting", "working"], 0),
     order
   )
   expect(waiting.map((t) => t.listed.id)).toEqual([
@@ -94,20 +100,13 @@ test("the list is what Alt+U walks from the top, as the Person arranges the side
       one("quiet", "rest"),
     ],
   }
-  const laters = {
-    now: 0,
-    asleep: none,
-    woke: () => undefined,
-    away: none,
-    archived: none,
-  }
   const keys = (things: Counted[]) =>
     things.map((t) => `${t.project}:${t.listed.id}`)
   const listedIn = (settings: Settings) => {
     const sidebar = keysOf(
-      order(day, [project("a"), project("b")], laters, { settings })
+      order(day, [project("a"), project("b")], 0, { settings })
     )
-    const listed = inOrder(tally(day, ["waiting", "working"], none), sidebar)
+    const listed = inOrder(tally(day, ["waiting", "working"], 0), sidebar)
     const waiting = keys(listed.waiting)
     const working = keys(listed.working)
     // Alt+U, once for each call, from no Thread in front.

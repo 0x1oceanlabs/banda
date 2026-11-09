@@ -59,7 +59,6 @@ const sources: Sources = {
   projects,
   actions,
   presets: { names: ["inbox", "projects", "places"], current: "inbox" },
-  archived: (listed) => listed.id === "t3",
   now: 10,
   items: itemActionsOf,
   found: [],
@@ -360,8 +359,13 @@ describe("its branches and acts", () => {
       "Later…",
       "Archive thread",
     ])
-    expect(actsOf(t3, sources).at(-1)?.title).toBe("Unarchive thread")
-    if (t2.kind !== "thread") throw new Error("not a Thread")
+    if (t2.kind !== "thread" || t3.kind !== "thread")
+      throw new Error("not a Thread")
+    const archived = {
+      ...t3,
+      listed: { ...t3.listed, archived: true as const },
+    }
+    expect(actsOf(archived, sources).at(-1)?.title).toBe("Unarchive thread")
     const sleeping = {
       ...t2,
       listed: { ...t2.listed, later: { at: 1, until: 20 } },

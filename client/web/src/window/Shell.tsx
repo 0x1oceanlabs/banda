@@ -71,7 +71,6 @@ import { Edge } from "../sidebar/Edge"
 import { Sidebar } from "../sidebar/Sidebar"
 import { LaterPicker } from "../sidebar/LaterPicker"
 import { QuitDialog } from "./Quit"
-import { useLatersAt } from "../sidebar/later"
 import { useWokeNote } from "../calls/woke"
 import { paneRowsOf } from "../sidebar/items"
 import { attachTo, focusedOn } from "./attach"
@@ -264,7 +263,7 @@ export function Shell({
   // sleeps calls no one, and calls again as it wakes.
   const [stores] = useState(newStores)
   useEffect(() => followCalls(stores), [stores])
-  const laters = useLatersAt(useStore(stores.calls, nowOf))
+  const laterClock = useStore(stores.calls, nowOf)
   const orderNow = useOrderNow()
   // What the Tiling reads of them, the same for the Window's life.
   const [shows] = useState(() => tilingShows(stores, showsOf))
@@ -549,7 +548,9 @@ export function Shell({
     // Alt+U: the next call below the Thread in front, as the sidebar lists
     // them, another machine's among this one's (ADR 0079, decision 4), picked.
     answer: () => {
-      const keys = keysOf(orderNow(stores.items.get(), projects, laters))
+      const keys = keysOf(
+        orderNow(stores.items.get(), projects, stores.calls.get().now)
+      )
       const { pane } = here.get()
       const at = pane?.subject ? `${pane.project}:${pane.subject}` : undefined
       const call = nextCall(stores.calls.get().list, keys, at)
@@ -904,7 +905,7 @@ export function Shell({
                   onAdded={added}
                   engine={engine}
                   modules={modules}
-                  laterClock={laters.now}
+                  laterClock={laterClock}
                   projects={menuProjects}
                   actions={keyed}
                   binds={binds}

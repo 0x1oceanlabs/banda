@@ -29,7 +29,7 @@ const row: Arranged = {
     changed: 1,
     pane: { kind: "agents.thread", args: { thread: "t1", host: "arc" } },
   },
-  state: "active",
+  stand: "turn",
   host: "arc",
 }
 

@@ -350,8 +350,6 @@ export type ItemAt = {
   project?: ProjectSummary
   /** The clock the menu reads it by. */
   now: number
-  /** The Person archived it (ADR 0069). */
-  archived: boolean
 }
 
 /** What an item action takes: its Item, as `itemOf` reads it, and

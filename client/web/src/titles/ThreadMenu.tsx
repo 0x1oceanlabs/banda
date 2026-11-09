@@ -17,7 +17,6 @@ import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { useRun } from "@banda/core/react"
 import type { Listed } from "@banda/ui/pane"
-import { useIsArchived } from "../sidebar/archived"
 import { rowsOf, type Shown } from "../sidebar/items"
 import { Making } from "./MakeProject"
 
@@ -69,7 +68,6 @@ export function ThreadRows({
   const keyFor = useKeyLabel()
   const projects = useContext(ProjectsContext)
   const run = useRun()
-  const isArchived = useIsArchived()
   // Whether it sleeps, by a clock that moves as the menu stays open.
   const now = useNow(30_000)
   const ours = useAfterMenu()
@@ -77,7 +75,6 @@ export function ThreadRows({
   const shown = rowsOf(listed, {
     project: projects.find((one) => one.id === project),
     now,
-    archived: isArchived(listed),
   })
   const naming = shown.filter(({ action }) => action.group === "name")
   const others = shown.filter(({ action }) => action.group === "other")

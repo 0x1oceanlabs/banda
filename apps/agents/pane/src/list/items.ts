@@ -29,7 +29,8 @@ import {
   itemOf,
   type WindowApi,
 } from "@banda/ui/module"
-import { asleep, type Listed, mayPutOff } from "@banda/ui/pane"
+import type { Listed } from "@banda/ui/pane"
+import { asleep, mayPutOff } from "@banda/ui/status"
 import {
   AlarmClockIcon,
   CircleDotIcon,

@@ -8,7 +8,7 @@ const project = { id: "s" as ProjectId, name: "S" } as Row["project"]
 const row = (id: string, title = id): Row => ({
   project,
   listed: { id, title, mark: "rest", changed: 0 } as Listed,
-  state: "active",
+  stand: "open",
 })
 const list = (...rows: Row[]): Arranged => ({
   sections: [

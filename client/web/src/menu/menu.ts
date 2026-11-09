@@ -13,7 +13,7 @@ import type {
   ProjectId,
   ProjectSummary,
 } from "@banda/contract"
-import { waits } from "@banda/ui/components/banda-mark"
+import { standOf } from "@banda/ui/status"
 import { type Key, keyLabel, keyText } from "@banda/ui/lib/keys"
 import type { Listed, Lists } from "@banda/ui/pane"
 import type { Action, ItemAction, MenuRow } from "@banda/ui/module"
@@ -355,8 +355,6 @@ export type Sources = {
   actions: readonly Action<Shell>[]
   /** The sidebar's presets, and the one in force. */
   presets: { names: readonly string[]; current: string }
-  /** Whether a Thread is archived now. */
-  archived: (listed: Listed) => boolean
   /** The clock a Thread's Later is read by (ADR 0074). */
   now: number
   /** A Thread's item actions, its App's and the sidebar list's (ADR
@@ -411,6 +409,7 @@ export function menuOf({
   sources: Sources
 }): Group[] {
   const { lists, projects, presets, found, weight } = sources
+  const byRecent = byRecentAt(sources.now)
   const query = words.trim()
   const byWeight = (row: Choice) => weight(row.id)
   // The actions, and the branches among them, as one list.
@@ -609,7 +608,6 @@ export function actsOf(row: Choice, sources: Sources): Act[] {
       const at = {
         project: sources.projects.find((one) => one.id === project),
         now: sources.now,
-        archived: sources.archived(listed),
       }
       // Each row an item action offers the menu, and is on now, read as
       // the sidebar list's `offeredOf` reads it: this file loads no module.
@@ -740,12 +738,14 @@ function foundRow(row: MenuRow): Choice {
   return { kind: "found", id: row.id, row }
 }
 
-/** What waits first, then what changed last: the sidebar's order. */
-function byRecent(a: { listed: Listed }, b: { listed: Listed }): number {
-  return (
-    Number(waits(b.listed.mark)) - Number(waits(a.listed.mark)) ||
-    b.listed.changed - a.listed.changed
-  )
+/** The Person's turn first, as it stands at `now`, then what changed
+ * last: the sidebar's order. */
+function byRecentAt(
+  now: number
+): (a: { listed: Listed }, b: { listed: Listed }) => number {
+  const turn = ({ listed }: { listed: Listed }) =>
+    Number(standOf(listed, now) === "turn")
+  return (a, b) => turn(b) - turn(a) || b.listed.changed - a.listed.changed
 }
 
 function threadTexts({ listed }: { listed: Listed }): string[] {

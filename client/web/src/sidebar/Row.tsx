@@ -1,9 +1,4 @@
-import {
-  MARK_WORDS,
-  ThreadMark,
-  toneOf,
-  waits,
-} from "@banda/ui/components/banda-mark"
+import { MARK_WORDS, ThreadMark, toneOf } from "@banda/ui/components/banda-mark"
 import type { Named } from "@banda/contract/machines"
 import { Emblem, emblemOf, type EmblemOf } from "@banda/ui/components/emblem"
 import { MachineMark } from "@banda/ui/components/machine-icon"
@@ -14,6 +9,7 @@ import { ago, clock, left } from "@banda/ui/lib/words"
 import { cn } from "@banda/ui/lib/utils"
 import { useNow } from "@banda/ui/hooks/use-now"
 import type { Listed } from "@banda/ui/pane"
+import { calls } from "@banda/ui/status"
 import type { Row as Arranged } from "./arrange"
 import { MachineCard } from "./MachineCard"
 import { useOpenRow } from "./open"
@@ -148,11 +144,8 @@ function Piece({
   harnesses: readonly EmblemOf[]
 }) {
   const { listed, project } = row
-  // Nothing waits in it and nothing works: it steps back.
-  const quiet =
-    row.state === "archived" ||
-    row.state === "later" ||
-    (row.state === "active" && !waits(listed.mark) && row.woke === undefined)
+  // Not the Person's turn and not at work: it steps back.
+  const quiet = row.stand !== "turn" && row.stand !== "working"
   switch (part) {
     case "~":
       return <span className="ml-auto" />
@@ -195,7 +188,7 @@ function Piece({
       )
     }
     case "status":
-      if (row.state === "later") return <Sleeps listed={listed} />
+      if (row.stand === "later") return <Sleeps listed={listed} />
       if (row.woke !== undefined) return <Woke listed={listed} at={row.woke} />
       return <Status listed={listed} stillAt={stillAt} />
     case "note": {
@@ -313,7 +306,6 @@ function Sleeps({ listed }: { listed: Listed }) {
 /** A Thread that woke while its Person was away: a clock before what calls,
  * or before the time it woke. */
 function Woke({ listed, at }: { listed: Listed; at: number }) {
-  const calls = waits(listed.mark) && listed.mark !== "offline"
   return (
     <span
       className={cn(
@@ -323,7 +315,7 @@ function Woke({ listed, at }: { listed: Listed; at: number }) {
       title="Woke from Later"
     >
       <AlarmClockIcon className="size-3" aria-label="Woke" />
-      {calls ? MARK_WORDS[listed.mark] : clock(at)}
+      {calls(listed.mark) ? MARK_WORDS[listed.mark] : clock(at)}
     </span>
   )
 }

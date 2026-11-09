@@ -10,7 +10,6 @@ import {
   keptLists,
   listedIn,
   newStores,
-  takeAttention,
   takeLists,
   workingHere,
   workingIn,
@@ -84,18 +83,6 @@ test("the items tell their readers only when what is listed changed", () => {
   expect(heard).toHaveBeenCalledTimes(2)
 })
 
-test("the calls take what the Watches say calls only when it is new", () => {
-  const stores = newStores(0)
-  const heard = vi.fn()
-  stores.calls.subscribe(heard)
-  takeAttention(stores, { mark: "rest", waiting: 0 })
-  expect(heard).not.toHaveBeenCalled()
-  takeAttention(stores, { mark: "asking", waiting: 1 })
-  takeAttention(stores, { mark: "asking", waiting: 1 })
-  expect(heard).toHaveBeenCalledTimes(1)
-  expect(stores.calls.get().attention).toEqual({ mark: "asking", waiting: 1 })
-})
-
 test("the calls follow the lists, and a Later that wakes by its time", () => {
   vi.useFakeTimers({ now: 1_000 })
   const stores = newStores(1_000)
@@ -147,8 +134,6 @@ test("what watches the lists hears them change, and a Later wake, not a mark", (
     [p]: [thread("a", { mark: "done", later: { at: 0, until: 1_500 } })],
   })
   expect(heard).toHaveBeenCalledTimes(1)
-  takeAttention(stores, { mark: "asking", waiting: 1 })
-  expect(heard).toHaveBeenCalledTimes(1)
   vi.advanceTimersByTime(600)
   expect(heard).toHaveBeenCalledTimes(2)
 
@@ -164,8 +149,12 @@ test("what the bar reads of the lists: who works, which Projects call, and a Pan
     [q]: [thread("c", { mark: "thinking" }), thread("d", { mark: "done" })],
   }
   expect(workingIn(lists)).toBe(2)
-  expect(callingIn(lists, () => false)).toEqual([p, q])
-  expect(callingIn(lists, (listed) => listed.id === "d")).toEqual([p])
+  expect(callingIn(lists, 0)).toEqual([p, q])
+  const away: Lists = {
+    ...lists,
+    [q]: [lists[q][0], { ...lists[q][1], archived: true }],
+  }
+  expect(callingIn(away, 0)).toEqual([p])
 
   const shows = (pane: { args?: unknown }) =>
     (pane.args as { thread?: string } | undefined)?.thread ?? null
@@ -216,20 +205,27 @@ test("each host's lists are kept apart, and the items hold them all, this machin
   expect(heard).toHaveBeenCalledTimes(1)
 })
 
-test("the calls hold the loudest of every host's, and how many wait in all", () => {
+test("the bar's Mark is every host's lists' loudest, and their turns in all, put away left out", () => {
   const stores = newStores(0)
-  const heard = vi.fn()
-  stores.calls.subscribe(heard)
-  takeAttention(stores, { mark: "done", waiting: 1 })
-  takeAttention(stores, { mark: "asking", waiting: 2 }, "arc")
-  expect(stores.calls.get().attention).toEqual({ mark: "asking", waiting: 3 })
-  expect(heard).toHaveBeenCalledTimes(2)
-  // This machine's quiet leaves the host's call.
-  takeAttention(stores, { mark: "rest", waiting: 0 })
+  const stop = followCalls(stores)
+  takeLists(stores, { [p]: [thread("a", { mark: "done" })] })
+  takeLists(
+    stores,
+    {
+      [q]: [
+        thread("b", { mark: "asking" }),
+        thread("c", { mark: "failed", archived: true }),
+      ],
+    },
+    "arc"
+  )
   expect(stores.calls.get().attention).toEqual({ mark: "asking", waiting: 2 })
+  // This machine's quiet leaves the host's call.
+  takeLists(stores, { [p]: [thread("a")] })
+  expect(stores.calls.get().attention).toEqual({ mark: "asking", waiting: 1 })
   dropHost(stores, "arc")
   expect(stores.calls.get().attention).toEqual({ mark: "rest", waiting: 0 })
-  expect(heard).toHaveBeenCalledTimes(4)
+  stop()
 })
 
 test("a host's Listed opens its Pane on that host, with no answer for this machine's engine", () => {

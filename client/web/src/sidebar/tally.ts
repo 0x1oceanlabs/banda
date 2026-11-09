@@ -5,17 +5,13 @@
  */
 import type { ProjectId } from "@banda/contract"
 import type { Count } from "@banda/contract/sidebar"
-import {
-  loudest,
-  type MarkState,
-  waits,
-  works,
-} from "@banda/ui/components/banda-mark"
+import { loudest, type MarkState } from "@banda/ui/components/banda-mark"
 import type { Listed, Lists } from "@banda/ui/pane"
+import { isAway, type Stand, standOf } from "@banda/ui/status"
 import { byOrder } from "./order"
 
-/** A Thread counted, with the Project it is in. */
-export type Counted = { project: ProjectId; listed: Listed }
+/** A Thread counted, with the Project it is in and where it stands. */
+export type Counted = { project: ProjectId; listed: Listed; stand: Stand }
 
 /** One count: the loudest mark of what it counts, and what that is. */
 export type Tally = {
@@ -24,30 +20,38 @@ export type Tally = {
   things: readonly Counted[]
 }
 
-/** Which marks each count takes: what waits, split or whole, or works. */
-const TAKES: Record<Count, (mark: MarkState) => boolean> = {
-  asking: (mark) => waits(mark) && mark !== "done",
-  done: (mark) => mark === "done",
-  waiting: waits,
-  working: works,
+/** Which Threads each count takes, by where they stand (`status.ts`):
+ * the Person's turn, whole or by what asks or failed and what is done,
+ * or what works. */
+const TAKES: Record<Count, (stand: Stand, listed: Listed) => boolean> = {
+  asking: (stand, { mark }) =>
+    stand === "turn" && (mark === "asking" || mark === "failed"),
+  done: (stand, { mark }) => stand === "turn" && mark === "done",
+  waiting: (stand) => stand === "turn",
+  working: (stand) => stand === "working",
 }
 
 /**
- * The counts in `counts`' order, each of what is not `archived`; a count of
- * none is left out.
+ * The counts in `counts`' order, each of what is not put away at `now`; a
+ * count of none is left out.
  */
 export function tally(
   lists: Lists,
   counts: readonly Count[],
-  archived: (listed: Listed) => boolean
+  now: number
 ): Tally[] {
   const all = Object.entries(lists).flatMap(([project, listed]) =>
-    listed
-      .filter((one) => !archived(one))
-      .map((one) => ({ project: project as ProjectId, listed: one }))
+    listed.flatMap((one) => {
+      const stand = standOf(one, now)
+      return isAway(stand)
+        ? []
+        : [{ project: project as ProjectId, listed: one, stand }]
+    })
   )
   return counts.flatMap((count) => {
-    const things = all.filter(({ listed }) => TAKES[count](listed.mark))
+    const things = all.filter(({ stand, listed }) =>
+      TAKES[count](stand, listed)
+    )
     if (things.length === 0) return []
     return [{ count, mark: loudest(things.map((t) => t.listed.mark)), things }]
   })
@@ -78,7 +82,7 @@ export function inOrder(
     (a, b) => a.listed.changed - b.listed.changed
   )
   return {
-    waiting: sorted.filter((t) => !works(t.listed.mark)),
-    working: sorted.filter((t) => works(t.listed.mark)),
+    waiting: sorted.filter((t) => t.stand !== "working"),
+    working: sorted.filter((t) => t.stand === "working"),
   }
 }

@@ -7,8 +7,8 @@ import {
 } from "@banda/contract"
 import type { ListedThread, ThreadList } from "@banda/contract/agents"
 import { beforeEach, expect, test, vi } from "vitest"
+import { attentionOf } from "@banda/ui/status"
 import { applyThreads } from "./list"
-import { attentionOf } from "./marks"
 import { listedOf } from "./rows"
 import { event, person } from "../testing"
 
@@ -375,10 +375,12 @@ test("the bar's Mark, the waiting count and the rows follow what was sent, as th
   })
   const threads = [thread({ seen: "u1" }), failed]
   const report = () => {
-    const now = shown(threads, sendingTo(engine))
+    const listed = shown(threads, sendingTo(engine)).map((one) =>
+      listedOf(one, "Fake AI")
+    )
     return {
-      ...attentionOf(now),
-      marks: now.map((one) => listedOf(one, "Fake AI").mark),
+      ...attentionOf({ [PROJECT]: listed }, 0),
+      marks: listed.map((one) => one.mark),
     }
   }
   expect(report()).toEqual({
@@ -386,12 +388,12 @@ test("the bar's Mark, the waiting count and the rows follow what was sent, as th
     waiting: 0,
     marks: ["rest", "rest"],
   })
-  // Marked unread: done again, and the failed one calls for the Person.
+  // Marked unread: both are the Person's turn again.
   void mark(engine, PROJECT, "t1", { seen: null })
   void mark(engine, PROJECT, "t2", { seen: null })
   expect(report()).toEqual({
     mark: "failed",
-    waiting: 1,
+    waiting: 2,
     marks: ["done", "failed"],
   })
 })

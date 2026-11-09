@@ -14,7 +14,6 @@ import { paneHost, type PaneState, type Place, withHost } from "@banda/core"
 import type { MarkState } from "./components/banda-mark"
 import type { Chip } from "./module"
 import type { Chime } from "./sound/families"
-import { sleeps } from "./lib/later"
 
 /**
  * Marks where a program reads the keys, as in a terminal. Banda's Alt keys
@@ -211,9 +210,9 @@ export function paneOf<A extends { [key: string]: JsonValue }>(
 }
 
 /**
- * What a module's work in one Project calls its Person for: the loudest
- * state, as Banda's mark shows it, and how many things wait for the Person
- * to act. The bar shows the loudest of every Project's.
+ * What the Threads call their Person for, all together: the loudest
+ * state, as Banda's mark shows it, and how many are the Person's turn.
+ * The bar shows it (`status.ts`, `attentionOf`).
  */
 export type Attention = { mark: MarkState; waiting: number }
 
@@ -331,48 +330,6 @@ export type Call = {
   answers?: readonly Answering[]
 }
 
-/** The marks that call for the Person, and their calls. */
-const CHIMES: Partial<Record<MarkState, Chime>> = {
-  done: "done",
-  asking: "asking",
-  failed: "failed",
-}
-
-/** Whether `listed` sleeps at `now`. */
-export function asleep(listed: Listed, now: number): boolean {
-  return sleeps(listed.later, now)
-}
-
-/** Whether the Person may put off `listed`: it does not ask (ADR 0074). */
-export function mayPutOff(listed: Listed): boolean {
-  return listed.mark !== "asking"
-}
-
-/** The things in the lists that call their Person now. One put off calls
- * no one while it sleeps (ADR 0074). */
-export function callsOf(lists: Lists, now = Date.now()): Call[] {
-  return Object.entries(lists).flatMap(([project, listed]) =>
-    (listed ?? []).flatMap((thing): Call[] => {
-      const chime = CHIMES[thing.mark]
-      if (!chime || asleep(thing, now)) return []
-      const detail = thing.calls ?? thing.said
-      return [
-        {
-          key: `${project}:${thing.id}`,
-          project: project as ProjectId,
-          about: thing.id,
-          chime,
-          title: thing.title,
-          ...(detail ? { detail } : {}),
-          pane: thing.pane,
-          since: thing.changed,
-          ...(thing.answers?.length ? { answers: thing.answers } : {}),
-        },
-      ]
-    })
-  )
-}
-
 /** The thing `agent` works in, as a Thread its Agent's, and its Project;
  * none when no module lists one. */
 export function listedOf(
@@ -386,8 +343,9 @@ export function listedOf(
   return null
 }
 
-/** What a Watch says about one Project: what calls the Person, and its list. */
-export type Report = Attention & { listed: readonly Listed[] }
+/** What a Watch says about one Project: its list, from which the window
+ * reads what calls the Person (`status.ts`). */
+export type Report = { listed: readonly Listed[] }
 
 export type WatchProps = {
   engine: Engine
@@ -396,16 +354,16 @@ export type WatchProps = {
    * (ADR 0081, decision 4); none for this machine's. */
   host?: string
   /**
-   * Says what the Project calls for now and lists; called on each change,
-   * first once the module has read its list. What calls in the first
+   * Says what the Project lists now; called on each change, first once
+   * the module has read its list. What calls in the first
    * report already was, and is no news (ADR 0011, decision 6).
    */
   report: (report: Report) => void
 }
 
 /**
- * How a module tells the window what its work in a Project calls the Person
- * for and what the sidebar lists, while none of its Panes may show. The
+ * How a module tells the window what the sidebar lists of its work in a
+ * Project, and so what calls the Person, while none of its Panes may show. The
  * window draws one per Project for as long as the engine runs the module; it
  * draws nothing itself.
  */

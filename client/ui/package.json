@@ -8,6 +8,7 @@
   "exports": {
     "./globals.css": "./src/styles/globals.css",
     "./pane": "./src/pane.ts",
+    "./status": "./src/status.ts",
     "./module": "./src/module.ts",
     "./slots": "./src/slots.ts",
     "./desktop": "./src/desktop.ts",

@@ -19,7 +19,7 @@ import {
 } from "@banda/core/react"
 import { currentLook } from "@banda/ui/lib/look"
 import type { Lists } from "@banda/ui/pane"
-import { type Arranged, arrange, type Elsewhere, type Marks } from "./arrange"
+import { type Arranged, arrange, type Elsewhere } from "./arrange"
 import { rowKey } from "./hold"
 import type { Settings } from "./settings"
 
@@ -38,14 +38,12 @@ export type View = {
 
 /**
  * The sidebar's arrangement of every Project's list, as the Person's
- * settings and marks say.
- *
- * @param marks what the Person's marks say of each row now
+ * settings say, each Thread where it stands at `now`, the Later clock.
  */
 export function order(
   lists: Lists,
   projects: readonly ProjectSummary[],
-  marks: Marks,
+  now: number,
   {
     settings = currentLook()?.sidebar ?? DEFAULT_SIDEBAR,
     only,
@@ -53,7 +51,7 @@ export function order(
     elsewhere = [],
   }: View = {}
 ): Arranged {
-  return arrange(lists, projects, settings, only, toggled, marks, elsewhere)
+  return arrange(lists, projects, settings, now, only, toggled, elsewhere)
 }
 
 /** The other machines whose Projects the order places among this one's:
@@ -76,12 +74,12 @@ export const useElsewhere = (): readonly Elsewhere[] =>
 export function useOrderNow(): (
   lists: Lists,
   projects: readonly ProjectSummary[],
-  marks: Marks
+  now: number
 ) => Arranged {
   const kept = useContext(HostsContext)
   return useCallback(
-    (lists, projects, marks) =>
-      order(lists, projects, marks, { elsewhere: elsewhereOf(kept.get()) }),
+    (lists, projects, now) =>
+      order(lists, projects, now, { elsewhere: elsewhereOf(kept.get()) }),
     [kept]
   )
 }

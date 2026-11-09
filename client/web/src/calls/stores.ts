@@ -12,7 +12,7 @@
  */
 import { createContext, useCallback, useContext } from "react"
 import type { ProjectId } from "@banda/contract"
-import { loudest, waits, works } from "@banda/ui/components/banda-mark"
+import { works } from "@banda/ui/components/banda-mark"
 import {
   type Readable,
   sameData,
@@ -23,19 +23,19 @@ import {
 import {
   type Attention,
   type Call,
-  callsOf,
   type Listed,
   type Lists,
   type PaneState,
   QUIET,
   withHost,
 } from "@banda/ui/pane"
-import { nextWake, type Laters, useLatersAt, wakeAfter } from "../sidebar/later"
+import { attentionOf, callsOf, standOf } from "@banda/ui/status"
+import { nextWake, wakeAfter } from "../sidebar/later"
 
 /** What calls the Person now. */
 export type Calls = {
-  /** The loudest of what the Watches say calls, and how many things
-   * wait: the bar's Mark. */
+  /** The loudest mark of what is not put away, and how many are the
+   * Person's turn: the bar's Mark (`attentionOf`). */
   attention: Attention
   /** The clock Laters are read by (ADR 0074): it moves only as the next
    * one wakes by its time. */
@@ -48,13 +48,10 @@ export type Calls = {
 export type Stores = {
   items: Store<Lists>
   calls: Store<Calls>
-  /** What each host's Watches said last, by its name, this machine's as
-   * `HERE`: `items` and the calls' attention merge them. */
-  hosts: Map<string, Said>
+  /** What each host's Watches listed last, by its name, this machine's as
+   * `HERE`: `items` merges them. */
+  hosts: Map<string, Lists>
 }
-
-/** What one host's Watches say: what it lists, and what calls. */
-type Said = { lists: Lists; attention: Attention }
 
 /** This machine, as the stores name the host of what it lists: a name
  * `hosts.toml` keeps for Banda's own. */
@@ -94,8 +91,8 @@ export function keptLists(was: Lists, now: Lists): Lists {
   return same ? was : kept
 }
 
-/** What each host said, this machine's first. */
-function inOrder(hosts: ReadonlyMap<string, Said>): Said[] {
+/** What each host listed, this machine's first. */
+function inOrder(hosts: ReadonlyMap<string, Lists>): Lists[] {
   const here = hosts.get(HERE)
   return [
     ...(here ? [here] : []),
@@ -105,9 +102,9 @@ function inOrder(hosts: ReadonlyMap<string, Said>): Said[] {
 
 /** Every host's lists as one: a Project's of the first host that lists
  * it, this machine's before any other. */
-function mergedLists(hosts: ReadonlyMap<string, Said>): Lists {
+function mergedLists(hosts: ReadonlyMap<string, Lists>): Lists {
   const all: Record<ProjectId, readonly Listed[]> = {}
-  for (const { lists } of inOrder(hosts))
+  for (const lists of inOrder(hosts))
     for (const [project, listed] of Object.entries(lists))
       all[project as ProjectId] ??= listed
   return all
@@ -122,10 +119,7 @@ export function takeLists(
   host = HERE
 ): void {
   const placed = host === HERE ? lists : onHost(lists, host)
-  hosts.set(host, {
-    attention: hosts.get(host)?.attention ?? QUIET,
-    lists: placed,
-  })
+  hosts.set(host, placed)
   items.set(keptLists(items.get(), mergedLists(hosts)))
 }
 
@@ -144,35 +138,18 @@ function onHost(lists: Lists, host: string): Lists {
   return placed
 }
 
-/** Takes what host `host`'s Watches say calls the Person: the calls hold
- * the loudest of every host's, when it is new. */
-export function takeAttention(
-  { calls, hosts }: Stores,
-  attention: Attention,
-  host = HERE
-): void {
-  hosts.set(host, { lists: hosts.get(host)?.lists ?? {}, attention })
-  const all = inOrder(hosts).map((said) => said.attention)
-  const mark = loudest(all.map((one) => one.mark))
-  const waiting = all.reduce((sum, one) => sum + one.waiting, 0)
-  const was = calls.get()
-  if (was.attention.mark !== mark || was.attention.waiting !== waiting)
-    calls.set({ ...was, attention: { mark, waiting } })
-}
-
-/** Lets go of what host `host` listed and called for, as the Window no
- * longer shows its rows. */
+/** Lets go of what host `host` listed, as the Window no longer shows its
+ * rows. */
 export function dropHost(stores: Stores, host: string): void {
   if (host === HERE || !stores.hosts.has(host)) return
   takeLists(stores, {}, host)
-  takeAttention(stores, QUIET, host)
   stores.hosts.delete(host)
 }
 
 /** What this machine lists, without the other hosts': what Quit and a
  * restart stop. */
 export function ownLists({ hosts }: Stores): Lists {
-  return hosts.get(HERE)?.lists ?? NO_LISTS
+  return hosts.get(HERE) ?? NO_LISTS
 }
 
 const NO_LISTS: Lists = {}
@@ -189,7 +166,18 @@ export function followCalls({ items, calls }: Stores): () => void {
   const work = (now: number) => {
     clearTimeout(timer)
     const lists = items.get()
-    calls.set({ ...calls.get(), now, list: callsOf(lists, now) })
+    // The bar's Mark stays the same object while it says the same, so
+    // the bar is not drawn again for each change of the lists.
+    const was = calls.get().attention
+    const attention = attentionOf(lists, now)
+    calls.set({
+      now,
+      list: callsOf(lists, now),
+      attention:
+        was.mark === attention.mark && was.waiting === attention.waiting
+          ? was
+          : attention,
+    })
     const next = nextWake(lists, now)
     if (next !== undefined)
       timer = setTimeout(() => work(Date.now()), wakeAfter(next))
@@ -238,7 +226,8 @@ export function listedIn(
     : undefined
 }
 
-/** How many of what the Apps list work now: the Agents at work. */
+/** How many of what the Apps list work now: the Agents at work, Later or
+ * archived as well, as Quit stops them all (not where they stand). */
 export function workingIn(lists: Lists): number {
   return Object.values(lists)
     .flat()
@@ -251,15 +240,11 @@ export function workingHere(stores: Stores): number {
   return workingIn(ownLists(stores))
 }
 
-/** The Projects one of whose Threads calls the Person, unless it is put
- * away: those whose workspace the bar marks with a dot (ADR 0065,
- * decision 9). */
-export function callingIn(
-  lists: Lists,
-  away: (listed: Listed) => boolean
-): ProjectId[] {
+/** The Projects one of whose Threads is the Person's turn at `now`:
+ * those whose workspace the bar marks with a dot (ADR 0065, decision 9). */
+export function callingIn(lists: Lists, now: number): ProjectId[] {
   return Object.entries(lists)
-    .filter(([, listed]) => listed.some((one) => waits(one.mark) && !away(one)))
+    .filter(([, listed]) => listed.some((one) => standOf(one, now) === "turn"))
     .map(([project]) => project as ProjectId)
 }
 
@@ -298,21 +283,21 @@ export function useWorkingHere(): number {
 }
 
 /** The bar's Mark: what calls the Person, and how many things wait. */
-export const attentionOf = (calls: Calls) => calls.attention
+export const barAttention = (calls: Calls) => calls.attention
 
 /** The Later clock. */
 export const nowOf = (calls: Calls) => calls.now
 
-/** The Laters, read by the calls' clock, which moves as the next one
- * wakes by its time. */
-export function useLatersNow(): Laters {
-  return useLatersAt(useCalls(nowOf))
+/** The Later clock, as where a Thread stands is read by it: it moves
+ * only as the next Later wakes by its time. */
+export function useLaterClock(): number {
+  return useCalls(nowOf)
 }
 
-/** The Projects one of whose Threads calls the Person now, unless it is
- * put away: the bar's dots, drawn again only as they change. */
+/** The Projects one of whose Threads is the Person's turn now: the bar's
+ * dots, drawn again only as they change. */
 export function useCalling(): ProjectId[] {
-  const { away } = useLatersNow()
-  const select = useCallback((lists: Lists) => callingIn(lists, away), [away])
+  const now = useLaterClock()
+  const select = useCallback((lists: Lists) => callingIn(lists, now), [now])
   return useItems(select, sameEach)
 }

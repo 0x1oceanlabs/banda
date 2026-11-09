@@ -5,8 +5,7 @@
  * say what that means here. Pure, so plain tests cover them.
  */
 import type { ListedThread, TurnId, TurnView } from "@banda/contract/agents"
-import { loudest, type MarkState } from "@banda/ui/components/banda-mark"
-import type { Attention } from "@banda/ui/pane"
+import type { MarkState } from "@banda/ui/components/banda-mark"
 
 /**
  * A Thread's mark: the loudest thing about it the Person has not seen. A
@@ -31,17 +30,6 @@ export function markOf(thread: ListedThread): MarkState {
     default:
       return "rest"
   }
-}
-
-/** Whether a mark calls the Person to act, not just to look. */
-export function needsPerson(mark: MarkState): boolean {
-  return mark === "asking" || mark === "failed"
-}
-
-/** What a Project's Threads call their Person for, all together. */
-export function attentionOf(threads: readonly ListedThread[]): Attention {
-  const marks = threads.map(markOf)
-  return { mark: loudest(marks), waiting: marks.filter(needsPerson).length }
 }
 
 /**
