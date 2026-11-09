@@ -38,3 +38,7 @@ preset = "inbox"
 # color = true                       # a question in orange, a failure in red, done in green
 # words = false                      # words beside the numbers
 # empty = "mark"                     # nothing to count: the calm square ("mark"), or nothing ("hide")
+
+# [machines]                         # once hosts.toml has another machine
+# rows = "named"                     # another machine on its rows: "named" (its icon and name), "icon" or "off"
+# this-too = false                   # name this machine too, as the others are

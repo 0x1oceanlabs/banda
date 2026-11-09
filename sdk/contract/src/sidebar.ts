@@ -23,6 +23,8 @@ export type { BarCounts } from "./generated/sidebar/BarCounts"
 export type { BarShow } from "./generated/sidebar/BarShow"
 export type { BarEmpty } from "./generated/sidebar/BarEmpty"
 export type { Count } from "./generated/sidebar/Count"
+export type { Machines } from "./generated/sidebar/Machines"
+export type { MachineRows } from "./generated/sidebar/MachineRows"
 
 /** Banda's arrangement, the `inbox` preset: what `banda look` gives with
  * no files, for before the first look and outside the desktop. */
@@ -55,4 +57,5 @@ export const DEFAULT_SIDEBAR: Sidebar = {
   later: {
     presets: ["1h", "3h", "18:00", "tomorrow 9:00", "mon 9:00"],
   },
+  machines: { rows: "named", thisToo: false },
 }

@@ -39,6 +39,22 @@ test("a list of states is some of them, and every file has rows", () => {
   for (const file of Object.keys(SCHEMAS)) expect(rowsOf(file)).not.toEqual([])
 })
 
+test("how another machine shows on rows is one of three, and naming this one a switch", () => {
+  const rows = rowsOf("sidebar.toml")
+  const row = (key: string) => rows.find((r) => r.key === key)!
+  expect(row("machines.rows")).toMatchObject({
+    group: "machines",
+    control: {
+      kind: "choice",
+      options: [{ value: "named" }, { value: "icon" }, { value: "off" }],
+    },
+  })
+  expect(row("machines.this-too")).toMatchObject({
+    title: "This too",
+    control: { kind: "switch" },
+  })
+})
+
 test("a value is written as TOML", () => {
   expect(tomlOf('a "b"')).toBe('"a \\"b\\""')
   expect(tomlOf(3)).toBe("3")
