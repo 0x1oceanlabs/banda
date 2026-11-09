@@ -1,6 +1,8 @@
 {
   "panes": [
-    "browser.browser"
+    {
+      "kind": "browser.browser"
+    }
   ],
   "actions": [
     {

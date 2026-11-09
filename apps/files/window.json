@@ -1,7 +1,11 @@
 {
   "panes": [
-    "files.tree",
-    "files.file"
+    {
+      "kind": "files.tree"
+    },
+    {
+      "kind": "files.file"
+    }
   ],
   "actions": [
     {

@@ -37,17 +37,31 @@ use model::{Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Side, Si
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
+use std::collections::BTreeSet;
 use ts_rs::TS;
 
 /// The version of every event this module writes.
 pub const VERSION: u32 = 1;
 
 #[derive(Default)]
-pub struct Workspaces;
+pub struct Workspaces {
+    /// The Pane kinds that open as a Group of their own, as their window
+    /// parts say (ADR 0065, decision 7).
+    grouped: BTreeSet<String>,
+}
 
 impl Workspaces {
+    /// Workspaces that know no kind of Pane to open as a Group of its own.
     pub fn new() -> Self {
-        Self
+        Self::default()
+    }
+
+    /// The kinds of Pane that open as a Group of their own, as a Thread
+    /// does, whoever opens them: the engine reads them from the window
+    /// parts (`PaneKind.grouped`), so the workspaces name no App for it.
+    pub fn grouped_kinds(mut self, kinds: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.grouped = kinds.into_iter().map(Into::into).collect();
+        self
     }
 }
 
@@ -119,9 +133,10 @@ banda_kernel::methods! {
         /// address (`browser.browser`, args `{"url": "https://…"}` alone).
         /// Only the args that choose what a Pane shows are yours to give;
         /// the rest are your Person's. Beside a Pane `panes` lists, or,
-        /// left out, beside your Project's Panes. One shown already, a
-        /// Thread's by its ID, stays where it is, and is named. It takes no
-        /// focus; the Person sees a mark on it until they look.
+        /// left out, beside your Project's Panes. A Thread opens as a
+        /// Group of its own. One shown already, a Thread's by its ID,
+        /// stays where it is, and is named. It takes no focus; the Person
+        /// sees a mark on it until they look.
         command open_pane(OpenPane) -> Opened, Write, tool "open_pane";
         /// Moves a Pane you opened beside another that `panes` lists.
         command move_own(MoveOwn) -> Done, Write, tool "move_pane";
@@ -461,7 +476,10 @@ impl Workspaces {
         .map(|()| Done {})
     }
 
-    async fn open(&self, call: Call, open: Open) -> Result<Opened, Refusal> {
+    async fn open(&self, call: Call, mut open: Open) -> Result<Opened, Refusal> {
+        if self.grouped.contains(&open.shows.kind) {
+            open.grouped.get_or_insert(true);
+        }
         let (pane, new) = change(&call, "opened", None, Say::Whole, move |list, _, seed| {
             Ok(commands::open(list, open, seed)?)
         })
@@ -683,6 +701,10 @@ impl Workspaces {
             args: open.args,
         };
         let beside = open.beside;
+        // A kind that opens as a Group of its own does so here too, unless
+        // it goes into another Pane's column, which stays as it is.
+        let grouped = self.grouped.contains(&shows.kind);
+        let stacks = (beside.as_ref()).is_some_and(|b| matches!(b.side, Side::Above | Side::Below));
         let (pane, new) = change(&call, "opened", None, Say::Whole, move |list, _, seed| {
             let place = beside.map(|b| b.place(list, wall)).transpose()?;
             if let Some(shown) = model::showing_asked(list, &shows) {
@@ -694,6 +716,9 @@ impl Workspaces {
                 ..Opening::of(shows)
             };
             let pane = model::open(list, opening, seed)?;
+            if grouped && !stacks {
+                model::group_pane(list, pane, seed)?;
+            }
             Ok((pane, true))
         })
         .await?;

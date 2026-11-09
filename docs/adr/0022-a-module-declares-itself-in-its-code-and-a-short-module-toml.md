@@ -209,6 +209,9 @@ from the first. Roma chose to declare in code what is code, and to keep
        main process; the architecture test's list names them, and the
        ceiling is 2 and only falls. The window's own actions are the key
        sheet's, not a module's, so the topic leaves them out.
+     - _Changed on 2026-11-09:_ `window.json` also carries what the
+       host needs of a Pane kind (ADR 0087, decision 13): today, whether
+       it opens as a Group of its own.
   - **Later, not forgotten:**
     - the browser's tabs and history as a source of the Banda menu;
     - the settings Pane's rows as a source, once ADR 0016 has them.

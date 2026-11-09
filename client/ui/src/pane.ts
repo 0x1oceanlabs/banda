@@ -156,7 +156,8 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
   home?: () => boolean
   /** Whether it opens as a Group of its own when no Group takes it in, as
    * an Agent's Thread does, so the Panes its Agent opens join a Group
-   * already there (ADR 0065, decision 7). */
+   * already there (ADR 0065, decision 7). The engine reads it too, from its
+   * App's `window.json`. */
   grouped?: true
   /** It opens for a Project of another host of `hosts.toml` too, on that
    * host's engine, which it reaches only through the API, as a Thread

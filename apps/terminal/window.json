@@ -1,6 +1,8 @@
 {
   "panes": [
-    "terminal.terminal"
+    {
+      "kind": "terminal.terminal"
+    }
   ],
   "actions": [
     {

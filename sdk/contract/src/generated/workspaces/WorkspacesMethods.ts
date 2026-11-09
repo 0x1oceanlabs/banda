@@ -134,9 +134,10 @@ panes: CallMethod<Nothing, Array<SeenWorkspace>>,
  * address (`browser.browser`, args `{"url": "https://…"}` alone).
  * Only the args that choose what a Pane shows are yours to give;
  * the rest are your Person's. Beside a Pane `panes` lists, or,
- * left out, beside your Project's Panes. One shown already, a
- * Thread's by its ID, stays where it is, and is named. It takes no
- * focus; the Person sees a mark on it until they look.
+ * left out, beside your Project's Panes. A Thread opens as a
+ * Group of its own. One shown already, a Thread's by its ID,
+ * stays where it is, and is named. It takes no focus; the Person
+ * sees a mark on it until they look.
  */
 open_pane: CommandMethod<OpenPane, Opened>, 
 /**

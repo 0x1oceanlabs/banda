@@ -27,6 +27,7 @@ again?: boolean,
  * A new Pane's column is in a Group from the start: the one the place
  * puts it in, else a Group of its own, as a Thread opens, so what its
  * Agent opens joins a Group already there (ADR 0065, decision 7).
+ * Left out, as its kind declares.
  */
 grouped?: boolean, 
 /**

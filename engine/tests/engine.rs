@@ -630,6 +630,12 @@ fn an_agent_reaches_banda_through_banda_mcp() {
         (pane["project"].clone(), pane["yours"].clone()),
         (json!(work), json!(true))
     );
+    // As a Group of its own, as the agents' window part says a Thread
+    // opens (ADR 0065, decision 7).
+    let arranged = places.ok("workspaces.list", None, json!({}));
+    let column = &arranged["workspaces"][0]["columns"][0];
+    assert_eq!(column["panes"][0]["id"], pane["id"]);
+    assert!(column["group"].is_string(), "{column}");
     let (error, said) = mcp.call(
         14,
         "open_pane",

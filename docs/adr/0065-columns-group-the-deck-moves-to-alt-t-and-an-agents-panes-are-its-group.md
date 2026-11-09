@@ -200,6 +200,15 @@ for any Panes, and an Agent's Panes are simply its Group.
      from before in none, stays in none until it opens again. Its kind
      says so (`PaneKind.grouped`), and the window opens it `grouped`;
      the engine knows no kind.
+   - _Changed on 2026-11-09._ The engine knows the kind too. The
+     window's tests copy `PaneKind.grouped` into its App's
+     `window.json`, and the engine reads it as it starts and gives the
+     workspaces those kinds. So a Thread is a Group from its opening,
+     whoever opens it: the window, an Agent's `open_pane` or the CLI.
+     `workspaces.open` with `grouped` left out does as the kind says;
+     `false` keeps it out. The window still sends `grouped`, so its
+     copy of the model needs no kinds. A Thread an Agent puts into
+     another Pane's column makes no Group of it.
 
 8. **A picked Agent comes to the left.**
    - A pick from the Inbox, the bar's widget or `Alt+U` (go to what
