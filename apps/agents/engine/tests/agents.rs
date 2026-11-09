@@ -6031,6 +6031,7 @@ async fn a_thread_moves_to_another_account_and_keeps_its_session() {
 
 /// Asks `thread`'s Agent what it read, and the reply: the prompt as it
 /// came, after the session's ID.
+#[cfg(unix)]
 async fn ask_read(world: &World, thread: &Value) -> (String, String) {
     let sent = world.send(Some(thread), "what did you read").await;
     let view = world
