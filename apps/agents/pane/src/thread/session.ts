@@ -94,9 +94,9 @@ const IMPLEMENT = "Implement the plan."
  * (decision 8). It fails quietly, as an older host's refusal: the window
  * marked it by itself.
  *
- * One not sent, as its host was away, is armed again once the host is
- * back, and goes as the first would have, when the Person is there: the
- * Thread on screen does not stay Done everywhere for a host that came
+ * One not sent, or lost on its way, as its host was away, is armed again
+ * once the host is back, and goes as a new seen when the Person is there:
+ * the Thread on screen does not stay Done everywhere for a host that came
  * back. One the host took, or refused while it was there, is done, so a
  * "Mark as unread" made since stays (ADR 0077, decision 6).
  */
@@ -110,15 +110,19 @@ export function seeWhenPresent(
   let off = false
   // What calls off the wait now: for the Person, or for the host.
   let stop = () => {}
-  const see = () =>
+  const see = () => {
+    // A wait for the Person armed as the host came back, and not called
+    // off with the rest, sends nothing for a Thread no longer on screen.
+    if (off) return
     void mark(engine, project, thread, { seen: turn }, { quiet: true }).then(
       (took) => {
-        // A refusal comes while the host is there; only a seen not sent
-        // waits for it to come back.
+        // A refusal comes while the host is there; only a seen not sent,
+        // or lost on its way, waits for it to come back.
         if (took || off || engine.status.state === "open") return
         stop = whenOpen(engine, () => (stop = when(see)))
       }
     )
+  }
   stop = when(see)
   return () => {
     off = true
