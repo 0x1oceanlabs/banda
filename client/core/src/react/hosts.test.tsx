@@ -2,7 +2,7 @@ import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, expect, test, vi } from "vitest"
 import type { HostState } from "../device"
-import { type HostsDevice, KeptHosts, reachWords, unseen } from "../hosts"
+import { type HostsDevice, KeptHosts, keyNamed, reachWords } from "../hosts"
 import { HostsContext, type Reach, useEngineOf, useReach } from "./hosts"
 
 afterEach(() => {
@@ -78,7 +78,7 @@ test("a Pane reaches the engine of the host its args name, else of the host list
   Socket.opened = []
   const { device, tell } = desktop()
   const hosts = new KeptHosts(device, {
-    seen: unseen,
+    seen: keyNamed,
     follow: () => () => undefined,
   })
   hosts.follow()

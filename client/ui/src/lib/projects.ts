@@ -5,11 +5,10 @@ import type {
   Sign,
   UpdateProject,
 } from "@banda/contract"
-import { openProjects, shownProjects } from "@banda/core"
 
 /** Which Projects a list shows: the core's (ADR 0089), named here too
  * for the Panes that take them from here, until L3 splits this package. */
-export { openProjects, shownProjects }
+export { openProjects, shownProjects } from "@banda/core"
 
 /** What the Threads without a Project are in (ADR 0069). */
 export const NO_PROJECT = "No Project"

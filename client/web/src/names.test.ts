@@ -91,7 +91,7 @@ test("a host goes by the name and icon its engine says, cleaned, from its welcom
   await vi.advanceTimersByTimeAsync(0)
   const socket = Socket.opened[0]!
   socket.onopen?.()
-  const named = { name: "Studio‮​", icon: "server" }
+  const named = { name: "Studio\u202E\u200B", icon: "server" }
   socket.say({ type: "welcome", engine: "e", modules: [], boot: "b", named })
   expect(hosts.get()[0]!.named).toEqual({ name: "Studio", icon: "server" })
   // Renamed there, it says so on its stream, which names no Project.

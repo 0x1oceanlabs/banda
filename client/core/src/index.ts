@@ -22,6 +22,7 @@ export {
   hostOfPane,
   type HostsDevice,
   KeptHosts,
+  keyNamed,
   liveIn,
   type Machine,
   machinesOf,
@@ -34,7 +35,6 @@ export {
   runOnHost,
   type Shown,
   shownOf,
-  unseen,
 } from "./hosts"
 export { KeptHere } from "./kept-here"
 export { paneHost, type PaneState, type Place, withHost } from "./pane"

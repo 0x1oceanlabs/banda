@@ -13,6 +13,8 @@ const PANE = [
   // go, and the search. The bridge says what the desktop does for the
   // browser (ADR 0028).
   /^@banda\/contract(\/browser|\/bridge)?$/,
+  // The client's core, by the one door an App takes to it (ADR 0089).
+  /^@banda\/core\/react$/,
   /^@banda\/ui\//,
   /^react$/,
   /^lucide-react$/,
@@ -21,7 +23,7 @@ const PANE = [
 /** A test may also read files and use its runner. */
 const TEST = [...PANE, /^node:/, /^vitest$/]
 
-test("the browser Pane imports only the API, client/ui and React", () => {
+test("the browser Pane imports only the API, the core, client/ui and React", () => {
   const folder = import.meta.dirname
   // This file names imports as examples; it is not a Pane.
   const panes = sources(folder).filter((file) => file !== import.meta.filename)

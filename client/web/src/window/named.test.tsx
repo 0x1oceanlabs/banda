@@ -5,9 +5,9 @@ import {
   HostsContext,
   type HostState,
   KeptHosts,
+  keyNamed,
   type Shown,
   shownOf,
-  unseen,
 } from "@banda/core/react"
 import { MachinePill, machineHeader } from "./named"
 
@@ -119,7 +119,7 @@ test("the Window fills the pill of a Pane by the host its args name, as the Wind
       engine: () => Promise.reject(new Error("not here")),
       start: () => undefined,
     },
-    { seen: unseen, follow: () => () => undefined }
+    { seen: keyNamed, follow: () => () => undefined }
   )
   kept.take([{ name: "arc", ssh: "arc", state: "stopped" }])
   const { Fill } = machineHeader

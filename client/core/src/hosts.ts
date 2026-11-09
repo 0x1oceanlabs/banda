@@ -55,7 +55,7 @@ export type Names = {
 
 /** A host before this device saw its name: by its key, with the
  * `desktop` icon. */
-export const unseen = (key: string): Named => ({ name: key, icon: "desktop" })
+export const keyNamed = (key: string): Named => ({ name: key, icon: "desktop" })
 
 /** A host as the Window shows it. */
 export type Shown = {
@@ -93,7 +93,7 @@ export function shownOf(
   was: Shown | undefined,
   now: HostState,
   at: number,
-  seen: (key: string) => Named = unseen
+  seen: (key: string) => Named = keyNamed
 ): Shown {
   const kept = was?.projects ?? NONE
   const { name } = now
