@@ -3,7 +3,9 @@
  * in main, thrown and not caught, and a process of Banda's that crashed
  * are kept by the problems module; Electron's crash dumps stay in the
  * problems' folder and go nowhere. Main's console, and the page's
- * warnings and errors, go to `window.log` too, beside the engine's.
+ * warnings and errors, go to `window.log` too, beside the engine's. A
+ * packed Banda's Chromium says its own warnings in `chromium.log`: why it
+ * ended a page's process, or the GPU's, is said there alone.
  */
 import {
   closeSync,
@@ -14,6 +16,7 @@ import {
   writeSync,
 } from "node:fs"
 import { readFile } from "node:fs/promises"
+import { freemem, totalmem } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { format } from "node:util"
@@ -28,6 +31,9 @@ import { app, crashReporter, type WebContents } from "electron"
 
 /** The most a log grows to before it starts again, as the engine's. */
 const LOG_MOST = 4 << 20
+
+/** Chromium's log, whose lines are at least this grave: 1 is a warning. */
+const CHROMIUM_LEVEL = "1"
 
 /**
  * A log file for this user alone that, past {@link LOG_MOST}, is kept as
@@ -70,6 +76,8 @@ export function startLog(
 ): void {
   app.setPath("crashDumps", join(state, "problems", "crashes"))
   crashReporter.start({ uploadToServer: false })
+  // A packed Banda's stderr goes nowhere; Banda Local's is its terminal's.
+  if (app.isPackaged) chromiumLog(join(state, "logs", "chromium.log"))
   let log: Rolling
   try {
     log = new Rolling(join(state, "logs", "window.log"))
@@ -95,6 +103,27 @@ export function startLog(
       written(log, `page ${event.level}`, `${event.message} (${at})`)
     })
   })
+}
+
+/**
+ * Chromium writes its warnings and errors to `path` from now on, not to
+ * stderr. It adds to the file and never cuts it, so one past
+ * {@link LOG_MOST} is kept as `chromium.1.log` as Banda starts.
+ */
+function chromiumLog(path: string): void {
+  try {
+    mkdirSync(dirname(path), { recursive: true })
+    if ((statSync(path, { throwIfNoEntry: false })?.size ?? 0) > LOG_MOST)
+      renameSync(path, path.replace(/\.log$/, ".1.log"))
+    // Chromium makes it readable by all; Banda's logs are the user's alone.
+    closeSync(openSync(path, "a", 0o600))
+  } catch (error) {
+    console.error("banda: chromium.log:", error)
+    return
+  }
+  app.commandLine.appendSwitch("enable-logging", "file")
+  app.commandLine.appendSwitch("log-file", path)
+  app.commandLine.appendSwitch("log-level", CHROMIUM_LEVEL)
 }
 
 function written(log: Rolling, level: string, text: string): void {
@@ -124,6 +153,9 @@ export function watchProblems(
   process.on("unhandledRejection", thrown)
   app.on("render-process-gone", (_event, contents, details) => {
     if (details.reason === "clean-exit" || !banda(contents)) return
+    console.error(
+      `banda: the page's process ended: ${details.reason}, code ${details.exitCode}; ${memory()}`
+    )
     keep(
       crash(
         details.reason,
@@ -132,8 +164,14 @@ export function watchProblems(
     )
   })
   app.on("child-process-gone", (_event, details) => {
-    if (details.reason === "clean-exit" || details.reason === "killed") return
+    if (details.reason === "clean-exit") return
     const name = details.name ?? details.serviceName ?? details.type
+    // One killed is no Problem of Banda's, as one ended as Banda quits;
+    // but the window.log says it, to tell later who killed it.
+    console.error(
+      `banda: the ${name} process ended: ${details.reason}, code ${details.exitCode}; ${memory()}`
+    )
+    if (details.reason === "killed") return
     keep(
       crash(
         details.reason,
@@ -142,6 +180,20 @@ export function watchProblems(
     )
   })
   return keep
+}
+
+/** The memory of the machine and of Banda's processes, for the log:
+ * what a process killed from outside may have been killed for. */
+function memory(): string {
+  const mb = (bytes: number) => Math.round(bytes / (1 << 20))
+  const processes = app
+    .getAppMetrics()
+    .map(
+      (one) =>
+        `${one.type} ${one.pid} ${mb(one.memory.workingSetSize << 10)} MB`
+    )
+    .join(", ")
+  return `free ${mb(freemem())} of ${mb(totalmem())} MB; ${processes}`
 }
 
 const crash = (reason: string, message: string): Record => ({

@@ -33,6 +33,7 @@ import {
   setQuiet,
   startWindow,
   wallpaper,
+  textOf,
   type Window,
   read,
 } from "./window"
@@ -156,6 +157,41 @@ test("a workspace opens Panes side by side, moves the focus by keys, and comes b
   await page.keyboard.press("Alt+KeyW")
   await expect(page.getByRole("region", { name: "New Pane" })).toBeHidden()
   await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+})
+
+test("a page whose process is killed loads again, as it was (#343)", async () => {
+  window = await startWindow()
+  const { app, page } = window
+  await firstThread(page)
+  await page.keyboard.press("Alt+KeyN")
+  await expect(page.getByRole("region", { name: "New Pane" })).toBeVisible()
+
+  // Killed from outside, as Banda Dev's was: the window had its colour
+  // alone, its engine running behind it.
+  const pid = await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]!.webContents.getOSProcessId()
+  )
+  process.kill(pid, "SIGKILL")
+  await expect
+    .poll(() =>
+      app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0]!.webContents.getOSProcessId()
+      )
+    )
+    .not.toBe(pid)
+  // Playwright's page stays the crashed one: the page loaded again is
+  // read through main.
+  const shown = () =>
+    app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]!.webContents.executeJavaScript(
+        `["New Thread", "New Pane"].filter((name) =>
+          document.querySelector(\`[aria-label="\${name}"]\`))`
+      )
+    )
+  await expect.poll(shown).toEqual(["New Thread", "New Pane"])
+  await expect
+    .poll(() => textOf(join(window.dir, "state/logs/window.log")))
+    .toContain("the page's process ended: killed, code 9; free")
 })
 
 test("New Pane and New Thread open a new tile at each press, as a browser's new window", async () => {

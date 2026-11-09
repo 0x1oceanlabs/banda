@@ -77,6 +77,7 @@ import {
 import { listApp, listShortcut } from "./entry"
 import { Hosts } from "./hosts"
 import { startLog, watchProblems } from "./problems"
+import { revive } from "./revive"
 import { Editors } from "./editors"
 import { dragOut, exists, openFile, showFile } from "./outside"
 import { roadLayer } from "./road"
@@ -1005,6 +1006,8 @@ function pageWindow(
   opened.once("ready-to-show", () => opened.show())
   opened.on("focus", () => opened.flashFrame(false))
   const contents = opened.webContents
+  // A page whose process died loads again, as it was (#343).
+  revive(contents)
   // The page never leaves: links open in the browser, nothing navigates.
   contents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url)) void shell.openExternal(url)
