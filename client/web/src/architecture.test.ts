@@ -93,6 +93,7 @@ import {
   parts,
   propNames,
   sources,
+  valuesTaken,
 } from "@banda/ui/testing/architecture"
 import ts from "typescript"
 import { expect, test } from "vitest"
@@ -957,23 +958,6 @@ test("a mark's rank is read only to pick the loudest, where the list holds", () 
   expect(reading).toEqual(RANKING)
 })
 
-/** What `file` takes of the module at `module`, by name, not as a type:
- * `import { a, type B } from "./x"` takes `a`. */
-function valuesTaken(file: string, module: string): string[] {
-  return [
-    ...readFileSync(file, "utf8").matchAll(
-      /^import\s+\{([^}]*)\}\s*from\s*"(\.[^"]*)"/gm
-    ),
-  ]
-    .filter(([, , from]) => join(dirname(file), from) === module)
-    .flatMap(([, names]) =>
-      names
-        .split(",")
-        .map((name) => name.trim())
-        .filter((name) => name && !name.startsWith("type "))
-    )
-}
-
 /**
  * What calls has one order, the Person's arrangement of the sidebar (ADR
  * 0087, decision 8; the plan's §6.3): the sidebar list, the bar's counts
@@ -982,55 +966,56 @@ function valuesTaken(file: string, module: string): string[] {
  * decision 4; #999): a file that takes `order` takes the other machines
  * from `useElsewhere` too, and Alt+U takes them on the key, through
  * `useOrderNow`. The counts and Alt+U sort what they show by its keys in
- * `byOrder`: the counts' files sort nothing by themselves, nor does a
- * file that reads a place in it, as Alt+U's start does.
+ * `byOrder`: the sidebar list's file, the counts', Alt+U's, and a file
+ * that reads a place in it, as Alt+U's start does, sort nothing by
+ * themselves. What a file takes is read in each form of import and
+ * re-export (`valuesTaken`), and neither `arrange`'s module nor `order`'s
+ * is taken whole, so none takes `arrange` by another name.
  */
 test("the sidebar list, the counts and Alt+U go by one order", () => {
   const sidebar = join(app, "web/src/sidebar")
-  const files = sources(join(app, "web/src"), { tests: false })
-  const arranging = files
-    .filter((file) =>
-      valuesTaken(file, join(sidebar, "arrange")).includes("arrange")
-    )
-    .map((file) => relative(app, file))
-  expect(arranging).toEqual(["web/src/sidebar/order.ts"])
-  const ordering = files
-    .map((file) => ({
-      file: relative(app, file),
-      taken: valuesTaken(file, join(sidebar, "order")),
-    }))
+  const arranging = join(sidebar, "arrange")
+  const ordering = join(sidebar, "order")
+  const taken = new Map(
+    sources(join(app, "web/src"), { tests: false }).map((file) => [
+      relative(app, file),
+      valuesTaken(readFileSync(file, "utf8"), file),
+    ])
+  )
+  const taking = (module: string, name: string) =>
+    [...taken]
+      .filter(([, of]) => of[module]?.includes(name))
+      .map(([file]) => file)
+  expect([...taking(arranging, "*"), ...taking(ordering, "*")]).toEqual([])
+  expect([
+    ...taking(arranging, "arrange"),
+    ...taking(ordering, "arrange"),
+  ]).toEqual(["web/src/sidebar/order.ts"])
+  const list = "web/src/sidebar/Sidebar.tsx"
+  const altU = "web/src/window/Shell.tsx"
+  const going = [...taken]
+    .map(([file, of]) => ({ file, taken: of[ordering] ?? [] }))
     .filter(
-      ({ taken }) => taken.includes("order") || taken.includes("useOrderNow")
+      ({ taken: names }) =>
+        names.includes("order") || names.includes("useOrderNow")
     )
-  expect(ordering).toEqual([
+  expect(going).toEqual([
     {
       file: "web/src/sidebar/Counts.tsx",
       taken: expect.arrayContaining(["order", "useElsewhere"]),
     },
-    {
-      file: "web/src/sidebar/Sidebar.tsx",
-      taken: expect.arrayContaining(["order", "useElsewhere"]),
-    },
-    {
-      file: "web/src/window/Shell.tsx",
-      taken: expect.arrayContaining(["useOrderNow"]),
-    },
+    { file: list, taken: expect.arrayContaining(["order", "useElsewhere"]) },
+    { file: altU, taken: expect.arrayContaining(["useOrderNow"]) },
   ])
-  for (const { file, taken } of ordering)
-    if (taken.includes("order")) expect(taken, file).toContain("useElsewhere")
+  for (const { file, taken: names } of going)
+    if (names.includes("order")) expect(names, file).toContain("useElsewhere")
   for (const file of ["web/src/sidebar/tally.ts", "web/src/calls/sight.ts"])
     expect(readFileSync(join(app, file), "utf8"), file).toMatch(/\bbyOrder\(/)
-  const placing = files.filter((file) =>
-    valuesTaken(file, join(sidebar, "order")).includes("placeIn")
-  )
-  expect(placing.map((file) => relative(app, file))).toEqual([
-    "web/src/calls/sight.ts",
-  ])
-  const counting = ["sidebar/tally.ts", "sidebar/Counts.tsx"].map((file) =>
-    join(app, "web/src", file)
-  )
-  for (const file of [...counting, ...placing])
-    expect(readFileSync(file, "utf8"), relative(app, file)).not.toMatch(
+  const placing = taking(ordering, "placeIn")
+  expect(placing).toEqual(["web/src/calls/sight.ts"])
+  const counting = ["web/src/sidebar/tally.ts", "web/src/sidebar/Counts.tsx"]
+  for (const file of [...counting, ...placing, list, altU])
+    expect(readFileSync(join(app, file), "utf8"), file).not.toMatch(
       /\.(?:sort|toSorted)\(/
     )
 })
