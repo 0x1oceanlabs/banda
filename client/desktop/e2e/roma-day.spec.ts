@@ -308,6 +308,14 @@ test("ten Agents of a Project work side by side on its workspace, and a pick bri
   const rows = sidebar.locator("[data-row]")
   await expect(rows).toHaveCount(10)
   await expect(rows.getByRole("img", { name: "Working" })).toHaveCount(10)
+  // Each Group's plate takes its Agent's state: at work, all ten.
+  await expect
+    .poll(() =>
+      plates.evaluateAll((all) =>
+        all.map((plate) => plate.getAttribute("data-state"))
+      )
+    )
+    .toEqual(Array(10).fill("working"))
 
   // The last is in front; the first is far out of view, and a pick in the
   // sidebar list brings it to the Strip's left. The others keep their
