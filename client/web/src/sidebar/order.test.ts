@@ -88,6 +88,8 @@ const twoMachines = {
 }
 
 test("another machine's Threads stand in one place in the sidebar list, the counts list and for Alt+U (ADR 0079, decision 4; #999)", () => {
+  // This pins the one order the three draw from; that each hands it the
+  // same other machines, the test below and the architecture test pin.
   const elsewhere = [{ name: "devbox", projects: [project("far")] }]
   // Grouped by state, the newest that waits first, wherever it is;
   // grouped by Project, below this machine's, as its label stands.
@@ -114,10 +116,11 @@ test("the counts and Alt+U take the other machines from the Window's hosts as th
     },
     { seen: keyNamed, follow: () => () => undefined }
   )
-  // devbox is live, of this window's build; old is stopped.
+  // devbox is live, of this window's build; lost is away; old is stopped.
   const build = { build: "abc", version: null }
   kept.take([
     { name: "devbox", ssh: "devbox", state: "live", ...build, own: build },
+    { name: "lost", ssh: "lost", state: "away", why: "ssh ended" },
     { name: "old", ssh: "old", state: "stopped" },
   ])
   let drawn: readonly Elsewhere[] = []
@@ -130,8 +133,8 @@ test("the counts and Alt+U take the other machines from the Window's hosts as th
   renderToStaticMarkup(
     createElement(HostsContext.Provider, { value: kept }, createElement(Reads))
   )
-  // A machine stopped holds no rows: only devbox is placed.
-  expect(drawn.map((host) => host.name)).toEqual(["devbox"])
+  // A machine stopped holds no rows; one away holds them as they were.
+  expect(drawn.map((host) => host.name)).toEqual(["devbox", "lost"])
   // devbox lists "far" after the drawing: the key finds it, newest first.
   kept.projects("devbox", [project("far")])
   expect(keysOf(orderNow!(twoMachines, [project("a")], marks))).toEqual([
