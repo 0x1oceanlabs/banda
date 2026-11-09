@@ -17,7 +17,8 @@
  */
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
-import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import { execFileSync } from "node:child_process"
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { availableParallelism, loadavg } from "node:os"
 import { join } from "node:path"
 import { expect, type Page, test } from "@playwright/test"
@@ -28,6 +29,7 @@ import {
   layoutOf,
   newTerminal,
   pressAtOnce,
+  read as fileText,
   startWindow,
   TEN_KEYS,
   type Window,
@@ -122,6 +124,54 @@ async function apart(page: Page, window: Window): Promise<string[]> {
     }
   }
   return found
+}
+
+/**
+ * Why this machine runs slower than it can, where it says so: at low load
+ * a laptop on battery or in power-saver runs its cores at about half
+ * their speed, and each key's ms with them (#1045). On Linux, the
+ * `low-power` platform profile, or a battery that discharges, or where
+ * no battery says, a mains supply that is off; on a Mac, Low Power Mode
+ * or the battery. None elsewhere, and none where nothing can be read.
+ */
+function slowed(): string | undefined {
+  if (process.platform === "darwin") {
+    const pmset = (...args: string[]) => {
+      try {
+        return execFileSync("pmset", args, { encoding: "utf8", timeout: 5000 })
+      } catch {
+        return ""
+      }
+    }
+    // A Mac with High Power Mode says `powermode`, 1 for Low Power.
+    if (/^\s*(?:low)?powermode\s+1\b/m.test(pmset("-g")))
+      return "Low Power Mode"
+    if (pmset("-g", "batt").includes("'Battery Power'")) return "on battery"
+    return undefined
+  }
+  if (process.platform !== "linux") return undefined
+  const text = (path: string) => fileText(path)?.trim()
+  if (text("/sys/firmware/acpi/platform_profile") === "low-power")
+    return "power-saver"
+  const supplies = "/sys/class/power_supply"
+  let names: string[]
+  try {
+    names = readdirSync(supplies)
+  } catch {
+    return undefined
+  }
+  const of = (name: string, what: string) => text(join(supplies, name, what))
+  // A USB-C charger shows as a USB supply, and the mains one may read off
+  // while it charges: a battery's own word comes first.
+  const batteries = names
+    .filter((name) => name.startsWith("BAT"))
+    .flatMap((name) => of(name, "status") ?? [])
+  if (batteries.length > 0)
+    return batteries.includes("Discharging") ? "on battery" : undefined
+  const mains = names.filter((name) => of(name, "type") === "Mains")
+  return mains.some((name) => of(name, "online") === "0")
+    ? "on battery"
+    : undefined
 }
 
 /** A page titled Page, served here; its address. */
@@ -354,22 +404,25 @@ for (const latency of [0, 150]) {
       // And in ms: the tiling keys within 16, all of them together, so one
       // key the machine held up does not fail it, as a phase of four
       // would; a Pane opened within a mount's budget, 50. Only on a machine
-      // busy with a quarter of its cores at most: a busier one times
-      // itself, not the window (focus and workspace keys, which T-pred
-      // left as they were, took 35 to 90 ms before it at load 18 of 20),
-      // and there the ms are only told, as the plan's §8.11 has them, a
-      // soft gate. The frames late above hold either way. A close is
-      // only told: its commit lets a Tile go in the key's own task, and
-      // takes longer than 16 (#894).
+      // busy with a quarter of its cores at most, and not slowed: a busier
+      // one times itself, not the window (focus and workspace keys, which
+      // T-pred left as they were, took 35 to 90 ms before it at load 18 of
+      // 20), and so does a slowed one (workspace and move keys took 20 to
+      // 30 on a laptop on battery in power-saver, #1045). There the ms are
+      // only told, as the plan's §8.11 has them, a soft gate. The frames
+      // late above hold either way. A close is only told: its commit lets
+      // a Tile go in the key's own task, and takes longer than 16 (#894).
       const all = keysOf(tiling.flatMap((phase) => measured[phase].keys))!
-      const busy = loadavg()[0] / availableParallelism()
-      if (busy <= 0.25) {
+      const load = loadavg()[0] / availableParallelism()
+      const busy = load > 0.25 ? `load ${load.toFixed(2)} a core` : undefined
+      const slow = slowed()
+      if (!busy && !slow) {
         expect(all.p95, "tiling keys: key to drawn p95").toBeLessThanOrEqual(16)
         expect(open.p95, "open: key to drawn p95").toBeLessThanOrEqual(50)
       } else
         test.info().annotations.push({
-          type: "busy",
-          description: `load ${busy.toFixed(2)} a core, not gated: tiling keys p95 ${all.p95} ms, open p95 ${open.p95} ms`,
+          type: busy ? "busy" : "slowed",
+          description: `${[busy, slow].filter(Boolean).join(", ")}, not gated: tiling keys p95 ${all.p95} ms, open p95 ${open.p95} ms`,
         })
       test.info().annotations.push({
         type: "close",
