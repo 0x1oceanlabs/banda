@@ -408,6 +408,9 @@ export type Report = Attention & { listed: readonly Listed[] }
 export type WatchProps = {
   engine: Engine
   project: ProjectId
+  /** The other host of `hosts.toml` whose engine it is, by its name
+   * (ADR 0081, decision 4); none for this machine's. */
+  host?: string
   /**
    * Says what the Project calls for now and lists; called on each change,
    * first once the module has read its list. What calls in the first
