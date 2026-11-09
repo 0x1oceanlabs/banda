@@ -303,11 +303,18 @@ export const TEN_KEYS = [
 ]
 
 /**
- * Presses `keys`, each as Playwright names it (`Alt+Shift+Home`), in one
- * task of the page, as the Window's keys hear them: each lands before the
- * one before is drawn, however fast the machine.
+ * Presses `keys`, each as Playwright names it (`Alt+Shift+Home`,
+ * `Control+Alt+ArrowLeft`), in one task of the page, as the Window's keys
+ * hear them: each lands before the one before is drawn, however fast the
+ * machine, and before anything the engine says can be heard. Says the
+ * page's time (`performance.now()`) just before the first and just after
+ * the last, read in that task, so a test times from the keys themselves
+ * and not from a round trip to the page.
  */
-export async function pressAtOnce(page: Page, keys: string[]): Promise<void> {
+export async function pressAtOnce(
+  page: Page,
+  keys: string[]
+): Promise<{ before: number; after: number }> {
   const events = keys.map((press) => {
     const mods = press.split("+")
     const code = mods.pop()!
@@ -315,16 +322,20 @@ export async function pressAtOnce(page: Page, keys: string[]): Promise<void> {
       code,
       key: code.startsWith("Key") ? code.slice(3).toLowerCase() : code,
       altKey: mods.includes("Alt"),
+      ctrlKey: mods.includes("Control"),
+      metaKey: mods.includes("Meta"),
       shiftKey: mods.includes("Shift"),
     }
   })
-  await page.evaluate((events) => {
+  return page.evaluate((events) => {
     const target = document.activeElement ?? document.body
+    const before = performance.now()
     for (const key of events)
       for (const type of ["keydown", "keyup"])
         target.dispatchEvent(
           new KeyboardEvent(type, { ...key, bubbles: true, cancelable: true })
         )
+    return { before, after: performance.now() }
   }, events)
 }
 

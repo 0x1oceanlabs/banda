@@ -438,6 +438,11 @@ type Sent = {
   swallow?: Record<string, object>
 }
 
+/** What a frame drew, by the page's time `at`: the share of the column
+ * watched, the column in focus, and the share of the column before the
+ * watched one. */
+type Frame = { at: number; share: number; focus?: string; prior?: number }
+
 /** The page's warnings, as they come. */
 function warningsOf(page: Page): string[] {
   const warnings: string[] = []
@@ -614,6 +619,9 @@ test.describe("a key drawn before the engine answers", () => {
     const { column: maximized } = await inFocus(page)
     const shares = await sharesNow(page)
     expect(shares[maximized]).toBeLessThan(100)
+    const order = arrangedOf(window)[0].columns.map((column) => column.id)
+    const prior = order[order.indexOf(maximized) - 1]
+    expect(prior, "a column before the one in focus").toBeDefined()
     await hearSent(page)
     // The engine is asked to maximize a column it has none of, and
     // refuses: the window drew the one in focus maximized.
@@ -626,61 +634,97 @@ test.describe("a key drawn before the engine answers", () => {
         },
       }
     })
-    // The column's share as each frame draws it, as its width moves to
-    // where the Tiling puts it (layout.ts).
-    await page.evaluate((column) => {
-      const seen: { at: number; share: number }[] = []
-      Object.assign(window, { seen })
-      const look = () => {
-        const one = document.querySelector<HTMLElement>(
-          `[data-column="${column}"]`
-        )
-        const share = one && /^calc\(([\d.]+) \*/.exec(one.style.width)?.[1]
-        if (share) seen.push({ at: performance.now(), share: Number(share) })
-        if (seen.length < 600) requestAnimationFrame(look)
-      }
-      requestAnimationFrame(look)
-    }, maximized)
+    // As each frame draws them: the column's share, as its width moves to
+    // where the Tiling puts it (layout.ts), the column in focus, and the
+    // share of the one before it.
+    await page.evaluate(
+      ({ maximized, prior }) => {
+        const seen: Frame[] = []
+        Object.assign(window, { seen })
+        const shareOf = (column: string) => {
+          const one = document.querySelector<HTMLElement>(
+            `[data-column="${column}"]`
+          )
+          const share = one && /^calc\(([\d.]+) \*/.exec(one.style.width)?.[1]
+          return share ? Number(share) : undefined
+        }
+        const look = () => {
+          const share = shareOf(maximized)
+          const focus = document
+            .querySelector('[data-tile][data-focused="true"]')
+            ?.closest<HTMLElement>("[data-column]")?.dataset.column
+          if (share !== undefined)
+            seen.push({
+              at: performance.now(),
+              share,
+              focus,
+              prior: shareOf(prior),
+            })
+          if (seen.length < 600) requestAnimationFrame(look)
+        }
+        requestAnimationFrame(look)
+      },
+      { maximized, prior }
+    )
     const was = await widthShare(page, maximized)
-    const key = await page.evaluate(() => performance.now())
-    await page.keyboard.press("Alt+KeyF")
+    const wide = await widthShare(page, prior)
     // Then the column before it, in focus, and a width of its own: changes
-    // that leave the maximized one as it is.
-    await page.keyboard.press("Alt+ArrowLeft")
-    await page.keyboard.press("Control+Alt+ArrowLeft")
-    const after = await page.evaluate(() => performance.now())
+    // that leave the maximized one as it is. The three in one task of the
+    // page, so the two after it are drawn before its refusal can be heard,
+    // however slow the machine, and the time is the keys' own.
+    const { before: key, after } = await pressAtOnce(page, [
+      "Alt+KeyF",
+      "Alt+ArrowLeft",
+      "Control+Alt+ArrowLeft",
+    ])
     await expect.poll(() => apart(page, window), { timeout: 5000 }).toEqual([])
     // Its motion back over too.
     const last = () =>
       page.evaluate(
-        () =>
-          (window as unknown as { seen: { share: number }[] }).seen.at(-1)!
-            .share
+        () => (window as unknown as { seen: Frame[] }).seen.at(-1)!.share
       )
     await expect.poll(last).toBe(was)
     const seen = await page.evaluate(
-      () =>
-        (window as unknown as { seen: { at: number; share: number }[] }).seen
+      () => (window as unknown as { seen: Frame[] }).seen
     )
-    const moving = seen.filter((frame) => frame.at > key)
-    // It grows toward the whole screen from the frame after the key, and
-    // still does after the keys that followed: the queue drew them on top
-    // of it.
+    const moving = seen.filter((frame) => frame.at > after)
+    // It grows toward the whole screen from the frame after the keys.
     const grows = moving.findIndex((frame) => frame.share > was + 0.01)
     expect(grows, "drawn maximized at once").toBeGreaterThanOrEqual(0)
     expect(
       moving[grows].at - key,
       "maximized before the engine could speak"
     ).toBeLessThan(late)
+    // It is drawn widest in the last frame before its refusal is heard.
     const peak = moving.reduce(
       (top, frame, i) => (frame.share > moving[top].share ? i : top),
       grows
     )
-    expect(moving[peak].at, "maximized after the next keys").toBeGreaterThan(
-      after
+    // The keys that followed are drawn on top of it while it still grows:
+    // the column before it in focus, and on its way to its new width.
+    const next = moving.findIndex(
+      (frame) =>
+        frame.focus === prior &&
+        frame.prior !== undefined &&
+        Math.abs(frame.prior - wide) > 0.01
     )
-    // Back as the refusal comes, no sooner than the engine can speak.
-    expect(moving[peak].at - key, "back once refused").toBeGreaterThanOrEqual(
+    expect(next, "the next keys drawn").toBeGreaterThanOrEqual(0)
+    expect(
+      next,
+      "the next keys drawn while it is maximized"
+    ).toBeLessThanOrEqual(peak)
+    // And they take none of it back: it grows each frame until the refusal.
+    const shrank = moving.findIndex(
+      (frame, i) => i > grows && i <= peak && frame.share < moving[i - 1].share
+    )
+    expect(shrank, "a frame drawn narrower before the refusal").toBe(-1)
+    // Back as the refusal comes, no sooner than the engine can speak: the
+    // first frame drawn narrower. Not the widest, which may begin before
+    // `late` is up, the refusal heard between it and the next.
+    const back = moving.findIndex(
+      (frame, i) => i > peak && frame.share < moving[peak].share
+    )
+    expect(moving[back].at - key, "back once refused").toBeGreaterThanOrEqual(
       late
     )
     expect(moving.at(-1)!.share).toBe(was)
