@@ -193,7 +193,7 @@ impl OneFile for BrowserSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use banda_look::theme::Places;
+    use banda_look::Places;
 
     fn resolved(text: Option<&str>) -> (Browser, Vec<Problem>) {
         let folder = tempfile::tempdir().unwrap();

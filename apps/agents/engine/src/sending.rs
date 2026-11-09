@@ -205,9 +205,9 @@ pub fn start(file: &Path, harness: &str) -> Start {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use banda_look::Places;
     use banda_look::Problem;
     use banda_look::keyed::Keyed;
-    use banda_look::theme::Places;
 
     fn resolved(text: Option<&str>) -> (Agents, Keyed, Vec<Problem>) {
         let folder = tempfile::tempdir().unwrap();

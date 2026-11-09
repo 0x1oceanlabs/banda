@@ -528,7 +528,7 @@ dependencies = [
 name = "banda-look"
 version = "0.1.0"
 dependencies = [
- "banda-kernel",
+ "banda-theme",
  "dunce",
  "schemars 1.2.3",
  "serde",
@@ -671,6 +671,19 @@ dependencies = [
  "tokio",
  "ts-rs",
  "uuid",
+]
+
+[[package]]
+name = "banda-theme"
+version = "0.1.0"
+dependencies = [
+ "banda-kernel",
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+ "ts-rs",
 ]
 
 [[package]]

@@ -7,8 +7,6 @@
 //! `configreloaded`. Hyprland runs on Linux only, so elsewhere Banda never
 //! runs under it.
 
-use crate::motion::MotionSettings;
-use crate::settings::{Corner, Gaps, Settings, Step, Tile};
 #[cfg(target_os = "linux")]
 use std::io::{BufRead, BufReader, Read, Write};
 #[cfg(target_os = "linux")]
@@ -29,33 +27,6 @@ pub struct Windows {
     pub dim: Option<f64>,
     /// `animations:enabled`: off, Banda's tiles hold still too.
     pub animations: bool,
-}
-
-impl Windows {
-    /// The layer they make. The tile is the `xl` step, so the radius is
-    /// the rounding divided by its factor, and every control keeps its
-    /// place on the ladder.
-    pub fn layer(self) -> Settings {
-        Settings {
-            radius: Some(self.rounding / Step::Xl.factor()),
-            gaps: Gaps {
-                inner: Some(self.gaps),
-                outer: Some(self.gaps),
-            },
-            tile: Tile {
-                radius: Some(Corner::Step(Step::Xl)),
-                border: Some(self.border),
-                dim_inactive: self.dim,
-                opacity: None,
-                shadow: None,
-            },
-            motion: MotionSettings {
-                off: (!self.animations).then_some(true),
-                ..MotionSettings::default()
-            },
-            ..Settings::default()
-        }
-    }
 }
 
 /// The Hyprland instance this program runs under.
@@ -161,28 +132,5 @@ impl Hyprland {
                 }
             }
         });
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn rounding_twelve_makes_tiles_of_twelve() {
-        let layer = Windows {
-            rounding: 12.0,
-            border: 2.0,
-            gaps: 5.0,
-            dim: Some(0.3),
-            animations: false,
-        }
-        .layer();
-        let radius = layer.radius.unwrap();
-        assert!((radius * Step::Xl.factor() - 12.0).abs() < 1e-9);
-        assert_eq!(layer.gaps.inner, Some(5.0));
-        assert_eq!(layer.tile.border, Some(2.0));
-        assert_eq!(layer.tile.dim_inactive, Some(0.3));
-        assert_eq!(layer.motion.off, Some(true));
     }
 }

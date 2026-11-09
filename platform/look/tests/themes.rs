@@ -8,10 +8,8 @@
 //! `BANDA_BLESS=1 cargo test -p banda-look --test themes` writes it again,
 //! for a change that means to show.
 
-use banda_look::hyprland::Windows;
 use banda_look::settings::Material;
-use banda_look::theme::Places;
-use banda_look::{Look, resolve};
+use banda_look::{Look, Places, Windows, resolve};
 use serde_json::Value;
 use std::fmt::Write as _;
 use std::fs;

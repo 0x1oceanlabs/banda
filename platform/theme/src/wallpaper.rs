@@ -12,7 +12,7 @@ use crate::theme::Places;
 /// What a desktop shows: its picture, the one for a dark desktop when it
 /// keeps another, and the desktop's name, for the look to tell where the
 /// picture came from.
-pub(crate) struct Found {
+pub struct Found {
     pub light: PathBuf,
     pub dark: Option<PathBuf>,
     pub from: &'static str,
@@ -20,7 +20,7 @@ pub(crate) struct Found {
 
 /// The desktop's wallpaper: Omarchy's current background, else the
 /// wallpaper of the desktop `XDG_CURRENT_DESKTOP` names.
-pub(crate) fn of_desktop(places: &Places, followed: &mut Vec<PathBuf>) -> Option<Found> {
+pub fn of_desktop(places: &Places, followed: &mut Vec<PathBuf>) -> Option<Found> {
     if let Some(background) = &places.omarchy_background {
         return Some(Found {
             light: background.clone(),

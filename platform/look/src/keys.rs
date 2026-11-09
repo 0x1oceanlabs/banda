@@ -8,9 +8,9 @@
 //! the look and watches it. This checks how a key is written; the window,
 //! which holds the actions, checks their ids and names what it does not run.
 
+use crate::Places;
 use crate::Problem;
 use crate::keyed::{self, Keyed, Layer};
-use crate::theme::Places;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -711,7 +711,7 @@ pub fn resolve(
     problems: &mut Vec<Problem>,
     watched: &mut Vec<PathBuf>,
 ) -> (Keys, Keyed) {
-    let file = places.keys_file();
+    let file = places.config.join("keys.toml");
     watched.push(file.clone());
     let mine_file = std::fs::read_to_string(&file)
         .ok()

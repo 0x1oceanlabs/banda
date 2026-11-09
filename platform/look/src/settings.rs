@@ -3,10 +3,12 @@
 //! and [`Settings::over`] lays one layer over another.
 
 use crate::columns::ColumnsSettings;
-use crate::fonts::FontSettings;
 use crate::motion::MotionSettings;
 use crate::notify::NotifySettings;
 use crate::sound::SoundSettings;
+pub use banda_theme::Material;
+use banda_theme::fonts::FontSettings;
+use banda_theme::hyprland::Windows;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -177,35 +179,6 @@ impl Desk {
             opacity: self.opacity.or(under.opacity),
             sidebar: self.sidebar.or(under.sidebar),
             sidebar_shadow: self.sidebar_shadow.or(under.sidebar_shadow),
-        }
-    }
-}
-
-/// Who makes the desk's glass (ADR 0023).
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "lowercase")]
-#[ts(export, export_to = "look/")]
-pub enum Material {
-    Banda,
-    System,
-}
-
-impl Material {
-    /// The platform's own glass (ADR 0030): the system's on macOS and
-    /// Windows, which have a material for it, Banda's on Linux.
-    pub const PLATFORM: Material = if cfg!(any(target_os = "macos", target_os = "windows")) {
-        Material::System
-    } else {
-        Material::Banda
-    };
-
-    /// The desk's tint over the platform's glass by default: light over the
-    /// system's material, which is tinted already, denser over Banda's,
-    /// where the wallpaper shows in its own colours (ADR 0030).
-    pub const fn tint(self) -> f64 {
-        match self {
-            Material::System => 0.1,
-            Material::Banda => 0.4,
         }
     }
 }
@@ -525,6 +498,31 @@ impl Settings {
         }
     }
 
+    /// The layer Hyprland's windows make (ADR 0007, decision 8). The tile
+    /// is the `xl` step, so the radius is the rounding divided by its
+    /// factor, and every control keeps its place on the ladder.
+    pub fn of_hyprland(windows: Windows) -> Settings {
+        Settings {
+            radius: Some(windows.rounding / Step::Xl.factor()),
+            gaps: Gaps {
+                inner: Some(windows.gaps),
+                outer: Some(windows.gaps),
+            },
+            tile: Tile {
+                radius: Some(Corner::Step(Step::Xl)),
+                border: Some(windows.border),
+                dim_inactive: windows.dim,
+                opacity: None,
+                shadow: None,
+            },
+            motion: MotionSettings {
+                off: (!windows.animations).then_some(true),
+                ..MotionSettings::default()
+            },
+            ..Settings::default()
+        }
+    }
+
     /// Banda's own defaults: the bottom layer, with every key set.
     /// `material` is the platform's, which the machine knows (ADR 0030).
     pub fn defaults(material: Material) -> Settings {
@@ -643,6 +641,23 @@ mod tests {
         assert_eq!(look.gaps.inner, Some(9.0));
         assert_eq!(look.gaps.outer, Some(3.0));
         assert_eq!(look.tile.border, Some(1.0));
+    }
+
+    #[test]
+    fn rounding_twelve_makes_tiles_of_twelve() {
+        let layer = Settings::of_hyprland(Windows {
+            rounding: 12.0,
+            border: 2.0,
+            gaps: 5.0,
+            dim: Some(0.3),
+            animations: false,
+        });
+        let radius = layer.radius.unwrap();
+        assert!((radius * Step::Xl.factor() - 12.0).abs() < 1e-9);
+        assert_eq!(layer.gaps.inner, Some(5.0));
+        assert_eq!(layer.tile.border, Some(2.0));
+        assert_eq!(layer.tile.dim_inactive, Some(0.3));
+        assert_eq!(layer.motion.off, Some(true));
     }
 
     #[test]

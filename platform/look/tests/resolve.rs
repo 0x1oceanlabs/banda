@@ -1,13 +1,11 @@
 //! The look as a Person meets it: their files, Omarchy's theme and
 //! Hyprland's windows, in throwaway folders.
 
-use banda_look::hyprland::Windows;
 use banda_look::motion::Move;
 #[cfg(unix)]
 use banda_look::settings::SidebarStyle;
 use banda_look::settings::{GroupAsking, GroupSaturation, GroupWorking, Material};
-use banda_look::theme::{Origin, Places};
-use banda_look::{Look, Shown, follow, resolve};
+use banda_look::{Look, Origin, Places, Shown, Windows, follow, resolve};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
