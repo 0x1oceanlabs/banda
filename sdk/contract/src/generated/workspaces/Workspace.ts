@@ -19,4 +19,10 @@ filled?: GroupId,
  * decision 9). It holds Panes of any Project still. Left out, none.
  * Kept as `space` before ADR 0069 (for good).
  */
-project?: ProjectId, };
+project?: ProjectId, 
+/**
+ * The Project's own Group, first here: the Panes the Person opened for
+ * the Project and not for an Agent (ADR 0102, decision 4). Left out,
+ * none.
+ */
+own?: GroupId, };

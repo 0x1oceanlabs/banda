@@ -72,9 +72,8 @@ day.
    5. A Pane of no Project goes to the Sheet (decision 5).
 
    _Built_ in step 1: a Pane opened on a free workspace stays there,
-   right of the Pane in front (decision 1), and one opened on its own
-   Project's workspace outside a Group goes right of the Pane in front
-   until step 2 gives it the Project's own Group. A Pane that joins a
+   right of the Pane in front (decision 1); step 2 put the rest into the
+   Project's own Group. A Pane that joins a
    Group from inside it goes last into the Deck right of the Pane it is
    opened from, as what an Agent opens does. A Pane of no Project other
    than a Thread opens right of the Pane in front until the Sheet comes.
@@ -87,6 +86,13 @@ day.
    - It exists only while it holds a Pane. The first Pane makes it.
    - Its plate is neutral, as a Group with no Agent's (ADR 0065,
      decision 6), with the Project's name as its tag.
+   _Built_ in step 2: the engine's `own` place puts a Pane last into the
+   workspace's `own` Group, made first on the Project's workspace when it
+   is gone; the Group's handle says the Project's name. A Pane opened from
+   inside the own Group goes last into it. What an Agent opens while its
+   Thread is not shown goes last on its Project's workspace. Moved off
+   the Project's workspace, the own Group is a Group like any other, and
+   the next Pane starts a new one.
 
 5. **Settings, Usage and the notifications come as a Sheet over the
    workspace.**

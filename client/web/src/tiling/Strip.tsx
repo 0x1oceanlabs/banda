@@ -394,7 +394,14 @@ export const Strip = memo(function Strip({
             {group !== undefined && ends.first && groups.handle && !zooms && (
               <GroupHandle
                 group={group}
-                name={owned.get(group)?.name}
+                name={
+                  owned.get(group)?.name ??
+                  // The Project's own Group has no owner: its tag is the
+                  // Project's name (ADR 0102, decision 4).
+                  (group === workspace.own && workspace.project !== undefined
+                    ? projectOf(workspace.project)?.name
+                    : undefined)
+                }
                 pane={column.entries[0]?.id}
                 panes={columns
                   .slice(c, runOf(columns, c).end)

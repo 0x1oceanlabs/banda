@@ -408,6 +408,8 @@ function placeOf(value: unknown): Place {
       return { to: "workspace", index: indexOf(f.index) }
     case "project":
       return { to: "project", project: id(f.project) }
+    case "own":
+      return { to: "own", project: id(f.project) }
     case "free":
       return { to: "free" }
     case "group":
@@ -444,6 +446,7 @@ function workspaceOf(value: unknown): Workspace {
     columns: listOf(f.columns, columnOf),
     filled: optional(f.filled, id),
     project: optional(f.project, id),
+    own: optional(f.own, id),
   })
 }
 
@@ -647,10 +650,18 @@ function put(
       return
     }
     case "project": {
-      const owned = list.findIndex((w) => w.project === place.project)
-      const w = owned >= 0 ? owned : list.length - 1
-      list[w].project = place.project
-      putLast(list, w, column, seed)
+      putLast(list, projectWorkspace(list, place.project), column, seed)
+      return
+    }
+    case "own": {
+      const w = projectWorkspace(list, place.project)
+      const own = list[w].own
+      const columns = list[w].columns
+      const last =
+        own === undefined ? -1 : columns.findLastIndex((c) => c.group === own)
+      const group = own ?? seed.group
+      columns.splice(last + 1, 0, { ...column, group })
+      list[w].own = group
       return
     }
     case "free": {
@@ -674,6 +685,15 @@ function put(
       return
     }
   }
+}
+
+/** The workspace `project` owns, even emptied; else the empty one at the
+ * bottom, which it owns then (ADR 0102, decision 1). */
+function projectWorkspace(list: Arrangement, project: string): number {
+  const owned = list.findIndex((w) => w.project === project)
+  const w = owned >= 0 ? owned : list.length - 1
+  list[w].project = project
+  return w
 }
 
 /** Puts a column last on workspace `w`. */
@@ -1014,12 +1034,13 @@ function normalize(list: Arrangement, seed: Seed): void {
       }
       before = column.group
     }
-    const filled = workspace.filled
-    if (
-      filled !== undefined &&
-      !workspace.columns.some((c) => c.group === filled)
-    ) {
+    // A Group the workspace names, gone from it, is named no more.
+    const holds = (g: string) => workspace.columns.some((c) => c.group === g)
+    if (workspace.filled !== undefined && !holds(workspace.filled)) {
       delete workspace.filled
+    }
+    if (workspace.own !== undefined && !holds(workspace.own)) {
+      delete workspace.own
     }
   }
   // A Project's, emptied, is never the empty one at the bottom (ADR 0102,

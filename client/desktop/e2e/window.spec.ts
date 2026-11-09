@@ -3061,7 +3061,7 @@ function heightOf(tile: Locator) {
 
 test("the mouse sizes as niri's: the gaps, Alt and the right button, a double click", async () => {
   // Narrow columns, so a third of this window is a third.
-  window = await startWindow({ look: "[columns]\nmin = 10\n" })
+  window = await startWindow({ files: FREE, look: "[columns]\nmin = 10\n" })
   const { page } = window
   const { thread, composer } = await firstThread(page)
   await expect(composer).toBeFocused()
