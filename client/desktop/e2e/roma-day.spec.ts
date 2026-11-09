@@ -90,6 +90,18 @@ async function agents(window: Window, ...texts: string[]) {
   return threads
 }
 
+/** The Bar's map of the workspace on screen: each column's share of the
+ * screen, in hundredths, as `Map.tsx` draws it, the whole screen 2.5rem
+ * wide. */
+const mapOf = (page: Page) =>
+  page
+    .locator("[data-map]")
+    .evaluateAll((bars) =>
+      bars.map((bar) =>
+        Math.round((parseFloat((bar as HTMLElement).style.width) / 2.5) * 100)
+      )
+    )
+
 /** Work's id in each window, looked up once. */
 const works = new WeakMap<Window, string>()
 
@@ -252,12 +264,15 @@ test("in solo every Agent is the whole screen wide at once, and the Strip scroll
   const [a, b, c] = await agents(window, "hello a", "hello b", "hello c")
   const shares = () => sharesOf(a, b, c)
   // In the row each Agent takes half the Strip; the last is in front.
+  // The Bar's map draws them as the Strip does.
   await expect.poll(shares).toEqual([50, 50, 50])
+  await expect.poll(() => mapOf(page)).toEqual([50, 50, 50])
   await expect(c).toHaveAttribute("data-focused", "true")
 
   // Solo: every Agent fills the screen, not only the one in front.
   await page.keyboard.press("Alt+Shift+KeyM")
   await expect.poll(shares).toEqual([100, 100, 100])
+  await expect.poll(() => mapOf(page)).toEqual([100, 100, 100])
   await expect(c).toBeInViewport({ ratio: 0.99 })
 
   // The focus past its Group's edge scrolls to the next Agent, already
@@ -270,18 +285,22 @@ test("in solo every Agent is the whole screen wide at once, and the Strip scroll
   await expect(a).toHaveAttribute("data-focused", "true")
   await expect(a).toBeInViewport({ ratio: 0.99 })
   expect(await shares()).toEqual([100, 100, 100])
+  expect(await mapOf(page)).toEqual([100, 100, 100])
 
   // Alt+M shows the row for a while, the focus where it was, and again
   // goes back to solo; agents.toml keeps solo.
   await page.keyboard.press("Alt+KeyM")
   await expect.poll(shares).toEqual([50, 50, 50])
+  await expect.poll(() => mapOf(page)).toEqual([50, 50, 50])
   await expect(a).toHaveAttribute("data-focused", "true")
   await page.keyboard.press("Alt+KeyM")
   await expect.poll(shares).toEqual([100, 100, 100])
+  await expect.poll(() => mapOf(page)).toEqual([100, 100, 100])
 
   // Back to the row, the room comes back.
   await page.keyboard.press("Alt+Shift+KeyM")
   await expect.poll(shares).toEqual([50, 50, 50])
+  await expect.poll(() => mapOf(page)).toEqual([50, 50, 50])
 })
 
 test("ten Agents of a Project work side by side on its workspace, and a pick brings one to the Strip's left, filled in solo (ADR 0065, ADR 0079)", async () => {
