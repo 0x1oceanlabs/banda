@@ -75,14 +75,18 @@ import { MachinePicker } from "./MachinePicker"
 import {
   addedWords,
   buildWords,
+  ended,
   factsWords,
   failedWords,
   foundNamed,
   NAME_MOST,
+  NO_ACTS,
   renameWords,
   type Settled,
   settle,
   settleWords,
+  shownActs,
+  started,
   stateWords,
   testWords,
   Told,
@@ -107,31 +111,33 @@ const write = (engine: Engine, key: "name" | "icon", value: string | null) =>
 /** A name as a field gives it: empty goes back to what Banda finds. */
 const nameOf = (text: string) => (text === "" ? null : text)
 
-/** Runs one of the Person's acts at a time, with what it is doing in
- * words (`doing`) and what went wrong in Banda's words until the next
- * (`failedWords`). */
+/** Runs the Person's acts, which may overlap, as Enter in a field while
+ * a Test runs: busy until every one has ended, with what the latest
+ * still running is doing in words (`doing`), and what went wrong in
+ * Banda's words (`failedWords`) until the next starts. One that ends
+ * first leaves the others busy, their words shown. */
 function useAsk() {
-  const [doing, setDoing] = useState<string>()
-  const [problem, setProblem] = useState<string>()
+  const [acts, setActs] = useState(NO_ACTS)
   const ask = useCallback(
     async <T,>(
       run: () => Promise<T>,
       words = "Working…"
     ): Promise<T | undefined> => {
-      setDoing(words)
-      setProblem(undefined)
+      const act = { words }
+      setActs((now) => started(now, act))
+      let failed: string | undefined
       try {
         return await run()
       } catch (error) {
-        setProblem(failedWords(error))
+        failed = failedWords(error)
         return undefined
       } finally {
-        setDoing(undefined)
+        setActs((now) => ended(now, act, failed))
       }
     },
     []
   )
-  return { busy: doing !== undefined, doing, problem, ask }
+  return { ...shownActs(acts), ask }
 }
 
 /** The icons the machines in `others` have, each with their names. */
