@@ -5107,6 +5107,53 @@ test("a Thread's marks are its host's: unread and read, archived and back, each 
   await expect(shelf).toBeHidden()
 })
 
+test("a Thread the focus only passes keeps its mark; one looked at for a moment, or clicked, settles it (ADR 0096, decision 3)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread).toHaveAccessibleName("hello")
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const row = sidebar
+    .getByRole("group", { name: "Threads" })
+    .getByRole("button", { name: /hello/ })
+  const done = row.getByRole("img", { name: "Done" })
+  // Typed in: seen at once.
+  await expect(done).toBeHidden()
+  await page.keyboard.press("Alt+KeyN")
+  const other = page.getByRole("region", { name: "New Pane" })
+  await expect(other).toHaveAttribute("data-focused", "true")
+  const unread = async () => {
+    await row.click({ button: "right" })
+    await page.getByRole("menuitem", { name: /Mark as unread/ }).click()
+    await expect(done).toBeVisible()
+  }
+  await unread()
+
+  // The focus passes through it, as Alt+arrow goes by: still Done.
+  await page.keyboard.press("Alt+ArrowLeft")
+  await expect(thread).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+ArrowRight")
+  await expect(other).toHaveAttribute("data-focused", "true")
+  await page.waitForTimeout(3000)
+  await expect(done).toBeVisible()
+
+  // The focus stays on it for a moment: seen.
+  await page.keyboard.press("Alt+ArrowLeft")
+  await expect(thread).toHaveAttribute("data-focused", "true")
+  await page.waitForTimeout(1000)
+  await expect(done).toBeVisible()
+  await expect(done).toBeHidden({ timeout: 5000 })
+
+  // A click on it is a look: seen at once.
+  await page.keyboard.press("Alt+ArrowRight")
+  await expect(other).toHaveAttribute("data-focused", "true")
+  await unread()
+  await thread.getByText("You said: hello").click()
+  await expect(done).toBeHidden({ timeout: 1500 })
+})
+
 test("from a far host, a mark shows at once and never flips back as its fact comes, and one the host refuses comes back with a toast (ADR 0096)", async () => {
   test.setTimeout(120_000)
   // What the engine says reaches the page 1.5 s late; what the page asks

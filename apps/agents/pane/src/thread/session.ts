@@ -35,6 +35,7 @@ import { base64Of, dataUrl } from "../composer/images"
 import type { QueueActions } from "./Queue"
 import { mark, type PersonMark } from "../list/sent"
 import { type WhenPresent, whenPresent } from "./presence"
+import { useLooking } from "./looking"
 import {
   asked,
   declineOnce,
@@ -239,13 +240,15 @@ export function useThreadSession({
   // A Person who looks at the Thread, its Pane focused in the window in
   // front, sees how its latest turn ended, which settles its mark in the
   // sidebar and the bar (ADR 0011, decision 1), once they are at the
-  // window. The mark goes to the Thread's host, this Pane's engine.
+  // window. A focus that only passes by settles nothing (ADR 0096,
+  // decision 3). The mark goes to the Thread's host, this Pane's engine.
   const front = useInFront()
+  const { looking, acted } = useLooking(focused)
   const settled = state && settledTurn(state.turns)
   useEffect(() => {
-    if (!focused || !front || thread === null || !settled) return
+    if (!looking || !front || thread === null || !settled) return
     return seeWhenPresent(engine, project, thread, settled)
-  }, [focused, front, thread, settled, engine, project])
+  }, [looking, front, thread, settled, engine, project])
 
   // A Thread not yet started keeps its settings here until its first
   // message, starting from its Harness's; each Harness's, as the model
@@ -461,6 +464,10 @@ export function useThreadSession({
 
   return {
     live,
+    /** Whether the Person looks at the Thread, not only passes it. */
+    looking,
+    /** For the Pane's pointer and key inputs, which count as looking. */
+    acted,
     /** The Thread once it has loaded. */
     state,
     /** The turn that runs now, if one does. */

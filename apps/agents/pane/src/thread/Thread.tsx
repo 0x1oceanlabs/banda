@@ -143,6 +143,8 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     rewind,
     queue,
     editLast,
+    looking,
+    acted,
   } = useThreadSession(props)
   const picked = useMemo(() => pickedOf(offer.options), [offer.options])
   // Learn more, wherever the fence is spoken of: Settings → General, at
@@ -169,7 +171,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   const written = useRef(false)
   const writers = useWriters(engine, project, thread)
   // A Thread that woke by itself is seen as its Person looks at it.
-  useSeeWoke(engine, project, thread, writers.own?.later, focused)
+  useSeeWoke(engine, project, thread, writers.own?.later, looking)
   const found = useFound(area, find?.query ?? "", find?.at ?? 0, state)
   // The details card: kept open on a wide Thread until hidden, popped
   // open for a moment on a narrow one.
@@ -295,7 +297,9 @@ export function Thread(props: PaneProps<ThreadArgs>) {
       ref={root}
       className="@container/thread flex h-full min-h-0 flex-col"
       style={{ "--thread-zoom": zoom.zoom } as React.CSSProperties}
-      onKeyDownCapture={() => {
+      onPointerDownCapture={(event) => acted(event.nativeEvent)}
+      onKeyDownCapture={(event) => {
+        acted(event.nativeEvent)
         written.current = thread !== null && drafted(thread)
       }}
       onKeyDown={(event) => {
