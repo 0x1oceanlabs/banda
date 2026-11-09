@@ -91,7 +91,14 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   engine listens, and how it left: `stopping` as soon as it is asked to
   stop, as it opens too, and `stopped` once it has. An engine that finds
   neither word keeps a crash as a Problem before it opens anything; one
-  killed while it stopped as asked left as asked. An `engine.json` it
+  killed while it stopped as asked left as asked. On macOS, where no unit
+  stops what an engine leaves, the engine keeps a note of each Harness's
+  program and Terminal while it runs (`children.json`), and the next
+  one, unless the run before said `stopped`, stops what is left of them
+  before it starts anything: what is still in their process groups (a
+  Terminal's: its session) and under them, never the window, and none of
+  a note whose number another process has taken. TERM, up to 3 s, then
+  KILL (`engine/src/children.rs`). An `engine.json` it
   finds is the run before's, and goes as soon as it takes the lock. It
   opens every Project, with its modules' migrations and the outbox's
   recovery, and only then writes `engine.json`, so no client finds it

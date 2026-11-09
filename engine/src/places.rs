@@ -345,6 +345,18 @@ impl Places {
 
 /// Writes a file only this user can read, whole or not at all.
 pub fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    write_private_as(path, bytes, true)
+}
+
+/// [`write_private`], not waited for on the disk: for a file that matters
+/// only until the system starts again, which an OS crash may leave as it
+/// was or empty.
+#[cfg(any(target_os = "macos", all(test, unix)))]
+pub fn write_private_unsynced(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    write_private_as(path, bytes, false)
+}
+
+fn write_private_as(path: &Path, bytes: &[u8], synced: bool) -> std::io::Result<()> {
     if let Some(folder) = path.parent() {
         std::fs::create_dir_all(folder)?;
     }
@@ -355,7 +367,9 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
     let mut file = options.open(&temporary)?;
     file.write_all(bytes)?;
-    file.sync_all()?;
+    if synced {
+        file.sync_all()?;
+    }
     drop(file);
     banda_kernel::host::rename(&temporary, path)
 }

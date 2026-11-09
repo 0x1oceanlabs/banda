@@ -103,18 +103,27 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
                 "the engine's last run ended without stopping: it crashed, or was killed"
             );
             run::keep_crash(&places);
-            // launchd puts no limit on starts, as systemd's unit has.
-            if job && run::crash_starts(&places, banda_kernel::now_ms()) >= run::CRASH_STARTS {
-                tracing::error!(
-                    "the engine started again after a crash {} times within a minute: this \
-                     launchd job stops, and the next client starts it",
-                    run::CRASH_STARTS
-                );
-                return Ok(());
-            }
         }
         Before::Left(left) => tracing::info!(?left, "the engine's last run left"),
         Before::None => {}
+    }
+    // launchd puts no limit on starts, as systemd's unit has. Counted
+    // first, so a start that crashes in what follows counts too.
+    let gives_up = before == Before::Crashed
+        && job
+        && run::crash_starts(&places, banda_kernel::now_ms()) >= run::CRASH_STARTS;
+    // What a run that did not say it stopped left running goes before
+    // this one starts anything, the one that gives up too; on Linux the
+    // unit stopped it already.
+    #[cfg(target_os = "macos")]
+    crate::children::stop_left(&places, before).await;
+    if gives_up {
+        tracing::error!(
+            "the engine started again after a crash {} times within a minute: this launchd \
+             job stops, and the next client starts it",
+            run::CRASH_STARTS
+        );
+        return Ok(());
     }
     open_files();
     let owner = places.owner().map_err(Failure::broken)?;
@@ -132,6 +141,10 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     // engine runs any program of its own on the host.
     let environment = crate::fence::environment(&places).await;
     let kept = environment.kept();
+    // Each Harness's and Terminal's program noted while it runs, for the
+    // next engine to stop should this one crash.
+    #[cfg(target_os = "macos")]
+    let (environment, noting) = crate::children::noted(environment, &places);
     harnesses.carry(carried(&program));
     // Heard from here on: a TERM as the engine opens, or as soon as it
     // says where it listens, stops it as any other does, not by the
@@ -220,6 +233,9 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         .await;
     kernel.stopping();
     places.withdraw();
+    // Before the lock goes, as the next engine may take it at once.
+    #[cfg(target_os = "macos")]
+    drop(noting);
     run.left(Left::Stopped);
     drop(lock);
     served.map_err(Failure::broken)
@@ -405,5 +421,34 @@ mod tests {
             2,
             "this start counted: {starts}"
         );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn what_a_crashed_run_left_is_stopped_on_macos_before_its_job_stops_trying() {
+        use banda_kernel::{Environment, Holes, Input, Program};
+        use rustix::process::{Pid, Signal, WaitOptions, kill_process, waitpid};
+        let base = tempfile::tempdir().unwrap();
+        let places = Places::under(base.path());
+        // A Harness's program the run before noted, and never let go of.
+        let (environment, noting) = crate::children::noted(banda_environments::Local, &places);
+        let sleep = Program::harness("sleep", vec!["300".to_owned()], Holes::default());
+        let started = environment.spawn(&sleep, Input::Null).unwrap();
+        let pid = Pid::from_raw(i32::try_from(started.id().unwrap()).unwrap()).unwrap();
+        std::mem::forget(started);
+        drop(noting);
+        // That run crashed, after two starts after a crash.
+        Run::began(&places, 4100);
+        let now = banda_kernel::now_ms();
+        run::crash_starts(&places, now - 20_000);
+        run::crash_starts(&places, now - 10_000);
+        assert!(serve(Places::under(base.path()), job()).await.is_ok());
+        let ended = matches!(waitpid(Some(pid), WaitOptions::NOHANG), Ok(Some(_)));
+        // On Linux the engine's unit stops it, not the engine.
+        assert_eq!(ended, cfg!(target_os = "macos"));
+        if !ended {
+            kill_process(pid, Signal::KILL).unwrap();
+            waitpid(Some(pid), WaitOptions::empty()).unwrap();
+        }
     }
 }

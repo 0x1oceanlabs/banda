@@ -41,6 +41,10 @@
 
 mod apps;
 mod build_id;
+// macOS's engine stops what a crashed one left; Linux's unit does (ADR
+// 0086, decision 1). Its tests run on every Unix.
+#[cfg(any(target_os = "macos", all(test, unix)))]
+mod children;
 mod client;
 mod control;
 mod fence;
