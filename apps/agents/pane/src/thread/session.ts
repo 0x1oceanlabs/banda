@@ -428,6 +428,12 @@ export function useThreadSession({
     void acting.act(() =>
       engine.command("agents.retry", { turn: turn.id }, project)
     )
+  // To another account or Harness from its next turn (ADR 0078).
+  const moveTo = (harness: string) =>
+    void acting.act(async () => {
+      if (thread === null) return
+      await engine.command("agents.switch", { thread, harness }, project)
+    })
   const retryOn = (turn: TurnView, harness: string) =>
     void acting.act(async () => {
       if (thread === null) return
@@ -524,6 +530,7 @@ export function useThreadSession({
     stop,
     retry,
     retryOn,
+    moveTo,
     /** Forks the Thread at the end of `turn` and opens the fork. */
     fork,
     /** Takes the Thread back to before `turn`'s message; resolves
