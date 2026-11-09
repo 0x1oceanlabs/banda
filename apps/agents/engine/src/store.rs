@@ -203,6 +203,12 @@ ALTER TABLE agents_threads ADD COLUMN cleared_at INTEGER;
 -- A snooze is called Later now (ADR 0098, decision 28).
 ALTER TABLE agents_threads RENAME COLUMN snooze TO later;
 "#,
+    r#"
+-- The sessions of each Harness the Thread ran on but its own now, by
+-- where they live, as JSON: a Thread that goes back to one goes on with
+-- it (ADR 0078, decision 5).
+ALTER TABLE agents_threads ADD COLUMN sessions TEXT;
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -1014,6 +1020,58 @@ pub fn run_on(sql: &Connection, turn: TurnId) -> Result<Option<String>, Error> {
         params![turn],
         |row| row.get(0),
     )?)
+}
+
+/// The sessions of the Harnesses the Thread ran on before, by where they
+/// live (ADR 0078, decision 5).
+pub fn sessions<T: DeserializeOwned>(
+    sql: &Connection,
+    thread: ThreadId,
+) -> Result<std::collections::BTreeMap<String, T>, Error> {
+    let text: Option<String> = sql
+        .query_row(
+            "SELECT sessions FROM agents_threads WHERE id = ?1",
+            params![thread],
+            |row| row.get(0),
+        )
+        .optional()?
+        .flatten();
+    Ok(text
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default())
+}
+
+/// Keeps the Thread's earlier sessions, and its session now: `None` when
+/// the Harness it moves to opens one of its own.
+pub fn set_sessions(
+    sql: &Connection,
+    thread: ThreadId,
+    now: Option<&impl Serialize>,
+    earlier: &std::collections::BTreeMap<String, impl Serialize>,
+) -> Result<(), Error> {
+    let now = now.map(json).transpose()?;
+    sql.execute(
+        "UPDATE agents_threads SET evidence = ?2, sessions = ?3 WHERE id = ?1",
+        params![thread, now, json(earlier)?],
+    )?;
+    Ok(())
+}
+
+/// The Harness entry each of the Thread's turns but `turn` ran on, in
+/// order, and the last of its items each one holds.
+pub fn turns_ran(
+    sql: &Connection,
+    thread: ThreadId,
+    turn: TurnId,
+) -> Result<Vec<(String, Option<ItemId>)>, Error> {
+    let mut statement = sql.prepare(
+        "SELECT t.harness, (SELECT i.id FROM agents_items i WHERE i.turn = t.id ORDER BY i.rowid DESC LIMIT 1)
+         FROM agents_turns t
+         WHERE t.thread = ?1 AND t.id != ?2 AND t.harness IS NOT NULL
+         ORDER BY t.created_at, t.id",
+    )?;
+    let rows = statement.query_map(params![thread, turn], |row| Ok((row.get(0)?, row.get(1)?)))?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 /// The Harness entry the Thread's latest turn but `turn` ran on: the

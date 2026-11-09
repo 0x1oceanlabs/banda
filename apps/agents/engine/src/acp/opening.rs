@@ -5,7 +5,7 @@ use super::*;
 
 /// What a Thread keeps of its session: evidence, not identity (ADR 0002,
 /// decision 7).
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Evidence {
     harness: String,
     session: String,
@@ -38,6 +38,11 @@ fn forked_at(mut meta: acp::Meta, message: &str) -> acp::Meta {
 }
 
 impl Evidence {
+    /// The Harness entry that opened the session.
+    pub fn harness(&self) -> &str {
+        &self.harness
+    }
+
     /// The session's ID, as its Harness named it.
     pub fn session(&self) -> &str {
         &self.session
@@ -71,7 +76,7 @@ pub enum Opened {
 }
 
 /// How long a session outlives its Harness process.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum Lasts {
     /// It ends with the process.

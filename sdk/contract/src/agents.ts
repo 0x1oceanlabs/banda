@@ -108,6 +108,7 @@ const KINDS: ReadonlySet<string> = new Set(
     "thread.rewound": true,
     "thread.renamed": true,
     "thread.switched": true,
+    "thread.moved": true,
     "thread.configured": true,
     "thread.offered": true,
     "thread.used": true,

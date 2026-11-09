@@ -8,6 +8,7 @@ import type { Body } from "@banda/contract/agents"
 import { CallEntry } from "./call"
 import { IssueEntry } from "./issue"
 import { MessageEntry } from "./message"
+import { MovedEntry } from "./moved"
 import { NoticeEntry } from "./notice"
 import { PlanEntry } from "./plan"
 import { QuestionEntry } from "./question"
@@ -22,6 +23,7 @@ const VIEWS: { [K in Body["kind"]]: EntryView<K> } = {
   plan: PlanEntry,
   question: QuestionEntry,
   notice: NoticeEntry,
+  moved: MovedEntry,
   issue: IssueEntry,
   visual: VisualEntry,
 }

@@ -5,6 +5,7 @@ import type { FieldValue } from "./FieldValue";
 import type { Fit } from "./Fit";
 import type { Image } from "./Image";
 import type { IssueState } from "./IssueState";
+import type { Moved } from "./Moved";
 import type { Output } from "./Output";
 import type { PlanStep } from "./PlanStep";
 import type { QuestionState } from "./QuestionState";
@@ -43,7 +44,7 @@ plan?: string, state: QuestionState, answer?: string,
 /**
  * What the Person filled in the form.
  */
-values?: { [key in string]: FieldValue }, } | { "kind": "notice", text: string, } | { "kind": "visual", visual: VisualId, title: string, height: number, 
+values?: { [key in string]: FieldValue }, } | { "kind": "notice", text: string, } | { "kind": "moved", from: string, to: string, how: Moved, } | { "kind": "visual", visual: VisualId, title: string, height: number, 
 /**
  * How tall the page laid out at each of several widths, as the
  * window found when it showed; none without a window.

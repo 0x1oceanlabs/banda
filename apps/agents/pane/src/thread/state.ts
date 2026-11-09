@@ -469,6 +469,11 @@ function project(state: ThreadState, event: Event): ThreadState {
     }
     case "thread.used":
       return { ...next, usage: fact.payload.usage }
+    case "thread.moved": {
+      const { item: id, turn, from, to, how } = fact.payload
+      const body = { kind: "moved", from, to, how } as const
+      return { ...next, items: [...state.items, item(id, body, turn)] }
+    }
     case "notice.posted": {
       const { item: id, turn, text } = fact.payload
       return {
