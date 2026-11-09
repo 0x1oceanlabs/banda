@@ -97,8 +97,8 @@ Nothing an App gives talks to anything else directly.
 
 Here holds `front`, `sidebar`, `workspace`, `pane` (`{id, project,
 subject?}`) and `project`. It has no Pane kind and no device form: branch
-on neither. A Widget reads it with `useHere` from `@banda/core/react`;
-an act reads `window.here.get()` as it runs.
+on neither. A Widget reads it with `useHere` from `@banda/ui/here` until
+W0a2, then from `@banda/core/react`; an act reads `window.here.get()` as it runs.
 
 ## Data
 
