@@ -70,7 +70,7 @@
  *   action by its id only where listed, each list only falling. So do the
  *   lists of what stands in for intents and Window stores meanwhile: an
  *   App writing the title field's store, the Window finding an item
- *   action by what it does, and the Window's module-level stores.
+ *   action by what it does, and the stores the page keeps in a module.
  * - Apps meet in Slots (ADR 0082, decision 8; ADR 0087, decision 5): each
  *   Slot's owner reads who fills it in one place, the Window alone gives
  *   them, and a Pane's header and its tile in the Overview draw no
@@ -1241,22 +1241,28 @@ test("the Window finds an item action by what it does no more than the list hold
 })
 
 /**
- * The Window's stores kept in a module, not one per Window (#863): what
- * an unlisted action sets and a part of the Window draws. The core keeps
- * none (ADR 0089). None joins the list, and one that goes leaves it.
+ * The page's stores kept in a module, not one per Window (#863), by file,
+ * over all the page's code: the Window's, the core's, `@banda/ui`'s and
+ * each module's Pane part. Most hold what an unlisted action sets for a
+ * part to draw: the snooze's picker, the new Project's field and the
+ * limits' look a refused write answers (#1020); Threads' holds the
+ * Person's marks on their way to a host (ADR 0096). The core keeps none
+ * (ADR 0089). None joins the list, and one that goes leaves it.
  */
 const MODULE_STORES = [
-  "web/src/sidebar/Snoozing.tsx: picking",
-  "web/src/titles/MakeProject.tsx: making",
+  "apps/agents/pane/src/list/sent.ts: sent",
+  "client/web/src/sidebar/Snoozing.tsx: picking",
+  "client/web/src/titles/MakeProject.tsx: making",
+  "platform/harnesses/pane/src/look.ts: picked",
 ]
 
-test("the Window keeps no more stores in a module than the list holds", () => {
+test("the page keeps no more stores in a module than the list holds", () => {
   const store = /^(?:export )?const (\w+) = new Store\b/gm
-  const kept = ["web/src", "core/src"]
-    .flatMap((folder) => sources(join(app, folder), { tests: false }))
+  const kept = pageCode
+    .flatMap((folder) => sources(folder, { tests: false }))
     .flatMap((file) =>
       [...readFileSync(file, "utf8").matchAll(store)].map(
-        ([, name]) => `${relative(app, file)}: ${name}`
+        ([, name]) => `${relative(root, file)}: ${name}`
       )
     )
   expect(kept.sort()).toEqual(MODULE_STORES)
