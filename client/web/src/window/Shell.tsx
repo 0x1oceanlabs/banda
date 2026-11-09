@@ -36,7 +36,7 @@ import {
   nowOf,
   workingHere,
 } from "../calls/stores"
-import { sidebarOrder } from "../sidebar/order"
+import { keysOf, order } from "../sidebar/order"
 import { WELL, wentWell } from "../safe/starts"
 import { useProblemNews } from "../problems/news"
 import { lookingInto } from "../problems/look"
@@ -550,10 +550,10 @@ export function Shell({
     // Alt+U: the next call below the Thread in front, as the sidebar lists
     // them (ADR 0079, decision 4), picked.
     answer: () => {
-      const order = sidebarOrder(stores.items.get(), projects, snoozes)
+      const keys = keysOf(order(stores.items.get(), projects, snoozes))
       const { pane } = here.get()
       const at = pane?.subject ? `${pane.project}:${pane.subject}` : undefined
-      const call = nextCall(stores.calls.get().list, order, at)
+      const call = nextCall(stores.calls.get().list, keys, at)
       if (call)
         parts.run("pane.pick", { project: call.project, pane: call.pane })
     },
