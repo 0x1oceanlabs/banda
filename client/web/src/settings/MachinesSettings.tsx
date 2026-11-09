@@ -2,9 +2,10 @@
  * Settings → Machines (ADR 0095, decision 9): this machine's name and
  * icon, which its own engine writes in its `machine.toml`, and when it
  * stays awake (ADR 0097); each other machine of `hosts.toml`, whose row
- * opens in place, its name and icon and whether it stays awake on power
- * written on that machine through its engine while it is live, its
- * address and its `banda` written in `hosts.toml` through the desktop;
+ * opens in place, its battery while it is live, its name and icon and
+ * whether it stays awake on power written on that machine through its
+ * engine while it is live, its address and its `banda` written in
+ * `hosts.toml` through the desktop;
  * and Add a machine, which finds it first, then numbers a name and moves
  * an icon that clash with a machine shown, written on the new machine
  * once it first answers (decision 3). Every write here is the Person's:
@@ -68,13 +69,17 @@ import {
   Undo2Icon,
 } from "lucide-react"
 import {
+  awakeWords,
+  batteryWords,
   type HostEntry,
   HostsContext,
   type HostTest,
   type Shown,
   useHosts,
 } from "@banda/core/react"
+import { BatteryIcon } from "@banda/ui/components/battery-icon"
 import { device } from "../boot"
+import { useTurnsOn } from "../calls/battery"
 import { useLookSettings } from "../look"
 import { MachinePicker } from "./MachinePicker"
 import {
@@ -552,8 +557,12 @@ function HostRow({
   others: readonly Named[]
 }) {
   const kept = useContext(HostsContext)
-  const { name: key, named, state } = host
+  const { name: key, named, state, power } = host
   const { name } = named
+  // Its battery, while it is live (ADR 0097, decision 7), and how many
+  // of its Agents' Turns run, which keep it awake.
+  const battery = power?.battery
+  const turns = useTurnsOn(key)
   // Opened or closed here, until a link names another row.
   const [toggled, setToggled] = useState<{ lit?: string; open: boolean }>()
   const open = toggled && toggled.lit === lit ? toggled.open : lit === key
@@ -641,10 +650,14 @@ function HostRow({
           </span>
         )}
         <span
-          className="ml-auto shrink-0 text-xs text-muted-foreground"
+          className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground tabular-nums"
           title={why}
         >
-          {stateWords(state)}
+          {battery && <BatteryIcon battery={battery} />}
+          <span>
+            {battery && `${battery.percent}% · `}
+            {stateWords(state)}
+          </span>
         </span>
       </button>
       {open && (
@@ -704,6 +717,18 @@ function HostRow({
                 </Popover>
               </span>
             </RowFrame>
+            {battery && power && (
+              <RowFrame
+                dataKey={`${key}.battery`}
+                title="Battery"
+                about={awakeWords(power.awake, turns).line}
+              >
+                <span className="flex items-center gap-1.5 text-sm tabular-nums">
+                  <BatteryIcon battery={battery} />
+                  {batteryWords(battery)}
+                </span>
+              </RowFrame>
+            )}
             <PluggedIn
               host={key}
               name={name}

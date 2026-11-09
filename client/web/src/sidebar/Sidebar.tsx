@@ -79,6 +79,7 @@ import { type Row as Arranged, type Section, type ProjectLine } from "./arrange"
 import { useLookSidebar } from "../look"
 import { order, useElsewhere } from "./order"
 import { Row } from "./Row"
+import { MachineCard } from "./MachineCard"
 import { ThreadRows } from "../titles/ThreadMenu"
 import { TitleField } from "../titles/Title"
 import { useNaming } from "@banda/ui/lib/naming"
@@ -920,7 +921,9 @@ function HostPart({
     <div role="group" aria-label={name} className="flex flex-col">
       <div className="group/label relative flex min-h-8 items-center gap-1.5 px-2 pt-3.5 pb-0.5 text-xs whitespace-nowrap text-muted-foreground">
         <h3 className="flex min-w-0">
-          <MachineMark named={host.named} form="full" />
+          <MachineCard host={host.name}>
+            <MachineMark named={host.named} form="full" />
+          </MachineCard>
         </h3>
         <span className="ml-auto flex min-w-0 items-center gap-1.5 tabular-nums">
           <HostWords host={host} />

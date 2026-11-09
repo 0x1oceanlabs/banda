@@ -24,15 +24,18 @@
  * Banda stops it. arc names itself in its machine.toml (ADR 0095), as
  * this checkout's engine says in its welcome: "arc", a server. In
  * Settings → Machines a row stays busy while any of its acts runs, as a
- * Test main holds outlasts an address refused meanwhile. With
- * BANDA_E2E_SHOTS set to a folder, it leaves pictures of each state there
- * for the Person to see.
+ * Test main holds outlasts an address refused meanwhile. arc says its
+ * battery while it is live, in its row and its label's card (ADR 0097):
+ * as its engine is this machine's, the runner's, so a laptop's shows and
+ * CI's none. With BANDA_E2E_SHOTS set to a folder, it leaves pictures of
+ * each state there for the Person to see.
  */
 import { execFileSync, spawn } from "node:child_process"
 import { once } from "node:events"
 import {
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   unlinkSync,
@@ -281,6 +284,36 @@ const withArc = (
 const sidebarOf = (page: Page) =>
   page.getByRole("complementary", { name: "Sidebar" })
 
+/** Whether this machine has a battery of its own, as its engine finds it
+ * on Linux: arc's engine runs here, so arc says this machine's. CI's
+ * runners have none. */
+function batteryHere(): boolean {
+  const supplies = "/sys/class/power_supply"
+  const read = (path: string) => {
+    try {
+      return readFileSync(join(supplies, path), "utf8").trim()
+    } catch {
+      return ""
+    }
+  }
+  try {
+    return readdirSync(supplies).some(
+      (one) =>
+        read(`${one}/type`) === "Battery" && read(`${one}/scope`) !== "Device"
+    )
+  } catch {
+    return false
+  }
+}
+
+/** What the window says of a battery in full (ADR 0097, decision 7). */
+const BATTERY =
+  /^\d+% · (on battery|charging|on power)( · \d+:\d\d (left|to full))?$/
+
+/** The card a machine's label or mark opens as the pointer rests on it. */
+const cardOf = (page: Page, name = "arc") =>
+  page.getByRole("group", { name: `${name} facts` })
+
 /** arc's part of the sidebar: its label and what it holds. */
 const arcOf = (page: Page) =>
   sidebarOf(page).getByRole("group", { name: "arc", exact: true })
@@ -374,6 +407,31 @@ test("another machine's Threads show under its name, below this one's; stopped t
     there.getByRole("button").filter({ hasText: "Hosts over ssh, wait" })
   ).toContainText(/\d:\d\d/)
   await shot(page, "pr2-1-projects-live")
+  // Its label's card has its longer facts: what it is, why it is awake,
+  // with its Agent at work there, its build and its address; its battery
+  // where it has one (ADR 0097).
+  await label.hover()
+  const card = cardOf(page)
+  await expect(card).toContainText("live")
+  await expect(card.getByRole("definition")).toContainText([
+    "While 1 Agent works there",
+    "same as here",
+    "arc",
+  ])
+  const terms = card.getByRole("term")
+  if (batteryHere()) {
+    await expect(terms).toContainText(["Battery", "Awake", "Build", "Address"])
+    await expect(
+      card.getByRole("definition").filter({ hasText: "%" })
+    ).toHaveText(BATTERY)
+  } else {
+    await expect(terms).toContainText(["Awake", "Build", "Address"])
+    await expect(terms.filter({ hasText: "Battery" })).toHaveCount(0)
+  }
+  const box = await label.boundingBox()
+  if (box) await shot(page, "machine-card", { x: box.x + 12, y: box.y + 8 })
+  await page.mouse.move(900, 700)
+  await expect(card).toHaveCount(0)
   // Its rows have no menu yet.
   await there.getByText("Bench window tests").click({ button: "right" })
   await expect(page.getByRole("menu", { name: "Thread menu" })).toHaveCount(0)
@@ -423,20 +481,25 @@ test("another machine's Threads show under its name, below this one's; stopped t
   // machine's, each with its host's name.
   writeFileSync(join(window.dir, "config/sidebar.toml"), 'preset = "inbox"\n')
   await expect(arcOf(page)).toHaveCount(0)
-  const tags = sidebar.getByTitle("Its Agent works on arc")
+  const tags = sidebar.getByRole("button").locator('[data-machine-card="arc"]')
   await expect(tags).toHaveCount(2)
   const mark = sidebar
     .getByRole("button")
     .filter({ hasText: "Bench window tests" })
-    .getByTitle("Its Agent works on arc")
+    .locator('[data-machine-card="arc"]')
   await expect(mark).toHaveText("arc")
   await expect(mark.locator('[data-machine-icon="server"]')).toBeVisible()
   await expect(
     sidebar
       .getByRole("button")
       .filter({ hasText: "Sidebar for arc" })
-      .getByTitle("Its Agent works on arc")
+      .locator('[data-machine-card="arc"]')
   ).toHaveCount(0)
+  // Its mark opens the machine's card, as its label does.
+  await mark.hover()
+  await expect(cardOf(page)).toContainText("Address")
+  await page.mouse.move(900, 700)
+  await expect(cardOf(page)).toHaveCount(0)
   await shot(page, "pr2-2-inbox-live")
 
   // The link drops and arc cannot be reached: away, its rows still there.
@@ -1403,6 +1466,22 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
     program
   )
   await expect(row).toContainText("same as here")
+  // Its battery while it is live: the percent in its header, and a line
+  // in full with why it is awake; where it has none, neither (ADR 0097).
+  const top = row.getByRole("button", { expanded: true })
+  const battery = row.locator('[data-key="arc.battery"]')
+  const withBattery = batteryHere()
+  if (withBattery) {
+    await expect(top).toContainText(/\d+% ·/)
+    await expect(battery).toContainText("Battery")
+    await expect(battery).toContainText(/\d+% · (on battery|charging|on power)/)
+    await expect(battery).toContainText(
+      /Kept awake: |Sleeps by itself when idle\./
+    )
+  } else {
+    await expect(battery).toHaveCount(0)
+    await expect(top).not.toContainText("%")
+  }
   await expect(
     row.getByRole("button", { name: "Stop Banda on arc" })
   ).toBeVisible()
@@ -1466,6 +1545,9 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
   await expect(row.getByRole("button", { expanded: true })).toContainText(
     "away"
   )
+  // Away, no battery: the last heard is no longer true.
+  await expect(top).not.toContainText("%")
+  await expect(battery).toHaveCount(0)
   await expect(row.getByRole("button", { name: "Edit" })).toBeDisabled()
   await expect(row).toContainText("Rename arc when it is back.")
   // Away, it is off and still: what arc said is no longer known.
@@ -1481,6 +1563,8 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
     "live · same build",
     { timeout: 60_000 }
   )
+  // Back, it is heard again.
+  await expect(battery).toHaveCount(withBattery ? 1 : 0)
   // Back, as arc says it; turned off there, its line goes.
   await expect(awake).toHaveAttribute("aria-checked", "true")
   await awake.click()

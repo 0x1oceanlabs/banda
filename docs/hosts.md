@@ -109,6 +109,12 @@ minute while a window listens, and not at all while none does. A
 machine with no battery says none, and Windows says no battery and no
 why yet.
 
+Another machine's window shows that battery while the machine is live,
+in its row in Settings → Machines and in the card its label opens in
+the sidebar, with why it is awake; away, it shows none. While Agents
+work there and it is on battery at 20% or less, the window warns once
+with a toast, and again only after it was on power.
+
 ## How it connects
 
 Banda runs your system's ssh twice for each host: one runs

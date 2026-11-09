@@ -15,6 +15,7 @@ import { cn } from "@banda/ui/lib/utils"
 import { useNow } from "@banda/ui/hooks/use-now"
 import type { Listed } from "@banda/ui/pane"
 import type { Row as Arranged } from "./arrange"
+import { MachineCard } from "./MachineCard"
 import { useOpenRow } from "./open"
 import type { Part, Settings } from "./settings"
 import { THINKING, useThinking } from "@banda/ui/lib/naming"
@@ -175,11 +176,11 @@ function Piece({
           ) : (
             <ProjectSign project={project} size={14} />
           )}
-          <Machine machine={machine} wide={wide} />
+          <Machine machine={machine} host={row.host} wide={wide} />
         </>
       )
     case "machine":
-      return <Machine machine={machine} wide={wide} />
+      return <Machine machine={machine} host={row.host} wide={wide} />
     case "harness": {
       // Its account's emblem, and in a row of more lines its name (ADR
       // 0093, decision 1).
@@ -219,15 +220,23 @@ function Piece({
 }
 
 /** Another machine on a row (ADR 0095, decision 5): its icon and name,
- * small and muted, with no border; its icon alone on a row of one line. */
-function Machine({ machine, wide }: { machine?: Named; wide: boolean }) {
-  if (!machine) return null
+ * small and muted, with no border; its icon alone on a row of one line.
+ * Its card, as the pointer rests on it, says the rest, so it has no
+ * tooltip. */
+function Machine({
+  machine,
+  host,
+  wide,
+}: {
+  machine?: Named
+  host?: string
+  wide: boolean
+}) {
+  if (!machine || host === undefined) return null
   return (
-    <MachineMark
-      named={machine}
-      form={wide ? "compact" : "icon"}
-      title={`Its Agent works on ${machine.name}`}
-    />
+    <MachineCard host={host} className="flex shrink-0">
+      <MachineMark named={machine} form={wide ? "compact" : "icon"} title="" />
+    </MachineCard>
   )
 }
 
