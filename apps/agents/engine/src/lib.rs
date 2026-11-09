@@ -32,6 +32,7 @@ pub mod counts;
 mod drive;
 mod effects;
 mod full_access;
+mod handoff;
 mod images;
 mod issues;
 mod kept;
@@ -1214,20 +1215,13 @@ impl Agents {
                 "Only a Person moves a Thread to another account.",
             ));
         }
-        let to = self.harness(&harness)?;
+
         let was = (call.project())
             .read(move |sql| store::thread(sql, thread))
             .await?
             .ok_or_else(|| Refusal::not_found("There is no such Thread."))?
             .harness;
-        let shares = (self.harnesses.find(&was)).is_some_and(|from| from.shares_sessions(&to));
-        if was != harness && !shares {
-            return Err(Refusal::conflict(format!(
-                "{} cannot go on with this Thread's session: it moves only to another \
-                 account of its own Harness, for now.",
-                to.name
-            )));
-        }
+        self.harness(&harness)?;
         call.command(move |tx| switching::switch(tx, author, thread, was, harness))
             .await
     }

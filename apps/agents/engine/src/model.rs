@@ -646,6 +646,13 @@ pub enum Body {
     Notice {
         text: String,
     },
+    /// The Thread moved from the Harness entry `from` to `to` before this
+    /// turn (ADR 0078): the Thread's divider.
+    Moved {
+        from: String,
+        to: String,
+        how: Moved,
+    },
     /// A page the Agent showed its Person (ADR 0037): read with
     /// `agents.visual`, it shows as tall as `heights` says for its width,
     /// or `height` pixels, till it says its own.
@@ -674,6 +681,42 @@ pub enum Body {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         url: Option<String>,
     },
+}
+
+/// How a Thread went on as it moved (ADR 0078).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[ts(export, export_to = "agents/")]
+pub enum Moved {
+    /// To another account of its Harness, in the same session: only the
+    /// prompt cache and the hidden reasoning are lost (decision 4).
+    Same,
+    /// To another Harness, which started a session of its own with the
+    /// history Banda handed it (decision 5).
+    Handoff {
+        #[serde(flatten)]
+        handed: Handed,
+    },
+    /// Back to a Harness the Thread ran on before, which goes on with its
+    /// own session and was handed only what it missed.
+    Back {
+        #[serde(flatten)]
+        handed: Handed,
+    },
+}
+
+/// What of a Thread's history went to the Harness it moved to.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Handed {
+    /// Messages, plans and Questions that went.
+    pub messages: u32,
+    /// Tool calls that went, as text.
+    pub tools: u32,
+    /// About how many tokens went.
+    pub tokens: u32,
+    /// Entries left out, which the Agent reads with `read`.
+    pub left_out: u32,
 }
 
 /// Where an issue the Agent drafted stands.
@@ -1263,6 +1306,16 @@ pub enum Fact {
     /// It can no longer be answered.
     #[serde(rename = "question.closed")]
     QuestionClosed { item: ItemId },
+    /// The Thread moved to another account or Harness, and its divider
+    /// went in before `turn`'s first reply (ADR 0078).
+    #[serde(rename = "thread.moved")]
+    ThreadMoved {
+        item: ItemId,
+        turn: TurnId,
+        from: String,
+        to: String,
+        how: Moved,
+    },
     /// A line from Banda, in a turn; or between turns, as a notice another
     /// part of Banda posts for the Agent (`agents.notice`).
     #[serde(rename = "notice.posted")]

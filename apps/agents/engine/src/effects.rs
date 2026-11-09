@@ -26,6 +26,7 @@
 use crate::acp::{self, Opened, Prompt, PromptImage, Running, Session, Steered};
 use crate::between;
 use crate::drive::drive;
+use crate::handoff;
 use crate::images::Images;
 use crate::kept;
 use crate::live::{Live, TurnRun};
@@ -36,7 +37,7 @@ use crate::model::{
 use crate::rules::{self, Ending, Event};
 use crate::transcript::{Transcript, notice, offered, used};
 use crate::{emit, plain, store, writer};
-use banda_harnesses::Harnesses;
+use banda_harnesses::{Harness, Harnesses};
 use banda_kernel::{Effect, Error, ModuleProject, Outcome, Participant, Settled, Tx};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -573,15 +574,16 @@ async fn work(
     // of it had goes (ADR 0078, decision 4).
     live.forget_elsewhere(project.id(), thread, &harness.id)
         .await;
-    // Another account of the same Harness goes on with the same session,
-    // readied for it as it moves here (ADR 0078, decision 3).
+    // Another account of the same Harness goes on with the same session.
     let kin = |other: &str| (harnesses.find(other)).is_some_and(|o| o.shares_sessions(&harness));
-    if let (Some(before), Some(earlier)) = (before.and_then(|id| harnesses.find(&id)), &earlier)
-        && before.shares_sessions(&harness)
-        && let Err(error) = harness.take_session(&before, earlier.session()).await
-    {
-        tracing::warn!(%error, "a moved session was not readied for its new account");
-    }
+    let (earlier, arrived) = match before.filter(|before| *before != harness.id) {
+        Some(before) => {
+            let (earlier, arrived) =
+                arrive(project, harnesses, turn, &harness, &before, earlier).await?;
+            (earlier, Some(arrived))
+        }
+        None => (earlier, None),
+    };
     // A session that opens reaches Banda with a pass of its own, which
     // names its Thread (ADR 0019; ADR 0083, decision 2).
     let banda = || live.banda(project, turn.agent, thread);
@@ -614,15 +616,29 @@ async fn work(
             .map_err(|e| unplanned(plain(e)))?;
     }
     let (running, mut refused) = session.settle(&settings).await;
-    let (prompt, left_out) = prompt_of(project, &harness.name, &running, Whose::of(turn), message)
-        .await
-        .map_err(unplanned)?;
+    let (mut prompt, left_out) =
+        prompt_of(project, &harness.name, &running, Whose::of(turn), message)
+            .await
+            .map_err(unplanned)?;
     refused.extend(left_out);
+    // A Harness the Thread moved to reads its history first; a command
+    // runs as it is.
+    let divider = arrived.map(|arrived| {
+        if let Some(history) = arrived.history
+            && prompt.command.is_none()
+        {
+            prompt.text = history + &prompt.text;
+        }
+        arrived.divider
+    });
     let (id, agent, now) = (turn.id, Participant::Agent(turn.agent), running.clone());
     // What the Agent used, as it last said, between turns too.
     let usage = session.usage();
     project
         .write(move |tx| {
+            if let Some((from, to, how)) = divider {
+                crate::transcript::moved(tx, agent, thread, id, from, to, how)?;
+            }
             offered(tx, agent, thread, &now)?;
             if let Some(usage) = usage {
                 used(tx, agent, thread, usage)?;
@@ -670,4 +686,115 @@ async fn work(
         tracing::warn!(%error, "what the Harness offers could not be written");
     }
     Ok(ending)
+}
+
+/// What a turn on a Thread that moved before it starts with (ADR 0078).
+struct Arrived {
+    /// The history it reads before the message, from another Harness.
+    history: Option<String>,
+    /// The Thread's divider: from, to, and how.
+    divider: (String, String, crate::model::Moved),
+}
+
+/// Readies `turn`, the first of its Thread on `harness` since it ran on
+/// the entry `before`, and the session it goes on with: the one the
+/// Thread had, on another account of the Harness; one this Harness had
+/// before; or none, for a session of its own.
+///
+/// - Another account of the same Harness goes on with the same session,
+///   readied for it (decisions 3 and 4).
+/// - Another Harness starts a session of its own and reads the Thread's
+///   history from Banda's log, or, one the Thread ran on before, goes on
+///   with its own session and reads what it missed (decision 5). The
+///   session the Thread had is kept for when it comes back.
+async fn arrive(
+    project: &ModuleProject,
+    harnesses: &Harnesses,
+    turn: &store::Turn,
+    harness: &Harness,
+    before: &str,
+    earlier: Option<acp::Evidence>,
+) -> Result<(Option<acp::Evidence>, Arrived), Ending> {
+    use crate::model::Moved;
+    let unplanned = |e: Error| Ending::failed(plain(e), None);
+    let from_entry = harnesses.find(before);
+    let named = |entry: &Harness| match &entry.of {
+        Some(of) => match harnesses.find(of) {
+            Some(of) => format!("{} · {}", of.name, entry.name),
+            None => entry.name.clone(),
+        },
+        None => entry.name.clone(),
+    };
+    let from = from_entry.as_ref().map_or_else(|| before.to_owned(), named);
+    // Where an entry's sessions live: one gone from the list, its own.
+    let store_of = |id: &str| {
+        harnesses
+            .find(id)
+            .map_or_else(|| id.to_owned(), |h| h.sessions().to_owned())
+    };
+    let here = harness.sessions().to_owned();
+    let divider = |how| (before.to_owned(), harness.id.clone(), how);
+    if store_of(before) == here {
+        if let (Some(from), Some(earlier)) = (&from_entry, &earlier)
+            && let Err(error) = harness.take_session(from, earlier.session()).await
+        {
+            tracing::warn!(%error, "a moved session was not readied for its new account");
+        }
+        let arrived = Arrived {
+            history: None,
+            divider: divider(Moved::Same),
+        };
+        return Ok((earlier, arrived));
+    }
+    let (thread, turn_id, message) = (turn.thread, turn.id, turn.message);
+    let (mut sessions, items, ran) = project
+        .read(move |sql| {
+            let sessions = store::sessions::<acp::Evidence>(sql, thread)?;
+            let items = store::items(sql, thread)?;
+            Ok((sessions, items, store::turns_ran(sql, thread, turn_id)?))
+        })
+        .await
+        .map_err(unplanned)?;
+    let items: Vec<_> = (items.into_iter())
+        .filter(|item| item.id != message && item.turn != Some(turn_id))
+        .collect();
+    if let Some(had) = earlier {
+        sessions.insert(store_of(had.harness()), had);
+    }
+    let back = sessions.remove(&here);
+    let (history, how) = match &back {
+        Some(_) => {
+            // What came after this Harness's last turn.
+            let last = (ran.iter().rev())
+                .find(|(entry, _)| store_of(entry) == here)
+                .and_then(|(_, item)| *item);
+            let after = last
+                .and_then(|last| items.iter().position(|item| item.id == last))
+                .map_or(0, |at| at + 1);
+            let missed = handoff::missed(thread, &from, &items[after..]);
+            let handed = missed
+                .as_ref()
+                .map(|m| m.handed.clone())
+                .unwrap_or_default();
+            (missed.map(|m| m.text), Moved::Back { handed })
+        }
+        None => {
+            let history = handoff::handoff(thread, &from, &items);
+            let handed = history
+                .as_ref()
+                .map(|h| h.handed.clone())
+                .unwrap_or_default();
+            (history.map(|h| h.text), Moved::Handoff { handed })
+        }
+    };
+    let now = back.clone();
+    project
+        .write(move |tx| store::set_sessions(tx.sql(), thread, now.as_ref(), &sessions))
+        .await
+        .map_err(unplanned)?;
+    let arrived = Arrived {
+        history,
+        divider: divider(how),
+    };
+    Ok((back, arrived))
 }
