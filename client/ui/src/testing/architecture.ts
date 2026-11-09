@@ -210,91 +210,142 @@ export function layoutMotion(source: string): string[] {
 }
 
 /**
- * The props of each component of `source`, the code of `file`, by the
- * component's name: with `code`, those whose type is a function, also
- * when optional or behind a type alias or an interface of the file, and
- * otherwise every one, whatever its type, and each it takes apart by
- * name. A component is a function whose name starts with a capital,
- * declared or held by a `const`, wrapped or not, as by `memo`. What its
- * props' type takes from elsewhere, as `Omit<ComponentProps<typeof Row>,
- * …>` takes Row's, is not read here: read the file that declares it.
+ * A TypeScript program over `files`, with the compiler options of the
+ * `tsconfig` file, for `componentProps` to read types by. It throws when
+ * a file of it outside node_modules takes something of a module that is
+ * not there (TS2307), as from a package a stale install left out: all it
+ * would take is `any`, which no check can tell for code or data.
  */
-function componentProps(
-  source: string,
-  file: string,
-  code: boolean
-): Record<string, string[]> {
-  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest)
-  const declared = new Map<string, ts.Node>()
-  for (const node of tree.statements)
-    if (ts.isTypeAliasDeclaration(node)) declared.set(node.name.text, node.type)
-    else if (ts.isInterfaceDeclaration(node)) declared.set(node.name.text, node)
-  // What a type stands for, through the file's aliases, once each.
-  const resolved = (type: ts.Node, seen: Set<string>): ts.Node => {
-    if (ts.isParenthesizedTypeNode(type)) return resolved(type.type, seen)
-    // A name, as a type or as what an interface extends.
-    const named = ts.isTypeReferenceNode(type)
-      ? type.typeName
-      : ts.isExpressionWithTypeArguments(type)
-        ? type.expression
-        : undefined
-    if (named && ts.isIdentifier(named)) {
-      const target = declared.get(named.text)
-      if (target && !seen.has(named.text))
-        return resolved(target, new Set([...seen, named.text]))
-    }
-    return type
+export function programOver(files: string[], tsconfig: string): ts.Program {
+  const said = (diagnostics: readonly ts.Diagnostic[]) =>
+    diagnostics
+      .map((diagnostic) =>
+        ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")
+      )
+      .join("; ")
+  const config = ts.getParsedCommandLineOfConfigFile(tsconfig, undefined, {
+    ...ts.sys,
+    onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
+      throw new Error(`${tsconfig}: ${said([diagnostic])}`)
+    },
+  })
+  if (!config || config.errors.length > 0)
+    throw new Error(`${tsconfig}: ${said(config?.errors ?? [])}`)
+  const program = ts.createProgram(files, config.options)
+  const checker = program.getTypeChecker()
+  // Each module a file names, at the top or inside, as `import("…")`
+  // does in a type or a call. `import "./look.css"` takes nothing, so
+  // brings no `any`.
+  const missing: string[] = []
+  const visit = (node: ts.Node) => {
+    const from =
+      (ts.isImportDeclaration(node) && node.importClause) ||
+      ts.isExportDeclaration(node)
+        ? node.moduleSpecifier
+        : ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)
+          ? node.argument.literal
+          : ts.isCallExpression(node) &&
+              node.expression.kind === ts.SyntaxKind.ImportKeyword
+            ? node.arguments[0]
+            : undefined
+    if (from && ts.isStringLiteral(from) && !checker.getSymbolAtLocation(from))
+      missing.push(`${node.getSourceFile().fileName}: ${from.text}`)
+    ts.forEachChild(node, visit)
   }
-  const isFunction = (type: ts.Node): boolean => {
-    const node = resolved(type, new Set())
-    if (ts.isFunctionTypeNode(node)) return true
-    return ts.isUnionTypeNode(node) && node.types.some(isFunction)
+  for (const tree of program.getSourceFiles())
+    if (!tree.fileName.includes("/node_modules/")) visit(tree)
+  if (missing.length > 0)
+    throw new Error(
+      `what these take would be any, as their module is not there (install again?): ${missing.join(", ")}`
+    )
+  return program
+}
+
+/**
+ * What a component takes: every prop, and those of them that are code,
+ * each by name, sorted.
+ */
+export interface Props {
+  /** Every prop, whatever its type, and each it takes apart by name. */
+  props: string[]
+  /** The props that are code rather than data (ADR 0087, B4e): those
+   * whose type, optional or not, can be called. */
+  code: string[]
+}
+
+/**
+ * The props of each component of `file`, a file of `program`, by the
+ * component's name, read as TypeScript types them, wherever its props'
+ * type is declared: a `Dispatch<…>`, a `VoidFunction` or a `typeof f` is
+ * code as a function type written out is, and `Omit<ComponentProps<typeof
+ * Row>, …>` brings Row's props. A component is a function whose name
+ * starts with a capital, declared or held by a `const`, wrapped or not,
+ * as by `memo`. Props typed `any`, all or one, throw, as they cannot be
+ * told for code or data.
+ */
+export function componentProps(
+  program: ts.Program,
+  file: string
+): Record<string, Props> {
+  const tree = program.getSourceFile(file)
+  if (!tree) throw new Error(`${file} is not a file of the program`)
+  const checker = program.getTypeChecker()
+  // A type can be called, also behind null or undefined, or as one of a
+  // union's parts.
+  const callable = (type: ts.Type): boolean => {
+    const some = checker.getNonNullableType(type)
+    return (some.isUnion() ? some.types : [some]).some(
+      (part) => part.getCallSignatures().length > 0
+    )
   }
-  // A name, bare or quoted: `onPin` or `"onPin"`.
-  const nameOf = (name: ts.Node | undefined): string[] =>
-    name && (ts.isIdentifier(name) || ts.isStringLiteral(name))
-      ? [name.text]
+  // Each name a component takes apart, bare or quoted (`onPin` or
+  // `"onPin"`), with its type: its props' type may not name it, as an
+  // index signature does not.
+  const apart = (props: ts.ParameterDeclaration): [string, ts.Type][] =>
+    ts.isObjectBindingPattern(props.name)
+      ? props.name.elements.flatMap((element) => {
+          const name = element.propertyName ?? element.name
+          return !element.dotDotDotToken &&
+            (ts.isIdentifier(name) || ts.isStringLiteral(name))
+            ? [[name.text, checker.getTypeAtLocation(element)]]
+            : []
+        })
       : []
-  // Each type once, so an interface that extends itself ends.
-  const members = (type: ts.Node, seen = new Set<ts.Node>()): string[] => {
-    const node = resolved(type, new Set())
-    if (seen.has(node)) return []
-    seen.add(node)
-    if (ts.isIntersectionTypeNode(node))
-      return node.types.flatMap((part) => members(part, seen))
-    if (!ts.isTypeLiteralNode(node) && !ts.isInterfaceDeclaration(node))
-      return []
-    // An interface of the file takes the members of those it extends.
-    const extended = ts.isInterfaceDeclaration(node)
-      ? (node.heritageClauses ?? []).flatMap((clause) =>
-          clause.types.flatMap((base) => members(base, seen))
-        )
-      : []
-    const own = node.members.flatMap((member) => {
-      if (!code || ts.isMethodSignature(member)) return nameOf(member.name)
-      return ts.isPropertySignature(member) &&
-        member.type &&
-        isFunction(member.type)
-        ? nameOf(member.name)
-        : []
-    })
-    return [...extended, ...own]
-  }
-  // What a component takes apart by name, its type read here or not.
-  const apart = (props: ts.ParameterDeclaration | undefined): string[] =>
-    props && ts.isObjectBindingPattern(props.name)
-      ? props.name.elements.flatMap((element) =>
-          element.dotDotDotToken
-            ? []
-            : nameOf(element.propertyName ?? element.name)
-        )
-      : []
-  const found: Record<string, string[]> = {}
+  const found: Record<string, Props> = {}
   const component = (name: string, fn: ts.SignatureDeclaration) => {
     if (!/^[A-Z]/.test(name)) return
     const props = fn.parameters[0]
-    const typed = props?.type ? members(props.type) : []
-    found[name] = [...new Set(code ? typed : [...typed, ...apart(props)])]
+    if (!props) {
+      found[name] = { props: [], code: [] }
+      return
+    }
+    const type = checker.getTypeAtLocation(props)
+    if (type.flags & ts.TypeFlags.Any)
+      throw new Error(
+        `${file}: ${name}'s props are any, so none can be told for code or data`
+      )
+    const typed: [string, ts.Type][] = [
+      ...checker
+        .getPropertiesOfType(type)
+        .map((prop): [string, ts.Type] => [
+          prop.name,
+          checker.getTypeOfSymbol(prop),
+        ]),
+      ...apart(props),
+    ]
+    // Sorted, as TypeScript gives the props an `Omit<…>` brings in the
+    // order it first met their types, which another file can change.
+    const names = (which: [string, ts.Type][]) =>
+      [...new Set(which.map(([prop]) => prop))].toSorted()
+    const loose = typed.filter(([, of]) => of.flags & ts.TypeFlags.Any)
+    if (loose.length > 0)
+      throw new Error(
+        `${file}: ${name} takes ${names(loose).join(", ")} as any, which cannot be told for code or data`
+      )
+    found[name] = {
+      props: names(typed),
+      code: names(typed.filter(([, of]) => callable(of))),
+    }
   }
   // The function a `const` holds, also inside a call such as `memo(…)`.
   const held = (node: ts.Expression): ts.SignatureDeclaration | undefined => {
@@ -313,34 +364,6 @@ function componentProps(
           component(declaration.name.text, fn)
       }
   return found
-}
-
-/**
- * The props of each component of `source`, the code of `file`, that are
- * code rather than data (ADR 0087, B4e), by the component's name: those
- * whose type is a function, also when optional or behind a type alias or
- * an interface of the file (`componentProps` says what a component is
- * and what is read).
- */
-export function functionProps(
-  source: string,
-  file: string
-): Record<string, string[]> {
-  return componentProps(source, file, true)
-}
-
-/**
- * Every prop of each component of `source`, the code of `file`, by the
- * component's name, whatever its type: its props' type's members, through
- * the file's aliases and interfaces, and each it takes apart by name. A
- * prop typed by a name from elsewhere, as `VoidFunction` or
- * `Dispatch<…>`, which `functionProps` cannot tell for code, is here too.
- */
-export function propNames(
-  source: string,
-  file: string
-): Record<string, string[]> {
-  return componentProps(source, file, false)
 }
 
 /**

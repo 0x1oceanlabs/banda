@@ -1,15 +1,16 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import ts from "typescript"
 import { expect, test } from "vitest"
 import {
   MANIFEST_NAMES,
+  componentProps,
   desktopReads,
-  functionProps,
   imports,
   layoutMotion,
   parts,
-  propNames,
+  programOver,
   valuesTaken,
 } from "./architecture"
 
@@ -51,58 +52,159 @@ test("the check sees each way code reads the desktop's bridge, and not what only
   ).toBe(0)
 })
 
-test("the check sees a component's props that are code, through the file's aliases, and not its data", () => {
+/** A strict TypeScript that finds no package: `lib` alone has types. */
+const STRICT = JSON.stringify({
+  compilerOptions: {
+    strict: true,
+    lib: ["ES2023", "DOM"],
+    types: [],
+    module: "ESNext",
+    moduleResolution: "bundler",
+    jsx: "preserve",
+    noEmit: true,
+  },
+})
+
+/**
+ * What `read` makes of a program over `file`, of `files` written by
+ * their names into a folder of their own beside that tsconfig.
+ */
+function readFrom<T>(
+  files: Record<string, string>,
+  file: string,
+  read: (program: ts.Program, path: string) => T
+): T {
+  const folder = mkdtempSync(join(tmpdir(), "banda-props-"))
+  try {
+    writeFileSync(join(folder, "tsconfig.json"), STRICT)
+    for (const [name, source] of Object.entries(files))
+      writeFileSync(join(folder, name), source)
+    const path = join(folder, file)
+    return read(programOver([path], join(folder, "tsconfig.json")), path)
+  } finally {
+    rmSync(folder, { recursive: true, force: true })
+  }
+}
+
+const propsOf = (files: Record<string, string>, file: string) =>
+  readFrom(files, file, componentProps)
+
+test("the check sees a component's props that are code, by whatever name they are typed, and not its data", () => {
   const source = [
+    `import type { Dispatch } from "./dispatch"`,
     `type Pick = (id: string) => void`,
     `type Shown = { label: string }`,
     `interface Folding { onFold(): void; folded: boolean }`,
-    `export function List({ onPick, label }: { onPick: Pick; label: string; done?: (() => void) | undefined }) {}`,
-    `function Header(props: Shown & Folding & { onMore: () => void }) {}`,
-    `const Item = ({ row }: { row: Shown; mark: Pick | undefined }) => null`,
-    `const Row = (props: Omit<ComponentProps<typeof Other>, "x">) => null`,
-    `function lower({ onOpen }: { onOpen: () => void }) {}`,
-    `function Empty() {}`,
+    `interface Pinning extends Folding { onPin?: VoidFunction }`,
+    `declare function wake(): void`,
+    `declare function memo<C>(component: C): C`,
+    `export function List({ onPick, label }: { onPick: Pick; label: string; done?: (() => void) | undefined }) { return null }`,
+    `function Header(props: Shown & Pinning & { onMore: () => void }) { return null }`,
+    `const Item = ({ row }: { row: Shown; mark: Pick | boolean | undefined }) => null`,
+    `export function Menu({ project }: { project: string; onPin?: VoidFunction; onRename: Dispatch<string>; "onWake": typeof wake }) { return null }`,
+    `const Kept = memo(function Kept({ onArchive: archive }: { onArchive: Dispatch<number> }) { return null })`,
+    // An index signature names no prop: what is taken apart is read.
+    `function Bag({ onGo, ...rest }: Record<string, VoidFunction>) { return null }`,
+    `function lower({ onOpen }: { onOpen: () => void }) { return null }`,
+    `function Empty() { return null }`,
   ].join("\n")
-  expect(functionProps(source, "list.tsx")).toEqual({
-    List: ["onPick", "done"],
-    Header: ["onFold", "onMore"],
-    Item: ["mark"],
-    Row: [],
-    Empty: [],
+  expect(
+    propsOf(
+      {
+        "dispatch.ts": `export type Dispatch<A> = (value: A) => void`,
+        "list.tsx": source,
+      },
+      "list.tsx"
+    )
+  ).toEqual({
+    List: { props: ["done", "label", "onPick"], code: ["done", "onPick"] },
+    Header: {
+      props: ["folded", "label", "onFold", "onMore", "onPin"],
+      code: ["onFold", "onMore", "onPin"],
+    },
+    Item: { props: ["mark", "row"], code: ["mark"] },
+    Menu: {
+      props: ["onPin", "onRename", "onWake", "project"],
+      code: ["onPin", "onRename", "onWake"],
+    },
+    Kept: { props: ["onArchive"], code: ["onArchive"] },
+    Bag: { props: ["onGo"], code: ["onGo"] },
+    Empty: { props: [], code: [] },
   })
 })
 
-test("the check sees every prop of a component, whatever its type, and each it takes apart", () => {
+test("the check reads a component's props whose type is declared in another file", () => {
+  const files = {
+    "types.ts": [
+      `export type Dispatch<A> = (value: A) => void`,
+      `export type ComponentProps<C> = C extends (props: infer P) => unknown ? P : never`,
+      `export interface MenuProps { project: string; onPin(): void; onGo: Dispatch<string> }`,
+    ].join("\n"),
+    "row.tsx": `export function Row(props: { row: string; x: number; onOpen: () => void }) { return null }`,
+    "menu.tsx": [
+      `import type { ComponentProps, MenuProps } from "./types"`,
+      `import type { Row } from "./row"`,
+      `function ProjectMenu(props: MenuProps) { return null }`,
+      `const Line = ({ row, ...rest }: Omit<ComponentProps<typeof Row>, "x">) => null`,
+    ].join("\n"),
+  }
+  expect(propsOf(files, "menu.tsx")).toEqual({
+    ProjectMenu: {
+      props: ["onGo", "onPin", "project"],
+      code: ["onGo", "onPin"],
+    },
+    Line: { props: ["onOpen", "row"], code: ["onOpen"] },
+  })
+})
+
+test("the check ends on an interface that extends itself", () => {
+  // Not TypeScript, as each extends the other, yet the check ends.
   const source = [
-    `import type { Dispatch } from "react"`,
-    `type Shown = { label: string }`,
-    `interface Folding { onFold(): void; folded: boolean }`,
-    `interface Pinning extends Folding { onPin?: VoidFunction }`,
-    `export function Menu({ project }: { project: string; onPin?: VoidFunction; onRename: Dispatch<string>; "onWake": typeof wake }) {}`,
-    `function Header(props: Shown & Pinning) {}`,
-    `const Row = ({ row, onOpen: open, ...rest }: Omit<ComponentProps<typeof Other>, "x">) => null`,
-    `const Item = memo(function Item({ onArchive }: { onArchive: Archive }) { return null })`,
-    `function lower({ onOpen }: { onOpen: VoidFunction }) {}`,
-    // Not TypeScript, as each extends the other, yet the check ends.
     `interface Looping extends Looped { onLoop: VoidFunction }`,
     `interface Looped extends Looping { looped: boolean }`,
-    `function Loop(props: Looping) {}`,
+    `function Loop(props: Looping) { return null }`,
   ].join("\n")
-  expect(propNames(source, "menu.tsx")).toEqual({
-    Menu: ["project", "onPin", "onRename", "onWake"],
-    Header: ["label", "onFold", "folded", "onPin"],
-    Row: ["row", "onOpen"],
-    Item: ["onArchive"],
-    Loop: ["looped", "onLoop"],
+  expect(propsOf({ "loop.tsx": source }, "loop.tsx")).toEqual({
+    Loop: { props: ["onLoop"], code: ["onLoop"] },
   })
-  // Of these, only a method is surely code, read in the file alone.
-  expect(functionProps(source, "menu.tsx")).toEqual({
-    Menu: [],
-    Header: ["onFold"],
-    Row: [],
-    Item: [],
-    Loop: [],
-  })
+})
+
+test("the check refuses a module that is not there, and props typed any", () => {
+  expect(() =>
+    propsOf(
+      {
+        "stale.tsx": [
+          `import type { Gone } from "gone"`,
+          `import "./look.css"`,
+          `export function Stale(props: { gone: Gone }) { return null }`,
+        ].join("\n"),
+      },
+      "stale.tsx"
+    )
+  ).toThrow(/stale\.tsx: gone$/)
+  // A module named inside a type is as missing as one at the top.
+  expect(() =>
+    propsOf(
+      {
+        "late.tsx": `export function Late(props: { onGo: typeof import("gone").go }) { return null }`,
+      },
+      "late.tsx"
+    )
+  ).toThrow(/late\.tsx: gone$/)
+  expect(() =>
+    propsOf(
+      { "loose.tsx": `export function Loose(props: any) { return null }` },
+      "loose.tsx"
+    )
+  ).toThrow(/Loose's props are any/)
+  expect(() =>
+    propsOf(
+      {
+        "loose.tsx": `export function Loose(props: { label: string; onPin: any }) { return null }`,
+      },
+      "loose.tsx"
+    )
+  ).toThrow(/Loose takes onPin as any/)
 })
 
 test("the check sees what a file takes of a module in each form, and no type", () => {
