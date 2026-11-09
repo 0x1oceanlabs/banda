@@ -1333,7 +1333,7 @@ test("another machine's Thread that calls opens on its engine by Alt+U and from 
   await expect(toast).toBeHidden()
 })
 
-test("another machine's Thread that asks has its toast name arc, and Allow and Try again go to arc's engine; with arc away they are refused at once, and sent nowhere", async () => {
+test("another machine's Thread that asks has its toast name arc, and Allow and Try again go to arc's engine; with arc away an Allow is refused at once, and sent nowhere", async () => {
   test.setTimeout(shots ? 300_000 : 180_000)
   arc = newArc()
   const banda = await seed(arc)

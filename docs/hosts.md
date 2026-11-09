@@ -6,7 +6,7 @@ sidebar shows its Projects and Threads under its name, below this
 machine's, and its state in words while it is not live. Its row, the
 bar's counts, a toast, `Alt+U` and the Banda menu open its Thread on its
 engine: you read it and write to it there, as to one of this machine's.
-A toast for its Thread names it after the title, and its Allow, Deny and
+A toast for its Thread names it after the title, and its Allow, Reject and
 Try again go to its engine too. While it is not live, they and the
 Thread menu's rename, Later, wake, mark and archive say so at once, in
 the words of its pill ("arc is away"), and send nothing to run later.
