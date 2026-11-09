@@ -5,7 +5,6 @@ import type {
   LimitWindow,
   UsageNow,
 } from "@banda/contract/harnesses"
-import { tomlOf } from "@banda/contract/settings"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -29,11 +28,12 @@ import {
   type Source,
 } from "@banda/ui/hooks/use-live"
 import { useNow } from "@banda/ui/hooks/use-now"
+import { useRun } from "@banda/ui/hooks/use-run"
 import { cn } from "@banda/ui/lib/utils"
 import { MINUTE, ago, fullDate, problem } from "@banda/ui/lib/words"
 import type { WidgetProps } from "@banda/ui/module"
 import { GaugeIcon } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   type Room,
   backWords,
@@ -56,14 +56,7 @@ import {
   tooltipOf,
   usedOf,
 } from "./limits"
-
-/** The looks the Person picks from, as its context menu names them. */
-const LOOKS: readonly { look: LimitsLook; words: string }[] = [
-  { look: "icon", words: "Icon" },
-  { look: "meter", words: "Meter and share" },
-  { look: "number", words: "Share" },
-  { look: "providers", words: "Share of each Harness" },
-]
+import { LOOKS, picked } from "./look"
 
 /** A share's colour on the bar: the bar's own until `warn`. */
 function loudOf(used: number, warn: number): string | undefined {
@@ -73,7 +66,8 @@ function loudOf(used: number, warn: number): string | undefined {
 /** The machine's snapshot and event log keep this current even while
  * its popover is closed. Opening requests a provider read; the engine
  * owns the one-minute bound and publishes the result on that same log. */
-export function LimitsWidget({ engine, window }: WidgetProps) {
+export function LimitsWidget({ engine }: WidgetProps) {
+  const run = useRun()
   const [round, setRound] = useState(0)
   const source = useMemo<Source<LimitsNow>>(
     () => ({
@@ -90,20 +84,24 @@ export function LimitsWidget({ engine, window }: WidgetProps) {
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string>()
   const [usage, setUsage] = useState<UsageNow>()
+  // A look picked is written by its action: once it is, the engine reads
+  // harnesses.toml as it answers, so read again; refused, say why.
+  useEffect(
+    () =>
+      picked.subscribe(() => {
+        const answer = picked.get()
+        if (answer?.refused) setError(answer.refused)
+        else setRound((round) => round + 1)
+      }),
+    []
+  )
   if (live.state !== "ready") return null
   const { limits, warn, look } = live.view
   const share = shareOf(limits, now)
   if (!share) return null
   const words = tooltipOf(limits, now)
-  // The engine reads harnesses.toml as it answers: read again once written.
   const pick = (next: LimitsLook) =>
-    void window
-      .writeSetting("harnesses.toml", "limits.look", tomlOf(next))
-      .then((refused) =>
-        refused.length > 0
-          ? setError(refused.join(" "))
-          : setRound((round) => round + 1)
-      )
+    run("harnesses.limits.look", { look: next })
   return (
     <ContextMenu>
       <ContextMenuTrigger className="flex">
@@ -166,7 +164,7 @@ export function LimitsWidget({ engine, window }: WidgetProps) {
               now={now}
               onUsage={() => {
                 setOpen(false)
-                window.run("harnesses.usage")
+                run("harnesses.usage")
               }}
             />
           </PopoverContent>

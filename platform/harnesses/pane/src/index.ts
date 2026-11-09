@@ -1,6 +1,7 @@
 import { type Action, defineModule } from "@banda/ui/module"
 import { paneOf } from "@banda/ui/pane"
 import { LimitsWidget } from "./LimitsWidget"
+import { pickLook } from "./look"
 import { usagePane } from "./UsagePane"
 
 export { usagePane }
@@ -22,7 +23,7 @@ export const harnesses = defineModule({
   id: "harnesses",
   engine: true,
   panes: [usagePane],
-  actions: [openUsage],
+  actions: [openUsage, pickLook],
   bar: [
     {
       id: "harnesses.limits",

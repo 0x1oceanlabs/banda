@@ -1,7 +1,7 @@
 import { Button } from "@banda/ui/components/button"
 import { Toaster, type ToastT, toast } from "@banda/ui/components/sonner"
 import { TopLayer } from "@banda/ui/components/top-layer"
-import type { WidgetProps } from "@banda/ui/module"
+import { useRun } from "@banda/ui/hooks/use-run"
 import { BellIcon } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { LAST, recentNow } from "./recent"
@@ -23,9 +23,10 @@ const NOTHING = {
  * The bell (ADR 0048, decision 2): a click shows the last toasts again,
  * the newest in front, as Sonner's stack, opened, with their buttons.
  * They stay till the bell is clicked again, `Esc`, a click elsewhere, or
- * one of their buttons is.
+ * one of their buttons is. A button runs its action as the toast's did.
  */
-export function BellWidget({ window: banda }: WidgetProps) {
+export function BellWidget() {
+  const run = useRun()
   const [open, setOpen] = useState(false)
   const shown = useRef(new Set<Id>())
   const bell = useRef<HTMLButtonElement>(null)
@@ -54,7 +55,7 @@ export function BellWidget({ window: banda }: WidgetProps) {
     shown.current = new Set(
       last.length > 0
         ? last.map((told) =>
-            toastTold(told, (button) => banda.run(button.action, button.args), {
+            toastTold(told, (button) => run(button.action, button.args), {
               ...here,
               id: `${RECENT}:${told.key}`,
             })
