@@ -138,9 +138,11 @@ type Handle = Pick<
 /** The handle of the Pane of kind `kind` at `entry` in `project`, a
  * Project of another host's when `host` names one (ADR 0081): what it
  * opens, in any Project, and its own args keep that host, as it knows only
- * that host's Projects, and it takes nothing this machine attaches, as
- * that names this machine's files. */
-function handleOf(
+ * that host's Projects, unless what it opens names its own, as a new
+ * Thread moved to another machine's Project does (ADR 0095, decision 7);
+ * and it takes nothing this machine attaches, as that names this
+ * machine's files. */
+export function handleOf(
   frame: Frame,
   entry: string,
   project: ProjectId,
@@ -148,7 +150,9 @@ function handleOf(
   host: string | undefined
 ): Handle {
   const there = (pane: PaneState) =>
-    host === undefined ? pane : withHost(pane, host)
+    host === undefined || paneHost(pane) !== undefined
+      ? pane
+      : withHost(pane, host)
   return {
     open: (pane, place, other) =>
       frame.open(other ?? project, there(pane), entry, place),

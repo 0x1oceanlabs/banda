@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from "react"
+import { type ReactNode, useEffect, useMemo, useState } from "react"
 import type { Engine } from "@banda/contract"
 import { Spinner } from "@banda/ui/components/spinner"
+import { MachinesContext } from "@banda/ui/hooks/use-machines"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { Previewers } from "@banda/ui/lib/previewers"
 import { useMachine, useModules, useStatus } from "@banda/ui/hooks/use-status"
 import { shownProjects } from "@banda/ui/lib/projects"
 import { Slots } from "@banda/ui/slots"
-import { HostsContext, KeptHosts, useOurs } from "./calls/hosts"
+import { HostsContext, KeptHosts, useMachinesOf, useOurs } from "./calls/hosts"
 import { previewers, slotsOf } from "./registry"
 import { device } from "./window/device"
 import { Shell } from "./window/Shell"
@@ -26,7 +27,7 @@ export function App({ engine }: { engine: Engine }) {
   const { listed, put } = useProjects(engine)
   const [hosts] = useState(() => new KeptHosts(device.hosts))
   useEffect(() => hosts.follow(), [hosts])
-  useOurs(hosts, listed)
+  useOurs(hosts, listed, machine)
 
   if (listed.state === "loading") {
     return (
@@ -56,17 +57,33 @@ export function App({ engine }: { engine: Engine }) {
     <Previewers value={previewers}>
       <Slots value={slots}>
         <HostsContext value={hosts}>
-          <Shell
-            engine={engine}
-            status={status}
-            modules={modules}
-            projects={projects}
-            home={home?.id ?? machine}
-            onCreated={put}
-          />
+          <Machines hosts={hosts}>
+            <Shell
+              engine={engine}
+              status={status}
+              modules={modules}
+              projects={projects}
+              home={home?.id ?? machine}
+              onCreated={put}
+            />
+          </Machines>
         </HostsContext>
       </Slots>
       {projects.length > 0 && <AskToShare engine={engine} />}
     </Previewers>
+  )
+}
+
+/** The machines a new Thread starts on, for the Panes' pickers (ADR 0095,
+ * decision 7): drawn again as they change, and the window not with them. */
+function Machines({
+  hosts,
+  children,
+}: {
+  hosts: KeptHosts
+  children: ReactNode
+}) {
+  return (
+    <MachinesContext value={useMachinesOf(hosts)}>{children}</MachinesContext>
   )
 }

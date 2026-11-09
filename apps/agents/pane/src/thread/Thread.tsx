@@ -34,7 +34,7 @@ import { carries, droppedPaths } from "@banda/ui/lib/file-drag"
 import { copyAsMarkdown } from "@banda/ui/lib/markdown-copy"
 import { fromFolder } from "@banda/ui/lib/paths"
 import type { Chip } from "@banda/ui/module"
-import { paneOf, type PaneProps } from "@banda/ui/pane"
+import { paneOf, type PaneProps, withHost } from "@banda/ui/pane"
 import { BotIcon } from "lucide-react"
 import { threadPaneOf } from "../list/rows"
 import { suggested } from "../composer/slash"
@@ -66,7 +66,7 @@ import {
   useSeenNamed,
   useStatus,
 } from "@banda/ui/hooks/use-status"
-import { NewThreadBar } from "../composer/NewThread"
+import { movedArgs, NewThreadBar } from "../composer/NewThread"
 import { type ThreadArgs, useThreadSession, zoomKey } from "./session"
 import { threadPane } from "../ThreadPane"
 import { Transcript } from "./Transcript"
@@ -566,21 +566,27 @@ export function Thread(props: PaneProps<ThreadArgs>) {
             </>
           )}
         </Composer>
-        {/* A new Thread's Project, bare under the card; its Harness is chosen
-          with the model. */}
+        {/* A new Thread's Project, bare under the card, and the machine it
+          starts on: another machine's opens it there, on its engine (ADR
+          0095, decision 7). Its Harness is chosen with the model. A Project
+          is added on this machine only. */}
         {thread === null && (
           <NewThreadBar
             engine={engine}
             project={project}
+            host={host}
             disabled={sending}
-            onProject={(other) =>
+            onProject={(other, there) =>
               open(
-                paneOf(threadPane, { ...args, scratch: undefined, harness }),
+                withHost(
+                  paneOf(threadPane, movedArgs(args, harness, there)),
+                  there
+                ),
                 "instead",
                 other
               )
             }
-            onAddProject={run && (() => run("project.add"))}
+            onAddProject={here && run ? () => run("project.add") : undefined}
           />
         )}
       </div>

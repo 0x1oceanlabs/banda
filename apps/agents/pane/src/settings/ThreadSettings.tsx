@@ -75,7 +75,7 @@ const MENU = "rounded-(--block-radius) shadow-md"
 const ROW = "py-1.5 pl-2.5"
 
 /** A choice in a menu: its icon, its name, and what it means under it. */
-type Choice = {
+export type Choice = {
   id: string
   name: string
   about?: string
@@ -321,12 +321,22 @@ function Choices({
   )
 }
 
+/** Choices of their own in a menu, under their label, as another
+ * machine's Projects. */
+export type ChoiceGroup = {
+  key: string
+  label: React.ReactNode
+  choices: Choice[]
+}
+
 /** One of a few choices, as a menu that opens above the message box. */
 export function Pick({
   what,
   icon,
   value,
   choices,
+  groups = [],
+  after,
   disabled,
   onChange,
   more,
@@ -335,12 +345,20 @@ export function Pick({
   icon?: React.ReactNode
   value: string
   choices: Choice[]
+  /** More choices after `choices`, each group under its label. */
+  groups?: readonly ChoiceGroup[]
+  /** What follows the name on the button, and its words in the button's
+   * name, as the other machine a Project is on. */
+  after?: { mark: React.ReactNode; words: string }
   disabled: boolean
   onChange: (id: string) => void
   /** One more row after the choices, which does rather than picks. */
   more?: { title: string; icon: React.ReactNode; run: () => void }
 }) {
-  const now = nameOf(choices, value)
+  const now = nameOf(
+    [...choices, ...groups.flatMap((group) => group.choices)],
+    value
+  )
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -351,19 +369,37 @@ export function Pick({
             variant="ghost"
             size="xs"
             className="font-normal"
-            aria-label={`${what}: ${now}`}
+            aria-label={`${what}: ${now}${after ? ` ${after.words}` : ""}`}
           />
         }
       >
         {icon}
         {now}
+        {after?.mark}
         <ChevronDownIcon data-icon="inline-end" />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" className={cn("w-auto min-w-48", MENU)}>
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="px-2.5">{what}</DropdownMenuLabel>
+        {/* Beside groups, the first choices go with no heading, as this
+            machine's Projects have no label beside another's: one would
+            read as theirs. They keep the name for those who hear it. */}
+        <DropdownMenuGroup aria-label={groups.length > 0 ? what : undefined}>
+          {groups.length === 0 && (
+            <DropdownMenuLabel className="px-2.5">{what}</DropdownMenuLabel>
+          )}
           <ChoiceItems value={value} choices={choices} onChange={onChange} />
         </DropdownMenuGroup>
+        {groups.map((group) => (
+          <DropdownMenuGroup key={group.key}>
+            <DropdownMenuLabel className="flex items-center gap-1.5 px-2.5 pt-2 font-normal">
+              {group.label}
+            </DropdownMenuLabel>
+            <ChoiceItems
+              value={value}
+              choices={group.choices}
+              onChange={onChange}
+            />
+          </DropdownMenuGroup>
+        ))}
         {more && (
           <>
             <DropdownMenuSeparator />
