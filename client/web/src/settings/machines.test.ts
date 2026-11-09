@@ -4,14 +4,18 @@ import { Refused } from "@banda/contract"
 import { ELSEWHERE } from "../boot"
 import {
   addedWords,
+  ended,
   failedWords,
   buildWords,
   factsWords,
   foundNamed,
   movedIcon,
+  NO_ACTS,
   numbered,
   settle,
   settleWords,
+  shownActs,
+  started,
   stateWords,
   testWords,
   Told,
@@ -201,4 +205,52 @@ test("what a machine says it is shows on one line, each part cleaned, a part it 
   expect(factsWords([undefined, "macOS 26.1"])).toBe("macOS 26.1")
   expect(factsWords(["\u200b", null])).toBe("")
   expect(factsWords(["x".repeat(60)])).toHaveLength(40)
+})
+
+test("acts that overlap keep a part busy until the last ends, with the words of the latest still running", () => {
+  const testing = { words: "Testing arc…" }
+  const adding = { words: "Adding…" }
+  expect(shownActs(NO_ACTS)).toEqual({ busy: false })
+  const both = started(started(NO_ACTS, testing), adding)
+  expect(shownActs(both)).toEqual({ busy: true, doing: "Adding…" })
+  // The first to end leaves the other running, and its words shown.
+  const left = ended(both, testing)
+  expect(shownActs(left)).toEqual({ busy: true, doing: "Adding…" })
+  expect(shownActs(ended(left, adding))).toEqual({ busy: false })
+  // The latest ending first gives the words back to the one still running.
+  expect(shownActs(ended(both, adding))).toEqual({
+    busy: true,
+    doing: "Testing arc…",
+  })
+})
+
+test("an act is known by itself: one of two with the same words ends only itself", () => {
+  const first = { words: "Working…" }
+  const second = { words: "Working…" }
+  const both = started(started(NO_ACTS, first), second)
+  const left = ended(both, first).running
+  expect(left).toHaveLength(1)
+  expect(left[0]).toBe(second)
+  expect(shownActs(ended(ended(both, second), first)).busy).toBe(false)
+})
+
+test("what went wrong stays until the next act starts, whatever ends meanwhile", () => {
+  const address = { words: "Working…" }
+  const testing = { words: "Testing arc…" }
+  const both = started(started(NO_ACTS, testing), address)
+  // The address is refused while the Test runs on.
+  const refused = ended(both, address, "ssh refuses it")
+  expect(shownActs(refused)).toEqual({
+    busy: true,
+    doing: "Testing arc…",
+    problem: "ssh refuses it",
+  })
+  // The Test ends well: the refusal stays.
+  const done = ended(refused, testing)
+  expect(shownActs(done)).toEqual({ busy: false, problem: "ssh refuses it" })
+  // The next act takes it out.
+  expect(shownActs(started(done, testing))).toEqual({
+    busy: true,
+    doing: "Testing arc…",
+  })
 })

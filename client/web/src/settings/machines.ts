@@ -1,10 +1,10 @@
 /**
  * Settings → Machines' own rules and words (ADR 0095): the ten icons in
  * the picker's order, how Add numbers a name another machine shown has
- * and moves a server's icon on (decision 3), and what a machine's state,
- * its build and a Test say. Its state's words are Settings' own small
- * list; the sidebar's label keeps its own (`HostWords`). Pure, so plain
- * tests cover it.
+ * and moves a server's icon on (decision 3), what a machine's state, its
+ * build and a Test say, and what the Person's acts show while several
+ * run. Its state's words are Settings' own small list; the sidebar's
+ * label keeps its own (`HostWords`). Pure, so plain tests cover it.
  */
 import type { MachineIcon, Named } from "@banda/contract/machines"
 import { cleanNamed, cleanText } from "@banda/ui/hooks/use-status"
@@ -241,6 +241,45 @@ export function testWords(
       return { found: false, title: `Cannot use it: ${test.why}` }
   }
 }
+
+/** One of the Person's acts while it runs, with what it is doing in
+ * words. An act is known by itself, not by its words, as two of them
+ * may say the same. */
+export type Act = { readonly words: string }
+
+/** The Person's acts running in one part of Settings, oldest first, and
+ * what went wrong in Banda's words until the next starts. Acts overlap,
+ * as Enter in a field while a Test runs, so one that ends leaves the
+ * others running. */
+export type Acts = {
+  readonly running: readonly Act[]
+  readonly problem?: string
+}
+
+/** No act running, and nothing gone wrong. */
+export const NO_ACTS: Acts = { running: [] }
+
+/** `act` starts, the latest running, and what went wrong before goes. */
+export const started = (acts: Acts, act: Act): Acts => ({
+  running: [...acts.running, act],
+})
+
+/** `act` ends, the others running on; why it failed (`failed`) shows
+ * until the next act starts, else what went wrong before stays. */
+export const ended = (acts: Acts, act: Act, failed?: string): Acts => ({
+  running: acts.running.filter((one) => one !== act),
+  problem: failed ?? acts.problem,
+})
+
+/** What a part of Settings shows of its acts: busy while any runs, what
+ * the latest still running is doing (`doing`), and what went wrong. */
+export const shownActs = (
+  acts: Acts
+): { busy: boolean; doing?: string; problem?: string } => ({
+  busy: acts.running.length > 0,
+  doing: acts.running.at(-1)?.words,
+  problem: acts.problem,
+})
 
 /** Words meant for the Person, which `failedWords` shows as they are. */
 export class Told extends Error {}
