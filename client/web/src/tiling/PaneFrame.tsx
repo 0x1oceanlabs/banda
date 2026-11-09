@@ -31,7 +31,6 @@ import {
 } from "@banda/ui/components/pane-header"
 import {
   type Label,
-  type Listed,
   type PaneProps,
   paneHost,
   type PaneState,
@@ -198,7 +197,7 @@ export const PaneFrame = memo(function PaneFrame({
   marked,
   zoomed = false,
   height,
-  listed,
+  item = false,
   project,
   mixed,
   frame,
@@ -220,8 +219,9 @@ export const PaneFrame = memo(function PaneFrame({
   zoomed?: boolean
   /** Its share of its column's height; left out, an even one. */
   height?: number
-  /** The Item it shows, as its App lists it, if it shows one. */
-  listed: Listed | undefined
+  /** It shows an Item, as its App lists what it shows: its header has the
+   * Item's places for its Project and its title, which finds the Item. */
+  item?: boolean
   /** The Project it is in; none while the list is read, which names none. */
   project: ProjectSummary | undefined
   /** The workspace mixes Projects, so each header names its Project. */
@@ -411,12 +411,12 @@ export const PaneFrame = memo(function PaneFrame({
           {(zoomed || away || kind?.header !== false) && (
             <PaneHeader
               title={title}
-              icon={listed ? undefined : Icon}
+              icon={item ? undefined : Icon}
               onClose={close}
               className={kind?.header === "bare" ? "border-b-0" : undefined}
             >
               <PaneSlot {...slot} at="start" />
-              {listed && (
+              {item && (
                 <>
                   {summary && (
                     <ProjectName
@@ -427,10 +427,10 @@ export const PaneFrame = memo(function PaneFrame({
                   <PaneSlot {...slot} at="project" />
                 </>
               )}
-              {listed && reach.engine ? (
+              {item && subject && reach.engine ? (
                 <Title
                   project={entry.project}
-                  listed={listed}
+                  thing={subject}
                   title={title}
                   focused={focused}
                 />
@@ -447,13 +447,13 @@ export const PaneFrame = memo(function PaneFrame({
                   {detail}
                 </span>
               )}
-              {mixed && !listed && summary && (
+              {mixed && !item && summary && (
                 <ProjectName
                   project={summary}
                   className="shrink-0 gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground"
                 />
               )}
-              {!listed && <PaneSlot {...slot} at="project" />}
+              {!item && <PaneSlot {...slot} at="project" />}
               {zoomed && (
                 <button
                   type="button"

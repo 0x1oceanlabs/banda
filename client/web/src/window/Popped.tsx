@@ -122,7 +122,6 @@ export function Popped({ engine, pane }: { engine: Engine; pane: string }) {
                   modules={modules}
                   focused
                   marked={false}
-                  listed={undefined}
                   project={project}
                   mixed={false}
                   frame={frame}

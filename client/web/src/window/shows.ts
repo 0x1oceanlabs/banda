@@ -1,10 +1,11 @@
 /**
  * What the Tiling reads of what the Apps list and of what calls the
  * Person (`tiling/shows.ts`), from the Window's stores: the one place an
- * Item becomes what the Tiling sees of it. A Group's owner is the Agent a
- * Thread's Item names, and that owner's Mark gives the Group its state,
- * its title the Group's name. After B7a `item@1`'s owner takes the
- * Agent's place here, and the Tiling stays as it is (ADR 0087).
+ * Item becomes what the Tiling sees of it. A Pane shows an Item when its
+ * App lists what it shows. A Group's owner is the Agent a Thread's Item
+ * names, and that owner's Mark gives the Group its state, its title the
+ * Group's name. After B7a `item@1`'s owner takes the Agent's place here,
+ * and the Tiling stays as it is (ADR 0087).
  */
 import { groupState } from "@banda/ui/components/banda-mark"
 import type { Listed, Lists, PaneState } from "@banda/ui/pane"
@@ -28,7 +29,7 @@ export function tilingShows(
     return indexed.owners
   }
   return {
-    listed,
+    item: (entry) => listed(entry) !== undefined,
     owner: (entry) => listed(entry)?.agent,
     mark: (owner) => {
       const item = ownersNow().get(owner)

@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react"
 import type { ProjectId } from "@banda/contract"
 import {
   DropdownMenu,
@@ -14,8 +20,9 @@ import {
   useThinking,
 } from "@banda/ui/lib/naming"
 import { cn } from "@banda/ui/lib/utils"
-import { focusedTile, type Listed } from "@banda/ui/pane"
+import { focusedTile, type Listed, type Lists } from "@banda/ui/pane"
 import { ChevronDownIcon, SparklesIcon } from "lucide-react"
+import { useItems } from "../calls/stores"
 import { itemActionOf } from "../sidebar/items"
 import { ThreadRows } from "./ThreadMenu"
 
@@ -30,21 +37,33 @@ type Reason = string | undefined
  * opens the field in its place, as its App's Rename does (ADR 0087,
  * decision 12). The rest of the header keeps its own gestures (ADR 0066,
  * decision 4): the Pane is carried by its title too.
+ *
+ * The Tiling says only that its Pane shows an Item: the title finds the
+ * Item itself among what the Apps list, by selector, so it is drawn again
+ * as that Item changes, not the Pane's frame. Where no App lists it, or
+ * its App cannot rename it, it is the plain title a Pane's frame draws.
  */
 export function Title({
   project,
-  listed,
+  thing,
   title,
   focused,
 }: {
   project: ProjectId
-  listed: Listed
+  /** What the Pane shows, as its kind names it (`PaneKind.shows`). */
+  thing: string
   /** The title as the Pane says it now. */
   title: string
   focused: boolean
 }) {
-  const naming = useNaming(project, listed.id, "head")
-  const thinking = useThinking(project, listed.id)
+  const listed = useItems(
+    useCallback(
+      (lists: Lists) => lists[project]?.find((one) => one.id === thing),
+      [project, thing]
+    )
+  )
+  const naming = useNaming(project, thing, "head")
+  const thinking = useThinking(project, thing)
   const [open, setOpen] = useState(false)
   const anchor = useRef<HTMLHeadingElement>(null)
   // What a press found, before it focused the Pane or closed the menu.
@@ -59,9 +78,9 @@ export function Title({
   const reason = useRef<Reason>(undefined)
   const next = useRef<() => void>(undefined)
   const run = useRun()
-  const rename = itemActionOf(listed, "rename")
+  const rename = listed && itemActionOf(listed, "rename")
   const words = thinking ? THINKING : title
-  if (!rename)
+  if (!listed || !rename)
     return (
       <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[selected=true]/tile:text-foreground">
         {title}
