@@ -9,8 +9,9 @@ _It amends ADR 0005 (decision 8), ADR 0008 (decisions 4 and 5: the row
 and the presets), ADR 0017 (decision 3), ADR 0067 (decisions 3 and 4:
 the header and the foot), ADR 0069 (Archive as a shelf), ADR 0074
 (decisions 1 and 6, asking and the Snoozed shelf, and its name: Snooze
-becomes Later) and ADR 0079 (the Flow's place). The mark it draws is ADR 0099's. Code is cited from main at
-`de0deb68`; the audit cites `290ec9a9`._
+becomes Later) and ADR 0079 (the Flow's place). The mark it draws is
+ADR 0099's. Code is cited from main at `de0deb68`; the audit cites
+`290ec9a9`._
 
 Roma, on 2026-11-09 (translated): "I want to put the sidebar with the
 Agents in order." Roma runs ten Agents and more at once, and asked for a
