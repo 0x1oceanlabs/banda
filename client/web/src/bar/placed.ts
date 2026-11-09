@@ -4,11 +4,10 @@
  * Pure, so plain tests cover it.
  */
 import type { Bar, Problem, Setting } from "@banda/contract/look"
+import { WORKSPACES } from "../tiling/widget-ids"
 
 export const PARTS = ["left", "center", "right"] as const
 
-/** The workspaces, a widget the window always has (ADR 0064, decision 2). */
-export const WORKSPACES = "workspaces.list"
 export type Part = (typeof PARTS)[number]
 
 /** What the window knows of an id: a widget it draws, one whose module the
@@ -19,7 +18,8 @@ export type Known = "shown" | "off" | undefined
  * Each part's ids the bar draws, in order and each once, and a Problem at
  * the file's line for each id no module has, as `keys.toml`'s are. An id
  * whose module does not run is left out, and is no Problem. The
- * workspaces stand first on the left when no part lists them.
+ * workspaces, the Tiling's, which the window always has (ADR 0064,
+ * decision 2), stand first on the left when no part lists them.
  */
 export function placed(
   bar: Bar,

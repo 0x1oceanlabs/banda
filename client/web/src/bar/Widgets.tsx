@@ -1,18 +1,15 @@
 import type { ProjectId } from "@banda/contract"
 import type { Problem } from "@banda/contract/look"
-import type { Aside } from "@banda/contract/workspaces"
 import type { WidgetProps } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { type ComponentType, memo, type ReactNode, useMemo } from "react"
 import { useLookBar, useLookSettings } from "../look"
 import { runs, widgets } from "../registry"
-import { AsidePill } from "../safe/AsidePill"
 import { type Ahead, Counts } from "../sidebar/Counts"
 import type { Layout } from "./arrange"
-import { type Known, PARTS, type Part, placed, WORKSPACES } from "./placed"
+import { type Known, PARTS, type Part, placed } from "./placed"
 
-/** A widget the bar draws, by its id. The workspaces' is the bar's own,
- * so it has no node. */
+/** A widget the bar draws, by its id. */
 export type Drawn = { id: string; node: ReactNode }
 
 /** What the window's own widgets are given besides a module's, as the
@@ -26,8 +23,6 @@ export type OwnProps = WidgetProps & {
   ahead?: Ahead
   /** Opens a Pane as a row of the sidebar does. */
   onOpen: (project: ProjectId, pane: PaneState) => void
-  /** The workspaces set aside, while they are (ADR 0039, decision 2). */
-  aside: Aside | null
 }
 
 /** The window's own widgets, by id, which stand on the bar as a module's
@@ -35,9 +30,6 @@ export type OwnProps = WidgetProps & {
  * decision 7), as a module's is. */
 const OWN: Readonly<Record<string, ComponentType<OwnProps>>> = {
   "sidebar.counts": memo(Counts),
-  "workspaces.aside": memo(({ engine, aside }: OwnProps) =>
-    aside ? <AsidePill engine={engine} aside={aside} /> : null
-  ),
 }
 
 /**
@@ -66,7 +58,6 @@ export function useWidgets(
   const { engine, projects, window } = props
   for (const part of PARTS) {
     drawn[part] = parts[part].map((id) => {
-      if (id === WORKSPACES) return { id, node: null }
       const Own = Object.hasOwn(OWN, id) ? OWN[id] : undefined
       if (Own) return { id, node: <Own {...props} /> }
       // A module's widget is given only what a module's is.

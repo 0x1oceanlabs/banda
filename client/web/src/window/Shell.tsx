@@ -20,7 +20,6 @@ import { openProjects } from "@banda/ui/lib/projects"
 import { useStore } from "@banda/ui/lib/store"
 import type { PaneState } from "@banda/ui/pane"
 import { Bar } from "../bar/Bar"
-import { WorkspaceMap } from "../tiling/Map"
 import { tomlOf } from "@banda/contract/settings"
 import { useWidgets } from "../bar/Widgets"
 import type { Layout } from "../bar/arrange"
@@ -94,7 +93,6 @@ import {
   focusEntry,
   go,
   heightsOf,
-  inBar,
   left,
   projectIn,
   samePane,
@@ -120,6 +118,7 @@ import {
   loadSidebarWidth,
 } from "../tiling/store"
 import { Workspaces } from "../tiling/Workspaces"
+import { TilingBar } from "../tiling/widgets"
 import {
   bringing,
   closing,
@@ -695,7 +694,6 @@ export function Shell({
     sidebarShown,
     ahead,
     onOpen: pickPane,
-    aside,
   })
   // A widget moved with the mod writes the parts of `[bar]` it changed, one
   // after another, as they are one file (ADR 0064).
@@ -834,40 +832,28 @@ export function Shell({
     [projects]
   )
 
-  // The bar's workspaces: a Project's by its name (ADR 0065, decision 9).
-  const barWorkspaces = useMemo(
-    () =>
-      inBar(workspaces).map((w) =>
-        w.project ? { ...w, owner: projectOf(w.project) } : w
-      ),
-    [workspaces, projectOf]
-  )
-
   return (
     <KeysInForce.Provider value={keys}>
       <Kept stores={stores} here={here} run={parts.run}>
         <ThreadMenus engine={engine} projects={projects}>
           <div className="flex h-svh flex-col bg-desk text-foreground">
             <Watches engine={engine} modules={modules} projects={open} />
-            <Bar
-              status={status}
-              workspaces={barWorkspaces}
-              map={
-                <WorkspaceMap workspace={current(workspaces)} shows={shows} />
-              }
-              current={workspaces.current}
-              sidebar={narrow ? over : sidebar}
-              onSidebar={toggleSidebar}
-              problems={bar.problems}
-              widgets={bar.parts}
-              listed={bar.listed}
-              onArrange={arrangeBar}
-              onPick={(index) =>
-                index === workspaces.current
-                  ? toggleOverview()
-                  : change((w) => go(w, index))
-              }
-            />
+            <TilingBar
+              workspaces={workspaces}
+              shows={shows}
+              change={change}
+              aside={aside}
+            >
+              <Bar
+                status={status}
+                sidebar={narrow ? over : sidebar}
+                onSidebar={toggleSidebar}
+                problems={bar.problems}
+                widgets={bar.parts}
+                listed={bar.listed}
+                onArrange={arrangeBar}
+              />
+            </TilingBar>
             <div
               className="relative flex min-h-0 flex-1"
               data-sidebar-shown={(sidebarShown && !narrow) || undefined}

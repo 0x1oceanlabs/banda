@@ -83,6 +83,7 @@ import {
 } from "@banda/ui/testing/architecture"
 import { expect, test } from "vitest"
 import { modules } from "./modules"
+import { widgets, windowModule } from "./registry"
 
 const app = join(import.meta.dirname, "../..")
 const root = join(app, "..")
@@ -209,23 +210,28 @@ test("the Tiling takes no more of Banda's mark than the list holds", () => {
 /**
  * What the Tiling still reads of an Item's Mark or what it calls, by file,
  * once for each place: a Group's plate and its bar in the Group map take
- * its Agent's colour, which T-a reads by the Group's owner instead. A
- * Pane's header and its tile in the Overview read none: what an App shows
- * there is its part of the Slot. None joins the list, and one that goes
- * leaves it.
+ * its Agent's colour, which T-a reads by the Group's owner instead; and a
+ * Project's workspace number has a dot while one of its Threads calls
+ * (`useCalling`), as it had on the Bar before the numbers became the
+ * Tiling's widget. A Pane's header and its tile in the Overview read none:
+ * what an App shows there is its part of the Slot. None joins the list,
+ * and one that goes leaves it.
  */
 const TILING_MARKS = [
   "web/src/tiling/Map.tsx: mark",
   "web/src/tiling/Strip.tsx: mark",
+  "web/src/tiling/widgets.tsx: useCalling",
 ]
 
 test("the Tiling reads an Item's Mark no more than the list holds", () => {
   const reading = sources(join(app, "web/src/tiling"), {
     tests: false,
   }).flatMap((file) =>
-    [...readFileSync(file, "utf8").matchAll(/\.(mark|calls)\b(?!\s*\()/g)].map(
-      ([, what]) => `${relative(app, file)}: ${what}`
-    )
+    [
+      ...readFileSync(file, "utf8").matchAll(
+        /\.(mark|calls)\b(?!\s*\()|\b(useCalling)\(/g
+      ),
+    ].map(([, what, hook]) => `${relative(app, file)}: ${what ?? hook}`)
   )
   expect(reading).toEqual(TILING_MARKS)
 })
@@ -505,7 +511,7 @@ test("a string that no longer names an App leaves the list", () => {
  * lowers it; the room lets PRs in flight that each cut a few lines leave
  * it alone.
  */
-const WINDOW_LINES = 1005
+const WINDOW_LINES = 991
 const SLACK = 20
 
 test("the Window's root keeps under its ceiling, and the ceiling follows it down", () => {
@@ -525,7 +531,8 @@ test("the Window's root keeps under its ceiling, and the ceiling follows it down
  * window's own and each module's, stay memoized, each by what its file
  * says. Their props stay steady too, which the motion numbers hold: the
  * Tiles React draws again for a key (motion.spec.ts). The list only
- * grows.
+ * grows, but where a part comes to be memoized by a line already on it:
+ * the window's own widgets stand in the registry's, as the modules' do.
  */
 const MEMOIZED = [
   "web/src/tiling/PaneFrame.tsx: export const PaneFrame = memo(",
@@ -534,7 +541,6 @@ const MEMOIZED = [
   "web/src/menu/BandaMenu.tsx: export const BandaMenu = memo(",
   "web/src/window/Drawer.tsx: export const Drawer = memo(",
   'web/src/bar/Widgets.tsx: "sidebar.counts": memo(Counts)',
-  'web/src/bar/Widgets.tsx: "workspaces.aside": memo(',
   "web/src/registry.tsx: { widget: { ...widget, Widget: memo(widget.Widget) }, module }",
   "web/src/registry.tsx: { kind: { ...kind, Pane: memo(kind.Pane) }, module }",
 ]
@@ -546,6 +552,21 @@ test("the parts the Window draws on every move stay memoized", () => {
     return !text.includes(each.slice(at + 2))
   })
   expect(lost).toEqual([])
+  // The window's own widgets, the Tiling's, the registry memoizes as a
+  // module's, by its line above.
+  for (const id of ["workspaces.list", "workspaces.aside"])
+    expect(widgets.get(id)?.module, id).toBe(windowModule)
+})
+
+/**
+ * The Tiling's widgets read what the Window hands them of it, around its
+ * Bar (`TilingBar`): only the Window gives it, as it gives Here.
+ */
+test("only the Window hands the Tiling's widgets what they read of it", () => {
+  const giving = sources(join(app, "web/src"), { tests: false })
+    .filter((file) => /<TilingBar\b/.test(readFileSync(file, "utf8")))
+    .map((file) => relative(app, file))
+  expect(giving).toEqual(["web/src/window/Shell.tsx"])
 })
 
 /** The `[unstable]` marks a module's manifest names. */
