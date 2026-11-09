@@ -451,9 +451,9 @@ function GroupHandle({
   panes,
 }: {
   group: string
-  /** Its first Pane, which the carrying names it by. */
   /** Its owner's name; left out, a Group no one owns. */
   name?: string
+  /** Its first Pane, which the carrying names it by. */
   pane: string | undefined
   panes: number
 }) {

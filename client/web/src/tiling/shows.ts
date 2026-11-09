@@ -30,7 +30,8 @@ export type Shows = {
   listed: (entry: Entry) => Listed | undefined
   /** The owner the Item an entry's Pane shows names, if it names one. */
   owner: (entry: Entry) => Owner | undefined
-  /** What a Group of `owner`'s shows of it, while an App lists it. */
+  /** What a Group `owner` owns shows of it: its state and name, while an
+   * App lists the owner's Item. */
   mark: (owner: Owner) => Owned | undefined
   /** How the Thread an entry's Pane shows calls the Person, if it does. */
   called: (entry: Entry) => Chime | undefined
