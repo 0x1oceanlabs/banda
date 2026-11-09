@@ -28,12 +28,14 @@
     {
       "measure": "focus.moving.layouts",
       "gate": "hard",
-      "budget": 0
+      "budget": 0,
+      "note": "read only in a phase with no Mark trick, whose frames each lay out (#738); the machine's load does not raise it (#1101)"
     },
     {
       "measure": "workspace.moving.layouts",
       "gate": "hard",
-      "budget": 0
+      "budget": 0,
+      "note": "read only in a phase with no Mark trick, whose frames each lay out (#738); the machine's load does not raise it (#1101)"
     },
     {
       "measure": "width.moving.layouts",

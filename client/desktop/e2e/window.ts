@@ -14,7 +14,7 @@ import {
   writeFileSync,
 } from "node:fs"
 import { createRequire } from "node:module"
-import { tmpdir } from "node:os"
+import { availableParallelism, loadavg, tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import {
@@ -337,6 +337,22 @@ export async function pressAtOnce(
         )
     return { before, after: performance.now() }
   }, events)
+}
+
+/** This machine's load a core: the processes that ran or waited to, over
+ * the last minute, for each of its cores. */
+export function loadACore(): number {
+  return loadavg()[0] / availableParallelism()
+}
+
+/**
+ * Why this machine, at `load` a core, is too busy to time the window by
+ * in ms: busy with more than a quarter of its cores, it times itself as
+ * much as the window. keys.spec.ts gates its keys' ms only below that,
+ * and motion.md says it beside a phase's load. None below that.
+ */
+export function busy(load = loadACore()): string | undefined {
+  return load > 0.25 ? `load ${load.toFixed(2)} a core` : undefined
 }
 
 /**
