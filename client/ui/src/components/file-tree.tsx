@@ -604,9 +604,13 @@ export function FolderTree({
     // Its folders open, as when it was picked as the tree was made.
     openNow(foldersOf(selected))
     if (model.getSelectedPaths().includes(selected)) return
-    for (const path of model.getSelectedPaths()) model.getItem(path)?.deselect()
+    // Picked and focused before the others are let go: while the tree has
+    // the keys, the row they are on would be picked again as it is let go,
+    // and stay picked with this one.
     item.select()
     model.focusPath(selected)
+    for (const path of model.getSelectedPaths())
+      if (path !== selected) model.getItem(path)?.deselect()
     model.scrollToPath(selected, { offset: "center", focus: false })
   }, [model, selected, paths, openNow])
 
