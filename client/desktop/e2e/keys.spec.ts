@@ -19,12 +19,12 @@ import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { execFileSync } from "node:child_process"
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
-import { availableParallelism, loadavg } from "node:os"
 import { join } from "node:path"
 import { expect, type Page, test } from "@playwright/test"
 import { install, read, reset, type Reading } from "./motion-probe"
 import { keysOf } from "./motion-report"
 import {
+  busy,
   firstThread,
   layoutOf,
   newTerminal,
@@ -417,16 +417,15 @@ for (const latency of [0, 150]) {
       // late above hold either way. A close is only told: its commit lets
       // a Tile go in the key's own task, and takes longer than 16 (#894).
       const all = keysOf(tiling.flatMap((phase) => measured[phase].keys))!
-      const load = loadavg()[0] / availableParallelism()
-      const busy = load > 0.25 ? `load ${load.toFixed(2)} a core` : undefined
+      const loaded = busy()
       const slow = slowed()
-      if (!busy && !slow) {
+      if (!loaded && !slow) {
         expect(all.p95, "tiling keys: key to drawn p95").toBeLessThanOrEqual(16)
         expect(open.p95, "open: key to drawn p95").toBeLessThanOrEqual(50)
       } else
         test.info().annotations.push({
-          type: busy ? "busy" : "slowed",
-          description: `${[busy, slow].filter(Boolean).join(", ")}, not gated: tiling keys p95 ${all.p95} ms, open p95 ${open.p95} ms`,
+          type: loaded ? "busy" : "slowed",
+          description: `${[loaded, slow].filter(Boolean).join(", ")}, not gated: tiling keys p95 ${all.p95} ms, open p95 ${open.p95} ms`,
         })
       test.info().annotations.push({
         type: "close",
@@ -745,13 +744,23 @@ test.describe("a key drawn before the engine answers", () => {
       () => (window as unknown as { seen: Frame[] }).seen
     )
     const moving = seen.filter((frame) => frame.at > after)
-    // It grows toward the whole screen from the frame after the keys.
+    // It grows toward the whole screen from the frame after the keys. A
+    // window that waited for the engine would draw it no wider at all, as
+    // the engine refuses.
     const grows = moving.findIndex((frame) => frame.share > was + 0.01)
     expect(grows, "drawn maximized at once").toBeGreaterThanOrEqual(0)
+    // Within the first frames after the keys: a count, which holds however
+    // slow the page is, as the frames late do, where a bound in ms does not
+    // (#1091). The first two show too little of it: each frame here is
+    // read before the spring steps in it, and the spring's time runs from
+    // the keys (motion.ts), so its first step covers only the moments
+    // between them and that frame's start, none at all on a busy page,
+    // where the frame began before them. The third has grown: a slow
+    // page's frames are long, and the spring goes further in each.
     expect(
-      moving[grows].at - key,
-      "maximized before the engine could speak"
-    ).toBeLessThan(late)
+      grows,
+      "maximized within the first frames after the keys"
+    ).toBeLessThanOrEqual(3)
     // It is drawn widest about when its refusal is heard: the spring keeps
     // its speed a frame or so past it (motion.ts).
     const peak = moving.reduce(

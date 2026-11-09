@@ -13,12 +13,15 @@
  * worse for a count, 20% for a timing, or the `tolerance` the measure
  * names, for a count that follows the machine's speed (the frames an
  * animation gets, the lines a shell prints); and `SLACK` more. A measure
- * with no number this run is not read. A measure that `blocks`, a count
- * the same on every run as React's drawings for a key, fails the test
- * over its budget, in record mode too. `MOTION_RECORD=1` writes the
- * recorded numbers, the median of the runs this test run made (with
- * `--repeat-each=3`, of three), over those recorded before. A PR may lower
- * one, and raises one only by saying why.
+ * with no number this run is not read, nor a hard count of each moving
+ * frame's work in a phase a Mark played its trick in, whose frames are
+ * the trick's as much as the move's: that number is only told, and not
+ * recorded. A measure that `blocks`, a count the same on every run as
+ * React's drawings for a key, fails the test over its budget, in record
+ * mode too. `MOTION_RECORD=1` writes the recorded numbers, the median of
+ * the runs this test run made (with `--repeat-each=3`, of three), over
+ * those recorded before. A PR may lower one, and raises one only by saying
+ * why.
  */
 import {
   existsSync,
@@ -36,6 +39,7 @@ import {
   type Frames,
   type Summary,
 } from "./motion-trace"
+import { busy } from "./window"
 
 /** Chrome's own counters the spec reads (`Performance.getMetrics`). */
 export const METRICS = [
@@ -72,6 +76,8 @@ export type Phase = {
   seconds: number
   /** The keys it pressed; none in a still one. */
   steps: number
+  /** The machine's load a core as it began or as it ended, the higher. */
+  load: number
   perSecond: PerSecond
   counted: Reading
   trace: Summary | null
@@ -128,7 +134,7 @@ export function keysOf(keys: Reading["keys"]) {
 }
 
 /** A phase's numbers, as motion.json has them. */
-function numbersOf({ seconds, steps, perSecond, counted, trace }: Phase) {
+function numbersOf({ seconds, steps, load, perSecond, counted, trace }: Phase) {
   const rate = (count: number) => round(count / (counted.ms / 1000), 1)
   const sum = (pick: (t: TerminalCount) => number) =>
     counted.terminals.reduce((total, t) => total + pick(t), 0)
@@ -138,6 +144,10 @@ function numbersOf({ seconds, steps, perSecond, counted, trace }: Phase) {
   return {
     seconds: round(seconds, 1),
     steps,
+    /** The machine's load a core (`loadACore` in window.ts). */
+    load: round(load, 2),
+    /** The tasks that changed a Mark's drawing: a trick, where any. */
+    marks: counted.marks,
     perSecond,
     /** The probe's own reads of the page, in ms a second. */
     probeMs: rate(counted.ownMs),
@@ -235,6 +245,24 @@ function valueOf(
   return typeof found === "number" ? found : undefined
 }
 
+/**
+ * Whether a hard count of the work in each moving frame goes unread in
+ * this run, its number only told: a Mark played its trick in the phase.
+ * Each frame of the trick is a moving frame, and lays out once as the
+ * Mark draws, so the count takes the trick's work for the move's (#738).
+ * The machine's load does not raise these counts: at up to 2.4 a core, a
+ * phase with no trick reads them as recorded (#1101).
+ */
+function unread(
+  numbers: Record<string, Numbers>,
+  measure: string,
+  gate: Gate
+): boolean {
+  if (gate !== "hard" || !measure.includes(".moving.")) return false
+  const phase = numbers[measure.slice(0, measure.indexOf("."))]
+  return (phase?.marks ?? 0) > 0
+}
+
 const median = (values: number[]) => {
   const sorted = sortedOf(values)
   const middle = sorted.length >> 1
@@ -274,12 +302,17 @@ function summary(
       "A second, unless named. A moving frame is a tick whose picture " +
       "changed (motion-trace.ts). The timings are taken with the probe " +
       "counting in the page and the trace running, both of which cost " +
-      "time; the probe's own reads are in Probe ms.",
+      "time; the probe's own reads are in Probe ms. Load a core is the " +
+      "machine's, the higher of the phase's start and end, busy over a " +
+      "quarter; Mark draws, the tasks that changed a Mark's drawing, as " +
+      "its trick does.",
     "",
     table(
       [
         "Phase",
         "s",
+        "Load a core",
+        "Mark draws",
         "Layouts",
         "Styles",
         "Script ms",
@@ -295,6 +328,8 @@ function summary(
       rows.map(([name, n]) => [
         name,
         n.seconds,
+        busy(n.load) ? `${n.load}, busy` : n.load,
+        n.marks,
         n.perSecond.LayoutCount,
         n.perSecond.RecalcStyleCount,
         n.perSecond.ScriptDuration,
@@ -438,7 +473,9 @@ export function report(
     ({ measure, gate, budget: most, tolerance, note }) => {
       const now = valueOf(numbers, measure)
       const was = recorded[measure]
+      const trick = unread(numbers, measure, gate)
       const worse =
+        !trick &&
         now !== undefined &&
         was !== undefined &&
         now > was * (1 + (tolerance ?? TOLERANCE[gate])) + SLACK
@@ -452,7 +489,7 @@ export function report(
         String(most),
         cell(was),
         cell(now),
-        worse ? "**worse**" : (note ?? ""),
+        worse ? "**worse**" : trick ? "trick, not read" : (note ?? ""),
       ]
     }
   )
@@ -488,9 +525,10 @@ export function report(
       ? JSON.parse(readFileSync(file, "utf8"))
       : {}
     const mine = (runs[key] ??= {})
-    for (const { measure } of budget.measures) {
+    for (const { measure, gate } of budget.measures) {
       const now = valueOf(numbers, measure)
-      if (now !== undefined) (mine[measure] ??= []).push(now)
+      if (now !== undefined && !unread(numbers, measure, gate))
+        (mine[measure] ??= []).push(now)
     }
     writeFileSync(file, `${JSON.stringify(runs, null, 2)}\n`)
     // What this run measured, over what was recorded before: a run

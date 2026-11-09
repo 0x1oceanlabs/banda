@@ -15,7 +15,9 @@
  * from a trace of the phase
  * (motion-trace.ts), the frames presented and dropped and the main
  * thread's work in each moving frame. It fails where a measure has nothing
- * to stand on, so a broken probe never reads as a perfect 0.
+ * to stand on, so a broken probe never reads as a perfect 0. A phase the
+ * logo's trick landed in is measured again: a still one up to three times
+ * in all, one that moves once more, after the trick (#738).
  *
  * The numbers go to test-results/motion.json and, for a Person to read,
  * test-results/motion.md. The playwright config runs it again on a screen of
@@ -39,6 +41,7 @@ import { install, read, reset } from "./motion-probe"
 import { perSecondOf, report, type Phase } from "./motion-report"
 import { MARKS, startTrace, stopTrace, summarise, within } from "./motion-trace"
 import {
+  loadACore,
   newTerminal,
   pressInPage,
   startWindow,
@@ -178,11 +181,13 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     await page.evaluate(reset, !still)
     await page.evaluate((mark) => console.timeStamp(mark), MARKS.start)
     const before = await metrics(name)
+    const loadBefore = loadACore()
     const started = Date.now()
     pressed = 0
     await act()
     const steps = pressed
     const seconds = (Date.now() - started) / 1000
+    const load = Math.max(loadBefore, loadACore())
     const after = await metrics(name)
     await page.evaluate((mark) => console.timeStamp(mark), MARKS.end)
     const counted = await page.evaluate(read)
@@ -222,9 +227,21 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     phases[name] = {
       seconds,
       steps,
+      load,
       perSecond: perSecondOf(before, after),
       counted,
       trace,
+    }
+  }
+
+  /** Measures the still phase `name`, 3 s long, again while a Mark played
+   * its trick in it, up to three times in all: the trick's frames are no
+   * still window's (#738), and the logo plays one about every half minute,
+   * so the next try finds it still. */
+  const measureStill = async (name: string) => {
+    for (let tries = 1; ; tries++) {
+      await measure(name, () => page.waitForTimeout(3000), { still: true })
+      if (phases[name].counted.marks === 0 || tries === 3) return
     }
   }
 
@@ -272,7 +289,7 @@ test("how the Tiling moves, against motion-budget.json", async () => {
   await page.keyboard.press("Enter")
   const printedBefore = lines()
   const shownBefore = shownLines()
-  await measure("printing", () => page.waitForTimeout(3000), { still: true })
+  await measureStill("printing")
   expect(lines() - printedBefore, "the lines printed").toBeGreaterThan(10)
   expect(
     shownLines() - shownBefore,
@@ -295,20 +312,36 @@ test("how the Tiling moves, against motion-budget.json", async () => {
   // Nothing has the keyboard, so no cursor blinks: a focused terminal's
   // blink is the working phase's (ADR 0088, decision 1).
   await page.evaluate(() => (document.activeElement as HTMLElement).blur())
-  // A Mark playing its trick is no quiet window: the logo plays one about
-  // every half minute, so the next try finds it still.
-  for (let tries = 1; ; tries++) {
-    await measure("quiet", () => page.waitForTimeout(3000), { still: true })
-    if (phases.quiet.counted.marks === 0 || tries === 3) break
-  }
+  await measureStill("quiet")
   // The clock stops while nothing moves (ADR 0088, decision 3): a hard
   // gate, whatever the budget file's mode.
   expect(phases.quiet.counted.callbacks, "quiet: animation frames").toBe(0)
-  // The last terminal, beside the browser, has the focus for the moves.
-  await terminal(2).click()
+  /** Waits for the Marks to be still: none changed its drawing for half a
+   * second. */
+  const marksStill = () =>
+    expect(async () => {
+      const before = (await page.evaluate(read)).marks
+      await page.waitForTimeout(500)
+      expect((await page.evaluate(read)).marks).toBe(before)
+    }).toPass({ timeout: 15_000 })
+  // A Mark playing its trick in a phase that moves adds frames of its own,
+  // each laid out as it draws, so the phase counts the trick's work with
+  // the move's (#738): it is measured once more, once the trick is over.
+  // The logo plays its next one 22 s later at the soonest (banda-mark.tsx),
+  // so the second try finds none. Each phase leaves the Tiling as it found
+  // it, and starts from the last terminal, beside the browser, which has
+  // the focus for the moves.
+  const moves = async (name: string, act: () => Promise<void>) => {
+    for (let tries = 1; ; tries++) {
+      await terminal(2).click()
+      await measure(name, act)
+      if (phases[name].counted.marks === 0 || tries === 2) return
+      await marksStill()
+    }
+  }
   // Through the widths short of the whole screen, and back: the browser
   // beside it stays in sight.
-  await measure("width", async () => {
+  await moves("width", async () => {
     await presses([
       "Control+Alt+ArrowLeft",
       "Control+Alt+ArrowRight",
@@ -318,11 +351,10 @@ test("how the Tiling moves, against motion-budget.json", async () => {
       "Control+Alt+ArrowRight",
     ])
   })
-  await terminal(2).click()
   // To the first terminal and back to the browser, its page sliding out
   // and in, and from the page to the last terminal.
   let went: string[] = []
-  await measure("focus", async () => {
+  await moves("focus", async () => {
     went = await presses([
       "Alt+ArrowLeft",
       "Alt+ArrowLeft",
@@ -332,7 +364,8 @@ test("how the Tiling moves, against motion-budget.json", async () => {
       "Alt+ArrowLeft",
     ])
   })
-  // The last key went from the page, and reached the window.
+  // The last key went from the page, and reached the window: the last
+  // try's, as the counts are.
   expect(went.at(-1)).toBe("page")
   // Each key drew again the two Tiles the focus moved between, as it must
   // to show it: the probe counts React's drawings.
@@ -342,17 +375,14 @@ test("how the Tiling moves, against motion-budget.json", async () => {
   await expect(
     terminal(2).locator("xpath=ancestor::section[@data-tile][1]")
   ).toHaveAttribute("data-focused", "true")
-  await terminal(2).click()
-  await measure("maximize", async () => {
+  await moves("maximize", async () => {
     await presses(["Alt+KeyF", "Alt+KeyF", "Alt+KeyF", "Alt+KeyF"])
   })
-  await terminal(2).click()
-  await measure("workspace", async () => {
+  await moves("workspace", async () => {
     await presses(["Alt+PageDown", "Alt+PageUp", "Alt+PageDown", "Alt+PageUp"])
   })
-  await terminal(2).click()
   const overview = page.getByRole("dialog", { name: "Overview" })
-  await measure("overview", async () => {
+  await moves("overview", async () => {
     for (let i = 0; i < 2; i++) {
       await inWindow("Alt+KeyO")
       await expect(overview).toBeVisible()
