@@ -27,10 +27,11 @@ export type Place =
  * The other host of `hosts.toml` whose Project a Pane shows, by its name,
  * as its args keep it under `host` (ADR 0081, decision 4): the arrangement
  * keeps it, so the Pane comes back there after a restart. None for this
- * machine's. It stands in for the client's Placement (ADR 0082) until
- * there is one.
+ * machine's. An act on it names its host in its args the same way, as a
+ * toast's answer does. It stands in for the client's Placement (ADR 0082)
+ * until there is one.
  */
-export function paneHost(pane: PaneState): string | undefined {
+export function paneHost(pane: Pick<PaneState, "args">): string | undefined {
   const host = pane.args.host
   return typeof host === "string" && host !== "" ? host : undefined
 }

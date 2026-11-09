@@ -9,7 +9,7 @@
  * Threads does them, on the engine of the host that lists the Thread (ADR
  * 0081).
  */
-import type { ProjectId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import type { ThreadId } from "@banda/contract/agents"
 import { toast } from "@banda/ui/components/sonner"
 import {
@@ -59,13 +59,25 @@ function threadAt(window: WindowApi, args?: Args): At | undefined {
 const inSight = (window: WindowApi) => threadAt(window) !== undefined
 
 /** The engine of the host that lists the Thread: this machine's, or
- * another host's (ADR 0081). */
+ * another host's (ADR 0081). One the Window does not reach now refuses
+ * at once (`WindowApi.sessionOf`), and nothing is sent there. */
 const engineOf = (window: WindowApi, { project, listed }: At) =>
   window.sessionOf(project, listed.pane)
 
+/** `engineOf`, for an act that says itself what went wrong: none when
+ * that host refuses, and a toast says why. */
+function reached(window: WindowApi, at: At): Engine | undefined {
+  try {
+    return engineOf(window, at)
+  } catch (error) {
+    toast.error(problem(error))
+    return undefined
+  }
+}
+
 /** Names the Thread `title`; with none, gives back the title it had by
  * itself, as its first message's. */
-function renaming(window: WindowApi, at: At, title: string | null) {
+async function renaming(window: WindowApi, at: At, title: string | null) {
   const thread = at.listed.id as ThreadId
   return engineOf(window, at).command(
     "agents.rename",
@@ -75,7 +87,7 @@ function renaming(window: WindowApi, at: At, title: string | null) {
 }
 
 /** A title for the Thread, from what it says lately; renames nothing. */
-function suggesting(window: WindowApi, at: At): Promise<string> {
+async function suggesting(window: WindowApi, at: At): Promise<string> {
   return engineOf(window, at).command(
     "agents.suggest_title",
     { thread: at.listed.id as ThreadId },
@@ -242,7 +254,8 @@ const unread: ItemAction = {
     const thread = at.listed.id as ThreadId
     // Read: the latest turn that ended, as its host knows it.
     const seen = at.listed.seen ? null : "latest"
-    void mark(engineOf(window, at), at.project, thread, { seen })
+    const engine = reached(window, at)
+    if (engine) void mark(engine, at.project, thread, { seen })
   },
 }
 
@@ -269,8 +282,8 @@ const makeProject: ItemAction = {
 
 /** Wakes the Thread now; what the engine refuses, a toast says. */
 function waking(window: WindowApi, at: At) {
-  engineOf(window, at)
-    .command("agents.wake", { thread: at.listed.id as ThreadId }, at.project)
+  reached(window, at)
+    ?.command("agents.wake", { thread: at.listed.id as ThreadId }, at.project)
     .catch((error: unknown) => toast.error(problem(error)))
 }
 
@@ -282,8 +295,8 @@ function waking(window: WindowApi, at: At) {
 function putOff(window: WindowApi, at: At, until?: number, resume = false) {
   const thread = at.listed.id as ThreadId
   const asked = until === undefined ? { thread } : { thread, until, resume }
-  engineOf(window, at)
-    .command("agents.later", asked, at.project)
+  reached(window, at)
+    ?.command("agents.later", asked, at.project)
     .then(
       () => {
         window.run("pane.put-away", { project: at.project, item: thread })
@@ -389,9 +402,10 @@ const archive: ItemAction = {
     const archived = args?.archived
     if (!at || typeof archived !== "boolean") return
     const thread = at.listed.id as ThreadId
-    const engine = engineOf(window, at)
     // A host away is sent no mark (decision 8): its Thread stays as it
     // was, Panes and all, and a toast says why.
+    const engine = reached(window, at)
+    if (!engine) return
     const goes = engine.status.state === "open"
     void mark(engine, at.project, thread, { archived })
     if (archived && goes)

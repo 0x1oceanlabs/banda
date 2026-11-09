@@ -9,8 +9,10 @@
  * from the sidebar on arc's engine, and waits while arc is away: Send
  * says why in the pill's words, from the window's start, and turns on as
  * arc is back. Alt+U and a toast open one there too, as `pane.pick` keeps
- * its host, and the counts list and Alt+U place its Threads where the
- * sidebar list does, among this machine's. A new Thread's picker groups
+ * its host, and a toast for one names arc, and its Allow and Try again go
+ * to arc's engine, or are refused at once while arc is away. The counts
+ * list and Alt+U place its Threads where the sidebar list does, among
+ * this machine's. A new Thread's picker groups
  * the Projects by machine, in a popped-out Pane's window as in the
  * window; one moved from arc to this machine's Project never names arc,
  * not for a frame, and starts its Thread here. As a Mac, its `uname` says
@@ -1329,6 +1331,91 @@ test("another machine's Thread that calls opens on its engine by Alt+U and from 
   const there = page.getByRole("region", { name: "Done on arc", exact: true })
   await expect(there.getByText("You said: Done on arc")).toBeVisible()
   await expect(toast).toBeHidden()
+})
+
+test("another machine's Thread that asks has its toast name arc, and Allow and Try again go to arc's engine; with arc away they are refused at once, and sent nowhere", async () => {
+  test.setTimeout(shots ? 300_000 : 180_000)
+  arc = newArc()
+  const banda = await seed(arc)
+  window = await withArc(arc)
+  const { page } = window
+  const local = await work(window)
+  await expect(sidebarOf(page).getByText("Sidebar for arc")).toBeVisible()
+  // arc's list is heard first: what calls in a Project's first list
+  // already was, and tells nothing.
+  await expect(arcOf(page).getByText("Bench window tests")).toBeVisible()
+  const toasts = page
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+  const threadOf = (title: string) =>
+    threadsOf(arc!, banda).find((thread) => thread.title === title)
+  const stateOf = (title: string) => threadOf(title)?.latest?.state
+  /** How each Question arc keeps in the Thread `title` stands. */
+  const questionsOf = (title: string) => {
+    const states: string[] = []
+    const walk = (value: unknown) => {
+      if (Array.isArray(value)) return value.forEach(walk)
+      if (!value || typeof value !== "object") return
+      const one = value as Record<string, unknown>
+      if (Array.isArray(one.choices) && typeof one.state === "string")
+        states.push(one.state)
+      Object.values(one).forEach(walk)
+    }
+    walk(JSON.parse(keptOf(arc!, banda, threadOf(title)!.id)))
+    return states
+  }
+
+  // An Agent on arc asks to run something, out of sight: its toast names
+  // arc after the title, with Allow and Reject, and Allow runs it there.
+  send(arc, banda, "please ask first")
+  const asks = toasts.filter({ hasText: "please ask first" })
+  await expect(asks).toContainText("please ask first · arc")
+  const allow = asks.getByRole("button", { name: "Allow", exact: true })
+  await expect(allow).toBeVisible()
+  await expect(asks.getByRole("button", { name: "Reject" })).toBeVisible()
+  if (shots) {
+    // Once the toast has come in.
+    await page.waitForTimeout(1_000)
+    await page.screenshot({ path: join(shots, "h5d-1-arc-asks-toast.png") })
+  }
+  await allow.click()
+  await expect.poll(() => stateOf("please ask first")).toBe("done")
+  expect(questionsOf("please ask first")).toEqual(["answered"])
+
+  // A turn there that fails is tried again there, from its toast.
+  send(arc, banda, "a flaky one")
+  const failed = toasts.filter({ hasText: "a flaky one" })
+  await expect(failed).toContainText("a flaky one · arc")
+  await failed.getByRole("button", { name: "Try again" }).click()
+  await expect.poll(() => stateOf("a flaky one")).toBe("done")
+
+  // With arc away, its Allow is refused at once, in the pill's words,
+  // and goes to no machine: not to arc later, nor to this one now.
+  send(arc, banda, "ask once more")
+  const again = toasts.filter({ hasText: "ask once more" })
+  await expect(again).toContainText("ask once more · arc")
+  arc.down(true)
+  arc.cut()
+  await expect(arcOf(page).getByText("away", { exact: true })).toBeVisible()
+  await expect(again).toBeVisible()
+  await again.getByRole("button", { name: "Allow", exact: true }).click()
+  await expect(toasts.filter({ hasText: "arc is away" })).toBeVisible({
+    timeout: 2_000,
+  })
+  if (shots) {
+    await page.waitForTimeout(1_000)
+    await page.screenshot({ path: join(shots, "h5d-2-arc-away-refused.png") })
+  }
+  const { ok } = JSON.parse(
+    window.banda("call", "agents.threads", "--project", local)
+  ) as { ok: { threads: { title: string }[] } }
+  expect(ok.threads.map(({ title }) => title)).toEqual(["Sidebar for arc"])
+  arc.down(false)
+  await expect(arcOf(page).getByText("away", { exact: true })).toHaveCount(0, {
+    timeout: 60_000,
+  })
+  // Back, nothing it was refused runs there by itself.
+  expect(questionsOf("ask once more")).not.toContain("answered")
 })
 
 test("the counts list and Alt+U place arc's Threads where the sidebar list does, among this machine's (ADR 0079, decision 4; #999)", async () => {

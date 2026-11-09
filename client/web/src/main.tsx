@@ -48,11 +48,9 @@ if (host && engine) {
     const view = popped
       ? import("./window/Popped").then(({ Popped }) => {
           // A Pane on another host reaches it from here too (ADR 0081),
-          // for the window's life.
-          const hosts = new KeptHosts(device.hosts, {
-            seen: seenNamed,
-            follow: followNamed,
-          })
+          // for the window's life; one of this machine's, its engine.
+          const names = { seen: seenNamed, follow: followNamed }
+          const hosts = new KeptHosts(device.hosts, names, engine)
           hosts.follow()
           return (
             <HostsContext value={hosts}>

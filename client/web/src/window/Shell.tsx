@@ -258,11 +258,11 @@ export function Shell({
 
   // A Pane that leaves every workspace lets its module let go, as a
   // terminal stops its program; one moved, or drawn still, has not left.
-  const engineOf = useEngineOf(engine)
+  const engineOf = useEngineOf()
   const before = useRef(standing)
   useEffect(() => {
     for (const entry of left(before.current, standing, identityOf))
-      closedOf(engineOf(entry.project, entry.pane), entry)
+      closedOf(() => engineOf(entry.project, entry.pane), entry)
     before.current = standing
   }, [engineOf, standing])
 

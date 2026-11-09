@@ -190,7 +190,6 @@ export function handleOf(
  */
 export const PaneFrame = memo(function PaneFrame({
   entry,
-  engine,
   modules,
   focused,
   selected = focused,
@@ -207,6 +206,7 @@ export const PaneFrame = memo(function PaneFrame({
   alone = false,
 }: {
   entry: Entry
+  /** Unread: the Window's hosts give the Pane its session (`useReach`). */
   engine: Engine
   modules: readonly string[]
   focused: boolean
@@ -245,7 +245,7 @@ export const PaneFrame = memo(function PaneFrame({
   // A Project of another host's is that host's engine's (ADR 0081): only
   // a kind that opens there does, on it; another says it is not there yet.
   const named = paneHost(entry.pane)
-  const reach = useReach(engine, entry.project, named)
+  const reach = useReach(entry.project, named)
   const there = reach.host
   const words =
     there === undefined ? undefined : reachWords(there, reach.shown, seenNamed)
