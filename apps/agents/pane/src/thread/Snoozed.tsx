@@ -1,23 +1,48 @@
 /**
  * The Thread's quiet line about its snooze (ADR 0074, decisions 4 and 7),
  * above the composer: while it sleeps, until when, with Wake now; once it
- * woke by itself, when, with Dismiss, until its next turn ends.
+ * woke by itself, when, with Dismiss, until its next turn ends. What its
+ * Person saw of it waking is its host's mark (`woke_seen`, ADR 0096), so
+ * every window and machine shows the same.
  */
-import type { Snooze, TurnView } from "@banda/contract/agents"
+import { useEffect } from "react"
+import type { Engine, ProjectId } from "@banda/contract"
+import type { Snooze, ThreadId, TurnView } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
+import { useInFront } from "@banda/ui/hooks/use-in-front"
 import { useNow } from "@banda/ui/hooks/use-now"
-import { kept } from "@banda/ui/lib/kept"
 import { clock, left } from "@banda/ui/lib/words"
-import { sleeps } from "@banda/ui/lib/snooze"
-import { wokeOf } from "@banda/ui/pane"
+import { sleeps, wokeOf } from "@banda/ui/lib/snooze"
 import { AlarmClockIcon } from "lucide-react"
 import { Docked } from "../entries/parts/Card"
+import { mark, useSending } from "../list/sent"
+import { markWhenPresent } from "./session"
 
-/** Which Thread's waking its Person dismissed: the moment it was snoozed. */
-const dismissed = kept(
-  "banda.agents.woke-dismissed",
-  (at): at is number => typeof at === "number"
-)
+/**
+ * Marks that its Person saw `thread` wake by itself, as they look at its
+ * Pane, focused in the window in front, once they are at the window: its
+ * row in every sidebar stops saying it woke (ADR 0074, decision 3).
+ */
+export function useSeeWoke(
+  engine: Engine,
+  project: ProjectId,
+  thread: ThreadId | null,
+  snooze: Snooze | undefined,
+  focused: boolean
+): void {
+  const front = useInFront()
+  // A clock only while it sleeps till a time: it wakes as that comes.
+  const now = useNow(30_000, snooze?.until !== undefined && !snooze.woke)
+  const seen = useWokeSeen(engine, thread, snooze)
+  // Its waking that is still to be seen: when it was snoozed, the snooze's
+  // own, so a new snooze is seen again.
+  const unseen =
+    snooze && !seen && wokeOf(snooze, now) !== undefined ? snooze.at : undefined
+  useEffect(() => {
+    if (!focused || !front || thread === null || unseen === undefined) return
+    return markWhenPresent(engine, project, thread, { woke: "seen" })
+  }, [focused, front, thread, unseen, engine, project])
+}
 
 /** What woke it early, in a few words; nothing for its time coming. */
 const WHY: Partial<Record<NonNullable<Snooze["woke"]>["by"], string>> = {
@@ -26,13 +51,30 @@ const WHY: Partial<Record<NonNullable<Snooze["woke"]>["by"], string>> = {
   done: "its turn ended",
 }
 
+/** What its Person saw of `thread` waking: its host's mark, or the one on
+ * its way there, which shows at once (`mark`). */
+function useWokeSeen(
+  engine: Engine,
+  thread: ThreadId | null,
+  snooze: Snooze | undefined
+): Snooze["woke_seen"] {
+  const sending = useSending(engine)[thread ?? ""]?.woke?.to
+  return snooze?.woke_seen === "dismissed"
+    ? "dismissed"
+    : (sending ?? snooze?.woke_seen)
+}
+
 export function SnoozeLine({
+  engine,
+  project,
   thread,
   snooze,
   turns,
   onWake,
 }: {
-  thread: string
+  engine: Engine
+  project: ProjectId
+  thread: ThreadId
   snooze: Snooze | undefined
   turns: readonly TurnView[]
   /** Wakes it now, as the window does (`thread.wake`). */
@@ -40,7 +82,7 @@ export function SnoozeLine({
 }) {
   // A clock only while it sleeps till a time: what it says then moves.
   const now = useNow(30_000, snooze?.until !== undefined && !snooze.woke)
-  const gone = dismissed.use()
+  const seen = useWokeSeen(engine, thread, snooze)
   if (!snooze) return null
   const byAgent = snooze.by.kind === "agent" ? " by its Agent" : ""
   if (sleeps(snooze, now)) {
@@ -57,7 +99,7 @@ export function SnoozeLine({
     )
   }
   const at = wokeOf(snooze, now)
-  if (at === undefined || gone[thread] === snooze.at) return null
+  if (at === undefined || seen === "dismissed") return null
   // Its next turn that ends puts the line away, as Dismiss does.
   if (turns.some((turn) => turn.ended !== undefined && turn.ended > at))
     return null
@@ -66,7 +108,7 @@ export function SnoozeLine({
     <Line
       words={`Woke at ${clock(at, now)}${why ? ` · ${why}` : ""}`}
       action="Dismiss"
-      onAction={() => dismissed.put(thread, snooze.at)}
+      onAction={() => void mark(engine, project, thread, { woke: "dismissed" })}
     />
   )
 }

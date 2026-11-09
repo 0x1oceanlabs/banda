@@ -7,7 +7,8 @@
 import { useEffect } from "react"
 import type { ProjectId } from "@banda/contract"
 import type { Args } from "@banda/ui/module"
-import { asleep, type Listed, wokeOf } from "@banda/ui/pane"
+import { wokeOf } from "@banda/ui/lib/snooze"
+import { asleep, type Listed } from "@banda/ui/pane"
 import type { Stores } from "./stores"
 
 /** What the notifications module tells of a Thread that woke by itself
@@ -56,6 +57,7 @@ export function tellWoke(
         else if (
           was.has(slept) &&
           !calls.has(key) &&
+          !one.snooze.wokeSeen &&
           wokeOf(one.snooze, now) !== undefined
         )
           run("notifications.tell", wokeTold(project as ProjectId, one))

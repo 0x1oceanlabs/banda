@@ -71,7 +71,7 @@ import { Edge } from "../sidebar/Edge"
 import { Sidebar } from "../sidebar/Sidebar"
 import { SnoozePicker } from "../sidebar/Snoozing"
 import { QuitDialog } from "./Quit"
-import { useSeeWoke, useSnoozesAt } from "../sidebar/snoozed"
+import { useSnoozesAt } from "../sidebar/snoozed"
 import { useWokeNote } from "../calls/woke"
 import { paneRowsOf } from "../sidebar/items"
 import { attachTo, focusedOn } from "./attach"
@@ -359,8 +359,6 @@ export function Shell({
   // Where the Person is (ADR 0087, decision 4), and what the Apps list,
   // as the Apps' code reads them.
   const here = useKeptHere(drawnNow, { sidebar: sidebarShown, home }, showsOf)
-  // A Thread that woke stops saying so once its Person looks at it.
-  useSeeWoke(here, stores.items)
   const [items] = useState(() => itemsOf(stores))
   const hideOver = useCallback(() => setOver(false), [])
   // Each Alt+C brings the focused column to the middle, once.

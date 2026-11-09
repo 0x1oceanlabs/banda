@@ -80,7 +80,7 @@ use rules::Event;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use snoozes::{SnoozeAsk, WakeAsk};
+use snoozes::{SeeWokeAsk, SnoozeAsk, WakeAsk};
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::path::PathBuf;
@@ -445,6 +445,12 @@ banda_kernel::methods! {
         /// as when what you waited on came early. One awake stays so. A
         /// Person wakes any Thread (ADR 0074).
         command wake(WakeAsk) -> (), Write, tool "wake";
+        /// Marks that its Person saw a Thread wake by itself, or dismissed
+        /// that it did (ADR 0074): its row no longer says it woke, and,
+        /// dismissed, its Pane's line goes. It moves forward only, and a
+        /// Thread that did not wake by itself stays as it is. The list says
+        /// it, as the snooze's `woke_seen`. Only a Person marks a Thread.
+        command see_woke(SeeWokeAsk) -> (), Write;
         /// Marks a Thread read for its Person (ADR 0096): `turn`, or
         /// without it the latest that ended, is the last they saw, so it
         /// calls them no more. Seen moves forward only: a turn not of this
@@ -1155,6 +1161,12 @@ impl Agents {
     async fn wake(&self, call: Call, WakeAsk { thread }: WakeAsk) -> Result<(), Refusal> {
         let author = call.participant();
         call.command(move |tx| snoozes::wake(tx, author, thread))
+            .await
+    }
+
+    async fn see_woke(&self, call: Call, ask: SeeWokeAsk) -> Result<(), Refusal> {
+        let author = marks::person(&call)?;
+        call.command(move |tx| snoozes::see_woke(tx, author, ask))
             .await
     }
 

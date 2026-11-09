@@ -272,6 +272,20 @@ test("a Thread keeps its latest snooze, and what woke it", () => {
     at: again.at,
     by: agent,
   })
+
+  // What its Person saw of it waking is its host's mark, and moves nothing.
+  const seen = event(
+    "thread.woke_seen",
+    { thread: "t1", seen: "seen" },
+    { author: person, subject: "t1" }
+  )
+  const looked = applyThreads(awake, seen)
+  expect(looked.threads[0].snooze?.woke_seen).toBe("seen")
+  expect(looked.threads[0].updated_at).toBe(awake.threads[0].updated_at)
+  expect(
+    applyThreads(one, seen).threads[0].snooze,
+    "no snooze, nothing to see"
+  ).toBeUndefined()
 })
 
 test("a renamed Thread takes its new title and keeps the one before, where it stands", () => {

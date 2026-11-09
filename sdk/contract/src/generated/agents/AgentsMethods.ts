@@ -28,6 +28,7 @@ import type { PreviewVisual } from "./PreviewVisual";
 import type { Previewed } from "./Previewed";
 import type { ReadAsk } from "./ReadAsk";
 import type { Rename } from "./Rename";
+import type { SeeWokeAsk } from "./SeeWokeAsk";
 import type { Send } from "./Send";
 import type { Sent } from "./Sent";
 import type { ShowVisual } from "./ShowVisual";
@@ -231,6 +232,14 @@ snooze: CommandMethod<SnoozeAsk, null>,
  * Person wakes any Thread (ADR 0074).
  */
 wake: CommandMethod<WakeAsk, null>, 
+/**
+ * Marks that its Person saw a Thread wake by itself, or dismissed
+ * that it did (ADR 0074): its row no longer says it woke, and,
+ * dismissed, its Pane's line goes. It moves forward only, and a
+ * Thread that did not wake by itself stays as it is. The list says
+ * it, as the snooze's `woke_seen`. Only a Person marks a Thread.
+ */
+see_woke: CommandMethod<SeeWokeAsk, null>, 
 /**
  * Marks a Thread read for its Person (ADR 0096): `turn`, or
  * without it the latest that ended, is the last they saw, so it

@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
-import { sleeps } from "./lib/snooze"
-import { callsOf, type Listed, wokeOf } from "./pane"
+import { callsOf, type Listed } from "./pane"
+import { sleeps, wokeOf } from "./lib/snooze"
 
 const pane = { kind: "agents.thread", args: {} }
 
