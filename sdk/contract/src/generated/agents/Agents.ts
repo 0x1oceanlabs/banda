@@ -7,6 +7,10 @@ import type { Flow } from "./Flow";
  */
 export type Agents = { enter: Enter, flow: Flow, 
 /**
+ * Seconds the focus stays on a Thread before it is seen; 0 at once.
+ */
+seen_after: number, 
+/**
  * The account a new Thread starts on, by its entry's ID: none, the
  * first one on (ADR 0093, decision 7).
  */

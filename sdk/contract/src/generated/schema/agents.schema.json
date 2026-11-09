@@ -15,6 +15,11 @@
     "flow": {
       "description": "The Flow (ADR 0079). `workspaces` before ADR 0079 (grace).",
       "$ref": "#/$defs/Flow"
+    },
+    "seen-after": {
+      "description": "How many seconds the focus stays on a Thread it only came to, by\nthe Strip's scroll or `Alt+arrow`, before its mark counts as seen:\n0 at once. A click or a key in it counts at once (ADR 0096,\ndecision 3).",
+      "type": "number",
+      "format": "double"
     }
   },
   "additionalProperties": false,
