@@ -9,6 +9,8 @@ import {
   imports,
   layoutMotion,
   parts,
+  propNames,
+  valuesTaken,
 } from "./architecture"
 
 test("the check sees every kind of import", () => {
@@ -67,6 +69,60 @@ test("the check sees a component's props that are code, through the file's alias
     Item: ["mark"],
     Row: [],
     Empty: [],
+  })
+})
+
+test("the check sees every prop of a component, whatever its type, and each it takes apart", () => {
+  const source = [
+    `import type { Dispatch } from "react"`,
+    `type Shown = { label: string }`,
+    `interface Folding { onFold(): void; folded: boolean }`,
+    `interface Pinning extends Folding { onPin?: VoidFunction }`,
+    `export function Menu({ project }: { project: string; onPin?: VoidFunction; onRename: Dispatch<string>; "onWake": typeof wake }) {}`,
+    `function Header(props: Shown & Pinning) {}`,
+    `const Row = ({ row, onOpen: open, ...rest }: Omit<ComponentProps<typeof Other>, "x">) => null`,
+    `const Item = memo(function Item({ onArchive }: { onArchive: Archive }) { return null })`,
+    `function lower({ onOpen }: { onOpen: VoidFunction }) {}`,
+  ].join("\n")
+  expect(propNames(source, "menu.tsx")).toEqual({
+    Menu: ["project", "onPin", "onRename", "onWake"],
+    Header: ["label", "onFold", "folded", "onPin"],
+    Row: ["row", "onOpen"],
+    Item: ["onArchive"],
+  })
+  // Of these, only a method is surely code, read in the file alone.
+  expect(functionProps(source, "menu.tsx")).toEqual({
+    Menu: [],
+    Header: ["onFold"],
+    Row: [],
+    Item: [],
+  })
+})
+
+test("the check sees what a file takes of a module in each form, and no type", () => {
+  const folder = join("/web", "sidebar")
+  const source = [
+    `import { arrange as sorted, type Row } from "./arrange"`,
+    `import type { Arranged } from "./arrange"`,
+    `import order, { keysOf } from "../sidebar/order.ts"`,
+    `import * as whole from "./tally"`,
+    `export { placeIn as at, type View } from "./order"`,
+    `export * from "./width"`,
+    `export type { Line } from "./line"`,
+    `import "./look.css"`,
+    `const later = () => import("./later")`,
+    `import { useState } from "react"`,
+    `// import { hidden } from "./hidden"`,
+    `const words = 'import { said } from "./said"'`,
+  ].join("\n")
+  expect(valuesTaken(source, join(folder, "Counts.tsx"))).toEqual({
+    [join(folder, "arrange")]: ["arrange"],
+    [join(folder, "order")]: ["default", "keysOf", "placeIn"],
+    [join(folder, "tally")]: ["*"],
+    [join(folder, "width")]: ["*"],
+    [join(folder, "look.css")]: [],
+    [join(folder, "later")]: ["*"],
+    react: ["useState"],
   })
 })
 
