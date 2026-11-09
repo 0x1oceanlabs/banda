@@ -225,13 +225,11 @@ wall).
      may serve it.
    - _Amended 2026-11-09 by
      [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): there
-     is no home host. The code comes from the signed binary of the machine
-     that serves it, never from a disk an Agent can edit. The reason above,
-     "no new place to trust", no longer holds: each machine that may serve
-     the page is a place whose code acts as the Person's device toward the
-     others. Which machines may (only those the Person marks, one origin
-     per machine for v1 as `critic-security.md` W6 has it, or every machine
-     reached over `direct`) is open in that ADR._
+     is no home host. The code still comes only from a signed binary, never
+     from a disk an Agent can edit. The reason above, "no new place to
+     trust", no longer holds as it is: which of the Person's machines serve
+     the page, and the trust that costs, are decided with the web (stage
+     4), in an ADR of its own._
 
 **Plan.** Each step its own PR; `scripts/check.sh` passes after each. The
 IDs are the vision's (§9.3).
@@ -339,7 +337,8 @@ MCP frames in the gateway (V6). Decision 8 lands with the web client, ADR
   is published (decision 8).
   _Amended 2026-11-09 by
   [ADR 0101](0101-machines-are-peers-and-there-is-no-home-host.md): from the
-  signed binary of the machine that serves it._
+  signed binary of a machine of the Person's that serves it; which ones is
+  decided with the web (stage 4)._
 - ADR 0081's plan: the fence before step 2; no listener beyond loopback
   (step 5) before the fence, B14, F1 and F2 (decision 7).
 - Decisions 1 and 2, as F0-3a built them (2026-11-08):
