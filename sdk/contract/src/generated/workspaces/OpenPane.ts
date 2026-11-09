@@ -14,6 +14,8 @@ kind: string,
  */
 args: JsonValue, 
 /**
- * A Pane `panes` lists, to open it beside.
+ * A Pane `panes` lists, to open it beside. Left out, right of your
+ * Thread, in its Group, when your Thread is shown, else beside your
+ * Project's Panes; a Thread, beside your Project's Panes.
  */
 beside?: Beside, };

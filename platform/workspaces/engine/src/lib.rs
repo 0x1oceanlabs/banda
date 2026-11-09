@@ -132,9 +132,11 @@ banda_kernel::methods! {
         /// `{"path": "<path>", "line": <n>}`), or a browser at a web
         /// address (`browser.browser`, args `{"url": "https://…"}` alone).
         /// Only the args that choose what a Pane shows are yours to give;
-        /// the rest are your Person's. Beside a Pane `panes` lists, or,
-        /// left out, beside your Project's Panes. A Thread opens as a
-        /// Group of its own. One shown already, a Thread's by its ID,
+        /// the rest are your Person's. Beside a Pane `panes` lists; left
+        /// out, right of your Thread, in its Group, when your Thread is
+        /// shown, else beside your Project's Panes. A Thread opens as a
+        /// Group of its own; left out, beside your Project's Panes, never
+        /// in your Thread's. One shown already, a Thread's by its ID,
         /// stays where it is, and is named. It takes no focus; the Person
         /// sees a mark on it until they look.
         command open_pane(OpenPane) -> Opened, Write, tool "open_pane";
@@ -276,7 +278,9 @@ pub struct OpenPane {
     /// browser.
     #[schemars(with = "serde_json::Map<String, Value>")]
     pub args: Value,
-    /// A Pane `panes` lists, to open it beside.
+    /// A Pane `panes` lists, to open it beside. Left out, right of your
+    /// Thread, in its Group, when your Thread is shown, else beside your
+    /// Project's Panes; a Thread, beside your Project's Panes.
     #[serde(default)]
     #[ts(optional)]
     pub beside: Option<Beside>,
@@ -705,11 +709,18 @@ impl Workspaces {
         // it goes into another Pane's column, which stays as it is.
         let grouped = self.grouped.contains(&shows.kind);
         let stacks = (beside.as_ref()).is_some_and(|b| matches!(b.side, Side::Above | Side::Below));
+        // The Thread whose session the pass was made for: what its Agent
+        // opens with no place goes into that Thread's Group. A kind that
+        // opens as a Group of its own does not: it comes first in its Group
+        // (ADR 0065, decisions 6 and 7).
+        let thread = call.thread().filter(|_| !grouped);
         let (pane, new) = change(&call, "opened", None, Say::Whole, move |list, _, seed| {
             let place = beside.map(|b| b.place(list, wall)).transpose()?;
             if let Some(shown) = model::showing_asked(list, &shows) {
                 return Ok((shown.id, false));
             }
+            let place =
+                place.or_else(|| thread.and_then(|t| model::agents_place(list, wall.project, t)));
             let opening = Opening {
                 place,
                 by: Some(me),

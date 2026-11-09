@@ -617,6 +617,24 @@ export function read(path: string): string | undefined {
   }
 }
 
+/** Runs git in `folder`, as one who has no config of their own, and says
+ * what it printed. */
+export function git(folder: string, ...args: string[]): string {
+  return execFileSync("git", args, {
+    encoding: "utf8",
+    cwd: folder,
+    env: {
+      ...process.env,
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_AUTHOR_NAME: "Roma",
+      GIT_AUTHOR_EMAIL: "roma@banda.so",
+      GIT_COMMITTER_NAME: "Roma",
+      GIT_COMMITTER_EMAIL: "roma@banda.so",
+    },
+  })
+}
+
 /** The id of the Project named `name`, as the Person's `banda call` lists
  * it. */
 export function projectId(window: Window, name: string): string {
