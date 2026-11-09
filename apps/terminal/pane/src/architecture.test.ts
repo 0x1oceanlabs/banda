@@ -12,6 +12,8 @@ const PANE = [
   // Ghostty draws the screen: T3 Code's adapter, vendored in client/ghostty.
   /^@banda\/ghostty$/,
   /^@banda\/contract(\/terminal)?$/,
+  // The client's core, by the one door an App takes to it (ADR 0089).
+  /^@banda\/core\/react$/,
   /^@banda\/ui\//,
   /^react$/,
   /^lucide-react$/,

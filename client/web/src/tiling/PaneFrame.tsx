@@ -56,7 +56,7 @@ import {
   showsOf,
   useLabel,
 } from "../registry"
-import { reachWords, runOnHost, useReach, useShownNow } from "../calls/hosts"
+import { reachWords, runOnHost, useReach, useShownNow } from "@banda/core/react"
 import { sayComposer } from "../window/attach"
 import { heightAt } from "./layout"
 import type { Plan } from "./arrange"
@@ -236,7 +236,8 @@ export const PaneFrame = memo(function PaneFrame({
   const named = paneHost(entry.pane)
   const reach = useReach(engine, entry.project, named)
   const there = reach.host
-  const words = there === undefined ? undefined : reachWords(there, reach.shown)
+  const words =
+    there === undefined ? undefined : reachWords(there, reach.shown, seenNamed)
   // Its host out of reach while the Pane shows: a pill under its header
   // says so, in a band of its own, so it covers none of the Pane (#955).
   const pill = !away && reach.engine !== undefined && words !== undefined

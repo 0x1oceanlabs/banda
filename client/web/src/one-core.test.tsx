@@ -8,8 +8,8 @@
 import { createRequire } from "node:module"
 import { join } from "node:path"
 import type { Engine } from "@banda/contract"
-import { type Here, type Run, Store } from "@banda/core"
 import type * as CoreReact from "@banda/core/react"
+import { type Here, type Run, Store } from "@banda/core/react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "vitest"
 import { newStores } from "./calls/stores"
@@ -34,14 +34,10 @@ const here = new Store<Here>({
 
 test("an App's part reads the run and Here the Window gives, by the path its package takes to them", async () => {
   // As the servers' widget and the bell take the run, and the Threads'
-  // tests Here: from `@banda/ui`, which hands the core's on until W0a2
-  // points them at `@banda/core/react`.
-  const servers = await asIn("apps/terminal/pane", "@banda/ui/hooks/use-run")
-  const bell = await asIn(
-    "platform/notifications/pane",
-    "@banda/ui/hooks/use-run"
-  )
-  const threads = await asIn("apps/agents/pane", "@banda/ui/here")
+  // tests Here: from `@banda/core/react`, by their own packages' paths.
+  const servers = await asIn("apps/terminal/pane", "@banda/core/react")
+  const bell = await asIn("platform/notifications/pane", "@banda/core/react")
+  const threads = await asIn("apps/agents/pane", "@banda/core/react")
   const ran: string[] = []
   const run: Run = (action) => void ran.push(action)
   function Reads() {

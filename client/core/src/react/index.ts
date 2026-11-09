@@ -5,5 +5,19 @@
  */
 export * from "../index"
 export { HereContext, useHere } from "./here"
+export {
+  HostsContext,
+  type Reach,
+  useEngineOf,
+  useHosts,
+  useHostsBy,
+  useMachinesOf,
+  useNamedOf,
+  useOurs,
+  usePaneOn,
+  useReach,
+  useShownNow,
+} from "./hosts"
+export { MachinesContext, useMachines } from "./machines"
 export { RunContext, useRun } from "./run"
 export { useSelected, useStore } from "./store"

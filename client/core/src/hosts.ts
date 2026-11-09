@@ -3,9 +3,12 @@
  * 4): each host of `hosts.toml` as the desktop reaches it over ssh, with
  * its engine and its Projects. What its Apps list flows into the Window's
  * stores under its name, through one Watches for each host while it is
- * live (bar/Watches.tsx). Where a host's engine listens only the desktop
- * knows: its engine asks it on every connect, and the page keeps the
- * address nowhere. Pure but for React's context, so plain tests cover it.
+ * live (`client/web/src/bar/Watches.tsx`). Where a host's engine listens
+ * only the desktop knows: its engine asks it on every connect, and the
+ * page keeps the address nowhere. What this device remembers of the
+ * hosts' names the Window hands in (`Names`), as the device keeps it.
+ * Plain, so plain tests cover it; what reads it from React is
+ * `react/hosts.ts`.
  */
 import {
   type Address,
@@ -14,21 +17,11 @@ import {
   type ProjectSummary,
 } from "@banda/contract"
 import type { Named } from "@banda/contract/machines"
-import type { Machine } from "@banda/ui/hooks/use-machines"
-import type { Read } from "@banda/ui/hooks/use-read"
-import { followNamed, seenNamed } from "@banda/ui/hooks/use-status"
-import type { Args } from "@banda/ui/module"
-import { openProjects, shownProjects } from "@banda/ui/lib/projects"
-import {
-  type Readable,
-  sameData,
-  sameEach,
-  Store,
-  useStore,
-} from "@banda/ui/lib/store"
-import { paneHost, type PaneState, withHost } from "@banda/ui/pane"
-import { createContext, useCallback, useContext, useEffect } from "react"
-import type { HostState } from "../host"
+import type { HostState } from "./device"
+import { paneHost, type PaneState, withHost } from "./pane"
+import { openProjects, shownProjects } from "./projects"
+import type { Args } from "./run"
+import { type Readable, sameData, sameEach, Store } from "./store"
 
 /** How the Window reaches the desktop's hosts: `device.hosts`. */
 export type HostsDevice = {
@@ -39,6 +32,30 @@ export type HostsDevice = {
   /** Starts host `name`'s engine again there. */
   start: (name: string) => void
 }
+
+/**
+ * What this device remembers of the names the hosts say they have, by
+ * their keys in `hosts.toml` (ADR 0081, decision 1; ADR 0095, decision
+ * 2), so one away or stopped draws as before. The Window hands in the
+ * memory the device keeps them in.
+ */
+export type Names = {
+  /** Host `key` as this device last saw it; before its first welcome
+   * here, its key with the `desktop` icon. */
+  seen: (key: string) => Named
+  /** Hands `take` what host `key`'s `engine` says it is called and drawn
+   * by, cleaned, from each welcome and each change after, and remembers
+   * the last. Returns how to stop. */
+  follow: (
+    engine: Engine,
+    key: string,
+    take: (named: Named) => void
+  ) => () => void
+}
+
+/** A host before this device saw its name: by its key, with the
+ * `desktop` icon. */
+export const unseen = (key: string): Named => ({ name: key, icon: "desktop" })
 
 /** A host as the Window shows it. */
 export type Shown = {
@@ -71,15 +88,16 @@ export function holds(shown: Shown): boolean {
 
 /** Host `now` as the Window shows it at `at`, after `was`. Another go
  * after a loss is still away; any other state but live drops its
- * Projects. */
+ * Projects. Before it said a name, it goes by the one `seen` remembers. */
 export function shownOf(
   was: Shown | undefined,
   now: HostState,
-  at: number
+  at: number,
+  seen: (key: string) => Named = unseen
 ): Shown {
   const kept = was?.projects ?? NONE
   const { name } = now
-  const named = was?.named ?? seenNamed(name)
+  const named = was?.named ?? seen(name)
   switch (now.state) {
     case "live":
       return { name, named, state: now, projects: kept }
@@ -111,6 +129,26 @@ export function otherBuild(state: HostState): string | undefined {
     : `${there} vs ${here}`
 }
 
+/** A machine as a new Thread picks where it starts (ADR 0095, decision
+ * 7). */
+export type Machine = {
+  /** Its key in `hosts.toml`, a Pane's `args.host`; none for this machine. */
+  host?: string
+  /** Its name and icon, cleaned (ADR 0095, decision 2); none for this
+   * machine, which goes unnamed (decision 4). */
+  named?: Named
+  /** Its Host scope's ID, where a Thread in its No Project starts; none
+   * until its engine first said it. */
+  machine?: ProjectId
+  /** Whether the Window reaches it now, or shows it as it was. */
+  state: "live" | "away"
+  /** Since when it is away, in ms since the epoch. */
+  away?: number
+  /** Its Projects a Thread starts in, pinned first: none archived, none
+   * whose folder is missing, none a Thread's own. */
+  projects: readonly ProjectSummary[]
+}
+
 /** This machine as the Window lists it: its Projects, as its engine
  * lists them, and its Host scope's ID, once its engine said it. */
 export type Ours = {
@@ -126,6 +164,7 @@ export type Ours = {
  */
 export class KeptHosts implements Readable<readonly Shown[]> {
   readonly #device: HostsDevice
+  readonly #names: Names
   readonly #shown = new Store<readonly Shown[]>([])
   readonly #engines = new Map<string, Engine>()
   /** Each host's Projects as its engine listed them last. */
@@ -143,13 +182,17 @@ export class KeptHosts implements Readable<readonly Shown[]> {
    * told again only as what they say changes. */
   readonly machines: Readable<readonly Machine[]> = this.#machines
 
-  constructor(device: HostsDevice) {
+  constructor(device: HostsDevice, names: Names) {
     this.#device = device
+    this.#names = names
     this.#shown.subscribe(() => this.#sayMachines())
   }
 
   readonly get = (): readonly Shown[] => this.#shown.get()
   readonly subscribe = (listener: () => void) => this.#shown.subscribe(listener)
+
+  /** Host `key`'s name and icon as this device last saw it (`Names`). */
+  readonly seen = (key: string): Named => this.#names.seen(key)
 
   /** Follows the desktop's hosts; returns how to stop. */
   follow(): () => void {
@@ -159,7 +202,9 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   /** Takes the hosts as the desktop tells them now, at `at`. */
   take(hosts: readonly HostState[], at = Date.now()): void {
     const was = new Map(this.get().map((one) => [one.name, one]))
-    const now = hosts.map((host) => shownOf(was.get(host.name), host, at))
+    const now = hosts.map((host) =>
+      shownOf(was.get(host.name), host, at, this.seen)
+    )
     for (const one of now) {
       if (!holds(one)) this.#listed.delete(one.name)
       // An engine that said goodbye tries no more: a host live again gets
@@ -205,7 +250,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
         return this.#device.engine(name)
       })
       this.#engines.set(name, engine)
-      followNamed(engine, name, (named) => this.#named(name, named))
+      this.#names.follow(engine, name, (named) => this.#named(name, named))
       engine.watch((status) => {
         if (status.state === "open" && status.machine)
           this.#scope(name, status.machine)
@@ -349,16 +394,6 @@ function drawnHere(project: ProjectSummary): ProjectSummary {
   return { ...project, sign: { ...sign, kind: "letters", text } }
 }
 
-/** No hosts, as where no Window follows the desktop's. */
-const NOWHERE: HostsDevice = {
-  follow: () => undefined,
-  engine: () => Promise.reject(new Error("No other machine here.")),
-  start: () => undefined,
-}
-
-/** The Window's hosts, for what it draws; none outside one. */
-export const HostsContext = createContext<KeptHosts>(new KeptHosts(NOWHERE))
-
 /** The names of the hosts that are live now. */
 export const liveIn = (hosts: readonly Shown[]): string[] =>
   hosts.filter(live).map((host) => host.name)
@@ -366,19 +401,6 @@ export const liveIn = (hosts: readonly Shown[]): string[] =>
 /** The names of the hosts whose rows the Window does not show. */
 export const emptyIn = (hosts: readonly Shown[]): string[] =>
   hosts.filter((host) => !holds(host)).map((host) => host.name)
-
-/** `select` of the hosts, drawn again only as what it selects changes. */
-export function useHostsBy<S>(
-  select: (hosts: readonly Shown[]) => S,
-  equal?: (a: S, b: S) => boolean
-): S {
-  return useStore(useContext(HostsContext), select, equal)
-}
-
-const all = (hosts: readonly Shown[]) => hosts
-
-/** The hosts as the Window shows them, drawn again as any changes. */
-export const useHosts = (): readonly Shown[] => useHostsBy(all)
 
 /**
  * The host a Pane of `project` is on: none when this machine has the
@@ -400,9 +422,13 @@ export function hostOfPane(
 }
 
 /** Host `host`'s name and icon, as the Window shows `hosts`; as this
- * device last saw it, while the Window does not show it yet. */
-export function namedIn(hosts: readonly Shown[], host: string): Named {
-  return hosts.find((one) => one.name === host)?.named ?? seenNamed(host)
+ * device last saw it (`seen`), while the Window does not show it yet. */
+export function namedIn(
+  hosts: readonly Shown[],
+  host: string,
+  seen: (key: string) => Named
+): Named {
+  return hosts.find((one) => one.name === host)?.named ?? seen(host)
 }
 
 /** How long a host has been away at `now`, since `since` (`Shown.away`),
@@ -418,14 +444,15 @@ export function awayFor(
 }
 
 /** What a Pane on host `host` says while it cannot reach it, as the
- * Window shows that host (`shown`), by the name it says it has; none
- * while it is live. Not known yet, as before the desktop first tells the
- * hosts, it waits. */
+ * Window shows that host (`shown`), by the name it says it has, or the
+ * one this device last saw (`seen`); none while it is live. Not known
+ * yet, as before the desktop first tells the hosts, it waits. */
 export function reachWords(
   host: string,
-  shown: Shown | undefined
+  shown: Shown | undefined,
+  seen: (key: string) => Named
 ): string | undefined {
-  const { name } = shown?.named ?? seenNamed(host)
+  const { name } = shown?.named ?? seen(host)
   if (!shown) return `Waiting for ${name}`
   const { state } = shown
   switch (state.state) {
@@ -499,115 +526,3 @@ export function ownItem(
   if (!shown?.projects.some((one) => one.id === project)) return undefined
   return { ...args, project, item }
 }
-
-/** Where a Pane reaches its engine: this machine's; or another host's,
- * by its name, with what the Window knows of that host yet, and its
- * engine once it knows it. */
-export type Reach =
-  | { host?: undefined; shown?: undefined; engine: Engine }
-  | { host: string; shown: Shown | undefined; engine: Engine | undefined }
-
-/**
- * Where a Pane of `project`, whose args name host `named`, reaches its
- * engine (ADR 0081, decision 4): `engine`, this machine's, for its own
- * Projects; else its host's. Drawn again only as the host it is on, or
- * what the Window knows of that host, changes.
- */
-export function useReach(
-  engine: Engine,
-  project: ProjectId,
-  named: string | undefined
-): Reach {
-  const kept = useContext(HostsContext)
-  const on = useCallback(
-    () => kept.hostOf(project, named),
-    [kept, project, named]
-  )
-  const host = useStore(kept, on)
-  const select = useCallback(
-    (hosts: readonly Shown[]) =>
-      host === undefined ? undefined : hosts.find((one) => one.name === host),
-    [host]
-  )
-  const shown = useStore(kept, select)
-  if (host === undefined) return { engine }
-  return { host, shown, engine: shown && kept.engine(host) }
-}
-
-/** The other host a Pane of `project` is on, whose args name host
- * `named`, by its name and icon; none for this machine's, or with no
- * Pane yet. Drawn again only as they change. */
-export function useNamedOf(
-  project: ProjectId | undefined,
-  named: string | undefined
-): Named | undefined {
-  const kept = useContext(HostsContext)
-  const select = useCallback(
-    (hosts: readonly Shown[]) => {
-      const host =
-        project === undefined ? undefined : kept.hostOf(project, named)
-      return host === undefined ? undefined : namedIn(hosts, host)
-    },
-    [kept, project, named]
-  )
-  return useStore(kept, select, sameData)
-}
-
-/** The engine of a Project, or of `pane` of it, which may name its host
- * (`hostOfPane`): its host's, never this machine's in its place, else
- * this machine's `engine`; the same function while those stay. */
-export function useEngineOf(
-  engine: Engine
-): (project: ProjectId, pane?: PaneState) => Engine {
-  const kept = useContext(HostsContext)
-  return useCallback(
-    (project: ProjectId, pane?: PaneState) => {
-      const host = kept.hostOf(project, pane && paneHost(pane))
-      return host === undefined ? engine : kept.engine(host)
-    },
-    [kept, engine]
-  )
-}
-
-/** How the Window shows host `name` now, as an act asks it; the same
- * function while the Window's hosts stay. */
-export function useShownNow(): (name: string) => Shown | undefined {
-  const kept = useContext(HostsContext)
-  return useCallback(
-    (name: string) => kept.get().find((one) => one.name === name),
-    [kept]
-  )
-}
-
-/** A Pane of a Project as a pick opens it (`KeptHosts.paneOn`); the same
- * function while the Window's hosts stay. */
-export function usePaneOn(): (
-  project: ProjectId,
-  pane: PaneState
-) => PaneState {
-  const kept = useContext(HostsContext)
-  return useCallback(
-    (project: ProjectId, pane: PaneState) => kept.paneOn(project, pane),
-    [kept]
-  )
-}
-
-/** Tells `hosts` this machine's Projects, as `listed` reads them, which
- * win an ID a host has too, and its Host scope's ID, `machine`, where
- * the Window has it (`KeptHosts.ours`). */
-export function useOurs(
-  hosts: KeptHosts,
-  listed: Read<ProjectSummary[]>,
-  machine?: ProjectId
-): void {
-  useEffect(() => {
-    if (listed.state === "ready") hosts.ours(listed.value, machine)
-  }, [hosts, listed, machine])
-}
-
-const allMachines = (machines: readonly Machine[]) => machines
-
-/** The machines a new Thread starts on, as `hosts` tells them
- * (`KeptHosts.machines`), drawn again as they change. */
-export const useMachinesOf = (hosts: KeptHosts): readonly Machine[] =>
-  useStore(hosts.machines, allMachines)

@@ -19,7 +19,7 @@ import {
   sameEach,
   Store,
   useStore,
-} from "@banda/ui/lib/store"
+} from "@banda/core/react"
 import {
   type Attention,
   type Call,

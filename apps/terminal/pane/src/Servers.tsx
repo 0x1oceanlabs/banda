@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
 import { ProjectSign } from "@banda/ui/components/project-sign"
-import { useRun } from "@banda/ui/hooks/use-run"
+import { useRun } from "@banda/core/react"
 import type { WidgetProps } from "@banda/ui/module"
 import { GlobeIcon, SquareIcon } from "lucide-react"
 import type { MouseEvent } from "react"

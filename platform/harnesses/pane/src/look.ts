@@ -9,7 +9,7 @@
  */
 import type { LimitsLook } from "@banda/contract/harnesses"
 import { tomlOf } from "@banda/contract/settings"
-import { Store } from "@banda/ui/lib/store"
+import { Store } from "@banda/core/react"
 import { type Action, takes } from "@banda/ui/module"
 
 /** The looks the Person picks from, as its context menu names them. */

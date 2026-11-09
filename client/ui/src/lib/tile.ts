@@ -26,7 +26,7 @@
  * away.
  */
 import { createContext, useCallback, useContext } from "react"
-import { useSelected } from "./store"
+import { useSelected } from "@banda/core/react"
 
 export type TileState = "shown" | "moving" | "hidden"
 

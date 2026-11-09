@@ -42,7 +42,7 @@ import {
   withAsked,
 } from "./arrange"
 import { apply, type Command } from "./arrangement"
-import { sameData, sameEach } from "@banda/ui/lib/store"
+import { sameData, sameEach } from "@banda/core"
 import {
   type Column,
   type Entry,

@@ -9,7 +9,6 @@
     "./globals.css": "./src/styles/globals.css",
     "./pane": "./src/pane.ts",
     "./module": "./src/module.ts",
-    "./here": "./src/here.ts",
     "./slots": "./src/slots.ts",
     "./desktop": "./src/desktop.ts",
     "./lib/*": "./src/lib/*.ts",

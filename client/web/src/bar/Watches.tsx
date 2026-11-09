@@ -10,16 +10,16 @@ import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { useModules } from "@banda/ui/hooks/use-status"
 import { openProjects } from "@banda/ui/lib/projects"
-import { sameEach } from "@banda/ui/lib/store"
-import type { Listed, Report, Watch } from "@banda/ui/pane"
 import {
   emptyIn,
   HostsContext,
   type KeptHosts,
   liveIn,
+  sameEach,
   type Shown,
   useHostsBy,
-} from "../calls/hosts"
+} from "@banda/core/react"
+import type { Listed, Report, Watch } from "@banda/ui/pane"
 import {
   dropHost,
   StoresContext,

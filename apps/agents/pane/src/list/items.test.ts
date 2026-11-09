@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from "vitest"
 import type { Engine, ProjectId } from "@banda/contract"
-import type { Here } from "@banda/ui/here"
+import type { Here } from "@banda/core/react"
 import {
   cleanTitle,
   namingNow,

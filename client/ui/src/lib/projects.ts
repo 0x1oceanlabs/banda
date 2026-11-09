@@ -5,25 +5,11 @@ import type {
   Sign,
   UpdateProject,
 } from "@banda/contract"
+import { openProjects, shownProjects } from "@banda/core"
 
-/** The Projects a picker shows: pinned ones first, archived ones not at
- * all (ADR 0026, decision 5). The window and the modules' Panes list
- * them alike. */
-export function shownProjects(
-  projects: readonly ProjectSummary[]
-): ProjectSummary[] {
-  return projects
-    .filter((project) => !project.archived && !project.scratch)
-    .toSorted((a, b) => Number(b.pinned) - Number(a.pinned))
-}
-
-/** The Projects whose folder is there: a missing one opens nothing until
- * the Person locates it (ADR 0026, decision 6). */
-export function openProjects(
-  projects: readonly ProjectSummary[]
-): ProjectSummary[] {
-  return projects.filter((project) => !project.missing)
-}
+/** Which Projects a list shows: the core's (ADR 0089), named here too
+ * for the Panes that take them from here, until L3 splits this package. */
+export { openProjects, shownProjects }
 
 /** What the Threads without a Project are in (ADR 0069). */
 export const NO_PROJECT = "No Project"

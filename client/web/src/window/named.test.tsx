@@ -1,8 +1,14 @@
 import type { ProjectId } from "@banda/contract"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, expect, test, vi } from "vitest"
-import { HostsContext, KeptHosts, type Shown, shownOf } from "../calls/hosts"
-import type { HostState } from "../host"
+import {
+  HostsContext,
+  type HostState,
+  KeptHosts,
+  type Shown,
+  shownOf,
+  unseen,
+} from "@banda/core/react"
 import { MachinePill, machineHeader } from "./named"
 
 afterEach(() => {
@@ -107,11 +113,14 @@ test("live, on its build or another, there is no pill: another build waits for U
 })
 
 test("the Window fills the pill of a Pane by the host its args name, as the Window shows it; none for a Pane on no host", () => {
-  const kept = new KeptHosts({
-    follow: () => undefined,
-    engine: () => Promise.reject(new Error("not here")),
-    start: () => undefined,
-  })
+  const kept = new KeptHosts(
+    {
+      follow: () => undefined,
+      engine: () => Promise.reject(new Error("not here")),
+      start: () => undefined,
+    },
+    { seen: unseen, follow: () => () => undefined }
+  )
   kept.take([{ name: "arc", ssh: "arc", state: "stopped" }])
   const { Fill } = machineHeader
   const fill = (pane: { thread: string; host?: string }) =>

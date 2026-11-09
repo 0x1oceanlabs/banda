@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { Update } from "../host"
+import type { Update } from "@banda/core"
 import {
   firstOf,
   groupsOf,

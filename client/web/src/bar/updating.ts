@@ -3,7 +3,7 @@
  * 0072). Pure, so plain tests cover it; Update.tsx draws it.
  */
 import { ago } from "@banda/ui/lib/words"
-import type { Note, Update } from "../host"
+import type { Note, Update } from "@banda/core"
 
 /** How long a download runs before the bar shows it: a Dev that differs
  * by a few blocks is down sooner, and the bar would only flicker. */

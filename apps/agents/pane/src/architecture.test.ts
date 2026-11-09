@@ -13,6 +13,8 @@ const PANE = [
   // with the look, and it writes them (ADR 0016). The desktop bridge (ADR 0028), and the Harnesses' words,
   // which its Threads run on (ADR 0040).
   /^@banda\/contract(\/agents|\/harnesses|\/look|\/settings|\/bridge)?$/,
+  // The client's core, by the one door an App takes to it (ADR 0089).
+  /^@banda\/core\/react$/,
   /^@banda\/ui\//,
   /^react$/,
   /^lucide-react$/,
@@ -21,7 +23,7 @@ const PANE = [
 /** A test may also read files and use its runner. */
 const TEST = [...PANE, /^node:/, /^vitest$/]
 
-test("the agents Panes import only the API, client/ui and React", () => {
+test("the agents Panes import only the API, the core, client/ui and React", () => {
   const folder = import.meta.dirname
   // This file names imports as examples; it is not a Pane.
   const panes = sources(folder).filter((file) => file !== import.meta.filename)

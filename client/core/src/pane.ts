@@ -1,7 +1,8 @@
 /**
  * What the Window, its popped-out windows and main say of a Pane (ADR
- * 0087): what one tile shows, and where a Pane opens. The Pane contract
- * itself, what a module offers and draws, is `@banda/ui/pane`'s.
+ * 0087): what one tile shows, the host a Pane is on, and where a Pane
+ * opens. The Pane contract itself, what a module offers and draws, is
+ * `@banda/ui/pane`'s.
  */
 import type { JsonValue } from "@banda/contract"
 
@@ -18,3 +19,25 @@ export type PaneState = { kind: string; args: { [key: string]: JsonValue } }
  * (ADR 0087, decision 14).
  */
 export type Place = "right" | "below" | "instead" | "group" | "project"
+
+/**
+ * The other host of `hosts.toml` whose Project a Pane shows, by its name,
+ * as its args keep it under `host` (ADR 0081, decision 4): the arrangement
+ * keeps it, so the Pane comes back there after a restart. None for this
+ * machine's. It stands in for the client's Placement (ADR 0082) until
+ * there is one.
+ */
+export function paneHost(pane: PaneState): string | undefined {
+  const host = pane.args.host
+  return typeof host === "string" && host !== "" ? host : undefined
+}
+
+/** `pane` as a Pane of host `host`'s Project keeps it; of this machine's,
+ * `host` none, with no host. */
+export function withHost(pane: PaneState, host: string | undefined): PaneState {
+  if (paneHost(pane) === host) return pane
+  const args = { ...pane.args }
+  if (host === undefined) delete args.host
+  else args.host = host
+  return { ...pane, args }
+}
