@@ -896,9 +896,14 @@ function PluggedIn({
       about={there.about}
     >
       {there.can ? (
-        <BusySwitch label={title} on={on} busy={busy} onChange={turn} />
+        <BusySwitch
+          label={`${title} on ${name}`}
+          on={on}
+          busy={busy}
+          onChange={turn}
+        />
       ) : (
-        <Switch label={title} on={on} disabled />
+        <Switch label={`${title} on ${name}`} on={on} disabled />
       )}
     </RowFrame>
   )
