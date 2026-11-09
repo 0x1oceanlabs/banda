@@ -31,6 +31,7 @@ pub mod chosen_modes;
 mod drive;
 mod effects;
 mod full_access;
+mod goes_on;
 mod images;
 mod issues;
 mod kept;
@@ -1418,8 +1419,8 @@ impl Module for Agents {
             tokio::spawn(notices::follow(project.listen(name, filter).await?));
         }
         // A put-off Thread's failed turn goes on as its time comes.
-        let heard = project.listen(laters::LISTENER, laters::put_off());
-        tokio::spawn(laters::resume(heard.await?));
+        let heard = project.listen(goes_on::LISTENER, goes_on::put_off());
+        tokio::spawn(goes_on::resume(heard.await?));
         let filter = banda_harnesses::account_changed();
         if let Some(heard) = project.listen_to_machine(Live::ACCOUNTS, filter).await? {
             let live = self.live.clone();

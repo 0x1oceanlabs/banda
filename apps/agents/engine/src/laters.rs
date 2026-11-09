@@ -4,13 +4,12 @@
 //! from it ([`crate::rules::later`]): what calls its Person wakes it
 //! early as that fact is written ([`heard`]), and its time needs no timer.
 
-use crate::model::{Fact, Later, ThreadId, TurnState, Wake, Woke, WokeSeen};
+use crate::model::{Fact, Later, ThreadId, TurnId, TurnState, Wake, Woke, WokeSeen};
 use crate::rules::later::{asleep, goes_on, may_put_off, sees, wake_of, wakes};
 use crate::{emit, store};
-use banda_kernel::{Error, EventFilter, Listener, Participant, Refusal, Tx, now_ms};
+use banda_kernel::{Error, Participant, Refusal, Tx};
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::time::Duration;
 use ts_rs::TS;
 
 /// What `agents.later` is asked: a Thread, and until when.
@@ -64,47 +63,15 @@ pub struct WakeAsk {
 /// puts off only its own Thread, never so that it goes on by itself, and
 /// not while its Person's goes on.
 pub fn later(tx: &mut Tx<'_>, author: Participant, ask: LaterAsk) -> Result<(), Error> {
-    let LaterAsk {
-        thread,
-        after,
-        until,
-        resume,
-    } = ask;
-    let thread = thread_of(tx, author, thread)?;
+    let thread = thread_of(tx, author, ask.thread)?;
     may_touch(tx, author, thread)?;
-    // An Agent's Later sends nothing and starts no turn (decision 10):
-    // only its Person's goes on by itself.
-    if resume && author.agent().is_some() {
-        return Err(Refusal::forbidden(
-            "An Agent's Later starts no turn: only its Person's goes on by itself.",
-        )
-        .into());
-    }
-    if after.is_some() && until.is_some() {
-        return Err(Refusal::invalid("Give `after` or `until`, not both.").into());
-    }
-    let until =
-        match after.as_deref().map(while_of).transpose()? {
-            Some(after) => Some(tx.now().checked_add(after).ok_or_else(|| {
-                Refusal::invalid("That while ends past any time Banda can keep.")
-            })?),
-            None => until,
-        };
-    if resume && until.is_none() {
-        return Err(Refusal::invalid("A turn goes on by itself at a time: give `until`.").into());
-    }
-    // The turn that goes again is the one that failed last, now.
-    let resume = match resume {
+    let until = until_of(tx.now(), ask.after.as_deref(), ask.until)?;
+    let resume = match ask.resume {
         false => None,
-        true => Some(
-            store::turns_in(tx.sql(), thread, TurnState::Failed)?
-                .pop()
-                .ok_or_else(|| Refusal::conflict("No turn of this Thread failed to go on with."))?
-                .id,
-        ),
+        true => Some(resumed(tx, author, thread, until)?),
     };
-    let asks = store::asks(tx.sql(), thread)?;
     let works = store::running(tx.sql(), thread)?.is_some();
+    let asks = store::asks(tx.sql(), thread)?;
     let at = tx.now();
     may_put_off(asks, works, until, at)?;
     // Put off, an archived Thread leaves Archive, whoever put it off (ADR
@@ -119,12 +86,49 @@ pub fn later(tx: &mut Tx<'_>, author: Participant, ask: LaterAsk) -> Result<(), 
         woke_seen: None,
     };
     store::set_later(tx.sql(), thread, &later)?;
-    let fact = Fact::ThreadLater {
+    let later = Fact::ThreadLater {
         thread,
         until,
         resume,
     };
-    emit(tx, author, thread, &fact)
+    emit(tx, author, thread, &later)
+}
+
+/// When a Later asked at `now` ends: `after` a while, at `until`, or with
+/// neither, when the turn that runs ends.
+fn until_of(now: i64, after: Option<&str>, until: Option<i64>) -> Result<Option<i64>, Refusal> {
+    match (after, until) {
+        (Some(_), Some(_)) => Err(Refusal::invalid("Give `after` or `until`, not both.")),
+        (Some(after), None) => now
+            .checked_add(while_of(after)?)
+            .map(Some)
+            .ok_or_else(|| Refusal::invalid("That while ends past any time Banda can keep.")),
+        (None, until) => Ok(until),
+    }
+}
+
+/// The turn of `thread` that goes on by itself as `until` comes: the one
+/// that failed last, now. Only a Person's Later goes on, at a time
+/// (decisions 8 and 10).
+fn resumed(
+    tx: &Tx<'_>,
+    author: Participant,
+    thread: ThreadId,
+    until: Option<i64>,
+) -> Result<TurnId, Error> {
+    if author.agent().is_some() {
+        return Err(Refusal::forbidden(
+            "An Agent's Later starts no turn: only its Person's goes on by itself.",
+        )
+        .into());
+    }
+    if until.is_none() {
+        return Err(Refusal::invalid("A turn goes on by itself at a time: give `until`.").into());
+    }
+    let failed = store::turns_in(tx.sql(), thread, TurnState::Failed)?.pop();
+    let failed =
+        failed.ok_or_else(|| Refusal::conflict("No turn of this Thread failed to go on with."))?;
+    Ok(failed.id)
 }
 
 /// The Thread a Later or a wake names, or for an Agent that names none,
@@ -242,78 +246,23 @@ fn may_touch(tx: &Tx<'_>, author: Participant, thread: ThreadId) -> Result<(), E
     Ok(())
 }
 
-/// The name of the module's listener of new Laters.
-pub const LISTENER: &str = "laters";
+#[cfg(test)]
+mod tests {
+    use super::until_of;
 
-/// The facts that may bring a turn that goes on by itself: a new Later.
-pub fn put_off() -> EventFilter {
-    EventFilter {
-        module: Some("agents".into()),
-        subject: None,
-        kinds: Some(vec!["thread.later".into()]),
+    #[test]
+    fn a_later_ends_after_a_while_at_a_moment_or_with_its_turn() {
+        assert_eq!(until_of(1_000, Some("1m"), None), Ok(Some(61_000)));
+        assert_eq!(until_of(1_000, None, Some(5_000)), Ok(Some(5_000)));
+        assert_eq!(until_of(1_000, None, None), Ok(None), "until done");
+        assert!(
+            until_of(1_000, Some("1m"), Some(5_000)).is_err(),
+            "not both"
+        );
+        assert!(until_of(1_000, Some("soon"), None).is_err());
+        assert!(
+            until_of(i64::MAX, Some("1m"), None).is_err(),
+            "past any time"
+        );
     }
-}
-
-/// Goes on with each Thread put off to go on by itself as its time comes
-/// (ADR 0074, decision 8): its failed turn goes again. A time that passed
-/// while the engine was off goes as it starts. It hears new Laters, each
-/// acked once the Laters are read again, and stops with its Project.
-pub async fn resume(mut heard: Listener) {
-    let mut woken: Option<i64> = None;
-    loop {
-        let Some(project) = heard.project() else {
-            return;
-        };
-        let due = match project.read(store::resuming).await {
-            Ok(due) => due,
-            Err(error) => {
-                tracing::warn!(%error, "the Laters that go on were not read");
-                return;
-            }
-        };
-        let now = now_ms();
-        let times = due.iter().filter_map(|(_, later)| later.until);
-        let next = times.filter(|&until| until > now).min();
-        for (thread, _) in due
-            .iter()
-            .filter(|(_, later)| later.until.is_some_and(|until| until <= now))
-        {
-            let thread = *thread;
-            if let Err(error) = project.write(move |tx| go_on(tx, thread)).await {
-                tracing::warn!(%error, "a put-off Thread's turn did not go on");
-            }
-        }
-        drop(project);
-        if let Some(seq) = woken.take()
-            && let Err(error) = heard.ack_through(seq).await
-        {
-            tracing::warn!(%error, "the Laters' place in the log was not kept");
-        }
-        // Until the next one's time, or a new Later.
-        let wait = next.map_or(Duration::MAX, |at| Duration::from_millis((at - now) as u64));
-        match tokio::time::timeout(wait, heard.next()).await {
-            Ok(Ok(Some(event))) => woken = Some(event.seq),
-            Ok(Ok(None) | Err(_)) => return,
-            Err(_) => {}
-        }
-    }
-}
-
-/// Sends `thread`'s failed turn again, as the one who put it off, once:
-/// the Later no longer goes on after. One that is no longer its latest
-/// stays as it is.
-fn go_on(tx: &mut Tx<'_>, thread: ThreadId) -> Result<(), Error> {
-    let found = store::later(tx.sql(), thread)?;
-    let Some(mut later) = found.filter(|later| later.woke.is_none()) else {
-        return Ok(());
-    };
-    let Some(turn) = later.resume.take() else {
-        return Ok(());
-    };
-    store::set_later(tx.sql(), thread, &later)?;
-    // Refused, it is not tried again: the Later has gone on once.
-    if let Err(error) = crate::retry(tx, later.by, turn) {
-        tracing::warn!(%error, "a put-off Thread's failed turn did not go again");
-    }
-    Ok(())
 }
