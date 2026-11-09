@@ -9,8 +9,10 @@
  * from the sidebar on arc's engine, and waits while arc is away: Send
  * says why in the pill's words, from the window's start, and turns on as
  * arc is back. Alt+U and a toast open one there too, as `pane.pick` keeps
- * its host. A new Thread's picker groups the Projects by machine, in a
- * popped-out Pane's window as in the window. As a Mac, its `uname` says
+ * its host, and the counts list and Alt+U place its Threads where the
+ * sidebar list does, among this machine's. A new Thread's picker groups
+ * the Projects by machine, in a popped-out Pane's window as in the
+ * window. As a Mac, its `uname` says
  * Darwin, and the window finds its Banda in its Application Support; its
  * engine is this checkout's still, which serves for the follower, as a
  * Mac's does not
@@ -258,11 +260,17 @@ const states = (arc: Arc, project: string) =>
 /** The window, its hosts.toml naming arc with `banda`, or with none
  * (`null`) for the window to find it there, and the fake ssh first on its
  * PATH; in `dir`, a window's folder before, it opens again on what that
- * window left. */
-const withArc = (arc: Arc, banda: string | null = program, dir?: string) =>
+ * window left. Its sidebar.toml is `sidebar`, grouped by Project unless
+ * a test says otherwise. */
+const withArc = (
+  arc: Arc,
+  banda: string | null = program,
+  dir?: string,
+  sidebar = 'preset = "projects"\n'
+) =>
   startWindow({
     look: 'mode = "dark"\n',
-    sidebar: 'preset = "projects"\n',
+    sidebar,
     files: {
       "config/hosts.toml": `[[hosts]]\nname = "arc"\nssh = "arc"\n${banda ? `banda = ${JSON.stringify(banda)}\n` : ""}`,
     },
@@ -1082,8 +1090,9 @@ test("another machine's Thread that calls opens on its engine by Alt+U and from 
   await expect(done("Sidebar for arc")).toBeVisible()
   await expect(done("Bench window tests")).toBeVisible()
 
-  // Alt+U goes down what calls, this machine's first: then arc's Thread,
-  // which opens read live from arc's engine.
+  // Alt+U goes down what calls as the sidebar lists it, by Project here:
+  // this machine's first, then arc's Thread, which opens read live from
+  // arc's engine.
   await page.keyboard.press("Alt+U")
   await expect(
     page.getByRole("region", { name: "Sidebar for arc", exact: true })
@@ -1108,6 +1117,63 @@ test("another machine's Thread that calls opens on its engine by Alt+U and from 
   const there = page.getByRole("region", { name: "Done on arc", exact: true })
   await expect(there.getByText("You said: Done on arc")).toBeVisible()
   await expect(toast).toBeHidden()
+})
+
+test("the counts list and Alt+U place arc's Threads where the sidebar list does, among this machine's (ADR 0079, decision 4; #999)", async () => {
+  test.setTimeout(shots ? 300_000 : 120_000)
+  arc = newArc()
+  const banda = await seed(arc)
+  // Grouped by state, the newest that waits first, and the counts always
+  // on the bar, beside the sidebar list.
+  window = await withArc(
+    arc,
+    program,
+    undefined,
+    'preset = "inbox"\n[bar]\nshow = "always"\n'
+  )
+  const { page } = window
+  await work(window)
+  const sidebar = sidebarOf(page)
+  const done = (title: string) =>
+    sidebar
+      .getByRole("button", { name: new RegExp(title) })
+      .getByRole("img", { name: "Done" })
+  await expect(done("Sidebar for arc")).toBeVisible()
+  // arc's newest is done after this machine's.
+  send(arc, banda, "Done on arc")
+  await expect(done("Done on arc")).toBeVisible()
+  const titles = [/Done on arc/, /Sidebar for arc/, /Bench window tests/]
+  await expect(
+    sidebar.getByRole("button", {
+      name: /Done on arc|Sidebar for arc|Bench window tests/,
+    })
+  ).toHaveText(titles)
+
+  // The counts list them in the sidebar list's order, arc's newest first.
+  await expect(
+    page.getByRole("region", { name: "Notifications" }).getByRole("listitem")
+  ).toHaveCount(0, { timeout: 30_000 })
+  const counts = page.getByRole("banner").getByRole("button", { name: /done/ })
+  await expect(counts).toHaveAccessibleName("3 done")
+  await counts.click()
+  const waiting = page.getByRole("group", { name: "Wait for you" })
+  await expect(waiting.getByRole("menuitem")).toHaveCount(3)
+  await shot(page, "order-elsewhere-counts")
+  await expect(waiting.getByRole("menuitem")).toHaveText(titles)
+  await page.keyboard.press("Escape")
+  await expect(waiting).toBeHidden()
+
+  // Alt+U walks them in that order too, arc's on arc's engine.
+  for (const title of [
+    "Done on arc",
+    "Sidebar for arc",
+    "Bench window tests",
+  ]) {
+    await page.keyboard.press("Alt+U")
+    const pane = page.getByRole("region", { name: title, exact: true })
+    await expect(pane).toHaveAttribute("data-focused", "true")
+    await expect(pane.getByText(`You said: ${title}`)).toBeVisible()
+  }
 })
 
 /** The page's global, with the bridge on it. */
