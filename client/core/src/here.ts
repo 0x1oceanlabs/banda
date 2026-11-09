@@ -1,14 +1,14 @@
 /**
  * Here (ADR 0087, decision 4): where the Person is in one Window, as a
  * program's working folder says where it runs. Only the Window writes it.
- * A widget reads the fields it needs by selector (`useHere`), so it is
- * drawn again only as they change; an act reads it as it runs, from its
- * Window (`WindowApi.here`). A Pane never reads it to draw: what it shows
- * comes from its args, the same on every client. No host keeps it.
+ * A widget reads the fields it needs by selector (`useHere`, in
+ * `@banda/core/react`), so it is drawn again only as they change; an act
+ * reads it as it runs, from its Window (`WindowApi.here`). A Pane never
+ * reads it to draw: what it shows comes from its args, the same on every
+ * client. No host keeps it.
  */
 import type { ProjectId } from "@banda/contract"
-import { createContext, useContext } from "react"
-import { type Readable, Store, useStore } from "./lib/store"
+import type { Readable } from "./store"
 
 export type Here = {
   /** The Window is in front: it has the desktop's focus, so the Person
@@ -38,30 +38,3 @@ export type Here = {
 /** Here as a Window keeps it: what it is now, the Tiling's last change
  * included, and who hears it change, told once the Window drew it. */
 export type HereStore = Readable<Here>
-
-/** Here where no Window keeps one, as in a test. */
-const NOWHERE: Here = {
-  front: false,
-  sidebar: false,
-  workspace: null,
-  pane: null,
-  project: "",
-}
-
-/** The Window's Here, for what it draws. */
-export const HereContext = createContext<HereStore>(new Store(NOWHERE))
-
-/**
- * `select` of Here, drawn again only as what it selects changes, as
- * `equal` tells, by default when it is another value: a widget that reads
- * the Project is not drawn again as the focus moves within it. Each part
- * of a Window's Here stays the same object while it says the same, so
- * `select` may give one, as `(h) => h.pane`. A `select` made once, not at
- * each drawing, spares React a read.
- */
-export function useHere<T>(
-  select: (here: Here) => T,
-  equal?: (a: T, b: T) => boolean
-): T {
-  return useStore(useContext(HereContext), select, equal)
-}

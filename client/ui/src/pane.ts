@@ -10,6 +10,7 @@
 import type { ComponentType } from "react"
 import type { LucideIcon } from "lucide-react"
 import type { Engine, JsonValue, ProjectId } from "@banda/contract"
+import type { PaneState, Place } from "@banda/core"
 import type { MarkState } from "./components/banda-mark"
 import type { Chip } from "./module"
 import type { Chime } from "./sound/families"
@@ -69,8 +70,10 @@ export function within(tile: Element, element: Element | null): boolean {
   )
 }
 
-/** What one tile shows: a kind of Pane and its args. */
-export type PaneState = { kind: string; args: { [key: string]: JsonValue } }
+/** What one tile shows, and where a Pane opens: the core's (ADR 0089),
+ * named here too for the modules that take them from here, until L3
+ * splits this package. */
+export type { PaneState, Place }
 
 /**
  * The other host of `hosts.toml` whose Project a Pane shows, by its name,
@@ -93,17 +96,6 @@ export function withHost(pane: PaneState, host: string | undefined): PaneState {
   else args.host = host
   return { ...pane, args }
 }
-
-/**
- * Where a Pane opens, from the Pane that opens it: in a new column to its
- * right, below it in its column, instead of it in its place, or in its
- * Group, in the Deck right of it, as what a Thread opens goes; or last on
- * its Project's workspace, as an Agent's Thread does (ADR 0065). Left out,
- * the window shows the Pane where its workspace shows one of its kind, or
- * to the right. `instead` is the word the engine's `workspaces.open` has
- * (ADR 0087, decision 14).
- */
-export type Place = "right" | "below" | "instead" | "group" | "project"
 
 /**
  * What a Pane draws. A part of it that keeps its own Esc, as a list of

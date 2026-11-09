@@ -27,7 +27,7 @@ import {
   writeFileSync,
 } from "node:fs"
 import { basename, dirname, join } from "node:path"
-import type { Note, Update } from "@banda/web/host"
+import type { Note, Update } from "@banda/core"
 import { app, powerMonitor } from "electron"
 import { autoUpdater, type UpdateInfo } from "electron-updater"
 import { CHANNELS, channel } from "./channel"

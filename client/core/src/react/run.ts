@@ -1,8 +1,5 @@
 import { createContext, useContext } from "react"
-import type { Args } from "../module"
-
-/** Runs an action by its id, as its key would, with `args`. */
-export type Run = (action: string, args?: Args) => void
+import type { Run } from "../run"
 
 /**
  * The Window's run (ADR 0087, decision 11): it acts with the Window's Here

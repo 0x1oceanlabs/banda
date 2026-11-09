@@ -1,13 +1,13 @@
 /**
- * Gives the page its one bridge to the desktop (client/web/src/host.ts),
- * built from the table of its channels (ADR 0028). The extensions'
- * buttons stay written here: electron-chrome-extensions answers them on
- * channels of its own.
+ * Gives the page its one bridge to the desktop, built from the table of
+ * its channels (`bridge.ts`, ADR 0028). The extensions' buttons stay
+ * written here: electron-chrome-extensions answers them on channels of
+ * their own.
  */
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron"
 import { PARTITION } from "@banda/browser-pane/desktop"
 import { type HostOf, type Leaf, mapTable } from "@banda/contract/bridge"
-import { BRIDGE, type Host } from "@banda/web/host"
+import { BRIDGE, type Host } from "./bridge"
 
 /** Calls `listener` with each value main tells on `name`; returns how to
  * stop. */

@@ -33,7 +33,7 @@ import {
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
-import type { Host } from "@banda/web/host"
+import type { Host } from "../src/bridge"
 import { headerShows, setInFront, startWindow, type Window } from "./window"
 
 const repository = resolve(import.meta.dirname, "../../..")

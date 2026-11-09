@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "vitest"
-import { type Here, HereContext, useHere } from "./here"
-import { Store } from "./lib/store"
+import type { Here } from "../here"
+import { Store } from "../store"
+import { HereContext, useHere } from "./here"
 
 const project = (here: Here) => here.project
 const subject = (here: Here) => here.pane?.subject ?? "none"

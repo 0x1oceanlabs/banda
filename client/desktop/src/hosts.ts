@@ -63,7 +63,7 @@ import {
   PROTOCOL,
 } from "@banda/contract"
 import { Refused, writeWholeIf } from "@banda/desktop-kit"
-import type { HostEntry, HostState, HostTest } from "@banda/web/host"
+import type { HostEntry, HostState, HostTest } from "@banda/core"
 import { parse } from "smol-toml"
 import {
   Cause,

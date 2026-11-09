@@ -1,14 +1,16 @@
 /**
- * The device as the Window reaches it: the Window's part of what the
- * desktop gives the page on `window.banda` (`host.ts`, ADR 0028), and its
- * only way there. Nothing else in the Window or the Tiling names
- * `window.banda` (architecture.test.ts). W0 replaces it with the device
- * port, whose desktop adapter, `boot/desktop.ts`, is then the only reader
- * (ADR 0089, decisions 2 and 11). Without the desktop, as in a page of
- * its own, each part does nothing, and what answers says so.
+ * The device as the page reaches it on the desktop, its adapter: the part
+ * of what the desktop gives the page on `window.banda` (`Host`, the
+ * bridge's table in `client/desktop/src/bridge.ts`, ADR 0028) that the
+ * Window uses, and its only way there. Nothing else in the Window or the
+ * Tiling names `window.banda`, and at last nothing else in the page does
+ * (architecture.test.ts; ADR 0089, decisions 2 and 11). Its callers reach
+ * it through `boot/index.ts`. Without the desktop, as in a page of its
+ * own, each part does nothing, and what answers says so.
  */
 import type { Address } from "@banda/contract"
-import type { Host, HostEntry, HostState, HostTest, PoppedAsk } from "../host"
+import type { HostEntry, HostState, HostTest, PoppedAsk } from "@banda/core"
+import type { Host } from "@banda/desktop/bridge"
 
 /** The desktop's bridge as each part is used; none without the desktop. */
 const desktop = (): Host | undefined => window.banda
@@ -93,7 +95,7 @@ export const device = {
     /** Closes Pane `pane`'s window: it is back in its place. */
     close: (pane: string): void => desktop()?.popped.close(pane),
     /** Hands `take` the Panes in windows of their own now, then each time
-     * they change, until it is stopped. Unlike `follow` in `host.ts`, a
+     * they change, until it is stopped. Unlike `@banda/core`'s `follow`, a
      * first answer that comes after a change is still taken, as the
      * Window has always taken it. */
     follow: (take: (panes: ReadonlySet<string>) => void) => {

@@ -1,7 +1,7 @@
 /**
  * The desktop's notifications, on `window.banda.notifications`
  * (client/desktop/src/preload.ts): the window's table takes the bridge in
- * (client/web/src/host.ts), and the module's desktop part answers it
+ * (client/desktop/src/bridge.ts), and the module's desktop part answers it
  * (`@banda/notifications-desktop`); none outside Banda's desktop window.
  */
 import { type HostOf, invoke, push, send } from "@banda/contract/bridge"

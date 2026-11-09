@@ -4,7 +4,7 @@
  * already, and the storage forgets it: the file is the one source now.
  */
 import { tomlOf } from "@banda/contract/settings"
-import type { Host } from "./host"
+import type { Host } from "@banda/desktop/bridge"
 
 const KEPT = "banda.agents.enter-key"
 
