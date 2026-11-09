@@ -93,6 +93,12 @@ const IMPLEMENT = "Implement the plan."
  * maybe after the Person marked the Thread unread on another machine
  * (decision 8). It fails quietly, as an older host's refusal: the window
  * marked it by itself.
+ *
+ * One not sent, as its host was away, is armed again once the host is
+ * back, and goes as the first would have, when the Person is there: the
+ * Thread on screen does not stay Done everywhere for a host that came
+ * back. One the host took, or refused while it was there, is done, so a
+ * "Mark as unread" made since stays (ADR 0077, decision 6).
  */
 export function seeWhenPresent(
   engine: Engine,
@@ -101,9 +107,42 @@ export function seeWhenPresent(
   turn: TurnId,
   when: WhenPresent = whenPresent
 ): () => void {
-  return when(
-    () => void mark(engine, project, thread, { seen: turn }, { quiet: true })
-  )
+  let off = false
+  // What calls off the wait now: for the Person, or for the host.
+  let stop = () => {}
+  const see = () =>
+    void mark(engine, project, thread, { seen: turn }, { quiet: true }).then(
+      (took) => {
+        // A refusal comes while the host is there; only a seen not sent
+        // waits for it to come back.
+        if (took || off || engine.status.state === "open") return
+        stop = whenOpen(engine, () => (stop = when(see)))
+      }
+    )
+  stop = when(see)
+  return () => {
+    off = true
+    stop()
+  }
+}
+
+/** Runs `act` once, when `engine` is next open; gives back how to call
+ * that off. */
+function whenOpen(engine: Engine, act: () => void): () => void {
+  let waiting = true
+  let stop: (() => void) | undefined = undefined
+  stop = engine.watch((status) => {
+    if (!waiting || status.state !== "open") return
+    waiting = false
+    stop?.()
+    act()
+  })
+  // `watch` tells the status at once: an engine open already.
+  if (!waiting) stop()
+  return () => {
+    waiting = false
+    stop?.()
+  }
 }
 
 /** The Thread a Pane with `args` shows, and what its Person may do there. */
