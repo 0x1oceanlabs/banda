@@ -7,7 +7,7 @@ import type { Columns } from "@banda/contract/look"
 import { cn } from "@banda/ui/lib/utils"
 import type { GroupState } from "@banda/ui/components/banda-mark"
 import { useLookColumns } from "../look"
-import { type Owned, type Shows, useShows } from "./shows"
+import { type Owned, type Shows, useGroups } from "./shows"
 import { share, widthIn, type Workspace } from "./model"
 
 /** A column of the map: its share of the screen, its Group, if any, and
@@ -21,7 +21,7 @@ export type MapColumn = {
 }
 
 /** The map of `workspace`, by the look's widths and each owned Group's
- * state, by its id (`useShows`). */
+ * state, by its id (`useGroups`). */
 export function mapOf(
   workspace: Workspace,
   look: Pick<Columns, "presets" | "default" | "alone">,
@@ -50,8 +50,11 @@ export function WorkspaceMap({
   workspace: Workspace
   shows: Shows
 }) {
-  const { groups } = useShows(shows, workspace)
-  const columns = mapOf(workspace, useLookColumns(), groups)
+  const columns = mapOf(
+    workspace,
+    useLookColumns(),
+    useGroups(shows, workspace)
+  )
   if (columns.length < 2 || !columns.some((c) => c.group !== undefined)) {
     return null
   }

@@ -3,9 +3,9 @@ import { sameEach } from "@banda/core"
 import { groupState } from "@banda/ui/components/banda-mark"
 import type { Listed, PaneState } from "@banda/ui/pane"
 import { expect, test } from "vitest"
-import { listedIn, newStores, takeLists } from "../calls/stores"
+import { followCalls, listedIn, newStores, takeLists } from "../calls/stores"
 import type { Column, Entry } from "../tiling/model"
-import { groupsIn, ownedIn } from "../tiling/shows"
+import { groupsIn, ownedIn, shownIn } from "../tiling/shows"
 import { tilingShows } from "./shows"
 
 /** What a Pane shows, as the registry's `showsOf` says it of a Thread's
@@ -183,4 +183,62 @@ test("a Group's part of what a Strip selects stays as its owner's Item changes o
     "done",
     "Thread b",
   ])
+})
+
+test("a row of the overview selects its Panes alone, and the map its Groups alone (#1099)", () => {
+  const stores = newStores()
+  // What calls follows the items, as in the Window.
+  const stop = followCalls(stores)
+  takeLists(stores, { [p]: [thread("a"), thread("b", { mark: "idle" })] })
+  const shows = tilingShows(stores, showsOf)
+  // The Thread a and a terminal, a Group; the Thread b in none.
+  const columns = [
+    column("1", "g", p, "a"),
+    column("2", "g", p, "-"),
+    column("3", undefined, p, "b"),
+  ]
+  const entries = columns.flatMap((one) => one.entries)
+  // What a row of the overview selects, and what the map does.
+  const row = shownIn(shows, entries)
+  const map = ownedIn(shows, columns)
+  expect(row).toEqual([true, undefined, false, undefined, true, undefined])
+  expect(map).toEqual(["g", "working", "Thread a"])
+
+  // The Group's owner comes to rest, then is renamed: its plate and its
+  // handle change, and nothing the row draws.
+  takeLists(stores, {
+    [p]: [thread("a", { mark: "idle" }), thread("b", { mark: "idle" })],
+  })
+  expect(ownedIn(shows, columns)).toEqual(["g", undefined, "Thread a"])
+  expect(sameEach(shownIn(shows, entries), row)).toBe(true)
+  takeLists(stores, {
+    [p]: [
+      thread("a", { mark: "idle", title: "Renamed" }),
+      thread("b", { mark: "idle" }),
+    ],
+  })
+  expect(ownedIn(shows, columns)).toEqual(["g", undefined, "Renamed"])
+  expect(sameEach(shownIn(shows, entries), row)).toBe(true)
+  const named = ownedIn(shows, columns)
+
+  // The Thread b, in no Group, is done and calls: the row rings it, and
+  // nothing the map draws changes.
+  const calls = stores.calls.get()
+  takeLists(stores, {
+    [p]: [
+      thread("a", { mark: "idle", title: "Renamed" }),
+      thread("b", { mark: "done" }),
+    ],
+  })
+  expect(stores.calls.get()).not.toBe(calls)
+  expect(shownIn(shows, entries)).toEqual([
+    true,
+    undefined,
+    false,
+    undefined,
+    true,
+    "done",
+  ])
+  expect(sameEach(ownedIn(shows, columns), named)).toBe(true)
+  stop()
 })

@@ -6,8 +6,10 @@
  * Window gives the port from its items and calls stores
  * (`window/shows.ts`), the same object for its life, and the Tiling reads
  * it by selector, so a list that changes draws again only the Strips
- * whose Panes it changes (ADR 0088, decision 7). The port goes once the
- * Tiling reads the items store by selector itself (B7a or E8b).
+ * whose Panes it changes (ADR 0088, decision 7). Each part selects only
+ * what it draws: a Strip its Panes and its Groups, a row of the overview
+ * its Panes' calls, the map its Groups. The port goes once the Tiling
+ * reads the items store by selector itself (B7a or E8b).
  */
 import { useCallback, useMemo } from "react"
 import { sameEach, useSelected } from "@banda/core/react"
@@ -40,10 +42,23 @@ export type Shows = {
 }
 
 /**
+ * What `shows` says of each Pane of `entries`, flat: whether it shows an
+ * Item, then how it calls. They are plain values, so a selection of them
+ * stays the same while they do, however else an Item or its owner's Mark
+ * changes.
+ */
+export function shownIn(
+  shows: Shows,
+  entries: readonly Entry[]
+): (boolean | Chime | undefined)[] {
+  return entries.flatMap((entry) => [shows.item(entry), shows.called(entry)])
+}
+
+/**
  * Each owned Group of `columns`, by the first Pane in it whose Item names
  * an owner, flat: its id, then its owner's state and name. They are
  * plain values, so a selection of them stays the same while they do,
- * however else the owner's Item changes.
+ * however else the owner's Item changes, or what calls.
  */
 export function ownedIn(
   shows: Shows,
@@ -71,28 +86,19 @@ export function groupsIn(
 
 /**
  * What `shows` says of the Panes of `workspace`, drawn again only when
- * that changes: what one Strip, one row of the overview or the map
- * reads. Whether each Pane shows an Item, and its call, side by side,
- * then its owned Groups, in one selection.
+ * that changes: what one Strip or one row of the overview reads. Whether
+ * each Pane shows an Item, and its call, side by side (`shownIn`); not
+ * its Groups, which a row of the overview does not draw.
  */
 export function useShows(
   shows: Shows,
   workspace: Workspace
-): Pick<Shows, "item" | "called"> & {
-  /** Each owned Group's state and name, by its id. */
-  groups: ReadonlyMap<string, Owned>
-} {
+): Pick<Shows, "item" | "called"> {
   const entries = useMemo(
     () => workspace.columns.flatMap((column) => column.entries),
     [workspace]
   )
-  const read = useCallback(
-    () => [
-      ...entries.flatMap((entry) => [shows.item(entry), shows.called(entry)]),
-      ...ownedIn(shows, workspace.columns),
-    ],
-    [shows, entries, workspace]
-  )
+  const read = useCallback(() => shownIn(shows, entries), [shows, entries])
   const shown = useSelected(shows.subscribe, read, sameEach)
   return useMemo(() => {
     const at = new Map(entries.map((entry, i) => [entry.id, 2 * i]))
@@ -103,9 +109,24 @@ export function useShows(
     return {
       item: (entry) => of(entry, 0) === true,
       called: (entry) => of(entry, 1) as Chime | undefined,
-      groups: groupsIn(shown.slice(2 * entries.length)),
     }
   }, [entries, shown])
+}
+
+/** Each owned Group of `workspace`, its state and name by its id, drawn
+ * again only as one of those changes (`ownedIn`): what a Strip's plates
+ * and handles, and the map, read; not its Panes' calls, which the map
+ * does not draw. */
+export function useGroups(
+  shows: Shows,
+  workspace: Workspace
+): ReadonlyMap<string, Owned> {
+  const read = useCallback(
+    () => ownedIn(shows, workspace.columns),
+    [shows, workspace]
+  )
+  const owned = useSelected(shows.subscribe, read, sameEach)
+  return useMemo(() => groupsIn(owned), [owned])
 }
 
 /** Whether an App lists what `entry`'s Pane shows, drawn again only as
