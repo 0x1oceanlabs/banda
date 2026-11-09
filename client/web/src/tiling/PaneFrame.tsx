@@ -164,10 +164,8 @@ export function handleOf(
       ? pane
       : withHost(pane, host)
   return {
-    open: (pane, place, other) => {
-      const into = other ?? project
-      frame.open(into, paneOn(into, there(pane)), entry, place)
-    },
+    open: (pane, place, into = project) =>
+      frame.open(into, paneOn(into, there(pane)), entry, place),
     update: (args) =>
       frame.update(entry, paneOn(project, there({ kind, args }))),
     close: () => frame.close(entry),
