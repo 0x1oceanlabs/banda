@@ -54,7 +54,8 @@ Nothing an App gives talks to anything else directly.
   published queries (`calls`) and intents (after B8); never by a method
   string, never by running its action by id, never by opening its Pane
   kind with its private args.
-- `borders.4` Import no other App and none of its contract types.
+- `borders.4` Import no other App and none of its contract types; take
+  the client core only as `@banda/core/react`.
 - `borders.5` The kernel, the platform, the Window and the Tiling name no
   App.
 - `borders.6` Keep no `WindowApi` in a module variable, no module global
@@ -97,8 +98,8 @@ Nothing an App gives talks to anything else directly.
 
 Here holds `front`, `sidebar`, `workspace`, `pane` (`{id, project,
 subject?}`) and `project`. It has no Pane kind and no device form: branch
-on neither. A Widget reads it with `useHere` from `@banda/ui/here` until
-W0a2, then from `@banda/core/react`; an act reads `window.here.get()` as it runs.
+on neither. A Widget reads it with `useHere` from `@banda/core/react`; an
+act reads `window.here.get()` as it runs.
 
 ## Data
 

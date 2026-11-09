@@ -97,9 +97,12 @@ What Apps give never talk to each other.
 - **borders.4 Import no other App, and none of its contract types.** A
   Pane imports only the contract, the kit, React and lucide
   (`apps/git/pane/src/architecture.test.ts:11-17`, which still lets Git
-  import Threads' contract at `:12`). Name another App's things by
-  Address. *Check:* today (one copy of the test per App); planned (one
-  shared test).
+  import Threads' contract at `:12`), and the client core only as
+  `@banda/core/react`, where its hooks and contexts are (`useHere`,
+  `useRun`, `useMachines`). Name another App's things by Address.
+  *Check:* today (one copy of the test per App, and "an App or a platform
+  part takes the core only from @banda/core/react" in
+  `client/web/src/architecture.test.ts`); planned (one shared test).
 - **borders.5 The kernel, the platform, the Window and the Tiling name no
   App.** No App id in their strings, no Thread-shaped type such as
   `Listed` (`client/ui/src/pane.ts:232`). *Check:* today for the kernel
@@ -197,9 +200,8 @@ What Apps give never talk to each other.
 ## 3. Here: the context, like `$PWD`
 
 Every rule here binds from B4c, which built Here. A Widget reads it with
-`useHere(select)` from `@banda/ui/here` until W0a2, then from
-`@banda/core/react`; an act reads it as it runs, `window.here.get()`, so it acts
-where the Person is at its gesture. Until Addresses come with `item@1`
+`useHere(select)` from `@banda/core/react`; an act reads it as it runs,
+`window.here.get()`, so it acts where the Person is at its gesture. Until Addresses come with `item@1`
 (B7), `subject` is the id the App lists the thing with
 (`PaneKind.shows`).
 
@@ -475,7 +477,8 @@ module and no module touches its tables (`kernel/tests/architecture.rs`);
 each `[unstable]` mark says why and their count stays at the ceiling
 (`scripts/check.sh:63-65`); the generated TypeScript matches the Rust;
 prettier, ESLint, typecheck and tests; each App's Pane imports only the
-contract, the kit, React and lucide; the window's end-to-end tests; and
+contract, the kit, React and lucide, and the core only as
+`@banda/core/react`; the window's end-to-end tests; and
 motion.spec, which measures every phase against
 `client/desktop/e2e/motion-budget.json` and, in record mode, only warns.
 The window's architecture test (`client/web/src/architecture.test.ts`)

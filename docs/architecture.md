@@ -1274,7 +1274,7 @@ module reaches a Harness through an adapter:
 client/desktop                      Electron main: starts the engine, serves the page, hands it the address
 client/desktop-kit                  what a module's part in main may use of main: its services, dialogs, errors, the bridge's answers, the byte host
 client/web                          the page: the bar, the sidebar, the workspaces and the overview; the actions; the Pane registry
-client/core                         the core every client shares, with no DOM: Here, the stores read by selector, what an action runs with, the device's words
+client/core                         the core every client shares, with no DOM: Here, the stores read by selector, what an action runs with, the device's words, the hosts
 client/ui                           shadcn/ui (preset b0, on Base UI), Banda's Mark and sounds, and the Pane contract
 client/ghostty                      T3 Code's Ghostty adapter: a terminal on a canvas
 apps/*/pane, platform/*/pane        each module's Panes
@@ -1368,8 +1368,12 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   and 11). What every client shares is `client/core` (`@banda/core`,
   and `@banda/core/react` for what reads it from React): Here and the
   store the Window keeps it in, the store read by selector, what an
-  action runs with, and the words the page and the desktop say to each
-  other. It has no DOM, reads no device and names no App (decision 1).
+  action runs with, the words the page and the desktop say to each
+  other, and the hosts the Window reaches (`KeptHosts`, with the
+  machines a new Thread starts on), which take the names this device
+  remembers from the Window. It has no DOM, reads no device and names
+  no App (decision 1); an App or a platform part takes it only as
+  `@banda/core/react`.
   The Window may import the Tiling; what the Tiling still imports of the
   Window, the architecture test lists, and the list only falls.
 - **The workspaces** follow niri (`client/web/src/tiling/model.ts`); every
@@ -1726,7 +1730,8 @@ images. Sweeps retain images still referenced by a fork after a rewind.
 
 - **Architecture tests.** The kernel names no module, no module reads
   another's tables, and a Pane imports only the API, `@banda/ui`, React
-  and its icons; the terminal's Pane also Ghostty. No code of the engine
+  and its icons, and the core only as `@banda/core/react`; the terminal's
+  Pane also Ghostty. No code of the engine
   makes a process but `banda-environments`, and the places named in its
   test, each with how many and why, that ask the host about itself or keep
   Banda's books and run nothing of a Project's (ADR 0084, decision 4); no
@@ -1754,8 +1759,10 @@ images. Sweeps retain images still referenced by a fork after a rewind.
   by file, a list that only falls (ADR 0089, decisions 2 and 11). The
   core imports only itself, the contract and, in its bindings, React,
   reads no device, names no App and keeps no state at a module's top
-  level; the desktop imports nothing of the page, which takes the
-  bridge's table only as a type (decisions 1, 4 and 11).
+  level but the constants listed; only the Window makes and gives the
+  hosts and gives the machines; the desktop imports nothing of the page,
+  which takes the bridge's table only as a type (decisions 1, 4 and
+  11).
 - **Module tests** run through the module's interface: commands go in and
   events come out. Nothing past the interface is mocked.
 - **Checkpoints** (ADR 0014, decision 3). With `BANDA_CHECKPOINTS` set,
