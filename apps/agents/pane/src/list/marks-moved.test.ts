@@ -316,8 +316,14 @@ test("a window that kept no marks asks its engine nothing", async () => {
     call: async (method: string) => void asked.push(method),
     command: async (method: string) => void asked.push(method),
   } as unknown as Engine
-  expect(await moveMarks(engine, storage())).toBe(0)
+  const held = storage()
+  expect(await moveMarks(engine, held)).toBe(0)
+  // Nor does a Project's list, which moves none alone.
+  const move = new Move(() => held)
+  move.start(engine)
+  await move.over(engine, P1 as ProjectId)
   expect(asked).toEqual([])
+  expect(held.getItem("banda.marks.moved")).toBeNull()
 })
 
 test("the cutoff is kept as the window wrote it: three quiet days for one with marks, none for a new one", () => {
@@ -494,6 +500,113 @@ test("once no move started within the wait, one that starts in the same tick is 
   } finally {
     vi.useRealTimers()
   }
+})
+
+/** An engine of this machine's, open, whose Projects are `projects`, a
+ * missing one as "missing", each listing its Threads, and every command
+ * it was sent, with its Project. */
+function projectsEngine(
+  projects: Record<string, ListedThread[] | "missing" | Error>
+) {
+  const sent: { method: string; project: string; params: unknown }[] = []
+  const status = { state: "open" } as Status
+  const engine = {
+    status,
+    watch: (watcher: (status: Status) => void) => {
+      watcher(status)
+      return () => undefined
+    },
+    call: async (
+      method: string,
+      _: unknown,
+      options?: { project?: string }
+    ) => {
+      if (method === "projects.list")
+        return Object.entries(projects).map(
+          ([id, threads]) =>
+            ({ id, missing: threads === "missing" }) as ProjectSummary
+        )
+      const threads = projects[options!.project!]
+      if (threads === "missing") throw new Error("its folder is gone")
+      if (threads instanceof Error) throw threads
+      return { at: 0, threads }
+    },
+    command: async (method: string, params: unknown, project: string) => {
+      sent.push({ method, project, params })
+      return { count: 1 }
+    },
+    commandAt: async (method: string, params: unknown, project: string) => {
+      sent.push({ method, project, params })
+      return { answer: null, at: 9 }
+    },
+  } as unknown as Engine
+  return { engine, sent, projects }
+}
+
+test("a Project missing at the start moves alone once located, before its list reads, and once", async () => {
+  const held = storage({
+    "banda.agents.seen": { [T1]: U1 },
+    "banda.sidebar.archived": { [T2]: { archived: true, at: NOW } },
+    ...NO_DAYS,
+  })
+  const { engine, sent, projects } = projectsEngine({
+    [P1]: [thread(T1, NOW - DAY)],
+    [P2]: "missing",
+  })
+  const move = new Move(() => held)
+  move.start(engine)
+  await move.over(engine, P)
+  expect(sent).toEqual([
+    {
+      method: "agents.import_marks",
+      project: P1,
+      params: { seen: { [T1]: U1 }, archived: [] },
+    },
+  ])
+  expect(JSON.parse(held.getItem("banda.marks.moved")!)).toEqual([P1])
+
+  // The Person locates P2. Another engine's list of it, or another
+  // host's, moves nothing.
+  projects[P2] = [thread(T2, NOW - DAY), thread(T3, NOW - DAY, { seen: U1 })]
+  const p2 = P2 as ProjectId
+  const arc = slowEngine()
+  await move.over(arc.engine, p2)
+  await move.over(arc.engine, p2, "arc")
+  expect(arc.asked).toEqual([])
+  expect(sent).toHaveLength(1)
+  // Its own list's first read moves it, then reads. T3, seen on its host
+  // though this window kept no seen of it, is taken back after the
+  // import, as at the start.
+  const read = await move.over(engine, p2).then(() => sent.slice(1))
+  expect(read).toEqual([
+    {
+      method: "agents.import_marks",
+      project: P2,
+      params: { seen: {}, archived: [T2] },
+    },
+    { method: "agents.unread", project: P2, params: { thread: T3 } },
+  ])
+  expect(JSON.parse(held.getItem("banda.marks.moved")!)).toEqual([P1, P2])
+
+  // Moved, it is not sent again.
+  await move.over(engine, p2)
+  expect(sent).toHaveLength(3)
+})
+
+test("a Project that does not move alone is not tried again in the session", async () => {
+  const held = storage({ "banda.agents.seen": { [T1]: U1 }, ...NO_DAYS })
+  const { engine, sent, projects } = projectsEngine({ [P2]: "missing" })
+  const move = new Move(() => held)
+  move.start(engine)
+  // Located, its Threads cannot be read yet.
+  projects[P2] = new Error("the engine broke off")
+  await move.over(engine, P2 as ProjectId)
+  // Read again, as a list does after it failed, it moves none, though it
+  // now could: it goes at the next start.
+  projects[P2] = [thread(T1, NOW - DAY)]
+  await move.over(engine, P2 as ProjectId)
+  expect(sent).toEqual([])
+  expect(held.getItem("banda.marks.moved")).toBeNull()
 })
 
 test("a Thread marked unread here, seen on its host, is taken back there; one never seen here is not", () => {
