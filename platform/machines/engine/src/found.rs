@@ -543,11 +543,11 @@ mod tests {
         assert!(!supplies(&laptop), "on battery");
         laptop
             .write(
-                "sys/class/power_supply/ucsi-source-psy-USBC000:001/type",
+                "sys/class/power_supply/ucsi-source-psy-USBC000-001/type",
                 "USB\n",
             )
             .write(
-                "sys/class/power_supply/ucsi-source-psy-USBC000:001/online",
+                "sys/class/power_supply/ucsi-source-psy-USBC000-001/online",
                 "1\n",
             );
         assert!(supplies(&laptop), "charged through USB-C");
