@@ -38,6 +38,11 @@ export type Folder = {
   listing: ReadonlySet<string>
   /** Whether the system has no watch left for some open folder. */
   limit: boolean
+  /** Says Files changes `folder` itself, which the tree shows before the
+   * folder is listed again; the call it gives back says the change is
+   * done. A listing sent before then is dropped, as it may have read the
+   * folder before the change, and the folder is listed again after. */
+  change: (folder: string) => () => void
 }
 
 /**
@@ -67,6 +72,13 @@ export function useFolder(
   const running = useRef(new Set<string>())
   const again = useRef(new Set<string>())
   const waiting = useRef<(() => void)[]>([])
+  // Files' own changes running in each folder, when its last one was done,
+  // and the folders whose listing was dropped meanwhile: by one clock that
+  // counts each listing sent and each change done.
+  const changing = useRef(new Map<string, number>())
+  const changed = useRef(new Map<string, number>())
+  const dropped = useRef(new Set<string>())
+  const clock = useRef(0)
   const list = useCallback(
     function listing(folder: string) {
       if (running.current.has(folder)) {
@@ -80,11 +92,18 @@ export function useFolder(
           listed: merged(was?.dir === dir ? was.listed : NONE, folder, entries),
         }))
       function go() {
+        const sent = ++clock.current
         engine
           .call("files.list", { dir: wholeOf(dir, folder) }, { project })
           .then(
             (found) => {
               if (now.current !== dir) return
+              // Sent before Files' own change was done: it may not hold it.
+              const before =
+                (changing.current.get(folder) ?? 0) > 0 ||
+                sent < (changed.current.get(folder) ?? 0)
+              if (before) return void dropped.current.add(folder)
+              dropped.current.delete(folder)
               keep(found.entries)
               if (folder === "")
                 setTop({
@@ -123,6 +142,23 @@ export function useFolder(
       else waiting.current.push(go)
     },
     [engine, project, dir]
+  )
+  // A change done: the folder is listed again if a listing was dropped
+  // meanwhile, or after the one running, which is dropped as it comes.
+  const change = useCallback(
+    (folder: string) => {
+      changing.current.set(folder, (changing.current.get(folder) ?? 0) + 1)
+      let over = false
+      return () => {
+        if (over) return
+        over = true
+        changing.current.set(folder, (changing.current.get(folder) ?? 1) - 1)
+        changed.current.set(folder, ++clock.current)
+        if (running.current.has(folder)) again.current.add(folder)
+        else if (dropped.current.delete(folder)) list(folder)
+      }
+    },
+    [list]
   )
 
   // Another folder: its top at once.
@@ -185,5 +221,6 @@ export function useFolder(
     listed: shown,
     listing,
     limit: limit === dir,
+    change,
   }
 }

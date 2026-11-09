@@ -244,6 +244,14 @@ function TreePane(props: PaneProps<TreeArgs>) {
   const wide = useWiderThan(box, NARROW)
   const railOpen = args.rail ?? wide
   const hidden = args.hidden ?? finder.hidden
+  // The same between draws: the tree's paths are worked out again only as
+  // a folder is listed again, or this changes. Paths from before drawn
+  // again, as the args are kept, would take back the row a New file shows
+  // early, its name's field with it, and a rename in place.
+  const showing = useMemo(
+    () => ({ hidden, ignored: finder.ignored }),
+    [hidden, finder.ignored]
+  )
   const recent = args.recent === true
   const trash = args.trash === true && !recent
   const dir = args.dir
@@ -359,7 +367,7 @@ function TreePane(props: PaneProps<TreeArgs>) {
             {...props}
             home={home}
             projectTop={projectTop}
-            showing={{ hidden, ignored: finder.ignored }}
+            showing={showing}
             thumbnails={finder.thumbnails}
             pinned={pinned}
             onGo={go}
@@ -475,6 +483,7 @@ function FolderView({
     [view, picked, open]
   )
   const folder = useFolder(engine, project, dir, listing, onListed)
+  const changeIn = folder.change
   const { paths, ignored } = useMemo(
     () => treeOf(folder.listed, showing),
     [folder.listed, showing]
@@ -689,7 +698,12 @@ function FolderView({
     async (kind: Making, row: string | null) => {
       const into = folderOfRow(row)
       const name = untitled(folder.listed.get(into) ?? [], kind === "folder")
-      const done = await acts.make(at, wholeOf(dir, into), name, kind)
+      // Its row shows before the folder is listed again: a listing from
+      // before it was made would take the row back, its field with it.
+      const over = changeIn(into)
+      const done = await acts
+        .make(at, wholeOf(dir, into), name, kind)
+        .finally(over)
       if (!done) return
       const path = `${into}${name}${kind === "folder" ? "/" : ""}`
       if (into) tree.current?.expand([into])
@@ -698,18 +712,23 @@ function FolderView({
       setPicked(path)
       requestAnimationFrame(() => tree.current?.rename(path, true))
     },
-    [at, dir, folder.listed]
+    [at, dir, folder.listed, changeIn]
   )
   const onRename = useCallback(
     async (from: string, to: string) => {
       const was = made.current?.path === from ? made.current.done : undefined
       made.current = null
       const name = nameOf(wholeOf(dir, to))
-      const done = await acts.rename(at, wholeOf(dir, from), name, was)
+      // The tree shows it renamed already: a listing from before the
+      // rename would name it back.
+      const over = changeIn(parentRow(from))
+      const done = await acts
+        .rename(at, wholeOf(dir, from), name, was)
+        .finally(over)
       if (done) setPicked(to)
       return done
     },
-    [at, dir]
+    [at, dir, changeIn]
   )
   const act = useCallback(
     (what: Does, row: string | null = null) => {
