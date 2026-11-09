@@ -771,12 +771,13 @@ it a column of the one on screen.
 **Sidebar**:
 The Window's area at its left edge, and Banda's list that fills it, the
 sidebar list: every Thread of every Project, and whatever else an App
-lists as an Item. Each row shows its own Mark. A preset arranges it, and
-the Person's own keys change any part of it. The list is a part of Banda,
+lists as an Item. Each row shows its own Mark. It is the Person's inbox:
+tabs Inbox, Working, Later and Archive, grouped by nothing, Project or
+machine, and the Person's own keys change any part of it (ADR 0098). The list is a part of Banda,
 not of the Threads App: it reads only what Apps list (ADR 0087). On a
 phone it is the home screen. Where the two must be told apart, say "the
 Sidebar" for the area and "the sidebar list" for the list.
-_Avoid_: panel; Inbox (that is the merged Calls).
+_Avoid_: panel. Inbox is its first tab.
 
 **Archive**:
 Where the Threads the Person put away wait, folded at the sidebar's
@@ -789,11 +790,12 @@ _Avoid_: settled (its name before ADR 0069).
 
 **Snooze**:
 A Thread put away until a time, until its turn ends, or until its usage
-limit resets, on its shelf above Archive. Anything that calls the Person
-wakes it early, and a Thread that asks cannot be snoozed. The engine keeps
+limit resets, or Someday, with no time; the sidebar shows it on its Later
+tab and calls the action Later. A new call wakes it early; a Thread that
+asks may be snoozed, and comes back with the same question (ADR 0098). The engine keeps
 it, so every window, machine and Agent sees it; an Agent may snooze its
 own Thread (ADR 0074).
-_Avoid_: remind, later.
+_Avoid_: remind. "Later" only on screen.
 
 **Seen**:
 The Person's mark that they saw how a Thread's latest turn ended: that
@@ -844,9 +846,12 @@ once they stop, and the new Banda says it updated (ADR 0041, ADR 0072).
 
 **Mark**:
 Banda's sign: three tiles, the top one an Agent with eyes. Its shape and
-colour say what the work calls the Person for: it rests, works, asks them,
-finished, failed, or the engine is offline. In the bar it shows the loudest
-of every Thread; in the sidebar, each Thread's own. A finished or failed
+colour say what the work calls the Person for: it asks them (a triangle),
+failed (an octagon), finished, woke from a snooze, is open, sleeps until
+later, or the engine is offline; while it works it shows what its Agent
+does: reads, edits, runs `>_`, waits on sub-agents (ADR 0099). In the bar
+it shows the loudest of every Thread, on its top tile only; in the
+sidebar, each Thread's own. A finished or failed
 turn settles once the Person has looked at its Thread; a Question asks until
 it is answered.
 
@@ -866,10 +871,17 @@ they look at it, its sound, a toast in the window, or a system
 notification when the window is behind. `Alt+U` goes to it.
 
 **Inbox**:
-Every Call of every host, merged by the client. Each row keeps its host,
+The sidebar's first tab: what is the Person's turn, the Threads open with
+no turn, and a shelf of those at work (ADR 0098). Its calls are every Call
+of every host, merged by the client. Each row keeps its host,
 so an answer goes back there (ADR 0081, ADR 0082). It is a part of Banda,
 not of an App; `Alt+U` walks it in the sidebar's order (ADR 0079, ADR
 0087).
+
+**Quiet**:
+A while in which nothing calls the Person: no sound, toast, system
+notification or calling Mark, while the inbox still fills; set from the
+sidebar's foot (ADR 0098).
 
 **Toast**:
 A short card at the window's top right that tells of a Call whose Thread is
