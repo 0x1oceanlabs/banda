@@ -67,7 +67,8 @@ scripts/try.sh --stop
 The trial is your worktree's alone: its Projects, settings and logs in
 `~/.local/state/banda-trial/<slug>`, with the fake agent for its Harness.
 `state/logs/window.log` has main's console and the page's warnings and
-errors, `engine.log` the engine's. `--detach` comes back once the start
+errors, `engine.log` the engine's; a trial's Chromium says its own in
+`run.log`, a packed Banda's in `state/logs/chromium.log`. `--detach` comes back once the start
 went well, or says what the window shows instead. `--hidden` keeps the
 window, its notices and its sounds off Roma's screen; without it, the window
 opens there to be clicked through, and is driven the same way.
