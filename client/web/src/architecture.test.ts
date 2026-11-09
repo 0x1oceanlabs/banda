@@ -171,14 +171,13 @@ test("a file that no longer reaches a module leaves the list", () => {
  * of sharing, Settings and the calls part, by file: the Window may import
  * the Tiling, never the other way (ADR 0087, decision 5). The calls part
  * holds the Window's stores, so a Tiling file that took them could read
- * an Item by selector and name no `Listed`: only the workspace numbers
- * take what calls, until E8b. None joins the list, and an import that
- * goes leaves it.
+ * an Item by selector and name no `Listed`: none takes them, since the
+ * workspace numbers lost their call dot. None joins the list, and an
+ * import that goes leaves it.
  */
 const TILING_STILL: Record<string, string[]> = {
   "web/src/tiling/PaneFrame.tsx": ["../window/attach", "../titles/Title"],
   "web/src/tiling/store.ts": ["../sidebar/width"],
-  "web/src/tiling/widgets.tsx": ["../calls/stores"],
 }
 
 test("the Tiling imports no more of the Window than the list holds", () => {
@@ -216,7 +215,6 @@ test("nothing in the Tiling draws a Thread's Mark", () => {
  * for the Deck's two. None joins the list, and one that goes leaves it.
  */
 const TILING_BANDA_MARK = [
-  "web/src/tiling/Map.tsx: GroupState",
   "web/src/tiling/Tabs.tsx: BandaMark",
   "web/src/tiling/Tabs.tsx: MARK_WORDS",
   "web/src/tiling/plates.ts: GroupState",
@@ -257,16 +255,15 @@ test("the Tiling takes no more of Banda's mark than the list holds", () => {
 
 /**
  * What the Tiling still reads of an Item's Mark or what it calls, by file,
- * once for each place: a Project's workspace number has a dot while one of
- * its Threads calls (`useCalling`), as it had on the Bar before the numbers
- * became the Tiling's widget, until E8b. A Group's plate and its bar in the
- * Group map take its owner's state through the Tiling's port, which asks
+ * once for each place: none since the bar's workspaces lost their call
+ * dot (2026-11-09). A Group's plate takes its owner's state through the
+ * Tiling's port, which asks
  * for it in one file, `shows.ts` (`shows.mark(owner)`, T-a). A Pane's
  * header and its tile in the Overview read none: what an App shows there
  * is its part of the Slot. None joins the list, and one that goes leaves
  * it.
  */
-const TILING_MARKS = ["web/src/tiling/widgets.tsx: useCalling"]
+const TILING_MARKS: string[] = []
 
 test("the Tiling reads an Item's Mark no more than the list holds", () => {
   const files = sources(join(app, "web/src/tiling"), { tests: false })
@@ -757,7 +754,7 @@ test("the Tiling's widgets make no context of their own and name no change of th
       (node) => ts.isIdentifier(node) && names.includes(node.text)
     )
   ).toBe(false)
-  // By context they read only the port and the aside: the workspaces come
+  // By context they read only the aside: the workspaces come
   // by selector (`useTiled`).
   const read: string[] = []
   hasNode(widgets, (node) => {
@@ -771,7 +768,7 @@ test("the Tiling's widgets make no context of their own and name no change of th
     }
     return false
   })
-  expect(read.sort()).toEqual(["AsideContext", "ShowsContext"])
+  expect(read.sort()).toEqual(["AsideContext"])
 })
 
 /**
@@ -1648,15 +1645,15 @@ test("only the Window gives the Apps what they list, and only what fills a Pane'
 
 /**
  * What the Tiling's parts read of it, its workspaces as it draws them,
- * its port of what the Apps list and the workspaces set aside
+ * and the workspaces set aside
  * (`tiling/kept.ts`), only the Window's `Kept` gives, as it gives the
  * items and Here, and only the Window's root draws a `Kept` (above). The
  * workspaces are read by selector alone (`useTiled`): no file but
  * `Kept`'s takes their context.
  */
-test("only the Window's Kept gives the Tiling's workspaces, its port and the aside, and the workspaces are read by selector", () => {
+test("only the Window's Kept gives the Tiling's workspaces and the aside, and the workspaces are read by selector", () => {
   const here = join(app, "web/src/window/here.tsx")
-  for (const tag of ["TilingContext", "ShowsContext", "AsideContext"]) {
+  for (const tag of ["TilingContext", "AsideContext"]) {
     expect(drawingTag(pageFiles, tag), tag).toEqual([
       "client/web/src/window/here.tsx",
     ])

@@ -13,13 +13,7 @@
 import { createContext, useCallback, useContext } from "react"
 import type { ProjectId } from "@banda/contract"
 import { works } from "@banda/ui/components/banda-mark"
-import {
-  type Readable,
-  sameData,
-  sameEach,
-  Store,
-  useStore,
-} from "@banda/core/react"
+import { type Readable, sameData, Store, useStore } from "@banda/core/react"
 import {
   type Attention,
   type Call,
@@ -29,7 +23,7 @@ import {
   QUIET,
   withHost,
 } from "@banda/ui/pane"
-import { attentionOf, callsOf, standOf } from "@banda/ui/status"
+import { attentionOf, callsOf } from "@banda/ui/status"
 import { nextWake, wakeAfter } from "../sidebar/later"
 
 /** What calls the Person now. */
@@ -247,14 +241,6 @@ export function workingHere(stores: Stores): number {
   return workingIn(ownLists(stores))
 }
 
-/** The Projects one of whose Threads is the Person's turn at `now`:
- * those whose workspace the bar marks with a dot (ADR 0065, decision 9). */
-export function callingIn(lists: Lists, now: number): ProjectId[] {
-  return Object.entries(lists)
-    .filter(([, listed]) => listed.some((one) => standOf(one, now) === "turn"))
-    .map(([project]) => project as ProjectId)
-}
-
 /** The Projects whose lists came and hold no Thread: their workspace, kept
  * while they had Threads, goes (ADR 0102, decision 2). A Project whose
  * lists have not come yet is in none of them. */
@@ -308,12 +294,4 @@ export const nowOf = (calls: Calls) => calls.now
  * only as the next Later wakes by its time. */
 export function useLaterClock(): number {
   return useCalls(nowOf)
-}
-
-/** The Projects one of whose Threads is the Person's turn now: the bar's
- * dots, drawn again only as they change. */
-export function useCalling(): ProjectId[] {
-  const now = useLaterClock()
-  const select = useCallback((lists: Lists) => callingIn(lists, now), [now])
-  return useItems(select, sameEach)
 }

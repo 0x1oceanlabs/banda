@@ -12,16 +12,7 @@ import type { PaneState } from "@banda/ui/pane"
 import { renderToStaticMarkup } from "react-dom/server"
 import { beforeEach, expect, test, vi } from "vitest"
 import { TilingContext } from "./kept"
-import {
-  current,
-  fresh,
-  go,
-  inBar,
-  move,
-  open,
-  start,
-  type Workspaces,
-} from "./model"
+import { fresh, go, inBar, move, open, start, type Workspaces } from "./model"
 import { WORKSPACES } from "./widget-ids"
 import { picked, tilingWidgets } from "./widgets"
 
@@ -102,7 +93,7 @@ test("a number runs an action by its id: the one on screen the overview, another
   ])
 })
 
-test("a key that moves only the focus draws the numbers not, and the map, which frames the column in focus, again", () => {
+test("a key that moves only the focus draws the numbers not again", () => {
   const two = open(
     open(start(), project, terminal(1), right),
     project,
@@ -112,8 +103,7 @@ test("a key that moves only the focus draws the numbers not, and the map, which 
   const { draw } = drawn(two)
   const moved = move(two, "left")
   draw(moved)
-  expect(asked).toHaveLength(1)
-  expect(asked[0]).toBe(current(moved))
+  expect(asked).toHaveLength(0)
   // A workspace that comes draws the numbers again, and one that goes on
   // screen too.
   const grown = open(fresh(moved), project, terminal(3), right)

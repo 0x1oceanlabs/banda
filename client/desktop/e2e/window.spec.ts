@@ -3753,7 +3753,7 @@ test("a Thread is a Group from its opening, and its Agent's Diff joins it", asyn
   expect((await thread.boundingBox())!.x).toBe(before.x)
 })
 
-test("an Agent's Group, its plate and its bars in the map, takes its state, and its handle says its Thread's title", async () => {
+test("an Agent's Group, its plate, takes its state, and its handle says its Thread's title", async () => {
   // Half the Strip each, so the Thread and its Diff both show; the
   // handle, off by default.
   window = await startWindow({
@@ -3767,20 +3767,17 @@ test("an Agent's Group, its plate and its bars in the map, takes its state, and 
   await composer.fill("edit the notes")
   await composer.press("Enter")
   await expect(thread.getByText("I edited notes.md.")).toBeVisible()
-  // Its Agent's Diff joins its Group, so the map draws the Group too.
+  // Its Agent's Diff joins its Group.
   const changed = thread.getByRole("region", { name: "Changed files" })
   await changed.getByRole("button", { name: /notes\.md/ }).click()
   const diff = page.getByRole("region", { name: "Diff" })
   await expect(diff).toBeVisible()
   const plates = page.locator(`${ON_SCREEN} [data-group-plate]`)
-  const bars = page.locator("[data-map]")
   await expect(plates).toHaveCount(2)
-  await expect(bars).toHaveCount(2)
   const states = (of: Locator) =>
     of.evaluateAll((all) => all.map((one) => one.getAttribute("data-state")))
   // Watched as its turn ended, the Agent rests: the Group has no colour.
   await expect.poll(() => states(plates)).toEqual([null, null])
-  await expect.poll(() => states(bars)).toEqual([null, null])
 
   // The Person goes to another window, and the Agent works.
   await setInFront(page, false)
@@ -3788,7 +3785,6 @@ test("an Agent's Group, its plate and its bars in the map, takes its state, and 
   await composer.press("Enter")
   await expect(thread.getByText("Waiting.")).toBeVisible()
   await expect.poll(() => states(plates)).toEqual(["working", "working"])
-  await expect.poll(() => states(bars)).toEqual(["working", "working"])
 
   // It ends its turn as the Person's word goes into it, from outside the
   // Window: done, and not seen, as the Person is away.
@@ -3800,7 +3796,6 @@ test("an Agent's Group, its plate and its bars in the map, takes its state, and 
   const go = JSON.stringify({ thread: id, text: "go", steer: true })
   window.banda("call", "agents.send", "--project", work, "--params", go)
   await expect.poll(() => states(plates)).toEqual(["done", "done"])
-  await expect.poll(() => states(bars)).toEqual(["done", "done"])
   // Under the pointer its handle shows, named by its Agent's Thread.
   const middle = await within(diff, 0.5, 0.5)
   await page.mouse.move(middle.x, middle.y)
@@ -3814,7 +3809,6 @@ test("an Agent's Group, its plate and its bars in the map, takes its state, and 
   await composer.fill("fail now")
   await composer.press("Enter")
   await expect.poll(() => states(plates)).toEqual(["failed", "failed"])
-  await expect.poll(() => states(bars)).toEqual(["failed", "failed"])
   await expect(handle).toHaveAccessibleName("edit the notes · 2 Panes")
   await settled(thread, diff)
   await groupShots(page, "failed")
@@ -3826,7 +3820,7 @@ const shots = process.env.BANDA_E2E_SHOTS
 /**
  * Pictures of the Group on screen, as drawn in `state`, with
  * BANDA_E2E_SHOTS set to a folder: its last plate, around the Diff; its
- * handle, with the plate's edge it sits on; and the map. Set beside the
+ * handle, with the plate's edge it sits on. Set beside the
  * same from another build, they show a change of the code that draws them
  * changed none of the pixels.
  */
@@ -3844,8 +3838,6 @@ async function groupShots(page: Page, state: string) {
     width: handle.width + 16,
     height: handle.height + 16,
   })
-  const map = page.locator("[data-map]").first().locator("xpath=..")
-  await stillShot(page, shots, `group-${state}-map`, (await map.boundingBox())!)
 }
 
 /**

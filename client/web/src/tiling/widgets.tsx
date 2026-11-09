@@ -1,7 +1,7 @@
 /**
  * The Tiling's widgets on the Bar (ADR 0087, decision 5): the workspaces,
- * as numbers or dots, with the Group map of the one on screen beside them,
- * and the pill that says the workspaces are set aside. The Tiling is the
+ * as numbers or dots, and the pill that says the workspaces are set
+ * aside. The Tiling is the
  * middle's program, and the Bar shows its workspaces as a bar shows a
  * compositor's; where they stand is the look's `[bar]`, by their ids
  * (`widget-ids.ts`). Each is given the engine and the Projects, as every
@@ -18,13 +18,11 @@ import { cn } from "@banda/ui/lib/utils"
 import type { Widget, WidgetProps } from "@banda/ui/module"
 import { PlusIcon } from "lucide-react"
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef } from "react"
-import { useCalling } from "../calls/stores"
 import { useLookBar } from "../look"
 import { AsidePill } from "./AsidePill"
 import { BarMotion } from "./bar-motion"
-import { AsideContext, ShowsContext, useTiled } from "./kept"
-import { WorkspaceMap } from "./Map"
-import { current, type InBar, inBar, type Workspaces } from "./model"
+import { AsideContext, useTiled } from "./kept"
+import { type InBar, inBar, type Workspaces } from "./model"
 import { ASIDE, WORKSPACES } from "./widget-ids"
 
 /** A workspace as the bar shows it: a Project's by its badge (ADR 0065,
@@ -49,23 +47,9 @@ export function picked(run: Run, index: number, current: number): void {
   else run("workspace.go", { index })
 }
 
-/**
- * The workspaces and the Group map of the one on screen, each drawn again
- * only as what it reads changes: the numbers as the bar's workspaces do,
- * the map as the one on screen does.
- */
+/** The workspaces the bar shows, a Project's by its Sign (ADR 0065,
+ * decision 9), drawn again only as they change. */
 function WorkspacesWidget({ projects }: WidgetProps) {
-  return (
-    <>
-      <Numbers projects={projects} />
-      <MapOnScreen />
-    </>
-  )
-}
-
-/** The workspaces the bar shows, a Project's by its name (ADR 0065,
- * decision 9). */
-function Numbers({ projects }: { projects: readonly ProjectSummary[] }) {
   const bar = useTiled(barOf, sameData)
   const run = useRun()
   const shown = useMemo(
@@ -89,13 +73,6 @@ function Numbers({ projects }: { projects: readonly ProjectSummary[] }) {
   )
 }
 
-/** The Group map of the workspace on screen. */
-function MapOnScreen() {
-  const workspace = useTiled(current)
-  const shows = useContext(ShowsContext)
-  return shows && <WorkspaceMap workspace={workspace} shows={shows} />
-}
-
 /** The pill, while the workspaces are set aside (ADR 0039, decision 2). */
 function AsideWidget({ engine }: WidgetProps) {
   const aside = useContext(AsideContext)
@@ -107,7 +84,7 @@ export const tilingWidgets: readonly Widget[] = [
   {
     id: WORKSPACES,
     about:
-      "The workspaces, as numbers or dots, and the one on screen's Groups; click one to go there, or the one on screen for the overview.",
+      "The workspaces, as numbers or dots; click one to go there, or the one on screen for the overview.",
     Widget: WorkspacesWidget,
     compact: true,
   },
@@ -131,9 +108,7 @@ function widthOf(style: Style, here: boolean): number {
 /**
  * The workspaces, as `[bar] workspaces` says: numbers, the one on screen
  * marked, or dots, the one on screen drawn long. They come, go and mark
- * the one on screen on the look's `workspace` move, with the screen. A
- * Project's has a dot while one of its Threads calls, which it reads from
- * the Window's stores (ADR 0065, decision 9).
+ * the one on screen on the look's `workspace` move, with the screen.
  */
 function WorkspaceList({
   workspaces,
@@ -146,7 +121,6 @@ function WorkspaceList({
 }) {
   const keyFor = useKeyLabel()
   const style = useLookBar().workspaces
-  const calling = useCalling()
   const nav = useRef<HTMLElement>(null)
   const mark = useRef<HTMLSpanElement>(null)
   const motion = useRef<BarMotion>(null)
@@ -218,15 +192,9 @@ function WorkspaceList({
                   w.empty && "border border-dashed border-muted-foreground/50"
                 )}
               >
-                {/* A Project's workspace shows its Project, with a dot while
-                    one of its Threads calls (ADR 0065, decision 9). */}
+                {/* A Project's workspace shows its Project (ADR 0065,
+                    decision 9). */}
                 {w.owner ? <ProjectSign project={w.owner} /> : number}
-                {w.project && calling.includes(w.project) && (
-                  <span
-                    aria-hidden
-                    className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-attention"
-                  />
-                )}
               </span>
             )}
           </button>

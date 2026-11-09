@@ -24,12 +24,7 @@ import { paneHost } from "@banda/ui/pane"
 import { type ReactNode, useContext, useEffect, useState } from "react"
 import type { Shows } from "../calls/sight"
 import { type Stores, StoresContext } from "../calls/stores"
-import {
-  AsideContext,
-  ShowsContext,
-  type Tiled,
-  TilingContext,
-} from "../tiling/kept"
+import { AsideContext, type Tiled, TilingContext } from "../tiling/kept"
 import { current, focused, projectIn, type Workspaces } from "../tiling/model"
 import { useSteady } from "./steady"
 
@@ -135,11 +130,9 @@ export function Kept({
       <ItemsContext value={stores.items}>
         <HereContext value={here}>
           <TilingContext value={tiled.store}>
-            <ShowsContext value={tiled.shows}>
-              <AsideContext value={tiled.aside}>
-                <RunContext value={run}>{children}</RunContext>
-              </AsideContext>
-            </ShowsContext>
+            <AsideContext value={tiled.aside}>
+              <RunContext value={run}>{children}</RunContext>
+            </AsideContext>
           </TilingContext>
         </HereContext>
       </ItemsContext>
