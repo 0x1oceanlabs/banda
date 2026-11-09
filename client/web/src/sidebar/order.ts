@@ -14,29 +14,36 @@ import { type Arranged, arrange, type Elsewhere, type Marks } from "./arrange"
 import { rowKey } from "./hold"
 import type { Settings } from "./settings"
 
-/** What of the order the sidebar list shows: one Project's rows alone, as
- * a click in the list of Projects asks, and the sections the Person
- * folded or opened. The counts and Alt+U take it whole. */
-export type View = { only?: ProjectId; toggled?: ReadonlySet<string> }
+/** What of the order the sidebar list shows, which the counts and Alt+U
+ * take whole: one Project's rows alone, as a click in the list of
+ * Projects asks, the sections the Person folded or opened, and the other
+ * machines' Projects, whose rows the sidebar list places among its own.
+ * The counts and Alt+U hand none of those, so another machine's Thread
+ * stands after all of this one's there. `settings` are the look's, as the
+ * Person arranged the sidebar, unless a test hands its own. */
+export type View = {
+  settings?: Settings
+  only?: ProjectId
+  toggled?: ReadonlySet<string>
+  elsewhere?: readonly Elsewhere[]
+}
 
 /**
  * The sidebar's arrangement of every Project's list, as the Person's
  * settings and marks say.
  *
  * @param marks what the Person's marks say of each row now
- * @param settings the look's, as the Person arranged the sidebar; a test
- * hands its own
- * @param elsewhere the other machines' Projects, whose rows the sidebar
- * list places among its own. The counts and Alt+U hand none, so another
- * machine's Thread stands after all of this one's there.
  */
 export function order(
   lists: Lists,
   projects: readonly ProjectSummary[],
   marks: Marks,
-  settings: Settings = currentLook()?.sidebar ?? DEFAULT_SIDEBAR,
-  { only, toggled }: View = {},
-  elsewhere: readonly Elsewhere[] = []
+  {
+    settings = currentLook()?.sidebar ?? DEFAULT_SIDEBAR,
+    only,
+    toggled,
+    elsewhere = [],
+  }: View = {}
 ): Arranged {
   return arrange(lists, projects, settings, only, toggled, marks, elsewhere)
 }

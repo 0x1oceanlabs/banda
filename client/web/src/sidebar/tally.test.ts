@@ -105,7 +105,7 @@ test("the list is what Alt+U walks from the top, as the Person arranges the side
     things.map((t) => `${t.project}:${t.listed.id}`)
   const listedIn = (settings: Settings) => {
     const sidebar = keysOf(
-      order(day, [project("a"), project("b")], snoozes, settings)
+      order(day, [project("a"), project("b")], snoozes, { settings })
     )
     const listed = inOrder(tally(day, ["waiting", "working"], none), sidebar)
     const waiting = keys(listed.waiting)

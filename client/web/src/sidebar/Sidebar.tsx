@@ -185,9 +185,7 @@ export function Sidebar({
         lists,
         projects,
         { archived, asleep, woke },
-        settings,
-        { only, toggled },
-        elsewhere
+        { settings, only, toggled, elsewhere }
       ),
     [
       lists,

@@ -63,12 +63,10 @@ function Counts({ projects }: WidgetProps) {
   const aheadProject = useHere(aheadProjectOf)
   const aheadThing = useHere(aheadThingOf)
   const lists = useLists()
-  const aheadRow =
-    aheadProject &&
-    aheadThing &&
-    lists[aheadProject]?.find((listed) => listed.id === aheadThing)
-  const current =
-    aheadRow && aheadRow.agent !== undefined ? aheadRow : undefined
+  const aheadRow = aheadProject
+    ? lists[aheadProject]?.find((listed) => listed.id === aheadThing)
+    : undefined
+  const current = aheadRow?.agent !== undefined ? aheadRow : undefined
   const settings = useLookSidebar().bar
   const snoozes = useSnoozesNow()
   const tallies = useMemo(

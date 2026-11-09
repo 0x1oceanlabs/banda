@@ -60,9 +60,10 @@ test("the sidebar list draws the order the counts list and Alt+U go by, whatever
     group: { ...DEFAULT_SIDEBAR.group, by: "project", bottom: [] },
   }
   for (const settings of [DEFAULT_SIDEBAR, byProject]) {
-    const keys = keysOf(order(lists, projects, marks, settings))
+    const keys = keysOf(order(lists, projects, marks, { settings }))
     // The sidebar list, a section folded: the same rows in the same order.
-    const drawn = order(lists, projects, marks, settings, {
+    const drawn = order(lists, projects, marks, {
+      settings,
       toggled: new Set(["a", "active"]),
     })
     expect(
@@ -84,13 +85,16 @@ test("another machine's Threads stand among this one's in the sidebar list, and 
   // The sidebar list, grouped by state: the newest that waits first,
   // wherever it is.
   const sidebar = keysOf(
-    order(lists, projects, marks, DEFAULT_SIDEBAR, {}, [
-      { name: "devbox", projects: [away] },
-    ])
+    order(lists, projects, marks, {
+      settings: DEFAULT_SIDEBAR,
+      elsewhere: [{ name: "devbox", projects: [away] }],
+    })
   )
   expect(sidebar).toEqual(["far:there", "a:ask", "a:old"])
   // The counts and Alt+U hand no other machine: it comes last there.
-  const keys = keysOf(order(lists, projects, marks, DEFAULT_SIDEBAR))
+  const keys = keysOf(
+    order(lists, projects, marks, { settings: DEFAULT_SIDEBAR })
+  )
   expect(keys).toEqual(["a:ask", "a:old"])
   expect(counted(lists, keys)).toEqual(["a:ask", "a:old", "far:there"])
   expect(walk(lists, keys)).toEqual(["a:ask", "a:old", "far:there"])
