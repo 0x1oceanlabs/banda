@@ -6012,17 +6012,20 @@ test("the sidebar over the Strip goes once it opened a menu, a Thread or the set
   await page.setViewportSize({ width: 700, height: 800 })
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   await expect(sidebar).toBeHidden()
-  // Alt+A, from the Thread once a menu closed: the closed menu keeps the
-  // focus, and the keys there are its own (#946).
-  const box = page
-    .getByRole("region", { name: "hello" })
-    .getByRole("textbox", { name: "Message to Fake AI" })
-  const over = async (from?: Locator) => {
-    await from?.click()
+  const over = async () => {
     await page.keyboard.press("Alt+A")
     await expect(sidebar).toBeVisible()
   }
   const menu = page.getByRole("dialog", { name: "Banda menu" })
+  // Esc closes the menu, whose opener went with the sidebar: the Thread's
+  // tile has the focus at once, and Alt+A works as the menu fades, with
+  // no click first (#946).
+  const shut = async () => {
+    await page.keyboard.press("Escape")
+    await expect(thread).toBeFocused()
+    await over()
+    await expect(menu).toBeHidden()
+  }
 
   // Search: the Banda menu, at its root.
   await over()
@@ -6031,22 +6034,18 @@ test("the sidebar over the Strip goes once it opened a menu, a Thread or the set
     menu.getByRole("group", { name: "Recent Threads" })
   ).toBeVisible()
   await expect(sidebar).toBeHidden()
-  await page.keyboard.press("Escape")
-  await expect(menu).toBeHidden()
+  await shut()
 
   // The key sheet: the menu at its Actions.
-  await over(box)
   await sidebar
     .getByRole("button", { name: "Every action and its key" })
     .click()
   await expect(menu.getByRole("group", { name: "Banda" })).toBeVisible()
   await expect(sidebar).toBeHidden()
-  await page.keyboard.press("Escape")
-  await expect(menu).toBeHidden()
+  await shut()
 
   // The Flow is picked where it is: agents.toml takes it, and the sidebar
   // stays.
-  await over(box)
   const flow = sidebar.getByRole("button", { name: /^Flow: / })
   await flow.click()
   await page.getByRole("menuitemradio", { name: /^Free/ }).click()

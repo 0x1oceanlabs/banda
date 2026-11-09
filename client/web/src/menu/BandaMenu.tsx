@@ -60,7 +60,7 @@ import {
   SearchIcon,
 } from "lucide-react"
 import { KEYS_FILE, writeBind } from "../actions/actions"
-import { paneHost } from "@banda/ui/pane"
+import { focusedTile, paneHost } from "@banda/ui/pane"
 import { useLists } from "../calls/stores"
 import { useLookSidebar } from "../look"
 import { runs, sources as allSources } from "../registry"
@@ -184,6 +184,23 @@ export const BandaMenu = memo(function BandaMenu({
   }, [])
   // Esc shuts the open act list before the menu.
   const escapeRef = useRef<() => boolean>(() => false)
+  // As the menu closes, its field goes and the focus with it. The focused
+  // Pane's tile takes it at once, so a key pressed as the menu fades is
+  // the window's, even when what opened the menu went first, as the
+  // sidebar over the Strip does (#946). What took the focus by then, as a
+  // Pane a row opened, keeps it. Not what had it before the menu: a field
+  // would show its caret again, and a button its ring.
+  const shown = opening !== null
+  const popup = useRef<HTMLDivElement>(null)
+  const wasShown = useRef(shown)
+  useLayoutEffect(() => {
+    const closed = wasShown.current && !shown
+    wasShown.current = shown
+    if (!closed) return
+    const at = document.activeElement
+    if (!at || at === document.body || popup.current?.contains(at))
+      focusedTile()?.focus({ preventScroll: true })
+  }, [shown])
   return (
     <>
       {running.map(({ source }) => (
@@ -196,7 +213,7 @@ export const BandaMenu = memo(function BandaMenu({
         />
       ))}
       <Dialog
-        open={opening !== null}
+        open={shown}
         onOpenChange={(open, details) => {
           if (open) return
           if (details.reason === "escape-key" && escapeRef.current())
@@ -205,7 +222,10 @@ export const BandaMenu = memo(function BandaMenu({
         }}
       >
         <DialogContent
+          ref={popup}
           showCloseButton={false}
+          // The menu gives the focus back itself, above.
+          finalFocus={false}
           className="top-[12%] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-xl"
         >
           <DialogTitle className="sr-only">Banda menu</DialogTitle>
