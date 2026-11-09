@@ -6329,6 +6329,14 @@ test("a Pane pops out into a window of its own, its place keeps a stand-in, and 
   // The same Thread, in its own window; its place keeps a stand-in.
   const popped = await popOut()
   await expect(popped.getByText("You said: hello")).toBeVisible()
+  // That window lists no Items: its header has the kind's icon where the
+  // window's has the Thread's Mark, and no Mark.
+  const alone = popped.getByRole("region", { name: "hello" })
+  await expect(alone.locator('[data-slot="banda-mark"]')).toHaveCount(0)
+  expect(await headerShows(alone)).toEqual(["", "hello", "buttons"])
+  await expect(alone.locator("header > svg").first()).toHaveClass(
+    /\blucide-message-square\b/
+  )
   const ask = popped.getByRole("textbox", { name: "Message to Fake AI" })
   await ask.fill("again")
   await ask.press("Enter")
