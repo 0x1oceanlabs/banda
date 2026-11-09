@@ -976,6 +976,23 @@ async fn turn(
         )?;
         return Ok(StopReason::EndTurn);
     }
+    if words.contains("what did you read") {
+        // The prompt as it came, for a test of what Banda put before the
+        // message, as a moved Thread's history (ADR 0078).
+        let read: String = (prompt.prompt.iter())
+            .filter_map(|block| match block {
+                ContentBlock::Text(text) => Some(text.text.as_str()),
+                _ => None,
+            })
+            .collect();
+        let reply = format!("Session {} read: {read}", session.0);
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text(&reply)),
+        )?;
+        return Ok(StopReason::EndTurn);
+    }
     if words.contains("which session") {
         let reply = format!("Session {} in process {}", session.0, std::process::id());
         say(

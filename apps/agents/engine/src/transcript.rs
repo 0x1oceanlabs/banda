@@ -55,6 +55,39 @@ pub fn notice(
     Ok(item.id)
 }
 
+/// Writes the Thread's divider before `turn`'s replies, as it moved from
+/// the Harness entry `from` to `to` (ADR 0078).
+pub fn moved(
+    tx: &mut Tx<'_>,
+    agent: Participant,
+    thread: ThreadId,
+    turn: TurnId,
+    from: String,
+    to: String,
+    how: crate::model::Moved,
+) -> Result<(), Error> {
+    let item = Item {
+        id: ItemId::new(),
+        turn: Some(turn),
+        author: agent,
+        at: tx.now(),
+        body: Body::Moved {
+            from: from.clone(),
+            to: to.clone(),
+            how: how.clone(),
+        },
+    };
+    store::put(tx.sql(), thread, &item, None)?;
+    let fact = Fact::ThreadMoved {
+        item: item.id,
+        turn,
+        from,
+        to,
+        how,
+    };
+    emit(tx, agent, thread, &fact)
+}
+
 /// Writes what the Harness offers in the Thread, when that changed. A
 /// session that has not said its commands yet leaves the Thread's slash
 /// commands and skills.

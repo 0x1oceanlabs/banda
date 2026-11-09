@@ -385,6 +385,7 @@ fn texts(view: &ThreadView) -> Vec<String> {
             Body::Question { title, state, .. } => format!("question: {title} ({state:?})"),
             Body::Notice { text } => format!("notice: {text}"),
             Body::Plan { steps } => format!("plan: {} steps", steps.len()),
+            Body::Moved { from, to, how } => format!("moved: {from} → {to} {how:?}"),
             Body::Visual { title, height, .. } => format!("visual: {title} ({height}px)"),
             Body::Issue { title, state, .. } => format!("issue: {title} ({state:?})"),
         })
@@ -6022,17 +6023,83 @@ async fn a_thread_moves_to_another_account_and_keeps_its_session() {
         "the same account again writes nothing"
     );
 
-    let refused = switch("other").await.unwrap_err();
-    assert!(
-        refused
-            .message
-            .contains("another account of its own Harness"),
-        "{refused:?}"
-    );
     let params = json!({ "thread": thread, "harness": "claude-b" });
     let by_agent = world.call(world.agent(), "agents.switch", params).await;
     assert!(by_agent.is_err(), "only a Person moves a Thread");
     assert!(switch("gone").await.is_err(), "an entry the list has not");
+}
+
+/// Asks `thread`'s Agent what it read, and the reply: the prompt as it
+/// came, after the session's ID.
+async fn ask_read(world: &World, thread: &Value) -> (String, String) {
+    let sent = world.send(Some(thread), "what did you read").await;
+    let view = world
+        .until(thread, |v| state(v, &sent["turn"]) == Some(TurnState::Done))
+        .await;
+    let reply = texts(&view)
+        .into_iter()
+        .rev()
+        .find_map(|t| t.strip_prefix("message: Session ").map(str::to_owned))
+        .expect("the agent said what it read");
+    let (session, read) = reply.split_once(" read: ").unwrap();
+    (session.to_owned(), read.to_owned())
+}
+
+// Its CLI is a `sh` script that runs by its exec bit.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_thread_moves_to_another_harness_with_its_history_and_back_to_its_own_session() {
+    let (root, bin) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let cli = fake_cli(bin.path());
+    let world = World::new_on(root.path(), two_claude_accounts(&cli), "claude-a").await;
+    let (thread, (on_claude, _)) = ask_session(&world, None).await;
+    let switch = |harness: &str| {
+        let params = json!({ "thread": thread, "harness": harness });
+        world.call(world.person(), "agents.switch", params)
+    };
+
+    // To another Harness: a session of its own, which reads the history.
+    switch("other").await.unwrap();
+    let (on_other, read) = ask_read(&world, &thread).await;
+    assert_ne!(on_other, on_claude, "a session of its own");
+    assert!(read.contains("ran on claude-a until now"), "{read}");
+    assert!(read.contains("[Person] which session\n"), "{read}");
+    assert!(
+        read.contains(&format!("[Agent] Session {on_claude}")),
+        "{read}"
+    );
+    assert!(read.ends_with("</history>\n\nwhat did you read"), "{read}");
+    // Its next turn goes on in that session, and reads nothing more.
+    let (again, read) = ask_read(&world, &thread).await;
+    assert_eq!(again, on_other);
+    assert_eq!(read, "what did you read");
+
+    // Back: Claude Code goes on with its own session, and reads only what
+    // it missed.
+    switch("claude-b").await.unwrap();
+    let (back, read) = ask_read(&world, &thread).await;
+    assert_eq!(back, on_claude, "its own session again");
+    assert!(read.contains("ran on other since your last turn"), "{read}");
+    // The two turns on the other Harness, and nothing from before them.
+    assert!(
+        read.contains("<missed>\n[Person] what did you read\n"),
+        "only what it missed: {read}"
+    );
+
+    let view = world.thread(&thread).await;
+    let moved: Vec<_> = texts(&view)
+        .into_iter()
+        .filter(|text| text.starts_with("moved: "))
+        .collect();
+    assert_eq!(moved.len(), 2, "{moved:?}");
+    assert!(
+        moved[0].starts_with("moved: claude-a → other Handoff"),
+        "{moved:?}"
+    );
+    assert!(
+        moved[1].starts_with("moved: other → claude-b Back"),
+        "{moved:?}"
+    );
 }
 
 /// Two accounts of Codex, the fake agent each: `codex`, whose home is
