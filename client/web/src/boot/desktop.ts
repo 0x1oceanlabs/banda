@@ -9,6 +9,7 @@
  * own, each part does nothing, and what answers says so.
  */
 import type { Address } from "@banda/contract"
+import type { Listed } from "@banda/contract/look"
 import type {
   Cap,
   HostEntry,
@@ -149,6 +150,10 @@ export const device = {
     set: (file: string, key: string, value: string) =>
       desktop()?.settings.set(file, key, value) ??
       Promise.resolve(["Only Banda's app writes the settings."]),
+    /** The themes there are, as `banda look themes` lists them (ADR
+     * 0007); none without the desktop. */
+    themes: (): Promise<Listed[]> =>
+      desktop()?.settings.themes() ?? Promise.resolve([]),
   },
   /** Files on the machine, by their full path (ADR 0073, decision 14). */
   files: {
