@@ -113,7 +113,8 @@ day.
    the Project's workspace there, or, of no Project, goes to the top
    free workspace: the two differ there yet. Moved off the Project's
    workspace, the own Group is a Group like any other, and the next Pane
-   starts a new one.
+   starts a new one. `Alt+Shift+N` and the Pane menu move a
+   Pane of the own Group alone; a drag of its handle still takes it whole.
 
 5. **Settings, Usage and the notifications come as a Sheet over the
    workspace.**
@@ -156,7 +157,11 @@ day.
    mouse, in the row and solo; a Group moves as its Agent's Thread's
    Project, else as its first Pane's. During a drag the note under the
    Pane's name says why. The Sign shows in the header of every Pane on a
-   free workspace, as on a workspace of mixed Projects.
+   free workspace, as on a workspace of mixed Projects. Later, the toast
+   and the note say whose the workspace is ("Workspace 2 is Brand's") and
+   where the Pane can go ("To free workspace 3"); the Banda menu's Open
+   beside refuses as the keys do, and the Pane menu shows a Project's
+   workspace by its Sign and greys out those the keys refuse.
 
 7. **A Thread of no Project that becomes a Project's goes to that
    Project's workspace,** by the row's rules, with its Group. The

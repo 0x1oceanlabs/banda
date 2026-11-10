@@ -549,7 +549,7 @@ export function Overview({
       ringed: true,
       frame,
       go: onGo,
-      refuses: refusing(workspaces, strict),
+      ...refusing(workspaces, strict, projectOf),
       land: (hit, x, y, pane, group) => {
         const between = hit.closest<HTMLElement>("[data-between]")
         if (!between) {

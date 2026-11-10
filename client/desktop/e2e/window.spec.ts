@@ -4256,6 +4256,134 @@ test('agents.toml\'s workspaces = "off" keeps a new Thread where the Person is',
   ).toHaveCount(1)
 })
 
+/** Work's Thread "hello" on workspace 1, then Play's "play here" on
+ * workspace 2, on screen: two Projects, each with a workspace of its
+ * own, in the row (ADR 0102). The workspace `n`, as the Strip shows it
+ * while it is on screen. */
+async function twoProjects(page: Page) {
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  await newProject(page, "Play")
+  const playing = page
+    .getByRole("region", { name: "New Thread" })
+    .filter({ has: page.getByRole("button", { name: "Project: Play" }) })
+    .getByRole("textbox", { name: "Message to Fake AI" })
+  await playing.fill("play here")
+  await playing.press("Enter")
+  const play = page.getByRole("region", { name: "play here" })
+  await expect(play.getByText("You said: play here")).toBeVisible()
+  const on = (n: number) => page.getByRole("group", { name: `Workspace ${n}` })
+  await expect(on(2).getByRole("region", { name: "play here" })).toBeVisible()
+  const refused = page
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+    .filter({ hasText: "Workspace 2 is Play's" })
+  return { on, play, refused }
+}
+
+test("in the row, the Pane menu greys out another Project's workspace, and Open beside brings no Thread there: it says whose it is (ADR 0102, decision 6)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { on, play, refused } = await twoProjects(page)
+
+  // The Pane menu shows Work's workspace by its Sign, and offers it not.
+  await play.getByRole("button", { name: "Pane menu" }).click()
+  const menu = page.getByRole("menu")
+  await expect(
+    menu.getByRole("menuitem", { name: "To workspace 1, Work's" })
+  ).toBeDisabled()
+  await expect(
+    menu.getByRole("menuitem", { name: "To a new workspace" })
+  ).toBeEnabled()
+  await page.keyboard.press("Escape")
+  await expect(menu).toBeHidden()
+  // The pointer off the toasts' corner, where it would hold one.
+  const away = await within(play, 0.3, 0.6)
+  await page.mouse.move(away.x, away.y)
+
+  // Open beside, from the Banda menu: Work's Thread stays on Work's
+  // workspace, and the toast says whose this one is.
+  const banda = page.getByRole("dialog", { name: "Banda menu" })
+  const search = banda.getByRole("combobox", { name: "Search" })
+  await page.keyboard.press("Alt+Space")
+  await search.fill("hello")
+  await expect(banda.getByRole("option").first()).toContainText("hello")
+  await search.press("Shift+Enter")
+  await expect(banda).toBeHidden()
+  await expect(refused).toContainText(
+    "Work's Panes go to its workspace, a free one or a new one."
+  )
+  await expect(on(2).getByRole("region", { name: "hello" })).toHaveCount(0)
+  await page.keyboard.press("Alt+Digit1")
+  await expect(on(1).getByRole("region", { name: "hello" })).toBeVisible()
+})
+
+test("in the row, Alt+Shift+N takes a Pane of the Project's own Group alone, and onto another Project's workspace the toast and the drag's note say whose it is (ADR 0102, decisions 4 and 6)", async () => {
+  window = await startWindow({ look: "[columns]\nmin = 10\n" })
+  const { page } = window
+  const { on, refused } = await twoProjects(page)
+  const terminals = (n: number) =>
+    on(n).getByRole("region", { name: "Terminal screen" })
+
+  // Work's workspace, emptied, stays: two terminals opened there go into
+  // its own Group.
+  await page.keyboard.press("Alt+Digit1")
+  const hello = on(1).getByRole("region", { name: "hello" })
+  await expect(hello).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+KeyW")
+  await expect(hello).toHaveCount(0)
+  for (const count of [1, 2]) {
+    await page.keyboard.press("Alt+KeyN")
+    await expect(
+      on(1).getByRole("region", { name: "New Pane" })
+    ).toHaveAttribute("data-focused", "true")
+    await page.keyboard.press("KeyT")
+    await expect(terminals(1)).toHaveCount(count)
+  }
+
+  // Onto Play's workspace: refused, and the toast says whose it is.
+  await page.keyboard.press("Alt+Shift+Digit2")
+  await expect(refused).toContainText(
+    "Work's Panes go to its workspace, a free one or a new one."
+  )
+  await expect(terminals(1)).toHaveCount(2)
+  // Onto a new workspace, the terminal goes alone: the other stays in
+  // Work's own Group.
+  await page.keyboard.press("Alt+Shift+Digit3")
+  await expect(terminals(3)).toHaveCount(1)
+  await page.keyboard.press("Alt+Digit1")
+  await expect(terminals(1)).toHaveCount(1)
+
+  // Carried over the bar, the note under it says whose a workspace is,
+  // or where it goes.
+  const terminal = on(1)
+    .locator("section[data-tile]")
+    .filter({ has: page.getByRole("region", { name: "Terminal screen" }) })
+  const bar = page.locator("[data-workspace]")
+  const ghost = page.locator("body > .bg-popover")
+  await expect(bar).toHaveCount(4)
+  await settled(terminal)
+  const over = async (n: number) => {
+    const box = (await bar.nth(n).boundingBox())!
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, {
+      steps: 8,
+    })
+  }
+  const from = await headerOf(terminal)
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await over(1)
+  await expect(bar.nth(1)).toHaveAttribute("data-refused", "")
+  await expect(ghost).toContainText("Workspace 2 is Play's")
+  await over(2)
+  await expect(ghost).toContainText("To free workspace 3")
+  await page.keyboard.press("Escape")
+  await page.mouse.up()
+  await expect(ghost).toHaveCount(0)
+})
+
 test("a tab in a Deck's bar carries its Pane", async () => {
   window = await startWindow()
   const { page } = window

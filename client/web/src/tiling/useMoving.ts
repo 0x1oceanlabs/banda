@@ -17,10 +17,11 @@ import { cn } from "@banda/ui/lib/utils"
  * draw, and what scrolls at their edges (`Carrying`); the rest is this.
  */
 import { type RefObject, useEffect, useRef } from "react"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
 import type { Place } from "@banda/contract/workspaces"
 import { leads } from "../registry"
 import type { Plan } from "./arrange"
-import { REFUSED, refusedTo, type Workspaces } from "./model"
+import { notesOf, refusedTo, type Workspaces } from "./model"
 import { room, scrollOf, stripOf } from "./layout"
 import {
   carriesGroup,
@@ -65,17 +66,28 @@ export type Carrying = {
   ringed?: boolean
   /** The workspaces `pane`, or `whole` its Group, may not go to. */
   refuses?: (pane: string, whole: boolean) => ReadonlySet<string>
+  /** What the note says with `pane` over each workspace, by its ID, those
+   * in `refused` among them; over one with none, what it says of the
+   * Group. */
+  notes?: (
+    pane: string,
+    refused: ReadonlySet<string>
+  ) => ReadonlyMap<string, string>
 }
 
-/** `Carrying.refuses` over `state`, in the row and solo, `strict`: every
- * other Project's workspace (ADR 0102, decision 6). */
+/** `Carrying.refuses` and `notes` over `state`, in the row and solo,
+ * `strict`: every other Project's workspace refuses the Pane, and the note
+ * says whose it is, or where the Pane goes (ADR 0102, decision 6). */
 export function refusing(
   state: Workspaces,
-  strict: boolean
-): Carrying["refuses"] {
-  return strict
-    ? (pane, whole) => refusedTo(state, pane, whole, leads)
-    : undefined
+  strict: boolean,
+  projectOf: (project: ProjectId) => ProjectSummary | undefined
+): Pick<Carrying, "refuses" | "notes"> {
+  if (!strict) return {}
+  return {
+    refuses: (pane, whole) => refusedTo(state, pane, whole, leads),
+    notes: (pane, refused) => notesOf(state, pane, refused, projectOf),
+  }
 }
 
 /** How long, in milliseconds, a Pane held over a workspace's number goes
@@ -133,6 +145,8 @@ type Carry = Press & {
   /** The workspaces it may not go to, and what is dimmed for them. */
   refused: ReadonlySet<string>
   dimmed: HTMLElement[]
+  /** What the note says over each workspace (`Carrying.notes`). */
+  notes: ReadonlyMap<string, string>
   /** Where it lands, if let go now. */
   place?: Place
   grouped?: boolean
@@ -249,6 +263,7 @@ export function useMoving(
         said: "",
         refused: new Set(),
         dimmed: [],
+        notes: new Map(),
         frame: requestAnimationFrame(edge),
       }
       window.addEventListener("keydown", onKey, true)
@@ -271,7 +286,10 @@ export function useMoving(
       carry.whole = whole
       carry.said = note ?? ""
       carry.note.textContent = carry.said
-      dim(carrying.current.refuses?.(carry.pane, whole) ?? new Set())
+      const refused =
+        carrying.current.refuses?.(carry.pane, whole) ?? new Set<string>()
+      dim(refused)
+      carry.notes = carrying.current.notes?.(carry.pane, refused) ?? new Map()
       for (const one of carry.looks) delete one.dataset.lifted
       // The handle stays shown, lifted with its Group.
       carry.looks =
@@ -307,15 +325,15 @@ export function useMoving(
       const hit = document.elementFromPoint(x, y)
       const number = hit?.closest<HTMLElement>("[data-workspace]") ?? undefined
       const workspace = number?.dataset.workspace
-      // Over a workspace it may not go to: its number, its overview row,
-      // its Strip.
+      // Over a workspace: its number, its overview row, its Strip. The note
+      // says whose it is, if the Pane may not go there, else where it goes.
       const over =
-        carry.refused.size > 0 &&
+        (carry.refused.size > 0 || carry.notes.size > 0) &&
         (workspace ??
           hit?.closest<HTMLElement>("[data-row]")?.dataset.row ??
           hit?.closest<HTMLElement>("[data-strip]")?.dataset.strip)
       const refused = !!over && carry.refused.has(over)
-      carry.note.textContent = refused ? REFUSED : carry.said
+      carry.note.textContent = (over && carry.notes.get(over)) || carry.said
       dropOn(refused ? undefined : number)
       const { place, hint, grouped }: Landed = refused
         ? {}

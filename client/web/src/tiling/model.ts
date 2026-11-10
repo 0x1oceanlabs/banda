@@ -17,6 +17,7 @@ import {
   type JsonValue,
   newId,
   type ProjectId,
+  type ProjectSummary,
 } from "@banda/contract"
 import {
   type Columns,
@@ -261,6 +262,17 @@ export function admits(workspace: Workspace, project: ProjectId): boolean {
   return workspace.project === undefined || workspace.project === project
 }
 
+/** Whether a Pane in `column` of `workspace` moves to another workspace
+ * by the keys with its whole Group, as one window (ADR 0065): not in the
+ * Project's own Group, whose Panes the Person opened one by one (ADR
+ * 0102, decision 4). */
+export function takesGroup(
+  workspace: Workspace,
+  column: Column | undefined
+): column is Column & { group: string } {
+  return column?.group !== undefined && column.group !== workspace.own
+}
+
 /** The Project Pane `pane` moves as: its own alone; `whole`, with its
  * Group, the Group's lead's, as `lead` says (an Agent's Thread), else its
  * first Pane's. */
@@ -300,9 +312,70 @@ export function refusedTo(
   )
 }
 
-/** What a move onto another Project's workspace is told (ADR 0102,
- * decision 6). */
-export const REFUSED = "Not onto another Project's workspace"
+/** A Project's, as the words name it: by its name, else another
+ * Project's. */
+const whose = (name: string | undefined) =>
+  name ? `${name}'s` : "another Project's"
+
+/** Whose workspace `to`, from 0, is, by its Project's `name`. */
+function whoseIs(to: number, name: string | undefined): string {
+  return `Workspace ${to + 1} is ${whose(name)}`
+}
+
+/**
+ * What a move refused onto workspace `to`, from 0, is told (ADR 0102,
+ * decision 6): whose it is, its Project `owner`'s, and where the Pane can
+ * go. `as` is the Project it moves as; `along`, a Group of that Project
+ * takes it along, and dragged alone it would go there. A Project not
+ * known is another Project's.
+ */
+export function refusalOf({
+  to,
+  owner,
+  as,
+  along,
+}: {
+  to: number
+  owner: ProjectSummary | undefined
+  as: ProjectSummary | undefined
+  along: boolean
+}): { title: string; description: string } {
+  const scratch = as?.scratch === true
+  const description = along
+    ? `It goes with its Group, which is ${scratch ? "of no Project" : whose(as?.name)}. Drag it to move it alone.`
+    : scratch
+      ? "A Pane of no Project goes to a free workspace or a new one."
+      : as?.name
+        ? `${as.name}'s Panes go to its workspace, a free one or a new one.`
+        : "A Pane goes to its Project's workspace, a free one or a new one."
+  return { title: whoseIs(to, owner?.name), description }
+}
+
+/** What the note under Pane `pane`, carried, says over each workspace but
+ * the one it stands on, by their IDs, in the row and solo (ADR 0102,
+ * decision 6): whose it is, if `refused`, else where the Pane goes, a
+ * Project's by `projectOf`. */
+export function notesOf(
+  state: Workspaces,
+  pane: string,
+  refused: ReadonlySet<string>,
+  projectOf: (project: ProjectId) => ProjectSummary | undefined
+): Map<string, string> {
+  const from = find(state, pane)?.workspace
+  const last = state.list.length - 1
+  const noteOf = ({ id, project }: Workspace, to: number) => {
+    const name = project === undefined ? undefined : projectOf(project)?.name
+    if (refused.has(id)) return whoseIs(to, name)
+    if (to === last) return "To a new workspace"
+    if (!project) return `To free workspace ${to + 1}`
+    return name ? `To ${name}'s workspace` : "To its Project's workspace"
+  }
+  return new Map(
+    state.list.flatMap((workspace, to) =>
+      to === from ? [] : [[workspace.id, noteOf(workspace, to)] as const]
+    )
+  )
+}
 
 /** The focused column of the workspace on screen, and its place. */
 export function focusedColumn(state: Workspaces) {
@@ -1017,8 +1090,9 @@ export function step(state: Workspaces, by: 1 | -1): Workspaces {
 
 /**
  * Sends the focused Pane to a workspace, as a column on its right, and
- * follows it there; in a Group, the whole Group goes. Past the last, it
- * goes to the empty one at the bottom.
+ * follows it there; in a Group, the whole Group goes, but from the
+ * Project's own Group the Pane goes alone (`takesGroup`). Past the last,
+ * it goes to the empty one at the bottom.
  */
 export function send(state: Workspaces, index: number): Workspaces {
   const entry = focused(state)
@@ -1027,7 +1101,7 @@ export function send(state: Workspaces, index: number): Workspaces {
   const target = state.list[to]
   const workspace = current(state)
   const column = workspace.columns[workspace.focus]
-  if (column?.group !== undefined) {
+  if (takesGroup(workspace, column)) {
     // A Pane in a Group takes its whole Group, as one window (ADR 0065).
     const { start, end } = runOf(workspace.columns, workspace.focus)
     const left = setWorkspace(state, state.current, {
