@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { ProjectId } from "@banda/contract"
-import type { Action, Module } from "@banda/ui/module"
+import type { Action, Module, WindowApi } from "@banda/ui/module"
 import { parts } from "@banda/ui/testing/architecture"
 import { expect, test } from "vitest"
 import { modules } from "./modules"
@@ -187,4 +187,19 @@ test("a terminal that typed its line is the same Pane, so its shell goes on (ADR
   expect(
     samePane(typed, terminal({ terminal: "t2", typed: null }), identityOf)
   ).toBe(false)
+})
+
+test("a New Thread with no Project asked starts where Here says, not in home (ADR 0102)", () => {
+  const action = modules
+    .flatMap((m) => m.actions)
+    .find((one) => one.id === "thread.new")!
+  const opened: (ProjectId | undefined)[] = []
+  const window = {
+    home: "home",
+    here: { get: () => ({ project: "focused", starts: "front" }) },
+    open: (_: unknown, project?: ProjectId) => void opened.push(project),
+  } as unknown as WindowApi
+  action.run(window)
+  action.run(window, { project: "asked" })
+  expect(opened).toEqual(["front", "asked"])
 })

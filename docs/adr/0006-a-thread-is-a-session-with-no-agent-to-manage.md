@@ -19,6 +19,7 @@ On 2026-11-01 Roma decided to do the same: "the Agents concept from old Banda is
 2. **A new Thread starts in the default Space, or in one picked from the list** (_decided_).
    - The composer of a new Thread shows its Space, its Harness and its model.
    - The default Space is set in the settings. On the first start it is a new `~/Banda/Default/`.
+   - _Changed by [ADR 0102](0102-in-the-row-and-solo-a-project-has-its-own-workspace-and-free-workspaces-hold-the-rest.md): with none picked, a new Thread starts in the Project of the workspace in front; on a free workspace, in the focused Pane's, or in No Project beside a Pane of none; otherwise, with no Pane on screen or none to start in, in the default Space._
    - The list holds every Space and opens a folder as a new one.
 
 3. **Defaults belong to the Harness.**

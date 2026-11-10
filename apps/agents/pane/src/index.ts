@@ -29,8 +29,9 @@ import { answering } from "./list/answering"
 /**
  * A new Thread, in a new column, on this computer's first Harness (ADR
  * 0006): a new one at each press, as a browser's new window. Its args: the
- * `project` (the home Project else), and, from the Banda menu, the words to
- * `ask` at once and the `harness` (ADR 0017, decision 6).
+ * `project` (else the one in front, `Here.starts`, ADR 0102), and, from
+ * the Banda menu, the words to `ask` at once and the `harness` (ADR 0017,
+ * decision 6).
  */
 const newThread: Action = {
   id: "thread.new",
@@ -54,7 +55,9 @@ const newThread: Action = {
     })
     window.open(
       thread,
-      typeof project === "string" ? (project as ProjectId) : window.home,
+      typeof project === "string"
+        ? (project as ProjectId)
+        : window.here.get().starts,
       place === "drawer" ? { drawer: true } : undefined
     )
   },

@@ -25,7 +25,7 @@ describe("looking into a Problem", () => {
     project("banda", "/home/p/code/banda"),
   ]
 
-  it("asks to read it and follow the skill's topic, in the home Project", () => {
+  it("asks to read it and follow the skill's topic, where a New Thread starts", () => {
     expect(lookInto("3124d1bf35ad", null, projects)).toEqual({
       ask: "Look into Banda's Problem 3124d1bf35ad: read it with the `problem` tool, and follow the Banda skill's `problems` topic.",
     })
@@ -37,7 +37,7 @@ describe("looking into a Problem", () => {
     )
   })
 
-  it("opens in the home Project when no Project is the checkout's, or its folder is gone", () => {
+  it("opens where a New Thread starts when no Project is the checkout's, or its folder is gone", () => {
     expect(
       lookInto("3124", "/home/p/code/other", projects).project
     ).toBeUndefined()

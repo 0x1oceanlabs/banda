@@ -234,6 +234,13 @@ day.
   it no longer claims a mixed workspace.
 - ADR 0079, decision 2: solo fills any focused Group or column, on any
   workspace.
+- ADR 0006, decision 2: a New Thread with no Project asked, by `Alt+Enter`,
+  the sidebar's New Thread or the Banda menu's words, starts in the
+  Project of the workspace in front, so it stays there. On a free
+  workspace, as every one is in the Flow free, it starts in the focused
+  Pane's Project, or in No Project beside a Pane of none; with no Pane
+  on screen, or when the Project in front starts none (archived, or its
+  folder missing), in the default Space.
 - `PaneKind.home` gives way to the Pane's Project. Every Pane already
   names its Project, and decision 3 places it by that and by where it
   was opened from.

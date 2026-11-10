@@ -14,6 +14,7 @@ const NOWHERE: Here = {
   workspace: null,
   pane: null,
   project: "",
+  starts: "",
 }
 
 /** The Window's Here, for what it draws. */

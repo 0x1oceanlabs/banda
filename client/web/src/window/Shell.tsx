@@ -164,7 +164,7 @@ export function Shell({
   status: Status
   modules: readonly string[]
   projects: ProjectSummary[]
-  /** The Project a new Thread starts in. */
+  /** The home Project, where a New Thread starts with no Pane on screen. */
   home: ProjectId
   onCreated: (project: ProjectSummary) => void
 }) {
@@ -371,7 +371,8 @@ export function Shell({
   const sidebarShown = (narrow ? over : sidebar) && !zoomed
   // Where the Person is (ADR 0087, decision 4), and what the Apps list,
   // as the Apps' code reads them.
-  const here = useKeptHere(drawnNow, { sidebar: sidebarShown, home }, showsOf)
+  const around = { sidebar: sidebarShown, home, machine, flow, projects }
+  const here = useKeptHere(drawnNow, around, showsOf)
   const [items] = useState(() => itemsOf(stores))
   const hideOver = useCallback(() => setOver(false), [])
   // Each Alt+C brings the focused column to the middle, once.
@@ -711,7 +712,7 @@ export function Shell({
           return row.action.run(parts)
         case "ask":
           return newThreadIn(
-            row.project ?? here.get().project,
+            row.project ?? here.get().starts,
             row.words || undefined
           )
         case "item":
@@ -833,7 +834,6 @@ export function Shell({
                   onDismiss={narrow ? hideOver : undefined}
                   hiding={hiding}
                   projects={projects}
-                  home={home}
                   machine={machine}
                   strayed={strayedIn(workspaces, placing)}
                   isCurrent={focusedIn(workspaces)}
