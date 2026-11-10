@@ -81,7 +81,11 @@ unprivileged user namespaces on as `fence` does, and with
 `BANDA_SAME_PATH=require`, which fails the part where bwrap makes no
 namespace. It builds only the engine and the fake agent, and the window,
 and runs when a PR changes any code, and on every push to main; `ci`
-waits for it. More of the window's tests move to it slice by slice. Here,
+waits for it. More of the window's tests move to it slice by slice, a
+spec of `e2e/remote-*.spec.ts` each, which the part names as its step
+turns its road on: `remote-bytes.spec.ts`, this machine's pictures,
+PDFs, videos and pages through the relay to its engine, beside arc's at
+the same path (step 4b). Here,
 outside CI, the spec requires the namespace where `unshare -Ur true`
 works, as the fence's tests do; `BANDA_SAME_PATH=off` runs it as devbox
 does.
