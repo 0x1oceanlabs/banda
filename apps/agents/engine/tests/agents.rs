@@ -2178,6 +2178,29 @@ async fn a_new_thread_starts_as_agents_toml_says_for_its_harness() {
     assert!(defaults["settings"]["options"].get("nothing").is_none());
 }
 
+/// A window on another device starts a new Thread by this machine's
+/// `[start]`, so `agents.defaults` says it (ADR 0106, step 5a).
+#[tokio::test]
+async fn defaults_name_the_accounts_this_machine_starts_on() {
+    let root = tempfile::tempdir().unwrap();
+    let start =
+        "[start]\naccount = \"work\"\nfallback = \"personal\"\n\n[start.fake]\nmode = \"auto\"\n";
+    std::fs::write(root.path().join("agents.toml"), start).unwrap();
+    let agents = Agents::new(harnesses()).config_in(root.path().to_owned());
+    let world = World::new_with(root.path(), agents).await;
+
+    let defaults = world.defaults().await;
+    assert_eq!(defaults["account"], "work");
+    assert_eq!(defaults["fallback"], "personal");
+    assert_eq!(defaults["settings"]["mode"], "auto", "the Harness's still");
+
+    // Asked again, it says the file as it is now.
+    std::fs::write(root.path().join("agents.toml"), "enter = \"send\"\n").unwrap();
+    let defaults = world.defaults().await;
+    assert!(defaults.get("account").is_none(), "{defaults}");
+    assert!(defaults.get("fallback").is_none(), "{defaults}");
+}
+
 /// A fence that does not hold, as on a system that gives no namespaces.
 fn missing() -> Fence {
     Fence::missing(
