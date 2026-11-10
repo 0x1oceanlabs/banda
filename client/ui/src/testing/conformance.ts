@@ -99,7 +99,8 @@ export type Conformance<A extends { [key: string]: JsonValue }> = {
   modules?: readonly string[]
   answers?: Answers
   /** What the Person can do in it, by name: by default, a click on each
-   * button it draws once mounted. */
+   * button it draws once mounted. A kind that draws none is given its
+   * gestures, or `{}` when there is nothing to do in it but look. */
   gestures?: Readonly<Record<string, Gesture>>
 }
 
@@ -546,10 +547,16 @@ export async function conformance<A extends { [key: string]: JsonValue }>(
     let gestures = spec.gestures
     if (!gestures) {
       const buttons: string[] = []
-      await play("live", "as it mounts", (pane) => {
+      const drawn = await play("live", "as it mounts", (pane) => {
         for (const button of pane.root.querySelectorAll("button"))
           if (!button.disabled) buttons.push(nameOf(button))
       })
+      // A kind with nothing to click, as a terminal that is typed in,
+      // would pass having done nothing: its gestures are to be given.
+      if (drawn && buttons.length === 0)
+        found.add(
+          `${kind}: draws no button, so the kit made no gesture in it; give it the Person's gestures, or none`
+        )
       gestures = Object.fromEntries(
         buttons.map((name): [string, Gesture] => [
           name,

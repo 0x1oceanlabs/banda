@@ -148,8 +148,21 @@ test("a kind that drops what an older build of arc refuses says nothing, and the
     await conformance({
       kind: kind("kit.lists", Lists),
       answers: (method) => (method === "projects.list" ? [] : null),
+      // It has nothing to click: it is only looked at.
+      gestures: {},
     })
   ).toEqual([
     'kit.lists, arc lacks the method, as it mounts: leaves "There is no method "projects.list"." unhandled',
   ])
+})
+
+test("a kind with nothing to click is not passed for doing nothing", async () => {
+  expect(
+    await conformance({
+      kind: kind("kit.lists", Lists),
+      answers: (method) => (method === "projects.list" ? [] : null),
+    })
+  ).toContain(
+    "kit.lists: draws no button, so the kit made no gesture in it; give it the Person's gestures, or none"
+  )
 })
