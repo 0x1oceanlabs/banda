@@ -9,7 +9,7 @@ import { join, resolve } from "node:path"
 import { promisify } from "node:util"
 import { _electron as electron, expect, test } from "@playwright/test"
 import type { ThreadView } from "@banda/contract/agents"
-import { inUnit } from "../e2e/window"
+import { addProject, inUnit } from "../e2e/window"
 
 const run = promisify(execFile)
 const desktop =
@@ -229,8 +229,7 @@ test(`real ${harness} exercises Banda's browser`, async () => {
       .getByRole("region", { name: "New Thread" })
       .getByRole("button", { name: "Close New Thread", exact: true })
       .click()
-    await page.getByRole("button", { name: "Add Project", exact: true }).click()
-    const menu = page.getByRole("dialog", { name: "Banda menu" })
+    const menu = await addProject(page)
     await menu.getByRole("option", { name: /New Project/ }).click()
     await menu.getByRole("combobox").fill(`Browser trial ${harness}`)
     await menu.getByRole("combobox").press("Enter")

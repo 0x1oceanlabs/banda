@@ -3,9 +3,9 @@
  * Actions run most; typed into, the Threads, Projects, what the modules'
  * sources find (ADR 0022, decision 4) and the Actions that fit the words,
  * then the sources' rows with no heading, as New Thread with them. A
- * Project and the sidebar's view are branches the menu goes into, as
- * Omarchy's menu does, and `Tab` shows what can be done with a row. Plain
- * data, so the window only draws it. It knows no module.
+ * Project, the sidebar's view and the theme are branches the menu goes
+ * into, as Omarchy's menu does, and `Tab` shows what can be done with a
+ * row. Plain data, so the window only draws it. It knows no module.
  */
 import type {
   Browsed,
@@ -19,6 +19,14 @@ import type { Listed, Lists } from "@banda/ui/pane"
 import type { Action, ItemAction, MenuRow } from "@banda/ui/module"
 import type { Shell } from "../window/actions"
 import { type Answer, ANSWERS } from "../trust/trust"
+import {
+  type LookRow,
+  schemeRows,
+  THEME,
+  themeRows,
+  THEMES,
+  type Theming,
+} from "./theme"
 
 /** Where the menu opens: its root, or its Actions, as the key sheet. */
 export type At = "root" | "actions"
@@ -37,6 +45,13 @@ export type Choice =
   | { kind: "project"; id: string; project: ProjectSummary }
   /** A branch: the sidebar's presets. */
   | { kind: "views"; id: string }
+  /** A branch: the schemes of the theme in force, and Themes… (ADR 0098,
+   * decision 21). */
+  | { kind: "theme"; id: string }
+  /** A branch: the themes there are. */
+  | { kind: "themes"; id: string }
+  /** Writes look.toml's scheme or theme. */
+  | LookRow
   | { kind: "action"; id: string; action: Action<Shell> }
   /** A branch: a family of actions, as the key sheet folds them. */
   | {
@@ -108,6 +123,8 @@ export type Source = (typeof SOURCE_ORDER)[number]
 const BRANCHES = [
   "project",
   "views",
+  "theme",
+  "themes",
   "family",
   "add",
   "source",
@@ -141,6 +158,10 @@ export function branchName(branch: Branch): string {
       return branch.title
     case "views":
       return VIEWS
+    case "theme":
+      return THEME
+    case "themes":
+      return THEMES
     case "add":
       return ADD_PROJECT
     case "source":
@@ -259,6 +280,10 @@ function folderName(folder: string): string {
 /** The sidebar's view, as the branch the menu goes into. */
 const VIEWS_BRANCH: Branch = { kind: "views", id: "views" }
 
+/** The theme, and the themes in it, as the branches the menu goes into. */
+const THEME_BRANCH: Branch = { kind: "theme", id: "theme" }
+const THEMES_BRANCH: Branch = { kind: "themes", id: "theme.themes" }
+
 /** A Project, as the branch the menu goes into: one whose folder is
  * missing goes to find it. */
 function projectBranch(project: ProjectSummary): Branch {
@@ -355,6 +380,8 @@ export type Sources = {
   actions: readonly Action<Shell>[]
   /** The sidebar's presets, and the one in force. */
   presets: { names: readonly string[]; current: string }
+  /** The theme in force, and the themes there are. */
+  theme: Theming
   /** The clock a Thread's Later is read by (ADR 0074). */
   now: number
   /** A Thread's item actions, its App's and the sidebar list's (ADR
@@ -377,14 +404,28 @@ export type Browsing = Browsed & { partial: string }
 /** The rows one source found, under its heading. */
 export type Found = { id: string; label: string; rows: readonly MenuRow[] }
 
-/** The Actions an empty menu offers, as T3 Code's palette offers its own. */
+/** What the bar's logo did before it opened the menu, and what the
+ * sidebar's foot held (ADR 0098, decision 21): the sidebar shown or
+ * hidden, the key sheet and the theme. No button is left for them, so the
+ * empty menu always offers them: what is chosen often pushes out T3
+ * Code's rows, never these. */
+const KEPT = ["sidebar.toggle", "menu.keys", "theme"]
+
+/** The Actions an empty menu offers, as T3 Code's palette offers its own,
+ * by the action's id or the branch's; then the kept ones. */
 export const ROOT_ACTIONS = [
   "thread.new",
   "browser.new",
   "pane.new",
   "calls.answer",
   "overview.toggle",
+  ...KEPT,
 ]
+
+/** A row's id among ROOT_ACTIONS: an action's own, or the branch's. */
+function rootIdOf(row: Choice): string {
+  return row.kind === "action" ? row.action.id : row.id
+}
 
 /** The key sheet's sections first, in this order; a module's own section
  * (`Action.section`) after them. */
@@ -408,7 +449,7 @@ export function menuOf({
   inside?: Branch
   sources: Sources
 }): Group[] {
-  const { lists, projects, presets, found, weight } = sources
+  const { lists, projects, presets, theme, found, weight } = sources
   const byRecent = byRecentAt(sources.now)
   const query = words.trim()
   const byWeight = (row: Choice) => weight(row.id)
@@ -418,6 +459,7 @@ export function menuOf({
     ...actions.map(actionRow),
     VIEWS_BRANCH,
     ADD_BRANCH,
+    THEME_BRANCH,
   ]
   // What the sources found: the groups with a heading, by it in the
   // modules' order, and the rows with none.
@@ -474,6 +516,23 @@ export function menuOf({
         ),
       },
     ])
+  if (inside?.kind === "theme")
+    return nonEmpty([
+      {
+        label: "",
+        rows: fitting<Choice>(
+          [...schemeRows(theme.now), THEMES_BRANCH],
+          lookTexts
+        ),
+      },
+    ])
+  if (inside?.kind === "themes")
+    return nonEmpty([
+      {
+        label: "",
+        rows: fitting(themeRows(theme.now, theme.listed), lookTexts),
+      },
+    ])
   if (inside?.kind === "project") {
     const here = inside.project.id
     // Its new Thread first, as its sources find it, then its Threads.
@@ -518,8 +577,9 @@ export function menuOf({
       return nonEmpty([
         { label: "Actions", rows: fitting(actionRows, actionTexts) },
       ])
-    // The key sheet: every action by section, a family as one row, and
-    // the sidebar's view with the Threads.
+    // The key sheet: every action by section, a family as one row, the
+    // sidebar's view with the Threads, and Add Project and the theme with
+    // Banda's.
     const sections = new Map<string, Choice[]>(
       SECTIONS.map((label) => [label, []])
     )
@@ -542,7 +602,7 @@ export function menuOf({
       }
     }
     sections.get("Threads")?.push(VIEWS_BRANCH)
-    sections.get("Banda")?.push(ADD_BRANCH)
+    sections.get("Banda")?.push(ADD_BRANCH, THEME_BRANCH)
     return nonEmpty([...sections].map(([label, rows]) => ({ label, rows })))
   }
 
@@ -550,20 +610,21 @@ export function menuOf({
     threadsOf(project, listed)
   )
   if (!query) {
-    // The actions run most, then the ones T3 Code's palette offers.
+    // The actions run most, then the ones T3 Code's palette offers; the
+    // kept ones keep their room, each in its place among the rest.
     const usual = (row: Choice) => {
-      const place =
-        row.kind === "action" ? ROOT_ACTIONS.indexOf(row.action.id) : -1
+      const place = ROOT_ACTIONS.indexOf(rootIdOf(row))
       return place === -1 ? ROOT_ACTIONS.length : place
     }
-    const offered = actionRows
+    const kept = (row: Choice) => KEPT.includes(rootIdOf(row))
+    const ranked = actionRows
       .filter(
-        (row) =>
-          byWeight(row) > 0 ||
-          (row.kind === "action" && ROOT_ACTIONS.includes(row.action.id))
+        (row) => byWeight(row) > 0 || ROOT_ACTIONS.includes(rootIdOf(row))
       )
       .toSorted((a, b) => byWeight(b) - byWeight(a) || usual(a) - usual(b))
-      .slice(0, ROOT_ACTIONS.length)
+    const room = ROOT_ACTIONS.length - ranked.filter(kept).length
+    const others = ranked.filter((row) => !kept(row)).slice(0, room)
+    const offered = ranked.filter((row) => kept(row) || others.includes(row))
     return nonEmpty([
       {
         label: "Recent Threads",
@@ -746,6 +807,13 @@ function byRecentAt(
   const turn = ({ listed }: { listed: Listed }) =>
     Number(standOf(listed, now) === "turn")
   return (a, b) => turn(b) - turn(a) || b.listed.changed - a.listed.changed
+}
+
+/** A row of the theme's branches, by its words: a scheme's title, a
+ * theme's name and what it has. */
+function lookTexts(row: Choice): string[] {
+  if (row.kind === "look") return [row.title, row.about ?? ""]
+  return isBranch(row) ? [branchName(row)] : []
 }
 
 function threadTexts({ listed }: { listed: Listed }): string[] {

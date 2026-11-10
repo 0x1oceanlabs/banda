@@ -433,11 +433,8 @@ const DESKTOP_READS: Record<string, number> = {
   "client/web/src/settings/ProjectsSettings.tsx": 1,
   "client/web/src/settings/SettingRow.tsx": 2,
   "client/web/src/settings/Settings.tsx": 1,
-  "client/web/src/settings/ThemePicker.tsx": 1,
   "client/web/src/sharing/AskToShare.tsx": 1,
   "client/web/src/sidebar/Foot.tsx": 1,
-  "client/web/src/sidebar/ThemeMenu.tsx": 1,
-  "client/web/src/sidebar/write-setting.ts": 1,
   "platform/notifications/pane/src/desktop.ts": 1,
 }
 
