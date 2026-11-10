@@ -49,7 +49,6 @@ pub struct RemoveAccount {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Retirement {
     pub to: String,
-    #[schemars(with = "serde_json::Value")]
     pub by: banda_kernel::Participant,
 }
 

@@ -135,7 +135,9 @@ impl CommandId {
 }
 
 /// Anyone who acts in a Project: a Person or an Agent.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, TS, schemars::JsonSchema,
+)]
 #[serde(tag = "kind", content = "id", rename_all = "snake_case")]
 #[ts(export)]
 pub enum Participant {
