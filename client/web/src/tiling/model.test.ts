@@ -823,7 +823,7 @@ const projectsOf = (names: Record<string, string>, scratch: string[] = []) =>
 test("a refusal names whose workspace it is, and where the Pane can go (ADR 0102, decision 6)", () => {
   const { a, b, s } = projectsOf({ a: "Banda", b: "Brand", s: "" }, ["s"])
   const told = (said: Partial<Parameters<typeof refusalOf>[0]>) =>
-    refusalOf({ to: 1, owner: b, as: a, along: false, ...said })
+    refusalOf({ to: 1, owner: b, as: a, scratch: false, along: false, ...said })
   expect(told({})).toEqual({
     title: "Workspace 2 is Brand's",
     description: "Banda's Panes go to its workspace, a free one or a new one.",
@@ -833,10 +833,18 @@ test("a refusal names whose workspace it is, and where the Pane can go (ADR 0102
   expect(told({ along: true }).description).toBe(
     "It goes with its Group, which is Banda's. Drag it to move it alone."
   )
-  expect(told({ as: s }).description).toBe(
+  expect(told({ as: s, scratch: true }).description).toBe(
     "A Pane of no Project goes to a free workspace or a new one."
   )
-  expect(told({ as: s, along: true }).description).toBe(
+  expect(told({ as: s, scratch: true, along: true }).description).toBe(
+    "It goes with its Group, which is of no Project. Drag it to move it alone."
+  )
+  // A draft in the machine's own ID has no summary, and is of no Project
+  // all the same, as the Placing says.
+  expect(told({ as: undefined, scratch: true }).description).toBe(
+    "A Pane of no Project goes to a free workspace or a new one."
+  )
+  expect(told({ as: undefined, scratch: true, along: true }).description).toBe(
     "It goes with its Group, which is of no Project. Drag it to move it alone."
   )
   // A name not known: another Project's.

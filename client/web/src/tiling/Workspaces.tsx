@@ -1,7 +1,7 @@
 import { cn } from "@banda/ui/lib/utils"
 import { useEffect, useLayoutEffect, useRef } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
-import { holderOf, PANE_LAYER, type PaneState } from "@banda/ui/pane"
+import { onPage, PANE_LAYER, type PaneState } from "@banda/ui/pane"
 import { moveOf } from "../look"
 import { Moving } from "../motion"
 import type { Entry, Workspaces as State } from "./model"
@@ -129,25 +129,17 @@ export function Workspaces({
     })
   }, [list, current, overview])
   useLayoutEffect(() => () => stacked(undefined), [])
-  // A page in the layer takes the keys as an iframe does, with no focus
-  // event of its own: the focus leaves for it, or the window blurs as it
-  // takes it. The tile that holds the page takes the focus then and there.
-  useEffect(() => {
-    const take = (element: Element | null) => {
-      const tile = holderOf(element)?.closest<HTMLElement>("[data-tile]")
-      if (tile?.dataset.tile && tile.dataset.focused !== "true")
-        frame.focus(tile.dataset.tile)
-    }
-    const onLeave = (event: FocusEvent) =>
-      take(event.relatedTarget as Element | null)
-    const onBlur = () => take(document.activeElement)
-    document.addEventListener("focusout", onLeave, true)
-    window.addEventListener("blur", onBlur)
-    return () => {
-      document.removeEventListener("focusout", onLeave, true)
-      window.removeEventListener("blur", onBlur)
-    }
-  }, [frame])
+  // A page in the layer takes the keys as `onPage` says: the tile that
+  // holds the page takes the focus then and there.
+  useEffect(
+    () =>
+      onPage((holder) => {
+        const tile = holder.closest<HTMLElement>("[data-tile]")
+        if (tile?.dataset.tile && tile.dataset.focused !== "true")
+          frame.focus(tile.dataset.tile)
+      }),
+    [frame]
+  )
   const step = useRef(onStep)
   // What the mouse's moving reads as it goes.
   const carrying = useRef<Carrying>({

@@ -696,10 +696,16 @@ export function Shell({
     (row: Exclude<Choice, Branch | Own>) => {
       switch (row.kind) {
         case "thread":
+          // A pick goes as the sidebar's does; one brought beside takes the
+          // Sheet away too (ADR 0102, decision 5).
+          if (!row.beside)
+            return parts.run("pane.pick", {
+              project: row.project,
+              pane: row.listed.pane,
+            })
+          parts.closeSheet()
           return change((w) =>
-            row.beside
-              ? bringing(w, row.project, row.listed.pane, placing, projectOf)
-              : picking(w, row.project, row.listed.pane, placing)
+            bringing(w, row.project, row.listed.pane, placing, projectOf)
           )
         case "action":
           return row.action.run(parts)
@@ -881,12 +887,6 @@ export function Shell({
                     onClose={closePeek}
                   />
                 )}
-                <Sheet
-                  state={sheet}
-                  engine={engine}
-                  modules={modules}
-                  shell={parts}
-                />
                 <Toaster />
                 <LaterPicker />
                 <QuitDialog
@@ -921,6 +921,13 @@ export function Shell({
                     onClose={closeDrawer}
                   />
                 )}
+                {/* After the drawer: the Sheet stands over it, dropped. */}
+                <Sheet
+                  state={sheet}
+                  engine={engine}
+                  modules={modules}
+                  shell={parts}
+                />
                 {overview && (
                   <Overview
                     open={overviewState === "open"}

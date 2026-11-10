@@ -628,6 +628,7 @@ test("Alt+Shift+N onto another Project's workspace does nothing in the row, and 
     const shell = {
       change: (how: (w: Workspaces) => unknown) => (step = how(state)),
       projectOf: lookupOf(projectsOf({ a: "Banda", b: "Brand" })),
+      placing: () => placingOf(flow, []),
     } as unknown as Shell
     runAction(shell, "pane.send-2")
     return step
@@ -658,7 +659,7 @@ test("Alt+Shift+N onto another Project's workspace does nothing in the row, and 
   ])
 })
 
-test("a refused move names the workspace by its number before the move, though the free one it leaves goes (ADR 0102, decision 6)", () => {
+test("a refused move names the workspace by its number before the move, though the free one it leaves goes; a draft in the machine's own ID hears it is of no Project, as a scratch Project's Thread does (ADR 0102, decisions 1 and 6)", () => {
   inFlow("row")
   const terminal = { kind: "terminal.terminal", args: {} }
   const one = (id: string, project: string, pane: PaneState = terminal) => ({
@@ -668,29 +669,34 @@ test("a refused move names the workspace by its number before the move, though t
   })
   // Banda's, then a free one with only a Thread of no Project, on screen,
   // then Brand's.
-  const state: Workspaces = {
+  const on = (project: string): Workspaces => ({
     list: [
       { id: "mine", project: "a", focus: 0, columns: [one("e", "a")] },
-      { id: "free", focus: 0, columns: [one("t", "s", thread("t1"))] },
+      { id: "free", focus: 0, columns: [one("t", project, thread("t1"))] },
       { id: "theirs", project: "b", focus: 0, columns: [one("f", "b")] },
       { id: "bottom", columns: [], focus: 0 },
     ],
     current: 1,
-  }
+  })
   const projects = projectsOf({ a: "Banda", b: "Brand", s: "" }, ["s"])
-  const shell = {
-    change: (how: (w: Workspaces) => unknown) =>
-      expect(how(state)).toBeUndefined(),
-    projectOf: lookupOf(projects),
-  } as unknown as Shell
-  for (const action of ["pane.send-3", "pane.move-down-or-to-workspace"]) {
-    toasted.mockClear()
-    runAction(shell, action)
-    expect(toasted).toHaveBeenCalledWith("Workspace 3 is Brand's", {
-      id: expect.any(String),
-      description:
-        "A Pane of no Project goes to a free workspace or a new one.",
-    })
+  // A scratch Project's Thread, and a draft in the machine's own ID, which
+  // the window knows no summary of.
+  for (const project of ["s", "machine"]) {
+    const shell = {
+      change: (how: (w: Workspaces) => unknown) =>
+        expect(how(on(project))).toBeUndefined(),
+      projectOf: lookupOf(projects),
+      placing: () => placingOf("row", noProjectOf(projects, "machine")),
+    } as unknown as Shell
+    for (const action of ["pane.send-3", "pane.move-down-or-to-workspace"]) {
+      toasted.mockClear()
+      runAction(shell, action)
+      expect(toasted).toHaveBeenCalledWith("Workspace 3 is Brand's", {
+        id: expect.any(String),
+        description:
+          "A Pane of no Project goes to a free workspace or a new one.",
+      })
+    }
   }
 })
 
@@ -725,6 +731,7 @@ test("Alt+Shift+N on a Pane of the Project's own Group moves it alone; on an Age
     const shell = {
       change: (how: (w: Workspaces) => unknown) => (step = how(state)),
       projectOf: () => undefined,
+      placing: () => placingOf("row", []),
     } as unknown as Shell
     runAction(shell, "pane.send-2")
     return step
@@ -760,7 +767,7 @@ test("Open beside brings a Thread onto a free workspace or its Project's, never 
   })
   const projects = projectsOf({ a: "Banda", b: "Brand", s: "" }, ["s"])
   const projectOf = lookupOf(projects)
-  const row = placingOf("row", noProjectOf(projects))
+  const row = placingOf("row", noProjectOf(projects, "machine"))
   toasted.mockClear()
   expect(bringing(on("b"), "a", pane, row, projectOf)).toBeUndefined()
   expect(toasted).toHaveBeenCalledWith("Workspace 1 is Brand's", {
@@ -769,12 +776,17 @@ test("Open beside brings a Thread onto a free workspace or its Project's, never 
   })
   expect(bringing(on(), "a", pane, row, projectOf)).toBeDefined()
   expect(bringing(on("a"), "a", pane, row, projectOf)).toBeDefined()
-  // A Thread of no Project hears where it goes: a free workspace.
-  expect(bringing(on("b"), "s", pane, row, projectOf)).toBeUndefined()
-  expect(toasted).toHaveBeenLastCalledWith("Workspace 1 is Brand's", {
-    id: expect.any(String),
-    description: "A Pane of no Project goes to a free workspace or a new one.",
-  })
+  // A Thread of no Project hears where it goes: a free workspace. So does
+  // a draft in the machine's own ID, which has no summary.
+  for (const none of ["s", "machine"]) {
+    toasted.mockClear()
+    expect(bringing(on("b"), none, pane, row, projectOf)).toBeUndefined()
+    expect(toasted).toHaveBeenCalledWith("Workspace 1 is Brand's", {
+      id: expect.any(String),
+      description:
+        "A Pane of no Project goes to a free workspace or a new one.",
+    })
+  }
   // In the Flow free, every workspace is free.
   const free = placingOf("free", noProjectOf(projects))
   expect(bringing(on("b"), "a", pane, free, projectOf)).toBeDefined()
@@ -898,6 +910,7 @@ test("workspace.close leaves an emptied workspace for the one above, or below fr
     params: { keep, projects },
   })
 
+  toasted.mockClear()
   // From the one on screen: up, then it goes.
   expect(closing([busy, mine, bottom], 1)()).toEqual({
     at: 0,
@@ -913,9 +926,31 @@ test("workspace.close leaves an emptied workspace for the one above, or below fr
     at: 0,
     sent: [tidy("theirs", ["b"])],
   })
-  // One that holds a Pane, the empty one at the bottom: nothing.
+  expect(toasted).not.toHaveBeenCalled()
+  // One that holds a Pane, the empty one at the bottom: nothing, and a
+  // quiet toast says why.
   expect(closing([busy, mine, bottom], 0)()).toEqual({ at: 0, sent: [] })
+  expect(toasted).toHaveBeenLastCalledWith("Workspace 1 holds Panes", {
+    id: expect.any(String),
+    description:
+      "Only an empty workspace closes. Close or move its Panes first.",
+  })
   expect(closing([busy, mine, bottom], 2)()).toEqual({ at: 2, sent: [] })
+  expect(toasted).toHaveBeenLastCalledWith(
+    "The empty workspace at the bottom stays",
+    {
+      id: expect.any(String),
+      description: "It is where a new workspace starts.",
+    }
+  )
+  // One gone already, as a second press of its cross finds it, says
+  // nothing.
+  toasted.mockClear()
+  expect(closing([busy, bottom], 0)({ workspace: "mine" })).toEqual({
+    at: 0,
+    sent: [],
+  })
+  expect(toasted).not.toHaveBeenCalled()
 
   // In the Banda menu, with no key: a held Alt+W would go on to close
   // the Panes of the workspace it goes to.

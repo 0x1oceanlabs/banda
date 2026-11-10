@@ -1,7 +1,7 @@
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
 import { open, start } from "../tiling/model"
-import { backTo, escAway, sheetEntries, take } from "./Sheet"
+import { awayTo, backTo, escAway, sheetEntries, take } from "./Sheet"
 
 /** An element as the Sheet's checks read it: in the page or gone, what
  * it is in, as `[data-tile]`, and whether it is a field. */
@@ -52,6 +52,28 @@ test("as the Sheet goes, the keys go back to the tile or field they came from, e
   const gone = element({ connected: false, inside: ["[data-tile]"] })
   expect(backTo(gone, tile)).toBe(tile)
   expect(backTo(null, null)).toBeNull()
+})
+
+test("the keys going to a Pane take the Sheet away: a tile, the dropped drawer's, the overview, or a page a tile holds (ADR 0102, decision 5)", () => {
+  expect(awayTo(element({ inside: ["[data-stack]"] }))).toBe(true)
+  expect(awayTo(element({ inside: ["[data-drawer]"] }))).toBe(true)
+  expect(awayTo(element({ inside: ["[data-overview-state]"] }))).toBe(true)
+  // The Sheet itself, the sidebar and the bar keep it.
+  expect(awayTo(element({ inside: ["[data-sheet]"] }))).toBe(false)
+  expect(awayTo(element())).toBe(false)
+  expect(awayTo(null)).toBe(false)
+  // A browser's page, in the layer over the workspaces, held by its tile.
+  vi.stubGlobal("CSS", { escape: (id: string) => id })
+  vi.stubGlobal("document", {
+    querySelector: (selector: string) =>
+      selector === '[data-holds="page-1"]' ? {} : null,
+  })
+  const page = {
+    closest: (selector: string) =>
+      selector === "[data-held-by]" ? { getAttribute: () => "page-1" } : null,
+  } as unknown as Element
+  expect(awayTo(page)).toBe(true)
+  vi.unstubAllGlobals()
 })
 
 test("the Sheet takes the keys, though a toast's button gives them back to the composer as it blurs", () => {
