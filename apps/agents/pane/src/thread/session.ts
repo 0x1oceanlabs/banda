@@ -2,10 +2,15 @@
  * What a Person does with one Thread, apart from how its Pane shows it:
  * the live Thread, its Harness and settings, and each command a Person
  * sends to it — a message, Implement, an answer, stop, retry and the
- * queue's. The Thread Pane lays these out; it decides none of them.
+ * queue's. The Thread Pane lays these out; it decides none of them. Each
+ * that does not go says why: on the Thread's problem line, or, for a
+ * machine the window does not reach, at once in a toast that names it.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { newId, type Engine, type ProjectId } from "@banda/contract"
+import { Unreachable } from "@banda/core/react"
+import { toast } from "@banda/ui/components/sonner"
+import { problem } from "@banda/ui/lib/words"
 import type {
   Defaults,
   Image,
@@ -16,7 +21,7 @@ import type {
   TurnId,
   TurnView,
 } from "@banda/contract/agents"
-import { useMachine } from "@banda/ui/hooks/use-status"
+import { useMachine, useStatus } from "@banda/ui/hooks/use-status"
 import { projectsChanged } from "@banda/ui/lib/projects"
 import { keepZoom, zoomOf } from "@banda/ui/lib/zoom"
 import { useAct } from "@banda/ui/hooks/use-act"
@@ -164,6 +169,25 @@ function whenOpen(engine: Engine, act: () => void): () => void {
   }
 }
 
+/**
+ * `run`, an act named `what`, as its button says it ("Stop") or as the
+ * Person would ("your answer"), for `useAct`: on a machine the window does
+ * not reach (`Unreachable`) it says so at once in a toast that names that
+ * machine, and the act did not go; anything else goes on to the Thread's
+ * problem line (ADR 0082, decision 16).
+ */
+export function named<T>(
+  what: string,
+  run: () => Promise<T>
+): () => Promise<T | undefined> {
+  return () =>
+    run().catch((error: unknown) => {
+      if (!(error instanceof Unreachable)) throw error
+      toast.error(problem(error, what))
+      return undefined
+    })
+}
+
 /** The Thread a Pane with `args` shows, and what its Person may do there. */
 export function useThreadSession({
   engine,
@@ -273,14 +297,16 @@ export function useThreadSession({
       return true
     }
     return (
-      (await acting.act(async () => {
-        await engine.command(
-          "agents.configure",
-          { thread, settings: next },
-          project
-        )
-        return true
-      })) === true
+      (await acting.act(
+        named("the change", async () => {
+          await engine.command(
+            "agents.configure",
+            { thread, settings: next },
+            project
+          )
+          return true
+        })
+      )) === true
     )
   }
 
@@ -293,16 +319,18 @@ export function useThreadSession({
   })
   // A file dropped or pasted, kept in the Project for the message to name.
   const keep = (file: File) =>
-    acting.act(async () => {
-      const target = await ensureProject()
-      const data = base64Of(await dataUrl(file))
-      const kept = await engine.command(
-        "agents.keep",
-        { name: file.name, data },
-        target
-      )
-      return kept.path
-    })
+    acting.act(
+      named("the file", async () => {
+        const target = await ensureProject()
+        const data = base64Of(await dataUrl(file))
+        const kept = await engine.command(
+          "agents.keep",
+          { name: file.name, data },
+          target
+        )
+        return kept.path
+      })
+    )
   // The files `@` names come from the Project's folder, as the files
   // module finds them (ADR 0073, decision 11).
   const findFiles = useCallback(
@@ -327,11 +355,13 @@ export function useThreadSession({
   const planned = state && proposedPlan(state)
 
   const answer = (item: ItemId, choice: string, values?: Values) =>
-    acting.act(() =>
-      engine.command(
-        "agents.answer",
-        { item, choice, ...(values && { values }) },
-        project
+    acting.act(
+      named("your answer", () =>
+        engine.command(
+          "agents.answer",
+          { item, choice, ...(values && { values }) },
+          project
+        )
       )
     )
   // A No Space draft shows no mode, so its Person chose none: what they
@@ -348,37 +378,41 @@ export function useThreadSession({
     )
     return { ...draft, mode: engines.settings.mode }
   }
-  /** Sends `text`; an existing Thread changes to `next` first, if given. */
+  /** Sends `text`, as the act `what` names; an existing Thread changes to
+   * `next` first, if given. */
   const go = async (
     text: string,
     images: Image[],
     steer: boolean,
-    next?: Settings
+    next?: Settings,
+    what = "your message"
   ) => {
     const no = asking && declineOnce(asking.body)
     if (no && text && (await answer(asking.id, no)) === undefined) return false
     let target = project
-    const sent = await sending.act(async () => {
-      target = await ensureProject()
-      return engine.command(
-        "agents.send",
-        // A new Thread starts as its composer shows; an existing one runs
-        // with its own settings, which the bar changes as it goes.
-        {
-          ...(thread === null ? { harness } : { thread }),
-          text,
-          images: images.map(({ id }) => id),
-          settings:
-            thread === null
-              ? unplaced
-                ? await drafted(target)
-                : (settings ?? null)
-              : (next ?? null),
-          steer,
-        },
-        target
-      )
-    })
+    const sent = await sending.act(
+      named(what, async () => {
+        target = await ensureProject()
+        return engine.command(
+          "agents.send",
+          // A new Thread starts as its composer shows; an existing one runs
+          // with its own settings, which the bar changes as it goes.
+          {
+            ...(thread === null ? { harness } : { thread }),
+            text,
+            images: images.map(({ id }) => id),
+            settings:
+              thread === null
+                ? unplaced
+                  ? await drafted(target)
+                  : (settings ?? null)
+                : (next ?? null),
+            steer,
+          },
+          target
+        )
+      })
+    )
     if (sent && thread === null) {
       // Its words keep the size they were given before it was made.
       keepZoom(zoomKey(sent.thread), zoomOf(zoomKey(null)))
@@ -392,16 +426,27 @@ export function useThreadSession({
   }
   // Words from the Banda menu start the Thread as the Pane opens, with its
   // Harness's settings (ADR 0017, decision 6). They leave the Pane's args
-  // first, so they go once.
+  // first, so they go once. With its machine out of reach they go at
+  // once, to be refused, never to start a Thread by themselves once it is
+  // back (ADR 0082, decision 16); words that did not go wait in the
+  // composer.
+  const { state: reach } = useStatus(engine)
+  const out = reach === "away" || reach === "refused"
+  const [unsent, setUnsent] = useState<{ text: string }>()
+  const took = useRef<string>(undefined)
   useEffect(() => {
-    if (thread !== null || !args.ask || (!defaults && !unplaced)) return
+    if (thread !== null || !args.ask || (!defaults && !unplaced && !out)) return
     const { ask, ...rest } = args
     update(rest)
-    void go(ask, [], false)
+    // Once, though the Pane is drawn again before its args lose them.
+    if (took.current === ask) return
+    took.current = ask
+    void go(ask, [], false).then((went) => went || setUnsent({ text: ask }))
   })
   // Implement turns plan mode off and asks for the plan, in one command.
   const implement = () => {
-    if (settings) void go(IMPLEMENT, [], false, { ...settings, plan: false })
+    if (settings)
+      void go(IMPLEMENT, [], false, { ...settings, plan: false }, "Implement")
   }
   // A turn's changes open in the git module's Diff, on that Turn: in the
   // Diff already open, or beside the Thread (ADR 0034).
@@ -421,43 +466,61 @@ export function useThreadSession({
     )
   }
   const stop = (turn: TurnView) =>
-    void acting.act(() =>
-      engine.command("agents.stop", { turn: turn.id }, project)
+    void acting.act(
+      named("Stop", () =>
+        engine.command("agents.stop", { turn: turn.id }, project)
+      )
     )
   const retry = (turn: TurnView) =>
-    void acting.act(() =>
-      engine.command("agents.retry", { turn: turn.id }, project)
+    void acting.act(
+      named("Try again", () =>
+        engine.command("agents.retry", { turn: turn.id }, project)
+      )
     )
   const retryOn = (turn: TurnView, harness: string) =>
-    void acting.act(async () => {
-      if (thread === null) return
-      await engine.command("agents.switch", { thread, harness }, project)
-      await engine.command("agents.retry", { turn: turn.id }, project)
-    })
+    void acting.act(
+      named(`Go on with ${harnessName(harnesses, harness)}`, async () => {
+        if (thread === null) return
+        await engine.command("agents.switch", { thread, harness }, project)
+        await engine.command("agents.retry", { turn: turn.id }, project)
+      })
+    )
   // The fork opens here, as a Thread picked in the sidebar does.
   const fork = (turn: TurnView) =>
     void acting
-      .act(() => engine.command("agents.fork", { turn: turn.id }, project))
+      .act(
+        named("Fork", () =>
+          engine.command("agents.fork", { turn: turn.id }, project)
+        )
+      )
       .then((forked) => forked && update({ ...forked, harness }))
   const queue: QueueActions = {
     onSendNow: ({ turn }) =>
-      void acting.act(() =>
-        engine.command("agents.steer", { turn: turn.id }, project)
+      void acting.act(
+        named("Send now", () =>
+          engine.command("agents.steer", { turn: turn.id }, project)
+        )
       ),
     onEdit: async ({ turn }, text) =>
-      (await acting.act(() =>
-        engine.command("agents.edit", { turn: turn.id, text }, project)
+      (await acting.act(
+        named("your edit", () =>
+          engine.command("agents.edit", { turn: turn.id, text }, project)
+        )
       )) !== undefined,
     onRemove: ({ turn }) =>
-      void acting.act(() =>
-        engine.command("agents.withdraw", { turn: turn.id }, project)
+      void acting.act(
+        named("Remove", () =>
+          engine.command("agents.withdraw", { turn: turn.id }, project)
+        )
       ),
     editing,
     onEditing: setEditing,
     onContinue: () => {
       if (thread === null) return
-      void acting.act(() =>
-        engine.command("agents.resume", { thread }, project)
+      void acting.act(
+        named("Continue", () =>
+          engine.command("agents.resume", { thread }, project)
+        )
       )
     },
   }
@@ -484,6 +547,8 @@ export function useThreadSession({
     acting: acting.busy,
     /** Why the last command did not go, if it did not. */
     problem: sending.problem ?? acting.problem,
+    /** The Banda menu's words, once they did not go: for the composer. */
+    unsent,
     settings,
     offer,
     configure,
@@ -529,8 +594,10 @@ export function useThreadSession({
     /** Takes the Thread back to before `turn`'s message; resolves
      * whether it went. */
     rewind: async (turn: TurnView) =>
-      (await acting.act(() =>
-        engine.command("agents.rewind", { turn: turn.id }, project)
+      (await acting.act(
+        named("Edit", () =>
+          engine.command("agents.rewind", { turn: turn.id }, project)
+        )
       )) !== undefined,
     queue,
     /** Opens the last waiting message to edit, from ↑ in the composer. */

@@ -37,6 +37,7 @@ import {
   systemPreferences,
   type WebContents,
 } from "electron"
+import type { Address } from "@banda/contract"
 import { type Look as LookValue, WALLPAPER_URL } from "@banda/contract/look"
 import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
@@ -414,22 +415,20 @@ async function ready(): Promise<void> {
       return runtime.runPromise(Stop.use((stop) => stop.engine))
     }
   )
+  /** An engine's address, with the tests' latency. */
+  const late = <E, R>(address: Effect.Effect<Address, E, R>) =>
+    TEST_LATENCY
+      ? Effect.map(address, (at) => ({ ...at, latency: TEST_LATENCY }))
+      : address
   serve(runtime, fromPage, BRIDGE, {
-    engine: [
-      none,
-      () =>
-        Engine.use((engine) =>
-          TEST_LATENCY
-            ? Effect.map(engine.address, (at) => ({
-                ...at,
-                latency: TEST_LATENCY,
-              }))
-            : engine.address
-        ),
-    ],
-    // The other machines' engines, through ssh (hosts.ts, ADR 0081).
+    engine: [none, () => Engine.use((engine) => late(engine.address))],
+    // The other machines' engines, through ssh (hosts.ts, ADR 0081), as
+    // far as this one's in a test.
     hosts: { current: [none, () => Hosts.use((hosts) => hosts.current)] },
-    hostEngine: [text, ([name]) => Hosts.use((hosts) => hosts.address(name))],
+    hostEngine: [
+      text,
+      ([name]) => Hosts.use((hosts) => late(hosts.address(name))),
+    ],
     hostStart: [text, ([name]) => Hosts.use((hosts) => hosts.start(name))],
     hostAdd: [
       Schema.Tuple([

@@ -145,6 +145,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     editLast,
     looking,
     acted,
+    unsent,
   } = useThreadSession(props)
   const picked = useMemo(() => pickedOf(offer.options), [offer.options])
   // Learn more, wherever the fence is spoken of: Settings → General, at
@@ -161,6 +162,10 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   const files = useThreadFiles(here ? project : null, state?.items, run)
   const root = useRef<HTMLDivElement>(null)
   const composer = useRef<ComposerHandle>(null)
+  // The Banda menu's words that did not go wait in the composer.
+  useEffect(() => {
+    if (unsent) composer.current?.putBack(unsent.text, [])
+  }, [unsent])
   const findField = useRef<HTMLInputElement>(null)
   const dock = useRef<HTMLDivElement>(null)
   // Esc and Enter answer the Question that waits, from anywhere in the

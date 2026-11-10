@@ -38,6 +38,7 @@ export {
   Lost,
   PROTOCOL,
   Refused,
+  Unreachable,
   type Address,
   type Answered,
   type CommandOptions,

@@ -69,8 +69,18 @@ function fake(item: Listed, title: string | Error = "") {
       status: { state: "open" },
       watch: () => () => undefined,
       command: asks,
-      commandAt: (name: string, args: { title?: string }) =>
-        asks(name, args).then((answer) => ({ answer, at: 3 })),
+      // As the engine sends a command `once`: refused at once while it is
+      // not open, and never sent.
+      commandAt: (
+        name: string,
+        args: { title?: string },
+        _project?: ProjectId,
+        _command?: string,
+        options?: { once?: boolean }
+      ) =>
+        options?.once && engine.status.state !== "open"
+          ? Promise.reject(new Lost())
+          : asks(name, args).then((answer) => ({ answer, at: 3 })),
     } as unknown as Engine
     engines.set(host, engine)
     return engine
@@ -422,7 +432,7 @@ test("an archive its host refuses, or whose host goes, comes back in the list wi
   }
 })
 
-test("an archive whose host is away is not sent, and keeps the Thread's Panes, with a toast", () => {
+test("an archive whose host is away is not sent, and keeps the Thread's Panes, with a toast", async () => {
   const { window, sent, ran, engineOf } = fake(listed())
   Object.assign(engineOf(undefined), { status: { state: "lost" } })
   action("agents.archive-thread").run(window, {
@@ -430,9 +440,9 @@ test("an archive whose host is away is not sent, and keeps the Thread's Panes, w
     item: "t1",
     archived: true,
   })
+  await vi.waitFor(() => expect(said.errors).toHaveLength(1))
   expect(sent).toEqual([])
   expect(ran).toEqual([])
-  expect(said.errors).toHaveLength(1)
 })
 
 test("another host's Thread is archived on its own engine", () => {
@@ -466,7 +476,16 @@ test("another host's Thread the Window does not reach now is renamed, put off to
   action("thread.unread").run(away, at)
   action("agents.archive-thread").run(away, { ...at, archived: true })
   await vi.waitFor(() => expect(said.errors).toHaveLength(5))
-  expect(new Set(said.errors)).toEqual(new Set(["arc is away"]))
+  // Each names the machine and what was not sent.
+  expect(new Set(said.errors)).toEqual(
+    new Set([
+      "arc is away: Rename was not sent.",
+      "arc is away: Later was not sent.",
+      "arc is away: Wake now was not sent.",
+      "arc is away: Mark as unread was not sent.",
+      "arc is away: Archive was not sent.",
+    ])
+  )
   expect(asked).toEqual([])
   expect(ran).toEqual([])
 })

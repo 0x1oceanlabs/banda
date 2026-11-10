@@ -10,7 +10,10 @@
  * says why in the pill's words, from the window's start, and turns on as
  * arc is back. Alt+U and a toast open one there too, as `pane.pick` keeps
  * its host, and a toast for one names arc, and its Allow and Try again go
- * to arc's engine, or are refused at once while arc is away. The counts
+ * to arc's engine, or are refused at once while arc is away. So is Stop
+ * on its Thread, in a toast that names arc, and nothing goes there once
+ * it is back; a Stop on its way as arc goes says it may have gone
+ * through. The counts
  * list and Alt+U place its Threads where the sidebar list does, among
  * this machine's. A new Thread's picker groups
  * the Projects by machine, in a popped-out Pane's window as in the
@@ -265,16 +268,34 @@ const keptOf = (arc: Arc, project: string, thread: string) =>
 const states = (on: Pick<Arc, "banda">, project: string) =>
   threadsOf(on, project).map((thread) => [thread.title, thread.latest?.state])
 
+/** arc's engine, started apart from the window's ssh, as a service
+ * there is: the window's ssh follows it, and the link's going leaves it
+ * running, its Agents' turns with it. How to stop it. */
+async function held(arc: Arc): Promise<() => Promise<void>> {
+  const engine = spawn(program, ["start", "--with-parent"], {
+    env: arc.env,
+    stdio: ["pipe", "pipe", "inherit"],
+  })
+  await once(engine.stdout, "data")
+  return async () => {
+    if (engine.exitCode !== null) return
+    engine.stdin.end()
+    await once(engine, "close")
+  }
+}
+
 /** The window, its hosts.toml naming arc with `banda`, or with none
  * (`null`) for the window to find it there, and the fake ssh first on its
  * PATH; in `dir`, a window's folder before, it opens again on what that
  * window left. Its sidebar.toml is `sidebar`, grouped by Project unless
- * a test says otherwise. */
+ * a test says otherwise. With `latency`, it hears each engine that many
+ * ms late, as from far away. */
 const withArc = (
   arc: Arc,
   banda: string | null = program,
   dir?: string,
-  sidebar = 'preset = "projects"\n'
+  sidebar = 'preset = "projects"\n',
+  latency = 0
 ) =>
   startWindow({
     look: 'mode = "dark"\n',
@@ -284,6 +305,7 @@ const withArc = (
     },
     env: { PATH: `${arc.bin}:${process.env.PATH}` },
     dir,
+    latency,
   })
 
 const sidebarOf = (page: Page) =>
@@ -1424,6 +1446,175 @@ test("another machine's Thread that asks has its toast name arc, and Allow and T
     expect(questionsOf("ask once more")).not.toContain("answered")
     await page.waitForTimeout(250)
   }
+})
+
+/** arc's Thread "Bench window tests", opened from the sidebar, with a
+ * turn at work there that waits until it is stopped; its Pane. */
+async function working(page: Page) {
+  await arcOf(page).getByText("Bench window tests").click()
+  const thread = page.getByRole("region", {
+    name: "Bench window tests",
+    exact: true,
+  })
+  const composer = thread.getByRole("textbox", { name: "Message to Fake AI" })
+  await composer.fill("wait for it")
+  await composer.press("Enter")
+  await expect(thread.getByText("Waiting.")).toBeVisible()
+  return thread
+}
+
+test("with arc away, Stop on its Thread is refused at once in a toast that names arc, and goes nowhere: arc back, its turn still works there", async () => {
+  test.setTimeout(shots ? 300_000 : 180_000)
+  arc = newArc()
+  const banda = await seed(arc)
+  const stopEngine = await held(arc)
+  window = await withArc(arc)
+  const { page } = window
+  const toasts = page
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+  const thread = await working(page)
+  const stop = thread.getByRole("button", { name: "Stop", exact: true })
+  const runs = () =>
+    expect(states(arc!, banda)).toEqual([["Bench window tests", "running"]])
+
+  // The link drops: arc is away, and its engine there works on. The
+  // Thread stands as it was, Stop and all; pressed, it is refused at
+  // once, in a toast that names arc and Stop.
+  arc.down(true)
+  arc.cut()
+  await expect(arcOf(page).getByText("away", { exact: true })).toBeVisible()
+  await stop.click()
+  await expect(
+    toasts.filter({ hasText: "arc is away: Stop was not sent." })
+  ).toBeVisible({ timeout: 2_000 })
+  // Nothing in the Thread's own words, and nothing waits on it.
+  await expect(thread.getByRole("alert")).toHaveCount(0)
+  await expect(stop).toBeEnabled()
+  if (shots) {
+    await page.mouse.move(900, 700)
+    await page.waitForTimeout(1_000)
+    await page.screenshot({ path: join(shots, "h5b-1.png") })
+  }
+  runs()
+
+  // arc back, and heard again: nothing refused went there by itself, a
+  // while after either.
+  arc.down(false)
+  await expect(arcOf(page).getByText("away", { exact: true })).toHaveCount(0, {
+    timeout: 60_000,
+  })
+  await expect(stop).toBeVisible()
+  for (const until = Date.now() + 5_000; Date.now() < until;) {
+    runs()
+    await page.waitForTimeout(250)
+  }
+  // Pressed now, Stop goes.
+  await stop.click()
+  await expect
+    .poll(() => states(arc!, banda))
+    .toEqual([["Bench window tests", "stopped"]])
+  await stopEngine()
+})
+
+test("a Stop on its way as arc goes says at once that it may have gone through, and the window sends it no more", async () => {
+  test.setTimeout(shots ? 300_000 : 180_000)
+  arc = newArc()
+  const banda = await seed(arc)
+  const stopEngine = await held(arc)
+  // arc's answers come late, as from far away: Stop is still on its way
+  // as the link drops.
+  window = await withArc(arc, program, undefined, undefined, 1_500)
+  const { page } = window
+  const toasts = page
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+  const thread = await working(page)
+  await thread.getByRole("button", { name: "Stop", exact: true }).click()
+  arc.down(true)
+  arc.cut()
+  const gone = toasts.filter({
+    hasText: "arc went away; Stop may have gone through.",
+  })
+  await expect(gone).toBeVisible({ timeout: 5_000 })
+  if (shots) {
+    await page.mouse.move(900, 700)
+    await page.waitForTimeout(1_000)
+    await page.screenshot({ path: join(shots, "h5b-2.png") })
+  }
+  // It reached arc before the link dropped, and stopped the turn there,
+  // or it did not, and the turn works on: either way, the window sends it
+  // no more once arc is back.
+  await page.waitForTimeout(2_000)
+  const [[, then]] = states(arc!, banda) as [[string, string]]
+  expect(["stopped", "running"]).toContain(then)
+  arc.down(false)
+  await expect(arcOf(page).getByText("away", { exact: true })).toHaveCount(0, {
+    timeout: 60_000,
+  })
+  for (const until = Date.now() + 5_000; Date.now() < until;) {
+    expect(states(arc!, banda)).toEqual([["Bench window tests", then]])
+    await page.waitForTimeout(250)
+  }
+  await stopEngine()
+})
+
+test("with arc away, the Banda menu's words for a new Thread on arc are refused at once and wait in its composer: arc back, nothing starts there by itself", async () => {
+  test.setTimeout(shots ? 300_000 : 180_000)
+  arc = newArc()
+  const banda = await seed(arc)
+  const stopEngine = await held(arc)
+  window = await withArc(arc)
+  const { page } = window
+  const toasts = page
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+  // In arc's Thread, so the menu's New Thread starts in arc's Project.
+  await arcOf(page).getByText("Bench window tests").click()
+  await expect(
+    page
+      .getByRole("region", { name: "Bench window tests", exact: true })
+      .getByText("You said: Bench window tests")
+  ).toBeVisible()
+  arc.down(true)
+  arc.cut()
+  await expect(arcOf(page).getByText("away", { exact: true })).toBeVisible()
+
+  // Its words are refused at once, in a toast that names arc, and wait in
+  // the new Thread's composer for the Person to send.
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  await page.keyboard.press("Alt+Space")
+  await menu.getByRole("combobox", { name: "Search" }).fill("fix the tests")
+  await menu
+    .getByRole("option")
+    .filter({ hasText: "New Thread: “fix the tests”" })
+    .click()
+  await expect(
+    toasts.filter({ hasText: "arc is away: your message was not sent." })
+  ).toBeVisible({ timeout: 2_000 })
+  const draft = page
+    .getByRole("region", { name: "New Thread" })
+    .and(page.locator('[data-focused="true"]'))
+  const composer = draft.getByRole("textbox", { name: /^Message to / })
+  await expect(composer).toHaveText("fix the tests")
+  if (shots) {
+    await page.mouse.move(900, 700)
+    await page.waitForTimeout(1_000)
+    await page.screenshot({ path: join(shots, "h5b-4.png") })
+  }
+
+  // arc back, and heard again: no Thread starts there by itself, a while
+  // after either; the words still wait.
+  arc.down(false)
+  await expect(arcOf(page).getByText("away", { exact: true })).toHaveCount(0, {
+    timeout: 60_000,
+  })
+  for (const until = Date.now() + 5_000; Date.now() < until;) {
+    expect(states(arc!, banda)).toEqual([["Bench window tests", "done"]])
+    await page.waitForTimeout(250)
+  }
+  await expect(composer).toHaveText("fix the tests")
+  await stopEngine()
 })
 
 test("the counts list and Alt+U place arc's Threads where the sidebar list does, among this machine's (ADR 0079, decision 4; #999)", async () => {

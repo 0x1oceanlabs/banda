@@ -20,17 +20,19 @@ const textOf = (args: Args | undefined, key: string) => {
 }
 
 /**
- * Sends `method` to the machine whose Thread in `project` it is about, by
- * the host `args` name. A machine the Window does not reach now refuses
- * it at once, and a toast says why, as for what that engine refuses.
+ * Sends `what`, by `send`, to the machine whose Thread in `project` it is
+ * about, by the host `args` name. A machine the Window does not reach now
+ * refuses it at once, and a toast says why, naming that machine and
+ * `what`, as for what that engine refuses.
  */
 function sendTo(
   window: WindowApi,
   project: ProjectId,
   args: Args,
+  what: string,
   send: (engine: Engine) => Promise<unknown>
 ): void {
-  const failed = (error: unknown) => void toast.error(problem(error))
+  const failed = (error: unknown) => void toast.error(problem(error, what))
   try {
     send(window.sessionOf(project, { args })).catch(failed)
   } catch (error) {
@@ -51,7 +53,7 @@ export const answering: Action[] = [
       )
       if (!args || !project || !item || !choice) return
       const at = project as ProjectId
-      sendTo(window, at, args, (engine) =>
+      sendTo(window, at, args, "your answer", (engine) =>
         engine.command("agents.answer", { item, choice }, at)
       )
     },
@@ -67,7 +69,7 @@ export const answering: Action[] = [
       )
       if (!args || !project || !turn) return
       const at = project as ProjectId
-      sendTo(window, at, args, (engine) =>
+      sendTo(window, at, args, "Try again", (engine) =>
         engine.command("agents.retry", { turn }, at)
       )
     },

@@ -40,7 +40,7 @@ import {
   SparklesIcon,
   Undo2Icon,
 } from "lucide-react"
-import { mark } from "./sent"
+import { actOf, mark } from "./sent"
 
 /** A Thread as an item action finds it: its Project, and how the lists
  * hold it. */
@@ -64,13 +64,13 @@ const inSight = (window: WindowApi) => threadAt(window) !== undefined
 const engineOf = (window: WindowApi, { project, listed }: At) =>
   window.sessionOf(project, listed.pane)
 
-/** `engineOf`, for an act that says itself what went wrong: none when
- * that host refuses, and a toast says why. */
-function reached(window: WindowApi, at: At): Engine | undefined {
+/** `engineOf`, for an act named `what` that says itself what went
+ * wrong: none when that host refuses, and a toast says why. */
+function reached(window: WindowApi, at: At, what: string): Engine | undefined {
   try {
     return engineOf(window, at)
   } catch (error) {
-    toast.error(problem(error))
+    toast.error(problem(error, what))
     return undefined
   }
 }
@@ -103,7 +103,7 @@ function renamed(window: WindowApi, at: At, text: string) {
   const title = cleanTitle(text)
   if (title === at.listed.title) return
   renaming(window, at, title || null).catch((error: unknown) =>
-    toast.error(problem(error))
+    toast.error(problem(error, "Rename"))
   )
 }
 
@@ -132,12 +132,12 @@ export async function suggestTitle(window: WindowApi, at: At): Promise<void> {
         label: "Undo",
         onClick: () =>
           void renaming(window, at, back).catch((error: unknown) =>
-            toast.error(problem(error))
+            toast.error(problem(error, "Undo"))
           ),
       },
     })
   } catch (error) {
-    toast.error(problem(error))
+    toast.error(problem(error, "Suggest a title"))
   } finally {
     think(project, listed.id, false)
   }
@@ -152,7 +152,7 @@ async function suggestIntoField(window: WindowApi, at: At): Promise<void> {
   try {
     offer(project, listed.id, await suggesting(window, at))
   } catch (error) {
-    toast.error(problem(error))
+    toast.error(problem(error, "Suggest a title"))
   } finally {
     asking(project, listed.id, false)
   }
@@ -254,7 +254,7 @@ const unread: ItemAction = {
     const thread = at.listed.id as ThreadId
     // Read: the latest turn that ended, as its host knows it.
     const seen = at.listed.seen ? null : "latest"
-    const engine = reached(window, at)
+    const engine = reached(window, at, actOf({ seen }))
     if (engine) void mark(engine, at.project, thread, { seen })
   },
 }
@@ -282,9 +282,9 @@ const makeProject: ItemAction = {
 
 /** Wakes the Thread now; what the engine refuses, a toast says. */
 function waking(window: WindowApi, at: At) {
-  reached(window, at)
+  reached(window, at, "Wake now")
     ?.command("agents.wake", { thread: at.listed.id as ThreadId }, at.project)
-    .catch((error: unknown) => toast.error(problem(error)))
+    .catch((error: unknown) => toast.error(problem(error, "Wake now")))
 }
 
 /**
@@ -295,7 +295,7 @@ function waking(window: WindowApi, at: At) {
 function putOff(window: WindowApi, at: At, until?: number, resume = false) {
   const thread = at.listed.id as ThreadId
   const asked = until === undefined ? { thread } : { thread, until, resume }
-  reached(window, at)
+  reached(window, at, "Later")
     ?.command("agents.later", asked, at.project)
     .then(
       () => {
@@ -307,7 +307,7 @@ function putOff(window: WindowApi, at: At, until?: number, resume = false) {
           { action: { label: "Undo", onClick: () => waking(window, at) } }
         )
       },
-      (error: unknown) => toast.error(problem(error))
+      (error: unknown) => toast.error(problem(error, "Later"))
     )
 }
 
@@ -404,7 +404,7 @@ const archive: ItemAction = {
     const thread = at.listed.id as ThreadId
     // A host away is sent no mark (decision 8): its Thread stays as it
     // was, Panes and all, and a toast says why.
-    const engine = reached(window, at)
+    const engine = reached(window, at, actOf({ archived }))
     if (!engine) return
     const goes = engine.status.state === "open"
     void mark(engine, at.project, thread, { archived })

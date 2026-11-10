@@ -1,15 +1,30 @@
 /** Plain words a Pane shows. */
-import { Lost, Refused } from "@banda/contract"
-import { Unreachable } from "@banda/core"
+import { Lost, Refused, Unreachable } from "@banda/contract"
 
-/** What went wrong with a call, for a Person to read: a machine the
- * Window does not reach now by its words, as "arc is away". */
-export function problem(error: unknown): string {
+/**
+ * What went wrong with an act, for a Person to read. `what` names the act,
+ * as its button says it ("Stop") or as the Person would ("your answer").
+ * A machine the Window does not reach is named (ADR 0095, decision 7), in
+ * the words its pill says: "arc is away: Stop was not sent."; one that
+ * went as the act was on its way, "arc went away; Stop may have gone
+ * through." (ADR 0082, decision 16).
+ */
+export function problem(error: unknown, what?: string): string {
   if (error instanceof Refused) return error.refusal.message
-  if (error instanceof Unreachable) return error.message
+  if (error instanceof Unreachable) return unreachable(error, what)
   if (error instanceof Lost)
     return "Banda lost its engine for a moment. Try again."
   return "Something went wrong. Try again."
+}
+
+function unreachable(
+  { message, machine, may_have_run }: Unreachable,
+  what: string | undefined
+): string {
+  if (may_have_run)
+    return `${machine} went away; ${what ?? "it"} may have gone through.`
+  const sent = what === undefined ? "nothing was sent" : `${what} was not sent`
+  return `${message}: ${sent}.`
 }
 
 export const MINUTE = 60_000

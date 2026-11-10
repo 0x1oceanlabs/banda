@@ -14,7 +14,7 @@ import {
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createInterface } from "node:readline"
-import { afterEach, beforeAll, beforeEach, expect, test } from "vitest"
+import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest"
 import { decodeFact } from "../src/agents"
 import { seeded } from "../src/workspaces"
 import {
@@ -22,9 +22,11 @@ import {
   Engine,
   newId,
   type Event,
+  Lost,
   type ProjectId,
   Refused,
   type Status,
+  Unreachable,
 } from "../src/index"
 import { program } from "./built"
 
@@ -50,6 +52,7 @@ afterEach(async () => {
   client?.close()
   await stop()
   rmSync(dir, { recursive: true, force: true })
+  vi.unstubAllGlobals()
 })
 
 /** Starts the engine as a window does, and waits for its first line. */
@@ -430,4 +433,230 @@ test("an address with a latency, as tests give, hears the engine that much later
   })
   expect(performance.now() - sent).toBeGreaterThanOrEqual(200)
   await expect.poll(() => heard).toContain(opened.at)
+})
+
+/** A frame the window sent, as far as these tests read it. */
+type Sent = { type: string; method?: string; command?: string }
+
+/**
+ * The WebSocket the window opens, which notes each frame it sends, on
+ * each connection; told to `drop`, it ends its connection itself right
+ * after the next command goes, as a link that breaks, so that command's
+ * answer is never heard (a socket closing hears nothing more).
+ */
+class Noting extends WebSocket {
+  static opened: Noting[] = []
+  static drop = false
+  readonly frames: Sent[] = []
+  constructor(url: string | URL) {
+    super(url)
+    Noting.opened.push(this)
+  }
+  override send(data: Parameters<WebSocket["send"]>[0]): void {
+    super.send(data)
+    const frame = JSON.parse(String(data)) as Sent
+    this.frames.push(frame)
+    if (frame.command === undefined || !Noting.drop) return
+    Noting.drop = false
+    this.close()
+  }
+}
+
+/** How often command `id` went, on any connection. */
+const sentWith = (id: string) =>
+  Noting.opened.flatMap((socket) =>
+    socket.frames.filter((frame) => frame.command === id)
+  )
+
+/** The window watches its WebSockets. */
+function noting() {
+  Noting.opened = []
+  Noting.drop = false
+  vi.stubGlobal("WebSocket", Noting)
+}
+
+/** arc out of reach since 5, as the window's hosts say it. */
+const arcAway = () => new Unreachable("arc", "arc is away", { as_of: 5 })
+
+/** The names of the Projects the engine lists. */
+const names = async (engine: Engine) =>
+  (await engine.call("projects.list", {})).map((project) => project.name)
+
+test("with its machine out of reach, a command is refused at once and never sent, a read waits, and nothing refused runs once it is back", async () => {
+  noting()
+  await serve()
+  client = new Engine(address)
+  await until(client, "open")
+  client.away(arcAway())
+  expect(client.status).toEqual({ state: "away" })
+  expect(Noting.opened[0]!.readyState).toBeGreaterThanOrEqual(WebSocket.CLOSING)
+  const id = newId()
+  const refused = client.command(
+    "projects.create",
+    { name: "Refused" },
+    undefined,
+    id
+  )
+  await expect(refused).rejects.toBeInstanceOf(Unreachable)
+  await expect(refused).rejects.toMatchObject({
+    message: "arc is away",
+    host: "arc",
+    machine: "arc",
+    as_of: 5,
+    may_have_run: false,
+  })
+  // A read waits for it, and it tries nothing meanwhile.
+  let read: string[] | undefined
+  void names(client).then((listed) => (read = listed))
+  await new Promise((done) => setTimeout(done, 600))
+  expect(read).toBeUndefined()
+  expect(Noting.opened).toHaveLength(1)
+  // Away still, it says why as it is told from now on.
+  client.away(new Unreachable("arc", "Banda is stopped on arc"))
+  await expect(
+    client.command("projects.create", { name: "No" })
+  ).rejects.toThrow("Banda is stopped on arc")
+  // Back: the read is answered, and nothing refused went or ran.
+  client.wake()
+  await until(client, "open")
+  await expect.poll(() => read).toBeDefined()
+  expect(read).not.toContain("Refused")
+  expect(read).not.toContain("No")
+  expect(sentWith(id)).toEqual([])
+})
+
+test("a command on its way as its machine goes is refused as one that may have run, and is not sent again once it is back", async () => {
+  noting()
+  await serve()
+  // Its answer comes late, as from a machine far away: it is on its way
+  // as the machine goes.
+  client = new Engine(async () => ({ ...(await address()), latency: 1_000 }))
+  await until(client, "open")
+  const id = newId()
+  const made = client.command(
+    "projects.create",
+    { name: "On its way" },
+    undefined,
+    id
+  )
+  await expect.poll(() => sentWith(id)).toHaveLength(1)
+  client.away(arcAway())
+  await expect(made).rejects.toMatchObject({
+    name: "Unreachable",
+    host: "arc",
+    may_have_run: true,
+  })
+  client.wake()
+  await until(client, "open")
+  // It reached the engine before the machine went, and ran there once.
+  expect(await names(client)).toContain("On its way")
+  // Its late answer, and the old connection, are heard no more, and it
+  // goes no more.
+  await new Promise((done) => setTimeout(done, 1_200))
+  expect(sentWith(id)).toHaveLength(1)
+  expect(client.status.state).toBe("open")
+})
+
+test("a command whose connection breaks while its machine is in reach goes again with its ID once the engine is back, and runs once", async () => {
+  noting()
+  await serve()
+  client = new Engine(address)
+  await until(client, "open")
+  const id = newId()
+  Noting.drop = true
+  const made = await client.command(
+    "projects.create",
+    { name: "Again" },
+    undefined,
+    id
+  )
+  expect(made.name).toBe("Again")
+  // Sent on the first connection, which broke before its answer, and
+  // again on the next, with its own ID: the engine ran it once.
+  expect(Noting.opened).toHaveLength(2)
+  expect(
+    Noting.opened.map(
+      (socket) => socket.frames.filter((frame) => frame.command === id).length
+    )
+  ).toEqual([1, 1])
+  expect((await names(client)).filter((name) => name === "Again")).toHaveLength(
+    1
+  )
+})
+
+test("a command whose connection breaks before its machine is said to be away fails as one that may have run, and one sent once fails at once in its machine's words; none goes again", async () => {
+  noting()
+  await serve()
+  // The engine of another machine, which names it.
+  client = new Engine(address, { unreachable: arcAway })
+  await until(client, "open")
+
+  // The link drops right after it went, and only then is arc said to be
+  // away: the try after the break, waiting, is refused as the one before
+  // may have run.
+  const plain = newId()
+  Noting.drop = true
+  const made = client.command(
+    "projects.create",
+    { name: "Plain" },
+    undefined,
+    plain
+  )
+  await until(client, "lost")
+  client.away(arcAway())
+  await expect(made).rejects.toMatchObject({
+    name: "Unreachable",
+    machine: "arc",
+    may_have_run: true,
+  })
+  client.wake()
+  await until(client, "open")
+
+  // Sent once, it fails as the link drops, before arc is said to be away,
+  // in arc's words; one made before the engine is back is not sent.
+  const once = newId()
+  Noting.drop = true
+  const marked = client.commandAt(
+    "projects.create",
+    { name: "Once" },
+    undefined,
+    once,
+    { once: true }
+  )
+  await expect(marked).rejects.toMatchObject({
+    name: "Unreachable",
+    message: "arc is away",
+    machine: "arc",
+    may_have_run: true,
+  })
+  const unsent = newId()
+  await expect(
+    client.commandAt("projects.create", { name: "Unsent" }, undefined, unsent, {
+      once: true,
+    })
+  ).rejects.toMatchObject({ name: "Unreachable", may_have_run: false })
+
+  // Each that went ran there once at most; none went again.
+  await until(client, "open")
+  const listed = await names(client)
+  for (const went of ["Plain", "Once"])
+    expect(listed.filter((name) => name === went).length).toBeLessThanOrEqual(1)
+  expect(listed).not.toContain("Unsent")
+  await new Promise((done) => setTimeout(done, 500))
+  expect(sentWith(plain)).toHaveLength(1)
+  expect(sentWith(once)).toHaveLength(1)
+  expect(sentWith(unsent)).toEqual([])
+})
+
+test("an engine that names no machine fails a command sent once with Lost as its connection breaks", async () => {
+  noting()
+  await serve()
+  client = new Engine(address)
+  await until(client, "open")
+  Noting.drop = true
+  await expect(
+    client.commandAt("projects.create", { name: "Here" }, undefined, newId(), {
+      once: true,
+    })
+  ).rejects.toBeInstanceOf(Lost)
 })
