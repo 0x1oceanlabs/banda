@@ -15,6 +15,7 @@ import {
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { useRun } from "@banda/core/react"
 import { useFile } from "@banda/ui/lib/look"
+import type { Widget } from "@banda/ui/module"
 import {
   Columns3Icon,
   FolderInputIcon,
@@ -23,6 +24,9 @@ import {
   RectangleHorizontalIcon,
 } from "lucide-react"
 
+/** Each Flow's name, its line in the menu and its icon (ADR 0098,
+ * decision 20): Free as the approved prototype words it, the row and solo
+ * as they work since ADR 0102. */
 const FLOWS: Record<Flow, { title: string; about: string; icon: LucideIcon }> =
   {
     free: {
@@ -54,16 +58,18 @@ export function nextFlow(flow: Flow): Flow {
 }
 
 /**
- * The Flow, from the sidebar's header (ADR 0079): its icon draws the one
- * in force, and its menu picks one by the Window's `flow.pick`, which
- * writes agents.toml beside `flow.solo`, its key. In the row and solo it
- * also offers Arrange by Project, as Panes already open stay where they
- * are (ADR 0102, decision 9).
+ * The Flow, on the bar beside the workspaces' numbers (ADR 0098, decision
+ * 20): it arranges the desk, not the sidebar's list. Its icon draws the
+ * one in force, and its menu picks one by the Window's `flow.pick`, which
+ * writes agents.toml beside `flow.solo`, its key (ADR 0079). In the row
+ * and solo it also offers Arrange by Project, as Panes already open stay
+ * where they are (ADR 0102, decision 9).
  */
-export function FlowMenu() {
+function FlowWidget() {
   const run = useRun()
   const flow = useFile(AGENTS_FILE).flow
-  const key = useKeyLabel()("flow.solo")
+  const keyFor = useKeyLabel()
+  const key = keyFor("flow.solo")
   const Icon = FLOWS[flow].icon
   const title = `Flow: ${FLOWS[flow].title}`
   return (
@@ -74,16 +80,20 @@ export function FlowMenu() {
             variant="ghost"
             size="icon-sm"
             aria-label={title}
-            title={key ? `${title} (${key})` : title}
+            title={keyFor("flow.solo", title)}
             className="text-muted-foreground"
           >
             <Icon />
           </Button>
         }
       />
-      <DropdownMenuContent align="end" className="w-auto min-w-64">
+      <DropdownMenuContent
+        align="start"
+        aria-label="Flow"
+        className="w-auto min-w-64"
+      >
         <DropdownMenuGroup>
-          <DropdownMenuLabel>How the Agents' windows stand</DropdownMenuLabel>
+          <DropdownMenuLabel>Flow</DropdownMenuLabel>
           <DropdownMenuRadioGroup
             value={flow}
             onValueChange={(value) => run("flow.pick", { flow: value })}
@@ -99,8 +109,12 @@ export function FlowMenu() {
                       {about}
                     </span>
                   </span>
+                  {/* Clear of the longest line, Solo's, so the two do
+                      not read as one. */}
                   {key && value !== "free" && (
-                    <DropdownMenuShortcut>{key}</DropdownMenuShortcut>
+                    <DropdownMenuShortcut className="pl-6">
+                      {key}
+                    </DropdownMenuShortcut>
                   )}
                 </DropdownMenuRadioItem>
               )
@@ -119,4 +133,13 @@ export function FlowMenu() {
       </DropdownMenuContent>
     </DropdownMenu>
   )
+}
+
+/** The Flow's widget, the window's own, which its module lists. It has no
+ * compact form: a narrow Bar reaches the Flow by its key, `flow.solo`. */
+export const flowWidget: Widget = {
+  id: "window.flow",
+  about:
+    "How the Agents' windows stand, free, in a row or solo, by its icon; click to pick one.",
+  Widget: FlowWidget,
 }

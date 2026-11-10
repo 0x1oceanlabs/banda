@@ -45,9 +45,10 @@ test.afterEach(async () => {
 /** Columns half the Strip wide, whatever Banda's default. */
 const HALVES = '[columns]\ndefault = "1/2"\n'
 
-/** The Flow's button, in the Sidebar's header. */
+/** The Flow's button, on the bar beside the workspaces (ADR 0098,
+ * decision 20). */
 const flowOf = (page: Page) =>
-  sidebarOf(page).getByRole("button", { name: /^Flow: / })
+  page.getByRole("banner").getByRole("button", { name: /^Flow: / })
 
 /**
  * Sends `text` from the message `box`: the first message of its Thread,
@@ -139,7 +140,7 @@ async function toastedOutOfView(
   ).toContainText("Done")
 }
 
-test("the Flow is picked in the Sidebar's header and kept in agents.toml, and Alt+Shift+M goes between the row and solo (ADR 0079)", async () => {
+test("the Flow is picked on the bar, after the workspaces, and kept in agents.toml, and Alt+Shift+M goes between the row and solo (ADR 0079, ADR 0098)", async () => {
   window = await startWindow()
   const { page, dir } = window
   await firstThread(page)
@@ -149,16 +150,32 @@ test("the Flow is picked in the Sidebar's header and kept in agents.toml, and Al
   // The row is the default, and nothing is written for it.
   await expect(flow).toHaveAccessibleName("Flow: Row")
   expect(written()).toBeUndefined()
+  // It stands on the bar's left, after the workspaces, and the sidebar's
+  // header has it no more: it arranges the desk, not the list.
+  const left = page
+    .getByRole("banner")
+    .locator('[data-part="left"] > [data-widget]')
+  await expect
+    .poll(() =>
+      left.evaluateAll((all) =>
+        all.map((one) => one.getAttribute("data-widget"))
+      )
+    )
+    .toEqual(["workspaces.list", "window.flow"])
+  await expect(
+    sidebarOf(page).getByRole("button", { name: /^Flow: / })
+  ).toHaveCount(0)
 
-  // Its menu names the three, and in the row offers Arrange by Project
-  // (ADR 0102, decision 9); a pick draws its icon and writes the file,
-  // and Esc closes the menu.
+  // Its menu names the three, in the prototype's words for Free and in
+  // ADR 0102's for the row and solo, and in the row offers Arrange by
+  // Project (ADR 0102, decision 9); a pick draws its icon and writes the
+  // file, and Esc closes the menu.
   const arrange = page.getByRole("menuitem", { name: "Arrange by Project" })
   await flow.click()
   await expect(page.getByRole("menuitemradio")).toHaveText([
-    /^Free/,
-    /^Row/,
-    /^Solo/,
+    /^Free\s*Windows stay where you put them/,
+    /^Row\s*Each Project on its own workspace/,
+    /^Solo\s*What has the focus, the whole screen wide/,
   ])
   await expect(arrange).toBeVisible()
   await page.keyboard.press("Escape")

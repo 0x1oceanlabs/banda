@@ -20,8 +20,8 @@
 # How an Agent's windows stand, its Flow (ADR 0079): "free", where they
 # are, a Thread opening beside the Pane in front; "row", each Project on
 # its own workspace, its Agents in a row (ADR 0065, ADR 0102); or "solo",
-# as the row, what has the focus filling the screen. The icon in the
-# sidebar's header switches it, and Alt+Shift+M goes from row to solo.
+# as the row, what has the focus filling the screen. The Flow's icon on
+# the bar switches it, and Alt+Shift+M goes from row to solo.
 # flow = "row"
 
 # How many seconds the focus stays on a Thread it only came to, by
