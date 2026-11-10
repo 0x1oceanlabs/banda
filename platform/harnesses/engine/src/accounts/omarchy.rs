@@ -172,12 +172,7 @@ impl Omarchy {
                         .env
                         .insert(variable.into(), folder.display().to_string());
                     if current.name == base.name
-                        && current.name
-                            == if provider == "claude" {
-                                "Claude Code"
-                            } else {
-                                "Codex"
-                            }
+                        && Some(current.name.as_str()) == crate::list::program(provider)
                     {
                         current.name = name;
                     }

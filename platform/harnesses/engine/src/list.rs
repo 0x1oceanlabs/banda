@@ -1121,6 +1121,12 @@ const ADAPTERS: [Adapter; 2] = [
     },
 ];
 
+/// The name of Banda's own Harness `id`, `Claude Code` for `claude`, as
+/// its program is called whatever its entry is renamed to.
+pub(crate) fn program(id: &str) -> Option<&'static str> {
+    ADAPTERS.iter().find(|a| a.id == id).map(|a| a.name)
+}
+
 /// Each adapter as Banda starts it: from npm, as `npx` downloads it,
 /// without the vendors' CLIs it never runs; or the copy Banda carries,
 /// when the engine found it and a Node on its host (`Harness::start`).

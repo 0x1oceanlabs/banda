@@ -375,6 +375,7 @@ mod tests {
                     harness: "claude".into(),
                     id: "work".into(),
                     name: None,
+                    colour: None,
                     folder: None
                 })
                 .is_err()

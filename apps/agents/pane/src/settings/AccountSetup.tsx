@@ -82,20 +82,17 @@ export function AccountSetup({
         harness: base.harness,
         id,
         name: name.trim(),
+        colour,
         ...(existing && { folder: folder.trim() }),
       })
       connected = true
       setMade(account)
       setStep(2)
-      // The profile exists even when an emblem write fails. Never create
+      // The profile exists even when the icon's write fails. Never create
       // another one when retrying a cosmetic choice.
-      const wrong = [
-        ...(await file.set(`harness.${account.id}.colour`, tomlOf(colour))),
-      ]
-      if (icon)
-        wrong.push(
-          ...(await file.set(`harness.${account.id}.icon`, tomlOf(icon)))
-        )
+      const wrong = icon
+        ? await file.set(`harness.${account.id}.icon`, tomlOf(icon))
+        : []
       if (wrong.length) setRefused(`Account added. ${wrong.join(" ")}`)
     } catch (error) {
       setRefused(problem(error))

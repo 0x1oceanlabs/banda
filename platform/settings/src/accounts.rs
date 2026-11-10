@@ -76,6 +76,7 @@ impl AccountStore for Store {
         env.insert(variable, Value::from(folder.to_string_lossy().into_owned()));
         let mut entry = InlineTable::new();
         entry.insert("name", Value::from(account.name()));
+        entry.insert("colour", Value::from(i64::from(account.colour())));
         entry.insert("of", Value::from(account.harness()));
         entry.insert("env", Value::InlineTable(env));
         crate::set(
@@ -118,6 +119,7 @@ mod tests {
                 harness: "claude".into(),
                 id: "work".into(),
                 name: Some("Work".into()),
+                colour: None,
                 folder: None,
             })
             .unwrap();
@@ -139,6 +141,7 @@ mod tests {
             harness: "claude".into(),
             id: id.into(),
             name: Some("Work".into()),
+            colour: None,
             folder: folder.map(|p| p.to_string_lossy().into_owned()),
         }
     }
