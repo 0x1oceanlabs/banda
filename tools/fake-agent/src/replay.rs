@@ -100,8 +100,14 @@ pub async fn replay(recording: &Path) -> std::io::Result<()> {
 }
 
 async fn say(out: &mut Stdout, fit: &Fit, frames: &[Value]) -> std::io::Result<()> {
-    for frame in frames {
+    for (n, frame) in frames.iter().enumerate() {
         write(out, &fit.fitted(frame)).await?;
+        // What a Harness said after it answered a prompt came after the
+        // turn had ended, as Claude Code's workflows say what they do:
+        // the client gets the time to end it a real Harness gives.
+        if frame.pointer("/result/stopReason").is_some() && n + 1 < frames.len() {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
     }
     Ok(())
 }
