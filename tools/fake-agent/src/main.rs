@@ -59,6 +59,10 @@
 //! - `edit`: edits a file, and shows the change as a diff.
 //! - `walk`: reads `notes.md`, then edits `src/util.ts`, naming each file
 //!   and its line, a step each time a message is sent into its turn.
+//! - `cat`, first, and files in its folder, as `@` names them or not:
+//!   reads each from its own machine's disk, naming each file it read,
+//!   and replies with what each holds (`who.txt holds arc.`), so a test
+//!   sees whose file it was.
 //! - `doing` and `read`, `edit` or `execute`, then what it works on:
 //!   works on a tool call of that kind, named as Claude Code names it
 //!   (`doing read card.ts`, `doing execute pnpm test`), until a message is
@@ -530,6 +534,48 @@ async fn allowed(
     }
 }
 
+/// The files a prompt that starts with `cat` names, each as the Person
+/// wrote it, without the `@` a Message box's chip puts before it.
+fn cat_of(words: &str) -> Option<Vec<String>> {
+    let mut words = words.split_whitespace();
+    (words.next()? == "cat").then(|| {
+        words
+            .map(|name| name.trim_start_matches('@').to_owned())
+            .collect()
+    })
+}
+
+/// `cat`: reads each of `names` in the session's folder, as a real
+/// Harness reads on the machine it runs on, naming the whole path it read
+/// (ACP's locations), and replies with what each holds.
+fn cat(
+    fake: &Fake,
+    cx: &ConnectionTo<Client>,
+    session: &SessionId,
+    names: &[String],
+) -> Result<StopReason, Error> {
+    let folder = fake.setup(session).folder;
+    let mut said = Vec::new();
+    for (at, name) in names.iter().enumerate() {
+        let file = folder.join(name);
+        let read = ToolCall::new(format!("cat-{at}"), format!("Read {name}"))
+            .kind(ToolKind::Read)
+            .status(ToolCallStatus::Completed)
+            .locations(vec![ToolCallLocation::new(file.clone())]);
+        say(cx, session, SessionUpdate::ToolCall(read))?;
+        said.push(match std::fs::read_to_string(&file) {
+            Ok(held) => format!("{name} holds {}.", held.trim()),
+            Err(_) => format!("{name} is not there."),
+        });
+    }
+    say(
+        cx,
+        session,
+        SessionUpdate::AgentMessageChunk(text(&said.join(" "))),
+    )?;
+    Ok(StopReason::EndTurn)
+}
+
 /// The kind of tool call `doing` names in `words`, and what it works on.
 fn doing_of(words: &str) -> Option<(ToolKind, String)> {
     let mut after = words.split_whitespace().skip_while(|word| *word != "doing");
@@ -634,6 +680,9 @@ async fn turn(
     }
     if doing_of(&words).is_some() {
         return doing(&fake, &cx, &session, words, &mut steered).await;
+    }
+    if let Some(names) = cat_of(&words) {
+        return cat(&fake, &cx, &session, &names);
     }
     if words.contains("silent") {
         let seconds = (words.split_whitespace())
