@@ -1691,11 +1691,12 @@ test("only the move names the window's old marks' keys", () => {
   expect(naming.sort()).toEqual(OLD_MARKS)
 })
 
-/** The client's core (ADR 0089, decision 1), its code and its tests. */
+/** The client's core (ADR 0089, decision 1), its code and its tests. A
+ * `testing.ts` holds what its tests share, and is read as one. */
 const core = join(app, "core/src")
 const coreFiles = sources(core)
-const coreCode = sources(core, { tests: false })
-const isTest = (file: string) => /\.test\.tsx?$/.test(file)
+const isTest = (file: string) => /\.test\.tsx?$|testing\.ts$/.test(file)
+const coreCode = coreFiles.filter((file) => !isTest(file))
 /** Whether `file` is in `folder`, at any depth. */
 const inside = (folder: string, file: string) => file.startsWith(folder + sep)
 
@@ -1704,7 +1705,8 @@ const inside = (folder: string, file: string) => file.startsWith(folder + sep)
  * nothing more (ADR 0089, decision 11), as the lint holds it too: no kit,
  * no page, no desktop, no App, no Node. Its main files never import its
  * bindings, and its bindings import its main files, not their barrel. A
- * test may use its runner, and one of the bindings may draw to text.
+ * test may use its runner and what the tests share, which only a test
+ * takes, and one of the bindings may draw to text.
  */
 test("the core imports only itself, the contract, and React in its bindings", () => {
   const bindings = join(core, "react")
@@ -1717,7 +1719,8 @@ test("the core imports only itself, the contract, and React in its bindings", ()
         return (
           inside(core, to) &&
           (binding || !(to === bindings || inside(bindings, to))) &&
-          !(binding && to === join(core, "index"))
+          !(binding && to === join(core, "index")) &&
+          (isTest(file) || !isTest(`${to}.ts`))
         )
       }
       return (
@@ -1799,12 +1802,12 @@ test("the core names no App", () => {
  * change.
  */
 const CORE_CONSTANTS = [
+  "core/src/hosts.ts: FORGETTING",
   "core/src/hosts.ts: ITEMS_ELSEWHERE",
   "core/src/hosts.ts: NONE",
   "core/src/hosts.ts: RUNS_ELSEWHERE",
   "core/src/react/here.ts: HereContext",
   "core/src/react/here.ts: NOWHERE",
-  "core/src/react/hosts.ts: FORGETTING",
   "core/src/react/hosts.ts: HostsContext",
   "core/src/react/hosts.ts: NOWHERE",
 ]

@@ -64,6 +64,13 @@ export type Names = {
  * `desktop` icon. */
 export const keyNamed = (key: string): Named => ({ name: key, icon: "desktop" })
 
+/** No memory of names, as where no Window keeps one: each host by its
+ * key. */
+export const FORGETTING: Names = {
+  seen: keyNamed,
+  follow: () => () => undefined,
+}
+
 /** A host as the Window shows it. */
 export type Shown = {
   /** Its key in `hosts.toml`, which the Person sees only until its first

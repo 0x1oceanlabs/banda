@@ -7,11 +7,10 @@ import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import type { Named } from "@banda/contract/machines"
 import { createContext, useCallback, useContext, useEffect } from "react"
 import {
+  FORGETTING,
   type HostsDevice,
   KeptHosts,
-  keyNamed,
   type Machine,
-  type Names,
   namedIn,
   type Shown,
 } from "../hosts"
@@ -25,10 +24,6 @@ const NOWHERE: HostsDevice = {
   engine: () => Promise.reject(new Error("No other machine here.")),
   start: () => undefined,
 }
-
-/** No memory of names, as where no Window keeps one: each host by its
- * key. */
-const FORGETTING: Names = { seen: keyNamed, follow: () => () => undefined }
 
 /** The Window's hosts, for what it draws; none outside one. */
 export const HostsContext = createContext<KeptHosts>(

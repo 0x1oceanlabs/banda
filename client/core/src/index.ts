@@ -22,6 +22,7 @@ export {
   batteryWords,
   cleanPower,
   emptyIn,
+  FORGETTING,
   heldWords,
   holds,
   hostOfPane,

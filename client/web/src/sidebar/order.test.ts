@@ -1,6 +1,6 @@
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { DEFAULT_SIDEBAR } from "@banda/contract/sidebar"
-import { HostsContext, KeptHosts, keyNamed } from "@banda/core/react"
+import { FORGETTING, HostsContext, KeptHosts } from "@banda/core/react"
 import type { MarkState } from "@banda/ui/components/banda-mark"
 import type { Listed, Lists } from "@banda/ui/pane"
 import { callsOf } from "@banda/ui/status"
@@ -112,7 +112,7 @@ test("the counts and Alt+U take the other machines from the Window's hosts as th
       engine: () => Promise.reject(new Error("No engine here.")),
       start: () => undefined,
     },
-    { seen: keyNamed, follow: () => () => undefined }
+    FORGETTING
   )
   // devbox is live, of this window's build; lost is away; old is stopped.
   const build = { build: "abc", version: null }
