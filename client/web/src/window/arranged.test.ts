@@ -36,7 +36,10 @@ function mixed(): Workspaces {
 function windowOf(state: Workspaces) {
   const steps: Step[] = []
   const change = (how: Change) => void steps.push(how(state))
-  const shell = { change, placing: () => row }
+  // Where the Person is, from which the router weighs a key's action:
+  // Arrange is the window's own, which runs wherever that is.
+  const here = { get: () => ({ project: "p1" }) }
+  const shell = { change, placing: () => row, here }
   const undos = () =>
     steps.filter(
       (step): step is Plan =>
