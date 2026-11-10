@@ -62,11 +62,17 @@ export function Agents({ engine, lit, run }: SectionProps) {
   const { listed } = useProjects(engine)
   const [pane, setPane] = useState<PaneState>()
   const close = () => setPane(undefined)
-  if (listed.state === "loading") return <Spinner />
   const project =
     listed.state === "ready"
       ? shownProjects(listed.value).find((s) => !s.missing)?.id
       : undefined
+  // The same owner while the Project stays, so the sign-in terminal keeps
+  // the handles it was given.
+  const owner = useMemo(
+    () => (project === undefined ? undefined : { project }),
+    [project]
+  )
+  if (listed.state === "loading") return <Spinner />
   const kind = pane && kinds.find((k) => k.kind === pane.kind)
   return (
     <>
@@ -84,7 +90,7 @@ export function Agents({ engine, lit, run }: SectionProps) {
         onOpenChange={(open) => !open && close()}
       >
         <DialogContent className="flex h-[70vh] flex-col sm:max-w-3xl">
-          {pane && kind && project && (
+          {pane && kind && owner && (
             <>
               <DialogTitle>{kind.title(pane.args)}</DialogTitle>
               <div className="min-h-0 flex-1">
@@ -94,9 +100,9 @@ export function Agents({ engine, lit, run }: SectionProps) {
                 <PaneMount
                   kind={kind}
                   engine={engine}
-                  project={project}
+                  project={owner.project}
                   pane={pane}
-                  owner={{ project }}
+                  owner={owner}
                   focused
                   handle={{
                     open: setPane,

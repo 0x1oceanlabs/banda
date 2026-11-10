@@ -939,8 +939,9 @@ sidebar's foot (ADR 0098).
 **Toast**:
 A short card at the window's top right that tells of a Call whose Thread is
 not on screen, less than half of its Tile in view (ADR 0087), of a new
-Problem, or of how a commit, push or pull from a Thread's card ended out of
-its sight; Sonner's, stacked (ADR 0048). It goes away by itself; the Mark
+Problem, of an action that does not run where its values are, as "Not on
+arc yet: Open in a browser" (ADR 0106), or of how a commit, push or pull
+from a Thread's card ended out of its sight; Sonner's, stacked (ADR 0048). It goes away by itself; the Mark
 remembers, and the bell shows the last ones again.
 
 **Pull request**:

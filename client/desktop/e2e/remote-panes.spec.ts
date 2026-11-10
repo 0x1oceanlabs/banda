@@ -131,7 +131,7 @@ test("New Pane on arc's Project lists what opens on arc and dims the rest, not o
   ).toHaveAttribute("aria-placeholder", /^Write to Fake AI on arc\./)
 })
 
-test("an act arc does not run says so from arc's Pane, from the Banda menu and by its key alike, and nothing opens", async () => {
+test("an act arc does not run says so from the Banda menu and by its key alike, on arc's Project, and nothing opens", async () => {
   const { page, composer } = await onArc()
   const toasts = page
     .getByRole("region", { name: "Notifications" })
