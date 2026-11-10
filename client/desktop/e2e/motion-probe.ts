@@ -70,6 +70,9 @@ export type Reading = {
   /** The page's `requestAnimationFrame` callbacks, and the ticks they ran in. */
   callbacks: number
   ticks: number
+  /** In a still phase, where the first few of those callbacks were asked
+   * for: the stack of each one's `requestAnimationFrame` call. */
+  stacks: string[]
   /** Reads of layout (sizes, places, rects) inside those callbacks. */
   reads: number
   /** Of those, the reads of the sidebar's own elements. */
@@ -120,6 +123,7 @@ export function install(): void {
     from: performance.now(),
     callbacks: 0,
     ticks: 0,
+    stacks: [] as string[],
     reads: 0,
     sidebarReads: 0,
     marks: 0,
@@ -136,11 +140,19 @@ export function install(): void {
   let inside = 0
   let lastTick = -1
 
-  // The page's ticks. Callbacks of one tick share its time.
+  // The page's ticks. Callbacks of one tick share its time. In a still
+  // phase, which asks for none, the first few say who asked: a stack costs
+  // too much to take for each tick of a phase that moves.
+  const STACKS = 3
   const frame = window.requestAnimationFrame.bind(window)
-  window.requestAnimationFrame = (callback) =>
-    frame((now) => {
+  window.requestAnimationFrame = (callback) => {
+    const asked =
+      !following && state.stacks.length < STACKS
+        ? new Error().stack?.split("\n").slice(2).join("\n")
+        : undefined
+    return frame((now) => {
       state.callbacks += 1
+      if (asked && state.stacks.length < STACKS) state.stacks.push(asked)
       if (now !== lastTick) {
         state.ticks += 1
         lastTick = now
@@ -154,6 +166,7 @@ export function install(): void {
         commits.takeRecords()
       }
     })
+  }
 
   // Reads of layout, counted only inside a tick, the sidebar's apart.
   const countRead = (element: Element) => {
@@ -523,6 +536,7 @@ export function install(): void {
       ms: performance.now() - state.from,
       callbacks: state.callbacks,
       ticks: state.ticks,
+      stacks: state.stacks,
       reads: state.reads,
       sidebarReads: state.sidebarReads,
       marks: state.marks,
