@@ -626,7 +626,6 @@ function Driving({
           state={thread?.mark ?? "running"}
           variant="agent"
           playful={0}
-          news={false}
           className="size-4"
         />
         <ThreadLink
