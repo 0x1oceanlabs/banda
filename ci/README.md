@@ -64,12 +64,13 @@ cache the job took about 2 minutes (2026-11-07).
 `client/desktop/e2e/same-path.spec.ts` checks that what the window does
 for another machine's Project ends at that machine's files (ADR 0106, law
 3). Its fake machine "arc" (`e2e/arc.ts`) runs everything of its own in a
-mount namespace, with bwrap, where arc's own home is mounted at this
-machine's home's path: one path names arc's `who.txt`, which says "arc",
-for arc, and this machine's, which says "mac", for the window, as
-`~/code/banda` does on two machines. A window that reads its own file for
-arc's then reads "mac" and fails. Its link is 40 ms away a round trip,
-and can go into a black hole, which drops what it carries with no reset.
+mount namespace, with bwrap, where arc's own home is mounted over a
+throwaway home in the test's folder that stands in for this machine's:
+one path names arc's `who.txt`, which says "arc", for arc, and this
+machine's, which says "mac", for the window, as `~/code/banda` does on
+two machines. A window that reads its own file for arc's then reads "mac"
+and fails. Its link is 40 ms away a round trip, and can go into a black
+hole, which drops what it carries with no reset.
 
 devbox's containers give no user namespaces, so there the window shards
 run the spec with arc's files only in arc's own folders: a window that
@@ -81,7 +82,9 @@ unprivileged user namespaces on as `fence` does, and with
 namespace. It builds only the engine and the fake agent, and the window,
 and runs when a PR changes any code, and on every push to main; `ci`
 waits for it. More of the window's tests move to it slice by slice. Here,
-`BANDA_SAME_PATH=off` runs the spec as devbox does.
+outside CI, the spec requires the namespace where `unshare -Ur true`
+works, as the fence's tests do; `BANDA_SAME_PATH=off` runs it as devbox
+does.
 
 ## macOS
 
@@ -106,8 +109,7 @@ GitHub keeps 10 GB of Actions caches for the repository, and past that
 deletes those used least lately, main's too. The tests'
 `Swatinem/rust-cache` entries (`macos-test`, `windows-test`,
 `windows-check`, `linux-fence`, `linux-same-path`) are saved only from
-main (`save-if`), and
-a PR's run reads main's.
+main (`save-if`), and a PR's run reads main's.
 
 `.github/workflows/cache-prune.yml` runs each day and keeps, of each
 family of keys, the newest entry main saved; it deletes the rest, main's
