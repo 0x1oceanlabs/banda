@@ -1,16 +1,17 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-10
 ---
 
 # Honest when away: what the Person sees while a machine is away, and what may wait for it
 
-_Proposed on 2026-11-10; Roma accepts it. The short ADR of the roadmap's
+_Accepted by Roma on 2026-11-10, with each open question as recommended
+("все по рекомендациям"). The short ADR of the roadmap's
 "Honest when away" slice (stage 1, H5a to H5e). The roadmap asks for one
 short ADR and one mock per stage
 (`docs/research/2026-11-08-roadmap-in-slices.md`); this slice has enough
 of Roma's calls to take its own. It holds his calls Q7 and Q8, the rules
-H5a to H5d built and H5e's open questions. Once accepted, it amends ADR
+H5a to H5d built and his answers for H5e. It amends ADR
 0082 decision 16, ADR 0095 decision 7 and ADR 0101 decision 7. Code is
 cited from main at `1464393e`; the plan is Roma's
 `~/Banda/artifacts/two-machines/h5-plan.md`._
@@ -80,13 +81,13 @@ Before H5, "away" was not honest:
    arc. A machine the window does not know or reach refuses at once; this
    machine's engine never stands in for it.
 
-## Open questions
+## Roma's answers (2026-11-10)
 
-For Roma, over the mock in Roma's
+Each as recommended, over the mock in Roma's
 `~/Banda/artifacts/two-machines/h5e-mock.html`.
 
-- **Q1. Which acts may wait for "Send when back"?** _Decided by Roma on
-  2026-11-10: as recommended._
+- **Q1. Which acts may wait for "Send when back"?** _Decided: as
+  recommended._
   - _Recommended:_ only a message to a Thread already started. Every
     other act fails at once (decision 4): Stop, answers, Implement, Try
     again, Fork, Edit of a sent message, steer, withdraw, rewind, model
@@ -100,7 +101,7 @@ For Roma, over the mock in Roma's
     "Closes on arc once it is back".
   - _Other:_ let more acts wait; but a Stop or an Allow that lands late
     does what the Person no longer means.
-- **Q2. How does the Person choose to wait?**
+- **Q2. How does the Person choose to wait?** _Decided: as recommended._
   - _Recommended:_ in a started Thread, while the machine is away, Send
     itself reads "Send when back", with a clock. Its tooltip says "Sends
     once arc is back, until 14:42", and Enter does the same. It is the
@@ -110,7 +111,7 @@ For Roma, over the mock in Roma's
   - _Other:_ a "Send when back" link beside a Send that stays off: two
     controls, and Enter does nothing. Or only away waits, since a
     stopped machine or another build does not come back by itself.
-- **Q3. Where does a waiting message show?**
+- **Q3. Where does a waiting message show?** _Decided: as recommended._
   - _Recommended:_ at the end of the Thread, dim, in the look of the
     Thread's Queue: "Waits for arc · until 14:42", with Edit and Cancel.
     Edit opens it in place and keeps its time; Cancel puts its text back
@@ -119,32 +120,32 @@ For Roma, over the mock in Roma's
     in the sidebar for now.
   - _Other:_ a sign on the sidebar's card too (ADR 0098); the pill says
     it already. Or the pill counts only its own Thread's.
-- **Q4. How long does it wait?**
+- **Q4. How long does it wait?** _Decided: as recommended._
   - _Recommended:_ 10 minutes by default (ADR 0082, decision 16). A
     click on "until 14:42", or a right click on the message, opens "Keep
     for": 10 min, 1 hour, 1 day or 7 days, the most. The time counts from
     when Send was pressed, in the words of `clock()`, as Later's "until"
     has them: "until 15:32", "until Wed 14:32", "until Nov 17, 14:32".
   - _Other:_ one fixed time, with no menu.
-- **Q5. What happens once its time has passed?**
+- **Q5. What happens once its time has passed?** _Decided: as recommended._
   - _Recommended:_ it is not sent. Its text goes back into the draft,
     above anything new there, after a blank line, with a toast: "Not
     sent: arc was still away at 14:42." The toast has Open when the
     Thread is not on screen.
   - _Other:_ drop it with the toast alone, and the Person's words with it.
-- **Q6. Does the queue survive a window restart?**
+- **Q6. Does the queue survive a window restart?** _Decided: as recommended._
   - _Recommended:_ yes, kept on this device, per machine, for its time.
     Each waiting message keeps what its Pane needs before arc answers:
     the Thread's title, its Project and its Harness's name (#956). A new
     Thread's draft is kept too, which closes #838.
   - _Other:_ kept in memory only; quitting drops what waits.
-- **Q9. Where do these answers live?**
+- **Q9. Where do these answers live?** _Decided: as recommended._
   - _Recommended:_ in this one short ADR with the mock, the way the
     roadmap asks of a stage.
   - _Other:_ dated notes in ADR 0082 decision 16 and ADR 0095 decision 7
     alone.
 
-## The rule for H5e, once accepted
+## The rule for H5e
 
 - Only a message to a Thread waits (Q1), and what another ADR names as
   deferred by the Person in its own words (ADR 0106's terminal close).
@@ -199,7 +200,7 @@ draft and the row after a restart. H5e closes #838, and #950 with Q1; with H5b a
 
 ## What it amends
 
-Once accepted, each with a dated note in place:
+Each with a dated note in place:
 
 - **ADR 0082, decision 16.** The visible queue holds only a message to a
   Thread, and "send when back" is its Send. Past `not_after` its text
