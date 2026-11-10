@@ -465,6 +465,29 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     return withHost(pane, this.hostOf(project, paneHost(pane)))
   }
 
+  /** The Apps each host's engine last listed in its welcome, once the
+   * router asked (`modulesOf`). */
+  readonly #welcomed = new WeakMap<Engine, readonly string[]>()
+
+  /**
+   * The Apps host `name`'s engine runs, as its welcome listed them while
+   * it was open last (ADR 0106, law 6): the router's word on whether an
+   * App is there. None before its engine was first open since it was
+   * asked, so an App is not taken for missing before that host said.
+   */
+  modulesOf(name: string): readonly string[] | undefined {
+    const engine = this.#engines.get(name)
+    if (!engine) return undefined
+    if (!this.#welcomed.has(engine)) {
+      const said = (status: Status) => {
+        if (status.state === "open") this.#welcomed.set(engine, status.modules)
+      }
+      said(engine.status)
+      engine.watch(said)
+    }
+    return this.#welcomed.get(engine)
+  }
+
   /** Starts host `name`'s engine again there. */
   start(name: string): void {
     this.#device.start(name)

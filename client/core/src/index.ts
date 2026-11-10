@@ -4,6 +4,7 @@
  * `@banda/core/react`.
  */
 export {
+  type Cap,
   type HostEntry,
   type HostState,
   type HostTest,
@@ -50,6 +51,16 @@ export {
 export { KeptHere } from "./kept-here"
 export { paneHost, type PaneState, type Place, withHost } from "./pane"
 export { openProjects, shownProjects } from "./projects"
+export {
+  type Act,
+  type Device,
+  deviceFor,
+  type From,
+  type Hosts,
+  type Owner,
+  type Route,
+  routeAct,
+} from "./route"
 export type { Args, Run } from "./run"
 export { type Readable, sameData, sameEach, Store } from "./store"
 export { clock } from "./time"
