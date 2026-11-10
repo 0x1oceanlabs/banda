@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
+import type { Owner } from "@banda/core"
+import { reachWords, useReach } from "@banda/core/react"
 import { Button } from "@banda/ui/components/button"
 import {
   HeaderSlot,
@@ -8,14 +10,21 @@ import {
 } from "@banda/ui/components/pane-header"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import type { Args } from "@banda/ui/module"
-import type { Label, PaneState, Place } from "@banda/ui/pane"
+import { seenNamed, useModules } from "@banda/ui/hooks/use-status"
+import {
+  type Label,
+  paneHost,
+  type PaneState,
+  type Place,
+  withHost,
+} from "@banda/ui/pane"
 import {
   Maximize2Icon,
   Minimize2Icon,
   SquareArrowOutUpRightIcon,
 } from "lucide-react"
-import { kindOf, kindRuns, labelOf } from "../registry"
-import { Broken } from "../tiling/PaneFrame"
+import { labelOf } from "../registry"
+import { gateOf, type Handle, PaneMount, usePaneHandles } from "../tiling/mount"
 import { opening, type Shell } from "./actions"
 import { usePeekEsc } from "./keys"
 
@@ -49,20 +58,19 @@ export function usePeek() {
  * and a Pane of the same kind it shows next takes the new args, so it is
  * not drawn anew. Floating as the window's menus do: their fill and hairline,
  * a deep shadow, and a blur of what is under it. Its Open makes it a Pane
- * of the workspace; ⌥Space, or its button, has it fill the desk.
+ * of the workspace; ⌥Space, or its button, has it fill the desk. Its Pane
+ * is drawn from its owner's session, as a Frame's is, on the machine its
+ * Project is on, and its acts go through the one router (ADR 0106,
+ * decision 1).
  */
 export function Peek({
   peek,
-  engine,
-  modules,
   shell,
   onUpdate,
   onFill,
   onClose,
 }: {
   peek: Peeked
-  engine: Engine
-  modules: readonly string[]
   /** What opens a Pane the peeking Pane asks for, in the workspace, opens
    * it there itself, and runs actions. */
   shell: Pick<Shell, "change" | "open" | "run">
@@ -81,6 +89,12 @@ export function Peek({
   const [said, setSaid] = useState<Label | null>(null)
   const label = useCallback((label: Label | null) => setSaid(label), [])
   const { title, detail, Icon } = labelOf(pane, said ?? undefined)
+  const reach = useReach(project, paneHost(pane))
+  const there = reach.host
+  const owner = useMemo(
+    () => ({ project, pane: withHost(pane, there) }),
+    [project, pane, there]
+  )
   const actions = (
     <>
       <Button
@@ -133,18 +147,26 @@ export function Peek({
                 </span>
               )}
             </PaneHeader>
-            <FloatingPane
-              engine={engine}
-              modules={modules}
-              project={project}
-              pane={pane}
-              open={open}
-              update={onUpdate}
-              close={onClose}
-              label={label}
-              run={run}
-              peek
-            />
+            {/* Its machine not known yet, it waits for it, in its words. */}
+            {reach.engine ? (
+              <FloatingPane
+                engine={reach.engine}
+                owner={owner}
+                elsewhere={there !== undefined}
+                project={project}
+                pane={pane}
+                open={open}
+                update={onUpdate}
+                close={onClose}
+                label={label}
+                run={run}
+                peek
+              />
+            ) : (
+              <p className="p-4 text-sm text-muted-foreground">
+                {there && reachWords(there, reach.shown, seenNamed)}
+              </p>
+            )}
           </HeaderSlot>
         </TileHeader>
       </section>
@@ -160,10 +182,14 @@ export const FLOATING =
 
 /** A Pane drawn over the desk, in no workspace, on its card's own fill:
  * a view that paints the page's background, as code does, paints the
- * card's. A Pane it opens goes in the workspace. */
+ * card's. A Pane it opens goes in the workspace. It is mounted as a
+ * Frame mounts its Pane (`PaneMount`), on its `owner`'s session `engine`,
+ * and shows as that engine's Apps say (`gateOf`): on another machine
+ * (`elsewhere`), by the router. */
 export function FloatingPane({
   engine,
-  modules,
+  owner,
+  elsewhere = false,
   project,
   pane,
   open,
@@ -175,7 +201,8 @@ export function FloatingPane({
   peek = false,
 }: {
   engine: Engine
-  modules: readonly string[]
+  owner: Owner
+  elsewhere?: boolean
   project: ProjectId
   pane: PaneState
   open: (project: ProjectId, pane: PaneState, place?: Place) => void
@@ -186,29 +213,30 @@ export function FloatingPane({
   focused?: boolean
   peek?: boolean
 }) {
-  const kind = kindOf(pane.kind)
-  const shown = kind && kindRuns(pane.kind, modules) ? kind : undefined
+  const { runs } = usePaneHandles(owner, run, pane)
+  const gate = gateOf(pane, elsewhere ? runs : undefined, useModules(engine))
+  const handle: Handle = {
+    open: (next, place, other) => open(other ?? project, next, place),
+    update: (args) => update({ kind: pane.kind, args }),
+    close,
+    label,
+  }
   return (
     <div className="min-h-0 flex-1 [--background:var(--popover)]">
-      {shown ? (
-        <Broken close={close}>
-          <shown.Pane
-            engine={engine}
-            project={project}
-            args={pane.args}
-            focused={focused}
-            open={(next, place, other) => open(other ?? project, next, place)}
-            update={(args) => update({ kind: pane.kind, args })}
-            close={close}
-            label={label}
-            run={run}
-            peek={peek}
-          />
-        </Broken>
+      {"why" in gate ? (
+        <p className="p-4 text-sm text-muted-foreground">{gate.why}</p>
       ) : (
-        <p className="p-4 text-sm text-muted-foreground">
-          This window does not show this kind of Pane now.
-        </p>
+        <PaneMount
+          kind={gate.opens}
+          engine={engine}
+          project={project}
+          pane={pane}
+          owner={owner}
+          focused={focused}
+          peek={peek}
+          handle={handle}
+          run={run}
+        />
       )}
     </div>
   )

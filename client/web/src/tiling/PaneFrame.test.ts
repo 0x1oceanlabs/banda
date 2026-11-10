@@ -2,6 +2,8 @@ import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { FORGETTING, KeptHosts } from "@banda/core/react"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
+import { arcHosts, MINE, ON_ARC } from "./arc.testing"
+import { gateOf, handlesOf, type Routing } from "./mount"
 import { type Frame, handleOf } from "./PaneFrame"
 
 /** A frame that notes what its Panes open and update. */
@@ -145,4 +147,49 @@ test("a Pane this machine took back in a clash lets the other host go as it upda
     kind: "agents.thread",
     args: { thread: "t1" },
   })
+})
+
+/** What the window says of its acts: none is asked here. */
+const NO_ACTS: Routing = { act: () => undefined, has: () => false }
+
+/** Whether `kind` shows on its Frame, on arc's "r1" where arc's welcome
+ * lists `arc`, or on this machine's "mine" while its engine runs `here`. */
+function shows(
+  kind: string,
+  { arc, here = [] }: { arc?: readonly string[]; here?: readonly string[] }
+) {
+  const pane: PaneState = { kind, args: {} }
+  const { runs } = handlesOf(
+    arcHosts(arc),
+    NO_ACTS,
+    arc === undefined ? { project: MINE } : ON_ARC,
+    undefined,
+    pane
+  )
+  const gate = gateOf(pane, arc === undefined ? undefined : runs, here)
+  return "opens" in gate ? true : gate.why
+}
+
+test("the gate of a Pane on arc reads arc's Apps, as its welcome lists them, never this window's (ADR 0106, decision 2)", () => {
+  // A kind that opens elsewhere opens while arc runs its App, though this
+  // machine's engine runs nothing.
+  expect(shows("agents.thread", { arc: ["agents"], here: [] })).toBe(true)
+  // An older arc without it says so, though this machine runs it.
+  expect(shows("agents.thread", { arc: ["git"], here: ["agents"] })).toBe(
+    "Not on arc yet"
+  )
+  // A kind that does not open elsewhere is not on arc yet, whatever arc
+  // runs; New Pane, which has no App, opens there.
+  expect(shows("terminal.terminal", { arc: ["terminal"] })).toBe(
+    "Not on arc yet"
+  )
+  expect(shows("window.launcher", { arc: [] })).toBe(true)
+  // On this machine, its engine's modules, as before.
+  expect(shows("terminal.terminal", { here: ["terminal"] })).toBe(true)
+  expect(shows("terminal.terminal", { here: ["agents"] })).toBe(
+    "This Pane comes back when the engine runs its module."
+  )
+  expect(shows("nobody.knows", { arc: ["nobody"] })).toBe(
+    "This window does not know this kind of Pane."
+  )
 })

@@ -16,7 +16,9 @@ import { Slots } from "@banda/ui/slots"
 import { previewers, slotsOf } from "./registry"
 import { device } from "./boot"
 import { Machines } from "./window/machines"
+import { ROUTING } from "./window/actions"
 import { Shell } from "./window/Shell"
+import { RoutingContext } from "./tiling/mount"
 import { AskToShare } from "./sharing/AskToShare"
 
 /**
@@ -67,22 +69,25 @@ export function App({ engine }: { engine: Engine }) {
   // one whose folder is missing opens nothing.
   const home = projects.find((project) => !project.missing && !project.scratch)
   if (!machine) return <Spinner />
-  // Every Pane draws a file with the modules' previewers (ADR 0073), and
-  // every Slot's owner what the modules that run fill it with.
+  // Every Pane draws a file with the modules' previewers (ADR 0073),
+  // every Slot's owner what the modules that run fill it with, and every
+  // Pane's host weighs its acts by the window's (ADR 0106, law 3).
   return (
     <Previewers value={previewers}>
       <Slots value={slots}>
         <HostsContext value={hosts}>
-          <Machines hosts={hosts}>
-            <Shell
-              engine={engine}
-              status={status}
-              modules={modules}
-              projects={projects}
-              home={home?.id ?? machine}
-              onCreated={put}
-            />
-          </Machines>
+          <RoutingContext value={ROUTING}>
+            <Machines hosts={hosts}>
+              <Shell
+                engine={engine}
+                status={status}
+                modules={modules}
+                projects={projects}
+                home={home?.id ?? machine}
+                onCreated={put}
+              />
+            </Machines>
+          </RoutingContext>
         </HostsContext>
       </Slots>
       {projects.length > 0 && <AskToShare engine={engine} />}

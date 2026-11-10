@@ -9,6 +9,7 @@ import type {
   ProjectId,
   ProjectSummary,
 } from "@banda/contract"
+import { type Act, type From, type Hosts, routeAct } from "@banda/core"
 import { toast } from "@banda/ui/components/sonner"
 import { seenNamed } from "@banda/ui/hooks/use-status"
 import { updateProject } from "@banda/ui/lib/projects"
@@ -27,6 +28,7 @@ import { chipOf } from "./attach"
 import { device } from "../boot"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
+import { refused, type Routing } from "../tiling/mount"
 import { type At, locateRoute } from "../menu/menu"
 import { modules } from "../modules"
 import {
@@ -36,6 +38,7 @@ import {
   identityOf,
   launcher,
   minOf,
+  moduleAct,
   showsOf,
   widthOf,
   windowModule,
@@ -165,6 +168,9 @@ export type Shell = WindowApi & {
   /** The engine, for what the window asks of it itself, as a title for a
    * Thread (ADR 0077). */
   engine: Engine
+  /** The Window's hosts, by which the router places what an act acts on
+   * (ADR 0106, law 3). */
+  hosts: Hosts
 }
 
 /** What a module is given of `shell`, a steady face of it (`useSteady`):
@@ -1583,9 +1589,84 @@ export const ACTIONS: readonly Action<Shell>[] = [
   ...WINDOW_ACTIONS.slice(ITEMS_AT),
 ]
 
-/** Runs the action `id` as its key would, with `args`. */
-export function runAction(shell: Shell, id: string, args?: Args): void {
-  const action = ACTIONS.find((action) => action.id === id)
-  if (!action) throw new Error(`Banda has no action ${id}`)
-  action.run(shell, args)
+/**
+ * The window's own acts on a file, by the word their ids start with, as
+ * Show in folder and Quick Look: a file is a value of a Project, the one
+ * the Person is in where its args name none, and is this device's to
+ * reach only where that Project is this machine's (ADR 0106, law 3).
+ */
+const ON_FILES = "file"
+
+/**
+ * The window's own acts on this machine's engine, by the word their ids
+ * start with: its Projects', as Add Project and Pin, and its Problems'.
+ * One that names another machine's Project does not go there; one that
+ * names none is this machine's, wherever the Person is. The rest of the
+ * window's own are the window's, as the arrangement, the menu and the
+ * settings.
+ */
+const ON_THIS_MACHINE: ReadonlySet<string> = new Set([
+  "project",
+  "projects",
+  "problems",
+])
+
+/** `action` as the router weighs it (ADR 0106, law 3): a module's by its
+ * App (`moduleAct`), the window's own by what it reaches. */
+export function actOf(action: Action<Shell>): Act {
+  const { title, id } = action
+  const of = moduleAct(id)
+  if (of) return { title, ...of }
+  const owner = id.split(".", 1)[0]!
+  if (owner === ON_FILES) return { title, at: "device", here: true }
+  return { title, at: ON_THIS_MACHINE.has(owner) ? "device" : "window" }
+}
+
+/** What the window tells its Panes' hosts (`Routing`): each of its
+ * actions as the router weighs it, and what this device can do. */
+export const ROUTING: Routing = {
+  act: (id) => {
+    const action = ACTIONS.find((one) => one.id === id)
+    return (
+      action && {
+        ...actOf(action),
+        takes: (name) =>
+          action.args !== undefined && name in action.args.properties,
+      }
+    )
+  },
+  has: device.has,
+}
+
+/** Where the Person is, as an act asked by a key or a menu is from: the
+ * Pane in focus, on the host its frame names; else Here's Project. */
+export function fromHere(shell: Pick<Shell, "here">): From {
+  const { pane, project } = shell.here.get()
+  if (!pane) return { here: { project } }
+  const { host } = pane
+  return {
+    here: { project: pane.project, pane: { args: host ? { host } : {} } },
+  }
+}
+
+/**
+ * Runs `action`, by its id or as found, as its key would, with `args`,
+ * where the one router says (ADR 0106, law 3): keys, menus and Widgets go
+ * through here, and a Pane's acts after its own route (`handlesOf`), so
+ * an action does the same from each. One that does not run says why, as
+ * "Not on arc yet: Open in a browser", never nothing.
+ */
+export function runAction(
+  shell: Shell,
+  action: string | Action<Shell>,
+  args?: Args
+): void {
+  const known =
+    typeof action === "string"
+      ? ACTIONS.find((one) => one.id === action)
+      : action
+  if (!known) throw new Error(`Banda has no action ${String(action)}`)
+  const route = routeAct(shell.hosts, actOf(known), fromHere(shell), args)
+  if (!route.runs) return refused(route.said)
+  known.run(shell, route.args)
 }

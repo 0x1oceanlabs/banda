@@ -1,6 +1,7 @@
 import {
   memo,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -35,6 +36,7 @@ import {
 } from "@banda/ui/lib/keys"
 import {
   type Here,
+  HostsContext,
   namedIn,
   type Shown,
   useHere,
@@ -161,18 +163,43 @@ export const BandaMenu = memo(function BandaMenu({
       })),
     [running, rows]
   )
-  // The sources look in the Project the Person is in, or the one gone into.
+  // The sources look in the Project the Person is in, or the one gone into,
+  // through its machine's session (ADR 0106, law 3): arc's for an arc
+  // Project, placed by the Pane in focus where it is that Project's.
   const project = useHere(projectOf)
+  const paneProject = useHere(paneProjectOf)
+  const paneHost = useHere(paneHostOf)
+  const hosts = useContext(HostsContext)
   const at: MenuAt = useMemo(() => {
     const where = looking.entered ?? project
+    const pane =
+      paneHost !== undefined && where === paneProject
+        ? { args: { host: paneHost } }
+        : undefined
+    let session = engine
+    try {
+      session = hosts.sessionOf(where, pane, { drawn: true })
+    } catch {
+      // A host this window does not show: none of this machine's
+      // Projects is that one, so this machine's engine finds nothing.
+    }
     return {
-      engine,
+      engine: session,
       project: where,
       folder: projects.find((one) => one.id === where)?.folder,
       entered: looking.entered !== undefined,
       ...(looking.only && { only: looking.only }),
     }
-  }, [engine, project, projects, looking.entered, looking.only])
+  }, [
+    engine,
+    hosts,
+    project,
+    paneProject,
+    paneHost,
+    projects,
+    looking.entered,
+    looking.only,
+  ])
   const hear = useCallback((id: string, heard?: readonly MenuRow[]) => {
     setRows((rows) => {
       if (rows[id] === heard) return rows
@@ -312,6 +339,9 @@ function Finder({
 
 /** The Project the Person is in, as Here says it. */
 const projectOf = (here: Here) => here.project
+/** The Pane in focus's Project, and the host its frame names. */
+const paneProjectOf = (here: Here) => here.pane?.project
+const paneHostOf = (here: Here) => here.pane?.host
 
 /** What the menu looks for: the words typed at its root, or the Project it
  * went into, or in one source alone. */

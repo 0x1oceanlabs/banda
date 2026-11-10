@@ -5,7 +5,8 @@ import { Component, memo, useEffect, useLayoutEffect, useRef } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import type { PaneState } from "@banda/ui/pane"
 import { columnsOf, moveOf, useLookColumns, useLookGroups } from "../look"
-import { Choices } from "../registry"
+import { Choices, choicesOf } from "../launcher"
+import { KINDS } from "../registry"
 import {
   type Column,
   type Entry,
@@ -365,7 +366,7 @@ export const Strip = memo(function Strip({
               ? `${whose ?? "This Project"}'s workspace is empty. It keeps its place until you close it.`
               : "This workspace is empty. Open a Pane:"}
           </p>
-          <Choices modules={modules} onPick={onStart} />
+          <Choices choices={choicesOf(KINDS, modules)} onPick={onStart} />
           {/* It goes when the Person closes it (ADR 0102, decision 2). */}
           {kept && (
             <Button

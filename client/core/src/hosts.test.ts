@@ -16,7 +16,6 @@ import {
   namedIn,
   otherBuild,
   reachWords,
-  runOnHost,
   type Shown,
   shownOf,
   Unreachable,
@@ -783,68 +782,6 @@ test("Send on a Pane on another host says what its pill says, and connects only 
       keyNamed
     )
   ).toBe("Studio is away. Send once it is back.")
-})
-
-test("a Pane on another host runs none of the Window's actions on this machine's files, and its Items' on that host's alone", () => {
-  const { device, tell } = desktop()
-  const hosts = new KeptHosts(device, FORGETTING)
-  hosts.follow()
-  tell([live])
-  hosts.ours([project("mine")])
-  hosts.projects("arc", [
-    project("mine"),
-    project("r1"),
-    project("s9", { scratch: true }),
-  ])
-  const ran: [string, Args | undefined][] = []
-  const arc = () => hosts.get().find((one) => one.name === "arc")
-  const own = { project: "r1" as ProjectId, item: "t1" }
-  const run = runOnHost(
-    (action, args) => void ran.push([action, args]),
-    new Set(["thread.later"]),
-    arc,
-    own
-  )
-  run("edit.paste")
-  for (const action of [
-    "terminal.run",
-    "file.open",
-    "file.attach",
-    "browser.open",
-  ])
-    run(action, {})
-  // Its own Thread, as its Pane names it, or the one it shows.
-  run("thread.later", { project: "r1", item: "t1", until: 5 })
-  run("thread.later")
-  // Its Thread in No Project there, one of that host's Projects.
-  run("thread.later", { project: "s9", item: "t2" })
-  // This machine's Project, which wins the ID both have: nothing.
-  run("thread.later", { project: "mine", item: "t9" })
-  // One no host shows, as a Thread not placed yet there: nothing.
-  run("thread.later", { project: "machine", item: "t3" })
-  expect(ran).toEqual([
-    ["edit.paste", undefined],
-    ["thread.later", { project: "r1", item: "t1", until: 5 }],
-    ["thread.later", { project: "r1", item: "t1" }],
-    ["thread.later", { project: "s9", item: "t2" }],
-  ])
-  // Before the Window knows that host, nothing either.
-  const waiting = runOnHost(
-    (action, args) => void ran.push([action, args]),
-    new Set(["thread.later"]),
-    () => undefined,
-    own
-  )
-  waiting("thread.later")
-  expect(ran).toHaveLength(4)
-
-  // The Window's own Archive goes to that host's Items alone, as an App's
-  // do (ADR 0096): its own Thread, never one of this machine's.
-  ran.length = 0
-  run("sidebar.archive")
-  run("sidebar.archive", { project: "mine", item: "t9" })
-  run("sidebar.later-picker")
-  expect(ran).toEqual([["sidebar.archive", { project: "r1", item: "t1" }]])
 })
 
 test("a host goes by the name this device remembers until its engine says one, and the device remembers what it says", () => {

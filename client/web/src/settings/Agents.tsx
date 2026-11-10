@@ -19,10 +19,10 @@ import { shownProjects } from "@banda/ui/lib/projects"
 import { problem } from "@banda/ui/lib/words"
 import type { PaneState } from "@banda/ui/pane"
 import { terminal } from "@banda/terminal-pane"
+import { PaneMount } from "../tiling/mount"
 import type { SectionProps } from "./sections"
 
-/** The Panes a sign-in opens: a terminal. Not the whole registry, which
- * would load every module's Panes into this window. */
+/** The Panes a sign-in opens: a terminal, and no other kind. */
 const kinds = terminal.panes
 
 /** A settings file, written through `banda settings`. */
@@ -88,14 +88,22 @@ export function Agents({ engine, lit, run }: SectionProps) {
             <>
               <DialogTitle>{kind.title(pane.args)}</DialogTitle>
               <div className="min-h-0 flex-1">
-                <kind.Pane
+                {/* This machine's terminal, in its Project, mounted as
+                    every Pane is (ADR 0106, decision 1); it runs none of
+                    the window's actions, as a dialog of the settings. */}
+                <PaneMount
+                  kind={kind}
                   engine={engine}
                   project={project}
-                  args={pane.args}
+                  pane={pane}
+                  owner={{ project }}
                   focused
-                  open={setPane}
-                  update={(args) => setPane({ ...pane, args })}
-                  close={close}
+                  handle={{
+                    open: setPane,
+                    update: (args) => setPane({ ...pane, args }),
+                    close,
+                  }}
+                  run={undefined}
                 />
               </div>
             </>

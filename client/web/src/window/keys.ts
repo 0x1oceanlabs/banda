@@ -23,7 +23,7 @@ import {
 import { useLookKeys } from "../look"
 import { modules } from "../modules"
 import { windowModule } from "../registry"
-import { ACTIONS, type Shell as Parts } from "./actions"
+import { ACTIONS, runAction, type Shell as Parts } from "./actions"
 
 /**
  * The actions with the keys in force, as the look makes them (ADR 0071,
@@ -148,7 +148,8 @@ export function useKeyRouter(
       const running = held
         ? (keyed.find((one) => one.id === held) ?? action)
         : action
-      running.run(parts, pressed.args)
+      // Through the one router, as from a Pane or a menu (ADR 0106, law 3).
+      runAction(parts, running, pressed.args)
     }
     window.addEventListener("keydown", onKey, { capture: true })
     return () => window.removeEventListener("keydown", onKey, { capture: true })

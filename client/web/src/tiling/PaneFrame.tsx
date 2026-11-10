@@ -1,5 +1,4 @@
 import {
-  Component,
   memo,
   type ReactNode,
   useEffect,
@@ -19,11 +18,6 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-} from "@banda/ui/components/empty"
 import {
   HeaderSlot,
   PaneHeader,
@@ -46,27 +40,15 @@ import {
   SquareArrowDownLeftIcon,
   SquareArrowOutUpRightIcon,
 } from "lucide-react"
-import {
-  ELSEWHERE,
-  kindOf,
-  kindRuns,
-  labelOf,
-  sayLabel,
-  showsOf,
-  useLabel,
-} from "../registry"
-import {
-  reachWords,
-  runOnHost,
-  usePaneOn,
-  useReach,
-  useShownNow,
-} from "@banda/core/react"
+import { launcher } from "../launcher"
+import { kindOf, labelOf, sayLabel, showsOf, useLabel } from "../registry"
+import { reachWords, usePaneOn, useReach } from "@banda/core/react"
 import { sayComposer } from "../window/attach"
 import { heightAt } from "./layout"
 import type { Plan } from "./arrange"
 import type { Entry } from "./model"
 import { type MenuFrame, PaneMenu, type Stand } from "./PaneMenu"
+import { gateOf, PaneMount, usePaneHandles, useWelcome } from "./mount"
 import { PaneSlot } from "./PaneSlot"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { Title } from "../titles/Title"
@@ -237,7 +219,6 @@ export const PaneFrame = memo(function PaneFrame({
 }) {
   const keyFor = useKeyLabel()
   const kind = kindOf(entry.pane.kind)
-  const shown = kind && kindRuns(entry.pane.kind, modules) ? kind : undefined
   const element = useRef<HTMLElement>(null)
   const { title, detail, edits, Icon } = labelOf(entry.pane, useLabel(entry.id))
   // A Project of another host's is that host's engine's (ADR 0081): only
@@ -262,21 +243,7 @@ export const PaneFrame = memo(function PaneFrame({
     [frame, entry.id, entry.project, entry.pane.kind, there, paneOn]
   )
   const { close } = handle
-  // What it runs of the Window's, there only what reaches neither this
-  // machine's files nor its engine's Projects: an item action, on an Item
-  // of that host's (ADR 0081).
-  const shownNow = useShownNow()
   const subject = showsOf(entry.pane)
-  const run = useMemo(
-    () =>
-      there === undefined
-        ? frame.run
-        : runOnHost(frame.run, ELSEWHERE, () => shownNow(there), {
-            project: entry.project,
-            item: subject,
-          }),
-    [frame, there, shownNow, entry.project, subject]
-  )
   // It with the host it is on in its args: its Pane reads that at once,
   // as Here does, and the args keep it, so it comes back there after a
   // restart. One opened where its host went unsaid takes it, and one this
@@ -285,8 +252,25 @@ export const PaneFrame = memo(function PaneFrame({
   useEffect(() => {
     if (onHost !== entry.pane) frame.update(entry.id, onHost)
   }, [frame, entry.id, entry.pane, onHost])
+  // Its owner: its Project, on the host it is on. What it runs goes
+  // through the one router from it, and whether it shows on another
+  // machine is that machine's to say, by the Apps its welcome lists, so
+  // the Frame is drawn again as they change (ADR 0106, law 3).
+  const owner = useMemo(
+    () => ({ project: entry.project, pane: onHost }),
+    [entry.project, onHost]
+  )
+  const { runs } = usePaneHandles(owner, frame.run, onHost)
+  useWelcome(there === undefined ? undefined : reach.engine)
+  const gate = gateOf(
+    entry.pane,
+    there === undefined ? undefined : runs,
+    modules
+  )
   const summary =
     project ?? reach.shown?.projects.find((one) => one.id === entry.project)
+  const launches =
+    entry.pane.kind === launcher.kind && there !== undefined && summary
   // What the Slot in its header is given: the Pane alone. What fills it
   // finds the Item the Pane shows itself (#943).
   const slot = { project: entry.project, pane: entry.pane }
@@ -445,7 +429,16 @@ export const PaneFrame = memo(function PaneFrame({
                   {detail}
                 </span>
               )}
-              {mixed && !item && summary && (
+              {/* New Pane on another machine says where what it opens
+                  opens: "in banda on arc", the machine in the Slot. */}
+              {launches && (
+                <span className="flex min-w-0 shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                  in
+                  <ProjectName project={summary} />
+                  on
+                </span>
+              )}
+              {mixed && !item && !launches && summary && (
                 <ProjectName
                   project={summary}
                   className="shrink-0 gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground"
@@ -479,30 +472,30 @@ export const PaneFrame = memo(function PaneFrame({
                 <SquareArrowOutUpRightIcon className="size-5" />
                 In its own window
               </button>
-            ) : machine && !kind?.elsewhere ? (
-              <Elsewhere machine={machine}>Not on {machine.name} yet</Elsewhere>
+            ) : machine && !reach.shown ? (
+              <Elsewhere machine={machine}>{words}</Elsewhere>
+            ) : "why" in gate ? (
+              machine ? (
+                <Elsewhere machine={machine}>{gate.why}</Elsewhere>
+              ) : (
+                <p className="p-4 text-sm text-muted-foreground">{gate.why}</p>
+              )
             ) : !reach.engine ? (
               <Elsewhere machine={machine}>{words}</Elsewhere>
-            ) : shown ? (
-              <Broken close={close}>
-                <TileContext value={tile}>
-                  <shown.Pane
-                    engine={reach.engine}
-                    project={entry.project}
-                    args={onHost.args}
-                    focused={focused}
-                    selected={selected}
-                    {...handle}
-                    run={run}
-                  />
-                </TileContext>
-              </Broken>
             ) : (
-              <p className="p-4 text-sm text-muted-foreground">
-                {kind
-                  ? "This Pane comes back when the engine runs its module."
-                  : "This window does not know this kind of Pane."}
-              </p>
+              <TileContext value={tile}>
+                <PaneMount
+                  kind={gate.opens}
+                  engine={reach.engine}
+                  project={entry.project}
+                  pane={onHost}
+                  owner={owner}
+                  focused={focused}
+                  selected={selected}
+                  handle={handle}
+                  run={frame.run}
+                />
+              </TileContext>
             )}
             {/* Its host out of reach, it shows what it showed, and
                 catches up once that host is back. What the pill says and
@@ -552,35 +545,4 @@ function Rows({
   return stand ? (
     <PaneMenu entry={entry} stand={stand} frame={menu} zoomed={zoomed} />
   ) : null
-}
-
-/**
- * A Pane that broke, as on args its kind cannot read, says so in its tile
- * and can be closed: the other Panes and the window go on.
- */
-export class Broken extends Component<
-  { close: () => void; children: ReactNode },
-  { error?: Error }
-> {
-  state: { error?: Error } = {}
-
-  static getDerivedStateFromError(error: Error) {
-    return { error }
-  }
-
-  render() {
-    if (!this.state.error) return this.props.children
-    return (
-      <Empty className="h-full">
-        <EmptyDescription>
-          This Pane could not show what it keeps.
-        </EmptyDescription>
-        <EmptyContent>
-          <Button variant="outline" size="sm" onClick={this.props.close}>
-            Close it
-          </Button>
-        </EmptyContent>
-      </Empty>
-    )
-  }
 }

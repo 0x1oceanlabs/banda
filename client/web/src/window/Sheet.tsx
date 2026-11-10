@@ -1,12 +1,15 @@
 import {
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react"
-import type { Engine, ProjectId } from "@banda/contract"
+import type { ProjectId } from "@banda/contract"
+import type { Owner } from "@banda/core"
+import { HostsContext, useStore } from "@banda/core/react"
 import { onDraw } from "@banda/ui/lib/frames"
 import { FIELDS } from "@banda/ui/lib/keys"
 import {
@@ -163,22 +166,23 @@ export function useSheet(where: () => ProjectId) {
  * shows on the tiles behind it at once. It is the top layer, and has the
  * keys while it shows: `Esc`, `Alt+W`, a press on the tiles, a pick, or
  * the focus going to a Pane or the overview takes it away, and the keys go
- * back where they were; there is one at a time.
+ * back where they were; there is one at a time. Its Pane is this
+ * machine's, on this machine's engine, whatever machine's Project the
+ * Person is in, until a machine's settings are read through its engine
+ * (ADR 0106, decision 1, step 5b).
  */
 export function Sheet({
   state,
-  engine,
-  modules,
   shell,
 }: {
   state: ReturnType<typeof useSheet>
-  engine: Engine
-  modules: readonly string[]
-  /** What opens a Pane it asks for in the workspace, and runs actions. */
-  shell: Pick<Shell, "open" | "run">
+  /** What opens a Pane it asks for in the workspace, runs actions, and
+   * this machine's engine, its Pane's. */
+  shell: Pick<Shell, "open" | "run" | "engine">
 }) {
   const panel = useRef<HTMLElement>(null)
   const { sheet, asked, close, update } = state
+  const owner = useOwnMachine()
   const showing = sheet !== null
   // It takes the keys as it comes in, before it listens, as a toast's
   // button gives them back to a composer as it blurs; as it goes, it gives
@@ -261,8 +265,8 @@ export function Sheet({
         className={`${FLOATING} pointer-events-auto absolute top-(--gap-outer) right-(--gap-outer) bottom-(--gap-outer) flex w-[min(40rem,calc(100%-2*var(--gap-outer)-var(--sidebar-inset,0px)))] animate-in flex-col overflow-hidden duration-200 ease-out fade-in-0 outline-none slide-in-from-right-8 motion-reduce:animate-none`}
       >
         <FloatingPane
-          engine={engine}
-          modules={modules}
+          engine={shell.engine}
+          owner={owner}
           project={project}
           pane={pane}
           // Where the Flow says, as any Pane the Person opens.
@@ -276,4 +280,15 @@ export function Sheet({
       </section>
     </div>
   )
+}
+
+/** This machine, by its Host scope's ID once its engine said it; the
+ * window's until then. */
+function useOwnMachine(): Owner {
+  const hosts = useContext(HostsContext)
+  const machine = useStore(
+    hosts.machines,
+    useCallback((all) => all.find((one) => one.host === undefined)?.machine, [])
+  )
+  return useMemo(() => (machine ? { machine } : "window"), [machine])
 }

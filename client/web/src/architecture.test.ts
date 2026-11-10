@@ -1858,9 +1858,7 @@ test("the core names no App", () => {
  */
 const CORE_CONSTANTS = [
   "core/src/hosts.ts: FORGETTING",
-  "core/src/hosts.ts: ITEMS_ELSEWHERE",
   "core/src/hosts.ts: NONE",
-  "core/src/hosts.ts: RUNS_ELSEWHERE",
   "core/src/react/here.ts: HereContext",
   "core/src/react/here.ts: NOWHERE",
   "core/src/react/hosts.ts: HostsContext",
@@ -2420,8 +2418,9 @@ test("where a Thread stands is read from status.ts, and no more files read a Lat
  * still reaches past its three handles, its owner, its window and the
  * device (ADR 0106, law 1): the places `kindReaches` finds in all the
  * code the kind takes, through every import, by kind, file and what it
- * reaches, each with the step of ADR 0106's plan that takes it away. Only
- * the Thread opens elsewhere today, so only its places are here:
+ * reaches, each with the step of ADR 0106's plan that takes it away. The
+ * Thread and New Pane open elsewhere today, and New Pane reaches none, so
+ * only the Thread's places are here:
  *
  * - 3c: a reply's links, Open in, and an Issue's page and the text it
  *   copies, as the Thread's paths go through `files.locate` and its links
@@ -2514,13 +2513,13 @@ const reachingPast: Record<string, number> = {}
 for (const place of reached)
   reachingPast[reachKey(place)] = (reachingPast[reachKey(place)] ?? 0) + 1
 
-test("the kind checker finds the file of each kind of Pane, and the Thread opens elsewhere", () => {
+test("the kind checker finds the file of each kind of Pane, and the Thread and New Pane open elsewhere", () => {
   expect(
     kinds.map(({ kind }) => kind).filter((kind) => !declared.has(kind))
   ).toEqual([])
   expect(
     kinds.filter((kind) => kind.elsewhere).map(({ kind }) => kind)
-  ).toContain("agents.thread")
+  ).toEqual(expect.arrayContaining(["agents.thread", "window.launcher"]))
 })
 
 test("a kind that opens elsewhere reaches past its handles no more than the list holds", () => {
@@ -2561,14 +2560,13 @@ test("each of the device's own helpers still does what it is the device's for", 
  * file: what reads its args' `host`, Here's Pane's or `paneHost`, and
  * each check of what they read. Today's counts, which only fall: the
  * Thread's checks go a few with each of its slices, New Thread's as the
- * directory names a Project's machine (1a″), and the title's and a
- * notification's as their actions go to the Thread's machine by the
- * router (1a).
+ * directory names a Project's machine (1a″), and a notification's as its
+ * actions go to the Thread's machine by the router (1a″). The title's
+ * went with the router (1a).
  */
 const ASKING_WHERE: Record<string, number> = {
   "apps/agents/pane/src/ThreadPane.tsx": 5,
   "apps/agents/pane/src/composer/NewThread.tsx": 3,
-  "apps/agents/pane/src/list/items.ts": 1,
   "apps/agents/pane/src/thread/Thread.tsx": 21,
   "platform/notifications/pane/src/system.ts": 3,
 }

@@ -1,4 +1,5 @@
 import type { ProjectSummary } from "@banda/contract"
+import { FORGETTING, type HostsDevice, KeptHosts } from "@banda/core"
 import { AGENTS_FILE, DEFAULT_AGENTS, type Flow } from "@banda/contract/agents"
 import type { Look } from "@banda/contract/look"
 import { takeLook } from "@banda/ui/lib/look"
@@ -6,6 +7,8 @@ import type { Args } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
 import type { Change, Plan } from "../tiling/arrange"
+import { arcHosts, ON_ARC, R1 } from "../tiling/arc.testing"
+import { handlesOf } from "../tiling/mount"
 import {
   type Column,
   entries,
@@ -27,6 +30,7 @@ import {
   picking,
   placeFor,
   placingOf,
+  ROUTING,
   strayedIn,
   type Placing,
   pickOf,
@@ -54,6 +58,23 @@ vi.mock("@banda/ui/components/sonner", async (actual) => {
   }
   return { toast: Object.assign(told, toast) }
 })
+
+/** No other machine: the hosts of a window alone. */
+const NO_HOSTS: HostsDevice = {
+  follow: () => undefined,
+  engine: () => Promise.reject(new Error("No other machine here.")),
+  start: () => undefined,
+}
+
+/** A Shell of `parts` for an action to run in by its key, through the
+ * router (ADR 0106, law 3): the Person in Project "a" on this machine,
+ * with no other machine, where `parts` says no other place. */
+const shellOf = (parts: object) =>
+  ({
+    here: { get: () => ({ project: "a" }) },
+    hosts: new KeptHosts(NO_HOSTS, FORGETTING),
+    ...parts,
+  }) as unknown as Shell
 
 /** Projects by their ids and names, as the window lists them. */
 const projectsOf = (names: Record<string, string>, scratch: string[] = []) =>
@@ -413,7 +434,7 @@ test("pane.pick takes a Project and a Pane, as an Item carries it, and only it r
   // decision 5).
   const pick = vi.fn()
   const closeSheet = vi.fn(() => true)
-  const shell = { pick, closeSheet } as unknown as Shell
+  const shell = shellOf({ pick, closeSheet })
   runAction(shell, "pane.pick", { project: "project-a", pane })
   runAction(shell, "pane.pick", { project: "project-a" })
   expect(pick.mock.calls).toEqual([["project-a", pane]])
@@ -424,7 +445,7 @@ test("a Project's verbs and the menu at a route do what the sidebar's buttons di
   const route = vi.fn()
   const settings = vi.fn()
   const command = vi.fn(() => Promise.resolve({}))
-  const shell = { route, settings, engine: { command } } as unknown as Shell
+  const shell = shellOf({ route, settings, engine: { command } })
 
   // The Search opens the menu at its root, the key sheet's button at its
   // Actions (`openingOf`), as `banda menu` does.
@@ -459,7 +480,7 @@ test("a Project's verbs and the menu at a route do what the sidebar's buttons di
 
 test("flow.pick writes the Flow it names into agents.toml, as flow.solo does from the one in force, and a word it does not know nothing", async () => {
   const writeSetting = vi.fn(() => Promise.resolve([] as string[]))
-  const shell = { writeSetting } as unknown as Shell
+  const shell = shellOf({ writeSetting })
   takeLook({
     files: { [AGENTS_FILE.name]: { ...DEFAULT_AGENTS, flow: "row" } },
   } as unknown as Look)
@@ -495,7 +516,7 @@ test("workspace.go goes to a workspace by its place, past the ninth too, and onl
     state = how(state) ?? state
     return Promise.resolve()
   })
-  const shell = { change } as unknown as Shell
+  const shell = shellOf({ change })
 
   runAction(shell, "workspace.go", { index: 10 })
   expect(state.current).toBe(10)
@@ -625,11 +646,11 @@ test("Alt+Shift+N onto another Project's workspace does nothing in the row, and 
   const sent = (flow: Flow) => {
     inFlow(flow)
     let step: unknown
-    const shell = {
+    const shell = shellOf({
       change: (how: (w: Workspaces) => unknown) => (step = how(state)),
       projectOf: lookupOf(projectsOf({ a: "Banda", b: "Brand" })),
       placing: () => placingOf(flow, []),
-    } as unknown as Shell
+    })
     runAction(shell, "pane.send-2")
     return step
   }
@@ -682,12 +703,12 @@ test("a refused move names the workspace by its number before the move, though t
   // A scratch Project's Thread, and a draft in the machine's own ID, which
   // the window knows no summary of.
   for (const project of ["s", "machine"]) {
-    const shell = {
+    const shell = shellOf({
       change: (how: (w: Workspaces) => unknown) =>
         expect(how(on(project))).toBeUndefined(),
       projectOf: lookupOf(projects),
       placing: () => placingOf("row", noProjectOf(projects, "machine")),
-    } as unknown as Shell
+    })
     for (const action of ["pane.send-3", "pane.move-down-or-to-workspace"]) {
       toasted.mockClear()
       runAction(shell, action)
@@ -728,11 +749,11 @@ test("Alt+Shift+N on a Pane of the Project's own Group moves it alone; on an Age
   })
   const sent = (state: Workspaces) => {
     let step: unknown
-    const shell = {
+    const shell = shellOf({
       change: (how: (w: Workspaces) => unknown) => (step = how(state)),
       projectOf: () => undefined,
       placing: () => placingOf("row", []),
-    } as unknown as Shell
+    })
     runAction(shell, "pane.send-2")
     return step
   }
@@ -889,7 +910,7 @@ test("workspace.close leaves an emptied workspace for the one above, or below fr
   const closing = (list: Workspace[], current: number) => {
     let state: Workspaces = { list, current }
     const sent: unknown[] = []
-    const shell = {
+    const shell = shellOf({
       change: (how: (w: Workspaces) => Workspaces | Plan | undefined) => {
         const step = how(state)
         if (step && "command" in step) sent.push(step.command)
@@ -898,7 +919,7 @@ test("workspace.close leaves an emptied workspace for the one above, or below fr
       here: {
         get: () => ({ workspace: { id: state.list[state.current]!.id } }),
       },
-    } as unknown as Shell
+    })
     const close = (args?: Args) => {
       runAction(shell, "workspace.close", args)
       return { at: state.current, sent: [...sent] }
@@ -957,4 +978,46 @@ test("workspace.close leaves an emptied workspace for the one above, or below fr
   const action = ACTIONS.find((action) => action.id === "workspace.close")
   expect(action?.keys).toBeUndefined()
   expect(action?.unlisted).toBeUndefined()
+})
+
+test("an action from a key goes through the router as one from a Pane: on arc, what arc does not run says so, the same words from each (ADR 0106, law 3)", () => {
+  // The Person is in arc's Thread, whose machine runs Threads alone.
+  const hosts = arcHosts(["agents"])
+  const route = vi.fn()
+  const shell = shellOf({
+    hosts,
+    route,
+    here: {
+      get: () => ({
+        project: R1,
+        pane: { id: "e1", project: R1, subject: "t1", host: "arc" },
+      }),
+    },
+  })
+  const ran = vi.fn()
+  const { run } = handlesOf(hosts, ROUTING, ON_ARC, ran, {
+    kind: "agents.thread",
+    args: { thread: "t1", host: "arc" },
+  })
+  const titleOf = (id: string) => ACTIONS.find((one) => one.id === id)!.title
+  // The device's, an App arc lacks, and this device's disk: refused alike.
+  for (const [id, args] of [
+    ["browser.open", { address: "https://example.com" }],
+    ["git.diff", undefined],
+    ["file.folder", { file: "/r1/a.ts" }],
+  ] as const) {
+    const said = `Not on arc yet: ${titleOf(id)}`
+    toasted.mockClear()
+    runAction(shell, id, args)
+    expect(toasted, id).toHaveBeenCalledWith(said, { id: expect.any(String) })
+    toasted.mockClear()
+    run!(id, args)
+    expect(toasted, id).toHaveBeenCalledWith(said, { id: expect.any(String) })
+  }
+  expect(ran).not.toHaveBeenCalled()
+  // The window's own runs from each.
+  runAction(shell, "menu.at", { route: "actions" })
+  expect(route).toHaveBeenCalledWith("actions")
+  run!("menu.at", { route: "actions" })
+  expect(ran).toHaveBeenCalledWith("menu.at", { route: "actions" })
 })

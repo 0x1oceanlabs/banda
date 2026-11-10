@@ -202,11 +202,7 @@ const suggest: ItemAction = {
   row: () => ({ title: "Suggest a title", icon: SparklesIcon }),
   run: (window, args) => {
     const at = threadAt(window, args)
-    // By its key, another host's Thread asks nothing, as before item
-    // actions: its header's menu and its field ask. `sessionOf` reaches
-    // its engine now, so the guard can go, as a change of its own.
-    if (!at || (args?.item === undefined && window.here.get().pane?.host))
-      return
+    if (!at) return
     if (namingNow(at.project, at.listed.id)) void suggestIntoField(window, at)
     else void suggestTitle(window, at)
   },
@@ -242,7 +238,6 @@ const unread: ItemAction = {
   keys: [{ code: "KeyU", mod: true, shift: true }],
   args: itemArgs(),
   group: "name",
-  elsewhere: true,
   row: (item) =>
     item.seen === undefined
       ? null
@@ -329,7 +324,6 @@ const later: ItemAction = {
   offered: ["pane", "menu"],
   // The picker takes the focus.
   later: true,
-  elsewhere: true,
   row: (item, at) =>
     asleep(item, at.now)
       ? null
@@ -362,7 +356,6 @@ const wake: ItemAction = {
   group: "other",
   does: "wake",
   offered: ["pane", "menu"],
-  elsewhere: true,
   row: (item, at) =>
     asleep(item, at.now) ? { title: "Wake now", icon: AlarmClockIcon } : null,
   run: (window, args) => {
@@ -396,7 +389,6 @@ const archive: ItemAction = {
   },
   group: "other",
   does: "archive",
-  elsewhere: true,
   row: () => null,
   run: (window, args) => {
     const at = threadAt(window, args)
@@ -440,7 +432,6 @@ const remove: ItemAction = {
   ),
   group: "other",
   does: "delete",
-  elsewhere: true,
   row: () => null,
   run: (window, args) => {
     const at = typeof args?.item === "string" && threadAt(window, args)
