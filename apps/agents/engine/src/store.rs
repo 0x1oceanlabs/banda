@@ -3,8 +3,8 @@
 
 use crate::full_access::Chosen;
 use crate::model::{
-    Archived, Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE, Later,
-    LatestTurn, ListedThread, Offer, Opener, PlanStep, QuestionState, Settings, ThreadId,
+    AccountUse, Archived, Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE,
+    Later, LatestTurn, ListedThread, Offer, Opener, PlanStep, QuestionState, Settings, ThreadId,
     ThreadSummary, ToolContent, TurnId, TurnState, TurnView, Usage, VisualId,
 };
 use banda_kernel::{AgentId, Error, Participant, Refusal};
@@ -1119,6 +1119,40 @@ pub fn ran_before(
             |row| row.get(0),
         )
         .optional()?)
+}
+
+/// How much the Project's Threads use each account they ran on: its
+/// Threads now, not archived, its latest turn, and its turns begun since
+/// `since` (ADR 0093, decision 6). A turn from before turns named their
+/// account ran on its Thread's.
+pub fn account_uses(sql: &Connection, since: i64) -> Result<Vec<AccountUse>, Error> {
+    let mut statement = sql.prepare(
+        "WITH turns AS (
+             SELECT COALESCE(t.harness, h.harness) AS harness, t.started_at
+             FROM agents_turns t JOIN agents_threads h ON h.id = t.thread
+             WHERE t.started_at IS NOT NULL
+         ), threads AS (
+             SELECT harness FROM agents_threads
+             WHERE harness IS NOT NULL
+               AND (archived IS NULL OR updated_at > json_extract(archived, '$.at'))
+         )
+         SELECT harness,
+                (SELECT COUNT(*) FROM threads WHERE threads.harness = a.harness),
+                (SELECT MAX(started_at) FROM turns WHERE turns.harness = a.harness),
+                (SELECT COUNT(*) FROM turns WHERE turns.harness = a.harness AND started_at >= ?1)
+         FROM (SELECT harness FROM turns UNION SELECT harness FROM threads) a
+         WHERE harness IS NOT NULL
+         ORDER BY harness",
+    )?;
+    let rows = statement.query_map(params![since], |row| {
+        Ok(AccountUse {
+            harness: row.get(0)?,
+            threads: row.get(1)?,
+            last: row.get(2)?,
+            turns: row.get(3)?,
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 /// Who opened each of the Thread's turns.

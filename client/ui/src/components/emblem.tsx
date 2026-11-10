@@ -101,6 +101,50 @@ const OWN: Readonly<Record<string, { viewBox: string; body: ReactNode }>> = {
   },
 }
 
+/** The icons an account of `harness` may pick, by their groups (ADR 0093,
+ * decision 2): its Harness's own, as `harnesses.toml` takes them, then
+ * the neutral ones. */
+export function iconGroupsOf(
+  harness: string
+): { group: string; icons: Icon[] }[] {
+  const own: Readonly<Record<string, Icon[]>> = {
+    claude: ["claude-code", "claude"],
+    codex: ["codex", "chatgpt"],
+  }
+  return [
+    ...(own[harness] ? [{ group: "Its own", icons: own[harness] }] : []),
+    { group: "Whose", icons: ["work", "personal", "team", "client"] },
+    { group: "What for", icons: ["spare", "experiments"] },
+    {
+      group: "How it runs",
+      icons: ["key", "gateway", "cloud", "local", "box"],
+    },
+  ]
+}
+
+/** What each icon stands for, as its picker names it. */
+export const ICON_NAMES: Readonly<Record<Icon, string>> = {
+  "claude-code": "Claude Code",
+  claude: "Claude",
+  codex: "Codex",
+  chatgpt: "ChatGPT",
+  work: "Work",
+  personal: "Personal",
+  team: "Team",
+  client: "Client",
+  spare: "Spare",
+  experiments: "Experiments",
+  key: "API key",
+  gateway: "Gateway",
+  cloud: "Cloud",
+  local: "Local model",
+  box: "Box",
+}
+
+/** The colours' names, by `colour`: 0 the Harness's own, then the four
+ * (ADR 0093, decision 3). */
+export const COLOUR_NAMES = ["Own", "Violet", "Rose", "Green", "Graphite"]
+
 /** The icon of each Harness's own entry before the list is read. */
 const PROGRAM: Readonly<Record<string, Icon>> = {
   claude: "claude-code",

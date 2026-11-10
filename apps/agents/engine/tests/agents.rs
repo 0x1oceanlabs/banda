@@ -477,6 +477,67 @@ async fn a_message_gets_the_agents_reply() {
 }
 
 #[tokio::test]
+async fn an_account_counts_its_threads_now_its_last_turn_and_its_turns_since() {
+    let root = tempfile::tempdir().unwrap();
+    let second = Harness {
+        id: "fake-b".into(),
+        ..fake_with(&[])
+    };
+    let agents = Agents::new(Harnesses::new(vec![fake_with(&[]), second]));
+    let world = World::new_with(root.path(), agents).await;
+    let done = async |sent: Value| {
+        world
+            .until(&sent["thread"], |v| {
+                state(v, &sent["turn"]) == Some(TurnState::Done)
+            })
+            .await
+    };
+    let first = world.send(None, "one").await;
+    done(first.clone()).await;
+    done(world.send(Some(&first["thread"]), "two").await).await;
+    let on_b = json!({ "harness": "fake-b", "text": "three" });
+    let other = world
+        .call(world.person(), "agents.send", on_b)
+        .await
+        .unwrap();
+    let view = done(other.clone()).await;
+    // An archived Thread is not one of the account's now; its turns count.
+    world
+        .archive(world.person(), &other["thread"], true)
+        .await
+        .unwrap();
+
+    let accounts = async |since: i64| {
+        let asked = json!({ "since": since });
+        let uses = world.call(world.person(), "agents.accounts", asked).await;
+        let uses = uses.unwrap();
+        let uses = uses.as_array().unwrap().clone();
+        uses.into_iter()
+            .map(|u| {
+                let name = u["harness"].as_str().unwrap().to_owned();
+                (
+                    name,
+                    u["threads"].clone(),
+                    u["turns"].clone(),
+                    u["last"].clone(),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let all = accounts(0).await;
+    let names: Vec<_> = all.iter().map(|(name, ..)| name.as_str()).collect();
+    assert_eq!(names, ["fake", "fake-b"]);
+    assert_eq!((&all[0].1, &all[0].2), (&json!(1), &json!(2)));
+    assert_eq!((&all[1].1, &all[1].2), (&json!(0), &json!(1)));
+    let began = view.turns[0].started.unwrap();
+    assert_eq!(all[1].3, json!(began), "its latest turn began then");
+
+    let later = accounts(began + 60_000).await;
+    assert_eq!(later[0].2, json!(0), "no turn began since");
+    assert_eq!(later[0].1, json!(1), "its Threads stay");
+}
+
+#[tokio::test]
 async fn a_question_waits_for_a_person_and_offers_every_answer_of_the_harness() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;

@@ -3,6 +3,7 @@ import type { CallMethod } from "../CallMethod";
 import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
 import type { StreamMethod } from "../StreamMethod";
+import type { AccountUse } from "./AccountUse";
 import type { Answer } from "./Answer";
 import type { AnswerIssue } from "./AnswerIssue";
 import type { Attach } from "./Attach";
@@ -34,6 +35,7 @@ import type { SeeWokeAsk } from "./SeeWokeAsk";
 import type { Send } from "./Send";
 import type { Sent } from "./Sent";
 import type { ShowVisual } from "./ShowVisual";
+import type { Since } from "./Since";
 import type { Switch } from "./Switch";
 import type { ThreadList } from "./ThreadList";
 import type { ThreadView } from "./ThreadView";
@@ -60,6 +62,13 @@ thread: CallMethod<OneThread, ThreadView>,
  * What a new Thread on a Harness starts with.
  */
 defaults: CallMethod<OneHarness, Defaults>, 
+/**
+ * How much this Project's Threads use each account, a Harness
+ * entry, they ran on: its Threads now, not archived, when its
+ * latest turn began, and its turns begun since `since`
+ * (ADR 0093, decision 6).
+ */
+accounts: CallMethod<Since, Array<AccountUse>>, 
 /**
  * The turns of a Thread that changed files, the latest first, and
  * the files one of them changed, from its tool calls: the Diff's

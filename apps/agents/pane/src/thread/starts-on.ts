@@ -7,7 +7,12 @@
 import { useMemo } from "react"
 import type { Engine } from "@banda/contract"
 import { AGENTS_FILE, type Agents } from "@banda/contract/agents"
-import type { HarnessView, Limits, LimitsNow } from "@banda/contract/harnesses"
+import type {
+  HarnessView,
+  Limits,
+  LimitsNow,
+  LimitWindow,
+} from "@banda/contract/harnesses"
 import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
 import {
   READ_AGAIN,
@@ -32,6 +37,13 @@ export type StartsOn = {
   fallback: boolean
 }
 
+/** The share of a limit window spent now: a window whose reset passed is
+ * empty until the next read. */
+export function usedOf(window: LimitWindow, now: number): number {
+  if (window.resets_at !== undefined && window.resets_at <= now) return 0
+  return Math.max(0, Math.min(100, window.used))
+}
+
 /** When an account is out, a window of it spent: the last of its spent
  * windows' resets, or none when one says none, and that window's name.
  * Not out: undefined. */
@@ -39,9 +51,7 @@ export function outOf(
   limits: Limits | undefined,
   now: number
 ): { until?: number; window?: string } | undefined {
-  const spent = (limits?.windows ?? []).filter(
-    (w) => w.used >= 100 && !(w.resets_at !== undefined && w.resets_at <= now)
-  )
+  const spent = (limits?.windows ?? []).filter((w) => usedOf(w, now) >= 100)
   if (spent.length === 0) return undefined
   const never = spent.find((w) => w.resets_at === undefined)
   if (never) return { window: never.label }

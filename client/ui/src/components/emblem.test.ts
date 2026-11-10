@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { emblemColour, emblemOf, type EmblemOf } from "./emblem"
+import { emblemColour, emblemOf, type EmblemOf, iconGroupsOf } from "./emblem"
 
 const work: EmblemOf = {
   id: "work",
@@ -38,4 +38,26 @@ test("an entry the list has is its own; one it has not is its Harness's", () => 
   expect(emblemOf([], "codex").icon).toBe("codex")
   const other = emblemOf([], "opencode", "  open code")
   expect([other.icon, other.mark, other.colour]).toEqual([undefined, "O", 0])
+})
+
+test("an account picks its Harness's own icons and the neutral ones, which the engine takes", () => {
+  const groups = (harness: string) =>
+    iconGroupsOf(harness).map(({ group, icons }) => [group, icons.length])
+  expect(groups("claude")).toEqual([
+    ["Its own", 2],
+    ["Whose", 4],
+    ["What for", 2],
+    ["How it runs", 5],
+  ])
+  expect(iconGroupsOf("codex")[0]!.icons).toEqual(["codex", "chatgpt"])
+  expect(groups("opencode").map(([group]) => group)).toEqual([
+    "Whose",
+    "What for",
+    "How it runs",
+  ])
+  // Fifteen icons in all (decision 4).
+  const all = new Set(
+    ["claude", "codex"].flatMap((h) => iconGroupsOf(h).flatMap((g) => g.icons))
+  )
+  expect(all.size).toBe(15)
 })

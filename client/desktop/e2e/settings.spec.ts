@@ -103,7 +103,7 @@ test("Alt+, opens the settings Pane, which writes the files and follows them (AD
   await expect(settings).toHaveCount(0)
 })
 
-test("Agents show who is signed in to each Harness, and write harnesses.toml", async () => {
+test("Agents show each account as a card, its page who is signed in, and write harnesses.toml", async () => {
   window = await startWindow({ account: true, oldCli: true })
   const { page, dir } = window
   const file = join(dir, "config/harnesses.toml")
@@ -120,7 +120,15 @@ test("Agents show who is signed in to each Harness, and write harnesses.toml", a
     .getByRole("button", { name: /Agents/ })
     .click()
 
+  // Each account is a card, by Harness (ADR 0093, decision 9); the card
+  // opens its page, which takes the card's name.
   const fake = settings.getByRole("group", { name: "Fake AI" })
+  await expect(fake.getByText("Not signed in")).toBeVisible()
+  await expect(fake.getByText("Default")).toBeVisible()
+  await settings.getByRole("button", { name: "Open Fake AI" }).click()
+  await expect(
+    settings.getByRole("button", { name: "Accounts", exact: true })
+  ).toBeVisible()
   await expect(
     fake.getByText(/^fake-cli 1\.0\.0 · banda-fake-agent \d/)
   ).toBeVisible()
@@ -132,9 +140,8 @@ test("Agents show who is signed in to each Harness, and write harnesses.toml", a
   await expect(fake.getByText("Not signed in.")).toBeVisible()
 
   await fake.getByRole("button", { name: "Sign in with Fake browser" }).click()
-  await expect(
-    fake.getByText("Signed in as person@example.invalid · Fake Pro")
-  ).toBeVisible()
+  await expect(fake.getByText("person@example.invalid")).toBeVisible()
+  await expect(fake.getByText("Fake Pro")).toBeVisible()
   await settings.screenshot({ path: "test-results/settings-agents.png" })
 
   await fake.getByRole("button", { name: "Sign out" }).click()
@@ -166,6 +173,28 @@ test("Agents show who is signed in to each Harness, and write harnesses.toml", a
   await fake.getByRole("switch", { name: "Fake AI on" }).click()
   await expect.poll(() => readFileSync(file, "utf8")).not.toContain("enabled")
 
+  // Its name and emblem are its entry's in harnesses.toml (ADR 0093).
+  await fake.getByRole("button", { name: "Experiments" }).click()
+  await expect.poll(() => textOf(file)).toContain('icon = "experiments"')
+  await fake
+    .getByRole("group", { name: "Colour" })
+    .getByRole("button", { name: "Rose" })
+    .click()
+  await expect.poll(() => textOf(file)).toContain("colour = 2")
+  // The first account on is the default till another is made it.
+  await expect(fake.getByRole("button", { name: "Default" })).toBeDisabled()
+  await fake.getByRole("textbox", { name: "Account name" }).fill("Fake Work")
+  await fake.getByRole("textbox", { name: "Account name" }).press("Enter")
+  await expect.poll(() => textOf(file)).toContain('name = "Fake Work"')
+  const work = settings.getByRole("group", { name: "Fake Work" })
+  await work.getByRole("button", { name: "Accounts", exact: true }).click()
+  await expect(work.getByText("Default")).toBeVisible()
+  await work.getByRole("button", { name: "Open Fake Work" }).click()
+  await work.getByRole("textbox", { name: "Account name" }).fill("Fake AI")
+  await work.getByRole("textbox", { name: "Account name" }).press("Enter")
+  await expect.poll(() => textOf(file)).toContain('name = "Fake AI"')
+  await fake.getByRole("button", { name: "Accounts", exact: true }).click()
+
   // A new entry, and taking it out.
   await settings.getByRole("button", { name: /Add a Harness/ }).click()
   const adding = page.getByRole("dialog", { name: "Add a Harness" })
@@ -179,6 +208,7 @@ test("Agents show who is signed in to each Harness, and write harnesses.toml", a
       '[[harness]]\nid = "other-agent"\nname = "Other Agent"\ncommand = "other-acp"\nargs = ["--stdio", "a b"]\n'
     )
   const other = settings.getByRole("group", { name: "Other Agent" })
+  await settings.getByRole("button", { name: "Open Other Agent" }).click()
   await expect(
     other.getByRole("textbox", { name: "Other Agent command" })
   ).toHaveValue("other-acp --stdio 'a b'")

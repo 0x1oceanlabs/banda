@@ -8,6 +8,7 @@ import type { Fact } from "./generated/agents/Fact"
 import type { ModuleFile } from "./look"
 import { VERSION } from "./generated/agents/VERSION"
 
+export type { AccountUse } from "./generated/agents/AccountUse"
 export type { AgentCounts } from "./generated/agents/AgentCounts"
 export type { Agents } from "./generated/agents/Agents"
 export type { Archived } from "./generated/agents/Archived"
