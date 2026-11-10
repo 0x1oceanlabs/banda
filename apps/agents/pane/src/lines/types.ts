@@ -2,6 +2,7 @@
 import type { ComponentType } from "react"
 import type { Item, Later, TurnState } from "@banda/contract/agents"
 import type { EntryFacts } from "../entries/types"
+import type { Lanes } from "../thread/findIn"
 import type { Moves } from "../thread/moves"
 import type { Line } from "../thread/timeline"
 
@@ -14,6 +15,8 @@ export type LineFacts = {
   turnState: (turn: string | undefined) => TurnState | undefined
   /** What the Person looks for, if anything. */
   finding: string
+  /** The Thread's sub-agents by their ID, whose rows its lines show. */
+  lanes: Lanes
   /** The Agent's name. */
   name: string
   /** The account the Thread runs on, by its entry's ID. */

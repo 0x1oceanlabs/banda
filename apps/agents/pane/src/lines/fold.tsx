@@ -1,7 +1,8 @@
 import { CircleCheckIcon, CircleSlashIcon } from "lucide-react"
 import { holds } from "../thread/findIn"
 import { did, foldTitle, workOf } from "../thread/timeline"
-import { Folded, Kinds } from "./folded"
+import { Kinds } from "../entries/parts/WorkFold"
+import { Folded } from "./folded"
 import type { LineProps } from "./types"
 
 /** What a turn that ended did before its last reply, folded into one

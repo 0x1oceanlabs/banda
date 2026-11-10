@@ -9,9 +9,9 @@ is ADR 0058.
 | Folder | What |
 |---|---|
 | `ThreadPane.tsx` | The Thread as a Pane: its kind, and what it gives the Thread. |
-| `thread/` | The Thread: `Thread.tsx` (transcript, dock and message box), `Transcript.tsx`, `context.tsx` (`useThreadAround`), its state (`state.ts`), its timeline (`timeline.ts`), the session, find, the queue, the details card. |
-| `entries/` | One file per kind of entry, `index.tsx` the table that picks one, `kinds.ts` the timeline's rules for each kind, `types.ts` what a view is given. `parts/` holds what the views share: messages, tool calls, cards, diffs, the proposed plan. |
-| `lines/` | One file per kind of line the timeline adds, `index.tsx` the table and the lines' keys, `types.ts` what a view is given. `parts/` holds the changes card. |
+| `thread/` | The Thread: `Thread.tsx` (transcript, dock and message box), `Transcript.tsx`, `context.tsx` (`useThreadAround`), its state (`state.ts`), its timeline (`timeline.ts`), the session, find, the queue, the details card. Its sub-agents (ADR 0103): `subagents.ts` (what a row and a group say), `live-lane.ts` (an opened row's work, read and followed); `facts.ts` is how a fact starts or changes an entry, which the Thread's state, a sub-agent's and what the Pane heard of each share. |
+| `entries/` | One file per kind of entry, `index.tsx` the table that picks one, `kinds.ts` the timeline's rules for each kind, `types.ts` what a view is given. `parts/` holds what the views share: messages, tool calls, cards, diffs, the proposed plan, a line of work folded (`WorkFold.tsx`), the line a sub-agent's row and their group open by (`RowTrigger.tsx`). `subagent.tsx` is a sub-agent's row, opened in place. |
+| `lines/` | One file per kind of line the timeline adds, `index.tsx` the table and the lines' keys, `types.ts` what a view is given. `parts/` holds the changes card. `subagents.tsx` is the group of sub-agents one message started. |
 | `composer/` | The message box: its menus, attachments, drafts, history, slash commands and the model picker. |
 | `asking/` | Questions: the drawer that docks on the composer, its form and its keys. |
 | `visual/` | `Frame.tsx` (a page apart from Banda, ADR 0062 d7), the Visual in its Thread, its preview, and its Pane. |
@@ -46,7 +46,14 @@ When a Thread is to show something new:
 A line is what the timeline adds between entries. Add its kind to `Line`
 in `thread/timeline.ts` and where the timeline makes it, then
 `lines/<kind>.tsx` taking `LineProps<"<kind>">`, and its row and key in
-`lines/index.tsx`.
+`lines/index.tsx`. Those do not compile without it. These do, and say
+nothing of it until it is there:
+
+- `turnOf` in `thread/timeline.ts`: the turn it belongs to, and
+  `staysOut` when it stays out of its turn's fold;
+- `room()` in `lines/folded.tsx`: the room it takes in a fold's list,
+  when it folds;
+- `holds` in `thread/findIn.ts`: the words Find matches in it.
 
 ## Borders
 

@@ -485,6 +485,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
                   state={live.view}
                   waits={waits}
                   name={name}
+                  short={short}
                   answering={acting}
                   writers={writers}
                   queue={queue}

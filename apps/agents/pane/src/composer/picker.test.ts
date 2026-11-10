@@ -1,6 +1,13 @@
 import type { HarnessOption, Settings } from "@banda/contract/agents"
 import { describe, expect, it } from "vitest"
-import { levelAt, levelsOf, modelName, pickedOf, resetOf } from "./picker"
+import {
+  levelAt,
+  levelsOf,
+  modelName,
+  modelNow,
+  pickedOf,
+  resetOf,
+} from "./picker"
 
 const choices = (...values: string[]) =>
   values.map((value) => ({ value, name: value }))
@@ -97,5 +104,12 @@ describe("the model picker", () => {
       { ...effort, choices: choices("low", "medium", "high") },
     ])
     expect(resetOf(settings(), codex)).toBeUndefined()
+  })
+
+  it("names the model a Thread runs on, its default by the model it stands for", () => {
+    expect(modelNow(settings(), [model])).toBe("Opus 5.5")
+    expect(modelNow(settings({ model: "default" }), [model])).toBe("Opus 5.5")
+    expect(modelNow(settings({ model: "gone" }), [model])).toBeUndefined()
+    expect(modelNow(settings(), [effort])).toBeUndefined()
   })
 })

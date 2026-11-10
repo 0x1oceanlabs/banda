@@ -65,6 +65,9 @@
   --color-focus-inactive: var(--focus-inactive);
   --color-added: var(--added);
   --color-removed: var(--removed);
+  --color-sub-grey: var(--sub-grey);
+  --color-sub-faint: var(--sub-faint);
+  --color-sub-rule: var(--sub-rule);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -757,6 +760,115 @@ html[data-drag="view"] * {
 }
 html[data-sidebar="desk"] [data-sidebar-shown] {
   --sidebar-inset: var(--sidebar-width);
+}
+
+/*
+ * Sub-agents (ADR 0103): each is a satellite, its shape its state, in the
+ * text's colour thinned but where it calls; the asks are --attention and
+ * the failed --destructive. A row of one is grey while it works. Worked
+ * out of the text's colour, they hold for light, dark and glass, as the
+ * design reference's kit has them (docs/design/kit/sub.css).
+ */
+:root {
+  --sat-working: color-mix(in oklab, var(--foreground) 45%, transparent);
+  --sat-done: color-mix(in oklab, var(--foreground) 70%, transparent);
+  --sat-stopped: color-mix(in oklab, var(--foreground) 38%, transparent);
+  --sat-queued: color-mix(in oklab, var(--foreground) 32%, transparent);
+  --sat-lost: color-mix(in oklab, var(--foreground) 30%, transparent);
+  /* A working row's title, and its now and time. */
+  --sub-grey: color-mix(in oklab, var(--foreground) 52%, transparent);
+  --sub-faint: color-mix(in oklab, var(--foreground) 38%, transparent);
+  /* The rule beside a report opened in place. */
+  --sub-rule: color-mix(in oklab, var(--foreground) 12%, transparent);
+}
+/* A satellite has no motion of its own: a change within its shape blends
+   in 0.45 s, one to another shape leaps in 0.6 s, as the Mark's do. */
+[data-sat-motion="blend"] {
+  animation: sat-blend-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+[data-sat-motion="leap"] {
+  animation: sat-leap 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+[data-sat-motion="out"] {
+  animation: sat-blend-out 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes sat-blend-in {
+  from {
+    opacity: 0;
+    scale: 0.7;
+  }
+}
+@keyframes sat-blend-out {
+  to {
+    opacity: 0;
+    scale: 0.7;
+  }
+}
+@keyframes sat-leap {
+  0% {
+    opacity: 0;
+    scale: 0.5;
+    translate: 0 0;
+  }
+  45% {
+    opacity: 1;
+    scale: 1.12;
+    translate: 0 -2px;
+  }
+  100% {
+    opacity: 1;
+    scale: 1;
+    translate: 0 0;
+  }
+}
+/* No motion, `[motion] off`: the shapes and colours stay. */
+html[data-still] :is([data-slot="satellite"], [data-sat-motion]) {
+  animation: none !important;
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  :is([data-slot="satellite"], [data-sat-motion]) {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+/*
+ * A sub-agent's brief and report, opened in place, clamped to a few lines
+ * (the kit's .s-brief and .s-report): its "more" or "Show all" shows only
+ * while there is more than shows. A box that holds more than it shows can
+ * scroll, which turns its scroll timeline on, and the timeline turns them
+ * on; nothing measures it. The brief's second line then fades at its end,
+ * its first stays whole.
+ */
+[data-clamped] {
+  scroll-timeline: --clamped block;
+}
+[data-clamp-scope] {
+  timeline-scope: --clamped;
+}
+[data-clamp-more] {
+  display: none;
+  animation: clamp-more 1ms both;
+  animation-timeline: --clamped;
+}
+@keyframes clamp-more {
+  from,
+  to {
+    display: inline-flex;
+  }
+}
+[data-clamped="brief"] {
+  animation: clamp-brief 1ms both;
+  animation-timeline: scroll(self block);
+}
+@keyframes clamp-brief {
+  from,
+  to {
+    mask:
+      linear-gradient(#000 0 0) top / 100% 1.25rem no-repeat,
+      linear-gradient(to right, #000 calc(100% - 5rem), transparent) bottom /
+        100% 1.25rem no-repeat;
+  }
 }
 
 /* Without these, Chromium on Linux draws its own scrollbar: a wide light

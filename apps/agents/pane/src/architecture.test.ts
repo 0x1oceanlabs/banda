@@ -89,3 +89,80 @@ test("only list/sent.ts sends a Thread's marks to its host", () => {
     .map((file) => relative(folder, file))
   expect(sending).toEqual([join("list", "sent.ts")])
 })
+
+/**
+ * A Thread's sub-agents as its Pane places and words them are pure, the
+ * same for every client (ADR 0103; ADR 0089, decision 1): no React, no
+ * DOM, only the contract and other pure words.
+ */
+test("thread/subagents.ts imports only the contract and pure words", () => {
+  const pure = [
+    "@banda/contract/agents",
+    "@banda/ui/lib/satellite",
+    "@banda/ui/lib/words",
+    "../asking/asking",
+    "../entries/parts/calls",
+    "../entries/parts/messageText",
+    "./facts",
+  ]
+  const file = join(import.meta.dirname, "thread", "subagents.ts")
+  const outside = imports(readFileSync(file, "utf8")).filter(
+    (name) => !pure.includes(name)
+  )
+  expect(outside).toEqual([])
+})
+
+/** The words a source shows: its strings, its template literals, and
+ * with `jsx` its JSX's text, without its comments; what an expression
+ * puts in them reads "N". A plain reading, for the words test below. */
+function shown(source: string, jsx: boolean): string[] {
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1")
+  const strings = [...code.matchAll(/"((?:[^"\\\n]|\\.)*)"/g)]
+  const templates = [...code.matchAll(/`((?:[^`\\]|\\.)*)`/g)].map(
+    ([, text]) => ["", text.replace(/\$\{[^}]*\}/g, "N")]
+  )
+  // JSX text runs from a tag or an expression to the next one; what
+  // follows a comma is the next of a list.
+  const text = jsx
+    ? [...code.matchAll(/([>}])([^<>{}"`]+)([<{])/g)]
+        .filter(([, , words]) => !/=>|[;=()]|^\s*,/.test(words))
+        .map(([, from, words, to]) => [
+          "",
+          `${from === "}" ? "N" : ""}${words}${to === "{" ? "N" : ""}`,
+        ])
+    : []
+  return [...strings, ...templates, ...text].map(([, words]) => words.trim())
+}
+
+/** "subagent" or "task" as a word on its own, not in a name as
+ * `agents.subagent` or `group/subagents`. */
+const WRONG = /(?<![\w/.-])(?:subagents?|tasks?)(?![\w/.-])/i
+
+test("the Pane's words say sub-agent, never subagent or task (ADR 0103, decision 1)", () => {
+  // Words a Person reads: a phrase, or one word that starts as a sentence.
+  const said = (words: string) => /\s/.test(words) || /^[A-Z]/.test(words)
+  const pane = import.meta.dirname
+  const wrong = sources(pane, { tests: false }).flatMap((file) =>
+    shown(readFileSync(file, "utf8"), file.endsWith(".tsx"))
+      .filter((words) => said(words) && WRONG.test(words))
+      .map((words) => `${relative(pane, file)}: ${words}`)
+  )
+  expect(wrong).toEqual([])
+  // It finds them where they would be: a string, a template's text, and
+  // JSX's text beside an expression.
+  const planted = [
+    '<span title="3 subagents">Stop the task</span>',
+    "const head = `Ran ${n} subagents`",
+    "<span>{n} subagents</span>",
+    "<b>Tasks {n}</b>",
+  ].join("\n")
+  expect(shown(planted, true).filter((words) => WRONG.test(words))).toEqual([
+    "3 subagents",
+    "Ran N subagents",
+    "Stop the task",
+    "N subagents",
+    "Tasks N",
+  ])
+})

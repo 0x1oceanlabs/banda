@@ -2,12 +2,11 @@ import type { Event, Participant } from "@banda/contract"
 import type {
   Item,
   ListedThread,
-  Subagent,
   ThreadView,
   TurnView,
 } from "@banda/contract/agents"
 import { expect, test } from "vitest"
-import { agent, event, person } from "../testing"
+import { agent, event, person, subagent as lane } from "../testing"
 import {
   EMPTY,
   apply,
@@ -28,6 +27,7 @@ import {
   working,
   threadOf,
   writerOf,
+  writing,
 } from "./state"
 import { timeline } from "./timeline"
 
@@ -780,17 +780,6 @@ test("a reply in plan mode is a plan that waits for the Person", () => {
   expect(proposedPlan(before)).toBeUndefined()
 })
 
-/** A sub-agent of turn `u` as it starts. */
-const lane = (id: string, more: Partial<Subagent> = {}): Subagent => ({
-  id,
-  turn: "u",
-  title: `Lane ${id}`,
-  state: "running",
-  can_stop: true,
-  started: 1,
-  ...more,
-})
-
 /** Turn `turn` as its message `item` starts it. */
 const begun = (item = "m", turn = "u") => [
   event(
@@ -1025,4 +1014,30 @@ test("a sub-agent's plan is not the Agent's plan of its turn", () => {
   expect(planOf(state.turns[0], state.items)).toBeUndefined()
   const own = apply(state, plan("q2"))
   expect(planOf(own.turns[0], own.items)?.id).toBe("q2")
+})
+
+test("the entry the Agent may still write is its last, a sub-agent's anchor too, but not a sub-agent's Question", () => {
+  const replied = play(
+    ...begun(),
+    event("reply.grew", { item: "r", turn: "u", text: "I'll split it." })
+  )
+  expect(writing(replied)?.id).toBe("r")
+  // Its reply ends as it starts sub-agents: their anchors are its own.
+  const started = apply(
+    replied,
+    event("subagent.started", { item: "s", subagent: lane("a") })
+  )
+  expect(writing(started)?.id).toBe("s")
+  // A sub-agent's Question comes beside what it writes.
+  const asked = apply(
+    started,
+    event("question.asked", {
+      item: "q",
+      turn: "u",
+      sub: "a",
+      title: "Allow pnpm vitest?",
+      choices: [],
+    })
+  )
+  expect(writing(asked)?.id).toBe("s")
 })

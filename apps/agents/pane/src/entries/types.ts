@@ -1,6 +1,13 @@
 /** What every entry's view is given (ADR 0091, decision 2). */
-import type { Body, Item, ListedThread, TurnView } from "@banda/contract/agents"
+import type {
+  Body,
+  Item,
+  ListedThread,
+  Subagent,
+  TurnView,
+} from "@banda/contract/agents"
 import type { ComponentType } from "react"
+import type { RowSaid } from "../thread/subagents"
 
 /** An entry whose body is of kind `K`. */
 export type EntryOf<K extends Body["kind"]> = Item & {
@@ -25,6 +32,19 @@ export type EntryFacts = {
   /** A Person's message's first turn, to edit it from; null when it may
    * not. */
   edits?: TurnView | null
+  /** The sub-agent an anchor names, as its row shows it; none for any
+   * other entry, or one the Thread no longer has. */
+  subagentRow?: SubagentRow
+}
+
+/** A sub-agent where it started (ADR 0103, decision 15): the same object
+ * until its row says something else, so only that row draws again. */
+export type SubagentRow = {
+  lane: Subagent
+  /** What its row says, as its Thread words it. */
+  said: RowSaid
+  /** Who set it to work, as its brief says: its Harness, "Claude". */
+  asker: string
 }
 
 export type EntryProps<K extends Body["kind"]> = EntryFacts & {

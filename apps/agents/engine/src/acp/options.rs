@@ -160,35 +160,50 @@ fn category(option: &acp::SessionConfigOption) -> Option<String> {
 }
 
 /// What a sub-agent's session runs with, as its options say: the name of
-/// the model it runs on, and its role, Claude Code's `agent` option.
+/// the model it runs on, and its role, Claude Code's `agent` option. The
+/// model is named as the Thread's picker names it: Claude Code's
+/// "Default (recommended)" by the model it stands for, "Opus 5.5", so a
+/// row tells it from its parent's by one name (ADR 0103, decision 15).
 pub(super) fn lane_runs(options: &[acp::SessionConfigOption]) -> (Option<String>, Option<String>) {
-    let chosen = |option: &acp::SessionConfigOption| {
+    /// The value an option is set to, and its choice, if it lists one.
+    fn chosen(
+        option: &acp::SessionConfigOption,
+    ) -> Option<(String, Option<&acp::SessionConfigSelectOption>)> {
         let acp::SessionConfigKind::Select(select) = &option.kind else {
             return None;
         };
         let now = &select.current_value;
-        let named = match &select.options {
+        let choice = match &select.options {
             acp::SessionConfigSelectOptions::Ungrouped(choices) => {
-                choices.iter().find(|c| c.value == *now).map(|c| &c.name)
+                choices.iter().find(|c| c.value == *now)
             }
             acp::SessionConfigSelectOptions::Grouped(groups) => (groups.iter())
                 .flat_map(|g| &g.options)
-                .find(|c| c.value == *now)
-                .map(|c| &c.name),
+                .find(|c| c.value == *now),
             _ => None,
         };
-        Some((now.0.to_string(), named.cloned()))
-    };
+        Some((now.0.to_string(), choice))
+    }
     let model = (options.iter())
         .find(|o| o.category == Some(acp::SessionConfigOptionCategory::Model))
         .and_then(chosen)
-        .map(|(value, name)| name.unwrap_or(value));
+        .map(|(value, choice)| match choice {
+            Some(choice) => match (&*choice.value.0, &choice.description) {
+                (DEFAULT_MODEL, Some(model)) => model.clone(),
+                _ => choice.name.clone(),
+            },
+            None => value,
+        });
     let role = (options.iter())
         .find(|o| &*o.id.0 == AGENT)
         .and_then(chosen)
         .map(|(value, _)| value);
     (model, role)
 }
+
+/// Claude Code's model choice that stands for another, which its
+/// description names: "Default (recommended)", "Opus 5.5".
+const DEFAULT_MODEL: &str = "default";
 
 /// Claude Code's option for the kind of agent a session is, which a
 /// sub-agent's session says.
@@ -651,5 +666,28 @@ mod tests {
             settle(other, &wanted).is_empty(),
             "a value it no longer offers"
         );
+    }
+
+    #[test]
+    fn a_lane_names_its_model_as_the_picker_does() {
+        let model = |now: &str| {
+            let choices = vec![
+                acp::SessionConfigSelectOption::new("default", "Default (recommended)")
+                    .description("Opus 5.5".to_owned()),
+                acp::SessionConfigSelectOption::new("haiku", "Haiku 5.5")
+                    .description("Fastest for quick answers".to_owned()),
+                acp::SessionConfigSelectOption::new("bare", "Bare"),
+            ];
+            let option =
+                acp::SessionConfigOption::select("model", "Model", now.to_owned(), choices)
+                    .category(acp::SessionConfigOptionCategory::Model);
+            lane_runs(&[option]).0
+        };
+        // The default by the model it stands for, as the picker says it.
+        assert_eq!(model("default").as_deref(), Some("Opus 5.5"));
+        // Any other by its name; one the Harness does not list, by its value.
+        assert_eq!(model("haiku").as_deref(), Some("Haiku 5.5"));
+        assert_eq!(model("bare").as_deref(), Some("Bare"));
+        assert_eq!(model("gone").as_deref(), Some("gone"));
     }
 }

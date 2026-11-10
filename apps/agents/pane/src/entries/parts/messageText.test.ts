@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { clamped, planTitle } from "./messageText"
+import { clamped, firstLine, planTitle } from "./messageText"
 
 test("a short message shows whole", () => {
   expect(clamped("hello")).toBe(false)
@@ -17,4 +17,16 @@ test("a plan's title is its first line without markdown's marks", () => {
     "Fix the login bug"
   )
   expect(planTitle("- Read the notes")).toBe("Read the notes")
+  expect(planTitle("2. Rename *old_name* in `card.ts`")).toBe(
+    "Rename old_name in card.ts"
+  )
+  expect(planTitle("   ")).toBe("")
+})
+
+test("a report's first line loses the markup that starts it", () => {
+  expect(firstLine("\n\n# Summary\nmore")).toBe("Summary")
+  expect(firstLine("- **one** `two`")).toBe("one two")
+  expect(firstLine("1. First")).toBe("First")
+  expect(firstLine("   ")).toBeUndefined()
+  expect(firstLine(undefined)).toBeUndefined()
 })
