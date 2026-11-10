@@ -195,22 +195,6 @@ export function backWords(limits: Limits, now: number): string {
   return back === undefined ? "out" : `back in ${remaining(back, now)}`
 }
 
-/** The accounts' colours, by place in `harnesses.toml`, as the Usage
- * Pane's (ADR 0055, decision 4); dark's until the window has them. */
-const ACCOUNT_COLOURS = [
-  "#3987e5",
-  "#9085e9",
-  "#1baf7a",
-  "#d55181",
-  "#c98500",
-] as const
-
-/** The colour of the account at `place`, from 0, in the limits list. */
-export function colourOf(place: number): string {
-  const n = place % ACCOUNT_COLOURS.length
-  return `var(--account-${n + 1}, ${ACCOUNT_COLOURS[n]})`
-}
-
 /** A Harness's name short, for the bar: `Claude`. */
 export function shortName(name: string): string {
   return name.trim().split(/\s+/)[0] || name

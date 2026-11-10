@@ -30,7 +30,9 @@ import {
   SettingsIcon,
   WorkflowIcon,
 } from "lucide-react"
+import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
 import { MoveConfirm } from "../composer/Moves"
+import { harnessName } from "../harnesses"
 import { useThreadAround } from "../thread/context"
 import { moveAll, useWaitingOn } from "../thread/move-all"
 import { type Move, type Moves, waysOn } from "../thread/moves"
@@ -130,16 +132,39 @@ function noteOf(move: Move): string {
   return `${name} gets the Thread's history.`
 }
 
+/** A limit the Thread went on from: what stopped there, in one quiet
+ * line, named by the account the turn ran on, not the one it is on now. */
+export function LimitPassed({ turn }: { turn: TurnView }) {
+  const { engine } = useThreadAround()
+  const harnesses = useHarnesses(engine)
+  const account = turn.harness
+    ? harnessName(harnesses, turn.harness)
+    : "The account"
+  return (
+    <div className="my-1 flex items-center gap-2 text-sm text-muted-foreground">
+      <PauseMark quiet />
+      {account}'s limit ran out
+    </div>
+  )
+}
+
 /** The pause sign in the warning's colour: a limit waits, it did not
- * fail. */
-function PauseMark() {
+ * fail. Quiet, once the Thread went on. */
+function PauseMark({ quiet }: { quiet?: boolean }) {
+  const bar = cn(
+    "h-1.5 w-[1.5px]",
+    quiet ? "bg-muted-foreground/60" : "bg-warning"
+  )
   return (
     <span
       aria-hidden
-      className="flex size-4 shrink-0 items-center justify-center gap-0.5 rounded-full border-[1.5px] border-warning"
+      className={cn(
+        "flex size-4 shrink-0 items-center justify-center gap-0.5 rounded-full border-[1.5px]",
+        quiet ? "border-muted-foreground/60" : "border-warning"
+      )}
     >
-      <span className="h-1.5 w-[1.5px] bg-warning" />
-      <span className="h-1.5 w-[1.5px] bg-warning" />
+      <span className={bar} />
+      <span className={bar} />
     </span>
   )
 }

@@ -5,6 +5,7 @@ import {
   cardWindows,
   groupsOf,
   lastWords,
+  newAccountOf,
   pickStart,
   threadsWords,
   usesOf,
@@ -131,4 +132,19 @@ test("the default and the fallback go in agents.toml's [start], by the entry's I
   await pickStart(file, "start.account", "work")
   await pickStart(file, "start.fallback", undefined)
   expect(said).toEqual(['start.account = "work"', "start.fallback out"])
+})
+
+test("a new account is named and coloured after the ones of its Harness", () => {
+  const c = (id: string, name: string, colour: number) => ({
+    ...entry(id, "claude", name),
+    colour,
+  })
+  const numbered = [c("claude", "C1", 0), c("c2", "C2", 1), c("c3", "C3", 2)]
+  expect(newAccountOf("claude", numbered)).toEqual({ name: "C4", colour: 3 })
+  const named = [c("claude", "Claude Code", 0), c("work", "Work", 3)]
+  expect(newAccountOf("claude", named)).toEqual({
+    name: "Claude Code 3",
+    colour: 1,
+  })
+  expect(newAccountOf("codex", named)).toEqual({ name: "Codex 1", colour: 1 })
 })

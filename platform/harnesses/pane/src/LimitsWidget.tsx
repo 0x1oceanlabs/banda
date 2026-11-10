@@ -28,6 +28,8 @@ import {
   type Source,
 } from "@banda/ui/hooks/use-live"
 import { useNow } from "@banda/ui/hooks/use-now"
+import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
+import { Emblem, emblemOf, type EmblemOf } from "@banda/ui/components/emblem"
 import { useRun } from "@banda/core/react"
 import { cn } from "@banda/ui/lib/utils"
 import { MINUTE, ago, fullDate, problem } from "@banda/ui/lib/words"
@@ -39,7 +41,6 @@ import { useEffect, useMemo, useState } from "react"
 import {
   type Room,
   backWords,
-  colourOf,
   elapsedOf,
   fullestOf,
   harnessName,
@@ -260,19 +261,19 @@ function Accounts({
   warn: number
 }) {
   const room = mostRoomOf(limits, now)
-  const placed = limits.map((l, place) => ({ limits: l, place }))
+  const views = useHarnesses(engine)
   const harnesses = [...new Set(limits.map(harnessOf))]
   return harnesses.flatMap((harness) =>
-    placed
-      .filter((each) => harnessOf(each.limits) === harness)
+    limits
+      .filter((each) => harnessOf(each) === harness)
       .map((each) => (
         <Account
-          key={each.limits.harness}
+          key={each.harness}
           engine={engine}
           all={limits}
-          limits={each.limits}
-          colour={colourOf(each.place)}
-          mostRoom={room.has(each.limits.harness)}
+          limits={each}
+          emblem={emblemOf(views, each.harness, each.name)}
+          mostRoom={room.has(each.harness)}
           now={now}
           warn={warn}
         />
@@ -284,7 +285,7 @@ function Account({
   engine,
   all,
   limits,
-  colour,
+  emblem,
   mostRoom,
   now,
   warn,
@@ -293,7 +294,9 @@ function Account({
   /** Every account's limits, for what fills a spent one's Slot. */
   all: readonly Limits[]
   limits: Limits
-  colour: string
+  /** The account's emblem, as the composer's chip and the picker show it
+   * (ADR 0093, decision 1). */
+  emblem: EmblemOf
   mostRoom: boolean
   now: number
   warn: number
@@ -317,12 +320,7 @@ function Account({
     >
       <div className="mb-2 flex items-center gap-2">
         <span className="flex min-w-0 items-center gap-2">
-          <span
-            className="size-1.5 shrink-0 rounded-full"
-            style={{ background: colour }}
-            aria-hidden="true"
-          />
-          <span className="truncate font-medium">{limits.name}</span>
+          <Emblem of={emblem} named nameClassName="truncate font-medium" />
         </span>
         <span
           className="truncate text-xs text-muted-foreground/70"

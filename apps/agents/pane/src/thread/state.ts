@@ -834,10 +834,38 @@ const UNFINISHED: ReadonlySet<TurnView["state"]> = new Set([
 export function rows(state: ThreadState): Row[] {
   const gone = withdrawn(state)
   const waits = new Set(waiting(state).map(({ item }) => item.id))
+  const said = limitsSaid(state)
   const items = state.items.filter(
-    (item) => !waits.has(item.id) && !(gone.has(item.id) && !item.turn)
+    (item) =>
+      !waits.has(item.id) &&
+      !(gone.has(item.id) && !item.turn) &&
+      !said.has(item.id)
   )
   return flow({ ...state, items })
+}
+
+/** The Agent's messages that only say its usage limit ran out, as Claude
+ * Code writes the words its turn then fails with: the limit's card says
+ * it already (ADR 0078, decision 6), so they are not said twice. */
+function limitsSaid(state: ThreadState): Set<string> {
+  const reasons = new Map<string, string>()
+  for (const turn of state.turns) {
+    if (turn.failure?.class === "usage_limit" && turn.reason)
+      reasons.set(turn.id, turn.reason.trim())
+  }
+  const said = new Set<string>()
+  if (reasons.size === 0) return said
+  for (const item of state.items) {
+    const reason = item.turn && reasons.get(item.turn)
+    if (
+      reason &&
+      item.author.kind !== "person" &&
+      item.body.kind === "message" &&
+      item.body.text.trim() === reason
+    )
+      said.add(item.id)
+  }
+  return said
 }
 
 function flow(state: ThreadState): Row[] {

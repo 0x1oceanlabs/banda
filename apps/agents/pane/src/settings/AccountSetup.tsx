@@ -22,10 +22,12 @@ import { Input } from "@banda/ui/components/input"
 import { Spinner } from "@banda/ui/components/spinner"
 import { useRead } from "@banda/ui/hooks/use-read"
 import { problem } from "@banda/ui/lib/words"
+import { harnessTitle } from "../harnesses"
 import { Problem } from "../thread/SignIn"
 import type { SettingsFile } from "./AgentsSettings"
 import { AccountLogin } from "./AccountLogin"
 import { EmblemPicker } from "./AccountPage"
+import { newAccountOf } from "./accounts"
 
 const PURPOSES: { name: string; icon: Icon }[] = [
   { name: "Work", icon: "work" },
@@ -51,15 +53,13 @@ export function AccountSetup({
   onClose: () => void
   onAdded: () => void
 }) {
-  const count = taken.filter((one) => one.harness === base.harness).length
+  const fresh = newAccountOf(base.harness, taken)
   const [step, setStep] = useState(0)
   const [existing, setExisting] = useState(false)
   const [folder, setFolder] = useState("")
-  const [name, setName] = useState(
-    `${base.harness === "claude" ? "Claude Code" : "Codex"} ${count + 1}`
-  )
+  const [name, setName] = useState(fresh.name)
   const [icon, setIcon] = useState(base.icon)
-  const [colour, setColour] = useState(count % 5)
+  const [colour, setColour] = useState(fresh.colour)
   const [made, setMade] = useState<HarnessView>()
   const [busy, setBusy] = useState(false)
   const [running, setRunning] = useState(false)
@@ -114,7 +114,7 @@ export function AccountSetup({
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            Add a {base.harness === "claude" ? "Claude Code" : "Codex"} account
+            Add a {harnessTitle(taken, base.harness)} account
           </DialogTitle>
           <DialogDescription>
             {

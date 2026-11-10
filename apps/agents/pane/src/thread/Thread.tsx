@@ -124,6 +124,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     offer,
     configure,
     starts,
+    startsOut,
     startOn,
     plan,
     setPlan,
@@ -603,6 +604,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
                 disabled={acting}
                 onChange={configure}
                 starts={starts}
+                out={startsOut}
                 onStart={startOn}
                 harnesses={harnesses}
                 moves={moves}

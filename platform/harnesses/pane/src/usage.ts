@@ -9,6 +9,7 @@ import type {
   UsageTokens,
   UsageTotal,
 } from "@banda/contract/harnesses"
+import { emblemColour } from "@banda/ui/components/emblem"
 import { DAY } from "@banda/ui/lib/words"
 
 /** A Harness entry, as the Pane names and colours it. */
@@ -19,19 +20,11 @@ export type Account = {
   name: string
   /** The Harness it runs, when Banda can tell: `Claude Code`. */
   harness?: string
-  /** Its place in harnesses.toml, which picks its colour. */
-  place: number
+  /** Its emblem's colour, as CSS (ADR 0093, decision 3): the same in the
+   * charts as on the chip and in the picker. */
+  colour: string
   /** The key a chart's row keeps its value under. */
   key: string
-}
-
-/** How many colours the accounts have; a sixth takes the first again. */
-export const COLOURS = 5
-
-/** An account's colour: its place in harnesses.toml, never its rank, so
- * turning another off repaints nothing. */
-export function colourOf(account: Account): string {
-  return `var(--account-${(account.place % COLOURS) + 1})`
 }
 
 /** The Harness an entry runs, from its program and its variables, as the
@@ -60,13 +53,19 @@ export function accountsOf(
       id: view.id,
       name: view.name,
       harness: harnessOf(view),
-      place,
+      colour: emblemColour(view),
       key: `a${place}`,
     })
   })
   let place = list.length
   for (const id of wanted) {
-    accounts.push({ id, name: id, place, key: `a${place}` })
+    // One the list no longer has: the text's colour, as an emblem's own.
+    accounts.push({
+      id,
+      name: id,
+      colour: "var(--account-own)",
+      key: `a${place}`,
+    })
     place++
   }
   return accounts

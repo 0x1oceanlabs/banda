@@ -12,7 +12,6 @@ import {
   accountsOf,
   byAccount,
   byModel,
-  colourOf,
   daysOf,
   changeWords,
   deltaOf,
@@ -74,20 +73,22 @@ const rows = [
   row(12, "codex", "gpt-5", total(0.5, 40, 60)),
 ]
 
-test("each account keeps the colour of its place in harnesses.toml", () => {
-  const accounts = accountsOf(list, ["codex", "claude", "gone"])
+test("each account keeps its emblem's colour, whatever else is shown", () => {
+  const accounts = accountsOf(
+    list.map((one, at) => ({ ...one, colour: at === 0 ? 0 : at + 1 })),
+    ["codex", "claude", "gone"]
+  )
   expect(accounts.map((a) => [a.id, a.harness, a.key])).toEqual([
     ["claude", "Claude Code", "a0"],
     ["codex", "Codex", "a2"],
     ["gone", undefined, "a3"],
   ])
-  // Work is not shown, and Codex keeps the third colour all the same.
-  expect(colourOf(accounts[1]!)).toBe("var(--account-3)")
-  const many = accountsOf(
-    Array.from({ length: 7 }, (_, i) => view(`h${i}`, `H${i}`, [])),
-    ["h6", "h5"]
-  )
-  expect(many.map(colourOf)).toEqual(["var(--account-1)", "var(--account-2)"])
+  // Work is not shown, and Codex keeps its own colour all the same.
+  expect(accounts.map((a) => a.colour)).toEqual([
+    "var(--account-own)",
+    "var(--account-3)",
+    "var(--account-own)",
+  ])
 })
 
 test("the days are each account's values, an empty day too", () => {
