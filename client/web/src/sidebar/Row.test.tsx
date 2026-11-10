@@ -35,9 +35,15 @@ const row: Arranged = {
 
 const arc: Named = { name: "arc", icon: "server" }
 
-/** The row drawn in `lines`, hiding `hide`, on `machine`; its title as a
- * field draws it, as the title's own reads the window's store. */
-const drawn = (lines: number, machine?: Named, hide: Part[] = []) => {
+/** The row drawn in `lines`, hiding `hide`, on `machine`, under its
+ * Project's header or not, away or not; its title as a field draws it,
+ * as the title's own reads the window's store. */
+const drawn = (
+  lines: number,
+  machine?: Named,
+  hide: Part[] = [],
+  { inProject = false, away = false } = {}
+) => {
   const settings: Settings = {
     ...DEFAULT_SIDEBAR,
     row: { ...DEFAULT_SIDEBAR.row, lines, hide },
@@ -46,10 +52,11 @@ const drawn = (lines: number, machine?: Named, hide: Part[] = []) => {
     <Row
       row={row}
       settings={settings}
-      inProject={false}
+      inProject={inProject}
       current={false}
       field={<span>Bench window tests</span>}
       machine={machine}
+      away={away}
     />
   )
 }
@@ -94,4 +101,31 @@ test("a row that hides its Project still says where its Thread runs", () => {
 test("a row of this machine carries no machine", () => {
   for (const lines of [1, 2, 3])
     expect(drawn(lines)).not.toContain("data-machine-icon")
+})
+
+test("a Thread away from its Project's workspace bears a small diamond before the row's right parts, where its Later clock never covers it (ADR 0102, decision 6)", () => {
+  for (const lines of [1, 2, 3])
+    for (const inProject of [false, true]) {
+      const html = drawn(lines, undefined, [], { inProject, away: true })
+      const mark = html.indexOf('aria-label="Away from its Project')
+      expect(mark, `${lines} lines`).toBeGreaterThan(-1)
+      expect(mark).toBeLessThan(html.indexOf('class="ml-auto"'))
+      expect(html).toContain("lucide-diamond")
+      // Its right parts stand where every row's do.
+      expect(html).not.toContain("pe-7")
+    }
+  expect(drawn(1)).not.toContain("Away from its Project")
+})
+
+test("on a line with nothing at its right, the mark keeps clear of the row's Later clock all the same (ADR 0102, decision 6)", () => {
+  // One line under its Project's header, its status hidden: the title
+  // and the mark alone, and the line keeps the clock's room.
+  const html = drawn(1, undefined, ["status"], { inProject: true, away: true })
+  expect(html).not.toContain('class="ml-auto"')
+  expect(html).toContain('class="flex min-w-0 items-center gap-1.5 pe-7"')
+  expect(html).toContain('aria-label="Away from its Project')
+  // A row not away keeps the whole line.
+  expect(drawn(1, undefined, ["status"], { inProject: true })).not.toContain(
+    "pe-7"
+  )
 })

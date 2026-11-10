@@ -171,7 +171,10 @@ day.
    and the note say whose the workspace is ("Workspace 2 is Brand's") and
    where the Pane can go ("To free workspace 3"); the Banda menu's Open
    beside refuses as the keys do, and the Pane menu shows a Project's
-   workspace by its Sign and greys out those the keys refuse.
+   workspace by its Sign and greys out those the keys refuse. The sidebar's mark is a small diamond after
+   the row's left parts, where its Later clock never covers it, and shows
+   only once the Thread's Project has a workspace, so going from the Flow
+   `free` to the row marks nothing.
 
 7. **A Thread of no Project that becomes a Project's goes to that
    Project's workspace,** by the row's rules, with its Group. The
@@ -192,7 +195,8 @@ day.
    and at a swipe's end. The width keys do nothing on a column that
    fills the screen alone, so the row never gets a width the Person did
    not see, and on a column of a Group each press steps the share it
-   shows on. A Group `Alt+M` filled in the row does the same.
+   shows on. A Group `Alt+M` filled in the row does the same. The Flow menu, Settings and the title of
+   `Alt+Shift+M` say so.
 
 9. **From the Flow `free` to the row, nothing jumps.**
    - Panes already open stay where they are, and new ones follow these
@@ -206,7 +210,8 @@ day.
    workspace, or, of no Project, on the top free one; with `only`, that
    Project's alone, which the window sends when a Project of no Project
    is made a Project's. `Ctrl+Z` does not undo it yet: the workspaces
-   have no undo.
+   have no undo. The sidebar's Flow menu offers it as well, in the row
+   and solo.
 
 ## Consequences
 

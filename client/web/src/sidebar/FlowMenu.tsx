@@ -4,9 +4,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
@@ -15,6 +17,7 @@ import { useRun } from "@banda/core/react"
 import { useFile } from "@banda/ui/lib/look"
 import {
   Columns3Icon,
+  FolderInputIcon,
   LayoutDashboardIcon,
   type LucideIcon,
   RectangleHorizontalIcon,
@@ -29,12 +32,12 @@ const FLOWS: Record<Flow, { title: string; about: string; icon: LucideIcon }> =
     },
     row: {
       title: "Row",
-      about: "A Project's Agents side by side",
+      about: "Each Project on its own workspace",
       icon: Columns3Icon,
     },
     solo: {
       title: "Solo",
-      about: "The Agent you are at, the whole screen wide",
+      about: "What has the focus, the whole screen wide",
       icon: RectangleHorizontalIcon,
     },
   }
@@ -53,7 +56,9 @@ export function nextFlow(flow: Flow): Flow {
 /**
  * The Flow, from the sidebar's header (ADR 0079): its icon draws the one
  * in force, and its menu picks one by the Window's `flow.pick`, which
- * writes agents.toml beside `flow.solo`, its key.
+ * writes agents.toml beside `flow.solo`, its key. In the row and solo it
+ * also offers Arrange by Project, as Panes already open stay where they
+ * are (ADR 0102, decision 9).
  */
 export function FlowMenu() {
   const run = useRun()
@@ -102,6 +107,15 @@ export function FlowMenu() {
             })}
           </DropdownMenuRadioGroup>
         </DropdownMenuGroup>
+        {flow !== "free" && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => run("workspaces.arrange")}>
+              <FolderInputIcon />
+              Arrange by Project
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

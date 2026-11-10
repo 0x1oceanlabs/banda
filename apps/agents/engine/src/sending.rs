@@ -42,14 +42,14 @@ pub enum Flow {
     /// to wherever its Pane is. `off` before ADR 0079 (grace).
     #[serde(alias = "off")]
     Free,
-    /// On its Project's workspace, in a row with the Project's other
-    /// Agents, a pick at the left (ADR 0065). `project` before ADR 0079,
-    /// `space` before ADR 0069 (grace).
+    /// Each Project on its own workspace, its Agents in a row, a pick at
+    /// the left (ADR 0065, ADR 0102). `project` before ADR 0079, `space`
+    /// before ADR 0069 (grace).
     #[default]
     #[serde(alias = "project")]
     #[serde(alias = "space")]
     Row,
-    /// As the row, and the Agent the focus is at fills the screen.
+    /// As the row, and what has the focus fills the screen (ADR 0102).
     Solo,
 }
 

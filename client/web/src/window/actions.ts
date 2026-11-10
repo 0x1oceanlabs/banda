@@ -292,12 +292,14 @@ export function focusedIn(workspaces: Workspaces) {
 
 /** What the Threads away from their Project's workspace show, on a free
  * one or another Project's, in the row and solo: their sidebar rows say so
- * (ADR 0102, decision 6). */
+ * (ADR 0102, decision 6). A Project with no workspace yet, as every one
+ * after the Flow free, has none of its Threads away. */
 export function strayedIn(
   workspaces: Workspaces,
   { flow, scratch }: Placing
 ): ReadonlySet<string> {
   if (flow === "free") return new Set()
+  const owned = new Set(workspaces.list.map((workspace) => workspace.project))
   return new Set(
     workspaces.list
       .flatMap((workspace) =>
@@ -306,7 +308,10 @@ export function strayedIn(
           .filter((entry) => entry.project !== workspace.project)
       )
       .filter(
-        (entry) => !scratch(entry.project) && homeOf(entry.pane) === "project"
+        (entry) =>
+          owned.has(entry.project) &&
+          !scratch(entry.project) &&
+          homeOf(entry.pane) === "project"
       )
       .flatMap((entry) => showsOf(entry.pane) ?? [])
   )
@@ -971,7 +976,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
   {
     id: "flow.solo",
     section: "Workspaces",
-    title: "Solo, every Agent the whole screen wide, or back to the row",
+    title: "Solo, what has the focus the whole screen wide, or back to the row",
     keys: [{ code: "KeyM", mod: true, shift: true }],
     run: (shell) => writeFlow(shell, nextFlow(fileNow(AGENTS_FILE).flow)),
   },
