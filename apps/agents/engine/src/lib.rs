@@ -79,8 +79,9 @@ use laters::{LaterAsk, SeeWokeAsk, WakeAsk};
 use live::Live;
 use marks::{ImportMarks, Imported, ReadAsk};
 use model::{
-    AccountUse, Body, Fact, Fit, Image, ImageId, Item, ItemId, Offer, Opener, Settings, ThreadId,
-    ThreadList, ThreadSummary, ThreadView, TurnId, TurnState, VERSION, VisualId,
+    AccountUse, Body, Fact, Fit, Image, ImageId, Item, ItemId, Offer, Opener, Settings, SubagentId,
+    SubagentView, ThreadId, ThreadList, ThreadSummary, ThreadView, TurnId, TurnState, VERSION,
+    VisualId,
 };
 use notes::Notify;
 use rules::Event;
@@ -326,6 +327,11 @@ banda_kernel::methods! {
         /// One Thread of this Project as its Person reads it: its messages and
         /// replies, its turns and what each may do now, and its settings.
         call thread(OneThread) -> ThreadView, Read, tool "read";
+        /// One sub-agent of a Thread, read only, as its Pane and its row
+        /// opened in place show it: its record, its own entries and the
+        /// Questions it asked, and the sub-agents it started (ADR 0103,
+        /// decision 21).
+        call subagent(OneSubagent) -> SubagentView, Read;
         /// What a new Thread on a Harness starts with.
         call defaults(OneHarness) -> Defaults, Read;
         /// How much this Project's Threads use each account, a Harness
@@ -566,6 +572,13 @@ enum Written {
 struct OneThread {
     /// The Thread's ID, as `threads` lists it.
     thread: ThreadId,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
+struct OneSubagent {
+    /// The sub-agent's ID, as its Thread's `subagents` lists it.
+    subagent: SubagentId,
 }
 
 /// A message in a Thread, or the first one of a new Thread on a Harness.
@@ -897,7 +910,9 @@ impl Agents {
                 let items = store::items(sql, thread)?;
                 let mut turns = store::turns(sql, thread)?;
                 let held = store::held(sql, thread)?;
-                rules::can(&mut turns, &store::openers(sql, thread)?, held);
+                // One read: `can` sees the lanes the view gives.
+                let lanes = store::lanes_at_work(sql, thread)?;
+                rules::can(&mut turns, &store::openers(sql, thread)?, held, lanes);
                 let settings = store::settings(sql, thread)?;
                 let unfenced = settings.mode == model::Mode::FullAccess
                     && store::full_access(sql, thread)? == Some(Chosen::Unfenced);
@@ -911,12 +926,38 @@ impl Agents {
                     held,
                     forked_from: store::forked_from(sql, thread)?,
                     unfenced,
+                    subagents: store::subagents(sql, thread)?,
+                    edits: store::edits(sql, thread)?,
                     thread: summary,
                 }))
             })
             .await?;
         let view = found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
         Ok(ThreadView { at, ..view })
+    }
+
+    async fn subagent(
+        &self,
+        call: Call,
+        OneSubagent { subagent }: OneSubagent,
+    ) -> Result<SubagentView, Refusal> {
+        let (at, found) = call
+            .project()
+            .view(move |sql| {
+                let Some((thread, lane)) = store::subagent(sql, subagent)? else {
+                    return Ok(None);
+                };
+                Ok(Some(SubagentView {
+                    at: 0,
+                    thread,
+                    subagent: lane,
+                    items: store::lane_items(sql, subagent)?,
+                    subagents: store::children(sql, subagent)?,
+                }))
+            })
+            .await?;
+        let view = found.ok_or_else(|| Refusal::not_found("There is no such sub-agent."))?;
+        Ok(SubagentView { at, ..view })
     }
 
     async fn changes(
@@ -931,8 +972,9 @@ impl Agents {
                     return Ok(None);
                 }
                 let items = store::items(sql, thread)?;
+                let edits = store::edits(sql, thread)?;
                 let turns = store::turns(sql, thread)?;
-                Ok(Some(changes::changes(&items, &turns, turn)))
+                Ok(Some(changes::changes(&items, &edits, &turns, turn)))
             })
             .await?;
         let (turns, mut files) =
@@ -1678,7 +1720,7 @@ fn agent_item(
         at: tx.now(),
         body,
     };
-    store::insert_item(tx.sql(), thread, &item)?;
+    store::insert_item(tx.sql(), thread, &item, None)?;
     store::touch_thread(tx.sql(), thread, item.at)?;
     Ok((thread, item, turn))
 }
@@ -1809,7 +1851,7 @@ fn send(
             answers,
         },
     };
-    store::insert_item(tx.sql(), thread, &item)?;
+    store::insert_item(tx.sql(), thread, &item, None)?;
     store::carry_images(tx.sql(), &images, item.id)?;
     if let Some(running) = running {
         store::touch_thread(tx.sql(), thread, now)?;
@@ -1881,7 +1923,7 @@ fn fork(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Forked, Er
     let found = turn_of(tx, turn)?;
     let from = found.thread;
     let works = store::running(tx.sql(), from)?.is_some();
-    rules::may_fork(found.state, works)?;
+    rules::may_fork(found.state, works, store::lanes_at_work(tx.sql(), from)?)?;
     let source = store::thread(tx.sql(), from)?
         .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
     let cannot = || Refusal::conflict("Its Agent named no reply of this turn to fork from.");
@@ -1907,7 +1949,8 @@ fn rewind(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<(), Erro
     let found = turn_of(tx, turn)?;
     let thread = found.thread;
     let turns = store::turns(tx.sql(), thread)?;
-    rules::may_rewind(turn, &turns, &store::openers(tx.sql(), thread)?)?;
+    let lanes = store::lanes_at_work(tx.sql(), thread)?;
+    rules::may_rewind(turn, &turns, &store::openers(tx.sql(), thread)?, lanes)?;
     // Its session goes back to the last reply before the message, or
     // starts anew before the first.
     let reply = store::named_reply_before(tx.sql(), thread, found.message)?;

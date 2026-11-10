@@ -1,6 +1,6 @@
 import type { Item, ToolContent, ToolStatus } from "@banda/contract/agents"
 import { expect, test } from "vitest"
-import { changes, total } from "./changes"
+import { changes, merged, total } from "./changes"
 import { agent } from "../../testing"
 
 let next = 0
@@ -53,4 +53,37 @@ test("a file changed back, or by a failed call, is no change", () => {
     edit([diff("/b.md", "x\n", "y\n")], { status: "failed" }),
   ]
   expect(changes(items, "u")).toEqual([])
+})
+
+test("merged keeps each list's order and puts the Thread's own item first on a tie", () => {
+  const at = (when: number, name: string): Item => ({
+    ...edit([diff(`/${name}`, undefined, "x")]),
+    id: name,
+    at: when,
+  })
+  const items = [at(1, "a"), at(3, "b"), at(3, "c"), at(9, "d")]
+  const edits = [at(0, "w"), at(3, "x"), at(5, "y"), at(20, "z")]
+  const ids = (all: Item[]) => all.map((item) => item.id)
+  expect(ids(merged(items, edits))).toEqual([
+    "w",
+    "a",
+    "b",
+    "c",
+    "x",
+    "y",
+    "d",
+    "z",
+  ])
+  expect(merged(items, [])).toBe(items)
+  expect(ids(merged([], edits))).toEqual(["w", "x", "y", "z"])
+  // A list out of order keeps its own order: the merge only interleaves.
+  const late = [at(7, "late"), at(2, "early")]
+  expect(ids(merged(items, late))).toEqual([
+    "a",
+    "b",
+    "c",
+    "late",
+    "early",
+    "d",
+  ])
 })

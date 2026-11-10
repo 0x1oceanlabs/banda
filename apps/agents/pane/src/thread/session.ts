@@ -43,7 +43,7 @@ import { type WhenPresent, whenPresent } from "./presence"
 import { useLooking } from "./looking"
 import {
   asked,
-  declineOnce,
+  declined,
   NO_OFFER,
   DEFAULT_SETTINGS,
   proposedPlan,
@@ -348,7 +348,8 @@ export function useThreadSession({
   const waits = state ? waiting(state) : []
   const last = waits.at(-1)
   // The Question the Agent waits on: one with a form opens on the composer,
-  // and a message sent while any waits says no to it first, as in T3 Code.
+  // and a message sent while the Agent's own waits says no to it first, as
+  // in T3 Code; a sub-agent's stays open (ADR 0103, decision 28).
   const asking = state && asked(state)
   // A plan the Agent proposed waits for Implement, or for a message that
   // refines it.
@@ -387,8 +388,9 @@ export function useThreadSession({
     next?: Settings,
     what = "your message"
   ) => {
-    const no = asking && declineOnce(asking.body)
-    if (no && text && (await answer(asking.id, no)) === undefined) return false
+    const no = state && declined(state)
+    if (no && text && (await answer(no.item, no.choice)) === undefined)
+      return false
     let target = project
     const sent = await sending.act(
       named(what, async () => {

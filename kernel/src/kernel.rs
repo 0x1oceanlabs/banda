@@ -523,8 +523,9 @@ struct UpdateProject {
     sign: Option<Option<SignPick>>,
 }
 
-/// A key given, `null` too, as `Some`; left out, `None`, by `default`.
-fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+/// A key given, `null` too, as `Some`; left out, `None`, by `default`: a
+/// field a call or a fact may clear.
+pub fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     D: serde::Deserializer<'de>,
     T: Deserialize<'de>,

@@ -8,13 +8,16 @@ import {
   knownItem,
   type Body,
   type Can,
+  type Fact,
   type HarnessOption,
   type Item,
   type ListedThread,
   type Offer,
   type OptionValue,
   type Settings,
+  type Subagent,
   type ThreadView,
+  type ToolKind,
   type TurnView,
   type Usage,
 } from "@banda/contract/agents"
@@ -37,6 +40,12 @@ export type ThreadState = {
   held: boolean
   /** The Thread it was forked from, by its ID, if it was. */
   forkedFrom?: string
+  /** Its sub-agents, nested ones with their parent, in the order they
+   * started (ADR 0103, decision 10). */
+  subagents: Subagent[]
+  /** Its sub-agents' calls that edit, delete or move files, the one part
+   * of their work its turns' changes count (ADR 0103, decision 8). */
+  edits: Item[]
 }
 
 /** What a Thread runs with until the engine says (`agents.defaults`), and
@@ -66,6 +75,8 @@ export const EMPTY: ThreadState = {
   settings: DEFAULT_SETTINGS,
   offer: NO_OFFER,
   held: false,
+  subagents: [],
+  edits: [],
 }
 
 /** The Thread `view` holds, but for its entries of a kind this window does
@@ -86,6 +97,9 @@ export function fromView(view: ThreadView): ThreadState {
     usage,
     held,
     forkedFrom,
+    // An engine from before sub-agents says neither.
+    subagents: view.subagents ?? [],
+    edits: (view.edits ?? []).filter(knownItem),
   }
 }
 
@@ -104,12 +118,30 @@ export function choose(
   return { ...settings, options: { ...settings.options, [option]: value } }
 }
 
+/** `list` with its one of `id` changed by `change`. */
+function changeOne<T extends { id: string }>(
+  list: T[],
+  id: string,
+  change: (one: T) => T
+): T[] {
+  return list.map((one) => (one.id === id ? change(one) : one))
+}
+
 function changeItem(
   state: ThreadState,
   id: string,
   change: (item: Item) => Item
 ): Item[] {
-  return state.items.map((item) => (item.id === id ? change(item) : item))
+  return changeOne(state.items, id, change)
+}
+
+/** The kinds of call of a sub-agent's that come with its Thread, as the
+ * engine's `edits` keeps them: a call's kind is set as it starts. */
+const EDITS: ReadonlySet<ToolKind> = new Set(["edit", "delete", "move"])
+
+/** Whether a sub-agent works: it runs, or asks. */
+export function atWork(lane: Subagent): boolean {
+  return lane.state === "running" || lane.state === "asks"
 }
 
 /** A tool call as the Thread shows it. */
@@ -127,10 +159,22 @@ function changeTool(
   state: ThreadState,
   id: string,
   change: (tool: Tool) => Tool
-): Item[] {
-  return changeItem(state, id, (item) =>
+): Pick<ThreadState, "items" | "edits"> {
+  const changed = (item: Item): Item =>
     item.body.kind === "tool" ? { ...item, body: change(item.body) } : item
-  )
+  // A sub-agent's call is changed where it is kept, among its edits.
+  const edits = state.edits.some((item) => item.id === id)
+    ? changeOne(state.edits, id, changed)
+    : state.edits
+  return { items: changeItem(state, id, changed), edits }
+}
+
+/** A call as it starts. */
+function called(
+  payload: Extract<Fact, { kind: "tool.started" }>["payload"]
+): Body {
+  const { title, tool, status, content } = payload
+  return { kind: "tool", title, tool, status, content }
 }
 
 /** The items with `id` after every other, changed by `change`. */
@@ -164,7 +208,9 @@ function changeTurn(
 /** The state after `event`. An event this Pane does not know changes nothing. */
 export function apply(state: ThreadState, event: Event): ThreadState {
   const next = project(state, event)
-  return next.turns === state.turns && next.held === state.held
+  return next.turns === state.turns &&
+    next.held === state.held &&
+    next.subagents === state.subagents
     ? next
     : withCan(next)
 }
@@ -185,6 +231,8 @@ function withCan(state: ThreadState): ThreadState {
   const begun = counted.findLast((turn) => turn.state !== "queued")?.id
   const works = state.turns.some((turn) => turn.state === "running")
   const anyWaits = state.turns.some((turn) => turn.state === "queued")
+  // Fork and rewind wait for any sub-agent at work (ADR 0103).
+  const lanes = state.subagents.some(atWork)
   // The messages a Person wrote, not an Agent.
   const persons = new Set(
     state.items
@@ -195,7 +243,7 @@ function withCan(state: ThreadState): ThreadState {
     const its = counted.filter((t) => t.message === turn.message)
     const byItself = notices.has(turn.message)
     const waits = turn.state === "queued"
-    const fork = !works && !waits && turn.state !== "withdrawn"
+    const fork = !works && !lanes && !waits && turn.state !== "withdrawn"
     const can: Can = {
       stop: waits || turn.state === "running",
       retry:
@@ -246,6 +294,20 @@ function project(state: ThreadState, event: Event): ThreadState {
     at: event.at,
     body,
   })
+  // A sub-agent's entries stay out of the Thread (ADR 0103, decision 8):
+  // its Questions are the Thread's, and of its work only its edits come,
+  // which its turns' changes count. Any entry with a `sub` is cut here, so
+  // a kind added later is too.
+  const sub = (fact.payload as { sub?: string }).sub
+  if (sub !== undefined && fact.kind !== "question.asked") {
+    if (fact.kind !== "tool.started" || !EDITS.has(fact.payload.tool))
+      return next
+    const { item: id, turn } = fact.payload
+    return {
+      ...next,
+      edits: [...state.edits, item(id, called(fact.payload), turn)],
+    }
+  }
   switch (fact.kind) {
     case "message.posted":
       return {
@@ -355,14 +417,17 @@ function project(state: ThreadState, event: Event): ThreadState {
       const gone = state.turns.slice(from)
       const turns = new Set(gone.map((turn) => turn.id))
       const messages = new Set(gone.map((turn) => turn.message))
+      const stays = (item: Item) =>
+        item.turn === undefined || !turns.has(item.turn)
+      // Their sub-agents go too, a nested one with its root's turn.
       return {
         ...next,
         turns: state.turns.slice(0, from),
         items: state.items.filter(
-          (item) =>
-            !messages.has(item.id) &&
-            (item.turn === undefined || !turns.has(item.turn))
+          (item) => !messages.has(item.id) && stays(item)
         ),
+        subagents: state.subagents.filter((lane) => !turns.has(lane.turn)),
+        edits: state.edits.filter(stays),
       }
     }
     case "reply.grew":
@@ -386,15 +451,15 @@ function project(state: ThreadState, event: Event): ThreadState {
       }
     }
     case "tool.started": {
-      const { item: id, turn, title, tool, status, content } = fact.payload
-      const body: Body = { kind: "tool", title, tool, status, content }
+      const { item: id, turn } = fact.payload
+      const body = called(fact.payload)
       return { ...next, items: [...state.items, item(id, body, turn)] }
     }
     case "tool.changed": {
       const { item: id, title, status, content, exit } = fact.payload
       return {
         ...next,
-        items: changeTool(state, id, (tool) => ({
+        ...changeTool(state, id, (tool) => ({
           ...tool,
           title: title ?? tool.title,
           status: status ?? tool.status,
@@ -410,7 +475,7 @@ function project(state: ThreadState, event: Event): ThreadState {
       const { item: id, text, cut } = fact.payload
       return {
         ...next,
-        items: changeTool(state, id, (tool) => ({
+        ...changeTool(state, id, (tool) => ({
           ...tool,
           output: {
             ...tool.output,
@@ -429,6 +494,8 @@ function project(state: ThreadState, event: Event): ThreadState {
         form,
         plan,
         state: "open",
+        // The sub-agent that asks; its Question is the Thread's all the same.
+        ...(sub && { sub }),
       }
       return { ...next, items: [...state.items, item(id, body, turn)] }
     }
@@ -510,6 +577,62 @@ function project(state: ThreadState, event: Event): ThreadState {
         ),
       }
     }
+    case "subagent.started": {
+      const { item: id, subagent } = fact.payload
+      const subagents = [...state.subagents, subagent]
+      // A nested one shows in its parent's lane, which the Thread does not
+      // hold.
+      if (subagent.parent !== undefined) return { ...next, subagents }
+      const anchor = item(
+        id,
+        { kind: "subagent", subagent: subagent.id },
+        subagent.turn
+      )
+      return { ...next, subagents, items: [...state.items, anchor] }
+    }
+    case "subagent.changed": {
+      const { subagent: id, role, ...given } = fact.payload
+      return {
+        ...next,
+        subagents: changeOne(state.subagents, id, (lane) => {
+          const changed: Subagent = { ...lane, ...given }
+          if (role === null) delete changed.role
+          else if (role !== undefined) changed.role = role
+          // At work again, it has not ended.
+          if (given.state !== undefined && atWork(changed)) {
+            delete changed.ended
+            delete changed.why
+          }
+          return changed
+        }),
+      }
+    }
+    case "subagent.ended": {
+      const {
+        subagent: id,
+        state: ended,
+        why,
+        report,
+        ended: at,
+      } = fact.payload
+      return {
+        ...next,
+        // Ended, it can no longer be stopped; the why is this end's.
+        subagents: changeOne(state.subagents, id, (lane) => {
+          const changed: Subagent = {
+            ...lane,
+            state: ended,
+            ended: at,
+            can_stop: false,
+            why,
+            report: report ?? lane.report,
+          }
+          if (why === undefined) delete changed.why
+          if (changed.report === undefined) delete changed.report
+          return changed
+        }),
+      }
+    }
     case "visual.shown": {
       const { item: id, turn, visual, title, height, heights } = fact.payload
       const body = { kind: "visual", visual, title, height, heights } as const
@@ -533,12 +656,26 @@ function project(state: ThreadState, event: Event): ThreadState {
   }
 }
 
-/** The Question the Agent waits on, if any: the first still open. */
+/** The Question the Agent waits on, if any: the first of its own still
+ * open, or else the first a sub-agent asks (ADR 0103, decision 28). */
 export function asked(state: ThreadState): Asked | undefined {
-  return state.items.find(
+  const open = state.items.filter(
     (item): item is Asked =>
       item.body.kind === "question" && item.body.state === "open"
   )
+  return open.find((item) => item.body.sub === undefined) ?? open[0]
+}
+
+/** The answer a message says to the Question docked, when it says one:
+ * no, once, and only to the Agent's own. A sub-agent's Question stays open
+ * as the message goes to the Agent (ADR 0103, decision 28). */
+export function declined(
+  state: ThreadState
+): { item: string; choice: string } | undefined {
+  const asking = asked(state)
+  if (!asking || asking.body.sub !== undefined) return undefined
+  const choice = declineOnce(asking.body)
+  return choice === undefined ? undefined : { item: asking.id, choice }
 }
 
 /** The answer that says no just this once, if the Question offers one. As
@@ -596,8 +733,12 @@ export function isReply(item: Item): item is Said {
 export function planOf(turn: TurnView, items: Item[]): Item | undefined {
   if (!turn.plan) return undefined
   const own = items.filter((item) => item.turn === turn.id)
+  // A sub-agent asks for no plan of its turn's.
   const asked = own.find(
-    (item) => item.body.kind === "question" && item.body.plan !== undefined
+    (item) =>
+      item.body.kind === "question" &&
+      item.body.plan !== undefined &&
+      item.body.sub === undefined
   )
   if (asked || turn.state !== "done") return asked
   return own.findLast(isReply)

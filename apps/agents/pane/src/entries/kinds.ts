@@ -25,6 +25,9 @@ export const ENTRY_KINDS: Record<Body["kind"], Rules> = {
   moved: { stays: true },
   issue: {},
   visual: { stays: true },
+  // A sub-agent's row, where it started: it stays out of its turn's fold,
+  // as a Visual does, since it may outlive it (ADR 0103, decision 15).
+  subagent: { stays: true },
 }
 
 export const isWorkKind = (kind: Body["kind"]): boolean =>

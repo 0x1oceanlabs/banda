@@ -39,6 +39,22 @@ export function fileChange(
   return change
 }
 
+/** The Thread's `items` and its sub-agents' `edits`, each list in its own
+ * order, as one list in the order they came: by `at`, the Thread's own
+ * first when two came at once, as the engine merges them (`changes.rs`). */
+export function merged(items: Item[], edits: Item[]): Item[] {
+  if (edits.length === 0) return items
+  const all: Item[] = []
+  let [own, lane] = [0, 0]
+  while (own < items.length || lane < edits.length) {
+    const takesLane =
+      own === items.length ||
+      (lane < edits.length && edits[lane]!.at < items[own]!.at)
+    all.push(takesLane ? edits[lane++]! : items[own++]!)
+  }
+  return all
+}
+
 /** The files the tool calls of `turn` changed, each from how it was before
  * the turn's first change to after its last, in the order it first changed
  * them. A file changed back to how it was is left out. */

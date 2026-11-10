@@ -54,11 +54,12 @@ pub fn notice(
         at: tx.now(),
         body: Body::Notice { text: text.clone() },
     };
-    store::put(tx.sql(), thread, &item, None)?;
+    store::put(tx.sql(), thread, &item, None, None)?;
     let fact = Fact::NoticePosted {
         item: item.id,
         turn,
         text,
+        sub: None,
     };
     emit(tx, agent, thread, &fact)?;
     Ok(item.id)
@@ -86,7 +87,7 @@ pub fn moved(
             how: how.clone(),
         },
     };
-    store::put(tx.sql(), thread, &item, None)?;
+    store::put(tx.sql(), thread, &item, None, None)?;
     let fact = Fact::ThreadMoved {
         item: item.id,
         turn,
@@ -398,6 +399,7 @@ impl Transcript {
                     item: id,
                     turn: Some(self.turn),
                     text: text.clone(),
+                    sub: None,
                 };
                 self.put(id, Body::Notice { text }, posted, None).await
             }
@@ -413,6 +415,7 @@ impl Transcript {
                         item: id,
                         turn: self.turn,
                         steps: steps.clone(),
+                        sub: None,
                     };
                     self.put(id, Body::Plan { steps }, made, None).await
                 }
@@ -485,6 +488,7 @@ impl Transcript {
             tool,
             status,
             content: content.clone(),
+            sub: None,
         };
         let body = Body::Tool {
             title,
@@ -688,7 +692,7 @@ impl Transcript {
                     at: tx.now(),
                     body,
                 };
-                store::put(tx.sql(), thread, &item, named.as_deref())?;
+                store::put(tx.sql(), thread, &item, named.as_deref(), None)?;
                 if let Body::Tool { content, .. } = &item.body {
                     store::tool_images(tx.sql(), content, id, agent, tx.now())?;
                 }

@@ -48,8 +48,10 @@ export function wordsOf(
 }
 
 /** The kind of tool call Question `asked` asks about: the call of its turn
- * with its title, or else the last that waits. */
+ * with its title, or else the last that waits. A sub-agent's asks about
+ * none of the Agent's calls: its own are in its lane. */
 export function aboutOf(items: Item[], asked: Asked): ToolKind | undefined {
+  if (asked.body.sub !== undefined) return undefined
   const at = items.findIndex((item) => item.id === asked.id)
   const calls = items
     .slice(0, at < 0 ? items.length : at)

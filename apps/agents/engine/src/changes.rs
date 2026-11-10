@@ -1,6 +1,7 @@
 //! What a Thread's turns changed in files, from the diffs their tool calls
 //! carry, not from git (ADR 0034, decision 2): the Diff's Turn scope reads
-//! it, in any Project.
+//! it, in any Project. A sub-agent's edits count in the turn it started
+//! in (ADR 0103, decision 8).
 
 use std::collections::HashMap;
 
@@ -63,15 +64,17 @@ pub struct TurnFile {
 /// How much of a message names its turn.
 const SAID: usize = 80;
 
-/// The turns of `turns` that changed files, and the files of `asked`.
+/// The turns of `turns` that changed files, with its sub-agents' `edits`,
+/// and the files of `asked`.
 pub fn changes(
     items: &[Item],
+    edits: &[Item],
     turns: &[TurnView],
     asked: Option<TurnId>,
 ) -> (Vec<ChangedTurn>, Vec<TurnFile>) {
     // Each turn's items, in one pass; only the asked turn's texts are copied.
     let mut by_turn: HashMap<TurnId, Vec<&Item>> = HashMap::new();
-    for item in items {
+    for item in merged(items, edits) {
         if let Some(turn) = item.turn {
             by_turn.entry(turn).or_default().push(item);
         }
@@ -102,6 +105,20 @@ pub fn changes(
     }
     changed.reverse();
     (changed, files)
+}
+
+/// The Thread's `items` and its sub-agents' `edits`, each list in its own
+/// order, as one list in the order they came: by `at`, the Thread's own
+/// first when two came at once. The window merges them the same way
+/// (`changes.ts`).
+pub fn merged<'a>(items: &'a [Item], edits: &'a [Item]) -> Vec<&'a Item> {
+    let (mut own, mut lanes) = (items.iter().peekable(), edits.iter().peekable());
+    std::iter::from_fn(|| match (own.peek(), lanes.peek()) {
+        (Some(a), Some(b)) if b.at < a.at => lanes.next(),
+        (Some(_), _) => own.next(),
+        (None, _) => lanes.next(),
+    })
+    .collect()
 }
 
 /// The files a turn's tool calls changed, each from before its first
@@ -224,7 +241,7 @@ mod tests {
             edit(first.id, ToolStatus::Done, "back.ts", Some("2"), "1"),
             again.clone(),
         ];
-        let (turns, files) = changes(&items, &[first.clone(), second], Some(first.id));
+        let (turns, files) = changes(&items, &[], &[first.clone(), second], Some(first.id));
         assert_eq!(
             turns,
             vec![ChangedTurn {
@@ -251,6 +268,65 @@ mod tests {
         );
     }
 
+    fn at(at: i64, mut item: Item) -> Item {
+        item.at = at;
+        item
+    }
+
+    #[test]
+    fn merged_keeps_each_lists_order_and_puts_the_threads_own_item_first_on_a_tie() {
+        let turn = turn(ItemId::new());
+        let one = |at_ms, path: &str| at(at_ms, edit(turn.id, ToolStatus::Done, path, None, "x"));
+        let items = [one(1, "a"), one(3, "b"), one(3, "c"), one(9, "d")];
+        let edits = [one(0, "w"), one(3, "x"), one(5, "y"), one(20, "z")];
+        let paths = |all: Vec<&Item>| -> Vec<String> {
+            all.iter()
+                .map(|item| match &item.body {
+                    Body::Tool { title, .. } => title.trim_start_matches("Edit ").to_owned(),
+                    _ => String::new(),
+                })
+                .collect()
+        };
+        assert_eq!(
+            paths(merged(&items, &edits)),
+            ["w", "a", "b", "c", "x", "y", "d", "z"]
+        );
+        assert_eq!(paths(merged(&items, &[])), ["a", "b", "c", "d"]);
+        assert_eq!(paths(merged(&[], &edits)), ["w", "x", "y", "z"]);
+        // A list out of order keeps its own order: the merge only interleaves.
+        let late = [one(7, "late"), one(2, "early")];
+        assert_eq!(
+            paths(merged(&items, &late)),
+            ["a", "b", "c", "late", "early", "d"]
+        );
+    }
+
+    #[test]
+    fn a_sub_agents_edits_count_in_the_turn_it_started_in() {
+        let ask = said("Fix it");
+        let first = turn(ask.id);
+        let own = at(5, edit(first.id, ToolStatus::Done, "a.ts", Some("1"), "2"));
+        let edits = [
+            at(2, edit(first.id, ToolStatus::Done, "a.ts", Some("0"), "1")),
+            at(6, edit(first.id, ToolStatus::Done, "b.ts", None, "b")),
+            at(7, edit(first.id, ToolStatus::Failed, "c.ts", None, "c")),
+        ];
+        let (turns, files) = changes(
+            &[ask, own],
+            &edits,
+            std::slice::from_ref(&first),
+            Some(first.id),
+        );
+        assert_eq!(turns[0].files, 2, "{turns:?}");
+        let a = &files[0];
+        assert_eq!(
+            (a.path.as_str(), a.old.as_deref(), a.new.as_str()),
+            ("a.ts", Some("0"), "2"),
+            "from before the sub-agent's edit to after the Agent's"
+        );
+        assert_eq!(files[1].path, "b.ts");
+    }
+
     #[test]
     fn the_turns_come_the_latest_first_and_no_files_without_one_asked() {
         let (one, two) = (said("one"), said(&"long ".repeat(40)));
@@ -261,7 +337,7 @@ mod tests {
             two.clone(),
             edit(second.id, ToolStatus::Done, "b", None, "b"),
         ];
-        let (turns, files) = changes(&items, &[first, second], None);
+        let (turns, files) = changes(&items, &[], &[first, second], None);
         assert_eq!(
             turns.iter().map(|turn| turn.n).collect::<Vec<_>>(),
             vec![2, 1]

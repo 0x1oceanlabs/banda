@@ -13,6 +13,9 @@ import type { Moved } from "./Moved";
 import type { Offer } from "./Offer";
 import type { PlanStep } from "./PlanStep";
 import type { Settings } from "./Settings";
+import type { Subagent } from "./Subagent";
+import type { SubagentId } from "./SubagentId";
+import type { SubagentState } from "./SubagentState";
 import type { ThreadId } from "./ThreadId";
 import type { ToolContent } from "./ToolContent";
 import type { ToolKind } from "./ToolKind";
@@ -67,7 +70,12 @@ resume?: TurnId, } } | { "kind": "thread.woke", "payload": { thread: ThreadId, b
  * fact may be written late, as the engine starts. Older facts
  * have none, and woke at their own moment.
  */
-at?: number, } } | { "kind": "thread.woke_seen", "payload": { thread: ThreadId, seen: WokeSeen, } } | { "kind": "thread.seen", "payload": { thread: ThreadId, turn: TurnId, } } | { "kind": "thread.unseen", "payload": { thread: ThreadId, } } | { "kind": "thread.archived", "payload": { thread: ThreadId, } } | { "kind": "thread.unarchived", "payload": { thread: ThreadId, } } | { "kind": "marks.moved", "payload": Record<symbol, never> } | { "kind": "thread.rewound", "payload": { thread: ThreadId, turn: TurnId, } } | { "kind": "thread.renamed", "payload": { thread: ThreadId, title: string, was: string, } } | { "kind": "thread.switched", "payload": { thread: ThreadId, harness: string, was: string, } } | { "kind": "thread.configured", "payload": { thread: ThreadId, settings: Settings, supervised?: WhySupervised, } } | { "kind": "thread.offered", "payload": { thread: ThreadId, offer: Offer, } } | { "kind": "reply.grew", "payload": { item: ItemId, turn: TurnId, text: string, } } | { "kind": "thought.grew", "payload": { item: ItemId, turn: TurnId, text: string, } } | { "kind": "tool.started", "payload": { item: ItemId, turn: TurnId, title: string, tool: ToolKind, status: ToolStatus, content: Array<ToolContent>, } } | { "kind": "tool.changed", "payload": { item: ItemId, title?: string, status?: ToolStatus, content?: Array<ToolContent>, 
+at?: number, } } | { "kind": "thread.woke_seen", "payload": { thread: ThreadId, seen: WokeSeen, } } | { "kind": "thread.seen", "payload": { thread: ThreadId, turn: TurnId, } } | { "kind": "thread.unseen", "payload": { thread: ThreadId, } } | { "kind": "thread.archived", "payload": { thread: ThreadId, } } | { "kind": "thread.unarchived", "payload": { thread: ThreadId, } } | { "kind": "marks.moved", "payload": Record<symbol, never> } | { "kind": "thread.rewound", "payload": { thread: ThreadId, turn: TurnId, } } | { "kind": "thread.renamed", "payload": { thread: ThreadId, title: string, was: string, } } | { "kind": "thread.switched", "payload": { thread: ThreadId, harness: string, was: string, } } | { "kind": "thread.configured", "payload": { thread: ThreadId, settings: Settings, supervised?: WhySupervised, } } | { "kind": "thread.offered", "payload": { thread: ThreadId, offer: Offer, } } | { "kind": "reply.grew", "payload": { item: ItemId, turn: TurnId, text: string, 
+/**
+ * The sub-agent whose lane it is of, when it is not the Agent's
+ * own; so for each fact below that names `sub`.
+ */
+sub?: SubagentId, } } | { "kind": "thought.grew", "payload": { item: ItemId, turn: TurnId, text: string, sub?: SubagentId, } } | { "kind": "tool.started", "payload": { item: ItemId, turn: TurnId, title: string, tool: ToolKind, status: ToolStatus, content: Array<ToolContent>, sub?: SubagentId, } } | { "kind": "tool.changed", "payload": { item: ItemId, title?: string, status?: ToolStatus, content?: Array<ToolContent>, 
 /**
  * The command ended so.
  */
@@ -75,4 +83,20 @@ exit?: Exit, } } | { "kind": "tool.output", "payload": { item: ItemId, text: str
 /**
  * Banda keeps no more of its output.
  */
-cut: boolean, } } | { "kind": "plan.made", "payload": { item: ItemId, turn: TurnId, steps: Array<PlanStep>, } } | { "kind": "plan.changed", "payload": { item: ItemId, steps: Array<PlanStep>, } } | { "kind": "thread.used", "payload": { thread: ThreadId, usage: Usage, } } | { "kind": "question.asked", "payload": { item: ItemId, turn: TurnId, title: string, choices: Array<Choice>, form?: Array<Field>, plan?: string, } } | { "kind": "question.answered", "payload": { item: ItemId, choice: string, values?: { [key in string]: FieldValue }, } } | { "kind": "question.closed", "payload": { item: ItemId, } } | { "kind": "thread.moved", "payload": { item: ItemId, turn: TurnId, from: string, to: string, how: Moved, } } | { "kind": "notice.posted", "payload": { item: ItemId, turn?: TurnId, text: string, } } | { "kind": "visual.shown", "payload": { item: ItemId, turn: TurnId, visual: VisualId, title: string, height: number, heights: Array<Fit>, } } | { "kind": "issue.drafted", "payload": { item: ItemId, turn: TurnId, fingerprint: string, title: string, body: string, comment_on?: number, } } | { "kind": "issue.answered", "payload": { item: ItemId, state: IssueState, title?: string, body?: string, url?: string, } };
+cut: boolean, } } | { "kind": "plan.made", "payload": { item: ItemId, turn: TurnId, steps: Array<PlanStep>, sub?: SubagentId, } } | { "kind": "plan.changed", "payload": { item: ItemId, steps: Array<PlanStep>, } } | { "kind": "thread.used", "payload": { thread: ThreadId, usage: Usage, } } | { "kind": "question.asked", "payload": { item: ItemId, turn: TurnId, title: string, choices: Array<Choice>, form?: Array<Field>, plan?: string, sub?: SubagentId, } } | { "kind": "question.answered", "payload": { item: ItemId, choice: string, values?: { [key in string]: FieldValue }, } } | { "kind": "question.closed", "payload": { item: ItemId, } } | { "kind": "thread.moved", "payload": { item: ItemId, turn: TurnId, from: string, to: string, how: Moved, } } | { "kind": "notice.posted", "payload": { item: ItemId, turn?: TurnId, text: string, sub?: SubagentId, } } | { "kind": "subagent.started", "payload": { item: ItemId, subagent: Subagent, } } | { "kind": "subagent.changed", "payload": { subagent: SubagentId, state?: SubagentState, 
+/**
+ * Empty when the Harness cleared it.
+ */
+title?: string, 
+/**
+ * `null` when the Harness cleared it.
+ */
+role?: string | null, model?: string, 
+/**
+ * `false` when the Harness cleared what it lets a client do.
+ */
+can_stop?: boolean, why?: string, prompt?: string, report?: string, } } | { "kind": "subagent.ended", "payload": { subagent: SubagentId, turn: TurnId, state: SubagentState, why?: string, report?: string, 
+/**
+ * When it ended, in milliseconds since the epoch.
+ */
+ended: number, } } | { "kind": "visual.shown", "payload": { item: ItemId, turn: TurnId, visual: VisualId, title: string, height: number, heights: Array<Fit>, } } | { "kind": "issue.drafted", "payload": { item: ItemId, turn: TurnId, fingerprint: string, title: string, body: string, comment_on?: number, } } | { "kind": "issue.answered", "payload": { item: ItemId, state: IssueState, title?: string, body?: string, url?: string, } };

@@ -24,6 +24,7 @@ import type { LaterAsk } from "./LaterAsk";
 import type { Notify } from "./Notify";
 import type { OneHarness } from "./OneHarness";
 import type { OneImage } from "./OneImage";
+import type { OneSubagent } from "./OneSubagent";
 import type { OneThread } from "./OneThread";
 import type { OneTurn } from "./OneTurn";
 import type { OneVisual } from "./OneVisual";
@@ -36,6 +37,7 @@ import type { Send } from "./Send";
 import type { Sent } from "./Sent";
 import type { ShowVisual } from "./ShowVisual";
 import type { Since } from "./Since";
+import type { SubagentView } from "./SubagentView";
 import type { Switch } from "./Switch";
 import type { ThreadList } from "./ThreadList";
 import type { ThreadView } from "./ThreadView";
@@ -59,6 +61,13 @@ threads: CallMethod<Nothing, ThreadList>,
  * replies, its turns and what each may do now, and its settings.
  */
 thread: CallMethod<OneThread, ThreadView>, 
+/**
+ * One sub-agent of a Thread, read only, as its Pane and its row
+ * opened in place show it: its record, its own entries and the
+ * Questions it asked, and the sub-agents it started (ADR 0103,
+ * decision 21).
+ */
+subagent: CallMethod<OneSubagent, SubagentView>, 
 /**
  * What a new Thread on a Harness starts with.
  */

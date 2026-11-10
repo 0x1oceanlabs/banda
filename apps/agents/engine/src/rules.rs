@@ -24,6 +24,17 @@ pub fn ongoing(state: TurnState) -> bool {
     matches!(state, TurnState::Queued | TurnState::Running)
 }
 
+/// Whether a Thread's sub-agents are at work: running or asking (ADR 0103,
+/// Open questions). Fork and rewind wait for any; Stop reaches the direct
+/// ones.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Lanes {
+    /// A lane of the Thread is at work.
+    pub work: bool,
+    /// A direct one is: a lane the Agent started itself.
+    pub direct: bool,
+}
+
 /// Whether a Person may still change a message, take it back or send it
 /// now: only while its turn waits.
 pub fn waits(state: TurnState) -> Result<(), Refusal> {
@@ -87,23 +98,27 @@ impl Ending {
 }
 
 /// Whether a Thread may be forked at the end of a turn: the turn ran and
-/// ended, and no turn of the Thread runs now (ADR 0027).
-pub fn may_fork(state: TurnState, works: bool) -> Result<(), Refusal> {
+/// ended, and no turn of the Thread runs now, nor any of its `lanes` (ADR
+/// 0027; ADR 0103, Open questions).
+pub fn may_fork(state: TurnState, works: bool, lanes: Lanes) -> Result<(), Refusal> {
     let turn = TurnFacts {
         works,
+        lanes: lanes.work,
+        lanes_direct: lanes.direct,
         ..TurnFacts::of(state)
     };
     next(&turn, Event::Fork).map(drop)
 }
 
 /// Whether a Thread may go back to before `turn`'s message, one of its
-/// `turns` (ADR 0027).
+/// `turns`, while its `lanes` are as they are (ADR 0027).
 pub fn may_rewind(
     turn: TurnId,
     turns: &[TurnView],
     openers: &HashMap<TurnId, Opener>,
+    lanes: Lanes,
 ) -> Result<(), Refusal> {
-    let (_, found) = facts(turns, openers, false)
+    let (_, found) = facts(turns, openers, false, lanes)
         .find(|(one, _)| one.id == turn)
         .ok_or_else(|| Refusal::not_found("There is no such turn."))?;
     next(&found, Event::Rewind).map(drop)
@@ -158,13 +173,14 @@ pub fn position(turns: &[TurnView], turn: TurnId) -> Position {
 }
 
 /// What the rules know of each of a Thread's `turns`, in the order they
-/// were made, who opened each in `openers`.
+/// were made, who opened each in `openers`, its `lanes` as they are.
 fn facts<'a>(
     turns: &'a [TurnView],
     openers: &'a HashMap<TurnId, Opener>,
     held: bool,
+    lanes: Lanes,
 ) -> impl Iterator<Item = (&'a TurnView, TurnFacts)> {
-    let works = Works::of(turns, openers, held);
+    let works = Works::of(turns, openers, held, lanes);
     turns.iter().map(move |turn| {
         let opener = opener_of(openers, turn.id);
         (
@@ -175,12 +191,13 @@ fn facts<'a>(
 }
 
 /// What the rules know of `turn`, opened by `opener` and asked to stop if
-/// `stopping`, among its Thread's `turns`, who opened each in `openers`. A
-/// turn not among them yet is new: it waits.
+/// `stopping`, among its Thread's `turns`, who opened each in `openers`,
+/// its `lanes` as they are. A turn not among them yet is new: it waits.
 pub fn known(
     turns: &[TurnView],
     openers: &HashMap<TurnId, Opener>,
     held: bool,
+    lanes: Lanes,
     turn: TurnId,
     opener: Opener,
     stopping: bool,
@@ -189,7 +206,7 @@ pub fn known(
     let state = found.map_or(TurnState::Queued, |one| one.state);
     TurnFacts {
         stopping,
-        ..Works::of(turns, openers, held).facts(state, opener, position(turns, turn))
+        ..Works::of(turns, openers, held, lanes).facts(state, opener, position(turns, turn))
     }
 }
 
@@ -198,24 +215,31 @@ fn opener_of(openers: &HashMap<TurnId, Opener>, turn: TurnId) -> Opener {
 }
 
 /// What the rules know of a Thread, whichever of its turns they look at:
-/// whether its queue is held, whether a turn runs, whose, and whether one
-/// waits.
+/// whether its queue is held, whether a turn runs, whose, whether one
+/// waits, and whether its sub-agents work.
 #[derive(Clone, Copy)]
 struct Works {
     held: bool,
     works: bool,
     own_works: bool,
     waits: bool,
+    lanes: Lanes,
 }
 
 impl Works {
-    fn of(turns: &[TurnView], openers: &HashMap<TurnId, Opener>, held: bool) -> Works {
+    fn of(
+        turns: &[TurnView],
+        openers: &HashMap<TurnId, Opener>,
+        held: bool,
+        lanes: Lanes,
+    ) -> Works {
         let running = turns.iter().find(|turn| turn.state == TurnState::Running);
         Works {
             held,
             works: running.is_some(),
             own_works: running.is_some_and(|turn| opener_of(openers, turn.id).by_itself()),
             waits: turns.iter().any(|turn| turn.state == TurnState::Queued),
+            lanes,
         }
     }
 
@@ -231,15 +255,18 @@ impl Works {
             works: self.works,
             own_works: self.own_works,
             waits: self.waits,
+            lanes: self.lanes.work,
+            lanes_direct: self.lanes.direct,
             ..TurnFacts::of(state)
         }
     }
 }
 
 /// What a Person may do with each of a Thread's turns now (ADR 0014,
-/// decision 2): what [`next`] accepts of a Person.
-pub fn can(turns: &mut [TurnView], openers: &HashMap<TurnId, Opener>, held: bool) {
-    let can: Vec<Can> = facts(turns, openers, held)
+/// decision 2), its `lanes` as they are: what [`next`] accepts of a
+/// Person.
+pub fn can(turns: &mut [TurnView], openers: &HashMap<TurnId, Opener>, held: bool, lanes: Lanes) {
+    let can: Vec<Can> = facts(turns, openers, held, lanes)
         .map(|(_, facts)| {
             let takes = |event| next(&facts, event).is_ok();
             Can {
@@ -288,7 +315,7 @@ mod tests {
             turn(ItemId::new(), TurnState::Running),
         ];
         let own = HashMap::from([(turns[3].id, Opener::ByItself)]);
-        can(&mut turns, &own, false);
+        can(&mut turns, &own, false, Lanes::default());
         let [failed, done, retried, by_itself] = [0, 1, 2, 3].map(|i| turns[i].can);
         assert!(!failed.retry, "a turn began after it");
         assert!(!done.stop && !done.retry);
@@ -300,6 +327,31 @@ mod tests {
             by_itself.stop && !by_itself.steer,
             "the Agent went on by itself"
         );
+    }
+
+    #[test]
+    fn can_takes_fork_and_rewind_while_a_lane_works() {
+        let mut turns = vec![
+            turn(ItemId::new(), TurnState::Done),
+            turn(ItemId::new(), TurnState::Stopped),
+        ];
+        let openers = HashMap::new();
+        can(&mut turns, &openers, false, Lanes::default());
+        assert!(turns.iter().all(|turn| turn.can.fork && turn.can.rewind));
+        let at_work = Lanes {
+            work: true,
+            direct: false,
+        };
+        can(&mut turns, &openers, false, at_work);
+        for turn in &turns {
+            assert!(!turn.can.fork && !turn.can.rewind, "{:?}", turn.state);
+            assert!(!turn.can.stop, "Stop is not this step's");
+        }
+        let id = turns[0].id;
+        assert!(may_rewind(id, &turns, &openers, at_work).is_err());
+        assert!(may_rewind(id, &turns, &openers, Lanes::default()).is_ok());
+        assert!(may_fork(TurnState::Done, false, at_work).is_err());
+        assert!(may_fork(TurnState::Done, false, Lanes::default()).is_ok());
     }
 
     #[test]

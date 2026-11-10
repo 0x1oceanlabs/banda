@@ -5,9 +5,11 @@ use crate::doing::AtWork;
 use crate::full_access::Chosen;
 use crate::model::{
     AccountUse, Archived, Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE,
-    Later, LatestTurn, ListedThread, Offer, Opener, PlanStep, QuestionState, Settings, ThreadId,
-    ThreadSummary, ToolContent, TurnId, TurnState, TurnView, Usage, VisualId,
+    Later, LatestTurn, ListedThread, Offer, Opener, PlanStep, QuestionState, Settings, Subagent,
+    SubagentId, SubagentState, ThreadId, ThreadSummary, ToolContent, TurnId, TurnState, TurnView,
+    Usage, VisualId,
 };
+use crate::rules::Lanes;
 use banda_kernel::{AgentId, Error, Participant, Refusal};
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::Serialize;
@@ -214,6 +216,41 @@ ALTER TABLE agents_threads ADD COLUMN sessions TEXT;
 -- A handoff is pending until its first ordinary prompt succeeds. A failed
 -- attempt, a slash command or a restart must not consume its history.
 ALTER TABLE agents_threads ADD COLUMN arrival TEXT;
+"#,
+    r#"
+-- A Thread's sub-agents, each a lane of it (ADR 0103, decision 8): the
+-- turn it started in, its root's for a nested one; the lane that started
+-- it; its anchor, the entry where it shows; and its own words and state.
+-- `stopping` is who asked it to stop, 'person' or 'agent', until it ends.
+-- `evidence` is the Harness's child session, as JSON (ADR 0002, decision
+-- 7): a Thread keeps one lane for each.
+CREATE TABLE agents_subagents (
+    id TEXT PRIMARY KEY,
+    thread TEXT NOT NULL,
+    turn TEXT NOT NULL,
+    parent TEXT,
+    item TEXT NOT NULL,
+    title TEXT NOT NULL,
+    role TEXT,
+    model TEXT,
+    state TEXT NOT NULL,
+    why TEXT,
+    can_stop INTEGER NOT NULL DEFAULT 0,
+    stopping TEXT,
+    started_at INTEGER NOT NULL,
+    ended_at INTEGER,
+    prompt TEXT,
+    report TEXT,
+    evidence TEXT
+);
+CREATE UNIQUE INDEX agents_subagents_by_evidence ON agents_subagents (thread, evidence)
+    WHERE evidence IS NOT NULL;
+CREATE INDEX agents_subagents_by_thread ON agents_subagents (thread);
+
+-- The lane an entry is of; NULL for the Thread's own. A lane's Question
+-- is the Thread's, NULL here, and names its lane in its body.
+ALTER TABLE agents_items ADD COLUMN sub TEXT;
+CREATE INDEX agents_items_by_sub ON agents_items (sub) WHERE sub IS NOT NULL;
 "#,
 ];
 
@@ -1107,14 +1144,19 @@ pub fn set_arrival(
 }
 
 /// The Harness entry each of the Thread's turns but `turn` ran on, in
-/// order, and the last of its items each one holds.
+/// order, and the last of its Agent's own items each one holds: not a
+/// lane's, nor a Question a lane asked, which may come after the next
+/// turn's message (ADR 0103, decision 8).
 pub fn turns_ran(
     sql: &Connection,
     thread: ThreadId,
     turn: TurnId,
 ) -> Result<Vec<(String, Option<ItemId>)>, Error> {
     let mut statement = sql.prepare(
-        "SELECT t.harness, (SELECT i.id FROM agents_items i WHERE i.turn = t.id ORDER BY i.rowid DESC LIMIT 1)
+        "SELECT t.harness, (SELECT i.id FROM agents_items i
+                            WHERE i.turn = t.id AND i.sub IS NULL
+                              AND json_extract(i.body, '$.sub') IS NULL
+                            ORDER BY i.rowid DESC LIMIT 1)
          FROM agents_turns t
          WHERE t.thread = ?1 AND t.id != ?2 AND t.harness IS NOT NULL
          ORDER BY t.created_at, t.id",
@@ -1182,16 +1224,24 @@ pub fn openers(sql: &Connection, thread: ThreadId) -> Result<HashMap<TurnId, Ope
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
-pub fn insert_item(sql: &Connection, thread: ThreadId, item: &Item) -> Result<(), Error> {
+/// Writes `item` into `thread`: its own, or with `sub`, a lane's.
+pub fn insert_item(
+    sql: &Connection,
+    thread: ThreadId,
+    item: &Item,
+    sub: Option<SubagentId>,
+) -> Result<(), Error> {
     sql.execute(
-        "INSERT INTO agents_items (id, thread, turn, author, at, body) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        "INSERT INTO agents_items (id, thread, turn, author, at, body, sub)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         params![
             item.id,
             thread,
             item.turn,
             json(&item.author)?,
             item.at,
-            json(&item.body)?
+            json(&item.body)?,
+            sub
         ],
     )?;
     Ok(())
@@ -1265,9 +1315,11 @@ pub fn item(sql: &Connection, id: ItemId) -> Result<Option<(ThreadId, Item)>, Er
         .optional()?)
 }
 
-/// Copies the turns of the Thread `from`, to `through` and with it, and
-/// their items, into the new Thread `to`: each with an ID of its own, in
-/// the same order, `to`'s Agent for `from`'s (ADR 0027).
+/// Copies the turns of the Thread `from`, to `through` and with it, their
+/// items and their sub-agents, into the new Thread `to`: each with an ID
+/// of its own, in the same order, `to`'s Agent for `from`'s (ADR 0027;
+/// ADR 0103, Open questions). A fork waits for its sub-agents to end, so
+/// each it copies has ended; none keeps its child session.
 pub fn copy_turns(
     sql: &Connection,
     (from, old): (ThreadId, AgentId),
@@ -1290,31 +1342,104 @@ pub fn copy_turns(
         .collect::<rusqlite::Result<Vec<(TurnId, String, ItemId)>>>()?;
     let new_turns: HashMap<TurnId, TurnId> =
         turns.iter().map(|(id, ..)| (*id, TurnId::new())).collect();
-    // Its items to the last of `through`'s, but for a later turn's, as a
-    // message queued while it ran.
+    // The lanes of those turns, each under an ID of its own.
     let mut listed = sql.prepare(
-        "SELECT id, turn, author FROM agents_items WHERE thread = ?1
-         AND rowid <= (SELECT MAX(rowid) FROM agents_items WHERE thread = ?1 AND turn = ?2)
+        "SELECT id, turn, parent, item FROM agents_subagents WHERE thread = ?1 ORDER BY rowid",
+    )?;
+    let lanes = listed
+        .query_map(params![from], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })?
+        .collect::<rusqlite::Result<Vec<(SubagentId, TurnId, Option<SubagentId>, ItemId)>>>()?;
+    let lanes: Vec<_> = (lanes.into_iter())
+        .filter(|(_, turn, ..)| new_turns.contains_key(turn))
+        .collect();
+    let new_lanes: HashMap<SubagentId, SubagentId> = lanes
+        .iter()
+        .map(|(id, ..)| (*id, SubagentId::new()))
+        .collect();
+    // Its own items to the last of `through`'s, but for a later turn's, as
+    // a message queued while it ran; and its lanes' items and the
+    // Questions they asked, which may come after and end nothing. An
+    // anchor, or a Question a lane asked, names the lane's copy.
+    let mut listed = sql.prepare(
+        "SELECT id, turn, author, sub,
+                CASE WHEN json_extract(body, '$.kind') = 'subagent'
+                       OR json_extract(body, '$.sub') IS NOT NULL THEN body END
+         FROM agents_items WHERE thread = ?1
+         AND (sub IS NOT NULL OR json_extract(body, '$.sub') IS NOT NULL
+              OR rowid <= (SELECT MAX(rowid) FROM agents_items
+                           WHERE thread = ?1 AND turn = ?2 AND sub IS NULL
+                             AND json_extract(body, '$.sub') IS NULL))
          ORDER BY rowid",
     )?;
     let items = listed
         .query_map(params![from, through], |row| {
-            Ok((row.get::<_, ItemId>(0)?, row.get(1)?, row.get(2)?))
+            Ok((
+                row.get::<_, ItemId>(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                maybe_column::<Body>(row, 4)?,
+            ))
         })?
-        .collect::<rusqlite::Result<Vec<(ItemId, Option<TurnId>, String)>>>()?;
+        .collect::<rusqlite::Result<
+            Vec<(
+                ItemId,
+                Option<TurnId>,
+                String,
+                Option<SubagentId>,
+                Option<Body>,
+            )>,
+        >>()?;
     let mut new_items = HashMap::new();
     let mut insert = sql.prepare(
-        "INSERT INTO agents_items (id, thread, turn, author, at, body, harness_message)
-         SELECT ?2, ?3, ?4, ?5, at, body, harness_message FROM agents_items WHERE id = ?1",
+        "INSERT INTO agents_items (id, thread, turn, author, at, body, harness_message, sub)
+         SELECT ?2, ?3, ?4, ?5, at, COALESCE(?6, body), harness_message, ?7
+         FROM agents_items WHERE id = ?1",
     )?;
-    for (id, turn, author) in items {
+    let lane_of = |id: SubagentId| new_lanes.get(&id).copied();
+    for (id, turn, author, sub, body) in items {
         let turn = match turn.map(|turn| new_turns.get(&turn)) {
             Some(None) => continue,
             new => new.flatten(),
         };
+        // A lane's entry, and a Question it asked, go with its copy.
+        let asker = match &body {
+            Some(Body::Question { sub, .. }) => *sub,
+            _ => None,
+        };
+        if sub.or(asker).is_some_and(|lane| lane_of(lane).is_none()) {
+            continue;
+        }
+        let body = body.map(|body| lanes_named(body, lane_of));
         let new = ItemId::new();
         new_items.insert(id, new);
-        insert.execute(params![id, new, to, turn, whose(author)])?;
+        insert.execute(params![
+            id,
+            new,
+            to,
+            turn,
+            whose(author),
+            body.as_ref().map(json).transpose()?,
+            sub.and_then(lane_of)
+        ])?;
+    }
+    let mut insert = sql.prepare(
+        "INSERT INTO agents_subagents (id, thread, turn, parent, item, title, role, model,
+             state, why, can_stop, started_at, ended_at, prompt, report)
+         SELECT ?2, ?3, ?4, ?5, ?6, title, role, model, state, why, can_stop, started_at,
+             ended_at, prompt, report FROM agents_subagents WHERE id = ?1",
+    )?;
+    for (id, turn, parent, item) in lanes {
+        insert.execute(params![
+            id,
+            new_lanes[&id],
+            to,
+            new_turns[&turn],
+            parent.and_then(lane_of),
+            new_items.get(&item).copied().unwrap_or(item)
+        ])?;
     }
     let mut insert = sql.prepare(
         "INSERT INTO agents_turns (id, thread, agent, author, message, state, reason,
@@ -1336,6 +1461,21 @@ pub fn copy_turns(
     Ok(())
 }
 
+/// `body` with the lane it names, its anchor's or the one that asks, as
+/// `lane_of` renames it.
+fn lanes_named(mut body: Body, lane_of: impl Fn(SubagentId) -> Option<SubagentId>) -> Body {
+    match &mut body {
+        Body::Subagent { subagent: lane }
+        | Body::Question {
+            sub: Some(lane), ..
+        } => {
+            *lane = lane_of(*lane).unwrap_or(*lane);
+        }
+        _ => {}
+    }
+    body
+}
+
 /// The ID the Harness gave the last reply of `turn` that it named.
 pub fn last_named_reply(
     sql: &Connection,
@@ -1345,7 +1485,7 @@ pub fn last_named_reply(
     Ok(sql
         .query_row(
             "SELECT harness_message FROM agents_items
-             WHERE thread = ?1 AND turn = ?2 AND harness_message IS NOT NULL
+             WHERE thread = ?1 AND turn = ?2 AND harness_message IS NOT NULL AND sub IS NULL
              ORDER BY rowid DESC LIMIT 1",
             params![thread, turn],
             |row| row.get(0),
@@ -1362,7 +1502,7 @@ pub fn named_reply_before(
     Ok(sql
         .query_row(
             "SELECT harness_message FROM agents_items
-             WHERE thread = ?1 AND harness_message IS NOT NULL
+             WHERE thread = ?1 AND harness_message IS NOT NULL AND sub IS NULL
              AND rowid < (SELECT rowid FROM agents_items WHERE id = ?2)
              ORDER BY rowid DESC LIMIT 1",
             params![thread, message],
@@ -1372,8 +1512,9 @@ pub fn named_reply_before(
 }
 
 /// Takes `turn` and every turn of the Thread after it out, with their
-/// items. The images their messages carried wait from `now` as a draft's
-/// do, so a message put back in the composer keeps them.
+/// items and their sub-agents (ADR 0103, Open questions). The images their
+/// messages carried wait from `now` as a draft's do, so a message put back
+/// in the composer keeps them.
 pub fn rewind(sql: &Connection, thread: ThreadId, turn: TurnId, now: i64) -> Result<(), Error> {
     const LATER: &str = "SELECT id FROM agents_turns WHERE thread = ?1
         AND rowid >= (SELECT rowid FROM agents_turns WHERE id = ?2)";
@@ -1399,6 +1540,12 @@ pub fn rewind(sql: &Connection, thread: ThreadId, turn: TurnId, now: i64) -> Res
     // A seen that named one of them names none (ADR 0096, decision 2).
     sql.execute(
         &format!("UPDATE agents_threads SET seen = NULL WHERE id = ?1 AND seen IN ({LATER})"),
+        params![thread, turn],
+    )?;
+    // Their sub-agents never happened in the session either; a nested one
+    // has its root's turn, and its entries went with the items above.
+    sql.execute(
+        &format!("DELETE FROM agents_subagents WHERE thread = ?1 AND turn IN ({LATER})"),
         params![thread, turn],
     )?;
     sql.execute(
@@ -1434,17 +1581,19 @@ pub fn set_body(sql: &Connection, id: ItemId, body: &Body) -> Result<(), Error> 
     Ok(())
 }
 
-/// Writes an item the Agent sends. A reply or a thought comes in pieces:
-/// a piece of an item that is already written adds its text to it.
-/// A reply keeps `named`, the ID the Harness gave its message.
+/// Writes an item the Agent sends, its own or, with `sub`, a lane's. A
+/// reply or a thought comes in pieces: a piece of an item that is already
+/// written adds its text to it. A reply keeps `named`, the ID the Harness
+/// gave its message.
 pub fn put(
     sql: &Connection,
     thread: ThreadId,
     item: &Item,
     named: Option<&str>,
+    sub: Option<SubagentId>,
 ) -> Result<(), Error> {
     let Some((_, mut stored)) = self::item(sql, item.id)? else {
-        insert_item(sql, thread, item)?;
+        insert_item(sql, thread, item, sub)?;
         sql.execute(
             "UPDATE agents_items SET harness_message = ?2 WHERE id = ?1",
             params![item.id, named],
@@ -1459,9 +1608,42 @@ pub fn put(
     set_body(sql, item.id, &stored.body)
 }
 
-/// A Thread's items, in the order they came.
+/// A Thread's items, in the order they came: its own, with its
+/// sub-agents' Questions, which are the Thread's (ADR 0103, decision 8),
+/// and none of its lanes' work.
 pub fn items(sql: &Connection, thread: ThreadId) -> Result<Vec<Item>, Error> {
-    let mut statement = sql.prepare(&format!("{ITEM} WHERE thread = ?1 ORDER BY rowid"))?;
+    let mut statement = sql.prepare(&format!(
+        "{ITEM} WHERE thread = ?1 AND sub IS NULL ORDER BY rowid"
+    ))?;
+    let rows = statement.query_map(params![thread], read_item)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// A Question of the Thread's that a lane asked, `?1`.
+const ASKED_BY: &str = "sub IS NULL AND json_extract(body, '$.kind') = 'question' AND json_extract(body, '$.sub') = ?1";
+
+/// The Thread of lane `?1`.
+const LANES_THREAD: &str = "SELECT thread FROM agents_subagents WHERE id = ?1";
+
+/// A lane's items, in the order they came: its own, and the Questions it
+/// asked, which are its Thread's.
+pub fn lane_items(sql: &Connection, sub: SubagentId) -> Result<Vec<Item>, Error> {
+    let mut statement = sql.prepare(&format!(
+        "{ITEM} WHERE thread = ({LANES_THREAD}) AND (sub = ?1 OR ({ASKED_BY})) ORDER BY rowid"
+    ))?;
+    let rows = statement.query_map(params![sub], read_item)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// The calls of the Thread's lanes that edit, delete or move files, in the
+/// order they came: what of their work its turns' changes count (ADR
+/// 0103, decision 8). A call's kind is set as it starts, so a window that
+/// follows the Thread's facts keeps the same ones.
+pub fn edits(sql: &Connection, thread: ThreadId) -> Result<Vec<Item>, Error> {
+    let mut statement = sql.prepare(&format!(
+        "{ITEM} WHERE thread = ?1 AND sub IS NOT NULL AND json_extract(body, '$.kind') = 'tool'
+         AND json_extract(body, '$.tool') IN ('edit', 'delete', 'move') ORDER BY rowid"
+    ))?;
     let rows = statement.query_map(params![thread], read_item)?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
@@ -1475,12 +1657,25 @@ fn open_word() -> Result<String, Error> {
     Ok(json(&QuestionState::Open)?.trim_matches('"').to_owned())
 }
 
-/// The Questions of a turn that still wait for an answer.
+/// The Agent's own Questions of a turn that still wait for an answer. A
+/// lane's, which has its launch turn, closes as the lane ends, not with
+/// the turn (ADR 0103, decision 8).
 pub fn open_questions(sql: &Connection, turn: TurnId) -> Result<Vec<Item>, Error> {
     let mut statement = sql.prepare(&format!(
-        "{ITEM} WHERE turn = ?1 AND {OPEN_QUESTION} ORDER BY rowid"
+        "{ITEM} WHERE turn = ?1 AND {OPEN_QUESTION} AND json_extract(body, '$.sub') IS NULL
+         ORDER BY rowid"
     ))?;
     let rows = statement.query_map(params![turn, open_word()?], read_item)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// The Questions lane `sub` asked that still wait for an answer.
+#[cfg_attr(not(test), expect(dead_code, reason = "lanes end from ADR 0103's E1c"))]
+pub fn lane_questions(sql: &Connection, sub: SubagentId) -> Result<Vec<Item>, Error> {
+    let mut statement = sql.prepare(&format!(
+        "{ITEM} WHERE thread = ({LANES_THREAD}) AND {ASKED_BY} AND {OPEN_QUESTION} ORDER BY rowid"
+    ))?;
+    let rows = statement.query_map(params![sub, open_word()?], read_item)?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
@@ -1515,7 +1710,8 @@ pub fn latest_message(sql: &Connection, thread: ThreadId) -> Result<Option<Strin
     let text: Option<Option<String>> = sql
         .query_row(
             "SELECT json_extract(i.body, '$.text') FROM agents_items i
-             WHERE i.thread = ?1 AND EXISTS (SELECT 1 FROM agents_turns t WHERE t.message = i.id)
+             WHERE i.thread = ?1 AND i.sub IS NULL
+             AND EXISTS (SELECT 1 FROM agents_turns t WHERE t.message = i.id)
              ORDER BY i.at DESC, i.rowid DESC LIMIT 1",
             params![thread],
             |row| row.get(0),
@@ -1570,9 +1766,10 @@ pub fn rename(sql: &Connection, thread: ThreadId, title: &str, was: &str) -> Res
     Ok(())
 }
 
-/// A message item of `thread`'s that its Agent, `agent`, did not write:
-/// `?1` is the Thread and `?2` the Agent.
-const SENT_IN: &str = "thread = ?1 AND json_extract(body, '$.kind') = 'message' AND author != ?2";
+/// A message item of `thread`'s that its Agent, `agent`, did not write,
+/// nor any of its lanes: `?1` is the Thread and `?2` the Agent.
+const SENT_IN: &str =
+    "thread = ?1 AND sub IS NULL AND json_extract(body, '$.kind') = 'message' AND author != ?2";
 
 /// The first message sent into the Thread, its text and its images: what
 /// its title was taken from. None once a rewind took every message.
@@ -1622,7 +1819,8 @@ pub fn latest_reply(
     Ok(sql
         .query_row(
             "SELECT json_extract(body, '$.text') FROM agents_items
-             WHERE thread = ?1 AND author = ?2 AND json_extract(body, '$.kind') = 'message'
+             WHERE thread = ?1 AND author = ?2 AND sub IS NULL
+                 AND json_extract(body, '$.kind') = 'message'
              ORDER BY rowid DESC LIMIT 1",
             params![thread, json(&Participant::Agent(agent))?],
             |row| row.get(0),
@@ -1635,7 +1833,7 @@ pub fn latest_plan(sql: &Connection, thread: ThreadId) -> Result<Vec<PlanStep>, 
     let item = sql
         .query_row(
             &format!(
-                "{ITEM} WHERE thread = ?1 AND json_extract(body, '$.kind') = 'plan'
+                "{ITEM} WHERE thread = ?1 AND sub IS NULL AND json_extract(body, '$.kind') = 'plan'
                  ORDER BY rowid DESC LIMIT 1"
             ),
             params![thread],
@@ -1702,13 +1900,204 @@ pub fn last_reply(
     Ok(sql
         .query_row(
             "SELECT json_extract(body, '$.text') FROM agents_items
-             WHERE thread = ?1 AND turn = ?2 AND author = ?3
+             WHERE thread = ?1 AND turn = ?2 AND author = ?3 AND sub IS NULL
                  AND json_extract(body, '$.kind') = 'message'
              ORDER BY rowid DESC LIMIT 1",
             params![thread, turn, json(&Participant::Agent(agent))?],
             |row| row.get(0),
         )
         .optional()?)
+}
+
+/// A lane as its row reads, then its Thread.
+const LANE: &str = "SELECT id, turn, parent, title, role, model, state, why, can_stop,
+    started_at, ended_at, prompt, report, thread FROM agents_subagents";
+
+fn read_lane(row: &Row<'_>) -> rusqlite::Result<Subagent> {
+    Ok(Subagent {
+        id: row.get(0)?,
+        turn: row.get(1)?,
+        parent: row.get(2)?,
+        title: row.get(3)?,
+        role: row.get(4)?,
+        model: row.get(5)?,
+        state: word_of(row, 6)?,
+        why: row.get(7)?,
+        can_stop: row.get(8)?,
+        started: row.get(9)?,
+        ended: row.get(10)?,
+        prompt: row.get(11)?,
+        report: row.get(12)?,
+    })
+}
+
+/// What [`insert_lane`] did.
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "lanes are written from ADR 0103's E1c")
+)]
+#[derive(Debug, PartialEq)]
+pub enum Upserted {
+    /// The lane is new, and kept.
+    New,
+    /// The Thread keeps a lane for that child session already: this one, as
+    /// kept. Nothing was written.
+    Known(Box<Subagent>),
+}
+
+/// Keeps `lane`, a new sub-agent of `thread` that shows at `item`, for the
+/// Harness's child session `evidence`; or, when the Thread keeps a lane
+/// for that session already, as a child announced again, resumed or
+/// replayed goes on in it, answers that one and writes nothing (ADR 0103,
+/// decision 7).
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "lanes are written from ADR 0103's E1c")
+)]
+pub fn insert_lane(
+    sql: &Connection,
+    thread: ThreadId,
+    lane: &Subagent,
+    item: ItemId,
+    evidence: &impl Serialize,
+) -> Result<Upserted, Error> {
+    let evidence = json(evidence)?;
+    let known = sql
+        .query_row(
+            &format!("{LANE} WHERE thread = ?1 AND evidence = ?2"),
+            params![thread, evidence],
+            read_lane,
+        )
+        .optional()?;
+    if let Some(known) = known {
+        return Ok(Upserted::Known(Box::new(known)));
+    }
+    sql.execute(
+        "INSERT INTO agents_subagents (id, thread, turn, parent, item, title, role, model, state,
+             why, can_stop, started_at, ended_at, prompt, report, evidence)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+        params![
+            lane.id,
+            thread,
+            lane.turn,
+            lane.parent,
+            item,
+            lane.title,
+            lane.role,
+            lane.model,
+            word(lane.state),
+            lane.why,
+            lane.can_stop,
+            lane.started,
+            lane.ended,
+            lane.prompt,
+            lane.report,
+            evidence
+        ],
+    )?;
+    Ok(Upserted::New)
+}
+
+/// Keeps what `lane` is now, by its ID; its Thread, turn, parent and
+/// anchor stay. One that no longer works is no longer being stopped.
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "lanes are written from ADR 0103's E1c")
+)]
+pub fn set_lane(sql: &Connection, lane: &Subagent) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_subagents SET title = ?2, role = ?3, model = ?4, state = ?5, why = ?6,
+             can_stop = ?7, ended_at = ?8, prompt = ?9, report = ?10,
+             stopping = CASE WHEN ?11 THEN stopping END
+         WHERE id = ?1",
+        params![
+            lane.id,
+            lane.title,
+            lane.role,
+            lane.model,
+            word(lane.state),
+            lane.why,
+            lane.can_stop,
+            lane.ended,
+            lane.prompt,
+            lane.report,
+            lane.state.works()
+        ],
+    )?;
+    Ok(())
+}
+
+/// One lane and its Thread.
+pub fn subagent(sql: &Connection, id: SubagentId) -> Result<Option<(ThreadId, Subagent)>, Error> {
+    Ok(sql
+        .query_row(&format!("{LANE} WHERE id = ?1"), params![id], |row| {
+            Ok((row.get(13)?, read_lane(row)?))
+        })
+        .optional()?)
+}
+
+/// The Thread's lanes, nested ones too, in the order they started.
+pub fn subagents(sql: &Connection, thread: ThreadId) -> Result<Vec<Subagent>, Error> {
+    let mut statement = sql.prepare(&format!("{LANE} WHERE thread = ?1 ORDER BY rowid"))?;
+    let rows = statement.query_map(params![thread], read_lane)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// The lanes lane `sub` started, in the order they started.
+pub fn children(sql: &Connection, sub: SubagentId) -> Result<Vec<Subagent>, Error> {
+    let mut statement = sql.prepare(&format!(
+        "{LANE} WHERE thread = ({LANES_THREAD}) AND parent = ?1 ORDER BY rowid"
+    ))?;
+    let rows = statement.query_map(params![sub], read_lane)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// The states of a lane at work, as its row keeps them: it runs or asks.
+fn at_work() -> [String; 2] {
+    [SubagentState::Running, SubagentState::Asks].map(word)
+}
+
+/// Whether a lane of the Thread is at work, and a direct one.
+pub fn lanes_at_work(sql: &Connection, thread: ThreadId) -> Result<Lanes, Error> {
+    let [running, asks] = at_work();
+    let (work, direct) = sql.query_row(
+        "SELECT EXISTS (SELECT 1 FROM agents_subagents
+                        WHERE thread = ?1 AND state IN (?2, ?3)),
+                EXISTS (SELECT 1 FROM agents_subagents
+                        WHERE thread = ?1 AND state IN (?2, ?3) AND parent IS NULL)",
+        params![thread, running, asks],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    Ok(Lanes { work, direct })
+}
+
+/// Whether a lane of any of the Project's Threads is at work.
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "lanes hold their host from ADR 0103's E1c")
+)]
+pub fn any_lane_at_work(sql: &Connection) -> Result<bool, Error> {
+    let [running, asks] = at_work();
+    Ok(sql.query_row(
+        "SELECT EXISTS (SELECT 1 FROM agents_subagents WHERE state IN (?1, ?2))",
+        params![running, asks],
+        |row| row.get(0),
+    )?)
+}
+
+/// The Thread's lanes in any of `states`, in the order they started.
+#[cfg_attr(not(test), expect(dead_code, reason = "lanes end from ADR 0103's E1c"))]
+pub fn lanes_in(
+    sql: &Connection,
+    thread: ThreadId,
+    states: &[SubagentState],
+) -> Result<Vec<Subagent>, Error> {
+    let words: Vec<String> = states.iter().copied().map(word).collect();
+    let mut statement = sql.prepare(&format!(
+        "{LANE} WHERE thread = ?1 AND state IN (SELECT value FROM json_each(?2)) ORDER BY rowid"
+    ))?;
+    let rows = statement.query_map(params![thread, json(&words)?], read_lane)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 #[cfg(test)]
@@ -1799,20 +2188,19 @@ mod tests {
         };
         let author = Participant::Agent(agent);
         insert_thread(&sql, &summary, agent, author, &Settings::default()).unwrap();
+        // As an engine of then wrote its items.
         let old = |body: Body| {
-            let item = Item {
-                id: ItemId::new(),
-                turn: None,
-                author,
-                at: 0,
-                body,
-            };
-            insert_item(&sql, summary.id, &item).unwrap();
+            let item = ItemId::new();
+            sql.execute(
+                "INSERT INTO agents_items (id, thread, author, at, body) VALUES (?1, ?2, ?3, 0, ?4)",
+                params![item, summary.id, json(&author).unwrap(), json(&body).unwrap()],
+            )
+            .unwrap();
             let turn = TurnId::new();
             sql.execute(
                 "INSERT INTO agents_turns (id, thread, agent, author, message, state, created_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, 'done', 0)",
-                params![turn, summary.id, agent, json(&author).unwrap(), item.id],
+                params![turn, summary.id, agent, json(&author).unwrap(), item],
             )
             .unwrap();
             turn
@@ -1977,9 +2365,10 @@ mod tests {
                     state,
                     answer: None,
                     values: None,
+                    sub: None,
                 },
             };
-            insert_item(&sql, summary.id, &item).unwrap();
+            insert_item(&sql, summary.id, &item, None).unwrap();
             item.id
         };
         let question = |state| asked(state, None);
@@ -2081,7 +2470,7 @@ mod tests {
                 at: 0,
                 body,
             };
-            put(&sql, summary.id, &item, None).unwrap();
+            put(&sql, summary.id, &item, None, None).unwrap();
             assert!(
                 drop_unsent_images(&sql, 10).unwrap().is_empty(),
                 "the surviving fork still names it"
@@ -2125,7 +2514,7 @@ mod tests {
                 output: None,
             },
         };
-        put(&sql, summary.id, &item, None).unwrap();
+        put(&sql, summary.id, &item, None, None).unwrap();
         tool_images(
             &sql,
             &[ToolContent::Image { image: old.clone() }],
@@ -2143,5 +2532,636 @@ mod tests {
         assert!(drop_unsent_images(&sql, 20).unwrap().is_empty());
         assert_eq!(drop_unsent_images(&sql, 21).unwrap(), vec![old.id]);
         assert!(image_kind(&sql, new.id).unwrap().is_some());
+    }
+
+    /// A Thread of its own Agent, kept in a store of every step, to write
+    /// turns, items and lanes into.
+    struct Kept {
+        sql: Connection,
+        thread: ThreadId,
+        agent: AgentId,
+    }
+
+    fn kept() -> Kept {
+        let kept = Kept {
+            sql: migrated(),
+            thread: ThreadId::new(),
+            agent: AgentId::new(),
+        };
+        kept.thread_of(kept.thread, kept.agent);
+        kept
+    }
+
+    fn reply(text: &str) -> Body {
+        Body::Message {
+            text: text.into(),
+            images: Vec::new(),
+            answers: false,
+        }
+    }
+
+    fn call(tool: crate::model::ToolKind) -> Body {
+        Body::Tool {
+            title: format!("{tool:?}"),
+            tool,
+            status: crate::model::ToolStatus::Done,
+            content: Vec::new(),
+            output: None,
+        }
+    }
+
+    fn question(title: &str, sub: Option<SubagentId>) -> Body {
+        Body::Question {
+            title: title.into(),
+            choices: Vec::new(),
+            form: None,
+            plan: None,
+            state: QuestionState::Open,
+            answer: None,
+            values: None,
+            sub,
+        }
+    }
+
+    impl Kept {
+        fn thread_of(&self, thread: ThreadId, agent: AgentId) {
+            let summary = ThreadSummary {
+                id: thread,
+                harness: "fake".into(),
+                title: "Move the settings".into(),
+                updated_at: 0,
+                was: None,
+            };
+            let author = Participant::Agent(agent);
+            insert_thread(&self.sql, &summary, agent, author, &Settings::default()).unwrap();
+        }
+
+        /// A Person's message and the turn that ran it, done.
+        fn turn(&self, text: &str) -> (TurnId, ItemId) {
+            let message = Item {
+                id: ItemId::new(),
+                turn: None,
+                author: Participant::Person(PersonId::new()),
+                at: 0,
+                body: reply(text),
+            };
+            insert_item(&self.sql, self.thread, &message, None).unwrap();
+            let turn = Turn {
+                id: TurnId::new(),
+                thread: self.thread,
+                agent: self.agent,
+                message: message.id,
+                state: TurnState::Done,
+                opener: Opener::Person,
+                from_thread: None,
+                stopping: false,
+            };
+            let author = message.author;
+            insert_turn(&self.sql, &turn, author, 0, &Settings::default()).unwrap();
+            set_item_turn(&self.sql, message.id, Some(turn.id)).unwrap();
+            (turn.id, message.id)
+        }
+
+        /// What the Agent writes in `turn`: its own, or with `sub`, a lane's.
+        fn put(&self, turn: Option<TurnId>, body: Body, sub: Option<SubagentId>) -> ItemId {
+            self.named(turn, body, None, sub)
+        }
+
+        fn named(
+            &self,
+            turn: Option<TurnId>,
+            body: Body,
+            named: Option<&str>,
+            sub: Option<SubagentId>,
+        ) -> ItemId {
+            let item = Item {
+                id: ItemId::new(),
+                turn,
+                author: Participant::Agent(self.agent),
+                at: 0,
+                body,
+            };
+            put(&self.sql, self.thread, &item, named, sub).unwrap();
+            item.id
+        }
+
+        /// A lane that started in `turn`, under `parent` if given, and its
+        /// anchor where it started: the Thread's, or its parent's lane's.
+        fn lane(&self, turn: TurnId, parent: Option<SubagentId>) -> Subagent {
+            let lane = Subagent {
+                id: SubagentId::new(),
+                turn,
+                parent,
+                title: "Read the settings".into(),
+                role: Some("Explore".into()),
+                model: None,
+                state: SubagentState::Done,
+                why: None,
+                can_stop: false,
+                started: 1,
+                ended: Some(2),
+                prompt: Some("Find where the sidebar reads them".into()),
+                report: Some("In sidebar.ts".into()),
+            };
+            let anchor = Body::Subagent { subagent: lane.id };
+            let item = self.put(Some(turn), anchor, parent);
+            let child = json!({ "session": lane.id.to_string() });
+            let kept = insert_lane(&self.sql, self.thread, &lane, item, &child).unwrap();
+            assert_eq!(kept, Upserted::New);
+            lane
+        }
+
+        fn ids(&self, items: Vec<Item>) -> Vec<ItemId> {
+            items.into_iter().map(|item| item.id).collect()
+        }
+    }
+
+    use banda_kernel::PersonId;
+    use serde_json::json;
+
+    #[test]
+    fn the_lanes_migration_keeps_every_thread() {
+        let sql = Connection::open_in_memory().unwrap();
+        let at = MIGRATIONS
+            .iter()
+            .position(|m| m.contains("CREATE TABLE agents_subagents"))
+            .unwrap();
+        let (before, from) = MIGRATIONS.split_at(at);
+        for migration in before {
+            sql.execute_batch(migration).unwrap();
+        }
+        let agent = AgentId::new();
+        let summary = ThreadSummary {
+            id: ThreadId::new(),
+            harness: "fake".to_owned(),
+            title: "Hello".to_owned(),
+            updated_at: 0,
+            was: None,
+        };
+        let author = Participant::Agent(agent);
+        insert_thread(&sql, &summary, agent, author, &Settings::default()).unwrap();
+        let old = Item {
+            id: ItemId::new(),
+            turn: None,
+            author,
+            at: 3,
+            body: reply("From before sub-agents"),
+        };
+        // As an engine from before wrote it.
+        sql.execute(
+            "INSERT INTO agents_items (id, thread, turn, author, at, body)
+             VALUES (?1, ?2, NULL, ?3, ?4, ?5)",
+            params![
+                old.id,
+                summary.id,
+                json(&author).unwrap(),
+                old.at,
+                json(&old.body).unwrap()
+            ],
+        )
+        .unwrap();
+        for migration in from {
+            sql.execute_batch(migration).unwrap();
+        }
+        assert_eq!(items(&sql, summary.id).unwrap(), [old]);
+        assert!(edits(&sql, summary.id).unwrap().is_empty());
+        assert!(subagents(&sql, summary.id).unwrap().is_empty());
+        let listed = threads(&sql, &AtWork::new()).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].thread, summary);
+        assert!(!lanes_at_work(&sql, summary.id).unwrap().work);
+    }
+
+    #[test]
+    fn a_lanes_question_is_the_threads_entry_and_its_work_the_lanes() {
+        let kept = kept();
+        let (turn, message) = kept.turn("Review it");
+        let lane = kept.lane(turn, None);
+        let own_reply = kept.put(Some(turn), reply("Looking"), None);
+        let work = kept.put(
+            Some(turn),
+            call(crate::model::ToolKind::Execute),
+            Some(lane.id),
+        );
+        let asked = kept.put(Some(turn), question("Run pnpm test?", Some(lane.id)), None);
+        let own = kept.put(Some(turn), question("Edit a.ts?", None), None);
+
+        let anchor = kept.ids(items(&kept.sql, kept.thread).unwrap())[1];
+        assert_eq!(
+            kept.ids(items(&kept.sql, kept.thread).unwrap()),
+            [message, anchor, own_reply, asked, own],
+            "the Thread keeps its sub-agent's Question, not its work"
+        );
+        assert_eq!(
+            kept.ids(open_questions(&kept.sql, turn).unwrap()),
+            [own],
+            "the turn's end closes only the Agent's own"
+        );
+        assert_eq!(
+            kept.ids(lane_questions(&kept.sql, lane.id).unwrap()),
+            [asked]
+        );
+        assert_eq!(
+            kept.ids(lane_items(&kept.sql, lane.id).unwrap()),
+            [work, asked]
+        );
+        let asking: Vec<_> = (asking(&kept.sql, kept.thread).unwrap().into_iter())
+            .map(|a| a.item)
+            .collect();
+        assert_eq!(asking, [asked, own], "the Thread asks for both");
+        assert!(asks(&kept.sql, kept.thread).unwrap());
+    }
+
+    #[test]
+    fn a_lane_is_kept_once_per_child_session() {
+        let kept = kept();
+        let (turn, _) = kept.turn("Review it");
+        let lane = kept.lane(turn, None);
+        let rowid = |id: SubagentId| -> i64 {
+            kept.sql
+                .query_row(
+                    "SELECT rowid FROM agents_subagents WHERE id = ?1",
+                    params![id],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+        let first = rowid(lane.id);
+        let child = json!({ "session": lane.id.to_string() });
+        let again = Subagent {
+            id: SubagentId::new(),
+            title: "Announced again".into(),
+            ..lane.clone()
+        };
+        let kept_again =
+            insert_lane(&kept.sql, kept.thread, &again, ItemId::new(), &child).unwrap();
+        assert_eq!(
+            kept_again,
+            Upserted::Known(Box::new(lane.clone())),
+            "as it was kept"
+        );
+        assert_eq!(rowid(lane.id), first, "in its place");
+        assert_eq!(
+            subagents(&kept.sql, kept.thread).unwrap(),
+            std::slice::from_ref(&lane)
+        );
+
+        // Another Thread keeps its own lane for a session of that name.
+        let (other, agent) = (ThreadId::new(), AgentId::new());
+        kept.thread_of(other, agent);
+        let theirs = insert_lane(&kept.sql, other, &again, ItemId::new(), &child).unwrap();
+        assert_eq!(theirs, Upserted::New);
+        assert_eq!(subagents(&kept.sql, other).unwrap(), [again]);
+    }
+
+    #[test]
+    fn a_lane_changes_in_place_and_says_whether_it_works() {
+        let kept = kept();
+        let (turn, _) = kept.turn("Review it");
+        let done = kept.lane(turn, None);
+        let mut working = kept.lane(turn, None);
+        let nested = kept.lane(turn, Some(working.id));
+        assert!(!lanes_at_work(&kept.sql, kept.thread).unwrap().work);
+        assert!(!any_lane_at_work(&kept.sql).unwrap());
+
+        working.state = SubagentState::Asks;
+        working.ended = None;
+        working.title = String::new();
+        working.can_stop = true;
+        set_lane(&kept.sql, &working).unwrap();
+        assert_eq!(
+            subagent(&kept.sql, working.id).unwrap(),
+            Some((kept.thread, working.clone()))
+        );
+        let lanes = lanes_at_work(&kept.sql, kept.thread).unwrap();
+        assert!(lanes.work && lanes.direct);
+        assert!(any_lane_at_work(&kept.sql).unwrap());
+
+        // Only a nested one at work: fork and rewind wait, Stop does not
+        // reach it.
+        working.state = SubagentState::Stopped;
+        set_lane(&kept.sql, &working).unwrap();
+        let running = Subagent {
+            state: SubagentState::Running,
+            ..nested.clone()
+        };
+        set_lane(&kept.sql, &running).unwrap();
+        let lanes = lanes_at_work(&kept.sql, kept.thread).unwrap();
+        assert!(lanes.work && !lanes.direct);
+        let all = subagents(&kept.sql, kept.thread).unwrap();
+        assert_eq!(
+            all.iter().map(|lane| lane.id).collect::<Vec<_>>(),
+            [done.id, working.id, nested.id],
+            "in the order they started"
+        );
+        let by_state = |states: &[SubagentState]| -> Vec<SubagentId> {
+            (lanes_in(&kept.sql, kept.thread, states)
+                .unwrap()
+                .into_iter())
+            .map(|lane| lane.id)
+            .collect()
+        };
+        assert_eq!(by_state(&[SubagentState::Running]), [nested.id]);
+        assert_eq!(
+            by_state(&[SubagentState::Done, SubagentState::Stopped]),
+            [done.id, working.id]
+        );
+        assert_eq!(children(&kept.sql, working.id).unwrap(), [running]);
+        assert_eq!(subagent(&kept.sql, SubagentId::new()).unwrap(), None);
+    }
+
+    #[test]
+    fn lanes_keep_the_order_they_were_kept_in_not_their_starts_or_ids() {
+        let kept = kept();
+        let (turn, _) = kept.turn("Review it");
+        // Kept last, with an ID made first and a start said as earlier.
+        let late = SubagentId::new();
+        let parent = kept.lane(turn, None);
+        let first = kept.lane(turn, Some(parent.id));
+        let last = Subagent {
+            id: late,
+            started: 0,
+            ..first.clone()
+        };
+        let anchor = kept.put(
+            Some(turn),
+            Body::Subagent { subagent: late },
+            Some(parent.id),
+        );
+        let child = json!({ "session": late.to_string() });
+        let new = insert_lane(&kept.sql, kept.thread, &last, anchor, &child).unwrap();
+        assert_eq!(new, Upserted::New);
+        let ids = (subagents(&kept.sql, kept.thread).unwrap().into_iter())
+            .map(|lane| lane.id)
+            .collect::<Vec<_>>();
+        assert_eq!(ids, [parent.id, first.id, late]);
+        assert_eq!(children(&kept.sql, parent.id).unwrap(), [first, last]);
+    }
+
+    #[test]
+    fn a_lane_no_longer_at_work_is_no_longer_being_stopped() {
+        let kept = kept();
+        let (turn, _) = kept.turn("Review it");
+        let mut lane = kept.lane(turn, None);
+        let stopping = || -> Option<String> {
+            kept.sql
+                .query_row(
+                    "SELECT stopping FROM agents_subagents WHERE id = ?1",
+                    params![lane.id],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+        lane.state = SubagentState::Running;
+        set_lane(&kept.sql, &lane).unwrap();
+        kept.sql
+            .execute(
+                "UPDATE agents_subagents SET stopping = 'person' WHERE id = ?1",
+                params![lane.id],
+            )
+            .unwrap();
+        set_lane(&kept.sql, &lane).unwrap();
+        assert_eq!(stopping().as_deref(), Some("person"), "it still works");
+        lane.state = SubagentState::Stopped;
+        set_lane(&kept.sql, &lane).unwrap();
+        assert_eq!(stopping(), None);
+    }
+
+    #[test]
+    fn lane_rows_stay_out_of_replies_plans_and_handoff_turns() {
+        use crate::model::StepState;
+        let kept = kept();
+        let (turn, _) = kept.turn("Review it");
+        run_on(&kept.sql, turn).unwrap();
+        let lane = kept.lane(turn, None);
+        let steps = |text: &str| Body::Plan {
+            steps: vec![PlanStep {
+                text: text.into(),
+                state: StepState::Pending,
+            }],
+        };
+        let own_plan = kept.put(Some(turn), steps("The Agent's plan"), None);
+        let own = kept.named(Some(turn), reply("The Agent's reply"), Some("own"), None);
+        kept.put(Some(turn), steps("The lane's plan"), Some(lane.id));
+        kept.named(
+            Some(turn),
+            reply("The lane's reply"),
+            Some("lane's"),
+            Some(lane.id),
+        );
+        // What a lane's parent wrote to it, which no Person sent.
+        let brief = Item {
+            id: ItemId::new(),
+            turn: Some(turn),
+            author: Participant::Person(PersonId::new()),
+            at: 0,
+            body: reply("The lane's brief"),
+        };
+        insert_item(&kept.sql, kept.thread, &brief, Some(lane.id)).unwrap();
+        let (next, message) = kept.turn("Go on");
+        // The lane asks late: its Question has the lane's launch turn and
+        // comes after the next turn's message.
+        kept.put(Some(turn), question("Run it?", Some(lane.id)), None);
+
+        let (sql, thread, agent) = (&kept.sql, kept.thread, kept.agent);
+        assert_eq!(
+            last_named_reply(sql, thread, turn).unwrap().as_deref(),
+            Some("own")
+        );
+        assert_eq!(
+            named_reply_before(sql, thread, message).unwrap().as_deref(),
+            Some("own")
+        );
+        let own_words = Some("The Agent's reply".to_owned());
+        assert_eq!(latest_reply(sql, thread, agent).unwrap(), own_words);
+        assert_eq!(last_reply(sql, thread, turn, agent).unwrap(), own_words);
+        let plan = latest_plan(sql, thread).unwrap();
+        assert_eq!(plan[0].text, "The Agent's plan", "not {own_plan}'s lane");
+        assert_eq!(
+            latest_messages(sql, thread, agent, 5).unwrap(),
+            ["Go on", "Review it"]
+        );
+        assert_eq!(
+            turns_ran(sql, thread, next).unwrap(),
+            [("fake".to_owned(), Some(own))],
+            "a handoff reads to the Agent's own last item"
+        );
+    }
+
+    #[test]
+    fn edits_are_a_lanes_edit_delete_and_move_calls() {
+        use crate::model::ToolKind;
+        let kept = kept();
+        let (turn, _) = kept.turn("Fix it");
+        let lane = kept.lane(turn, None);
+        kept.put(Some(turn), call(ToolKind::Edit), None);
+        let mut lanes = Vec::new();
+        for tool in [
+            ToolKind::Read,
+            ToolKind::Edit,
+            ToolKind::Execute,
+            ToolKind::Delete,
+            ToolKind::Move,
+            ToolKind::Search,
+        ] {
+            let id = kept.put(Some(turn), call(tool), Some(lane.id));
+            if matches!(tool, ToolKind::Edit | ToolKind::Delete | ToolKind::Move) {
+                lanes.push(id);
+            }
+        }
+        assert_eq!(kept.ids(edits(&kept.sql, kept.thread).unwrap()), lanes);
+    }
+
+    #[test]
+    fn a_rewind_takes_the_lanes_of_its_turns_with_them() {
+        let kept = kept();
+        let (first, _) = kept.turn("Look");
+        let stays = kept.lane(first, None);
+        let stays_work = kept.put(
+            Some(first),
+            call(crate::model::ToolKind::Read),
+            Some(stays.id),
+        );
+        let (second, _) = kept.turn("Look again");
+        let goes = kept.lane(second, None);
+        let nested = kept.lane(second, Some(goes.id));
+        kept.put(
+            Some(second),
+            call(crate::model::ToolKind::Edit),
+            Some(nested.id),
+        );
+        kept.put(Some(second), question("Run it?", Some(goes.id)), None);
+
+        rewind(&kept.sql, kept.thread, second, 9).unwrap();
+        assert_eq!(
+            subagents(&kept.sql, kept.thread).unwrap(),
+            std::slice::from_ref(&stays)
+        );
+        assert_eq!(
+            kept.ids(lane_items(&kept.sql, stays.id).unwrap()),
+            [stays_work]
+        );
+        assert!(lane_items(&kept.sql, goes.id).unwrap().is_empty());
+        let left: i64 = kept
+            .sql
+            .query_row(
+                "SELECT COUNT(*) FROM agents_items WHERE sub IN (?1, ?2)",
+                params![goes.id, nested.id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(left, 0, "a whole tree leaves with its turn");
+        assert!(edits(&kept.sql, kept.thread).unwrap().is_empty());
+        assert_eq!(items(&kept.sql, kept.thread).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn a_fork_copies_lanes_under_new_ids_and_rewrites_who_asks() {
+        use crate::model::ToolKind;
+        let kept = kept();
+        let (first, _) = kept.turn("Review it");
+        kept.put(Some(first), reply("Starting"), None);
+        let lane = kept.lane(first, None);
+        let edited = kept.put(Some(first), call(ToolKind::Edit), Some(lane.id));
+        let nested = kept.lane(first, Some(lane.id));
+        kept.put(Some(first), call(ToolKind::Read), Some(nested.id));
+        kept.put(Some(first), question("Run it?", Some(lane.id)), None);
+        kept.put(Some(first), reply("Reviewed"), None);
+        // Between turns, after the Agent's last word in the first.
+        kept.put(
+            None,
+            Body::Notice {
+                text: "Later on".into(),
+            },
+            None,
+        );
+        let (second, _) = kept.turn("Go on");
+        kept.put(Some(second), reply("Went on"), None);
+        // The first turn's lane still at it after the second began.
+        kept.put(Some(first), call(ToolKind::Edit), Some(lane.id));
+        kept.put(Some(first), question("And this?", Some(lane.id)), None);
+        kept.sql
+            .execute("UPDATE agents_subagents SET stopping = 'person'", [])
+            .unwrap();
+
+        let (to, agent) = (ThreadId::new(), AgentId::new());
+        kept.thread_of(to, agent);
+        copy_turns(&kept.sql, (kept.thread, kept.agent), first, (to, agent)).unwrap();
+
+        let lanes = subagents(&kept.sql, to).unwrap();
+        assert_eq!(lanes.len(), 2);
+        let (copy, nested_copy) = (&lanes[0], &lanes[1]);
+        let new_turn = turns(&kept.sql, to).unwrap()[0].id;
+        assert!(copy.id != lane.id && nested_copy.id != nested.id);
+        assert_eq!(
+            (copy.turn, copy.parent, nested_copy.turn, nested_copy.parent),
+            (new_turn, None, new_turn, Some(copy.id))
+        );
+        assert_eq!(
+            Subagent {
+                id: lane.id,
+                turn: lane.turn,
+                ..copy.clone()
+            },
+            lane,
+            "the rest as it was"
+        );
+        let unkept: Vec<(Option<String>, Option<String>)> = {
+            let mut rows = kept
+                .sql
+                .prepare("SELECT evidence, stopping FROM agents_subagents WHERE thread = ?1")
+                .unwrap();
+            rows.query_map(params![to], |row| Ok((row.get(0)?, row.get(1)?)))
+                .unwrap()
+                .collect::<rusqlite::Result<_>>()
+                .unwrap()
+        };
+        assert_eq!(unkept, [(None, None), (None, None)]);
+
+        let bodies =
+            |items: Vec<Item>| -> Vec<Body> { items.into_iter().map(|i| i.body).collect() };
+        let thread = items(&kept.sql, to).unwrap();
+        assert_eq!(
+            bodies(thread.clone()),
+            [
+                reply("Review it"),
+                reply("Starting"),
+                Body::Subagent { subagent: copy.id },
+                question("Run it?", Some(copy.id)),
+                reply("Reviewed"),
+                question("And this?", Some(copy.id)),
+            ],
+            "neither the later turn's nor what came between, though the lane went on"
+        );
+        let anchor = |lane: &Subagent| -> ItemId {
+            kept.sql
+                .query_row(
+                    "SELECT item FROM agents_subagents WHERE id = ?1",
+                    params![lane.id],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+        assert_eq!(anchor(copy), thread[2].id);
+        let own = lane_items(&kept.sql, copy.id).unwrap();
+        assert_eq!(
+            bodies(own.clone()),
+            [
+                call(ToolKind::Edit),
+                Body::Subagent {
+                    subagent: nested_copy.id
+                },
+                question("Run it?", Some(copy.id)),
+                call(ToolKind::Edit),
+                question("And this?", Some(copy.id)),
+            ]
+        );
+        assert_eq!(anchor(nested_copy), own[1].id);
+        assert!(own[0].id != edited);
+        assert_eq!(
+            bodies(lane_items(&kept.sql, nested_copy.id).unwrap()),
+            [call(ToolKind::Read)]
+        );
+        assert_eq!(edits(&kept.sql, to).unwrap().len(), 2);
     }
 }

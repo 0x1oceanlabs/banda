@@ -12,6 +12,7 @@ import { MovedEntry } from "./moved"
 import { NoticeEntry } from "./notice"
 import { PlanEntry } from "./plan"
 import { QuestionEntry } from "./question"
+import { SubagentEntry } from "./subagent"
 import { ThoughtEntry } from "./thought"
 import type { EntryProps, EntryView } from "./types"
 import { VisualEntry } from "./visual"
@@ -26,6 +27,7 @@ const VIEWS: { [K in Body["kind"]]: EntryView<K> } = {
   moved: MovedEntry,
   issue: IssueEntry,
   visual: VisualEntry,
+  subagent: SubagentEntry,
 }
 
 /** One entry, drawn by its kind; drawn again only when it or what its

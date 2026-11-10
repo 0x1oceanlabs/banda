@@ -30,6 +30,14 @@ pub struct TurnFacts {
     pub own_works: bool,
     /// A turn of its Thread waits in its queue.
     pub waits: bool,
+    /// A sub-agent of its Thread is at work: it runs or asks (ADR 0103).
+    pub lanes: bool,
+    /// A direct one is, one the Agent started itself.
+    #[expect(
+        dead_code,
+        reason = "the Thread's Stop reaches them from ADR 0103's E2"
+    )]
+    pub lanes_direct: bool,
 }
 
 impl TurnFacts {
@@ -47,6 +55,8 @@ impl TurnFacts {
             works: false,
             own_works: false,
             waits: false,
+            lanes: false,
+            lanes_direct: false,
         }
     }
 }
@@ -220,6 +230,10 @@ pub fn next(turn: &TurnFacts, event: Event) -> Result<Step, Refusal> {
         Event::Fork if turn.works => Err(Refusal::conflict(
             "The Thread can be forked once its turn ends.",
         )),
+        // A fork's session could not reach a sub-agent still at work.
+        Event::Fork if turn.lanes => Err(Refusal::conflict(
+            "The Thread can be forked once its sub-agents end.",
+        )),
         Event::Fork => to(state),
         // A Person's message a turn ran first, that turn ended, and
         // nothing runs or waits in its Thread.
@@ -231,6 +245,9 @@ pub fn next(turn: &TurnFacts, event: Event) -> Result<Step, Refusal> {
         )),
         Event::Rewind if turn.works || turn.waits => Err(Refusal::conflict(
             "The Thread can go back once nothing runs or waits in it.",
+        )),
+        Event::Rewind if turn.lanes => Err(Refusal::conflict(
+            "The Thread can go back once its sub-agents end.",
         )),
         Event::Rewind => to(state),
         // A turn ends once, and the queue waits behind it when its Harness
@@ -402,6 +419,35 @@ mod tests {
         ];
         for (why, turn, event, want) in cases {
             assert_eq!(moved(&turn, event), want, "{why}");
+        }
+    }
+
+    /// ADR 0103, Open questions: neither waits for a turn, both for a
+    /// sub-agent at work, whichever way the turn ended.
+    #[test]
+    fn a_sub_agent_at_work_keeps_its_thread_from_forking_or_going_back() {
+        for state in [Done, Stopped, Failed, Interrupted] {
+            let lanes = TurnFacts {
+                lanes: true,
+                ..TurnFacts::of(state)
+            };
+            let direct = TurnFacts {
+                lanes_direct: true,
+                ..lanes
+            };
+            for (turn, event) in [
+                (lanes, Event::Fork),
+                (lanes, Event::Rewind),
+                (direct, Event::Fork),
+                (direct, Event::Rewind),
+            ] {
+                let what = format!("{state:?} {event:?}");
+                let refused = next(&turn, event).unwrap_err();
+                assert!(refused.message.contains("sub-agents end"), "{what}");
+            }
+            let at_rest = TurnFacts::of(state);
+            assert_eq!(moved(&at_rest, Event::Fork), format!("{state:?}"));
+            assert_eq!(moved(&at_rest, Event::Rewind), format!("{state:?}"));
         }
     }
 

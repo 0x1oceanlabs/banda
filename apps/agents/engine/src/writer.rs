@@ -114,12 +114,14 @@ fn known(sql: &Connection, turn: &store::Turn) -> Result<TurnFacts, Error> {
     let held = store::held(sql, turn.thread)?;
     let turns = store::turns(sql, turn.thread)?;
     let openers = store::openers(sql, turn.thread)?;
+    let lanes = store::lanes_at_work(sql, turn.thread)?;
     // Read anew: the turn a caller holds may be as it was when it began.
     let stopping = store::turn(sql, turn.id)?.is_some_and(|now| now.stopping);
     Ok(rules::known(
         &turns,
         &openers,
         held,
+        lanes,
         turn.id,
         turn.opener,
         stopping,

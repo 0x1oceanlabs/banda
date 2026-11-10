@@ -79,6 +79,7 @@ pub fn ask(
         choices: choices.clone(),
         form: form.clone(),
         plan: plan.clone(),
+        sub: None,
     };
     let body = Body::Question {
         title,
@@ -88,6 +89,7 @@ pub fn ask(
         state: QuestionState::Open,
         answer: None,
         values: None,
+        sub: None,
     };
     Ok(Asked::Open(Box::new((item, body, asked))))
 }
@@ -589,6 +591,7 @@ mod tests {
             state: QuestionState::Open,
             answer: None,
             values: None,
+            sub: None,
         }
     }
 

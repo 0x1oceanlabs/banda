@@ -64,6 +64,11 @@ export type { Woke } from "./generated/agents/Woke"
 export type { WokeSeen } from "./generated/agents/WokeSeen"
 export type { SeeWokeAsk } from "./generated/agents/SeeWokeAsk"
 export type { StepState } from "./generated/agents/StepState"
+export type { OneSubagent } from "./generated/agents/OneSubagent"
+export type { Subagent } from "./generated/agents/Subagent"
+export type { SubagentId } from "./generated/agents/SubagentId"
+export type { SubagentState } from "./generated/agents/SubagentState"
+export type { SubagentView } from "./generated/agents/SubagentView"
 export type { ThreadId } from "./generated/agents/ThreadId"
 export type { ThreadList } from "./generated/agents/ThreadList"
 export type { ThreadSummary } from "./generated/agents/ThreadSummary"
@@ -134,6 +139,9 @@ const KINDS: ReadonlySet<string> = new Set(
     "question.answered": true,
     "question.closed": true,
     "notice.posted": true,
+    "subagent.started": true,
+    "subagent.changed": true,
+    "subagent.ended": true,
     "visual.shown": true,
     "issue.drafted": true,
     "issue.answered": true,
@@ -153,6 +161,7 @@ export const BODY_KINDS: ReadonlySet<Body["kind"]> = new Set(
     moved: true,
     issue: true,
     visual: true,
+    subagent: true,
   } satisfies Record<Body["kind"], true>) as Body["kind"][]
 )
 

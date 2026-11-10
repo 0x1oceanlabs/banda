@@ -276,6 +276,7 @@ mod tests {
             choices: Vec::new(),
             form: None,
             plan: None,
+            sub: None,
         };
         assert_eq!(woken(&timed, &asked, agent, NOW), Some(Wake::Question));
         let failed = ended(TurnState::Failed);
@@ -296,6 +297,7 @@ mod tests {
             item: ItemId::new(),
             turn: TurnId::new(),
             text: "more".into(),
+            sub: None,
         };
         assert_eq!(wake_of(&delta, agent), None, "a reply that grows");
     }

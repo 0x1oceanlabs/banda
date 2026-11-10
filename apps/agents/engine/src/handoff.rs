@@ -121,9 +121,10 @@ impl Line {
     }
 }
 
-/// The lines of `items` that go: messages, tool calls, plans and
-/// Questions with their answers. Thoughts, notices, dividers, pages and
-/// issues do not.
+/// The lines of `items` that go: messages, tool calls, plans and the
+/// Agent's own Questions with their answers. Thoughts, notices, dividers,
+/// pages, issues and sub-agents, with what they asked, do not (ADR 0103,
+/// decision 10).
 fn lines(items: &[Item]) -> Vec<Line> {
     items.iter().filter_map(line).collect()
 }
@@ -168,6 +169,9 @@ fn line(item: &Item) -> Option<Line> {
                 false,
             )
         }
+        // A sub-agent stays out, with what it asked: the Agent's own reply
+        // after it says what it found (ADR 0103, decision 10).
+        Body::Subagent { .. } | Body::Question { sub: Some(_), .. } => return None,
         Body::Question { title, answer, .. } => {
             let answer = answer.as_deref().unwrap_or("not answered");
             (
@@ -313,6 +317,43 @@ mod tests {
         assert!(history.text.len() <= BUDGET * BYTES_PER_TOKEN + 2_000);
         assert!(history.handed.left_out > 0);
         assert!(history.text.contains(&format!("thread {thread}")));
+    }
+
+    #[test]
+    fn a_handoff_leaves_a_sub_agent_and_its_question_out() {
+        let lane = crate::model::SubagentId::new();
+        let question = |sub| Item {
+            body: Body::Question {
+                title: "Run pnpm test?".into(),
+                choices: Vec::new(),
+                form: None,
+                plan: None,
+                state: crate::model::QuestionState::Answered,
+                answer: Some("allow".into()),
+                values: None,
+                sub,
+            },
+            ..message(false, "")
+        };
+        let anchor = Item {
+            body: Body::Subagent { subagent: lane },
+            ..message(false, "")
+        };
+        let items = [
+            message(true, "Review it"),
+            anchor,
+            question(Some(lane)),
+            question(None),
+            message(false, "Reviewed."),
+        ];
+        let history = handoff(ThreadId::new(), "Claude Code", &items).unwrap();
+        assert_eq!(
+            history.text.matches("[Agent asked] Run pnpm test?").count(),
+            1,
+            "only the Agent's own Question goes: {}",
+            history.text
+        );
+        assert_eq!(history.handed.messages, 3, "two messages and one Question");
     }
 
     #[test]

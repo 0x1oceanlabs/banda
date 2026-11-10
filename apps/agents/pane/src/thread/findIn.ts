@@ -24,6 +24,10 @@ function wordsOf({ body }: Item): string {
       return body.steps.map((step) => step.text).join("\n")
     case "moved":
       return ""
+    // Find reads a sub-agent's record, not its anchor (ADR 0103, Open
+    // questions).
+    case "subagent":
+      return ""
   }
 }
 

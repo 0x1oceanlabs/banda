@@ -14,7 +14,12 @@ import type {
 import { duration } from "@banda/ui/lib/words"
 import { outcome, said, type Said as Words } from "../entries/parts/calls"
 import { isWorkKind, staysKind } from "../entries/kinds"
-import { changes, type FileChange, total } from "../entries/parts/changes"
+import {
+  changes,
+  type FileChange,
+  merged,
+  total,
+} from "../entries/parts/changes"
 import {
   isReply,
   planOf,
@@ -161,11 +166,12 @@ function fold(lines: Line[], turns: TurnView[]): Line[] {
 }
 
 /** A turn that no longer runs or waits, and changed files, says which
- * after the last thing it wrote. */
+ * after the last thing it wrote: its own and its sub-agents' (ADR 0103,
+ * decision 8). */
 function changed(lines: Line[], state: ThreadState): Line[] {
   const after = new Map<number, Line>()
   const byTurn = new Map<string | undefined, Item[]>()
-  for (const item of state.items) {
+  for (const item of merged(state.items, state.edits)) {
     const own = byTurn.get(item.turn)
     if (own) own.push(item)
     else byTurn.set(item.turn, [item])
@@ -236,11 +242,14 @@ export function doing(state: ThreadState, turn: TurnView): Doing | undefined {
 }
 
 /** The tool calls that wait for their Person: in each turn with a
- * Question open, its latest call that has not started. */
+ * Question of the Agent's own open, its latest call that has not started.
+ * A sub-agent's Question waits on a call of its own lane. */
 export function awaiting(state: ThreadState): Set<string> {
   const asking = new Set(
     state.items.flatMap((item) =>
-      item.body.kind === "question" && item.body.state === "open"
+      item.body.kind === "question" &&
+      item.body.state === "open" &&
+      item.body.sub === undefined
         ? [item.turn]
         : []
     )
