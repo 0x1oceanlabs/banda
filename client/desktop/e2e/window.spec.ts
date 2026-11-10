@@ -6364,15 +6364,18 @@ test("with no Pane in focus, the window's keys work as the Banda menu fades", as
       ;(style as HTMLStyleElement).disabled = !on
     }, on)
   const fading = page.locator("[role=dialog][data-closed]")
-  // The sidebar's Search opens the menu, and the sidebar goes. Esc closes
-  // it, and the focus, which nothing else takes, is back in it as it fades.
-  const searchAndShut = async () => {
+  // The sidebar's Search opens the menu, and the sidebar goes.
+  const search = async () => {
     await holding(true)
     await sidebar.getByRole("button", { name: /Search/ }).click()
     await expect(
       page.getByRole("dialog", { name: "Banda menu" }).getByRole("combobox")
     ).toBeFocused()
     await expect(sidebar).toBeHidden()
+  }
+  // Esc closes it, and the focus, which nothing else takes, is in it as it
+  // fades.
+  const shut = async () => {
     await page.keyboard.press("Escape")
     await expect(fading).toHaveCount(1)
     await expect
@@ -6389,20 +6392,61 @@ test("with no Pane in focus, the window's keys work as the Banda menu fades", as
     await holding(false)
     await expect(fading).toHaveCount(0)
   }
+  // The page's requestAnimationFrame callbacks held until let go, as a
+  // busy runner's come late after the keys. Only those: the page still
+  // paints, and its CSS animations run. A frame asked for before the hold
+  // runs first: Base UI asks for one frame for all its parts, and would
+  // add a later ask to it. Let go, the held callbacks run in one frame and
+  // the check after sees what they did: a refocus asked for a frame later
+  // still, which Base UI does not do, would pass it.
+  const holdFrames = () =>
+    page.evaluateHandle(async () => {
+      const request = requestAnimationFrame.bind(globalThis)
+      const cancel = cancelAnimationFrame.bind(globalThis)
+      const held = new Map<number, FrameRequestCallback>()
+      let last = 0
+      Object.assign(globalThis, {
+        requestAnimationFrame: (callback: FrameRequestCallback) => {
+          held.set(--last, callback)
+          return last
+        },
+        cancelAnimationFrame: (id: number) => held.delete(id) || cancel(id),
+      })
+      await new Promise((ran) => request(ran))
+      return () =>
+        new Promise<void>((ran) => {
+          Object.assign(globalThis, {
+            requestAnimationFrame: request,
+            cancelAnimationFrame: cancel,
+          })
+          request((now) => {
+            for (const callback of held.values()) callback(now)
+            ran()
+          })
+        })
+    })
 
   // Alt+A shows the sidebar again while the menu fades (#1065).
   await page.keyboard.press("Alt+A")
   await expect(sidebar).toBeVisible()
-  await searchAndShut()
+  await search()
+  await shut()
   await page.keyboard.press("Alt+A")
   await expect(sidebar).toBeVisible()
   await expect(fading).toHaveCount(1)
   await letGo()
 
-  // Alt+O opens the overview the same way.
-  await searchAndShut()
+  // Alt+O opens the overview the same way, and the overview keeps the
+  // focus, though the next frame's callbacks run only after Alt+O: Base
+  // UI would give the fading menu the focus once more a frame after it
+  // closed.
+  await search()
+  const frames = await holdFrames()
+  await shut()
   await page.keyboard.press("Alt+KeyO")
   const overview = page.getByRole("dialog", { name: "Overview" })
+  await expect(overview).toBeFocused()
+  await frames.evaluate((letFramesGo) => letFramesGo())
   await expect(overview).toBeFocused()
   await expect(fading).toHaveCount(1)
   await letGo()
