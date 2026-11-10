@@ -5,7 +5,8 @@
 //! Thread's mark (`markOf` in the agents Pane) and the bar's tally, which
 //! leaves out what is put away, asleep or archived (`tally` in the
 //! sidebar). `apps/agents/counted.json` holds the cases both are to give:
-//! this module's tests read it, and the window's are to read it too.
+//! this module's tests read it, and so does the window's (`counted.test.ts`
+//! in the agents Pane).
 //! Pure: the caller brings the lists and the time.
 
 use crate::model::{ListedThread, ThreadId, TurnState};

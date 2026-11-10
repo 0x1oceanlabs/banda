@@ -7,7 +7,7 @@ import type { ProjectId } from "@banda/contract"
 import type { Count } from "@banda/contract/sidebar"
 import { loudest, type MarkState } from "@banda/ui/components/banda-mark"
 import type { Listed, Lists } from "@banda/ui/pane"
-import { isAway, type Stand, standOf } from "@banda/ui/status"
+import { isAway, type Stand, standOf, takes } from "@banda/ui/status"
 import { byOrder } from "./order"
 
 /** A Thread counted, with the Project it is in and where it stands. */
@@ -20,20 +20,10 @@ export type Tally = {
   things: readonly Counted[]
 }
 
-/** Which Threads each count takes, by where they stand (`status.ts`):
- * the Person's turn, whole or by what asks or failed and what is done,
- * or what works. */
-const TAKES: Record<Count, (stand: Stand, listed: Listed) => boolean> = {
-  asking: (stand, { mark }) =>
-    stand === "turn" && (mark === "asking" || mark === "failed"),
-  done: (stand, { mark }) => stand === "turn" && mark === "done",
-  waiting: (stand) => stand === "turn",
-  working: (stand) => stand === "working",
-}
-
 /**
- * The counts in `counts`' order, each of what is not put away at `now`; a
- * count of none is left out.
+ * The counts in `counts`' order, each of what is not put away at `now`, as
+ * `takes` in `status.ts` says it takes a Thread; a count of none is left
+ * out.
  */
 export function tally(
   lists: Lists,
@@ -50,7 +40,7 @@ export function tally(
   )
   return counts.flatMap((count) => {
     const things = all.filter(({ stand, listed }) =>
-      TAKES[count](stand, listed)
+      takes(count, stand, listed.mark)
     )
     if (things.length === 0) return []
     return [{ count, mark: loudest(things.map((t) => t.listed.mark)), things }]

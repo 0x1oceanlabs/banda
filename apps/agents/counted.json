@@ -1,5 +1,5 @@
 {
-  "about": "What each Thread counts as in the bar at `now` (ADR 0035), null when it is not counted: the window's rule (markOf, then the bar's tally, which leaves out what is asleep or archived), which the engine takes as it is (apps/agents/engine/src/counts.rs). The engine's tests read these cases; the window's are to read them too.",
+  "about": "What each Thread counts as in the bar at `now` (ADR 0035), null when it is not counted: the window's rule (markOf, then the bar's tally, which leaves out what is asleep or archived), which the engine takes as it is (apps/agents/engine/src/counts.rs). The engine's tests read these cases, and the window's too (apps/agents/pane/src/list/counted.test.ts).",
   "now": 1000,
   "cases": [
     {
