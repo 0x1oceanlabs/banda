@@ -22,6 +22,7 @@ import { writeFileSync } from "node:fs"
 import { expect, test, type Page } from "@playwright/test"
 import { install, read, reset, resetTexts } from "./motion-probe"
 import {
+  FREE,
   newTerminal,
   pressInPage,
   startWindow,
@@ -233,7 +234,7 @@ test("a terminal and a browser's page take each size their Tile gives them, and 
   })
   await new Promise<void>((done) => site!.listen(0, "127.0.0.1", done))
   const address = `http://127.0.0.1:${(site.address() as AddressInfo).port}/`
-  window = await startWindow()
+  window = await startWindow({ files: FREE })
   const { app, page, dir } = window
   const screen = await newTerminal(page)
   await page.keyboard.press("Alt+KeyN")

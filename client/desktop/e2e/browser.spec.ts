@@ -12,6 +12,7 @@ import {
   test,
 } from "@playwright/test"
 import {
+  FREE,
   agentAnswers,
   agentCalls,
   agentSays,
@@ -86,7 +87,7 @@ test("a Person browses in a Pane that keeps its page wherever it moves", async (
     "/": '<title>Alpha</title><a href="/beta">Beta</a>',
     "/beta": "<title>Beta</title><p>The second page</p>",
   })
-  window = await startWindow()
+  window = await startWindow({ files: FREE })
   const { app, page } = window
   const { thread: draft } = await firstThread(page)
   await expect(draft).toBeVisible()
@@ -234,7 +235,7 @@ test("a gap dragged over a browser's page sizes the column: the page lets the po
 
 test("with Alt held in a browser's page, the mouse moves its Pane from the page", async () => {
   const address = await serve({ "/": "<title>Alpha</title><p>A page</p>" })
-  window = await startWindow({ look: "[columns]\nmin = 10\n" })
+  window = await startWindow({ files: FREE, look: "[columns]\nmin = 10\n" })
   const { app, page } = window
   const { thread: draft } = await firstThread(page)
   await expect(draft).toBeVisible()
@@ -630,7 +631,7 @@ test("the Person lends a tab of theirs to a Thread, which drives it until the le
       "<title>Signed in</title><script>document.cookie = 'who=person; path=/'</script>" +
       "<button onclick=\"document.querySelector('output').value = document.cookie\">Go</button><output></output>",
   })
-  window = await startWindow()
+  window = await startWindow({ files: FREE })
   const { app, page } = window
   const { thread, composer } = await firstThread(page)
   await composer.fill("hello")
@@ -1038,7 +1039,7 @@ test("an Agent's tab opens beside its Thread, in the browser there, and the Pers
     "/second": "<title>Second</title>",
     "/mine": "<title>Mine</title>",
   })
-  window = await startWindow()
+  window = await startWindow({ files: FREE })
   const { page } = window
   const { thread, composer } = await firstThread(page)
   await composer.fill("hello")

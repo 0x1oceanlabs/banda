@@ -13,6 +13,7 @@
 import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import {
+  FREE,
   countNotes,
   firstThread,
   fromLeft,
@@ -575,7 +576,7 @@ test("a Thread at work put off until it's done comes back as its turn ends, with
 })
 
 test("ten tiling keys pressed faster than the Window draws land in order, each on what the one before did", async () => {
-  window = await startWindow()
+  window = await startWindow({ files: FREE })
   const { page } = window
   // The keys go to the Window once the New Thread has the focus.
   const { composer: box } = await firstThread(page)

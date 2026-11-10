@@ -24,6 +24,7 @@ import { expect, type Page, test } from "@playwright/test"
 import { install, read, reset, type Reading } from "./motion-probe"
 import { keysOf } from "./motion-report"
 import {
+  FREE,
   busy,
   firstThread,
   layoutOf,
@@ -332,7 +333,7 @@ for (const latency of [0, 150]) {
     test("each tiling key is drawn, and what is drawn is the engine's", async () => {
       test.setTimeout(180_000)
       const address = await pageSite()
-      window = await startWindow({ latency })
+      window = await startWindow({ files: FREE, latency })
       const { page } = window
       await strip(page, address)
       await page.evaluate(install)
@@ -434,7 +435,7 @@ for (const latency of [0, 150]) {
     })
 
     test("ten tiling keys pressed faster than the Window draws land in order, as the engine has them", async () => {
-      window = await startWindow({ latency })
+      window = await startWindow({ files: FREE, latency })
       const { page } = window
       const { composer: box } = await firstThread(page)
       await expect(box).toBeFocused()
