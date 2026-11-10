@@ -85,7 +85,8 @@ Before H5, "away" was not honest:
 For Roma, over the mock in Roma's
 `~/Banda/artifacts/two-machines/h5e-mock.html`.
 
-- **Q1. Which acts may wait for "Send when back"?**
+- **Q1. Which acts may wait for "Send when back"?** _Decided by Roma on
+  2026-11-10: as recommended._
   - _Recommended:_ only a message to a Thread already started. Every
     other act fails at once (decision 4): Stop, answers, Implement, Try
     again, Fork, Edit of a sent message, steer, withdraw, rewind, model
