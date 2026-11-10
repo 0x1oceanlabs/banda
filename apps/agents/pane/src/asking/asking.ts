@@ -41,6 +41,11 @@ export function wordsOf(
   name: string
 ): { words: string; detail?: string } {
   const title = plain(question.title)
+  if (question.command !== undefined)
+    return {
+      words: `Allow ${name} to run a command?`,
+      detail: question.command,
+    }
   const does = about && ALLOWS[about]
   if (!does || question.form || question.plan !== undefined)
     return { words: title }
@@ -115,7 +120,7 @@ export function foldedOf(question: QuestionBody): Folded {
       kind: "chose",
       text: `You chose: ${chosen ? plain(chosen.name) : answer}`,
     }
-  const what = named(question.title)
+  const what = question.command ?? named(question.title)
   if (!chosen.allows) return { kind: "declined", text: `Declined: ${what}` }
   return {
     kind: "allowed",

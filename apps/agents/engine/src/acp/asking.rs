@@ -189,6 +189,19 @@ pub(super) fn offered(option: &acp::PermissionOption) -> Choice {
     }
 }
 
+/// The command in a permission request, kept verbatim even when its title
+/// only says "Run command". Older Harnesses may omit the tool kind.
+pub(super) fn command(fields: &acp::ToolCallUpdateFields) -> Option<String> {
+    if fields
+        .kind
+        .is_some_and(|kind| kind != acp::ToolKind::Execute)
+    {
+        return None;
+    }
+    let command = fields.raw_input.as_ref()?.get("command")?.as_str()?;
+    (!command.trim().is_empty()).then(|| command.to_owned())
+}
+
 /// The plan a Harness asks to carry out: Claude Code leaves plan mode by
 /// asking, the plan in what it would call the tool with.
 pub(super) fn proposed(fields: &acp::ToolCallUpdateFields) -> Option<String> {
@@ -202,6 +215,33 @@ pub(super) fn proposed(fields: &acp::ToolCallUpdateFields) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_command_permission_keeps_the_input_verbatim() {
+        let input = "  printf '%s\\n' `pwd`\necho done\n";
+        let fields = acp::ToolCallUpdateFields::new()
+            .title("Run command")
+            .raw_input(serde_json::json!({ "command": input }));
+        assert_eq!(command(&fields).as_deref(), Some(input));
+        assert_eq!(
+            command(&fields.clone().kind(acp::ToolKind::Execute)).as_deref(),
+            Some(input)
+        );
+        assert_eq!(command(&fields.kind(acp::ToolKind::Edit)), None);
+        for input in [
+            serde_json::json!(" "),
+            serde_json::json!(["echo", "done"]),
+            serde_json::Value::Null,
+        ] {
+            assert_eq!(
+                command(
+                    &acp::ToolCallUpdateFields::new()
+                        .raw_input(serde_json::json!({ "command": input }))
+                ),
+                None
+            );
+        }
+    }
 
     #[test]
     fn claude_asking_to_leave_plan_mode_brings_its_plan() {

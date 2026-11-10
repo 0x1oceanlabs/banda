@@ -324,6 +324,7 @@ mod tests {
         let lane = crate::model::SubagentId::new();
         let question = |sub| Item {
             body: Body::Question {
+                command: None,
                 title: "Run pnpm test?".into(),
                 choices: Vec::new(),
                 form: None,

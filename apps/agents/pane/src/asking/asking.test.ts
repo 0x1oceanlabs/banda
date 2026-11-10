@@ -264,3 +264,16 @@ test("other keys answer nothing from the Pane", () => {
   expect(keyAnswer(press({ key: "1" }))).toBeUndefined()
   expect(keyAnswer(press({ key: "a", on: "composer" }))).toBeUndefined()
 })
+
+// Codex can ask without a preceding pending call, and shell backticks are data.
+test("a command Question keeps its exact command without a matching tool", () => {
+  const command = "printf '%s\\n' `pwd`\n  echo done"
+  const asked = question({ title: "Run command", command })
+  expect(wordsOf(asked, undefined, "Codex")).toEqual({
+    words: "Allow Codex to run a command?",
+    detail: command,
+  })
+  expect(foldedOf({ ...asked, state: "answered", answer: "allow" }).text).toBe(
+    `Allowed: ${command}`
+  )
+})

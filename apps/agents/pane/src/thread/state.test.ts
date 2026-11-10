@@ -131,9 +131,11 @@ test("a Question opens, then is answered or closed", () => {
       item: "q",
       turn: "u",
       title: "Run it?",
+      command: "printf '%s\\n' `pwd`",
       choices: [{ id: "allow", name: "Allow", allows: true }],
     })
   )
+  expect(asked.items[1].body).toMatchObject({ command: "printf '%s\\n' `pwd`" })
   expect(working(asked)?.id).toBe("u")
   const answered = apply(
     asked,
@@ -144,6 +146,7 @@ test("a Question opens, then is answered or closed", () => {
     )
   )
   expect(answered.items[1].body).toMatchObject({
+    command: "printf '%s\\n' `pwd`",
     state: "answered",
     answer: "allow",
   })

@@ -628,6 +628,10 @@ pub enum Body {
     },
     Question {
         title: String,
+        /// The exact command the Harness asks to run, independent of its title.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        command: Option<String>,
         choices: Vec<Choice>,
         /// A form to fill in, when the Harness asks for more than a choice.
         /// Its choices then submit it or skip it.
@@ -1497,6 +1501,9 @@ pub enum Fact {
         item: ItemId,
         turn: TurnId,
         title: String,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        command: Option<String>,
         choices: Vec<Choice>,
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]

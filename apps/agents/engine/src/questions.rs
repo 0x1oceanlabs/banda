@@ -68,6 +68,7 @@ pub fn ask(
     form: Option<Vec<Field>>,
     plan: Option<String>,
     sub: Option<SubagentId>,
+    command: Option<String>,
 ) -> Result<Asked, String> {
     if form.is_none()
         && by_mode.is_some_and(|mode| allowed(mode, tool))
@@ -84,6 +85,7 @@ pub fn ask(
         item,
         turn,
         title: title.clone(),
+        command: command.clone(),
         choices: choices.clone(),
         form: form.clone(),
         plan: plan.clone(),
@@ -91,6 +93,7 @@ pub fn ask(
     };
     let body = Body::Question {
         title,
+        command,
         choices,
         form,
         plan,
@@ -450,6 +453,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         ) {
             Ok(Asked::Open(opened)) => opened.1,
             _ => unreachable!("a Person answers without a mode"),
@@ -495,6 +499,7 @@ mod tests {
             form,
             None,
             None,
+            None,
         ) {
             Ok(Asked::ByMode(id)) => Some(id),
             _ => None,
@@ -521,6 +526,7 @@ mod tests {
                 ToolKind::Read,
                 None,
                 Vec::new(),
+                None,
                 None,
                 None,
                 None
@@ -566,6 +572,7 @@ mod tests {
             input,
         };
         Body::Question {
+            command: None,
             title: "Which colour?".into(),
             choices: vec![
                 Choice {

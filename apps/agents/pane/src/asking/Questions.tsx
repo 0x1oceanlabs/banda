@@ -60,7 +60,7 @@ export type AnswerKeys = (answer: "decline" | "main") => boolean
 export function Question({ question }: { question: QuestionBody }) {
   const line =
     question.state === "open" ? (
-      <WaitingLine title={plain(question.title)} />
+      <WaitingLine title={question.command ?? plain(question.title)} />
     ) : (
       <FoldedLine folded={foldedOf(question)} />
     )

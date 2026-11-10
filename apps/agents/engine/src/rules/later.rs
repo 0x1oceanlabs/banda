@@ -271,6 +271,7 @@ mod tests {
         let agent = Participant::Agent(AgentId::new());
         let timed = until(Some(NOW + 60));
         let asked = Fact::QuestionAsked {
+            command: None,
             item: ItemId::new(),
             turn: TurnId::new(),
             title: "Run it?".into(),

@@ -4492,6 +4492,22 @@ async fn codex_asks_before_it_runs_a_command_and_shows_what_its_commands_print()
         "message: notes.txt now contains `apples` and `pears`, each on its own line."
     );
     assert_eq!(view.turns[0].state, TurnState::Done);
+    let command = view.items.iter().find_map(|item| match &item.body {
+        Body::Question { command, .. } => command.as_deref(),
+        _ => None,
+    });
+    let recording = std::fs::read_to_string(recorded_file("codex-edit")).unwrap();
+    let expected = recording
+        .lines()
+        .find_map(|line| {
+            let frame: Value = serde_json::from_str(line).unwrap();
+            frame
+                .pointer("/frame/params/toolCall/rawInput/command")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        })
+        .unwrap();
+    assert_eq!(command, Some(expected.as_str()));
     let choices = view.items.iter().find_map(|item| match &item.body {
         Body::Question { choices, .. } => Some(choices),
         _ => None,

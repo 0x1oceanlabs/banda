@@ -496,10 +496,19 @@ function project(state: ThreadState, event: Event): ThreadState {
       }
     }
     case "question.asked": {
-      const { item: id, turn, title, choices, form, plan } = fact.payload
+      const {
+        item: id,
+        turn,
+        title,
+        command,
+        choices,
+        form,
+        plan,
+      } = fact.payload
       const body: Body = {
         kind: "question",
         title,
+        ...(command !== undefined && { command }),
         choices,
         form,
         plan,

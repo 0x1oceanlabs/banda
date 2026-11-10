@@ -2841,6 +2841,7 @@ mod tests {
                 author,
                 at: 0,
                 body: Body::Question {
+                    command: None,
                     title: "Which?".to_owned(),
                     choices: vec![allow.clone()],
                     form: form.clone(),
@@ -3185,6 +3186,7 @@ mod tests {
 
     fn question(title: &str, sub: Option<SubagentId>) -> Body {
         Body::Question {
+            command: None,
             title: title.into(),
             choices: Vec::new(),
             form: None,
