@@ -81,6 +81,10 @@ desktop, web and the PWA now.
      browser's over Web APIs and a Service Worker.
    - Only `boot/desktop.ts` and Electron main touch `window.banda` or
      Electron. A ratchet counts the other reads down to none.
+   _Amended 2026-11-10 by
+   [ADR 0106](0106-another-machine-s-panes-run-on-its-engine-and-this-device-only-draws-them.md),
+   decision 6: the port carries `save_file` too, which ADR 0082 decision
+   12's list gains for "Save a copy to this Mac"._
 
 3. **The desktop's device session stays in Electron main.** Main holds it
    today (`client/desktop/src/road.ts:1-6`). There is one device per
@@ -166,6 +170,13 @@ desktop, web and the PWA now.
    files and the theme folders come from the window's own machine's copy,
    and the device works the theme out (ADR 0100), so the vision's E5
    narrows to the web page's look._
+   _Amended 2026-11-10 by
+   [ADR 0106](0106-another-machine-s-panes-run-on-its-engine-and-this-device-only-draws-them.md),
+   decisions 6 and 7: "client/desktop reads no Project path" becomes a
+   test with stage 2's step 4b, once main's byte and page hosts relay to
+   the Project's host, with the agents module's `paths` its one exception
+   until step 3c; and a machine's own files come through its engine
+   (`keys.settings_read`) with step 5b._
 
 10. **The catalogue's code stays where the vision put it,** `sdk/kit` as
     `@banda/kit` (L3). The Tree runtime goes in the core; the web renderer

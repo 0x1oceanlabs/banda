@@ -134,6 +134,13 @@ rest are our defaults, and they stay his to change.
      taken off). It opens a terminal Pane beside the Thread, in the
      Thread's folder, and runs the line, as T3 Code does. The Person
      pressed Run; an Agent cannot press it.
+   _Amended 2026-11-10 by
+   [ADR 0106](0106-another-machine-s-panes-run-on-its-engine-and-this-device-only-draws-them.md),
+   decisions 3 and 4: Run runs on the Thread's machine. In an arc Thread
+   it opens arc's terminal beside the Thread, in the Thread's folder, and
+   runs the line, as it does here. While that machine is away Run is
+   refused at once and no Pane opens, so a line never runs later by
+   itself._
 
 7. **Not now.**
    - Spellcheck in the composer (_decided_ against: on Linux, Electron

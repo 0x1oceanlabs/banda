@@ -170,6 +170,15 @@ Each as recommended, over the mock in Roma's
   its text back in the draft.
 - Any other message refused `expired`, or dropped, follows Q5.
 
+_Amended 2026-11-10 by
+[ADR 0106](0106-another-machine-s-panes-run-on-its-engine-and-this-device-only-draws-them.md),
+decision 4: the terminal's close waits in this queue with the queue's
+longest time, 7 days, and no Keep for, since a late close still does
+what the Person meant. `terminal.close` is a call with no CommandId: one
+that may have gone goes again, as a second close does nothing. It is
+dropped once the machine's welcome names a new `boot`, as its shell ended
+with it. The pill's "· 1 waiting" counts it._
+
 ## Plan
 
 Each step is its own PR, after H5c (#1189) merges.

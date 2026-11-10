@@ -150,6 +150,13 @@ Roma, 2026-11-06, among the vision's decisions:
    - A byte URL and a pass are capabilities, as a file descriptor is.
    - No fifth kind is added. A new need fits one of the four, or it shows
      a part that is missing.
+   _Amended 2026-11-10 by
+   [ADR 0106](0106-another-machine-s-panes-run-on-its-engine-and-this-device-only-draws-them.md),
+   law 4: until decision 11 makes each `call` a query or a command, a
+   write still made as a `call` is an act by its line in `methods!`, and
+   fails at once while its machine is away, as a command does. A query is
+   always a read and a command always an act. A write that is repeated or
+   shared still becomes a command, with its receipt._
 
 4. **The kernel keeps a receipt for every command, and a command never
    hangs.**
@@ -388,6 +395,11 @@ Roma, 2026-11-06, among the vision's decisions:
     - Only a device's session answers. The host's own work leaves the
       road: reading a Harness's Limits and sharing's posts now, the
       Visual's layout and the Agents' browser later.
+    _Amended 2026-11-10 by
+    [ADR 0106](0106-another-machine-s-panes-run-on-its-engine-and-this-device-only-draws-them.md),
+    decision 6: `save_file` joins the closed list, for "Save a copy to
+    this Mac". The Person picks the place in the device's own save dialog,
+    and the device fetches the bytes by the host's URL._
 
 13. **Bytes come from the host, by a signed URL.**
     - `platform/bytes` issues a URL bound to one device and a time, and
@@ -399,6 +411,14 @@ Roma, 2026-11-06, among the vision's decisions:
       host.
     - Today's file links (signed, bound to the file, with ranges and a
       sandbox) move to the host as they are.
+    _Amended 2026-11-10 by
+    [ADR 0106](0106-another-machine-s-panes-run-on-its-engine-and-this-device-only-draws-them.md),
+    decision 6: until pairing (H3) a URL is bound to the file and the
+    hour, not yet to a device, and its token is the capability. On the
+    desktop, main relays `app://files/<machine>/<token>` to that machine's
+    forward, so the page's rules stay and a link outlives a new port; the
+    web fetches from the host itself, with stage 4. An answer that names
+    bytes carries their URLs._
 
 14. **Versions are agreed at each layer** (ADR 0081, decision 8).
     - **The protocol.** `hello` carries a range, and the host picks the
@@ -516,6 +536,16 @@ Roma, 2026-11-06, among the vision's decisions:
       queue is kept on the device, per machine. The 10 minutes and the 7
       days stand._
     - Streams and answers say "as of".
+    _Amended 2026-11-10 by
+    [ADR 0106](0106-another-machine-s-panes-run-on-its-engine-and-this-device-only-draws-them.md),
+    law 4 and decision 4: every act fails fast, not commands alone. A call
+    that writes or runs and a stream that does something fail at once
+    while their machine is away, as a command does since H5b, each method
+    a read or an act by its line in `methods!`. Besides ADR 0105's
+    message, the one act that waits for its machine is a terminal closed
+    while that machine is away: it waits in the same visible queue, with
+    the queue's longest time, and closes once the machine is back, with a
+    toast._
 
 17. **In v1 the routes are `local`, `ssh` and `direct`; iroh comes
     later.**
