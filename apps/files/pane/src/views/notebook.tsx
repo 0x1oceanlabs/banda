@@ -135,6 +135,7 @@ function CellView({
   cell,
   name,
   file,
+  engine,
   project,
   run,
 }: { cell: Cell; name: string } & PreviewProps) {
@@ -143,6 +144,7 @@ function CellView({
     return (
       <div data-cell="markdown" className="px-2 py-1">
         <MarkdownIn
+          engine={engine}
           project={project}
           file={file.path}
           text={text}

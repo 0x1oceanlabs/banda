@@ -49,12 +49,11 @@ import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
 import {
   confirm,
   Engine,
-  FileHost,
-  PreviewHost,
   Look,
   none,
   pickFolder,
   Refused,
+  relay,
   serve,
   Settings,
   tellPage,
@@ -132,14 +131,10 @@ const TEST_LATENCY = app.isPackaged
 
 /** The hosts of `app://` beside Banda's own page: the files a Pane shows,
  * and the pages among them that run scripts, sandboxed (ADR 0073,
- * decision 5); and the modules' own. */
+ * decision 5), both relayed to the engine that gave their tokens, which
+ * serves them (ADR 0106, decision 6); and the modules' own. */
 const hosts = new Map(
-  Object.entries({
-    ...modules.served,
-    files: (request: Request) => FileHost.use((host) => host.serve(request)),
-    preview: (request: Request) =>
-      PreviewHost.use((host) => host.serve(request)),
-  })
+  Object.entries({ ...modules.served, files: relay, preview: relay })
 )
 /** The hosts a frame shows: the modules' and the sandbox host. The byte
  * host serves any file, so no frame shows one. */
@@ -261,9 +256,9 @@ function leave(): void {
 }
 
 /** Main's services (ADR 0020): the engine and the look as children, the
- * settings, all three on the window's `banda` (program.ts), the byte
- * host, over them the modules' own, the browser's and the notifications'
- * (modules.ts), and the road that answers what the modules' engine parts
+ * settings, all three on the window's `banda` (program.ts), over them the
+ * modules' own, the browser's and the notifications' (modules.ts), and
+ * the road that answers what the modules' engine parts
  * ask (road.ts). Beside them, not under them, the other machines' engines
  * (hosts.ts): only the page reaches those. They start with the first
  * effect run, and stop when it is disposed. */
@@ -290,9 +285,7 @@ const runtime = ManagedRuntime.make(
         lookLayer,
         // The settings open their files with `Editors.edit`.
         settingsLayer.pipe(Layer.provideMerge(Editors.layer)),
-        Window.layer(() => window),
-        FileHost.layer,
-        PreviewHost.layer
+        Window.layer(() => window)
       )
     ),
     Layer.merge(
@@ -540,14 +533,6 @@ async function ready(): Promise<void> {
       themes: [none, () => Settings.use((settings) => settings.themes)],
     },
     files: {
-      url: [
-        Schema.Tuple([Schema.String, Schema.String]),
-        ([project, path]) => FileHost.url(project, path),
-      ],
-      preview: [
-        Schema.Tuple([Schema.String, Schema.String]),
-        ([project, path]) => PreviewHost.url(project, path),
-      ],
       outside: [text, ([path]) => openFile(path)],
       show: [text, ([path]) => Effect.sync(() => showFile(path))],
       exists: [text, ([path]) => Effect.sync(() => exists(path))],

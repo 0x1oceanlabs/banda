@@ -1,17 +1,20 @@
-import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
-import { afterEach, beforeEach, expect, it } from "vitest"
-import { FileLinks } from "./files"
-import { PREVIEW_CSP, PREVIEW_HOST } from "./preview"
+/**
+ * The sandbox host's relay (ADR 0106, step 4b): `app://preview/<token>`
+ * goes to the engine's `/p/<token>` with what tells a frame's navigation
+ * from a page's fetch, as the frame or the page asked it, so the engine
+ * serves a page into a frame alone (its `into_frame`); main says nothing
+ * of its own there, and the engine's sandbox comes back as it gave it.
+ */
+import { createServer, type IncomingHttpHeaders, type Server } from "node:http"
+import type { AddressInfo } from "node:net"
+import { afterEach, beforeEach, expect, it } from "@effect/vitest"
+import { Effect, Layer } from "effect"
+import { Engine } from "./engine"
+import { relay } from "./files"
 
-let dir: string
-beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), "banda-preview-"))
-})
-afterEach(async () => {
-  await rm(dir, { recursive: true, force: true })
-})
+/** The engine's sandbox for a page, as it says it. */
+const SANDBOX =
+  "default-src 'none'; img-src app://files data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; sandbox allow-scripts"
 
 /** What a frame's navigation sends to Electron's handler, which hears no
  * `Sec-Fetch-*`. */
@@ -20,92 +23,101 @@ const FRAME = {
   "upgrade-insecure-requests": "1",
 }
 
-/** What `links` answers at `url`, asked with `headers`. */
-const asked = (links: FileLinks, url: string, headers: HeadersInit) =>
-  links.serve(new Request(url, { headers }), 1)
+let engine: Server
+/** The path and the headers of each request the fake engine heard. */
+let heard: { path: string; headers: IncomingHttpHeaders }[]
 
-it("serves a page into a frame, sandboxed, with nothing from the network", async () => {
-  const links = new FileLinks(undefined, PREVIEW_HOST)
-  const page = join(dir, "index.html")
-  await writeFile(page, "<p>hi</p><script>parent.document</script>")
-  const url = await links.issue(page, 0)
-  expect(url).toMatch(/^app:\/\/preview\//)
-  const shown = await asked(links, url!, FRAME)
-  expect(shown.status).toBe(200)
-  expect(shown.headers.get("content-type")).toBe("text/html; charset=utf-8")
-  expect(shown.headers.get("x-content-type-options")).toBe("nosniff")
-  expect(shown.headers.get("cross-origin-resource-policy")).toBe("same-origin")
-  expect(shown.headers.get("access-control-allow-origin")).toBeNull()
-  expect(await shown.text()).toContain("<p>hi</p>")
-
-  const csp = shown.headers.get("content-security-policy")
-  expect(csp).toBe(PREVIEW_CSP)
-  const rules = new Map(
-    csp!.split("; ").map((rule) => {
-      const [name, ...values] = rule.split(" ")
-      return [name, values.join(" ")] as const
+beforeEach(async () => {
+  heard = []
+  engine = createServer((request, response) => {
+    heard.push({ path: request.url!, headers: request.headers })
+    response.writeHead(200, {
+      "content-type": "text/html; charset=utf-8",
+      "content-security-policy": SANDBOX,
+      "cross-origin-resource-policy": "same-origin",
+      "referrer-policy": "no-referrer",
     })
-  )
-  expect(rules.get("default-src")).toBe("'none'")
-  expect(rules.get("img-src")).toBe("app://files data:")
-  expect(rules.get("style-src")).toBe("'unsafe-inline'")
-  // Scripts run, but only in the sandbox: never on an origin of its own.
-  expect(rules.get("sandbox")).toBe("allow-scripts")
-  expect(csp).not.toContain("allow-same-origin")
-  expect(rules.has("connect-src")).toBe(false)
+    response.end("<p>hi</p>")
+  })
+  await new Promise<void>((done) => engine.listen(0, "127.0.0.1", done))
+})
+afterEach(async () => {
+  await new Promise((done) => engine.close(done))
 })
 
-it("never serves the app's own page, its fetch or a picture, nor a window's page: a frame alone gets it", async () => {
-  const links = new FileLinks(undefined, PREVIEW_HOST)
-  const page = join(dir, "index.html")
-  await writeFile(page, "<p>hi</p>")
-  const url = (await links.issue(page, 0))!
-  const refused: Record<string, string>[] = [
-    // Banda's page fetching it, or a picture of it.
-    { accept: "*/*", origin: "app://banda" },
-    { ...FRAME, origin: "app://banda" },
-    { accept: "image/*" },
-    // Where Chromium says what for: a page's fetch, a window's page.
-    { "sec-fetch-mode": "cors", "sec-fetch-dest": "empty" },
-    { ...FRAME, "sec-fetch-mode": "navigate", "sec-fetch-dest": "document" },
-    // Who says nothing.
-    {},
-  ]
-  for (const headers of refused)
-    expect((await asked(links, url, headers)).status).toBe(404)
-  expect((await asked(links, url, FRAME)).status).toBe(200)
-  const framed = { "sec-fetch-mode": "navigate", "sec-fetch-dest": "iframe" }
-  expect((await asked(links, url, framed)).status).toBe(200)
-})
+const at = () =>
+  Layer.succeed(Engine)({
+    address: Effect.sync(() => ({
+      url: `ws://127.0.0.1:${(engine.address() as AddressInfo).port}/ws`,
+      secret: "unused",
+    })),
+    client: Effect.die("unused"),
+    door: Effect.die("unused"),
+  })
 
-it("serves only pages: an SVG document too, never another kind, nor a page by a link to another kind", async () => {
-  const links = new FileLinks(undefined, PREVIEW_HOST)
-  await writeFile(
-    join(dir, "logo.svg"),
-    "<svg xmlns='http://www.w3.org/2000/svg'/>"
-  )
-  await writeFile(join(dir, "notes.txt"), "secret")
-  await symlink(join(dir, "notes.txt"), join(dir, "notes.html"))
-  const svg = await links.issue(join(dir, "logo.svg"), 0)
-  expect((await asked(links, svg!, FRAME)).headers.get("content-type")).toBe(
-    "image/svg+xml"
-  )
-  expect(await links.issue(join(dir, "notes.txt"), 0)).toBeNull()
-  expect(await links.issue(join(dir, "notes.html"), 0)).toBeNull()
-})
+/** What the engine heard of a request to `url` with `headers`, but where
+ * it went and Node's connection; and what main answered. */
+const asked = (url: string, headers: Record<string, string>) =>
+  Effect.gen(function* () {
+    const response = yield* relay(new Request(url, { headers }))
+    const body = yield* Effect.promise(() => response.text())
+    const passed = { ...heard.at(-1)!.headers }
+    delete passed.host
+    delete passed.connection
+    return { path: heard.at(-1)!.path, passed, response, body }
+  })
 
-it("a link of one host is not the other's: each signs with its own secret", async () => {
-  const pages = new FileLinks(undefined, PREVIEW_HOST)
-  const bytes = new FileLinks()
-  const page = join(dir, "index.html")
-  await writeFile(page, "<p>hi</p>")
-  const url = (await pages.issue(page, 0))!
-  const asBytes = url.replace("app://preview/", "app://files/")
-  expect((await bytes.serve(new Request(asBytes), 1)).status).toBe(404)
-  const byteUrl = (await bytes.issue(page, 0))!
-  const asPage = byteUrl.replace("app://files/", "app://preview/")
-  expect((await asked(pages, asPage, FRAME)).status).toBe(404)
-  // The byte host serves a page as its text, which runs nothing.
-  const text = await bytes.serve(new Request(byteUrl), 1)
-  expect(text.headers.get("content-type")).toBe("text/plain; charset=utf-8")
-})
+it.effect(
+  "a frame's navigation reaches the engine's /p/ as the frame asked it, and the page comes back sandboxed as the engine said",
+  () =>
+    Effect.gen(function* () {
+      const shown = yield* asked("app://preview/f00d", FRAME)
+      expect(shown.path).toBe("/p/f00d")
+      // No origin and an upgrade asked: the engine takes it for a frame.
+      expect(shown.passed).toEqual(FRAME)
+      expect(shown.body).toBe("<p>hi</p>")
+      const { headers } = shown.response
+      expect(headers.get("content-security-policy")).toBe(SANDBOX)
+      expect(headers.get("cross-origin-resource-policy")).toBe("same-origin")
+      expect(headers.get("referrer-policy")).toBe("no-referrer")
+      expect(headers.get("access-control-allow-origin")).toBeNull()
+    }).pipe(Effect.provide(at()))
+)
+
+it.effect(
+  "Banda's page, a picture or a window says what it is to the engine, which serves a frame alone; main adds no Sec-Fetch of its own",
+  () =>
+    Effect.gen(function* () {
+      const all: Record<string, string>[] = [
+        // Banda's page fetching it, or a picture of it.
+        { accept: "*/*", origin: "app://banda" },
+        { ...FRAME, origin: "app://banda" },
+        { accept: "image/*" },
+        // Where Chromium says what for: a page's fetch, a window's page, a
+        // frame.
+        { "sec-fetch-mode": "cors", "sec-fetch-dest": "empty" },
+        {
+          ...FRAME,
+          "sec-fetch-mode": "navigate",
+          "sec-fetch-dest": "document",
+        },
+        { "sec-fetch-mode": "navigate", "sec-fetch-dest": "iframe" },
+        // Who says nothing.
+        {},
+      ]
+      for (const headers of all) {
+        const { path, passed } = yield* asked("app://preview/f00d", headers)
+        expect(path).toBe("/p/f00d")
+        expect(passed, JSON.stringify(headers)).toEqual(headers)
+      }
+    }).pipe(Effect.provide(at()))
+)
+
+it.effect(
+  "each host keeps its route: a token in a file's URL goes to /b/, in a page's to /p/",
+  () =>
+    Effect.gen(function* () {
+      expect((yield* asked("app://files/f00d", FRAME)).path).toBe("/b/f00d")
+      expect((yield* asked("app://preview/f00d", FRAME)).path).toBe("/p/f00d")
+    }).pipe(Effect.provide(at()))
+)

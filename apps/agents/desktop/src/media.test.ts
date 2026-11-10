@@ -1,38 +1,34 @@
 /**
  * A reply's media (ADR 0037, decision 8): its paths come from an Agent's
- * text, so the agents module's channel gives a URL for an image, a video
- * or a sound, in the Project or anywhere on the machine, and for nothing
- * else, though the byte host serves any file a Pane opens.
+ * text, so the agents module's channel asks this machine's engine for a
+ * token for an image, a video or a sound alone (`bytes.issue`, `media`),
+ * in the Thread's Project, and gives the URL that names it. The engine
+ * judges the file (platform/bytes); main reads none (ADR 0106, decision
+ * 6).
  */
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
 import type { Engine as Client } from "@banda/contract"
-import { Engine, FileHost, Look } from "@banda/desktop-kit"
-import { afterEach, beforeEach, expect, it } from "@effect/vitest"
+import { Engine, Look } from "@banda/desktop-kit"
+import { expect, it } from "@effect/vitest"
 import { Effect, Layer, Stream } from "effect"
 import { agentsDesktop } from "./index"
 
-let project: string
-let elsewhere: string
-beforeEach(async () => {
-  project = await mkdtemp(join(tmpdir(), "banda-project-"))
-  elsewhere = await mkdtemp(join(tmpdir(), "banda-elsewhere-"))
-})
-afterEach(async () => {
-  for (const dir of [project, elsewhere])
-    await rm(dir, { recursive: true, force: true })
-})
-
-/** Main's services, as far as the channel asks them: one Project, `p`. */
-const main = () =>
-  Layer.mergeAll(
-    FileHost.layer,
+/** Main's services, as far as the channel asks them: an engine that
+ * answers `bytes.issue` as `issue` does, and says what it was asked. */
+const main = (issue: (path: string) => string | null) => {
+  const asked: unknown[][] = []
+  const client = {
+    call: async (...call: unknown[]) => {
+      asked.push(call)
+      const [, { path }] = call as [string, { path: string }]
+      const token = issue(path)
+      if (token === null) throw new Error(`${path} is no picture`)
+      return { token, until: 0 }
+    },
+  } as unknown as Client
+  const layer = Layer.mergeAll(
     Layer.succeed(Engine)({
       address: Effect.die("unused"),
-      client: Effect.succeed({
-        call: async () => [{ id: "p", folder: project }],
-      } as unknown as Client),
+      client: Effect.succeed(client),
       door: Effect.die("unused"),
     }),
     Layer.succeed(Look)({
@@ -40,31 +36,30 @@ const main = () =>
       changes: Stream.empty,
     })
   )
+  return { asked, layer }
+}
 
 it.effect(
-  "the media channel gives images, video and sound, from the Project or anywhere, and refuses any other file",
-  () =>
-    Effect.gen(function* () {
-      const [, media] = agentsDesktop.answers.media
-      const ask = (path: string) => media(["p", path], {} as never)
-      yield* Effect.promise(async () => {
-        for (const name of ["shot.png", "clip.webm", "notes.txt", "page.html"])
-          await writeFile(join(project, name), name)
-        await writeFile(join(project, "Makefile"), "all:")
-        await writeFile(join(elsewhere, "screenshot.png"), "png")
-      })
-      for (const path of [
-        "shot.png",
-        "./clip.webm",
-        join(elsewhere, "screenshot.png"),
+  "the media channel asks the engine for a picture's, a video's or a sound's token in the Thread's Project, and gives its URL; a refusal is none",
+  () => {
+    const { asked, layer } = main((path) =>
+      path.endsWith(".txt") ? null : "a5e"
+    )
+    const [, media] = agentsDesktop.answers.media
+    const ask = (path: string) => media(["p", path], {} as never)
+    return Effect.gen(function* () {
+      expect(yield* ask("shot.png")).toBe("app://files/a5e")
+      expect(yield* ask("/elsewhere/clip.webm")).toBe("app://files/a5e")
+      expect(yield* ask("notes.txt")).toBeNull()
+      expect(asked).toEqual([
+        ["bytes.issue", { path: "shot.png", use: "media" }, { project: "p" }],
+        [
+          "bytes.issue",
+          { path: "/elsewhere/clip.webm", use: "media" },
+          { project: "p" },
+        ],
+        ["bytes.issue", { path: "notes.txt", use: "media" }, { project: "p" }],
       ])
-        expect(yield* ask(path), path).toMatch(/^app:\/\/files\//)
-      for (const path of [
-        "notes.txt",
-        "page.html",
-        "Makefile",
-        join(project, "notes.txt"),
-      ])
-        expect(yield* ask(path), path).toBeNull()
-    }).pipe(Effect.provide(main()))
+    }).pipe(Effect.provide(layer))
+  }
 )

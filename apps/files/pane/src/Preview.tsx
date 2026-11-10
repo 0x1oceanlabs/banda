@@ -65,7 +65,7 @@ export function Preview({
   /** What shows under the file where a previewer draws it. */
   after?: ReactNode
 }) {
-  const url = useFileUrl(project, stat.path, stat.modified)
+  const url = useFileUrl(engine, project, stat.path, stat.modified)
   const previewer = usePicked(stat, url)
   const signal = useSignal(`${stat.path}\0${stat.modified}`)
   const read = useCallback(
