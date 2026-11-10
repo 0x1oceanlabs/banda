@@ -4,10 +4,10 @@
 # from Banda's defaults, written below. Check a change with:
 # banda settings check
 #
-# theme: "omarchy" follows Omarchy's current theme (the default when
-# Omarchy is installed), "banda" is Banda's own, light and dark (the
-# default elsewhere), and any other name is a theme folder in
-# ~/.config/banda/themes/<name>/ or Omarchy's ~/.config/omarchy/themes/.
+# theme: "platform", the default, is this device's own: "omarchy" where
+# Omarchy is installed (its current theme), "macos" on a Mac, else
+# "banda", Banda's own, light and dark. Any other name is a theme folder
+# in ~/.config/banda/themes/<name>/ or Omarchy's ~/.config/omarchy/themes/.
 # For the system's light and dark, a pair:
 # theme = { light = "tokyo-night-light", dark = "forest-dusk" }
 

@@ -1,0 +1,49 @@
+# macOS (ADR 0075, decisions 1 and 6): the Mac's own colours, its window,
+# label and separator colours and Apple's system colours for the
+# terminal, light and dark. The accent is the one set in System Settings,
+# which the window gives the page. The Mac's shape over Banda's: the
+# system's font at 13, and a bar as tall as a window's title with its
+# toolbar, for the traffic lights. Buttons are the accent, as the Mac's
+# default buttons are.
+name = "macOS"
+
+[shape]
+bar.height = 38
+
+[font]
+sans = "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", system-ui, sans-serif"
+size = 13
+
+[colors]
+accent = "var(--system-accent)"
+selection = { light = "#b3d7ff", dark = "#3f638b" }
+muted = { light = "#a1a1a6", dark = "#636366" }
+background = { light = "#ffffff", dark = "#1e1e1e" }
+dark_background = { light = "#f5f5f7", dark = "#2b2b2d" }
+darker_background = { light = "#ececec", dark = "#161616" }
+lighter_background = { light = "#ffffff", dark = "#2c2c2e" }
+foreground = { light = "#262626", dark = "#dfdfdf" }
+dark_foreground = { light = "#808080", dark = "#8d8d93" }
+light_foreground = { light = "#3c3c3c", dark = "#c7c7cc" }
+bright_foreground = { light = "#000000", dark = "#ffffff" }
+red = { light = "#d70015", dark = "#ff453a" }
+yellow = { light = "#b25000", dark = "#ffd60a" }
+orange = { light = "#c93400", dark = "#ff9f0a" }
+green = { light = "#248a3d", dark = "#30d158" }
+cyan = { light = "#0071a4", dark = "#64d2ff" }
+blue = { light = "#007aff", dark = "#0a84ff" }
+magenta = { light = "#8944ab", dark = "#bf5af2" }
+brown = { light = "#7f6545", dark = "#ac8e68" }
+bright_red = { light = "#ff3b30", dark = "#ff6961" }
+bright_yellow = { light = "#ff9500", dark = "#ffd426" }
+bright_green = { light = "#34c759", dark = "#31de4b" }
+bright_cyan = { light = "#32ade6", dark = "#70d7ff" }
+bright_blue = "#409cff"
+bright_magenta = { light = "#af52de", dark = "#da8fff" }
+
+[tokens]
+desk-solid = { light = "#ececec", dark = "#28282a" }
+primary-foreground = "#ffffff"
+border = { light = "oklch(0 0 0 / 10%)", dark = "oklch(1 0 0 / 10%)" }
+input = { light = "oklch(0 0 0 / 12%)", dark = "oklch(1 0 0 / 14%)" }
+sidebar-border = "border"

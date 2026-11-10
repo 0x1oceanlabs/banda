@@ -926,3 +926,226 @@ fn a_mac_starts_on_the_macos_theme_with_its_shape() {
     machine.look_toml("theme = \"macos\"\n");
     assert_eq!(machine.look().vars["--bar-height"], "38px");
 }
+
+/// Writes the Person's theme `name`, a `theme.toml`.
+fn theme_toml(machine: &Machine, name: &str, text: &str) {
+    write(
+        &machine.places.own_themes().join(name).join("theme.toml"),
+        text,
+    );
+}
+
+#[test]
+fn a_theme_toml_has_light_and_dark_and_its_shape_inside() {
+    let machine = Machine::new(false);
+    theme_toml(
+        &machine,
+        "sea",
+        r##"name = "Sea"
+
+[colors]
+accent = "#2a9d8f"
+background = { light = "#f7fbfb", dark = "#0e1a1c" }
+
+[shape]
+radius = 4
+
+[font]
+sans = "Inter"
+
+[glass]
+blur = 30
+
+[tokens]
+card = { dark = "#101010" }
+"##,
+    );
+    machine.look_toml("theme = \"sea\"\n");
+    let look = machine.look();
+    assert!(look.problems.is_empty(), "{:?}", look.problems);
+    assert_eq!(look.mode, Shown::System);
+    let names: Vec<_> = look.sources.iter().filter_map(|s| s.name.clone()).collect();
+    assert_eq!(names, ["sea-light", "sea-dark"]);
+    assert_eq!(look.sources[1].origin, Some(Origin::Yours));
+    assert_eq!(color(&look, false, "--background"), "#f7fbfb");
+    assert_eq!(color(&look, true, "--background"), "#0e1a1c");
+    assert_eq!(color(&look, false, "--focus"), "#2a9d8f");
+    assert_eq!(color(&look, true, "--focus"), "#2a9d8f");
+    assert_eq!(color(&look, true, "--card"), "#101010");
+    assert_ne!(color(&look, false, "--card"), "#101010");
+    assert_eq!(look.vars["--radius"], "4px");
+    assert_eq!(look.vars["--desk-blur"], "30px");
+    assert_eq!(look.vars["--font-family-sans"], "\"Inter\", sans-serif");
+    let keys = &look.settings["look.toml"];
+    assert_eq!(keys["radius"].from.layer, "theme");
+    let listed: Vec<_> = (machine.places.themes().into_iter())
+        .filter(|theme| theme.origin == Origin::Yours)
+        .map(|theme| theme.name)
+        .collect();
+    assert_eq!(listed, ["sea-light", "sea-dark"]);
+}
+
+#[test]
+fn a_theme_of_only_seeds_works_out_the_rest() {
+    let machine = Machine::new(false);
+    theme_toml(
+        &machine,
+        "seeds",
+        "[colors]\naccent = \"#e07a3f\"\nbackground = { light = \"#fbf8f3\", dark = \"#1d1a16\" }\nforeground = { light = \"#2b2620\", dark = \"#ece4d8\" }\n",
+    );
+    machine.look_toml("theme = \"seeds\"\n");
+    let look = machine.look();
+    assert!(look.problems.is_empty(), "{:?}", look.problems);
+    // Each scheme is complete: the palette worked out, then its tokens.
+    for dark in [false, true] {
+        assert_eq!(color(&look, dark, "--primary"), "#e07a3f");
+        for var in ["--card", "--sidebar-accent", "--border", "--ansi-8"] {
+            assert!(!color(&look, dark, var).is_empty(), "{var}");
+        }
+    }
+    assert_eq!(color(&look, true, "--background"), "#1d1a16");
+}
+
+#[test]
+fn a_theme_extends_another_and_so_on() {
+    let machine = Machine::new(false);
+    theme_toml(
+        &machine,
+        "dusk",
+        "extends = \"warm\"\n[colors]\nbackground = { dark = \"#101418\" }\n",
+    );
+    theme_toml(
+        &machine,
+        "warm",
+        "extends = \"banda\"\n[colors]\naccent = \"#e07a3f\"\n[shape]\nradius = 3\n[tokens]\nattention = \"#ff0000\"\n",
+    );
+    machine.look_toml("theme = \"dusk\"\n");
+    let look = machine.look();
+    assert!(look.problems.is_empty(), "{:?}", look.problems);
+    // dusk's own background, warm's accent, shape and token, and Banda's
+    // colours and tokens under them.
+    assert_eq!(color(&look, true, "--background"), "#101418");
+    assert_eq!(color(&look, false, "--background"), "#ffffff");
+    assert_eq!(color(&look, false, "--focus"), "#e07a3f");
+    assert_eq!(color(&look, false, "--attention"), "#ff0000");
+    assert_eq!(color(&look, false, "--primary"), "#18181b");
+    assert_eq!(color(&look, true, "--card"), "#1f1f23");
+    assert_eq!(look.vars["--radius"], "3px");
+    let names: Vec<_> = look.sources.iter().filter_map(|s| s.name.clone()).collect();
+    assert_eq!(names, ["dusk-light", "dusk-dark"]);
+}
+
+#[test]
+fn a_theme_on_the_platform_takes_what_the_device_shows() {
+    // Under Omarchy, "platform" is its current theme, dark: a theme over
+    // it is dark too.
+    let machine = Machine::new(true);
+    theme_toml(
+        &machine,
+        "mine",
+        "extends = \"platform\"\n[colors]\naccent = \"#e07a3f\"\n",
+    );
+    machine.look_toml("theme = \"mine\"\n");
+    let look = machine.look();
+    assert!(look.problems.is_empty(), "{:?}", look.problems);
+    assert_eq!(look.mode, Shown::Dark);
+    assert!(look.schemes.light.is_none());
+    assert_eq!(color(&look, true, "--background"), "#19251f");
+    assert_eq!(color(&look, true, "--focus"), "#e07a3f");
+    assert_eq!(look.sources[1].name.as_deref(), Some("mine"));
+
+    // "platform" as look.toml's theme is the device's own, as no theme.
+    machine.look_toml("theme = \"platform\"\n");
+    let look = machine.look();
+    assert!(look.problems.is_empty(), "{:?}", look.problems);
+    assert_eq!(color(&look, true, "--background"), "#19251f");
+
+    // Elsewhere it is Banda's own.
+    let machine = Machine::new(false);
+    theme_toml(&machine, "mine", "extends = \"platform\"\n");
+    machine.look_toml("theme = \"mine\"\n");
+    let look = machine.look();
+    assert_eq!(look.mode, Shown::System);
+    assert_eq!(color(&look, true, "--background"), "#19191c");
+}
+
+#[test]
+fn a_base_that_is_not_there_is_named_and_the_theme_stands_alone() {
+    let machine = Machine::new(false);
+    theme_toml(
+        &machine,
+        "lone",
+        "extends = \"nope\"\n\n[colors]\naccent = \"#e07a3f\"\n",
+    );
+    machine.look_toml("theme = \"lone\"\n");
+    let look = machine.look();
+    assert_eq!(look.problems.len(), 1, "{:?}", look.problems);
+    let problem = &look.problems[0];
+    assert!(problem.message.contains("no theme \"nope\""), "{problem}");
+    assert_eq!(problem.line, Some(1));
+    assert!(problem.path.ends_with("theme.toml"), "{problem}");
+    assert_eq!(color(&look, false, "--focus"), "#e07a3f");
+}
+
+#[test]
+fn a_ring_of_themes_is_refused_and_each_still_shows() {
+    let machine = Machine::new(false);
+    theme_toml(
+        &machine,
+        "a",
+        "extends = \"b\"\n[colors]\naccent = \"#e07a3f\"\n",
+    );
+    theme_toml(
+        &machine,
+        "b",
+        "extends = \"a\"\n[colors]\nbackground = \"#101418\"\n",
+    );
+    machine.look_toml("theme = \"a\"\n");
+    let look = machine.look();
+    assert_eq!(look.problems.len(), 1, "{:?}", look.problems);
+    let problem = &look.problems[0];
+    assert!(problem.message.contains("comes back round"), "{problem}");
+    assert!(
+        Path::new(&problem.path).ends_with("b/theme.toml"),
+        "{problem}"
+    );
+    // b stands alone and a over it.
+    assert_eq!(color(&look, false, "--focus"), "#e07a3f");
+    assert_eq!(color(&look, false, "--background"), "#101418");
+
+    // A theme that extends itself the same.
+    theme_toml(&machine, "a", "extends = \"a\"\n");
+    let look = machine.look();
+    assert_eq!(look.problems.len(), 1, "{:?}", look.problems);
+}
+
+#[test]
+fn a_pair_takes_each_scheme_of_a_theme_of_both() {
+    let machine = Machine::new(false);
+    theme_toml(
+        &machine,
+        "sea",
+        "[colors]\nbackground = { light = \"#f7fbfb\", dark = \"#0e1a1c\" }\n",
+    );
+    machine.look_toml("theme = { light = \"sea\", dark = \"banda\" }\n");
+    let look = machine.look();
+    assert!(look.problems.is_empty(), "{:?}", look.problems);
+    assert_eq!(color(&look, false, "--background"), "#f7fbfb");
+    assert_eq!(color(&look, true, "--background"), "#19191c");
+    let names: Vec<_> = look.sources.iter().filter_map(|s| s.name.clone()).collect();
+    assert_eq!(names, ["sea-light", "banda-dark"]);
+}
+
+#[test]
+fn a_theme_toml_is_checked_as_it_is_written() {
+    let path = Path::new("themes/sea/theme.toml");
+    let problems = banda_look::check_text(path, "[shape]\nradiuss = 3\n");
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].message.contains("radiuss"), "{}", problems[0]);
+    let problems = banda_look::check_text(path, "[tokens]\ncard = \"red; --x: 1\"\n");
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert_eq!(problems[0].line, Some(2));
+    let problems = banda_look::check_text(path, "[shape]\nradius = -1\n");
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(banda_look::check_text(path, "extends = \"banda\"\n").is_empty());
+}

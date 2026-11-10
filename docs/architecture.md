@@ -163,9 +163,11 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   reads Omarchy's theme, Hyprland's windows and `~/.config/banda/look.toml`
   and prints the CSS variables as JSON, with no engine; `--follow` prints
   each change, and `check` names a broken file's line. The theme is
-  `platform/theme`'s: where a theme is found, its palette worked into
-  tokens, its fonts, the wallpaper and Hyprland's windows; `platform/look`
-  lays a theme's `banda.toml` and the Person's files over it (ADR 0100).
+  `platform/theme`'s: where a theme is found and what it extends, its
+  palette worked into tokens, its fonts, the wallpaper and Hyprland's
+  windows; `platform/look` reads a theme's shape and lays the Person's
+  files over it (ADR 0100). A theme is a `theme.toml`, light and dark
+  inside (ADR 0080); Omarchy's `colors.toml` still reads as colours.
   The look's `[sound]` says which sounds the window plays (ADR 0009) and
   its `[notify]` where the window tells of a call (ADR 0011); the look's
   layers apply to them as to every other key. The sidebar's arrangement

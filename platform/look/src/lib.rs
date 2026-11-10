@@ -30,12 +30,14 @@ pub mod sound;
 use banda_theme::color::{is_css_color, is_hex};
 pub use banda_theme::hyprland::{Hyprland, Windows};
 use banda_theme::palette::Palette;
-use banda_theme::{Mode, Theme, fonts, theme, tokens, wallpaper};
+use banda_theme::{Mode, Picked, Theme, Wrong, fonts, tokens, wallpaper};
 pub use banda_theme::{Origin, Places, path_of};
 pub use file::{OneFile, SettingsFile};
 use motion::Motion;
 use serde::Serialize;
-use settings::{Corner, Material, ModeChoice, Settings, SidebarStyle, ThemeChoice, Workspaces};
+use settings::{
+    Corner, Material, ModeChoice, Settings, SidebarStyle, ThemeChoice, ThemeFile, Workspaces,
+};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt;
@@ -366,6 +368,21 @@ pub fn read<T: serde::de::DeserializeOwned>(
 /// file.
 pub fn read_settings(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Option<Settings> {
     let settings: Settings = read(path, text, problems)?;
+    check_settings(path, text, &settings, problems);
+    Some(settings)
+}
+
+/// Reads a theme's `theme.toml` as the layer its `[shape]`, `[font]` and
+/// `[glass]` make, checked as [`read_settings`] checks one; its colours
+/// and tokens are `banda_theme`'s to read.
+fn read_theme_file(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Option<Settings> {
+    let settings = read::<ThemeFile>(path, text, problems)?.settings();
+    check_settings(path, text, &settings, problems);
+    Some(settings)
+}
+
+/// What TOML alone does not refuse in `settings`, read from `text`.
+fn check_settings(path: &Path, text: &str, settings: &Settings, problems: &mut Vec<Problem>) {
     for key in settings.negative_sizes() {
         problems.push(Problem::of_key(
             path,
@@ -435,7 +452,6 @@ pub fn read_settings(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Op
             ));
         }
     }
-    Some(settings)
 }
 
 /// What `look.toml` can say, every key with its default and commented
@@ -507,35 +523,14 @@ pub fn resolve(
     let mine_read = mine.is_some();
     let mine = mine.unwrap_or_default();
 
-    // Each platform starts on its own theme (ADR 0075, decision 2).
-    let default_theme = if places.omarchy_current.is_some() {
-        "omarchy"
-    } else if places.mac {
-        "macos"
-    } else {
-        "banda"
-    };
+    // Each device starts on its own theme, "platform" (ADR 0100, decision
+    // 2).
     let choice = mine
         .theme
         .as_ref()
         .map(|t| t.get_ref().clone())
-        .unwrap_or_else(|| ThemeChoice::One(default_theme.to_owned()));
+        .unwrap_or_else(|| ThemeChoice::One("platform".to_owned()));
 
-    let load =
-        |name: &str, problems: &mut Vec<Problem>, watched: &mut Vec<PathBuf>| -> Option<Laid> {
-            if name == "omarchy" {
-                if let Some(current) = &places.omarchy_current {
-                    watched.push(current.join("colors.toml"));
-                    watched.push(current.join("banda.toml"));
-                }
-            } else {
-                for (_, folder) in places.candidates(name) {
-                    watched.push(folder.join("colors.toml"));
-                    watched.push(folder.join("banda.toml"));
-                }
-            }
-            laid(places, name, problems)
-        };
     let missing = |name: &str, problems: &mut Vec<Problem>| {
         let words = if name == "omarchy" {
             "theme = \"omarchy\", but Omarchy's current theme is not here; Banda's own shows"
@@ -547,47 +542,46 @@ pub fn resolve(
         };
         problems.push(Problem::whole(&look_file, words));
     };
-    // A pair of Banda's own, `<name>-light` and `<name>-dark`: banda, macos.
-    let pair = |name: &str, problems: &mut Vec<Problem>| {
-        (
-            laid(places, &format!("{name}-light"), problems),
-            laid(places, &format!("{name}-dark"), problems),
-        )
+    // Banda's own, light and dark, where a theme named is not there.
+    let banda = |problems: &mut Vec<Problem>| match pick(places, "banda", problems, &mut Vec::new())
+    {
+        Some(Picked::Both(light, dark)) => (Some(light), Some(dark)),
+        _ => (None, None),
     };
 
     // The themes of each scheme, and which scheme shows.
     let wanted = mine.mode.unwrap_or(ModeChoice::System);
     let (light, dark, shown) = match choice {
-        ThemeChoice::One(name) if theme::is_pair(&name) => {
-            let (light, dark) = pair(&name, &mut problems);
-            (light, dark, shown_of(wanted))
-        }
-        ThemeChoice::One(name) => match load(&name, &mut problems, &mut watched) {
-            Some(theme) => match theme.palette.mode() {
+        ThemeChoice::One(name) => match pick(places, &name, &mut problems, &mut watched) {
+            Some(Picked::Both(light, dark)) => (Some(light), Some(dark), shown_of(wanted)),
+            Some(Picked::One(theme)) => match theme.palette.mode() {
                 Mode::Light => (Some(theme), None, Shown::Light),
                 Mode::Dark => (None, Some(theme), Shown::Dark),
             },
             None => {
                 missing(&name, &mut problems);
-                let (light, dark) = pair("banda", &mut problems);
+                let (light, dark) = banda(&mut problems);
                 (light, dark, shown_of(wanted))
             }
         },
         ThemeChoice::Pair { light, dark } => {
-            let found_light = load(&light, &mut problems, &mut watched);
-            if found_light.is_none() {
-                missing(&light, &mut problems);
-            }
-            let found_dark = load(&dark, &mut problems, &mut watched);
-            if found_dark.is_none() {
-                missing(&dark, &mut problems);
-            }
-            let (banda_light, banda_dark) = pair("banda", &mut problems);
-            (
-                found_light.or(banda_light),
-                found_dark.or(banda_dark),
-                shown_of(wanted),
-            )
+            // Each takes its own scheme of a theme of both, or the one a
+            // theme of one has.
+            let mut side = |name: &str, mode: Mode| {
+                let picked = pick(places, name, &mut problems, &mut watched);
+                if picked.is_none() {
+                    missing(name, &mut problems);
+                }
+                picked.map(|picked| picked.of(mode))
+            };
+            let (light, dark) = match (side(&light, Mode::Light), side(&dark, Mode::Dark)) {
+                (Some(light), Some(dark)) => (Some(light), Some(dark)),
+                (light, dark) => {
+                    let (banda_light, banda_dark) = banda(&mut problems);
+                    (light.or(banda_light), dark.or(banda_dark))
+                }
+            };
+            (light, dark, shown_of(wanted))
         }
     };
 
@@ -622,7 +616,7 @@ pub fn resolve(
     let mut layers = Settings::defaults(material);
     let mut keyed_layers = vec![keyed::Layer::new("defaults", &layers, None)];
     if let Some(theme) = sizing {
-        let file = theme.banda_toml.as_ref();
+        let file = theme.file.as_ref();
         keyed_layers.push(keyed::Layer::new("theme", &theme.settings, file));
         layers = theme.settings.clone().over(layers);
     }
@@ -668,20 +662,6 @@ pub fn resolve(
         light: light.as_ref().map(|t| scheme(t, &mine, &all)),
         dark: dark.as_ref().map(|t| scheme(t, &mine, &all)),
     };
-    for theme in [&light, &dark].into_iter().flatten() {
-        let not_hex = theme.palette.not_hex();
-        if !not_hex.is_empty()
-            && let Some(folder) = &theme.folder
-        {
-            problems.push(Problem::whole(
-                &folder.join("colors.toml"),
-                format!(
-                    "{} are not hex, so colours mixed from them fall back",
-                    not_hex.join(", ")
-                ),
-            ));
-        }
-    }
 
     let (sidebar, sidebar_keys) = sidebar::resolve(places, &mut problems, &mut watched);
     let (keys, keys_keys) = keys::resolve(places, manifests, &mut problems, &mut watched);
@@ -870,8 +850,8 @@ fn shown_of(wanted: ModeChoice) -> Shown {
 }
 
 /// One theme's colours as CSS variables: its palette under the colours
-/// its `banda.toml` and `look.toml` replace, derived into tokens, under
-/// the tokens they replace ([`tokens::scheme`]).
+/// an old `banda.toml` and `look.toml` replace, derived into tokens,
+/// under the tokens the theme and `look.toml` set ([`tokens::scheme`]).
 fn scheme(theme: &Laid, mine: &Settings, all: &Settings) -> BTreeMap<String, String> {
     fn named<'a>((key, value): (&'a String, &'a Spanned<String>)) -> (&'a str, &'a str) {
         (key, value.get_ref())
@@ -888,51 +868,79 @@ fn scheme(theme: &Laid, mine: &Settings, all: &Settings) -> BTreeMap<String, Str
     )
 }
 
-/// A theme, read: its palette, and what Banda and its `banda.toml` say of
-/// it, a layer in `look.toml`'s schema.
+/// One scheme's theme, read: its palette, and what its files say of it,
+/// a layer in `look.toml`'s schema.
 struct Laid {
     name: String,
     origin: Origin,
     folder: Option<PathBuf>,
     palette: Palette,
     settings: Settings,
-    /// The `banda.toml` its settings were read from, so each key is known
-    /// by its line; none for Banda's own, or with no file.
-    banda_toml: Option<(PathBuf, String)>,
+    /// The theme's own file its settings were read from, so each key is
+    /// known by its line; none for Banda's own.
+    file: Option<(PathBuf, String)>,
 }
 
-/// Reads the theme `name` and its `banda.toml`. Problems in its files go
-/// to `problems`; `None` when there is no such theme.
-fn laid(places: &Places, name: &str, problems: &mut Vec<Problem>) -> Option<Laid> {
-    let Theme {
-        name,
-        origin,
-        folder,
-        palette,
-        inside,
-        banda_toml,
-    } = match places.theme(name)? {
-        Ok(theme) => theme,
-        Err(unread) => {
-            problems.push(Problem::toml(&unread.path, &unread.text, &unread.error).left_out());
-            return None;
+/// The theme `name`, both schemes or the one it has, its files read;
+/// what is wrong in them goes to `problems`.
+fn pick(
+    places: &Places,
+    name: &str,
+    problems: &mut Vec<Problem>,
+    watched: &mut Vec<PathBuf>,
+) -> Option<Picked<Laid>> {
+    let mut wrong = Vec::new();
+    let picked = places.theme(name, watched, &mut wrong);
+    problems.extend(wrong.into_iter().map(problem_of));
+    Some(laid(picked?, problems))
+}
+
+/// Reads the files of `picked`, the theme's and those of the themes it
+/// extends, into its layer; problems in them go to `problems`.
+fn laid(picked: Picked, problems: &mut Vec<Problem>) -> Picked<Laid> {
+    // Both schemes of a theme are of the same files: read once.
+    let (Picked::Both(first, _) | Picked::One(first)) = &picked;
+    let mut settings = Settings::default();
+    for layer in &first.layers {
+        let path = layer.path.as_deref().unwrap_or(Path::new("theme.toml"));
+        let read = if layer.theme_toml {
+            read_theme_file(path, &layer.text, problems)
+        } else {
+            read_settings(path, &layer.text, problems)
+        };
+        settings = read.unwrap_or_default().over(settings);
+    }
+    let file = (first.layers.iter().rev())
+        .find_map(|layer| Some((layer.path.clone()?, layer.text.to_string())));
+    let with = |theme: Theme| {
+        let mut settings = settings.clone();
+        // Its `theme.toml`'s tokens, under an old `banda.toml`'s, as the
+        // look's keys.
+        for (key, value) in theme.tokens {
+            (settings.tokens)
+                .entry(key)
+                .or_insert_with(|| Spanned::new(0..0, value));
+        }
+        Laid {
+            name: theme.name,
+            origin: theme.origin,
+            folder: theme.folder,
+            palette: theme.palette,
+            settings,
+            file: file.clone(),
         }
     };
-    let inside: Settings = inside
-        .map(|text| toml::from_str(text).expect("Banda's own banda.toml parses"))
-        .unwrap_or_default();
-    let file = banda_toml
-        .as_ref()
-        .and_then(|(path, text)| read_settings(path, text, problems))
-        .unwrap_or_default();
-    Some(Laid {
-        name,
-        origin,
-        folder,
-        palette,
-        settings: file.over(inside),
-        banda_toml,
-    })
+    picked.map(with)
+}
+
+/// What is wrong in a theme's file, as a [`Problem`].
+fn problem_of(wrong: Wrong) -> Problem {
+    let problem = Problem::at(&wrong.path, &wrong.text, wrong.span, wrong.message);
+    if wrong.left_out {
+        problem.left_out()
+    } else {
+        problem
+    }
 }
 
 /// The sizes as CSS variables, in pixels.
@@ -1114,6 +1122,15 @@ pub fn check_text(path: &Path, text: &str) -> Vec<Problem> {
     if name.is_some_and(|name| name == "colors.toml") {
         return check_palette(path, text);
     }
+    if name.is_some_and(|name| name == "theme.toml") {
+        let mut wrong = Vec::new();
+        let colours = banda_theme::file::read(path, text, &mut wrong);
+        let mut problems: Vec<Problem> = wrong.into_iter().map(problem_of).collect();
+        if colours.is_some() {
+            read_theme_file(path, text, &mut problems);
+        }
+        return problems;
+    }
     match FILES
         .iter()
         .find(|file| name.is_some_and(|name| name == file.name))
@@ -1126,18 +1143,10 @@ pub fn check_text(path: &Path, text: &str) -> Vec<Problem> {
 fn check_palette(path: &Path, text: &str) -> Vec<Problem> {
     match Palette::parse(text) {
         Ok(palette) => {
-            let complete = palette.complete();
-            let not_hex = complete.not_hex();
-            if not_hex.is_empty() {
-                return Vec::new();
-            }
-            vec![Problem::whole(
-                path,
-                format!(
-                    "{} are not hex, so colours mixed from them fall back",
-                    not_hex.join(", ")
-                ),
-            )]
+            let said = palette.complete().not_hex_said();
+            said.into_iter()
+                .map(|said| Problem::whole(path, said))
+                .collect()
         }
         Err(error) => vec![Problem::toml(path, text, &error)],
     }

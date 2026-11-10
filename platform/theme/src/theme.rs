@@ -1,11 +1,18 @@
-//! Where themes are found, and what one holds: a folder with Omarchy's
-//! `colors.toml` and, if its author wants, a `banda.toml` in the schema of
-//! `look.toml` (ADR 0007, decisions 2 and 3), which the look reads.
+//! Where themes are found, and what one holds: a folder with a
+//! `theme.toml`, light and dark inside, which may extend another theme
+//! (ADR 0080, decisions 3 and 4); or an old one, Omarchy's `colors.toml`
+//! and, if its author wants, a `banda.toml` in the schema of `look.toml`
+//! (ADR 0007, decisions 2 and 3), which the look reads.
 
+use crate::file::ThemeToml;
 use crate::palette::Palette;
 use crate::{Material, Mode};
 use serde::Serialize;
+use std::borrow::Cow;
+use std::collections::BTreeMap;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 use ts_rs::TS;
 
 /// Where to look, on this machine.
@@ -147,68 +154,143 @@ pub enum Origin {
     Current,
 }
 
-/// One theme, read.
+/// One scheme's theme, read: its palette and tokens, and the files that
+/// say its shape, font and glass, for the look to read.
 #[derive(Clone, Debug)]
 pub struct Theme {
+    /// As the look's layers name it: `<name>-light` and `<name>-dark` for
+    /// each scheme of a theme of both.
     pub name: String,
     pub origin: Origin,
     /// Its folder; none for Banda's own.
     pub folder: Option<PathBuf>,
+    /// By Omarchy's names: each theme's colours over those of the one it
+    /// extends.
     pub palette: Palette,
-    /// What Banda says of it before its `banda.toml`, in the same schema:
-    /// all a theme of Banda's own says, and Omarchy's current one's shape.
-    pub inside: Option<&'static str>,
-    /// Its `banda.toml` and its text, for the look to read in the schema
-    /// of `look.toml`, so each key is known by its line (ADR 0007,
-    /// decision 3); none for Banda's own, or with no file.
-    pub banda_toml: Option<(PathBuf, String)>,
+    /// The tokens its `theme.toml` sets, each theme's over those of the
+    /// one it extends: a palette name, a token's name or a CSS colour. An
+    /// old `banda.toml` sets its own in `look.toml`'s schema.
+    pub tokens: BTreeMap<String, String>,
+    /// Its files that say its shape, font and glass, the one it extends
+    /// first.
+    pub layers: Vec<Layer>,
 }
 
-/// Under Omarchy's current theme's own `banda.toml`: Hyprland's
-/// rounding, border and gaps are its shape, and its border is the focus,
-/// as its windows show it, with no shadow beside it (ADR 0075, decisions
-/// 3 and 5).
-const OMARCHY: &str = "hyprland = true\n\n[focus]\nshadow = 0\n";
+/// A theme's file that says its shape, font and glass in `look.toml`'s
+/// keys, for the look to read.
+#[derive(Clone, Debug)]
+pub struct Layer {
+    /// Where it is, so each key is known by its line; none for Banda's own.
+    pub path: Option<PathBuf>,
+    pub text: Cow<'static, str>,
+    /// A `theme.toml`, which says them in its `[shape]`, `[font]` and
+    /// `[glass]`; else an old `banda.toml`, which says them as `look.toml`
+    /// does (ADR 0007, decision 3).
+    pub theme_toml: bool,
+}
 
-/// A theme's `colors.toml` that is no TOML: the theme is not read, and
-/// the look names it, where it is.
+impl Layer {
+    fn inside(text: &'static str) -> Layer {
+        Layer {
+            path: None,
+            text: Cow::Borrowed(text),
+            theme_toml: true,
+        }
+    }
+}
+
+/// A theme as `look.toml`'s `theme` names it: both schemes, or the one it
+/// has.
+#[derive(Clone, Debug)]
+pub enum Picked<T = Theme> {
+    Both(T, T),
+    One(T),
+}
+
+impl<T> Picked<T> {
+    /// Each scheme, made into another thing.
+    pub fn map<U>(self, mut f: impl FnMut(T) -> U) -> Picked<U> {
+        match self {
+            Picked::Both(light, dark) => Picked::Both(f(light), f(dark)),
+            Picked::One(one) => Picked::One(f(one)),
+        }
+    }
+
+    /// The scheme of `mode`, or the one there is.
+    pub fn of(self, mode: Mode) -> T {
+        match (self, mode) {
+            (Picked::Both(light, _), Mode::Light) => light,
+            (Picked::Both(_, dark), Mode::Dark) => dark,
+            (Picked::One(one), _) => one,
+        }
+    }
+}
+
+/// Something wrong in a theme's file, where it is, for the look to name.
 #[derive(Debug)]
-pub struct Unread {
+pub struct Wrong {
     pub path: PathBuf,
+    /// The file's text, which `span` is in.
     pub text: String,
-    pub error: toml::de::Error,
+    pub span: Option<Range<usize>>,
+    pub message: String,
+    /// The file is left out whole, as TOML written wrong is.
+    pub left_out: bool,
 }
 
-/// Banda's own themes: files in this crate, so they are examples too.
-const BUILT_IN: [(&str, &str, &str); 4] = [
-    (
-        "banda-light",
-        include_str!("../themes/banda-light/colors.toml"),
-        include_str!("../themes/banda-light/banda.toml"),
-    ),
-    (
-        "banda-dark",
-        include_str!("../themes/banda-dark/colors.toml"),
-        include_str!("../themes/banda-dark/banda.toml"),
-    ),
-    (
-        "macos-light",
-        include_str!("../themes/macos-light/colors.toml"),
-        include_str!("../themes/macos-light/banda.toml"),
-    ),
-    (
-        "macos-dark",
-        include_str!("../themes/macos-dark/colors.toml"),
-        include_str!("../themes/macos-dark/banda.toml"),
-    ),
-];
+impl Wrong {
+    pub fn at(path: &Path, text: &str, span: Range<usize>, message: String) -> Wrong {
+        Wrong {
+            path: path.to_owned(),
+            text: text.to_owned(),
+            span: Some(span),
+            message,
+            left_out: false,
+        }
+    }
 
-/// Whether `name` is a pair of Banda's own, shipped as `<name>-light` and
-/// `<name>-dark`, which `theme = "<name>"` takes both of (ADR 0075).
-pub fn is_pair(name: &str) -> bool {
-    let light = format!("{name}-light");
-    BUILT_IN.iter().any(|(n, _, _)| *n == light)
+    /// Something wrong in the file as a whole, at no place in it.
+    pub fn of_file(path: &Path, message: String) -> Wrong {
+        Wrong {
+            path: path.to_owned(),
+            text: String::new(),
+            span: None,
+            message,
+            left_out: false,
+        }
+    }
+
+    pub fn toml(path: &Path, text: &str, error: &toml::de::Error) -> Wrong {
+        Wrong {
+            path: path.to_owned(),
+            text: text.to_owned(),
+            span: error.span(),
+            message: error.message().trim().to_owned(),
+            left_out: true,
+        }
+    }
 }
+
+/// A theme's `extends` that comes back round to it.
+struct Cycle;
+
+/// Banda's own themes, light and dark in each: files in this crate, so
+/// they are examples too; each read once.
+static BUILT_IN: LazyLock<[(&str, &str, ThemeToml); 2]> = LazyLock::new(|| {
+    [
+        ("banda", include_str!("../themes/banda/theme.toml")),
+        ("macos", include_str!("../themes/macos/theme.toml")),
+    ]
+    .map(|(name, text)| {
+        let file = crate::file::read(Path::new(name), text, &mut Vec::new());
+        (name, text, file.expect("Banda's own theme.toml reads"))
+    })
+});
+
+/// Omarchy's current theme's shape, under its own `banda.toml`: its
+/// shape only, as its colours are its `colors.toml`'s until Omarchy's
+/// theme is read as any other (ADR 0080, step 5).
+const OMARCHY: &str = include_str!("../themes/omarchy/theme.toml");
 
 /// A theme as `themes` lists it.
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
@@ -224,7 +306,7 @@ pub struct Listed {
 
 impl Places {
     /// The folders a theme of this name may be in, in the order they win.
-    pub fn candidates(&self, name: &str) -> Vec<(Origin, PathBuf)> {
+    fn candidates(&self, name: &str) -> Vec<(Origin, PathBuf)> {
         if name.is_empty() || name.contains(['/', '\\']) || name.starts_with('.') {
             return Vec::new();
         }
@@ -237,66 +319,164 @@ impl Places {
         folders
     }
 
-    /// Reads the theme `name`: `omarchy` is Omarchy's current one, then
-    /// Banda's own, the Person's and Omarchy's by name. `None` when
-    /// there is no such theme; [`Unread`] when its palette is no TOML.
-    pub fn theme(&self, name: &str) -> Option<Result<Theme, Box<Unread>>> {
-        if name == "omarchy" {
-            let folder = self.omarchy_current.as_ref()?;
-            return read_folder("omarchy", Origin::Current, folder).map(|read| {
-                read.map(|theme| Theme {
-                    inside: Some(OMARCHY),
-                    ..theme
-                })
-            });
+    /// The theme `"platform"` names on this device, its own (ADR 0100,
+    /// decision 2): for now `omarchy` where Omarchy is, `macos` on a Mac,
+    /// else `banda`. The whole order comes with the platforms' adapters.
+    fn platform(&self) -> &'static str {
+        if self.omarchy_current.is_some() {
+            "omarchy"
+        } else if self.mac {
+            "macos"
+        } else {
+            "banda"
         }
-        if let Some((_, colors, banda)) = BUILT_IN.iter().find(|(n, _, _)| *n == name) {
-            let palette = Palette::parse(colors).expect("Banda's own palettes parse");
-            return Some(Ok(Theme {
-                name: name.to_owned(),
-                origin: Origin::Banda,
-                folder: None,
-                palette,
-                inside: Some(banda),
-                banda_toml: None,
-            }));
-        }
-        self.candidates(name)
-            .into_iter()
-            .find(|(_, folder)| folder.join("colors.toml").is_file())
-            .and_then(|(origin, folder)| read_folder(name, origin, &folder))
     }
 
-    /// Every theme there is, Banda's first.
-    pub fn themes(&self) -> Vec<Listed> {
-        let mut listed: Vec<Listed> = BUILT_IN
-            .iter()
-            .map(|(name, colors, _)| Listed {
-                name: (*name).to_owned(),
-                mode: Palette::parse(colors)
-                    .expect("Banda's own palettes parse")
-                    .mode(),
-                origin: Origin::Banda,
-                folder: None,
-            })
-            .collect();
-        let mut add = |name: String, origin: Origin, folder: &Path| {
-            let Ok(text) = std::fs::read_to_string(folder.join("colors.toml")) else {
-                return;
-            };
-            let Ok(palette) = Palette::parse(&text) else {
-                return;
-            };
-            listed.push(Listed {
-                name,
-                mode: palette.mode(),
-                origin,
-                folder: Some(folder.display().to_string()),
-            });
-        };
-        if let Some(current) = &self.omarchy_current {
-            add("omarchy".to_owned(), Origin::Current, current);
+    /// The theme `name`, as `look.toml`'s `theme` names it: `"platform"`;
+    /// `omarchy`, Omarchy's current one; Banda's own; the Person's and
+    /// Omarchy's by name. `<theme>-light` and `<theme>-dark` are one scheme
+    /// of a theme of both. Each file it reads or looks for goes to
+    /// `watched`, and what is wrong in them to `wrong`. `None` when there
+    /// is no such theme.
+    pub fn theme(
+        &self,
+        name: &str,
+        watched: &mut Vec<PathBuf>,
+        wrong: &mut Vec<Wrong>,
+    ) -> Option<Picked> {
+        self.find(name, &mut Vec::new(), watched, wrong)
+            .ok()
+            .flatten()
+    }
+
+    /// [`Places::theme`], with the themes whose `extends` is being followed
+    /// in `seen`.
+    fn find(
+        &self,
+        name: &str,
+        seen: &mut Vec<String>,
+        watched: &mut Vec<PathBuf>,
+        wrong: &mut Vec<Wrong>,
+    ) -> Result<Option<Picked>, Cycle> {
+        if name == "platform" {
+            return self.find(self.platform(), seen, watched, wrong);
         }
+        if name == "omarchy" {
+            let Some(folder) = &self.omarchy_current else {
+                return Ok(None);
+            };
+            watched.push(folder.join("colors.toml"));
+            watched.push(folder.join("banda.toml"));
+            return Ok(
+                old_folder("omarchy", Origin::Current, folder, wrong).map(|mut theme| {
+                    theme.layers.insert(0, Layer::inside(OMARCHY));
+                    Picked::One(theme)
+                }),
+            );
+        }
+        let built_in = |name: &str| BUILT_IN.iter().find(|(n, ..)| *n == name);
+        if let Some((name, text, file)) = built_in(name) {
+            let layer = Layer::inside(text);
+            return Ok(Some(over(name, Origin::Banda, None, layer, file, None)));
+        }
+        let scheme = name
+            .strip_suffix("-light")
+            .map(|stem| (stem, Mode::Light))
+            .or_else(|| name.strip_suffix("-dark").map(|stem| (stem, Mode::Dark)));
+        // One scheme of a theme of both.
+        let half = |picked: Option<Picked>, mode: Mode| {
+            let both = picked.filter(|picked| matches!(picked, Picked::Both(..)));
+            both.map(|both| Picked::One(both.of(mode)))
+        };
+        // Banda's own scheme wins over a folder of its name, as it did.
+        if let Some((stem, mode)) = scheme
+            && built_in(stem).is_some()
+        {
+            return Ok(half(self.find(stem, seen, watched, wrong)?, mode));
+        }
+        let candidates = self.candidates(name);
+        for (_, folder) in &candidates {
+            for file in ["theme.toml", "colors.toml", "banda.toml"] {
+                watched.push(folder.join(file));
+            }
+        }
+        let found = candidates.into_iter().find(|(_, folder)| {
+            folder.join("theme.toml").is_file() || folder.join("colors.toml").is_file()
+        });
+        match (found, scheme) {
+            (Some((origin, folder)), _) => self.folder(name, origin, &folder, seen, watched, wrong),
+            (None, Some((stem, mode))) => Ok(half(self.find(stem, seen, watched, wrong)?, mode)),
+            (None, None) => Ok(None),
+        }
+    }
+
+    /// The theme `name` in `folder`: its `theme.toml` over the theme it
+    /// extends, or an old one's files.
+    fn folder(
+        &self,
+        name: &str,
+        origin: Origin,
+        folder: &Path,
+        seen: &mut Vec<String>,
+        watched: &mut Vec<PathBuf>,
+        wrong: &mut Vec<Wrong>,
+    ) -> Result<Option<Picked>, Cycle> {
+        let path = folder.join("theme.toml");
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            return Ok(old_folder(name, origin, folder, wrong).map(Picked::One));
+        };
+        if seen.iter().any(|one| one == name) {
+            return Err(Cycle);
+        }
+        let Some(file) = crate::file::read(&path, &text, wrong) else {
+            return Ok(None);
+        };
+        seen.push(name.to_owned());
+        let base = file.extends.as_ref().and_then(|base| {
+            let said = base.get_ref();
+            let why = match self.find(said, seen, watched, wrong) {
+                Ok(Some(found)) => return Some(found),
+                Ok(None) => {
+                    format!("there is no theme \"{said}\" to extend, so {name} stands alone")
+                }
+                Err(Cycle) => format!(
+                    "extends = \"{said}\" comes back round to {name}, so {name} stands alone"
+                ),
+            };
+            wrong.push(Wrong::at(&path, &text, base.span(), why));
+            None
+        });
+        seen.pop();
+        let layer = Layer {
+            path: Some(path),
+            text: Cow::Owned(text),
+            theme_toml: true,
+        };
+        Ok(Some(over(name, origin, Some(folder), layer, &file, base)))
+    }
+
+    /// Every theme there is, Banda's first; each scheme of a theme of
+    /// both by itself, as `<theme>-light` and `<theme>-dark`.
+    pub fn themes(&self) -> Vec<Listed> {
+        let mut listed = Vec::new();
+        let mut add = |picked: Option<Picked>| {
+            let schemes = match picked {
+                Some(Picked::Both(light, dark)) => vec![light, dark],
+                Some(Picked::One(theme)) => vec![theme],
+                None => Vec::new(),
+            };
+            listed.extend(schemes.into_iter().map(|theme| Listed {
+                mode: theme.palette.mode(),
+                origin: theme.origin,
+                folder: (theme.folder).map(|folder| folder.display().to_string()),
+                name: theme.name,
+            }));
+        };
+        let (mut watched, mut wrong) = (Vec::new(), Vec::new());
+        for (name, ..) in BUILT_IN.iter() {
+            add(self.theme(name, &mut watched, &mut wrong));
+        }
+        add(self.theme("omarchy", &mut watched, &mut wrong));
         let roots = std::iter::once((Origin::Yours, self.own_themes())).chain(
             self.omarchy_themes
                 .iter()
@@ -312,38 +492,101 @@ impl Places {
                 .collect();
             names.sort();
             for name in names {
-                add(name.clone(), origin, &root.join(name));
+                let folder = root.join(&name);
+                let read = self.folder(
+                    &name,
+                    origin,
+                    &folder,
+                    &mut Vec::new(),
+                    &mut watched,
+                    &mut wrong,
+                );
+                add(read.ok().flatten());
             }
         }
         listed
     }
 }
 
-fn read_folder(name: &str, origin: Origin, folder: &Path) -> Option<Result<Theme, Box<Unread>>> {
+/// The theme of `file`, `name`'s `theme.toml`, over `base`: both schemes
+/// unless it extends a theme of one.
+fn over(
+    name: &str,
+    origin: Origin,
+    folder: Option<&Path>,
+    layer: Layer,
+    file: &ThemeToml,
+    base: Option<Picked>,
+) -> Picked {
+    let scheme = |base: Option<Theme>, mode: Mode, name: String| {
+        let mut theme = base.unwrap_or_else(|| {
+            let mut palette = Palette::default();
+            palette.set("mode", mode.word());
+            Theme {
+                name: String::new(),
+                origin,
+                folder: None,
+                palette,
+                tokens: BTreeMap::new(),
+                layers: Vec::new(),
+            }
+        });
+        theme.name = name;
+        theme.origin = origin;
+        theme.folder = folder.map(Path::to_owned);
+        for (key, value) in file.colors(mode) {
+            theme.palette.set(key, value.clone());
+        }
+        (theme.tokens).extend(file.tokens(mode).clone());
+        theme.layers.push(layer.clone());
+        theme
+    };
+    let (light, dark) = match base {
+        Some(Picked::One(base)) => {
+            let mode = base.palette.mode();
+            return Picked::One(scheme(Some(base), mode, name.to_owned()));
+        }
+        Some(Picked::Both(light, dark)) => (Some(light), Some(dark)),
+        None => (None, None),
+    };
+    let named = |mode: Mode| format!("{name}-{}", mode.word());
+    Picked::Both(
+        scheme(light, Mode::Light, named(Mode::Light)),
+        scheme(dark, Mode::Dark, named(Mode::Dark)),
+    )
+}
+
+/// An old theme's folder: Omarchy's `colors.toml`, and a `banda.toml` in
+/// `look.toml`'s schema if its author wants one (ADR 0007, decision 3).
+fn old_folder(name: &str, origin: Origin, folder: &Path, wrong: &mut Vec<Wrong>) -> Option<Theme> {
     let colors_path = folder.join("colors.toml");
     let text = std::fs::read_to_string(&colors_path).ok()?;
     let palette = match Palette::parse(&text) {
         Ok(palette) => palette,
         Err(error) => {
-            return Some(Err(Box::new(Unread {
-                path: colors_path,
-                text,
-                error,
-            })));
+            wrong.push(Wrong::toml(&colors_path, &text, &error));
+            return None;
         }
     };
+    if let Some(said) = palette.not_hex_said() {
+        wrong.push(Wrong::of_file(&colors_path, said));
+    }
     let banda_path = folder.join("banda.toml");
-    let banda_toml = std::fs::read_to_string(&banda_path)
-        .ok()
-        .map(|text| (banda_path, text));
-    Some(Ok(Theme {
+    let banda_toml = std::fs::read_to_string(&banda_path).ok();
+    Some(Theme {
         name: name.to_owned(),
         origin,
         folder: Some(folder.to_owned()),
         palette,
-        inside: None,
-        banda_toml,
-    }))
+        tokens: BTreeMap::new(),
+        layers: (banda_toml.into_iter())
+            .map(|text| Layer {
+                path: Some(banda_path.clone()),
+                text: Cow::Owned(text),
+                theme_toml: false,
+            })
+            .collect(),
+    })
 }
 
 /// The system's program `name`, as the PATH finds it: on Linux one only

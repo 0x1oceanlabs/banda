@@ -42,7 +42,8 @@ pub fn mix(from: &str, to: &str, amount: f64) -> Option<String> {
 }
 
 /// Whether a value can stand in CSS as a colour as it is: hex, a colour
-/// function, or a word such as `transparent`. The window's CSS decides the
+/// function, or a word such as `transparent`, or a palette's name such as
+/// `dark_background`, which a token names. The window's CSS decides the
 /// rest; this only keeps out what could break the declaration.
 pub fn is_css_color(text: &str) -> bool {
     let text = text.trim();
@@ -56,7 +57,7 @@ pub fn is_css_color(text: &str) -> bool {
         b.is_ascii_alphanumeric()
             || matches!(
                 b,
-                b'(' | b')' | b' ' | b',' | b'.' | b'%' | b'/' | b'-' | b'+'
+                b'(' | b')' | b' ' | b',' | b'.' | b'%' | b'/' | b'-' | b'+' | b'_'
             )
     }) && text.bytes().filter(|&b| b == b'(').count() == text.bytes().filter(|&b| b == b')').count()
 }
@@ -82,6 +83,7 @@ mod tests {
             "oklch(0.68 0.21 41)",
             "rgb(1 2 3 / 50%)",
             "transparent",
+            "darker_background",
         ] {
             assert!(is_css_color(ok), "{ok}");
         }
