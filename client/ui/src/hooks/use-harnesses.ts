@@ -15,6 +15,7 @@ type Shared = {
   /** When it was read, by `Date.now()`; 0 before. */
   readAt: number
   reading: boolean
+  revision: number
   readers: Set<() => void>
 }
 
@@ -23,7 +24,13 @@ const shared = new WeakMap<Engine, Shared>()
 function of(engine: Engine): Shared {
   let one = shared.get(engine)
   if (!one) {
-    one = { value: NONE, readAt: 0, reading: false, readers: new Set() }
+    one = {
+      value: NONE,
+      readAt: 0,
+      reading: false,
+      revision: 0,
+      readers: new Set(),
+    }
     shared.set(engine, one)
   }
   return one
@@ -35,12 +42,11 @@ function of(engine: Engine): Shared {
 function read(engine: Engine, one: Shared) {
   if (one.reading || Date.now() - one.readAt < FRESH) return
   one.reading = true
+  const revision = one.revision
   engine.call("harnesses.list", {}).then(
     (value) => {
       one.reading = false
-      one.value = value
-      one.readAt = Date.now()
-      for (const reader of one.readers) reader()
+      if (revision === one.revision) takeHarnesses(engine, value)
     },
     (error: unknown) => {
       one.reading = false
@@ -65,4 +71,14 @@ export function useHarnesses(engine: Engine): HarnessView[] {
   )
   useEffect(() => read(engine, one), [engine, one])
   return value
+}
+
+/** A list Settings has just read after a change. Mounted pickers receive
+ * it too; a read already in flight cannot put the old list back. */
+export function takeHarnesses(engine: Engine, value: HarnessView[]): void {
+  const one = of(engine)
+  one.revision++
+  one.value = value
+  one.readAt = Date.now()
+  for (const reader of one.readers) reader()
 }

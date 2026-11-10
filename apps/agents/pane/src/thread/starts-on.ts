@@ -5,6 +5,7 @@
  * for one they did not.
  */
 import { useMemo } from "react"
+import { useAccount } from "../harnesses"
 import type { Engine } from "@banda/contract"
 import { AGENTS_FILE, type Agents } from "@banda/contract/agents"
 import type {
@@ -32,7 +33,7 @@ export type StartsOn = {
   default: string
   /** The default is out: a limit window of it spent, till `until` when
    * every spent window says when it resets. */
-  out?: { until?: number }
+  out?: { until?: number; signedOut?: true }
   /** It starts on the fallback, the default being out. */
   fallback: boolean
 }
@@ -68,17 +69,27 @@ export function startsOn(
   harnesses: readonly HarnessView[],
   agents: Pick<Agents, "account" | "fallback">,
   limits: readonly Limits[],
-  now: number
+  now: number,
+  signedIn: ReadonlyMap<string, boolean | undefined> = new Map()
 ): StartsOn | undefined {
   const on = harnesses.filter((h) => h.enabled)
   const first = on.find((h) => h.id === agents.account) ?? on[0]
   if (!first) return undefined
   const of = (id: string) => limits.find((l) => l.harness === id)
-  const out = outOf(of(first.id), now)
+  const spent = outOf(of(first.id), now)
+  const out =
+    signedIn.get(first.id) === false
+      ? { ...spent, signedOut: true as const }
+      : spent
   const base = { id: first.id, default: first.id, out, fallback: false }
   if (!out) return base
   const fallback = on.find((h) => h.id === agents.fallback && h !== first)
-  if (!fallback || outOf(of(fallback.id), now)) return base
+  if (
+    !fallback ||
+    signedIn.get(fallback.id) !== true ||
+    outOf(of(fallback.id), now)
+  )
+    return base
   return { ...base, id: fallback.id, fallback: true }
 }
 
@@ -92,11 +103,14 @@ export function startsOnWords(
   if (!starts.out) return undefined
   const name = (id: string) => harnesses.find((h) => h.id === id)?.name ?? id
   const until = starts.out.until
-  const out = `${name(starts.default)} is out${until === undefined ? "" : ` until ${clock(until)}`}`
+  const out = starts.out.signedOut
+    ? `${name(starts.default)} is signed out`
+    : `${name(starts.default)} is out${until === undefined ? "" : ` until ${clock(until)}`}`
   if (!starts.fallback)
-    return `${out}: new Threads start on it still, as no fallback has room.`
-  const till =
-    until === undefined
+    return `${out}: new Threads start on it still, as no signed-in fallback has room.`
+  const till = starts.out.signedOut
+    ? ` till ${name(starts.default)} signs in again`
+    : until === undefined
       ? ` till ${name(starts.default)} has room`
       : " until then"
   return `${out}: new Threads start on ${name(starts.id)}${till}.`
@@ -130,8 +144,34 @@ export function useStartsOn(engine: Engine): StartsOn | undefined {
   const harnesses = useHarnesses(engine)
   const { account, fallback } = useFile(AGENTS_FILE)
   const { limits, now } = useLimitsNow(engine)
+  const first =
+    harnesses.find((one) => one.enabled && one.id === account) ??
+    harnesses.find((one) => one.enabled)
+  const spare = harnesses.find(
+    (one) => one.enabled && one.id === fallback && one.id !== first?.id
+  )
+  const primary = useAccount(engine, first?.id)
+  const secondary = useAccount(engine, spare?.id)
+  const signedIn = useMemo(
+    () =>
+      new Map([
+        [
+          first?.id ?? "",
+          primary.state === "ready"
+            ? primary.view.account.signed_in_as?.signed_in
+            : undefined,
+        ],
+        [
+          spare?.id ?? "",
+          secondary.state === "ready"
+            ? secondary.view.account.signed_in_as?.signed_in
+            : undefined,
+        ],
+      ]),
+    [first?.id, spare?.id, primary, secondary]
+  )
   return useMemo(
-    () => startsOn(harnesses, { account, fallback }, limits, now),
-    [harnesses, account, fallback, limits, now]
+    () => startsOn(harnesses, { account, fallback }, limits, now, signedIn),
+    [harnesses, account, fallback, limits, now, signedIn]
   )
 }

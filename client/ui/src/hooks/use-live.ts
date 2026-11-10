@@ -190,7 +190,7 @@ export function useLive<S extends { at: number }>(
  */
 export function useMachineLive<S extends { at: number }>(
   engine: Engine,
-  source: Source<S>,
+  source: Source<S> | null,
   round = 0
 ): Live<S> {
   const machine = useMachine(engine)
