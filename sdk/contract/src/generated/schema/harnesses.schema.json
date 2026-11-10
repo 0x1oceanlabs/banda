@@ -49,6 +49,10 @@
           "type": "boolean",
           "default": true
         },
+        "retired": {
+          "description": "Written by the bounded Account removal operation.",
+          "$ref": "#/$defs/Retirement"
+        },
         "args": {
           "description": "The program's arguments.",
           "type": "array",
@@ -94,6 +98,20 @@
       },
       "required": [
         "id"
+      ]
+    },
+    "Retirement": {
+      "description": "Kept with the old entry so a resumed session still knows its source.",
+      "type": "object",
+      "properties": {
+        "to": {
+          "type": "string"
+        },
+        "by": true
+      },
+      "required": [
+        "to",
+        "by"
       ]
     },
     "Cli": {
