@@ -122,6 +122,10 @@ banda_kernel::methods! {
         /// Brings the workspaces set aside back, after the ones there are
         /// now.
         command bring_back(Nothing) -> Done, Write;
+        /// Puts the workspaces back as they stood before the last Arrange
+        /// by Project, while they still stand as it left them (ADR 0102,
+        /// decision 9). Each Pane keeps the args it has now.
+        command unarrange(Nothing) -> Done, Write;
         /// The Panes on the workspaces, from the top down and from the
         /// left: your Project's with their args, a browser's with the tabs
         /// your Project's Agents opened alone, and, when your Person lets
@@ -411,6 +415,9 @@ impl Module for Workspaces {
            )",
             // The workspaces set aside, when a window broke on them.
             "ALTER TABLE workspaces_arrangement ADD COLUMN aside TEXT",
+            // The last Arrange by Project, before it and after it, while
+            // Undo may put it back.
+            "ALTER TABLE workspaces_arrangement ADD COLUMN arranged TEXT",
         ]
     }
 
@@ -641,9 +648,36 @@ impl Workspaces {
 
     async fn arrange(&self, call: Call, arrange: Arrange) -> Result<Done, Refusal> {
         let leads = (arrange.leads).unwrap_or_else(|| self.grouped.iter().cloned().collect());
-        change(&call, "arranged", None, Say::Whole, move |list, _, seed| {
-            model::arrange(list, &arrange.projects, arrange.only, &leads, seed);
-            Ok(())
+        change(
+            &call,
+            "arranged",
+            None,
+            Say::Whole,
+            move |list, tx, seed| {
+                let before = list.clone();
+                model::arrange(list, &arrange.projects, arrange.only, &leads, seed);
+                // Undo puts back the Person's Arrange of every Project, and
+                // none past one that moved nothing. One with `only`, as a
+                // Thread made a Project's, is another change.
+                if arrange.only.is_some() {
+                    return Ok(());
+                }
+                let after = list.clone();
+                let last = (after != before).then_some(LastArrange { before, after });
+                keep_arranged(tx, last.as_ref())
+            },
+        )
+        .await
+        .map(|()| Done {})
+    }
+
+    async fn unarrange(&self, call: Call, _: Nothing) -> Result<Done, Refusal> {
+        change(&call, "unarranged", None, Say::Whole, |list, tx, _| {
+            let Some(last) = load_arranged(tx.sql())? else {
+                return Err(Refusal::conflict("There is no Arrange to undo.").into());
+            };
+            model::unarrange(list, last.before, &last.after)?;
+            keep_arranged(tx, None)
         })
         .await
         .map(|()| Done {})
@@ -906,15 +940,52 @@ fn load(sql: &rusqlite::Connection) -> Result<Arrangement, Error> {
 /// reads them now, and none an Agent may not give.
 fn parsed(text: &str) -> Result<Arrangement, Error> {
     let mut list: Arrangement = serde_json::from_str(text)?;
-    for pane in list
-        .iter_mut()
-        .flat_map(|w| &mut w.columns)
-        .flat_map(|c| &mut c.panes)
-    {
+    upgraded(&mut list);
+    Ok(list)
+}
+
+/// Reads each Pane's args of `list` as its kind reads them now, and drops
+/// any an Agent may not give.
+fn upgraded(list: &mut Arrangement) {
+    for pane in model::panes_mut(list) {
         pane.shows.upgrade();
         unasked(pane);
     }
-    Ok(list)
+}
+
+/// The last Arrange by Project, while Undo may put it back: the
+/// arrangement before it, and after it (ADR 0102, decision 9).
+#[derive(Serialize, Deserialize)]
+struct LastArrange {
+    before: Arrangement,
+    after: Arrangement,
+}
+
+/// The last Arrange by Project, if there is one to undo.
+fn load_arranged(sql: &rusqlite::Connection) -> Result<Option<LastArrange>, Error> {
+    let text: Option<String> = sql.query_row(
+        "SELECT arranged FROM workspaces_arrangement WHERE one = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    let Some(text) = text else {
+        return Ok(None);
+    };
+    let mut last: LastArrange = serde_json::from_str(&text)?;
+    upgraded(&mut last.before);
+    upgraded(&mut last.after);
+    Ok(Some(last))
+}
+
+/// Keeps `last` as the last Arrange by Project; none, when there is none
+/// to undo.
+fn keep_arranged(tx: &Tx<'_>, last: Option<&LastArrange>) -> Result<(), Error> {
+    let kept = last.map(serde_json::to_string).transpose()?;
+    tx.sql().execute(
+        "UPDATE workspaces_arrangement SET arranged = ?1 WHERE one = 1",
+        [kept],
+    )?;
+    Ok(())
 }
 
 /// The workspaces set aside; none when there are none.

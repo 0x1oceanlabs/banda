@@ -12,8 +12,9 @@ import { holdsAlone, type Key, keyLabel, type Pressed } from "../lib/keys"
 /**
  * The keys in force (ADR 0068): the mod, and by the id of the action each
  * runs, its key, Banda's or the one `keys.toml` gives it; and every key
- * by the scope its action works in, "" for the window's (ADR 0071). A
- * window gives them; outside one, Alt and no key.
+ * by the scope its action works in, "" for the window's (ADR 0071), but
+ * those a browser's page keeps (`Action.pageKeeps`). A window gives them;
+ * outside one, Alt and no key.
  */
 export type KeysInForce = {
   mod: Mod

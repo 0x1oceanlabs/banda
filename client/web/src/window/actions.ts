@@ -22,6 +22,7 @@ import {
 } from "@banda/ui/module"
 import { IN_PROGRAM, type PaneState, paneOf, type Place } from "@banda/ui/pane"
 import { RESET_KEY } from "../actions/actions"
+import { sayArranged, unarrange, undoesNow } from "./arranged"
 import { chipOf } from "./attach"
 import { device } from "../boot"
 import { showing } from "../calls/sight"
@@ -1032,7 +1033,20 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     id: "workspaces.arrange",
     section: "Workspaces",
     title: "Arrange by Project",
-    run: (shell) => shell.change((w) => arranging(w, shell.placing())),
+    // A toast says it, and offers Undo (`arranged.ts`).
+    run: (shell) =>
+      shell.change((w) => sayArranged(shell, w, arranging(w, shell.placing()))),
+  },
+  {
+    id: "workspaces.unarrange",
+    section: "Workspaces",
+    title: "Undo Arrange by Project",
+    // Its key is Undo's only while the toast offers it, and never a
+    // field's, a program's or a page's, which have their own.
+    keys: [{ code: "KeyZ", primary: true }],
+    when: undoesNow,
+    pageKeeps: true,
+    run: (shell) => unarrange(shell),
   },
   {
     // The sidebar's Flow menu: a pick of the three, where the key only

@@ -43,8 +43,8 @@ export type Command = {
 
 /**
  * The commands `apply` runs, as `commands::METHODS`: the module's own, but
- * for those that need its store (`set_aside`, `bring_back`) and the
- * Agents' tools.
+ * for those that need its store (`set_aside`, `bring_back`, `unarrange`)
+ * and the Agents' tools.
  */
 export const METHODS: readonly Command["method"][] = [
   "workspaces.open",

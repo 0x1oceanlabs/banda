@@ -410,6 +410,13 @@ pub fn panes(list: &Arrangement) -> impl Iterator<Item = &Pane> {
     list.iter().flat_map(panes_of)
 }
 
+/// Every Pane of `list`, to change.
+pub fn panes_mut(list: &mut Arrangement) -> impl Iterator<Item = &mut Pane> {
+    list.iter_mut()
+        .flat_map(|w| &mut w.columns)
+        .flat_map(|c| &mut c.panes)
+}
+
 /// The Pane the workspaces show that shows `shown`, if one does.
 pub fn showing<'a>(list: &'a Arrangement, shown: &Shown) -> Option<&'a Pane> {
     panes(list).find(|pane| pane.shows == *shown)
@@ -1105,6 +1112,38 @@ pub fn arrange(
         }
     }
     normalize(list, seed);
+}
+
+/// Puts back `before`, the workspaces as they stood before the last
+/// Arrange by Project, while `list` stands as it left them, `after` (ADR
+/// 0102, decision 9). Each Pane keeps the args it has now.
+pub fn unarrange(
+    list: &mut Arrangement,
+    mut before: Arrangement,
+    after: &Arrangement,
+) -> Result<(), Refusal> {
+    if standing(list) != standing(after) {
+        return Err(Refusal::conflict("Can't undo: the workspaces changed."));
+    }
+    for pane in panes_mut(&mut before) {
+        if let Some(args) = args_of(list, pane.id) {
+            pane.shows.args = args.clone();
+        }
+    }
+    *list = before;
+    Ok(())
+}
+
+/// How `list` stands, each Pane's args left out, as they change while the
+/// Pane works, a terminal's folder, a browser's page; and the empty
+/// workspaces, which the window lets go as the Person leaves them.
+fn standing(list: &Arrangement) -> Arrangement {
+    let mut list = list.clone();
+    list.retain(|workspace| !workspace.columns.is_empty());
+    for pane in panes_mut(&mut list) {
+        pane.shows.args = Value::Null;
+    }
+    list
 }
 
 /// Whether the Group a column is in takes the whole screen, its columns

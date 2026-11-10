@@ -4095,15 +4095,25 @@ test("a Project's Agents open in a row on its workspace, from wherever the Perso
   ).toHaveCount(2)
 })
 
-test("Arrange by Project puts a Project's terminal into its own Group, first on its workspace, and its Agents after it (ADR 0102, decisions 4 and 9)", async () => {
-  window = await startWindow({ files: FREE })
+type Kept = {
+  project?: string
+  own?: string
+  columns: { group?: string; panes: { id: string; kind: string }[] }[]
+}
+
+/**
+ * As the Flow free leaves them, on one workspace: Work's Thread, a
+ * terminal in none, and another Thread; then the row. Gives how to
+ * Arrange by Project from the Banda menu, the workspaces as the engine
+ * keeps them, and where each Pane stands, by its ID, on the workspaces
+ * that hold one.
+ */
+async function freeThenRow(window: Window) {
   const { page } = window
   const { thread, composer } = await firstThread(page)
   await composer.fill("hello")
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
-  // As the Flow free leaves them, on one workspace: Work's Thread, a
-  // terminal in none, and another Thread.
   await page.keyboard.press("Alt+KeyN")
   await page
     .getByRole("region", { name: "New Pane" })
@@ -4125,26 +4135,38 @@ test("Arrange by Project puts a Project's terminal into its own Group, first on 
   await page.keyboard.press("Escape")
   await expect(flow).toHaveAccessibleName("Flow: Row")
 
-  // Arranged from the Banda menu, on Work's workspace as the engine keeps
-  // it: the terminal is the own Group, first, and each Thread its Group.
   const menu = page.getByRole("dialog", { name: "Banda menu" })
-  const arrange = async () => {
+  const run = async (action: RegExp) => {
     await page.keyboard.press("Alt+Space")
     await menu.getByRole("combobox", { name: "Search" }).fill("Arrange")
-    await menu.getByRole("option", { name: /^Arrange by Project/ }).click()
+    await menu.getByRole("option", { name: action }).click()
     await expect(menu).toBeHidden()
   }
-  type Kept = {
-    project?: string
-    own?: string
-    columns: { group?: string; panes: { kind: string }[] }[]
+  const workspaces = () =>
+    JSON.parse(window.banda("call", "workspaces.list")).ok.workspaces as Kept[]
+  const standing = () =>
+    workspaces()
+      .filter((workspace) => workspace.columns.length > 0)
+      .map((workspace) =>
+        workspace.columns.map((c) => c.panes.map((pane) => pane.id))
+      )
+  return {
+    arrange: () => run(/^Arrange by Project/),
+    unarrange: () => run(/^Undo Arrange by Project/),
+    workspaces,
+    standing,
   }
+}
+
+test("Arrange by Project puts a Project's terminal into its own Group, first on its workspace, and its Agents after it (ADR 0102, decisions 4 and 9)", async () => {
+  window = await startWindow({ files: FREE })
+  const { arrange, workspaces } = await freeThenRow(window)
+
+  // Arranged from the Banda menu, on Work's workspace as the engine keeps
+  // it: the terminal is the own Group, first, and each Thread its Group.
   const work = projectId(window, "Work")
   const works = () =>
-    (
-      JSON.parse(window.banda("call", "workspaces.list")).ok
-        .workspaces as Kept[]
-    ).find((workspace) => workspace.project === work)
+    workspaces().find((workspace) => workspace.project === work)
   const arranged = () => {
     const home = works()
     return {
@@ -4164,6 +4186,76 @@ test("Arrange by Project puts a Project's terminal into its own Group, first on 
   const before = works()
   await arrange()
   expect(works()).toEqual(before)
+})
+
+test("Arrange by Project's toast undoes it, and so does Ctrl+Z while it shows (ADR 0102, decision 9)", async () => {
+  window = await startWindow({ files: FREE })
+  const { page } = window
+  const { arrange, standing } = await freeThenRow(window)
+  const toasts = page
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+  const arranged = toasts.filter({ hasText: "Arranged by Project" })
+  const before = standing()
+  // The Pane in front, which the view brings back along with it.
+  const again = page
+    .locator(ON_SCREEN)
+    .getByRole("region", { name: "again", exact: true })
+
+  // Undo, on the toast: every Pane back where it stood.
+  await arrange()
+  await expect.poll(standing).not.toEqual(before)
+  await arranged.getByRole("button", { name: "Undo" }).click()
+  await expect.poll(standing).toEqual(before)
+  await expect(arranged).toBeHidden()
+  await expect(again).toHaveAttribute("data-focused", "true")
+
+  // Ctrl+Z, after the sidebar's Flow menu's Arrange, with the keys on its
+  // button: a Thread's tile gives them to its composer, and a terminal's
+  // to its program, which keep their own Ctrl+Z. The pointer on the
+  // toast holds it.
+  const flow = page
+    .getByRole("complementary", { name: "Sidebar" })
+    .getByRole("button", { name: /^Flow: / })
+  await flow.click()
+  await page.getByRole("menuitem", { name: "Arrange by Project" }).click()
+  await expect.poll(standing).not.toEqual(before)
+  await arranged.hover()
+  await flow.focus()
+  await page.keyboard.press("Control+KeyZ")
+  await expect.poll(standing).toEqual(before)
+  await expect(arranged).toBeHidden()
+  await expect(again).toHaveAttribute("data-focused", "true")
+
+  // Arranged already: it says so, with nothing to undo.
+  await arrange()
+  await arrange()
+  await expect(toasts.filter({ hasText: "Already arranged" })).toBeVisible()
+})
+
+test("Arrange by Project's Undo is refused once a Pane closed since, in the engine's words, and nothing moves (ADR 0102, decision 9)", async () => {
+  window = await startWindow({ files: FREE })
+  const { page } = window
+  const { arrange, unarrange, standing } = await freeThenRow(window)
+  const before = standing()
+  await arrange()
+  await expect.poll(standing).not.toEqual(before)
+  const arranged = standing()
+  await page.getByRole("region", { name: "again", exact: true }).focus()
+  await page.keyboard.press("Alt+KeyW")
+  await expect.poll(() => standing().flat(2).length).toBe(2)
+  const closed = standing()
+  expect(closed).not.toEqual(arranged)
+
+  // From the Banda menu, as the toast's Undo does.
+  await unarrange()
+  await expect(
+    page
+      .getByRole("region", { name: "Notifications" })
+      .getByRole("listitem")
+      .filter({ hasText: "Can't undo: the workspaces changed." })
+  ).toBeVisible()
+  expect(standing()).toEqual(closed)
 })
 
 /** Sends `words` from the New Thread in focus, its first message. */

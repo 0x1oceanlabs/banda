@@ -181,6 +181,7 @@ export const DOES = {
   "workspaces.take": "act",
   "workspaces.set_aside": "act",
   "workspaces.bring_back": "act",
+  "workspaces.unarrange": "act",
   "workspaces.panes": "read",
   "workspaces.open_pane": "act",
   "workspaces.move_own": "act",

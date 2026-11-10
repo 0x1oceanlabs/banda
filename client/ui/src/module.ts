@@ -212,6 +212,10 @@ export type Action<Context = WindowApi> = {
    * the Pane, as `F2` to a terminal's program while no Thread has the
    * focus. Its key is always its own, by default. */
   when?: (context: Context) => boolean
+  /** A browser's page keeps its key, as `Ctrl+Z`, the page's own Undo:
+   * main never takes it from a page for the window (ADR 0071, decision
+   * 4), so `when` leaves it to a page too. */
+  pageKeeps?: true
   run: (context: Context, args?: Args) => void
 }
 

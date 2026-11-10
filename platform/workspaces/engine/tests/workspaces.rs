@@ -1251,3 +1251,136 @@ async fn arranging_with_no_leads_said_leads_a_group_by_the_kinds_that_open_group
     assert_eq!(columns(&list, 0), 0);
     assert_eq!(list["workspaces"][1]["project"], json!(home));
 }
+
+/// A terminal of `work` and a browser of `home`, each on a free workspace
+/// as the Flow free leaves them; the workspaces then, and the browser.
+async fn free_of(machine: &Machine, work: ProjectId, home: ProjectId) -> (Value, Value) {
+    let terminal = json!({ "project": work, "kind": "terminal.terminal", "args": {} });
+    machine.command("workspaces.open", terminal).await.unwrap();
+    let browser = json!({ "project": home, "kind": "browser.browser", "args": { "url": "a" } });
+    let opened = machine.command("workspaces.open", browser).await.unwrap();
+    (
+        machine.list().await["workspaces"].clone(),
+        opened["pane"].clone(),
+    )
+}
+
+/// `workspaces` with the args of the Pane `pane` as `args`.
+fn with_args(mut workspaces: Value, pane: &Value, args: &Value) -> Value {
+    for workspace in workspaces.as_array_mut().unwrap() {
+        for column in workspace["columns"].as_array_mut().unwrap() {
+            for one in column["panes"].as_array_mut().unwrap() {
+                if one["id"] == *pane {
+                    one["args"] = args.clone();
+                }
+            }
+        }
+    }
+    workspaces
+}
+
+#[tokio::test]
+async fn undo_puts_the_workspaces_back_as_they_stood_before_arrange_by_project() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let (work, home) = (ProjectId::new(), ProjectId::new());
+    let (before, browser) = free_of(&machine, work, home).await;
+    let arrange = json!({ "projects": [work, home] });
+    machine
+        .command("workspaces.arrange", arrange)
+        .await
+        .unwrap();
+    assert_ne!(machine.list().await["workspaces"], before);
+
+    // The browser went to another page since, and the window let go of
+    // the workspaces the Arrange emptied: that is no change of how they
+    // stand, and the browser's Pane keeps its page.
+    let page = json!({ "url": "b" });
+    let update = json!({ "pane": browser, "args": page });
+    machine.command("workspaces.update", update).await.unwrap();
+    let tidy = json!({ "projects": [work, home] });
+    machine.command("workspaces.tidy", tidy).await.unwrap();
+    machine
+        .command("workspaces.unarrange", json!({}))
+        .await
+        .unwrap();
+    let back = machine.list().await["workspaces"].clone();
+    assert_eq!(back, with_args(before, &browser, &page));
+    let (kind, said) = machine.events().await.pop().unwrap();
+    assert_eq!(kind, "unarranged");
+    assert_eq!(said["workspaces"], back);
+
+    // Undone, there is none to undo again.
+    let again = machine.command("workspaces.unarrange", json!({}));
+    let refused = again.await.unwrap_err();
+    assert_eq!(refused.code, Code::Conflict);
+    assert_eq!(refused.message, "There is no Arrange to undo.");
+    assert_eq!(machine.list().await["workspaces"], back);
+}
+
+#[tokio::test]
+async fn an_arrange_by_project_that_moves_nothing_leaves_none_to_undo() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let (work, home) = (ProjectId::new(), ProjectId::new());
+    free_of(&machine, work, home).await;
+    let arrange = json!({ "projects": [work, home] });
+    machine
+        .command("workspaces.arrange", arrange.clone())
+        .await
+        .unwrap();
+
+    // Again, it moves nothing and says nothing, and Undo never reaches
+    // past it.
+    let again = machine.answer(CommandId::new(), "workspaces.arrange", arrange);
+    assert_eq!(again.await.unwrap(), unplaced(json!({})));
+    let undo = machine.command("workspaces.unarrange", json!({}));
+    let refused = undo.await.unwrap_err();
+    assert_eq!(refused.code, Code::Conflict);
+    assert_eq!(refused.message, "There is no Arrange to undo.");
+}
+
+#[tokio::test]
+async fn undo_is_refused_once_the_workspaces_changed_since_arrange_by_project() {
+    // A Pane closed, one opened, a workspace moved, and an Arrange of one
+    // Project, as a Thread made a Project's.
+    for case in ["close", "open", "move", "only"] {
+        let root = tempfile::tempdir().unwrap();
+        let machine = Machine::open(root.path(), PersonId::new()).await;
+        let (work, home) = (ProjectId::new(), ProjectId::new());
+        free_of(&machine, work, home).await;
+        // `home` of no Project: its browser stays on its free workspace.
+        let arrange = json!({ "projects": [work] });
+        machine
+            .command("workspaces.arrange", arrange)
+            .await
+            .unwrap();
+        let list = machine.list().await;
+        let terminal = panes(&list["workspaces"])[0]["id"].clone();
+        let (method, params) = match case {
+            "close" => ("close", json!({ "pane": terminal })),
+            "open" => (
+                "open",
+                json!({ "project": work, "kind": "git.diff", "args": {} }),
+            ),
+            "move" => (
+                "move_workspace",
+                json!({ "workspace": list["workspaces"][2]["id"], "index": 0 }),
+            ),
+            _ => ("arrange", json!({ "projects": [work, home], "only": home })),
+        };
+        let method = format!("workspaces.{method}");
+        machine.command(&method, params).await.unwrap();
+        let changed = machine.list().await["workspaces"].clone();
+        assert_ne!(changed, list["workspaces"], "{case}");
+
+        let undo = machine.command("workspaces.unarrange", json!({}));
+        let refused = undo.await.unwrap_err();
+        assert_eq!(refused.code, Code::Conflict, "{case}");
+        assert_eq!(
+            refused.message, "Can't undo: the workspaces changed.",
+            "{case}"
+        );
+        assert_eq!(machine.list().await["workspaces"], changed, "{case}");
+    }
+}

@@ -124,6 +124,12 @@ set_aside: CommandMethod<Nothing, Done>,
  */
 bring_back: CommandMethod<Nothing, Done>, 
 /**
+ * Puts the workspaces back as they stood before the last Arrange
+ * by Project, while they still stand as it left them (ADR 0102,
+ * decision 9). Each Pane keeps the args it has now.
+ */
+unarrange: CommandMethod<Nothing, Done>, 
+/**
  * The Panes on the workspaces, from the top down and from the
  * left: your Project's with their args, a browser's with the tabs
  * your Project's Agents opened alone, and, when your Person lets
