@@ -978,7 +978,7 @@ If Chat is removed, Agents still works through its own Thread.
     `agents.toml`'s `[start.<id>]`, set from the same bar in the settings,
     which writes it through the engine as the Person (ADR 0083):
     `harnesses.toml` says only how the Harnesses start (ADR 0040).
-- **Agents connect Accounts through the engine** (ADR 0103).
+- **Agents connect Accounts through the engine** (ADR 0104).
   `banda account` uses the caller's pass. `account_profiles` discovers
   folders without reading credentials; `connect_account` adopts an
   existing folder or creates a private one under the engine's data,

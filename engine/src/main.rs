@@ -18,7 +18,7 @@
 //!   `browser.toml`; `--follow` prints it again on each change. It needs
 //!   no engine: the look is this machine's.
 //! - `banda account` discovers, connects and manages Accounts through the
-//!   engine, with the caller's pass (ADR 0103).
+//!   engine, with the caller's pass (ADR 0104).
 //! - `banda machine` prints what this machine is called and drawn by, its
 //!   name and icon, as its engine says them to every window.
 //! - `banda --version` prints the version and the build id, by which the

@@ -133,7 +133,7 @@ const WHOSE: [(&str, &str, usize, &str); 8] = [
         "platform/harnesses/engine/src/module.rs",
         "terminal",
         1,
-        "Codex's fixed device-code sign-in, initiated through the bounded Account contract and completed by the Person (ADR 0103)",
+        "Codex's fixed device-code sign-in, initiated through the bounded Account contract and completed by the Person (ADR 0104)",
     ),
     (
         "apps/agents/engine/src/lib.rs",
