@@ -2,15 +2,16 @@
 //! Agent's replies and thoughts, gathered a moment so they are written
 //! together; its tool calls and what their commands print; its Questions,
 //! its plan and its notices; and what it uses and offers, between turns
-//! too; and which file its tool calls work on now, which only memory
-//! keeps (`touching.rs`). The turn's own state is the writer's
-//! (`writer.rs`).
+//! too; and which file its tool calls work on now, and what the turn
+//! does, which only memory keeps (`touching.rs`, `doing.rs`). The turn's
+//! own state is the writer's (`writer.rs`).
 
 mod content;
 mod output;
 
 use crate::acp::ToolPart;
-use crate::acp::{Answer, Running, Said, ToolChange};
+use crate::acp::{Answer, Running, Said, ToolChange, unstarted};
+use crate::doing::Doer;
 use crate::full_access::Chosen;
 use crate::live::TurnRun;
 use crate::model::{
@@ -29,6 +30,14 @@ use tokio::time::Instant;
 
 /// How long pieces of a reply gather before they are written together.
 const GATHER: Duration = Duration::from_millis(80);
+
+/// Returns at `at`, or never without one.
+async fn until(at: Option<Instant>) {
+    match at {
+        Some(at) => tokio::time::sleep_until(at).await,
+        None => std::future::pending().await,
+    }
+}
 
 /// Writes a line from Banda into the Thread.
 pub fn notice(
@@ -201,9 +210,13 @@ pub struct Transcript {
     pub(crate) resets: Option<i64>,
     /// Which file its tool calls work on now; nothing once it is let go.
     toucher: Toucher,
+    /// What the turn does now; nothing once it is let go.
+    doer: Doer,
 }
 
 impl Transcript {
+    /// `doer` says what the turn does from its start, before its Harness
+    /// says anything.
     pub fn new(
         project: ModuleProject,
         turn: &store::Turn,
@@ -211,9 +224,11 @@ impl Transcript {
         settings: Settings,
         running: Running,
         touches: &Arc<Touches>,
+        doer: Doer,
     ) -> Transcript {
         Transcript {
             toucher: Toucher::new(touches.clone(), project.id(), turn.thread),
+            doer,
             project,
             thread: turn.thread,
             turn: turn.id,
@@ -239,12 +254,8 @@ impl Transcript {
     ) -> Result<(), String> {
         loop {
             let due = self.due;
-            let gathered = async move {
-                match due {
-                    Some(at) => tokio::time::sleep_until(at).await,
-                    None => std::future::pending().await,
-                }
-            };
+            let gathered = until(due);
+            let saying = until(self.doer.due());
             tokio::select! {
                 biased;
                 said = hear.recv() => match said {
@@ -252,12 +263,14 @@ impl Transcript {
                     None => break,
                 },
                 () = gathered => self.write_gathered().await?,
+                () = saying => self.doer.say(),
             }
         }
         self.close().await
     }
 
     async fn hear(&mut self, run: &TurnRun, said: Said) -> Result<(), String> {
+        self.doer.hear(&said);
         match said {
             Said::Reply { text, message } => {
                 self.after_steer(run).await?;
@@ -276,6 +289,7 @@ impl Transcript {
                 status,
                 content,
                 places,
+                ..
             } => {
                 self.close().await?;
                 self.start_tool(call, title, tool, status, content, &places)
@@ -291,13 +305,13 @@ impl Transcript {
                 // message; what the command prints is gathered still.
                 self.end_text().await?;
                 if !self.tools.contains_key(&call) {
-                    let title = change.title.take().unwrap_or_else(|| "A tool".to_owned());
-                    let status = change.status.take().unwrap_or(ToolStatus::Running);
+                    let titled = change.title.take();
+                    let (tool, title, status) = unstarted(titled.as_deref(), change.status.take());
                     let content = change.content.take().unwrap_or_default();
                     self.start_tool(
                         call.clone(),
-                        title,
-                        ToolKind::Other,
+                        title.to_owned(),
+                        tool,
                         status,
                         content,
                         &places,
@@ -305,15 +319,8 @@ impl Transcript {
                     .await?;
                 } else {
                     // What it works on now, if it says.
-                    let shown = change
-                        .content
-                        .iter()
-                        .flatten()
-                        .filter_map(|part| match part {
-                            ToolPart::Shown(shown) => Some(shown),
-                            ToolPart::Image { .. } => None,
-                        });
-                    let diff = diffed(shown);
+                    let shown = change.content.iter().flatten();
+                    let diff = diffed(shown.filter_map(ToolPart::shown));
                     if !places.is_empty() || diff.is_some() {
                         self.toucher.tool(self.tools[&call].kind, &places, diff);
                     }

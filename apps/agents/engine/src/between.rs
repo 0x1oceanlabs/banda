@@ -17,6 +17,7 @@
 //! turns too.
 
 use crate::acp::{Between, Said, Session, WeakSession};
+use crate::doing::Doer;
 use crate::drive::drive;
 use crate::live::Live;
 use crate::model::{
@@ -108,6 +109,12 @@ impl Listener {
         let _kept = session.keep();
         let run = self.live.open(turn.id);
         run.begin(session.clone());
+        let doer = Doer::new(
+            self.live.doings().clone(),
+            self.project.id(),
+            self.thread,
+            turn.id,
+        );
         let transcript = Transcript::new(
             self.project.clone(),
             &turn,
@@ -115,6 +122,7 @@ impl Listener {
             settings,
             session.running(),
             self.live.touches(),
+            doer,
         );
         let (to_writer, mut written) = mpsc::unbounded_channel();
         let mut calls = Calls::default();

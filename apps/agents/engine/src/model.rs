@@ -884,6 +884,11 @@ pub struct ListedThread {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived: Option<Archived>,
+    /// What it does while a turn of its runs (ADR 0099, decision 11):
+    /// only its host's memory holds it, and `agents.doing` says each
+    /// change.
+    #[serde(flatten)]
+    pub now: crate::doing::DoingNow,
 }
 
 impl ListedThread {

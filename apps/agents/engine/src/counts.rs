@@ -274,6 +274,7 @@ mod tests {
             later: None,
             seen: None,
             archived: None,
+            now: Default::default(),
         }
     }
 

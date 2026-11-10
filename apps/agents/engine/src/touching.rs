@@ -8,6 +8,7 @@
 use crate::model::{ThreadId, ToolContent, ToolKind};
 use banda_kernel::{ProjectId, Stream};
 use serde::Serialize;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, watch};
@@ -103,23 +104,65 @@ pub fn touched(
     })
 }
 
+/// What memory holds of each Project's turns at work, made at first
+/// need, and who hears it: what they touch here, and what they do
+/// (`doing.rs`).
+pub struct ByProject<T>(Mutex<HashMap<ProjectId, watch::Sender<T>>>);
+
+impl<T> Default for ByProject<T> {
+    fn default() -> ByProject<T> {
+        ByProject(Mutex::default())
+    }
+}
+
+impl<T: Default + Send + Sync + 'static> ByProject<T> {
+    /// What `project`'s turns hold, made at first need.
+    pub fn of(&self, project: ProjectId) -> watch::Sender<T> {
+        let mut projects = self.0.lock().unwrap();
+        let now = projects.entry(project);
+        now.or_insert_with(|| watch::channel(T::default()).0)
+            .clone()
+    }
+
+    /// What `piece` makes of what `project`'s turns hold now, then again
+    /// each time it changes, until the one hearing lets go; nothing when
+    /// it makes none. One slow to hear skips to what is so when it hears
+    /// again.
+    pub fn hear(
+        &self,
+        project: ProjectId,
+        mut piece: impl FnMut(&T) -> Option<Value> + Send + 'static,
+    ) -> Stream {
+        let mut heard = self.of(project).subscribe();
+        let (say, stream) = mpsc::channel(1);
+        tokio::spawn(async move {
+            loop {
+                let said = piece(&heard.borrow_and_update());
+                if let Some(said) = said
+                    && say.send(said).await.is_err()
+                {
+                    return;
+                }
+                tokio::select! {
+                    changed = heard.changed() => if changed.is_err() { return },
+                    () = say.closed() => return,
+                }
+            }
+        });
+        stream
+    }
+}
+
 /// What every Project's turns work on now, and who hears it.
 #[derive(Default)]
 pub struct Touches {
-    projects: Mutex<HashMap<ProjectId, watch::Sender<Vec<Touched>>>>,
+    projects: ByProject<Vec<Touched>>,
 }
 
 impl Touches {
-    /// What `project`'s turns work on, made at first need.
-    fn of(&self, project: ProjectId) -> watch::Sender<Vec<Touched>> {
-        let mut projects = self.projects.lock().unwrap();
-        let now = projects.entry(project);
-        now.or_insert_with(|| watch::channel(Vec::new()).0).clone()
-    }
-
     /// The turn of `touched.thread` works on its file now.
     pub fn touch(&self, project: ProjectId, touched: Touched) {
-        self.of(project).send_if_modified(|now| {
+        self.projects.of(project).send_if_modified(|now| {
             now.retain(|one| one.thread != touched.thread);
             now.push(touched);
             true
@@ -128,7 +171,7 @@ impl Touches {
 
     /// The Thread's turn ended: it works on no file.
     pub fn end(&self, project: ProjectId, thread: ThreadId) {
-        self.of(project).send_if_modified(|now| {
+        self.projects.of(project).send_if_modified(|now| {
             let was = now.len();
             now.retain(|one| one.thread != thread);
             now.len() != was
@@ -139,24 +182,10 @@ impl Touches {
     /// changes, until the one hearing lets go. One slow to hear skips to
     /// what is so when it hears again.
     pub fn hear(&self, project: ProjectId) -> Stream {
-        let mut heard = self.of(project).subscribe();
-        let (say, stream) = mpsc::channel(1);
-        tokio::spawn(async move {
-            loop {
-                let touched = heard.borrow_and_update().clone();
-                let Ok(piece) = serde_json::to_value(Touching { touched }) else {
-                    return;
-                };
-                if say.send(piece).await.is_err() {
-                    return;
-                }
-                tokio::select! {
-                    changed = heard.changed() => if changed.is_err() { return },
-                    () = say.closed() => return,
-                }
-            }
-        });
-        stream
+        self.projects.hear(project, |touched| {
+            let touched = touched.clone();
+            serde_json::to_value(Touching { touched }).ok()
+        })
     }
 }
 

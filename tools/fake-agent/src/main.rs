@@ -29,7 +29,9 @@
 //!   answers as anything else does after that.
 //! - `sign in`: answers the prompt as a Harness whose Person signed out.
 //! - `limit`: says the account's limit resets in an hour, as Claude Code
-//!   does, then fails the prompt as one over its limit.
+//!   does, then fails the prompt as one over its limit. `limit wait`, it
+//!   waits on its limit instead, until a message is sent into its turn,
+//!   and replies.
 //! - `warn`: sends a notice, if the client shows them, then answers.
 //! - `crash`: exits at once, as a Harness that dies would.
 //! - `which session`: replies with the session's ID and its own process ID.
@@ -49,6 +51,13 @@
 //! - `edit`: edits a file, and shows the change as a diff.
 //! - `walk`: reads `notes.md`, then edits `src/util.ts`, naming each file
 //!   and its line, a step each time a message is sent into its turn.
+//! - `doing` and `read`, `edit` or `execute`, then what it works on:
+//!   works on a tool call of that kind, named as Claude Code names it
+//!   (`doing read card.ts`, `doing execute pnpm test`), until a message is
+//!   sent into its turn. Another `doing …` moves on to that; anything
+//!   else ends the call and replies.
+//! - `silent` and a number: says nothing for that many seconds, then
+//!   replies.
 //! - `run`: runs the tests, printing as Codex does; `loud` far more than a
 //!   Thread keeps; `at once` as Claude Code does, all at the end.
 //! - `new command`: starts its reply, learns the command `/init`, and ends
@@ -411,20 +420,20 @@ fn seen(prompt: &[ContentBlock]) -> Option<String> {
     }
 }
 
-/// Waits for a message sent into the turn; false when the turn is
-/// cancelled first.
+/// Waits for a message sent into the turn, and gives its words; none when
+/// the turn is cancelled first.
 async fn steered_on(
     fake: &Fake,
     session: &SessionId,
     steered: &mut mpsc::UnboundedReceiver<String>,
-) -> bool {
+) -> Option<String> {
     loop {
         if fake.cancelled(session) {
-            return false;
+            return None;
         }
         let heard = tokio::time::timeout(Duration::from_millis(50), steered.recv()).await;
-        if let Ok(Some(_)) = heard {
-            return true;
+        if let Ok(Some(words)) = heard {
+            return Some(words);
         }
     }
 }
@@ -446,7 +455,7 @@ async fn walk(
         .status(ToolCallStatus::Completed)
         .locations(vec![ToolCallLocation::new(notes).line(2)]);
     say(cx, session, SessionUpdate::ToolCall(read))?;
-    if !steered_on(fake, session, steered).await {
+    if steered_on(fake, session, steered).await.is_none() {
         return Ok(StopReason::Cancelled);
     }
     let util = folder.join("src/util.ts");
@@ -467,7 +476,7 @@ async fn walk(
             Diff::new(util, new).old_text(old),
         )]);
     say(cx, session, SessionUpdate::ToolCall(edit))?;
-    if !steered_on(fake, session, steered).await {
+    if steered_on(fake, session, steered).await.is_none() {
         return Ok(StopReason::Cancelled);
     }
     say(
@@ -476,6 +485,72 @@ async fn walk(
         SessionUpdate::AgentMessageChunk(text("I walked the files.")),
     )?;
     Ok(StopReason::EndTurn)
+}
+
+/// The kind of tool call `doing` names in `words`, and what it works on.
+fn doing_of(words: &str) -> Option<(ToolKind, String)> {
+    let mut after = words.split_whitespace().skip_while(|word| *word != "doing");
+    let kind = match after.nth(1)? {
+        "read" => ToolKind::Read,
+        "edit" => ToolKind::Edit,
+        "execute" => ToolKind::Execute,
+        _ => return None,
+    };
+    Some((kind, after.collect::<Vec<_>>().join(" ")))
+}
+
+/// `doing`: works on each tool call a message names, as Claude Code titles
+/// its calls, until a message names none (see the top).
+async fn doing(
+    fake: &Fake,
+    cx: &ConnectionTo<Client>,
+    session: &SessionId,
+    mut words: String,
+    steered: &mut mpsc::UnboundedReceiver<String>,
+) -> Result<StopReason, Error> {
+    let folder = fake.setup(session).folder;
+    let mut calls = 0;
+    while let Some((kind, on)) = doing_of(&words) {
+        calls += 1;
+        let id = format!("doing-{calls}");
+        let call = match kind {
+            ToolKind::Execute => ToolCall::new(id.clone(), on),
+            _ => {
+                let title = if kind == ToolKind::Read {
+                    "Read"
+                } else {
+                    "Edit"
+                };
+                let place = ToolCallLocation::new(folder.join(&on));
+                ToolCall::new(id.clone(), format!("{title} {on}")).locations(vec![place])
+            }
+        };
+        let call = call.kind(kind).status(ToolCallStatus::InProgress);
+        say(cx, session, SessionUpdate::ToolCall(call))?;
+        let Some(next) = steered_on(fake, session, steered).await else {
+            return Ok(StopReason::Cancelled);
+        };
+        let done = ToolCallUpdateFields::new().status(ToolCallStatus::Completed);
+        say(
+            cx,
+            session,
+            SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(id, done)),
+        )?;
+        words = next;
+    }
+    let reply = format!("Done: {words}.");
+    say(cx, session, SessionUpdate::AgentMessageChunk(text(&reply)))?;
+    Ok(StopReason::EndTurn)
+}
+
+/// Says the account reached its limit, which resets in an hour, as Claude
+/// Code's adapter does.
+fn limit_reached(cx: &ConnectionTo<Client>, session: &SessionId) -> Result<(), Error> {
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+    let limit = json!({ "status": "rejected", "resetsAt": now.as_secs() + 3600 });
+    let meta = json!({ "_claude/rateLimit": limit });
+    let usage = UsageUpdate::new(1000, 200_000).meta(meta.as_object().cloned());
+    say(cx, session, SessionUpdate::UsageUpdate(usage))
 }
 
 async fn turn(
@@ -501,12 +576,45 @@ async fn turn(
     if words.contains("sign in") || !fake.signed_in.load(Ordering::Relaxed) {
         return Err(Error::auth_required());
     }
+    if doing_of(&words).is_some() {
+        return doing(&fake, &cx, &session, words, &mut steered).await;
+    }
+    if words.contains("silent") {
+        let seconds = (words.split_whitespace())
+            .skip_while(|word| *word != "silent")
+            .nth(1)
+            .and_then(|word| word.parse().ok())
+            .unwrap_or(1);
+        let until = tokio::time::Instant::now() + Duration::from_secs(seconds);
+        while tokio::time::Instant::now() < until {
+            if fake.cancelled(&session) {
+                return Ok(StopReason::Cancelled);
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let reply = format!("I was silent for {seconds} s.");
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text(&reply)),
+        )?;
+        return Ok(StopReason::EndTurn);
+    }
+    if words.contains("limit wait") {
+        limit_reached(&cx, &session)?;
+        let Some(words) = steered_on(&fake, &session, &mut steered).await else {
+            return Ok(StopReason::Cancelled);
+        };
+        let reply = format!("Steered: {words}.");
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text(&reply)),
+        )?;
+        return Ok(StopReason::EndTurn);
+    }
     if words.contains("limit") {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-        let limit = json!({ "status": "rejected", "resetsAt": now.as_secs() + 3600 });
-        let meta = json!({ "_claude/rateLimit": limit });
-        let usage = UsageUpdate::new(1000, 200_000).meta(meta.as_object().cloned());
-        say(&cx, &session, SessionUpdate::UsageUpdate(usage))?;
+        limit_reached(&cx, &session)?;
         return Err(Error::new(-32603, "Internal error: You've hit your limit.")
             .data(json!({ "errorKind": "rate_limit" })));
     }

@@ -14,7 +14,8 @@ pub enum Said {
         text: String,
         message: Option<String>,
     },
-    /// `places` are the files it works on, as the Harness names them.
+    /// `places` are the files it works on, as the Harness names them;
+    /// `compacts` when it is the Harness compacting the context.
     ToolStarted {
         call: String,
         title: String,
@@ -22,6 +23,7 @@ pub enum Said {
         status: ToolStatus,
         content: Vec<ToolPart>,
         places: Vec<Place>,
+        compacts: bool,
     },
     /// `output` follows what the command printed before; `places`, when
     /// not empty, are the files it works on now.
@@ -63,6 +65,24 @@ pub enum Said {
 pub enum ToolPart {
     Shown(ToolContent),
     Image { mime: String, data: String },
+}
+
+impl ToolPart {
+    /// What it shows as the Thread keeps it, unless it is an image.
+    pub fn shown(&self) -> Option<&ToolContent> {
+        match self {
+            ToolPart::Shown(shown) => Some(shown),
+            ToolPart::Image { .. } => None,
+        }
+    }
+}
+
+/// How a tool call its Harness changes but never said started shows, in
+/// the Thread and on its card alike: of no kind, titled "A tool" and
+/// running, unless the change says its title or how it stands.
+pub fn unstarted(title: Option<&str>, status: Option<ToolStatus>) -> (ToolKind, &str, ToolStatus) {
+    let status = status.unwrap_or(ToolStatus::Running);
+    (ToolKind::Other, title.unwrap_or("A tool"), status)
 }
 
 /// What an update changes in a tool call: each field given replaces its
@@ -124,6 +144,7 @@ pub(super) fn said(update: acp::SessionUpdate) -> Option<Said> {
             text_of(&chunk).map(|text| Said::Thought { text, message })
         }
         acp::SessionUpdate::ToolCall(call) => Some(Said::ToolStarted {
+            compacts: compacts(call.meta.as_ref()),
             call: call.tool_call_id.0.to_string(),
             title: call.title,
             tool: tool_kind(call.kind),
@@ -176,6 +197,14 @@ pub(super) fn said(update: acp::SessionUpdate) -> Option<Said> {
         })),
         _ => None,
     }
+}
+
+/// Whether a tool call is its Harness compacting the context: Claude
+/// Code's adapter says so as a call of its tool `compact` to a client that
+/// does not declare ACP's own compaction updates, as the engine does not.
+fn compacts(meta: Option<&acp::Meta>) -> bool {
+    let tool = meta.and_then(|meta| meta.get("claudeCode")?.get("toolName"));
+    tool.and_then(serde_json::Value::as_str) == Some("compact")
 }
 
 /// The files a tool call works on, as the Harness names them.
@@ -324,6 +353,23 @@ fn tool_status(status: acp::ToolCallStatus) -> ToolStatus {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn claude_codes_compact_tool_call_is_a_compaction_and_no_other_is() {
+        let call = |meta: Option<serde_json::Value>| {
+            let call = acp::ToolCall::new("c", "Compact conversation").kind(acp::ToolKind::Think);
+            let call = call.meta(meta.and_then(|meta| meta.as_object().cloned()));
+            match said(acp::SessionUpdate::ToolCall(call)) {
+                Some(Said::ToolStarted { compacts, .. }) => compacts,
+                _ => panic!("a tool call starts"),
+            }
+        };
+        assert!(call(Some(
+            json!({ "claudeCode": { "toolName": "compact" } })
+        )));
+        assert!(!call(Some(json!({ "claudeCode": { "toolName": "Read" } }))));
+        assert!(!call(None));
+    }
 
     #[test]
     fn mcp_image_results_arrive_as_content_or_raw_output_without_duplicates() {
