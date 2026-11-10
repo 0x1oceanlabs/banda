@@ -187,9 +187,13 @@ export const BandaMenu = memo(function BandaMenu({
   // As the menu closes, its field goes and the focus with it. The focused
   // Pane's tile takes it at once, so a key pressed as the menu fades is
   // the window's, even when what opened the menu went first, as the
-  // sidebar over the Strip does (#946). What took the focus by then, as a
-  // Pane a row opened, keeps it. Not what had it before the menu: a field
-  // would show its caret again, and a button its ring.
+  // sidebar over the Strip does (#946). With no Pane, the fading popup
+  // takes it at once, and passes the window's keys on (#1065): left to
+  // Base UI, which gives it only while nothing has it, the popup took it
+  // again a frame later, from what took it meanwhile, as the overview
+  // Alt+O opens. What took the focus by then, as a Pane a row opened,
+  // keeps it. Not what had it before the menu: a field would show its
+  // caret again, and a button its ring.
   const shown = opening !== null
   const popup = useRef<HTMLDivElement>(null)
   const wasShown = useRef(shown)
@@ -199,7 +203,7 @@ export const BandaMenu = memo(function BandaMenu({
     if (!closed) return
     const at = document.activeElement
     if (!at || at === document.body || popup.current?.contains(at))
-      focusedTile()?.focus({ preventScroll: true })
+      (focusedTile() ?? popup.current)?.focus({ preventScroll: true })
   }, [shown])
   return (
     <>
