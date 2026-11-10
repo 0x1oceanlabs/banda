@@ -65,6 +65,18 @@ test("a Thread at work lists what it does, in the window's words (ADR 0099, deci
     expect(listed).not.toHaveProperty(field)
 })
 
+test("a Thread lists how many lines its last turn that ended changed, and nothing when it changed none (ADR 0098, decision 8)", () => {
+  const done = thread({
+    latest: { turn: "u1", state: "done", began: 3 },
+    changed_lines: { added: 38, removed: 9 },
+  })
+  expect(listedOf(done, "Claude").changedLines).toEqual({
+    added: 38,
+    removed: 9,
+  })
+  expect(listedOf(thread(), "Claude")).not.toHaveProperty("changedLines")
+})
+
 test("a failed Thread says why, or that it failed", () => {
   const failed = (reason?: string) =>
     thread({ latest: { turn: "u1", state: "failed", began: 3, reason } })

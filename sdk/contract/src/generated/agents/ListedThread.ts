@@ -2,6 +2,7 @@
 import type { AgentId } from "../AgentId";
 import type { Archived } from "./Archived";
 import type { Asking } from "./Asking";
+import type { ChangedLines } from "./ChangedLines";
 import type { Doing } from "./Doing";
 import type { Later } from "./Later";
 import type { LatestTurn } from "./LatestTurn";
@@ -47,7 +48,14 @@ seen?: TurnId,
  * works nor asks and nothing happened in it after: `updated_at <=
  * archived.at`, both the host's times.
  */
-archived?: Archived, id: ThreadId, 
+archived?: Archived, 
+/**
+ * How many lines its latest turn that ended changed, with its
+ * sub-agents' edits, kept as it ended: the card's "+38 −9" (ADR 0098,
+ * decision 8). None when that turn changed no line, or ended before
+ * turns kept it; while another runs, it is still the one before's.
+ */
+changed_lines?: ChangedLines, id: ThreadId, 
 /**
  * The Harness it runs on, by its ID in the Harness list; chosen when
  * it starts, it stays (ADR 0006). Empty for a Thread from before

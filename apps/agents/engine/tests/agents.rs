@@ -2601,6 +2601,32 @@ async fn a_threads_lanes_are_read_with_it_and_fork_and_rewind_wait_for_them() {
 }
 
 #[tokio::test]
+async fn the_list_says_how_many_lines_the_latest_turn_that_ended_changed() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    // The notes go from one, two, three to one, 2, three, four.
+    let (thread, _) = world.finish(None, "edit the notes").await;
+    let lines = |listed: banda_agents::model::ListedThread| {
+        listed
+            .changed_lines
+            .map(|lines| (lines.added, lines.removed))
+    };
+    assert_eq!(lines(world.listed(&thread).await), Some((2, 1)));
+    let ended = world.facts("turn.ended").await;
+    assert_eq!(
+        ended[0].payload["changed_lines"],
+        json!({ "added": 2, "removed": 1 }),
+        "the fact a window's list follows carries it"
+    );
+
+    // A turn that changed no file says none.
+    world.finish(Some(&thread), "just answer").await;
+    assert_eq!(lines(world.listed(&thread).await), None);
+    let ended = world.facts("turn.ended").await;
+    assert!(ended.last().unwrap().payload.get("changed_lines").is_none());
+}
+
+#[tokio::test]
 async fn a_tool_call_shows_its_diff_and_what_its_command_printed() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;

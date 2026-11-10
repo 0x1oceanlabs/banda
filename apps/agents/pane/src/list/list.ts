@@ -88,9 +88,10 @@ export function readsAgain(state: ThreadList, event: Event): boolean {
 /**
  * The list after one fact. A new Thread joins it at the top, and a Thread
  * that heard a message or ended a turn moves there. Each Thread keeps its
- * latest turn that began, its Questions that wait, the start of its
- * latest message, its Later and the Person's marks, as the engine reads
- * them. A mark moves no Thread (ADR 0096, decision 6). A list the fact
+ * latest turn that began, how many lines its latest that ended changed,
+ * its Questions that wait, the start of its latest message, its Later and
+ * the Person's marks, as the engine reads them. A mark moves no Thread
+ * (ADR 0096, decision 6). A list the fact
  * changed stands at the fact's place in the log, which a mark the Person
  * sent waits for (`./sent.ts`); one it left as it was stays where it was.
  */
@@ -123,13 +124,15 @@ function applied(state: ThreadList, event: Event): ThreadList {
     }
     case "turn.ended": {
       const { turn, state: ended, reason, note, failure } = fact.payload
+      const { changed_lines } = fact.payload
       // A turn a Person took back never began, so it is no one's latest.
       if (ended === "withdrawn") return state
       return change(
         state,
         event,
         (thread) => ({
-          ...thread,
+          // What the turn before changed goes: this one says its own.
+          ...without(thread, "changed_lines"),
           latest: {
             turn,
             state: ended,
@@ -139,6 +142,7 @@ function applied(state: ThreadList, event: Event): ThreadList {
             ...(note ? { note } : {}),
             ...(failure ? { failure } : {}),
           },
+          ...(changed_lines ? { changed_lines } : {}),
         }),
         true
       )
@@ -226,10 +230,11 @@ function applied(state: ThreadList, event: Event): ThreadList {
 export const archiveHolds = ({ archived, updated_at }: ListedThread) =>
   archived !== undefined && updated_at <= archived.at
 
-/** `thread` with no `mark`: the same Thread when it had none. */
+/** `thread` with no `mark`, or no lines its last turn changed: the same
+ * Thread when it had none. */
 export function without(
   thread: ListedThread,
-  mark: "seen" | "archived"
+  mark: "seen" | "archived" | "changed_lines"
 ): ListedThread {
   if (thread[mark] === undefined) return thread
   const unmarked = { ...thread }

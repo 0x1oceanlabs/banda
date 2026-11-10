@@ -275,6 +275,7 @@ mod tests {
             seen: None,
             archived: None,
             now: Default::default(),
+            changed_lines: None,
         }
     }
 

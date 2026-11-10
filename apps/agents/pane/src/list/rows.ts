@@ -2,7 +2,8 @@
  * Each Thread as the sidebar lists it (ADR 0008): its title and the one
  * before it, its mark, what its work does now (ADR 0099), what calls its
  * Person (a Question, why it failed, or what its Agent told it of its
- * turn, ADR 0057), whether they saw how it ended and whether they
+ * turn, ADR 0057), how many lines its last turn that ended changed (ADR
+ * 0098, decision 8), whether they saw how it ended and whether they
  * archived it, what it was last asked, its Agent, and the Pane a click
  * opens.
  * The window arranges the rows; this says only what each one is. Pure, so
@@ -121,6 +122,7 @@ export function listedOf(
     ...(thread.limit_until !== undefined
       ? { limitUntil: thread.limit_until }
       : {}),
+    ...(thread.changed_lines ? { changedLines: thread.changed_lines } : {}),
     ...(calls ? { calls } : {}),
     ...(answers.length ? { answers } : {}),
     ...(said ? { said } : {}),
