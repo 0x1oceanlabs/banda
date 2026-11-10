@@ -23,11 +23,14 @@
  * network gone dead: what was sent waits, as TCP keeps it, and goes on if
  * the hole closes first, and ssh gives up once its keepalives go
  * unanswered as long as main's ServerAliveInterval and ServerAliveCountMax
- * say. A new ssh then waits its ConnectTimeout and gives up.
+ * say. A new ssh then waits its ConnectTimeout and gives up. The forward
+ * notes each message the window sends arc, so a test counts what a
+ * gesture costs.
  */
 import { execFileSync, spawn } from "node:child_process"
 import { once } from "node:events"
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -111,7 +114,7 @@ const HANDSHAKE = 4
  * listening once the handshake's round trips are done. Each chunk is held
  * half the `latency` in its folder, in order, each way; while `blackhole`
  * is there nothing moves, and ssh gives up as its options say. It writes
- * its two ports to `forward.port`.
+ * its two ports to `forward.port`, and what the window asks to `asked`.
  */
 const FORWARD = `
 const fs = require("node:fs")
@@ -177,6 +180,67 @@ const carry = (from, into) => {
   from.on("error", () => {})
 }
 
+// What the window asks arc on \`socket\`, a JSON line each in \`asked\`:
+// each frame of the engine's WebSocket, by its type and the method it
+// names, as the window sends it. A connection that is no WebSocket's
+// notes its first request's line.
+const asked = (socket) => {
+  const note = (what) =>
+    fs.appendFileSync(path.join(__dirname, "asked"), JSON.stringify(what) + "\\n")
+  let held = Buffer.alloc(0)
+  let upgraded = false
+  let other = false
+  let parts = []
+  socket.on("data", (chunk) => {
+    if (other) return
+    held = Buffer.concat([held, chunk])
+    if (!upgraded) {
+      const end = held.indexOf("\\r\\n\\r\\n")
+      if (end < 0) return
+      const head = held.subarray(0, end).toString()
+      if (!/^upgrade: *websocket/im.test(head)) {
+        other = true
+        return note({ type: "http", method: head.split("\\r\\n")[0] })
+      }
+      upgraded = true
+      held = held.subarray(end + 4)
+    }
+    // RFC 6455's frames, masked as a client sends them.
+    while (held.length >= 2) {
+      let length = held[1] & 0x7f
+      let at = 2
+      if (length === 126) {
+        if (held.length < 4) return
+        length = held.readUInt16BE(2)
+        at = 4
+      } else if (length === 127) {
+        if (held.length < 10) return
+        length = Number(held.readBigUInt64BE(2))
+        at = 10
+      }
+      const mask = held[1] & 0x80 ? held.subarray(at, (at += 4)) : undefined
+      if (held.length < at + length) return
+      const payload = Buffer.from(held.subarray(at, at + length))
+      if (mask)
+        for (let byte = 0; byte < length; byte++) payload[byte] ^= mask[byte % 4]
+      const last = held[0] & 0x80
+      const control = (held[0] & 0x0f) >= 8
+      held = held.subarray(at + length)
+      if (control) continue
+      parts.push(payload)
+      if (!last) continue
+      const text = Buffer.concat(parts).toString()
+      parts = []
+      try {
+        const frame = JSON.parse(text)
+        note({ type: frame.type, method: frame.method })
+      } catch {
+        note({ type: "binary" })
+      }
+    }
+  })
+}
+
 const gone = (said) => {
   console.error(said)
   process.exit(255)
@@ -215,6 +279,7 @@ if (hole) {
           host: "127.0.0.1",
           allowHalfOpen: true,
         })
+        asked(socket)
         carry(socket, there)
         carry(there, socket)
       })
@@ -254,6 +319,10 @@ export type Arc = {
   latency: (ms: number) => void
   /** arc's link is a black hole while `on` (above). */
   blackhole: (on: boolean) => void
+  /** What the window has asked arc through its link so far, in order:
+   * each WebSocket frame's type and the method it names, or an HTTP
+   * request's line, to count what a gesture costs. */
+  asked: () => { type: string; method?: string }[]
   /** The forward's port on this machine's loopback, and the engine's it
    * carries to there, once it listens. */
   ports: () => { from: number; to: number }
@@ -374,6 +443,15 @@ export function newArc({ latency = 0 } = {}): Arc {
       on
         ? writeFileSync(at("bin/blackhole"), "")
         : rmSync(at("bin/blackhole"), { force: true }),
+    asked: () =>
+      existsSync(at("bin/asked"))
+        ? readFileSync(at("bin/asked"), "utf8")
+            .split("\n")
+            .filter(Boolean)
+            .map(
+              (line) => JSON.parse(line) as { type: string; method?: string }
+            )
+        : [],
     ports: () => {
       const [from, to] = readFileSync(at("bin/forward.port"), "utf8")
         .split(" ")

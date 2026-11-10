@@ -15,7 +15,8 @@
  * of the plan opens are `test.fixme`, each naming the step that turns it
  * on. arc is 40 ms away a round trip, as a machine across a network is,
  * and its link can go into a black hole: an act sent there waits for no
- * answer until ssh gives up, and is never left hanging.
+ * answer until ssh gives up, and is never left hanging. What a gesture
+ * asks arc is counted on its link, one call a gesture.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { connect } from "node:net"
@@ -147,6 +148,32 @@ test("arc is as far as its latency: each round trip through its link waits that 
   await composer.press("Enter")
   await expect(thread.getByText("who.txt holds arc.")).toBeVisible()
   expect(Date.now() - sent).toBeGreaterThanOrEqual(800)
+})
+
+test("a gesture in arc's Message box asks arc one call: @'s search one files.find, and Send its message, with nothing asked before it", async () => {
+  // One round trip a gesture (ADR 0106, the budget), counted by what
+  // the window asks through arc's link. The seen marks a key in the
+  // Thread makes (agents.read) are acts of their own.
+  const { page, thread, composer } = await opened()
+  const calls = (since: number) =>
+    arc!
+      .asked()
+      .slice(since)
+      .flatMap(({ method }) =>
+        method && method !== "agents.read" ? [method] : []
+      )
+  let since = arc!.asked().length
+  await composer.fill("cat @only")
+  await expect(
+    page.getByRole("listbox", { name: "Files" }).getByRole("option")
+  ).toContainText("only-arc.txt")
+  expect(calls(since)).toEqual(["files.find"])
+  await composer.press("Escape")
+  await composer.fill("cat who.txt")
+  since = arc!.asked().length
+  await composer.press("Enter")
+  await expect(thread.getByText("who.txt holds arc.")).toBeVisible()
+  expect(calls(since)).toEqual(["agents.send"])
 })
 
 test("arc in a black hole: Stop sent into it waits for no answer, then says what became of it once arc is away; the next is refused at once, and nothing lands there later", async () => {
