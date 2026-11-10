@@ -9,8 +9,15 @@
 //! action Banda has not, args it does not take, a key the window's fields
 //! would type, a `none` that frees nothing. Only the Person binds a key
 //! that acts as them (ADR 0083, decision 3).
+//!
+//! A machine's own settings are read through it too ([`read`]), so another
+//! device's window shows them as this machine has them (ADR 0106,
+//! decision 7).
 
-use banda_kernel::{Call, Kind, Module, Nothing, Participant, Refusal, Right, Scope, Tool};
+use banda_kernel::{
+    Call, Error, Kind, Module, ModuleProject, Nothing, Participant, Refusal, Right, Scope, Stream,
+    Tool,
+};
 use banda_look::Problem;
 use banda_look::keys::{self as look, Args, Keys, Mod, NONE};
 use schemars::JsonSchema;
@@ -18,7 +25,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use tokio::sync::watch;
 use ts_rs::TS;
+
+pub mod read;
+use read::{ReadSetting, SettingsRead};
 
 /// The file the Person's keys are in.
 const FILE: &str = "keys.toml";
@@ -327,6 +339,9 @@ pub struct KeysModule {
     /// The file that keeps the modes the Person chose for each Harness's
     /// new Threads in Settings; none in a test that gives none.
     modes: Option<PathBuf>,
+    /// Says something in the config folder changed, by hand or by a set,
+    /// once the module watches it.
+    heard: Arc<watch::Sender<()>>,
 }
 
 impl KeysModule {
@@ -334,6 +349,7 @@ impl KeysModule {
         KeysModule {
             config,
             modes: None,
+            heard: Arc::new(watch::Sender::new(())),
         }
     }
 
@@ -418,6 +434,14 @@ impl KeysModule {
         })?;
         Ok(format!("{key} is {to} in {file} now"))
     }
+
+    async fn settings_read(&self, _: Call, ask: ReadSetting) -> Result<SettingsRead, Refusal> {
+        read::read(&self.config, &ask.file)
+    }
+
+    async fn settings_changed(&self, _: Call, _: Nothing) -> Result<Stream, Refusal> {
+        Ok(read::follow(self.config.clone(), self.heard.subscribe()))
+    }
 }
 
 /// A refusal of a change, with what was wrong, line by line.
@@ -469,6 +493,17 @@ banda_kernel::methods! {
         /// `banda settings rename` does, with `settings_set`'s refusals for
         /// the key and for what it becomes.
         call settings_rename(RenameSetting) -> String, Write, tool "settings_rename";
+        /// This machine's part of one of Banda's settings files, as a
+        /// window of another device shows it: its keys with their values
+        /// and where they come from, the file as the look resolves it,
+        /// what is wrong at those keys, and a `rev` that changes only as
+        /// they read otherwise. A file that holds nothing of the machine's
+        /// own is refused, as each window reads its own copy of it.
+        call settings_read(ReadSetting) -> SettingsRead, Read;
+        /// Each settings file with a part that is this machine's own, with
+        /// its `rev`: first as each is now, then each again as its part
+        /// reads otherwise, changed by hand or by `settings_set`.
+        stream settings_changed(Nothing) -> read::SettingChanged, Read;
     }
 }
 
@@ -498,8 +533,38 @@ impl Module for KeysModule {
         Self::method_tools(self.name())
     }
 
+    /// Follows the config folder, so `settings_changed` hears a change by
+    /// hand at once, as the one a set makes.
+    async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
+        let config = self.config.clone();
+        // Made, so a file written there later is heard.
+        if let Err(error) = std::fs::create_dir_all(&config) {
+            tracing::warn!(%error, "the config folder was not made: its settings are not followed");
+        }
+        // Resolved, as the system names what changed by the real path.
+        let config = dunce::canonicalize(&config).unwrap_or(config);
+        let mut watch = match project.watch([config]) {
+            Ok(watch) => watch,
+            Err(error) => {
+                tracing::warn!(%error, "the machine's settings are not followed");
+                return Ok(());
+            }
+        };
+        let heard = self.heard.clone();
+        tokio::spawn(async move {
+            while watch.next().await.is_some() {
+                heard.send_replace(());
+            }
+        });
+        Ok(())
+    }
+
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
         self.dispatch(call, method, params).await
+    }
+
+    async fn stream(&self, call: Call, method: &str, params: Value) -> Result<Stream, Refusal> {
+        self.dispatch_stream(call, method, params).await
     }
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "banda-keys"
-description = "The keys module: Banda's actions with their keys in force, and keys.toml's lines bound, freed and reset after the look's checks, for `banda keys` and an Agent's tools."
+description = "The keys module: Banda's actions with their keys in force, and keys.toml's lines bound, freed and reset after the look's checks, for `banda keys` and an Agent's tools; and a machine's own settings, read through its engine."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,14 +12,19 @@ async-trait.workspace = true
 banda-kernel = { path = "../../../kernel" }
 banda-look = { path = "../../../platform/look" }
 banda-settings = { path = "../../../platform/settings" }
+dunce.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
 toml_edit.workspace = true
+tracing.workspace = true
 ts-rs.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [lints]
 workspace = true
