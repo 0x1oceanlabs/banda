@@ -508,7 +508,7 @@ fn columns_and_fonts_come_through_the_layers() {
 fn the_bar_s_widgets_stand_where_look_toml_lists_them() {
     let machine = Machine::new(false);
     let bar = machine.look().bar;
-    assert_eq!(bar.left, ["workspaces.list"]);
+    assert_eq!(bar.left, ["workspaces.list", "window.flow"]);
     assert_eq!(bar.center, ["sidebar.counts"]);
     assert_eq!(
         bar.right,
@@ -528,6 +528,11 @@ fn the_bar_s_widgets_stand_where_look_toml_lists_them() {
     assert_eq!(look.bar.right, ["git.branch", "workspaces.aside"]);
     let right = &look.settings["look.toml"]["bar.right"].from;
     assert_eq!((right.layer.as_str(), right.line), ("file", Some(3)));
+
+    // A left of the Person's own, written before the Flow came, has no
+    // Flow: it replaces Banda's whole (ADR 0098, decision 20).
+    machine.look_toml("[bar]\nleft = [\"workspaces.list\"]\n");
+    assert_eq!(machine.look().bar.left, ["workspaces.list"]);
 }
 
 #[test]

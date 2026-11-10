@@ -3,7 +3,6 @@ import { Kbd } from "@banda/ui/components/kbd"
 import { useKeyOf } from "@banda/ui/hooks/use-key-of"
 import { keyCaps } from "@banda/ui/lib/keys"
 import { SearchIcon } from "lucide-react"
-import { FlowMenu } from "./FlowMenu"
 import { NewThreadMenu } from "./NewThreadMenu"
 import { useOpen } from "./open"
 
@@ -18,9 +17,10 @@ function MenuKey() {
 
 /**
  * The sidebar's header (ADR 0098, decision 19): Search, which opens the
- * Banda menu, the Flow's menu, and ✎, which starts a Thread in the
- * Project whose rows alone the list shows, or else where the Person is,
- * as Alt+Enter starts one (`Here.starts`), or, by its menu, elsewhere.
+ * Banda menu, and ✎, which starts a Thread in the Project whose rows
+ * alone the list shows, or else where the Person is, as Alt+Enter starts
+ * one (`Here.starts`), or, by its menu, elsewhere. The Flow went to the
+ * bar (decision 20): it arranges the desk, not the list.
  */
 export function Header({
   engine,
@@ -45,7 +45,6 @@ export function Header({
         <span className="min-w-0 flex-1 truncate text-left">Search</span>
         <MenuKey />
       </button>
-      <FlowMenu />
       {/* S12a (ADR 0098, decision 17) hides ✎ here while the search in
         place has words, as in concept-v7. */}
       <NewThreadMenu engine={engine} only={only} projects={projects} />

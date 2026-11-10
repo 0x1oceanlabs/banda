@@ -1,6 +1,6 @@
 /**
  * Arrange by Project as the Person asks for it, from the Banda menu or the
- * sidebar's Flow menu, and its Undo (ADR 0102, decision 9). A toast says
+ * Flow's menu on the bar, and its Undo (ADR 0102, decision 9). A toast says
  * it, and its Undo, or `workspaces.unarrange`'s key (Ctrl+Z, ⌘Z on a
  * Mac) while it shows, puts the workspaces back as they stood; once they
  * changed since, the engine refuses, and its words show. The Arrange a

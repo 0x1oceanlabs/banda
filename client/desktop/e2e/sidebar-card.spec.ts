@@ -40,9 +40,10 @@ test.afterEach(async () => {
   await window?.close()
 })
 
-/** The Flow's button, in the Sidebar's header. */
+/** The Flow's button, on the bar beside the workspaces (ADR 0098,
+ * decision 20). */
 const flowOf = (page: Page) =>
-  sidebarOf(page).getByRole("button", { name: /^Flow: / })
+  page.getByRole("banner").getByRole("button", { name: /^Flow: / })
 
 /** Picks the Flow `name` in its menu, which Esc then closes. */
 async function pickFlow(page: Page, name: "Free" | "Row") {

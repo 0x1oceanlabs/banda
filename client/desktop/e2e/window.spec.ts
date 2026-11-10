@@ -4148,8 +4148,7 @@ async function freeThenRow(window: Window) {
   await box.fill("again")
   await box.press("Enter")
   await expect(page.getByText("You said: again")).toBeVisible()
-  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const flow = sidebar.getByRole("button", { name: /^Flow: / })
+  const flow = page.getByRole("banner").getByRole("button", { name: /^Flow: / })
   await flow.click()
   await page.getByRole("menuitemradio", { name: /^Row/ }).click()
   await page.keyboard.press("Escape")
@@ -4230,13 +4229,11 @@ test("Arrange by Project's toast undoes it, and so does Ctrl+Z while it shows (A
   await expect(arranged).toBeHidden()
   await expect(again).toHaveAttribute("data-focused", "true")
 
-  // Ctrl+Z, after the sidebar's Flow menu's Arrange, with the keys on its
-  // button: a Thread's tile gives them to its composer, and a terminal's
-  // to its program, which keep their own Ctrl+Z. The pointer on the
-  // toast holds it.
-  const flow = page
-    .getByRole("complementary", { name: "Sidebar" })
-    .getByRole("button", { name: /^Flow: / })
+  // Ctrl+Z, after the Flow menu's Arrange on the bar, with the keys on
+  // its button: a Thread's tile gives them to its composer, and a
+  // terminal's to its program, which keep their own Ctrl+Z. The pointer on
+  // the toast holds it.
+  const flow = page.getByRole("banner").getByRole("button", { name: /^Flow: / })
   await flow.click()
   await page.getByRole("menuitem", { name: "Arrange by Project" }).click()
   await expect.poll(standing).not.toEqual(before)
@@ -5328,11 +5325,12 @@ test("with Alt held, the mouse moves a widget along the bar, the workspaces too,
   await expect
     .poll(async () => (await calm.boundingBox())!.x)
     .toBeGreaterThan(width * 0.75)
-  // The workspaces go to the middle; the Mark stays at the left edge.
+  // The workspaces go to the middle; the Flow stays on the left, and the
+  // Mark at the left edge.
   const workspaces = bar.getByRole("navigation", { name: "Workspaces" })
   await drag(workspaces, width / 2)
   await expect.poll(written).toMatch(/^center = \["workspaces\.list"\]$/m)
-  await expect.poll(written).toMatch(/^left = \[\]$/m)
+  await expect.poll(written).toMatch(/^left = \["window\.flow"\]$/m)
   await expect
     .poll(async () => {
       const box = (await workspaces.boundingBox())!
@@ -6391,7 +6389,7 @@ test("an emptied Project's workspace says whose it is, its first terminal starts
   await play.getByRole("button", { name: "New Thread in Play" }).click()
   await expect(inPlay).toBeVisible()
   await expect(plays).toHaveCount(1)
-  const flow = sidebar.getByRole("button", { name: /^Flow: / })
+  const flow = page.getByRole("banner").getByRole("button", { name: /^Flow: / })
   await flow.click()
   await page.getByRole("menuitemradio", { name: /^Free/ }).click()
   await page.keyboard.press("Escape")
@@ -7032,9 +7030,9 @@ test("a narrow window hides the sidebar, and Alt+A shows it over the Strip", asy
   await expect.poll(left).toBeGreaterThan(200)
 })
 
-test("the sidebar over the Strip goes once it opened a menu, a Thread or the settings, and stays as its Flow is picked", async () => {
+test("the sidebar over the Strip goes once it opened a menu, a Thread or the settings", async () => {
   window = await startWindow()
-  const { app, dir, page } = window
+  const { app, page } = window
   const { thread, composer } = await firstThread(page)
   await composer.fill("hello")
   await composer.press("Enter")
@@ -7076,18 +7074,6 @@ test("the sidebar over the Strip goes once it opened a menu, a Thread or the set
   await expect(menu.getByRole("group", { name: "Banda" })).toBeVisible()
   await expect(sidebar).toBeHidden()
   await shut()
-
-  // The Flow is picked where it is: agents.toml takes it, and the sidebar
-  // stays.
-  const flow = sidebar.getByRole("button", { name: /^Flow: / })
-  await flow.click()
-  await page.getByRole("menuitemradio", { name: /^Free/ }).click()
-  await page.keyboard.press("Escape")
-  await expect(flow).toHaveAccessibleName("Flow: Free")
-  await expect
-    .poll(() => read(join(dir, "config/agents.toml")))
-    .toContain('flow = "free"')
-  await expect(sidebar).toBeVisible()
 
   // New Thread: a new Thread in Work, in focus.
   await sidebar.getByRole("button", { name: "New Thread", exact: true }).click()
