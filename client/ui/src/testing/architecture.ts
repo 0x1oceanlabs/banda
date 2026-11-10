@@ -503,7 +503,8 @@ export function workspaceResolver(
         sub.endsWith(key.slice(star + 1))
       ) {
         const stem = sub.slice(star, sub.length - (key.length - star - 1))
-        return code(join(found.folder, to.replace("*", stem)))
+        // Node puts the match in place of every "*" in the target.
+        return code(join(found.folder, to.replaceAll("*", stem)))
       }
     }
     return undefined
