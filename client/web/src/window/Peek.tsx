@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -17,10 +17,30 @@ import {
 import { kindOf, kindRuns, labelOf } from "../registry"
 import { Broken } from "../tiling/PaneFrame"
 import { opening, type Shell } from "./actions"
+import { usePeekEsc } from "./keys"
 
 /** What peeks over the desk: a Pane of a Project, and whether it fills
  * the desk. */
 export type Peeked = { project: ProjectId; pane: PaneState; fill: boolean }
+
+/** Quick Look's tile over the desk (ADR 0073, decision 7): one Pane, in
+ * no workspace, and whether it fills the desk. Esc closes it, unless a
+ * menu or a dialog over it takes the Esc first. */
+export function usePeek() {
+  const [peek, setPeek] = useState<Peeked | null>(null)
+  const peekNow = useRef(peek)
+  useEffect(() => {
+    peekNow.current = peek
+  }, [peek])
+  const closePeek = useCallback(() => setPeek(null), [])
+  const fillPeek = useCallback(() => {
+    if (!peekNow.current) return false
+    setPeek((was) => was && { ...was, fill: !was.fill })
+    return true
+  }, [])
+  usePeekEsc(peek !== null, closePeek)
+  return { peek, setPeek, peekNow, closePeek, fillPeek }
+}
 
 /**
  * Quick Look's tile (ADR 0073, decision 7): a Pane that floats over the
