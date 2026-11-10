@@ -441,6 +441,21 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   }
 
   /**
+   * Reads this machine's Projects again from its engine, for one no
+   * machine the Window knows has: its list is read as the window comes
+   * to the front, so a Project added since, as by `banda project add`, is
+   * not on it yet. Where that read fails, what the Window knows stays.
+   */
+  async reread(): Promise<void> {
+    try {
+      const listed = await this.#here?.call("projects.list", {})
+      if (listed) this.ours(listed, this.#ours.machine)
+    } catch {
+      // The act that asked is refused, in its words.
+    }
+  }
+
+  /**
    * Host `name`'s engine: one for the Window's life, made as it is first
    * asked for. It asks the desktop where that engine listens on each
    * connect while the host is live, so a refused host is not tried again

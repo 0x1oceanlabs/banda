@@ -1,9 +1,10 @@
-import type { ProjectId, ProjectSummary } from "@banda/contract"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { FORGETTING, type HostsDevice, KeptHosts } from "@banda/core"
 import { AGENTS_FILE, DEFAULT_AGENTS, type Flow } from "@banda/contract/agents"
 import type { Look } from "@banda/contract/look"
 import { takeLook } from "@banda/ui/lib/look"
-import type { Args } from "@banda/ui/module"
+import { onProjectsChanged } from "@banda/ui/lib/projects"
+import type { Action, Args } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
 import type { Change, Plan } from "../tiling/arrange"
@@ -1026,7 +1027,46 @@ test("an action from a key goes through the router as one from a Pane: on arc, w
   expect(ran).toHaveBeenCalledWith("menu.at", { route: "actions" })
 })
 
-test("a key in a Pane acts on the machine Here says, an old arrangement's host where the directory knows nothing of its Project, and none where nothing says one (ADR 0106, decision 1)", () => {
+test("a key's act on a Project this machine added since its list was read runs, once that list is read again; one no machine has is refused (ADR 0106, law 3)", async () => {
+  const added = "added" as ProjectId
+  const engine = {
+    call: () => Promise.resolve(projectsOf({ a: "a", added: "added" })),
+  } as unknown as Engine
+  const hosts = new KeptHosts(NO_HOSTS, FORGETTING, engine)
+  hosts.ours(projectsOf({ a: "a" }), "m0" as ProjectId)
+  const ran = vi.fn()
+  const heard = vi.fn()
+  const stop = onProjectsChanged(heard)
+  const shell = shellOf({
+    hosts,
+    route: ran,
+    here: { get: () => ({ project: "a" as ProjectId }) },
+  })
+  // An App's act, with what the run does in the test's hands.
+  const act: Action<Shell> = {
+    ...ACTIONS.find((one) => one.id === "thread.new")!,
+    run: (_, args) => ran(args),
+  }
+  toasted.mockClear()
+  runAction(shell, act, { project: added })
+  expect(ran).not.toHaveBeenCalled()
+  await vi.waitFor(() => expect(ran).toHaveBeenCalledWith({ project: added }))
+  expect(toasted).not.toHaveBeenCalled()
+  expect(heard).toHaveBeenCalled()
+  stop()
+
+  ran.mockClear()
+  runAction(shell, act, { project: "x" as ProjectId })
+  await vi.waitFor(() =>
+    expect(toasted).toHaveBeenCalledWith(
+      "This window does not reach that machine",
+      { id: expect.any(String) }
+    )
+  )
+  expect(ran).not.toHaveBeenCalled()
+})
+
+test("a key in a Pane acts on the machine Here says, an old arrangement's host where the directory knows nothing of its Project, and none where nothing says one (ADR 0106, decision 1)", async () => {
   const hosts = arcHosts(["agents"])
   const project = "old" as ProjectId
   const pane = { id: "e1", project }
@@ -1045,8 +1085,10 @@ test("a key in a Pane acts on the machine Here says, an old arrangement's host w
     shellOf({ hosts, here: { get: () => ({ project, pane }) } }),
     "git.diff"
   )
-  expect(toasted).toHaveBeenCalledWith(
-    "This window does not reach that machine",
-    { id: expect.any(String) }
+  await vi.waitFor(() =>
+    expect(toasted).toHaveBeenCalledWith(
+      "This window does not reach that machine",
+      { id: expect.any(String) }
+    )
   )
 })

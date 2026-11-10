@@ -297,6 +297,27 @@ test("a Project this machine's engine just answered as made is this machine's at
   expect(hosts.sessionOf("m0" as ProjectId)).toBe(here)
 })
 
+test("this machine's Projects are read again from its engine for one the Window has not read, and what it knows stays where the read fails", async () => {
+  let listed: Promise<unknown> = Promise.resolve([
+    project("mine"),
+    project("added"),
+  ])
+  const here = { call: () => listed } as unknown as Engine
+  const { device } = desktop()
+  const hosts = new KeptHosts(device, FORGETTING, here)
+  hosts.ours([project("mine")], "m0" as ProjectId)
+  const added = "added" as ProjectId
+  expect(hosts.hostOf(added)).toBeNull()
+  await hosts.reread()
+  expect(hosts.hostOf(added)).toBeUndefined()
+  expect(hosts.sessionOf(added)).toBe(here)
+
+  listed = Promise.reject(new Error("the engine went"))
+  await expect(hosts.reread()).resolves.toBeUndefined()
+  expect(hosts.hostOf(added)).toBeUndefined()
+  expect(hosts.hostOf("m0" as ProjectId)).toBeUndefined()
+})
+
 test("the directory keeps on the device which machine has each Project: after a restart with arc away from the first moment, arc's Projects are arc's, this machine's its own, and one no machine has fails closed", async () => {
   vi.useFakeTimers()
   vi.stubGlobal("WebSocket", Socket)

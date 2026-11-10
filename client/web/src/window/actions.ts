@@ -29,7 +29,7 @@ import { chipOf } from "./attach"
 import { device } from "../boot"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
-import { refused, type Routing } from "../tiling/mount"
+import { actAs, type Routing } from "../tiling/mount"
 import { type At, locateRoute } from "../menu/menu"
 import { modules } from "../modules"
 import {
@@ -1674,7 +1674,9 @@ export function runAction(
       ? ACTIONS.find((one) => one.id === action)
       : action
   if (!known) throw new Error(`Banda has no action ${String(action)}`)
-  const route = routeAct(shell.hosts, actOf(known), fromHere(shell), args)
-  if (!route.runs) return refused(route.said)
-  known.run(shell, route.args)
+  actAs(
+    shell.hosts,
+    () => routeAct(shell.hosts, actOf(known), fromHere(shell), args),
+    (routed) => known.run(shell, routed)
+  )
 }
