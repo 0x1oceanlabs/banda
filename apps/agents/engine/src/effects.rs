@@ -679,9 +679,9 @@ async fn work(
         })
         .await
         .map_err(|e| unplanned(plain(e)))?;
-    let (mut hear, done) = session.prompt(&prompt);
-    run.begin(session.clone());
-    // What the session says once the turn ends is the Agent's own.
+    // What the session says once the turn ends is the Agent's own. Heard
+    // before the prompt goes, so what follows its answer is heard in a
+    // session's first turn too.
     let listener = between::Listener {
         live: live.clone(),
         project: project.clone(),
@@ -691,6 +691,8 @@ async fn work(
         harness: harness.name.clone(),
     };
     listener.hear(&session);
+    let (mut hear, done) = session.prompt(&prompt);
+    run.begin(session.clone());
     let transcript = Transcript::new(
         project.clone(),
         turn,

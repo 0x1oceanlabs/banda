@@ -44,9 +44,10 @@
 //! - `background`: starts a task, ends the turn, and goes on by itself when
 //!   the task ends, as Claude Code does; `long`, until it is stopped or a
 //!   prompt takes it in; `asks`, asking to run a check; `quiet`, never
-//!   saying what that cost; `dies`, ending its process; `soon`, going on
-//!   at once, before Banda wrote how the turn ended. `background
-//!   detached` runs a command that ends after the turn, and nothing more.
+//!   saying what that cost; `dies`, ending its process; `at once`, going
+//!   on right after its answer, with no frame between, before Banda wrote
+//!   how the turn ended. `background detached` runs a command that ends
+//!   after the turn, and nothing more.
 //! - `later`: says what it used after the turn has ended.
 //! - `edit`: edits a file, and shows the change as a diff.
 //! - `walk`: reads `notes.md`, then edits `src/util.ts`, naming each file
@@ -139,6 +140,7 @@ use agent_client_protocol::{Agent, Client, ConnectionTo, Error, Responder, Stdio
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -553,11 +555,17 @@ fn limit_reached(cx: &ConnectionTo<Client>, session: &SessionId) -> Result<(), E
     say(cx, session, SessionUpdate::UsageUpdate(usage))
 }
 
+/// What a turn says right after its answer, before anything else.
+type After = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
+
+/// Does what the prompt's words say, and puts in `then` what it says
+/// right after it answers, if anything.
 async fn turn(
     fake: Fake,
     cx: ConnectionTo<Client>,
     prompt: PromptRequest,
     mut steered: mpsc::UnboundedReceiver<String>,
+    then: &mut Option<After>,
 ) -> Result<StopReason, Error> {
     let session = prompt.session_id.clone();
     if let Some(seen) = seen(&prompt.prompt) {
@@ -833,11 +841,12 @@ async fn turn(
         // with what the task found, as Claude Code does. `long`, it goes on
         // until it is stopped or a prompt takes it in; `asks`, it asks to
         // run a check first; `quiet`, it never says what that cost, as
-        // Codex; `dies`, its process ends. `detached` runs a command in the
-        // background, which ends after the turn, and nothing more.
+        // Codex; `dies`, its process ends; `at once`, it goes on right
+        // after its answer, with nothing between. `detached` runs a command
+        // in the background, which ends after the turn, and nothing more.
         let (after, its, fake) = (cx.clone(), session.clone(), fake.clone());
         let long = words.contains("long");
-        let after_ms = if words.contains("soon") { 2 } else { 100 };
+        let at_once = words.contains("at once");
         let (asks, quiet, dies) = (
             words.contains("asks"),
             words.contains("quiet"),
@@ -868,8 +877,7 @@ async fn turn(
             });
             return Ok(StopReason::EndTurn);
         }
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(after_ms)).await;
+        let goes_on = async move {
             let found = SessionUpdate::AgentMessageChunk(text("The task finished."));
             let _ = say(&after, &its, found);
             if dies {
@@ -929,12 +937,20 @@ async fn turn(
                     return;
                 }
             }
-        });
+        };
         say(
             &cx,
             &session,
             SessionUpdate::AgentMessageChunk(text("Started a task.")),
         )?;
+        if at_once {
+            *then = Some(Box::pin(goes_on));
+        } else {
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                goes_on.await;
+            });
+        }
         return Ok(StopReason::EndTurn);
     }
     if words.contains("later") {
@@ -1650,12 +1666,18 @@ async fn main() -> Result<(), Error> {
                     // The turn waits on the client, so it runs off the
                     // dispatch loop.
                     cx.spawn(async move {
-                        let ended = turn(fake.clone(), turn_cx, request, steered).await;
+                        let mut then = None;
+                        let ended = turn(fake.clone(), turn_cx, request, steered, &mut then).await;
                         fake.running.lock().unwrap().remove(&session);
                         match ended {
-                            Ok(stop) => responder.respond(PromptResponse::new(stop)),
-                            Err(error) => responder.respond_with_error(error),
+                            Ok(stop) => responder.respond(PromptResponse::new(stop))?,
+                            Err(error) => return responder.respond_with_error(error),
                         }
+                        // What it says right after its answer follows it.
+                        if let Some(then) = then {
+                            then.await;
+                        }
+                        Ok(())
                     })
                 }
             },
