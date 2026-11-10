@@ -26,7 +26,7 @@
  *   Sub.row({state, title, role, now, time, wt, deep, tag, path, open, stop, detail}) -> HTML
  *   Sub.group({title, members:[row data], more, settled, folded}) -> HTML
  *   Sub.crew(el, {state, name, desc, phases, current, narrator, foot, time, action}) renders a card
- *   Sub.counts(states, {noun:'agents', total:true, queued:true}) -> '12 agents · 2 working · …'
+ *   Sub.counts(states, {noun:'agents', total:true, queued:true, text:false}) -> '12 agents · 2 working · …' (text: no spans)
  *   Sub.tally(states) -> {working, asks, done, failed, stopped, queued, lost, total}
  *   Sub.icon(name, size)  kit icons plus 'panel-right' (Open beside) and 'stop';
  *                         in markup: <i data-sicon="panel-right" data-size="14"></i>
@@ -136,9 +136,9 @@
     o = o || {}; var t = Array.isArray(states) ? tally(states) : states, out = []
     if (o.total !== false) out.push(t.total + ' ' + (o.noun || 'agents'))
     if (t.working) out.push(t.working + ' working')
-    if (t.asks) out.push('<span class="s-n-asks">' + t.asks + ' asks</span>')
+    if (t.asks) out.push(o.text ? t.asks + ' asks' : '<span class="s-n-asks">' + t.asks + ' asks</span>')
     if (t.done) out.push(t.done + ' done')
-    if (t.failed) out.push('<span class="s-n-failed">' + t.failed + ' failed</span>')
+    if (t.failed) out.push(o.text ? t.failed + ' failed' : '<span class="s-n-failed">' + t.failed + ' failed</span>')
     if (t.stopped) out.push(t.stopped + ' stopped')
     if (t.queued && o.queued !== false) out.push(t.queued + ' waiting')
     if (t.lost) out.push(t.lost + ' lost')
@@ -173,7 +173,7 @@
         (when === 'is-current' && t.total && !bar ? ' <span class="s-ph-n">' + settled + '/' + t.total + '</span>' : '') + '</span>'
       var body = ''
       if (bar) {
-        body = '<span class="s-bar" data-tip="' + esc(p.title + ' · ' + counts(t, { noun: 'agents' }).replace(/<[^>]+>/g, '')) + '">' +
+        body = '<span class="s-bar" data-tip="' + esc(p.title + ' · ' + counts(t, { noun: 'agents', text: true })) + '">' +
           ['done', 'failed', 'asks', 'working', 'stopped', 'lost', 'queued'].map(function (k) { return t[k] ? '<i data-sat="' + k + '" style="flex-grow:' + t[k] + '"></i>' : '' }).join('') +
           '</span><span class="s-ph-n">' + settled + '/' + t.total + '</span>'
       } else if (t.total) {
