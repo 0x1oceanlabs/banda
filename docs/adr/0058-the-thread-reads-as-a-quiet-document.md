@@ -61,6 +61,9 @@ change.
    under one rule, each call in the past tense with a "Failed" tag where
    it failed; a call's output opens under it and does not scroll inside
    another scroll. A turn the Person stopped says so once.
+   _Amended 2026-11-10 by [ADR 0103](0103-a-harness-s-sub-agents-work-in-their-thread-and-a-crew-shows-beside-it.md):
+   sub-agents' work is not counted here; the live line names them, and a
+   docked Question names who asks._
 
 5. **The live line is at the live edge.** While a turn runs, "Working for
    45s" sits at the end of the turn, after what it has done, with what it
@@ -88,6 +91,9 @@ change.
    a turn runs it says "Steer this thread…" and keeps queueing and
    steering as ADR 0010 says. A queued message is the Person's bubble,
    dashed, with quiet actions.
+   _Amended 2026-11-10 by [ADR 0103](0103-a-harness-s-sub-agents-work-in-their-thread-and-a-crew-shows-beside-it.md):
+   the effort's top level, Claude's Ultracode and Codex's Ultra, is in
+   magenta, `--effort-top`; the rest of the effort stays lighter text._
 
 9. **Later, each its own decision.** A plan to comment on by selecting its
    text (Claude Code), a Progress and Outputs panel (Cowork, Work),

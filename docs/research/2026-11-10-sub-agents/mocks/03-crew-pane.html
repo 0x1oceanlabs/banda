@@ -1,0 +1,880 @@
+<!doctype html>
+<!-- prettier-ignore -->
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Crew Pane</title>
+<link rel="stylesheet" href="../../../design/kit/kit.css" />
+<link rel="stylesheet" href="../../../design/kit/sub.css" />
+<style>
+  /* ---------------------------------------------------------------- */
+  /* The page around the mocks (Russian notes). Banda parts are below. */
+  /* ---------------------------------------------------------------- */
+  body { margin: 0; }
+  .pg-screen { min-height: 100vh; padding: 20px; }
+  .pg-window { flex: 1; }
+  .pg-head { padding: 14px 24px 4px; display: flex; flex-direction: column; gap: 4px; }
+  .pg-head h1 { margin: 0; font-size: 18px; line-height: 26px; font-weight: 600; letter-spacing: -0.01em; }
+  .pg-head p { margin: 0; font-size: 13px; line-height: 19px; color: var(--muted-foreground); max-width: 92ch; }
+  .pg-head kbd { font: 500 11px var(--font-sans); padding: 1px 5px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--border); color: var(--muted-foreground); }
+  .pg-toc { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 12.5px; color: var(--muted-foreground); }
+  .pg-toc a { color: inherit; text-decoration: none; }
+  .pg-toc a:hover { color: var(--foreground); }
+  .pg-toc b { font-weight: 600; color: var(--foreground); margin-right: 4px; }
+
+  .pg-sec { padding: 26px 12px 10px; display: flex; flex-direction: column; }
+  .pg-title { display: flex; align-items: baseline; gap: 10px; margin: 0 8px 3px; }
+  .pg-title h2 { margin: 0; font-size: 15px; line-height: 22px; font-weight: 600; }
+  .pg-id { font-size: 12px; font-weight: 600; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .pg-badge { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: var(--r-round); box-shadow: inset 0 0 0 1px var(--border); color: var(--muted-foreground); }
+  .pg-note { margin: 0 8px 14px; font-size: 12.5px; line-height: 18px; color: var(--muted-foreground); max-width: 96ch; }
+  .pg-stage { display: flex; gap: var(--gap); min-width: 0; }
+  .pg-stage > .b-group { flex: 1; }
+  /* the left column: the Thread in A, Russian notes elsewhere */
+  .pg-left { flex: 0 0 420px; min-width: 0; }
+  .pg-note.is-open { margin-top: -10px; color: color-mix(in oklab, var(--muted-foreground) 80%, transparent); }
+  .pg-note.is-open b { color: var(--muted-foreground); font-weight: 600; }
+  .pg-aside { display: flex; flex-direction: column; gap: 12px; padding: 4px 18px 0 8px; font-size: 12.5px; line-height: 18px; color: var(--muted-foreground); }
+  .pg-aside h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--foreground); }
+  .pg-aside p { margin: 0; }
+  .pg-aside b { color: var(--foreground); font-weight: 550; }
+  .pg-aside .pg-pick { padding: 10px 12px; border-radius: var(--r-card); background: var(--block); box-shadow: inset 0 0 0 1px var(--border); color: var(--foreground); }
+  .pg-aside .pg-pick b { display: block; margin-bottom: 2px; }
+  .pg-aside ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+  .pg-aside li::marker { color: var(--s-faint); font-variant-numeric: tabular-nums; }
+  .pg-cap { font-size: 11.5px; line-height: 16px; color: color-mix(in oklab, var(--muted-foreground) 85%, transparent); margin: 0 6px 6px; }
+  .pg-col { display: flex; flex-direction: column; min-width: 0; }
+  .pg-menufig { display: flex; flex-direction: column; gap: 0; margin-top: 2px; }
+  .pg-menufig .pg-cap { margin: 0 0 6px 2px; }
+  .pg-menufig .b-menu { width: 240px; }
+  .pg-arrow { align-self: center; display: grid; place-items: center; width: 22px; flex: none; color: var(--s-faint); }
+  @media (max-width: 1180px) {
+    .pg-screen { padding: 12px; }
+    .pg-stage { flex-wrap: wrap; height: auto !important; }
+    .pg-left { flex: 1 1 100%; }
+    .pg-left.pg-thread { display: none; }
+    .pg-stage > .b-group, .pg-stage > .b-tile { flex: 1 1 100%; }
+    .pg-stage .cp { height: 720px; }
+    #d .pg-stage .cp, #e .pg-stage .cp, #f .pg-stage .cp { height: auto; padding-bottom: 4px; }
+    .pg-arrow { display: none; }
+    .pg-col { flex: 1 1 100% !important; }
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* The Crew Pane (agents.crew): brief §5.8                           */
+  /* ---------------------------------------------------------------- */
+  .cp { flex: 1; min-width: 0; }
+  .cp-head .b-pane-title { overflow: visible; }
+  .b-pane-title.s-fit, .b-pane-detail.s-fit { text-overflow: clip; }
+  .cp-word { color: var(--muted-foreground); font-weight: 500; }
+  .cp-head .b-pane-detail { flex: 0 1 auto; text-overflow: clip; }
+  .cp-head > .s-glyph { margin-right: 1px; }
+  .cp-tabs { margin-left: auto; display: flex; align-items: center; gap: 2px; padding-left: 10px; flex: none; }
+  .cp-tabs button, .cp-filter button {
+    height: 24px; padding: 0 8px; border-radius: 8px;
+    font-size: 12.5px; color: var(--muted-foreground);
+    transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  }
+  .cp-tabs button:hover, .cp-filter button:hover { color: var(--foreground); }
+  .cp-tabs button.is-current, .cp-filter button.is-current { background: var(--current); color: var(--foreground); }
+  .cp-head .b-capsule { margin-left: 6px; }
+  .cp-head .b-capsule .b-ib.is-on { background: var(--current); color: var(--foreground); }
+
+  .cp-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 16px; }
+  /* 1. Summary: counts, the one clock, tokens, the filter */
+  .cp-desc { margin: -2px 0 -4px; font-size: 14px; line-height: 20px; color: color-mix(in oklab, var(--foreground) 88%, transparent); }
+  .cp-sum { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-height: 28px; font-size: 13.5px; line-height: 20px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .cp-counts b { font-weight: 550; color: var(--foreground); }
+  .cp-sep { color: var(--s-faint); }
+  .cp-meta { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .cp-clock { color: var(--foreground); font-variant-numeric: tabular-nums; }
+  .cp-clock.is-still { color: var(--muted-foreground); min-width: 0; }
+  .cp-tokens { color: var(--s-faint); }
+  .cp-filter { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+  .cp-word-lost { color: var(--foreground); font-weight: 500; }
+  /* 2. Narrator: the workflow's latest log() */
+  .cp-narr { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: -4px; font-size: 13px; line-height: 18px; color: var(--muted-foreground); white-space: nowrap; }
+  .cp-narr .b-icon { flex: none; width: 13px; height: 13px; color: var(--s-faint); }
+  .cp-narr .s-fit { flex: 0 1 auto; }
+  .cp-narr .cp-when { flex: none; color: var(--s-faint); font-size: 12px; }
+
+  /* 3+4 wide: the strip laid over the phase columns */
+  .cp-wide { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+  .cp-strip.s-strip { display: grid; grid-template-columns: repeat(var(--phases, 3), minmax(0, 1fr)); column-gap: var(--gap); height: 28px; margin-top: 4px; }
+  .cp-strip .s-rule { display: none; }
+  .cp-strip .s-phase { display: flex; min-width: 0; padding: 0 0 0 12px; }
+  .cp-strip .s-phase:not(:last-child)::after { content: ""; flex: 1 1 auto; min-width: 10px; height: 1px; margin: 0 -8px 0 4px; background: var(--s-rule); }
+  .cp-strip .s-phase.has-bar .s-bar { flex: 1 1 auto; max-width: 160px; }
+  .cp-cols { flex: 1; min-height: 0; display: grid; column-gap: var(--gap); row-gap: 2px; align-content: stretch; }
+  .cp-colbg { border-radius: var(--r-card); background: var(--block); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 5%, transparent); }
+  .cp-colhead { display: flex; align-items: center; gap: 6px; min-width: 0; height: 34px; padding: 6px 12px 0; font-size: 12px; color: var(--s-faint); white-space: nowrap; }
+  .cp-colhead .s-fit { flex: 0 1 auto; }
+  .cp-colhead .cp-n { margin-left: auto; flex: none; font-variant-numeric: tabular-nums; }
+  .cp-slotcell { min-width: 0; padding: 0 4px; z-index: 1; }
+
+  /* A compact agent row: two lines (label + time; now/result). */
+  .cp-cell { position: relative; display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 6px 8px 7px; border-radius: var(--r-control); outline: none; cursor: default; transition: background-color var(--dur-fast) var(--ease); }
+  .cp-cell:hover { background: var(--hover); }
+  .cp-cell:focus-visible { box-shadow: inset 0 0 0 1px var(--focus); }
+  .cp-cell.is-selected { background: var(--current); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 13%, transparent); }
+  .cp-l1 { display: flex; align-items: center; gap: 7px; min-width: 0; height: 20px; font-size: 13px; }
+  .cp-l1 .s-slot { height: 20px; }
+  .cp-label { flex: 1 1 auto; }
+  .cp-dir { color: color-mix(in oklab, var(--muted-foreground) 72%, transparent); }
+  .cp-name { color: var(--foreground); font-weight: 450; }
+  .cp-time { flex: none; margin-left: 4px; font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .cp-l2 { display: flex; align-items: center; gap: 6px; min-width: 0; height: 18px; padding-left: 23px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+  .cp-l1 .b-tag, .cp-l2 .b-tag { flex: none; height: 16px; padding: 0 5px; font-size: 10.5px; }
+  .cp-l2 .b-tag { display: none; }
+  .cp.has-sel .cp-main .cp-l1 .b-tag { display: none; }
+  .cp.has-sel .cp-main .cp-l2 .b-tag { display: inline-flex; }
+  .cp-now { flex: 1 1 auto; }
+  .cp-now b { font-weight: 550; }
+  .cp-now code { font-family: var(--font-mono); font-size: 11.5px; }
+  /* states: working is grey all through; colour only where it calls */
+  .cp-cell:is([data-state="working"], [data-state="queued"], [data-state="lost"], [data-state="stopped"]) .cp-name,
+  .cp-cell.is-dim .cp-name { color: var(--s-grey); font-weight: 400; }
+  .cp-cell:is([data-state="working"], [data-state="queued"], [data-state="lost"], [data-state="stopped"]) :is(.cp-dir, .cp-l2, .cp-time),
+  .cp-cell.is-dim :is(.cp-dir, .cp-l2, .cp-time) { color: var(--s-faint); }
+  .cp-cell[data-state="asks"] .cp-l2 { color: var(--foreground); }
+  .cp-cell[data-state="asks"] .cp-time { color: var(--attention); font-weight: 500; }
+  .cp-cell.is-hidden { visibility: hidden; }
+
+  /* 3+4 narrow: the strip, then phase bands stacked */
+  .cp-narrow { display: none; flex: 1; min-height: 0; flex-direction: column; gap: 8px; }
+  .cp-nstrip { margin: 2px 0 4px; }
+  .cp-bands { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+  .cp-band { flex: none; display: flex; flex-direction: column; padding: 2px 4px 4px; border-radius: var(--r-card); background: var(--block); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 5%, transparent); }
+  .cp-bhead { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 8px; font-size: 13px; white-space: nowrap; min-width: 0; }
+  .cp-bhead .cp-bname { font-weight: 550; color: var(--foreground); display: inline-flex; align-items: center; gap: 4px; }
+  .cp-bhead .cp-bname .b-icon { width: 13px; height: 13px; color: var(--muted-foreground); }
+  .cp-bhead .cp-n { color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .cp-bhead .cp-bdetail { margin-left: auto; font-size: 12px; color: var(--s-faint); }
+  .cp-band.is-past .cp-bname { color: var(--muted-foreground); font-weight: 500; }
+  .cp-band.is-future .cp-bname { color: var(--s-faint); font-weight: 500; }
+  .cp-band.is-future { background: none; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 6%, transparent); }
+  .cp-fold, .cp-qline, .cp-none { display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 8px; border-radius: var(--r-control); font-size: 13px; color: var(--muted-foreground); white-space: nowrap; }
+  .cp-fold:hover { background: var(--hover); color: var(--foreground); }
+  .cp-fold .s-slot { height: 20px; }
+  .cp-fold .b-icon { width: 14px; height: 14px; }
+  .cp-fold .cp-chev { margin-left: auto; color: color-mix(in oklab, var(--muted-foreground) 55%, transparent); }
+  .cp-fold .cp-faint { color: var(--s-faint); }
+  .cp-qline { color: var(--s-faint); }
+  .cp-none { padding-left: 31px; color: var(--s-faint); font-size: 12.5px; height: 26px; margin-top: -6px; }
+
+  /* 5. Agent detail: a split on the right (wide), or instead of the list (narrow) */
+  .cp-split { flex: 1; min-height: 0; display: flex; }
+  .cp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+  .cp-detail { flex: 0 0 372px; min-width: 0; display: flex; flex-direction: column; gap: 14px; margin: -2px 0 0 16px; padding: 2px 0 0 16px; box-shadow: inset 1px 0 0 var(--border); overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
+  .cp.has-sel .cp-main .cp-dir { display: none; }
+  .cp.has-sel .cp-colhead .s-fit { visibility: hidden; }
+  .cp-detail .b-tl-text { text-overflow: clip; }
+  .cp-crumbs { display: none; align-items: center; gap: 2px; height: 24px; margin: -4px 0 -6px -6px; font-size: 12px; color: var(--muted-foreground); white-space: nowrap; min-width: 0; }
+  .cp-crumbs button { display: inline-flex; align-items: center; gap: 2px; height: 24px; padding: 0 6px; border-radius: 8px; color: inherit; }
+  .cp-crumbs button:hover { background: var(--hover); color: var(--foreground); }
+  .cp-crumbs .b-icon { width: 12px; height: 12px; flex: none; color: var(--s-faint); }
+  .cp-crumbs .is-here { color: var(--foreground); padding: 0 4px; }
+  .cp-dhead { display: flex; align-items: center; gap: 8px; min-width: 0; height: 28px; }
+  .cp-dhead .cp-label { font-size: 14px; font-weight: 500; }
+  .cp-dhead .cp-name { font-weight: 550; }
+  .cp-dhead .s-sat { flex: none; }
+  .cp-dacts { margin-left: auto; display: flex; align-items: center; gap: 2px; flex: none; }
+  .cp-facts { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr); gap: 5px 12px; font-size: 13px; line-height: 20px; }
+  .cp-facts dt { color: var(--muted-foreground); }
+  .cp-facts dd { margin: 0; color: var(--foreground); display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .cp-facts dd .is-attention { color: var(--attention); }
+  .cp-dsec { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .cp-dlabel { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; font-weight: 550; color: var(--muted-foreground); }
+  .cp-dlabel span { font-weight: 400; color: var(--s-faint); }
+  .cp-dsec .s-brief { color: color-mix(in oklab, var(--foreground) 80%, transparent); }
+  .cp-dsec .s-brief code, .cp-json code, .cp-dsec code { font-family: var(--font-mono); font-size: 11.5px; }
+  .cp-dsec .b-tl-list { margin-top: 2px; gap: 6px; }
+  .cp-dsec .b-tl-list .b-tl { font-size: 13px; }
+  .cp-dsec .b-tl { font-size: 13.5px; }
+  .cp-json { position: relative; margin: 0; padding: 10px 12px; max-height: 120px; overflow: hidden; border-radius: var(--r-control); background: var(--block); box-shadow: inset 0 0 0 1px var(--border); font-family: var(--font-mono); font-size: 12px; line-height: 18px; color: var(--foreground); white-space: pre; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 44px), transparent); }
+  .cp-json .k { color: var(--muted-foreground); }
+  .cp-json .s { color: var(--ansi-green); }
+  .cp-json .n { color: var(--ansi-blue); }
+  .cp-note { display: flex; align-items: flex-start; gap: 6px; font-size: 12.5px; line-height: 18px; color: var(--muted-foreground); }
+  .cp-note > .s-sat { margin: 4px 1px 0 1px; }
+  .cp-note .b-icon { flex: none; width: 13px; height: 13px; margin-top: 2px; color: var(--s-faint); }
+
+  /* Timeline tab (variant): swim lanes, phases as background bands */
+  .tl { --lab: 232px; --rgt: 18px; position: relative; flex: none; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+  .tl-axis { display: grid; grid-template-columns: var(--lab) 1fr var(--rgt); height: 22px; font-size: 11.5px; color: var(--s-faint); font-variant-numeric: tabular-nums; }
+  .tl-ticks { position: relative; }
+  .tl-ticks span { position: absolute; bottom: 4px; translate: -50% 0; }
+  .tl-ticks span:first-child { translate: 0 0; }
+  .tl-ticks .tl-nowlab { color: var(--foreground); font-weight: 500; }
+  .tl-grid { position: absolute; top: 22px; bottom: 0; left: var(--lab); right: var(--rgt); pointer-events: none; z-index: 2; }
+  .tl-grid i { position: absolute; top: 0; bottom: 0; width: 1px; background: color-mix(in oklab, var(--foreground) 5%, transparent); }
+  .tl-grid .tl-now { width: 1px; background: color-mix(in oklab, var(--foreground) 38%, transparent); }
+  .tl-band { position: relative; display: flex; flex-direction: column; padding: 2px 0 4px; border-radius: var(--r-control); background: var(--block); }
+  .tl-band + .tl-band { margin-top: 2px; }
+  .tl-bhead { display: grid; grid-template-columns: var(--lab) 1fr; align-items: center; height: 26px; font-size: 12px; color: var(--muted-foreground); }
+  .tl-bhead > span { padding-left: 12px; display: flex; gap: 6px; align-items: center; }
+  .tl-bhead b { font-weight: 550; color: var(--foreground); font-size: 12.5px; }
+  .tl-bhead .tl-bd { color: var(--s-faint); }
+  .tl-lane { display: grid; grid-template-columns: var(--lab) 1fr var(--rgt); align-items: center; height: 26px; border-radius: 8px; }
+  .tl-lane:hover { background: var(--hover); }
+  .tl-lab { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 0 10px 0 12px; font-size: 12.5px; }
+  .tl-lab .b-tag { flex: none; height: 16px; padding: 0 5px; font-size: 10.5px; }
+  .tl-track { position: relative; height: 26px; }
+  .tl-bar { position: absolute; top: 10px; height: 6px; border-radius: 3px; background: color-mix(in oklab, var(--foreground) 20%, transparent); }
+  .tl-bar.is-working { background: linear-gradient(to right, color-mix(in oklab, var(--foreground) 22%, transparent), color-mix(in oklab, var(--foreground) 48%, transparent)); }
+  .tl-bar.is-stalled { background: none; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 20%, transparent); }
+  .tl-bar.is-asks { background: color-mix(in oklab, var(--attention) 55%, transparent); }
+  .tl-bar.is-failed { background: color-mix(in oklab, var(--destructive) 50%, transparent); }
+  .tl-bar.is-queued { background: none; height: 6px; border: 1px dashed color-mix(in oklab, var(--foreground) 30%, transparent); }
+  .tl-cap { position: absolute; top: 13px; translate: -50% -50%; z-index: 3; line-height: 0; }
+  .tl-cap .s-sat { display: block; }
+  .tl-lane:is([data-state="working"], [data-state="queued"]) .cp-name { color: var(--s-grey); font-weight: 400; }
+  .tl-lane:is([data-state="working"], [data-state="queued"]) .cp-dir { color: var(--s-faint); }
+  .cp-later { display: flex; align-items: center; gap: 8px; padding: 9px 12px; font-size: 12.5px; color: var(--s-faint); }
+  .cp-later-t { font-size: 12px; color: var(--s-faint); font-style: normal; }
+  .tl-legend { flex: none; display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 2px 2px 0 12px; font-size: 12px; color: var(--s-faint); }
+  .tl-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .tl-legend i { display: inline-block; width: 22px; height: 6px; border-radius: 3px; }
+  .tl-legend .s-sat { margin: 0 2px; }
+
+  /* Finished: the result at the top. Lost: the one action. */
+  .cp-result { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px 10px; border-radius: var(--r-card); background: var(--block); box-shadow: inset 0 0 0 1px var(--border); }
+  .cp-rhead { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+  .cp-rhead b { font-weight: 550; color: var(--foreground); font-size: 13px; }
+  .cp-result .b-prose { font-size: 14px; line-height: 22px; }
+  .cp-result .b-prose code { font-size: 12px; }
+  .cp-racts { display: flex; gap: 2px; margin: 0 0 0 -8px; }
+  .cp-lost { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 12px 12px 12px 14px; border-radius: var(--r-card); background: var(--block); box-shadow: inset 0 0 0 1px var(--border); font-size: 13.5px; }
+  .cp-lost .s-glyph { flex: none; }
+  .cp-lost-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 260px; min-width: 0; }
+  .cp-lost-text b { font-weight: 550; }
+  .cp-lost-text span { font-size: 12.5px; line-height: 17px; color: var(--muted-foreground); }
+
+  /* The Pane picks its layout by its own width (brief §5.8: ≥ 760 columns). */
+  @container tile (width < 760px) {
+    .cp-wide { display: none; }
+    .cp-narrow { display: flex; }
+    .cp.has-sel .cp-main { display: none; }
+    .cp.has-sel .cp-detail { flex: 1 1 auto; margin: 0; padding: 0; box-shadow: none; }
+    .cp-crumbs { display: flex; }
+    .cp-dclose { display: none; }
+    .cp-head .b-pane-detail { display: none; }
+    .cp-sum .cp-counts { flex-basis: 100%; }
+    .cp-sum .cp-meta > .cp-sep:first-child { display: none; }
+    .cp-desc { display: none; }
+  }
+  @container tile (width < 520px) {
+    .cp-head .cp-tabs { display: none; }
+    .cp-head .b-capsule { margin-left: auto; }   /* no tabs to push it: the capsule still ends the row */
+  }
+
+  /* The Thread beside it (A): only what this page needs. */
+  .pg-thread .b-thread { justify-content: flex-end; }
+  .pg-thread .b-chat { gap: 16px; padding-top: 10px; }
+  .pg-thread .s-crew { margin: 0 -4px; }
+  .pg-thread .b-composer-wrap { gap: 6px; }
+  .pg-thread .b-docked { gap: 7px; padding: 11px 12px; }
+  .pg-thread .b-choice { min-height: 32px; font-size: 13.5px; }
+  .pg-thread .b-tl { font-size: 13.5px; }
+  .pg-thread .b-tl .b-quiet { white-space: nowrap; }
+  .b-send.is-stop { background: var(--raised); color: var(--foreground); }
+</style>
+</head>
+<body class="b-kit">
+<div class="b-screen pg-screen">
+  <div class="b-window pg-window" id="win">
+    <header class="b-bar">
+      <button class="b-bar-logo" title="Sidebar · Alt+A"><span data-mark="asks" data-logo data-size="20"></span></button>
+      <nav class="b-ws"><button class="is-current">1</button><button>2</button><button>3</button><button><i data-icon="plus" data-size="14"></i></button></nav>
+      <button class="b-widget"><i data-icon="columns-3"></i></button>
+      <div class="b-bar-right">
+        <span class="b-widget"><i data-icon="globe"></i>:5173</span>
+        <span class="b-widget"><span class="b-ring" style="--share:.64"></span></span>
+        <span class="b-widget"><i data-icon="bell"></i></span>
+      </div>
+    </header>
+
+    <div class="pg-head">
+      <h1>Панель Crew — большая картина</h1>
+      <p>Crew открывается панелью рядом с Thread, в его Group. В Thread остаётся одна карточка, а здесь вся работа: сводка, фазы, каждый агент, его задание и результат. Тикают только одни часы — в сводке панели. Клик по агенту или точке открывает деталь, слова фильтра и вкладки живые. <kbd>t</kbd> светлая тема, <kbd>g</kbd> стекло вкл/выкл.</p>
+      <nav class="pg-toc">
+        <a href="#a"><b>A</b>широко, 12 агентов</a><a href="#b"><b>B</b>выбран агент</a><a href="#c"><b>C</b>узко, 50 агентов</a>
+        <a href="#d"><b>D</b>вариант: Timeline</a><a href="#e"><b>E</b>закончен</a><a href="#f"><b>F</b>потерян и снова</a>
+      </nav>
+    </div>
+
+    <!-- ============================== A ============================== -->
+    <section class="pg-sec" id="a">
+      <div class="pg-title"><span class="pg-id">A</span><h2>Широкая панель: 12 агентов в работе</h2></div>
+      <p class="pg-note">Слева Thread: одна карточка Crew, живая строка и вопрос агента в доке. Справа панель Crew (~950 px): сводка с часами и токенами, фильтр, строка рассказчика, полоса фаз над колонками Scan / Fix / Verify. Тот же Fix 4/7, что на странице 02, двумя минутами позже: два сканера прочли 12 маршрутов, у семи нет проверки — на каждый свой агент в Fix (share.ts на второй попытке, pair.ts упал, session.ts спрашивает). Наборы тестов в Verify появятся, когда их маршруты будут исправлены, поэтому агентов пока 9 из будущих 12.</p>
+      <p class="pg-note is-open"><b>Не проверено:</b> кто спросил («Fix · session.ts asks») — по ACP это пока не подтверждено (gaps §2.3). Модель фазы («Haiku», «Opus 5.5») видна, только если скрипт назвал её в meta.</p>
+      <div class="pg-stage" style="height:700px">
+        <div class="b-group" data-state="asks">
+          <section class="b-tile pg-left pg-thread">
+            <div class="b-pane-head b-bare">
+              <span data-mark="asks" data-calls="false"></span>
+              <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+              <span class="b-pane-title s-fit">Move sidebar settings to sidebar.toml</span>
+              <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+            </div>
+            <div class="b-thread">
+              <div class="b-chat">
+                <div class="b-you">Before this ships, check that every route does the access check, and fix the ones that don't.</div>
+                <div class="b-prose"><p>There are 12 routes, and at least three read a Thread before they call <code>requireAccess</code>. It is wide, even work, so I'll run it as a Crew.</p></div>
+                <div id="a-card"></div>
+                <div class="b-trace"><div class="b-tl"><span data-glyph="running" data-size="15"></span><span class="b-shimmer">Crew audit-routes is at work</span><span class="b-quiet">· Fix 4/7</span></div></div>
+              </div>
+            </div>
+            <div class="b-composer-wrap">
+              <div class="b-docked">
+                <div class="b-docked-head s-ask-head"><span data-sat="asks" data-size="10"></span><span><b>Fix · session.ts</b> asks · 1m</span></div>
+                <div style="font-size:13.5px">Run a command in <code class="b-code-inline">~/code/banda</code>?</div>
+                <code class="s-cmd"><span class="s-prompt">$</span>pnpm vitest auth</code>
+                <button class="b-choice is-hl"><span class="b-kbd">1</span>Allow once<span class="s-hint">↵</span></button>
+                <button class="b-choice"><span class="b-kbd">2</span>Allow for this Thread</button>
+                <button class="b-choice b-muted"><span class="b-kbd">Esc</span>Deny, and tell it what to do differently…</button>
+              </div>
+              <div class="b-composer">
+                <div class="b-composer-text is-empty">Steer this thread…</div>
+                <div class="b-composer-row">
+                  <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                  <span class="b-spacer"></span>
+                  <button class="b-ctl"><i data-icon="shield"></i></button>
+                  <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort is-top">Ultracode</span></button>
+                  <button class="b-send is-stop" aria-label="Stop" title="Stop the Crew · Esc"></button>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="b-tile cp is-focused" data-pane="a"></section>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== B ============================== -->
+    <section class="pg-sec" id="b">
+      <div class="pg-title"><span class="pg-id">B</span><h2>Выбран агент: деталь справа, в той же панели</h2></div>
+      <p class="pg-note">Клик по агенту (или по точке в полосе) открывает деталь сбоку. Колонки сужаются до имён файлов. Закрыть — × или Esc.</p>
+      <div class="pg-stage" style="height:760px">
+        <div class="pg-left pg-aside">
+          <h3>Что в детали</h3>
+          <ol>
+            <li><b>Факты:</b> фаза, состояние, модель, попытка, токены, время. Токены — только в панели Crew и здесь.</li>
+            <li><b>Brief</b> — задание агента: две строки и «more».</li>
+            <li><b>Work</b> — одна строка работы; открыта, в ней строки вызовов.</li>
+            <li><b>Result</b> — текст или JSON, свёрнут с затуханием, «Show all».</li>
+            <li><b>Open as Pane</b> — агент отдельной панелью в Group, только чтение.</li>
+          </ol>
+          <p>Остановить, перезапустить или пропустить одного агента Crew нельзя (Harness не даёт). Поэтому кнопок нет совсем — не серые, а никаких. Стоп — только весь Crew, в шапке.</p>
+        </div>
+        <section class="b-tile cp is-focused" data-pane="b"></section>
+      </div>
+    </section>
+
+    <!-- ============================== C ============================== -->
+    <section class="pg-sec" id="c">
+      <div class="pg-title"><span class="pg-id">C</span><h2>Узкая панель (~460 px): 50 агентов</h2></div>
+      <p class="pg-note">Панель сама выбирает вид по ширине: уже 760 px — фазы полосами сверху вниз. Готовые сворачиваются в «✓ 12 done», ждущие — одна строка «8 waiting for a slot». Работающие, спрашивающие и упавшие видны всегда, вопросы первыми.</p>
+      <div class="pg-stage" style="height:944px">
+        <div class="pg-left pg-aside">
+          <h3>Порядок в полосе</h3>
+          <p><b>Asks</b> → <b>Failed</b> → <b>Working</b> → свёрнутые готовые → одна строка ждущих. Полоса фаз наверху тоже не растёт: больше 24 агентов в фазе (или не влезает) — тонкая полоса с долями и «14/28».</p>
+          <h3>Почему 20 ждут слота</h3>
+          <p>Тот же Crew на приложении побольше: Scan 10 · Fix 28 · Verify 12. Crew запускает сразу не больше min(16, ядра − 2) агентов. Здесь машина на 8 ядер — 6 слотов: 5 работают и 1 спрашивает (вопрос держит слот). Ждут 8 в Fix и 12 наборов тестов в Verify.</p>
+          <h3>Агент в узкой панели</h3>
+          <p>Справа: деталь заменяет список, наверху крошки <b>audit-routes › Fix › share.ts</b>; назад — клик по ним или Esc. Это агент на второй попытке: первая застряла, файлы, которые она успела изменить, остались изменёнными (так работает Claude).</p>
+        </div>
+        <section class="b-tile cp" data-pane="c" style="flex:0 0 460px"></section>
+        <section class="b-tile cp" data-pane="c2" style="flex:0 0 460px"></section>
+      </div>
+    </section>
+
+    <!-- ============================== D ============================== -->
+    <section class="pg-sec" id="d">
+      <div class="pg-title"><span class="pg-id">D</span><h2>Вкладка Timeline</h2><span class="pg-badge">Вариант</span></div>
+      <p class="pg-note">Тот же Crew и тот же момент, что в A. Дорожка на агента по оси времени, фазы — фоновые полосы. Видно, сколько шло параллельно, где ждали ответа и где застряли.</p>
+      <div class="pg-stage" style="height:590px">
+        <div class="pg-left pg-aside">
+          <div class="pg-pick"><b>Мой выбор</b>Колонки (широко) и полосы (узко) — по умолчанию; Timeline — вкладка рядом с Phases.</div>
+          <p>Колонки быстрее отвечают на «что сейчас нужно от меня». Timeline отвечает на «куда ушло время» — это вопрос после, а не во время.</p>
+          <p>Цвета те же: работа серая, готово спокойное, оранжевое — ждёт вас, красное — упало. Первая попытка, которая застряла, — пустой контур.</p>
+          <p>Verify ещё не начат: дорожек нет, пока наборы тестов не запустятся. Banda узнаёт агента, когда он стартует.</p>
+          <p>Ось не тикает: двигается только линия «now» вместе с часами сводки.</p>
+        </div>
+        <section class="b-tile cp" data-pane="d"></section>
+      </div>
+    </section>
+
+    <!-- ============================== E ============================== -->
+    <section class="pg-sec" id="e">
+      <div class="pg-title"><span class="pg-id">E</span><h2>Crew закончен</h2></div>
+      <p class="pg-note">Всё улеглось. Наверху — результат, который получил Claude, и <b>Copy result</b>. Часы стоят: время итоговое. Слева — меню ⋯ из шапки.</p>
+      <div class="pg-stage" style="height:792px">
+        <div class="pg-left pg-aside">
+          <h3>После конца</h3>
+          <p>Готовые — спокойные квадраты, не зелёные: зелёный «готово» есть только у Thread. Красное — два упавших агента и их число в сводке.</p>
+          <p>Stop из шапки ушёл: останавливать нечего. Фильтр остался — «Failed» быстро показывает, что делать дальше.</p>
+          <p>Ответ Claude приходит в Thread строкой «↩ Crew audit-routes finished · 14m» и его текстом. Панель не закрывается сама.</p>
+          <div class="pg-menufig">
+            <span class="pg-cap">Меню ⋯ в шапке панели</span>
+            <div class="b-menu"><div class="b-menu-item"><i data-icon="file-code"></i>View script</div><div class="b-menu-item is-hl"><i data-icon="copy"></i>Copy result</div><div class="b-menu-sep"></div><div class="b-menu-item b-muted"><i data-icon="square-terminal"></i>Save as command<span class="b-key">later</span></div></div>
+          </div>
+          <p><b>Save as command</b> — позже: Banda сохранит скрипт Crew в <code class="b-code-inline">.claude/workflows/</code>, и его можно звать снова.</p>
+        </div>
+        <section class="b-tile cp" data-pane="e"></section>
+      </div>
+    </section>
+
+    <!-- ============================== F ============================== -->
+    <section class="pg-sec" id="f">
+      <div class="pg-title"><span class="pg-id">F</span><h2>Потерян после перезапуска Banda — и после «Ask Claude to go on»</h2></div>
+      <p class="pg-note">Crew не переживает свой процесс. Что успело — готово, остальное «Lost», на своих местах в колонках: видно, где остановилось. Одно действие: <b>Ask Claude to go on</b>. Ниже — то же сразу после: готовые вернулись «from last run» (бледнее), остальные пошли заново.</p>
+      <div class="pg-stage" id="f1" style="height:700px">
+        <div class="pg-left pg-aside">
+          <h3>Почему так</h3>
+          <p>Перезапустить Crew может только Claude (resume с прошлого запуска). Поэтому кнопка не «Restart», а <b>Ask Claude to go on</b>: она пишет Claude в composer этого Thread и отправляет.</p>
+          <p>Потерянные — бледный контур с разрывом. Они не красные: никто не ошибся, просто процесс умер. Часов нет — время не идёт.</p>
+        </div>
+        <section class="b-tile cp" data-pane="f"></section>
+      </div>
+      <div class="pg-stage" id="f2" style="height:632px;margin-top:var(--gap)">
+        <div class="pg-left pg-aside">
+          <h3>После «Ask Claude to go on»</h3>
+          <p>Claude запустил тот же Crew с прошлого запуска. 7 готовых вернулись как были — бледнее, с пометкой <b>from last run</b>, и не тратят лимит второй раз. Упавший pair.ts идёт заново (attempt 2), потерянный session.ts — тоже.</p>
+          <p>Счёт честный: «7 from last run», а не «7 done». Часы снова идут.</p>
+        </div>
+        <section class="b-tile cp" data-pane="f2"></section>
+      </div>
+    </section>
+    <div style="height:20px"></div>
+  </div>
+</div>
+
+<script src="../../../design/kit/icons.js"></script>
+<script src="../../../design/kit/mark.js"></script>
+<script src="../../../design/kit/sub.js"></script>
+<script>
+/* ===================================================================== */
+/* Data: Crew audit-routes (brief §9). Labels are route paths.           */
+/* ===================================================================== */
+const R = 'client/web/src/routes/'
+const ic = (n, s) => BandaIcons.svg(n, s || 15)
+const T0 = Date.now(), since = () => Math.floor((Date.now() - T0) / 1000)   // the one clock keeps going across redraws
+const clock = (s) => s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`
+
+const SCAN = { title: 'Scan', detail: 'read each route', model: 'Haiku' }
+const FIX = { title: 'Fix', detail: 'one agent per route', model: 'Opus 5.5' }
+const VERIFY = { title: 'Verify', detail: 'run the tests', model: 'Haiku' }
+
+// The one Crew of every page (00, 02, 03, 05): Scan 2 · Fix 7 · Verify 3 = 12 agents.
+// Two scanners read 12 routes; each route that skips the check gets its own Fix agent;
+// a test suite starts in Verify once its routes are fixed. Banda learns of an agent when it starts.
+const SCAN1 = 'billing, settings, hosts', SCAN2 = 'threads, auth, files'
+const scanDone = () => [
+  { key: SCAN1, state: 'done', now: '6 routes · invoices.ts, keys.ts and pair.ts skip the check', time: '1m 50s', tl: [[0, 110]] },
+  { key: SCAN2, state: 'done', now: '6 routes · later.ts, share.ts, session.ts and upload.ts skip it', time: '5m 00s', tl: [[0, 300]] },
+]
+const PAIR_WHY = 'Pairing runs before a session; the check can’t come first'
+
+// A, B, D: mid-run, Fix 4/7 (9 agents so far; Verify has not started)
+const LIVE = {
+  name: 'audit-routes', from: 'Move sidebar settings to sidebar.toml', clock: 580, tokens: '1.4M tokens',
+  narrator: '12 of 12 routes scanned · 7 need a fix · 3 fixed', narrWhen: '3m',
+  phases: [
+    { ...SCAN, agents: scanDone() },
+    { ...FIX, agents: [
+      { key: 'billing/invoices.ts', state: 'done', now: 'Added requireAccess to GET · +8 −2', time: '2m 10s', tl: [[110, 240]], tokens: '48.2k', detail: 'invoices' },
+      { key: 'settings/keys.ts', state: 'done', now: 'Checked PATCH like GET · +12 −3', time: '3m 04s', tl: [[110, 294]], tokens: '52.6k' },
+      { key: 'hosts/pair.ts', state: 'failed', now: PAIR_WHY, time: '2m 20s', tl: [[110, 250]], tokens: '35.9k' },
+      { key: 'threads/later.ts', state: 'done', now: 'Snooze and wake check threads:write · +9 −2', time: '3m 40s', tl: [[160, 380]], tokens: '41.3k' },
+      { key: 'threads/share.ts', state: 'working', attempt: 2, now: 'Editing share.ts', time: '3m', tl: [[300, 385, 'stalled'], [400, 580]], tokens: '61.0k' },
+      { key: 'auth/session.ts', state: 'asks', now: 'Allow pnpm vitest auth?', time: '1m', tl: [[300, 520, 'working'], [520, 580, 'asks']], tokens: '22.7k' },
+      { key: 'files/upload.ts', state: 'working', now: 'Editing upload.ts', time: '4m', tl: [[300, 580]], tokens: '30.1k' },
+    ] },
+    { ...VERIFY, agents: [], later: 'Each suite starts when its routes are fixed' },
+  ],
+}
+
+// C: 50 agents, the same Crew on a bigger app (Scan 10 · Fix 28 · Verify 12), on an 8-core machine
+const many = ['auth/logout.ts', 'auth/callback.ts', 'billing/plans.ts', 'billing/receipts.ts', 'files/share.ts', 'hosts/list.ts', 'threads/fork.ts', 'threads/archive.ts', 'settings/agents.ts', 'settings/look.ts', 'spaces/list.ts', 'spaces/open.ts']
+const BIG = {
+  name: 'audit-routes', from: 'Move sidebar settings to sidebar.toml', clock: 1134, tokens: '3.4M tokens',
+  narrator: '48 routes in 6 apps scanned · 28 need a fix · 12 fixed', narrWhen: '1m',
+  phases: [
+    { ...SCAN, agents: Array.from({ length: 10 }, (_, i) => ({ key: 'app-' + (1 + (i % 6)) + '/' + ['auth, billing', 'files, hosts', 'threads, spaces', 'settings', 'share, keys'][i % 5], state: 'done' })) },
+    { ...FIX, agents: [
+      { key: 'auth/session.ts', state: 'asks', now: 'Allow pnpm vitest auth?', time: '2m' },
+      { key: 'threads/later.ts', state: 'failed', now: 'Usage limit · ask Claude to go on after 15:00', time: '2m 12s' },
+      { key: 'threads/share.ts', state: 'working', attempt: 2, now: 'Editing share.ts', time: '1m 12s', tokens: '31.4k', detail: 'share' },
+      { key: 'hosts/pair.ts', state: 'failed', now: PAIR_WHY, time: '2m 20s' },
+      { key: 'files/upload.ts', state: 'working', now: '<code>&gt;_ rg requireAccess files/</code>', time: '1m' },
+      { key: 'billing/plans.ts', state: 'working', now: 'Editing plans.ts', time: '40s' },
+      { key: 'hosts/rename.ts', state: 'working', now: 'Reading rename.ts', time: '20s' },
+      { key: 'spaces/open.ts', state: 'working', now: 'Reading open.ts', time: '10s' },
+      ...Array.from({ length: 12 }, (_, i) => ({ key: many[i % many.length], state: 'done' })),
+      // 6 slots (8 cores): 5 working + 1 asks hold them, so these wait
+      ...['hosts/list.ts', 'files/share.ts', 'auth/callback.ts', 'threads/fork.ts', 'settings/look.ts', 'spaces/list.ts', 'billing/receipts.ts', 'auth/logout.ts'].map((key) => ({ key, state: 'queued' })),
+    ] },
+    { ...VERIFY, agents: Array.from({ length: 12 }, (_, i) => ({ key: 'Tests: app-' + (1 + (i % 6)) + (i < 6 ? ', api' : ', web'), state: 'queued' })) },
+  ],
+}
+
+// E: finished, 12 agents, 2 failed
+const DONE = {
+  name: 'audit-routes', from: 'Move sidebar settings to sidebar.toml', clock: 848, tokens: '1.9M tokens',
+  narrator: '6 of 7 routes fixed · tests pass in 2 of 3 suites', narrWhen: '14:16',
+  phases: [
+    { ...SCAN, agents: scanDone() },
+    { ...FIX, agents: [
+      { key: 'billing/invoices.ts', state: 'done', now: 'Added requireAccess to GET · +8 −2', time: '2m 10s' },
+      { key: 'settings/keys.ts', state: 'done', now: 'Checked PATCH like GET · +12 −3', time: '3m 04s' },
+      { key: 'hosts/pair.ts', state: 'failed', now: PAIR_WHY, time: '2m 20s' },
+      { key: 'threads/later.ts', state: 'done', now: 'Snooze and wake check threads:write · +9 −2', time: '3m 40s' },
+      { key: 'threads/share.ts', state: 'done', attempt: 2, now: 'Checks threads:share on POST · +7 −1', time: '4m 50s' },
+      { key: 'auth/session.ts', state: 'done', now: 'Reads the session after the check · +10 −4', time: '6m 05s' },
+      { key: 'files/upload.ts', state: 'done', now: 'Checks files:write before upload · +5 −1', time: '6m 30s' },
+    ] },
+    { ...VERIFY, agents: [
+      { key: 'Tests: billing, auth', state: 'done', now: '14 tests pass', time: '1m 40s' },
+      { key: 'Tests: settings, files', state: 'failed', now: '1 test fails in keys.test.ts', time: '2m 05s' },
+      { key: 'Tests: hosts, threads', state: 'done', now: '21 tests pass', time: '2m 30s' },
+    ] },
+  ],
+}
+
+// F: lost when Banda restarted (7 of 12 done), then relaunched by Claude
+const LOST = {
+  name: 'audit-routes', from: 'Move sidebar settings to sidebar.toml', clock: 540, tokens: '1.1M tokens',
+  narrator: '12 of 12 routes scanned · 7 need a fix · 5 fixed', narrWhen: '9m',
+  phases: [
+    { ...SCAN, agents: scanDone() },
+    { ...FIX, agents: [
+      { key: 'billing/invoices.ts', state: 'done', now: 'Added requireAccess to GET · +8 −2', time: '2m 10s' },
+      { key: 'settings/keys.ts', state: 'done', now: 'Checked PATCH like GET · +12 −3', time: '3m 04s' },
+      { key: 'hosts/pair.ts', state: 'failed', now: PAIR_WHY, time: '2m 20s' },
+      { key: 'threads/later.ts', state: 'done', now: 'Snooze and wake check threads:write · +9 −2', time: '3m 40s' },
+      { key: 'threads/share.ts', state: 'done', now: 'Checks threads:share on POST · +7 −1', time: '4m 50s' },
+      { key: 'auth/session.ts', state: 'lost', now: 'Lost · stopped when Banda restarted', time: '7m' },
+      { key: 'files/upload.ts', state: 'done', now: 'Checks files:write before upload · +5 −1', time: '6m 30s' },
+    ] },
+    { ...VERIFY, agents: [
+      { key: 'Tests: billing, auth', state: 'lost', wait: 'Fix', now: 'Lost · had not started' },
+      { key: 'Tests: settings, files', state: 'lost', now: 'Lost · stopped when Banda restarted', time: '1m' },
+      { key: 'Tests: hosts, threads', state: 'lost', now: 'Lost · stopped when Banda restarted', time: '1m' },
+    ] },
+  ],
+}
+const AGAIN = {
+  name: 'audit-routes', from: 'Move sidebar settings to sidebar.toml', clock: 48, tokens: '0.1M tokens',
+  narrator: 'Relaunched · 7 agents came back from the last run', narrWhen: 'now',
+  phases: [
+    { ...SCAN, agents: scanDone().map((a) => ({ ...a, dim: true })) },
+    { ...FIX, agents: [
+      { key: 'billing/invoices.ts', state: 'done', dim: true, now: 'from last run · +8 −2', time: '2m 10s' },
+      { key: 'settings/keys.ts', state: 'done', dim: true, now: 'from last run · +12 −3', time: '3m 04s' },
+      { key: 'hosts/pair.ts', state: 'working', attempt: 2, now: 'Reading pair.ts', time: '40s' },
+      { key: 'threads/later.ts', state: 'done', dim: true, now: 'from last run · +9 −2', time: '3m 40s' },
+      { key: 'threads/share.ts', state: 'done', dim: true, now: 'from last run · +7 −1', time: '4m 50s' },
+      { key: 'auth/session.ts', state: 'working', now: 'Reading session.ts', time: '40s' },
+      { key: 'files/upload.ts', state: 'done', dim: true, now: 'from last run · +5 −1', time: '6m 30s' },
+    ] },
+    { ...VERIFY, agents: [
+      { key: 'Tests: billing, auth', state: 'queued', wait: 'its routes', now: 'Starts when session.ts is fixed' },
+      { key: 'Tests: settings, files', state: 'working', now: '<code>&gt;_ pnpm vitest settings files</code>', time: '30s' },
+      { key: 'Tests: hosts, threads', state: 'queued', wait: 'its routes', now: 'Starts when pair.ts is fixed' },
+    ] },
+  ],
+}
+
+// What a selected agent shows (brief §5.8 point 5)
+const DETAILS = {
+  invoices: {
+    brief: 'Add the access check to client/web/src/routes/billing/invoices.ts. Scan found that GET reads invoices with no check; POST already checks <code>billing:write</code>. Use <code>requireAccess</code> the way the other routes do, keep the handler\'s shape, and do not touch the tests.',
+    work: { text: 'Read 2 files, edited 1, ran 1 command', diff: ['+8', '−2'], open: true, rows: [
+      ['file-text', 'Read', 'client/web/src/routes/billing/invoices.ts'],
+      ['file-text', 'Read', 'server/access/require.ts'],
+      ['file-pen', 'Edited', 'billing/invoices.ts', ['+8', '−2']],
+      ['terminal', 'Ran', 'pnpm tsc --noEmit -p client/web'],
+    ] },
+    json: [
+      '{',
+      '  <span class="k">"route"</span>: <span class="s">"billing/invoices.ts"</span>,',
+      '  <span class="k">"fixed"</span>: <span class="n">true</span>,',
+      '  <span class="k">"methods"</span>: [<span class="s">"GET"</span>],',
+      '  <span class="k">"check"</span>: <span class="s">"requireAccess(\'billing:read\')"</span>,',
+      '  <span class="k">"diff"</span>: { <span class="k">"added"</span>: <span class="n">8</span>, <span class="k">"removed"</span>: <span class="n">2</span> },',
+      '  <span class="k">"notes"</span>: <span class="s">"POST checked billing:write; GET did not"</span>',
+      '}',
+    ].join('\n'),
+  },
+  share: {
+    brief: 'Add the access check to client/web/src/routes/threads/share.ts. Scan found that POST creates a share link without checking <code>threads:share</code>. Use <code>requireAccess</code> like the other routes and do not touch the tests.',
+    note: 'Attempt 1 stalled after 3m. Files it already changed stay changed.',
+    work: { text: 'Read 3 files, searched for 1 pattern', live: 'Editing client/web/src/routes/threads/share.ts' },
+  },
+}
+
+/* ===================================================================== */
+/* Rendering                                                             */
+/* ===================================================================== */
+const DESC = 'Find every route that skips the access check and fix it'
+;[LIVE, BIG, DONE, LOST, AGAIN].forEach((c) => { c.desc = DESC })
+const all = (c) => c.phases.flatMap((p) => p.agents)
+const full = (key) => key.startsWith('Tests:') ? key : R + key
+const pathHTML = (key) => { const f = full(key), i = f.lastIndexOf('/'); return `<span class="cp-dir">${f.slice(0, i + 1)}</span><span class="cp-name">${f.slice(i + 1)}</span>` }
+const label = (key) => `<span class="cp-label s-path"><span>${pathHTML(key)}</span></span>`
+const nowOf = (a) => Sub.norm(a.state) === 'asks' ? `<b>Asks:</b> ${a.now}` : (a.now || '')
+const settledN = (t) => t.done + t.failed + t.stopped
+const phaseWhen = (p) => { const t = Sub.tally(p.agents); return !t.total ? 'future' : settledN(t) === t.total ? 'past' : 'live' }
+
+function cell(a, id, sel) {
+  const st = Sub.norm(a.state)
+  const tags = (st === 'failed' ? '<span class="b-tag is-failed">Failed</span>' : '') + (a.attempt ? `<span class="b-tag">attempt ${a.attempt}</span>` : '')
+  return `<div class="cp-cell${sel ? ' is-selected' : ''}${a.dim ? ' is-dim' : ''}" data-state="${st}" data-id="${id}" tabindex="0">` +
+    `<div class="cp-l1"><span class="s-slot">${Sub.sat(st, 10, { dim: a.dim })}</span>${label(a.key)}${tags}${a.time ? `<span class="cp-time">${a.time}</span>` : ''}</div>` +
+    `<div class="cp-l2">${tags}<span class="cp-now s-fit">${nowOf(a)}</span></div></div>`
+}
+
+function head(c, o) {
+  const glyph = o.glyph || 'running'
+  return `<div class="b-pane-head cp-head">${Sub.glyph(glyph, 16)}` +
+    `<span class="b-pane-title"><span class="cp-word">Crew ·</span> ${c.name}</span>` +
+    `<span class="b-pane-detail s-fit">from ${c.from}</span>` +
+    `<nav class="cp-tabs"><button data-tab="phases" class="${o.tab !== 'timeline' ? 'is-current' : ''}">Phases</button><button data-tab="timeline" class="${o.tab === 'timeline' ? 'is-current' : ''}">Timeline</button></nav>` +
+    `<div class="b-capsule">` +
+    (o.live ? `<button class="b-ib is-xs" title="Stop the Crew">${Sub.icon('stop', 14)}</button>` : '') +
+    `<button class="b-ib is-xs${o.menu ? ' is-on' : ''}" title="More">${ic('ellipsis', 14)}</button><span class="b-capsule-line"></span>` +
+    `<button class="b-ib is-xs" title="Pane menu">${ic('layout-panel-left', 14)}</button><button class="b-ib is-xs" title="Close">${ic('x', 14)}</button></div></div>`
+}
+
+function summary(c, o) {
+  let counts = o.counts || Sub.counts(all(c))
+  counts = counts.replace(/^(\d+ agents)/, '<b>$1</b>')
+  const time = o.live ? `<span class="cp-clock" data-clock="${c.clock}">${clock(c.clock + since())}</span>` : `<span class="cp-clock is-still">${o.still || clock(c.clock)}</span>`
+  const F = ['All', 'Working', 'Asks', 'Failed']
+  return `<div class="cp-sum"><span class="cp-counts">${counts}</span><span class="cp-meta">` +
+    (o.noTime ? '' : `<span class="cp-sep">·</span>${time}`) +
+    `<span class="cp-sep">·</span><span class="cp-tokens">${c.tokens}</span></span>` +
+    `<nav class="cp-filter">${F.map((f) => `<button data-filter="${f}" class="${(o.filter || 'All') === f ? 'is-current' : ''}">${f}</button>`).join('')}</nav></div>`
+}
+
+const narr = (c) => `<div class="cp-narr">${ic('chevron-right', 13)}<span class="s-fit">${c.narrator}</span>${c.narrWhen ? `<span class="cp-when">· ${c.narrWhen}</span>` : ''}</div>`
+
+const matches = (a, f) => !f || f === 'All' || Sub.norm(a.state) === f.toLowerCase().replace(/s$/, '') || (f === 'Asks' && Sub.norm(a.state) === 'asks')
+
+function columns(c, o) {
+  const N = Math.max(1, ...c.phases.map((p) => p.agents.length)), P = c.phases.length
+  let h = `<div class="cp-cols" style="grid-template-columns:repeat(${P},minmax(0,1fr));grid-template-rows:auto repeat(${N},auto) 1fr">`
+  c.phases.forEach((p, i) => {
+    const t = Sub.tally(p.agents)
+    h += `<div class="cp-colbg" style="grid-column:${i + 1};grid-row:1 / ${N + 3}"></div>`
+    h += `<div class="cp-colhead" style="grid-column:${i + 1};grid-row:1"><span class="s-fit">${p.detail} · ${p.model}</span>${t.total ? `<span class="cp-n">${settledN(t)}/${t.total}</span>` : ''}</div>`
+    if (!p.agents.length && p.later) h += `<div class="cp-slotcell" style="grid-column:${i + 1};grid-row:2 / ${N + 2};align-self:start"><div class="cp-later">${Sub.sat('queued', 10)}<span>${p.later}</span></div></div>`
+    p.agents.forEach((a, ai) => {
+      const r = ai, id = `${i}:${ai}`
+      const hid = matches(a, o.filter) ? '' : ' is-hidden'
+      h += `<div class="cp-slotcell" style="grid-column:${i + 1};grid-row:${r + 2}">${cell(a, id, o.sel === id).replace('class="cp-cell', 'class="cp-cell' + hid)}</div>`
+    })
+  })
+  return h + '</div>'
+}
+
+const ORDER = { asks: 0, failed: 1, working: 2, stopped: 3, lost: 4, done: 5, queued: 6 }
+function bands(c, o) {
+  return `<div class="cp-bands">` + c.phases.map((p, i) => {
+    const t = Sub.tally(p.agents), when = phaseWhen(p)
+    const list = p.agents.map((a, k) => ({ a, k })).sort((x, y) => ORDER[Sub.norm(x.a.state)] - ORDER[Sub.norm(y.a.state)])
+    const shown = list.filter(({ a }) => !['done', 'queued'].includes(Sub.norm(a.state)) && matches(a, o.filter))
+    const done = list.filter(({ a }) => Sub.norm(a.state) === 'done'), dim = done.length && done.every(({ a }) => a.dim)
+    const qs = p.agents.filter((a) => Sub.norm(a.state) === 'queued')
+    const q = qs.filter((a) => !a.wait).length, after = qs.filter((a) => a.wait)
+    const name = (when === 'past' && t.done === t.total ? ic('check', 13) : '') + p.title
+    let h = `<div class="cp-band is-${when}"><div class="cp-bhead"><span class="cp-bname">${name}</span>${t.total ? `<span class="cp-n">${settledN(t)}/${t.total}</span>` : ''}<span class="cp-bdetail">${p.detail} · ${p.model}</span></div>`
+    if (!t.total) return h + `<div class="cp-none">${p.later || 'Not started'}</div></div>`
+    h += shown.map(({ a, k }) => cell(a, `${i}:${k}`, o.sel === `${i}:${k}`)).join('')
+    if (done.length && (!o.filter || o.filter === 'All')) h += `<div class="cp-fold"><span class="s-slot">${ic('check', 14)}</span><span>${done.length} done${dim ? ' <span class="cp-faint">· from last run</span>' : ''}</span><span class="cp-chev">${ic('chevron-right', 14)}</span></div>`
+    if (q && (!o.filter || o.filter === 'All')) h += `<div class="cp-qline"><span class="s-slot">${Sub.sat('queued', 10)}</span>${q} waiting for a slot</div>`
+    if (after.length && (!o.filter || o.filter === 'All')) h += `<div class="cp-qline"><span class="s-slot">${Sub.sat('queued', 10)}</span>${after.length} ${after.length > 1 ? 'start' : 'starts'} after ${after[0].wait}</div>`
+    return h + '</div>'
+  }).join('') + '</div>'
+}
+
+// Any other agent: a plain brief, its work folded, its result or why there is none.
+function fallback(p, a, st) {
+  const path = full(a.key), plain = (a.now || '').replace(/<[^>]+>/g, '')
+  const brief = { Scan: `Read every route under ${path} and list the methods that skip the access check. Return each route, its methods and whether it needs a fix.`,
+    Fix: `Add the access check to ${path}. Use requireAccess the way the other routes do, keep the handler's shape, and do not touch the tests.`,
+    Verify: `Run the ${path.replace('Tests: ', '')} test suites with pnpm vitest. Report what fails and why; do not change code.` }[p.title]
+  const d = { brief }
+  if (st === 'done') { d.work = { text: 'Read 3 files, searched for 1 pattern' }; d.report = plain }
+  if (st === 'working') d.work = { text: 'Read 2 files', live: plain }
+  if (st === 'asks') { d.work = { text: 'Read 3 files, edited 1' }; d.ask = a.now }
+  if (st === 'failed') { d.work = { text: 'Read 2 files, edited 1' }; d.why = plain }
+  if (st === 'queued') d.none = a.wait ? `Not started: it starts when ${a.wait} are fixed.` : 'Not started yet: waiting for a slot.'
+  if (st === 'lost') d.none = 'Lost when Banda restarted. Ask Claude to go on.'
+  return d
+}
+
+function detail(c, o) {
+  const [pi, ai] = o.sel.split(':').map(Number), p = c.phases[pi], a = p.agents[ai], st = Sub.norm(a.state)
+  const d = DETAILS[a.detail] || fallback(p, a, st)
+  const word = st === 'asks' ? `<span class="is-attention">Asks</span>` : Sub.word(st)
+  const facts = [['Phase', `${p.title} · ${ai + 1} of ${p.agents.length}`], ['Model', p.model], ['State', `${Sub.sat(st, 10)}${word}`], ['Attempt', st === 'queued' ? '—' : (a.attempt || 1)], ['Time', a.time || '—'], ['Tokens', a.tokens || '—']]
+  const name = full(a.key).split('/').pop()
+  let h = `<div class="cp-detail">` +
+    `<div class="cp-crumbs"><button data-back>${ic('chevron-right', 12).replace('class="b-icon"', 'class="b-icon" style="rotate:180deg"')}${c.name}</button>${ic('chevron-right', 12)}<button data-back>${p.title}</button>${ic('chevron-right', 12)}<span class="is-here">${name}</span></div>` +
+    `<div class="cp-dhead">${Sub.sat(st, 12)}${label(a.key)}<span class="cp-dacts"><button class="b-btn is-ghost is-sm">${Sub.icon('panel-right', 14)}Open as Pane</button><button class="b-ib is-xs cp-dclose" data-back title="Close · Esc">${ic('x', 14)}</button></span></div>` +
+    `<dl class="cp-facts">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`
+  if (d.note) h += `<div class="cp-note">${ic('rotate-ccw', 13)}<span>${d.note}</span></div>`
+  if (d.ask) h += `<div class="cp-note" style="color:var(--foreground)">${Sub.sat('asks', 10)}<span><b>Asks:</b> ${d.ask} Answer it in the Thread.</span></div>`
+  if (d.why) h += `<div class="cp-note">${Sub.sat('failed', 10)}<span>${d.why}</span></div>`
+  if (d.brief) h += `<div class="cp-dsec"><div class="cp-dlabel">Brief</div><div class="s-brief"><span class="s-brief-text">${d.brief}</span><button class="s-link">more</button></div></div>`
+  if (d.work) {
+    const w = d.work, diff = (x) => x ? `<span class="b-diff"><span class="is-add">${x[0]}</span><span class="is-del">${x[1]}</span></span>` : ''
+    h += `<div class="cp-dsec"><div class="cp-dlabel">Work</div><div class="b-trace">` +
+      `<button class="b-tl${w.open ? ' is-open' : ''}">${ic('layers')}<span class="b-tl-text">${w.text}</span>${diff(w.diff)}${ic('chevron-right').replace('class="b-icon"', 'class="b-icon b-chev"')}</button>` +
+      (w.open ? `<div class="b-tl-list">${w.rows.map((r) => `<div class="b-tl">${ic(r[0])}<span class="b-tl-text">${r[1]} <span class="b-subject">${r[2]}</span></span>${diff(r[3])}</div>`).join('')}</div>` : '') +
+      (w.live ? `<div class="b-tl is-pending">${ic('file-pen')}<span class="b-tl-text b-shimmer">${w.live}</span></div>` : '') +
+      `</div></div>`
+  }
+  if (d.report) h += `<div class="cp-dsec"><div class="cp-dlabel">Result</div><div class="s-report">${d.report}</div></div>`
+  if (d.none) h += `<div class="cp-note" style="color:var(--s-faint)">${d.none}</div>`
+  if (d.json) h += `<div class="cp-dsec"><div class="cp-dlabel">Result <span>JSON · 8 lines</span></div><pre class="cp-json">${d.json}</pre><div><button class="s-link">Show all</button></div></div>`
+  else if (st === 'working' || st === 'asks') h += `<div class="cp-dsec"><div class="cp-dlabel">Result</div><div class="cp-note" style="color:var(--s-faint)">Comes when it ends.</div></div>`
+  return h + '</div>'
+}
+
+function timeline(c, o) {
+  const T = 600, pct = (s) => (s / T * 100).toFixed(3) + '%', now = c.clock
+  let h = `<div class="tl"><div class="tl-axis"><span></span><div class="tl-ticks">` +
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter((m) => Math.abs(m * 60 - now) > 24).map((m) => `<span style="left:${pct(m * 60)}">${m ? m + 'm' : '0'}</span>`).join('') +
+    `<span class="tl-nowlab" style="left:${pct(now)}">now</span></div><span></span></div>` +
+    `<div class="tl-grid">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((m) => `<i style="left:${pct(m * 60)}"></i>`).join('')}<i class="tl-now" style="left:${pct(now)}"></i></div>`
+  c.phases.forEach((p, i) => {
+    const t = Sub.tally(p.agents)
+    h += `<div class="tl-band"><div class="tl-bhead"><span><b>${p.title}</b><span class="tl-bd">${p.model} · ${t.total ? settledN(t) + '/' + t.total : 'not started'}</span></span></div>`
+    if (!t.total && p.later) h += `<div class="tl-lane"><div class="tl-lab"><span class="cp-later-t">${p.later}</span></div><div class="tl-track"></div><span></span></div>`
+    p.agents.forEach((a, k) => {
+      const st = Sub.norm(a.state)
+      const tags = (a.attempt ? `<span class="b-tag">attempt ${a.attempt}</span>` : '')
+      let bars = ''
+      ;(a.tl || []).forEach(([s, e, kind], j, arr) => {
+        const last = j === arr.length - 1, kd = kind || (last ? st : 'done')
+        bars += `<span class="tl-bar is-${kd}" style="left:${pct(s)};width:calc(${pct(e - s)} - ${last ? 0 : 3}px)"></span>`
+        if (last) bars += `<span class="tl-cap" style="left:${pct(e)}">${Sub.sat(st, 10, { tip: full(a.key) + ' · ' + Sub.word(st) })}</span>`
+      })
+      // not started yet: no bar, only its satellite on the "now" line
+      if (!a.tl && st === 'queued') bars += `<span class="tl-cap" style="left:calc(${pct(now)} + 11px)">${Sub.sat('queued', 10, { tip: full(a.key) + ' · ' + (a.now || 'Queued') })}</span>`
+      h += `<div class="tl-lane" data-state="${st}"><div class="tl-lab">${label(a.key)}${tags}</div><div class="tl-track">${bars}</div><span></span></div>`
+    })
+    h += `</div>`
+  })
+  h += `</div><div class="tl-legend"><span><i style="background:color-mix(in oklab,var(--foreground) 20%,transparent)"></i>done</span><span><i style="background:linear-gradient(to right,color-mix(in oklab,var(--foreground) 22%,transparent),color-mix(in oklab,var(--foreground) 48%,transparent))"></i>working</span><span><i style="background:color-mix(in oklab,var(--attention) 55%,transparent)"></i>asks you</span><span><i style="background:color-mix(in oklab,var(--destructive) 50%,transparent)"></i>failed</span><span><i style="box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--foreground) 20%,transparent)"></i>stalled attempt</span>${all(c).some((a) => Sub.norm(a.state) === 'queued') ? `<span>${Sub.sat('queued', 10)}not started</span>` : ''}</div>`
+  return h
+}
+
+const stripData = (c) => ({ phases: c.phases.map((p) => ({ title: p.title, agents: p.agents.map((a) => ({ state: a.state, label: full(a.key), dim: a.dim })) })), size: 10 })
+
+function render(el) {
+  const o = el.__o, c = o.crew
+  el.classList.toggle('has-sel', !!o.sel)
+  let body = c.desc ? `<div class="cp-desc s-fit">${c.desc}</div>` : ''
+  if (o.top) body += o.top(c, o)
+  body += summary(c, o)
+  if (o.tab === 'timeline') {
+    body += narr(c) + timeline(c, o)
+  } else {
+    const main = (o.sel ? '' : narr(c)) +
+      `<div class="cp-wide"><div class="cp-strip" style="--phases:${c.phases.length}"></div>${columns(c, o)}</div>` +
+      `<div class="cp-narrow"><div class="cp-nstrip"></div>${bands(c, o)}</div>`
+    body += o.sel ? narr(c) + `<div class="cp-split"><div class="cp-main">${main}</div>${detail(c, o)}</div>` : main
+  }
+  el.innerHTML = head(c, o) + `<div class="cp-body">${body}</div>`
+  const sd = stripData(c)
+  el.querySelectorAll('.cp-strip, .cp-nstrip').forEach((s) => { Sub.strip(s, { ...sd, current: o.current }); s.classList.add(s.classList.contains('cp-strip') ? 'cp-strip' : 'is-spread') })
+  BandaIcons.scan(el); Sub.scan(el); Sub.fit(el)
+}
+
+let lastPane = null
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && lastPane && lastPane.__o.sel) { lastPane.__o.sel = null; render(lastPane) } })
+function mount(name, o) {
+  const el = document.querySelector(`[data-pane="${name}"]`)
+  el.__o = o; render(el)
+  el.addEventListener('click', (e) => {
+    const t = e.target
+    const tab = t.closest('[data-tab]'); if (tab) { o.tab = tab.dataset.tab; return render(el) }
+    const f = t.closest('[data-filter]'); if (f) { o.filter = f.dataset.filter; return render(el) }
+    if (t.closest('[data-back]')) { o.sel = null; return render(el) }
+    const cl = t.closest('.cp-cell[data-id]'); if (cl && !t.closest('.cp-detail')) { o.sel = cl.dataset.id; o.tab = 'phases'; return render(el) }
+    const fold = t.closest('.cp-fold'); if (fold) { fold.classList.toggle('is-open') }
+  })
+  el.addEventListener('sub:open', (e) => {
+    const c = o.crew, pi = c.phases.findIndex((p) => p.title === e.detail.phase)
+    if (pi >= 0) { o.sel = `${pi}:${e.detail.index}`; render(el) }
+  })
+  el.addEventListener('pointerdown', () => { lastPane = el })
+  return el
+}
+
+/* ---- A: the live Crew, wide, beside its Thread ---- */
+mount('a', { crew: LIVE, live: true })
+const card = () => Sub.crew(document.getElementById('a-card'), {
+  name: 'audit-routes', desc: DESC, phases: stripData(LIVE).phases, narrator: LIVE.narrator, time: '9m',
+  foot: Sub.counts(all(LIVE), { queued: false }),
+})
+card()
+
+/* ---- B: same Pane, an agent selected ---- */
+mount('b', { crew: LIVE, live: true, sel: '1:0' })
+
+/* ---- C: narrow, 50 agents; and an agent opened in a narrow Pane ---- */
+mount('c', { crew: BIG, live: true })
+mount('c2', { crew: BIG, live: true, sel: '1:2' })
+
+/* ---- D: the Timeline tab ---- */
+mount('d', { crew: LIVE, live: true, tab: 'timeline' })
+
+/* ---- E: finished ---- */
+mount('e', {
+  crew: DONE, glyph: 'finished', still: '14m 08s',
+  counts: '12 agents · 3 phases · <span class="s-n-failed">2 failed</span>',
+  top: () => `<div class="cp-result"><div class="cp-rhead"><b>Result</b><span>returned to Claude at 14:16</span></div>` +
+    `<div class="b-prose"><p>7 of 12 routes skipped the access check; 6 now call <code>requireAccess</code> first. <a class="b-path" href="#e">hosts/pair.ts</a> is not fixed: pairing runs before there is a session, so the check can't come first. Tests pass in 2 of 3 suites; settings, files fails 1 in <code>keys.test.ts</code>: it expects 404 for a stranger and now gets 403.</p></div>` +
+    `<div class="cp-racts"><button class="b-btn is-ghost is-sm">${ic('copy', 14)}Copy result</button></div></div>`,
+})
+
+/* ---- F: lost, then relaunched ---- */
+mount('f', {
+  crew: LOST, glyph: 'lost', noTime: true,
+  counts: '12 agents · 7 done · <span class="s-n-failed">1 failed</span> · 4 lost',
+  top: () => `<div class="cp-lost">${Sub.glyph('lost', 16)}<div class="cp-lost-text"><b>Stopped when Banda restarted · 7 of 12 done</b><span>Claude can go on from here: the 7 done come back as they are.</span></div><button class="b-btn is-outline is-sm">Ask Claude to go on</button></div>`,
+})
+mount('f2', {
+  crew: AGAIN, glyph: 'relaunched', live: true,
+  counts: '12 agents · 3 working · 7 from last run · 2 waiting',
+})
+
+/* ---- The one clock per surface: each live Pane's summary ticks ---- */
+setInterval(() => document.querySelectorAll('[data-clock]').forEach((n) => { n.textContent = clock(+n.dataset.clock + since()) }), 1000)
+
+BandaIcons.scan(); BandaMark.scan(); Sub.scan()
+// strips fit themselves to the real font: draw again once the fonts are in
+document.fonts.ready.then(() => { card(); document.querySelectorAll('[data-pane]').forEach(render) })
+
+/* t: light/dark, g: glass on/off; #light and #solid in the address do the same */
+const win = document.getElementById('win'), root = document.documentElement
+const apply = () => {
+  if (location.hash.includes('light')) root.setAttribute('data-theme', 'light'); else root.removeAttribute('data-theme')
+  if (location.hash.includes('solid')) win.setAttribute('data-glass', 'off'); else win.removeAttribute('data-glass')
+  requestAnimationFrame(() => Sub.fit())
+}
+apply(); addEventListener('hashchange', apply)
+addEventListener('keydown', (e) => {
+  if (e.target.closest && e.target.closest('input, textarea')) return
+  if (e.key === 't') location.hash = location.hash.includes('light') ? location.hash.replace('light', '') : location.hash + 'light'
+  if (e.key === 'g') location.hash = location.hash.includes('solid') ? location.hash.replace('solid', '') : location.hash + 'solid'
+})
+</script>
+</body>
+</html>

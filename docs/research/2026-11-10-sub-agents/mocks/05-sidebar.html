@@ -1,0 +1,828 @@
+<!doctype html>
+<!-- prettier-ignore -->
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sidebar and Bar</title>
+<link rel="stylesheet" href="../../../design/kit/kit.css" />
+<link rel="stylesheet" href="../../../design/kit/sub.css" />
+<style>
+  /* Page chrome only. Every Banda part comes from kit.css + sub.css. */
+  body { margin: 0; }
+  :root, [data-theme] { --pw-mark: color-mix(in oklab, var(--foreground) 30%, transparent); --pw-big: color-mix(in oklab, var(--foreground) 58%, transparent); }
+  [data-theme="light"] { --pw-mark: color-mix(in oklab, #71717a 70%, transparent); --pw-big: color-mix(in oklab, #71717a 85%, transparent); }
+  .pg { max-width: 1440px; margin: 0 auto; padding: 40px 32px 80px; display: flex; flex-direction: column; gap: 64px; }
+  .pg-head { display: flex; flex-direction: column; gap: 10px; }
+  .pg-head h1 { margin: 0; font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.015em; }
+  .pg-head .lead { margin: 0; font-size: 15px; line-height: 22px; color: var(--muted-foreground); max-width: 92ch; }
+  .toc { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .toc a { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px 0 6px; border-radius: var(--r-control); box-shadow: inset 0 0 0 1px var(--border); font-size: 12.5px; color: var(--muted-foreground); text-decoration: none; }
+  .toc a:hover { color: var(--foreground); background: var(--hover); }
+  .toc a i { font-style: normal; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 5px; background: var(--raised); font-size: 10.5px; font-weight: 600; color: var(--foreground); }
+
+  .sec { display: flex; flex-direction: column; gap: 16px; scroll-margin-top: 24px; }
+  .sec-h { display: flex; align-items: baseline; gap: 12px; }
+  .sec-h .lt { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; background: var(--raised); font-size: 12px; font-weight: 600; flex: none; translate: 0 -2px; }
+  .sec-h h2 { margin: 0; font-size: 19px; line-height: 26px; font-weight: 600; letter-spacing: -0.01em; }
+  .sec-note { margin: -6px 0 4px 36px; font-size: 14px; line-height: 21px; color: var(--muted-foreground); max-width: 96ch; }
+  .sec-note b { color: var(--foreground); font-weight: 500; }
+
+  /* A "screenshot": the wallpaper with a Banda window on it. */
+  .shot { position: relative; border-radius: 24px; padding: 18px; background: var(--wallpaper); background-size: cover; overflow: hidden; min-width: 0; }
+  .shot > .b-window { height: 100%; }
+  .shot.tight { padding: 14px; }
+  .cap { font-size: 12px; line-height: 16px; color: var(--muted-foreground); margin: 0 0 8px 4px; }
+  .cap b { color: var(--foreground); font-weight: 500; }
+  .cap code { font-family: var(--font-mono); font-size: 11px; padding: 0 4px; border-radius: 4px; background: var(--raised); }
+
+  /* Notes in Russian beside a mock. */
+  .notes { margin: 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; line-height: 20px; color: var(--muted-foreground); }
+  .notes li::marker { color: color-mix(in oklab, var(--muted-foreground) 60%, transparent); }
+  .notes b { color: var(--foreground); font-weight: 500; }
+  .notes code, .tbl code, .sec-note code, .pick code { font-family: var(--font-mono); font-size: 12px; padding: 1px 5px; border-radius: 5px; background: var(--raised); color: var(--foreground); }
+  .pick { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: var(--r-card); background: var(--block); box-shadow: inset 0 0 0 1px var(--border); font-size: 13.5px; line-height: 20px; color: var(--muted-foreground); }
+  .pick > b:first-child { color: var(--foreground); font-weight: 600; font-size: 12.5px; }
+  .pick b { color: var(--foreground); font-weight: 500; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 19px; }
+  .tbl th { text-align: left; font-weight: 500; font-size: 12px; color: var(--muted-foreground); padding: 0 12px 8px 0; border-bottom: 1px solid var(--border); }
+  .tbl td { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--muted-foreground); }
+  .tbl td:first-child { color: var(--foreground); }
+  .tbl tr:last-child td { border-bottom: 0; }
+  .tbl .ui { color: var(--foreground); }
+  .tbl .no { color: color-mix(in oklab, var(--muted-foreground) 60%, transparent); }
+
+  /* ---------- A: the main window ---------- */
+  .win-a { height: 760px; }
+  .win-a .b-body { position: relative; }
+  .win-a .b-thread { justify-content: flex-end; }
+  .win-a .chat { width: 100%; max-width: 768px; margin: 0 auto; padding: 16px 24px 20px; display: flex; flex-direction: column; gap: 18px; font-size: 15px; line-height: 24px; }
+  .win-a .b-composer-wrap { padding: 0 24px 12px; }
+  /* kit's .b-pane-title ends with "…"; Banda fades instead (only when it overflows, via Sub.fit) */
+  .b-pane-title, .b-pane-detail { text-overflow: clip; }
+  /* a still of the pointer over a working row: its action replaces the time (ADR 0098 d10) */
+  .b-row.is-hover { background: var(--hover); }
+  .b-row.is-hover .b-acts { display: flex; }
+  .b-row.is-hover > .b-line:first-child .b-time { visibility: hidden; }
+  .b-row .b-acts { top: 4px; }
+  /* the floating peek of a working row (a proposal: the row never grows) */
+  .peek { position: absolute; z-index: 5; padding: 5px 10px; border-radius: var(--r-control); font-size: 12px; line-height: 16px; white-space: nowrap; color: color-mix(in oklab, var(--foreground) 88%, transparent); background: var(--floating); box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 12%, transparent), 0 16px 40px -12px rgb(0 0 0 / 0.45), 0 2px 8px rgb(0 0 0 / 0.1); }
+  .peek::before { content: ""; position: absolute; left: -4px; top: calc(50% - 5px); width: 10px; height: 10px; rotate: 45deg; background: var(--floating); box-shadow: -1px 1px 0 color-mix(in oklab, var(--foreground) 12%, transparent); clip-path: polygon(0 0, 0 100%, 100% 100%); }
+  .cursor { position: absolute; z-index: 6; width: 18px; height: 22px; pointer-events: none; filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.5)); }
+
+  .a-under { display: grid; grid-template-columns: 300px minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+  .crop { padding: 8px; height: auto; }
+  .crop .b-sidebar { width: 100%; }
+  .crop .b-list { -webkit-mask-image: none; mask-image: none; padding-bottom: 6px; }
+  .side-only { padding: 8px; }
+  .side-only > .b-sidebar { width: 100%; }
+
+  /* ---------- B: children ---------- */
+  .b-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .b-grid .shot { padding: 14px; }
+  .b-grid > div, .f-grid > div { display: flex; flex-direction: column; }
+  .fill { flex: 1; display: flex; flex-direction: column; }
+  .fill > .b-window { flex: 1; height: auto; }
+  .fill > .b-window > .b-sidebar { flex: 1; }
+  .b-card .b-line.l2i { padding-left: 38px; }
+  .b-under { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+  .b-card .b-line.l3 .ch { color: var(--muted-foreground); }
+
+  /* ---------- C: the Mark ---------- */
+  .c-win { padding: 10px; }
+  .cgrid { display: grid; grid-template-columns: 150px 168px minmax(0, 1fr) 168px minmax(0, 1fr); gap: 8px; }
+  .cgrid .hd { padding: 6px 4px 2px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+  .cgrid .hd b { color: var(--foreground); font-weight: 600; }
+  .cgrid .hd.prop b { color: var(--foreground); }
+  .cgrid .lb { display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 0 6px 0 4px; font-size: 13px; line-height: 18px; }
+  .cgrid .lb span { font-size: 12px; color: var(--muted-foreground); line-height: 16px; }
+  .cell { position: relative; display: grid; place-items: center; min-height: 112px; border-radius: var(--r-card); background: var(--panel); box-shadow: inset 0 0 0 1px var(--border); }
+  .cell.big svg[data-banda-mark] { color: var(--pw-big); }
+  .cell.big svg[data-banda-mark][data-look="asks"] { color: var(--attention); }
+  .cell.row { padding: 0 10px; place-items: center stretch; }
+  .cell.row > div { width: 100%; }
+  .cell .tag { position: absolute; left: 10px; bottom: 7px; font-size: 11px; line-height: 14px; color: color-mix(in oklab, var(--muted-foreground) 80%, transparent); }
+  .cell.is-new { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 18%, transparent); }
+  .prop16 .b-row.is-working svg[data-banda-mark] { opacity: 1 !important; color: var(--pw-mark) !important; }
+  .c-under { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+
+  /* ---------- D: the bar ---------- */
+  .d-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 28px; align-items: start; }
+  .d-left { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+  .bar-win { height: 128px; }
+  .bar-win.tall { height: 226px; }
+  .bar-win .b-body { position: relative; }
+  .bar-win .b-strip { -webkit-mask-image: linear-gradient(to bottom, #000 30%, transparent); mask-image: linear-gradient(to bottom, #000 30%, transparent); }
+  .bar-win.tall .b-strip { -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent); mask-image: linear-gradient(to bottom, #000 55%, transparent); }
+  /* real content in the small tiles: a Thread's live edge and a terminal (as in kit/demo.html) */
+  .tile-peek { -webkit-mask-image: none; mask-image: none; }
+  .mini-chat { width: 100%; max-width: 768px; margin: 0 auto; padding: 4px 24px 16px; display: flex; flex-direction: column; gap: 16px; font-size: 14px; line-height: 22px; }
+  .term-out { margin: 0; padding: 4px 16px 12px; font-family: var(--font-mono); font-size: var(--text-code); line-height: 1.6; white-space: pre; overflow: hidden; color: var(--foreground); }
+  .t-g { color: var(--ansi-green); } .t-b { color: var(--ansi-blue); } .t-m { color: var(--ansi-magenta); } .t-y { color: var(--ansi-yellow); } .t-q { color: var(--muted-foreground); }
+  .b-count .n-turn { color: var(--attention); font-weight: 600; }
+  .b-count .n-work { color: var(--muted-foreground); }
+  .b-count { height: 26px; padding: 0 6px; margin-left: -2px; border-radius: var(--r-control); }
+  .b-count.is-open { background: var(--hover); color: var(--foreground); }
+  .mini { position: absolute; z-index: 5; top: 4px; left: 8px; width: 344px; padding: 4px; border-radius: var(--r-card); background: var(--floating); box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 12%, transparent), 0 16px 40px -12px rgb(0 0 0 / 0.45), 0 2px 8px rgb(0 0 0 / 0.1); }
+  .mini .b-card { padding: 5px 8px; }
+  .mini .b-divider { margin: 4px 8px; }
+  .mini .b-row .b-chev { width: 14px; height: 14px; color: var(--muted-foreground); }
+  .mini-keys { display: flex; gap: 4px; align-items: center; padding: 6px 8px 4px; font-size: 11px; color: color-mix(in oklab, var(--muted-foreground) 75%, transparent); }
+  .zoom { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .zoom figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 8px 12px; border-radius: var(--r-card); background: var(--panel); box-shadow: inset 0 0 0 1px var(--border); font-size: 12px; line-height: 16px; color: var(--muted-foreground); text-align: center; }
+  .zoom figure b { display: block; color: var(--foreground); font-weight: 500; }
+  .zoom .lg { color: var(--muted-foreground); }
+  .zoom .lg.asks { color: var(--attention); }
+
+  /* ---------- E: notifications ---------- */
+  .e-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+  .desk-shot { height: 300px; padding: 0; }
+  .desk-bar { position: absolute; inset: 0 0 auto 0; height: 26px; display: flex; align-items: center; gap: 14px; padding: 0 14px; font-size: 11.5px; color: rgb(255 255 255 / 0.75); background: rgb(10 10 14 / 0.55); }
+  [data-theme="light"] .desk-bar { color: rgb(0 0 0 / 0.7); background: rgb(255 255 255 / 0.5); }
+  .desk-bar .r { margin-left: auto; display: flex; gap: 12px; }
+  .desk-term { position: absolute; left: 18px; top: 42px; width: 58%; bottom: -24px; border-radius: 12px; background: color-mix(in oklab, var(--background) 94%, transparent); box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 12%, transparent), 0 18px 40px -16px rgb(0 0 0 / 0.5); overflow: hidden; }
+  .desk-term .dt-head { height: 30px; display: grid; place-items: center; font-size: 11.5px; color: var(--muted-foreground); border-bottom: 1px solid var(--border); }
+  .desk-term .term-out { padding: 10px 14px; }
+  .sysn { position: absolute; right: 16px; width: 372px; display: flex; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--popover); box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 14%, transparent), 0 14px 34px -10px rgb(0 0 0 / 0.55); color: var(--foreground); }
+  .sysn .ic { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 9px; background: color-mix(in oklab, var(--foreground) 6%, transparent); }
+  .sysn .tx { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .sysn .app { font-size: 11px; line-height: 15px; color: var(--muted-foreground); }
+  .sysn .t { font-size: 13.5px; line-height: 19px; font-weight: 600; }
+  .sysn .d { font-size: 13px; line-height: 18px; color: var(--muted-foreground); }
+  .toast-shot { height: 300px; padding: 0; }
+  .toast-win { position: absolute; inset: 18px -40px -40px 18px; }
+  .toast-win .b-body { padding-top: 8px; }
+  .toasts { position: absolute; right: 64px; bottom: 64px; display: flex; flex-direction: column; gap: 8px; width: 400px; }
+  .toasts .b-toast { min-width: 0; padding: 10px 10px 10px 14px; }
+  .toasts .b-toast .msg { flex: 1; min-width: 0; }
+  .toasts .b-toast b { font-weight: 600; }
+  .e-under { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+
+  /* ---------- F: what does not change ---------- */
+  .f-grid { display: grid; grid-template-columns: 300px 300px minmax(0, 1fr); gap: 20px; align-items: stretch; }
+  .verdict { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 8px 4px; font-size: 12.5px; font-weight: 600; }
+  .verdict.no { color: var(--destructive); }
+  .verdict.yes { color: var(--foreground); }
+  .wrong { position: relative; }
+  .wrong .b-window { filter: saturate(0.6); opacity: 0.6; }
+  .wrong::after { content: ""; position: absolute; inset: 14px; pointer-events: none; background: linear-gradient(to top right, transparent calc(50% - 1px), color-mix(in oklab, var(--destructive) 85%, transparent) calc(50% - 1px), color-mix(in oklab, var(--destructive) 85%, transparent) calc(50% + 1px), transparent calc(50% + 1px)); }
+  .f-why { margin: 10px 4px 0; min-height: 72px; font-size: 12.5px; line-height: 18px; color: var(--muted-foreground); }
+
+  @media (max-width: 1180px) {
+    .a-under { grid-template-columns: 300px minmax(0, 1fr); }
+    .a-under > :last-child { grid-column: 1 / -1; }
+    .d-grid, .c-under, .b-under, .e-under { grid-template-columns: minmax(0, 1fr); }
+    .f-grid { grid-template-columns: 1fr 1fr; }
+    .f-grid > :last-child { grid-column: 1 / -1; }
+  }
+  @media (max-width: 900px) {
+    .pg { padding: 28px 16px 64px; gap: 48px; }
+    .sec-note { margin-left: 0; }
+    .shot { padding: 10px; border-radius: 18px; }
+    .win-a { height: 700px; }
+    .win-a .b-sidebar { --sidebar-width: 236px; }
+    .peek, .cursor { display: none; }
+    .a-under, .b-grid, .e-grid, .f-grid { grid-template-columns: minmax(0, 1fr); }
+    .cgrid { grid-template-columns: 96px repeat(4, minmax(0, 1fr)); }
+    .cgrid .cell.row .b-title { display: none; }
+    .toasts { width: auto; left: 30px; right: 60px; }
+    .sysn { width: auto; left: 16px; }
+    .desk-term { width: auto; right: 18px; top: 236px; }
+    .win-a .b-tab { padding: 0 6px; gap: 4px; }
+    .f-why { min-height: 0; margin-bottom: 8px; }
+    .f-grid > .notes { padding-top: 0 !important; }
+  }
+  .b-send.is-stop { background: var(--raised); color: var(--foreground); }
+</style>
+</head>
+<body class="b-kit" id="kit">
+<main class="pg">
+
+  <header class="pg-head">
+    <h1>Сабагенты в сайдбаре, Mark, баре и уведомлениях</h1>
+    <p class="lead">Сайдбар — как утверждено (v5 / concept v7). Сабагенты не получают своих карточек: они спутники у марки и слова в строке 2. Ниже — что меняется в сайдбаре, Mark, баре и уведомлениях, и что остаётся как есть.</p>
+    <nav class="toc">
+      <a href="#a"><i>A</i>Сайдбар</a><a href="#b"><i>B</i>Дочерние Thread ↳</a><a href="#c"><i>C</i>Mark со спутниками</a><a href="#d"><i>D</i>Бар</a><a href="#e"><i>E</i>Уведомления</a><a href="#f"><i>F</i>Что не меняется</a>
+    </nav>
+  </header>
+
+  <!-- ============================== A ============================== -->
+  <section class="sec" id="a">
+    <div class="sec-h"><span class="lt">A</span><h2>Сайдбар: входящие, когда у Агентов есть сабагенты</h2></div>
+    <p class="sec-note">Reviewer (сабагент) спрашивает — и Thread «Move sidebar settings» идёт в Your turn как обычный вопрос, строка 2 называет, кто спрашивает. Работающие строки серые, как раньше; у четырёх из них спутники на марке. Наведение на серую строку: справа, вместо времени, её действие (как утверждено), а рядом подсказка с её строкой 2 (предложение).</p>
+
+    <div class="shot">
+      <div class="b-window win-a" id="winA">
+        <header class="b-bar">
+          <button class="b-bar-logo" title="Sidebar · Alt+A"><span data-mark="failed" data-logo data-size="20"></span></button>
+          <nav class="b-ws" aria-label="Workspaces"><button class="is-current">1</button><button>2</button><button>3</button><button><i data-icon="plus" data-size="14"></i></button></nav>
+          <button class="b-widget" title="Flow: Row"><i data-icon="columns-3"></i></button>
+          <div class="b-bar-right">
+            <span class="b-widget"><i data-icon="globe"></i>:5173 <span class="b-faint">+1</span></span>
+            <span class="b-widget"><span class="b-ring" style="--share:.62"></span></span>
+            <span class="b-widget"><i data-icon="bell"></i></span>
+          </div>
+        </header>
+
+        <div class="b-body">
+          <aside class="b-sidebar">
+            <div class="b-sb-head">
+              <button class="b-search"><i data-icon="search"></i>Search<span class="b-key">Alt Space</span></button>
+              <button class="b-ib" title="New Thread"><i data-icon="square-pen"></i></button>
+            </div>
+            <div class="b-tabs">
+              <button class="b-tab is-current">Inbox <span class="b-n is-turn">3</span></button>
+              <button class="b-tab">Working <span class="b-n">6</span></button>
+              <button class="b-tab">Later <span class="b-n">2</span></button>
+              <button class="b-tab b-end" title="Archive"><i data-icon="archive"></i></button>
+            </div>
+            <div class="b-list">
+              <div class="b-section"><span>Your turn</span><span class="b-hint">oldest first</span></div>
+
+              <div class="b-card is-current" data-look="asks">
+                <div class="b-line"><span data-mark="asks" data-calls="false"></span><span class="b-title b-fade">Move sidebar settings to sidebar.toml</span><span class="b-time">3m</span></div>
+                <div class="b-line"><span class="b-say b-fade"><span class="b-word">Asks</span>Reviewer: allow pnpm vitest sidebar?</span></div>
+                <div class="b-line"><span class="b-where"><span class="b-sign" data-color="violet">B</span><span class="b-fade">banda</span></span><span data-emblem="claude"></span></div>
+              </div>
+              <div class="b-card" data-look="done">
+                <div class="b-line"><span data-mark="done"></span><span class="b-title b-fade">Fix blank window on reload</span><span class="b-time">2m</span></div>
+                <div class="b-line"><span class="b-say b-fade"><span class="b-word">Done</span>Reloads after a renderer SIGKILL, keeps chromium.log</span><span class="b-pr">#1061 <span class="is-ok">✓</span></span></div>
+                <div class="b-line"><span class="b-where"><span class="b-sign" data-color="violet">B</span><span class="b-fade">banda</span></span><span class="b-machine"><i data-icon="laptop"></i>mac</span><span data-emblem="claude"></span></div>
+              </div>
+              <div class="b-card" data-look="failed">
+                <div class="b-line"><span data-mark="failed"></span><span class="b-title b-fade">Import March invoices</span><span class="b-time">1m</span></div>
+                <div class="b-line"><span class="b-say b-fade"><span class="b-word">Failed</span>3 tests fail in invoices.spec.ts</span></div>
+                <div class="b-line"><span class="b-where"><span class="b-sign" data-color="teal">W</span><span class="b-fade">Work</span></span><span data-emblem="codex"></span></div>
+              </div>
+
+              <div class="b-divider"></div>
+              <div class="b-row"><div class="b-line"><span data-mark="open"></span><span class="b-title b-fade">macOS Tahoe theme</span><span class="b-time">1d</span></div></div>
+
+              <div class="b-section"><span>Working · 6</span></div>
+              <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-satellites="2"></span><span class="b-title b-fade">Research: Hyprland socket</span><span class="b-time">47m</span></div></div>
+              <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-satellites="1"></span><span class="b-title b-fade">Overview open/close zoom</span><span class="b-time">21m</span></div></div>
+              <div class="b-row is-working is-hover" id="hovRow"><div class="b-line"><span data-mark="working" data-satellites="3"></span><span class="b-title b-fade">Audit the sidebar code</span><span class="b-time">16m</span></div><div class="b-acts"><button class="b-act" title="Later, when done (Z)"><i data-icon="clock"></i></button></div></div>
+              <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-doing="edit"></span><span class="b-title b-fade">Landing page: pricing section</span><span class="b-time">12m</span></div></div>
+              <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-doing="execute"></span><span class="b-title b-fade">Reconcile February bank export</span><span class="b-machine"><i data-icon="laptop"></i></span><span class="b-time">9m</span></div></div>
+              <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-doing="edit"></span><span class="b-title b-fade">waybar: show Banda's count</span><span class="b-time">3m</span></div></div>
+            </div>
+            <div class="b-sb-foot">
+              <button class="b-ib" title="Settings"><i data-icon="settings"></i></button>
+              <button class="b-ib" title="View"><i data-icon="list-filter"></i></button>
+              <button class="b-ib" title="Quiet"><i data-icon="bell"></i></button>
+              <span class="b-machines"><span class="b-dot"></span>arc · mac</span>
+            </div>
+          </aside>
+
+          <div class="b-strip">
+            <section class="b-tile is-focused">
+              <div class="b-pane-head b-bare">
+                <span data-mark="asks" data-calls="false"></span>
+                <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+                <span class="b-pane-title s-fit">Move sidebar settings to sidebar.toml</span>
+                <div class="b-capsule">
+                  <button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span>
+                  <button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button>
+                </div>
+              </div>
+              <div class="b-thread">
+                <div class="chat">
+                  <div class="b-you">Move the sidebar's settings into sidebar.toml, one file per module. Keep what people already set working.</div>
+                  <div class="b-prose"><p>I'll split it three ways: map where the old keys are read, check the settings tests, and have a reviewer look at the new schema.</p></div>
+                  <div class="s-group">
+                    <div class="s-line s-ghead" tabindex="0">
+                      <span class="s-sats"><span data-sat="working" data-size="8"></span><span data-sat="working" data-size="8"></span><span data-sat="asks" data-size="8"></span></span>
+                      <span class="s-gtitle s-fit"><b>3 sub-agents</b> · 2 working · <span class="s-n-asks">1 asks</span></span>
+                      <span class="s-chev"><i data-icon="chevron-right" data-size="14"></i></span>
+                    </div>
+                    <div class="s-members">
+                      <div class="s-row" data-state="working"><div class="s-line" tabindex="0"><span class="s-slot"><span data-sat="working"></span></span><span class="s-title s-fit">Map where [row] keys are read</span><span class="s-role">Explore · Haiku</span><span class="s-now">Reading client/web/src/sidebar/settings.ts</span><span class="s-time">4m</span><span class="s-chev"><i data-icon="chevron-right" data-size="14"></i></span></div></div>
+                      <div class="s-row" data-state="working"><div class="s-line" tabindex="0"><span class="s-slot"><span data-sat="working"></span></span><span class="s-title s-fit">Check the settings tests</span><span class="s-role">general</span><span class="s-now"><code>&gt;_ pnpm vitest settings</code></span><span class="s-time">4m</span><span class="s-chev"><i data-icon="chevron-right" data-size="14"></i></span></div></div>
+                      <div class="s-row" data-state="asks"><div class="s-line" tabindex="0"><span class="s-slot"><span data-sat="asks"></span></span><span class="s-title s-fit">Review the sidebar.toml schema</span><span class="s-role">Reviewer</span><span class="s-now"><b>Asks:</b> Allow pnpm vitest sidebar?</span><span class="s-time">3m</span><span class="s-chev"><i data-icon="chevron-right" data-size="14"></i></span></div></div>
+                    </div>
+                  </div>
+                  <div class="b-trace"><div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 4m 12s</span><span class="b-quiet">· Waiting for you</span></div></div>
+                </div>
+              </div>
+              <div class="b-composer-wrap">
+                <div class="b-docked">
+                  <div class="b-docked-head s-ask-head"><span data-sat="asks" data-size="10"></span><span><b>Reviewer</b> asks · 3m</span></div>
+                  <div>Run a command in <code class="b-code-inline">~/code/banda</code>?</div>
+                  <code class="s-cmd"><span class="s-prompt">$</span>pnpm vitest sidebar</code>
+                  <button class="b-choice is-hl"><span class="b-kbd">1</span>Allow once<span class="s-hint">↵</span></button>
+                  <button class="b-choice"><span class="b-kbd">2</span>Allow for this Thread</button>
+                  <button class="b-choice b-muted"><span class="b-kbd">Esc</span>Deny, and tell it what to do differently…</button>
+                  <div class="s-note"><i data-icon="circle-alert" data-size="13"></i>“Allow for this Thread” covers Claude and all its sub-agents.</div>
+                </div>
+                <div class="b-composer">
+                  <div class="b-composer-text is-empty">Steer this thread…</div>
+                  <div class="b-composer-row">
+                    <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                    <span class="b-spacer"></span>
+                    <button class="b-ctl"><i data-icon="shield"></i></button>
+                    <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></button>
+                    <button class="b-send is-stop" aria-label="Stop" title="Stop · Esc"></button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- the peek over the hovered working row -->
+          <div class="peek" id="peek">3 sub-agents at work</div>
+          <svg class="cursor" id="cursor" viewBox="0 0 18 22" aria-hidden="true"><path d="M2 1.5v16.2l4.3-4.1 2.9 6.6 2.6-1.1-2.9-6.5h6.1z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="a-under">
+      <div>
+        <p class="cap"><b>Вкладка Working</b> при <code>card = 2</code>, минутой позже: Reviewer получил ответ, ход Claude кончился, Crew работает</p>
+        <div class="shot tight">
+          <div class="b-window side-only">
+            <aside class="b-sidebar">
+              <div class="b-tabs" style="padding-top:10px">
+                <button class="b-tab">Inbox <span class="b-n is-turn">2</span></button>
+                <button class="b-tab is-current">Working <span class="b-n">7</span></button>
+                <button class="b-tab">Later <span class="b-n">2</span></button>
+              </div>
+              <div class="b-list" style="-webkit-mask-image:none;mask-image:none">
+                <div class="b-card is-working"><div class="b-line"><span data-mark="working" data-satellites="2"></span><span class="b-title b-fade">Research: Hyprland socket</span><span class="b-time">47m</span></div><div class="b-line"><span class="b-say b-fade">2 sub-agents at work</span></div></div>
+                <div class="b-card is-working"><div class="b-line"><span data-mark="working" data-satellites="1"></span><span class="b-title b-fade">Overview open/close zoom</span><span class="b-time">21m</span></div><div class="b-line"><span class="b-say b-fade">Waiting on Explore</span></div></div>
+                <div class="b-card is-working"><div class="b-line"><span data-mark="working" data-satellites="3"></span><span class="b-title b-fade">Audit the sidebar code</span><span class="b-time">16m</span></div><div class="b-line"><span class="b-say b-fade">3 sub-agents at work</span></div></div>
+                <div class="b-card is-working"><div class="b-line"><span data-mark="working" data-doing="edit"></span><span class="b-title b-fade">Landing page: pricing section</span><span class="b-time">12m</span></div><div class="b-line"><span class="b-say b-fade">Edits PricingTable.tsx</span><span class="b-diffgrey">+42 −8</span></div></div>
+                <div class="b-card is-working"><div class="b-line"><span data-mark="working" data-satellites="3"></span><span class="b-title b-fade">Move sidebar settings to sidebar.toml</span><span class="b-time">11m</span></div><div class="b-line"><span class="b-say b-fade">Crew audit-routes · Fix 4/7</span></div></div>
+                <div class="b-card is-working"><div class="b-line"><span data-mark="working" data-doing="execute"></span><span class="b-title b-fade">Reconcile February bank export</span><span class="b-machine"><i data-icon="laptop"></i>mac</span><span class="b-time">9m</span></div><div class="b-line"><span class="b-say b-fade">python reconcile.py --month 02</span></div></div>
+                <div class="b-card is-working"><div class="b-line"><span data-mark="working" data-doing="edit"></span><span class="b-title b-fade">waybar: show Banda's count</span><span class="b-time">3m</span></div><div class="b-line"><span class="b-say b-fade">Edits waybar/config.jsonc</span></div></div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="cap"><b>Строка 2 работающего с сабагентами</b> — одни слова везде: карточка, наведение, живая строка в Thread</p>
+        <table class="tbl">
+          <tr><th style="width:38%">Что идёт</th><th>Строка 2</th><th style="width:14%">Спутники</th></tr>
+          <tr><td>2–6 сабагентов работают</td><td class="ui">3 sub-agents at work</td><td>по одному, до 3</td></tr>
+          <tr><td>Агент ждёт одного</td><td class="ui">Waiting on Explore</td><td>1</td></tr>
+          <tr><td>Crew после хода Claude</td><td class="ui">Crew audit-routes · Fix 4/7</td><td>3</td></tr>
+          <tr><td>Crew на 50 агентов</td><td class="ui">Crew audit-routes · Fix 14/28</td><td>3</td></tr>
+          <tr><td>Codex, свои сабагенты</td><td class="ui">2 sub-agents at work</td><td>2</td></tr>
+          <tr><td>Сабагент спрашивает</td><td class="ui"><span style="font-weight:500">Asks</span> Reviewer: allow pnpm vitest sidebar? <span class="no">— карточка в Your turn</span></td><td>марка — треугольник</td></tr>
+          <tr><td>Сабагент упал</td><td class="no">ничего не меняется, родитель идёт дальше</td><td>см. C</td></tr>
+        </table>
+      </div>
+
+      <ul class="notes">
+        <li><b>Своих карточек у сабагентов нет</b> (ADR 0098 d23). Они — спутники у марки родителя и число в строке 2.</li>
+        <li><b>Вопрос сабагента = вопрос Thread.</b> Марка — треугольник, время оранжевое, строка 2: слово <b>Asks</b> и «Reviewer: …» (как у любого вопроса, без новых знаков). Ответ — в доке над composer этого Thread, там же видно, кто спрашивает.</li>
+        <li><b>Crew держит Thread в Working</b>, хотя ход Claude закончен: серая марка со спутниками, «Crew audit-routes · Fix 4/7». Когда Crew кончится, Claude пойдёт дальше сам.</li>
+        <li>Crew audit-routes запущен из «Move sidebar settings», как на страницах 00–03. Пока Reviewer спрашивает, карточка этого Thread в Your turn и строка 2 — вопрос; вкладка Working слева показывает минуту спустя, когда вопрос снят и ход Claude кончился: тогда строка 2 — «Crew audit-routes · Fix 4/7».</li>
+        <li><b>Наведение</b> на серую строку: время уходит, справа её действие (часы — Later, when done), как утверждено. Новое — подсказка рядом с её строкой 2; сама строка не растёт (это отвергнуто). Предложение. Те же слова видны на вкладке Working при <code>card = 2</code>.</li>
+        <li><b>Упавший сабагент не двигает карточку</b> — родитель сам решает, что делать. Предложение.</li>
+        <li>Число в строке 2 считает только <b>прямых</b> сабагентов; глубже — видно в Thread как «+2».</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============================== B ============================== -->
+  <section class="sec" id="b">
+    <div class="sec-h"><span class="lt">B</span><h2>Дочерние Thread ↳ и сабагенты: в чём разница</h2></div>
+    <p class="sec-note">Два разных случая. <b>Сабагент</b> — помощник внутри хода Harness'а (Claude Agent tool, Codex spawn_agent): своего Thread нет. <b>Дочерний Thread</b> — настоящий Thread, который Агент начал через Banda (ADR 0019, ADR 0098 d24): у него своя строка ↳ под родителем, свой composer, своя карточка.</p>
+
+    <div class="b-grid">
+      <div>
+        <p class="cap"><b>Сабагенты</b>: спутники и строка 2, своих строк нет</p>
+        <div class="shot fill">
+          <div class="b-window side-only">
+            <aside class="b-sidebar">
+              <div class="b-list" style="-webkit-mask-image:none;mask-image:none;padding-top:4px">
+                <div class="b-section"><span>Working · 3</span></div>
+                <div class="b-card is-working"><div class="b-line"><span data-mark="working" data-satellites="3"></span><span class="b-title b-fade">Audit the sidebar code</span><span class="b-time">16m</span></div><div class="b-line"><span class="b-say b-fade">3 sub-agents at work</span></div></div>
+                <div class="b-card is-working"><div class="b-line"><span data-mark="working" data-satellites="2"></span><span class="b-title b-fade">Research: Hyprland socket</span><span class="b-time">47m</span></div><div class="b-line"><span class="b-say b-fade">2 sub-agents at work</span></div></div>
+                <div class="b-card is-working"><div class="b-line"><span data-mark="working" data-doing="edit"></span><span class="b-title b-fade">Landing page: pricing section</span><span class="b-time">12m</span></div><div class="b-line"><span class="b-say b-fade">Edits PricingTable.tsx</span></div></div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="cap"><b>Дочерние Thread</b>: строки ↳ под родителем; у родителя ещё и спутники</p>
+        <div class="shot fill">
+          <div class="b-window side-only">
+            <aside class="b-sidebar">
+              <div class="b-list" style="-webkit-mask-image:none;mask-image:none;padding-top:4px">
+                <div class="b-section"><span>Working · 3</span></div>
+                <div class="b-card is-working"><div class="b-line"><span data-mark="working" data-satellites="2"></span><span class="b-title b-fade">Ship the inbox sidebar</span><span class="b-time">40m</span></div><div class="b-line"><span class="b-say b-fade">2 sub-agents at work</span></div></div>
+                <div class="b-card is-working"><div class="b-line"><span class="b-indent">↳</span><span data-mark="working" data-doing="edit"></span><span class="b-title b-fade">card.ts row model</span><span class="b-time">12m</span></div><div class="b-line l2i"><span class="b-say b-fade">Edits card.ts</span></div></div>
+                <div class="b-card is-working"><div class="b-line"><span class="b-indent">↳</span><span data-mark="working" data-doing="execute"></span><span class="b-title b-fade">split Sidebar.tsx</span><span class="b-time">8m</span></div><div class="b-line l2i"><span class="b-say b-fade">pnpm vitest sidebar</span></div></div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="cap"><b>Ребёнок спрашивает</b>: идёт в Your turn сам, строка 3 «↳ родитель»</p>
+        <div class="shot fill">
+          <div class="b-window side-only">
+            <aside class="b-sidebar">
+              <div class="b-list" style="-webkit-mask-image:none;mask-image:none;padding-top:4px">
+                <div class="b-section"><span>Your turn</span></div>
+                <div class="b-card" data-look="asks">
+                  <div class="b-line"><span data-mark="asks"></span><span class="b-title b-fade">split Sidebar.tsx</span><span class="b-time">1m</span></div>
+                  <div class="b-line"><span class="b-say b-fade"><span class="b-word">Asks</span>Keep Row.tsx default export, or name it?</span></div>
+                  <div class="b-line l3"><span class="b-where"><span class="ch">↳</span><span class="b-fade">Ship the inbox sidebar</span></span><span data-emblem="claude"></span></div>
+                </div>
+                <div class="b-section"><span>Working · 2</span></div>
+                <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-satellites="2"></span><span class="b-title b-fade">Ship the inbox sidebar</span><span class="b-time">40m</span></div></div>
+                <div class="b-row is-working"><div class="b-line"><span class="b-indent">↳</span><span data-mark="working" data-doing="edit"></span><span class="b-title b-fade">card.ts row model</span><span class="b-time">12m</span></div></div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="b-under">
+      <table class="tbl">
+        <tr><th style="width:24%"></th><th style="width:38%">Сабагент</th><th>Дочерний Thread ↳</th></tr>
+        <tr><td>Кто начинает</td><td>Harness внутри хода (Agent tool, spawn_agent)</td><td>Агент через Banda (ADR 0019)</td></tr>
+        <tr><td>В сайдбаре</td><td>спутник у марки + строка 2</td><td>своя строка ↳ под родителем</td></tr>
+        <tr><td>Спрашивает</td><td>спрашивает родитель: «Asks» + «Reviewer: …»</td><td>сам в Your turn, строка 3 «↳ родитель»</td></tr>
+        <tr><td>Упал</td><td>карточка не двигается</td><td>сам в Your turn, Failed</td></tr>
+        <tr><td>Написать ему</td><td>нельзя: «Ask Claude about it»</td><td>свой composer</td></tr>
+        <tr><td>Later, Archive</td><td>нет — он часть хода</td><td>как у любого Thread</td></tr>
+        <tr><td>Открыть</td><td>Pane рядом, в Group родителя, только чтение</td><td>как любой Thread</td></tr>
+      </table>
+      <ul class="notes">
+        <li><b>Спутник = сабагент, ↳ = Thread.</b> Один родитель может иметь и то и другое — как «Ship the inbox sidebar» в середине.</li>
+        <li>Дети стоят <b>под родителем</b>, не по времени старта (d24).</li>
+        <li>Громкий ребёнок <b>не поднимает</b> свой цвет на родителя (<code>folded</code> убран, d24) — у него своя карточка.</li>
+        <li>У сабагентов ребёнка нет своих строк: они спутники уже на марке ребёнка.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============================== C ============================== -->
+  <section class="sec" id="c">
+    <div class="sec-h"><span class="lt">C</span><h2>Mark со спутниками: как утверждено и предложение</h2></div>
+    <p class="sec-note">Утверждено: спутники — простые точки в цвете марки, по одной на работающего сабагента, до трёх (ADR 0099 d3). Предложение: точка берёт состояние своего сабагента — на 48 px форму и цвет, на 16 px только цвет.</p>
+
+    <div class="shot">
+      <div class="b-window c-win">
+        <div class="cgrid" id="cgrid">
+          <div></div>
+          <div class="hd"><b>Как утверждено</b> · 48 px</div>
+          <div class="hd">16 px, в серой строке</div>
+          <div class="hd prop"><b>Предложение</b> · 48 px</div>
+          <div class="hd">16 px: только цвет</div>
+
+          <div class="lb">3 работают<span>обычный случай</span></div>
+          <div class="cell big"><span class="mk" data-k="plain" data-sats="working,working,working"></span></div>
+          <div class="cell row"><div class="b-row is-working"><div class="b-line"><span data-mark="working" data-satellites="3"></span><span class="b-title b-fade">Audit the sidebar code</span><span class="b-time">16m</span></div></div></div>
+          <div class="cell big"><span class="mk" data-k="shapes" data-sats="working,working,working"></span><span class="tag">круги крупнее</span></div>
+          <div class="cell row prop16"><div class="b-row is-working"><div class="b-line"><span class="mk16" data-sats="working,working,working"></span><span class="b-title b-fade">Audit the sidebar code</span><span class="b-time">16m</span></div></div><span class="tag">то же</span></div>
+
+          <div class="lb">1 упал, 2 работают<span>родитель идёт дальше</span></div>
+          <div class="cell big"><span class="mk" data-k="plain" data-sats="working,working"></span><span class="tag">упавший ушёл с орбиты</span></div>
+          <div class="cell row"><div class="b-row is-working"><div class="b-line"><span data-mark="working" data-satellites="2"></span><span class="b-title b-fade">Audit the sidebar code</span><span class="b-time">16m</span></div></div></div>
+          <div class="cell big is-new"><span class="mk" data-k="shapes" data-sats="failed,working,working"></span><span class="tag">форма: восьмиугольник</span></div>
+          <div class="cell row prop16 is-new"><div class="b-row is-working"><div class="b-line"><span class="mk16" data-sats="failed,working,working"></span><span class="b-title b-fade">Audit the sidebar code</span><span class="b-time">16m</span></div></div><span class="tag">красная точка 3 px, не гаснет со строкой</span></div>
+
+          <div class="lb">Reviewer спрашивает<span>Thread зовёт сам</span></div>
+          <div class="cell big"><span data-mark="asks" data-size="48"></span></div>
+          <div class="cell row"><div class="b-card" data-look="asks" style="padding:4px 8px"><div class="b-line"><span data-mark="asks"></span><span class="b-title b-fade">Move sidebar settings to sidebar.toml</span><span class="b-time">3m</span></div></div></div>
+          <div class="cell big"><span data-mark="asks" data-size="48"></span><span class="tag">то же</span></div>
+          <div class="cell row"><div class="b-card" data-look="asks" style="padding:4px 8px"><div class="b-line"><span data-mark="asks"></span><span class="b-title b-fade">Move sidebar settings to sidebar.toml</span><span class="b-time">3m</span></div></div><span class="tag">то же</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="c-under">
+      <ul class="notes">
+        <li><b>Оранжевый спутник почти не живёт</b>: как только сабагент спрашивает, весь Thread становится треугольником и зовёт сам. Отдельная оранжевая точка повторяла бы его.</li>
+        <li><b>Красный — вот где польза.</b> Упавший сабагент не двигает карточку (A), и без цвета на марке о нём не узнать до конца хода. Красная точка говорит «что-то внутри упало», не зовя.</li>
+        <li><b>На 16 px</b> точка спутника — 1,5 px, а серая строка ещё гасит марку (в тёмной теме до 30 %): серых точек там почти не видно, работу говорят слова строки 2. Поэтому красную рисуем <b>крупнее (3 px)</b> и не гасим вместе со строкой — гасим только тело марки.</li>
+        <li><b>На 48 px</b> точки — формы спутника (круг, восьмиугольник), как в Thread и полосе Crew. Мельче 10 px формы не читаются, поэтому на 16 px — только цвет.</li>
+        <li>Движку нужно не только число <code>subagents</code> (ADR 0099 d11), а состояния до трёх — небольшая работа, позже.</li>
+      </ul>
+      <div class="pick"><b>Мой выбор</b><span>Предложение, но только <b>красный</b> (в брифе — оранжевый и красный). Упавший сабагент — красный восьмиугольник на 48 px и красная точка 3 px на 16 px, пока идёт ход родителя. Работающие — серые, как сейчас. Оранжевую точку не делаем: когда сабагент спрашивает, марка Thread уже треугольник, и оранжевой точке не на чем появиться.</span></div>
+    </div>
+  </section>
+
+  <!-- ============================== D ============================== -->
+  <section class="sec" id="d">
+    <div class="sec-h"><span class="lt">D</span><h2>Бар: лого со спутниками и счётчик</h2></div>
+    <p class="sec-note">Лого показывает самого громкого (без изменений, ADR 0099 d9). Новое: если самый громкий — работающий Thread с сабагентами, у шляпы его спутники. Когда сайдбар скрыт, рядом с лого счётчик — как утверждено (ADR 0098 d22).</p>
+
+    <div class="d-grid">
+      <div class="d-left">
+        <div>
+          <p class="cap"><b>Сайдбар скрыт, никто не ждёт</b>: громче всех — «Audit the sidebar code» с 3 сабагентами. Счётчика нет: нечему звать.</p>
+          <div class="shot tight">
+            <div class="b-window bar-win">
+              <header class="b-bar">
+                <button class="b-bar-logo"><span class="logo-sat" data-state="working" data-sats="3"></span></button>
+                <nav class="b-ws"><button class="is-current">1</button><button>2</button><button>3</button><button><i data-icon="plus" data-size="14"></i></button></nav>
+                <button class="b-widget"><i data-icon="columns-3"></i></button>
+                <div class="b-bar-right">
+                  <span class="b-widget"><i data-icon="globe"></i>:5173</span>
+                  <span class="b-widget"><span class="b-ring" style="--share:.62"></span></span>
+                  <span class="b-widget"><i data-icon="bell"></i></span>
+                </div>
+              </header>
+              <div class="b-body">
+                <div class="b-strip">
+                  <section class="b-tile"><div class="b-pane-head b-bare"><span data-mark="working" data-satellites="3"></span><span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span><span class="b-pane-title s-fit">Audit the sidebar code</span></div><div class="b-thread tile-peek"><div class="mini-chat"><div class="s-group is-folded"><div class="s-line s-ghead"><span class="s-sats"><span data-sat="working" data-size="8"></span><span data-sat="working" data-size="8"></span><span data-sat="working" data-size="8"></span></span><span class="s-gtitle s-fit"><b>3 sub-agents</b> · 3 working</span><span class="s-chev"><i data-icon="chevron-right" data-size="14"></i></span></div></div><div class="b-trace"><div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 16m 04s</span><span class="b-quiet">· 3 sub-agents at work</span></div></div></div></div></section>
+                  <section class="b-tile" style="flex:0 0 36%"><div class="b-pane-head"><i data-icon="terminal"></i><span class="b-pane-title s-fit">pnpm vitest</span><span class="b-pane-detail s-fit">~/code/banda</span></div><pre class="term-out"><span class="t-b">~/code/banda</span> <span class="t-m">❯</span> pnpm vitest sidebar
+ <span class="t-g">✓</span> card.test.ts <span class="t-q">(31 tests)</span> 98ms
+ <span class="t-g">✓</span> order.test.ts <span class="t-q">(9 tests)</span> 41ms</pre></section>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <p class="cap"><b>Сайдбар скрыт, Reviewer спрашивает</b> (Done и Failed уже разобраны): лого — оранжевый треугольник, «1 · 7», клик — мини-инбокс</p>
+          <div class="shot tight">
+            <div class="b-window bar-win tall">
+              <header class="b-bar">
+                <button class="b-bar-logo"><span data-mark="asks" data-logo data-size="20"></span></button>
+                <span class="b-count is-open"><span class="n-turn">1</span><span class="n-work">· 7</span></span>
+                <nav class="b-ws"><button class="is-current">1</button><button>2</button><button>3</button><button><i data-icon="plus" data-size="14"></i></button></nav>
+                <button class="b-widget"><i data-icon="columns-3"></i></button>
+                <div class="b-bar-right">
+                  <span class="b-widget"><i data-icon="globe"></i>:5173</span>
+                  <span class="b-widget"><span class="b-ring" style="--share:.62"></span></span>
+                  <span class="b-widget"><i data-icon="bell"></i></span>
+                </div>
+              </header>
+              <div class="b-body">
+                <div class="b-strip">
+                  <section class="b-tile"><div class="b-pane-head b-bare"><span data-mark="working" data-satellites="3"></span><span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span><span class="b-pane-title s-fit">Audit the sidebar code</span></div><div class="b-thread tile-peek"><div class="mini-chat"><div class="b-prose"><p>I'll audit it in three parts: the list, the dead styles, and the keys.</p></div><div class="s-group"><div class="s-line s-ghead"><span class="s-sats"><span data-sat="working" data-size="8"></span><span data-sat="working" data-size="8"></span><span data-sat="working" data-size="8"></span></span><span class="s-gtitle s-fit"><b>3 sub-agents</b> · 3 working</span><span class="s-chev"><i data-icon="chevron-right" data-size="14"></i></span></div><div class="s-members"><div class="s-row" data-state="working"><div class="s-line"><span class="s-slot"><span data-sat="working"></span></span><span class="s-title s-fit">Read Sidebar.tsx and list its parts</span><span class="s-role">Explore</span><span class="s-now">Reading client/web/src/sidebar/Sidebar.tsx</span><span class="s-time">16m</span><span class="s-chev"><i data-icon="chevron-right" data-size="14"></i></span></div></div><div class="s-row" data-state="working"><div class="s-line"><span class="s-slot"><span data-sat="working"></span></span><span class="s-title s-fit">Find dead CSS in sidebar/</span><span class="s-role">Explore</span><span class="s-now">Searching for .sb-</span><span class="s-time">16m</span><span class="s-chev"><i data-icon="chevron-right" data-size="14"></i></span></div></div><div class="s-row" data-state="working"><div class="s-line"><span class="s-slot"><span data-sat="working"></span></span><span class="s-title s-fit">Check keys against keys.toml</span><span class="s-role">general</span><span class="s-now"><code>&gt;_ pnpm vitest keys</code></span><span class="s-time">15m</span><span class="s-chev"><i data-icon="chevron-right" data-size="14"></i></span></div></div></div></div><div class="b-trace"><div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 16m 04s</span><span class="b-quiet">· 3 sub-agents at work</span></div></div></div></div></section>
+                  <section class="b-tile" style="flex:0 0 36%"><div class="b-pane-head"><i data-icon="terminal"></i><span class="b-pane-title s-fit">pnpm vitest</span><span class="b-pane-detail s-fit">~/code/banda</span></div><pre class="term-out"><span class="t-b">~/code/banda</span> <span class="t-m">❯</span> pnpm vitest sidebar
+
+ <span class="t-g">✓</span> settings.test.ts <span class="t-q">(14 tests)</span> 212ms
+ <span class="t-g">✓</span> card.test.ts <span class="t-q">(31 tests)</span> 98ms
+ <span class="t-g">✓</span> order.test.ts <span class="t-q">(9 tests)</span> 41ms
+
+ <span class="t-q">Test Files</span>  <span class="t-g">3 passed</span> (3)</pre></section>
+                </div>
+                <div class="mini">
+                  <div class="b-card" data-look="asks"><div class="b-line"><span data-mark="asks"></span><span class="b-title b-fade" style="font-weight:400">Move sidebar settings to sidebar.toml</span><span class="b-time">3m</span></div></div>
+                  <div class="b-divider"></div>
+                  <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-doing="other"></span><span class="b-title b-fade">7 at work</span><i data-icon="chevron-right" class="b-chev"></i></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="b-vstack" style="gap:16px">
+        <div class="zoom">
+          <figure><span class="logo-sat lg" data-state="working" data-sats="3" data-size="60"></span><span><b>Лого × 3</b>работает, 3 сабагента</span></figure>
+          <figure><span class="lg asks" data-mark="asks" data-logo data-size="60"></span><span><b>Лого × 3</b>спрашивает</span></figure>
+        </div>
+        <ul class="notes">
+          <li><b>Только шляпа</b> берёт состояние; две плитки — в цвете текста. Спутники кружат вокруг шляпы, как у марки в строке.</li>
+          <li>В 20 px точки марки — 1 px. В лого рисуем их <b>крупнее (≈ 3 px)</b>, иначе их не видно. Цвета у них нет: громче работающего лого не бывает.</li>
+          <li><b>Счётчик «1 · 7»</b>: Your turn — числом в его цвете, работающие — серым. Пусто — только лого. Сабагенты в счёт не входят: «7» — это Threads.</li>
+          <li><b>Мини-инбокс</b>: те же карточки в одну строку, те же клавиши. Кто спрашивает (Reviewer), видно в доке Thread после <kbd class="b-kbd" style="height:18px">↵</kbd>.</li>
+          <li>Цифры воркспейсов без точек, центр бара пуст, пока сайдбар открыт (#1127).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== E ============================== -->
+  <section class="sec" id="e">
+    <div class="sec-h"><span class="lt">E</span><h2>Уведомления</h2></div>
+    <p class="sec-note">Системное уведомление и тост говорят, кто спрашивает, и что Crew закончился. Упавший сабагент молчит: ни звука, ни тоста — он виден в Thread (и, если примем C, красной точкой у марки).</p>
+
+    <div class="e-grid">
+      <div>
+        <p class="cap"><b>Системное</b> — когда окно Banda не в фокусе (по правилам ADR 0011)</p>
+        <div class="shot desk-shot">
+          <div class="desk-bar"><span>1 2 3</span><span class="r"><span>arc</span><span>14:32</span></span></div>
+          <div class="desk-term"><div class="dt-head">~/code/site — zsh</div><pre class="term-out"><span class="t-b">~/code/site</span> <span class="t-g">main</span> <span class="t-m">❯</span> git log --oneline -5
+<span class="t-y">4c1e9a2</span> pricing: three plans, yearly toggle
+<span class="t-y">9b07d13</span> pricing: table on phones
+<span class="t-y">7d2f0b8</span> brand: tile logo, favicon
+<span class="t-y">1a7c0d2</span> home: hero copy
+<span class="t-y">c08d1e9</span> deps: astro 5
+<span class="t-b">~/code/site</span> <span class="t-g">main</span> <span class="t-m">❯</span> pnpm dev
+  <span class="t-q">Local</span>  http://localhost:4321/
+  <span class="t-q">ready in 412 ms</span></pre></div>
+          <div class="sysn" style="top:42px">
+            <span class="ic"><span data-mark="asks" data-size="26" data-still></span></span>
+            <span class="tx"><span class="app">Banda · banda</span><span class="t">Reviewer asks · Move sidebar settings to sidebar.toml</span><span class="d">Allow pnpm vitest sidebar?</span></span>
+          </div>
+          <div class="sysn" style="top:150px">
+            <span class="ic"><span class="glyph-big" data-g="done,failed,done"></span></span>
+            <span class="tx"><span class="app">Banda · banda</span><span class="t">Crew audit-routes finished · 2 failed</span><span class="d">Move sidebar settings to sidebar.toml · 14m</span></span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="cap"><b>Тост</b> (Sonner) — когда окно в фокусе, но этот Thread не открыт</p>
+        <div class="shot toast-shot">
+          <div class="b-window toast-win">
+            <div class="b-body">
+              <div class="b-strip">
+                <section class="b-tile"><div class="b-pane-head b-bare"><span data-mark="working" data-satellites="3"></span><span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span><span class="b-pane-title s-fit">Audit the sidebar code</span></div>
+                  <div class="b-thread tile-peek"><div class="mini-chat"><div class="b-you">Audit the sidebar code: dead styles, unused parts, keys that no longer match keys.toml.</div><div class="b-prose"><p>I'll audit it in three parts: the list, the dead styles, and the keys.</p></div><div class="s-group"><div class="s-line s-ghead"><span class="s-sats"><span data-sat="working" data-size="8"></span><span data-sat="working" data-size="8"></span><span data-sat="working" data-size="8"></span></span><span class="s-gtitle s-fit"><b>3 sub-agents</b> · 3 working</span><span class="s-chev"><i data-icon="chevron-right" data-size="14"></i></span></div><div class="s-members"><div class="s-row" data-state="working"><div class="s-line"><span class="s-slot"><span data-sat="working"></span></span><span class="s-title s-fit">Read Sidebar.tsx and list its parts</span><span class="s-role">Explore</span><span class="s-now">Reading client/web/src/sidebar/Sidebar.tsx</span><span class="s-time">16m</span><span class="s-chev"><i data-icon="chevron-right" data-size="14"></i></span></div></div><div class="s-row" data-state="working"><div class="s-line"><span class="s-slot"><span data-sat="working"></span></span><span class="s-title s-fit">Find dead CSS in sidebar/</span><span class="s-role">Explore</span><span class="s-now">Searching for .sb-</span><span class="s-time">16m</span><span class="s-chev"><i data-icon="chevron-right" data-size="14"></i></span></div></div><div class="s-row" data-state="working"><div class="s-line"><span class="s-slot"><span data-sat="working"></span></span><span class="s-title s-fit">Check keys against keys.toml</span><span class="s-role">general</span><span class="s-now"><code>&gt;_ pnpm vitest keys</code></span><span class="s-time">15m</span><span class="s-chev"><i data-icon="chevron-right" data-size="14"></i></span></div></div></div></div><div class="b-trace"><div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 16m 04s</span><span class="b-quiet">· 3 sub-agents at work</span></div></div></div></div>
+                </section>
+              </div>
+            </div>
+          </div>
+          <div class="toasts">
+            <div class="b-toast"><span data-mark="asks" data-calls="false"></span><span class="msg b-fade"><b>Reviewer</b> asks · Move sidebar settings to sidebar.toml</span><button class="b-btn is-outline is-sm">Open</button></div>
+            <div class="b-toast"><span data-glyph="done failed done" data-size="16"></span><span class="msg b-fade">Crew audit-routes finished · <span class="s-n-failed">2 failed</span></span><button class="b-btn is-outline is-sm">Open</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="e-under">
+      <table class="tbl">
+        <tr><th style="width:28%">Событие</th><th style="width:26%">Звук</th><th style="width:30%">Тост</th><th>Системное</th></tr>
+        <tr><td>Сабагент спрашивает</td><td>да — звук «спрашивает», как у Thread</td><td class="ui">Reviewer asks · Move sidebar settings…</td><td>да</td></tr>
+        <tr><td>Crew закончился</td><td class="no">нет</td><td class="ui">Crew audit-routes finished · 2 failed</td><td>да</td></tr>
+        <tr><td>Сабагент упал</td><td class="no">нет</td><td class="no">нет</td><td class="no">нет</td></tr>
+        <tr><td>Сабагент готов</td><td class="no">нет</td><td class="no">нет</td><td class="no">нет</td></tr>
+        <tr><td>Claude пошёл дальше сам и закончил</td><td>да — «готово», как сейчас</td><td>как сейчас</td><td>как сейчас</td></tr>
+      </table>
+      <div class="b-vstack" style="gap:12px">
+        <ul class="notes">
+          <li><b>Кто спрашивает — первым словом</b>: «Reviewer asks», а не «Move sidebar settings asks». Название Thread после точки, гаснет, если не влезает.</li>
+          <li>Иконка системного уведомления — <b>неподвижная поза</b> марки (ADR 0099 d8); у Crew — её значок из трёх спутников.</li>
+          <li><b>Тише</b> (Quiet) глушит всё это, инбокс всё равно наполняется.</li>
+        </ul>
+        <div class="pick"><b>Мой выбор</b><span>«Crew закончился» — <b>без звука</b>, только тост и системное. Claude после него идёт дальше сам, и звук «готово» прозвучит, когда закончит он, — два звука подряд не нужны.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== F ============================== -->
+  <section class="sec" id="f">
+    <div class="sec-h"><span class="lt">F</span><h2>Что не меняется</h2></div>
+    <p class="sec-note">Сабагенты не добавляют в сайдбар ничего, кроме спутников и слов в строке 2.</p>
+
+    <div class="f-grid">
+      <div>
+        <span class="verdict no"><i data-icon="x" data-size="14"></i>Не так: карточка на сабагента</span>
+        <div class="shot tight wrong fill">
+          <div class="b-window side-only">
+            <aside class="b-sidebar">
+              <div class="b-list" style="-webkit-mask-image:none;mask-image:none;padding-top:4px">
+                <div class="b-section"><span>Your turn</span></div>
+                <div class="b-card" data-look="asks"><div class="b-line"><span data-mark="asks" data-still></span><span class="b-title b-fade">Reviewer</span><span class="b-time">3m</span></div><div class="b-line"><span class="b-say b-fade"><span class="b-word">Asks</span>Allow pnpm vitest sidebar?</span></div></div>
+                <div class="b-card" data-look="failed"><div class="b-line"><span data-mark="failed" data-still></span><span class="b-title b-fade">routes/hosts/pair.ts</span><span class="b-time">1m</span></div><div class="b-line"><span class="b-say b-fade"><span class="b-word">Failed</span>The fix breaks pairing.spec.ts</span></div></div>
+                <div class="b-section"><span>Working · 26</span></div>
+                <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-still></span><span class="b-title b-fade">Map where [row] keys are read</span><span class="b-time">4m</span></div></div>
+                <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-still></span><span class="b-title b-fade">routes/billing/invoices.ts</span><span class="b-time">2m</span></div></div>
+                <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-still></span><span class="b-title b-fade">routes/settings/keys.ts</span><span class="b-time">2m</span></div></div>
+              </div>
+            </aside>
+          </div>
+        </div>
+        <p class="f-why">Сабагент — часть хода, не Thread: ему не написать, его не отложить и не заархивировать. Один Crew на 12 агентов — и в Working уже 26 строк. ADR 0098 d23.</p>
+      </div>
+      <div>
+        <span class="verdict yes"><i data-icon="check" data-size="14"></i>Так: одна карточка Thread</span>
+        <div class="shot tight fill">
+          <div class="b-window side-only">
+            <aside class="b-sidebar">
+              <div class="b-list" style="-webkit-mask-image:none;mask-image:none;padding-top:4px">
+                <div class="b-section"><span>Your turn</span></div>
+                <div class="b-card" data-look="asks">
+                  <div class="b-line"><span data-mark="asks"></span><span class="b-title b-fade">Move sidebar settings to sidebar.toml</span><span class="b-time">3m</span></div>
+                  <div class="b-line"><span class="b-say b-fade"><span class="b-word">Asks</span>Reviewer: allow pnpm vitest sidebar?</span></div>
+                  <div class="b-line"><span class="b-where"><span class="b-sign" data-color="violet">B</span><span class="b-fade">banda</span></span><span data-emblem="claude"></span></div>
+                </div>
+                <div class="b-section"><span>Working · 6</span></div>
+                <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-satellites="2"></span><span class="b-title b-fade">Research: Hyprland socket</span><span class="b-time">47m</span></div></div>
+                <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-satellites="1"></span><span class="b-title b-fade">Overview open/close zoom</span><span class="b-time">21m</span></div></div>
+                <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-satellites="3"></span><span class="b-title b-fade">Audit the sidebar code</span><span class="b-time">16m</span></div></div>
+              </div>
+            </aside>
+          </div>
+        </div>
+        <p class="f-why">Всё про сабагентов — в Thread (строки, группа, карточка Crew) и в Pane рядом. В сайдбаре — только кто ждёт тебя.</p>
+      </div>
+      <ul class="notes" style="padding-top:28px">
+        <li><b>Вкладки</b> Inbox · Working · Later, порядок «oldest first», полка Working — первые шесть и «+ N more».</li>
+        <li><b>Цвет только у марки и времени.</b> Никаких цветов по агентам (поле <code>color</code> у агентов Claude игнорируем).</li>
+        <li><b>Марка открытого Thread не зовёт</b>, даже если спрашивает его сабагент.</li>
+        <li><b>Alt+U</b> ведёт по Your turn как раньше; вопрос Reviewer'а — обычная его часть.</li>
+        <li><b>Счётчики</b> «Inbox 3», «1 · 7» считают Threads, не сабагентов.</li>
+        <li><b>Бар</b>: центр пуст при открытом сайдбаре, на цифрах воркспейсов нет точек.</li>
+        <li><b>Новых вкладок, фильтров и значков нет.</b> Crew не получает своего места в сайдбаре — только строку 2 своего Thread.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<script src="../../../design/kit/icons.js"></script>
+<script src="../../../design/kit/mark.js"></script>
+<script src="../../../design/kit/sub.js"></script>
+<script>
+(function () {
+  // Theme switches: #light / #solid in the address (keys t and g).
+  const kit = document.documentElement
+  const apply = () => {
+    const light = location.hash.includes('light'), solid = location.hash.includes('solid')
+    if (light) kit.setAttribute('data-theme', 'light'); else if (kit.getAttribute('data-theme') === 'light' && !window.__forcedLight) kit.removeAttribute('data-theme')
+    document.querySelectorAll('.b-window').forEach(w => { if (solid) w.setAttribute('data-glass', 'off'); else if (!window.__forcedSolid) w.removeAttribute('data-glass') })
+  }
+  window.__forcedLight = kit.getAttribute('data-theme') === 'light'
+  apply(); addEventListener('hashchange', apply)
+  addEventListener('keydown', e => {
+    if (e.key === 't') location.hash = location.hash.includes('light') ? location.hash.replace('light', '') : location.hash + 'light'
+    if (e.key === 'g') location.hash = location.hash.includes('solid') ? location.hash.replace('solid', '') : location.hash + 'solid'
+  })
+
+  const NS = 'http://www.w3.org/2000/svg'
+  const TONE = { failed: 'var(--destructive)', asks: 'var(--attention)' }
+
+  // Draws a mark's satellites ourselves (mark.js only draws plain dots):
+  // shapes = the satellite's own shape at `unit` size; else round dots of radius `r`.
+  // It follows mark.js's orbit by reading its dots each frame.
+  const overlays = []
+  function overlay(host, o) {
+    const h = host.__bandaMark; if (!h) return
+    const svg = h.svg, gs = svg.querySelectorAll(':scope > g'), dotsG = gs[gs.length - 1]
+    const circles = [...dotsG.querySelectorAll('circle')]
+    dotsG.style.display = 'none'
+    const layer = document.createElementNS(NS, 'g'); svg.appendChild(layer)
+    const items = circles.map((c, i) => {
+      const st = (o.states && o.states[i]) || 'working'
+      const it = document.createElementNS(NS, 'g')
+      if (o.shapes) {
+        const t = document.createElement('template'); t.innerHTML = Sub.sat(st, o.unit)
+        it.innerHTML = t.content.querySelector('svg').innerHTML
+      } else {
+        it.innerHTML = '<circle cx="0" cy="0" r="' + (typeof o.r === 'function' ? o.r(st) : o.r) + '" fill="currentColor"/>'
+      }
+      if (TONE[st]) it.style.color = TONE[st]
+      layer.appendChild(it); return it
+    })
+    overlays.push({ circles, items, off: o.shapes ? o.unit / 2 : 0, k: o.k || 1 })
+  }
+  function tick() {
+    overlays.forEach(ov => ov.circles.forEach((c, i) => {
+      const r = +c.getAttribute('r'), it = ov.items[i]
+      if (!r) { it.style.display = 'none'; return }
+      it.style.display = ''
+      // mark.js orbits round (76, 22.5); k pushes larger shapes out so they clear the body
+      const x = 76 + (+c.getAttribute('cx') - 76) * ov.k, y = 22.5 + (+c.getAttribute('cy') - 22.5) * ov.k
+      it.setAttribute('transform', 'translate(' + (x - ov.off).toFixed(2) + ' ' + (y - ov.off).toFixed(2) + ')')
+    }))
+    requestAnimationFrame(tick)
+  }
+
+  function init() {
+    // C: 48 px marks, plain dots (approved) or satellite shapes (proposal)
+    document.querySelectorAll('.mk').forEach(n => {
+      const states = n.dataset.sats.split(',')
+      BandaMark.mount(n, { state: 'working', satellites: n.dataset.k === 'plain' ? states.length : states, size: 48 })
+      if (n.dataset.k === 'shapes') overlay(n, { shapes: true, unit: 14, k: 1.17, states })
+    })
+    // C: 16 px marks with per-state colour (kit extension), body dimmed instead of the whole mark
+    document.querySelectorAll('.mk16').forEach(n => {
+      const states = n.dataset.sats.split(',')
+      BandaMark.mount(n, { state: 'working', satellites: states, size: 16 })
+      overlay(n, { shapes: false, r: st => st === 'working' ? 3.1 : 6.2, states })
+    })
+    // D: the logo with satellites around its hat, drawn larger than mark.js's 1 px dots
+    document.querySelectorAll('.logo-sat').forEach(n => {
+      BandaMark.mount(n, { state: 'working', logo: true, satellites: +n.dataset.sats, size: +(n.dataset.size || 20) })
+      overlay(n, { shapes: false, r: 7, states: [] })
+    })
+    // E: the Crew glyph, larger, for the notification icon
+    document.querySelectorAll('.glyph-big').forEach(n => { n.outerHTML = Sub.glyph(n.dataset.g.split(','), 24) })
+    requestAnimationFrame(tick)
+    place()
+  }
+
+  // A: the peek and the pointer sit by the hovered working row.
+  function place() {
+    const body = document.querySelector('#winA .b-body'), row = document.getElementById('hovRow')
+    const peek = document.getElementById('peek'), cur = document.getElementById('cursor')
+    if (!body || !row) return
+    const b = body.getBoundingClientRect(), r = row.getBoundingClientRect()
+    peek.style.left = (r.right - b.left + 12) + 'px'
+    peek.style.top = (r.top - b.top + r.height / 2 - peek.offsetHeight / 2) + 'px'
+    cur.style.left = (r.left - b.left + r.width * 0.62) + 'px'
+    cur.style.top = (r.top - b.top + 9) + 'px'
+  }
+  addEventListener('resize', place)
+  if (document.fonts) document.fonts.ready.then(place)
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init()
+})()
+</script>
+</body>
+</html>

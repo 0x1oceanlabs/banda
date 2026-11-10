@@ -62,14 +62,14 @@ the [GLOSSARY](../../GLOSSARY.md)'s.
    muted line per call ([0058] d4).
 9. **Nothing ticks but one clock per surface.** Times are short and
    still: now, 40s, 14m, 2h, 3d ([0098] d8). The Thread's live line is its
-   one clock, the Crew Pane's summary its own _(mocks)_.
+   one clock, the Crew Pane's summary its own ([0103] d20).
 10. **Fades, not "…".** Long text fades out at its end, and only when it
     does not fit ([0098] d8). A path fades from its start, so the file's
     name stays _(mocks)_.
 11. **No emoji, no colour per Agent.** Banda's pictures are lucide icons
     and the Harnesses' Emblems; a Project's Sign may be the Person's
     emoji ([0070]). A sub-agent has its state's colour, never one of its
-    own: a Harness's agent `color` is not drawn _(mocks)_.
+    own: a Harness's agent `color` is not drawn ([0103] d12).
 12. **Shape is state.** Square, all is calm; circle, work goes on;
     triangle, the Person's turn; octagon, it failed. It reads without
     colour ([0099] d1, `client/ui/src/lib/mark-state.ts`).
@@ -232,7 +232,7 @@ something ([0099] d4):
 - **Reduced motion and `[motion] off`** draw the still poses: every look
   has one (d8), and the colours and the ladder stay.
 - **Satellites never move on their own**; a change blends in 0.45 s, or
-  leaps in 0.6 s to a new shape _(mocks)_.
+  leaps in 0.6 s to a new shape ([0103] d12).
 
 ## Surfaces
 
@@ -367,11 +367,11 @@ A quiet document ([0058]):
   time, a chevron. Two to six started by one message are one **group
   row**, "3 sub-agents · 2 working · 1 asks", the members under it; once
   settled it dims, "Ran 3 sub-agents · 2m 40s". A row opens in place: the
-  brief, its work as one work line, its report _(mocks)_.
+  brief, its work as one work line, its report ([0103] d15).
 - **A Crew** puts one card in the Thread: its glyph, "Crew ·
   audit-routes" and what it does, the strip of its phases, one narrator
   line, the counts ("12 agents · 6 working · 4 done · 2 failed", only the
-  asks and the failed in colour) and **Open** _(mocks)_.
+  asks and the failed in colour) and **Open** ([0103] d18).
 - **The changes card** is a block: "Edited 2 files +38 −9" and
   **Review**, then a row per file, its folder muted, its name in the
   text's colour, + and − in green and red ([0058] d7).
@@ -380,7 +380,7 @@ A quiet document ([0058]):
   top right, faint until hovered ([0058] d3).
 - **The live line** sits at the live edge while a turn runs: a spinner and
   "Working for 45s · Running pnpm test · 11s", or "· Waiting for you", or
-  "· 3 sub-agents at work" _(mocks)_. It is the Thread's one clock, and
+  "· 3 sub-agents at work" ([0103] d19). It is the Thread's one clock, and
   with the Thread's mark the only place that says the Agent works
   ([0058] d5, [0031] d5).
 - A Thread opens where what the Person has not seen begins, and follows
@@ -410,14 +410,14 @@ it the composer):
 - **Decisions dock on it** ([0058] d6), in a block of the same shape just
   above it: the head at the meta size, 600, in orange ("Asks you · 14m",
   or "**Reviewer** asks · 2m" with an orange triangle when a sub-agent
-  asks _(mocks)_); the question; a command in mono on the raised fill; the
+  asks, [0103] d28); the question; a command in mono on the raised fill; the
   choices as rows with their keys, `1`–`9`, `⏎` on the main one, `Esc` on
   "Deny, and tell it what to do differently…"; a quiet note under them
   when an answer reaches further ("“Allow for this Thread” covers Claude
   and all its sub-agents").
 - **An opened sub-agent** has no message box: a status bar takes its place,
   the same shape: its satellite (12), "Working · reviewer · Runs on its
-  own", then **Ask Claude about it** and Stop _(mocks)_.
+  own", then **Ask Claude about it** and Stop ([0103] d21).
 
 ### The Top layer: menus, dialogs, toasts
 
@@ -463,9 +463,11 @@ eight states before it).
   failed › asking › woke › done › working › rest. Only its hat, the
   Agent's tile, takes the colour and the motion; the two tiles under it
   stay the text's ([0099] d9).
-- **Proposal** _(mocks)_: each satellite on a mark takes its sub-agent's
-  state, by shape at 48 px and by colour at 16 px
-  (`satellites: ["working", "asks"]`). ADR 0099 draws plain dots.
+- **Satellites on the Mark** stay grey, as ADR 0099 has them; only a
+  failed sub-agent's takes colour: a red octagon at 48 px, a red 3 px dot
+  at 16 px, while its Thread works ([0103] d13). No orange satellite: a
+  sub-agent that asks makes the Thread itself ask. The kit takes
+  `satellites: ["working", "failed"]`.
 
 ### Satellites: shape is state
 
@@ -474,7 +476,7 @@ eight states before it).
 A sub-agent is a satellite everywhere: on its Agent's mark, at the start
 of its row in the Thread, as a dot in a Crew's strip, as the icon of a
 sub-agent opened in a Pane. It is the Mark's grammar without eyes and
-without motion of its own ([0099] d3: a sub-agent has no mark) _(mocks)_:
+without motion of its own ([0099] d3: a sub-agent has no mark; [0103] d12):
 
 | State | Shape | Colour |
 |---|---|---|
@@ -500,9 +502,9 @@ without motion of its own ([0099] d3: a sub-agent has no mark) _(mocks)_:
 
 - **English in the UI**, in short plain words, and the GLOSSARY's terms
   exactly: Person, Agent, Thread, Pane, Project, Harness, Group,
-  workspace, Later. "Workflow" and "Task" are taken; the mocks call
-  sub-agents set to work in phases a **Crew**, and the word goes into the
-  GLOSSARY with its ADR _(mocks)_.
+  workspace, Later, Sub-agent, Crew. "Workflow" and "Task" are taken:
+  the sub-agents one Thread sets to work in phases are a **Crew**
+  ([0103] d2).
 - **Name the Harness that is there**: "Write to Claude Code", "Ask Claude
   about it", "Codex". Never "Claude" for every Agent.
 - **Times are short and still**: now, 40s, 14m, 2h, 3d. A duration, "1m
@@ -520,7 +522,7 @@ without motion of its own ([0099] d3: a sub-agent has no mark) _(mocks)_:
 ## Scale: the surface grows with the work
 
 Draw the smallest thing that holds the work, and grow it only as the work
-grows _(mocks)_:
+grows ([0103] d14):
 
 | How much | In the Thread | Beside it | The sidebar | The Mark |
 |---|---|---|---|---|
@@ -709,3 +711,4 @@ kit's own demos. Each is a JPEG at quality 85.
 [0099]: ../adr/0099-the-mark-says-whose-turn-it-is-and-what-the-agent-does.md
 [0100]: ../adr/0100-the-look-splits-in-three-and-each-platform-has-a-banda-theme-that-follows-it.md
 [0102]: ../adr/0102-in-the-row-and-solo-a-project-has-its-own-workspace-and-free-workspaces-hold-the-rest.md
+[0103]: ../adr/0103-a-harness-s-sub-agents-work-in-their-thread-and-a-crew-shows-beside-it.md

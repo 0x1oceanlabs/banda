@@ -80,6 +80,9 @@ light theme and the rhythm table).
    The line 2 of its card says it in words (ADR 0098, decision 8).
 3. **Sub-agents are satellites** around their Agent's mark. They have no
    mark of their own.
+   _Amended 2026-11-10 by [ADR 0103](0103-a-harness-s-sub-agents-work-in-their-thread-and-a-crew-shows-beside-it.md):
+   the satellites stay grey circles, and only a failed sub-agent's
+   changes: red, an octagon at 48 px, a dot at 16 px._
 
 ### How it moves
 
@@ -118,6 +121,9 @@ light theme and the rhythm table).
     - `limit_until`: when a usage limit lets it go on
       (`Failure::usage_limit`'s `until`).
     It changes no more often than once a second.
+    _Amended 2026-11-10 by [ADR 0103](0103-a-harness-s-sub-agents-work-in-their-thread-and-a-crew-shows-beside-it.md):
+    `subagents` counts the direct ones that work or ask, and `failed`,
+    `crew` and `parent` come beside it._
 12. **The look is worked out in one place** for the sidebar, the bar, the
     Pane's header and the notifications: ADR 0098's `status.ts` gives the
     place and the word; `markOf` gives the look and what it does.

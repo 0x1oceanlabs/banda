@@ -142,6 +142,9 @@ desktop, web and the PWA now.
      Window, which pushes the Pane's screen on the stack (ADR 0087 d7).
      On a phone that is a Thread's screen; a Pane of another kind is
      named and opens on a wide screen.
+     _Amended 2026-11-10 by [ADR 0103](0103-a-harness-s-sub-agents-work-in-their-thread-and-a-crew-shows-beside-it.md):
+     a sub-agent, its Thread's view read only, goes on the stack as a
+     Thread's screen does._
    - The Bar is a header: the Mark, Here's title and at most two widgets
      marked `compact` (ADR 0087 d11), placed by the Person's `[bar]` with
      a default. The Top layer becomes bottom sheets.

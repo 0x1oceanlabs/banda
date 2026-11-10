@@ -1,0 +1,852 @@
+<!doctype html>
+<!-- prettier-ignore -->
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sub-agent Pane</title>
+<link rel="stylesheet" href="../../../design/kit/kit.css" />
+<link rel="stylesheet" href="../../../design/kit/sub.css" />
+<style>
+  /* Only this page's layout and a few small parts the kit lacks. */
+  body { margin: 0; }
+  .p-page { max-width: 1392px; margin: 0 auto; padding: 40px 24px 80px; display: flex; flex-direction: column; gap: 60px; }
+  .p-head h1 { font-size: 22px; line-height: 30px; font-weight: 600; letter-spacing: -0.01em; }
+  .p-head p { margin-top: 6px; font-size: 14px; line-height: 22px; color: var(--muted-foreground); max-width: 92ch; }
+  .p-head kbd { font: 500 11px var(--font-sans); padding: 1px 5px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--border); color: var(--muted-foreground); }
+  .p-sec { display: flex; flex-direction: column; gap: 16px; padding: 20px 20px 24px; margin: -20px -20px -24px; }
+  .p-cap h2 { display: flex; align-items: baseline; gap: 10px; font-size: 16px; line-height: 24px; font-weight: 600; }
+  .p-cap h2 .p-id { font: 500 12px/1 var(--font-mono); color: var(--muted-foreground); }
+  .p-cap p { margin-top: 4px; font-size: 13.5px; line-height: 21px; color: var(--muted-foreground); max-width: 104ch; }
+  .p-notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px 32px; font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+  .p-notes p b { color: var(--foreground); font-weight: 600; }
+  .p-notes code { font-family: var(--font-mono); font-size: 12px; }
+  .p-later { color: var(--foreground); }
+  .p-later::before { content: "Позже"; margin-right: 6px; padding: 1px 6px; border-radius: 5px; font-size: 11px; font-weight: 600; color: var(--muted-foreground); box-shadow: inset 0 0 0 1px var(--border); }
+
+  /* The stage: a piece of the desktop the window sits on. */
+  .p-stage { position: relative; padding: 28px; border-radius: 22px; background: var(--wallpaper); background-size: cover; overflow: hidden; }
+  .p-stage.is-tight { padding: 24px; }
+  .p-full { height: 664px; }
+  .p-crop { height: 600px; }
+  .p-crop > .b-body { padding-top: var(--gap); }
+  .p-tall { height: 652px; }
+  .p-crop.p-h560 { height: 560px; }
+  .p-crop.p-h500 { height: 500px; }
+  .b-prose code { white-space: nowrap; }
+  .b-pane-title:has(+ .b-pane-detail), .b-pane-title:has(+ .s-fit) { flex: none; }
+
+  /* The working Mark of the open Thread is grey too; it does not call. */
+  .p-hmark svg[data-banda-mark] { color: var(--muted-foreground); }
+  /* A detail that fades instead of "…" */
+  .b-pane-detail.s-fit { text-overflow: clip; flex: 0 1 auto; }
+  .b-pane-head .s-crumbs { flex: 0 1 auto; }
+  .b-pane-head .s-crumbs > span:not(.is-here) { flex: 0 1 auto; }
+  .b-pane-head .s-crumbs > span:not(.is-here):hover { color: var(--foreground); cursor: pointer; }
+  /* A Thread view seen from its end: the newest at the bottom. */
+  .p-end { justify-content: flex-end; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 56px, #000 calc(100% - 20px), transparent); mask-image: linear-gradient(to bottom, transparent 0, #000 56px, #000 calc(100% - 20px), transparent); }
+  .p-end .b-chat { flex: none; padding-top: 40px; }
+  /* The row whose Pane is open beside: the current fill, as the sidebar's open card. */
+  .s-line.p-current { background: var(--current); }
+  .s-line.p-current:hover { background: color-mix(in oklab, var(--foreground) 10%, transparent); }
+  /* "Claude asked" with a satellite instead of an emblem (a sub-agent asked). */
+  .s-asked-label .s-sat { margin-right: 1px; }
+  /* A chip in the composer and the bubble, as Banda's prompt chips (ADR 0015): icon + short name, raised fill. */
+  .p-chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 6px 0 5px; margin: 0 2px 0 0; border-radius: var(--r-small); background: var(--raised); font-size: 0.93em; line-height: 1; vertical-align: 1px; color: var(--foreground); white-space: nowrap; }
+  .b-you .p-chip { background: color-mix(in oklab, var(--foreground) 9%, transparent); }
+  .p-caret { display: inline-block; width: 1.5px; height: 1.15em; margin-left: 1px; vertical-align: -0.2em; background: var(--foreground); }
+  .b-composer.is-focused .b-composer-text { padding-bottom: 8px; }
+  /* A still of a hover on a button, and the pointer over it. */
+  .b-btn.p-hover { background: var(--hover); color: var(--foreground); }
+  .p-cursor { position: absolute; width: 18px; height: 22px; pointer-events: none; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.35)); z-index: 3; }
+  .p-rel { position: relative; }
+  /* A still tip over a button. */
+  .p-tip { position: absolute; right: -4px; bottom: calc(100% + 9px); white-space: nowrap; z-index: 3; }
+  .p-tip::after { content: ""; position: absolute; right: 26px; bottom: -4px; border: 4px solid transparent; border-bottom: 0; border-top-color: var(--foreground); }
+  /* The worktree changes card (D). */
+  .p-wtcard .b-block-head .b-diff { margin-left: 2px; }
+  .p-wtcard .b-block-rows { display: flex; flex-direction: column; }
+  .p-wtcard .b-block-rows > * { width: 100%; text-align: left; }
+  .p-wtfoot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 8px 8px 12px; border-top: 1px solid var(--border); font-size: var(--text-meta); color: var(--muted-foreground); }
+  .p-wtfoot .p-acts { margin-left: auto; display: flex; gap: 4px; }
+
+  /* B: four stills of one flow. Each still sits on its own piece of
+     wallpaper, so its caption stays on the page and reads in both themes. */
+  .p-flow { display: grid; grid-template-columns: 1fr 1fr; gap: 26px 20px; }
+  .p-step { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .p-step > h3, .p-frame > h3 { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding-left: 2px; font-size: 13px; line-height: 18px; font-weight: 500; color: var(--foreground); }
+  .p-step > h3 i, .p-frame > h3 i { flex: none; font-style: normal; font: 600 11px/1 var(--font-mono); color: var(--muted-foreground); }
+  .p-step > h3 span, .p-frame > h3 span { color: var(--muted-foreground); font-weight: 400; }
+  .p-step > .p-stage, .p-frame > .p-stage { padding: 18px; }
+  .p-step .b-window { height: 440px; }
+  .p-step .b-body { padding-top: var(--gap); }
+
+  /* E: the idle variant under the window. */
+  .p-under { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 20px; align-items: start; margin-top: 8px; }
+  .p-under .p-step .b-window { height: auto; }
+  .p-under .b-composer-wrap { max-width: none; padding: 0; }
+  .p-slab { padding: var(--gap); }
+  .p-slab .b-tile { padding: 12px; }
+  .p-hovrows { padding: 10px 18px !important; }
+
+  /* F: narrow screens, pushed. */
+  .p-row { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+  .p-frame { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .p-phone { width: 340px; height: 700px; border-radius: 34px; }
+  .p-phone .p-sc { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--tile); }
+  .p-phead { flex: none; height: 52px; display: flex; align-items: center; gap: 6px; padding: 8px 10px 0 8px; white-space: nowrap; min-width: 0; }
+  .p-phead .b-pane-title { flex: 0 1 auto; }
+  .p-phead .p-sub { display: flex; flex-direction: column; min-width: 0; line-height: 18px; }
+  .p-phead .p-sub small { font-size: 11.5px; line-height: 15px; color: var(--muted-foreground); }
+  .p-narrow .b-chat { --prose-size: 14px; --prose-leading: 22px; --chat-gutter: 14px; }
+  .p-narrow .b-composer-wrap { padding: 0 10px 12px; }
+  .p-phone .s-statusbar { flex-wrap: wrap; row-gap: 8px; padding: 10px 10px 10px 14px; }
+  .p-phone .s-sb-text { flex: 1 1 calc(100% - 30px); }
+  .p-phone .s-sb-acts { margin-left: 22px; }
+  .p-narrow .s-line { flex-wrap: wrap; height: auto; padding-top: 4px; padding-bottom: 4px; row-gap: 0; }
+  .p-narrow .s-title { max-width: none; flex: 1 1 0; }
+  .p-narrow .s-role { display: none; }
+  .p-narrow .s-now { order: 9; flex: 1 0 calc(100% - 23px); margin-left: 23px; font-size: 12.5px; line-height: 18px; }
+  .p-narrow .s-members { padding-left: 22px; }
+  .p-arrow { align-self: center; display: grid; place-items: center; width: 18px; margin: 28px -8px 0; color: var(--muted-foreground); }
+  .p-drawerwin { width: 100%; height: 700px; }
+  .p-drawerwin .p-under-strip { flex: 1; min-height: 0; display: flex; gap: var(--gap); padding: 0 var(--gap) var(--gap); }
+  /* The workspace under the drawer: real Panes, seen only below it. */
+  .p-under-strip .b-tile { flex: 1 1 0; min-width: 0; }
+  .p-under-strip .p-low { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; }
+  .p-term { overflow: hidden; padding: 0 16px 14px; font: 12px/19px var(--font-mono); color: var(--muted-foreground); white-space: pre; }
+  .p-term b { font-weight: 400; color: var(--added); }
+  .p-term em { font-style: normal; color: var(--foreground); }
+  .p-scrim { position: absolute; left: 0; right: 0; top: var(--bar-height); bottom: 0; background: rgb(0 0 0 / 0.38); z-index: 1; }
+  [data-theme="light"] .p-scrim { background: rgb(0 0 0 / 0.22); }
+  .p-drawer { position: absolute; z-index: 2; left: var(--gap); right: var(--gap); top: calc(var(--bar-height) + 2px); height: 66%; flex: none; box-shadow: inset 0 0 0 1px var(--focus), 0 24px 60px -20px rgb(0 0 0 / 0.6); }
+  .p-drawer .b-pane-head .b-ib.is-xs { color: var(--muted-foreground); }
+
+  /* Questions at the end. */
+  .p-qs { display: grid; gap: 8px; padding-left: 20px; margin: 0; font-size: 13.5px; line-height: 21px; color: var(--muted-foreground); }
+  .p-qs b { color: var(--foreground); font-weight: 600; }
+
+  /* Not wide enough for two tiles side by side: stack them. */
+  @media (max-width: 960px) {
+    .p-page { padding: 24px 12px 56px; gap: 44px; }
+    .p-sec { padding: 12px 12px 24px; margin: -12px -12px -24px; }
+    .p-stage, .p-step > .p-stage, .p-frame > .p-stage { padding: 14px; border-radius: 18px; }
+    .p-full, .p-crop, .p-tall, .p-crop.p-h560, .p-crop.p-h500 { height: auto; }
+    .p-full > .b-body, .p-crop > .b-body, .p-tall > .b-body { flex: none; }
+    .p-full .b-group, .p-crop .b-group, .p-tall .b-group { flex-direction: column; }
+    .p-full .b-tile, .p-crop .b-tile, .p-tall .b-tile { flex: none !important; height: 600px; }
+    .p-flow, .p-under { grid-template-columns: 1fr; }
+    .p-arrow { display: none; }
+    .p-drawerwin { width: 100%; }
+    .p-phone { width: 340px; }
+  }
+  .b-send.is-stop { background: var(--raised); color: var(--foreground); }
+</style>
+</head>
+<body class="b-kit" id="kit">
+<main class="p-page">
+
+  <header class="p-head">
+    <h1>Сабагент, открытый рядом</h1>
+    <p>Панель сабагента в Group его Thread: тот же вид Thread, только для чтения, а на месте composer — статус-бар. Писать сабагенту напрямую нельзя: только через его Agent, «Ask Claude about it». <kbd>t</kbd> светлая тема, <kbd>g</kbd> стекло вкл/выкл.</p>
+  </header>
+
+  <!-- ============================================================ A -->
+  <section class="p-sec" id="a">
+    <div class="p-cap">
+      <h2><span class="p-id">A</span>Окно: Thread и сабагент рядом</h2>
+      <p>«Open beside» на строке Reviewer кладёт его панель в Group Thread. Строка в Thread подсвечена, пока панель открыта. В панели: задание пузырём «Claude asked», работа одной строкой, проза, а внизу статус-бар той же формы, что composer (радиус 14).</p>
+    </div>
+    <div class="p-stage">
+      <div class="b-window p-full">
+        <header class="b-bar">
+          <button class="b-bar-logo" title="Sidebar · Alt+A"><span data-mark="working" data-logo data-size="20" data-satellites="working"></span></button>
+          <nav class="b-ws"><button class="is-current">1</button><button>2</button><button>3</button><button><i data-icon="plus" data-size="14"></i></button></nav>
+          <button class="b-widget" title="Flow: Row"><i data-icon="columns-3"></i></button>
+          <div class="b-bar-center"><span class="b-count" title="Working: 3"><span data-mark="working" data-size="14"></span>3</span></div>
+          <div class="b-bar-right">
+            <span class="b-widget"><i data-icon="globe"></i>:5173 <span class="b-faint">+1</span></span>
+            <span class="b-widget"><span class="b-ring" style="--share:.62"></span></span>
+            <span class="b-widget"><i data-icon="bell"></i></span>
+          </div>
+        </header>
+        <div class="b-body">
+          <div class="b-group" data-state="working">
+            <!-- the parent Thread -->
+            <section class="b-tile" style="flex: 1.15 1 0">
+              <div class="b-pane-head b-bare">
+                <span class="p-hmark"><span data-mark="working" data-satellites="working" data-calls="false"></span></span>
+                <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+                <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+                <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+              </div>
+              <div class="b-thread">
+                <div class="b-chat">
+                  <div class="b-you">Move the sidebar's settings into sidebar.toml, one file per module. Keep what people already set working.</div>
+                  <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 4 files, searched for 2 patterns</span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                  <div class="b-prose"><p>I'll split it three ways: map where the old keys are read, check the settings tests, and have a reviewer look at the new schema.</p></div>
+                  <div data-fill="group-live" data-cur="Review the sidebar.toml schema"></div>
+                  <div class="b-prose"><p>Two are back: the old <code>[row]</code> keys are read in three places, and all 54 settings tests pass. I'll wait for the review before I move anything.</p></div>
+                  <div class="b-trace"><div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 4m 12s</span><span class="b-quiet">· Waiting on Reviewer</span></div></div>
+                </div>
+              </div>
+              <div class="b-composer-wrap">
+                <div class="b-composer">
+                  <div class="b-composer-text is-empty">Steer this thread…</div>
+                  <div class="b-composer-row">
+                    <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                    <span class="b-spacer"></span>
+                    <button class="b-ctl"><i data-icon="shield"></i></button>
+                    <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></button>
+                    <button class="b-send is-stop" aria-label="Stop" title="Stop · Esc"></button>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <!-- the sub-agent, opened beside -->
+            <section class="b-tile is-focused" style="flex: 1 1 0">
+              <div class="b-pane-head b-bare">
+                <span data-sat="working" data-size="12"></span>
+                <span class="b-pane-title">Reviewer</span>
+                <span class="b-pane-detail s-fit">sub-agent of Move sidebar settings to sidebar.toml</span>
+                <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+              </div>
+              <div class="b-thread">
+                <div class="b-chat">
+                  <div class="s-asked">
+                    <span class="s-asked-label"><span data-emblem="claude" data-size="12"></span>Claude asked</span>
+                    <div class="b-you">Review the new schema in platform/look/sidebar.toml against client/web/src/settings/schema.ts. Check that every key has a default, a type and a doc line, and that the old [row] keys still map to the new ones. Report problems as a short list.</div>
+                  </div>
+                  <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 9 files, searched for 3 patterns</span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                  <div class="b-prose">
+                    <p>The schema has 14 keys. Two look wrong so far:</p>
+                    <ul>
+                      <li><code>row.density</code> has no default</li>
+                      <li><code>later.until</code> is typed as text, but the sidebar reads it as minutes</li>
+                    </ul>
+                  </div>
+                  <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 3 files, searched for <span class="b-subject">[row]</span></span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                  <div class="b-prose"><p>The old <code>[row]</code> keys map one to one, except <code>row.compact</code>: it has no new key yet.</p></div>
+                  <div class="b-trace"><div class="b-tl is-pending"><i data-icon="file-text"></i><span class="b-tl-text b-shimmer">Reading client/web/src/sidebar/card.ts</span></div></div>
+                </div>
+              </div>
+              <div class="b-composer-wrap">
+                <div class="s-statusbar" data-state="working">
+                  <span data-sat="working" data-size="12"></span>
+                  <span class="s-sb-text"><span class="s-sb-word">Working</span><span class="s-sep">·</span><span>Runs on its own</span></span>
+                  <span class="s-sb-acts"><button class="b-btn is-outline is-sm"><i data-icon="at-sign"></i>Ask Claude about it</button><button class="b-btn is-ghost is-sm"><i data-sicon="stop" data-size="13"></i>Stop</button></span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="p-notes">
+      <p><b>Шапка.</b> Спутник 12 px (форма = состояние), имя, приглушённо «sub-agent of …». Своей Mark нет: сабагент — не Thread (ADR 0099 d3). Длинное гаснет, без «…».</p>
+      <p><b>Статус-бар</b> вместо composer: слово состояния, роль и модель, только если они что-то добавляют (у Reviewer роль и есть имя, модель как у Claude; Explore · Haiku — в C), и «Runs on its own». Не тикает: часы одни — живая строка в Thread.</p>
+      <p><b>Мой выбор:</b> одна панель сабагента на Group. «Open beside» другого сабагента меняет её содержимое, а не добавляет колонку.</p>
+    </div>
+  </section>
+
+  <!-- ============================================================ B -->
+  <section class="p-sec" id="b">
+    <div class="p-cap">
+      <h2><span class="p-id">B</span>«Ask Claude about it»</h2>
+      <p>По ACP написать сабагенту нельзя. Кнопка ставит фокус в composer родителя с чипом Reviewer (иконка — его спутник). Сообщение уходит в идущий ход как steer, Claude передаёт его через SendMessage, и в Thread появляется строка «Messaged Reviewer». agentId нигде не виден.</p>
+    </div>
+    <div class="p-flow">
+        <div class="p-step">
+          <h3><i>1</i>Кнопка в статус-баре <span>панель Reviewer</span></h3>
+          <div class="p-stage"><div class="b-window"><div class="b-body"><section class="b-tile">
+            <div class="b-pane-head b-bare">
+              <span data-sat="working" data-size="12"></span><span class="b-pane-title">Reviewer</span>
+              <span class="b-pane-detail s-fit">sub-agent of Move sidebar settings to sidebar.toml</span>
+              <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+            </div>
+            <div class="b-thread p-end"><div class="b-chat">
+              <div class="s-asked">
+                <span class="s-asked-label"><span data-emblem="claude" data-size="12"></span>Claude asked</span>
+                <div class="b-you">Review the new schema in platform/look/sidebar.toml against client/web/src/settings/schema.ts. Check that every key has a default, a type and a doc line, and that the old [row] keys still map to the new ones. Report problems as a short list.</div>
+              </div>
+              <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 9 files, searched for 3 patterns</span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+              <div class="b-prose">
+                <p>The schema has 14 keys. Two look wrong so far:</p>
+                <ul>
+                  <li><code>row.density</code> has no default</li>
+                  <li><code>later.until</code> is typed as text, but the sidebar reads it as minutes</li>
+                </ul>
+              </div>
+              <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 3 files, searched for <span class="b-subject">[row]</span></span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+              <div class="b-prose"><p>The old <code>[row]</code> keys map one to one, except <code>row.compact</code>: it has no new key yet.</p></div>
+              <div class="b-trace"><div class="b-tl is-pending"><i data-icon="file-text"></i><span class="b-tl-text b-shimmer">Reading client/web/src/sidebar/card.ts</span></div></div>
+            </div></div>
+            <div class="b-composer-wrap">
+              <div class="s-statusbar" data-state="working">
+                <span data-sat="working" data-size="12"></span>
+                <span class="s-sb-text"><span class="s-sb-word">Working</span><span class="s-sep">·</span><span>Runs on its own</span></span>
+                <span class="s-sb-acts"><span class="p-rel"><button class="b-btn is-outline is-sm p-hover"><i data-icon="at-sign"></i>Ask Claude about it</button><svg class="p-cursor" style="left:112px;top:15px" viewBox="0 0 18 22"><path d="M2 1.5v16.2l4.3-4.1 2.9 6.6 2.7-1.2-2.9-6.5h6z" fill="#fff" stroke="#111" stroke-width="1.2" stroke-linejoin="round"/></svg></span><button class="b-btn is-ghost is-sm"><i data-sicon="stop" data-size="13"></i>Stop</button></span>
+              </div>
+            </div>
+          </section></div></div></div>
+        </div>
+
+        <div class="p-step">
+          <h3><i>2</i>Composer родителя в фокусе, в нём чип <span>текст — ваш</span></h3>
+          <div class="p-stage"><div class="b-window"><div class="b-body"><section class="b-tile is-focused">
+            <div class="b-pane-head b-bare">
+              <span class="p-hmark"><span data-mark="working" data-satellites="working" data-calls="false"></span></span>
+              <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+              <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+              <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+            </div>
+            <div class="b-thread p-end"><div class="b-chat">
+              <div class="b-prose"><p>I'll split it three ways: map where the old keys are read, check the settings tests, and have a reviewer look at the new schema.</p></div>
+              <div data-fill="group-live" data-cur="Review the sidebar.toml schema"></div>
+              <div class="b-prose"><p>Two are back: the old <code>[row]</code> keys are read in three places, and all 54 settings tests pass. I'll wait for the review before I move anything.</p></div>
+              <div class="b-trace"><div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 4m 30s</span><span class="b-quiet">· Waiting on Reviewer</span></div></div>
+            </div></div>
+            <div class="b-composer-wrap">
+              <div class="b-composer is-focused">
+                <div class="b-composer-text"><span class="p-chip"><span data-sat="working" data-size="8"></span>Reviewer</span> skip card.ts, it goes away in #1105. Propose a new key for row.compact instead.<span class="p-caret"></span></div>
+                <div class="b-composer-row">
+                  <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                  <span class="b-spacer"></span>
+                  <button class="b-ctl"><i data-icon="shield"></i></button>
+                  <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></button>
+                  <button class="b-send"><i data-icon="arrow-up"></i></button>
+                </div>
+              </div>
+            </div>
+          </section></div></div></div>
+        </div>
+
+        <div class="p-step">
+          <h3><i>3</i>В Thread: «Messaged Reviewer» <span>строка от Claude</span></h3>
+          <div class="p-stage"><div class="b-window"><div class="b-body"><section class="b-tile">
+            <div class="b-pane-head b-bare">
+              <span class="p-hmark"><span data-mark="working" data-satellites="working" data-calls="false"></span></span>
+              <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+              <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+              <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+            </div>
+            <div class="b-thread p-end"><div class="b-chat">
+              <div data-fill="group-steered" data-cur="Review the sidebar.toml schema"></div>
+              <div class="b-prose"><p>Two are back: the old <code>[row]</code> keys are read in three places, and all 54 settings tests pass. I'll wait for the review before I move anything.</p></div>
+              <div class="b-you"><span class="p-chip"><span data-sat="working" data-size="8"></span>Reviewer</span> skip card.ts, it goes away in #1105. Propose a new key for row.compact instead.</div>
+              <div class="b-trace">
+                <div class="b-tl"><i data-icon="message-square"></i><span class="b-tl-text">Messaged <span class="b-subject">Reviewer</span></span><span class="b-quiet">· skip card.ts, propose a key for row.compact</span></div>
+                <div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 5m 02s</span><span class="b-quiet">· Waiting on Reviewer</span></div>
+              </div>
+            </div></div>
+            <div class="b-composer-wrap">
+              <div class="b-composer">
+                <div class="b-composer-text is-empty">Steer this thread…</div>
+                <div class="b-composer-row">
+                  <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                  <span class="b-spacer"></span>
+                  <button class="b-ctl"><i data-icon="shield"></i></button>
+                  <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></button>
+                  <button class="b-send is-stop" aria-label="Stop" title="Stop · Esc"></button>
+                </div>
+              </div>
+            </div>
+          </section></div></div></div>
+        </div>
+
+        <div class="p-step">
+          <h3><i>4</i>В панели Reviewer <span>слова Claude, не ваши</span></h3>
+          <div class="p-stage"><div class="b-window"><div class="b-body"><section class="b-tile">
+            <div class="b-pane-head b-bare">
+              <span data-sat="working" data-size="12"></span><span class="b-pane-title">Reviewer</span>
+              <span class="b-pane-detail s-fit">sub-agent of Move sidebar settings to sidebar.toml</span>
+              <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+            </div>
+            <div class="b-thread p-end"><div class="b-chat">
+              <div class="b-prose">
+                <p>The schema has 14 keys. Two look wrong so far:</p>
+                <ul>
+                  <li><code>row.density</code> has no default</li>
+                  <li><code>later.until</code> is typed as text, but the sidebar reads it as minutes</li>
+                </ul>
+              </div>
+              <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 3 files, searched for <span class="b-subject">[row]</span></span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+              <div class="b-prose"><p>The old <code>[row]</code> keys map one to one, except <code>row.compact</code>: it has no new key yet.</p></div>
+              <div class="b-trace"><button class="b-tl"><i data-icon="file-text"></i><span class="b-tl-text">Read <span class="b-subject">card.ts</span></span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+              <div class="s-asked">
+                <span class="s-asked-label"><span data-emblem="claude" data-size="12"></span>Claude wrote</span>
+                <div class="b-you">Skip card.ts: it goes away in #1105. Propose a new key for row.compact instead.</div>
+              </div>
+              <div class="b-trace"><div class="b-tl is-pending"><i data-icon="search"></i><span class="b-tl-text b-shimmer">Searching for compact in client/web/src/settings</span></div></div>
+            </div></div>
+            <div class="b-composer-wrap">
+              <div class="s-statusbar" data-state="working">
+                <span data-sat="working" data-size="12"></span>
+                <span class="s-sb-text"><span class="s-sb-word">Working</span><span class="s-sep">·</span><span>Runs on its own</span></span>
+                <span class="s-sb-acts"><button class="b-btn is-outline is-sm"><i data-icon="at-sign"></i>Ask Claude about it</button><button class="b-btn is-ghost is-sm"><i data-sicon="stop" data-size="13"></i>Stop</button></span>
+              </div>
+            </div>
+          </section></div></div></div>
+        </div>
+    </div>
+    <div class="p-notes">
+      <p><b>Чип</b> — как другие чипы Banda (ADR 0015): иконка и короткое имя. Иконка — спутник Reviewer. Claude получает его как «(about sub-agent ‘Reviewer’)».</p>
+      <p><b>Строка «Messaged Reviewer»</b> — вызов SendMessage родителя, обычная строка работы. Строка сабагента остаётся на месте запуска, её now-line сменилась.</p>
+      <p><b>Мой выбор:</b> в панели сабагента сообщение родителя — пузырь «Claude wrote» (первое задание — «Claude asked»).</p>
+    </div>
+  </section>
+
+  <!-- ============================================================ C -->
+  <section class="p-sec" id="c">
+    <div class="p-cap">
+      <h2><span class="p-id">C</span>Вложенный: сабагент сабагента</h2>
+      <p>Claude ходит до трёх уровней. В Thread родителя — только первый уровень; глубже — «+2» на строке (подсказка «Its own sub-agents»). Панель уходит вглубь на месте: хлебные крошки «Move sidebar settings › Reviewer › Explore», клик по крошке или Esc — на уровень выше.</p>
+    </div>
+    <div class="p-stage">
+      <div class="b-window p-crop p-h560">
+        <div class="b-body">
+          <div class="b-group" data-state="working">
+            <section class="b-tile" style="flex: 1 1 0">
+              <div class="b-pane-head b-bare">
+                <span class="p-hmark"><span data-mark="working" data-satellites="working" data-calls="false"></span></span>
+                <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+                <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+                <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+              </div>
+              <div class="b-thread p-end"><div class="b-chat">
+                <div class="b-you">Move the sidebar's settings into sidebar.toml, one file per module. Keep what people already set working.</div>
+                <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 4 files, searched for 2 patterns</span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                <div class="b-prose"><p>I'll split it three ways: map where the old keys are read, check the settings tests, and have a reviewer look at the new schema.</p></div>
+                <div data-fill="group-deep" data-cur="Review the sidebar.toml schema"></div>
+                <div class="b-prose"><p>Two are back. The Reviewer started two helpers of its own; I'll wait for it.</p></div>
+                <div class="b-trace"><div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 5m 40s</span><span class="b-quiet">· Waiting on Reviewer</span></div></div>
+              </div></div>
+              <div class="b-composer-wrap">
+                <div class="b-composer">
+                  <div class="b-composer-text is-empty">Steer this thread…</div>
+                  <div class="b-composer-row">
+                    <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                    <span class="b-spacer"></span>
+                    <button class="b-ctl"><i data-icon="shield"></i></button>
+                    <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></button>
+                    <button class="b-send is-stop" aria-label="Stop" title="Stop · Esc"></button>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section class="b-tile is-focused" style="flex: 1 1 0">
+              <div class="b-pane-head b-bare">
+                <span data-sat="working" data-size="12"></span>
+                <span class="s-crumbs"><span title="Back to the Thread">Move sidebar settings</span><i data-icon="chevron-right"></i><span title="Up · Esc">Reviewer</span><i data-icon="chevron-right"></i><span class="is-here">Explore</span></span>
+                <span class="b-pane-detail s-fit">Find where later.until is parsed</span>
+                <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+              </div>
+              <div class="b-thread"><div class="b-chat">
+                <div class="s-asked">
+                  <span class="s-asked-label"><span data-sat="working" data-size="8"></span>Reviewer asked</span>
+                  <div class="b-you">Find every place that parses later.until and say which unit each one expects. Read only, don't edit.</div>
+                </div>
+                <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Searched for 2 patterns, read 4 files</span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                <div class="b-prose">
+                  <p>Two places read it, and they disagree:</p>
+                  <ul>
+                    <li><a class="b-path">client/web/src/sidebar/card.ts</a> takes minutes, as a number</li>
+                    <li><a class="b-path">client/web/src/threads/later.ts</a> takes a string like <code>"2h"</code></li>
+                  </ul>
+                </div>
+                <div class="b-trace"><button class="b-tl"><i data-icon="search"></i><span class="b-tl-text">Searched for <span class="b-subject">later.until</span> in tests</span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                <div class="b-prose"><p>No test sets it, so both work today only because the default is used.</p></div>
+                <div class="b-trace"><div class="b-tl is-pending"><i data-icon="file-text"></i><span class="b-tl-text b-shimmer">Reading client/web/src/threads/later.ts</span></div></div>
+              </div></div>
+              <div class="b-composer-wrap">
+                <div class="s-statusbar" data-state="working">
+                  <span data-sat="working" data-size="12"></span>
+                  <span class="s-sb-text"><span class="s-sb-word">Working</span><span class="s-sep">·</span><span>Explore</span><span class="s-sep">·</span><span>Haiku</span><span class="s-sep">·</span><span>Runs on its own</span></span>
+                  <span class="s-sb-acts"><button class="b-btn is-outline is-sm"><i data-icon="at-sign"></i>Ask Claude about it</button><button class="b-btn is-ghost is-sm"><i data-sicon="stop" data-size="13"></i>Stop</button></span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="p-notes">
+      <p><b>Задание подписано тем, кто его дал:</b> «Reviewer asked», со спутником Reviewer. Спрашивать всё равно Claude: Person говорит только с Agent своего Thread.</p>
+      <p><b>Модель видна, когда отличается:</b> Explore идёт на Haiku, родитель на Opus 5.5, поэтому «Haiku» в статус-баре.</p>
+      <p><b>Мой выбор:</b> внутри панели Reviewer его сабагенты — обычные строки (один уровень); клик открывает их в той же панели.</p>
+    </div>
+  </section>
+
+  <!-- ============================================================ D -->
+  <section class="p-sec" id="d">
+    <div class="p-cap">
+      <h2><span class="p-id">D</span>Закончил в worktree: изменения на своей ветке</h2>
+      <p>Сабагент с изоляцией worktree правил файлы на своей ветке. Ничто не сливает её назад само, поэтому в его панели — карточка изменений: Review открывает Diff Pane на этой ветке в той же Group, Ask Claude to merge — просьба родителю, Discard — удалить worktree (с подтверждением).</p>
+    </div>
+    <div class="p-stage">
+      <div class="b-window p-tall">
+        <div class="b-body" style="padding-top: var(--gap)">
+          <div class="b-group" data-state="done">
+            <section class="b-tile" style="flex: 1.26 1 0">
+              <div class="b-pane-head b-bare">
+                <span data-mark="done" data-calls="false"></span>
+                <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+                <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+                <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+              </div>
+              <div class="b-thread"><div class="b-chat">
+                <div class="b-you">Move the sidebar's settings into sidebar.toml, one file per module. Keep what people already set working.</div>
+                <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 4 files, searched for 2 patterns</span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                <div class="b-prose"><p>I'll split it three ways: map where the old keys are read, check the settings tests, and have a reviewer look at the new schema.</p></div>
+                <div data-fill="group-settled" data-cur="Review the sidebar.toml schema"></div>
+                <div class="b-prose">
+                  <p>The Reviewer found two problems and fixed them on its own branch, <code>worktree-reviewer</code>. Nothing is merged yet.</p>
+                  <p>Review the changes there, or tell me to merge them and I'll move the rest of the settings after that.</p>
+                </div>
+              </div></div>
+              <div class="b-composer-wrap">
+                <div class="b-composer">
+                  <div class="b-composer-text is-empty">Write to Claude Code. @ files, / commands, $ skills</div>
+                  <div class="b-composer-row">
+                    <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                    <span class="b-spacer"></span>
+                    <button class="b-ctl"><i data-icon="shield"></i></button>
+                    <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></button>
+                    <button class="b-send is-empty"><i data-icon="arrow-up"></i></button>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section class="b-tile is-focused" style="flex: 1 1 0">
+              <div class="b-pane-head b-bare">
+                <span data-sat="done" data-size="12"></span>
+                <span class="b-pane-title">Reviewer</span>
+                <span class="b-pane-detail s-fit">sub-agent of Move sidebar settings to sidebar.toml</span>
+                <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+              </div>
+              <div class="b-thread"><div class="b-chat">
+                <div class="s-asked">
+                  <span class="s-asked-label"><span data-emblem="claude" data-size="12"></span>Claude asked</span>
+                  <div class="b-you">Review the new schema in platform/look/sidebar.toml against client/web/src/settings/schema.ts. Fix what you find on your own branch; don't touch the main checkout.</div>
+                </div>
+                <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 14 files, searched for 4 patterns, edited 3 files</span><span class="b-diff"><span class="is-add">+120</span><span class="is-del">−14</span></span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                <div class="b-prose">
+                  <p>Fixed both problems on my branch:</p>
+                  <ul>
+                    <li><code>row.density</code> defaults to <code>"comfortable"</code></li>
+                    <li><code>later.until</code> is a number of minutes; <code>"2h"</code> is refused with a message</li>
+                    <li>the old <code>[row]</code> keys, <code>row.compact</code> too, map to the new ones in <code>aliases.ts</code></li>
+                  </ul>
+                </div>
+                <div class="b-block p-wtcard" role="region" aria-label="Changes on a worktree">
+                  <div class="b-block-head"><i data-icon="git-branch"></i><span class="b-block-title">Left changes on <code class="b-code-inline">worktree-reviewer</code></span><span class="b-diff"><span class="is-add">+120</span><span class="is-del">−14</span></span></div>
+                  <div class="b-block-rows">
+                    <button><span class="b-file"><span class="b-dir">platform/look/</span><span class="b-name">sidebar.toml</span></span><span class="b-diff"><span class="is-add">+64</span><span class="is-del">−2</span></span></button>
+                    <button><span class="b-file"><span class="b-dir">client/web/src/settings/</span><span class="b-name">schema.ts</span></span><span class="b-diff"><span class="is-add">+41</span><span class="is-del">−9</span></span></button>
+                    <button><span class="b-file"><span class="b-dir">client/web/src/settings/</span><span class="b-name">aliases.ts</span></span><span class="b-diff"><span class="is-add">+15</span><span class="is-del">−3</span></span></button>
+                  </div>
+                  <div class="p-wtfoot"><span>From main · not merged</span><span class="p-acts"><button class="b-btn is-outline is-sm">Review</button><button class="b-btn is-ghost is-sm">Ask Claude to merge</button><button class="b-btn is-ghost is-sm">Discard</button></span></div>
+                </div>
+              </div></div>
+              <div class="b-composer-wrap">
+                <div class="s-statusbar" data-state="done">
+                  <span data-sat="done" data-size="12"></span>
+                  <span class="s-sb-text"><span class="s-sb-word">Done</span><span class="s-sep">·</span><span>4m 12s</span><span class="s-sep">·</span><span>Returned its report to Claude</span></span>
+                  <span class="s-sb-acts"><button class="b-btn is-outline is-sm"><i data-icon="at-sign"></i>Ask Claude about it</button></span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="p-notes">
+      <p class="p-later">Нужна работа в engine: ACP не передаёт ветку worktree (0 упоминаний worktreePath в адаптере). Banda узнает её из сырых кадров SDK или скана <code>.claude/worktrees/</code>. До тех пор чипа и карточки нет.</p>
+      <p><b>«From main»</b> — worktree ответвлён от main, а не от несохранённой работы Thread; это сюрприз, его стоит назвать. Тот же чип на строке в Thread.</p>
+      <p><b>Цвет:</b> только +/− и зелёная плита Group (Thread закончил). Discard не красный: красный — для ошибок и удалённых строк.</p>
+    </div>
+  </section>
+
+  <!-- ============================================================ E -->
+  <section class="p-sec" id="e">
+    <div class="p-cap">
+      <h2><span class="p-id">E</span>Codex: сабагенты без имён</h2>
+      <p>Codex (V1) не присылает имён по ACP. Banda зовёт их по номеру и первым словам задания, с затуханием: «Agent 1 · Read the socket…». Строки, слова и панель — те же, что у Claude; спрашивают Codex: «Ask Codex about it». Остановить можно только пока он работает.</p>
+    </div>
+    <div class="p-stage">
+      <div class="b-window p-crop p-h500">
+        <div class="b-body">
+          <div class="b-group" data-state="working">
+            <section class="b-tile" style="flex: 1.2 1 0">
+              <div class="b-pane-head b-bare">
+                <span class="p-hmark"><span data-mark="working" data-satellites="working" data-calls="false"></span></span>
+                <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+                <span class="b-pane-title">Research: Hyprland socket</span>
+                <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+              </div>
+              <div class="b-thread"><div class="b-chat">
+                <div class="b-you">How do Hyprland and niri tell a client about window events? I want Banda to follow them without polling.</div>
+                <div class="b-prose"><p>I'll have two agents read both sides at once, then compare.</p></div>
+                <div data-fill="group-codex" data-cur="Agent 2 · Compare with niri's event stream and list what each one lacks"></div>
+                <div class="b-trace"><div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 4m 30s</span><span class="b-quiet">· Waiting on Agent 2</span></div></div>
+              </div></div>
+              <div class="b-composer-wrap">
+                <div class="b-composer">
+                  <div class="b-composer-text is-empty">Steer this thread…</div>
+                  <div class="b-composer-row">
+                    <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                    <span class="b-spacer"></span>
+                    <button class="b-ctl"><i data-icon="shield"></i></button>
+                    <button class="b-ctl"><span data-emblem="codex"></span>GPT-5.5 <span class="b-effort">High</span></button>
+                    <button class="b-send is-stop" aria-label="Stop" title="Stop · Esc"></button>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section class="b-tile is-focused" style="flex: 1 1 0">
+              <div class="b-pane-head b-bare">
+                <span data-sat="working" data-size="12"></span>
+                <span class="b-pane-title">Agent 2</span>
+                <span class="b-pane-detail s-fit">sub-agent of Research: Hyprland socket</span>
+                <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+              </div>
+              <div class="b-thread"><div class="b-chat">
+                <div class="s-asked">
+                  <span class="s-asked-label"><span data-emblem="codex" data-size="12"></span>Codex asked</span>
+                  <div class="b-you">Compare with niri's event stream: how a client subscribes, what each event carries, and what Hyprland's socket2 lacks next to it. Answer as a short table.</div>
+                </div>
+                <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 7 files, ran 3 commands</span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                <div class="b-prose"><p>niri sends JSON over one socket once a client asks for <code>EventStream</code>. Each event is a whole object, so a client can rebuild its state from it. Hyprland sends <code>name&gt;&gt;data</code> lines and leaves the rest to the client.</p></div>
+                <div class="b-trace"><div class="b-tl is-pending"><i data-icon="terminal"></i><span class="b-tl-text b-shimmer">Running rg EventStream ~/src/niri</span></div></div>
+              </div></div>
+              <div class="b-composer-wrap">
+                <div class="s-statusbar" data-state="working">
+                  <span data-sat="working" data-size="12"></span>
+                  <span class="s-sb-text"><span class="s-sb-word">Working</span><span class="s-sep">·</span><span>Runs on its own</span></span>
+                  <span class="s-sb-acts"><button class="b-btn is-outline is-sm"><i data-icon="at-sign"></i>Ask Codex about it</button><span class="p-rel"><button class="b-btn is-ghost is-sm p-hover"><i data-sicon="stop" data-size="13"></i>Stop</button><span class="b-tip p-tip">Codex sub-agents stop only while they work</span></span></span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="p-under">
+        <div class="p-step">
+          <h3><i>E2</i>Agent 1 закончил <span>Stop больше нет: Codex не даёт остановить простаивающего</span></h3>
+          <div class="p-stage"><div class="b-window"><div class="p-slab"><div class="b-tile">
+            <div class="b-composer-wrap">
+              <div class="s-statusbar" data-state="done">
+                <span data-sat="done" data-size="12"></span>
+                <span class="s-sb-text"><span class="s-sb-word">Done</span><span class="s-sep">·</span><span>2m 05s</span><span class="s-sep">·</span><span>Returned its answer to Codex</span></span>
+                <span class="s-sb-acts"><button class="b-btn is-outline is-sm"><i data-icon="at-sign"></i>Ask Codex about it</button></span>
+              </div>
+            </div>
+          </div></div></div></div>
+        </div>
+        <div class="p-step">
+          <h3><i>E3</i>Наведение на строки <span>Stop только у работающего</span></h3>
+          <div class="p-stage"><div class="b-window"><div class="p-slab"><div class="b-tile p-hovrows"><div data-fill="codex-hover"></div></div></div></div></div>
+        </div>
+    </div>
+    <div class="p-notes">
+      <p><b>Имя:</b> «Agent N» по порядку среди братьев, затем первые слова задания; полное задание — в пузыре «Codex asked». Ролей и Crew у Codex нет.</p>
+      <p><b>Stop</b> у Codex есть, только пока сабагент работает (ACP шлёт cancel лишь на время его хода). Подсказка на Stop это говорит заранее.</p>
+      <p><b>Ultra</b> (верх усилия Codex) раздаёт работу сам только в V2; выглядит так же — строки и группа.</p>
+    </div>
+  </section>
+
+  <!-- ============================================================ F -->
+  <section class="p-sec" id="f">
+    <div class="p-cap">
+      <h2><span class="p-id">F</span>Узкое окно, телефон, drawer: экран поверх</h2>
+      <p>Где нет места для Group, сабагент открывается экраном в стеке, со стрелкой назад. Так в узком окне, на телефоне (ADR 0089: у телефона свой стек экранов) и в drawer. Статус-бар остаётся внизу, кнопки уходят на вторую строку.</p>
+    </div>
+    <div class="p-row">
+        <div class="p-frame">
+          <h3><i>1</i>Thread <span>тап по строке</span></h3>
+          <div class="p-stage"><div class="b-window p-phone"><div class="p-sc p-narrow">
+            <div class="p-phead">
+              <button class="b-ib"><i data-picon="arrow-left"></i></button>
+              <span class="p-hmark"><span data-mark="working" data-satellites="working" data-calls="false"></span></span>
+              <span class="b-pane-title s-fit">Move sidebar settings to sidebar.toml</span>
+            </div>
+            <div class="b-thread p-end"><div class="b-chat">
+              <div class="b-you">Move the sidebar's settings into sidebar.toml, one file per module. Keep what people already set working.</div>
+              <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 4 files, searched for 2 patterns</span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+              <div class="b-prose"><p>I'll split it three ways: map where the old keys are read, check the settings tests, and have a reviewer look at the new schema.</p></div>
+              <div data-fill="group-live" data-cur="Review the sidebar.toml schema"></div>
+              <div class="b-prose"><p>Two are back. I'll wait for the review before I move anything.</p></div>
+              <div class="b-trace"><div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 4m 12s</span></div></div>
+            </div></div>
+            <div class="b-composer-wrap">
+              <div class="b-composer">
+                <div class="b-composer-text is-empty">Steer this thread…</div>
+                <div class="b-composer-row">
+                  <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                  <span class="b-spacer"></span>
+                  <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5</button>
+                  <button class="b-send is-stop" aria-label="Stop" title="Stop · Esc"></button>
+                </div>
+              </div>
+            </div>
+          </div></div></div>
+        </div>
+
+        <span class="p-arrow"><i data-icon="arrow-right" data-size="18"></i></span>
+
+        <div class="p-frame">
+          <h3><i>2</i>Сабагент поверх <span>← назад в Thread</span></h3>
+          <div class="p-stage"><div class="b-window p-phone"><div class="p-sc p-narrow">
+            <div class="p-phead">
+              <button class="b-ib" title="Back · Esc"><i data-picon="arrow-left"></i></button>
+              <span data-sat="working" data-size="12"></span>
+              <span class="p-sub"><span class="b-pane-title">Reviewer</span><small class="s-fit">sub-agent of Move sidebar settings to sidebar.toml</small></span>
+            </div>
+            <div class="b-thread"><div class="b-chat">
+              <div class="s-asked">
+                <span class="s-asked-label"><span data-emblem="claude" data-size="12"></span>Claude asked</span>
+                <div class="b-you">Review the new schema in platform/look/sidebar.toml. Check that every key has a default, a type and a doc line. Report problems as a short list.</div>
+              </div>
+              <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 9 files, searched for 3 patterns</span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+              <div class="b-prose"><p>The schema has 14 keys. Two look wrong so far: <code>row.density</code> has no default, and <code>later.until</code> is typed as text.</p></div>
+              <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 3 files, searched for <span class="b-subject">[row]</span></span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+              <div class="b-prose"><p>The old <code>[row]</code> keys map one to one, except <code>row.compact</code>: it has no new key yet.</p></div>
+              <div class="b-trace"><div class="b-tl is-pending"><i data-icon="file-text"></i><span class="b-tl-text b-shimmer">Reading card.ts</span></div></div>
+            </div></div>
+            <div class="b-composer-wrap">
+              <div class="s-statusbar" data-state="working">
+                <span data-sat="working" data-size="12"></span>
+                <span class="s-sb-text"><span class="s-sb-word">Working</span><span class="s-sep">·</span><span>Runs on its own</span></span>
+                <span class="s-sb-acts"><button class="b-btn is-outline is-sm"><i data-icon="at-sign"></i>Ask Claude about it</button><button class="b-btn is-ghost is-sm"><i data-sicon="stop" data-size="13"></i>Stop</button></span>
+              </div>
+            </div>
+          </div></div></div>
+        </div>
+
+        <div class="p-frame" style="flex: 1 1 0; min-width: 440px">
+          <h3><i>3</i>То же в drawer <span>Alt+` · поверх рабочего стола</span></h3>
+          <div class="p-stage"><div class="b-window p-drawerwin">
+            <header class="b-bar">
+              <button class="b-bar-logo"><span data-mark="working" data-logo data-size="20" data-satellites="working"></span></button>
+              <nav class="b-ws"><button class="is-current">1</button><button>2</button><button><i data-icon="plus" data-size="14"></i></button></nav>
+              <div class="b-bar-right"><span class="b-widget"><span class="b-ring" style="--share:.62"></span></span><span class="b-widget"><i data-icon="bell"></i></span></div>
+            </header>
+            <div class="p-under-strip">
+              <section class="b-tile"><div class="p-low"> <div class="p-term"> <b>✓</b> card.test.ts (12)
+ <b>✓</b> schema.test.ts (54)
+
+ Test Files  <b>2 passed</b> (2)
+      Tests  <b>66 passed</b> (66)
+<em>~/code/banda</em> $ </div></div></section>
+              <section class="b-tile"><div class="p-low"><div class="b-chat" style="padding-bottom:10px"><div class="b-prose"><p>The bar keeps its own toml. Nothing to move there.</p></div></div>
+                <div class="b-composer-wrap"><div class="b-composer"><div class="b-composer-text is-empty">Steer this thread…</div><div class="b-composer-row"><button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button><span class="b-spacer"></span><button class="b-send is-stop" aria-label="Stop" title="Stop · Esc"></button></div></div></div></div></section>
+            </div>
+            <div class="p-scrim"></div>
+            <section class="b-tile p-drawer p-narrow">
+              <div class="b-pane-head b-bare">
+                <button class="b-ib is-xs" title="Back · Esc" style="margin-left:-6px"><i data-picon="arrow-left"></i></button>
+                <span data-sat="working" data-size="12"></span>
+                <span class="b-pane-title">Reviewer</span>
+                <span class="b-pane-detail s-fit">sub-agent of Move sidebar settings to sidebar.toml</span>
+                <div class="b-capsule"><button class="b-ib is-xs" title="Pin as a column"><i data-picon="pin"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+              </div>
+              <div class="b-thread p-end"><div class="b-chat">
+                <div class="s-asked">
+                  <span class="s-asked-label"><span data-emblem="claude" data-size="12"></span>Claude asked</span>
+                  <div class="b-you">Review the new schema in platform/look/sidebar.toml. Check that every key has a default, a type and a doc line. Report problems as a short list.</div>
+                </div>
+                <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 9 files, searched for 3 patterns</span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                <div class="b-prose"><p>The schema has 14 keys. Two look wrong so far: <code>row.density</code> has no default, and <code>later.until</code> is typed as text.</p></div>
+                <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 3 files, searched for <span class="b-subject">[row]</span></span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                <div class="b-prose"><p>The old <code>[row]</code> keys map one to one, except <code>row.compact</code>: it has no new key yet.</p></div>
+                <div class="b-trace"><div class="b-tl is-pending"><i data-icon="file-text"></i><span class="b-tl-text b-shimmer">Reading client/web/src/sidebar/card.ts</span></div></div>
+              </div></div>
+              <div class="b-composer-wrap">
+                <div class="s-statusbar" data-state="working">
+                  <span data-sat="working" data-size="12"></span>
+                  <span class="s-sb-text"><span class="s-sb-word">Working</span><span class="s-sep">·</span><span>Runs on its own</span></span>
+                  <span class="s-sb-acts"><button class="b-btn is-outline is-sm"><i data-icon="at-sign"></i>Ask Claude about it</button><button class="b-btn is-ghost is-sm"><i data-sicon="stop" data-size="13"></i>Stop</button></span>
+                </div>
+              </div>
+            </section>
+          </div></div>
+        </div>
+    </div>
+    <div class="p-notes">
+      <p><b>Назад</b> — стрелка, Esc или свайп; Thread остаётся там же, где был. Вложенный сабагент кладёт ещё один экран (вместо хлебных крошек).</p>
+      <p><b>Вопрос:</b> на телефоне v1 открываются только экраны Thread (ADR 0089 d8). Вид сабагента — тоже Thread, только для чтения, поэтому я кладу его в стек, а не «откроется на широком экране».</p>
+      <p><b>Drawer:</b> Thread упал сверху, места на Group нет — сабагент открывается на месте Thread, булавка делает колонку, как у самого drawer.</p>
+    </div>
+  </section>
+
+  <section class="p-sec" id="q">
+    <div class="p-cap"><h2><span class="p-id">?</span>Вопросы к Роме</h2></div>
+    <ol class="p-qs">
+      <li><b>Одна панель сабагента на Group</b>, которая меняет содержимое (мой выбор), или по колонке на каждого открытого?</li>
+      <li><b>Чип в composer:</b> спутник + имя, как другие чипы Banda (мой выбор), или текст «@Reviewer»?</li>
+      <li><b>Сообщения родителя в панели сабагента:</b> пузырь «Claude wrote» (мой выбор) или прятать их в строку работы?</li>
+      <li><b>Телефон:</b> сабагент как экран в стеке (мой выбор) или только назван и открывается на широком экране, как другие Pane?</li>
+      <li><b>Worktree:</b> Review · Ask Claude to merge · Discard (мой выбор), позже — после работы в engine.</li>
+    </ol>
+  </section>
+</main>
+
+<script src="../../../design/kit/icons.js"></script>
+<script src="../../../design/kit/mark.js"></script>
+<script src="../../../design/kit/sub.js"></script>
+<script>
+  // Rows and groups come from the kit (Sub.row / Sub.group), so they match every other mock.
+  const MAP = { state: 'done', title: 'Map where [row] keys are read', role: 'Explore · Haiku', now: 'Read in 3 places: settings.ts, schema.ts and card.ts', time: '1m 12s' }
+  const TESTS = { state: 'done', title: 'Check the settings tests', role: 'general', now: 'All 54 tests pass; none of them read [row]', time: '48s' }
+  const REV = { state: 'working', title: 'Review the sidebar.toml schema', role: 'Reviewer', now: 'Reading client/web/src/sidebar/card.ts', time: '3m' }
+  const FILL = {
+    'group-live': Sub.group({ members: [MAP, TESTS, REV] }),
+    'group-steered': Sub.group({ members: [MAP, TESTS, Object.assign({}, REV, { now: 'Searching for compact in client/web/src/settings', time: '4m' })] }),
+    'group-deep': Sub.group({ members: [MAP, TESTS, Object.assign({}, REV, { deep: 2, now: '2 sub-agents at work', time: '5m' })] }),
+    'group-settled': Sub.group({ settled: true, time: '4m 12s', members: [MAP, TESTS,
+      { state: 'done', title: 'Review the sidebar.toml schema', role: 'Reviewer', wt: 'worktree · from main', now: 'Not merged', time: '4m 12s' }] }),
+    'group-codex': Sub.group({ members: [
+      { state: 'done', title: 'Agent 1 · Read the socket2 code in Hyprland and list every event it sends', now: '31 events, one line each, as name>>data', time: '2m 05s' },
+      { state: 'working', title: "Agent 2 · Compare with niri's event stream and list what each one lacks", now: '<code>&gt;_ rg EventStream ~/src/niri</code>', time: '4m' }] }),
+    'codex-hover': [
+      { state: 'working', title: "Agent 2 · Compare with niri's event stream and list what each one lacks", now: '<code>&gt;_ rg EventStream ~/src/niri</code>', time: '4m' },
+      { state: 'done', title: 'Agent 1 · Read the socket2 code in Hyprland and list every event it sends', now: '31 events, one line each, as name>>data', time: '2m 05s' },
+    ].map((r) => Sub.row(r).replace('class="s-line"', 'class="s-line is-hover"')).join(''),
+  }
+  document.querySelectorAll('[data-fill]').forEach((n) => {
+    n.innerHTML = FILL[n.dataset.fill] || ''
+    const cur = n.dataset.cur
+    if (cur) n.querySelectorAll('.s-row > .s-line .s-title').forEach((t) => { if (t.textContent === cur) t.closest('.s-line').classList.add('p-current') })
+  })
+
+  // Two lucide icons the kit lacks (lucide v1, ISC): arrow-left, pin.
+  const PICON = {
+    'arrow-left': '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+    pin: '<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
+  }
+  document.querySelectorAll('[data-picon]').forEach((n) => {
+    const s = +(n.dataset.size || 16)
+    n.outerHTML = `<svg class="b-icon" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PICON[n.dataset.picon]}</svg>`
+  })
+
+  BandaIcons.scan(); BandaMark.scan(); Sub.scan()
+
+  // t: light/dark, g: glass on/off; #light and #solid in the address do the same.
+  const root = document.documentElement
+  const apply = () => {
+    const light = location.hash.includes('light') || (root.getAttribute('data-theme') === 'light' && !apply.seen)
+    apply.seen = true
+    if (light) root.setAttribute('data-theme', 'light'); else root.removeAttribute('data-theme')
+    document.querySelectorAll('.b-window').forEach((w) => { if (location.hash.includes('solid')) w.setAttribute('data-glass', 'off'); else w.removeAttribute('data-glass') })
+    requestAnimationFrame(() => Sub.fit())
+  }
+  apply(); addEventListener('hashchange', apply)
+  addEventListener('keydown', (e) => {
+    if (e.target.closest && e.target.closest('input, textarea')) return
+    if (e.key === 't') location.hash = location.hash.includes('light') ? location.hash.replace('light', '') : location.hash + 'light'
+    if (e.key === 'g') location.hash = location.hash.includes('solid') ? location.hash.replace('solid', '') : location.hash + 'solid'
+  })
+</script>
+</body>
+</html>
