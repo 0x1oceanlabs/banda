@@ -278,7 +278,7 @@
         <span><i style="background:var(--added)"></i>--added done, +</span>
         <span><i style="background:var(--woke)"></i>--woke</span>
         <span><i style="background:var(--ring)"></i>--ring focus, links</span>
-        <span><i style="background:var(--working)"></i>--working Group plate</span>
+        <span><i style="background:var(--working)"></i>--working Group plate, working Mark</span>
         <span><i style="background:var(--account-claude)"></i>--account-claude</span>
         <span><i style="background:var(--muted-foreground)"></i>--muted-foreground</span>
       </div>
@@ -313,10 +313,10 @@
   tile(sats, 'one failed', 'its dot red', { state: 'working', satellites: ['working', 'failed', 'done'] })
   tile(sats, 'runs + 2 subs', 'execute and orbit', { state: 'working', doing: 'execute', satellites: 2 })
   const logos = document.getElementById('logos')
-  ;[['rest', 'no eyes', { state: 'rest' }], ['working', 'muted hat', { state: 'working', doing: 'other' }], ['asks', '', { state: 'asks' }],
+  ;[['rest', 'no eyes', { state: 'rest' }], ['working', 'quiet blue hat', { state: 'working', doing: 'other' }], ['asks', '', { state: 'asks' }],
     ['failed', '', { state: 'failed' }], ['done', '', { state: 'done' }], ['woke', '', { state: 'woke' }], ['offline', '', { state: 'offline' }]]
     .forEach(([l, n, o]) => tile(logos, l, n, Object.assign({ logo: true }, o)))
-  logos.querySelectorAll('svg[data-look=working]').forEach(s => s.style.color = 'var(--muted-foreground)')
+  logos.querySelectorAll('svg[data-look=working]').forEach(s => s.style.color = 'var(--mark-working)')
 
   // t: light/dark, g: glass on/off; #light and #solid in the address do the same.
   const screen = document.getElementById('screen'), win = document.getElementById('win'), kit = document.getElementById('kit')

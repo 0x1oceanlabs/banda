@@ -36,15 +36,15 @@ the [GLOSSARY](../../GLOSSARY.md)'s.
 2. **Colour only for calls.** Orange asks, red failed, green done,
    yellow woke. In a list the colour is on the mark and the time, never
    the row ([0098] d8). Everything else is the text, muted or faint.
-3. **Blue only for focus, selection and links** ([0075] d4). The accent
+3. **The accent's blue only for focus, selection and links** ([0075] d4). The accent
    is never a state. Main buttons take the text's colour, so the blue
    stays rare. The effort word is lighter text, as [0058] d8 has it and
    the window draws it; only its top level, Ultracode or Ultra, takes
    magenta ([0031] d3).
-4. **Working is grey.** An Agent at work needs nothing from the Person,
+4. **Working is quiet.** An Agent at work needs nothing from the Person,
    so its row is grey and its mark's motion says what it does ([0098]
-   d3, [0099] d2). The one working colour is a Group plate's slow blue
-   breath ([0065] d6).
+   d3, [0099] d2). The one working colour is a muted blue: a Group
+   plate's slow breath ([0065] d6) and the Mark ([0107]).
 5. **Glass over the wallpaper.** The desk is the wallpaper, frosted, under
    a 40% tint; the sidebar's panel is halfway; the tiles are solid; the
    Top layer is solid ([0023], [0036], [0075] d3, [0100] d4: glass is on
@@ -100,7 +100,7 @@ the `banda` theme
 | `--destructive`, `--removed` | `oklch(0.704 0.191 22.2)` | `oklch(0.577 0.245 27.3)` | failed: its mark, its time, the "Failed" tag; −lines |
 | `--added` | `oklch(0.723 0.192 149.6)` | `oklch(0.527 0.137 150.1)` | done; +lines; a PR's ✓ |
 | `--woke` (kit) | `#f5c542` | `#f5c542` | woke from Later, plain, no outline ([0099] d1); not a token in the window yet |
-| `--working` | `oklch(0.72 0.13 255)` | `oklch(0.6 0.15 255)` | a Group plate at work, and nothing else |
+| `--working` | `oklch(0.72 0.13 255)` | `oklch(0.6 0.15 255)` | an Agent at work: a Group plate, and a working Mark muted ([0107]); never a row |
 | `--warning` | `oklch(0.8 0.15 80)` | `oklch(0.65 0.16 70)` | a limit that is near ([0024] d2) |
 | `--account-claude` | `#d97757` | `#c96442` | Claude's Emblem ([0093]) |
 | effort's top level | `#e879f9` | `#c026d3` | the top effort word only, as Ultracode, in the kit ([0031] d3) |
@@ -306,7 +306,7 @@ d6–7):
 
 ### The sidebar
 
-![The sidebar: Your turn's cards, an Open row, and the Working shelf in grey, one row hovered](shots/sidebar.jpg)
+![The sidebar: Your turn's cards, an Open row, and the Working shelf in grey with its muted blue marks, one row hovered](shots/sidebar.jpg)
 
 The Person's inbox ([0098]), 16rem wide, a glass panel with the tile's
 radius:
@@ -328,7 +328,7 @@ radius:
 
   Lines 2 and 3 are at the meta size, 22 px in from the mark. Padding 6 ×
   8, the control's radius, 2 px between lines.
-- **A working row** is one line: a grey mark that moves by what its Agent
+- **A working row** is one line: a muted blue mark that moves by what its Agent
   does, the title at 45% of the text, the time. Its words, on a card or on
   hover, say what it does now: "pnpm test", "Edits Row.tsx", "3 sub-agents
   at work", "No events for 6m", "Usage limit · goes on at 15:00".
@@ -456,8 +456,8 @@ eight states before it).
 | Later | square | muted | asleep, breathes, no zz |
 | Offline | square | muted | asleep with zz |
 
-- **At work** it is grey (dark: the text at 30%; light: `#71717a` at 70%,
-  [0099] d10) and shows what its Thread does: think (eyes up, a sway),
+- **At work** it is `--working`, muted (dark 60%, light 80%, [0107]), and
+  shows what its Thread does: think (eyes up, a sway),
   read (eyes scan), search (a lens), edit (tilts with each stroke),
   execute (`>_`), fetch (a dot goes out), reply (types), other (a calm
   series), **sub-agents (satellites, one each, up to three)**, compacting
@@ -467,7 +467,7 @@ eight states before it).
   failed › asking › woke › done › working › rest. Only its hat, the
   Agent's tile, takes the colour and the motion; the two tiles under it
   stay the text's ([0099] d9).
-- **Satellites on the Mark** stay grey, as ADR 0099 has them; only a
+- **Satellites on the Mark** take its colour ([0107]); only a
   failed sub-agent's takes colour: a red octagon at 48 px, a red 3 px dot
   at 16 px, while its Thread works ([0103] d13). No orange satellite: a
   sub-agent that asks makes the Thread itself ask. The kit takes
@@ -542,7 +542,7 @@ sidebar, or a parent that looks done while its sub-agents work.
 **Do**
 
 - Keep every row grey until the Person must act; then colour the mark and
-  the time, and nothing else.
+  the time, and nothing else. A working Mark has only its muted blue.
 - Keep headers one row: icon or mark, Project, title, muted detail, the
   capsule with no plate.
 - Fold work, a sub-agent's too, into one line that opens to muted rows.
@@ -556,7 +556,8 @@ sidebar, or a parent that looks done while its sub-agents work.
 
 **Don't**
 
-- Colour working: no blue rows, no progress bars in a list.
+- Colour a working row: only its Mark is blue, muted. No blue rows, no
+  progress bars in a list.
 - Put pills, boxes, badges or call dots in the bar or a header.
 - Grow a card on hover, add a shadow or an accent border to the current
   one, or bring back "↑ N updates".
@@ -715,3 +716,4 @@ kit's own demos. Each is a JPEG at quality 85.
 [0100]: ../adr/0100-the-look-splits-in-three-and-each-platform-has-a-banda-theme-that-follows-it.md
 [0102]: ../adr/0102-in-the-row-and-solo-a-project-has-its-own-workspace-and-free-workspaces-hold-the-rest.md
 [0103]: ../adr/0103-a-harness-s-sub-agents-work-in-their-thread-and-a-crew-shows-beside-it.md
+[0107]: ../adr/0107-a-working-mark-takes-the-group-plate-s-blue-muted.md

@@ -109,6 +109,9 @@ light theme and the rhythm table).
 
 10. On a light theme: open at 80% of the text, working `#71717a` at 70%,
     later `#71717a` at 55%. The calls' colours stay.
+    _Amended 2026-11-10 by [ADR 0107](0107-a-working-mark-takes-the-group-plate-s-blue-muted.md):
+    a working Mark, on both themes, is the Group plate's `--working`,
+    muted._
 
 ### What the engine says
 
