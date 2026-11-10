@@ -59,7 +59,9 @@ const at = () =>
  * it went and Node's connection; and what main answered. */
 const asked = (url: string, headers: Record<string, string>) =>
   Effect.gen(function* () {
-    const response = yield* relay(new Request(url, { headers }))
+    const response = yield* relay(new Request(url, { headers }), () =>
+      Engine.use((engine) => engine.address)
+    )
     const body = yield* Effect.promise(() => response.text())
     const passed = { ...heard.at(-1)!.headers }
     delete passed.host
