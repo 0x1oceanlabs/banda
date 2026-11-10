@@ -167,19 +167,39 @@ impl Palette {
         self
     }
 
+    /// What to say of the colours that are not hex, which the derivation
+    /// cannot mix; none when every one is.
+    pub fn not_hex_said(&self) -> Option<String> {
+        let not_hex = self.not_hex();
+        (!not_hex.is_empty()).then(|| {
+            format!(
+                "{} are not hex, so colours mixed from them fall back",
+                not_hex.join(", ")
+            )
+        })
+    }
+
     /// Colours that are not hex, which the derivation cannot mix.
     pub fn not_hex(&self) -> Vec<&str> {
-        ANSI.iter()
-            .copied()
-            .chain([
-                "accent",
-                "selection",
-                "dark_background",
-                "lighter_background",
-            ])
+        mixed()
             .filter(|key| self.get(key).is_some_and(|v| !is_hex(v)))
             .collect()
     }
+}
+
+/// The colours the derivation mixes others from, which only hex can be.
+fn mixed() -> impl Iterator<Item = &'static str> {
+    ANSI.iter().copied().chain([
+        "accent",
+        "selection",
+        "dark_background",
+        "lighter_background",
+    ])
+}
+
+/// Whether the derivation mixes other colours from `key`'s.
+pub fn mixes(key: &str) -> bool {
+    mixed().any(|one| one == key)
 }
 
 fn rgb(hex: &str) -> Option<(u8, u8, u8)> {

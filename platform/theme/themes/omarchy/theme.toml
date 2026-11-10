@@ -1,0 +1,9 @@
+# Omarchy (ADR 0075, decisions 3 and 5): the colours of Omarchy's current
+# theme, its colors.toml, and Hyprland's shape: its rounding, border and
+# gaps, and its border is the focus, as its windows show it, with no
+# shadow beside it. A banda.toml in Omarchy's theme folder lays over this.
+name = "Omarchy"
+
+[shape]
+from = "hyprland"
+focus.shadow = 0

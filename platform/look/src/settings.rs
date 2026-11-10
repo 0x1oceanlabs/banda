@@ -20,7 +20,8 @@ use ts_rs::TS;
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Settings {
-    /// `"omarchy"`, `"macos"`, `"banda"`, a theme's name, or `{ light, dark }`.
+    /// `"platform"`, this device's own, the default; `"omarchy"`, `"macos"`,
+    /// `"banda"`, a theme's name, or `{ light, dark }`.
     #[schemars(with = "Option<ThemeChoice>")]
     pub theme: Option<Spanned<ThemeChoice>>,
     pub mode: Option<ModeChoice>,
@@ -334,6 +335,74 @@ pub enum GroupSaturation {
 pub enum Workspaces {
     Numbers,
     Dots,
+}
+
+/// What a theme's `theme.toml` says of its shape, font and glass, in
+/// `look.toml`'s keys (ADR 0080, decision 3). Its name, `extends`,
+/// colours and tokens are the theme's, which `banda_theme` reads first,
+/// and which refuses a key no `theme.toml` has.
+#[derive(Clone, Debug, Default, Deserialize)]
+pub(crate) struct ThemeFile {
+    #[serde(default)]
+    shape: Shape,
+    #[serde(default)]
+    font: FontSettings,
+    /// `look.toml`'s `[desk]`.
+    #[serde(default)]
+    glass: Desk,
+}
+
+/// A theme's `[shape]`: `look.toml`'s sizes, and where else its shape
+/// comes from.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+struct Shape {
+    /// `"hyprland"`: Hyprland's rounding, border and gaps, under it (ADR
+    /// 0080, decision 9), as `hyprland = true` in `look.toml`.
+    from: Option<ShapeFrom>,
+    radius: Option<f64>,
+    #[serde(default)]
+    gaps: Gaps,
+    #[serde(default)]
+    tile: Tile,
+    #[serde(default)]
+    focus: Focus,
+    #[serde(default)]
+    bar: BarShape,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum ShapeFrom {
+    Hyprland,
+}
+
+/// The bar's height, the one key of `[bar]` a theme says.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BarShape {
+    height: Option<f64>,
+}
+
+impl ThemeFile {
+    /// The layer it makes.
+    pub(crate) fn settings(self) -> Settings {
+        let shape = self.shape;
+        Settings {
+            radius: shape.radius,
+            hyprland: shape.from.map(|ShapeFrom::Hyprland| true),
+            gaps: shape.gaps,
+            tile: shape.tile,
+            focus: shape.focus,
+            bar: Bar {
+                height: shape.bar.height,
+                ..Bar::default()
+            },
+            desk: self.glass,
+            font: self.font,
+            ..Settings::default()
+        }
+    }
 }
 
 /// Whether `v` is a share: from 0 to 1.

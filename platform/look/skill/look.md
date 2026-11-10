@@ -17,13 +17,34 @@ Every key, with its default:
 
 ## Themes
 
-- A theme is a folder with Omarchy's `colors.toml` (the palette) and, if
-  it wants, a `banda.toml` with the keys of `look.toml`.
-- `banda look themes` lists every theme there is, one JSON line each.
-- To make one, copy a theme's folder into `~/.config/banda/themes/<name>/`
-  and set `theme = "<name>"`. Behind Banda's fence the settings folder is
-  read-only to you: make the folder in your Project, and give your Person
-  the line that copies it there.
+- A theme is a folder with a `theme.toml`, light and dark inside. Every
+  key is optional; a value is one for both, or `{ light = …, dark = … }`:
+
+  ```toml
+  name = "Sea"
+  extends = "banda"          # a theme's name, or "platform", this device's own
+  [colors]                   # the palette, by Omarchy's names: the seeds
+  accent = "#2a9d8f"
+  background = { light = "#f7fbfb", dark = "#0e1a1c" }
+  [tokens]                   # a token: a palette name, a token's name or a CSS colour
+  card = { dark = "#101418" }
+  [shape]                    # look.toml's radius, gaps, tile, focus and bar.height
+  radius = 4
+  [font]                     # as look.toml's [font]
+  [glass]                    # as look.toml's [desk]
+  ```
+
+  With no `extends` the theme stands alone: what it leaves out is worked
+  out from its colours. Omarchy's theme folders read as colours only
+  (their `colors.toml`), and an old folder's `banda.toml`, with the keys
+  of `look.toml`, still reads.
+- `banda look themes` lists every theme there is, one JSON line each; a
+  theme of light and dark as `<name>-light` and `<name>-dark`.
+- To make one, write `~/.config/banda/themes/<name>/theme.toml` and set
+  `theme = "<name>"`; `banda settings check <its path>` names what is
+  wrong in it. Behind Banda's fence the settings folder is read-only to
+  you: make the folder in your Project, and give your Person the line
+  that copies it there.
 
 ## Asked for, and what to set
 

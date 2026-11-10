@@ -10,6 +10,7 @@
 //! theme and works out its colours, and the look its sizes.
 
 pub mod color;
+pub mod file;
 pub mod fonts;
 pub mod hyprland;
 pub mod palette;
@@ -19,7 +20,7 @@ pub mod wallpaper;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-pub use theme::{Listed, Origin, Places, Theme, Unread};
+pub use theme::{Layer, Listed, Origin, Picked, Places, Theme, Wrong};
 use ts_rs::TS;
 pub use wallpaper::path_of;
 
@@ -30,6 +31,16 @@ pub use wallpaper::path_of;
 pub enum Mode {
     Light,
     Dark,
+}
+
+impl Mode {
+    /// `light` or `dark`, as the files say it.
+    pub fn word(self) -> &'static str {
+        match self {
+            Mode::Light => "light",
+            Mode::Dark => "dark",
+        }
+    }
 }
 
 /// Who makes the desk's glass (ADR 0023).

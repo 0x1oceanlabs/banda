@@ -5,7 +5,7 @@
   "type": "object",
   "properties": {
     "theme": {
-      "description": "`\"omarchy\"`, `\"macos\"`, `\"banda\"`, a theme's name, or `{ light, dark }`.",
+      "description": "`\"platform\"`, this device's own, the default; `\"omarchy\"`, `\"macos\"`,\n`\"banda\"`, a theme's name, or `{ light, dark }`.",
       "$ref": "#/$defs/ThemeChoice"
     },
     "mode": {
