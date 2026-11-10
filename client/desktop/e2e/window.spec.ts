@@ -6250,6 +6250,52 @@ test("an emptied Project's workspace says whose it is, its first terminal starts
   await expect(plays).toHaveCount(0)
 })
 
+test("Alt+Enter and the sidebar's New Thread start in the Project in front, on its workspace; beside a Thread of no Project, in No Project (ADR 0102)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const numbers = page.getByRole("navigation", { name: "Workspaces" })
+  const current = numbers.locator("[aria-current]:not([inert])")
+  const drafts = page
+    .locator(`${ON_SCREEN} [data-strip]`)
+    .getByRole("region", { name: "New Thread" })
+  const startsIn = (project: string) =>
+    expect(
+      drafts
+        .and(page.locator('[data-focused="true"]'))
+        .getByRole("button", { name: `Project: ${project}`, exact: true })
+    ).toBeVisible()
+  // A Thread in No Project, the first screen's, on a free workspace; then
+  // Work, which is home, and Play, whose workspace is in front.
+  const box = page.getByRole("textbox", { name: "Message to Fake AI" })
+  await box.fill("scratch hello")
+  await box.press("Enter")
+  await expect(page.getByText("You said: scratch hello")).toBeVisible()
+  await newProject(page, "Work")
+  await expect(current).toHaveText("W")
+  await newProject(page, "Play")
+  await expect(current).toHaveText("P")
+  await expect(drafts).toHaveCount(1)
+
+  // Alt+Enter starts in Play, beside its draft: the screen stays there.
+  await page.keyboard.press("Alt+Enter")
+  await expect(drafts).toHaveCount(2)
+  await startsIn("Play")
+  await expect(current).toHaveText("P")
+  // So does the sidebar's New Thread.
+  await sidebar.getByRole("button", { name: "New Thread", exact: true }).click()
+  await expect(drafts).toHaveCount(3)
+  await startsIn("Play")
+  await expect(current).toHaveText("P")
+
+  // On the free workspace, beside the Thread of no Project, it starts in
+  // No Project, not in that Thread's scratch Space nor in home.
+  await page.keyboard.press("Alt+Digit1")
+  await expect(current).toHaveText("1")
+  await page.keyboard.press("Alt+Enter")
+  await startsIn("No Project")
+})
+
 test("banda menu opens the Banda menu at a route, from outside the window", async () => {
   window = await startWindow()
   const { page, banda } = window
@@ -7065,13 +7111,14 @@ test("the sidebar's New Thread buttons and a Project's menu start a Thread where
   await expect(scratch).toHaveAttribute("aria-current", "true")
   await expect(hello).not.toHaveAttribute("aria-current")
 
-  // The header's New Thread starts in home.
+  // The header's New Thread starts where the Person is: beside the
+  // Thread of no Project, on a free workspace, in No Project (ADR 0102).
   const header = sidebar.getByRole("button", {
     name: "New Thread",
     exact: true,
   })
   await header.click()
-  await startsIn("Work")
+  await startsIn("No Project")
   await expect(scratch).not.toHaveAttribute("aria-current")
   await newProject(page, "lab")
   await startsIn("lab")

@@ -22,6 +22,7 @@ test("a reader draws what it selects of its Window's Here", () => {
     workspace: { id: "w", project: "a" },
     pane: { id: "p", project: "a", subject: "t1" },
     project: "a",
+    starts: "a",
   })
   expect(
     renderToStaticMarkup(

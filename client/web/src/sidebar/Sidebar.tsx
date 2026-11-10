@@ -36,7 +36,6 @@ export function Sidebar({
   hiding,
   engine,
   projects,
-  home,
   machine,
   isCurrent,
   strayed,
@@ -52,8 +51,6 @@ export function Sidebar({
   hiding?: boolean
   engine: Engine
   projects: ProjectSummary[]
-  /** The Project a new Thread from the header starts in. */
-  home: ProjectId
   /** This machine's No Project, where its section's New Thread starts;
    * none until the engine names it. */
   machine?: ProjectId
@@ -150,7 +147,7 @@ export function Sidebar({
             "sidebar-desk:inset-y-0 sidebar-desk:left-0 sidebar-desk:rounded-none sidebar-desk:border-0 sidebar-desk:bg-desk sidebar-desk:shadow-none"
         )}
       >
-        <Header only={only} home={home} projects={projects} />
+        <Header only={only} projects={projects} />
         {updates > 0 && (
           <button
             type="button"

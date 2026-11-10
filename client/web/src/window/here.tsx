@@ -7,7 +7,8 @@
  * that keeps it, `KeptHere`, is the core's (ADR 0089); what it folds, the
  * Tiling and the Window's areas, stays here.
  */
-import type { ProjectId } from "@banda/contract"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
+import type { Flow } from "@banda/contract/agents"
 import {
   type Here,
   HereContext,
@@ -17,6 +18,7 @@ import {
   type KeptHosts,
   type Run,
   RunContext,
+  type Shown,
 } from "@banda/core/react"
 import { inFront } from "@banda/ui/hooks/use-in-front"
 import { ItemsContext } from "@banda/ui/hooks/use-item"
@@ -25,7 +27,14 @@ import { type ReactNode, useContext, useEffect, useState } from "react"
 import type { Shows } from "../calls/sight"
 import { type Stores, StoresContext } from "../calls/stores"
 import { AsideContext, type Tiled, TilingContext } from "../tiling/kept"
-import { current, focused, projectIn, type Workspaces } from "../tiling/model"
+import {
+  current,
+  type Entry,
+  focused,
+  projectIn,
+  type Workspace,
+  type Workspaces,
+} from "../tiling/model"
 import { useSteady } from "./steady"
 
 /** What the Window and the device say besides the Tiling. */
@@ -36,6 +45,17 @@ export type Around = {
   front: boolean
   /** The Project where a Pane of no Project starts. */
   home: ProjectId
+  /** This machine's No Project, once the engine named it. */
+  machine?: ProjectId
+  /** How the Person works the Panes: in `free` every workspace is free
+   * (ADR 0102, decision 1). */
+  flow: Flow
+  /** This machine's Projects as the Window lists them, none archived; a
+   * scratch one is a Thread's of no Project (ADR 0046). */
+  projects: readonly ProjectSummary[]
+  /** The other machines as the Window shows them, with their Projects
+   * and their No Project (`Shown`). */
+  hosts: readonly Shown[]
 }
 
 /** Here, from the workspaces as the Tiling drew them and what is
@@ -44,7 +64,7 @@ export type Around = {
  * Tiling reads the arrangement, no workspace is on screen. */
 export function hereOf(
   state: Workspaces,
-  { sidebar, front, home }: Around,
+  around: Around,
   shows: Shows,
   hostOf: KeptHosts["hostOf"] = (_, named) => named
 ): Here {
@@ -53,8 +73,8 @@ export function hereOf(
   const subject = entry && shows(entry.pane)
   const host = entry && hostOf(entry.project, paneHost(entry.pane))
   return {
-    front,
-    sidebar,
+    front: around.front,
+    sidebar: around.sidebar,
     workspace: workspace.id
       ? {
           id: workspace.id,
@@ -69,8 +89,36 @@ export function hereOf(
           ...(host && { host }),
         }
       : null,
-    project: projectIn(state) ?? home,
+    project: projectIn(state) ?? around.home,
+    starts: startsIn(workspace, entry, around),
   }
+}
+
+/** Where a New Thread asked for in no Project starts (`Here.starts`): in
+ * the Project of the workspace on screen, unless in the Flow `free`, where
+ * every workspace is free; else in the focused Pane's. Beside a Pane of no
+ * Project, in this machine's No Project: never in another Thread's scratch
+ * Space (ADR 0046), nor in another machine's No Project, as a New Thread
+ * names no host. In home with no Pane on screen, and for a Project no
+ * Thread starts in: one archived, one whose folder is missing, or one the
+ * Window does not list yet. */
+function startsIn(
+  workspace: Workspace,
+  entry: Entry | undefined,
+  { flow, home, machine, projects, hosts }: Around
+): ProjectId {
+  const project =
+    (flow === "free" ? undefined : workspace.project) ?? entry?.project
+  if (project === undefined) return home
+  const listed = [projects, ...hosts.map((host) => host.projects)]
+    .flat()
+    .find((one) => one.id === project)
+  const none =
+    listed?.scratch ||
+    project === machine ||
+    hosts.some((host) => host.machine === project)
+  if (none) return machine ?? home
+  return listed && !listed.missing ? project : home
 }
 
 /**
@@ -82,7 +130,7 @@ export function hereOf(
  */
 export function useKeptHere(
   drawn: () => Workspaces,
-  around: Omit<Around, "front">,
+  around: Omit<Around, "front" | "hosts">,
   shows: Shows
 ): KeptHere {
   const hosts = useContext(HostsContext)
@@ -92,7 +140,15 @@ export function useKeptHere(
       new KeptHere(() =>
         hereOf(
           now.drawn(),
-          { sidebar: now.sidebar, front: inFront(), home: now.home },
+          {
+            sidebar: now.sidebar,
+            front: inFront(),
+            home: now.home,
+            machine: now.machine,
+            flow: now.flow,
+            projects: now.projects,
+            hosts: now.hosts.get(),
+          },
           now.shows,
           (project, named) => now.hosts.hostOf(project, named)
         )

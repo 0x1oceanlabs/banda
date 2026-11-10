@@ -4,13 +4,13 @@
  * Banda skill's `problems` topic. Nothing starts by itself: it costs the
  * Person's model. When the engine runs from a checkout of Banda's source
  * and a Project is that checkout, the Thread opens there, where the topic
- * has the Agent fix it; else in the window's home Project.
+ * has the Agent fix it; else where a New Thread starts (`Here.starts`).
  */
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { openProjects } from "@banda/ui/lib/projects"
 
 /** What `thread.new` is given to look into a Problem: its Project, none
- * for the window's home one, and what it asks. */
+ * for where a New Thread starts, and what it asks. */
 export type LookInto = { project?: ProjectId; ask: string }
 
 /** How a Thread looks into Problem `fingerprint`, which the engine says

@@ -21,8 +21,9 @@ function FindAsk({ words, at, found }: FindProps) {
     // A Harness turned off starts no new Thread.
     const harnesses = all.filter((harness) => harness.enabled)
     const first = harnesses[0]
+    // At the root, it starts where Alt+Enter's would (`Here.starts`).
     const start = (harness?: string) => ({
-      project,
+      ...(entered && { project }),
       ...(words && { ask: words }),
       ...(harness && { harness }),
     })

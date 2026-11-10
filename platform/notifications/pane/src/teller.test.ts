@@ -34,6 +34,7 @@ const at = (subject: string): Here => ({
   workspace: { id: "w", project: "p" },
   pane: { id: subject, project: "p", subject },
   project: "p",
+  starts: "p",
 })
 
 afterEach(() => {

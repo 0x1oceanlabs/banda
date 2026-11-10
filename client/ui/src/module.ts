@@ -67,7 +67,8 @@ export type AnyPaneKind = PaneKind<Args>
  * What a module needs that this lacks is added here, not reached around.
  */
 export type WindowApi = {
-  /** The Project a new Thread starts in. */
+  /** The home Project, where a new Thread starts with no Pane on screen
+   * (`Here.starts`). */
   home: ProjectId
   /** Shows a new Pane right of the focused one, with its width, and
    * focuses it: in `project`, else in the Project the Person is in, the

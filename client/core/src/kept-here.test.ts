@@ -12,6 +12,7 @@ const on = (subject: string, front = true): Here => ({
   workspace: { id: "w1", project: A },
   pane: { id: `pane-${subject}`, project: A, subject },
   project: A,
+  starts: A,
 })
 
 test("what says the same is kept: all of Here, else each part of it", () => {

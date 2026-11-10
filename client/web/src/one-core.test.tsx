@@ -49,6 +49,7 @@ const here = new Store<Here>({
   workspace: { id: "w1", project: "p1" },
   pane: { id: "pane1", project: "p1", subject: "t1" },
   project: "p1",
+  starts: "p1",
 })
 
 /** The Tiling as the Window gives it before it read the workspaces: these

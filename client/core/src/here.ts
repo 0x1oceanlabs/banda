@@ -31,8 +31,15 @@ export type Here = {
     host?: string
   } | null
   /** The Project the Person is in: the Pane's, else the workspace's,
-   * else the Window's home, where a new Thread starts. */
+   * else the Window's home. */
   project: ProjectId
+  /** Where a New Thread asked for in no Project starts (ADR 0102): in the
+   * Project whose workspace is on screen; on a free workspace, as every
+   * one is in the Flow `free`, in the focused Pane's, or in No Project,
+   * this machine's, when that Pane is of none; in the Window's home with
+   * no Pane on screen, or for a Project no Thread starts in, as one
+   * archived or whose folder is missing. */
+  starts: ProjectId
 }
 
 /** Here as a Window keeps it: what it is now, the Tiling's last change
