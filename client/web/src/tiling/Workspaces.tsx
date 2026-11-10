@@ -12,7 +12,7 @@ import { Strip } from "./Strip"
 import { useModHeld } from "./held"
 import { pixels, Swipe } from "./swipe"
 import { stacked } from "./tiles"
-import { type Carrying, inStrip, useMoving } from "./useMoving"
+import { type Carrying, inStrip, refusing, useMoving } from "./useMoving"
 import { useHoldsMod } from "@banda/ui/hooks/use-key-of"
 
 /** How far a swipe goes, in pixels, before it moves a workspace. */
@@ -31,6 +31,7 @@ export function Workspaces({
   engine,
   modules,
   projectOf,
+  strict,
   shows,
   marked,
   away,
@@ -51,6 +52,9 @@ export function Workspaces({
   engine: Engine
   modules: readonly string[]
   projectOf: (project: ProjectId) => ProjectSummary | undefined
+  /** In the row and solo, where a Project's workspace holds its Panes
+   * only (ADR 0102). */
+  strict: boolean
   /** What the Panes show, as their Apps list it, and how each calls. */
   shows: Shows
   /** An Agent opened it, and the Person has not looked at it yet. */
@@ -158,6 +162,7 @@ export function Workspaces({
       frame,
       go: onGo,
       ...inStrip(workspaces.list[workspaces.current]?.id),
+      refuses: refusing(workspaces, strict),
     }
   })
   useMoving(root, carrying)
@@ -231,6 +236,7 @@ export function Workspaces({
               engine={engine}
               modules={modules}
               projectOf={projectOf}
+              strict={strict}
               shows={shows}
               marked={marked}
               away={away}

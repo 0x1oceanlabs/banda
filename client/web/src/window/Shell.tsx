@@ -123,6 +123,8 @@ import {
   picking,
   placed,
   placeFor,
+  focusedIn,
+  strayedIn,
   placingOf,
   runAction,
   settingsAt,
@@ -829,13 +831,8 @@ export function Shell({
                   projects={projects}
                   home={home}
                   machine={machine}
-                  isCurrent={(project, pane) => {
-                    const entry = focused(workspaces)
-                    return (
-                      entry !== undefined &&
-                      samePane(entry, { project, pane }, identityOf)
-                    )
-                  }}
+                  strayed={strayedIn(workspaces, placing)}
+                  isCurrent={focusedIn(workspaces)}
                 />
               )}
               {sidebarShown && !narrow && (
@@ -860,6 +857,7 @@ export function Shell({
                     engine={engine}
                     modules={modules}
                     projectOf={projectOf}
+                    strict={flow !== "free"}
                     shows={shows}
                     marked={marked}
                     away={away}
@@ -935,6 +933,7 @@ export function Shell({
                     onExited={leftOverview}
                     workspaces={workspaces}
                     projectOf={projectOf}
+                    strict={flow !== "free"}
                     shows={shows}
                     frame={frame}
                     onPick={(entry) => change((w) => focusEntry(w, entry))}

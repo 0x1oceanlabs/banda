@@ -45,7 +45,7 @@ import { lying, nudge, pushed } from "./moving"
 import type { Frame } from "./PaneFrame"
 import { PaneSlot } from "./PaneSlot"
 import { STEP_ASIDE, useReorder } from "./reorder"
-import { type Carrying, landIn, useMoving } from "./useMoving"
+import { type Carrying, landIn, refusing, useMoving } from "./useMoving"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 
 /** Where a Pane lands before the overview is drawn: nowhere. */
@@ -124,6 +124,7 @@ export function Overview({
   onExited,
   workspaces,
   projectOf,
+  strict,
   shows,
   frame,
   onPick,
@@ -136,6 +137,9 @@ export function Overview({
   onExited: () => void
   workspaces: Workspaces
   projectOf: (project: ProjectId) => ProjectSummary | undefined
+  /** In the row and solo, where a Project's workspace holds its Panes
+   * only (ADR 0102). */
+  strict: boolean
   /** The Thread each Pane shows, as its module lists it, and how it
    * calls the Person. */
   shows: Shows
@@ -545,6 +549,7 @@ export function Overview({
       ringed: true,
       frame,
       go: onGo,
+      refuses: refusing(workspaces, strict),
       land: (hit, x, y, pane, group) => {
         const between = hit.closest<HTMLElement>("[data-between]")
         if (!between) {

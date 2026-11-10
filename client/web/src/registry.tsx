@@ -224,6 +224,12 @@ export function groupedOf(pane: PaneState): boolean {
   return kindOf(pane.kind)?.grouped === true
 }
 
+/** A Group's lead, whose Project the Group moves as: its Agent's Thread,
+ * the Pane that opens as a Group of its own (ADR 0102, decision 6). */
+export function leads(entry: { pane: PaneState }): boolean {
+  return groupedOf(entry.pane)
+}
+
 /** A Pane as what makes it that one Pane (`PaneKind.identity`). */
 export function identityOf(pane: PaneState): PaneState {
   const identity = kindOf(pane.kind)?.identity
