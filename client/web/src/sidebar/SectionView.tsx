@@ -154,7 +154,7 @@ export function SectionView({
               // It goes, as from any New Thread, though none starts before
               // the engine names this machine.
               dismiss?.()
-              if (machine) newThread(run, machine)
+              if (machine) newThread(run, { project: machine })
             }}
           >
             <SquarePenIcon />

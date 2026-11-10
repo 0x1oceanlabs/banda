@@ -229,8 +229,10 @@ From the audit (`2-code.md`):
 ### The header, the foot, the bar
 
 19. **The header holds Search and ✎.**
-    - A click on ✎ starts a Thread at once: in the open Thread's
-      Project, on its machine, with the default Harness.
+    - A click on ✎ starts a Thread at once, where `Alt+Enter` does
+      (ADR 0102's `Here.starts`): in the Project picked in the sidebar,
+      else the Project in front, on the machine that lists it, with the
+      default Harness.
     - A right click, or a press held, opens its menu: New Thread
       (`Alt+N`); in (the Projects, No project); on (the machines); with
       (the Harnesses); then Add Project… and Projects…. A tick marks what
