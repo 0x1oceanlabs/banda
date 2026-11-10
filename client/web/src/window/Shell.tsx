@@ -302,7 +302,7 @@ export function Shell({
     (id: ProjectId) => projects.find((project) => project.id === id),
     [projects]
   )
-  useMadeGoesHome(projects, flow, change)
+  useMadeGoesHome(projects, placing, change)
   // The Person archives a Thread, from its row's menu, the Banda menu or
   // Alt+S, or brings it back. Archived, it is put away: every Pane that
   // shows it closes, on any workspace (ADR 0008, decision 4; ADR 0069).
@@ -563,6 +563,7 @@ export function Shell({
     look: () => told,
     projects: () => open,
     projectOf,
+    placing: () => placing,
     toggleSidebar,
     showSidebar,
     toggleOverview,

@@ -1215,3 +1215,39 @@ async fn ids_kept_before_go_on_working() {
     assert_eq!(shown.len(), 1);
     assert_eq!(shown[0]["id"], json!(one));
 }
+
+#[tokio::test]
+async fn arranging_with_no_leads_said_leads_a_group_by_the_kinds_that_open_grouped() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let (work, home) = (ProjectId::new(), ProjectId::new());
+    // `work`'s Agent's Group, a Pane of `home` first in it.
+    let thread = json!({ "project": work, "kind": "agents.thread", "args": { "thread": "a" } });
+    let opened = machine.command("workspaces.open", thread).await.unwrap();
+    let left = json!({ "to": "beside", "pane": opened["pane"], "side": "left" });
+    let browser = json!({ "project": home, "kind": "browser.browser", "args": {}, "place": left });
+    machine.command("workspaces.open", browser).await.unwrap();
+    let column = machine.list().await["workspaces"][0]["columns"][0]["id"].clone();
+    let regroup = json!({ "column": column, "toward": "right" });
+    machine
+        .command("workspaces.regroup", regroup)
+        .await
+        .unwrap();
+    let columns =
+        |list: &Value, w: usize| list["workspaces"][w]["columns"].as_array().unwrap().len();
+    // Left out, as the CLI sends it: the Thread leads it, so it is not
+    // `home`'s.
+    let only = json!({ "projects": [work, home], "only": home });
+    machine
+        .command("workspaces.arrange", only.clone())
+        .await
+        .unwrap();
+    assert_eq!(columns(&machine.list().await, 0), 2);
+    // Said none, its first Pane's.
+    let mut none = only;
+    none["leads"] = json!([]);
+    machine.command("workspaces.arrange", none).await.unwrap();
+    let list = machine.list().await;
+    assert_eq!(columns(&list, 0), 0);
+    assert_eq!(list["workspaces"][1]["project"], json!(home));
+}

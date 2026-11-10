@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react"
 import type { ProjectSummary } from "@banda/contract"
-import type { Flow } from "@banda/contract/agents"
 import type { Change } from "../tiling/arrange"
-import { arranging } from "./actions"
+import { arranging, type Placing } from "./actions"
 
 /**
  * A Project of no Project made a Project's (ADR 0046) takes its Panes to
@@ -12,7 +11,7 @@ import { arranging } from "./actions"
  */
 export function useMadeGoesHome(
   projects: readonly ProjectSummary[],
-  flow: Flow,
+  placing: Placing,
   change: (how: Change) => unknown
 ): void {
   const scratch = useRef<ReadonlySet<string> | null>(null)
@@ -21,9 +20,9 @@ export function useMadeGoesHome(
     scratch.current = new Set(
       projects.filter((one) => one.scratch).map((one) => one.id)
     )
-    if (was === null || flow === "free") return
+    if (was === null || placing.flow === "free") return
     for (const one of projects)
       if (was.has(one.id) && !one.scratch)
-        void change((w) => arranging(w, projects, one.id))
-  }, [projects, flow, change])
+        void change((w) => arranging(w, placing, one.id))
+  }, [projects, placing, change])
 }

@@ -142,6 +142,9 @@ export type Shell = WindowApi & {
   /** Takes the Sheet away while it shows (ADR 0102, decision 5); false
    * when none does. */
   closeSheet: () => boolean
+  /** How the Person works the Panes now: the Flow, and which Projects are
+   * of no Project (`placingOf`). */
+  placing: () => Placing
   /** In solo, the workspace in view as the row for a while, or back to
    * solo (ADR 0079); false when the Flow is not solo. */
   glance: () => boolean
@@ -265,18 +268,27 @@ function closeWorkspace(shell: Shell, id: string): void {
 }
 
 /** Puts every Pane where the row would have opened it, or with `only`
- * that Project's alone: last on its Project's workspace, one of no
- * Project, or of none open, on a free one (ADR 0102, decisions 7 and 9). */
+ * that Project's alone: on its Project's workspace, one of no Project on a
+ * free one (ADR 0102, decisions 7 and 9). A Project is one as `placing`
+ * says, as for a Pane that opens: another machine's too, and one whose
+ * folder is missing. A Group goes as its lead says, as it moves. */
 export function arranging(
   workspaces: Workspaces,
-  projects: readonly ProjectSummary[],
+  { scratch }: Placing,
   only?: ProjectId
 ): Plan {
-  const homed = projects.filter((one) => !one.scratch).map((one) => one.id)
+  const all = entries(workspaces)
+  const named = new Set(all.map((entry) => entry.project))
+  const homed = [...named].filter((project) => !scratch(project))
+  const kinds = new Set(all.filter(leads).map((entry) => entry.pane.kind))
   return {
     command: {
       method: "workspaces.arrange",
-      params: { projects: homed, ...(only !== undefined && { only }) },
+      params: {
+        projects: homed,
+        leads: [...kinds],
+        ...(only !== undefined && { only }),
+      },
     },
     // The Pane in front goes along to where it is put.
     want: focused(workspaces)?.id,
@@ -984,7 +996,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     id: "workspaces.arrange",
     section: "Workspaces",
     title: "Arrange by Project",
-    run: (shell) => shell.change((w) => arranging(w, shell.projects())),
+    run: (shell) => shell.change((w) => arranging(w, shell.placing())),
   },
   {
     // The sidebar's Flow menu: a pick of the three, where the key only

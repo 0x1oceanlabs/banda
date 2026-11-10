@@ -4094,6 +4094,77 @@ test("a Project's Agents open in a row on its workspace, from wherever the Perso
   ).toHaveCount(2)
 })
 
+test("Arrange by Project puts a Project's terminal into its own Group, first on its workspace, and its Agents after it (ADR 0102, decisions 4 and 9)", async () => {
+  window = await startWindow({ files: FREE })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  // As the Flow free leaves them, on one workspace: Work's Thread, a
+  // terminal in none, and another Thread.
+  await page.keyboard.press("Alt+KeyN")
+  await page
+    .getByRole("region", { name: "New Pane" })
+    .getByRole("button", { name: "Terminal" })
+    .click()
+  await expect(terminalTile(page)).toBeVisible()
+  await page.keyboard.press("Alt+Enter")
+  const box = page
+    .getByRole("region", { name: "New Thread" })
+    .and(page.locator('[data-focused="true"]'))
+    .getByRole("textbox", { name: "Message to Fake AI" })
+  await box.fill("again")
+  await box.press("Enter")
+  await expect(page.getByText("You said: again")).toBeVisible()
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const flow = sidebar.getByRole("button", { name: /^Flow: / })
+  await flow.click()
+  await page.getByRole("menuitemradio", { name: /^Row/ }).click()
+  await page.keyboard.press("Escape")
+  await expect(flow).toHaveAccessibleName("Flow: Row")
+
+  // Arranged from the Banda menu, on Work's workspace as the engine keeps
+  // it: the terminal is the own Group, first, and each Thread its Group.
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const arrange = async () => {
+    await page.keyboard.press("Alt+Space")
+    await menu.getByRole("combobox", { name: "Search" }).fill("Arrange")
+    await menu.getByRole("option", { name: /^Arrange by Project/ }).click()
+    await expect(menu).toBeHidden()
+  }
+  type Kept = {
+    project?: string
+    own?: string
+    columns: { group?: string; panes: { kind: string }[] }[]
+  }
+  const work = projectId(window, "Work")
+  const works = () =>
+    (
+      JSON.parse(window.banda("call", "workspaces.list")).ok
+        .workspaces as Kept[]
+    ).find((workspace) => workspace.project === work)
+  const arranged = () => {
+    const home = works()
+    return {
+      kinds: home?.columns.map((c) => c.panes.map((pane) => pane.kind)),
+      own: home !== undefined && home.own === home.columns[0]?.group,
+      groups: new Set(home?.columns.map((c) => c.group ?? "none")).size,
+    }
+  }
+  await arrange()
+  await expect.poll(arranged).toEqual({
+    kinds: [["terminal.terminal"], ["agents.thread"], ["agents.thread"]],
+    own: true,
+    groups: 3,
+  })
+
+  // Again, nothing moves.
+  const before = works()
+  await arrange()
+  expect(works()).toEqual(before)
+})
+
 /** Sends `words` from the New Thread in focus, its first message. */
 async function say(page: Page, words: string) {
   const box = page

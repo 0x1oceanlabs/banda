@@ -107,9 +107,10 @@ banda_kernel::methods! {
         /// Lets every empty workspace go but the one the Person looks at
         /// and the last.
         command tidy(Tidy) -> Done, Write;
-        /// Puts every Pane where the row would have opened it: last on
-        /// its Project's workspace, or of no Project on a free one (ADR
-        /// 0102, decisions 7 and 9).
+        /// Puts every Pane where the row would have opened it: on its
+        /// Project's workspace, the Person's own into its own Group and an
+        /// Agent's last, or of no Project on a free one (ADR 0102,
+        /// decisions 4, 7 and 9).
         command arrange(Arrange) -> Done, Write;
         /// Puts a window's arrangement over the engine's, once (ADR 0025,
         /// decision 2).
@@ -639,8 +640,9 @@ impl Workspaces {
     }
 
     async fn arrange(&self, call: Call, arrange: Arrange) -> Result<Done, Refusal> {
+        let leads = (arrange.leads).unwrap_or_else(|| self.grouped.iter().cloned().collect());
         change(&call, "arranged", None, Say::Whole, move |list, _, seed| {
-            model::arrange(list, &arrange.projects, arrange.only, seed);
+            model::arrange(list, &arrange.projects, arrange.only, &leads, seed);
             Ok(())
         })
         .await
