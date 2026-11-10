@@ -294,7 +294,7 @@ export async function transfer(
     }
   } catch (error) {
     if (shown) toast.dismiss(id)
-    toast.error(problem(error))
+    toast.error(problem(error, copy ? "the copy" : "the move"))
     return null
   }
 }

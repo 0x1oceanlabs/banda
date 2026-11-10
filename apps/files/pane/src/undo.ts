@@ -91,7 +91,8 @@ export async function runSteps(
 }
 
 /** A move's or a copy's last piece, as it ends: its clashes, or what it
- * did. */
+ * did; or the client's error, in its machine's words, where it was
+ * refused at once or cut off on its way (ADR 0106, law 4). */
 export function lastPiece(
   engine: Engine,
   project: ProjectId,
@@ -109,8 +110,9 @@ export function lastPiece(
         onPiece?.(job)
         if (job.kind !== "progress") last = job
       },
-      (refusal) => {
-        if (refusal) reject(new Refused(refusal))
+      (refusal, error) => {
+        if (error) reject(error)
+        else if (refusal) reject(new Refused(refusal))
         else if (last) resolve(last)
         else
           reject(

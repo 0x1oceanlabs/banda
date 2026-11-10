@@ -283,7 +283,9 @@ function Screen({
     let followed = false
     const call = <M extends MethodOf<"call">>(method: M, params: Params<M>) =>
       engine.call(method, params, { project })
-    const input = new Input(call, terminal, (error) => setProblem(words(error)))
+    const input = new Input(call, terminal, (error) =>
+      setProblem(words(error, "your typing"))
+    )
     typed.current = (data) => {
       if (running) input.type(data)
     }
