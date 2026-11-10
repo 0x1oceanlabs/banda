@@ -190,7 +190,9 @@ Five levels ([0080] d6), each inside the one above it:
   `--window-radius` … `--small-radius`, classes `rounded-window` …
   `rounded-small`, and a test refuses any other corner. A theme says
   `window` and `control` in `[shape]`; the tile is the window less the
-  outer gap, the card the tile less 8, the small 0.6 of a control.
+  outer gap, the card the tile less 8 but never below a control (Roma,
+  2026-11-10: so window ≥ tile ≥ card ≥ control ≥ small), the small 0.6
+  of a control.
   Omarchy takes Hyprland's rounding for the window's corner and a third
   of it for a control's, so Hyprland square is Banda square ([0100] d11,
   way A). shadcn's ladder lands on them: `sm` small, `md` and `lg`

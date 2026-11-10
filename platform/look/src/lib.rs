@@ -976,14 +976,17 @@ const PILL: f64 = 9999.0;
 
 /// The room inside a tile, between its edge and a card in it, as the
 /// window lays them out (docs/design): a card's corner is the tile's
-/// less it, so the two are concentric.
+/// less it, so the two are concentric while that is no less than a
+/// control's.
 const PADDING: f64 = 8.0;
 
 /// The five corners (ADR 0080, decision 6), in pixels: the window's and
 /// a control's as the layers say them, times `[shape] roundness`; a
 /// tile's the window's less the outer gap, unless `[tile] radius` says
-/// it; a card's the tile's less its padding; a chip's 0.6 of a control's.
-/// None is below 0. With `[shape] pill`, controls and chips are pills.
+/// it; a card's the tile's less its padding, but never below a control's,
+/// so a card holds its controls (Roma, 2026-11-10); a chip's 0.6 of a
+/// control's. None is below 0. With `[shape] pill`, controls and chips
+/// are pills; a card's floor is still the control's number.
 fn corners(all: &Settings) -> [(&'static str, f64); 5] {
     let shape = &all.shape;
     let roundness = shape.roundness.unwrap_or(1.0);
@@ -995,7 +998,7 @@ fn corners(all: &Settings) -> [(&'static str, f64); 5] {
         None => window - all.gaps.outer.unwrap_or(0.0),
     }
     .max(0.0);
-    let card = (tile - PADDING).max(0.0);
+    let card = (tile - PADDING).max(control).max(0.0);
     let (control, small) = if shape.pill == Some(true) {
         (PILL, PILL)
     } else {

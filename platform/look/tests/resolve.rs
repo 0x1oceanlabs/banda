@@ -212,7 +212,8 @@ fn under_hyprland_its_rounding_is_the_windows_corner() {
     let look = machine.under_hyprland();
     assert_eq!(look.vars["--window-radius"], "12px");
     assert_eq!(look.vars["--tile-radius"], "7px");
-    assert_eq!(look.vars["--card-radius"], "0px");
+    // The tile less its padding is below 0, so the card is a control's.
+    assert_eq!(look.vars["--card-radius"], "4px");
     assert_eq!(look.vars["--control-radius"], "4px");
     assert_eq!(look.vars["--small-radius"], "2.4px");
     assert_eq!(look.vars["--tile-border"], "2px");
@@ -931,6 +932,8 @@ fn a_mac_starts_on_the_macos_theme_with_its_shape() {
     // step 5): a tile about 10, a control 7.
     assert_eq!(look.vars["--tile-radius"], "10px");
     assert_eq!(look.vars["--control-radius"], "7px");
+    // The tile less its padding is 2, below a control: the card is 7.
+    assert_eq!(look.vars["--card-radius"], "7px");
     // The accent is the system's, which the window writes for the look
     // (ADR 0075, decision 6), else Apple's blue; [colors] accent still
     // wins.

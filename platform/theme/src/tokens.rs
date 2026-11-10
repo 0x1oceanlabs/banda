@@ -175,8 +175,9 @@ pub const TOKENS: &[Token] = list! {
     Layout Length ["gap-inner", "gap-outer", "bar-height"];
     // The five corners (ADR 0080, decision 6): the window and the desk; a
     // Pane and the sidebar's panel, the window's less the outer gap; a
-    // card, a Thread's block, a menu, the tile's less its padding; a
-    // button, an input, a select; a chip, a checkbox, a badge.
+    // card, a Thread's block, a menu, the tile's less its padding but
+    // never below a control's; a button, an input, a select; a chip, a
+    // checkbox, a badge.
     Radius Length [
         "window-radius", "tile-radius", "card-radius", "control-radius",
         "small-radius",

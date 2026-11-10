@@ -98,7 +98,8 @@ pub enum ModeChoice {
 /// The corners, five levels, each inside the one before (ADR 0080,
 /// decision 6): a theme says two, the window's and a control's, and the
 /// rest follow. A tile's is the window's less the outer gap, a card's the
-/// tile's less its padding, a chip's 0.6 of a control's.
+/// tile's less its padding but never below a control's, a chip's 0.6 of a
+/// control's.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Shape {
