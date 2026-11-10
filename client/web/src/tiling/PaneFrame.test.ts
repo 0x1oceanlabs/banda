@@ -1,8 +1,9 @@
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { FORGETTING, KeptHosts } from "@banda/core/react"
+import type { Args } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
-import { arcHosts, MINE, ON_ARC } from "./arc.testing"
+import { arcHosts, MINE, ON_ARC, R1 } from "./testing"
 import { gateOf, handlesOf, type Routing } from "./mount"
 import { type Frame, handleOf } from "./PaneFrame"
 
@@ -192,4 +193,41 @@ test("the gate of a Pane on arc reads arc's Apps, as its welcome lists them, nev
   expect(shows("nobody.knows", { arc: ["nobody"] })).toBe(
     "This window does not know this kind of Pane."
   )
+})
+
+test("a Pane's own act takes its Project, and the Item it shows, where its args name none, so it acts on that Pane's, not on the one in focus (ADR 0106, law 3)", () => {
+  const ran: [string, Args | undefined][] = []
+  const takes = (name: string) => ["project", "item", "until"].includes(name)
+  /** Threads' Later, which takes a Project and an Item; the window's own
+   * Archive, which does too; and the device's browser, which arc's Panes
+   * do not open. */
+  const routing: Routing = {
+    act: (id) =>
+      id === "thread.later"
+        ? { title: "Later", at: "owner", app: "agents", here: true, takes }
+        : id === "sidebar.archive"
+          ? { title: "Archive", at: "window", takes }
+          : id === "browser.open"
+            ? { title: "Open in a browser", at: "device", takes: () => false }
+            : undefined,
+    has: () => false,
+  }
+  const { run } = handlesOf(
+    arcHosts(["agents"]),
+    routing,
+    ON_ARC,
+    (action, args) => void ran.push([action, args]),
+    thread({ thread: "t1", host: "arc" })
+  )
+  run!("thread.later", { until: 5 })
+  run!("sidebar.archive")
+  // Args that name their own go as they are.
+  run!("thread.later", { project: "r1", item: "t2" })
+  // The device's does not run from arc's Pane: nothing goes out.
+  run!("browser.open", { address: "x" })
+  expect(ran).toEqual([
+    ["thread.later", { until: 5, project: R1, item: "t1" }],
+    ["sidebar.archive", { project: R1, item: "t1" }],
+    ["thread.later", { project: R1, item: "t2" }],
+  ])
 })
