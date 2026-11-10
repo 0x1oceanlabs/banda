@@ -15,7 +15,7 @@ import {
   SquarePenIcon,
 } from "lucide-react"
 import type { Row as Arranged } from "./arrange"
-import { lineCount } from "./card"
+import { type CardView, linesOf } from "./card"
 import { EmptyTab, InboxZero } from "./Empty"
 import { wentWords } from "./hold"
 import { Dismiss, newThread } from "./open"
@@ -26,7 +26,7 @@ import { NewThreadIn } from "./NewThreadIn"
 import type { GroupBlock, Region } from "./regions"
 import { Rollup } from "./Rollup"
 import type { WithMenu } from "./ProjectMenu"
-import type { Settings } from "./settings"
+import { DENSITY, type Settings } from "./settings"
 import { ThreadRow } from "./ThreadRow"
 import { HoldingContext } from "./useHold"
 import type { Holds } from "./useOrdered"
@@ -87,17 +87,13 @@ export function SectionView({
   const holding = useContext(HoldingContext)
   const dismiss = useContext(Dismiss)
   // Grouped by Project, a header names each card's Project.
-  const grouped = regions.some((region) => region.group?.by === "project")
-  const inProject = (row: Arranged) => grouped || row.project.scratch
-  const items = itemsOf(
-    regions,
-    (row) =>
-      lineCount(settings, {
-        inProject: inProject(row),
-        elsewhere: row.host !== undefined && !named,
-      }),
-    holds
-  )
+  const view: CardView = {
+    density: DENSITY,
+    group: regions.some((region) => region.group?.by === "project")
+      ? "project"
+      : "none",
+  }
+  const items = itemsOf(regions, (place) => linesOf(place, view), holds)
   const list = useRef<HTMLDivElement>(null)
   // Each look, with its font, is measured again, as the cards' density.
   const look = useLook((one) => one.vars, undefined)
@@ -176,14 +172,20 @@ export function SectionView({
    * opens the picker at the card. */
   const actionOf = (row: Arranged) =>
     row.stand === "later" ? (
-      <Button variant="ghost" size="xs" onClick={() => wake(row)}>
-        <AlarmClockIcon />
+      <Button
+        variant="ghost"
+        size="xs"
+        className="h-5"
+        onClick={() => wake(row)}
+      >
+        <AlarmClockIcon className="size-3.5" />
         Wake
       </Button>
     ) : (
       <Button
         variant="ghost"
         size="icon-xs"
+        className="size-5"
         aria-label="Later"
         title={`Later ${laterKey(row.listed)}`}
         onClick={(event) => {
@@ -197,7 +199,7 @@ export function SectionView({
           })
         }}
       >
-        <AlarmClockIcon />
+        <AlarmClockIcon className="size-3.5" />
       </Button>
     )
 
@@ -209,12 +211,14 @@ export function SectionView({
       <ThreadRow
         engine={engine}
         row={row}
-        settings={settings}
-        inProject={inProject(row)}
+        place={item.stand}
+        at={item.entry.at}
+        now={holds.now}
+        view={view}
         current={isCurrent(row.project.id, row.listed.pane)}
-        away={strayed.has(row.listed.id)}
+        strayed={strayed.has(row.listed.id)}
         named={named}
-        {...(went ? { gone: said ?? "" } : { action: actionOf(row) })}
+        {...(went ? { went } : { action: actionOf(row) })}
       />
     )
     return (

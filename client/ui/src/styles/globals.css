@@ -61,6 +61,7 @@
   --color-destructive: var(--destructive);
   --color-attention: var(--attention);
   --color-woke: var(--woke);
+  --color-woke-text: var(--woke-text);
   --color-mark-open: var(--mark-open);
   --color-mark-working: var(--mark-working);
   --color-mark-later: var(--mark-later);
@@ -165,6 +166,10 @@
   --mark-open: color-mix(in oklab, var(--foreground) 80%, transparent);
   --mark-working: color-mix(in oklab, var(--working) 80%, transparent);
   --mark-later: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+  /* Woke's yellow as small text, a card's time (ADR 0098, decision 8): on
+     a light theme darker, past 4.5:1 on the light glass, so it can be
+     read; the Mark keeps --woke. */
+  --woke-text: color-mix(in oklab, var(--woke) 60%, black);
   /* How the sidebar's list moves (ADR 0098, S5c), by the design kit's
      names: what is quick (a hover coming in, a row going, a ghost's
      crossfade), a hover going, what comes (a row, a dim), and what is
@@ -184,6 +189,8 @@
   --mark-open: var(--foreground);
   --mark-working: color-mix(in oklab, var(--working) 60%, transparent);
   --mark-later: color-mix(in oklab, var(--foreground) 55%, transparent);
+  /* On a dark one the yellow reads as it is. */
+  --woke-text: var(--woke);
 }
 
 @layer base {

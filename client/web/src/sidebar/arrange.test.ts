@@ -68,7 +68,6 @@ const over = (base: Settings, keys: Keys = {}): Settings => ({
   group: { ...base.group, ...keys.group },
   sort: { ...base.sort, ...keys.sort },
   projects: { ...base.projects, ...keys.projects },
-  row: { ...base.row, ...keys.row },
 })
 
 /** Banda's presets, as platform/look/sidebars/*.toml set them. */
@@ -76,12 +75,10 @@ const PRESETS = {
   inbox: {},
   projects: {
     group: { by: "project", bottom: [] },
-    row: { lines: 1 },
   },
   places: {
     group: { bottom: [] },
     projects: { list: true },
-    row: { lines: 2 },
   },
 } satisfies Record<string, Keys>
 type Preset = keyof typeof PRESETS

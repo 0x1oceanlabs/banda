@@ -43,10 +43,15 @@ Banda's own:
 
 - `inbox`: as T3 Code's sidebar, one list, what waits for the Person
   first; below, the shelves "Working", then "Later" and "Archive",
-  folded; three lines a row. It is the defaults.
-- `projects`: each Project a section, one line a row.
+  folded. It is the defaults.
+- `projects`: each Project a section.
 - `places`: a list of Projects above, a click shows one's Threads; below,
-  every Thread by need, the archived ones folded; two lines a row.
+  every Thread by need, the archived ones folded.
+
+However it is arranged, a card's lines follow where it stands (ADR 0098,
+decision 9): three in Your turn, two there when grouped by Project, one
+for the rest. The `[row]` keys no longer lay a card out, and a preset's
+`lines` is not read.
 
 A preset of the Person's own is `~/.config/banda/sidebars/<name>.toml`,
 with the keys of `sidebar.toml` except `preset`. The view menu lists it.
@@ -63,8 +68,9 @@ A file named as one of Banda's presets wins over it.
 ## Asked for, and what to set
 
 - "Group my Threads by Project": `[group]` `by = "project"`.
-- "One line per Thread": `[row]` `lines = 1`.
-- "Hide the Harness": `[row]` `hide = ["harness"]`.
+- "One line per Thread", "Hide the Harness": not yet. `[row]` is no
+  longer read; a key for a card's lines, `card = 1 | 2 | 3`, comes later
+  (ADR 0098, decision 9). Tell your Person so, and write no `[row]`.
 - "The working Threads in the list, not on a shelf": `[group]`
   `states = ["working", "active"]` and `bottom = ["archived"]`.
 - "Show the archived Threads open": `[group]` `folded = []`.

@@ -65,10 +65,11 @@ async function say(window: Window, box: Locator, text: string) {
     return thread
   }
   await expect(thread.getByText(`You said: ${text}`)).toBeVisible()
-  // Its turn is over in the engine, and the Window took it in, seen.
+  // Its turn is over in the engine, and the Window took it in, seen: its
+  // card's Mark has the open look (ADR 0099).
   await expect.poll(() => threadNamed(window, text)?.latest?.state).toBe("done")
   const row = sidebarOf(page).getByRole("button", { name: new RegExp(text) })
-  await expect(row.getByRole("img", { name: "Nothing runs" })).toBeVisible()
+  await expect(row.getByRole("img", { name: "Open" })).toBeVisible()
   return thread
 }
 
@@ -528,19 +529,19 @@ test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, 
   await expect(tab).toHaveAccessibleName("Later, 1")
   await expect(row).toBeHidden()
 
-  // The Later tab lists it with when it wakes; Wake brings it back to the
-  // Inbox.
+  // The Later tab lists it with when it wakes, by the clock; Wake brings
+  // it back to the Inbox, where its time is how long ago it changed.
   await tab.click()
   await expect(tab).toHaveAttribute("aria-selected", "true")
-  await expect(row).toContainText(/ · 4\dm/)
+  await expect(row).toContainText(/\d:\d\d/)
   await row.focus()
-  await actions.getByRole("button", { name: "Wake" }).click()
+  await actions.getByRole("button", { name: "Wake", exact: true }).click()
   await leaveSidebar(page)
   await expect(tab).toHaveAccessibleName("Later")
   await expect(row).toBeHidden()
   await inbox.click()
   await expect(row).toBeVisible()
-  await expect(row).not.toContainText("·")
+  await expect(row).not.toContainText(/\d:\d\d/)
 
   // Its row's Thread menu puts it off too, and in Later, wakes it.
   const menu = page.getByRole("menu", { name: "Thread menu" })
@@ -551,14 +552,14 @@ test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, 
   await field.press("Enter")
   await expect(row).toBeHidden()
   await tab.click()
-  await expect(row).toContainText(/ · 4\dm/)
+  await expect(row).toContainText(/\d:\d\d/)
   await row.click({ button: "right" })
   await menu.getByRole("menuitem", { name: "Wake now" }).click()
   await leaveSidebar(page)
   await expect(tab).toHaveAccessibleName("Later")
   await inbox.click()
   await expect(row).toBeVisible()
-  await expect(row).not.toContainText("·")
+  await expect(row).not.toContainText(/\d:\d\d/)
 
   // Opened while it sleeps, its picker wakes it too: its first line is
   // Wake now, so Z then Enter does it.
@@ -567,7 +568,7 @@ test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, 
   await field.fill("45m")
   await field.press("Enter")
   await tab.click()
-  await expect(row).toContainText(/ · 4\dm/)
+  await expect(row).toContainText(/\d:\d\d/)
   await row.click()
   await page.keyboard.press("Alt+KeyZ")
   await expect(picker.getByRole("option").first()).toContainText("Wake now")
@@ -576,7 +577,7 @@ test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, 
   await leaveSidebar(page)
   await expect(tab).toHaveAccessibleName("Later")
   await inbox.click()
-  await expect(row).not.toContainText("·")
+  await expect(row).not.toContainText(/\d:\d\d/)
 })
 
 test("a Thread at work put off until it's done comes back as its turn ends, with a toast that opens it (ADR 0074)", async () => {
