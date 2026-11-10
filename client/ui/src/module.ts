@@ -337,9 +337,6 @@ export type ItemAction<Context = WindowApi> = Action<Context> & {
   /** It runs once the menu has gone, as what takes the focus must: a
    * field, a picker. */
   later?: true
-  /** A Pane on another host runs it too (ADR 0081): it goes to its Item's
-   * host. */
-  elsewhere?: true
   /** Its args name the Item: `project` and `item`, then its own. */
   args: ArgsSchema
 }
@@ -495,6 +492,12 @@ export type Module = {
    * browser, is always on.
    */
   engine: boolean
+  /**
+   * Its acts are this device's, as the browser's pages are (ADR 0062,
+   * decision 12): no other machine's values reach them, so one asked on
+   * another machine's Project is not there yet (ADR 0106, law 3).
+   */
+  device?: true
   /** Its kinds of Pane, in the order the launcher offers them. */
   panes: readonly AnyPaneKind[]
   /** What it tells the bar and the sidebar about each Project. */
@@ -531,6 +534,7 @@ export type Module = {
 export function defineModule<const P extends readonly Args[]>(module: {
   id: string
   engine: boolean
+  device?: true
   panes?: { readonly [K in keyof P]: PaneKind<P[K]> }
   watches?: readonly Watch[]
   actions?: readonly Action[]
@@ -545,6 +549,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
   return {
     id: module.id,
     engine: module.engine,
+    ...(module.device && { device: module.device }),
     // Each kind checks its own args; the window hands it only the args it
     // kept for it.
     panes: (module.panes ?? []) as unknown as readonly AnyPaneKind[],

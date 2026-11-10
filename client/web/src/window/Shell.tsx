@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -17,7 +18,12 @@ import { Toaster, toast } from "@banda/ui/components/sonner"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openProjects } from "@banda/ui/lib/projects"
-import { useEngineOf, usePaneOn, useStore } from "@banda/core/react"
+import {
+  HostsContext,
+  useEngineOf,
+  usePaneOn,
+  useStore,
+} from "@banda/core/react"
 import type { PaneState } from "@banda/ui/pane"
 import { Bar } from "../bar/Bar"
 import { tomlOf } from "@banda/contract/settings"
@@ -586,6 +592,7 @@ export function Shell({
         .catch(() => undefined),
     run: (action, args) => runAction(parts, action, args),
     engine,
+    hosts: useContext(HostsContext),
     sessionOf: engineOf,
     writeSetting: device.settings.set,
     attach: (chips) => {
@@ -709,7 +716,7 @@ export function Shell({
             bringing(w, row.project, row.listed.pane, placing, projectOf)
           )
         case "action":
-          return row.action.run(parts)
+          return runAction(parts, row.action)
         case "ask":
           return newThreadIn(
             row.project ?? here.get().starts,
@@ -877,8 +884,6 @@ export function Shell({
                 {peek && (
                   <Peek
                     peek={peek}
-                    engine={engine}
-                    modules={modules}
                     shell={parts}
                     onUpdate={(pane) =>
                       setPeek((was) => was && { ...was, pane })
@@ -922,12 +927,7 @@ export function Shell({
                   />
                 )}
                 {/* After the drawer: the Sheet stands over it, dropped. */}
-                <Sheet
-                  state={sheet}
-                  engine={engine}
-                  modules={modules}
-                  shell={parts}
-                />
+                <Sheet state={sheet} shell={parts} />
                 {overview && (
                   <Overview
                     open={overviewState === "open"}

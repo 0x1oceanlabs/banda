@@ -30,7 +30,6 @@ import type { HostState } from "./device"
 import { paneHost, type PaneState, withHost } from "./pane"
 import { clock, tickingClock } from "./time"
 import { openProjects, shownProjects } from "./projects"
-import type { Args } from "./run"
 import { type Readable, sameData, sameEach, Store } from "./store"
 
 /** How the Window reaches the desktop's hosts: `device.hosts`. */
@@ -895,60 +894,4 @@ export function heldWords(
   return status === "refused"
     ? `${name} refused this window`
     : `Connecting to ${name}…`
-}
-
-/** The Window's actions a Pane on another host runs: the page's own
- * paste and copy, and the settings. None reaches this machine's files or
- * its engine's Projects. */
-const RUNS_ELSEWHERE: ReadonlySet<string> = new Set([
-  "edit.paste",
-  "edit.paste-plain",
-  "edit.copy-image",
-  "settings.open",
-])
-
-/** The Window's own item actions a Pane on another host runs: Archive,
- * which the Item's App sends to its host (ADR 0096). Each goes to an Item
- * of that host's alone, as an App's do. It is for a Pane that runs
- * Archive itself: the key and the Thread menus run it through the Shell's
- * own run, which goes to the Item's host already. */
-const ITEMS_ELSEWHERE: ReadonlySet<string> = new Set(["sidebar.archive"])
-
-/** What a Pane on host `there` runs of the Window's: those above, and the
- * item actions `items` its Apps say go to their Item's host (ADR 0087,
- * decision 12), as a Thread's Later, and the Window's own that do, each
- * to an Item of that host's alone (`ownItem`); none of the rest. */
-export function runOnHost(
-  run: (action: string, args?: Args) => void,
-  items: ReadonlySet<string>,
-  shownNow: () => Shown | undefined,
-  own: { project: ProjectId; item: string | null }
-): (action: string, args?: Args) => void {
-  return (action, args) => {
-    if (RUNS_ELSEWHERE.has(action)) return run(action, args)
-    if (!items.has(action) && !ITEMS_ELSEWHERE.has(action)) return
-    const asked = ownItem(shownNow(), own, args)
-    if (asked) run(action, asked)
-  }
-}
-
-/**
- * The args of an item action a Pane on another host runs (ADR 0081): its
- * Item, the one the Pane shows where they name none, in the Pane's own
- * Project where they name none. That Project must be one of the host's as
- * the Window shows it (`shown`), so the action goes to its engine, never
- * to one of this machine's, which wins an ID both have, nor another
- * host's; none for another, and nothing runs. A Thread that host has not
- * placed in a Project yet, as one unplaced in No Project, is one of none.
- */
-export function ownItem(
-  shown: Shown | undefined,
-  own: { project: ProjectId; item: string | null },
-  args?: Args
-): Args | undefined {
-  const project = args?.project ?? own.project
-  const item = args?.item ?? own.item
-  if (typeof project !== "string" || typeof item !== "string") return undefined
-  if (!shown?.projects.some((one) => one.id === project)) return undefined
-  return { ...args, project, item }
 }

@@ -15,6 +15,9 @@ import { followThreads, waitsWatch } from "./threads"
 export const browser = defineModule({
   id: "browser",
   engine: false,
+  // Its pages are this device's: an arc page reaches it as a link, and
+  // later through a forwarded port (ADR 0106, decision 2).
+  device: true,
   panes: [browserPane],
   actions: [
     {

@@ -11,10 +11,13 @@
  * that comes to open elsewhere passes as it does: the terminal, in 1b.
  */
 import type { JsonValue } from "@banda/contract"
+import type { AnyPaneKind } from "@banda/ui/module"
 import { type Conformance, conformance } from "@banda/ui/testing/conformance"
+import { createElement } from "react"
 import { expect, test } from "vitest"
+import { KindsContext } from "./launcher"
 import { modules } from "./modules"
-import { windowModule } from "./registry"
+import { KINDS, windowModule } from "./registry"
 
 /** The kinds that opened elsewhere before the kit came: only these may
  * wait for it. */
@@ -40,11 +43,29 @@ const PENDING: Record<string, string> = {
 const GIVEN: Record<
   string,
   Omit<Conformance<{ [key: string]: JsonValue }>, "kind">
-> = {}
+> = {
+  // New Pane on arc, which runs every App: a click on each kind it offers.
+  "window.launcher": { modules: ["agents", "terminal", "files", "git"] },
+}
+
+/** Each kind as the Window mounts it: New Pane with the kinds the Window
+ * hands it (`PaneMount`), which the kit does not. */
+const mounted = (kind: AnyPaneKind): AnyPaneKind =>
+  kind.kind === "window.launcher"
+    ? {
+        ...kind,
+        Pane: (props) =>
+          createElement(KindsContext, {
+            value: KINDS,
+            children: createElement(kind.Pane, props),
+          }),
+      }
+    : kind
 
 const elsewhere = [...modules, windowModule]
   .flatMap((module) => module.panes ?? [])
   .filter((kind) => kind.elsewhere)
+  .map(mounted)
 
 test("only kinds that open elsewhere wait for the kit, or are given to it, each for its steps", () => {
   const ids = elsewhere.map(({ kind }) => kind)

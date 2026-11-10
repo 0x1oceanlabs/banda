@@ -203,14 +203,18 @@ test("another host's Thread is suggested a title and renamed on its own engine",
   ])
 })
 
-test("by its key, another host's Thread asks no title: its header's menu does", () => {
+test("by its key, another host's Thread is suggested a title on its own engine, as from its header's menu: keys share the router (ADR 0106, law 3)", async () => {
   const item = listed({
     pane: { kind: "agents.thread", args: { host: "arc" } },
   })
   const { window, asked, here } = fake(item, "There")
   ;(here.pane as { host?: string }).host = "arc"
   action("thread.suggest-title").run(window)
-  expect(asked).toEqual([])
+  await vi.waitFor(() => expect(asked).toHaveLength(2))
+  expect(asked).toEqual([
+    { host: "arc", name: "agents.suggest_title" },
+    { host: "arc", name: "agents.rename" },
+  ])
 })
 
 test("Previous title gives back the one before; a Thread never renamed has no row", () => {

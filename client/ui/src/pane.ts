@@ -11,7 +11,13 @@ import type { ComponentType } from "react"
 import type { LucideIcon } from "lucide-react"
 import type { Engine, JsonValue, ProjectId } from "@banda/contract"
 import type { ChangedLines, Doing } from "@banda/contract/agents"
-import { paneHost, type PaneState, type Place, withHost } from "@banda/core"
+import {
+  type Device,
+  paneHost,
+  type PaneState,
+  type Place,
+  withHost,
+} from "@banda/core"
 import type { MarkState } from "./components/banda-mark"
 import type { Chip } from "./module"
 import type { Chime } from "./sound/families"
@@ -99,6 +105,11 @@ export function within(tile: Element, element: Element | null): boolean {
  * from here, until L3 splits this package. */
 export { paneHost, type PaneState, type Place, withHost }
 
+/** Whether something runs from a Pane, as the router answers it (ADR
+ * 0106, law 6): it does, or why not, in the Person's words, "Not on arc
+ * yet". */
+export type Runs = { runs: true } | { runs: false; why: string }
+
 /**
  * What a Pane draws. A part of it that keeps its own Esc, as a list of
  * suggestions, stops the press there: what holds the Pane, as the drawer,
@@ -144,6 +155,18 @@ export type PaneProps<A> = {
    * a Project picker. None where no window runs actions, as in a dialog of
    * the settings. */
   run?: (action: string, args?: { [key: string]: JsonValue }) => void
+  /**
+   * Whether an action runs from this Pane, as `run` would run it with
+   * `args`, or a Pane opens from it: the router asks whether the act's
+   * App is on the owner's machine and its values can go there (ADR 0106,
+   * law 6). A Pane asks what can run, never where it is. None where no
+   * window routes, as in a dialog of the settings: then everything does.
+   */
+  runs?: (what: string | PaneState, args?: { [key: string]: JsonValue }) => Runs
+  /** The device the Person is at (ADR 0106, law 1): what it can do, and
+   * whether a file is one of this computer's. None where no window gives
+   * it. */
+  device?: Device
   /**
    * Says the Pane has a composer, and how it takes what an App puts in a
    * message (`WindowApi.attach`); `null` takes it back. A Thread says so.

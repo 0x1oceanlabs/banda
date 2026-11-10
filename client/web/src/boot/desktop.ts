@@ -9,7 +9,13 @@
  * own, each part does nothing, and what answers says so.
  */
 import type { Address } from "@banda/contract"
-import type { HostEntry, HostState, HostTest, PoppedAsk } from "@banda/core"
+import type {
+  Cap,
+  HostEntry,
+  HostState,
+  HostTest,
+  PoppedAsk,
+} from "@banda/core"
 import type { Host } from "@banda/desktop/bridge"
 
 /** The desktop's bridge as each part is used; none without the desktop. */
@@ -172,4 +178,11 @@ export const device = {
   /** Quits Banda: stops the engine and closes the window (ADR 0086,
    * decision 3). */
   quit: (): void => desktop()?.quit(),
+  /** What this device can do for a Pane (ADR 0082, decision 12): the
+   * desktop all of the list; a page of its own what a browser does, the
+   * clipboard, telling and sounds. */
+  has: (cap: Cap): boolean => desktop() !== undefined || IN_A_BROWSER.has(cap),
 }
+
+/** What a page of its own can do, with no desktop. */
+const IN_A_BROWSER: ReadonlySet<Cap> = new Set(["clipboard", "notify", "sound"])

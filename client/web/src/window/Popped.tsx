@@ -5,7 +5,7 @@ import { useProjects } from "@banda/ui/hooks/use-projects"
 import { paneHost, type PaneState } from "@banda/ui/pane"
 import { HostsContext, useNamedOf, useOurs } from "@banda/core/react"
 import { labelOf, previewers, slotsOf } from "../registry"
-import { closing } from "./actions"
+import { closing, ROUTING } from "./actions"
 import { device } from "../boot"
 import { useKeys, usePoppedKeys } from "./keys"
 import { Listed, Machines } from "./machines"
@@ -13,6 +13,7 @@ import type { Workspace as Kept } from "@banda/contract/workspaces"
 import { send } from "../tiling/arrange"
 import { useArranged } from "../tiling/useArranged"
 import { type Entry, samePane } from "../tiling/model"
+import { RoutingContext } from "../tiling/mount"
 import { type Frame, PaneFrame } from "../tiling/PaneFrame"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { Previewers } from "@banda/ui/lib/previewers"
@@ -111,22 +112,25 @@ export function Popped({ engine, pane }: { engine: Engine; pane: string }) {
       <div className="flex h-svh bg-desk text-foreground">
         {entry ? (
           // Its Pane draws a file with the modules' previewers, what the
-          // modules fill the Slots with, and a new Thread's picker the
-          // machines, as in the window.
+          // modules fill the Slots with, a new Thread's picker the
+          // machines, and its acts go by the window's router, as in the
+          // window.
           <Previewers value={previewers}>
             <Slots value={slots}>
-              <Machines hosts={hosts}>
-                <PaneFrame
-                  entry={entry}
-                  modules={modules}
-                  focused
-                  marked={false}
-                  project={project}
-                  mixed={false}
-                  frame={frame}
-                  alone
-                />
-              </Machines>
+              <RoutingContext value={ROUTING}>
+                <Machines hosts={hosts}>
+                  <PaneFrame
+                    entry={entry}
+                    modules={modules}
+                    focused
+                    marked={false}
+                    project={project}
+                    mixed={false}
+                    frame={frame}
+                    alone
+                  />
+                </Machines>
+              </RoutingContext>
               <Listed />
             </Slots>
           </Previewers>

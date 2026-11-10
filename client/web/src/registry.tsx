@@ -5,13 +5,10 @@
  * and another machine's name. A Pane or a Watch runs only while the
  * engine runs its module.
  */
-import type { Engine, JsonValue } from "@banda/contract"
-import { Button } from "@banda/ui/components/button"
-import { Kbd } from "@banda/ui/components/kbd"
-import { useModules } from "@banda/ui/hooks/use-status"
+import type { Engine } from "@banda/contract"
+import type { Act } from "@banda/core"
 import {
   type AnyPaneKind,
-  type Args as ActionArgs,
   defineModule,
   type ItemAction,
   type Module,
@@ -22,19 +19,11 @@ import {
   takes,
   type Widget,
 } from "@banda/ui/module"
-import {
-  definePane,
-  type Label,
-  type PaneProps,
-  type PaneState,
-  paneOf,
-  type Place,
-  type Watch,
-} from "@banda/ui/pane"
-import { useScope } from "@banda/ui/hooks/use-scope"
+import { type Label, type PaneState, paneOf, type Watch } from "@banda/ui/pane"
 import type { Filler, Fillers } from "@banda/ui/slots"
-import { LayoutGridIcon, type LucideIcon } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { memo, useCallback, useSyncExternalStore } from "react"
+import { type Kinds, launcher } from "./launcher"
 import { machineHeader } from "./window/named"
 import { columnsOf } from "./look"
 import { modules } from "./modules"
@@ -44,15 +33,7 @@ import { countsWidget } from "./sidebar/Counts"
 import type { Entry, Width } from "./tiling/model"
 import { tilingWidgets } from "./tiling/widgets"
 
-type Args = { [key: string]: JsonValue }
-
-/** Lists the Panes a Person can open, and becomes the one picked. */
-export const launcher: AnyPaneKind = definePane<Args>({
-  kind: "window.launcher",
-  title: () => "New Pane",
-  icon: LayoutGridIcon,
-  Pane: Launcher,
-})
+export { launcher }
 
 /** The launcher's scope (ADR 0071, decision 1): while it has the focus a
  * letter picks a Pane, the mod still held or not, as after Alt+N (ADR
@@ -174,13 +155,48 @@ export function itemsOf(kind: string): readonly ItemAction[] {
   return all.find((module) => module.id === id)?.items ?? []
 }
 
-/** The item actions a Pane on another host runs too, by their ids: each
- * goes to its Item's host (`ItemAction.elsewhere`, ADR 0081). */
-export const ELSEWHERE: ReadonlySet<string> = new Set(
+/** Each module's actions and item actions, by id, with their module. */
+const byAction = new Map(
   all.flatMap((module) =>
-    module.items.filter((action) => action.elsewhere).map(({ id }) => id)
+    [...module.actions, ...module.items].map(
+      (action) => [action.id, module] as const
+    )
   )
 )
+
+/**
+ * Where a module's action runs, as the router weighs it (ADR 0106, law
+ * 3): an App's with an engine part, on the machine of the Project it acts
+ * on, while that machine runs the App; the device's, as the browser's,
+ * on this device alone; the window's own module's and an App's with no
+ * engine part, as the notifications', in the window. None for an action
+ * of no module: one of the window's own.
+ */
+export function moduleAct(id: string): Omit<Act, "title"> | undefined {
+  const module = byAction.get(id)
+  if (!module) return undefined
+  if (module.engine) return { at: "owner", app: module.id, here: true }
+  if (module.device) return { at: "device", here: true }
+  return { at: "window" }
+}
+
+/**
+ * Opening `pane`, as the router weighs it (ADR 0106, decision 2): on the
+ * owner's machine where its kind says `elsewhere`, while that machine
+ * runs its module; else on this machine alone, as a kind that would reach
+ * this device's files. None for a kind this window does not know.
+ */
+export function kindAct(pane: PaneState): Act | undefined {
+  const known = byKind.get(pane.kind)
+  if (!known) return undefined
+  const { kind, module } = known
+  return {
+    title: told(() => kind.title(pane.args), kind.kind),
+    at: kind.elsewhere ? "owner" : "device",
+    ...(module.engine && { app: module.id }),
+    here: true,
+  }
+}
 
 export function kindOf(kind: string): AnyPaneKind | undefined {
   return byKind.get(kind)?.kind
@@ -377,74 +393,9 @@ export function tileable(engineModules: readonly string[]): PaneState[] {
   return startable(engineModules).filter((pane) => !sheetsOf(pane))
 }
 
-/**
- * The launcher: a button for each Pane, which it becomes. Its letters are
- * its actions, which its scope runs: with Shift the Pane opens beside it,
- * and the launcher stays (ADR 0025, decision 4).
- */
-function Launcher({ engine, open }: PaneProps<Args>) {
-  const modules = useModules(engine)
-  const pick = (args: ActionArgs | undefined, place: Place) => {
-    const pane = tileable(modules).find((one) => one.kind === args?.kind)
-    if (!pane) return false
-    open(pane, place)
-    return true
-  }
-  const scope = useScope(
-    "launcher",
-    {
-      "launcher.open": (args) => pick(args, "instead"),
-      "launcher.open-beside": (args) => pick(args, "right"),
-    },
-    { tile: true }
-  )
-  return (
-    <div
-      ref={scope}
-      className="flex h-full flex-col items-center justify-center gap-3 p-6"
-    >
-      <p className="text-sm text-muted-foreground">
-        What should this tile show?
-      </p>
-      <Choices
-        modules={modules}
-        letters
-        onPick={(pane) => open(pane, "instead")}
-      />
-    </div>
-  )
-}
-
-/** A button for each Pane a Person can start as a tile. */
-export function Choices({
-  modules,
-  letters = false,
-  onPick,
-}: {
-  modules: readonly string[]
-  /** Each button shows the letter that picks it. */
-  letters?: boolean
-  onPick: (pane: PaneState) => void
-}) {
-  return (
-    <div className="flex flex-wrap justify-center gap-2">
-      {tileable(modules).map((pane) => {
-        const kind = kindOf(pane.kind)!
-        const Icon = kind.icon
-        return (
-          <Button
-            key={pane.kind}
-            variant="outline"
-            onClick={() => onPick(pane)}
-          >
-            <Icon />
-            {kind.title(pane.args)}
-            {letters && kind.letter && (
-              <Kbd className="ml-1">{kind.letter}</Kbd>
-            )}
-          </Button>
-        )
-      })}
-    </div>
-  )
+/** The kinds the launchers offer, as the Window hands them its own: those
+ * a tile can become (`tileable`). */
+export const KINDS: Kinds = {
+  all: kinds.filter((kind) => !kind.sheet),
+  runs: kindRuns,
 }
