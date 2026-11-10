@@ -4572,9 +4572,10 @@ test("a tile fades in as it opens and fades out where it was as it closes", asyn
   await expect(still).toHaveCount(0)
 
   // The last Pane of a workspace fades out too, over the empty workspace:
-  // the one on screen. The spare at the bottom is drawn hidden with the
-  // same words, so the whole page has them once until the close is drawn,
-  // and twice after. The fading copy is looked for first, while it lasts.
+  // the one on screen. The spare at the bottom is drawn hidden with words
+  // of its own, so the whole page says "workspace is empty" once until
+  // the close is drawn, and twice after. The fading copy is looked for
+  // first, while it lasts.
   await page.keyboard.press("Alt+KeyW")
   const last = page.locator("[aria-hidden=true][inert]", {
     hasText: "Write to Fake AI",
@@ -4583,9 +4584,9 @@ test("a tile fades in as it opens and fades out where it was as it closes", asyn
   const empty = page
     .getByRole("main")
     .getByRole("paragraph")
-    .filter({ hasText: "This workspace is empty." })
+    .filter({ hasText: "workspace is empty." })
   await expect(empty).toBeVisible()
-  await expect(page.getByText("This workspace is empty.")).toHaveCount(2)
+  await expect(page.getByText("workspace is empty.")).toHaveCount(2)
   await expect(last).toHaveCount(0)
 })
 
@@ -5933,11 +5934,12 @@ test("on a Project's empty workspace, a new Thread starts in that Project", asyn
   // no Pane has the focus (ADR 0087, decision 4).
   await page.keyboard.press("Alt+S")
   await expect(thread).toBeHidden()
-  // The workspace on screen: the others are drawn hidden.
+  // The workspace on screen: the others are drawn hidden. It says whose
+  // it is (ADR 0102, decision 2).
   const tiling = page.getByRole("main")
   const empty = tiling
     .getByRole("paragraph")
-    .filter({ hasText: "This workspace is empty." })
+    .filter({ hasText: "Play's workspace is empty." })
   await expect(empty).toBeVisible()
 
   // Its own New Thread starts in Play, not in home.
@@ -5954,6 +5956,131 @@ test("on a Project's empty workspace, a new Thread starts in that Project", asyn
   await menu.getByRole("option", { name: /New Thread: “again”/ }).click()
   await expect(menu).toBeHidden()
   await expect(play.getByRole("button", { name: /again/ })).toBeVisible()
+})
+
+test("an emptied Project's workspace says whose it is, its first terminal starts the own Group, and the Person closes it (ADR 0102)", async () => {
+  window = await startWindow({ sidebar: 'preset = "projects"\n' })
+  const { page } = window
+  // Work, the first Project, is workspace 1; Play's, 2, is the one emptied.
+  await firstThread(page)
+  await newProject(page, "Play")
+  const inPlay = page.getByRole("region", { name: "New Thread" }).filter({
+    has: page.getByRole("button", { name: "Project: Play" }),
+  })
+  const composer = inPlay.getByRole("textbox", { name: "Message to Fake AI" })
+  await composer.fill("hello")
+  await composer.press("Enter")
+  const thread = page.getByRole("region", { name: "hello" })
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  await expect(thread.getByRole("img", { name: "Nothing runs" })).toBeVisible()
+  const bar = page.getByRole("navigation", { name: "Workspaces" })
+  const plays = bar.locator('[title^="Play: "]')
+  await expect(plays).toHaveCount(1)
+
+  // Its last Pane closed, it stays, and says whose it is.
+  await page.keyboard.press("Alt+KeyW")
+  await expect(thread).toBeHidden()
+  const tiling = page.getByRole("main")
+  const words = tiling
+    .getByRole("paragraph")
+    .filter({ hasText: "Play's workspace is empty." })
+  await expect(words).toContainText("It keeps its place until you close it.")
+
+  // Its Terminal starts the Project's own Group, which bears Play's name;
+  // the next terminal goes right of it, into the Group (decision 4).
+  await tiling.getByRole("button", { name: "Terminal", exact: true }).click()
+  const screens = tiling.getByRole("region", { name: "Terminal screen" })
+  await expect(screens).toHaveCount(1)
+  await expect(screens.first()).toHaveAttribute("data-state", "running")
+  await page.keyboard.press("Control+Alt+Enter")
+  await expect(screens).toHaveCount(2)
+  await expect(screens.nth(1)).toHaveAttribute("data-state", "running")
+  const columns = tiling
+    .locator("[data-column]")
+    .filter({ has: page.getByRole("region", { name: "Terminal screen" }) })
+  const [first, second] = [columns.nth(0), columns.nth(1)]
+  const group = await first.getAttribute("data-group")
+  expect(group).toBeTruthy()
+  await expect(second).toHaveAttribute("data-group", group!)
+  await expect(second.locator("section[data-tile]")).toHaveAttribute(
+    "data-focused",
+    "true"
+  )
+  const left = async (column: Locator) => (await column.boundingBox())!.x
+  expect(await left(second)).toBeGreaterThan(await left(first))
+  const tag = page.locator("[data-group-tag]")
+  await expect(tag).toHaveCount(1)
+  await expect(tag).toHaveText("Play")
+  await page.screenshot({ path: "test-results/42-own-group-tag.png" })
+
+  // Emptied again, the Person closes it: the window goes to Work's, and
+  // the bar has Play no more.
+  await page.keyboard.press("Alt+KeyW")
+  await expect(screens).toHaveCount(1)
+  await page.keyboard.press("Alt+KeyW")
+  await expect(words).toBeVisible()
+  await page.screenshot({ path: "test-results/42-emptied-workspace.png" })
+  await tiling.getByRole("button", { name: "Close the workspace" }).click()
+  await expect(plays).toHaveCount(0)
+  await expect(bar.locator("[aria-current]")).toHaveAccessibleName(
+    "Workspace 1"
+  )
+  await expect(words).toBeHidden()
+
+  // Play's next Thread makes its workspace again, at the end.
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await sidebar
+    .getByRole("group", { name: "Play", exact: true })
+    .getByRole("button", { name: "New Thread in Play" })
+    .click()
+  await expect(inPlay).toBeVisible()
+  await expect(plays).toHaveCount(1)
+  await expect(bar.locator("[aria-current]")).toHaveAccessibleName(
+    "Workspace 2"
+  )
+  await expect(plays).toHaveAttribute("aria-current", "true")
+
+  // Emptied once more, the cross on its slim row in the overview closes
+  // it too.
+  await page.keyboard.press("Alt+KeyW")
+  await expect(inPlay).toBeHidden()
+  await expect(words).toBeVisible()
+  await page.keyboard.press("Alt+KeyO")
+  const overview = page.getByRole("dialog", { name: "Overview" })
+  await overview.getByRole("button", { name: "Close workspace 2" }).click()
+  await expect(plays).toHaveCount(0)
+  await expect(
+    overview.getByRole("button", { name: /^Close workspace/ })
+  ).toHaveCount(0)
+  await page.keyboard.press("Escape")
+  await expect(overview).toBeHidden()
+
+  // In the Flow free every workspace is free: emptied, Play's says only
+  // that it is empty, and goes once the Person leaves it (decision 1).
+  await sidebar
+    .getByRole("group", { name: "Play", exact: true })
+    .getByRole("button", { name: "New Thread in Play" })
+    .click()
+  await expect(inPlay).toBeVisible()
+  await expect(plays).toHaveCount(1)
+  const flow = sidebar.getByRole("button", { name: /^Flow: / })
+  await flow.click()
+  await page.getByRole("menuitemradio", { name: /^Free/ }).click()
+  await page.keyboard.press("Escape")
+  await expect(flow).toHaveAccessibleName("Flow: Free")
+  await page.keyboard.press("Alt+KeyW")
+  await expect(inPlay).toBeHidden()
+  await expect(
+    tiling
+      .getByRole("paragraph")
+      .filter({ hasText: "This workspace is empty." })
+  ).toBeVisible()
+  await expect(
+    tiling.getByRole("button", { name: "Close the workspace" })
+  ).toHaveCount(0)
+  await expect(plays).toHaveCount(1)
+  await page.keyboard.press("Alt+Digit1")
+  await expect(plays).toHaveCount(0)
 })
 
 test("banda menu opens the Banda menu at a route, from outside the window", async () => {

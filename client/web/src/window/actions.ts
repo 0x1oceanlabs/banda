@@ -49,6 +49,8 @@ import { pickLater } from "../sidebar/LaterPicker"
 import { logged } from "../sidebar/write-setting"
 import {
   type Change,
+  closableAt,
+  closingWorkspace,
   columnMoved,
   moved,
   opened,
@@ -246,6 +248,20 @@ function movedTo(w: Workspaces, side: "first" | "last"): Step {
   const column = workspace.columns[workspace.focus]
   const next = toEdge(w, side)
   return column && next !== w ? columnMoved(next, column.id) : undefined
+}
+
+/** Closes the empty workspace `id`, a Project's too (`closingWorkspace`):
+ * from the one on screen, the window goes to the one above it first, or
+ * below when it is the first. */
+function closeWorkspace(shell: Shell, id: string): void {
+  shell.change((w) => {
+    if (closableAt(w, id) !== w.current) return undefined
+    return step(w, w.current > 0 ? -1 : 1)
+  })
+  shell.change((w) => {
+    const command = closingWorkspace(w, id)
+    return command && { command, focus: false }
+  })
 }
 
 /** Puts every Pane where the row would have opened it, or with `only`
@@ -614,6 +630,27 @@ export function placed(
 ): Step {
   const place = placeFor(workspaces, project, pane, placing)
   return opening(workspaces, project, pane, { ...how, place })
+}
+
+/**
+ * Opens a first Pane on the empty workspace on screen, as its buttons do,
+ * in its Project, else in `home`. On a Project's, where the keys would:
+ * a terminal makes the Project's own Group there, and the next goes right
+ * of it (ADR 0102, decision 4). On one of no Project, there, which makes
+ * it a free one (decision 1).
+ */
+export function startingHere(
+  workspaces: Workspaces,
+  home: ProjectId,
+  pane: PaneState,
+  placing: Placing
+): Step {
+  const { project } = current(workspaces)
+  const place =
+    project === undefined
+      ? "right"
+      : placeFor(workspaces, project, pane, placing)
+  return opening(workspaces, project ?? home, pane, { place, again: true })
 }
 
 /** What `pane.pick` is asked: a Project, and the Pane to open in it, its
@@ -1065,6 +1102,21 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     section: "Workspaces",
     title: "A new workspace: the empty one at the bottom",
     run: (shell) => shell.change(fresh),
+  },
+  {
+    // An emptied Project's workspace keeps its place until the Person
+    // closes it (ADR 0102, decision 2). No key: a held Alt+W would go on
+    // to close the Panes of the workspace it goes to.
+    id: "workspace.close",
+    args: takes({
+      workspace: "the workspace's id; none for the one on screen",
+    }),
+    section: "Workspaces",
+    title: "Close the workspace",
+    run: (shell, args) => {
+      const id = args?.workspace ?? shell.here.get().workspace?.id
+      if (typeof id === "string") closeWorkspace(shell, id)
+    },
   },
   {
     // The one way to go to an Agent (ADR 0087, decision 7): a sidebar
