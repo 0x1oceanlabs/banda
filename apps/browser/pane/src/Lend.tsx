@@ -74,7 +74,6 @@ export function LentMark({
         variant="agent"
         state={mark}
         playful={0}
-        news={false}
         label={`Lent to ${to}`}
         className={cn("size-3", className)}
       />
