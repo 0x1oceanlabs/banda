@@ -1,4 +1,6 @@
-/** The desktop's dialogs: the Person's yes or no, and a folder they pick. */
+/** The desktop's dialogs: the Person's yes or no, a folder they pick, and
+ * where they save a copy. */
+import { basename, join } from "node:path"
 import { Effect } from "effect"
 import { app, type BrowserWindow, dialog } from "electron"
 
@@ -36,4 +38,19 @@ export const pickFolder = (window: BrowserWindow | null, at: string | null) =>
       ? await dialog.showOpenDialog(window, options)
       : await dialog.showOpenDialog(options)
     return canceled ? null : (filePaths[0] ?? null)
+  })
+
+/** The file the Person picks to save a copy as, in the system's save
+ * dialog over `window`, offered as `name` in their Downloads; none if they
+ * cancel. `name` is another machine's, so only its last part is offered,
+ * and only the Person says where it goes. */
+export const pickSave = (window: BrowserWindow | null, name: string) =>
+  Effect.promise(async () => {
+    const options = {
+      defaultPath: join(app.getPath("downloads"), basename(name)),
+    }
+    const { canceled, filePath } = window
+      ? await dialog.showSaveDialog(window, options)
+      : await dialog.showSaveDialog(options)
+    return canceled || !filePath ? null : filePath
   })

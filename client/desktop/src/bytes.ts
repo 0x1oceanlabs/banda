@@ -3,12 +3,22 @@
  * `relayed` answers the byte host and the sandbox host: a URL that names
  * another machine goes to its engine through its forward, as it listens
  * now, so a link goes on working when ssh comes back on a new port, and
- * one that names none to this machine's engine. Main still reads no
- * Project's path, here or there: a URL's token is all it knows of the
+ * one that names none to this machine's engine. `saveCopy` is the device's
+ * `save_file`, the same road for a copy the Person keeps. Main still reads
+ * no Project's path, here or there: a URL's token is all it knows of the
  * file.
  */
+import { Readable } from "node:stream"
+import type { ReadableStream as NodeWeb } from "node:stream/web"
 import type { Address } from "@banda/contract"
-import { Engine, type Refused, relay } from "@banda/desktop-kit"
+import {
+  askedOf,
+  Engine,
+  namedBy,
+  Refused,
+  relay,
+  writeWholeFrom,
+} from "@banda/desktop-kit"
 import { Effect } from "effect"
 import { Hosts } from "./hosts"
 
@@ -25,3 +35,67 @@ const engineOf = (machine: string | null): Where =>
 
 /** The answer to `request`, to `app://files` or `app://preview`. */
 export const relayed = (request: Request) => relay(request, engineOf)
+
+/** Where that engine listens now, and none while its machine is away: a
+ * gesture goes now or says why not (ADR 0106, law 4). */
+const engineNow = (
+  machine: string | null
+): Effect.Effect<Address | undefined, never, Engine | Hosts> =>
+  machine === null
+    ? Engine.use((engine) => engine.address)
+    : Hosts.use((hosts) => hosts.addressNow(machine))
+
+/**
+ * Saves a copy on this device of the file the byte-host URL `url` names,
+ * the capability `save_file` (ADR 0106, decision 6): `pick` asks the
+ * Person where, offering `name`, and only then the bytes are fetched, from
+ * the machine that has them. They land whole or not at all
+ * (`writeWholeFrom`), so a link that ends halfway leaves nothing at the
+ * place the Person picked. The address is asked again after the dialog,
+ * since the Person may take a while and ssh come back on a new port.
+ *
+ * `away` while that machine is away, before the dialog or after it, and
+ * if the link ended halfway and it is away by then; `canceled` when the
+ * Person cancels, with no byte asked for. Fails, saying why, for a URL that
+ * is not a file's, an engine that will not give the file, or a disk that
+ * refuses it.
+ */
+export const saveCopy = (
+  url: string,
+  name: string,
+  pick: (name: string) => Effect.Effect<string | null>
+) =>
+  Effect.gen(function* () {
+    const named = namedBy(url)
+    if (named?.route !== "b")
+      return yield* new Refused({ message: "That is not a file's link." })
+    if ((yield* engineNow(named.machine)) === undefined) return "away"
+    const path = yield* pick(name)
+    if (path === null) return "canceled"
+    const address = yield* engineNow(named.machine)
+    if (address === undefined) return "away"
+    return yield* Effect.tryPromise({
+      try: async (): Promise<"saved"> => {
+        const answer = await askedOf(named, address.url)
+        if (!answer.ok || !answer.body) {
+          // Unread, its connection would stay open.
+          await answer.body?.cancel()
+          throw new Error("that file's link has ended")
+        }
+        await writeWholeFrom(path, Readable.fromWeb(answer.body as NodeWeb))
+        return "saved"
+      },
+      catch: (error) =>
+        new Refused({
+          message: `The copy was not saved: ${error instanceof Error ? error.message : String(error)}`,
+        }),
+    }).pipe(
+      Effect.catch((refused) =>
+        Effect.flatMap(engineNow(named.machine), (now) =>
+          now === undefined
+            ? Effect.succeed<"saved" | "away">("away")
+            : Effect.fail(refused)
+        )
+      )
+    )
+  })

@@ -39,6 +39,14 @@ export const FILES_BRIDGE = {
    * themselves, for another app to take: called as a drag of rows starts,
    * in place of the page's own. */
   drag: send<[paths: readonly string[]]>(),
+  /** Saves a copy of the file the byte-host URL `url` names on this
+   * device, the capability `save_file` (ADR 0106, decision 6): where the
+   * Person picks in the system's save dialog, offered as `name`, and the
+   * bytes come from the machine that has them. `saved`, `canceled`, or
+   * `away` while that machine is away, at once and with nothing written.
+   * Fails, saying why, when that URL is not a file's or its link ended, or
+   * the disk refuses it. */
+  save: invoke<[url: string, name: string], "saved" | "canceled" | "away">(),
 }
 
 /** The part of the desktop bridge the window's table takes in under

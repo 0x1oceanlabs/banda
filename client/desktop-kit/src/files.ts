@@ -117,6 +117,13 @@ function ask(to: URL, request: Request): Promise<Response> {
   })
 }
 
+/** What the engine at `address` answers a plain `GET` of `named`, its
+ * body as it comes. */
+export const askedOf = (named: Named, address: string): Promise<Response> => {
+  const to = relayedTo(named, address)
+  return ask(to, new Request(to))
+}
+
 /** Fails once the page gives `request` up. */
 const givenUp = (request: Request) =>
   Effect.callback<never, Error>((resume) => {

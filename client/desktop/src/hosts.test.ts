@@ -1761,6 +1761,38 @@ it.live(
 )
 
 it.live(
+  "addressNow says where a live host listens, and none at once while it connects, is away or is not there",
+  () =>
+    Effect.gen(function* () {
+      const fake = fakeSsh({
+        followers: [
+          [
+            { until: "up" },
+            { out: running("one", 1111) },
+            { until: "drop" },
+            { exit: 1 },
+          ],
+          [{ err: "ssh: connect to host devbox port 22: refused", exit: 255 }],
+        ],
+      })
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        expect(yield* hosts.addressNow("devbox")).toBeUndefined()
+        fake.touch("up")
+        yield* reaches((host) => host.state === "live")
+        expect(yield* hosts.addressNow("devbox")).toEqual(
+          yield* hosts.address("devbox")
+        )
+        fake.touch("drop")
+        yield* reaches((host) => host.state === "away")
+        expect(yield* hosts.addressNow("devbox")).toBeUndefined()
+        expect(yield* hosts.addressNow("nowhere")).toBeUndefined()
+      }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
+    }),
+  20_000
+)
+
+it.live(
   "a host added over the bridge is written at the end of hosts.toml and reached at once; taken out, its ssh ends and the file is as it was",
   () =>
     Effect.gen(function* () {
