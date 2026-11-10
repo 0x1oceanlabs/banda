@@ -1,13 +1,11 @@
 import type { ProjectId, ProjectSummary } from "@banda/contract"
-import { HereContext } from "@banda/core/react"
 import { Button } from "@banda/ui/components/button"
 import { Kbd } from "@banda/ui/components/kbd"
 import { useKeyOf } from "@banda/ui/hooks/use-key-of"
 import { keyCaps } from "@banda/ui/lib/keys"
 import { SearchIcon, SquarePenIcon } from "lucide-react"
-import { useContext } from "react"
 import { FlowMenu } from "./FlowMenu"
-import { newThread, useOpen } from "./open"
+import { useNewThread, useOpen } from "./open"
 
 /** The Banda menu's key in force, as its caps, in the Search field. */
 function MenuKey() {
@@ -32,9 +30,7 @@ export function Header({
   projects: ProjectSummary[]
 }) {
   const open = useOpen()
-  // Here, read as the button is pressed: a move of the focus does not
-  // draw the header again.
-  const here = useContext(HereContext)
+  const startThread = useNewThread(only, projects)
   return (
     <div className="flex items-center gap-0.5 px-2 pt-2 pb-1">
       <button
@@ -53,11 +49,7 @@ export function Header({
         className="text-muted-foreground"
         aria-label="New Thread"
         title="New Thread"
-        onClick={() => {
-          const project = only ?? here.get().starts
-          const { missing } = projects.find((one) => one.id === project) ?? {}
-          newThread(open, project, missing)
-        }}
+        onClick={startThread}
       >
         <SquarePenIcon />
       </Button>

@@ -44,7 +44,7 @@ test("under its Project's header a card leaves the Project out; hidden, another 
   ).toEqual(["mark", "machine"])
 })
 
-test("only the Person's turn and work stand forward", () => {
+test("only the Person's turn and the open stand forward; work is grey (ADR 0098, decision 3)", () => {
   const quiet = (stand: Row["stand"]) =>
     cardOf(row({ stand }), laid(1), here).quiet
   expect([
@@ -53,7 +53,7 @@ test("only the Person's turn and work stand forward", () => {
     quiet("open"),
     quiet("later"),
     quiet("archived"),
-  ]).toEqual([false, false, true, true, true])
+  ]).toEqual([false, true, false, true, true])
 })
 
 test("the status says the Later, the waking, or the mark", () => {

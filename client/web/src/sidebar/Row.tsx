@@ -156,8 +156,13 @@ function Piece({
   const { quiet } = card
   switch (part) {
     case "mark":
+      // A working card is grey, but its Mark says what its Agent does,
+      // already quiet in its own blue (ADR 0107): it does not fade.
       return (
-        <ThreadMark listed={listed} className={cn(quiet && "opacity-40")} />
+        <ThreadMark
+          listed={listed}
+          className={cn(quiet && row.stand !== "working" && "opacity-40")}
+        />
       )
     case "title":
       return <Title row={row} quiet={quiet} />

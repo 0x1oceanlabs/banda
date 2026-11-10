@@ -18,7 +18,15 @@ function ScrollArea({
         data-slot="scroll-area-viewport"
         className="size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1"
       >
-        {children}
+        {/* The content is watched apart from the viewport: when it grows
+            or shrinks inside a viewport that keeps its size (a sidebar tab
+            switched for a shorter one), the scrollbar follows, and none
+            stays drawn over a list that no longer scrolls. It is as wide
+            as the viewport, not as its widest line, so a line too long is
+            cut short rather than scrolled sideways. */}
+        <ScrollAreaPrimitive.Content style={{ minWidth: 0 }}>
+          {children}
+        </ScrollAreaPrimitive.Content>
       </ScrollAreaPrimitive.Viewport>
       <ScrollBar />
       <ScrollAreaPrimitive.Corner />

@@ -16,7 +16,7 @@ import {
 } from "@banda/ui/module"
 import type { Listed } from "@banda/ui/pane"
 import { ArchiveIcon, ArchiveRestoreIcon } from "lucide-react"
-import { itemsOf } from "../registry"
+import { itemsOf, kinds } from "../registry"
 import type { StandRow } from "../tiling/PaneMenu"
 import type { Shell } from "../window/actions"
 import { mayArchive } from "@banda/ui/status"
@@ -73,7 +73,25 @@ export function itemActionOf(
   listed: Listed,
   does: NonNullable<ItemAction["does"]>
 ): ItemAction<Shell> | undefined {
-  return itemActionsOf(listed).find((action) => action.does === does)
+  return doing(itemActionsOf(listed), does)
+}
+
+/** Of `actions`, the first that does `does`. */
+const doing = (
+  actions: readonly ItemAction<Shell>[],
+  does: NonNullable<ItemAction["does"]>
+) => actions.find((action) => action.does === does)
+
+/** The item action that does `does` of the first App with one: what
+ * words name the key of where no Item is in view, as an empty Later's
+ * do. */
+export function actionDoing(
+  does: NonNullable<ItemAction["does"]>
+): ItemAction<Shell> | undefined {
+  return doing(
+    kinds.flatMap(({ kind }) => itemsOf(kind)),
+    does
+  )
 }
 
 /** An item action with its row for one Item. */

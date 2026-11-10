@@ -2675,8 +2675,18 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   const view = sidebar.getByRole("button", { name: /^View: / })
   await expect(view).toHaveAccessibleName("View: projects")
-  // Each Project a section: the row sits under its Project's name.
-  const work = sidebar.getByRole("group", { name: "Work" })
+  // The Inbox in view, under its tab (ADR 0098, decision 2), each Project
+  // a group in it: the row sits under its Project's name.
+  await expect(
+    sidebar.getByRole("tablist", { name: "Threads by where they stand" })
+  ).toBeVisible()
+  await expect(sidebar.getByRole("tab", { name: /^Inbox/ })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  )
+  const work = sidebar
+    .getByRole("tabpanel")
+    .getByRole("group", { name: "Work" })
   await expect(work.getByRole("button", { name: /hello/ })).toBeVisible()
   await page.screenshot({ path: "test-results/22-sidebar-projects.png" })
 
@@ -3622,13 +3632,14 @@ test("Alt+[ takes a Pane into a column, Alt+T shows it as a Deck", async () => {
 
   // As a Deck: one shows, the other waits behind its tab.
   await page.keyboard.press("Alt+KeyT")
-  const tabs = page.getByRole("tab")
+  // The Deck's tabs, not the sidebar's.
+  const tabs = columns.getByRole("tab")
   await expect(tabs).toHaveCount(2)
   await expect(tabs.nth(1)).toHaveAttribute("aria-selected", "true")
   await expect(launcher).toBeVisible()
   await expect(thread).toBeHidden()
   // Over the tile, which keeps its own header.
-  const bar = await page.getByRole("tablist").boundingBox()
+  const bar = await columns.getByRole("tablist").boundingBox()
   const tile = await launcher.boundingBox()
   expect(bar!.y + bar!.height).toBeLessThanOrEqual(tile!.y)
   await expect(
@@ -4605,7 +4616,8 @@ test("a tab in a Deck's bar carries its Pane", async () => {
   )
   await page.keyboard.press("Alt+BracketLeft")
   await page.keyboard.press("Alt+KeyT")
-  const tabs = page.getByRole("tab")
+  // The Deck's tabs, not the sidebar's.
+  const tabs = page.locator("[data-column]").getByRole("tab")
   await expect(tabs).toHaveCount(2)
 
   // The Thread's tab, to the right edge of the tile: a column of its own.
@@ -5438,31 +5450,34 @@ test("a Thread is archived from its row's menu, its Pane closes, and Alt+S bring
 
   await row.click({ button: "right" })
   await page.getByRole("menuitem", { name: /Archive thread/ }).click()
-  // On the Archive shelf, folded, with its count; its Pane is put away.
+  // In the Archive, which its tab counts (ADR 0098, decision 2); its Pane
+  // is put away.
+  const archive = sidebar.getByRole("tab", { name: /^Archive/ })
   const shelf = sidebar.getByRole("group", { name: "Archive" })
-  const header = shelf.getByRole("button", { name: /Archive/ })
-  await expect(header).toHaveAttribute("aria-expanded", "false")
-  await expect(header).toContainText("1")
+  await expect(archive).toHaveAccessibleName("Archive, 1")
   await expect(row).toBeHidden()
   await expect(thread).toBeHidden()
-  await header.click()
+  await archive.click()
   const archived = shelf.getByRole("button", { name: /hello/ })
   await expect(archived).toBeVisible()
   await page.screenshot({ path: "test-results/25-archived.png" })
 
-  // Its row opens it again, archived still; Alt+S on it brings it back.
+  // Its row opens it again, archived still; Alt+S on it brings it back,
+  // out of the Archive and into the Inbox.
   await archived.click()
   await expect(thread).toBeVisible()
   await expect(shelf).toBeVisible()
   await page.keyboard.press("Alt+S")
-  await expect(row).toBeVisible()
   await expect(shelf).toBeHidden()
+  await expect(sidebar.getByText("Nothing archived yet")).toBeVisible()
   await expect(thread).toBeVisible()
+  await sidebar.getByRole("tab", { name: /^Inbox/ }).click()
+  await expect(row).toBeVisible()
 
   // Alt+S archives the Thread in the focused Pane, and closes it.
   await page.keyboard.press("Alt+S")
   await expect(thread).toBeHidden()
-  await expect(shelf).toBeVisible()
+  await expect(archive).toHaveAccessibleName("Archive, 1")
 })
 
 /** The window drawn again, as soon after its start as the test goes: not
@@ -5540,6 +5555,7 @@ test("a Thread's marks are its host's: unread and read, archived and back, each 
   const list = sidebar.getByRole("group", { name: "Threads" })
   const row = list.getByRole("button", { name: /hello/ })
   const done = row.getByRole("img", { name: "Done" })
+  const archive = sidebar.getByRole("tab", { name: /^Archive/ })
   const shelf = sidebar.getByRole("group", { name: "Archive" })
   await expect(done).toBeHidden()
   // Another Pane has the focus, so nothing reads the Thread again.
@@ -5575,19 +5591,20 @@ test("a Thread's marks are its host's: unread and read, archived and back, each 
 
   // Archived on its host, and still after a reload.
   await menu(/Archive thread/)
-  await expect(shelf).toBeVisible()
+  await expect(archive).toHaveAccessibleName("Archive, 1")
   await expect(row).toBeHidden()
   await expect.poll(() => first().archived).toBeDefined()
   await drawnAgain(page)
-  const header = shelf.getByRole("button", { name: /Archive/ })
-  await expect(header).toContainText("1")
+  await expect(archive).toHaveAccessibleName("Archive, 1")
   await expect(row).toBeHidden()
   // Back, on its host too, and still after a reload.
-  await header.click()
+  await archive.click()
   await shelf.getByRole("button", { name: /hello/ }).click({ button: "right" })
   await page.getByRole("menuitem", { name: /Unarchive thread/ }).click()
-  await expect(row).toBeVisible()
   await expect(shelf).toBeHidden()
+  await expect(archive).toHaveAccessibleName("Archive")
+  await sidebar.getByRole("tab", { name: /^Inbox/ }).click()
+  await expect(row).toBeVisible()
   await expect.poll(() => first().archived).toBeUndefined()
   await drawnAgain(page)
   await expect(row).toBeVisible()
@@ -5677,6 +5694,7 @@ test("from a far host, a mark shows at once and never flips back as its fact com
     .getByRole("group", { name: "Threads" })
     .getByRole("button", { name: /hello/ })
   const done = row.getByRole("img", { name: "Done" })
+  const archive = sidebar.getByRole("tab", { name: /^Archive/ })
   const shelf = sidebar.getByRole("group", { name: "Archive" })
   await expect(row.getByRole("img", { name: "Working" })).toBeHidden()
   await expect(done).toBeHidden()
@@ -5706,14 +5724,16 @@ test("from a far host, a mark shows at once and never flips back as its fact com
   await page.keyboard.press("Alt+S")
   await expect(thread).toBeHidden(soon)
   await expect(row).toBeHidden(soon)
-  await expect(shelf).toBeVisible()
+  await expect(archive).toHaveAccessibleName("Archive, 1")
   await expect.poll(() => first().archived).toBeDefined()
   await heard()
   expect(await was()).toEqual([true, false])
-  // Back, from its row on the shelf.
-  await shelf.getByRole("button", { name: /Archive/ }).click()
+  // Back, from its row in the Archive, with the Inbox in view again.
+  await archive.click()
   await shelf.getByRole("button", { name: /hello/ }).click()
   await expect(thread).toBeVisible()
+  await sidebar.getByRole("tab", { name: /^Inbox/ }).click()
+  await expect(thread).toHaveAttribute("data-focused", "true")
   was = await followed(page, rowIn("hello"))
   await page.keyboard.press("Alt+S")
   await expect(row).toBeVisible(soon)
@@ -5738,7 +5758,7 @@ test("from a far host, a mark shows at once and never flips back as its fact com
     .getByRole("group", { name: "Working" })
     .getByRole("button", { name: /hello/ })
   await expect(working).toBeVisible()
-  await expect(shelf).toBeHidden()
+  await expect(archive).toHaveAccessibleName("Archive")
   await expect(thread).toBeHidden()
   expect(first().archived).toBeUndefined()
   await working.click()
@@ -5807,9 +5827,9 @@ test("the marks this window kept move to its host once, and its first list shows
   })()`)
   await drawnAgain(page)
 
+  const archive = sidebar.getByRole("tab", { name: /^Archive/ })
   const shelf = sidebar.getByRole("group", { name: "Archive" })
-  const header = shelf.getByRole("button", { name: /Archive/ })
-  await expect(header).toContainText("1")
+  await expect(archive).toHaveAccessibleName("Archive, 1")
   await expect(marked).toBeVisible()
   await expect(marked.getByRole("img", { name: "Done" })).toBeHidden()
   expect(await page.evaluate("globalThis.__before")).toEqual({
@@ -5828,9 +5848,11 @@ test("the marks this window kept move to its host once, and its first list shows
 
   // Brought back, it stays back at the next start: the old keys, there
   // still, move nothing again.
-  await header.click()
+  await archive.click()
   await shelf.getByRole("button", { name: /hello/ }).click({ button: "right" })
   await page.getByRole("menuitem", { name: /Unarchive thread/ }).click()
+  await expect(shelf).toBeHidden()
+  await sidebar.getByRole("tab", { name: /^Inbox/ }).click()
   await expect(hello).toBeVisible()
   await expect.poll(() => titled("hello").archived).toBeUndefined()
   await drawnAgain(page)
@@ -6174,7 +6196,9 @@ test("the Banda menu goes into a Project and the sidebar's view, and Tab shows w
   await acts.getByRole("option", { name: /Archive thread/ }).click()
   await expect(menu).toBeHidden()
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  await expect(sidebar.getByRole("group", { name: "Archive" })).toBeVisible()
+  await expect(
+    sidebar.getByRole("tab", { name: /^Archive/ })
+  ).toHaveAccessibleName("Archive, 1")
   await expect(thread).toBeHidden()
 
   // The sidebar's view: its presets, one picked writes the file.
