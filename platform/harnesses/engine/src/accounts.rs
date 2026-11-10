@@ -35,9 +35,33 @@ pub struct ConnectAccount {
     pub folder: Option<String>,
 }
 
+#[derive(Deserialize, TS, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[ts(export_to = "harnesses/")]
+pub struct RemoveAccount {
+    pub harness: String,
+    /// If supplied, refuse when the default changed since confirmation.
+    #[ts(optional)]
+    pub to: Option<String>,
+}
+
+/// Kept with the old entry so a resumed session still knows its source.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Retirement {
+    pub to: String,
+    #[schemars(with = "serde_json::Value")]
+    pub by: banda_kernel::Participant,
+}
+
 /// The one settings writer, injected by the engine to avoid making the
 /// Harness module depend on every module whose settings it describes.
 pub trait AccountSettings: Send + Sync {
+    fn remove(
+        &self,
+        id: &str,
+        expected: Option<&str>,
+        by: banda_kernel::Participant,
+    ) -> Result<String, Refusal>;
     fn profiles(&self) -> Result<Vec<AccountProfile>, Refusal>;
     fn connect(&self, account: ConnectAccount) -> Result<HarnessView, Refusal>;
 }

@@ -547,8 +547,12 @@ async fn work(
     // What the turn does is said from its start, while its Harness starts
     // too, so one that never gets going shows as stuck.
     let doer = Doer::new(live.doings().clone(), project.id(), thread, turn.id);
+    let choices = harnesses.clone();
     let harness_id = project
-        .read(move |sql| store::thread(sql, thread))
+        .write(move |tx| {
+            crate::retirements::one(tx, &choices, thread)?;
+            store::thread(tx.sql(), thread)
+        })
         .await
         .map_err(|e| unplanned(plain(e)))?
         .map(|summary| summary.harness)

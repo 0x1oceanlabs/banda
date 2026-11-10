@@ -972,12 +972,13 @@ If Chat is removed, Agents still works through its own Thread.
     in, and Sign out where a logout ends the sign-in: an account's, not a
     key's. Check again asks the Harness anew; a sign-in or sign-out
     anywhere reads it again as `account_changed` arrives. It needs no
-    Project: with none, a way in a terminal shows its line to run by hand,
-    and what a new Thread starts with, which a Project offers, does not
-    show. It turns an entry on or off, changes its command, and adds or
-    removes one, writing `harnesses.toml` through `banda settings` (ADR
-    0016). An entry with a known ID, `claude`
-    or `codex`, takes each key it leaves out from Banda, so a new Banda
+    Project: subscription Accounts use the engine's sign-in flow; a custom
+    Harness's terminal way shows its command when there is no Project.
+    What a new Thread starts with, which a Project offers, does not show
+    without one. Entry settings use the existing writer (ADR 0016);
+    subscription setup and removal use the Account contract (ADR 0104).
+    An entry with a known ID, `claude` or `codex`, takes each key it leaves
+    out from Banda, so a new Banda
     moves its adapter; the window shows what is wrong in the file as in
     the look's. What a new Thread on each starts with, its mode, plan and
     options, as the composer's bar shows them (`agents.defaults`), is
@@ -1002,6 +1003,13 @@ If Chat is removed, Agents still works through its own Thread.
   fallback only after that Account reports a sign-in and available limits.
   Finishing emits the same account change
   as the window's sign-in, and a fresh status confirms the identity.
+  `remove_account` records the destination and caller, hides the Account
+  and refuses new starts on it. Each Project moves idle Threads through
+  its own store, and moves a running Thread after its Turn ends. A queued
+  Turn checks again before opening its Harness. Reopened Projects apply
+  the same instruction. The source entry and profile remain for session
+  resumption; removal never signs out or deletes an adopted profile.
+  The default cannot be removed until another enabled default is chosen.
 - **The Harness's notices**, such as warnings, join the Thread as lines of
   their own.
 - **A notice for the Agent** says what another module did for the

@@ -16,8 +16,8 @@ use toml_edit::Key;
 /// engine writes for it: which entry it is, its program and arguments, its
 /// environment, its CLI, the Harness it is an account of, the adapter
 /// Banda carries for it, and its recording's folder.
-const RUNS: [&str; 8] = [
-    "id", "command", "args", "env", "cli", "of", "carried", "record",
+const RUNS: [&str; 9] = [
+    "id", "command", "args", "env", "cli", "of", "carried", "record", "retired",
 ];
 
 /// Why only the Person changes `key` (dotted, as `banda settings set` takes

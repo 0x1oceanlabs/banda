@@ -401,6 +401,8 @@ enum AccountCommand {
     LoginCancel { login: String },
     /// Refresh after sign-in ends; use account status to confirm the identity.
     LoginFinish { login: String },
+    /// Remove an Account; its Threads move to the default after their Turn.
+    Remove { id: String },
     /// Change the display name; the ID stays.
     Rename { id: String, name: String },
     /// Offer the Account for new Threads.
@@ -848,6 +850,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
 /// Calls one method and prints its answer as `{"ok": …}`.
 async fn account_command(places: &Places, what: AccountCommand) -> Result<(), Failure> {
     let (method, params) = match what {
+        AccountCommand::Remove { id } => ("harnesses.remove_account", json!({ "harness": id })),
         AccountCommand::List => ("harnesses.list", json!({})),
         AccountCommand::Discover => ("harnesses.account_profiles", json!({})),
         AccountCommand::Add { harness, id, name } => (

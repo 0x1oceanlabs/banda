@@ -717,6 +717,15 @@ pub fn set_forked_from(sql: &Connection, thread: ThreadId, from: ThreadId) -> Re
     Ok(())
 }
 
+/// Idle Threads still assigned to a removed Account, including archived
+/// Threads. Queued Turns follow the new Account when they start.
+pub fn idle_on(sql: &Connection, harness: &str) -> Result<Vec<ThreadId>, Error> {
+    let mut statement = sql.prepare("SELECT id FROM agents_threads WHERE harness = ?1 AND NOT EXISTS (SELECT 1 FROM agents_turns WHERE thread = agents_threads.id AND state = 'running')")?;
+    Ok(statement
+        .query_map([harness], |row| row.get(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
 /// The Project's Threads, the latest first, each with where its work
 /// stands and what it does now, from `doing`: memory's, not the store's,
 /// read before them. A Thread takes what its latest turn does while that

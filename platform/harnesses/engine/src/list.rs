@@ -40,6 +40,8 @@ pub struct Harness {
     pub command: String,
     /// Whether it is on: one turned off starts nothing new.
     pub enabled: bool,
+    /// Removed from choices, with session provenance retained.
+    pub retired: Option<crate::accounts::Retirement>,
     /// The program's arguments.
     pub args: Vec<String>,
     /// Variables over the environment it starts in.
@@ -609,6 +611,8 @@ struct HarnessEntry {
     /// starts, for when it is turned on again.
     #[schemars(extend("default" = true))]
     enabled: Option<bool>,
+    /// Written by the bounded Account removal operation.
+    retired: Option<crate::accounts::Retirement>,
     /// The program's arguments.
     args: Option<Vec<String>>,
     /// Variables over the environment it starts in.
@@ -739,7 +743,8 @@ impl HarnessEntry {
             name,
             short,
             command,
-            enabled: self.enabled.unwrap_or(true),
+            enabled: self.enabled.unwrap_or(true) && self.retired.is_none(),
+            retired: self.retired,
             args: self.args.unwrap_or(args),
             env,
             cli: self.cli.or(cli),
@@ -990,9 +995,48 @@ impl Harnesses {
     /// Entry `id`, when it is on.
     pub fn get(&self, id: &str) -> Result<Harness, String> {
         match self.find(id) {
-            Some(harness) if harness.enabled => Ok(harness),
+            Some(harness) if harness.enabled && harness.retired.is_none() => Ok(harness),
             Some(harness) => Err(format!("{} is turned off in harnesses.toml.", harness.name)),
             None => Err(format!("This computer has no Harness named \"{id}\".")),
+        }
+    }
+
+    /// Removed Accounts keep their source metadata for old sessions.
+    pub fn retired(&self) -> Vec<Harness> {
+        self.now()
+            .iter()
+            .filter(|h| h.retired.is_some())
+            .cloned()
+            .collect()
+    }
+
+    /// Follow later removals too, refusing a malformed cycle or destination.
+    pub fn replacement(
+        &self,
+        id: &str,
+    ) -> Result<Option<(String, banda_kernel::Participant)>, String> {
+        let mut seen = std::collections::HashSet::new();
+        let mut next = id.to_owned();
+        let mut by = None;
+        loop {
+            if !seen.insert(next.clone()) {
+                return Err("Account removal destinations form a cycle.".into());
+            }
+            let harness = self
+                .find(&next)
+                .ok_or_else(|| format!("Account {next} is missing."))?;
+            if let Some(retired) = harness.retired {
+                by.get_or_insert(retired.by);
+                next = retired.to;
+            } else {
+                return match by {
+                    Some(_) if !harness.enabled => Err(format!(
+                        "Account {next} is turned off; enable it to finish moving Threads."
+                    )),
+                    Some(by) => Ok(Some((next, by))),
+                    None => Ok(None),
+                };
+            }
         }
     }
 
@@ -1000,6 +1044,7 @@ impl Harnesses {
         let list = self.now();
         let looks = looks(&list);
         (list.iter().zip(looks))
+            .filter(|(harness, _)| harness.retired.is_none())
             .map(|(harness, (mark, colour))| HarnessView::of(harness, mark, colour))
             .collect()
     }
@@ -1054,6 +1099,7 @@ pub(super) fn known() -> Vec<Harness> {
                 command: "npx".to_owned(),
                 args: vec!["-y".to_owned(), adapter.npm()],
                 enabled: true,
+                retired: None,
                 env: BTreeMap::from([("npm_config_omit".to_owned(), "optional".to_owned())]),
                 cli: Some(Cli {
                     program: program.to_owned(),

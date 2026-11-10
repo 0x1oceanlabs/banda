@@ -63,6 +63,7 @@ fn fake_with(env: &[(&str, &str)]) -> Harness {
         short: None,
         command: fake_agent().display().to_string(),
         enabled: true,
+        retired: None,
         args: Vec::new(),
         env: env
             .iter()
@@ -1554,6 +1555,7 @@ fn with_cli_since(program: &str, minimum: Option<&str>) -> Agents {
         short: None,
         command: fake_agent().display().to_string(),
         enabled: true,
+        retired: None,
         args: Vec::new(),
         env: Default::default(),
         cli: Some(Cli {
@@ -3396,6 +3398,7 @@ async fn the_real_harnesses_say_what_they_run_and_who_is_signed_in() {
         short: None,
         command: fake_agent().display().to_string(),
         enabled: true,
+        retired: None,
         args: Vec::new(),
         env: Default::default(),
         cli: None,
@@ -6124,6 +6127,7 @@ fn two_claude_accounts(cli: &Path) -> Agents {
         short: None,
         command: fake_agent().display().to_string(),
         enabled: true,
+        retired: None,
         args: Vec::new(),
         env: Default::default(),
         cli,
@@ -6451,6 +6455,7 @@ async fn a_threads_process_runs_the_carried_adapter_on_the_node_found_with_the_p
         short: None,
         command: "npx".into(),
         enabled: true,
+        retired: None,
         args: Vec::new(),
         env: Default::default(),
         cli: None,
@@ -7299,4 +7304,61 @@ async fn a_turn_a_limit_stopped_goes_on_with_another_account_at_once() {
     );
     assert_eq!(world.thread(thread).await.thread.harness, "other");
     assert!(world.later_of(thread).await.unwrap().woke.is_none());
+}
+
+#[tokio::test]
+async fn removing_an_account_keeps_its_running_turn_then_moves_its_threads() {
+    let root = tempfile::tempdir().unwrap();
+    let file = root.path().join("harnesses.toml");
+    let program = serde_json::to_string(&fake_agent().display().to_string()).unwrap();
+    let base = format!(
+        "[[harness]]\nid = \"old\"\nname = \"Old\"\ncommand = {program}\n\n[[harness]]\nid = \"next\"\nname = \"Next\"\ncommand = {program}\n"
+    );
+    std::fs::write(&file, &base).unwrap();
+    let choices = Harnesses::load(&file).unwrap();
+    let world = World::new_on(root.path(), Agents::new(choices.clone()), "old").await;
+    let idle = world.send(None, "hello").await;
+    world
+        .until(&idle["thread"], |v| {
+            state(v, &idle["turn"]) == Some(TurnState::Done)
+        })
+        .await;
+    let active = world.send(None, "slow").await;
+    world
+        .until(&active["thread"], |v| {
+            texts(v).iter().any(|s| s.contains("message: 0 "))
+        })
+        .await;
+    let saved = base.replace("name = \"Old\"", &format!("name = \"Old\"\nretired = {{ to = \"next\", by = {{ kind = \"person\", id = \"{}\" }} }}", world.owner));
+    std::fs::write(&file, saved).unwrap();
+    assert!(choices.get("old").is_err());
+    assert_eq!(
+        world.thread(&active["thread"]).await.thread.harness,
+        "old",
+        "the current Turn keeps its Account"
+    );
+    world
+        .until(&active["thread"], |v| v.thread.harness == "next")
+        .await;
+    world
+        .until(&idle["thread"], |v| v.thread.harness == "next")
+        .await;
+    let next = world.send(Some(&active["thread"]), "hello again").await;
+    let view = world
+        .until(&active["thread"], |v| {
+            state(v, &next["turn"]) == Some(TurnState::Done)
+        })
+        .await;
+    assert!(
+        texts(&view).iter().any(|s| s.contains("message: 0 ")),
+        "history stays"
+    );
+    assert_eq!(
+        world
+            .events_of(&active["thread"], "thread.switched")
+            .await
+            .len(),
+        1,
+        "repeated checks move once"
+    );
 }
