@@ -62,10 +62,16 @@ login_input: CallMethod<LoginInput, null>,
  */
 login_cancel: CallMethod<LoginId, null>, 
 /**
+ * Removes an Account from choices and moves its Threads to the
+ * default after their current Turn. Keeps profiles and history;
+ * refuses removing the default.
+ */
+remove_account: CommandMethod<RemoveAccount, string>, 
+/**
  * Refreshes the Account after a completed sign-in. Then ask
  * account_status to confirm the Harness's report.
  */
-remove_account: CommandMethod<RemoveAccount, string>, login_finish: CommandMethod<LoginId, null>, 
+login_finish: CommandMethod<LoginId, null>, 
 /**
  * Signs in with one of the Harness's ways. A way in a terminal ran
  * there already: the Person signed in in it.
