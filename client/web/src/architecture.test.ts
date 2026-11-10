@@ -93,6 +93,14 @@
  * - Where a Thread stands is said once, in `@banda/ui/status` (ADR 0098,
  *   decision 26): what still reads a Later against the clock by itself
  *   is listed, and the list only falls.
+ * - A kind of Pane that opens on another machine reaches nothing past its
+ *   three handles (ADR 0106, law 1): over all the code it takes, through
+ *   every import, the kit's helpers too, what it still reaches of the
+ *   desktop's bridge, the clipboard, the browser's windows or an engine
+ *   of its own, but through the device's own helpers, is listed by kind,
+ *   each with the step that takes it, and the list only falls. And no App code asks where its Pane is (law 6):
+ *   what reads a Pane's host, and each check of what it read, is counted
+ *   by file, and the counts only fall.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { dirname, join, relative, sep } from "node:path"
@@ -100,13 +108,19 @@ import {
   appStrings,
   componentProps,
   desktopReads,
+  hostReads,
   imports,
+  kindReaches,
+  kindsIn,
   layoutMotion,
   manifestIn,
   parts,
+  type PastHandle,
+  pastHandles,
   programOver,
   sources,
   valuesTaken,
+  workspaceResolver,
 } from "@banda/ui/testing/architecture"
 import ts from "typescript"
 import { expect, test } from "vitest"
@@ -2396,4 +2410,180 @@ test("where a Thread stands is read from status.ts, and no more files read a Lat
     .map((file) => relative(root, file))
     .sort()
   expect(reading).toEqual(LATER_READERS)
+})
+
+/**
+ * What each kind of Pane that opens on another machine (`elsewhere`)
+ * still reaches past its three handles, its owner, its window and the
+ * device (ADR 0106, law 1): the places `kindReaches` finds in all the
+ * code the kind takes, through every import, by kind, file and what it
+ * reaches, each with the step of ADR 0106's plan that takes it away. Only
+ * the Thread opens elsewhere today, so only its places are here:
+ *
+ * - 3c: a reply's links, Open in, and an Issue's page and the text it
+ *   copies, as the Thread's paths go through `files.locate` and its links
+ *   through the router to the device;
+ * - 4c: its media, as arc's bytes come through arc's session;
+ * - 4d: a Visual's links in a reply, as `visual/Frame.tsx`'s
+ *   `window.open` becomes a `Link`.
+ *
+ * None joins the list, and a place that goes leaves it, as its step
+ * lands. A kind that comes to say `elsewhere` reaches none, or says here
+ * why with its step.
+ */
+const REACHING: Record<string, { places: number; until: string }> = {
+  "agents.thread: apps/agents/pane/src/thread/Thread.tsx: window.open": {
+    places: 1,
+    until: "3c",
+  },
+  "agents.thread: client/ui/src/lib/outside.ts: @banda/ui/desktop": {
+    places: 1,
+    until: "3c",
+  },
+  "agents.thread: apps/agents/pane/src/entries/parts/Issue.tsx: window.open": {
+    places: 1,
+    until: "3c",
+  },
+  "agents.thread: apps/agents/pane/src/entries/parts/Issue.tsx: navigator.clipboard":
+    { places: 1, until: "3c" },
+  "agents.thread: apps/agents/pane/src/desktop.ts: @banda/ui/desktop": {
+    places: 1,
+    until: "4c",
+  },
+  "agents.thread: apps/agents/pane/src/visual/Frame.tsx: window.open": {
+    places: 1,
+    until: "4d",
+  },
+}
+
+/**
+ * The device's own helpers, which any kind may reach for what they do
+ * (ADR 0106, decision 2): they put the text the Person copies on this
+ * device's clipboard, which is the device's whichever machine the Pane's
+ * Project is on. A helper is the device's by an ADR, not to pass this
+ * test.
+ */
+const DEVICE_HELPERS: Record<string, PastHandle[]> = {
+  "client/ui/src/lib/clipboard.ts": ["navigator.clipboard"],
+  "client/ui/src/components/copy-button.tsx": ["navigator.clipboard"],
+}
+
+/** The steps of ADR 0106's plan. */
+const STEPS = [
+  ...["0′", "1a", "1a″", "1a′", "1b", "1c", "1d", "2a"],
+  ...["3a", "3b", "3c", "4a", "4b", "4c", "4d", "5a", "5b"],
+]
+
+/** Each kind of Pane the window has, by its ID: the file that declares
+ * it, and the name it exports it by. */
+const declared = new Map(
+  pageCode
+    .flatMap((folder) => sources(folder, { tests: false }))
+    .flatMap((file) =>
+      kindsIn(readFileSync(file, "utf8"), file).map(
+        ({ kind, name }) => [kind, { file, name }] as const
+      )
+    )
+)
+const kinds = [...modules, windowModule].flatMap((module) => module.panes ?? [])
+const resolveImport = workspaceResolver(root)
+const reached = kinds
+  .filter((kind) => kind.elsewhere)
+  .flatMap(({ kind }) => {
+    const at = declared.get(kind)
+    return at
+      ? kindReaches(at.file, resolveImport, { name: at.name }).map((place) => ({
+          kind,
+          ...place,
+        }))
+      : []
+  })
+  .filter(
+    (place) => !DEVICE_HELPERS[relative(root, place.file)]?.includes(place.what)
+  )
+const reachKey = (place: (typeof reached)[number]) =>
+  `${place.kind}: ${relative(root, place.file)}: ${place.what}`
+const reachingPast: Record<string, number> = {}
+for (const place of reached)
+  reachingPast[reachKey(place)] = (reachingPast[reachKey(place)] ?? 0) + 1
+
+test("the kind checker finds the file of each kind of Pane, and the Thread opens elsewhere", () => {
+  expect(
+    kinds.map(({ kind }) => kind).filter((kind) => !declared.has(kind))
+  ).toEqual([])
+  expect(
+    kinds.filter((kind) => kind.elsewhere).map(({ kind }) => kind)
+  ).toContain("agents.thread")
+})
+
+test("a kind that opens elsewhere reaches past its handles no more than the list holds", () => {
+  const over = Object.entries(reachingPast)
+    .filter(([key, count]) => count > (REACHING[key]?.places ?? 0))
+    .map(([key]) => key)
+  expect(
+    reached
+      .filter((place) => over.includes(reachKey(place)))
+      .map(
+        (place) =>
+          `${place.kind} reaches ${place.what} at ${relative(root, place.file)}:${place.line}, by ${place.chain.map((file) => relative(root, file)).join(" → ")}`
+      )
+  ).toEqual([])
+})
+
+test("a place that no longer reaches past the handles leaves the list, and each says its step", () => {
+  expect(reachingPast).toEqual(
+    Object.fromEntries(
+      Object.entries(REACHING).map(([key, { places }]) => [key, places])
+    )
+  )
+  for (const [key, { until }] of Object.entries(REACHING))
+    expect(STEPS, key).toContain(until)
+})
+
+test("each of the device's own helpers still does what it is the device's for", () => {
+  for (const [file, what] of Object.entries(DEVICE_HELPERS)) {
+    const does = pastHandles(readFileSync(join(root, file), "utf8"), file)
+    expect(new Set(does.map((place) => place.what)), file).toEqual(
+      new Set(what)
+    )
+  }
+})
+
+/**
+ * Where App code asks where its Pane is (ADR 0106, law 6; `hostReads`), by
+ * file: what reads its args' `host`, Here's Pane's or `paneHost`, and
+ * each check of what they read. Today's counts, which only fall: the
+ * Thread's checks go a few with each of its slices, New Thread's as the
+ * directory names a Project's machine (1a″), and the title's and a
+ * notification's as their actions go to the Thread's machine by the
+ * router (1a).
+ */
+const ASKING_WHERE: Record<string, number> = {
+  "apps/agents/pane/src/ThreadPane.tsx": 5,
+  "apps/agents/pane/src/composer/NewThread.tsx": 3,
+  "apps/agents/pane/src/list/items.ts": 1,
+  "apps/agents/pane/src/thread/Thread.tsx": 21,
+  "platform/notifications/pane/src/system.ts": 3,
+}
+
+const askingWhere = Object.fromEntries(
+  [...folders.values()]
+    .map((folder) => join(folder, "pane/src"))
+    .filter((folder) => existsSync(folder))
+    .flatMap((folder) => sources(folder, { tests: false }))
+    .flatMap((file) => {
+      const count = hostReads(readFileSync(file, "utf8"), file).length
+      return count > 0 ? [[relative(root, file), count] as const] : []
+    })
+)
+
+test("App code asks where its Pane is no more than the list holds", () => {
+  for (const [file, count] of Object.entries(askingWhere))
+    expect(count, `${file} asks where its Pane is`).toBeLessThanOrEqual(
+      ASKING_WHERE[file] ?? 0
+    )
+})
+
+test("a file that asks less where its Pane is lowers its count", () => {
+  expect(askingWhere).toEqual(ASKING_WHERE)
 })

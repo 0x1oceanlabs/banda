@@ -7,11 +7,16 @@ import {
   MANIFEST_NAMES,
   componentProps,
   desktopReads,
+  hostReads,
   imports,
+  kindReaches,
+  kindsIn,
   layoutMotion,
   parts,
+  pastHandles,
   programOver,
   valuesTaken,
+  workspaceResolver,
 } from "./architecture"
 
 test("the check sees every kind of import", () => {
@@ -288,4 +293,262 @@ test("a part is found by each name of its manifest, not by the old module.toml, 
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+test("the kind checker sees each way code reaches past a Pane's handles, and not a parameter named window", () => {
+  const places = (source: string) =>
+    pastHandles(source, "pane.tsx").map(({ what, line }) => `${line} ${what}`)
+  expect(
+    places(
+      [
+        `const host = window.banda`,
+        `navigator.clipboard.writeText("a")`,
+        `window.navigator.clipboard.readText()`,
+        `const { clipboard } = navigator`,
+        `window.open("https://a", "_blank")`,
+        `globalThis.open?.("https://b")`,
+        `open("https://c")`,
+        `const engine = new Engine(address)`,
+        `const other = new contract.Engine(address)`,
+        `const view = <a onClick={() => window.open(url)} />`,
+      ].join("\n")
+    )
+  ).toEqual([
+    "1 window.banda",
+    "2 navigator.clipboard",
+    "3 navigator.clipboard",
+    "4 navigator.clipboard",
+    "5 window.open",
+    "6 window.open",
+    "7 window.open",
+    "8 new Engine",
+    "9 new Engine",
+    "10 window.open",
+  ])
+  expect(
+    places(
+      [
+        `// window.open(url) in a comment`,
+        `const words = "window.open(url)"`,
+        `type Opens = typeof window.open`,
+        `function act(window: WindowApi) { window.open(pane) }`,
+        `const run = (window: WindowApi) => window.open(pane, project)`,
+        `import { open } from "./open"`,
+        `open(pane)`,
+        `function own({ open }: Props) { open(pane) }`,
+        `function inner() { const window = api(); window.open(pane) }`,
+        `tab.open(url)`,
+        `const navigator = keys(); navigator.clipboard`,
+      ].join("\n")
+    )
+  ).toEqual([])
+})
+
+/**
+ * What `kindReaches` finds from `start` in `files`, written as code by
+ * their paths: each place as `what at file:line, by a → b`. `@banda/ui/
+ * desktop` is `desktop.ts`, the core is under `core/`, and a module
+ * named bare is a package from outside.
+ */
+function reachedIn(
+  files: Record<string, string>,
+  start: string,
+  name?: string
+): string[] {
+  const resolve = (module: string, from: string) => {
+    if (module === "@banda/ui/desktop") return "/desktop.ts"
+    if (module === "@banda/core") return "/core/index.ts"
+    if (!module.startsWith(".")) return undefined
+    const path = join(from, "..", module)
+    return [path, `${path}.ts`, `${path}.tsx`, `${path}/index.ts`].find(
+      (file) => file in files
+    )
+  }
+  return kindReaches(start, resolve, {
+    name,
+    read: (file) => files[file],
+  }).map(
+    ({ what, file, line, chain }) =>
+      `${what} at ${file}:${line}, by ${chain.join(" → ")}`
+  )
+}
+
+test("the kind checker follows a kind's code through what it takes, and only that", () => {
+  const files = {
+    "/kind.tsx": [
+      `import { quiet, loud } from "./helpers"`,
+      `import { Pick } from "./index"`,
+      `import type { Bridge } from "./bridge"`,
+      `import { useState } from "react"`,
+      `import { twice } from "./named"`,
+      `export const kind = definePane({ kind: "a.kind", Pane })`,
+      `function Pane() { quiet(); loud(); twice(); return <Pick /> }`,
+    ].join("\n"),
+    // A default function is said by its own name in its file too.
+    "/named.ts": [
+      `export const twice = () => opens() + opens()`,
+      `export default function opens() { return window.banda?.files }`,
+    ].join("\n"),
+    // Of a file, the kind's code is what it names, and what that names.
+    "/helpers.ts": [
+      `import { filesHost } from "@banda/ui/desktop"`,
+      `export function quiet() { return 1 }`,
+      `export function loud() { return opens() }`,
+      `function opens() { window.open("https://a") }`,
+      `export function unused() { filesHost()?.outside("/a") }`,
+    ].join("\n"),
+    // An index gives again only what is taken of it.
+    "/index.ts": [
+      `export { Pick } from "./pick"`,
+      `export * from "./more"`,
+    ].join("\n"),
+    "/pick.tsx": [
+      `import { copy } from "./copy"`,
+      `export function Pick() { return <b onClick={copy} /> }`,
+    ].join("\n"),
+    "/more.ts": `export function more() { navigator.clipboard.readText() }`,
+    "/copy.ts": `export const copy = () => navigator.clipboard.writeText("a")`,
+    "/bridge.ts": `export type Bridge = typeof window.banda`,
+  }
+  expect(reachedIn(files, "/kind.tsx", "kind")).toEqual([
+    "window.open at /helpers.ts:4, by /kind.tsx → /helpers.ts",
+    "window.banda at /named.ts:2, by /kind.tsx → /named.ts",
+    "navigator.clipboard at /copy.ts:1, by /kind.tsx → /index.ts → /pick.tsx → /copy.ts",
+  ])
+  // The function that reaches the bridge is the kind's once it calls it.
+  files["/kind.tsx"] = files["/kind.tsx"]
+    .replace("quiet, loud", "quiet, loud, unused")
+    .replace("loud();", "loud(); unused();")
+  expect(reachedIn(files, "/kind.tsx", "kind")).toContain(
+    "@banda/ui/desktop at /helpers.ts:1, by /kind.tsx → /helpers.ts"
+  )
+})
+
+test("the kind checker takes what runs as a file loads, what a call is handed then, a dynamic import, and stops at the core", () => {
+  const files = {
+    "/kind.tsx": [
+      `import { store } from "./store"`,
+      `import { paneHost } from "@banda/core"`,
+      `export const kind = definePane({ Pane: () => store.get() + paneHost(pane) })`,
+      `export const other = definePane({ Pane: () => import("./later") })`,
+    ].join("\n"),
+    // Made as it loads: what the call names runs then, and what it is
+    // handed may; a function it only holds does not.
+    "/store.ts": [
+      `import { made } from "./made"`,
+      `export const store = made()`,
+      `export function idle() { window.open("https://idle") }`,
+      `export const watched = made().watch(() => window.banda?.files)`,
+      `export const held = made({ open: () => window.open("https://held") })`,
+      `void import("./side")`,
+      // Taken only to run, it runs all the same.
+      `import "./setup"`,
+    ].join("\n"),
+    "/side.ts": `export const side = () => navigator.clipboard.readText()`,
+    "/setup.ts": `globalThis.open?.("https://setup")`,
+    "/made.ts": `export function made() { return { get: () => new Engine(at) } }`,
+    "/later.ts": `export default function later() { window.open("https://b") }`,
+    "/core/index.ts": `export { paneHost } from "./hosts"`,
+    "/core/hosts.ts": `export const paneHost = () => new Engine(at)`,
+  }
+  expect(reachedIn(files, "/kind.tsx", "kind")).toEqual([
+    "window.banda at /store.ts:4, by /kind.tsx → /store.ts",
+    "new Engine at /made.ts:1, by /kind.tsx → /store.ts → /made.ts",
+    "navigator.clipboard at /side.ts:1, by /kind.tsx → /store.ts → /side.ts",
+    "window.open at /setup.ts:1, by /kind.tsx → /store.ts → /setup.ts",
+  ])
+  // All of the file: the other kind's Pane loads its page when it shows.
+  expect(reachedIn(files, "/kind.tsx")).toEqual([
+    "window.banda at /store.ts:4, by /kind.tsx → /store.ts",
+    "window.open at /later.ts:1, by /kind.tsx → /later.ts",
+    "new Engine at /made.ts:1, by /kind.tsx → /store.ts → /made.ts",
+    "navigator.clipboard at /side.ts:1, by /kind.tsx → /store.ts → /side.ts",
+    "window.open at /setup.ts:1, by /kind.tsx → /store.ts → /setup.ts",
+  ])
+})
+
+test("the kind checker finds each kind a file declares, by the name it exports it as", () => {
+  expect(
+    kindsIn(
+      [
+        `export const threadPane = definePane<ThreadArgs>({ kind: "agents.thread", title })`,
+        `export const launcher: AnyPaneKind = definePane({ kind: "window.launcher" })`,
+        `const made = definePane({ kind: prefix + ".made" })`,
+        `const other = makePane({ kind: "not.a.kind" })`,
+      ].join("\n"),
+      "kinds.tsx"
+    )
+  ).toEqual([
+    { kind: "agents.thread", name: "threadPane" },
+    { kind: "window.launcher", name: "launcher" },
+  ])
+})
+
+test("the resolver finds a workspace package by its exports, and a folder by its index", () => {
+  const root = join(import.meta.dirname, "../../../..")
+  const resolve = workspaceResolver(root)
+  const from = join(root, "apps/agents/pane/src/ThreadPane.tsx")
+  expect(resolve("@banda/ui/lib/look", from)).toBe(
+    join(root, "client/ui/src/lib/look.ts")
+  )
+  expect(resolve("@banda/ui/desktop", from)).toBe(
+    join(root, "client/ui/src/desktop.ts")
+  )
+  expect(resolve("@banda/core", from)).toBe(
+    join(root, "client/core/src/index.ts")
+  )
+  expect(resolve("./thread/Thread", from)).toBe(
+    join(root, "apps/agents/pane/src/thread/Thread.tsx")
+  )
+  expect(
+    resolve("../entries", join(root, "apps/agents/pane/src/lines/entry.tsx"))
+  ).toBe(join(root, "apps/agents/pane/src/entries/index.tsx"))
+  expect(resolve("react", from)).toBeUndefined()
+  expect(resolve("@banda/ui/globals.css", from)).toBeUndefined()
+})
+
+test("the check sees where a Pane asks where it is, and each check of what it read", () => {
+  const asks = (source: string) => hostReads(source, "pane.tsx")
+  expect(
+    asks(
+      [
+        `function Pane(props: PaneProps<Args>) {`,
+        `  const here = props.args.host === undefined`,
+        `  return here ? <A /> : here && <B />`,
+        `}`,
+        `function Thread({ args }: PaneProps<Args>) {`,
+        `  const { thread, host } = args`,
+        `  const shown = useShownOf(host)`,
+        `  const away = host !== undefined && shown`,
+        `  return away ? null : thread`,
+        `}`,
+        `const said = (call: Call) => paneHost(call.pane)`,
+        `const picked = (window: WindowApi) => window.here.get().pane?.host`,
+        `function Moved({ args: { host } }: Props) { return host }`,
+      ].join("\n")
+    )
+  ).toEqual([
+    "args.host",
+    "args.host",
+    "paneHost",
+    "pane.host",
+    "args.host",
+    "here",
+    "here",
+    "host",
+    "host",
+    "away",
+    "host",
+  ])
+  expect(
+    asks(
+      [
+        `const mine = groups.find((group) => group.host === host)`,
+        `const url = new URL(page).host`,
+        `function Picker({ host }: { host: string }) { return host }`,
+        `// args.host in a comment`,
+        `function Other() { const host = "arc"; return host }`,
+      ].join("\n")
+    )
+  ).toEqual([])
 })
