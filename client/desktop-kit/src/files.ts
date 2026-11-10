@@ -1,18 +1,19 @@
 /**
  * The byte host, `app://files`, and the sandbox host, `app://preview`
- * (ADR 0073, decision 5), as main relays them to the engine (ADR 0106,
- * decision 6). The page asks the engine of the Pane's session for a
- * token (`bytes.issue`), and a URL names it; main carries the request to
- * that engine's `/b/<token>` or `/p/<token>`, and its answer back as it
- * came. Main reads no file for it, and finds no Project's folder: the
- * engine serves the one file the token was given for, and says how, its
- * type, its ranges and a page's sandbox. The page's rules for the two
- * hosts stay as they were.
+ * (ADR 0073, decision 5), as main relays them to the engine that gave
+ * their tokens (ADR 0106, decision 6). The page asks the engine of the
+ * Pane's session for a token (`bytes.issue`), and a URL names it, and
+ * the machine it came from when that is not this one; main carries the
+ * request to that engine's `/b/<token>` or `/p/<token>`, and its answer
+ * back as it came. Main reads no file for it, and finds no Project's
+ * folder: the engine serves the one file the token was given for, and
+ * says how, its type, its ranges and a page's sandbox. The page's rules
+ * for the two hosts stay as they were.
  */
 import { type IncomingMessage, request as asking } from "node:http"
 import { Readable } from "node:stream"
+import type { Address } from "@banda/contract"
 import { Effect } from "effect"
-import { Engine } from "./engine"
 
 /** The hosts of `app://` main relays, each by its route on the engine: a
  * file's bytes, in ranges, and a page, into a frame alone. */
@@ -36,26 +37,46 @@ const PASSED = [
 /** What a connection says of itself alone, which no relay passes on. */
 const HOP = new Set(["connection", "keep-alive", "transfer-encoding"])
 
-/** A token, the URL's one part: the engine gives letters and digits. */
-const TOKEN = /^\/([\w-]+)$/
+/** A URL's path: a token, which the engine gives in letters and digits,
+ * and before it the machine that gave it, when that is not this one, in
+ * the letters a name in `hosts.toml` takes. */
+const NAMED = /^\/(?:([a-z0-9-]+)\/)?([\w-]+)$/
 
 const missing = () => new Response("Not found", { status: 404 })
 
+/** What a URL of the two hosts names. */
+export type Named = {
+  /** This device's name for the machine whose engine gave the token, as
+   * `hosts.toml` says it; none for this machine. It means nothing past
+   * this device, which is why no URL is ever kept (ADR 0106, law 2). */
+  machine: string | null
+  /** The engine's route for it: `b`, a file's bytes, or `p`, a page. */
+  route: string
+  token: string
+}
+
 /**
- * Where the engine listening at `address` (its API's `ws://` URL, always
- * on this machine's loopback) serves what `url` names:
- * `app://files/<token>` at its `/b/<token>`, `app://preview/<token>` at
- * its `/p/<token>`, over plain HTTP. None for a URL of another host, or
- * with no token, more parts, a query or a fragment.
+ * What `url` names: `app://files/<token>` and `app://preview/<token>` a
+ * token of this machine's engine, and `app://files/<machine>/<token>` and
+ * `app://preview/<machine>/<token>` one of that machine's. None for a URL
+ * of another host, or with no token, more parts, a query or a fragment.
  */
-export function relayedTo(url: string, address: string): URL | null {
+export function namedBy(url: string): Named | null {
+  if (!URL.canParse(url)) return null
   const asked = new URL(url)
   const route = Object.hasOwn(ROUTES, asked.host) ? ROUTES[asked.host] : null
-  const token = TOKEN.exec(asked.pathname)?.[1]
+  const [, machine = null, token] = NAMED.exec(asked.pathname) ?? []
   if (!route || !token || asked.search || asked.hash) return null
+  return { machine, route, token }
+}
+
+/** Where the engine listening at `address` (its API's `ws://` URL, always
+ * on this machine's loopback, through its forward for another machine's)
+ * serves `named`, over plain HTTP. */
+export function relayedTo(named: Named, address: string): URL {
   const engine = new URL(address)
   engine.protocol = "http:"
-  return new URL(`/${route}/${token}`, engine)
+  return new URL(`/${named.route}/${named.token}`, engine)
 }
 
 /** `answer`, the engine's, as the page's request gets it: its status,
@@ -96,24 +117,41 @@ function ask(to: URL, request: Request): Promise<Response> {
   })
 }
 
+/** Fails once the page gives `request` up. */
+const givenUp = (request: Request) =>
+  Effect.callback<never, Error>((resume) => {
+    const gone = () => resume(Effect.fail(new Error("The page gave it up")))
+    if (request.signal.aborted) gone()
+    else request.signal.addEventListener("abort", gone, { once: true })
+    return Effect.sync(() => request.signal.removeEventListener("abort", gone))
+  })
+
 /**
- * The answer to `request`, to `app://files` or `app://preview`: this
- * machine's engine's, relayed. A URL that names no token is refused here,
- * and never asked; a method but `GET` and `HEAD` too. While the engine is
- * between runs, the request waits till it listens again; an engine that
- * refuses the connection gives 502, which the page takes for a URL that
- * broke. Main puts no time limit on an answer, since a video's flows as
- * long as it plays: a request waits till the engine answers, or till the
- * page gives it up.
+ * The answer to `request`, to `app://files` or `app://preview`: the
+ * engine's that gave its token, relayed, wherever `addressOf` says it
+ * listens now, so a link goes on working when ssh comes back on a new
+ * port. A URL that names no token is refused here, and never asked; a
+ * method but `GET` and `HEAD` too. While `addressOf` waits, as for an
+ * engine between runs or a machine that is away, the request waits, till
+ * the page gives it up, when no engine hears of it; one `addressOf` fails
+ * for, and an engine that refuses the connection, give 502, which the
+ * page takes for a URL that broke. Main puts no time limit on an answer,
+ * since a video's flows as long as it plays.
  */
-export const relay = (request: Request) =>
+export const relay = <E, R>(
+  request: Request,
+  addressOf: (machine: string | null) => Effect.Effect<Address, E, R>
+) =>
   Effect.gen(function* () {
     if (request.method !== "GET" && request.method !== "HEAD")
       return new Response(null, { status: 405 })
-    const address = yield* Engine.use((engine) => engine.address)
-    const to = relayedTo(request.url, address.url)
-    if (!to) return missing()
-    return yield* Effect.tryPromise(() => ask(to, request)).pipe(
+    const named = namedBy(request.url)
+    if (!named) return missing()
+    return yield* addressOf(named.machine).pipe(
+      Effect.raceFirst(givenUp(request)),
+      Effect.flatMap((address) =>
+        Effect.tryPromise(() => ask(relayedTo(named, address.url), request))
+      ),
       Effect.catch(() =>
         Effect.succeed(
           new Response("The engine did not answer", { status: 502 })

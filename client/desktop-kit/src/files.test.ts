@@ -8,7 +8,7 @@ import type { AddressInfo } from "node:net"
 import { afterEach, beforeEach, expect, it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
 import { Engine } from "./engine"
-import { relay, relayedTo } from "./files"
+import { namedBy, relay, relayedTo } from "./files"
 
 /** What the fake engine heard: each request's method, path and headers. */
 type Heard = { method: string; path: string; headers: IncomingHttpHeaders }
@@ -69,7 +69,9 @@ const at = (port?: number) =>
 
 /** What main answers `url`, asked with `init`. */
 const relayed = (url: string, init?: RequestInit) =>
-  relay(new Request(url, init)).pipe(
+  relay(new Request(url, init), () =>
+    Engine.use((engine) => engine.address)
+  ).pipe(
     Effect.flatMap((response) =>
       Effect.promise(async () => ({
         status: response.status,
@@ -143,7 +145,8 @@ it.effect(
     Effect.gen(function* () {
       for (const url of [
         "app://files/",
-        "app://files/a/b",
+        "app://files/a/b/c",
+        "app://files/A/b",
         "app://files/a?b=c",
         "app://files/a#b",
         "app://files/a.b",
@@ -204,11 +207,29 @@ it.effect("an engine that does not answer gives 502", () =>
 
 it("each host goes to its own route on the engine, over http", () => {
   const ws = "ws://127.0.0.1:4321/ws"
-  expect(relayedTo("app://files/ab-c_1", ws)?.href).toBe(
+  expect(relayedTo(namedBy("app://files/ab-c_1")!, ws).href).toBe(
     "http://127.0.0.1:4321/b/ab-c_1"
   )
-  expect(relayedTo("app://preview/ab", ws)?.href).toBe(
+  expect(relayedTo(namedBy("app://preview/ab")!, ws).href).toBe(
     "http://127.0.0.1:4321/p/ab"
   )
-  expect(relayedTo("app://banda/index.html", ws)).toBeNull()
+  expect(namedBy("app://banda/index.html")).toBeNull()
+})
+
+it("a URL names the machine that gave its token, or none for this machine's", () => {
+  expect(namedBy("app://files/ab")).toEqual({
+    machine: null,
+    route: "b",
+    token: "ab",
+  })
+  expect(namedBy("app://files/arc-2/ab")).toEqual({
+    machine: "arc-2",
+    route: "b",
+    token: "ab",
+  })
+  expect(namedBy("app://preview/arc/ab")).toEqual({
+    machine: "arc",
+    route: "p",
+    token: "ab",
+  })
 })

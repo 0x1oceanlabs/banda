@@ -54,7 +54,6 @@ import {
   none,
   pickFolder,
   Refused,
-  relay,
   serve,
   Settings,
   tellPage,
@@ -67,6 +66,7 @@ import {
   poppedRoute,
 } from "@banda/core"
 import { BRIDGE } from "./bridge"
+import { relayed } from "./bytes"
 import { openDoor } from "./door"
 import { engineLayer, Stop } from "./engine"
 import { loginPath } from "./login"
@@ -140,9 +140,10 @@ const TEST_LATENCY = app.isPackaged
 /** The hosts of `app://` beside Banda's own page: the files a Pane shows,
  * and the pages among them that run scripts, sandboxed (ADR 0073,
  * decision 5), both relayed to the engine that gave their tokens, which
- * serves them (ADR 0106, decision 6); and the modules' own. */
+ * serves them, this machine's or another's (bytes.ts, ADR 0106, decision
+ * 6); and the modules' own. */
 const hosts = new Map(
-  Object.entries({ ...modules.served, files: relay, preview: relay })
+  Object.entries({ ...modules.served, files: relayed, preview: relayed })
 )
 /** The hosts a frame shows: the modules' and the sandbox host. The byte
  * host serves any file, so no frame shows one. */
