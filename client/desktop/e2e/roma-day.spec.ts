@@ -360,6 +360,11 @@ test("ten Agents of a Project work side by side on its workspace, and a pick bri
   expect(new Set(groups).size).toBe(10)
   const sidebar = sidebarOf(page)
   const rows = sidebar.locator("[data-row]")
+  // Nothing waits for the Person: the Working shelf shows the first six,
+  // and "+ 4 more" the rest (ADR 0098, decision 3).
+  await expect(sidebar.getByText("Nothing waits for you")).toBeVisible()
+  await expect(rows).toHaveCount(6)
+  await sidebar.getByRole("button", { name: "+ 4 more" }).click()
   await expect(rows).toHaveCount(10)
   await expect(rows.getByRole("img", { name: "Working" })).toHaveCount(10)
   // Each Group's plate takes its Agent's state: at work, all ten.
@@ -426,14 +431,14 @@ test("with the Sidebar hidden, Alt+U goes down what calls in the sidebar list's 
   await expect(counts).toHaveAccessibleName("3 done")
 
   // The counts' list goes in the sidebar list's order, the one order of
-  // what calls (ADR 0087, decision 8): the `inbox` preset puts the last
-  // done first.
+  // what calls (ADR 0087, decision 8): Your turn oldest first, so no one
+  // waits forever (ADR 0098, decision 3).
   await counts.click()
   const waiting = page.getByRole("group", { name: "Wait for you" })
   await expect(waiting.getByRole("menuitem")).toHaveText([
-    /wait c/,
-    /wait b/,
     /wait a/,
+    /wait b/,
+    /wait c/,
   ])
   await page.keyboard.press("Escape")
   await expect(waiting).toBeHidden()
@@ -441,9 +446,9 @@ test("with the Sidebar hidden, Alt+U goes down what calls in the sidebar list's 
   // Alt+U takes the next below, as the sidebar list orders them though it
   // is hidden: down the counts' list. The bar names each as it comes.
   await page.keyboard.press("Alt+KeyU")
-  await expect(c).toHaveAttribute("data-focused", "true")
+  await expect(a).toHaveAttribute("data-focused", "true")
   await expect(counts).toHaveAccessibleName("2 done")
-  await expect(counts).toContainText("wait c")
+  await expect(counts).toContainText("wait a")
   await page.keyboard.press("Alt+KeyU")
   await expect(b).toHaveAttribute("data-focused", "true")
   await expect(counts).toHaveAccessibleName("1 done")
@@ -451,8 +456,8 @@ test("with the Sidebar hidden, Alt+U goes down what calls in the sidebar list's 
 
   // A row of the counts' list goes there too.
   await counts.click()
-  await page.getByRole("menuitem", { name: /wait a/ }).click()
-  await expect(a).toHaveAttribute("data-focused", "true")
+  await page.getByRole("menuitem", { name: /wait c/ }).click()
+  await expect(c).toHaveAttribute("data-focused", "true")
   await expect(counts).toBeHidden()
   await expect(
     bar.getByRole("img", { name: "Nothing waits for you, nothing works" })
@@ -467,8 +472,10 @@ test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, 
   const toasts = toastsOf(page)
   const picker = pickerOf(page)
   const row = sidebar.getByRole("button", { name: /hello b/ })
-  const shelf = sidebar.getByRole("button", { name: /^Later/ })
-  await expect(shelf).toBeHidden()
+  // Later is a tab of its own (ADR 0098, decision 2), the Inbox another.
+  const tab = sidebar.getByRole("tab", { name: /^Later/ })
+  const inbox = sidebar.getByRole("tab", { name: /^Inbox/ })
+  await expect(tab).toHaveAccessibleName("Later")
 
   // The Pane menu's Later… opens the same picker, for its Pane's Thread
   // (ADR 0087, decision 12); Esc leaves it awake.
@@ -490,9 +497,9 @@ test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, 
   await expect(picker).toContainText("in 2h")
   await field.press("Enter")
 
-  // Its Pane closes, a toast says until when, and its row goes to the
-  // folded shelf, which says when the next one wakes. A time past
-  // midnight reads with its weekday (`clock`).
+  // Its Pane closes, a toast says until when, and its row goes to Later,
+  // whose tab counts it. A time past midnight reads with its weekday
+  // (`clock`).
   await expect(picker).toBeHidden()
   await expect(b).toBeHidden()
   const later = toasts.getByText(/^Later, until (\S+ )?\d/)
@@ -500,15 +507,13 @@ test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, 
   // A toast goes after a few seconds, but not under the pointer: Undo
   // stays there to click.
   await later.hover()
-  await expect(shelf).toHaveAttribute("aria-expanded", "false")
-  await expect(shelf).toContainText(/next (\S+ )?\d/)
-  await expect(shelf).toContainText(/1$/)
+  await expect(tab).toHaveAccessibleName("Later, 1")
   await expect(row).toBeHidden()
 
   // Undo wakes it: back in the list.
   await toasts.getByRole("button", { name: "Undo" }).click()
   await expect(row).toBeVisible()
-  await expect(shelf).toBeHidden()
+  await expect(tab).toHaveAccessibleName("Later")
 
   // The clock on its row puts it off too. A row shows its clock under the
   // pointer, or with the focus in it: headless, nothing hovers.
@@ -520,34 +525,38 @@ test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, 
   await expect(b).toBeHidden()
   await field.fill("45m")
   await field.press("Enter")
-  await expect(shelf).toBeVisible()
+  await expect(tab).toHaveAccessibleName("Later, 1")
   await expect(row).toBeHidden()
 
-  // Open, the shelf lists it with when it wakes; Wake brings it back.
-  await shelf.click()
-  await expect(shelf).toHaveAttribute("aria-expanded", "true")
+  // The Later tab lists it with when it wakes; Wake brings it back to the
+  // Inbox.
+  await tab.click()
+  await expect(tab).toHaveAttribute("aria-selected", "true")
   await expect(row).toContainText(/ · 4\dm/)
   await row.focus()
   await actions.getByRole("button", { name: "Wake" }).click()
   await leaveSidebar(page)
-  await expect(shelf).toBeHidden()
+  await expect(tab).toHaveAccessibleName("Later")
+  await expect(row).toBeHidden()
+  await inbox.click()
   await expect(row).toBeVisible()
   await expect(row).not.toContainText("·")
 
-  // Its row's Thread menu puts it off too, and on the shelf, wakes it.
+  // Its row's Thread menu puts it off too, and in Later, wakes it.
   const menu = page.getByRole("menu", { name: "Thread menu" })
   await row.click({ button: "right" })
   await menu.getByRole("menuitem", { name: /^Later…/ }).click()
   await expect(field).toBeFocused()
   await field.fill("45m")
   await field.press("Enter")
-  // The shelf stays open, as the Person left it.
-  await expect(shelf).toHaveAttribute("aria-expanded", "true")
+  await expect(row).toBeHidden()
+  await tab.click()
   await expect(row).toContainText(/ · 4\dm/)
   await row.click({ button: "right" })
   await menu.getByRole("menuitem", { name: "Wake now" }).click()
   await leaveSidebar(page)
-  await expect(shelf).toBeHidden()
+  await expect(tab).toHaveAccessibleName("Later")
+  await inbox.click()
   await expect(row).toBeVisible()
   await expect(row).not.toContainText("·")
 
@@ -557,6 +566,7 @@ test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, 
   await page.keyboard.press("Alt+KeyZ")
   await field.fill("45m")
   await field.press("Enter")
+  await tab.click()
   await expect(row).toContainText(/ · 4\dm/)
   await row.click()
   await page.keyboard.press("Alt+KeyZ")
@@ -564,7 +574,8 @@ test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, 
   await field.press("Enter")
   await expect(picker).toBeHidden()
   await leaveSidebar(page)
-  await expect(shelf).toBeHidden()
+  await expect(tab).toHaveAccessibleName("Later")
+  await inbox.click()
   await expect(row).not.toContainText("·")
 })
 
@@ -575,15 +586,16 @@ test("a Thread at work put off until it's done comes back as its turn ends, with
   const sidebar = sidebarOf(page)
   const toasts = toastsOf(page)
   const row = sidebar.getByRole("button", { name: /wait a/ })
-  const shelf = sidebar.getByRole("button", { name: /^Later/ })
+  const tab = sidebar.getByRole("tab", { name: /^Later/ })
 
   // At work, it may sleep until its turn ends.
   await page.keyboard.press("Alt+KeyZ")
   await pickerOf(page).getByText("When it's done").click()
   await expect(a).toBeHidden()
   await expect(toasts.getByText("Later, until it's done")).toBeVisible()
-  await shelf.click()
+  await tab.click()
   await expect(row).toContainText("when done")
+  await sidebar.getByRole("tab", { name: /^Inbox/ }).click()
   await leaveSidebar(page)
 
   // Its turn ends. A word from its Person would wake it by itself (ADR
@@ -597,7 +609,7 @@ test("a Thread at work put off until it's done comes back as its turn ends, with
     .getByRole("listitem")
     .filter({ hasText: "Woke from Later" })
   await expect(woke).toContainText("wait a")
-  await expect(shelf).toBeHidden()
+  await expect(tab).toHaveAccessibleName("Later")
   await expect(row.getByRole("img", { name: "Woke" })).toBeVisible()
 
   // Open goes there, and the clock goes once its Person looks: its host

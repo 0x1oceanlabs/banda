@@ -3,7 +3,13 @@ import type { ProjectId } from "@banda/contract"
 import type { Args } from "@banda/ui/module"
 import type { Listed, Lists } from "@banda/ui/pane"
 import type { Shell } from "../window/actions"
-import { archiving, itemActionsOf, paneRowsOf, rowsOf } from "./items"
+import {
+  actionDoing,
+  archiving,
+  itemActionsOf,
+  paneRowsOf,
+  rowsOf,
+} from "./items"
 
 const S1 = "s1" as ProjectId
 
@@ -121,4 +127,9 @@ test("an Item whose App has no archive of its own stays as it is", () => {
   const { shell, ran } = fake(file)
   archiving.run(shell)
   expect(ran).toEqual([])
+})
+
+test("with no Item in view, the action that puts one off is the first App's that does; its archive has no key, so the list's own names that", () => {
+  expect(actionDoing("later")?.id).toBe("thread.later")
+  expect(actionDoing("archive")?.id).toBe("agents.archive-thread")
 })

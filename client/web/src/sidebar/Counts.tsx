@@ -19,7 +19,7 @@ import { useMemo, useState } from "react"
 import { useLaterClock, useLists } from "../calls/stores"
 import { useLookSidebar } from "../look"
 import { ThreadMark, toneOf } from "@banda/ui/components/banda-mark"
-import { keysOf, order, useElsewhere } from "./order"
+import { order, useElsewhere } from "./order"
 import { markSaid } from "./card"
 import { Status } from "./CardStatus"
 import { calm, type Counted, inOrder, type Tally, tally } from "./tally"
@@ -167,7 +167,7 @@ function List({
   const run = useRun()
   // Another machine's Threads stand where the sidebar list places them.
   const elsewhere = useElsewhere()
-  const keys = keysOf(order(lists, projects, now, { elsewhere }))
+  const { keys } = order(lists, projects, now, { elsewhere })
   const { waiting, working } = inOrder(tallies, keys)
   const named = new Map(projects.map((project) => [project.id, project]))
   const rows = (things: Counted[]) =>

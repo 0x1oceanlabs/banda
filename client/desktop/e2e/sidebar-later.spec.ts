@@ -165,10 +165,11 @@ test("a Thread put off Someday sleeps on as its turn ends, until a new question 
   // nothing else works or calls.
   await expect(markOf(page)).toHaveAccessibleName("Sidebar")
 
-  // Its shelf says it keeps no time.
-  const shelf = sidebar.getByRole("button", { name: /^Later/ })
-  await shelf.click()
-  await expect(shelf).toHaveAttribute("aria-expanded", "true")
+  // Its card in Later says it keeps no time.
+  const tab = (name: string) =>
+    sidebar.getByRole("tab", { name: new RegExp(`^${name}`) })
+  await tab("Later").click()
+  await expect(tab("Later")).toHaveAttribute("aria-selected", "true")
   await expect(row).toContainText("someday")
   await shots(window, "someday-row")
   await leaveSidebar(page)
@@ -191,6 +192,9 @@ test("a Thread put off Someday sleeps on as its turn ends, until a new question 
   await expect
     .poll(() => threadNamed(window, "pages 1")?.later?.woke?.by)
     .toBe("question")
+  // It has left Later for the Inbox's Your turn.
+  await expect(row).toBeHidden()
+  await tab("Inbox").click()
   await expect(row).toContainText("Asks you")
   await expect(row).not.toContainText("someday")
   await expect(row.getByRole("img", { name: "Woke" })).toHaveCount(0)

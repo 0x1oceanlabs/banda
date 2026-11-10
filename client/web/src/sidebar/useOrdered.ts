@@ -2,20 +2,34 @@ import { useMemo, useState } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { useLaterClock, useLists } from "../calls/stores"
 import { type Held, held, hold } from "./hold"
+import type { Tab } from "./inbox"
 import { order, useElsewhere } from "./order"
 import type { Settings } from "./settings"
 
 /**
  * The sidebar list as it is drawn: what every module lists, in the one
- * order the counts and Alt+U take too, as the Person has it in view
- * (`only`, `toggled`). Under the pointer, the rows hold still; what would
- * move or come waits as `updates`, taken in by the pill (`take`) or as
- * the pointer leaves (`letGo`) (ADR 0065, decision 8).
+ * order the counts and Alt+U take too, as the Person has it in view: the
+ * tab, one Project's rows alone (`only`), a cut list whole (`more`), the
+ * groups folded, and when inbox zero last told of Someday. Under the
+ * pointer, the cards hold still (`take`); what would move or come waits
+ * until the pointer leaves (`letGo`) (ADR 0098, decision 6).
  */
 export function useOrdered(
   projects: ProjectSummary[],
   settings: Settings,
-  { only, toggled }: { only?: ProjectId; toggled: ReadonlySet<string> }
+  {
+    tab,
+    only,
+    more,
+    folded,
+    someday,
+  }: {
+    tab: Tab
+    only?: ProjectId
+    more: boolean
+    folded: ReadonlySet<string>
+    someday?: number
+  }
 ) {
   // What every module lists, from the Window's items.
   const lists = useLists()
@@ -25,15 +39,40 @@ export function useOrdered(
   // order places, as the counts and Alt+U place them.
   const elsewhere = useElsewhere()
   const fresh = useMemo(
-    () => order(lists, projects, now, { settings, only, toggled, elsewhere }),
-    [lists, projects, now, settings, only, toggled, elsewhere]
+    () =>
+      order(lists, projects, now, {
+        settings,
+        only,
+        elsewhere,
+        tab,
+        more,
+        folded,
+        ...(someday === undefined ? {} : { someday }),
+      }),
+    [
+      lists,
+      projects,
+      now,
+      settings,
+      only,
+      elsewhere,
+      tab,
+      more,
+      folded,
+      someday,
+    ]
   )
-  const [holding, setHolding] = useState<Held>()
-  const { arranged, updates } = useMemo(
-    () => hold(fresh, holding),
+  // What the list held, and on which tab: another tab under the pointer
+  // holds what it shows from the start, as a tab switch draws its order
+  // straight away.
+  const [holding, setHolding] = useState<{ tab: Tab; held: Held }>()
+  if (holding && holding.tab !== tab)
+    setHolding({ tab, held: held(fresh.blocks) })
+  const blocks = useMemo(
+    () => hold(fresh.blocks, holding?.held),
     [fresh, holding]
   )
-  const take = () => setHolding(held(fresh))
+  const take = () => setHolding({ tab, held: held(fresh.blocks) })
   const letGo = () => setHolding(undefined)
-  return { arranged, updates, take, letGo }
+  return { ordered: { ...fresh, blocks }, take, letGo }
 }

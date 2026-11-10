@@ -40,7 +40,7 @@ import {
   nowOf,
   workingHere,
 } from "../calls/stores"
-import { keysOf, useOrderNow } from "../sidebar/order"
+import { useOrderNow } from "../sidebar/order"
 import { WELL, wentWell } from "../safe/starts"
 import { useProblemNews } from "../problems/news"
 import { lookingInto } from "../problems/look"
@@ -559,7 +559,7 @@ export function Shell({
     // them, another machine's among this one's (ADR 0079, decision 4), picked.
     answer: () => {
       const calls = stores.calls.get()
-      const keys = keysOf(orderNow(stores.items.get(), projects, calls.now))
+      const { keys } = orderNow(stores.items.get(), projects, calls.now)
       const { pane } = here.get()
       const at = pane?.subject ? `${pane.project}:${pane.subject}` : undefined
       const call = nextCall(calls.list, keys, at)
