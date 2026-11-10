@@ -479,6 +479,94 @@ async fn a_message_gets_the_agents_reply() {
     );
 }
 
+/// A word of a reply finds its Thread, through the walls the kernel puts
+/// around the module's tables, with the line it is in (ADR 0098,
+/// decision 17).
+#[tokio::test]
+async fn the_words_of_a_reply_find_its_thread_with_their_line() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let done = |sent: &Value| {
+        let turn = sent["turn"].clone();
+        move |v: &ThreadView| state(v, &turn) == Some(TurnState::Done)
+    };
+    let sent = world.send(None, "Посади ёлку у дома").await;
+    world.until(&sent["thread"], done(&sent)).await;
+    let other = world.send(None, "something else").await;
+    world.until(&other["thread"], done(&other)).await;
+    let search = |words: &str| {
+        let words = json!({ "words": words });
+        world.call(world.person(), "agents.search", words)
+    };
+    let found = search("said елку").await.unwrap();
+    let found = found.as_array().unwrap();
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0]["thread"], sent["thread"]);
+    assert_eq!(found[0]["snippet"], "You said: Посади ёлку у дома");
+    assert_eq!(
+        found[0]["hits"],
+        json!([{ "from": 4, "to": 8 }, { "from": 17, "to": 21 }])
+    );
+    let view = world.thread(&sent["thread"]).await;
+    let reply = view.items.last().unwrap();
+    assert_eq!(found[0]["item"], json!(reply.id));
+    assert_eq!(found[0]["at"], json!(reply.at));
+    // The start of a word finds it, in the other Thread only.
+    let other_found = search("some").await.unwrap();
+    assert_eq!(other_found[0]["thread"], other["thread"]);
+    assert_eq!(other_found.as_array().unwrap().len(), 1);
+    assert_eq!(search("zed").await.unwrap(), json!([]));
+}
+
+/// Once a Person takes a message back before it runs, its Thread shows it
+/// nowhere, and the search finds it nowhere either.
+#[tokio::test]
+async fn a_message_taken_back_is_found_no_more() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let wait = world.waiting(None).await;
+    let taken = world
+        .send(Some(&wait["thread"]), "a walrus after all")
+        .await;
+    let search = || {
+        let words = json!({ "words": "walrus" });
+        world.call(world.person(), "agents.search", words)
+    };
+    let found = search().await.unwrap();
+    assert_eq!(found.as_array().unwrap().len(), 1, "while it waits");
+    world
+        .on_turn("agents.withdraw", &taken["turn"])
+        .await
+        .unwrap();
+    assert_eq!(search().await.unwrap(), json!([]));
+}
+
+/// A Thread its Person deleted is found no more, and the others are
+/// (ADR 0098, decisions 14 and 17).
+#[tokio::test]
+async fn a_deleted_thread_is_found_no_more() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (gone, _) = world.finish(None, "remember the heron").await;
+    let (kept, _) = world.finish(None, "the heron again").await;
+    let search = || {
+        let words = json!({ "words": "heron" });
+        world.call(world.person(), "agents.search", words)
+    };
+    assert_eq!(search().await.unwrap().as_array().unwrap().len(), 2);
+    let person = world.person();
+    world.archive(person, &gone, true).await.unwrap();
+    world.delete(person, &gone).await.unwrap();
+    let found = search().await.unwrap();
+    let threads: Vec<&Value> = found
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| &f["thread"])
+        .collect();
+    assert_eq!(threads, [&kept]);
+}
+
 #[tokio::test]
 async fn an_account_counts_its_threads_now_its_last_turn_and_its_turns_since() {
     let root = tempfile::tempdir().unwrap();

@@ -11,6 +11,7 @@ use crate::model::{
     Usage, VisualId,
 };
 use crate::rules::Lanes;
+use crate::search;
 use banda_kernel::{AgentId, Error, Participant, Refusal};
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::Serialize;
@@ -274,6 +275,19 @@ UPDATE agents_threads SET parent = (
     ORDER BY p.updated_at DESC, p.id DESC LIMIT 1
 )
 WHERE forked_from IS NULL AND json_extract(author, '$.kind') = 'agent';
+"#,
+    r#"
+-- The messages a Person searches (ADR 0098, decision 17): each message's
+-- text, its Person's and its Agents', under its item's rowid, and the
+-- item's ID beside it (`search.rs`). The tokenizer folds case in every
+-- script, and Latin accents.
+CREATE VIRTUAL TABLE agents_search USING fts5(
+    text, item UNINDEXED, tokenize = 'unicode61 remove_diacritics 2'
+);
+-- How far the index came with the messages written before it: those
+-- with a rowid below this are not in it yet; 0 once none is left.
+CREATE TABLE agents_backfill (below INTEGER NOT NULL);
+INSERT INTO agents_backfill SELECT COALESCE(MAX(rowid), 0) + 1 FROM agents_items;
 "#,
 ];
 
@@ -1312,6 +1326,11 @@ pub fn insert_item(
             sub
         ],
     )?;
+    // A message is searched as soon as it is written (ADR 0098, decision
+    // 17).
+    if matches!(item.body, Body::Message { .. }) {
+        search::index(sql, item.id)?;
+    }
     Ok(())
 }
 
@@ -1528,6 +1547,9 @@ pub fn copy_turns(
             message
         ])?;
     }
+    // Its messages are found in the fork too, once its turns say which
+    // of them it shows.
+    search::index_thread(sql, to)?;
     Ok(())
 }
 
@@ -1603,6 +1625,8 @@ pub fn rewind(sql: &Connection, thread: ThreadId, turn: TurnId, now: i64) -> Res
         &format!("UPDATE agents_notices SET taken_by = NULL WHERE taken_by IN ({items})"),
         params![thread, turn],
     )?;
+    // What they said is no longer found in it.
+    search::unindex(sql, &items, params![thread, turn])?;
     sql.execute(
         &format!("DELETE FROM agents_items WHERE id IN ({items})"),
         params![thread, turn],
@@ -1639,6 +1663,8 @@ pub fn delete_thread(sql: &Connection, thread: ThreadId) -> Result<(), Error> {
         &format!("UPDATE agents_images SET item = NULL WHERE item IN ({ITEMS})"),
         params![thread],
     )?;
+    // What it said is found nowhere (ADR 0098, decision 17).
+    search::unindex(sql, ITEMS, params![thread])?;
     for each in [
         "DELETE FROM agents_notices WHERE thread = ?1",
         "DELETE FROM agents_items WHERE thread = ?1",
@@ -1662,10 +1688,13 @@ pub fn set_item_turn(sql: &Connection, id: ItemId, turn: Option<TurnId>) -> Resu
 
 /// Moves an item after every other: the Thread shows it there now.
 pub fn move_last(sql: &Connection, id: ItemId) -> Result<(), Error> {
+    // Its row in the message index goes by its rowid, so it moves too.
+    search::unindex(sql, "?1", params![id])?;
     sql.execute(
         "UPDATE agents_items SET rowid = (SELECT MAX(rowid) + 1 FROM agents_items) WHERE id = ?1",
         params![id],
     )?;
+    search::index(sql, id)?;
     Ok(())
 }
 
@@ -1674,6 +1703,13 @@ pub fn set_body(sql: &Connection, id: ItemId, body: &Body) -> Result<(), Error> 
         "UPDATE agents_items SET body = ?2 WHERE id = ?1",
         params![id, json(body)?],
     )?;
+    // A message is searched as it reads now: edited, or grown by a piece.
+    // Each piece indexes the whole reply again: on a reply of 20 KB in 400
+    // pieces, about 0.3 ms a piece at its end, while the transcript gathers
+    // pieces for 80 ms (`search::tests::cost` measures it on a real log).
+    if matches!(body, Body::Message { .. }) {
+        search::index(sql, id)?;
+    }
     Ok(())
 }
 

@@ -13,6 +13,7 @@ import type { Defaults } from "./Defaults";
 import type { DraftIssue } from "./DraftIssue";
 import type { Edit } from "./Edit";
 import type { Forked } from "./Forked";
+import type { Found } from "./Found";
 import type { GoOn } from "./GoOn";
 import type { Image } from "./Image";
 import type { ImageData } from "./ImageData";
@@ -32,6 +33,7 @@ import type { PreviewVisual } from "./PreviewVisual";
 import type { Previewed } from "./Previewed";
 import type { ReadAsk } from "./ReadAsk";
 import type { Rename } from "./Rename";
+import type { SearchAsk } from "./SearchAsk";
 import type { SeeWokeAsk } from "./SeeWokeAsk";
 import type { Send } from "./Send";
 import type { Sent } from "./Sent";
@@ -85,6 +87,16 @@ accounts: CallMethod<Since, Array<AccountUse>>,
  * Turn (ADR 0034).
  */
 changes: CallMethod<ChangesAsk, TurnChanges>, 
+/**
+ * The Threads of this Project with a message, its Person's or an
+ * Agent's, that holds every one of `words`: in any case, with or
+ * without accents, and from two letters on as the start of a
+ * longer word too. Each Thread comes once, by its best such
+ * message, the best first, with a line of that message around the
+ * words and where they are in it (ADR 0098, decision 17). Titles
+ * are the window's to search.
+ */
+search: CallMethod<SearchAsk, Array<Found>>, 
 /**
  * What a Thread's Harness, or a Harness a new Thread starts on,
  * replies to a prompt, in a short run of its own no Thread shows:

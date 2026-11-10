@@ -28,6 +28,7 @@ export const DOES = {
   "agents.defaults": "read",
   "agents.accounts": "read",
   "agents.changes": "read",
+  "agents.search": "read",
   "agents.write": "act",
   "agents.touching": "read",
   "agents.doing": "read",

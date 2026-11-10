@@ -17,14 +17,24 @@
 //!   `CREATE INDEX`, `ALTER TABLE`), and each foreign key they leave
 //!   points at its own tables: SQLite asks nothing of a key's parent as
 //!   the key is made, so the kernel looks after each step.
+//! - A step may also make a full-text index of its own, an FTS5 virtual
+//!   table, as the agents module's of its messages (ADR 0098, decision 17).
+//!   FTS5 keeps it in shadow tables named after it, so the module's too,
+//!   and asks `PRAGMA data_version` as it reads and writes them, to know
+//!   whether another connection changed them: that pragma, and no other.
+//!   An export, an import and a purge (ADR 0085, decisions 7 and 10) take
+//!   such an index as one table and leave its shadow tables, which
+//!   `PRAGMA table_list` marks `shadow`, to it: an export writes its
+//!   CREATE and its rows as it reads them, an import makes it and writes
+//!   them back through it, and a purge drops it, which drops them.
 //! - The rest no module needs yet, and it is refused until one does, with
 //!   a test: a transaction or a savepoint (the kernel begins and ends
-//!   each), another database, a pragma, a view, a trigger (it would run as
-//!   whoever fires it), a temporary or virtual table, dropping a table (its
-//!   data is kept, ADR 0085, and SQLite's `sqlite_sequence` beside it holds
-//!   the kernel's counters), and renaming one: SQLite does not tell the new
-//!   name. A module rebuilds a table under a new name it owns, and copies
-//!   its rows.
+//!   each), another database, any other pragma, a view, a trigger (it would
+//!   run as whoever fires it), a temporary table or another virtual one,
+//!   dropping a table (its data is kept, ADR 0085, and SQLite's
+//!   `sqlite_sequence` beside it holds the kernel's counters), and renaming
+//!   one: SQLite does not tell the new name. A module rebuilds a table
+//!   under a new name it owns, and copies its rows.
 //!
 //! SQLite asks as a statement is prepared, so a statement cached before
 //! was decided for whoever ran SQL then: entering a module empties its
@@ -70,6 +80,10 @@ const AUTOINDEX: &str = "sqlite_autoindex_";
 
 /// SQLite's functions that read as tables, of their arguments alone.
 const TABLE_FUNCTIONS: [&str; 2] = ["json_each", "json_tree"];
+
+/// The one kind of virtual table a module's step may make: SQLite's
+/// full-text index, whose rows are all in the module's own tables.
+const FTS5: &str = "fts5";
 
 /// One module's tables in a store: the prefixes they go by, and its ledger
 /// of migrations.
@@ -128,6 +142,18 @@ impl Tables {
             }
             // An index it makes SQLite fills as it would a REINDEX.
             A::Reindex { index_name } => migrating && self.owns(index_name),
+            // FTS5 makes its shadow tables, `<table>_data` and the rest,
+            // as the step runs, each asked of as the module's own.
+            A::CreateVtable {
+                table_name,
+                module_name,
+            } => migrating && module_name == FTS5 && self.owns(table_name),
+            // FTS5 reads it, a count of changes, before it trusts what it
+            // cached of its index.
+            A::Pragma {
+                pragma_name: "data_version",
+                pragma_value: None,
+            } => true,
             _ => false,
         }
     }
@@ -464,8 +490,13 @@ mod tests {
             AuthAction::CreateView {
                 view_name: "notes_recent",
             },
+            // A virtual table but FTS5's, or FTS5's under another's name.
             AuthAction::CreateVtable {
                 table_name: "notes_v",
+                module_name: "rtree",
+            },
+            AuthAction::CreateVtable {
+                table_name: "other_v",
                 module_name: "fts5",
             },
             AuthAction::Analyze { table_name: own },
@@ -489,6 +520,25 @@ mod tests {
         ] {
             assert!(!migrating(action) && !allowed(action), "{action:?}");
         }
+    }
+
+    #[test]
+    fn a_module_s_step_makes_a_full_text_index_of_its_own_which_reads_its_change_count() {
+        let index = AuthAction::CreateVtable {
+            table_name: "notes_search",
+            module_name: "fts5",
+        };
+        assert!(migrating(index) && !allowed(index));
+        let changes = AuthAction::Pragma {
+            pragma_name: "data_version",
+            pragma_value: None,
+        };
+        assert!(migrating(changes) && allowed(changes));
+        let set = AuthAction::Pragma {
+            pragma_name: "data_version",
+            pragma_value: Some("1"),
+        };
+        assert!(!migrating(set) && !allowed(set));
     }
 
     #[test]
