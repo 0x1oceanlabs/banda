@@ -1,0 +1,64 @@
+import type { ProjectId, ProjectSummary } from "@banda/contract"
+import { Button } from "@banda/ui/components/button"
+import { Kbd } from "@banda/ui/components/kbd"
+import { useKeyOf } from "@banda/ui/hooks/use-key-of"
+import { keyCaps } from "@banda/ui/lib/keys"
+import { SearchIcon, SquarePenIcon } from "lucide-react"
+import { FlowMenu } from "./FlowMenu"
+import { newThread, useOpen } from "./open"
+
+/** The Banda menu's key in force, as its caps, in the Search field. */
+function MenuKey() {
+  const key = useKeyOf()("menu.open")
+  if (!key) return null
+  return (
+    <Kbd className="h-4.5 px-0.5 text-[10px]">{keyCaps(key).join(" ")}</Kbd>
+  )
+}
+
+/**
+ * The sidebar's header: Search, which opens the Banda menu, the Flow's
+ * menu, and New Thread, in the Project whose rows alone the list shows,
+ * or else in `home`.
+ */
+export function Header({
+  only,
+  home,
+  projects,
+}: {
+  /** The Project whose rows alone the list shows, if one. */
+  only?: ProjectId
+  /** The Project a new Thread from the header starts in. */
+  home: ProjectId
+  projects: ProjectSummary[]
+}) {
+  const open = useOpen()
+  return (
+    <div className="flex items-center gap-0.5 px-2 pt-2 pb-1">
+      <button
+        type="button"
+        onClick={() => open("menu.at")}
+        className="mr-1 flex h-7 min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md border bg-background/60 px-2 text-[13px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+      >
+        <SearchIcon className="size-3.5 shrink-0" />
+        <span className="min-w-0 flex-1 truncate text-left">Search</span>
+        <MenuKey />
+      </button>
+      <FlowMenu />
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="text-muted-foreground"
+        aria-label="New Thread"
+        title="New Thread"
+        onClick={() => {
+          const project = only ?? home
+          const { missing } = projects.find((one) => one.id === project) ?? {}
+          newThread(open, project, missing)
+        }}
+      >
+        <SquarePenIcon />
+      </Button>
+    </div>
+  )
+}

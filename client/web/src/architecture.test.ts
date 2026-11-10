@@ -419,7 +419,7 @@ const DESKTOP_READS: Record<string, number> = {
   "client/web/src/settings/Settings.tsx": 1,
   "client/web/src/settings/ThemePicker.tsx": 1,
   "client/web/src/sharing/AskToShare.tsx": 1,
-  "client/web/src/sidebar/Sidebar.tsx": 1,
+  "client/web/src/sidebar/Foot.tsx": 1,
   "client/web/src/sidebar/ThemeMenu.tsx": 1,
   "client/web/src/sidebar/write-setting.ts": 1,
   "platform/notifications/pane/src/desktop.ts": 1,
@@ -517,10 +517,18 @@ const SIDEBAR_CODE: Record<string, Record<string, string[]>> = {
   },
   "web/src/sidebar/Sidebar.tsx": {
     Sidebar: ["onDismiss", "isCurrent"],
+  },
+  "web/src/sidebar/SectionView.tsx": {
     SectionView: ["isCurrent", "onToggle", "onMore", "withMenu"],
+  },
+  "web/src/sidebar/ProjectsList.tsx": {
     ProjectsList: ["onPick", "withMenu"],
+  },
+  "web/src/sidebar/ProjectMenu.tsx": {
     ProjectMenu: ["onTrust", "onStopTrusting"],
     TrustItem: ["onTrust", "onStopTrusting"],
+  },
+  "web/src/sidebar/HostPart.tsx": {
     HostPart: ["onFold"],
   },
   "web/src/sidebar/LaterPicker.tsx": {
@@ -586,7 +594,7 @@ test("the sidebar list pins no Project and writes no agents.toml", () => {
   const writing =
     /\bupdateProject\b|\bprojects\.update\b|(?:writeSetting|settings\.set)\(\s*(?:AGENTS_FILE|["'`]agents\.toml)/
   const files = sources(join(app, "web/src/sidebar"), { tests: false })
-  expect(files).toContain(join(app, "web/src/sidebar/Sidebar.tsx"))
+  expect(files).toContain(join(app, "web/src/sidebar/ProjectMenu.tsx"))
   expect(
     files
       .filter((file) => writing.test(readFileSync(file, "utf8")))
@@ -702,6 +710,25 @@ test("the Window's root keeps under its ceiling, and the ceiling follows it down
   expect(
     WINDOW_LINES - lines,
     `Shell.tsx has ${lines} lines: lower WINDOW_LINES to it`
+  ).toBeLessThanOrEqual(SLACK)
+})
+
+/**
+ * The ceiling on the sidebar's frame, in lines (ADR 0098, plan step 4):
+ * its header, foot, sections, rows, list of Projects, Project menu and
+ * hosts' labels are parts of their own, and what the sidebar gains goes
+ * into a part, not the frame. It only falls, as the Window's does: a PR
+ * that cuts the file more than `SLACK` lines below it lowers it.
+ */
+const SIDEBAR_LINES = 227
+
+test("the sidebar's frame keeps under its ceiling, and the ceiling follows it down", () => {
+  const text = readFileSync(join(app, "web/src/sidebar/Sidebar.tsx"), "utf8")
+  const lines = text.split("\n").length - 1
+  expect(lines).toBeLessThanOrEqual(SIDEBAR_LINES)
+  expect(
+    SIDEBAR_LINES - lines,
+    `Sidebar.tsx has ${lines} lines: lower SIDEBAR_LINES to it`
   ).toBeLessThanOrEqual(SLACK)
 })
 
@@ -1148,7 +1175,15 @@ test("the sidebar list, the counts and Alt+U go by one order", () => {
     ...taking(arranging, "arrange"),
     ...taking(ordering, "arrange"),
   ]).toEqual(["web/src/sidebar/order.ts"])
-  const list = "web/src/sidebar/Sidebar.tsx"
+  const list = "web/src/sidebar/useOrdered.ts"
+  // The parts that draw the list take its order as it comes.
+  const drawing = [
+    "Sidebar.tsx",
+    "SectionView.tsx",
+    "ProjectsList.tsx",
+    "HostPart.tsx",
+    "ThreadRow.tsx",
+  ].map((file) => `web/src/sidebar/${file}`)
   const altU = "web/src/window/Shell.tsx"
   const going = [...taken]
     .map(([file, of]) => ({ file, taken: of[ordering] ?? [] }))
@@ -1171,7 +1206,7 @@ test("the sidebar list, the counts and Alt+U go by one order", () => {
   const placing = taking(ordering, "placeIn")
   expect(placing).toEqual(["web/src/calls/sight.ts"])
   const counting = ["web/src/sidebar/tally.ts", "web/src/sidebar/Counts.tsx"]
-  for (const file of [...counting, ...placing, list, altU])
+  for (const file of [...counting, ...placing, list, ...drawing, altU])
     expect(readFileSync(join(app, file), "utf8"), file).not.toMatch(
       /\.(?:sort|toSorted)\(/
     )
@@ -1377,8 +1412,8 @@ const BY_DOES = [
   "web/src/menu/menu.ts: action.does",
   "web/src/sidebar/LaterPicker.tsx: itemActionOf",
   "web/src/sidebar/LaterPicker.tsx: itemActionOf",
-  "web/src/sidebar/Sidebar.tsx: itemActionOf",
-  "web/src/sidebar/Sidebar.tsx: itemActionOf",
+  "web/src/sidebar/SectionView.tsx: itemActionOf",
+  "web/src/sidebar/SectionView.tsx: itemActionOf",
   "web/src/sidebar/items.ts: action.does",
   "web/src/sidebar/items.ts: itemActionOf",
   "web/src/titles/Title.tsx: itemActionOf",
