@@ -1,7 +1,8 @@
 import { expect, test } from "vitest"
 import type { Defaults } from "@banda/contract/agents"
+import type { Engine } from "@banda/contract"
 import type { HarnessView, Limits } from "@banda/contract/harnesses"
-import { outOf, startOf, startsOn, startsOnWords } from "./starts-on"
+import { lastStart, outOf, startOf, startsOn, startsOnWords } from "./starts-on"
 
 const NOW = 1_000_000
 const signedIn = new Map([
@@ -121,4 +122,16 @@ test("a draft starts by the accounts its machine named, once it said them", () =
   // A machine that names none starts on its first one on.
   const none = startOf({ claude: {} as Partial<Defaults> as Defaults })
   expect(startsOn(harnesses, none!, [], NOW, signedIn)?.id).toBe("claude")
+})
+
+test("while its machine has not answered, a draft keeps what that machine named last, and takes nothing from another's", () => {
+  const arc = {} as Engine
+  const mac = {} as Engine
+  expect(lastStart(arc, undefined)).toBeUndefined()
+  expect(lastStart(arc, { account: "work" })).toEqual({ account: "work" })
+  expect(lastStart(arc, undefined)).toEqual({ account: "work" })
+  expect(lastStart(mac, undefined)).toBeUndefined()
+  // What it names now wins, naming none too.
+  expect(lastStart(arc, {})).toEqual({})
+  expect(lastStart(arc, undefined)).toEqual({})
 })
