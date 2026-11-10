@@ -3,17 +3,13 @@
  * Banda's and the Person's (ADR 0007). `banda look themes` lists them once
  * for the window.
  */
-import { useEffect, useState } from "react"
-import type { Listed } from "@banda/contract/look"
 import { tomlOf } from "@banda/contract/settings"
+import { useThemes } from "../look"
 import type { CustomRow } from "./sections"
 import { Choice } from "./SettingRow"
 
 export const ThemePicker: CustomRow = ({ setting, set }) => {
-  const [themes, setThemes] = useState<Listed[]>([])
-  useEffect(() => {
-    void window.banda?.settings.themes().then(setThemes, () => setThemes([]))
-  }, [])
+  const themes = useThemes(true)
   const value = setting?.value
   const options = themes.map((theme) => ({
     value: theme.name,
