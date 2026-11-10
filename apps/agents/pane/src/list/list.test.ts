@@ -327,6 +327,31 @@ test("a window that moved its marks has every list read again", () => {
   expect(applyThreads(one, moved)).toBe(one)
 })
 
+test("a Thread moved to another Project leaves this list, and the other reads itself again (ADR 0098)", () => {
+  const left = (thread: string) =>
+    event(
+      "thread.left",
+      { thread, to: "p2" },
+      { author: person, subject: thread }
+    )
+  const out = left("t1")
+  const gone = applyThreads(two, out)
+  expect(gone.threads.map((t) => t.id)).toEqual(["t2"])
+  expect(gone.at).toBe(out.seq)
+  // One this list does not have changes nothing.
+  expect(applyThreads(gone, left("t1"))).toBe(gone)
+  const came = event(
+    "thread.arrived",
+    { thread: "t3", from: "p1" },
+    { author: person, subject: "t3" }
+  )
+  expect(readsAgain(two, came)).toBe(true)
+  expect(readsAgain(empty, came)).toBe(true)
+  expect(THREADS_FILTER.kinds).toEqual(
+    expect.arrayContaining(["thread.left", "thread.arrived"])
+  )
+})
+
 test("a Thread keeps its latest Later, and what woke it", () => {
   const later = event(
     "thread.later",

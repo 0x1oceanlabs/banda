@@ -264,7 +264,14 @@ pub(crate) fn place(
 
 pub struct Project {
     id: ProjectId,
-    pub(crate) moving: tokio::sync::RwLock<()>,
+    /// Held to read while a call runs in it, and to write while its folder
+    /// moves: shared, so a call that reaches it from another Project holds
+    /// it too ([`Call::other`](crate::Call::other)).
+    pub(crate) moving: Arc<tokio::sync::RwLock<()>>,
+    /// Held to read by a call that reaches it from another Project, and to
+    /// write as it is removed: its data is put away only once what such a
+    /// call brought it has landed ([`Call::other`](crate::Call::other)).
+    pub(crate) reached: Arc<tokio::sync::RwLock<()>>,
     /// `projects/<id>/` in the engine's data.
     data: PathBuf,
     /// Its `project.json`, as the Person changes its name, pin and archive.
@@ -355,6 +362,7 @@ impl Project {
         let project = Arc::new(Project {
             id: manifest.id,
             moving: Default::default(),
+            reached: Default::default(),
             data,
             manifest: std::sync::Mutex::new(manifest),
             removed: Default::default(),
@@ -403,6 +411,11 @@ impl Project {
     /// of the Project: its turns and terminals have stopped.
     pub(crate) fn delete_when_closed(&self, data: PathBuf) {
         *self.removed.lock().unwrap() = Some(data);
+    }
+
+    /// Whether it was removed, and is deleted as it closes.
+    pub(crate) fn removed(&self) -> bool {
+        self.removed.lock().unwrap().is_some()
     }
 
     pub fn owner(&self) -> PersonId {
@@ -748,6 +761,26 @@ impl ModuleProject {
     /// get the Person's GitHub token (ADR 0083).
     pub fn trust_said(&self) -> bool {
         self.project.trust_said()
+    }
+
+    /// The Project's name as the Person sees it; empty for one in No
+    /// Project.
+    pub fn name(&self) -> String {
+        self.project.manifest.lock().unwrap().name.clone()
+    }
+
+    /// Whether it is one Thread's Project, in No Project (ADR 0046).
+    pub fn scratch(&self) -> bool {
+        self.project.scratch()
+    }
+
+    /// The same module in `other`, as a call that reaches it from this
+    /// Project sees it ([`Call::other`](crate::Call::other)).
+    pub(crate) fn beside(&self, other: Arc<Project>) -> ModuleProject {
+        ModuleProject {
+            project: other,
+            module: self.module,
+        }
     }
 
     /// Where the Project's programs run (ADR 0084): a module starts each

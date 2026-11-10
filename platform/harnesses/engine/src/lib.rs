@@ -23,6 +23,7 @@ mod shadow;
 
 pub use accounts::account_changed;
 pub use accounts::secrets::{Kept, Secrets};
+pub use list::claude_sessions;
 pub use list::{Cli, Credentials, FILE, Harness, Harnesses, LimitsSettings};
 pub use module::{HarnessesModule, LimitsNow, SETTINGS};
 

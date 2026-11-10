@@ -9,11 +9,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { DEFAULT_KEYS, type Mod } from "@banda/contract/look"
 import { scopesOf } from "@banda/ui/hooks/use-scope"
-import { holdsAlone, withMore } from "@banda/ui/lib/keys"
+import { aPageSaid, holdsAlone, withMore } from "@banda/ui/lib/keys"
 import type { Action } from "@banda/ui/module"
 import { IN_PROGRAM } from "@banda/ui/pane"
 import {
   actionFor,
+  actsAsPerson,
   type Held,
   inScope,
   keysInForce,
@@ -125,6 +126,10 @@ export function useKeyRouter(
       if (target?.closest("[data-takes-keys]")) return
       const pressed = pressFor(keyed, event, scopesOf(target), stillHeld)
       if (!pressed) return handOn(event, target, keyed, mod, handing)
+      // A press a page in a frame said, as a Visual's, is none of the
+      // Person's: it runs no action that acts as them (ADR 0083, decision
+      // 3), whatever key the Person bound it to.
+      if (aPageSaid(event) && actsAsPerson(pressed.action, pressed.args)) return
       if (inScope(pressed, event)) return
       const { action } = pressed
       // A key that is not its action's now is the Pane's, as F2 a

@@ -210,6 +210,11 @@ fn keep(
     if facts.is_empty() {
         return Ok(now);
     }
+    // Its Thread left the Project, moved or deleted, as its session here
+    // closes: nothing of it is written here any more.
+    if store::agent_of(tx.sql(), thread)?.is_none() {
+        return Ok(was.clone());
+    }
     store::set_lane(tx.sql(), &now)?;
     for fact in &facts {
         emit(tx, agent, thread, fact)?;

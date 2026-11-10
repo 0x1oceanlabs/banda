@@ -2,8 +2,9 @@
 //! clock, randomness or Harness protocol. IDs come in from the caller.
 //!
 //! Here are a turn's rules, and [`next`] moves it; a message
-//! ([`message`]), what an Agent writes to another Thread ([`to_thread`])
-//! and a Thread's title ([`title`]) have files of their own. A Question's
+//! ([`message`]), what an Agent writes to another Thread ([`to_thread`]),
+//! a Thread's move to another Project ([`to_project`]) and a Thread's
+//! title ([`title`]) have files of their own. A Question's
 //! rules are in `questions.rs`, and what a Thread keeps of what a Harness
 //! says in `transcript/output.rs`.
 
@@ -16,6 +17,7 @@ pub mod later;
 pub mod message;
 mod moves;
 pub mod title;
+pub mod to_project;
 pub mod to_thread;
 pub use moves::{Event, Step, Then, TurnFacts, next};
 

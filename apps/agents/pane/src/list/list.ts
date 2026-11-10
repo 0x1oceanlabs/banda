@@ -52,6 +52,8 @@ export const THREADS_FILTER = {
     "thread.archived",
     "thread.unarchived",
     "marks.moved",
+    "thread.left",
+    "thread.arrived",
   ] satisfies Fact["kind"][],
 } satisfies EventFilter
 
@@ -70,16 +72,18 @@ export function threadsSource(
 
 /**
  * Whether the list is read again, as only the engine knows what it is
- * now. Both seldom happen:
+ * now. Each seldom happens:
  * - a Thread of the list went back to before a message (ADR 0027): its
  *   latest turn and message are then earlier ones, and a seen that named
  *   a turn taken out names none (ADR 0096, decision 2);
  * - a window moved its marks to the host, all in one fact (ADR 0096,
- *   decision 9).
+ *   decision 9);
+ * - a Thread came, whole, from another Project (ADR 0098, decision 14).
  */
 export function readsAgain(state: ThreadList, event: Event): boolean {
   const fact = decodeFact(event)
-  if (fact?.kind === "marks.moved") return true
+  if (fact?.kind === "marks.moved" || fact?.kind === "thread.arrived")
+    return true
   return (
     fact?.kind === "thread.rewound" &&
     state.threads.some((thread) => thread.id === fact.payload.thread)
@@ -232,7 +236,9 @@ function applied(state: ThreadList, event: Event): ThreadList {
     }
     case "thread.unarchived":
       return change(state, event, (thread) => without(thread, "archived"))
-    case "thread.deleted": {
+    // Deleted, or moved to another Project, whose list has it now.
+    case "thread.deleted":
+    case "thread.left": {
       const { thread: id } = fact.payload
       const threads = state.threads.filter((thread) => thread.id !== id)
       return threads.length === state.threads.length

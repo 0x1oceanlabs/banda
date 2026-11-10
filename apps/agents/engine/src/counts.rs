@@ -199,7 +199,7 @@ pub fn wakes_next<'a>(
 
 /// The facts after which a Thread may count as something else, or its row
 /// say something else: a follower reads its Project's list again on them.
-pub const KINDS: [&str; 18] = [
+pub const KINDS: [&str; 20] = [
     "thread.started",
     "message.posted",
     "turn.started",
@@ -218,6 +218,8 @@ pub const KINDS: [&str; 18] = [
     "thread.archived",
     "thread.unarchived",
     "marks.moved",
+    "thread.left",
+    "thread.arrived",
 ];
 
 #[cfg(test)]

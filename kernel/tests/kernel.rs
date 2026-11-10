@@ -25,7 +25,9 @@ use uuid::Uuid;
 /// file's rename does; `linger` is a `stamp` that runs on past one write,
 /// as a sign-in does; `post` writes a note, then answers other than its
 /// change; `touch` is a call that acts and keeps no receipt; `whose`
-/// answers the Thread its caller's pass names, as `stamp` does too.
+/// answers the Thread its caller's pass names, as `stamp` does too;
+/// `give` writes a note in another Project, as a module moves its own
+/// data there.
 #[derive(Clone, Default)]
 struct Notes {
     published: Arc<Mutex<Vec<String>>>,
@@ -34,7 +36,8 @@ struct Notes {
     /// How the next runs of `stamp` and `post` are refused, after acting;
     /// they answer once the script is empty.
     stamp_refusals: Arc<Mutex<VecDeque<Refusal>>>,
-    /// Said as each run of `stamp` begins; a run waits while it is held.
+    /// Said as each run of `stamp` begins, and as `give` reached the other
+    /// Project; a run waits while it is held.
     stamp_began: Arc<tokio::sync::Notify>,
     stamp_held: Arc<tokio::sync::RwLock<()>>,
     /// How many times `touch` acted.
@@ -79,7 +82,7 @@ impl Module for Notes {
 
     fn right(&self, method: &str) -> Option<Right> {
         match method {
-            "add" | "stamp" | "linger" | "post" | "touch" => Some(Right::Write),
+            "add" | "stamp" | "linger" | "post" | "touch" | "give" => Some(Right::Write),
             "list" => Some(Right::Read),
             "purge" => Some(Right::Manage),
             "count" => Some(Right::Read),
@@ -91,7 +94,7 @@ impl Module for Notes {
 
     fn kind(&self, method: &str) -> Option<Kind> {
         match method {
-            "add" | "purge" | "stamp" | "linger" | "post" => Some(Kind::Command),
+            "add" | "purge" | "stamp" | "linger" | "post" | "give" => Some(Kind::Command),
             "list" | "pass" | "whose" | "show" | "touch" => Some(Kind::Call),
             "count" => Some(Kind::Stream),
             _ => None,
@@ -166,6 +169,20 @@ impl Module for Notes {
                 }
             }
             "touch" => Ok(json!(self.touched.fetch_add(1, Ordering::SeqCst) + 1)),
+            "give" => {
+                let to: ProjectId = decode(params["to"].clone())?;
+                let text = params["text"].as_str().unwrap_or_default().to_owned();
+                let other = call.other(to).await?;
+                self.stamp_began.notify_one();
+                let _held = self.stamp_held.read().await;
+                (other.write(move |tx| {
+                    tx.sql()
+                        .execute("INSERT INTO notes_items (text) VALUES (?1)", [&text])?;
+                    Ok(())
+                }))
+                .await?;
+                Ok(Value::Null)
+            }
             "whose" => Ok(json!({ "thread": call.thread() })),
             // The pass of the Agent `agent` in this Project, and in the
             // session of `thread` when it names one, as the agents module
@@ -4126,4 +4143,120 @@ async fn letters_that_start_alike_are_told_apart() {
             ("work".to_owned(), "W".to_owned()),
         ]
     );
+}
+
+#[tokio::test]
+async fn a_persons_command_reaches_another_project_and_an_agents_never_does() {
+    let dir = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(dir.path(), owner, &notes).await;
+    let work = create(&kernel, owner, "Work").await;
+    let home = create(&kernel, owner, "Home").await;
+    let person = Participant::Person(owner);
+    let give = |to: ProjectId| json!({ "to": to, "text": "moved" });
+    let items = async |project: &ProjectSummary| {
+        let list = kernel.call(person, "notes.list", Some(project.id), None, Value::Null);
+        list.await.unwrap()["items"].clone()
+    };
+
+    let given = kernel.call(
+        person,
+        "notes.give",
+        Some(work.id),
+        Some(CommandId::new()),
+        give(home.id),
+    );
+    given.await.unwrap();
+    assert_eq!(items(&home).await, json!(["moved"]));
+    assert_eq!(items(&work).await, json!([]));
+
+    // An Agent's pass keeps it in its own Project, whatever it calls.
+    let agent = Caller::agent(AgentId::new(), work.id);
+    let by_agent = kernel.call(
+        agent,
+        "notes.give",
+        Some(work.id),
+        Some(CommandId::new()),
+        give(home.id),
+    );
+    assert_eq!(by_agent.await.unwrap_err().code, Code::Forbidden);
+    // Nor does one with no pass, whose own Project is no wall.
+    let unwalled = kernel.call(
+        Participant::Agent(AgentId::new()),
+        "notes.give",
+        Some(work.id),
+        Some(CommandId::new()),
+        give(home.id),
+    );
+    assert_eq!(unwalled.await.unwrap_err().code, Code::Forbidden);
+    // Its own Project is no other, and one there is not, is not found.
+    let own = kernel.call(
+        person,
+        "notes.give",
+        Some(work.id),
+        Some(CommandId::new()),
+        give(work.id),
+    );
+    assert_eq!(own.await.unwrap_err().code, Code::Invalid);
+    let nowhere = kernel.call(
+        person,
+        "notes.give",
+        Some(work.id),
+        Some(CommandId::new()),
+        give(ProjectId::new()),
+    );
+    assert_eq!(nowhere.await.unwrap_err().code, Code::NotFound);
+    assert_eq!(items(&home).await, json!(["moved"]));
+    assert_eq!(items(&work).await, json!([]));
+}
+
+#[tokio::test]
+async fn a_project_removed_as_a_call_reaches_it_goes_once_what_the_call_brought_landed() {
+    let dir = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(dir.path(), owner, &notes).await;
+    let work = create(&kernel, owner, "Work").await;
+    let home = create(&kernel, owner, "Home").await;
+    let person = Participant::Person(owner);
+    let (from, to) = (work.id, home.id);
+    let give = move |kernel: Arc<Kernel>| async move {
+        let given = json!({ "to": to, "text": "moved" });
+        let id = Some(CommandId::new());
+        kernel
+            .call(person, "notes.give", Some(from), id, given)
+            .await
+    };
+    let data = dir.path().join(".data/projects").join(to.to_string());
+    assert!(data.is_dir());
+
+    let held = notes.stamp_held.clone().write_owned().await;
+    let given = tokio::spawn(give(kernel.clone()));
+    notes.stamp_began.notified().await;
+    let removed = tokio::spawn({
+        let kernel = kernel.clone();
+        let remove = json!({ "project": to });
+        async move {
+            let id = Some(CommandId::new());
+            kernel
+                .call(person, "projects.remove", None, id, remove)
+                .await
+        }
+    });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(!removed.is_finished(), "the removal waits for the call");
+    assert!(data.is_dir(), "its data is in place while the call writes");
+    drop(held);
+    given.await.unwrap().unwrap();
+    removed.await.unwrap().unwrap();
+    // Put away at once where an open Project's data may be renamed; on
+    // Windows, where its open files keep it in place, deleted as it
+    // closes, a moment after.
+    let gone = data.with_file_name(format!("{to}.gone"));
+    eventually(|| async { !data.exists() && !gone.exists() }).await;
+
+    // Removed, it is reached no more.
+    let after = give(kernel.clone()).await.unwrap_err();
+    assert_eq!(after.code, Code::NotFound);
 }

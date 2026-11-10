@@ -2,7 +2,14 @@ import { expect, test } from "vitest"
 import { ACTIONS } from "../window/actions"
 import { keyText, matches } from "@banda/ui/lib/keys"
 import type { Mod } from "@banda/contract/look"
-import { actionFor, movesOf, pressFor, RESET_KEY, withKeys } from "./actions"
+import {
+  actionFor,
+  actsAsPerson,
+  movesOf,
+  pressFor,
+  RESET_KEY,
+  withKeys,
+} from "./actions"
 import type { Action } from "@banda/ui/module"
 
 /** Banda's actions with its own keys, Alt the mod, before the look. */
@@ -149,4 +156,21 @@ test("a scope's key works with the mod still held, unless the window's takes it"
   // Out of the launcher, or with no scope that takes it so, Alt+B is no key.
   expect(id("KeyB", [], held)).toBeUndefined()
   expect(id("KeyB", ["launcher"])).toBeUndefined()
+})
+
+test("an action acts as the Person always, or given an arg that makes it so", () => {
+  const action = (runsAsPerson?: true | readonly string[]): Action<null> => ({
+    id: "thread.new",
+    title: "New Thread",
+    section: "Threads",
+    runsAsPerson,
+    run: () => undefined,
+  })
+  expect(actsAsPerson(action())).toBe(false)
+  expect(actsAsPerson(action(true))).toBe(true)
+  expect(actsAsPerson(action(true), { to: "p" })).toBe(true)
+  expect(actsAsPerson(action(["ask"]))).toBe(false)
+  expect(actsAsPerson(action(["ask"]), { project: "p" })).toBe(false)
+  expect(actsAsPerson(action(["ask"]), { ask: "hi" })).toBe(true)
+  expect(actsAsPerson(action(["ask"]), { ask: null })).toBe(true)
 })

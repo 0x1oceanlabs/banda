@@ -16,12 +16,13 @@ use std::time::Duration;
 /// in the log holds.
 pub const LISTENER: &str = "laters";
 
-/// The facts that may bring a nearer time: a new Later.
+/// The facts that may bring a nearer time: a new Later, and a Thread
+/// that came with its Later from another Project (ADR 0098, decision 14).
 pub fn put_off() -> EventFilter {
     EventFilter {
         module: Some("agents".into()),
         subject: None,
-        kinds: Some(vec!["thread.later".into()]),
+        kinds: Some(vec!["thread.later".into(), "thread.arrived".into()]),
     }
 }
 

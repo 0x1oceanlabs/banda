@@ -287,17 +287,26 @@ impl World {
     /// view it reads now. The Pane's tests apply those facts to the first
     /// view and must get this one (ADR 0014, decision 3).
     async fn checkpoint(&self, view: &ThreadView) {
-        static LAST: Mutex<BTreeMap<String, (usize, ThreadView)>> = Mutex::new(BTreeMap::new());
+        static LAST: Mutex<BTreeMap<String, (usize, ProjectId, ThreadView)>> =
+            Mutex::new(BTreeMap::new());
         let Some(folder) = std::env::var_os("BANDA_CHECKPOINTS") else {
             return;
         };
         let thread = view.thread.id.to_string();
         let (n, start) = {
             let mut last = LAST.lock().unwrap();
-            let Some((n, before)) = last.get_mut(&thread) else {
-                last.insert(thread, (0, view.clone()));
+            let Some((n, project, before)) = last.get_mut(&thread) else {
+                last.insert(thread, (0, self.project, view.clone()));
                 return;
             };
+            // A Thread moved to another Project (ADR 0098) is read there
+            // whole: its views here and there stand in two logs, and no
+            // facts lead from one to the other.
+            if *project != self.project {
+                *project = self.project;
+                *before = view.clone();
+                return;
+            }
             if before.at == view.at {
                 return;
             }
@@ -409,13 +418,17 @@ fn entries(items: &[Item]) -> Vec<String> {
         .collect()
 }
 
-/// The fake agent's answer to "which session": its session and process.
-fn session_of(view: &ThreadView) -> (String, String) {
-    let reply = texts(view)
-        .into_iter()
-        .rev()
-        .find_map(|t| t.strip_prefix("message: Session ").map(str::to_owned))
-        .expect("the agent named its session");
+/// The fake agent's answer to "which session" in `turn`: its session and
+/// process. Only that turn's: a Thread may hold one from before, as a
+/// moved Thread does.
+fn session_of(view: &ThreadView, turn: &Value) -> (String, String) {
+    let reply = (view.items.iter())
+        .filter(|item| item.turn.is_some_and(|its| json!(its) == *turn))
+        .find_map(|item| match &item.body {
+            Body::Message { text, .. } => text.strip_prefix("Session "),
+            _ => None,
+        })
+        .expect("the agent named its session in that turn");
     let (session, process) = reply.split_once(" in process ").unwrap();
     (session.to_owned(), process.to_owned())
 }
@@ -428,7 +441,7 @@ async fn ask_session(world: &World, thread: Option<&Value>) -> (Value, (String, 
             state(v, &sent["turn"]) == Some(TurnState::Done)
         })
         .await;
-    (sent["thread"].clone(), session_of(&view))
+    (sent["thread"].clone(), session_of(&view, &sent["turn"]))
 }
 
 /// A session may read the files Banda keeps for the Project's messages,
@@ -9886,4 +9899,802 @@ async fn two_lanes_with_the_same_call_id_keep_their_own_calls() {
     let (first, second) = (numbered(one), numbered(two));
     assert_eq!(first.1, second.1, "the same call IDs");
     assert_ne!(first.0, second.0, "from another process");
+}
+
+impl World {
+    /// Another Project of the same machine, `name`, whose new Threads
+    /// start on the same Harness, and its folder.
+    async fn beside(&self, name: &str) -> (World, PathBuf) {
+        let made = self
+            .call_in(
+                None,
+                self.person(),
+                "projects.create",
+                json!({ "name": name }),
+            )
+            .await
+            .unwrap();
+        let world = World {
+            kernel: self.kernel.clone(),
+            owner: self.owner,
+            project: serde_json::from_value(made["id"].clone()).unwrap(),
+            harness: self.harness.clone(),
+        };
+        (world, PathBuf::from(made["folder"].as_str().unwrap()))
+    }
+
+    /// The Project's folder, as the kernel lists it.
+    async fn folder(&self) -> PathBuf {
+        let all = self.kernel.projects().await;
+        let this = all.into_iter().find(|p| p.id == self.project).unwrap();
+        PathBuf::from(this.folder)
+    }
+
+    /// `who` moves `thread` from this Project to `to`.
+    async fn move_to(
+        &self,
+        who: Participant,
+        thread: &Value,
+        to: ProjectId,
+    ) -> Result<Value, banda_kernel::Refusal> {
+        let params = json!({ "thread": thread, "project": to });
+        self.call(who, "agents.move_thread", params).await
+    }
+
+    /// Whether the list has `thread`.
+    async fn lists(&self, thread: &Value) -> bool {
+        let threads = self.threads().await.threads;
+        threads.iter().any(|t| json!(t.thread.id) == *thread)
+    }
+}
+
+#[tokio::test]
+async fn a_person_moves_a_thread_to_another_project_whole_and_its_session_goes_on_there() {
+    let root = tempfile::tempdir().unwrap();
+    let work = World::new(root.path()).await;
+    let (home, home_folder) = work.beside("Home").await;
+    let work_folder = work.folder().await;
+    let person = work.person();
+    let shot = work
+        .attach(person, "image/png", PNG, Some("shot.png"))
+        .await
+        .unwrap();
+    let sent = work.send_images("what is this", &[&shot]).await;
+    let thread = sent["thread"].clone();
+    work.ended(&sent).await;
+    let (_, (session, process)) = ask_session(&work, Some(&thread)).await;
+    work.call(person, "agents.read", json!({ "thread": thread }))
+        .await
+        .unwrap();
+    let listed = work.listed(&thread).await;
+    let before = work.thread(&thread).await;
+
+    work.move_to(person, &thread, home.project).await.unwrap();
+
+    // It left the Project it was in, which says where it went.
+    assert!(!work.lists(&thread).await);
+    let gone = work
+        .call(person, "agents.thread", json!({ "thread": thread }))
+        .await
+        .unwrap_err();
+    assert_eq!(gone.code, Code::NotFound);
+    let left = work.facts("thread.left").await;
+    assert_eq!(
+        left.iter().map(|e| &e.payload).collect::<Vec<_>>(),
+        [&json!({ "thread": thread, "to": home.project })]
+    );
+    // It is in the other whole, its marks too, and says it came.
+    let there = home.listed(&thread).await;
+    assert_eq!(there.thread, listed.thread, "the same Thread, at its place");
+    assert_eq!((there.seen, there.latest), (listed.seen, listed.latest));
+    let arrived = home.facts("thread.arrived").await;
+    assert_eq!(
+        arrived.iter().map(|e| &e.payload).collect::<Vec<_>>(),
+        [&json!({ "thread": thread, "from": work.project })]
+    );
+    let view = home.thread(&thread).await;
+    assert_eq!(view.turns, before.turns);
+    assert_eq!(view.items[..before.items.len()], before.items[..]);
+    assert_eq!(
+        texts(&view)[before.items.len()..],
+        [format!(
+            "notice: Moved here from “Work”. Its Agent works in {} from now on; what it \
+             changed in {} stays there.",
+            home_folder.display(),
+            work_folder.display()
+        )]
+    );
+    // Its image came along.
+    let read = home
+        .call(person, "agents.image", json!({ "image": shot["id"] }))
+        .await
+        .unwrap();
+    assert_eq!(BASE64.decode(read["data"].as_str().unwrap()).unwrap(), PNG);
+
+    // Its session goes on there, in a process of that Project, and its
+    // Agent works in that Project's folder.
+    let (_, (again, other)) = ask_session(&home, Some(&thread)).await;
+    assert_eq!(again, session, "the same session");
+    assert_ne!(other, process, "in the other Project's process");
+    let done = home.send(Some(&thread), "on disk").await;
+    home.ended(&done).await;
+    assert!(home_folder.join("made.txt").is_file());
+    assert!(!work_folder.join("made.txt").exists());
+
+    // Moved where it is, it stays; only a Person moves it, to a Project
+    // there is.
+    home.move_to(person, &thread, home.project).await.unwrap();
+    assert!(home.lists(&thread).await);
+    let refused = home
+        .move_to(agent_of(&view), &thread, work.project)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Forbidden, "{refused:?}");
+    let nowhere = home
+        .move_to(person, &thread, ProjectId::new())
+        .await
+        .unwrap_err();
+    assert_eq!(nowhere.code, Code::NotFound, "{nowhere:?}");
+    let none = json!(banda_agents::model::ThreadId::new());
+    let none = home.move_to(person, &none, work.project).await.unwrap_err();
+    assert_eq!(none.code, Code::NotFound, "{none:?}");
+    assert!(home.lists(&thread).await && !work.lists(&thread).await);
+}
+
+#[tokio::test]
+async fn a_thread_at_work_that_asks_or_into_no_project_does_not_move() {
+    let root = tempfile::tempdir().unwrap();
+    let work = World::new(root.path()).await;
+    let (home, _) = work.beside("Home").await;
+    let person = work.person();
+    let stays = async |thread: &Value, why: &str| {
+        let refused = work
+            .move_to(person, thread, home.project)
+            .await
+            .unwrap_err();
+        assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+        assert!(refused.message.contains(why), "{refused:?}");
+        assert!(work.lists(thread).await && !home.lists(thread).await);
+        assert!(home.facts("thread.arrived").await.is_empty());
+        assert!(work.facts("thread.left").await.is_empty());
+    };
+
+    let slow = work.send(None, "slow please").await;
+    work.until(&slow["thread"], |v| {
+        state(v, &slow["turn"]) == Some(TurnState::Running)
+    })
+    .await;
+    stays(&slow["thread"], "at work").await;
+    work.ended(&slow).await;
+
+    let asks = work.send(None, "please ask first").await;
+    work.until(&asks["thread"], |v| {
+        let open = |i: &banda_agents::model::Item| {
+            matches!(
+                i.body,
+                Body::Question {
+                    state: QuestionState::Open,
+                    ..
+                }
+            )
+        };
+        v.items.iter().any(open)
+    })
+    .await;
+    stays(&asks["thread"], "answer it").await;
+
+    let made = work
+        .call_in(None, person, "projects.create", json!({ "scratch": true }))
+        .await
+        .unwrap();
+    let scratch: ProjectId = serde_json::from_value(made["id"].clone()).unwrap();
+    let refused = work
+        .move_to(person, &slow["thread"], scratch)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Invalid, "{refused:?}");
+    assert!(work.lists(&slow["thread"]).await);
+}
+
+#[tokio::test]
+async fn two_moves_of_one_thread_at_once_leave_it_whole_where_it_moved() {
+    let root = tempfile::tempdir().unwrap();
+    let work = World::new(root.path()).await;
+    let (home, _) = work.beside("Home").await;
+    let person = work.person();
+    let (thread, before) = work.finish(None, "hello").await;
+
+    // As from two windows: one moves it, and the other finds it moving,
+    // or gone from here.
+    let (one, two) = tokio::join!(
+        work.move_to(person, &thread, home.project),
+        work.move_to(person, &thread, home.project),
+    );
+    assert!(one.is_ok() != two.is_ok(), "{one:?} {two:?}");
+    let refused = one.err().or(two.err()).unwrap();
+    assert!(
+        matches!(refused.code, Code::Conflict | Code::NotFound),
+        "{refused:?}"
+    );
+    assert!(home.lists(&thread).await && !work.lists(&thread).await);
+    assert_eq!(home.facts("thread.arrived").await.len(), 1);
+    assert!(home.facts("thread.left").await.is_empty());
+    assert_eq!(home.thread(&thread).await.turns, before.turns);
+}
+
+#[tokio::test]
+async fn a_thread_that_changes_as_it_moves_stays_whole_and_its_copy_is_taken_back() {
+    let root = tempfile::tempdir().unwrap();
+    let work = World::new(root.path()).await;
+    let (home, _) = work.beside("Home").await;
+    let person = work.person();
+    let data = |world: &World| {
+        let projects = root.path().join(".data/projects");
+        projects.join(world.project.to_string())
+    };
+    let store = |world: &World| {
+        let sql = rusqlite::Connection::open(data(world).join("project.sqlite3")).unwrap();
+        sql.busy_timeout(Duration::from_secs(5)).unwrap();
+        sql
+    };
+    // A file kept for its message, which the move copies into the other
+    // Project's data just before it writes the Thread there.
+    let params = json!({ "name": "notes.md", "data": BASE64.encode("# notes") });
+    let kept = work.call(person, "agents.keep", params).await.unwrap();
+    let path = PathBuf::from(kept["path"].as_str().unwrap());
+    let said = format!("remember apples in @{}", path.display());
+    let (thread, before) = work.finish(None, &said).await;
+    let (other, _) = work.finish(None, "hello").await;
+    let copied = data(&home).join(path.strip_prefix(data(&work)).unwrap());
+    let (here, there) = (store(&work), store(&home));
+    let found = async |world: &World| {
+        let words = json!({ "words": "apples" });
+        let found = world.call(person, "agents.search", words).await.unwrap();
+        let found = found.as_array().unwrap().iter();
+        found.map(|one| one["thread"].clone()).collect::<Vec<_>>()
+    };
+    let asked = TurnId::new();
+
+    // Its Person renames it; then another Thread takes up what its Agent
+    // asked, which is no row of its own, so it is at rest no more.
+    for (round, change) in ["renamed", "awaited"].into_iter().enumerate() {
+        // The other Project's store is held, so the move waits there to
+        // write the Thread, once its files are copied.
+        there.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let (moved, ()) = tokio::join!(work.move_to(person, &thread, home.project), async {
+            while !copied.is_file() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            // Meanwhile it moves: no other move of it, nor a delete.
+            let again = work.move_to(person, &thread, home.project).await;
+            let deleted = work.delete(person, &thread).await;
+            for refused in [again.unwrap_err(), deleted.unwrap_err()] {
+                assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+                assert!(refused.message.contains("moving to another"), "{refused:?}");
+            }
+            if change == "renamed" {
+                work.rename(&thread, Some("Apples")).await.unwrap();
+            } else {
+                let opened = here.execute(
+                    "INSERT INTO agents_turns
+                         (id, thread, agent, author, message, state, created_at, opener, from_thread)
+                     SELECT ?1, thread, agent, author, message, 'queued', created_at, 'asked', ?2
+                     FROM agents_turns WHERE thread = ?3 LIMIT 1",
+                    rusqlite::params![asked, thread.as_str().unwrap(), other.as_str().unwrap()],
+                );
+                assert_eq!(opened.unwrap(), 1);
+            }
+            there.execute_batch("ROLLBACK").unwrap();
+        });
+
+        let refused = moved.unwrap_err();
+        assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+        let why = if change == "renamed" {
+            "changed as it moved"
+        } else {
+            "works on what this one asked"
+        };
+        assert!(refused.message.contains(why), "{refused:?}");
+        // It stays here whole, and its copy there is taken back: written,
+        // then gone again to here.
+        assert!(work.lists(&thread).await && !home.lists(&thread).await);
+        assert_eq!(work.thread(&thread).await.items, before.items);
+        let (came, went) = (
+            home.facts("thread.arrived").await,
+            home.facts("thread.left").await,
+        );
+        assert_eq!((came.len(), went.len()), (round + 1, round + 1));
+        assert!(came[round].seq < went[round].seq);
+        assert_eq!(went[round].payload["to"], json!(work.project));
+        assert_eq!(found(&work).await, std::slice::from_ref(&thread));
+        assert!(found(&home).await.is_empty());
+        std::fs::remove_file(&copied).unwrap();
+    }
+
+    // Once that work is done, it moves.
+    let done = here.execute(
+        "UPDATE agents_turns SET state = 'done' WHERE id = ?1",
+        rusqlite::params![asked],
+    );
+    assert_eq!(done.unwrap(), 1);
+    work.move_to(person, &thread, home.project).await.unwrap();
+    assert!(home.lists(&thread).await && !work.lists(&thread).await);
+    assert_eq!(found(&home).await, std::slice::from_ref(&thread));
+}
+
+/// A Thread whose Agent goes on by itself while it moves stays, and that
+/// turn of the Agent's own goes on here as it would have: the Thread's
+/// session here closes only once it left, so a move that does not happen
+/// cuts nothing off.
+#[tokio::test]
+async fn a_thread_whose_agent_goes_on_by_itself_as_it_moves_stays_and_that_turn_goes_on() {
+    let root = tempfile::tempdir().unwrap();
+    let work = World::new(root.path()).await;
+    let (home, _) = work.beside("Home").await;
+    let person = work.person();
+    let data = |world: &World| {
+        let projects = root.path().join(".data/projects");
+        projects.join(world.project.to_string())
+    };
+    // A file kept for its message, which the move copies into the other
+    // Project's data just before it writes the Thread there.
+    let params = json!({ "name": "notes.md", "data": BASE64.encode("# notes") });
+    let kept = work.call(person, "agents.keep", params).await.unwrap();
+    let path = PathBuf::from(kept["path"].as_str().unwrap());
+    let said = format!("background on cue, with @{}", path.display());
+    let (thread, _) = work.finish(None, &said).await;
+    let copied = data(&home).join(path.strip_prefix(data(&work)).unwrap());
+    let cue = work.folder().await.join("cue");
+    let there = rusqlite::Connection::open(data(&home).join("project.sqlite3")).unwrap();
+    there.busy_timeout(Duration::from_secs(5)).unwrap();
+
+    // The other Project's store is held, so the move waits there to write
+    // the Thread, once its files are copied; meanwhile its Agent goes on
+    // by itself here.
+    there.execute_batch("BEGIN IMMEDIATE").unwrap();
+    let (moved, ()) = tokio::join!(work.move_to(person, &thread, home.project), async {
+        while !copied.is_file() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        std::fs::write(&cue, "").unwrap();
+        work.until(&thread, |v| v.turns.len() == 2).await;
+        there.execute_batch("ROLLBACK").unwrap();
+    });
+
+    let refused = moved.unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+    assert!(
+        refused.message.contains("changed as it moved"),
+        "{refused:?}"
+    );
+    assert!(work.lists(&thread).await && !home.lists(&thread).await);
+    assert_eq!(home.rows_of(root.path(), &thread), 0, "its copy taken back");
+    // Its Agent's own turn was not cut off: it ends as it would have.
+    let view = work
+        .until(&thread, |v| v.turns[1].state != TurnState::Running)
+        .await;
+    assert_eq!(view.turns[1].state, TurnState::Done);
+    assert_eq!(
+        texts(&view)[2..],
+        [
+            "notice: Fake went on by itself.",
+            "message: The task finished.",
+        ]
+    );
+
+    // Once at rest, it moves.
+    work.move_to(person, &thread, home.project).await.unwrap();
+    assert!(home.lists(&thread).await && !work.lists(&thread).await);
+    assert_eq!(home.thread(&thread).await.turns, view.turns);
+}
+
+#[tokio::test]
+async fn a_fork_moves_once_it_has_run_with_a_session_of_its_own() {
+    let root = tempfile::tempdir().unwrap();
+    let work = World::new(root.path()).await;
+    let (home, _) = work.beside("Home").await;
+    let person = work.person();
+    let (thread, first) = work.finish(None, "remember apples").await;
+    work.finish(Some(&thread), "remember pears").await;
+    let forked = work
+        .call(person, "agents.fork", json!({ "turn": first.turns[0].id }))
+        .await
+        .unwrap();
+    let fork = forked["thread"].clone();
+
+    // Its session is still its source's, which says what came after.
+    let refused = work.move_to(person, &fork, home.project).await.unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+    assert!(refused.message.contains("send it a message"), "{refused:?}");
+    assert!(work.lists(&fork).await && !home.lists(&fork).await);
+
+    work.finish(Some(&fork), "remember plums").await;
+    work.move_to(person, &fork, home.project).await.unwrap();
+    assert!(home.lists(&fork).await && !work.lists(&fork).await);
+}
+
+// Its CLI is a `sh` script that runs by its exec bit.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_fork_gone_to_another_harness_before_its_session_opened_moves_without_its_sources() {
+    let (root, bin) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let cli = fake_cli(bin.path());
+    let work = World::new_on(root.path(), two_claude_accounts(&cli), "claude-a").await;
+    let (home, _) = work.beside("Home").await;
+    let person = work.person();
+    let (thread, first) = work.finish(None, "remember apples").await;
+    let (_, (source, _)) = ask_session(&work, Some(&thread)).await;
+    let forked = work
+        .call(person, "agents.fork", json!({ "turn": first.turns[0].id }))
+        .await
+        .unwrap();
+    let fork = forked["thread"].clone();
+    let data = |world: &World| {
+        let projects = root.path().join(".data/projects");
+        projects.join(world.project.to_string())
+    };
+    // Its first turn ran on Claude Code and ended before its session
+    // opened, as when its process fails to start: the turn names the
+    // account, and the fork's session is still its source's.
+    let sql = rusqlite::Connection::open(data(&work).join("project.sqlite3")).unwrap();
+    sql.busy_timeout(Duration::from_secs(5)).unwrap();
+    let ran = sql.execute(
+        "UPDATE agents_turns SET harness = 'claude-a' WHERE thread = ?1",
+        rusqlite::params![fork.as_str().unwrap()],
+    );
+    assert_eq!(ran.unwrap(), 1);
+    // Then it goes to another Harness, and keeps that session for the
+    // way back.
+    let switch = async |world: &World, harness: &str| {
+        let params = json!({ "thread": fork, "harness": harness });
+        world.call(person, "agents.switch", params).await
+    };
+    switch(&work, "other").await.unwrap();
+    let (_, view) = work.finish(Some(&fork), "remember plums").await;
+    assert_eq!(view.turns.last().unwrap().state, TurnState::Done);
+    // Its source's transcript, as Claude Code keeps it in the Project's
+    // data, which says what came after the fork too.
+    let transcript = |world: &World| {
+        let sessions = banda_harnesses::claude_sessions(&data(world));
+        sessions.join(format!("{source}.jsonl"))
+    };
+    std::fs::create_dir_all(transcript(&work).parent().unwrap()).unwrap();
+    std::fs::write(transcript(&work), "{\"said\":\"pears\"}\n").unwrap();
+
+    work.move_to(person, &fork, home.project).await.unwrap();
+    assert!(home.lists(&fork).await && !work.lists(&fork).await);
+    assert!(
+        !transcript(&home).exists(),
+        "what its source said stays where its source is"
+    );
+    // Back on Claude Code there, it is handed its history, in a session of
+    // its own.
+    switch(&home, "claude-a").await.unwrap();
+    let (session, read) = ask_read(&home, &fork).await;
+    assert_ne!(session, source);
+    assert!(read.contains("<history>"), "{read}");
+}
+
+#[tokio::test]
+async fn a_moved_thread_takes_the_files_kept_for_its_messages_and_names_them_there() {
+    let root = tempfile::tempdir().unwrap();
+    let work = World::new(root.path()).await;
+    let (home, _) = work.beside("Home").await;
+    let person = work.person();
+    let params = json!({ "name": "notes.md", "data": BASE64.encode("# notes") });
+    let kept = work.call(person, "agents.keep", params).await.unwrap();
+    let path = PathBuf::from(kept["path"].as_str().unwrap());
+    let said = format!("read @{}", path.display());
+    let (thread, _) = work.finish(None, &said).await;
+
+    work.move_to(person, &thread, home.project).await.unwrap();
+
+    // Named part by part, as the kernel names it: a `/` would stay in the
+    // path on Windows, which the message names with `\`.
+    let data = |world: &World| {
+        let projects = root.path().join(".data").join("projects");
+        projects.join(world.project.to_string())
+    };
+    let moved = data(&home).join(path.strip_prefix(data(&work)).unwrap());
+    assert_eq!(std::fs::read_to_string(&moved).unwrap(), "# notes");
+    let said = format!("message: read @{}", moved.display());
+    assert_eq!(texts(&home.thread(&thread).await)[0], said);
+    assert!(path.is_file(), "the old Project keeps its own");
+}
+
+#[tokio::test]
+async fn a_moved_thread_names_its_parent_and_its_children_name_it_wherever_they_are() {
+    let root = tempfile::tempdir().unwrap();
+    let work = World::new(root.path()).await;
+    let (home, _) = work.beside("Home").await;
+    let person = work.person();
+    let (parent, view) = work.finish(None, "remember apples").await;
+    let sent = work.write(agent_of(&view), None, "look around").await;
+    let child = sent.unwrap()["thread"].clone();
+    work.until(&parent, settled(2)).await;
+    let names = |listed: banda_agents::model::ListedThread| listed.parent.map(|p| json!(p));
+
+    // The parent moves: its child here names it still, a Thread of
+    // another Project now (ADR 0098, decision 24).
+    work.move_to(person, &parent, home.project).await.unwrap();
+    assert_eq!(names(work.listed(&child).await), Some(parent.clone()));
+    assert_eq!(names(home.listed(&parent).await), None);
+    // Then the child: it names its parent there too.
+    work.move_to(person, &child, home.project).await.unwrap();
+    assert_eq!(names(home.listed(&child).await), Some(parent.clone()));
+}
+
+#[tokio::test]
+async fn a_moved_thread_takes_its_lanes_and_changed_lines_and_is_found_only_there() {
+    use banda_agents::model::SubagentId;
+    let root = tempfile::tempdir().unwrap();
+    let work = World::new(root.path()).await;
+    let (home, _) = work.beside("Home").await;
+    let person = work.person();
+    // The notes go from one, two, three to one, 2, three, four.
+    let (thread, view) = work.finish(None, "edit the notes").await;
+    let turn = view.turns[0].id;
+    // A lane of its turn, with an entry of its own, as its Harness's
+    // sub-agent writes them (ADR 0103).
+    let data = root.path().join(".data/projects");
+    let sql = data.join(work.project.to_string()).join("project.sqlite3");
+    let sql = rusqlite::Connection::open(sql).unwrap();
+    sql.busy_timeout(Duration::from_secs(5)).unwrap();
+    let (lane, anchor, read) = (SubagentId::new(), ItemId::new(), ItemId::new());
+    let item = |id: ItemId, body: &Body, sub: Option<SubagentId>| {
+        sql.execute(
+            "INSERT INTO agents_items (id, thread, turn, author, at, body, sub)
+             SELECT ?1, thread, turn, author, at, ?2, ?3 FROM agents_items
+             WHERE turn = ?4 AND sub IS NULL ORDER BY rowid DESC LIMIT 1",
+            rusqlite::params![id, serde_json::to_string(body).unwrap(), sub, turn],
+        )
+        .unwrap();
+    };
+    item(anchor, &Body::Subagent { subagent: lane }, None);
+    let looked = Body::Tool {
+        title: "Read notes.md".into(),
+        tool: ToolKind::Read,
+        status: ToolStatus::Done,
+        content: Vec::new(),
+        output: None,
+    };
+    item(read, &looked, Some(lane));
+    sql.execute(
+        "INSERT INTO agents_subagents (id, thread, turn, item, title, state, started_at)
+         VALUES (?1, ?2, ?3, ?4, 'Read the notes', 'running', 1)",
+        rusqlite::params![lane, thread.as_str().unwrap(), turn, anchor],
+    )
+    .unwrap();
+
+    // While the lane works, the Thread stays.
+    let refused = work
+        .move_to(person, &thread, home.project)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+    assert!(refused.message.contains("sub-agents end"), "{refused:?}");
+    assert!(work.lists(&thread).await && !home.lists(&thread).await);
+    sql.execute(
+        "UPDATE agents_subagents SET state = 'done', ended_at = 2 WHERE id = ?1",
+        rusqlite::params![lane],
+    )
+    .unwrap();
+
+    let before = work.thread(&thread).await;
+    let lines = |listed: banda_agents::model::ListedThread| {
+        let lines = listed.changed_lines?;
+        Some((lines.added, lines.removed))
+    };
+    assert_eq!(lines(work.listed(&thread).await), Some((2, 1)));
+    let found = async |world: &World| {
+        let words = json!({ "words": "notes" });
+        let found = world.call(person, "agents.search", words).await.unwrap();
+        let found = found.as_array().unwrap().iter();
+        found.map(|one| one["thread"].clone()).collect::<Vec<_>>()
+    };
+    assert_eq!(found(&work).await, std::slice::from_ref(&thread));
+
+    work.move_to(person, &thread, home.project).await.unwrap();
+
+    let view = home.thread(&thread).await;
+    assert_eq!(view.subagents, before.subagents, "its lanes");
+    assert_eq!(view.subagents[0].id, lane);
+    let ids = |view: &ThreadView| view.edits.iter().map(|one| one.id).collect::<Vec<_>>();
+    assert_eq!(ids(&view), ids(&before), "their entries");
+    assert_eq!(lines(home.listed(&thread).await), Some((2, 1)));
+    // Its messages are found where it is, and no more where it was.
+    assert_eq!(found(&home).await, std::slice::from_ref(&thread));
+    assert!(found(&work).await.is_empty());
+}
+
+#[tokio::test]
+async fn a_thread_is_never_deleted_as_it_moves_nor_moved_as_it_is_deleted() {
+    let root = tempfile::tempdir().unwrap();
+    let work = World::new(root.path()).await;
+    let (home, _) = work.beside("Home").await;
+    let person = work.person();
+    for delete_first in [false, true] {
+        let (thread, _) = work.finish(None, "hello").await;
+        work.archive(person, &thread, true).await.unwrap();
+        let (moved, deleted) = if delete_first {
+            let (deleted, moved) = tokio::join!(
+                work.delete(person, &thread),
+                work.move_to(person, &thread, home.project),
+            );
+            (moved, deleted)
+        } else {
+            tokio::join!(
+                work.move_to(person, &thread, home.project),
+                work.delete(person, &thread),
+            )
+        };
+        // One of them goes, and the other finds it held, or gone.
+        assert!(moved.is_ok() != deleted.is_ok(), "{moved:?} {deleted:?}");
+        let refused = moved.as_ref().err().or(deleted.as_ref().err()).unwrap();
+        assert!(
+            matches!(refused.code, Code::Conflict | Code::NotFound),
+            "{refused:?}"
+        );
+        // A deleted Thread has no copy left in the other Project.
+        assert!(!work.lists(&thread).await);
+        assert_eq!(home.lists(&thread).await, moved.is_ok());
+    }
+}
+
+// A Thread moves with the lanes its Harness's sub-agents write (ADR 0103,
+// step 1), and only once they ended.
+
+impl World {
+    /// How many rows of `thread` this Project's store holds: its own, its
+    /// turns, its items and its lanes.
+    fn rows_of(&self, root: &Path, thread: &Value) -> i64 {
+        let data = root.join(".data/projects").join(self.project.to_string());
+        let sql = rusqlite::Connection::open(data.join("project.sqlite3")).unwrap();
+        sql.busy_timeout(Duration::from_secs(5)).unwrap();
+        sql.query_row(
+            "SELECT (SELECT COUNT(*) FROM agents_threads WHERE id = ?1)
+                  + (SELECT COUNT(*) FROM agents_turns WHERE thread = ?1)
+                  + (SELECT COUNT(*) FROM agents_items WHERE thread = ?1)
+                  + (SELECT COUNT(*) FROM agents_subagents WHERE thread = ?1)",
+            [thread.as_str().unwrap()],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+}
+
+/// A Thread whose sub-agent ended moves with its lane: the lane, its own
+/// entries and its edit read the same in the other Project, and no more
+/// where it was.
+#[tokio::test]
+async fn a_thread_whose_sub_agent_ended_moves_with_its_lane_its_entries_and_its_edit() {
+    let root = tempfile::tempdir().unwrap();
+    let work = World::declaring(root.path(), harnesses()).await;
+    let (home, _) = work.beside("Home").await;
+    let person = work.person();
+    let (sent, before) = work.lanes_end(None, "sub-agents edit", 1).await;
+    let thread = &sent["thread"];
+    let lane = &before.subagents[0];
+    assert_eq!(lane.state, SubagentState::Done);
+    let own = work.subagent(lane).await;
+    assert!(!own.items.is_empty(), "its own entries");
+    assert_eq!(before.edits.len(), 1, "its edit");
+    // The files its turn changed, its sub-agent's edit among them, each
+    // named apart from the folder it is in.
+    let changes = async |world: &World| {
+        let params = json!({ "thread": thread, "turn": sent["turn"] });
+        let mut changed = world.call(person, "agents.changes", params).await.unwrap();
+        let files = changed["files"].as_array_mut().unwrap();
+        for file in files.iter_mut() {
+            let path = file["path"].take();
+            assert!(Path::new(path.as_str().unwrap()).ends_with("src/util.ts"));
+        }
+        (changed["turns"].take(), changed["files"].take())
+    };
+    let changed = changes(&work).await;
+    let lines = |listed: banda_agents::model::ListedThread| {
+        let lines = listed.changed_lines?;
+        Some((lines.added, lines.removed))
+    };
+    // Kept as its turn ended, with what its sub-agent edited by then.
+    let counted = lines(work.listed(thread).await);
+
+    work.move_to(person, thread, home.project).await.unwrap();
+
+    let view = home.thread(thread).await;
+    assert_eq!(view.turns, before.turns);
+    assert_eq!(view.items[..before.items.len()], before.items[..]);
+    assert_eq!(view.subagents, before.subagents, "its lane");
+    assert_eq!(view.edits, before.edits, "its edit");
+    let moved = home.subagent(lane).await;
+    assert_eq!(
+        (moved.thread, moved.subagent, moved.items, moved.subagents),
+        (own.thread, own.subagent, own.items, own.subagents),
+        "its entries"
+    );
+    assert_eq!(changes(&home).await, changed);
+    assert_eq!(lines(home.listed(thread).await), counted);
+    let gone = work
+        .call(person, "agents.subagent", json!({ "subagent": lane.id }))
+        .await
+        .unwrap_err();
+    assert_eq!(gone.code, Code::NotFound, "{gone:?}");
+    assert_eq!(work.rows_of(root.path(), thread), 0);
+}
+
+/// A Thread whose sub-agent works on after its turn ended stays where it
+/// is, as one whose turn works, and nothing of it goes to the other
+/// Project: its sub-agent goes on undisturbed, and once it ends, the
+/// Thread moves with it (ADR 0103, decision 11).
+#[tokio::test]
+async fn a_thread_whose_sub_agent_works_after_its_turn_stays_and_nothing_of_it_is_copied() {
+    let root = tempfile::tempdir().unwrap();
+    let harnesses = harnesses_with(&[("FAKE_AGENT_OUTLIVES_BY", "3000")]);
+    let work = World::declaring(root.path(), harnesses).await;
+    let (home, _) = work.beside("Home").await;
+    let person = work.person();
+    let (sent, view) = work.outlived(None, "sub-agents outlive").await;
+    let thread = &sent["thread"];
+    assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Done));
+
+    let refused = work
+        .move_to(person, thread, home.project)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+    assert_eq!(
+        refused.message,
+        "A sub-agent of this Thread is at work: move it once its sub-agents end."
+    );
+    assert!(work.lists(thread).await && !home.lists(thread).await);
+    assert!(home.facts("thread.arrived").await.is_empty());
+    assert!(work.facts("thread.left").await.is_empty());
+    assert_eq!(home.rows_of(root.path(), thread), 0, "nothing of it there");
+    // Its sub-agent was not cut off: it ends as it would have.
+    let view = work.until(thread, |v| lanes_ended(v, 1)).await;
+    let lane = &view.subagents[0];
+    assert_eq!(
+        (lane.state, lane.why.as_deref()),
+        (SubagentState::Done, None)
+    );
+
+    work.move_to(person, thread, home.project).await.unwrap();
+    assert_eq!(home.thread(thread).await.subagents, view.subagents);
+}
+
+/// A Thread whose sub-agent asks after its turn ended stays where it is
+/// until its Person answers, so the Question is answered where it was
+/// asked; then it moves (ADR 0103, decision 8).
+#[tokio::test]
+async fn a_thread_whose_sub_agent_asks_after_its_turn_stays_until_it_is_answered() {
+    let root = tempfile::tempdir().unwrap();
+    let work = World::declaring(root.path(), harnesses()).await;
+    let (home, _) = work.beside("Home").await;
+    let person = work.person();
+    let sent = work.send(None, "sub-agents asks outlive").await;
+    let thread = &sent["thread"];
+    let view = work.until(thread, |v| asked(v).is_some()).await;
+    assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Done));
+    assert_eq!(view.subagents[0].state, SubagentState::Asks);
+
+    let refused = work
+        .move_to(person, thread, home.project)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+    assert_eq!(
+        refused.message,
+        "This Thread asks its Person: answer it before moving it."
+    );
+    assert!(work.lists(thread).await && !home.lists(thread).await);
+    assert_eq!(home.rows_of(root.path(), thread), 0, "nothing of it there");
+
+    let (question, _) = asked(&view).unwrap();
+    work.answer(question, "allow-once").await;
+    let view = work.until(thread, |v| lanes_ended(v, 1)).await;
+    assert_eq!(view.subagents[0].state, SubagentState::Done);
+    work.move_to(person, thread, home.project).await.unwrap();
+    let moved = home.thread(thread).await;
+    assert!(asked(&moved).is_none(), "answered where it was asked");
+    assert_eq!(moved.subagents, view.subagents);
 }

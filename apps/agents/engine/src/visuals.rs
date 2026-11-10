@@ -72,7 +72,7 @@ impl Visuals {
         .await
     }
 
-    fn path(&self, visual: VisualId) -> PathBuf {
+    pub(crate) fn path(&self, visual: VisualId) -> PathBuf {
         self.folder.join(format!("{visual}.html"))
     }
 }

@@ -1,4 +1,5 @@
-use crate::access::Right;
+use crate::access::{self, Right};
+use crate::kernel::Projects;
 use crate::methods::{Kind, Tool, needs_command_id};
 use crate::outbox::{Effect, OnRestart, Outcome, Retry, Settled};
 use crate::project::ModuleProject;
@@ -192,6 +193,27 @@ pub struct Call {
     wall: Option<Wall>,
     thread: Option<Uuid>,
     runs: Option<String>,
+    /// Every Project of this machine, which a call of their owner's may
+    /// reach ([`Call::other`]); none for a stream.
+    projects: Option<Projects>,
+}
+
+/// Another Project, as the module of a call that reaches it sees it
+/// ([`Call::other`]). While it is held, that Project's folder does not
+/// move, as the call's own does not while it runs, and its data is not
+/// put away: removed meanwhile, it goes once the call let go of it.
+pub struct Other {
+    project: ModuleProject,
+    _moving: tokio::sync::OwnedRwLockReadGuard<()>,
+    _reached: tokio::sync::OwnedRwLockReadGuard<()>,
+}
+
+impl std::ops::Deref for Other {
+    type Target = ModuleProject;
+
+    fn deref(&self) -> &ModuleProject {
+        &self.project
+    }
 }
 
 impl Call {
@@ -212,6 +234,15 @@ impl Call {
             wall,
             thread,
             runs,
+            projects: None,
+        }
+    }
+
+    /// The call, able to reach the other Projects of `projects`.
+    pub(crate) fn reaching(self, projects: Projects) -> Self {
+        Self {
+            projects: Some(projects),
+            ..self
         }
     }
 
@@ -241,6 +272,42 @@ impl Call {
 
     pub fn project(&self) -> &ModuleProject {
         &self.project
+    }
+
+    /// This module in `project`, another open Project of this machine, for
+    /// a call of their owner's that moves the module's own data there, as
+    /// a Person moves a Thread to another Project (ADR 0098, decision 14).
+    /// What it writes there is the module's own, in that Project's store
+    /// and data, under no receipt: it is the call's to write once. Only a
+    /// Person reaches it, the owner, whose every right holds there too: an
+    /// Agent stays in its own Project, with a pass or without, whatever
+    /// right the method needs. The call's own Project is no other.
+    pub async fn other(&self, project: ProjectId) -> Result<Other, Refusal> {
+        if self.participant.agent().is_some() {
+            return Err(Refusal::forbidden(
+                "An Agent reaches no Project but its own.",
+            ));
+        }
+        access::within(self.wall.map(|wall| wall.project), Some(project))?;
+        if project == self.project.id() {
+            return Err(Refusal::invalid("That is the Project this call runs in."));
+        }
+        let projects = (self.projects.as_ref()).ok_or_else(|| {
+            Refusal::invalid(format!("{} reaches no other Project.", self.method))
+        })?;
+        let other = crate::kernel::open_in(projects, project).await?;
+        access::decide(&self.participant, Right::Write, other.owner())?;
+        let moving = other.moving.clone().read_owned().await;
+        let reached = other.reached.clone().read_owned().await;
+        // Removed as it was found: it is not there any more.
+        if other.removed() {
+            return Err(crate::kernel::no_project());
+        }
+        Ok(Other {
+            project: self.project.beside(other),
+            _moving: moving,
+            _reached: reached,
+        })
     }
 
     /// Asks the window `what`, under this module's name, for this call's

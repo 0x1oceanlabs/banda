@@ -8,6 +8,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import type { ProjectId } from "@banda/contract"
 import type { Fit, VisualId } from "@banda/contract/agents"
+import { saidByAPage } from "@banda/ui/lib/keys"
 import { onThemeChange } from "@banda/ui/lib/look"
 import {
   heard,
@@ -94,14 +95,17 @@ export function VisualFrame({
         if (navigator.userActivation.isActive)
           window.open(said.url, "_blank", "noopener")
       }
-      // A key the page left goes on from its frame, as one pressed on it.
+      // A key the page left goes on from its frame, as one pressed on it,
+      // but as the page's: it runs nothing that acts as the Person.
       else
         own.dispatchEvent(
-          new KeyboardEvent("keydown", {
-            ...said.key,
-            bubbles: true,
-            cancelable: true,
-          })
+          saidByAPage(
+            new KeyboardEvent("keydown", {
+              ...said.key,
+              bubbles: true,
+              cancelable: true,
+            })
+          )
         )
     }
     window.addEventListener("message", listen)

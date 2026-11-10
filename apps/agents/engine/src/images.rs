@@ -78,7 +78,7 @@ impl Images {
         .await
     }
 
-    fn path(&self, image: ImageId) -> PathBuf {
+    pub(crate) fn path(&self, image: ImageId) -> PathBuf {
         self.folder.join(image.to_string())
     }
 }

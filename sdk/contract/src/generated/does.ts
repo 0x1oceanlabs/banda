@@ -65,6 +65,7 @@ export const DOES = {
   "agents.suggest_title": "act",
   "agents.switch": "act",
   "agents.go_on": "act",
+  "agents.move_thread": "act",
   "browser.tabs": "read",
   "browser.snapshot": "read",
   "browser.screenshot": "read",

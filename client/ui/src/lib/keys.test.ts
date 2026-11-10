@@ -1,5 +1,6 @@
 import { expect, test } from "vitest"
 import {
+  aPageSaid,
   holdsAlone,
   isModKey,
   keyCaps,
@@ -9,6 +10,7 @@ import {
   modText,
   realKey,
   sameMod,
+  saidByAPage,
   withMore,
 } from "./keys"
 
@@ -98,4 +100,11 @@ test("a mod reads as it is pressed, and keys.toml writes it in one order", () =>
   expect(modText({ alt: true, ctrl: false, super: true })).toBe("Alt+Super")
   expect(sameMod(ctrlAlt, { ...ALT, ctrl: true })).toBe(true)
   expect(sameMod(ctrlAlt, ALT)).toBe(false)
+})
+
+test("a press a page said is told from one the Person pressed", () => {
+  const pressed = new Event("keydown")
+  const said = saidByAPage(new Event("keydown"))
+  expect(aPageSaid(said)).toBe(true)
+  expect(aPageSaid(pressed)).toBe(false)
 })

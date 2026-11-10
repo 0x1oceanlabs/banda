@@ -2,7 +2,8 @@
 //! 0090, decision 3): the PATH a program is found on and how it is found,
 //! how a program the engine runs for itself starts, how two paths compare,
 //! which paths are on this machine's own disks, which names a file cannot
-//! have, and how a file written whole is put in place. Unix's ways are the
+//! have, how a file written whole is put in place, and how one is copied
+//! where a fenced Agent may write (`host/beneath.rs`). Unix's ways are the
 //! plain ones; Windows' differ, and are in `host/windows.rs`.
 //!
 //! On Windows each program the engine starts, on its own or through a
@@ -19,8 +20,11 @@ use std::path::{Component, Path, PathBuf, Prefix};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+mod beneath;
 #[cfg(windows)]
 mod windows;
+
+pub use beneath::copy_beneath;
 
 /// What each program the engine starts on Windows starts with:
 /// `CREATE_NEW_PROCESS_GROUP`, and no `CREATE_NO_WINDOW`.

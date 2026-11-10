@@ -17,6 +17,7 @@ use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 
 pub const MIGRATIONS: &[&str] = &[
     r#"
@@ -2217,6 +2218,18 @@ pub fn lanes_at_work(sql: &Connection, thread: ThreadId) -> Result<Lanes, Error>
     Ok(Lanes { work, direct })
 }
 
+/// Whether a lane of the Thread has not ended: it works, or waits for a
+/// slot in a Crew (ADR 0103).
+pub fn lanes_unended(sql: &Connection, thread: ThreadId) -> Result<bool, Error> {
+    let [running, asks] = at_work();
+    Ok(sql.query_row(
+        "SELECT EXISTS (SELECT 1 FROM agents_subagents
+                        WHERE thread = ?1 AND state IN (?2, ?3, ?4))",
+        params![thread, running, asks, word(SubagentState::Queued)],
+        |row| row.get(0),
+    )?)
+}
+
 /// Whether a lane of any of the Project's Threads is at work.
 pub fn any_lane_at_work(sql: &Connection) -> Result<bool, Error> {
     let [running, asks] = at_work();
@@ -2281,6 +2294,293 @@ pub fn lanes_in(
     ))?;
     let rows = statement.query_map(params![thread, json(&words)?], read_lane)?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// Whether another Thread works on what `thread`'s Agent asked it (ADR
+/// 0019, decision 4): its last reply comes back here once its turn ends.
+pub fn awaited(sql: &Connection, thread: ThreadId) -> Result<bool, Error> {
+    let ongoing = [TurnState::Queued, TurnState::Running].map(word);
+    Ok(sql.query_row(
+        "SELECT EXISTS (SELECT 1 FROM agents_turns
+         WHERE from_thread = ?1 AND opener = ?2 AND state IN (?3, ?4))",
+        params![thread, word(Opener::Asked), ongoing[0], ongoing[1]],
+        |row| row.get(0),
+    )?)
+}
+
+/// Every Visual an item of `thread` names (ADR 0037).
+pub fn thread_visuals(sql: &Connection, thread: ThreadId) -> Result<Vec<VisualId>, Error> {
+    let mut named = sql.prepare(
+        "SELECT json_extract(body, '$.visual') FROM agents_items \
+         WHERE thread = ?1 AND json_extract(body, '$.kind') = 'visual' ORDER BY rowid",
+    )?;
+    let ids = named.query_map(params![thread], |row| row.get(0))?;
+    Ok(ids.collect::<Result<_, _>>()?)
+}
+
+/// Each table that holds a Thread's rows, its own first, and which of
+/// their rows are the Thread's, with `?1` its ID. A table added later that
+/// holds a Thread's rows joins it, or a move leaves them behind. Its
+/// images' rows go apart ([`thread_images`]), and the index of its
+/// messages is written again where they go ([`search`]).
+const THREAD_TABLES: [(&str, &str); 5] = [
+    ("agents_threads", "id = ?1"),
+    ("agents_turns", "thread = ?1"),
+    ("agents_items", "thread = ?1"),
+    ("agents_notices", "thread = ?1"),
+    // Its sub-agents' lanes (ADR 0103), whose entries are its items.
+    ("agents_subagents", "thread = ?1"),
+];
+
+/// A Thread whole, as the module's tables hold it: each table's rows of
+/// it, in the order they were written, with the columns' names. Every
+/// Project's store has the same columns, as each ran the same migrations,
+/// so a Thread moves to another Project as these rows (ADR 0098,
+/// decision 14).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ThreadRows(Vec<TableRows>);
+
+#[derive(Clone, Debug, PartialEq)]
+struct TableRows {
+    table: &'static str,
+    columns: Vec<String>,
+    rows: Vec<Vec<rusqlite::types::Value>>,
+}
+
+impl ThreadRows {
+    /// `thread`'s rows, or none for a Thread there is not.
+    pub fn read(sql: &Connection, thread: ThreadId) -> Result<Option<ThreadRows>, Error> {
+        let mut tables = Vec::with_capacity(THREAD_TABLES.len());
+        for (table, whose) in THREAD_TABLES {
+            let mut statement = sql.prepare(&format!(
+                "SELECT * FROM {table} WHERE {whose} ORDER BY rowid"
+            ))?;
+            let columns: Vec<String> = statement.column_names().map(str::to_owned).collect();
+            let width = columns.len();
+            let rows = statement.query_map(params![thread], |row| {
+                (0..width).map(|at| row.get(at)).collect()
+            })?;
+            let rows = rows.collect::<rusqlite::Result<Vec<Vec<_>>>>()?;
+            tables.push(TableRows {
+                table,
+                columns,
+                rows,
+            });
+        }
+        let found = tables.first().is_some_and(|own| !own.rows.is_empty());
+        Ok(found.then_some(ThreadRows(tables)))
+    }
+
+    /// Writes the rows in another Project's store, in the order they were
+    /// written, so each list reads as it did.
+    pub fn insert(&self, sql: &Connection) -> Result<(), Error> {
+        for TableRows {
+            table,
+            columns,
+            rows,
+        } in &self.0
+        {
+            let marks = vec!["?"; columns.len()].join(", ");
+            let mut statement = sql.prepare(&format!(
+                "INSERT INTO {table} ({}) VALUES ({marks})",
+                columns.join(", ")
+            ))?;
+            for row in rows {
+                statement.execute(rusqlite::params_from_iter(row))?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Whether these rows, a Thread's in the Project it moved to, are
+    /// `came`, the rows it moved with, and the one notice that says it
+    /// came, kept for its Agent: nothing of it went on there since.
+    pub fn came_with(&self, came: &ThreadRows) -> bool {
+        const SAID: [&str; 2] = ["agents_items", "agents_notices"];
+        self.0.len() == came.0.len()
+            && self.0.iter().zip(&came.0).all(|(here, came)| {
+                let said = usize::from(SAID.contains(&here.table));
+                here.table == came.table
+                    && here.rows.len() == came.rows.len() + said
+                    && here.rows.starts_with(&came.rows)
+            })
+    }
+
+    /// The folders of kept files beneath `kept`, a Project's
+    /// ([`crate::kept::folder`]), its Person's messages in these rows name:
+    /// each by its name, a UUID, as a message names a file in one by its
+    /// absolute path. Only a Person keeps a file for a message
+    /// (`agents.keep`), so what an Agent wrote names none that goes.
+    pub fn kept_in(&self, kept: &Path) -> Vec<String> {
+        let [_, way] = beneath(kept);
+        let mut named = std::collections::BTreeSet::new();
+        for text in self.persons_messages() {
+            for (at, _) in text.match_indices(&way) {
+                let id = text.get(at + way.len()..at + way.len() + 36);
+                // Named as the folder is, which is how it is named there.
+                let named_so =
+                    |id: &&str| uuid::Uuid::try_parse(id).is_ok_and(|u| u.to_string() == *id);
+                if let Some(id) = id.filter(named_so) {
+                    named.insert(id.to_owned());
+                }
+            }
+        }
+        named.into_iter().collect()
+    }
+
+    /// These rows, each path they name in one of `kept`, folders of kept
+    /// files beneath `from`, the Project's they leave, named beneath `to`
+    /// instead, the one's they move to.
+    pub fn kept_moved(&self, from: &Path, to: &Path, kept: &[String]) -> ThreadRows {
+        let ways: Vec<(String, String)> = (beneath(from).into_iter().zip(beneath(to)))
+            .flat_map(|(from, to)| {
+                let named = |name: &String| (format!("{from}{name}"), format!("{to}{name}"));
+                kept.iter().map(named).collect::<Vec<_>>()
+            })
+            .collect();
+        let mut moved = self.clone();
+        let values = moved.0.iter_mut().flat_map(|table| &mut table.rows);
+        for value in values.flatten() {
+            if let rusqlite::types::Value::Text(text) = value {
+                for (from, to) in &ways {
+                    if text.contains(from.as_str()) {
+                        *text = text.replace(from.as_str(), to);
+                    }
+                }
+            }
+        }
+        moved
+    }
+
+    /// These rows, the Thread's own row's `column` `text` instead.
+    pub fn with_own(mut self, column: &str, text: String) -> ThreadRows {
+        if let Some(own) = self.0.first_mut()
+            && let Some(at) = own.columns.iter().position(|named| named == column)
+            && let Some(row) = own.rows.first_mut()
+        {
+            row[at] = rusqlite::types::Value::Text(text);
+        }
+        self
+    }
+
+    /// The text of each message its Person wrote in these rows.
+    fn persons_messages(&self) -> impl Iterator<Item = String> + '_ {
+        use rusqlite::types::Value;
+        let items = self.0.iter().filter(|table| table.table == "agents_items");
+        items.flat_map(|table| {
+            let at = |name: &str| table.columns.iter().position(|named| named == name);
+            let (author, body) = (at("author"), at("body"));
+            table.rows.iter().filter_map(move |row| {
+                let text = |at: Option<usize>| match row.get(at?)? {
+                    Value::Text(text) => Some(text.as_str()),
+                    _ => None,
+                };
+                let by: Participant = serde_json::from_str(text(author)?).ok()?;
+                if by.agent().is_some() {
+                    return None;
+                }
+                match serde_json::from_str(text(body)?).ok()? {
+                    Body::Message { text, .. } => Some(text),
+                    _ => None,
+                }
+            })
+        })
+    }
+}
+
+/// How a row's text names a path beneath `folder`: as a JSON string
+/// writes it, as an item's body does, then as it is.
+fn beneath(folder: &Path) -> [String; 2] {
+    let plain = folder.join("").display().to_string();
+    let json = serde_json::Value::from(plain.as_str()).to_string();
+    [json[1..json.len() - 1].to_owned(), plain]
+}
+
+/// An image a Thread's items name, as the store keeps it, for another
+/// Project's store as the Thread moves there: with the item that carries
+/// it when that is one of the Thread's. A fork's items name their
+/// source's images, whose items stay the source's (ADR 0027).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ImageRow {
+    pub image: Image,
+    author: String,
+    added_at: i64,
+    item: Option<ItemId>,
+}
+
+/// The images `thread`'s items name, as [`drop_unsent_images`] reads
+/// what an item names, and those its items carry.
+pub fn thread_images(sql: &Connection, thread: ThreadId) -> Result<Vec<ImageRow>, Error> {
+    const ITEMS: &str = "SELECT id FROM agents_items WHERE thread = ?1";
+    let mut named = sql.prepare(&format!(
+        "SELECT id, mime, name, size, author, added_at,
+           CASE WHEN item IN ({ITEMS}) THEN item END
+         FROM agents_images WHERE item IN ({ITEMS}) OR id IN (
+           SELECT json_extract(image.value, '$.id')
+           FROM agents_items, json_each(agents_items.body, '$.images') AS image
+           WHERE agents_items.thread = ?1
+           UNION
+           SELECT json_extract(part.value, '$.image.id')
+           FROM agents_items, json_each(agents_items.body, '$.content') AS part
+           WHERE agents_items.thread = ?1 AND json_extract(part.value, '$.kind') = 'image'
+         ) ORDER BY rowid"
+    ))?;
+    let rows = named.query_map(params![thread], |row| {
+        Ok(ImageRow {
+            image: Image {
+                id: row.get(0)?,
+                mime: row.get(1)?,
+                name: row.get(2)?,
+                size: row.get(3)?,
+            },
+            author: row.get(4)?,
+            added_at: row.get(5)?,
+            item: row.get(6)?,
+        })
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// Keeps `images`, a Thread's that came here whole, after its items. One
+/// kept here already stays, given its item if it had none.
+pub fn keep_images(sql: &Connection, images: &[ImageRow]) -> Result<(), Error> {
+    let mut keep = sql.prepare(
+        "INSERT INTO agents_images (id, mime, name, size, author, added_at, item)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT (id) DO UPDATE SET item = COALESCE(agents_images.item, excluded.item)",
+    )?;
+    for ImageRow {
+        image,
+        author,
+        added_at,
+        item,
+    } in images
+    {
+        keep.execute(params![
+            image.id, image.mime, image.name, image.size, author, added_at, item
+        ])?;
+    }
+    Ok(())
+}
+
+/// Takes `thread` out of the module's tables, every row of it, and its
+/// messages out of the index. The images its items carried wait from
+/// `now` as a draft's do, and go with the sweep unless an item left here
+/// names them, as a fork's.
+pub fn forget_thread(sql: &Connection, thread: ThreadId, now: i64) -> Result<(), Error> {
+    const ITEMS: &str = "SELECT id FROM agents_items WHERE thread = ?1";
+    sql.execute(
+        &format!("UPDATE agents_images SET item = NULL, added_at = ?2 WHERE item IN ({ITEMS})"),
+        params![thread, now],
+    )?;
+    search::unindex(sql, ITEMS, params![thread])?;
+    for (table, whose) in THREAD_TABLES.iter().rev() {
+        sql.execute(
+            &format!("DELETE FROM {table} WHERE {whose}"),
+            params![thread],
+        )?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -3589,5 +3889,382 @@ mod tests {
         // The sweep takes the image no item shows, and leaves the fork's.
         assert_eq!(drop_unsent_images(&sql, 10).unwrap(), vec![shot.id]);
         assert!(image_kind(&sql, shown.id).unwrap().is_some());
+    }
+
+    /// A Thread with a turn, its message, the image it carries, a notice
+    /// its Agent has yet to read, the lines its turn changed, a sub-agent's
+    /// lane with an entry of its own, and the Thread that is its parent, in
+    /// `sql`.
+    fn a_whole_thread(sql: &Connection) -> ThreadId {
+        let agent = AgentId::new();
+        let summary = ThreadSummary {
+            id: ThreadId::new(),
+            harness: "fake".to_owned(),
+            title: "Hello".to_owned(),
+            updated_at: 0,
+            was: None,
+        };
+        let author = Participant::Agent(agent);
+        insert_thread(sql, &summary, agent, author, &Settings::default()).unwrap();
+        set_parent(sql, summary.id, ThreadId::new()).unwrap();
+        let image = Image {
+            id: ImageId::new(),
+            mime: "image/png".into(),
+            name: None,
+            size: 8,
+        };
+        attach_image(sql, &image, author, 0).unwrap();
+        let message = Item {
+            id: ItemId::new(),
+            turn: None,
+            author,
+            at: 0,
+            body: Body::Message {
+                text: "Hi apples".to_owned(),
+                images: vec![image.clone()],
+                answers: false,
+            },
+        };
+        insert_item(sql, summary.id, &message, None).unwrap();
+        carry_images(sql, &[image], message.id).unwrap();
+        let turn = Turn {
+            id: TurnId::new(),
+            thread: summary.id,
+            agent,
+            message: message.id,
+            state: TurnState::Done,
+            opener: Opener::Person,
+            from_thread: None,
+            stopping: false,
+        };
+        insert_turn(sql, &turn, author, 1, &Settings::default()).unwrap();
+        let lines = ChangedLines {
+            added: 2,
+            removed: 1,
+        };
+        set_changed_lines(sql, turn.id, Some(lines)).unwrap();
+        let said = |at: i64, body: Body| Item {
+            id: ItemId::new(),
+            turn: Some(turn.id),
+            author,
+            at,
+            body,
+        };
+        let lane = Subagent {
+            id: SubagentId::new(),
+            turn: turn.id,
+            parent: None,
+            title: "Read the notes".into(),
+            role: None,
+            model: None,
+            state: SubagentState::Done,
+            why: None,
+            can_stop: false,
+            started: 1,
+            ended: Some(2),
+            prompt: None,
+            report: None,
+        };
+        let anchor = said(1, Body::Subagent { subagent: lane.id });
+        insert_item(sql, summary.id, &anchor, None).unwrap();
+        let child = json!({ "session": lane.id.to_string() });
+        insert_lane(sql, summary.id, &lane, anchor.id, &child).unwrap();
+        let own = said(1, call(crate::model::ToolKind::Read));
+        insert_item(sql, summary.id, &own, Some(lane.id)).unwrap();
+        let notice = Item {
+            id: ItemId::new(),
+            turn: None,
+            author,
+            at: 2,
+            body: Body::Notice {
+                text: "Committed".to_owned(),
+            },
+        };
+        insert_item(sql, summary.id, &notice, None).unwrap();
+        keep_notice(sql, summary.id, notice.id).unwrap();
+        summary.id
+    }
+
+    #[test]
+    fn a_thread_goes_to_another_store_as_its_rows_whole_and_leaves_none_behind() {
+        let (here, there) = (migrated(), migrated());
+        let thread = a_whole_thread(&here);
+        let other = a_whole_thread(&here);
+        let rows = ThreadRows::read(&here, thread).unwrap().unwrap();
+        let images = thread_images(&here, thread).unwrap();
+        assert_eq!(images.len(), 1);
+        let (said, ran) = (items(&here, thread).unwrap(), turns(&here, thread).unwrap());
+        let lanes = subagents(&here, thread).unwrap();
+        assert_eq!(lanes.len(), 1);
+        let found = |sql: &Connection| {
+            let found = search::search(sql, "apples", None).unwrap();
+            found.into_iter().map(|one| one.thread).collect::<Vec<_>>()
+        };
+        rows.insert(&there).unwrap();
+        search::index_thread(&there, thread).unwrap();
+        keep_images(&there, &images).unwrap();
+        assert_eq!(
+            ThreadRows::read(&there, thread).unwrap(),
+            Some(rows.clone())
+        );
+        // Its parent, the lines its turn changed, its lanes and their
+        // entries go with it, and its messages are found there.
+        assert_eq!(thread_parent(&there, thread), thread_parent(&here, thread));
+        assert!(thread_parent(&there, thread).is_some());
+        assert_eq!(subagents(&there, thread).unwrap(), lanes);
+        assert_eq!(
+            lane_items(&there, lanes[0].id).unwrap(),
+            lane_items(&here, lanes[0].id).unwrap()
+        );
+        assert_eq!(found(&there), [thread]);
+        assert_eq!(thread_images(&there, thread).unwrap(), images);
+        assert_eq!(
+            items(&there, thread).unwrap(),
+            said,
+            "in the order they came"
+        );
+        assert_eq!(turns(&there, thread).unwrap(), ran);
+        assert_eq!(
+            notices_of(&there, thread, said[0].id, true).unwrap(),
+            ["Committed"]
+        );
+
+        assert_eq!(found(&here).len(), 2);
+        forget_thread(&here, thread, 5).unwrap();
+        assert_eq!(ThreadRows::read(&here, thread).unwrap(), None);
+        assert_eq!(found(&here), [other], "found no more where it was");
+        let kept = ThreadRows::read(&here, other).unwrap().unwrap();
+        forget_thread(&here, other, 5).unwrap();
+        for (table, _) in THREAD_TABLES {
+            let count = format!("SELECT COUNT(*) FROM {table}");
+            let left: i64 = here.query_row(&count, [], |row| row.get(0)).unwrap();
+            assert_eq!(left, 0, "nothing of either is left in {table}");
+        }
+        // Their images wait for the sweep, as a draft's do.
+        assert!(drop_unsent_images(&here, 5).unwrap().is_empty());
+        assert_eq!(drop_unsent_images(&here, 6).unwrap().len(), 2);
+        kept.insert(&here).unwrap();
+        assert_eq!(ThreadRows::read(&here, other).unwrap(), Some(kept));
+    }
+
+    /// The parent `thread` names, as its row keeps it.
+    fn thread_parent(sql: &Connection, thread: ThreadId) -> Option<String> {
+        sql.query_row(
+            "SELECT parent FROM agents_threads WHERE id = ?1",
+            params![thread],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    /// A fork of `source`, whose message names the image `source`'s
+    /// carries, as a fork's copied items do (ADR 0027).
+    fn a_fork(sql: &Connection, source: ThreadId) -> ThreadId {
+        let agent = AgentId::new();
+        let fork = ThreadSummary {
+            id: ThreadId::new(),
+            harness: "fake".to_owned(),
+            title: "Hello again".to_owned(),
+            updated_at: 0,
+            was: None,
+        };
+        let author = Participant::Agent(agent);
+        insert_thread(sql, &fork, agent, author, &Settings::default()).unwrap();
+        let image = thread_images(sql, source).unwrap().remove(0).image;
+        let message = Item {
+            id: ItemId::new(),
+            turn: None,
+            author,
+            at: 0,
+            body: Body::Message {
+                text: "Hi".to_owned(),
+                images: vec![image],
+                answers: false,
+            },
+        };
+        insert_item(sql, fork.id, &message, None).unwrap();
+        fork.id
+    }
+
+    #[test]
+    fn a_fork_and_its_source_each_move_with_the_images_both_name() {
+        let (here, there) = (migrated(), migrated());
+        let source = a_whole_thread(&here);
+        let fork = a_fork(&here, source);
+        let named = thread_images(&here, fork).unwrap();
+        let carried = thread_images(&here, source).unwrap();
+        assert_eq!(named.len(), 1);
+        assert_eq!(named[0].image, carried[0].image, "the same image");
+        assert_eq!((named[0].item, carried[0].item.is_some()), (None, true));
+
+        // The fork moves: the image goes with it, kept there for it.
+        let rows = ThreadRows::read(&here, fork).unwrap().unwrap();
+        rows.insert(&there).unwrap();
+        keep_images(&there, &named).unwrap();
+        let id = named[0].image.id;
+        assert!(image_kind(&there, id).unwrap().is_some());
+        assert!(drop_unsent_images(&there, i64::MAX).unwrap().is_empty());
+        forget_thread(&here, fork, 5).unwrap();
+        assert_eq!(thread_images(&here, source).unwrap(), carried);
+
+        // Then its source: the image it carries is its own there too.
+        let rows = ThreadRows::read(&here, source).unwrap().unwrap();
+        rows.insert(&there).unwrap();
+        keep_images(&there, &carried).unwrap();
+        assert_eq!(thread_images(&there, source).unwrap(), carried);
+
+        // A source that moves while its fork stays leaves the image for it.
+        let (here, there) = (migrated(), migrated());
+        let source = a_whole_thread(&here);
+        let fork = a_fork(&here, source);
+        let carried = thread_images(&here, source).unwrap();
+        let rows = ThreadRows::read(&here, source).unwrap().unwrap();
+        rows.insert(&there).unwrap();
+        keep_images(&there, &carried).unwrap();
+        forget_thread(&here, source, 5).unwrap();
+        let id = carried[0].image.id;
+        assert!(drop_unsent_images(&here, i64::MAX).unwrap().is_empty());
+        assert!(image_kind(&here, id).unwrap().is_some(), "the fork's still");
+        assert_eq!(thread_images(&here, fork).unwrap()[0].image.id, id);
+    }
+
+    #[test]
+    fn a_thread_that_came_is_told_from_one_that_went_on_where_it_came() {
+        let (here, there) = (migrated(), migrated());
+        let thread = a_whole_thread(&here);
+        let rows = ThreadRows::read(&here, thread).unwrap().unwrap();
+        rows.insert(&there).unwrap();
+        let notice = |sql: &Connection, text: &str| {
+            let item = Item {
+                id: ItemId::new(),
+                turn: None,
+                author: Participant::Agent(AgentId::new()),
+                at: 9,
+                body: Body::Notice {
+                    text: text.to_owned(),
+                },
+            };
+            insert_item(sql, thread, &item, None).unwrap();
+            keep_notice(sql, thread, item.id).unwrap();
+        };
+        assert!(
+            !ThreadRows::read(&there, thread)
+                .unwrap()
+                .unwrap()
+                .came_with(&rows)
+        );
+        notice(&there, "Moved here");
+        let came = ThreadRows::read(&there, thread).unwrap().unwrap();
+        assert!(came.came_with(&rows));
+        assert!(!rows.came_with(&came));
+        notice(&there, "Committed");
+        let went_on = ThreadRows::read(&there, thread).unwrap().unwrap();
+        assert!(!went_on.came_with(&rows));
+    }
+
+    #[test]
+    fn every_table_of_the_module_that_holds_a_threads_rows_goes_with_it() {
+        // A table that holds no Thread's rows, or whose rows go apart, is
+        // named here instead: the images', and the backfill's mark. The
+        // index of messages and its own tables, `agents_search*`, are
+        // written again where the messages go.
+        const APART: [&str; 2] = ["agents_images", "agents_backfill"];
+        let sql = migrated();
+        let mut statement = sql
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'agents_%'")
+            .unwrap();
+        let names = statement
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap();
+        let mut tables: Vec<String> = names.collect::<rusqlite::Result<_>>().unwrap();
+        tables.retain(|table| {
+            !APART.contains(&table.as_str()) && !table.starts_with("agents_search")
+        });
+        tables.sort();
+        let mut moved: Vec<String> = THREAD_TABLES.iter().map(|(t, _)| t.to_string()).collect();
+        moved.sort();
+        assert_eq!(
+            tables, moved,
+            "name a new table in THREAD_TABLES, or in APART"
+        );
+        // An image's row goes as `keep_images` names its columns.
+        let mut columns = sql
+            .prepare("SELECT name FROM pragma_table_info('agents_images')")
+            .unwrap();
+        let columns: Vec<String> = (columns.query_map([], |row| row.get(0)).unwrap())
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert_eq!(
+            columns,
+            ["id", "mime", "name", "size", "author", "added_at", "item"]
+        );
+    }
+
+    #[test]
+    fn a_thread_takes_the_files_kept_for_its_persons_messages_named_as_json_writes_them() {
+        use rusqlite::types::Value;
+        // A folder whose name JSON writes otherwise, as Windows' are.
+        let (from, to) = (Path::new(r"/data\one/files"), Path::new(r"/data\two/files"));
+        let (ours, theirs) = (uuid::Uuid::now_v7(), uuid::Uuid::now_v7());
+        let path = |folder: &Path, id: uuid::Uuid| {
+            let path = folder.join(id.to_string()).join("notes.md");
+            path.display().to_string()
+        };
+        let said = |text: String| {
+            let body = Body::Message {
+                text,
+                images: Vec::new(),
+                answers: false,
+            };
+            Value::Text(json(&body).unwrap())
+        };
+        let tool = |title: String| {
+            Value::Text(serde_json::json!({ "kind": "tool", "title": title }).to_string())
+        };
+        let by = |who: Participant| Value::Text(json(&who).unwrap());
+        let person = by(Participant::Person(banda_kernel::PersonId::new()));
+        let agent = by(Participant::Agent(AgentId::new()));
+        // Its title, plain text, names a kept file; its Person's message
+        // names it, which its Agent's tool reads; its Agent's message names
+        // another Thread's.
+        let rows = |folder: &Path| {
+            let title = Value::Text(format!("About {}", path(folder, ours)));
+            ThreadRows(vec![
+                TableRows {
+                    table: "agents_threads",
+                    columns: vec!["title".to_owned(), "sessions".to_owned()],
+                    rows: vec![vec![title, Value::Text("{}".to_owned())]],
+                },
+                TableRows {
+                    table: "agents_items",
+                    columns: vec!["author".to_owned(), "body".to_owned()],
+                    rows: vec![
+                        vec![
+                            person.clone(),
+                            said(format!("read @{}", path(folder, ours))),
+                        ],
+                        vec![agent.clone(), tool(format!("Read {}", path(folder, ours)))],
+                        vec![agent.clone(), said(format!("see @{}", path(from, theirs)))],
+                    ],
+                },
+            ])
+        };
+        let here = rows(from);
+        let kept = here.kept_in(from);
+        assert_eq!(kept, [ours.to_string()]);
+        assert!(here.kept_in(to).is_empty());
+        // There they name its copy, as JSON writes it and as plain text;
+        // another Thread's stays named where it is, as it is not copied.
+        let there = here.kept_moved(from, to, &kept);
+        assert_eq!(there, rows(to));
+        // The Thread's own row takes what it has there instead.
+        let there = there.with_own("sessions", "[]".to_owned());
+        assert_eq!(
+            there.0[0].rows,
+            [[
+                Value::Text(format!("About {}", path(to, ours))),
+                Value::Text("[]".to_owned())
+            ]]
+        );
     }
 }
