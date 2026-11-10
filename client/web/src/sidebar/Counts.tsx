@@ -20,8 +20,10 @@ import { useLaterClock, useLists } from "../calls/stores"
 import { useLookSidebar } from "../look"
 import { ThreadMark, toneOf } from "@banda/ui/components/banda-mark"
 import { order, useElsewhere } from "./order"
-import { markSaid } from "./card"
-import { Status } from "./CardStatus"
+import { lookOf } from "@banda/ui/status"
+import { placedOf } from "./arrange"
+import { timeAt } from "./card"
+import { TimeNow } from "./CardStatus"
 import { calm, type Counted, inOrder, type Tally, tally } from "./tally"
 
 /** Each count's words, after its number. */
@@ -173,16 +175,19 @@ function List({
   const rows = (things: Counted[]) =>
     things.map(({ project, listed }) => {
       const where = named.get(project)
+      // Its mark's look, and its time from its place's moment in that
+      // look's colour, as its card has them.
+      const { look } = lookOf(listed, now)
       return (
         <DropdownMenuItem
           key={listed.id}
           className="gap-2 py-1.5"
           onClick={() => run("pane.pick", { project, pane: listed.pane })}
         >
-          <ThreadMark listed={listed} news={false} />
+          <ThreadMark listed={listed} look={look} news={false} />
           <span className="min-w-0 flex-1 truncate">{listed.title}</span>
           {where && <ProjectSign project={where} />}
-          <Status said={markSaid(listed)} />
+          <TimeNow time={timeAt(placedOf(listed, now), look)} />
         </DropdownMenuItem>
       )
     })

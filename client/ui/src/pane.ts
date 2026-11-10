@@ -266,6 +266,10 @@ export type Attention = { mark: MarkState; waiting: number }
 /** Nothing calls for the Person. */
 export const QUIET: Attention = { mark: "rest", waiting: 0 }
 
+/** What a failed turn calls with when its Harness gave no reason: a card
+ * then says only "Failed". */
+export const NO_REASON = "The turn failed"
+
 /**
  * One thing a module lists in the sidebar for a Project: a Thread, for the
  * agents module (ADR 0008). The module says what each one is; the window

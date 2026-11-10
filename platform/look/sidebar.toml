@@ -28,15 +28,9 @@ preset = "inbox"
 # [later]
 # presets = ["1h", "3h", "18:00", "tomorrow 9:00", "mon 9:00"]  # the picker's, up to eight
 
-# [row]
-# lines = 3                          # 1, 2 or 3
-# hide = []                          # parts to leave out: "project", "note", …
-# A layout of your own replaces the lines', part by part; "~" pushes the
-# rest to the right. The parts: "mark", "title", "project", "harness",
-# "status", "note".
-# line1 = ["mark", "project", "~", "status"]
-# line2 = ["title"]
-# line3 = ["note", "~", "harness"]
+# A card's lines follow where it stands: three in Your turn, two there
+# when grouped by Project, one for the rest (ADR 0098, decision 9). [row]
+# and its keys are no longer read; a key of the card's own comes later.
 
 # [bar]                              # who waits for you and who works, in the bar's middle
 # show = "closed"                    # "closed" (while the sidebar is), "always" or "never"

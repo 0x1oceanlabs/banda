@@ -98,7 +98,7 @@ test("a Person makes a Project, starts a Thread in it, and works with it", async
   await expect(thread.getByText("Waiting for you: Run a check")).toBeVisible()
   // The Thread's Mark, and the bar's, say it asks the Person.
   const row = sidebar.getByRole("button", { name: /hello/ })
-  await expect(row).toContainText("Asks you")
+  await expect(row).toContainText("Asks Run a check")
   const mark = page.getByRole("button", { name: /^Sidebar/ })
   await expect(mark).toHaveAccessibleName(/Asks you/)
   // In its header, Threads' Mark stands in the icon's place, before its
@@ -122,7 +122,7 @@ test("a Person makes a Project, starts a Thread in it, and works with it", async
   await expect(thread.getByText("Allowed: Run a check")).toBeVisible()
   // The Person watched it finish, so nothing calls for them: its Mark in
   // the header rests, faint.
-  await expect(row).not.toContainText("Asks you")
+  await expect(row).not.toContainText("Asks")
   await expect(mark).toHaveAccessibleName("Sidebar")
   await expect(head.getByRole("img", { name: "Nothing runs" })).toHaveClass(
     /\bopacity-40\b/
@@ -5100,7 +5100,7 @@ test("a Question is answered from its toast, which stays until then (ADR 0056)",
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   await expect(
     sidebar.getByRole("button", { name: /background asks/ })
-  ).not.toContainText("Asks you")
+  ).not.toContainText("Asks")
 })
 
 test("Threads done while one's toast shows join it in one toast, a line each (ADR 0056)", async () => {

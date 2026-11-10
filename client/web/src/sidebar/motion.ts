@@ -22,7 +22,7 @@
  * list shown whole).
  */
 import { type RefObject, useLayoutEffect, useRef } from "react"
-import type { Row } from "./arrange"
+import type { Stand } from "@banda/ui/status"
 import type { Block, Entry } from "./inbox"
 import { itemKey, type Went } from "./hold"
 import type { Region } from "./regions"
@@ -43,8 +43,9 @@ export type Item = {
 } & (
   | {
       kind: "card"
-      /** The part it is drawn in. */
+      /** The part it is drawn in, and that part's place. */
       block: string
+      stand: Stand
       entry: Entry
       lines: number
       /** It went by the Person's pointer, and stands as a ghost line. */
@@ -93,12 +94,13 @@ export const MOST = 24
 
 /**
  * The items of `regions`, top down: each region's group header, then its
- * blocks, each part's cards one by one, each card of `lines(row)` lines;
- * a ghost or a dimmed card where `ghosts` or `leaving` name it.
+ * blocks, each part's cards one by one, each card of `lines(place)`
+ * lines, by the place it is drawn in; a ghost or a dimmed card where
+ * `ghosts` or `leaving` name it.
  */
 export function itemsOf(
   regions: readonly Region[],
-  lines: (row: Row) => number,
+  lines: (place: Stand) => number,
   {
     ghosts,
     leaving,
@@ -128,7 +130,7 @@ export function itemsOf(
         const key = itemKey(entry.row)
         const ghost = ghosts?.get(key)
         const went = leaving?.get(key)
-        const count = lines(entry.row)
+        const count = lines(block.stand)
         return {
           kind: "card",
           key,
@@ -136,6 +138,7 @@ export function itemsOf(
           ...place,
           measure: `card:${count}`,
           block: block.key,
+          stand: block.stand,
           entry,
           lines: count,
           ...(ghost ? { ghost } : {}),

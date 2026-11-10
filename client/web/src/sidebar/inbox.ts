@@ -137,7 +137,11 @@ function bucketOf(entry: Entry, tomorrow: number, after: number): Bucket {
 }
 
 /** When `row`'s time counts from, where it stands (decision 8). */
-function atOf({ listed, stand, woke }: Row): number {
+export function atOf({
+  listed,
+  stand,
+  woke,
+}: Pick<Row, "listed" | "stand" | "woke">): number {
   switch (stand) {
     case "turn":
       // Whichever came last: one put off while at work may finish, ask or
