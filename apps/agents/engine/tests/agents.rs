@@ -78,6 +78,7 @@ fn fake_with(env: &[(&str, &str)]) -> Harness {
         shadows: None,
         carried: None,
         record: None,
+        subagents: false,
         cwd: None,
         holes: Holes::default(),
         credentials: Default::default(),
@@ -1572,6 +1573,7 @@ fn with_cli_since(program: &str, minimum: Option<&str>) -> Agents {
         shadows: None,
         carried: None,
         record: None,
+        subagents: false,
         cwd: None,
         holes: Holes::default(),
         credentials: Default::default(),
@@ -3637,6 +3639,7 @@ async fn the_real_harnesses_say_what_they_run_and_who_is_signed_in() {
         shadows: None,
         carried: None,
         record: None,
+        subagents: false,
         cwd: None,
         holes: Holes::default(),
         credentials: Default::default(),
@@ -4400,6 +4403,108 @@ async fn a_recorded_conversation_plays_again_as_it_went() {
     let replayed = world.edit(Duration::from_secs(10)).await;
     assert_eq!(texts(&replayed), texts(&lived));
     assert_eq!(replayed.turns[0].state, TurnState::Done);
+}
+
+/// What the engine tells the fake it can show as it starts it, read from
+/// the first frame of its recording: declaring sub-agents, or not.
+async fn shown(declaring: bool) -> Value {
+    let (root, kept) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let mut harness = harnesses().find("fake").unwrap().clone();
+    harness.record = Some(kept.path().join("recordings"));
+    let agents = Agents::new(Harnesses::new(vec![harness]));
+    let agents = match declaring {
+        true => agents.declaring_subagents(),
+        false => agents,
+    };
+    let world = World::new_with(root.path(), agents).await;
+    ask_session(&world, None).await;
+
+    let mut files = std::fs::read_dir(kept.path().join("recordings")).unwrap();
+    let file = files.next().unwrap().unwrap().path();
+    assert!(files.next().is_none(), "one file for the one start");
+    let recording = std::fs::read_to_string(file).unwrap();
+    let first: Value = serde_json::from_str(recording.lines().next().unwrap()).unwrap();
+    assert_eq!(
+        (&first["to"], &first["frame"]["method"]),
+        (&json!("agent"), &json!("initialize"))
+    );
+    first["frame"]["params"]["clientCapabilities"].clone()
+}
+
+/// The engine tells a Harness it shows sub-agents only once its engine
+/// declares them, as `BANDA_SUBAGENTS=1` has it, and says nothing else
+/// differently then (ADR 0103, decision 7).
+#[tokio::test]
+async fn banda_declares_sub_agents_only_once_its_engine_does() {
+    let today = shown(false).await;
+    assert!(today.get("subagents").is_none(), "{today}");
+    assert_eq!(today["elicitation"], json!({ "form": {} }), "{today}");
+
+    let mut declared = shown(true).await;
+    let subagents = declared.as_object_mut().unwrap().remove("subagents");
+    assert_eq!(subagents, Some(json!({})));
+    assert_eq!(declared, today, "the rest as before");
+}
+
+/// Undeclared, a Harness's sub-agent comes as on Dev today: its Agent
+/// call a think call titled with its task and ending with its answer,
+/// its own calls in its parent's turn, and nothing of a sub-agent apart
+/// (ADR 0103, decision 7).
+#[tokio::test]
+async fn undeclared_sub_agents_stay_in_their_parents_turn_as_on_dev_today() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "sub-agents").await;
+    let view = world
+        .until(&sent["thread"], |v| {
+            state(v, &sent["turn"]) == Some(TurnState::Done)
+        })
+        .await;
+    assert_eq!(
+        texts(&view),
+        [
+            "message: sub-agents",
+            "tool: Read a.txt one line (Done)",
+            "tool: Read a.txt (Done)",
+            "message: The sub-agents said: alpha.",
+        ]
+    );
+    assert_eq!(view.turns.len(), 1, "all in the parent's one turn");
+    let Body::Tool { tool, content, .. } = &view.items[1].body else {
+        unreachable!()
+    };
+    let text = |text: &str| ToolContent::Text { text: text.into() };
+    assert_eq!(
+        (*tool, content.clone()),
+        (
+            ToolKind::Think,
+            vec![
+                text("<tools-used-before-summary>Read</tools-used-before-summary>\n"),
+                text("alpha")
+            ]
+        )
+    );
+
+    let project = world.kernel.project(world.project).await.unwrap();
+    let events = (project.events_after(0, Default::default(), 1000).await).unwrap();
+    let apart: Vec<_> = events
+        .iter()
+        .map(|event| event.kind.as_str())
+        .filter(|kind| kind.starts_with("subagent.") || kind.starts_with("crew."))
+        .collect();
+    assert!(apart.is_empty(), "{apart:?}");
+    assert!(
+        !(view.items.iter()).any(|item| matches!(item.body, Body::Subagent { .. })),
+        "no lane's entry"
+    );
+    assert!(view.subagents.is_empty(), "{:?}", view.subagents);
+    let sql =
+        rusqlite::Connection::open(project_data(root.path()).join("project.sqlite3")).unwrap();
+    let lanes: i64 = (sql.query_row("SELECT count(*) FROM agents_subagents", [], |row| {
+        row.get(0)
+    }))
+    .unwrap();
+    assert_eq!(lanes, 0);
 }
 
 /// `threads`, `read` and `send` are tools from the methods table (ADR
@@ -6366,6 +6471,7 @@ fn two_claude_accounts(cli: &Path) -> Agents {
         shadows: None,
         carried: None,
         record: None,
+        subagents: false,
         cwd: None,
         holes: Holes::default(),
         credentials: Default::default(),
@@ -6694,6 +6800,7 @@ async fn a_threads_process_runs_the_carried_adapter_on_the_node_found_with_the_p
         shadows: None,
         carried: Some("claude-agent-acp.mjs".into()),
         record: None,
+        subagents: false,
         cwd: None,
         holes: Holes::default(),
         credentials: Default::default(),
