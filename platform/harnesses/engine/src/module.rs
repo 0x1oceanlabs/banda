@@ -110,7 +110,8 @@ banda_kernel::methods! {
         call connect_account(ConnectAccount) -> HarnessView, Write, tool "connect_account";
         /// A Harness as it says: its program, who is signed in, how to sign
         /// in, at the machine's log's position it is current at.
-        call account(OneHarness) -> Accounted, Manage;
+        // It needs Manage, and only asks the Harness who is signed in.
+        call account(OneHarness) -> Accounted, Manage, read;
         /// Who is signed in, as the Harness says. No sign-in program,
         /// environment or credentials are returned (ADR 0103).
         call account_status(OneHarness) -> AccountStatus, Read, tool "account_status";

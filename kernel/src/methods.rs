@@ -13,6 +13,19 @@
 //! - `stream`: pieces until it ends (`Module::stream`); its "answer" is
 //!   the piece; `engine.stream`.
 //!
+//! Each method reads or acts ([`Does`], ADR 0106, law 4): a client
+//! may send a read late and again, and sends an act now, at most once, or
+//! says why not. A command acts. A call or a stream reads when its right
+//! is `Read`; one with another right acts, unless its line ends `, read`,
+//! as one that only reads or listens says: a right is authority, not
+//! effect, and some reads need more than `Read`, as browsing the folders
+//! does. A line that leaves the mark out by mistake is refused sooner
+//! while its machine is away, and a stream so left ends with
+//! `may_have_run` at each reconnect instead of being heard again: a
+//! terminal's `watch` would show it gone after each engine restart, and
+//! main would stop hearing `window.requests`. One that takes the mark in
+//! error would let an act wait and run later by itself.
+//!
 //! A line that ends `, tool "<name>"` is also a tool an Agent calls
 //! through `banda mcp` (ADR 0019, decision 3): its description is the
 //! method's `///`, and its input the JSON Schema of its params. A tool's
@@ -141,6 +154,17 @@ pub(crate) fn needs_command_id(method: &str) -> Refusal {
     Refusal::invalid(format!("{method} is a command and needs a command ID."))
 }
 
+/// What a method does, as a client sends it (ADR 0106, law 4): it
+/// only reads, so it may wait for the link and go again; or it acts, so
+/// it goes now, at most once, or fails at once while its machine is
+/// away. The module's doc says which a line is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Does {
+    Read,
+    Act,
+}
+
 /// One line of a module's `methods!` table, as `banda modules` prints it
 /// (ADR 0022, decision 1).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -150,6 +174,8 @@ pub struct Method {
     pub kind: Kind,
     /// The right it needs.
     pub right: crate::Right,
+    /// Whether it reads or acts.
+    pub does: Does,
     /// Its tool's name, when an Agent may call it as one.
     pub tool: Option<&'static str>,
     /// What it does, from its `///`.
@@ -168,6 +194,23 @@ pub trait MethodTable {
 
     /// Every line of its table (ADR 0022, decision 1).
     fn method_list() -> Vec<Method>;
+}
+
+/// One of the kernel's own tables: the prefix a client calls its methods
+/// by, the TypeScript type it writes and its folder (`MethodTable`), and
+/// its lines.
+pub type OwnTable = (&'static str, (&'static str, &'static str), Vec<Method>);
+
+/// The kernel's own tables, as the contract's list of methods has them
+/// first.
+pub fn own() -> Vec<OwnTable> {
+    fn table<T: MethodTable>(prefix: &'static str) -> OwnTable {
+        (prefix, (T::TS, T::DIR), T::method_list())
+    }
+    vec![
+        table::<crate::Kernel>("projects"),
+        table::<crate::window::Window>("window"),
+    ]
 }
 
 /// How the window types one kind of method: its params, its answer, and
@@ -213,12 +256,17 @@ pub fn answer(answer: impl serde::Serialize) -> Result<serde_json::Value, Refusa
 ///         /// Starts a program on a PTY.
 ///         call open(Open) -> (), Run;
 ///         command close(One) -> (), Run;
-///         stream watch(One) -> Piece, Run;
+///         stream watch(One) -> Piece, Run, read;
 ///         /// What the terminal shows now.
 ///         call screen(One) -> Screen, Read, tool "screen";
 ///     }
 /// }
 /// ```
+///
+/// After its right, a line takes marks: `read`, for a call or a stream
+/// that only reads with a right other than `Read`; `tool "<name>"`, for
+/// one an Agent calls. A `read` on a command, or on a line whose right is
+/// `Read`, does not compile: it would say nothing true.
 ///
 /// Each method needs a handler on the type, `async fn open(&self, ask:
 /// Call, params: Open) -> Result<(), Refusal>`, and a stream's returns a
@@ -245,7 +293,7 @@ macro_rules! methods {
         $ty:ident($ask:ty) as $ts:literal in $dir:literal {
             $(
                 $(#[doc = $doc:literal])*
-                $kind:ident $name:ident($params:ty) -> $answer:ty, $right:ident $(, tool $tool:literal)?;
+                $kind:ident $name:ident($params:ty) -> $answer:ty, $right:ident $(, $mark:ident $($tool:literal)?)*;
             )*
         }
     ) => {
@@ -293,7 +341,7 @@ macro_rules! methods {
             #[allow(dead_code, unused_mut, unused_variables)]
             fn method_tools(module: &str) -> Vec<$crate::methods::Tool> {
                 let mut tools = Vec::new();
-                $( $crate::methods!(@tool tools module $kind $name($params) [$($doc)*] $($tool)?); )*
+                $( $crate::methods!(@tool tools module $kind $name($params) [$($doc)*] $($mark $($tool)?)*); )*
                 tools
             }
         }
@@ -308,7 +356,8 @@ macro_rules! methods {
                         name: $crate::methods::bare(stringify!($name)),
                         kind: $crate::methods!(@kind $kind),
                         right: $crate::Right::$right,
-                        tool: $crate::methods!(@tool_name $($tool)?),
+                        does: $crate::methods!(@does $kind $right [$($mark $($tool)?)*]),
+                        tool: $crate::methods!(@tool_name $($mark $($tool)?)*),
                         about: $crate::methods::words(&[$($doc),*]),
                     },
                 )*]
@@ -326,10 +375,19 @@ macro_rules! methods {
     (@kind call) => { $crate::Kind::Call };
     (@kind command) => { $crate::Kind::Command };
     (@kind stream) => { $crate::Kind::Stream };
+    // A line's marks, after its right: `read`, and `tool "<name>"`.
     (@tool_name) => { None };
-    (@tool_name $tool:literal) => { Some($tool) };
+    (@tool_name tool $tool:literal $($marks:tt)*) => { Some($tool) };
+    (@tool_name read $($marks:tt)*) => { $crate::methods!(@tool_name $($marks)*) };
+    (@tool_name $mark:tt $($marks:tt)*) => {
+        compile_error!(concat!(
+            "A method's marks are `read` and `tool \"<name>\"`, not ",
+            stringify!($mark),
+            "."
+        ))
+    };
     (@tool $tools:ident $module:ident $kind:ident $name:ident($p:ty) [$($doc:literal)*]) => {};
-    (@tool $tools:ident $module:ident $kind:ident $name:ident($p:ty) [$($doc:literal)*] $tool:literal) => {
+    (@tool $tools:ident $module:ident $kind:ident $name:ident($p:ty) [$($doc:literal)*] tool $tool:literal $($marks:tt)*) => {
         $tools.push($crate::methods::Tool::new(
             $tool,
             format!("{}.{}", $module, $crate::methods::bare(stringify!($name))),
@@ -338,6 +396,27 @@ macro_rules! methods {
             $crate::schemars::schema_for!($p),
         ));
     };
+    (@tool $tools:ident $module:ident $kind:ident $name:ident($p:ty) [$($doc:literal)*] $mark:tt $($marks:tt)*) => {
+        $crate::methods!(@tool $tools $module $kind $name($p) [$($doc)*] $($marks)*)
+    };
+    // What a line does: a command acts; a call or a stream reads by its
+    // right `Read`, or by `read`, and acts otherwise.
+    (@does command $right:ident [$($marks:tt)*]) => { $crate::methods!(@acts $($marks)*) };
+    (@does $kind:ident Read [$($marks:tt)*]) => { $crate::methods!(@reads $($marks)*) };
+    (@does $kind:ident $right:ident [$($marks:tt)*]) => { $crate::methods!(@marked $($marks)*) };
+    (@acts) => { $crate::methods::Does::Act };
+    (@acts read $($marks:tt)*) => {
+        compile_error!("A command acts: its line takes no `read`.")
+    };
+    (@acts $mark:tt $($marks:tt)*) => { $crate::methods!(@acts $($marks)*) };
+    (@reads) => { $crate::methods::Does::Read };
+    (@reads read $($marks:tt)*) => {
+        compile_error!("A line whose right is `Read` reads already: it takes no `read`.")
+    };
+    (@reads $mark:tt $($marks:tt)*) => { $crate::methods!(@reads $($marks)*) };
+    (@marked) => { $crate::methods::Does::Act };
+    (@marked read $($marks:tt)*) => { $crate::methods::Does::Read };
+    (@marked $mark:tt $($marks:tt)*) => { $crate::methods!(@marked $($marks)*) };
 
     (@call stream $self:ident $ask:ident $params:ident $name:ident $p:ty, $a:ty) => {
         Err($crate::Refusal::invalid(format!("{} is a stream.", $crate::methods::bare(stringify!($name)))))
