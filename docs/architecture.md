@@ -761,7 +761,11 @@ and `client/desktop/src/modules.ts`; the tests write the contract's
   params and answer: one line in its `methods!` table, which makes the
   right, the dispatch and the module's methods as TypeScript, so the
   window's `engine.call`, `engine.command` and `engine.stream` take only
-  those (ADR 0014).
+  those (ADR 0014). Each is a read or an act (ADR 0106, law 4): a command
+  acts; a call or a stream reads when its right is Read, or when its line
+  ends `, read`, as `terminal.watch` does, and acts otherwise. The tests
+  write which each is to `sdk/contract/src/generated/does.ts`, and the
+  window's client fails an act at once while its machine is away.
 - **Events it publishes.** These are its published language, and they carry a
   version.
 - **Its tables.** Only this module writes them, and no other module reads

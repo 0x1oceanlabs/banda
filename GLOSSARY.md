@@ -394,6 +394,25 @@ A read, answered with how fresh it is ("as of"), and safe to repeat (ADR
 0082).
 _Avoid_: call (its old name).
 
+**Act**:
+A method that changes or runs something: a command, or a call or a stream
+whose right is not Read and whose line in `methods!` does not say `read`.
+It goes at most once, and fails at once while its machine is away, never
+to run later by itself; one on its way as the link breaks may have run
+(ADR 0106, law 4). The Person never reads the word.
+_Avoid_: write (a right says who may, not what a method does).
+
+**Read**:
+A method that only reads: its right is Read, or its line says `read`, as
+`terminal.watch` does. It may wait for the link, and go again after it
+(ADR 0106, law 4). A Query is a read that says how fresh it is.
+
+**Owner**:
+The machine or device a value belongs to: a Project's file is its
+Project's machine's, a machine's own file that machine's, a link the
+device's that opens it (ADR 0106, law 2). It is not the Owner socket,
+the way the Person's own window and CLI reach their computer's engine.
+
 **Published fact**:
 An event other Apps may hear, named `app.noun.past-verb@major` and
 declared by its App. Every other event is its App's own (ADR 0082).

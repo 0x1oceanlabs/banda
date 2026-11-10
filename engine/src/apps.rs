@@ -233,6 +233,7 @@ pub(crate) fn on_a_test_host<R>(with: impl FnOnce(&HostContext<'_>) -> R) -> R {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use banda_kernel::{Does, Kind, Right};
     use std::collections::{BTreeMap, BTreeSet};
     use std::path::{Path, PathBuf};
 
@@ -448,10 +449,10 @@ mod tests {
     /// the kernel's own, then each engine part's, as the list has them,
     /// each by the type its `methods!` table writes.
     fn contract() -> String {
-        let mut parts: Vec<(&str, &str, &str)> = vec![
-            ("projects", "ProjectsMethods", "./"),
-            ("window", "WindowMethods", "./"),
-        ];
+        let mut parts: Vec<(&str, &str, &str)> = banda_kernel::methods::own()
+            .into_iter()
+            .map(|(id, (ts, dir), _)| (id, ts, dir))
+            .collect();
         parts.extend(
             scanned::TYPES
                 .iter()
@@ -482,17 +483,103 @@ mod tests {
         text
     }
 
-    #[test]
-    fn the_contract_has_each_engine_parts_methods() {
-        let path = repository().join("sdk/contract/src/generated/Methods.ts");
-        let text = contract();
-        if std::fs::read_to_string(&path).ok().as_deref() != Some(text.as_str()) {
-            std::fs::write(&path, &text).unwrap();
+    /// Writes `text` at `file` of the contract's `generated/`, and fails
+    /// the test when what was there was not it.
+    fn written(file: &str, text: &str) {
+        let path = repository().join("sdk/contract/src/generated").join(file);
+        if std::fs::read_to_string(&path).ok().as_deref() != Some(text) {
+            std::fs::write(&path, text).unwrap();
             panic!(
                 "{} was stale: written; review it and run again",
                 path.display()
             );
         }
+    }
+
+    #[test]
+    fn the_contract_has_each_engine_parts_methods() {
+        written("Methods.ts", &contract());
+    }
+
+    /// Every method, `<prefix>.<name>`, with its line: the kernel's own,
+    /// then each engine part's, as the contract's list of methods has
+    /// them.
+    fn every_method() -> Vec<(String, Method)> {
+        let parts = APPS
+            .iter()
+            .filter_map(|part| Some((part.id, (part.methods?)())));
+        banda_kernel::methods::own()
+            .into_iter()
+            .map(|(prefix, _, methods)| (prefix, methods))
+            .chain(parts)
+            .flat_map(|(prefix, methods)| {
+                methods
+                    .into_iter()
+                    .map(move |method| (format!("{prefix}.{}", method.name), method))
+            })
+            .collect()
+    }
+
+    /// What each method does, for the window's client to know an act by
+    /// (`sdk/contract/src/generated/does.ts`, ADR 0106, law 4).
+    fn does() -> String {
+        let mut text = String::from(
+            "// Written by banda's tests from the list of Apps (engine/src/apps.rs): do not edit.\n\
+             import type { Methods } from \"./Methods\"\n\n\
+             /** What a method does: it reads, or it acts (ADR 0106, law 4). */\n\
+             export type Does = \"read\" | \"act\"\n\n\
+             /** What each method does, as its line in `methods!` says: a command\n \
+             * acts; a call or a stream reads by its right `Read`, or by `read`,\n \
+             * and acts otherwise. */\n\
+             export const DOES = {\n",
+        );
+        for (name, method) in every_method() {
+            let does = match method.does {
+                Does::Read => "read",
+                Does::Act => "act",
+            };
+            text.push_str(&format!("  \"{name}\": \"{does}\",\n"));
+        }
+        text.push_str("} as const satisfies { readonly [M in keyof Methods]: Does }\n");
+        text
+    }
+
+    #[test]
+    fn the_contract_says_what_each_method_does() {
+        written("does.ts", &does());
+    }
+
+    /// A method reads or acts by its kind and its right, and the mark
+    /// `read` alone turns that (ADR 0106, law 4): a command acts, a call or
+    /// a stream whose right is `Read` reads, and one with another right
+    /// acts unless it says `read`. Those that do are these alone, each
+    /// with why it only reads: a mark taken in error would let an act wait
+    /// for its machine and run later by itself, so a new one is added here
+    /// with its reason.
+    #[test]
+    fn every_method_whose_right_is_not_read_acts_or_says_read() {
+        let marked = [
+            ("projects.browse", "it lists the folders a path names"),
+            ("projects.foreign", "it looks at a folder for Add Project"),
+            ("window.requests", "it listens for what to ask the window"),
+            ("terminal.watch", "it says what a terminal shows"),
+            ("harnesses.account", "it asks a Harness who is signed in"),
+        ];
+        let mut read_by_mark = Vec::new();
+        for (name, method) in every_method() {
+            let expected = match (method.kind, method.right) {
+                (Kind::Command, _) => Does::Act,
+                (_, Right::Read) => Does::Read,
+                _ if method.does == Does::Read => {
+                    read_by_mark.push(name.clone());
+                    Does::Read
+                }
+                _ => Does::Act,
+            };
+            assert_eq!(method.does, expected, "{name}");
+        }
+        let listed: Vec<&str> = marked.iter().map(|(name, _)| *name).collect();
+        assert_eq!(read_by_mark, listed, "the methods that say `read`");
     }
 
     /// `BANDA_SUBAGENTS=1` turns the switch on, and nothing else does: not

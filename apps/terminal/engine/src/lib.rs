@@ -90,7 +90,8 @@ banda_kernel::methods! {
         call close(One) -> (), Run;
         /// The screen so far, then what it prints, then how it ended.
         /// Watching shows what a Person types, such as a sign-in's code.
-        stream watch(One) -> Piece, Run;
+        // It needs Run, for what the screen shows, and only reads it.
+        stream watch(One) -> Piece, Run, read;
         /// The Project's servers, then their list again each time it
         /// changes: what a terminal or an Agent started that listens on
         /// this computer (ADR 0044).

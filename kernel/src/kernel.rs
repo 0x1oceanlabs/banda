@@ -385,11 +385,13 @@ crate::methods! {
         command add(AddProject) -> ProjectSummary, Manage;
         /// The folders that match a path as it is typed, for the field
         /// that picks a Project's folder. Only the owner browses.
-        call browse(Browse) -> Browsed, Manage;
+        // It needs Manage, and only reads the folders.
+        call browse(Browse) -> Browsed, Manage, read;
         /// Whether a folder looks foreign, and why, for Add Project to ask
         /// whether to trust it (ADR 0084, decision 13); one not made yet,
         /// as it will be. It names the Project the folder already is.
-        call foreign(OneFolder) -> Foreign, Manage;
+        // It needs Manage, and only looks at the folder.
+        call foreign(OneFolder) -> Foreign, Manage, read;
         /// Trusts a Project, or takes its trust back, from its Harnesses'
         /// next turn. Only the Person trusts; a scratch Project always is.
         command trust(TrustProject) -> ProjectSummary, Manage;

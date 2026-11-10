@@ -85,7 +85,9 @@ crate::methods! {
         /// What modules ask the window, one request a piece, for the
         /// window that runs as the Person. It takes the road from the
         /// window that held it.
-        stream requests(Nothing) -> WindowRequest, Run;
+        // It needs Run, and only listens: a window takes it again on each
+        // connection.
+        stream requests(Nothing) -> WindowRequest, Run, read;
         /// The window's answer to a request it heard.
         call answer(WindowAnswer) -> (), Run;
     }
