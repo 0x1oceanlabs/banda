@@ -8,9 +8,11 @@
  * then Add Project… and Projects…. A tick marks what a click takes, and a
  * pick starts one at once. With one machine the menu names none (ADR
  * 0095, decision 4). Esc gives ✎ the focus back, never the page; a press
- * on ✎ while it is open shuts it, and starts nothing. Pictures for Roma,
- * dark and light, with glass and without, at 1440×900:
- * `test-results/sidebar-s9a-*.png`.
+ * on ✎ while it is open shuts it, and starts nothing. The Flow left the
+ * header for the bar, after the workspaces, as it arranges the desk, not
+ * the list (decision 20, S9b). Pictures for Roma, dark and light, with
+ * glass and without, at 1440×900: `test-results/sidebar-s9a-*.png` and
+ * `test-results/sidebar-s9b-*.png`.
  */
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
@@ -44,8 +46,9 @@ async function wide({ app, page }: Window) {
 
 /** Pictures of the window as it is, in the dark and the light, on glass
  * made of a wallpaper, as Banda's desk is by default (ADR 0100), and with
- * glass off: `sidebar-s9a-<name>-<mode>.png` and
- * `sidebar-s9a-<name>-<mode>-noglass.png`. */
+ * glass off: `sidebar-<name>-<mode>.png` and
+ * `sidebar-<name>-<mode>-noglass.png`, the name led by its step,
+ * `s9a-menu`. */
 async function shots({ dir, page }: Window, name: string) {
   const html = page.locator("html")
   wallpaper(dir)
@@ -61,7 +64,7 @@ async function shots({ dir, page }: Window, name: string) {
       if (mode === "dark") await expect(html).toHaveClass(/dark/)
       else await expect(html).not.toHaveClass(/dark/)
       await page.screenshot({
-        path: `test-results/sidebar-s9a-${name}-${mode}${glass ? "" : "-noglass"}.png`,
+        path: `test-results/sidebar-${name}-${mode}${glass ? "" : "-noglass"}.png`,
         animations: "disabled",
       })
     }
@@ -138,7 +141,7 @@ test("✎'s menu ticks what a click takes, and starts one elsewhere at once: in 
     menu.getByRole("menuitem", { name: "Add Project…" })
   ).toBeVisible()
   await expect(menu.getByRole("menuitem", { name: "Projects…" })).toBeVisible()
-  await shots(window, "menu")
+  await shots(window, "s9a-menu")
 
   // A pick starts one at once: in Work, the click's, with Other AI.
   await harnesses.getByRole("menuitem", { name: "Other AI" }).click()
@@ -248,5 +251,32 @@ test("✎'s menu opens by the keys, a right click and a press held, and starts n
   ).toBeVisible()
   // The pointer off the sidebar, for the picture of its header at rest.
   await page.mouse.move(900, 450)
-  await shots(window, "header")
+  await shots(window, "s9a-header")
+})
+
+test("the Flow on the bar, and its menu: the one in force checked, its key beside the two it goes between", async () => {
+  // Where it stands, its words, a pick and Alt+Shift+M are roma-day's
+  // Flow test; this one takes the pictures.
+  const { window, page } = await withTwoProjects()
+  const flow = page.getByRole("banner").getByRole("button", { name: /^Flow: / })
+  await expect(flow).toHaveAccessibleName("Flow: Row")
+  // The pointer off the bar, for the picture of it at rest.
+  await page.mouse.move(900, 450)
+  await shots(window, "s9b-bar")
+
+  await flow.click()
+  const items = page
+    .getByRole("menu", { name: "Flow" })
+    .getByRole("menuitemradio")
+  await expect(items).toHaveCount(3)
+  await expect(items.nth(1)).toHaveAttribute("aria-checked", "true")
+  const shortcut = '[data-slot="dropdown-menu-shortcut"]'
+  await expect(items.nth(0).locator(shortcut)).toHaveCount(0)
+  await expect(items.nth(1).locator(shortcut)).toHaveText("Alt+Shift+M")
+  await expect(items.nth(2).locator(shortcut)).toHaveText("Alt+Shift+M")
+  // In the row it offers Arrange by Project too (ADR 0102, decision 9).
+  await expect(
+    page.getByRole("menuitem", { name: "Arrange by Project" })
+  ).toBeVisible()
+  await shots(window, "s9b-menu")
 })

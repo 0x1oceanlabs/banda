@@ -752,11 +752,12 @@ _Avoid_: Desk (in speech, «стол» is a workspace; the look's desk is the
 glass under the tiles).
 
 **Flow**:
-How an Agent's Panes stand, as the sidebar's header switches it: free,
-where they are; in a row on its Project's workspace; or solo, the Agent
-you are at filling the screen (ADR 0079). Free and the row are where the
-Tiling places a Pane; solo is each client's own view, so a phone and a
-desktop open at once do not fight over it (ADR 0087).
+How an Agent's Panes stand, as its icon on the bar switches it (ADR
+0098): free, where they are; in a row, each Project on its own
+workspace; or solo, as the row, what has the focus filling the screen
+(ADR 0079, ADR 0102). Free and the row are where the Tiling places a
+Pane; solo is each client's own view, so a phone and a desktop open at
+once do not fight over it (ADR 0087).
 
 **Strip**:
 How a workspace lays out its Panes: columns side by side that scroll
