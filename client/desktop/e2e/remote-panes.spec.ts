@@ -372,6 +372,9 @@ test("a new Thread on arc starts on arc's account, by arc's agents.toml, in a Pr
     .getByRole("button", { name: "Thread" })
     .click()
   await expect(message("Work")).toBeVisible()
+  // The new draft names its account at once, before arc has answered that
+  // read: a blink would come a few round trips later.
+  await page.waitForTimeout(1_000)
   expect(await blinks.jsonValue()).toEqual([])
 
   // arc's file changes, and the draft follows, as Settings on arc would.
