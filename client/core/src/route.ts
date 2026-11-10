@@ -15,7 +15,7 @@
  */
 import type { ProjectId } from "@banda/contract"
 import type { Cap } from "./device"
-import type { KeptHosts } from "./hosts"
+import { type KeptHosts, namedIn } from "./hosts"
 import { paneHost, type PaneState } from "./pane"
 import type { Args } from "./run"
 
@@ -109,7 +109,7 @@ const sameWhere = (a: Where, b: Where) =>
 
 /** Host `host`'s name, as the Window shows it or this device last saw it. */
 const nameOf = (hosts: Hosts, host: string) =>
-  (hosts.get().find((one) => one.name === host)?.named ?? hosts.seen(host)).name
+  namedIn(hosts.get(), host, hosts.seen).name
 
 const refused = (why: string, said = why): Route => ({
   runs: false,
@@ -149,15 +149,18 @@ export function routeAct(
   let owner: Owner | undefined
   let runWith = args
   if (asked !== undefined) {
-    // What a Pane names is placed as its own Project is, first by its
-    // host, so a Project its host has not listed yet goes there, never to
-    // this machine; and so is Here's own Project, as a Pane's act comes
-    // again through the window's run from the Pane in focus.
+    // The Pane's own Project, and Here's as a Pane's act comes again
+    // through the window's run from the Pane in focus, is placed first by
+    // the host it is on; so is one no machine lists that a Pane names, as
+    // its host has not listed it yet, which goes there, never to this
+    // machine. One another machine lists is placed by that listing, so a
+    // Pane never lends its host to a third machine's Project.
     const by = "pane" in from ? from.pane : from.here
     const hint =
       typeof by === "object" &&
       "project" in by &&
-      (pane !== undefined || by.project === asked)
+      (by.project === asked ||
+        (pane !== undefined && hosts.hostOf(asked, undefined) === undefined))
         ? by.pane && paneHost(by.pane)
         : undefined
     const host = typeof args?.host === "string" ? args.host : hint

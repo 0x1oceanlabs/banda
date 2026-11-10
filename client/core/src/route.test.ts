@@ -45,9 +45,12 @@ async function machines() {
   tell([live])
   hosts.ours([project("mine")], "m0" as ProjectId)
   hosts.projects("arc", [project("r1"), project("mine")])
-  hosts.engine("arc")
-  // Asked before arc said, it is not taken for missing an App.
+  const watch = vi.spyOn(hosts.engine("arc"), "watch")
+  // Asked before arc said, it is not taken for missing an App; asked again
+  // on every draw while arc has not said, it watches arc once.
   expect(hosts.modulesOf("arc")).toBeUndefined()
+  expect(hosts.modulesOf("arc")).toBeUndefined()
+  expect(watch).toHaveBeenCalledOnce()
   await vi.advanceTimersByTimeAsync(0)
   Socket.opened[0]!.say({
     type: "welcome",
@@ -137,7 +140,7 @@ test("args that name no Project take the Pane's; a key's take the Project its ar
 })
 
 test("a Pane's values are its owner's: a Project of another machine it names is refused, in words", async () => {
-  const { hosts } = await machines()
+  const { hosts, tell } = await machines()
   // "mine" is this machine's, which wins the ID arc has too.
   expect(routeAct(hosts, later, onArc, { project: "mine" })).toEqual({
     runs: false,
@@ -148,6 +151,14 @@ test("a Pane's values are its owner's: a Project of another machine it names is 
     runs: false,
     why: "That is not on this machine",
   })
+  // A third machine's Project is studio's, as studio lists it: arc's Pane
+  // does not lend it arc, so it is refused, not placed on arc and then
+  // run on studio as the window's run places it again from Here.
+  tell([live, { ...live, name: "studio", ssh: "studio" }])
+  hosts.projects("studio", [project("x1")])
+  expect(
+    routeAct(hosts, later, onArc, { project: "x1", item: "t9" })
+  ).toMatchObject({ runs: false, why: "That is not on arc" })
   hosts.engine("arc").close()
 })
 
