@@ -28,12 +28,14 @@ const COUNTS = Object.keys({
 
 /** The counts `banda status` adds a Thread to by what it counts as
  * (`AgentCounts::of` in counts.rs): what fails is in `asking`, and all
- * but work in `waiting`. In `COUNTS`' order. */
+ * but work in `waiting`; one that woke from Later only there. In
+ * `COUNTS`' order. */
 const ADDS: Record<CountedAs, Count[]> = {
   working: ["working"],
   asking: ["asking", "waiting"],
   failed: ["asking", "waiting"],
   done: ["done", "waiting"],
+  woke: ["waiting"],
 }
 
 test("the shared cases are there", () => {

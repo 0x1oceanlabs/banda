@@ -3,6 +3,6 @@
 /**
  * What a Thread counts as: at work, or waiting for its Person, and for
  * what. The words are the Mark's, but `working`, as the bar counts its
- * `running`.
+ * `running`, and `woke`, which has no Mark of its own.
  */
-export type CountedAs = "working" | "asking" | "failed" | "done";
+export type CountedAs = "working" | "asking" | "failed" | "done" | "woke";

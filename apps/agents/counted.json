@@ -1,5 +1,5 @@
 {
-  "about": "What each Thread counts as in the bar at `now` (ADR 0035), null when it is not counted: the window's rule (markOf, then the bar's tally, which leaves out what is asleep or archived), which the engine takes as it is (apps/agents/engine/src/counts.rs). The engine's tests read these cases, and the window's too (apps/agents/pane/src/list/counted.test.ts).",
+  "about": "What each Thread counts as in the bar at `now` (ADR 0035), null when it is not counted: the window's rule (markOf, then where it stands, standOf, which takes a Thread that woke from Later by itself, unseen, as waiting, then the bar's tally, which leaves out what is asleep or archived), which the engine takes as it is (apps/agents/engine/src/counts.rs). The engine's tests read these cases, and the window's too (apps/agents/pane/src/list/counted.test.ts).",
   "now": 1000,
   "cases": [
     {
@@ -399,6 +399,341 @@
         "archived": { "at": 500 }
       },
       "counted": "working"
+    },
+    {
+      "case": "woke from Later by itself, no turn, not seen",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "asking": [],
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "until": 900
+        }
+      },
+      "counted": "woke"
+    },
+    {
+      "case": "woke from Later as its time came, its turn seen, the wake not",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "done",
+          "began": 100
+        },
+        "asking": [],
+        "seen": "019a0000-0000-7000-8000-000000000010",
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "until": 900,
+          "woke": { "at": 900, "by": "time" }
+        }
+      },
+      "counted": "woke"
+    },
+    {
+      "case": "woke from Later by itself, its Person stopped the turn",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "stopped",
+          "began": 100
+        },
+        "asking": [],
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "until": 900
+        }
+      },
+      "counted": "woke"
+    },
+    {
+      "case": "put off until its turn ended, which woke it, the turn seen, the wake not",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "done",
+          "began": 100
+        },
+        "asking": [],
+        "seen": "019a0000-0000-7000-8000-000000000010",
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "woke": { "at": 600, "by": "done" }
+        }
+      },
+      "counted": "woke"
+    },
+    {
+      "case": "woke from Later by itself, and its Person saw it wake",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "done",
+          "began": 100
+        },
+        "asking": [],
+        "seen": "019a0000-0000-7000-8000-000000000010",
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "until": 900,
+          "woke": { "at": 900, "by": "time" },
+          "woke_seen": "seen"
+        }
+      },
+      "counted": null
+    },
+    {
+      "case": "woke from Later by itself, and its Person dismissed it",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "asking": [],
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "until": 900,
+          "woke": { "at": 900, "by": "time" },
+          "woke_seen": "dismissed"
+        }
+      },
+      "counted": null
+    },
+    {
+      "case": "woken by its Person before its time",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "done",
+          "began": 100
+        },
+        "asking": [],
+        "seen": "019a0000-0000-7000-8000-000000000010",
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "until": 2000,
+          "woke": { "at": 300, "by": "woken" }
+        }
+      },
+      "counted": null
+    },
+    {
+      "case": "put off until a time to come, its turn seen",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "done",
+          "began": 100
+        },
+        "asking": [],
+        "seen": "019a0000-0000-7000-8000-000000000010",
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "until": 2000
+        }
+      },
+      "counted": null
+    },
+    {
+      "case": "woke from Later by itself, and a turn runs",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 950,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "running",
+          "began": 950
+        },
+        "asking": [],
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "until": 900,
+          "woke": { "at": 900, "by": "time" }
+        }
+      },
+      "counted": "working"
+    },
+    {
+      "case": "woke from Later by itself, and a Question asks",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 950,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "running",
+          "began": 950
+        },
+        "asking": [
+          { "item": "019a0000-0000-7000-8000-000000000020", "title": "Run it?" }
+        ],
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "until": 900,
+          "woke": { "at": 900, "by": "time" }
+        }
+      },
+      "counted": "asking"
+    },
+    {
+      "case": "woke from Later by itself, its turn ended well, not seen",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "done",
+          "began": 100
+        },
+        "asking": [],
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "until": 900,
+          "woke": { "at": 900, "by": "time" }
+        }
+      },
+      "counted": "done"
+    },
+    {
+      "case": "woke from Later by itself, its turn failed, not seen",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "failed",
+          "began": 100
+        },
+        "asking": [],
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "until": 900,
+          "woke": { "at": 900, "by": "time" }
+        }
+      },
+      "counted": "failed"
+    },
+    {
+      "case": "woke from Later by itself, and archived since",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 400,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "done",
+          "began": 100
+        },
+        "asking": [],
+        "seen": "019a0000-0000-7000-8000-000000000010",
+        "later": {
+          "at": 200,
+          "by": {
+            "kind": "person",
+            "id": "019a0000-0000-7000-8000-000000000030"
+          },
+          "until": 900,
+          "woke": { "at": 900, "by": "time" }
+        },
+        "archived": { "at": 950 }
+      },
+      "counted": null
     }
   ]
 }
