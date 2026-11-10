@@ -152,11 +152,12 @@ function numbersOf({ seconds, steps, load, perSecond, counted, trace }: Phase) {
     /** The probe's own reads of the page, in ms a second. */
     probeMs: rate(counted.ownMs),
     /** The page's own ticks, a second: its rAF callbacks, the ticks they
-     * ran in, and the reads of layout inside them. */
+     * ran in, and the reads of layout inside them, the sidebar's apart. */
     ticks: {
       callbacksPerSecond: rate(counted.callbacks),
       perSecond: rate(counted.ticks),
       readsPerSecond: rate(counted.reads),
+      sidebarReadsPerSecond: rate(counted.sidebarReads),
     },
     /** The terminals' draws a second, on screen and off. */
     draws: {

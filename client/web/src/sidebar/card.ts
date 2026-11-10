@@ -77,17 +77,30 @@ export type Placed = {
 /** The card of `row`, as `settings` lay it out where it is `placed`. */
 export function cardOf(row: Row, settings: Settings, placed: Placed): Card {
   const { listed, stand, woke } = row
-  const { lines, hide, layout } = settings.row
   return {
-    lines: (layout ?? LAYOUTS[lines] ?? LAYOUTS[3]).map((line) =>
-      lineOf(line, hide, placed)
-    ),
+    lines: linesOf(settings, placed),
     // Open is in the text's colour, and work is a grey shelf (ADR 0098,
     // decision 3).
     quiet: stand !== "turn" && stand !== "open",
     status: statusOf(listed, stand, woke),
     note: noteOf(listed),
   }
+}
+
+/** The lines `settings` lay a card out in where it is `placed`, whatever
+ * its Thread says. */
+function linesOf({ row }: Settings, placed: Placed): Line[] {
+  return (row.layout ?? LAYOUTS[row.lines] ?? LAYOUTS[3]).map((line) =>
+    lineOf(line, row.hide, placed)
+  )
+}
+
+/** How many lines a card draws where it is `placed`: those with
+ * something in them. The list takes a card's height by it (`motion.ts`). */
+export function lineCount(settings: Settings, placed: Placed): number {
+  return linesOf(settings, placed).filter(
+    (line) => line.left.length + line.right.length > 0
+  ).length
 }
 
 /** One line of a layout, with what is hidden or said above left out. */

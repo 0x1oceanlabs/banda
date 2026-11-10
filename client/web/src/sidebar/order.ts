@@ -21,7 +21,7 @@ import {
 } from "@banda/core/react"
 import { currentLook } from "@banda/ui/lib/look"
 import type { Lists } from "@banda/ui/pane"
-import { arrange, type Elsewhere, type ProjectLine } from "./arrange"
+import { arrange, type Elsewhere, type ProjectLine, type Row } from "./arrange"
 import { type Inbox, inboxOf, type InboxView } from "./inbox"
 import type { Settings } from "./settings"
 
@@ -39,9 +39,9 @@ export type View = Partial<Omit<InboxView, "group">> & {
   elsewhere?: readonly Elsewhere[]
 }
 
-/** The sidebar as it is drawn: the Inbox, and the list of Projects when
- * the settings ask for it. */
-export type Ordered = Inbox & { projects?: ProjectLine[] }
+/** The sidebar as it is drawn: the Inbox, every row it was made of, and
+ * the list of Projects when the settings ask for it. */
+export type Ordered = Inbox & { rows: Row[]; projects?: ProjectLine[] }
 
 /**
  * The sidebar's Inbox of every Project's list, as the Person's settings
@@ -62,6 +62,7 @@ export function order(
   const view = { tab: "inbox" as const, ...shown, group: arranged.group }
   return {
     ...inboxOf(arranged.rows, view, now),
+    rows: arranged.rows,
     ...(arranged.projects ? { projects: arranged.projects } : {}),
   }
 }

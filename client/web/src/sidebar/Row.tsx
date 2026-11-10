@@ -28,6 +28,7 @@ export function Row({
   field,
   machine,
   stillAt,
+  gone,
   harnesses = NO_HARNESSES,
 }: {
   row: Arranged
@@ -50,6 +51,9 @@ export function Row({
   /** When its host went away: its timer and how long ago stand as they
    * were then. */
   stillAt?: number
+  /** It left the tab while the list held (ADR 0098, decision 6): line
+   * 1's right says where it went, if anywhere, and it has no actions. */
+  gone?: string
   /** The Harness list its emblem is read from; none, the Harness's own. */
   harnesses?: readonly EmblemOf[]
 }) {
@@ -80,16 +84,27 @@ export function Row({
       type={field ? undefined : "button"}
       aria-current={current ? "true" : undefined}
       className={cn(
-        "flex w-full min-w-0 flex-col gap-0.5 rounded-control border border-transparent px-2 text-left transition-colors outline-none",
-        "hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50",
+        "relative isolate flex w-full min-w-0 flex-col gap-0.5 rounded-control border border-transparent px-2 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        // The hover's fill is a layer under the card that fades: at once
+        // in, over 100 ms out, by its opacity alone (ADR 0088, decision 2).
+        "before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-foreground/5 before:opacity-0 before:transition-opacity before:duration-100 before:ease-(--ease-exit) hover:before:opacity-100 hover:before:duration-0",
         one ? "py-1" : "py-1.5",
-        current && "border-border bg-tile shadow-xs hover:bg-tile"
+        current && "border-border bg-tile shadow-xs before:hidden"
       )}
       onClick={field ? undefined : onOpen}
     >
       {card.lines.map((line, index) => {
         if (line.left.length + line.right.length === 0) return null
         const marked = index === 0 && away
+        // Where a card that left went takes line 1's right.
+        const right =
+          index === 0 && gone !== undefined
+            ? gone && (
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {gone}
+                </span>
+              )
+            : line.right.length > 0 && line.right.map(slot)
         return (
           <span
             key={index}
@@ -98,25 +113,28 @@ export function Row({
               // With nothing at its right, the title would push the mark
               // under the button that shows over the row: the line keeps
               // that button's room.
-              marked && line.right.length === 0 && "pe-7"
+              marked && !right && "pe-7"
             )}
           >
             {line.left.map(slot)}
             {marked && <Away />}
-            {line.right.length > 0 && <span className="ml-auto" />}
-            {line.right.map(slot)}
+            {right && <span className="ml-auto" />}
+            {right}
           </span>
         )
       })}
     </Element>
   )
-  if (!action || field) return button
+  if (field || (!action && gone === undefined)) return button
   return (
     <div data-row className="group/row relative">
       {button}
-      <span className="absolute top-1 right-1 hidden items-center rounded-control bg-popover shadow-xs ring-1 ring-foreground/10 group-focus-within/row:flex group-hover/row:flex pointer-coarse:flex">
-        {action}
-      </span>
+      {/* One that left has none. */}
+      {gone === undefined && (
+        <span className="absolute top-1 right-1 hidden items-center rounded-control bg-popover shadow-xs ring-1 ring-foreground/10 group-focus-within/row:flex group-hover/row:flex pointer-coarse:flex">
+          {action}
+        </span>
+      )}
     </div>
   )
 }
