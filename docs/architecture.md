@@ -808,8 +808,12 @@ If Chat is removed, Agents still works through its own Thread.
     still share it.
 - **The Harness list is a text file** of the machine. It says how to start
   each Harness. Without one, the engine knows Claude Code and Codex through
-  their ACP adapters, at exact versions. Reading the ACP Registry comes
-  next.
+  their ACP adapters, at exact versions. On Omarchy, the engine also reads
+  Omarchy's display-safe Account registries and discovers installed
+  OpenCode, Oh My Pi and Pi's ACP adapter (ADR 0105). Explicit entries win,
+  duplicate profile folders are skipped, and `[omarchy] enabled = false`
+  turns this off. No credentials are copied or settings written. Reading
+  the ACP Registry comes next.
 - **Banda carries the adapters, and the host runs them** (ADR 0059; ADR
   0062, step S1). The harnesses' host package,
   `platform/harnesses/adapters`, bundles both adapters into one file each,

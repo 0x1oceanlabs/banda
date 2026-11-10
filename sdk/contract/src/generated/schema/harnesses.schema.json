@@ -18,6 +18,9 @@
     "usage": {
       "description": "Whether local session journals are counted (ADR 0043).",
       "$ref": "#/$defs/UsageSettings"
+    },
+    "omarchy": {
+      "$ref": "#/$defs/OmarchySettings"
     }
   },
   "$defs": {
@@ -278,6 +281,26 @@
           "description": "Read Claude Code and Codex session journals on this computer.",
           "type": "boolean",
           "default": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "OmarchySettings": {
+      "description": "Automatic discovery on Omarchy. Explicit Harness entries take priority.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Discover installed ACP Harnesses and Accounts from Omarchy's registry.",
+          "type": "boolean",
+          "default": true
+        },
+        "excluded": {
+          "description": "Discovered entries removed in Banda. Explicit entries still win.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
         }
       },
       "additionalProperties": false

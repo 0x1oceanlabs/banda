@@ -41,6 +41,14 @@ pub fn set(config: &Path, name: &str, key: &str, value: &str) -> Result<(), Vec<
         }
         value => vec![(open.leaf.clone(), value)],
     };
+    if name == "harnesses.toml"
+        && keys.len() >= 2
+        && keys[0].get() == "harness"
+        && let Ok(harnesses) = banda_harnesses::Harnesses::load(&open.path)
+        && let Some(harness) = harnesses.discovered(keys[1].get())
+    {
+        materialize(&mut open.document, &keys[..2], &open.path, &harness)?;
+    }
     // A file of nothing but comments, as a template, keeps them first,
     // above what is set: its `#:schema` line stays its first.
     let only_comments = open.document.is_empty();
@@ -72,6 +80,40 @@ pub fn set(config: &Path, name: &str, key: &str, value: &str) -> Result<(), Vec<
             .map_err(|error| whole(&open.path, error))?;
     }
     open.save(Some(&alone))
+}
+
+/// Preserve a discovered entry's fixed start when the Person first edits
+/// it: subsequent starts no longer depend on the external registry.
+fn materialize(
+    document: &mut DocumentMut,
+    keys: &[Key],
+    path: &Path,
+    harness: &banda_harnesses::Harness,
+) -> Result<(), Vec<Problem>> {
+    let table = walk(document, keys, path)?;
+    put(table, "name", Value::from(harness.name.as_str()));
+    match &harness.of {
+        Some(of) => {
+            put(table, "of", Value::from(of.as_str()));
+            let mut env = toml_edit::InlineTable::new();
+            for variable in ["CLAUDE_CONFIG_DIR", "CODEX_HOME"] {
+                if let Some(folder) = harness.env.get(variable) {
+                    env.insert(variable, Value::from(folder.as_str()));
+                }
+            }
+            put(table, "env", Value::InlineTable(env));
+        }
+        None => {
+            put(table, "command", Value::from(harness.command.as_str()));
+            let args: toml_edit::Array = harness
+                .args
+                .iter()
+                .map(|s| Value::from(s.as_str()))
+                .collect();
+            put(table, "args", Value::Array(args));
+        }
+    }
+    Ok(())
 }
 
 /// Names `key` in the file called `name` `to` instead, where it is, its
@@ -119,6 +161,30 @@ pub fn rename(config: &Path, name: &str, key: &str, to: &str) -> Result<(), Vec<
 pub fn reset(config: &Path, name: &str, key: &str) -> Result<(), Vec<Problem>> {
     let mut open = Open::new(config, name, key)?;
     let leaf = open.leaf.clone();
+    if name == "harnesses.toml"
+        && open.tables.len() == 1
+        && open.tables[0].get() == "harness"
+        && let Ok(harnesses) = banda_harnesses::Harnesses::load(&open.path)
+        && harnesses.from_omarchy(&leaf)
+    {
+        if let Some(Item::ArrayOfTables(entries)) = open.document.get_mut("harness") {
+            let at = entries.iter().position(|entry| id_of(entry) == Some(&leaf));
+            if let Some(at) = at {
+                entries.remove(at);
+            }
+        }
+        let table = walk(&mut open.document, &[Key::new("omarchy")], &open.path)?;
+        let mut excluded = table
+            .get("excluded")
+            .and_then(Item::as_array)
+            .cloned()
+            .unwrap_or_default();
+        if !excluded.iter().any(|v| v.as_str() == Some(&leaf)) {
+            excluded.push(leaf.as_str());
+        }
+        put(table, "excluded", Value::Array(excluded));
+        return open.save(None);
+    }
     if let Some((list, tables)) = open.tables.split_last()
         && let Ok(table) = walk(&mut open.document, tables, &open.path)
         && let Some(Item::ArrayOfTables(list)) = table.get_mut(list.get())
@@ -430,6 +496,44 @@ fn write(path: &Path, text: &str) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn discovered_account_becomes_an_editable_stable_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("harnesses.toml");
+        let mut account = banda_harnesses::Harnesses::known().find("claude").unwrap();
+        account.id = "omarchy-claude-c2".into();
+        account.of = Some("claude".into());
+        account.name = "C2".into();
+        account
+            .env
+            .insert("CLAUDE_CONFIG_DIR".into(), "/existing/c2".into());
+        let mut doc: DocumentMut = file("harnesses.toml").unwrap().template().parse().unwrap();
+        let keys = Key::parse("harness.omarchy-claude-c2").unwrap();
+        materialize(&mut doc, &keys, &path, &account).unwrap();
+        std::fs::write(&path, doc.to_string()).unwrap();
+        set(
+            dir.path(),
+            "harnesses.toml",
+            "harness.omarchy-claude-c2.name",
+            "Work",
+        )
+        .unwrap();
+        set(
+            dir.path(),
+            "harnesses.toml",
+            "harness.omarchy-claude-c2.enabled",
+            "false",
+        )
+        .unwrap();
+        let list = banda_harnesses::Harnesses::load(&path).unwrap();
+        let account = list.find("omarchy-claude-c2").unwrap();
+        assert_eq!(account.name, "Work");
+        assert!(!account.enabled);
+        assert_eq!(account.env["CLAUDE_CONFIG_DIR"], "/existing/c2");
+        assert_eq!(account.harness(), "claude");
+        assert!(!doc.to_string().contains("command ="));
+    }
+
     use super::*;
 
     fn config(look: &str) -> tempfile::TempDir {
