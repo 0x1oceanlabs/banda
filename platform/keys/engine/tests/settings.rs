@@ -77,6 +77,8 @@ async fn a_machine_s_settings_are_read_and_followed_through_its_engine() {
         .find(|each| each.file == "agents.toml")
         .unwrap();
     assert_eq!(read["rev"], json!(was.rev), "the read and the stream agree");
+    let path = config.join("agents.toml").display().to_string();
+    assert_eq!(read["path"], json!(path), "where it is on this machine");
     assert_eq!(read["keyed"]["start.account"]["value"], "home");
     assert_eq!(read["keyed"]["start.account"]["from"]["line"], 4);
     assert_eq!(read["values"]["account"], "home");

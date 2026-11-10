@@ -661,7 +661,7 @@ round trip.
 | desktop | `app://files/<machine>/<token>`, `app://preview/<machine>/<token>` relayed to that machine | 4b, 4c |
 | device | `save_file`, a save dialog and then the bytes by the host's URL | 4c |
 | host | `agents.defaults` also says the machine's start account and fallback | 5a |
-| host | `keys.settings_read {file}` → `{file, values?, keyed, problems, rev}`; `keys.settings_changed` → `{file, rev}`, a Read stream (amended with step 5b) | 5b |
+| host | `keys.settings_read {file}` → `{file, path, values?, keyed, problems, rev}`; `keys.settings_changed` → `{file, rev}`, a Read stream (amended with step 5b) | 5b |
 
 - **Kept, now checked:** `PaneKind.elsewhere`.
 - **Never added:** the draft's `Action.elsewhere`, and `PaneProps.runs` as
