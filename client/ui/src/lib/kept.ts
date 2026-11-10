@@ -14,6 +14,8 @@ export type Kept<V> = {
   read: () => Readonly<Record<string, V>>
   /** Keeps `value` for `id`, the latest kept last: an old one falls off. */
   put: (id: string, value: V) => void
+  /** Keeps each of `values` as one write of the storage. */
+  putAll: (values: readonly (readonly [string, V])[]) => void
   /** Forgets what it kept for `id`. */
   drop: (id: string) => void
   /** The record, kept current. */
@@ -69,10 +71,12 @@ export function kept<V>(
   // changed it while none here heard. Where the storage would not take
   // the last one, `here` has what it lacks.
   const latest = () => (stored ? load() : read())
-  const put = (id: string, value: V) => {
-    const others = Object.entries(latest()).filter(([other]) => other !== id)
-    keepAll(Object.fromEntries([...others.slice(-(keep - 1)), [id, value]]))
+  const putAll = (values: readonly (readonly [string, V])[]) => {
+    const fresh = new Set(values.map(([id]) => id))
+    const others = Object.entries(latest()).filter(([id]) => !fresh.has(id))
+    keepAll(Object.fromEntries([...others, ...values].slice(-keep)))
   }
+  const put = (id: string, value: V) => putAll([[id, value]])
   const drop = (id: string) => {
     if (!(id in latest())) return
     keepAll(
@@ -100,6 +104,7 @@ export function kept<V>(
   return {
     read,
     put,
+    putAll,
     drop,
     use: () => useSyncExternalStore(listen, read, () => none),
   }

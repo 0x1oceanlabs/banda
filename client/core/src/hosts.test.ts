@@ -318,6 +318,25 @@ test("this machine's Projects are read again from its engine for one the Window 
   expect(hosts.hostOf("m0" as ProjectId)).toBeUndefined()
 })
 
+test("the directory takes what a machine lists in one write, and writes nothing while the list says what it holds", () => {
+  const kept = inWindow()
+  const putAll = vi.spyOn(kept, "putAll")
+  const { device, tell } = desktop()
+  const hosts = new KeptHosts(device, FORGETTING, undefined, {
+    directory: kept,
+  })
+  hosts.follow()
+  tell([live])
+  const listed = [project("r1"), project("r2"), project("r3")]
+  hosts.projects("arc", listed)
+  expect(putAll).toHaveBeenCalledTimes(1)
+  hosts.projects("arc", [...listed])
+  expect(putAll).toHaveBeenCalledTimes(1)
+  hosts.projects("arc", [...listed, project("r4")])
+  expect(putAll).toHaveBeenCalledTimes(2)
+  expect(putAll.mock.lastCall?.[0].map(([id]) => id)).toEqual(["r4"])
+})
+
 test("the directory keeps on the device which machine has each Project: after a restart with arc away from the first moment, arc's Projects are arc's, this machine's its own, and one no machine has fails closed", async () => {
   vi.useFakeTimers()
   vi.stubGlobal("WebSocket", Socket)

@@ -34,6 +34,26 @@ test("a change starts from what another window kept while none here heard, so ne
   })
 })
 
+test("many values are kept in one write, the latest last, and an old one falls off", () => {
+  const shared = storage()
+  const setItem = vi.spyOn(localStorage, "setItem")
+  const here = kept("record", isText, 3)
+  here.put("old", "falls off")
+  here.put("stays", "older")
+  setItem.mockClear()
+  here.putAll([
+    ["a", "1"],
+    ["stays", "new"],
+    ["b", "2"],
+  ])
+  expect(setItem).toHaveBeenCalledTimes(1)
+  expect(Object.entries(JSON.parse(shared.stored.get("record")!))).toEqual([
+    ["a", "1"],
+    ["stays", "new"],
+    ["b", "2"],
+  ])
+})
+
 test("a window whose storage will not take a change keeps it, and the next change with it", () => {
   const shared = storage()
   const here = kept("record", isText)
