@@ -1,4 +1,4 @@
-import { type ReactElement, useRef } from "react"
+import { type ReactElement, useRef, useState } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import {
   ContextMenu,
@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { LOCATE } from "../menu/menu"
 import { newThread, useOpen } from "./open"
+import { useHoldWhile } from "./useHold"
 
 /** A Project's row with its right-click menu around it. */
 export type WithMenu = (
@@ -46,8 +47,11 @@ export function ProjectMenu({
   // A pin changes the list in place; the rest open a Pane or a menu.
   const run = useRun()
   const open = useOpen()
+  // Open, it holds the list still (ADR 0098, decision 6).
+  const [shown, setShown] = useState(false)
+  useHoldWhile(shown)
   return (
-    <ContextMenu>
+    <ContextMenu onOpenChange={setShown}>
       <ContextMenuTrigger ref={row}>{children}</ContextMenuTrigger>
       <ContextMenuContent>
         {project.missing ? (

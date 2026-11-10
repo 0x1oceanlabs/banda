@@ -4,8 +4,9 @@
  * printing off screen and, for a while, the last on screen, as Agents'
  * do; then the window left quiet, nothing holding the keyboard, a
  * column's width stepped, the focus stepped along the Strip, a column
- * maximized, the workspaces stepped, and the overview opened and closed.
- * The browser's page shows in every phase.
+ * maximized, the workspaces stepped, and the overview opened and closed;
+ * then the sidebar list as an Agent's day moves it, and the window once
+ * its batch is over. The browser's page shows in every phase.
  *
  * For each phase it reports the main thread's work a second, from Chrome's
  * own counters; what motion-probe.ts counts in the page (ticks, layout read
@@ -41,11 +42,16 @@ import { install, read, reset } from "./motion-probe"
 import { perSecondOf, report, type Phase } from "./motion-report"
 import { MARKS, startTrace, stopTrace, summarise, within } from "./motion-trace"
 import {
+  call,
   loadACore,
   newTerminal,
+  leaveSidebar,
   pressInPage,
+  send,
   startWindow,
   textOf,
+  threadNamed,
+  topsOf,
   type Window,
 } from "./window"
 
@@ -63,7 +69,7 @@ const keep = tracing === "keep"
 const profiled = process.env.MOTION_PROFILE?.split(",") ?? []
 
 test("how the Tiling moves, against motion-budget.json", async () => {
-  test.setTimeout(240_000)
+  test.setTimeout(360_000)
   const scale = Number(test.info().project.metadata.scale ?? 1)
   site = createServer((_, response) => {
     response.writeHead(200, { "content-type": "text/html" })
@@ -392,6 +398,105 @@ test("how the Tiling moves, against motion-budget.json", async () => {
       await page.waitForTimeout(900)
     }
   })
+
+  // The sidebar list as an Agent's day moves it (ADR 0098, S5c): ten
+  // Threads at work; six that call come while the pointer is away; one,
+  // open in a Pane, archived by its key; and the hold let go with eight
+  // changes in it, four done, two archived on another machine and two
+  // come. Each batch moves by opacity alone, played by element.animate
+  // with no frame loop of the list's own.
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const rows = sidebar.getByRole("tabpanel").locator("[data-row]")
+  const row = (title: string) => rows.filter({ hasText: title })
+  for (let i = 1; i <= 10; i++) await send(window, `wait ${i}`)
+  await send(window, "read me")
+  call(window, "agents.read", { thread: threadNamed(window, "read me")!.id })
+  await row("read me").click()
+  const opened = page.getByRole("region", { name: "read me", exact: true })
+  await expect(opened).toHaveAttribute("data-focused", "true")
+  await leaveSidebar(page)
+  await measure("sidebar", async () => {
+    for (let i = 1; i <= 6; i++) await send(window, `call ${i}`)
+    await expect(rows.filter({ hasText: /call \d/ })).toHaveCount(6)
+    // By its key, the Person's own act: its slot closes at once.
+    await inWindow("Alt+KeyS")
+    await expect(opened).toBeHidden()
+    await expect(row("read me")).toHaveCount(0)
+    // Held, with the pointer on the list: no card moves while the eight
+    // changes come.
+    await rows.first().hover()
+    const held = await topsOf(rows)
+    for (let i = 1; i <= 4; i++)
+      call(window, "agents.send", {
+        thread: threadNamed(window, `wait ${i}`)!.id,
+        text: "go",
+        steer: true,
+      })
+    for (const title of ["call 1", "call 2"])
+      call(window, "agents.archive", { thread: threadNamed(window, title)!.id })
+    await send(window, "call 7")
+    await send(window, "call 8")
+    await expect
+      .poll(() =>
+        [1, 2, 3, 4].map((i) => threadNamed(window, `wait ${i}`)?.latest?.state)
+      )
+      .toEqual(["done", "done", "done", "done"])
+    await expect(
+      sidebar.getByRole("tab", { name: /^Archive/ })
+    ).toHaveAccessibleName("Archive, 3")
+    await expect(row("call 1")).toContainText("Archived")
+    expect(await topsOf(rows), "sidebar: the cards' places, held").toEqual(held)
+    expect(await row("call 7").count(), "sidebar: a call come, held").toBe(0)
+    // Let go: what waited lands in one batch.
+    await leaveSidebar(page)
+    await expect(row("call 7")).toHaveCount(1)
+    await expect(rows.filter({ hasText: /call [12]/ })).toHaveCount(0)
+    await page.waitForTimeout(800)
+  })
+  // A hard gate, whatever the budget file's mode: the list reads no layout
+  // of its own in a frame. The Tiling and the browser's page read theirs
+  // in the same ticks, as the archived Thread's Pane closes: those are not
+  // the sidebar's, warn as sidebar.ticks.readsPerSecond, and #1292 tracks
+  // them. The phase's long animation frames are soft in motion-budget.json:
+  // that Pane closing blocks one frame for 130-200 ms of its own (#1293),
+  // and the machine's load makes more.
+  expect(
+    phases.sidebar.counted.sidebarReads,
+    "sidebar: its layout read in a frame"
+  ).toBe(0)
+  // What the list's arithmetic says it stands, as it is drawn: a px apart
+  // at most, on a screen of 1.6 too, as each kind's height is read to the
+  // fraction.
+  const [planned, drawn] = await sidebar
+    .locator("[data-height]")
+    .evaluate((list) => [
+      Number(list.getAttribute("data-height")),
+      list.getBoundingClientRect().height,
+    ])
+  expect(
+    Math.abs(planned - drawn),
+    `sidebar: the heights planned, ${planned}, and drawn, ${drawn}`
+  ).toBeLessThanOrEqual(1)
+  // Once the batch is over, the list plays nothing of its own and keeps no
+  // card on its way out, whatever the Marks do: the Threads that work and
+  // call still tell their news, so the window asks for no frame but
+  // theirs.
+  await page.evaluate(() => (document.activeElement as HTMLElement).blur())
+  await measureStill("settled")
+  const list = sidebar.locator("[data-height]")
+  await expect(list.locator("[data-going]")).toHaveCount(0)
+  const own = await list.evaluate(
+    (one) =>
+      one.getAnimations({ subtree: true }).filter((animation) => {
+        const target = (animation.effect as KeyframeEffect | null)?.target
+        return !target?.closest("[data-slot=banda-mark]")
+      }).length
+  )
+  expect(own, "settled: the list's own animations").toBe(0)
+  if (phases.settled.counted.marks === 0)
+    expect(phases.settled.counted.callbacks, "settled: animation frames").toBe(
+      0
+    )
 
   report(scale, versions, phases)
 })

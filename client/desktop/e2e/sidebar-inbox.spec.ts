@@ -3,7 +3,10 @@
  * oldest first, Open newest first under a hairline, the Working shelf in
  * grey with "+ N more", Later by day, the Archive, inbox zero in words and
  * each tab empty. Each state is screenshot in the dark and the light, on
- * glass and on a solid desk, at 1440×900, as `sidebar-s5b-*.png`.
+ * glass and on a solid desk, at 1440×900, as `sidebar-s5b-*.png`. And the
+ * list holding still under the pointer (ADR 0098, S5c): what comes waits,
+ * what leaves stays dimmed in its slot, and both land as the pointer
+ * leaves, screenshot as a strip of three frames, `sidebar-s5c-*.png`.
  *
  * Threads start from outside the Window, as `banda call` starts them: one
  * whose first message says "wait" works until the test ends, any other is
@@ -13,10 +16,15 @@ import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import {
+  call,
   firstThread,
   GLASS,
-  projectId,
+  placeOf,
+  leaveSidebar,
+  send,
   startWindow,
+  threadNamed,
+  topsOf,
   wallpaper,
   type Window,
 } from "./window"
@@ -27,43 +35,24 @@ test.afterEach(async () => {
   await window?.close()
 })
 
-/** Work's id in each window, looked up once. */
-const works = new WeakMap<Window, string>()
-
-/** What the engine's `method` answers in the Project "Work", run as the
- * Person's `banda call`, from outside the Window. */
-function call(window: Window, method: string, params?: object) {
-  if (!works.has(window)) works.set(window, projectId(window, "Work"))
-  const work = works.get(window)!
-  const args = params ? ["--params", JSON.stringify(params)] : []
-  return JSON.parse(window.banda("call", method, "--project", work, ...args)).ok
-}
-
 /** The id of Work's Thread named `title`, as the engine lists it; none
  * until it is listed. */
-function idOf(window: Window, title: string): string | undefined {
-  const { threads } = call(window, "agents.threads") as {
-    threads: { id: string; title: string; latest: { state: string } }[]
-  }
-  return threads.find((thread) => thread.title === title)?.id
-}
+const idOf = (window: Window, title: string) => threadNamed(window, title)?.id
 
-/** The state of the latest turn of Work's Thread named `title`. */
-function stateOf(window: Window, title: string): string | undefined {
-  const { threads } = call(window, "agents.threads") as {
-    threads: { title: string; latest: { state: string } }[]
-  }
-  return threads.find((thread) => thread.title === title)?.latest.state
-}
-
-/** A Thread in Work started with `text`, one after the other, so each is
- * newer than the one before: at work while its words say "wait", else
- * answered. */
-async function send(window: Window, text: string) {
-  call(window, "agents.send", { harness: "fake", text, settings: null })
-  await expect
-    .poll(() => stateOf(window, text))
-    .toBe(text.includes("wait") ? "running" : "done")
+/** Waits until the Person's Threads are Your turn's head and `titles`, in
+ * that order, with nothing between, as the window draws them, and the
+ * batch that drew them is over. The engine says a Thread is done before
+ * the window's list has it there: the list may draw it Open first, before
+ * its turn begins, then Working, a batch each. What a batch takes away,
+ * as the hairline above Open, the Working head or inbox zero, fades in its
+ * slot for a moment, and a slot that closes once the pointer is on the
+ * list moves the cards under it, which the hold never stops. */
+async function landed(sidebar: Locator, titles: string[]) {
+  await expect(placeOf(sidebar, "Threads")).toHaveText([
+    /^Your turn/,
+    ...titles.map((title) => new RegExp(title)),
+  ])
+  await expect(sidebar.locator("[data-going]")).toHaveCount(0)
 }
 
 /** The colour `element`'s text is drawn in. */
@@ -190,8 +179,8 @@ test("the Inbox: Your turn oldest first, Open newest first under a hairline, the
 
   // Your turn, the oldest first, under its head; Open, the newest first,
   // under a hairline.
-  const threads = sidebar.getByRole("group", { name: "Threads" })
-  await expect(threads).toContainText(/Your turn\s*· 3/)
+  const threads = placeOf(sidebar, "Threads")
+  await expect(threads.first()).toContainText(/Your turn\s*· 3/)
   await expect(threads.getByRole("separator")).toHaveCount(1)
   await expect(threads.locator("[data-row]")).toHaveText([
     /call one/,
@@ -204,8 +193,8 @@ test("the Inbox: Your turn oldest first, Open newest first under a hairline, the
   ])
   // The Working shelf: its first six, the oldest first, and how many more,
   // in grey, where Open is in the text's colour.
-  const shelf = sidebar.getByRole("group", { name: "Working" })
-  await expect(shelf).toContainText(/Working\s*· 9/)
+  const shelf = placeOf(sidebar, "Working")
+  await expect(shelf.first()).toContainText(/Working\s*· 9/)
   await expect(shelf.locator("[data-row]")).toHaveText(
     working.slice(0, 6).map((text) => new RegExp(text))
   )
@@ -294,16 +283,16 @@ test("the Inbox: Your turn oldest first, Open newest first under a hairline, the
   await expect(
     sidebar.locator('[data-slot="scroll-area-scrollbar"]')
   ).toHaveCount(0)
-  const later = sidebar.getByRole("group", { name: "Later" })
-  await expect(later).toContainText("Someday")
+  const later = placeOf(sidebar, "Later")
+  await expect(later.filter({ hasText: "Someday" })).not.toHaveCount(0)
   await expect(later.locator("[data-row]")).toHaveText([
     /call three/,
     /read one/,
   ])
   await shots(window, "later")
   await tab("Archive").click()
-  const archive = sidebar.getByRole("group", { name: "Archive" })
-  await expect(archive).toContainText("Today")
+  const archive = placeOf(sidebar, "Archive")
+  await expect(archive.first()).toContainText("Today")
   await expect(archive.locator("[data-row]")).toHaveText([/read two/])
   await shots(window, "archive")
 })
@@ -390,4 +379,136 @@ test("inbox zero says how many work and when the next wakes, once a week how man
   await expect(tab("Inbox")).toHaveAttribute("aria-selected", "true")
   await expect(panel).toContainText(/2 at work · next wakes at (\S+ )?\d/)
   await expect(someday).toBeHidden()
+})
+
+test("a call that comes while the pointer is on the list waits until the pointer leaves, and no pill counts it (ADR 0098, S5c)", async () => {
+  test.setTimeout(180_000)
+  window = await startWindow()
+  const { page } = window
+  await firstThread(page)
+  await wide(window)
+  await send(window, "call one")
+  await send(window, "call two")
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const rows = sidebar.getByRole("tabpanel").locator("[data-row]")
+  const come = rows.filter({ hasText: "call three" })
+  const pill = sidebar.getByText(/\d+ updates?/)
+  await landed(sidebar, ["call one", "call two"])
+
+  // The pointer rests on the list: the call that comes waits, though the
+  // Inbox's tab counts it at once, and no card moves.
+  await rows.first().hover()
+  const held = await topsOf(rows)
+  await send(window, "call three")
+  await expect(
+    sidebar.getByRole("tab", { name: /^Inbox/ })
+  ).toHaveAccessibleName("Inbox, 3")
+  await page.waitForTimeout(1_000)
+  await expect(come).toHaveCount(0)
+  expect(await topsOf(rows)).toEqual(held)
+  await expect(pill).toHaveCount(0)
+
+  // Away, it comes in the next batch, as silently.
+  await leaveSidebar(page)
+  await expect(come).toHaveCount(1)
+  await expect(rows).toHaveCount(3)
+  await expect(pill).toHaveCount(0)
+})
+
+/** `frames`, screenshots of one height, side by side, 8 px apart, into
+ * `path`: drawn on a canvas in the page, from their bytes. */
+async function strip(page: Page, frames: Buffer[], path: string) {
+  const drawn = await page.evaluate(
+    async (shots) => {
+      const images = await Promise.all(
+        shots.map((shot) =>
+          createImageBitmap(
+            new Blob([Uint8Array.from(atob(shot), (c) => c.charCodeAt(0))], {
+              type: "image/png",
+            })
+          )
+        )
+      )
+      const gap = 8
+      const canvas = document.createElement("canvas")
+      canvas.width =
+        images.reduce((sum, image) => sum + image.width, 0) +
+        gap * (images.length - 1)
+      canvas.height = Math.max(...images.map((image) => image.height))
+      const context = canvas.getContext("2d")!
+      let x = 0
+      for (const image of images) {
+        context.drawImage(image, x, 0)
+        x += image.width + gap
+      }
+      return canvas.toDataURL("image/png").split(",")[1]!
+    },
+    frames.map((frame) => frame.toString("base64"))
+  )
+  writeFileSync(path, Buffer.from(drawn, "base64"))
+}
+
+test("a Thread archived elsewhere while the list holds stays in its slot, dimmed and saying Archived, and goes as the pointer leaves; in the dark and the light, as a strip of three frames (ADR 0098, S5c)", async () => {
+  test.setTimeout(240_000)
+  window = await startWindow()
+  const { page, dir } = window
+  await firstThread(page)
+  await wide(window)
+  const calls = ["call one", "call two", "call three", "call four"]
+  for (const text of calls) await send(window, text)
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const rows = sidebar.getByRole("tabpanel").locator("[data-row]")
+  const archive = sidebar.getByRole("tab", { name: /^Archive/ })
+  const html = page.locator("html")
+  await landed(sidebar, calls)
+  // The fades played ten times slower as the hold lets go, for the strip's
+  // middle frame to catch one on its way.
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send("Animation.enable")
+  const looks = [
+    ["dark", "call two"],
+    ["light", "call three"],
+  ] as const
+  for (const [i, [mode, title]] of looks.entries()) {
+    writeFileSync(join(dir, "config/look.toml"), `mode = "${mode}"\n${GLASS}`)
+    if (mode === "dark") await expect(html).toHaveClass(/\bdark\b/)
+    else await expect(html).not.toHaveClass(/\bdark\b/)
+    await page.waitForTimeout(250)
+    const box = (await sidebar.boundingBox())!
+    const frame = () => page.screenshot({ clip: box })
+
+    // Held: archived on another machine, it stays in its slot, at half,
+    // saying where it went, with no action of its own; no card moves.
+    await rows.first().hover()
+    const held = await topsOf(rows)
+    call(window, "agents.archive", { thread: idOf(window, title) })
+    await expect(archive).toHaveAccessibleName(`Archive, ${i + 1}`)
+    const gone = rows.filter({ hasText: title })
+    await expect(gone).toContainText("Archived")
+    await expect
+      .poll(() =>
+        gone.evaluate(
+          (one) =>
+            getComputedStyle(one.closest("[data-key]")!.firstElementChild!)
+              .opacity
+        )
+      )
+      .toBe("0.5")
+    await expect(gone.getByRole("button", { name: "Later" })).toHaveCount(0)
+    expect(await topsOf(rows)).toEqual(held)
+    const frames = [await frame()]
+
+    // Let go: it fades out where it stood, and the rows below close up.
+    await cdp.send("Animation.setPlaybackRate", { playbackRate: 0.1 })
+    await leaveSidebar(page)
+    await page.waitForTimeout(600)
+    frames.push(await frame())
+    await cdp.send("Animation.setPlaybackRate", { playbackRate: 1 })
+    await expect(gone).toHaveCount(0)
+    await expect(rows).toHaveCount(3 - i)
+    await page.waitForTimeout(400)
+    frames.push(await frame())
+    await page.screenshot({ path: `test-results/sidebar-s5c-${mode}.png` })
+    await strip(page, frames, `test-results/sidebar-s5c-${mode}-strip.png`)
+  }
 })
