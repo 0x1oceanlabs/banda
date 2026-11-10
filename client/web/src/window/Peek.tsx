@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
-import type { Owner } from "@banda/core"
-import { reachWords, useReach } from "@banda/core/react"
+import { type Owner, withHost } from "@banda/core"
+import { reachWords, UNKNOWN, useReach } from "@banda/core/react"
 import { Button } from "@banda/ui/components/button"
 import {
   HeaderSlot,
@@ -16,7 +16,6 @@ import {
   paneHost,
   type PaneState,
   type Place,
-  withHost,
 } from "@banda/ui/pane"
 import {
   Maximize2Icon,
@@ -89,8 +88,10 @@ export function Peek({
   const [said, setSaid] = useState<Label | null>(null)
   const label = useCallback((label: Label | null) => setSaid(label), [])
   const { title, detail, Icon } = labelOf(pane, said ?? undefined)
+  // Its machine as the directory says, its args' only as an arrangement
+  // written before kept it; none the Window knows, it opens on none.
   const reach = useReach(project, paneHost(pane))
-  const there = reach.host
+  const there = reach.host ?? undefined
   const owner = useMemo(
     () => ({ project, pane: withHost(pane, there) }),
     [project, pane, there]
@@ -164,7 +165,9 @@ export function Peek({
               />
             ) : (
               <p className="p-4 text-sm text-muted-foreground">
-                {there && reachWords(there, reach.shown, seenNamed)}
+                {reach.host === null
+                  ? UNKNOWN
+                  : there && reachWords(there, reach.shown, seenNamed)}
               </p>
             )}
           </HeaderSlot>

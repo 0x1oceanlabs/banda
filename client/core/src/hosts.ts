@@ -27,6 +27,12 @@ import {
   type Power,
 } from "@banda/contract/machines"
 import type { HostState } from "./device"
+import {
+  type DirectoryMemory,
+  inWindow,
+  type Placed,
+  samePlace,
+} from "./directory"
 import { paneHost, type PaneState, withHost } from "./pane"
 import { clock, tickingClock } from "./time"
 import { openProjects, shownProjects } from "./projects"
@@ -215,7 +221,7 @@ export function otherBuild(state: HostState): string | undefined {
 /** A machine as a new Thread picks where it starts (ADR 0095, decision
  * 7). */
 export type Machine = {
-  /** Its key in `hosts.toml`, a Pane's `args.host`; none for this machine. */
+  /** Its key in `hosts.toml`; none for this machine. */
   host?: string
   /** Its name and icon, cleaned (ADR 0095, decision 2); none for this
    * machine, which goes unnamed (decision 4). */
@@ -284,11 +290,15 @@ export class KeptHosts implements Readable<readonly Shown[]> {
    * open and answering. */
   readonly waiting: Waiting
 
+  /** Which machine has each Project, as this device found it last. */
+  readonly #directory: DirectoryMemory
+
   /** `here` is this machine's engine; none outside a Window, where no
    * Project is this machine's to act on. What waits is kept in `waiting`,
    * the device's storage in a Window, which every window on the device
    * shares; only the main window `drains` it: sends it, and gives back
-   * what does not go (#1299). */
+   * what does not go (#1299). The `directory` is kept where the Window
+   * keeps it, the same storage; else in this window alone. */
   constructor(
     device: HostsDevice,
     names: Names,
@@ -296,11 +306,17 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     {
       waiting = inMemory(),
       drains = true,
-    }: { waiting?: WaitingStorage; drains?: boolean } = {}
+      directory = inWindow(),
+    }: {
+      waiting?: WaitingStorage
+      drains?: boolean
+      directory?: DirectoryMemory
+    } = {}
   ) {
     this.#device = device
     this.#names = names
     this.#here = here
+    this.#directory = directory
     this.#shown.subscribe(() => this.#sayMachines())
     this.waiting = new Waiting(waiting, {
       named: (host) => namedIn(this.get(), host, this.seen).name,
@@ -410,6 +426,10 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     const ids = projects.map((project) => project.id)
     this.#ourIds = new Set(machine === undefined ? ids : [...ids, machine])
     this.#ours = { machine, projects }
+    // The directory keeps them as this machine's, once its engine said
+    // its ID, so its Panes are its own from a window's first moment.
+    if (machine !== undefined)
+      for (const id of this.#ourIds) this.#learn(id, { machine })
     this.#shown.set(this.#placed(this.get()))
     // Said here too, as the hosts' rows may not change with ours.
     this.#sayMachines()
@@ -455,23 +475,64 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     return engine
   }
 
-  /** The host a Pane of `project` is on, whose args name host `named`
-   * (`hostOfPane`); none for this machine's. */
-  hostOf(project: ProjectId, named: string | undefined): string | undefined {
-    return hostOfPane(this.get(), this.#ourIds, project, named)
+  /**
+   * The machine that has `project` (ADR 0106, decision 1): none for this
+   * machine, as it wins an ID a host has too; else the host whose rows
+   * list it now, or whose No Project it is; else the one the directory
+   * found last, where this device kept it, so a Pane restored while its
+   * host is away goes there; else host `named`, as the args of an
+   * arrangement written before the directory kept it (`paneHost`); else
+   * `null`: no machine the Window knows has it, and an act on it fails
+   * closed, never on this machine in its place.
+   */
+  hostOf(project: ProjectId, named?: string): string | undefined | null {
+    if (this.#ourIds.has(project)) return undefined
+    const listing = this.get().find(
+      (host) =>
+        host.machine === project ||
+        host.projects.some((one) => one.id === project)
+    )
+    if (listing) return listing.name
+    const placed = this.#directory.read()[project]
+    if (placed) return this.#reached(placed)
+    return named ?? null
+  }
+
+  /**
+   * The machine a place the directory kept is, as the Window reaches it
+   * now: this one by its ID; a host by the ID its engine said, so one
+   * renamed in `hosts.toml` is still found once it was reached; else by
+   * the key it was kept with.
+   */
+  #reached({ machine, host }: Placed): string | undefined {
+    if (machine !== undefined) {
+      if (machine === this.#ours.machine) return undefined
+      for (const [name, scope] of this.#scopes)
+        if (scope === machine && this.get().some((one) => one.name === name))
+          return name
+    }
+    return host
+  }
+
+  /** Keeps `placed` for `project` in the directory, where it says
+   * something new. */
+  #learn(project: ProjectId, placed: Placed): void {
+    if (!samePlace(this.#directory.read()[project], placed))
+      this.#directory.put(project, placed)
   }
 
   /**
    * The session of the machine that owns `project`, or `pane` of it, whose
-   * args, or an act's on it, may name its host (`hostOf`): this machine's
-   * engine for its own Projects; else that host's, one for the Window's
-   * life (`engine`). Every act an App makes goes to it (ADR 0089, decision
-   * 5). It is never this machine's in another's place, so an act never
-   * runs on the wrong machine: a host the Window does not know, or does
-   * not reach now, refuses at once (`Unreachable`) rather than wait to
-   * run by itself once it is back. A Pane `drawn` from it keeps its host's
-   * while that host is out of reach: it shows what it showed, and catches
-   * up once the host is back.
+   * args may name its host as an arrangement written before the directory
+   * did (`hostOf`): this machine's engine for its own Projects; else that
+   * host's, one for the Window's life (`engine`). Every act an App makes
+   * goes to it (ADR 0089, decision 5). It is never this machine's in
+   * another's place, so an act never runs on the wrong machine: a host the
+   * Window does not know, or does not reach now, refuses at once
+   * (`Unreachable`) rather than wait to run by itself once it is back, and
+   * so does a Project no machine the Window knows has (ADR 0106, law 3). A
+   * Pane `drawn` from it keeps its host's while that host is out of reach:
+   * it shows what it showed, and catches up once the host is back.
    */
   sessionOf(
     project: ProjectId,
@@ -479,6 +540,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     { drawn = false }: { drawn?: boolean } = {}
   ): Engine {
     const host = this.hostOf(project, pane && paneHost(pane))
+    if (host === null) throw new Unreachable("", UNKNOWN, { machine: "" })
     if (host === undefined) {
       if (!this.#here) throw new Error("This window has no engine of its own.")
       return this.#here
@@ -504,12 +566,19 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     return new Unreachable(name, words, { machine, as_of: shown?.away })
   }
 
-  /** `pane` of `project` as a pick opens it (`pane.pick`): its args name
-   * the host it is on (`hostOf`), so it opens on that host's engine, never
-   * on this machine's with another host's Project (ADR 0081); none for
-   * this machine's. */
+  /**
+   * `pane` of `project` as the arrangement keeps it, as a pick or a Pane
+   * opens or changes it: its args name no host, as the directory says
+   * which machine has its Project (ADR 0106, decision 1). A host its args
+   * name, as an arrangement written before kept it, the directory takes
+   * first where it knows nothing of that Project, so the Pane still goes
+   * there after a restart.
+   */
   paneOn(project: ProjectId, pane: PaneState): PaneState {
-    return withHost(pane, this.hostOf(project, paneHost(pane)))
+    const named = paneHost(pane)
+    if (named === undefined) return pane
+    if (this.hostOf(project) === null) this.#learn(project, { host: named })
+    return withHost(pane, undefined)
   }
 
   /** The Apps each host's engine last listed in its welcome, kept from
@@ -611,12 +680,13 @@ export class KeptHosts implements Readable<readonly Shown[]> {
    * Thread's picker alike (`machinesOf`). This machine is first, and has
    * every ID it knows (`#ourIds`): its Projects, the archived, missing
    * and scratch ones too, and its Host scope's. A Pane of any of them
-   * opens here (`hostOfPane`), so another machine's Project or No
+   * opens here (`hostOf`), so another machine's Project or No
    * Project of one of those IDs, shown, would open this machine's. Then
    * each host whose rows the Window shows, in the order of `hosts.toml`,
    * has its Host scope's ID, once its engine said it, and its Projects
    * as it shows them: those it holds, none archived. Each that shows
-   * what it showed stays as it was.
+   * what it showed stays as it was. The directory keeps where each is,
+   * its archived ones too, as a Pane opens one from the Archive.
    */
   #placed(hosts: readonly Shown[]): readonly Shown[] {
     const taken = new Set(this.#ourIds)
@@ -638,6 +708,12 @@ export class KeptHosts implements Readable<readonly Shown[]> {
         ...shownProjects(listed),
         ...listed.filter((project) => project.scratch && !project.archived),
       ].filter((project) => free(name, project.id))
+      const archived = listed.filter(
+        (project) => project.archived && !taken.has(project.id)
+      )
+      const place = { ...(said !== undefined && { machine: said }), host: name }
+      for (const { id } of [...projects, ...archived]) this.#learn(id, place)
+      if (machine !== undefined) this.#learn(machine, place)
       return machine === host.machine && sameEach(projects, host.projects)
         ? host
         : { ...host, machine, projects }
@@ -684,6 +760,10 @@ export function machinesOf(ours: Ours, hosts: readonly Shown[]): Machine[] {
   return machines
 }
 
+/** Why an act on a Project no machine the Window knows has is refused,
+ * and what a Pane of it shows (ADR 0106, law 3): it fails closed. */
+export const UNKNOWN = "This window does not reach that machine"
+
 /** An act refused at once (`KeptHosts.sessionOf`, `Engine.away`): the
  * machine that owns its Project is one the Window does not reach now, or
  * does not know. The contract's, handed on with the hosts, so an App
@@ -706,25 +786,6 @@ export const liveIn = (hosts: readonly Shown[]): string[] =>
 /** The names of the hosts whose rows the Window does not show. */
 export const emptyIn = (hosts: readonly Shown[]): string[] =>
   hosts.filter((host) => !holds(host)).map((host) => host.name)
-
-/**
- * The host a Pane of `project` is on: none when this machine has the
- * Project, as it wins an ID a host has too; else host `named`, as the
- * Pane's args keep it (`paneHost`), known yet or not, so the Pane waits
- * for it after a restart; else the host that lists the Project, for a
- * Pane opened where its host went unsaid.
- */
-export function hostOfPane(
-  hosts: readonly Shown[],
-  ours: ReadonlySet<ProjectId>,
-  project: ProjectId,
-  named: string | undefined
-): string | undefined {
-  if (ours.has(project)) return undefined
-  if (named !== undefined) return named
-  return hosts.find((host) => host.projects.some((one) => one.id === project))
-    ?.name
-}
 
 /** Host `host`'s name and icon, as the Window shows `hosts`; as this
  * device last saw it (`seen`), while the Window does not show it yet. */

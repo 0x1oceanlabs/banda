@@ -179,6 +179,18 @@ test("an owner the Window does not know fails closed, never on this machine", as
   })
   // Its own close still runs: it is the window's.
   expect(routeAct(hosts, close, gone)).toMatchObject({ runs: true })
+  // A Project no machine the Window knows has, as the directory keeps
+  // none and no old args name one, named by a key or by this machine's
+  // Pane: refused, never run on this machine (ADR 0106, decision 1).
+  for (const from of [onMine, { here: onMine.pane }])
+    expect(routeAct(hosts, later, from, { project: "zz" })).toEqual({
+      runs: false,
+      why: "This window does not reach that machine",
+      said: "This window does not reach that machine",
+    })
+  expect(
+    routeAct(hosts, later, { here: { project: "zz" as ProjectId } })
+  ).toMatchObject({ runs: false })
   hosts.engine("arc").close()
 })
 

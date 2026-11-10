@@ -23,6 +23,7 @@ import {
   shownOf,
   Unreachable,
 } from "./hosts"
+import { inWindow } from "./directory"
 import type { Args } from "./run"
 import { clock } from "./time"
 import { away, desktop, live, project, Socket } from "./testing"
@@ -241,8 +242,8 @@ test("an act goes to the session of the machine that owns its Project, and never
   expect(refused("r1", on("arc"))).toBe("arc: This window does not reach arc")
   expect(Socket.opened).toEqual([])
 
-  // Live: its host's, by the host its args name, else the one that lists
-  // it; this machine's wins a clash.
+  // Live: its host's, the one that lists it, else the host an old
+  // arrangement's args name; this machine's wins a clash.
   tell([live])
   hosts.projects("arc", [project("mine"), project("r1")])
   const arc = hosts.engine("arc")
@@ -250,8 +251,9 @@ test("an act goes to the session of the machine that owns its Project, and never
   expect(hosts.sessionOf("r1" as ProjectId)).toBe(arc)
   expect(hosts.sessionOf("gone" as ProjectId, on("arc"))).toBe(arc)
   expect(hosts.sessionOf("mine" as ProjectId, on("arc"))).toBe(here)
-  // A Project no machine lists, its host unsaid, as one just added here.
-  expect(hosts.sessionOf("new" as ProjectId)).toBe(here)
+  // A Project no machine the Window knows has fails closed, never on this
+  // machine (ADR 0106, law 3).
+  expect(refused("new")).toBe(": This window does not reach that machine")
 
   // Away: an act is refused at once, in the pill's words, and waits for
   // nothing; a Pane drawn from it keeps arc's, which catches up as arc is
@@ -276,9 +278,116 @@ test("an act goes to the session of the machine that owns its Project, and never
 
   // Outside a Window, with no engine of this machine's: none here either.
   const none = new KeptHosts(device, FORGETTING)
+  none.ours([project("mine")])
   expect(() => none.sessionOf("mine" as ProjectId)).toThrow(
     "This window has no engine of its own."
   )
+})
+
+test("the directory keeps on the device which machine has each Project: after a restart with arc away from the first moment, arc's Projects are arc's, this machine's its own, and one no machine has fails closed", async () => {
+  vi.useFakeTimers()
+  vi.stubGlobal("WebSocket", Socket)
+  vi.spyOn(console, "warn").mockImplementation(() => undefined)
+  Socket.opened = []
+  // The device's storage, which outlives each window.
+  const kept = inWindow()
+  const here = { here: true } as unknown as Engine
+  const before = desktop()
+  const first = new KeptHosts(before.device, FORGETTING, here, {
+    directory: kept,
+  })
+  first.follow()
+  before.tell([live])
+  first.ours(
+    [project("mine"), project("s0", { scratch: true })],
+    "m0" as ProjectId
+  )
+  first.projects("arc", [
+    project("r1"),
+    project("gone", { archived: true }),
+    project("s1", { scratch: true }),
+    project("mine"),
+  ])
+  const arc = first.engine("arc")
+  await vi.advanceTimersByTimeAsync(0)
+  Socket.opened[0]!.say({
+    type: "welcome",
+    engine: "0.1.0",
+    modules: [],
+    machine: "m1",
+    boot: "b1",
+  })
+  // Each Project by its machine's ID and its key in hosts.toml; an
+  // archived one too, as the Archive opens it; a clash as the window
+  // places it, this machine's.
+  const onArc = { machine: "m1", host: "arc" }
+  expect(kept.read()).toEqual({
+    mine: { machine: "m0" },
+    s0: { machine: "m0" },
+    m0: { machine: "m0" },
+    r1: onArc,
+    gone: onArc,
+    s1: onArc,
+    m1: onArc,
+  })
+  arc.close()
+
+  // The window starts again with arc away from its first moment, and no
+  // Project of this machine's read yet.
+  const after = desktop()
+  const again = new KeptHosts(after.device, FORGETTING, here, {
+    directory: kept,
+  })
+  again.follow()
+  expect(again.hostOf("mine" as ProjectId)).toBeUndefined()
+  expect(again.sessionOf("mine" as ProjectId)).toBe(here)
+  after.tell([away])
+  for (const id of ["r1", "gone", "s1", "m1"])
+    expect(again.hostOf(id as ProjectId), id).toBe("arc")
+  // An act there is refused at once in its pill's words, and a Pane drawn
+  // from it keeps arc's engine, which catches up once arc is back.
+  expect(() => again.sessionOf("r1" as ProjectId)).toThrow("arc is away")
+  const drawn = again.sessionOf("r1" as ProjectId, undefined, { drawn: true })
+  expect(drawn).toBe(again.engine("arc"))
+  // One no machine the Window knows has: refused, never this machine's.
+  expect(again.hostOf("x" as ProjectId)).toBeNull()
+  let refusal: unknown
+  try {
+    again.sessionOf("x" as ProjectId, undefined, { drawn: true })
+  } catch (error) {
+    refusal = error
+  }
+  expect(refusal).toBeInstanceOf(Unreachable)
+  expect((refusal as Error).message).toBe(
+    "This window does not reach that machine"
+  )
+  // An arrangement written before the directory kept its host is read
+  // still, where the directory knows nothing of its Project.
+  expect(again.hostOf("x" as ProjectId, "arc")).toBe("arc")
+  expect(again.hostOf("r1" as ProjectId, "devbox")).toBe("arc")
+
+  // arc, renamed studio in hosts.toml, is found by its ID once its engine
+  // says it, before it lists anything; until then the key kept names a
+  // machine the window does not reach.
+  const studio = { ...live, name: "studio", ssh: "studio" }
+  after.tell([{ ...studio, state: "connecting" }])
+  expect(() => again.sessionOf("r1" as ProjectId)).toThrow(
+    "This window does not reach arc"
+  )
+  after.tell([studio])
+  const engine = again.engine("studio")
+  await vi.advanceTimersByTimeAsync(0)
+  Socket.opened.at(-1)!.say({
+    type: "welcome",
+    engine: "0.1.0",
+    modules: [],
+    machine: "m1",
+    boot: "b2",
+  })
+  expect(again.hostOf("r1" as ProjectId)).toBe("studio")
+  expect(again.sessionOf("r1" as ProjectId)).toBe(engine)
+  drawn.close()
+  engine.close()
 })
 
 test("an engine that said goodbye is made anew as its host is live again", async () => {
@@ -701,7 +810,8 @@ test("a host taken out of hosts.toml has its engine refuse at once, as one the w
   engine.close()
 })
 
-test("a pick of another host's Thread opens it on that host, never on this machine's engine with its Project", () => {
+test("a pick of another host's Thread keeps no host in the arrangement, as the directory says where its Project is; an old arrangement's host the directory takes first", () => {
+  vi.spyOn(console, "warn").mockImplementation(() => undefined)
   const { device, tell } = desktop()
   const hosts = new KeptHosts(device, FORGETTING)
   hosts.follow()
@@ -715,16 +825,19 @@ test("a pick of another host's Thread opens it on that host, never on this machi
   const on = (project: string, pane: ReturnType<typeof thread>) =>
     hosts.paneOn(project as ProjectId, pane)
 
-  // As the lists carry it from that host: kept as it is.
-  const there = thread({ host: "arc" })
-  expect(on("r1", there)).toBe(there)
-  // Its host unsaid: the host that lists its Project.
-  expect(on("r1", thread())).toEqual(there)
+  // None names its host: arc's goes to arc by its Project.
+  const bare = thread()
+  expect(on("r1", bare)).toBe(bare)
+  expect(on("r1", thread({ host: "arc" }))).toEqual(bare)
+  expect(hosts.hostOf("r1" as ProjectId)).toBe("arc")
   // This machine's Project, which wins a clash: on this machine.
-  expect(on("mine", thread({ host: "arc" }))).toEqual(thread())
-  // A Project no host lists: this machine's, as it is.
-  const mine = thread()
-  expect(on("x", mine)).toBe(mine)
+  expect(on("mine", thread({ host: "arc" }))).toEqual(bare)
+  expect(hosts.hostOf("mine" as ProjectId)).toBeUndefined()
+  // One no machine lists yet, whose args an arrangement written before
+  // kept with arc: the directory takes arc, and the args let it go.
+  expect(hosts.hostOf("old" as ProjectId)).toBeNull()
+  expect(on("old", thread({ host: "arc" }))).toEqual(bare)
+  expect(hosts.hostOf("old" as ProjectId)).toBe("arc")
 })
 
 test("a new Thread's machines: this one first and unnamed, then each host live or away, each with its Host scope and its open Projects as the Window placed them", () => {

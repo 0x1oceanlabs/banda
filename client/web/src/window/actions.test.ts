@@ -68,13 +68,17 @@ const NO_HOSTS: HostsDevice = {
 
 /** A Shell of `parts` for an action to run in by its key, through the
  * router (ADR 0106, law 3): the Person in Project "a" on this machine,
- * with no other machine, where `parts` says no other place. */
-const shellOf = (parts: object) =>
-  ({
+ * which has "a" and "p1", with no other machine, where `parts` says no
+ * other place. */
+const shellOf = (parts: object) => {
+  const hosts = new KeptHosts(NO_HOSTS, FORGETTING)
+  hosts.ours(projectsOf({ a: "a", p1: "p1" }))
+  return {
     here: { get: () => ({ project: "a" }) },
-    hosts: new KeptHosts(NO_HOSTS, FORGETTING),
+    hosts,
     ...parts,
-  }) as unknown as Shell
+  } as unknown as Shell
+}
 
 /** Projects by their ids and names, as the window lists them. */
 const projectsOf = (names: Record<string, string>, scratch: string[] = []) =>

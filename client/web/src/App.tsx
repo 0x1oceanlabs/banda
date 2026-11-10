@@ -18,6 +18,7 @@ import { device } from "./boot"
 import { Machines } from "./window/machines"
 import { ROUTING } from "./window/actions"
 import { Shell } from "./window/Shell"
+import { DIRECTORY } from "./directory"
 import { RoutingContext } from "./tiling/mount"
 import { AskToShare } from "./sharing/AskToShare"
 
@@ -34,16 +35,17 @@ export function App({ engine }: { engine: Engine }) {
   // A Project added here shows at once, as the engine answered it.
   const { listed, put } = useProjects(engine)
   // The names it shows each host by, as this device last saw them, are
-  // the device's to keep (ADR 0081, decision 1); this machine's own
-  // Projects are its engine's. What waits for a host is the device's too,
-  // and this window sends it (ADR 0105, Q6).
+  // the device's to keep (ADR 0081, decision 1), and so is which machine
+  // has each Project (ADR 0106, decision 1); this machine's own Projects
+  // are its engine's. What waits for a host is the device's too, and this
+  // window sends it (ADR 0105, Q6).
   const [hosts] = useState(
     () =>
       new KeptHosts(
         device.hosts,
         { seen: seenNamed, follow: followNamed },
         engine,
-        { waiting: onDevice(() => localStorage, window) }
+        { waiting: onDevice(() => localStorage, window), directory: DIRECTORY }
       )
   )
   useEffect(() => hosts.follow(), [hosts])

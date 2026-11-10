@@ -14,6 +14,7 @@ import { keepProblem, watchProblems } from "./problems/keep"
 import { type Broke, BrokeCard } from "./safe/Broke"
 import { OFFER_AFTER, starting } from "./safe/starts"
 import { device } from "./boot"
+import { DIRECTORY } from "./directory"
 
 const host = window.banda
 // The look the desktop reads (ADR 0007), else the system's light or dark.
@@ -51,11 +52,14 @@ if (host && engine) {
           // A Pane on another host reaches it from here too (ADR 0081),
           // for the window's life; one of this machine's, its engine.
           // What waits for a host is the main window's to send: this one
-          // queues it there, through the device (#1299).
+          // queues it there, through the device (#1299). It finds which
+          // machine has its Project where the main window keeps it (ADR
+          // 0106, decision 1).
           const names = { seen: seenNamed, follow: followNamed }
           const hosts = new KeptHosts(device.hosts, names, engine, {
             waiting: onDevice(() => localStorage, window),
             drains: false,
+            directory: DIRECTORY,
           })
           window.addEventListener("pagehide", hosts.follow())
           return (
