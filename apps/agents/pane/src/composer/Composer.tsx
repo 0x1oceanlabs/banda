@@ -23,8 +23,10 @@ import { RingMeter } from "@banda/ui/components/ring-meter"
 import { quoted } from "@banda/ui/lib/prompt"
 import { cn } from "@banda/ui/lib/utils"
 import { Spinner } from "@banda/ui/components/spinner"
+import { useNow } from "@banda/ui/hooks/use-now"
 import {
   ArrowUpIcon,
+  ClockIcon,
   CornerUpRightIcon,
   MessageSquareIcon,
   PlusIcon,
@@ -71,6 +73,8 @@ import { COMPOSER } from "../scopes"
  * text as the Agent reads them (ADR 0034, decision 9). On another
  * machine's Thread it names that machine, and while it cannot reach it,
  * Send waits and says why; what is written stays (ADR 0095, decision 7).
+ * In a started Thread, Send then reads "Send when back" instead, and the
+ * message waits for that machine (ADR 0105, Q2).
  */
 export function Composer({
   name,
@@ -79,6 +83,7 @@ export function Composer({
   placeholder,
   machine,
   held,
+  whenBack,
   plan,
   focused,
   busy,
@@ -116,6 +121,10 @@ export function Composer({
   /** Why Send waits, while the machine cannot be reached: Enter and the
    * button send nothing, and what is written stays. */
   held?: string
+  /** While the message would wait for the machine instead, Send's
+   * tooltip at a time: the button reads "Send when back", and it and Enter
+   * send it to wait. */
+  whenBack?: (now: number) => string
   /** Whether plan mode is on, where the Harness has one: Shift+Tab
    * switches it. */
   plan?: boolean
@@ -490,6 +499,8 @@ export function Composer({
             >
               <SquareIcon className="size-2.5 fill-current" />
             </Button>
+          ) : whenBack !== undefined ? (
+            <SendWhenBack title={whenBack} disabled={!ready} busy={busy} />
           ) : (
             <Button
               type="submit"
@@ -523,6 +534,34 @@ export function Composer({
         </p>
       )}
     </form>
+  )
+}
+
+/** Send while the message would wait for its machine (ADR 0105, Q2),
+ * its tooltip saying until when, drawn again each second so it says the
+ * time it would. Quiet with nothing to send, as Send is, it still takes
+ * the pointer, so its tooltip shows. */
+function SendWhenBack({
+  title,
+  disabled,
+  busy,
+}: {
+  title: (now: number) => string
+  disabled: boolean
+  busy: boolean
+}) {
+  const now = useNow(1_000)
+  return (
+    <Button
+      type="submit"
+      size="sm"
+      className="ml-1 gap-1.5 rounded-full pr-3 pl-2.5 text-xs font-medium hover:bg-primary/90 disabled:pointer-events-auto disabled:bg-foreground/10 disabled:text-muted-foreground disabled:opacity-100"
+      title={title(now)}
+      disabled={disabled}
+    >
+      {busy ? <Spinner /> : <ClockIcon />}
+      Send when back
+    </Button>
   )
 }
 

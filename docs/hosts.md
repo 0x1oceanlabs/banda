@@ -19,6 +19,22 @@ on its way as it goes says so too ("arc went away; Stop may have gone
 through."), and is not sent again once it is back. Words the Banda menu
 starts a new Thread on it with are refused the same way, and wait in
 that Thread's composer for you to send.
+
+A message to a started Thread waits for its machine (ADR 0105). While
+that machine is away, stopped or on another build, Send reads "Send when back", its tooltip says until when ("Sends once arc is
+back, until 14:42 ↵"), and Enter does the same. The message waits at the
+end of the Thread, dim, as "Waits for arc · until 14:42", with Edit and
+Cancel, and the pill counts it: "arc is away · 2 min · 1 waiting". It
+waits 10 minutes from when you pressed Send: "until 14:42", or a right
+click on the message, opens Keep for, which keeps it 10 min, 1 hour, 1
+day or 7 days from then. Once the machine is live again it goes once, by
+the ID it was given as it was queued, and nothing says so. Past its time
+it is not sent: its words and images go back into the draft, above
+anything new there, and a toast says so ("Not sent: arc was still away
+at 14:42."). One on its way as the machine goes again may have gone
+through ("arc went away; your message may have gone through."). For now
+the window keeps what waits in memory, so closing the window drops it.
+
 A machine whose link looks up but which answers nothing, as one asleep
 before ssh notices or an engine that hangs, is away too (ADR 0082,
 decision 11): the window pings its engine every 15 s, and two pings in a

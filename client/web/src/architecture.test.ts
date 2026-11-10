@@ -1890,10 +1890,12 @@ test("the core names no App", () => {
 const CORE_CONSTANTS = [
   "core/src/hosts.ts: FORGETTING",
   "core/src/hosts.ts: NONE",
+  "core/src/queue.ts: KEEPS",
   "core/src/react/here.ts: HereContext",
   "core/src/react/here.ts: NOWHERE",
   "core/src/react/hosts.ts: HostsContext",
   "core/src/react/hosts.ts: NOWHERE",
+  "core/src/react/waiting.ts: NONE",
 ]
 
 /** What `value` makes, past a cast: `new Map() as Kept` makes a Map. */
@@ -2597,13 +2599,15 @@ test("each of the device's own helpers still does what it is the device's for", 
  * each check of what they read. Today's counts, which only fall: the
  * Thread's checks go a few with each of its slices, New Thread's as the
  * directory names a Project's machine (1a″), and a notification's as its
- * actions go to the Thread's machine by the router (1a″). The title's
- * went with the router (1a).
+ * actions go to the Thread's machine by the router (1a″), and Send when
+ * back's as its queue is keyed by the Pane (#1324). The title's went with
+ * the router (1a).
  */
 const ASKING_WHERE: Record<string, number> = {
   "apps/agents/pane/src/ThreadPane.tsx": 5,
   "apps/agents/pane/src/composer/NewThread.tsx": 3,
   "apps/agents/pane/src/thread/Thread.tsx": 21,
+  "apps/agents/pane/src/thread/session.ts": 10,
   "platform/notifications/pane/src/system.ts": 3,
 }
 

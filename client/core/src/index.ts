@@ -59,6 +59,21 @@ export {
   type Route,
   routeAct,
 } from "./route"
+export {
+  type Back,
+  type BackListener,
+  inMemory,
+  KEEP,
+  KEEPS,
+  type NewWait,
+  type Queue,
+  type Sender,
+  type Wait,
+  Waiting,
+  type WaitingStorage,
+  waitsFor,
+  type Why,
+} from "./queue"
 export type { Args, Run } from "./run"
 export { type Readable, sameData, sameEach, Store } from "./store"
 export { clock } from "./time"

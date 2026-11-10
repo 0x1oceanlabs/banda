@@ -147,3 +147,55 @@ test("the Window fills the pill of a Pane by the host its args name, as the Wind
   )
   expect(fill({ thread: "t1" })).toBe("")
 })
+
+test("the pill counts every message this device has waiting for its machine, from any Thread", () => {
+  vi.useFakeTimers({ now: 12 * MINUTE })
+  const kept = new KeptHosts(
+    {
+      follow: () => undefined,
+      engine: () => Promise.reject(new Error("not here")),
+      start: () => undefined,
+    },
+    FORGETTING
+  )
+  const arc = shown(
+    { name: "arc", ssh: "arc", state: "away", why: "ssh ended" },
+    10 * MINUTE
+  )
+  const wait = (item: string, host = "arc") =>
+    kept.waiting.add({
+      call: {
+        method: "agents.send",
+        params: {
+          thread: item,
+          text: "hi",
+          images: [],
+          settings: null,
+          steer: false,
+        },
+        command: `${host}-${item}`,
+      },
+      host,
+      project: "r1" as ProjectId,
+      item,
+      text: "hi",
+      pane: { kind: "agents.thread", args: { thread: item, host } },
+      at: Date.now(),
+    })
+  const words = () =>
+    read(
+      renderToStaticMarkup(
+        <HostsContext value={kept}>
+          <MachinePill shown={arc} onStart={() => {}} />
+        </HostsContext>
+      )
+    )
+  expect(words()).toBe("arc is away · 2 min")
+  wait("t1")
+  expect(words()).toBe("arc is away · 2 min · 1 waiting")
+  wait("t2")
+  // Another machine's does not count here.
+  wait("t3", "mini")
+  expect(words()).toBe("arc is away · 2 min · 2 waiting")
+  kept.waiting.close()
+})

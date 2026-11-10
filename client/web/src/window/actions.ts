@@ -10,6 +10,7 @@ import type {
   ProjectSummary,
 } from "@banda/contract"
 import { type Act, type From, type Hosts, routeAct } from "@banda/core"
+import { useState } from "react"
 import { toast } from "@banda/ui/components/sonner"
 import { seenNamed } from "@banda/ui/hooks/use-status"
 import { updateProject } from "@banda/ui/lib/projects"
@@ -187,6 +188,7 @@ export function windowApiOf(shell: Shell): WindowApi {
     items: shell.items,
     run: shell.run,
     sessionOf: shell.sessionOf,
+    waiting: shell.waiting,
     sight: shell.sight,
     projects: shell.projects,
     look: shell.look,
@@ -194,6 +196,12 @@ export function windowApiOf(shell: Shell): WindowApi {
     attach: shell.attach,
     peek: shell.peek,
   }
+}
+
+/** What the modules are given of `shell`: the API alone, made once. */
+export function useWindowApi(shell: Shell): WindowApi {
+  const [api] = useState(() => windowApiOf(shell))
+  return api
 }
 
 const ARROWS: Record<Direction, string> = {

@@ -30,6 +30,7 @@ import type { HostState } from "./device"
 import { paneHost, type PaneState, withHost } from "./pane"
 import { clock, tickingClock } from "./time"
 import { openProjects, shownProjects } from "./projects"
+import { inMemory, Waiting } from "./queue"
 import { type Readable, sameData, sameEach, Store } from "./store"
 
 /** How the Window reaches the desktop's hosts: `device.hosts`. */
@@ -278,6 +279,11 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   /** This machine's engine, its own Projects' session (`sessionOf`). */
   readonly #here: Engine | undefined
 
+  /** The messages that wait for a host to be back (ADR 0105): each goes
+   * once the Window reaches that host again, as it is live and its engine
+   * open and answering. */
+  readonly waiting: Waiting
+
   /** `here` is this machine's engine; none outside a Window, where no
    * Project is this machine's to act on. */
   constructor(device: HostsDevice, names: Names, here?: Engine) {
@@ -285,6 +291,10 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     this.#names = names
     this.#here = here
     this.#shown.subscribe(() => this.#sayMachines())
+    this.waiting = new Waiting(inMemory(), {
+      named: (host) => namedIn(this.get(), host, this.seen).name,
+    })
+    this.waiting.subscribe(() => this.#sendWaiting())
   }
 
   readonly get = (): readonly Shown[] => this.#shown.get()
@@ -327,6 +337,19 @@ export class KeptHosts implements Readable<readonly Shown[]> {
       const told = hosts.find((host) => host.name === name)
       if (told?.state !== "live") engine.away(this.#unreachable(name))
       else if (was.get(name)?.state.state !== "live") engine.wake()
+    }
+    this.#sendWaiting()
+  }
+
+  /** Sends what waits for each host the Window reaches now: live, its
+   * engine open and answering. Its engine is made for it if need be. */
+  #sendWaiting(): void {
+    const hosts = new Set(this.waiting.get().map((wait) => wait.host))
+    for (const shown of this.get()) {
+      if (!hosts.has(shown.name) || !live(shown)) continue
+      const engine = this.engine(shown.name)
+      if (engine.status.state === "open" && !engine.stale)
+        this.waiting.send(shown.name, engine)
     }
   }
 
@@ -399,8 +422,10 @@ export class KeptHosts implements Readable<readonly Shown[]> {
       this.#engines.set(name, engine)
       this.#names.follow(engine, name, (named) => this.#named(name, named))
       engine.watch((status) => {
-        if (status.state === "open" && status.machine)
-          this.#scope(name, status.machine)
+        if (status.state !== "open") return
+        if (status.machine) this.#scope(name, status.machine)
+        // What waits for the host goes as its engine is open again.
+        this.#sendWaiting()
       })
       this.#hearPowers()
     }

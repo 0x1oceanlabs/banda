@@ -441,7 +441,12 @@ test("an address with a latency, as tests give, hears the engine that much later
 })
 
 /** A frame the window sent, as far as these tests read it. */
-type Sent = { type: string; method?: string; command?: string }
+type Sent = {
+  type: string
+  method?: string
+  command?: string
+  not_after?: number
+}
 
 /**
  * The WebSocket the window opens, which notes each frame it sends, on
@@ -929,6 +934,75 @@ test("an act on its way as the link to this machine's own engine breaks fails as
   expect(asked("git.init")).toHaveLength(1)
   expect(asked("git.act")).toHaveLength(1)
   expect(commit).toHaveLength(1)
+})
+
+test("a command kept until a time carries it as not_after in the host's time, by the offset its last pong said; past it the host refuses it expired, and one that ran answers as it did", async () => {
+  noting()
+  await serve()
+  client = new Engine(address)
+  await until(client, "open")
+  const project = await client.command("projects.create", { name: "Work" })
+  const page = (page: number) => ({
+    project: project.id,
+    kind: "notes.page",
+    args: { page },
+  })
+  // No pong heard yet: by this machine's clock.
+  const ran = newId()
+  const kept = Date.now() + 60_000
+  const opened = await client.commandAt(
+    "workspaces.open",
+    page(1),
+    undefined,
+    ran,
+    {
+      notAfter: kept,
+    }
+  )
+  expect(sentWith(ran)).toEqual([expect.objectContaining({ not_after: kept })])
+  // Past its time, unseen: refused expired, and that is its answer.
+  const late = newId()
+  for (let send = 0; send < 2; send++)
+    await expect(
+      client.commandAt("workspaces.open", page(2), undefined, late, {
+        notAfter: Date.now() - 1,
+      })
+    ).rejects.toMatchObject({ name: "Refused", refusal: { code: "expired" } })
+  // One that ran, sent again past its time: as it answered.
+  const again = await client.commandAt(
+    "workspaces.open",
+    page(1),
+    undefined,
+    ran,
+    {
+      notAfter: Date.now() - 1,
+    }
+  )
+  expect(again).toEqual(opened)
+  client.close()
+
+  // This machine's clock a minute behind the host's: the pong says so,
+  // and not_after goes a minute on.
+  const real = Date.now.bind(Date)
+  const behind = vi.spyOn(Date, "now").mockImplementation(() => real() - 60_000)
+  try {
+    client = new Engine(address, {
+      unreachable: arcAway,
+      ping: { every: 100, quiet: 1_000, within: 300 },
+    })
+    await until(client, "open")
+    await expect.poll(() => client!.offset).toBeDefined()
+    expect(Math.abs(client.offset! - 60_000)).toBeLessThan(1_000)
+    const ahead = newId()
+    const at = Date.now() + 60_000
+    await client.commandAt("workspaces.open", page(3), undefined, ahead, {
+      notAfter: at,
+    })
+    const [frame] = sentWith(ahead)
+    expect(Math.abs(frame!.not_after! - (at + 60_000))).toBeLessThan(1_000)
+  } finally {
+    behind.mockRestore()
+  }
 })
 
 /**

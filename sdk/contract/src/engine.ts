@@ -198,6 +198,16 @@ export type CommandOptions = {
    * decision 4): its fact then says so.
    */
   once?: boolean
+  /**
+   * The time past which it must not run, in ms since the epoch by this
+   * machine's clock, as for a message that waited for its machine (ADR
+   * 0105). It goes on the frame as `not_after`, in the host's time: plus
+   * how far the host's clock is ahead, as its last `pong` said (`offset`),
+   * or as it is while none was heard. The host refuses it `expired` after,
+   * unless it ran: then it answers as it did. An older host ignores it,
+   * so the caller drops it in time itself.
+   */
+  notAfter?: number
 }
 
 type Following = {
@@ -248,6 +258,11 @@ export const PING: Ping = { every: 15_000, quiet: 5_000, within: 3_000 }
 
 /** Pings in a row that heard nothing after them, and the engine is stale. */
 const MISSED = 2
+
+/** `at`, by this machine's clock, by the host's that is `offset` ms ahead;
+ * as it is while none was heard. */
+const hostTime = (at: number | undefined, offset: number | undefined) =>
+  at === undefined ? undefined : Math.round(at + (offset ?? 0))
 
 /**
  * A window's connection to the engine: JSON frames over one WebSocket.
@@ -428,6 +443,7 @@ export class Engine {
       project?: ProjectId
       command?: CommandId
       once?: boolean
+      notAfter?: number
       sent?: () => void
     }
   ): Promise<Result> {
@@ -453,6 +469,7 @@ export class Engine {
       method,
       project: options.project,
       command: options.command,
+      not_after: hostTime(options.notAfter, this.#offset),
       params: params as JsonValue,
     })
     options.sent?.()
@@ -496,7 +513,7 @@ export class Engine {
     params: Params<M>,
     project?: ProjectId,
     command: CommandId = newId(),
-    { once = false }: CommandOptions = {}
+    { once = false, notAfter }: CommandOptions = {}
   ): Promise<Answered<M>> {
     let went = false
     const sent = () => void (went = true)
@@ -506,6 +523,7 @@ export class Engine {
           project,
           command,
           once,
+          notAfter,
           sent,
         })
         return {

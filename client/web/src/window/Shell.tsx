@@ -140,7 +140,7 @@ import {
   startingHere,
   updating,
   type Shell as Parts,
-  windowApiOf,
+  useWindowApi,
 } from "./actions"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { ThreadMenus } from "../titles/ThreadMenu"
@@ -594,6 +594,7 @@ export function Shell({
     engine,
     hosts: useContext(HostsContext),
     sessionOf: engineOf,
+    waiting: useContext(HostsContext).waiting,
     writeSetting: device.settings.set,
     attach: (chips) => {
       const at = focused(drawnNow())
@@ -613,8 +614,7 @@ export function Shell({
   useWokeNote(stores, parts.run)
   // A new Problem of Banda's own tells too, silently (ADR 0039).
   useProblemNews(engine, notify, parts.run)
-  // What the modules are given of it: the API alone.
-  const [api] = useState(() => windowApiOf(parts))
+  const api = useWindowApi(parts)
   // Each module that runs starts once, with the window as it is when it
   // asks (ADR 0022): the browser opens a Pane for an Agent's tab.
   const running = known

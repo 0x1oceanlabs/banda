@@ -17,7 +17,9 @@
 //!    they commit, and answer, in the order sent. A client sends the next
 //!    before the last answers. Queues run beside each other, and a call
 //!    or a stream waits in none, nor does a command that runs on past one
-//!    write ([`Module::runs_on`](crate::Module::runs_on)).
+//!    write ([`Module::runs_on`](crate::Module::runs_on)). A command may
+//!    carry `not_after`: past it it is refused `expired`, but for one that
+//!    ran, which gets its answer (ADR 0105).
 //!
 //!    The decision's session is one connection here. A reconnect gets new
 //!    queues, while the old connection's still run what is in them. Order
@@ -101,6 +103,13 @@ pub enum ClientFrame {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         command: Option<CommandId>,
+        /// The time past which a command does not run, in ms since the
+        /// epoch by this machine's clock: one that waited for it is
+        /// refused `expired` after (ADR 0105). A resend of one that ran
+        /// gets its answer all the same.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional, type = "number")]
+        not_after: Option<i64>,
         #[serde(default)]
         params: Value,
     },
@@ -501,6 +510,7 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                 method,
                 project,
                 command,
+                not_after,
                 params,
             } => {
                 let queue = api.kernel.queue(&caller, &method, project);
@@ -509,7 +519,8 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                 let name = method.clone();
                 let caller = caller.clone();
                 let run = async move {
-                    let answer = kernel.answer(caller, &method, project, command, params);
+                    let answer =
+                        kernel.answer_until(caller, &method, project, command, not_after, params);
                     let _ = out.send(answered(id, answer.await)).await;
                 };
                 match queue {

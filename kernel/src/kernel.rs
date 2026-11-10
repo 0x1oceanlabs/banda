@@ -659,6 +659,17 @@ fn named_stream(mut named: watch::Receiver<Named>) -> Stream {
     hear
 }
 
+/// Whether a command may still run by `not_after`, by this machine's clock
+/// (ADR 0105): refused `expired` once past it.
+fn in_time(not_after: Option<i64>) -> Result<(), Refusal> {
+    match not_after {
+        Some(at) if crate::now_ms() > at => {
+            Err(Refusal::expired("Its time had passed, so it did not run."))
+        }
+        _ => Ok(()),
+    }
+}
+
 fn no_method(method: &str) -> Refusal {
     Refusal::invalid(format!("There is no method \"{method}\"."))
 }
@@ -769,10 +780,9 @@ impl Kernel {
     /// - A receipt is kept thirty days past its last write, as its command
     ///   began or was answered, and while its command runs, however long.
     ///   A resend comes within seven days of the first send, so each finds
-    ///   its receipt. Past them the same ID runs as a new command. Today
-    ///   those seven days are a convention of Banda's clients; the host
-    ///   will check them, refusing a command past its `not_after` (ADR
-    ///   0082, decisions 4 and 16), and nothing here checks it yet.
+    ///   its receipt. Past them the same ID runs as a new command. Those
+    ///   seven days are a convention of Banda's clients, and the most a
+    ///   message waits for this machine ([`Kernel::answer_until`]).
     ///
     /// A `call` keeps no receipt, whatever it changes, so `banda mcp`
     /// never sends one again ([`Tool::kind`](crate::Tool)). The kernel's own
@@ -784,6 +794,26 @@ impl Kernel {
         method: &str,
         project: Option<ProjectId>,
         command: Option<CommandId>,
+        params: Value,
+    ) -> Result<Answer, Refusal> {
+        self.answer_until(caller, method, project, command, None, params)
+            .await
+    }
+
+    /// Answers as [`Kernel::answer`] does a command that may run only
+    /// until `not_after`, in ms since the epoch by this machine's clock,
+    /// as one that waited for this machine is sent (ADR 0105). Its receipt
+    /// is looked up first, so a resend of one that ran gets its answer
+    /// however late. One not run yet is refused `expired` past that time,
+    /// before its module sees it, and that is its answer, so a resend gets
+    /// it too. The kernel's own commands keep no receipt, and go by none.
+    pub async fn answer_until(
+        &self,
+        caller: impl Into<Caller>,
+        method: &str,
+        project: Option<ProjectId>,
+        command: Option<CommandId>,
+        not_after: Option<i64>,
         params: Value,
     ) -> Result<Answer, Refusal> {
         let plain = |value| Answer { value, at: None };
@@ -837,8 +867,10 @@ impl Kernel {
             Begun::Answered(answer) => return answer,
         };
         // A refusal made before the handler runs is the command's answer
-        // too (ADR 0002, decision 2).
-        let answer = match access::decide(&participant, right, project.owner()) {
+        // too (ADR 0002, decision 2): one past its time, or not allowed.
+        let allowed =
+            in_time(not_after).and_then(|()| access::decide(&participant, right, project.owner()));
+        let answer = match allowed {
             Ok(()) => {
                 let call = Call::new(
                     participant,

@@ -11,6 +11,7 @@ import { useCallback, useState, useSyncExternalStore } from "react"
 import type { Image } from "@banda/contract/agents"
 import { type Kept, kept as keptIn } from "@banda/ui/lib/kept"
 import type { Comment } from "./comments"
+import { MOST_IMAGES } from "./images"
 
 const PREFIX = "banda.agents.draft."
 const heard = new Set<() => void>()
@@ -149,5 +150,29 @@ export function drafted(thread: string): boolean {
     read(thread).trim() !== "" ||
     (images.read()[thread]?.length ?? 0) > 0 ||
     (comments.read()[thread]?.length ?? 0) > 0
+  )
+}
+
+/** Puts a message that was not sent back into `thread`'s draft: its
+ * `text` above anything new there, after a blank line, and its `carried`
+ * images after those there, as many as fit; so nothing is lost and
+ * nothing goes by itself (ADR 0105, Q5). */
+export function putBack(
+  thread: string,
+  text: string,
+  carried: readonly Image[] = []
+): void {
+  if (text !== "") {
+    const now = read(thread)
+    keep(thread, now.trim() === "" ? text : `${text}\n\n${now}`)
+  }
+  if (carried.length === 0) return
+  const all = images.read()[thread] ?? NONE
+  images.put(
+    thread,
+    [
+      ...all,
+      ...carried.filter((one) => !all.some((k) => k.id === one.id)),
+    ].slice(0, MOST_IMAGES)
   )
 }
