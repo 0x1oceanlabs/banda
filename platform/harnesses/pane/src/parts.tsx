@@ -17,7 +17,7 @@ export function Segments({
       role="group"
       aria-label={label}
       className={cn(
-        "inline-flex shrink-0 gap-0.5 rounded-lg bg-muted/60 p-0.5",
+        "inline-flex shrink-0 gap-0.5 rounded-control bg-muted/60 p-0.5",
         className
       )}
     >
@@ -36,7 +36,7 @@ export function Segment({
       type="button"
       aria-pressed={pressed}
       className={cn(
-        "rounded-md px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground aria-pressed:bg-foreground/10 aria-pressed:text-foreground",
+        "rounded-control px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground aria-pressed:bg-foreground/10 aria-pressed:text-foreground",
         className
       )}
       {...props}

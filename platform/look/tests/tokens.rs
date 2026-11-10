@@ -7,7 +7,7 @@
 //! them stale, as it does for the types.
 
 use banda_look::{Look, Places, resolve};
-use banda_theme::tokens::{Group, Kind, SAID_ONLY, TOKENS, Token, token};
+use banda_theme::tokens::{Kind, RENAMED, SAID_ONLY, TOKENS, Token, token};
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::PathBuf;
@@ -83,12 +83,11 @@ fn generated() -> PathBuf {
         .join("look")
 }
 
-/// What the page sets before the first look comes: every token but the
-/// radii, which `globals.css` still works out (ADR 0100, step 3), and
-/// those only a theme that says them has, whose stand-in the page works
-/// out (step 4).
+/// What the page sets before the first look comes: every token but those
+/// only a theme that says them has, whose stand-in the page works out
+/// (ADR 0100, step 4).
 fn in_css(listed: &Token) -> bool {
-    listed.group != Group::Radius && !SAID_ONLY.contains(&listed.name)
+    !SAID_ONLY.contains(&listed.name)
 }
 
 const WRITTEN: &str = "Written by platform/look/tests/tokens.rs from the list in\n \
@@ -146,8 +145,19 @@ fn typescript(light: &BTreeMap<&str, &str>, dark: &BTreeMap<&str, &str>) -> Stri
     }
     ts.push_str(
         "} as const satisfies Readonly<\n  Record<string, { kind: TokenKind; group: TokenGroup }>\n>\n\n\
-         export type Token = keyof typeof TOKENS\n\n\
-         export const BANDA: Readonly<\n  Record<\"light\" | \"dark\", Readonly<Record<Token, string>>>\n> = {\n",
+         export type Token = keyof typeof TOKENS\n\n",
+    );
+    // The old names (ADR 0100, decision 10), for a client that hands the
+    // tokens on under them.
+    ts.push_str(
+        "/** Each renamed token's old name, and its name now. */\n\
+         export const RENAMED: Readonly<Record<string, Token>> = {\n",
+    );
+    for (old, now) in RENAMED {
+        writeln!(ts, "  {}: {},", quoted(old), quoted(now)).unwrap();
+    }
+    ts.push_str(
+        "}\n\nexport const BANDA: Readonly<\n  Record<\"light\" | \"dark\", Readonly<Record<Token, string>>>\n> = {\n",
     );
     for (mode, scheme) in [("light", light), ("dark", dark)] {
         writeln!(ts, "  {mode}: {{").unwrap();

@@ -394,7 +394,7 @@ export function Composer({
           inset. */}
       <div
         data-dropping={dropping || undefined}
-        className="flex flex-col rounded-bubble border bg-block transition-colors focus-within:border-foreground/15 data-dropping:border-primary data-dropping:bg-accent/45"
+        className="flex flex-col rounded-card border bg-block transition-colors focus-within:border-foreground/15 data-dropping:border-primary data-dropping:bg-accent/45"
       >
         {images.adding.length > 0 && (
           <div className="px-3.5 pt-3">
@@ -559,7 +559,7 @@ function CommentList({
             key={one.id}
             data-comment
             title={`${commentAt(one)}${one.comment ? `: ${one.comment}` : ""}`}
-            className="flex h-6 max-w-full min-w-0 items-center gap-1 rounded-md bg-raised pr-0.5 pl-1.5 text-xs"
+            className="flex h-6 max-w-full min-w-0 items-center gap-1 rounded-control bg-raised pr-0.5 pl-1.5 text-xs"
           >
             <MessageSquareIcon className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="shrink-0 font-mono text-[11px]">
@@ -591,12 +591,12 @@ function CommentList({
  * its hover the raised fill, which shows on the composer's block. For a
  * ghost `Button` of size `sm`. */
 export const FOOTER_CONTROL =
-  "h-7 gap-1.5 rounded-md px-2 text-xs font-normal text-muted-foreground hover:bg-raised hover:text-foreground aria-expanded:bg-raised aria-expanded:text-foreground dark:hover:bg-raised"
+  "h-7 gap-1.5 rounded-control px-2 text-xs font-normal text-muted-foreground hover:bg-raised hover:text-foreground aria-expanded:bg-raised aria-expanded:text-foreground dark:hover:bg-raised"
 
 /** {@link FOOTER_CONTROL} with only an icon, for a ghost `Button` of size
  * `icon-sm`. */
 export const FOOTER_ICON =
-  "rounded-md text-muted-foreground hover:bg-raised hover:text-foreground aria-expanded:bg-raised aria-expanded:text-foreground dark:hover:bg-raised [&_svg:not([class*='size-'])]:size-3.5"
+  "rounded-control text-muted-foreground hover:bg-raised hover:text-foreground aria-expanded:bg-raised aria-expanded:text-foreground dark:hover:bg-raised [&_svg:not([class*='size-'])]:size-3.5"
 
 /** A pasted text this long or longer is kept as a file, as in T3 Code. */
 const LONG_PASTE = 32 * 1024

@@ -113,7 +113,7 @@ export default function HexView({ file, read, mode }: PreviewProps) {
       key={`${kind}${offset}`}
       data-offset={offset}
       className={cn(
-        "rounded-[2px]",
+        "rounded-small",
         kind === "hex" ? "w-[2ch]" : "w-[1ch]",
         (text === undefined || text === "·") && "text-muted-foreground/40",
         marked === offset && "bg-primary/20 text-foreground"
@@ -206,7 +206,7 @@ export default function HexView({ file, read, mode }: PreviewProps) {
         className="flex-1 font-mono text-xs outline-none select-text"
       />
       {going && (
-        <div className="absolute top-12 right-4 z-20 w-64 max-w-[calc(100%-2rem)] rounded-block bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10">
+        <div className="absolute top-12 right-4 z-20 w-64 max-w-[calc(100%-2rem)] rounded-card bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10">
           <InputGroup className="h-9 border-transparent bg-transparent has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0 dark:bg-transparent">
             <InputGroupInput
               ref={field}

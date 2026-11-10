@@ -262,7 +262,7 @@ function Branches({
               >
                 <span className="min-w-0 flex-1 truncate">{ref.name}</span>
                 {tag && (
-                  <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] text-muted-foreground">
+                  <span className="shrink-0 rounded-small bg-muted px-1.5 text-[10px] text-muted-foreground">
                     {tag}
                   </span>
                 )}

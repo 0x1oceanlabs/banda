@@ -296,7 +296,7 @@ export function Choice({
       <div
         role="radiogroup"
         aria-label={label}
-        className="flex rounded-md border p-0.5"
+        className="flex rounded-control border p-0.5"
       >
         {options.map((option) => (
           <button
@@ -307,7 +307,7 @@ export function Choice({
             title={option.about}
             onClick={() => onPick(option.value)}
             className={cn(
-              "rounded px-2.5 py-0.5 text-xs text-muted-foreground",
+              "rounded-small px-2.5 py-0.5 text-xs text-muted-foreground",
               option.value === value && "bg-accent text-foreground"
             )}
           >
@@ -372,7 +372,7 @@ function Many({
               )
             }
             className={cn(
-              "rounded-md border px-2 py-0.5 text-xs text-muted-foreground",
+              "rounded-control border px-2 py-0.5 text-xs text-muted-foreground",
               on && "border-primary bg-accent text-foreground"
             )}
           >

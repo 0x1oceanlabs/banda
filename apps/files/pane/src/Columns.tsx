@@ -216,7 +216,7 @@ function Row({
       data-pulse={colour ? "" : undefined}
       style={pulseStyle(colour)}
       className={cn(
-        "flex h-6 shrink-0 cursor-default items-center gap-1.5 rounded-md px-1.5 text-xs",
+        "flex h-6 shrink-0 cursor-default items-center gap-1.5 rounded-control px-1.5 text-xs",
         picked
           ? "bg-foreground/12"
           : open

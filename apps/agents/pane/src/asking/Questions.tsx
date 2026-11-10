@@ -202,7 +202,7 @@ export function QuestionDrawer({
             {words}
           </p>
           {detail && (
-            <pre className="mt-2 max-h-32 overflow-auto rounded-md bg-raised px-3 py-2 font-mono text-code break-all whitespace-pre-wrap">
+            <pre className="mt-2 max-h-32 overflow-auto rounded-control bg-raised px-3 py-2 font-mono text-code break-all whitespace-pre-wrap">
               {detail}
             </pre>
           )}

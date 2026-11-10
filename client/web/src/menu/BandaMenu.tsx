@@ -630,7 +630,7 @@ function Menu({
         {path.map((branch) => (
           <span
             key={branch.id}
-            className="shrink-0 rounded-sm bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground"
+            className="shrink-0 rounded-small bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground"
           >
             {branchName(branch)}
           </span>
@@ -1019,7 +1019,7 @@ function TwoLines({
  * 13). It is no answer, so the keys pass it by. */
 function Isolated({ cloned }: { cloned: boolean }) {
   return (
-    <div className="mx-1.5 mb-1.5 flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground">
+    <div className="mx-1.5 mb-1.5 flex items-center gap-2.5 rounded-control px-2.5 py-1.5 text-sm text-muted-foreground">
       <TwoLines
         icon={BoxIcon}
         title={ISOLATED.title}

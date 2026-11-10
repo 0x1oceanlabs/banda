@@ -471,7 +471,7 @@ function Browser({
         <div
           // Beside the tabs it gives way to them; alone it fills the row.
           className={cn(
-            "@container mx-1 flex h-7 items-center gap-1 rounded-md pr-1 hover:bg-muted has-[input:focus]:bg-muted",
+            "@container mx-1 flex h-7 items-center gap-1 rounded-control pr-1 hover:bg-muted has-[input:focus]:bg-muted",
             left ? "min-w-32 flex-1" : "w-56 min-w-24 shrink-[4]"
           )}
         >
@@ -653,7 +653,7 @@ function Driving({
  * across its foot. */
 const PLACES = {
   foot: "bottom-3 left-1/2 max-w-[calc(100%-24px)] -translate-x-1/2 gap-2 rounded-full py-1 pr-1 whitespace-nowrap",
-  card: "inset-x-3 bottom-3 flex-wrap gap-2.5 rounded-lg py-2 pr-2 pl-3",
+  card: "inset-x-3 bottom-3 flex-wrap gap-2.5 rounded-control py-2 pr-2 pl-3",
 }
 
 /** Banda's glass over a page, which says what a Thread does there or
@@ -852,7 +852,7 @@ function Cursor({ at, title }: { at: Point; title: string }) {
         strokeWidth={1.6}
         className="-mt-[3px] -ml-[3px] size-[18px] drop-shadow-[0_1px_2px_rgb(0_0_0_/_0.3)]"
       />
-      <span className="mt-3 -ml-1 max-w-40 truncate rounded-md bg-primary px-1.5 py-px text-[10.5px] font-semibold text-primary-foreground">
+      <span className="mt-3 -ml-1 max-w-40 truncate rounded-control bg-primary px-1.5 py-px text-[10.5px] font-semibold text-primary-foreground">
         {title}
       </span>
     </div>
@@ -1012,7 +1012,7 @@ function TabItem({
         if (event.key === "Enter" || event.key === " ") onShow()
       }}
       className={cn(
-        "group/tab flex min-w-0 cursor-default items-center gap-2 overflow-hidden rounded-md px-2 text-sm text-muted-foreground select-none hover:bg-muted",
+        "group/tab flex min-w-0 cursor-default items-center gap-2 overflow-hidden rounded-control px-2 text-sm text-muted-foreground select-none hover:bg-muted",
         shown && "bg-muted text-foreground",
         iconOnly && "justify-center px-0",
         className
@@ -1031,7 +1031,7 @@ function TabItem({
             onClose()
           }}
           className={cn(
-            "-mr-1 flex size-5 shrink-0 items-center justify-center rounded opacity-0 group-hover/tab:opacity-100 hover:bg-foreground/10 [&_svg]:size-3.5",
+            "-mr-1 flex size-5 shrink-0 items-center justify-center rounded-small opacity-0 group-hover/tab:opacity-100 hover:bg-foreground/10 [&_svg]:size-3.5",
             shown && "opacity-100"
           )}
         >
@@ -1072,7 +1072,7 @@ function Driven({
         event.stopPropagation()
         stopIn(contents, thread)
       }}
-      className="group/stop flex size-5 shrink-0 items-center justify-center rounded text-primary hover:bg-foreground/10 [&_svg]:size-3.5"
+      className="group/stop flex size-5 shrink-0 items-center justify-center rounded-small text-primary hover:bg-foreground/10 [&_svg]:size-3.5"
     >
       <BotIcon className="group-hover/stop:hidden" />
       <SquareIcon className="hidden fill-current group-hover/stop:block" />

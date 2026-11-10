@@ -25,7 +25,9 @@ pub struct Settings {
     #[schemars(with = "Option<ThemeChoice>")]
     pub theme: Option<Spanned<ThemeChoice>>,
     pub mode: Option<ModeChoice>,
-    /// shadcn's `--radius`, in pixels: every corner is a step of it.
+    /// The old radius, which every corner was a step of: it reads as
+    /// `[shape] roundness` of it over 7, its old default, so 7 is the
+    /// theme's own corners and 0 squares them all.
     #[schemars(range(min = 0))]
     pub radius: Option<f64>,
     /// Whether to take Hyprland's rounding, border and gaps, glass or not.
@@ -41,6 +43,9 @@ pub struct Settings {
     #[serde(default)]
     #[schemars(with = "BTreeMap<String, String>")]
     pub tokens: BTreeMap<String, Spanned<String>>,
+    /// The corners (ADR 0080, decision 6).
+    #[serde(default)]
+    pub shape: Shape,
     #[serde(default)]
     pub gaps: Gaps,
     /// The desk the tiles float over (ADR 0023).
@@ -90,6 +95,27 @@ pub enum ModeChoice {
     Dark,
 }
 
+/// The corners, five levels, each inside the one before (ADR 0080,
+/// decision 6): a theme says two, the window's and a control's, and the
+/// rest follow. A tile's is the window's less the outer gap, a card's the
+/// tile's less its padding, a chip's 0.6 of a control's.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct Shape {
+    /// The window's corner, and the desk's, in pixels.
+    #[schemars(range(min = 0))]
+    pub window: Option<f64>,
+    /// A button's, an input's and a select's corner, in pixels.
+    #[schemars(range(min = 0))]
+    pub control: Option<f64>,
+    /// Controls and chips as pills, as Tahoe's are.
+    pub pill: Option<bool>,
+    /// Times every corner: 1 as the theme has them, 0 square, 1.2 a
+    /// little rounder.
+    #[schemars(range(min = 0))]
+    pub roundness: Option<f64>,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Gaps {
@@ -102,6 +128,8 @@ pub struct Gaps {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Tile {
+    /// The tile's corner, when it is not the window's less the outer gap:
+    /// pixels, or a step of a control's ("sm" … "4xl").
     pub radius: Option<Corner>,
     #[schemars(range(min = 0))]
     pub border: Option<f64>,
@@ -345,7 +373,7 @@ pub enum Workspaces {
 #[derive(Clone, Debug, Default, Deserialize)]
 pub(crate) struct ThemeFile {
     #[serde(default)]
-    shape: Shape,
+    shape: ThemeShape,
     #[serde(default)]
     font: FontSettings,
     /// `look.toml`'s `[desk]`.
@@ -353,14 +381,19 @@ pub(crate) struct ThemeFile {
     glass: Desk,
 }
 
-/// A theme's `[shape]`: `look.toml`'s sizes, and where else its shape
-/// comes from.
+/// A theme's `[shape]`: `look.toml`'s sizes, its `[shape]`'s corners
+/// among them, and where else its shape comes from.
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
-struct Shape {
+struct ThemeShape {
     /// `"hyprland"`: Hyprland's rounding, border and gaps, under it (ADR
     /// 0080, decision 9), as `hyprland = true` in `look.toml`.
     from: Option<ShapeFrom>,
+    window: Option<f64>,
+    control: Option<f64>,
+    pill: Option<bool>,
+    roundness: Option<f64>,
+    /// The old radius, as `look.toml`'s.
     radius: Option<f64>,
     #[serde(default)]
     gaps: Gaps,
@@ -391,6 +424,12 @@ impl ThemeFile {
         let shape = self.shape;
         Settings {
             radius: shape.radius,
+            shape: Shape {
+                window: shape.window,
+                control: shape.control,
+                pill: shape.pill,
+                roundness: shape.roundness,
+            },
             hyprland: shape.from.map(|ShapeFrom::Hyprland| true),
             gaps: shape.gaps,
             tile: shape.tile,
@@ -419,7 +458,8 @@ pub enum Corner {
     Pixels(f64),
 }
 
-/// shadcn/ui's ladder: each step is `--radius` times its factor.
+/// shadcn/ui's old ladder: each step is a control's corner times its
+/// factor, as `[tile] radius` may still say it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Step {
     Sm,
@@ -510,6 +550,14 @@ impl TryFrom<toml::Value> for Corner {
 impl Settings {
     /// `self` laid over `under`: what `self` says wins, key by key.
     pub fn over(self, under: Settings) -> Settings {
+        // A layer's old radius is its roundness, over the layers under it
+        // whichever name they say.
+        let roundness = self
+            .shape
+            .roundness
+            .or(self.old_roundness())
+            .or(under.shape.roundness)
+            .or(under.old_roundness());
         let mut colors = under.colors;
         colors.extend(self.colors);
         let mut tokens = under.tokens;
@@ -518,6 +566,12 @@ impl Settings {
             theme: self.theme.or(under.theme),
             mode: self.mode.or(under.mode),
             radius: self.radius.or(under.radius),
+            shape: Shape {
+                window: self.shape.window.or(under.shape.window),
+                control: self.shape.control.or(under.shape.control),
+                pill: self.shape.pill.or(under.shape.pill),
+                roundness,
+            },
             hyprland: self.hyprland.or(under.hyprland),
             colors,
             tokens,
@@ -568,18 +622,28 @@ impl Settings {
         }
     }
 
-    /// The layer Hyprland's windows make (ADR 0007, decision 8). The tile
-    /// is the `xl` step, so the radius is the rounding divided by its
-    /// factor, and every control keeps its place on the ladder.
+    /// The roundness the old `radius` says: of it over its default, 7.
+    fn old_roundness(&self) -> Option<f64> {
+        self.radius.map(|radius| radius / 7.0)
+    }
+
+    /// The layer Hyprland's windows make (ADR 0007, decision 8): its
+    /// rounding is the window's corner (ADR 0100, decision 11), and a
+    /// control's is a third of it, as Banda's own are of its window's, so
+    /// a square Hyprland squares the controls too.
     pub fn of_hyprland(windows: Windows) -> Settings {
         Settings {
-            radius: Some(windows.rounding / Step::Xl.factor()),
+            shape: Shape {
+                window: Some(windows.rounding),
+                control: Some(windows.rounding / 3.0),
+                ..Shape::default()
+            },
             gaps: Gaps {
                 inner: Some(windows.gaps),
                 outer: Some(windows.gaps),
             },
             tile: Tile {
-                radius: Some(Corner::Step(Step::Xl)),
+                radius: None,
                 border: Some(windows.border),
                 dim_inactive: windows.dim,
                 opacity: None,
@@ -599,9 +663,14 @@ impl Settings {
         Settings {
             theme: None,
             mode: Some(ModeChoice::System),
-            // The tile is the xl step: 7 makes it about 10 pixels round, as a Mac's
-            // windows are (ADR 0075, decision 1).
-            radius: Some(7.0),
+            radius: None,
+            // Banda's own, as its theme says them (ADR 0100, decision 11).
+            shape: Shape {
+                window: Some(30.0),
+                control: Some(10.0),
+                pill: Some(false),
+                roundness: Some(1.0),
+            },
             hyprland: Some(false),
             colors: BTreeMap::new(),
             tokens: BTreeMap::new(),
@@ -622,7 +691,7 @@ impl Settings {
                 sidebar_shadow: Some(0.45),
             },
             tile: Tile {
-                radius: Some(Corner::Step(Step::Xl)),
+                radius: None,
                 border: Some(1.0),
                 dim_inactive: Some(0.0),
                 opacity: Some(1.0),
@@ -665,6 +734,9 @@ impl Settings {
     pub fn negative_sizes(&self) -> Vec<&'static str> {
         [
             ("radius", self.radius),
+            ("shape.window", self.shape.window),
+            ("shape.control", self.shape.control),
+            ("shape.roundness", self.shape.roundness),
             ("gaps.inner", self.gaps.inner),
             ("gaps.outer", self.gaps.outer),
             ("tile.border", self.tile.border),
@@ -707,14 +779,24 @@ mod tests {
         let mine: Settings = toml::from_str("radius = 6\n[gaps]\ninner = 9\n").unwrap();
         let theirs: Settings = toml::from_str("[gaps]\ninner = 2\nouter = 3\n").unwrap();
         let look = mine.over(theirs.over(Settings::defaults(Material::Banda)));
-        assert_eq!(look.radius, Some(6.0));
+        // The old radius scales Banda's own corners, as it scaled its own.
+        assert_eq!(look.shape.roundness, Some(6.0 / 7.0));
+        assert_eq!(look.shape.window, Some(30.0));
         assert_eq!(look.gaps.inner, Some(9.0));
         assert_eq!(look.gaps.outer, Some(3.0));
         assert_eq!(look.tile.border, Some(1.0));
     }
 
     #[test]
-    fn rounding_twelve_makes_tiles_of_twelve() {
+    fn an_old_radius_is_the_roundness_of_the_layer_that_says_it() {
+        let theme: Settings = toml::from_str("[shape]\nroundness = 2\n").unwrap();
+        let mine: Settings = toml::from_str("radius = 0\n").unwrap();
+        assert_eq!(mine.clone().over(theme.clone()).shape.roundness, Some(0.0));
+        assert_eq!(theme.over(mine).shape.roundness, Some(2.0));
+    }
+
+    #[test]
+    fn rounding_twelve_is_the_windows_corner_and_a_third_of_it_a_controls() {
         let layer = Settings::of_hyprland(Windows {
             rounding: 12.0,
             border: 2.0,
@@ -722,8 +804,9 @@ mod tests {
             dim: Some(0.3),
             animations: false,
         });
-        let radius = layer.radius.unwrap();
-        assert!((radius * Step::Xl.factor() - 12.0).abs() < 1e-9);
+        assert_eq!(layer.shape.window, Some(12.0));
+        assert_eq!(layer.shape.control, Some(4.0));
+        assert_eq!(layer.tile.radius, None);
         assert_eq!(layer.gaps.inner, Some(5.0));
         assert_eq!(layer.tile.border, Some(2.0));
         assert_eq!(layer.tile.dim_inactive, Some(0.3));

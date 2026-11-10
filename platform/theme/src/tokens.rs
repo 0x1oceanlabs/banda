@@ -60,7 +60,8 @@ pub enum Group {
     Terminal,
     /// The gaps and the bar.
     Layout,
-    /// The corners: five levels in ADR 0100's step 3.
+    /// The corners: five levels, each inside the one before (ADR 0080,
+    /// decision 6).
     Radius,
     /// The type.
     Font,
@@ -172,7 +173,14 @@ pub const TOKENS: &[Token] = list! {
     ];
     // Between tiles, and between the tiles and the window's edge; the bar.
     Layout Length ["gap-inner", "gap-outer", "bar-height"];
-    Radius Length ["radius", "tile-radius"];
+    // The five corners (ADR 0080, decision 6): the window and the desk; a
+    // Pane and the sidebar's panel, the window's less the outer gap; a
+    // card, a Thread's block, a menu, the tile's less its padding; a
+    // button, an input, a select; a chip, a checkbox, a badge.
+    Radius Length [
+        "window-radius", "tile-radius", "card-radius", "control-radius",
+        "small-radius",
+    ];
     // `[font]`: the two families, and the root's size that makes the
     // usual text (`text-sm`) the size said. Everything in rem grows with it.
     Font Font ["font-family-sans", "font-family-mono"];
@@ -181,8 +189,12 @@ pub const TOKENS: &[Token] = list! {
 
 /// Tokens renamed: each old name, and the token it is now. A theme that
 /// says an old name still sets the token, and `check` names the new one
-/// (ADR 0100, decision 10). None is renamed yet.
-pub const RENAMED: &[(&str, &str)] = &[];
+/// (ADR 0100, decision 10).
+pub const RENAMED: &[(&str, &str)] = &[
+    // shadcn's `--radius`, which every corner was a step of: the
+    // control's now (ADR 0080, decision 6).
+    ("radius", "control-radius"),
+];
 
 /// Tokens only a theme that says them has. The page works out what stands
 /// in for `desk-solid` (`--desk` in `globals.css`) until the desk is a

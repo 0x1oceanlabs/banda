@@ -28,8 +28,9 @@ Every key, with its default:
   background = { light = "#f7fbfb", dark = "#0e1a1c" }
   [tokens]                   # a colour token: a palette name, a token's name or a colour
   card = { dark = "#101418" }
-  [shape]                    # look.toml's radius, gaps, tile, focus and bar.height
-  radius = 4
+  [shape]                    # look.toml's [shape], gaps, tile, focus and bar.height
+  window = 12                # the window's corner; a tile's and a card's follow
+  control = 4                # a button's; a chip's is 0.6 of it
   [font]                     # as look.toml's [font]
   [glass]                    # as look.toml's [desk]
   ```
@@ -44,6 +45,10 @@ Every key, with its default:
   by name; a value is a colour as it is: hex, `oklch(…)`, `rgb(…)` and
   the like, or a name. `var()`, `color-mix()` and other expressions are
   refused, as is a name that is no token.
+- The corners are the theme's (ADR 0100, decision 11): `banda` is round,
+  window 30 and control 10; `omarchy` takes Hyprland's rounding as the
+  window's and a third of it as a control's, so a square Hyprland makes
+  Banda square; `macos` a tile about 10 and a control 7 for now.
 - `banda look themes` lists every theme there is, one JSON line each; a
   theme of light and dark as `<name>-light` and `<name>-dark`.
 - To make one, write `~/.config/banda/themes/<name>/theme.toml` and set
@@ -55,7 +60,8 @@ Every key, with its default:
 ## Asked for, and what to set
 
 - "Make it dark": `mode = "dark"`.
-- "Square corners": `radius = 0`.
+- "Square corners": `[shape]` `roundness = 0`; "rounder": `roundness = 1.3`.
+  Banda's own round look on any system: `theme = "banda"`.
 - "Orange focus": `[colors]` `accent = "orange"`, or a hex.
 - "Columns too narrow in a small window": `[columns]` `min = 36`.
 - "One Pane at a time, the others' names over it": `[columns]` `display = "deck"` (a Deck, `Alt+T`).

@@ -10,7 +10,7 @@ function Suggestions({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="suggestions"
       className={cn(
-        "z-50 flex max-h-72 flex-col overflow-y-auto rounded-block bg-popover p-1 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10",
+        "z-50 flex max-h-72 flex-col overflow-y-auto rounded-card bg-popover p-1 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10",
         className
       )}
       {...props}
@@ -45,7 +45,7 @@ function Suggestion({
       aria-selected={selected ?? false}
       data-slot="suggestion"
       className={cn(
-        "flex min-w-0 cursor-default items-center gap-2 rounded-md px-2.5 py-1.5 outline-none select-none hover:bg-accent/60 aria-selected:bg-accent aria-selected:text-accent-foreground",
+        "flex min-w-0 cursor-default items-center gap-2 rounded-control px-2.5 py-1.5 outline-none select-none hover:bg-accent/60 aria-selected:bg-accent aria-selected:text-accent-foreground",
         className
       )}
       onMouseDown={(event) => {

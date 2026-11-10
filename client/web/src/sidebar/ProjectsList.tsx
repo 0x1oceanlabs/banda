@@ -51,7 +51,7 @@ export function ProjectsList({
                     : project.folder
                 }
                 className={cn(
-                  "flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-transparent px-2 py-1 text-left text-sm outline-none hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50",
+                  "flex min-w-0 flex-1 items-center gap-2 rounded-control border border-transparent px-2 py-1 text-left text-sm outline-none hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50",
                   only === project.id && "border-border bg-tile shadow-xs"
                 )}
                 onClick={() =>

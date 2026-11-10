@@ -973,7 +973,7 @@ function TestFound({
     <div
       role="status"
       className={cn(
-        "mx-2.5 mb-2 flex items-start gap-3 rounded-lg bg-muted/50 px-3 py-2.5 text-sm",
+        "mx-2.5 mb-2 flex items-start gap-3 rounded-control bg-muted/50 px-3 py-2.5 text-sm",
         !words.found && "text-muted-foreground"
       )}
     >
@@ -1141,7 +1141,7 @@ function AddMachine({
                 connect(chip)
               }}
               className={cn(
-                "rounded-md border px-2 py-0.5 font-mono text-xs text-foreground hover:bg-accent disabled:opacity-50",
+                "rounded-control border px-2 py-0.5 font-mono text-xs text-foreground hover:bg-accent disabled:opacity-50",
                 address === chip && "border-ring"
               )}
             >

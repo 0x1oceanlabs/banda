@@ -86,7 +86,7 @@ function LocalMedia({ path, alt }: { path: string; alt: string }) {
         controls
         preload="metadata"
         onError={unavailable}
-        className="my-2 max-h-96 max-w-full rounded-md"
+        className="my-2 max-h-96 max-w-full rounded-control"
       />
     )
   if (kind === "audio")
@@ -107,14 +107,14 @@ function LocalMedia({ path, alt }: { path: string; alt: string }) {
     <ImagePreview name={name} url={url} alt={alt}>
       <DialogTrigger
         aria-label={`Open ${name}`}
-        className="my-2 block max-w-full cursor-zoom-in rounded-md focus-visible:ring-2 focus-visible:ring-ring"
+        className="my-2 block max-w-full cursor-zoom-in rounded-control focus-visible:ring-2 focus-visible:ring-ring"
       >
         <img
           src={url}
           alt={alt}
           onError={unavailable}
           loading="lazy"
-          className="max-h-96 max-w-full rounded-md object-contain"
+          className="max-h-96 max-w-full rounded-control object-contain"
         />
       </DialogTrigger>
     </ImagePreview>

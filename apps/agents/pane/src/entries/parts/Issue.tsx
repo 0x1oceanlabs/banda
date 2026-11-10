@@ -106,7 +106,7 @@ function Draft({ engine, project, item, issue }: Props) {
             {comment_on === undefined && (
               <span className="font-medium">{title}</span>
             )}
-            <pre className="max-h-40 overflow-auto rounded-md bg-raised px-3 py-2 font-mono text-code whitespace-pre-wrap text-muted-foreground">
+            <pre className="max-h-40 overflow-auto rounded-control bg-raised px-3 py-2 font-mono text-code whitespace-pre-wrap text-muted-foreground">
               {body}
             </pre>
           </div>

@@ -154,10 +154,15 @@ fn without_omarchy_banda_shows_its_own_light_and_dark_as_today() {
     let look = machine.look();
     assert_eq!(look.mode, Shown::System);
     assert!(look.problems.is_empty(), "{:?}", look.problems);
-    // Banda's shape (ADR 0075, decision 1): tiles 10 round, hairlines,
-    // gaps 8, and the focused tile lifts off the desk.
-    assert_eq!(look.vars["--radius"], "7px");
-    assert_eq!(look.vars["--tile-radius"], "9.8px");
+    // Banda's shape (ADR 0100, decisions 3 and 11): the window 30, so a
+    // tile 22 in the gap of 8 and a card 14 in the tile's padding, a
+    // control 10 and a chip 6; hairlines, gaps 8, and the focused tile
+    // lifts off the desk.
+    assert_eq!(look.vars["--window-radius"], "30px");
+    assert_eq!(look.vars["--tile-radius"], "22px");
+    assert_eq!(look.vars["--card-radius"], "14px");
+    assert_eq!(look.vars["--control-radius"], "10px");
+    assert_eq!(look.vars["--small-radius"], "6px");
     assert_eq!(look.vars["--tile-border"], "1px");
     assert_eq!(look.vars["--gap-inner"], "8px");
     assert_eq!(look.vars["--bar-height"], "36px");
@@ -200,11 +205,16 @@ fn with_omarchy_banda_takes_its_current_theme_and_mode() {
 }
 
 #[test]
-fn under_hyprland_the_tiles_look_like_its_windows() {
+fn under_hyprland_its_rounding_is_the_windows_corner() {
+    // Way A (ADR 0100, decision 11): Banda's window is as round as
+    // Hyprland's, the rest inside it, and a control a third of it.
     let machine = Machine::new(true);
     let look = machine.under_hyprland();
-    assert_eq!(look.vars["--tile-radius"], "12px");
-    assert_eq!(look.vars["--radius"], "8.571px");
+    assert_eq!(look.vars["--window-radius"], "12px");
+    assert_eq!(look.vars["--tile-radius"], "7px");
+    assert_eq!(look.vars["--card-radius"], "0px");
+    assert_eq!(look.vars["--control-radius"], "4px");
+    assert_eq!(look.vars["--small-radius"], "2.4px");
     assert_eq!(look.vars["--tile-border"], "2px");
     assert_eq!(look.vars["--gap-inner"], "5px");
     assert_eq!(look.vars["--gap-outer"], "5px");
@@ -396,11 +406,12 @@ fn look_toml_wins_key_by_key_and_can_turn_hyprland_off() {
     let look = machine.under_hyprland();
     assert_eq!(look.vars["--gap-inner"], "10px");
     assert_eq!(look.vars["--gap-outer"], "5px");
-    assert_eq!(look.vars["--tile-radius"], "8.571px");
+    // A step of the control's, as the old ladder had it.
+    assert_eq!(look.vars["--tile-radius"], "4px");
 
     machine.look_toml("hyprland = false\n");
     let look = machine.under_hyprland();
-    assert_eq!(look.vars["--tile-radius"], "9.8px");
+    assert_eq!(look.vars["--tile-radius"], "22px");
     assert!(!look.sources.iter().any(|s| s.layer == "hyprland"));
 }
 
@@ -546,7 +557,10 @@ fn a_theme_of_the_persons_brings_its_own_sizes() {
     );
     machine.look_toml("theme = \"square\"\n");
     let look = machine.look();
-    assert_eq!(look.vars["--tile-radius"], "0px");
+    // The old radius is the roundness of it over 7: 0 squares them all.
+    for level in ["window", "tile", "card", "control", "small"] {
+        assert_eq!(look.vars[&format!("--{level}-radius")], "0px", "{level}");
+    }
     assert_eq!(look.sources[1].origin, Some(Origin::Yours));
 }
 
@@ -913,6 +927,10 @@ fn a_mac_starts_on_the_macos_theme_with_its_shape() {
     assert!(look.vars["--font-family-sans"].starts_with("-apple-system"));
     assert_eq!(look.vars["--bar-height"], "38px");
     assert_eq!(look.vars["--gap-inner"], "8px");
+    // Banda's corners on the Mac until Tahoe's are measured (ADR 0100,
+    // step 5): a tile about 10, a control 7.
+    assert_eq!(look.vars["--tile-radius"], "10px");
+    assert_eq!(look.vars["--control-radius"], "7px");
     // The accent is the system's, which the window writes for the look
     // (ADR 0075, decision 6), else Apple's blue; [colors] accent still
     // wins.
@@ -957,7 +975,8 @@ accent = "#2a9d8f"
 background = { light = "#f7fbfb", dark = "#0e1a1c" }
 
 [shape]
-radius = 4
+window = 20
+control = 4
 
 [font]
 sans = "Inter"
@@ -982,11 +1001,14 @@ card = { dark = "#101010" }
     assert_eq!(color(&look, true, "--focus"), "#2a9d8f");
     assert_eq!(color(&look, true, "--card"), "#101010");
     assert_ne!(color(&look, false, "--card"), "#101010");
-    assert_eq!(look.vars["--radius"], "4px");
+    assert_eq!(look.vars["--window-radius"], "20px");
+    assert_eq!(look.vars["--tile-radius"], "12px");
+    assert_eq!(look.vars["--card-radius"], "4px");
+    assert_eq!(look.vars["--control-radius"], "4px");
     assert_eq!(look.vars["--desk-blur"], "30px");
     assert_eq!(look.vars["--font-family-sans"], "\"Inter\", sans-serif");
     let keys = &look.settings["look.toml"];
-    assert_eq!(keys["radius"].from.layer, "theme");
+    assert_eq!(keys["shape.control"].from.layer, "theme");
     let listed: Vec<_> = (machine.places.themes().into_iter())
         .filter(|theme| theme.origin == Origin::Yours)
         .map(|theme| theme.name)
@@ -1046,7 +1068,7 @@ fn a_theme_extends_another_and_so_on() {
     theme_toml(
         &machine,
         "warm",
-        "extends = \"banda\"\n[colors]\naccent = \"#e07a3f\"\n[shape]\nradius = 3\n[tokens]\nattention = \"#ff0000\"\n",
+        "extends = \"banda\"\n[colors]\naccent = \"#e07a3f\"\n[shape]\ncontrol = 3\n[tokens]\nattention = \"#ff0000\"\n",
     );
     machine.look_toml("theme = \"dusk\"\n");
     let look = machine.look();
@@ -1059,7 +1081,7 @@ fn a_theme_extends_another_and_so_on() {
     assert_eq!(color(&look, false, "--attention"), "#ff0000");
     assert_eq!(color(&look, false, "--primary"), "#18181b");
     assert_eq!(color(&look, true, "--card"), "#1f1f23");
-    assert_eq!(look.vars["--radius"], "3px");
+    assert_eq!(look.vars["--control-radius"], "3px");
     let names: Vec<_> = look.sources.iter().filter_map(|s| s.name.clone()).collect();
     assert_eq!(names, ["dusk-light", "dusk-dark"]);
 }

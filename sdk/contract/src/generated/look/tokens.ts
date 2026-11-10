@@ -97,8 +97,11 @@ export const TOKENS = {
   "gap-inner": { kind: "length", group: "layout" },
   "gap-outer": { kind: "length", group: "layout" },
   "bar-height": { kind: "length", group: "layout" },
-  "radius": { kind: "length", group: "radius" },
+  "window-radius": { kind: "length", group: "radius" },
   "tile-radius": { kind: "length", group: "radius" },
+  "card-radius": { kind: "length", group: "radius" },
+  "control-radius": { kind: "length", group: "radius" },
+  "small-radius": { kind: "length", group: "radius" },
   "font-family-sans": { kind: "font", group: "font" },
   "font-family-mono": { kind: "font", group: "font" },
   "text-root": { kind: "length", group: "font" },
@@ -107,6 +110,11 @@ export const TOKENS = {
 >
 
 export type Token = keyof typeof TOKENS
+
+/** Each renamed token's old name, and its name now. */
+export const RENAMED: Readonly<Record<string, Token>> = {
+  "radius": "control-radius",
+}
 
 export const BANDA: Readonly<
   Record<"light" | "dark", Readonly<Record<Token, string>>>
@@ -198,8 +206,11 @@ export const BANDA: Readonly<
     "gap-inner": "8px",
     "gap-outer": "8px",
     "bar-height": "36px",
-    "radius": "7px",
-    "tile-radius": "9.8px",
+    "window-radius": "30px",
+    "tile-radius": "22px",
+    "card-radius": "14px",
+    "control-radius": "10px",
+    "small-radius": "6px",
     "font-family-sans": "\"Inter Variable\", sans-serif",
     "font-family-mono": "\"JetBrains Mono Variable\", monospace",
     "text-root": "16px",
@@ -291,8 +302,11 @@ export const BANDA: Readonly<
     "gap-inner": "8px",
     "gap-outer": "8px",
     "bar-height": "36px",
-    "radius": "7px",
-    "tile-radius": "9.8px",
+    "window-radius": "30px",
+    "tile-radius": "22px",
+    "card-radius": "14px",
+    "control-radius": "10px",
+    "small-radius": "6px",
     "font-family-sans": "\"Inter Variable\", sans-serif",
     "font-family-mono": "\"JetBrains Mono Variable\", monospace",
     "text-root": "16px",

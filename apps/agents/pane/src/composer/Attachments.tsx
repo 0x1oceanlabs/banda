@@ -218,7 +218,7 @@ function Attachment({
         <ImagePreview name={called} url={url}>
           <DialogTrigger
             aria-label={`Open ${called}`}
-            className="block size-full cursor-zoom-in rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            className="block size-full cursor-zoom-in rounded-control outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           >
             <ThumbnailImage src={url} alt={called} />
           </DialogTrigger>

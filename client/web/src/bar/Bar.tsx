@@ -87,7 +87,7 @@ export function Bar({
   const { layout, dragging, over } = useArranging(header, shown, write)
   const zone = (part: Part) =>
     cn(
-      "flex items-center rounded-lg",
+      "flex items-center rounded-control",
       dragging &&
         "min-h-7 min-w-10 bg-foreground/[0.03] ring-1 ring-foreground/15",
       over === part && "bg-foreground/[0.06] ring-ring"
@@ -100,7 +100,7 @@ export function Bar({
         className={cn(
           "flex items-center",
           dragging === id &&
-            "relative z-10 cursor-grabbing rounded-md bg-popover shadow-lg ring-1 ring-ring/60"
+            "relative z-10 cursor-grabbing rounded-control bg-popover shadow-lg ring-1 ring-ring/60"
         )}
       >
         {nodes.get(id)}

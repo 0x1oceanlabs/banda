@@ -38,7 +38,7 @@ export function Header({
       <button
         type="button"
         onClick={() => open("menu.at")}
-        className="mr-1 flex h-7 min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md border bg-background/60 px-2 text-[13px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        className="mr-1 flex h-7 min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-control border bg-background/60 px-2 text-[13px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
       >
         <SearchIcon className="size-3.5 shrink-0" />
         <span className="min-w-0 flex-1 truncate text-left">Search</span>

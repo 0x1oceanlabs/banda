@@ -133,7 +133,7 @@ export function ToolCall({
                   <pre
                     key={at}
                     data-slot="tool-text"
-                    className="max-h-80 overflow-auto rounded-md border bg-block px-3 py-2 font-mono text-code wrap-break-word whitespace-pre-wrap"
+                    className="max-h-80 overflow-auto rounded-control border bg-block px-3 py-2 font-mono text-code wrap-break-word whitespace-pre-wrap"
                   >
                     {part.text}
                   </pre>

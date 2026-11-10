@@ -92,7 +92,11 @@ export function GitButton({
 
   if (now.is === "running")
     return (
-      <div role="status" aria-live="polite" className="rounded-lg bg-muted/50">
+      <div
+        role="status"
+        aria-live="polite"
+        className="rounded-control bg-muted/50"
+      >
         <DetailsRow
           icon={<Spinner />}
           // Who writes the message is said whole, on two lines if need be.
@@ -130,7 +134,7 @@ export function GitButton({
     <>
       {now.is === "failed" && (
         <GitAlert
-          className="rounded-lg bg-destructive/10 py-1 pr-1 pl-2"
+          className="rounded-control bg-destructive/10 py-1 pr-1 pl-2"
           onDismiss={() => dismiss(project)}
         >
           {now.message}
@@ -138,7 +142,7 @@ export function GitButton({
       )}
       <div
         className={cn(
-          "group/split flex items-center rounded-lg has-data-popup-open:bg-black/[3.5%] dark:has-data-popup-open:bg-white/8",
+          "group/split flex items-center rounded-control has-data-popup-open:bg-black/[3.5%] dark:has-data-popup-open:bg-white/8",
           ROW_HOVER
         )}
       >

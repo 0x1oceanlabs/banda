@@ -161,7 +161,7 @@ export function ModCard() {
         </p>
       ))}
       {asked && (
-        <div className="flex flex-col gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs">
+        <div className="flex flex-col gap-2 rounded-control border bg-muted/40 px-3 py-2 text-xs">
           <p>
             {asked.moves.length === 1
               ? "One of your keys holds"
@@ -246,7 +246,7 @@ function Pick({
       aria-checked={on}
       onClick={onClick}
       className={cn(
-        "flex min-w-0 flex-col items-start gap-0.5 rounded-md border px-2.5 py-1.5 text-left text-muted-foreground hover:text-foreground",
+        "flex min-w-0 flex-col items-start gap-0.5 rounded-control border px-2.5 py-1.5 text-left text-muted-foreground hover:text-foreground",
         on && "border-foreground/60 bg-secondary text-foreground"
       )}
     >

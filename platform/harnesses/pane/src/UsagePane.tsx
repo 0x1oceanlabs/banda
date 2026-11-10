@@ -265,7 +265,7 @@ function Toggle({
       aria-pressed={on}
       onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-[7px] rounded-md px-2 py-1 text-[12.5px] transition-colors hover:bg-muted/60",
+        "inline-flex items-center gap-[7px] rounded-control px-2 py-1 text-[12.5px] transition-colors hover:bg-muted/60",
         !on && "text-muted-foreground/70"
       )}
     >

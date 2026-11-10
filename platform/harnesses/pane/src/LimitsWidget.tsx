@@ -131,7 +131,7 @@ export function LimitsWidget({ engine }: WidgetProps) {
                 aria-label={`Usage limits: ${words}`}
                 title={words}
                 className={cn(
-                  "flex h-6 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground tabular-nums outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-muted data-popup-open:text-foreground",
+                  "flex h-6 items-center gap-1.5 rounded-control px-2 text-xs text-muted-foreground tabular-nums outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-muted data-popup-open:text-foreground",
                   staleOf(share.best, now) && "opacity-50"
                 )}
               />
@@ -449,7 +449,7 @@ function Foot({
       </div>
       <button
         type="button"
-        className="shrink-0 rounded-sm font-medium text-foreground outline-none hover:underline hover:underline-offset-3 focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="shrink-0 rounded-small font-medium text-foreground outline-none hover:underline hover:underline-offset-3 focus-visible:ring-3 focus-visible:ring-ring/50"
         onClick={onUsage}
       >
         Usage →

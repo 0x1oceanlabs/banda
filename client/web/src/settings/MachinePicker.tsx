@@ -95,7 +95,7 @@ export function MachinePicker({
               data-taken={has.length > 0 || undefined}
               onClick={() => !on && onIcon(icon)}
               className={cn(
-                "flex aspect-square items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none",
+                "flex aspect-square items-center justify-center rounded-control text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none",
                 on && "bg-accent text-foreground ring-1 ring-ring",
                 !on && has.length > 0 && "opacity-40"
               )}
@@ -112,7 +112,7 @@ export function MachinePicker({
       )}
       <div
         aria-label="How it shows"
-        className="flex flex-col gap-1.5 rounded-md border px-2.5 py-2 text-xs"
+        className="flex flex-col gap-1.5 rounded-control border px-2.5 py-2 text-xs"
       >
         <div className="flex items-center gap-2">
           <span className="w-10 shrink-0 text-muted-foreground">Label</span>

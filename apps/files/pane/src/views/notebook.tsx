@@ -156,7 +156,7 @@ function CellView({
     return (
       <pre
         data-cell="raw"
-        className="rounded-block bg-muted/40 px-3 py-2 font-mono text-xs whitespace-pre-wrap"
+        className="rounded-card bg-muted/40 px-3 py-2 font-mono text-xs whitespace-pre-wrap"
       >
         {cell.source}
       </pre>
@@ -170,7 +170,7 @@ function CellView({
         <CodeLines
           name={name}
           text={cell.source}
-          className="min-w-0 flex-1 overflow-hidden rounded-block ring-1 ring-foreground/10"
+          className="min-w-0 flex-1 overflow-hidden rounded-card ring-1 ring-foreground/10"
         />
       </div>
       {cell.outputs.map((output, index) => (
@@ -191,7 +191,7 @@ function OutputView({ output }: { output: Output }) {
         <img
           src={output.src}
           alt="An output"
-          className="max-w-full self-start rounded-sm bg-white p-1"
+          className="max-w-full self-start rounded-small bg-white p-1"
         />
       )
     case "markdown":
@@ -233,7 +233,7 @@ function Text({
   return (
     <pre
       className={cn(
-        "min-w-0 flex-1 overflow-x-auto rounded-sm px-2 py-1 font-mono text-xs whitespace-pre-wrap",
+        "min-w-0 flex-1 overflow-x-auto rounded-small px-2 py-1 font-mono text-xs whitespace-pre-wrap",
         stream === "stderr" && "bg-amber-500/10",
         stream === "error" && "bg-destructive/10 text-destructive"
       )}

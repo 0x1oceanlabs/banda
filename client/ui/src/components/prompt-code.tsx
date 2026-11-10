@@ -40,14 +40,14 @@ export const CodeBlock = Node.create({
       let block = node
       const dom = document.createElement("div")
       dom.dataset.code = ""
-      dom.className = "my-1 overflow-hidden rounded-md border bg-muted/40"
+      dom.className = "my-1 overflow-hidden rounded-control border bg-muted/40"
       const head = document.createElement("div")
       head.contentEditable = "false"
       head.className = "flex justify-end border-b px-1.5 py-0.5"
       const pick = document.createElement("select")
       pick.ariaLabel = "Language"
       pick.className =
-        "cursor-pointer rounded bg-transparent text-xs text-muted-foreground outline-none hover:text-foreground"
+        "cursor-pointer rounded-small bg-transparent text-xs text-muted-foreground outline-none hover:text-foreground"
       pick.append(
         new Option("Plain text", ""),
         ...LANGUAGES.map(({ id, name }) => new Option(name, id))

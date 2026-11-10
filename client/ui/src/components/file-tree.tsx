@@ -280,7 +280,7 @@ function picturesCSS(pictures: ReadonlyMap<string, string>): string {
     .map(([path, picture]) => {
       const icon = `button[data-type='item'][data-item-path="${path.replace(/["\\]/g, "\\$&")}"] [data-item-section='icon']`
       const address = picture.replace(/["\\\n]/g, "")
-      return `${icon} > svg { visibility: hidden; } ${icon} { background: center / cover no-repeat url("${address}"); border-radius: 2px; }`
+      return `${icon} > svg { visibility: hidden; } ${icon} { background: center / cover no-repeat url("${address}"); border-radius: var(--small-radius); }`
     })
     .join("\n")
 }
@@ -329,7 +329,7 @@ function dropFolderAt(event: Event): string {
 function dropCSS(folder: string | null): string {
   if (folder === null) return ""
   if (folder === "")
-    return ":host { outline: 1px solid color-mix(in srgb, var(--ring) 70%, transparent); outline-offset: -1px; border-radius: calc(var(--radius) - 2px); }"
+    return ":host { outline: 1px solid color-mix(in srgb, var(--ring) 70%, transparent); outline-offset: -1px; border-radius: var(--control-radius); }"
   return `button[data-item-path="${globalThis.CSS.escape(folder)}"] { background: color-mix(in srgb, var(--ring) 22%, transparent) !important; }`
 }
 
@@ -749,7 +749,7 @@ const CSS = `
   }
   [data-truncate-content='visible'] { overflow: hidden; text-overflow: ellipsis; }
   [data-truncate-marker] { display: none; }
-  button[data-type='item'], button[data-type='item']::before { border-radius: calc(var(--radius) - 4px); }
+  button[data-type='item'], button[data-type='item']::before { border-radius: var(--control-radius); }
 `
 
 /** A folder tree's own: git's colours from Banda's palette, what git

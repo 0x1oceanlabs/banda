@@ -13,13 +13,9 @@ const defaults = [...css.matchAll(/^(?::root|\.dark) \{\n([^}]*)\}/gm)].map(
 
 test("globals.css writes no token by hand: tokens.css has Banda's own (ADR 0080, decision 7)", () => {
   expect(defaults.length).toBeGreaterThan(0)
-  const written = Object.entries(TOKENS)
-    // The radii are the page's until the five levels (ADR 0100, step 3).
-    .filter(([, { group }]) => group !== "radius")
-    .map(([name]) => name)
-    .filter((name) =>
-      defaults.some((body) => new RegExp(`^\\s*--${name}:`, "m").test(body))
-    )
+  const written = Object.keys(TOKENS).filter((name) =>
+    defaults.some((body) => new RegExp(`^\\s*--${name}:`, "m").test(body))
+  )
   expect(written).toEqual([])
   expect(css).toContain('@import "@banda/contract/tokens.css";')
 })

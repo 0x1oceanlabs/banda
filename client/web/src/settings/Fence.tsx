@@ -274,7 +274,7 @@ function Details({ words }: { words: string }) {
 function Copyable({ text, label }: { text: string; label: string }) {
   return (
     <div className="flex items-start gap-1.5">
-      <code className="min-w-0 flex-1 rounded-md bg-muted px-2 py-1 font-mono text-xs break-all whitespace-pre-wrap select-text">
+      <code className="min-w-0 flex-1 rounded-control bg-muted px-2 py-1 font-mono text-xs break-all whitespace-pre-wrap select-text">
         {text}
       </code>
       <CopyButton text={text} label={label} />
@@ -410,7 +410,7 @@ function Attention({ children }: { children: React.ReactNode }) {
   return (
     <p
       role="status"
-      className="flex gap-2 rounded-md bg-attention/10 px-2.5 py-2 text-xs text-attention"
+      className="flex gap-2 rounded-control bg-attention/10 px-2.5 py-2 text-xs text-attention"
     >
       <span
         aria-hidden

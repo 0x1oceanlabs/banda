@@ -111,12 +111,12 @@ function Facts({
     <>
       <header className="flex flex-col items-center gap-2 text-center">
         {pictured && (
-          <div className="flex h-28 w-full items-center justify-center overflow-hidden rounded-md">
+          <div className="flex h-28 w-full items-center justify-center overflow-hidden rounded-control">
             {picture ? (
               <img
                 src={picture}
                 alt=""
-                className="max-h-full max-w-full rounded-md object-contain ring-1 ring-foreground/10"
+                className="max-h-full max-w-full rounded-control object-contain ring-1 ring-foreground/10"
               />
             ) : folder ? (
               <FolderIcon className="size-12 stroke-[1.25] text-muted-foreground" />

@@ -159,7 +159,7 @@ export function Settings({
                 aria-current={s === section && !words ? "page" : undefined}
                 onClick={() => go(s)}
                 className={cn(
-                  "flex shrink-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent/60",
+                  "flex shrink-0 items-center gap-2 rounded-control px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent/60",
                   s === section && !words && "bg-accent text-foreground"
                 )}
               >
@@ -246,7 +246,7 @@ export function Settings({
                   {above.length > 0 && (
                     <div
                       role="alert"
-                      className="order-first rounded-lg border border-destructive/40 px-4 py-2 text-xs text-destructive"
+                      className="order-first rounded-control border border-destructive/40 px-4 py-2 text-xs text-destructive"
                     >
                       {above.map((p) => (
                         <p key={problemWords(p)}>{problemWords(p)}</p>

@@ -205,7 +205,7 @@ export function SearchView({
             onClick: () => setAt(index),
             onDoubleClick: () => open(index),
             className: cn(
-              "flex cursor-default items-center gap-1.5 rounded-sm pr-2 text-xs",
+              "flex cursor-default items-center gap-1.5 rounded-small pr-2 text-xs",
               on && "bg-foreground/10"
             ),
           } as const
@@ -265,7 +265,7 @@ export function SearchView({
                   piece.lit ? (
                     <mark
                       key={n}
-                      className="rounded-[2px] bg-warning/30 text-foreground"
+                      className="rounded-small bg-warning/30 text-foreground"
                     >
                       {piece.text}
                     </mark>

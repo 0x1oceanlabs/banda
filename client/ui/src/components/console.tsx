@@ -7,7 +7,7 @@ function Console({ className, ...props }: React.ComponentProps<"figure">) {
     <figure
       data-slot="console"
       className={cn(
-        "flex min-w-0 flex-col overflow-hidden rounded-md border bg-block text-code",
+        "flex min-w-0 flex-col overflow-hidden rounded-control border bg-block text-code",
         className
       )}
       {...props}

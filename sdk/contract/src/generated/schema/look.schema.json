@@ -12,7 +12,7 @@
       "$ref": "#/$defs/ModeChoice"
     },
     "radius": {
-      "description": "shadcn's `--radius`, in pixels: every corner is a step of it.",
+      "description": "The old radius, which every corner was a step of: it reads as\n`[shape] roundness` of it over 7, its old default, so 7 is the\ntheme's own corners and 0 squares them all.",
       "type": "number",
       "format": "double",
       "minimum": 0
@@ -36,6 +36,10 @@
         "type": "string"
       },
       "default": {}
+    },
+    "shape": {
+      "description": "The corners (ADR 0080, decision 6).",
+      "$ref": "#/$defs/Shape"
     },
     "gaps": {
       "$ref": "#/$defs/Gaps"
@@ -114,6 +118,35 @@
         "light",
         "dark"
       ]
+    },
+    "Shape": {
+      "description": "The corners, five levels, each inside the one before (ADR 0080,\ndecision 6): a theme says two, the window's and a control's, and the\nrest follow. A tile's is the window's less the outer gap, a card's the\ntile's less its padding, a chip's 0.6 of a control's.",
+      "type": "object",
+      "properties": {
+        "window": {
+          "description": "The window's corner, and the desk's, in pixels.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0
+        },
+        "control": {
+          "description": "A button's, an input's and a select's corner, in pixels.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0
+        },
+        "pill": {
+          "description": "Controls and chips as pills, as Tahoe's are.",
+          "type": "boolean"
+        },
+        "roundness": {
+          "description": "Times every corner: 1 as the theme has them, 0 square, 1.2 a\nlittle rounder.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
     },
     "Gaps": {
       "type": "object",
@@ -211,6 +244,7 @@
       "type": "object",
       "properties": {
         "radius": {
+          "description": "The tile's corner, when it is not the window's less the outer gap:\npixels, or a step of a control's (\"sm\" … \"4xl\").",
           "$ref": "#/$defs/Corner"
         },
         "border": {

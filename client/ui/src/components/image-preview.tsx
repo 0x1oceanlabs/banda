@@ -21,7 +21,7 @@ export function ImagePreview({
         <img
           src={url}
           alt={alt}
-          className="max-h-[calc(100vh-8rem)] min-h-0 rounded-md object-contain"
+          className="max-h-[calc(100vh-8rem)] min-h-0 rounded-control object-contain"
         />
       </DialogContent>
     </Dialog>

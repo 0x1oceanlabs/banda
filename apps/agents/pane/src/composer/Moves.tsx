@@ -84,7 +84,7 @@ function MoveRow({
           ? `${harness.name} is out of its limits${out.until === undefined ? "" : ` until ${clock(out.until)}`}`
           : undefined
       }
-      className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent disabled:hover:bg-transparent"
+      className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent disabled:hover:bg-transparent"
       onClick={() => onPick(move)}
     >
       <Emblem of={harness} />

@@ -8,7 +8,7 @@
  */
 
 import type { Fit } from "@banda/contract/agents"
-import { type Look, shown } from "@banda/contract/look"
+import { type Look, RENAMED, shown } from "@banda/contract/look"
 
 /** The host of `app://` that serves Visuals: an origin apart from
  * Banda's page. */
@@ -119,7 +119,6 @@ const SAME = [
   "--chart-3",
   "--chart-4",
   "--chart-5",
-  "--radius",
   "--font-sans",
   "--font-mono",
 ]
@@ -136,6 +135,11 @@ const NEAREST: Readonly<Record<string, string>> = {
   "--code-background": "--muted",
   "--code-foreground": "--foreground",
   "--chart-6": "--chart-1",
+  // A renamed token under its old name (ADR 0100, decision 10): shadcn's
+  // `--radius`, a control's corner now.
+  ...Object.fromEntries(
+    Object.entries(RENAMED).map(([old, now]) => [`--${old}`, `--${now}`])
+  ),
 }
 
 /** A soft ground of a colour, for a box that says it. */

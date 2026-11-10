@@ -128,7 +128,7 @@ export function LendButton({
             size="icon-xs"
             aria-label={words}
             title={label(LEND, words)}
-            className="size-5 shrink-0 rounded-[5px] text-muted-foreground/70 hover:text-foreground data-popup-open:bg-muted data-popup-open:text-foreground"
+            className="size-5 shrink-0 rounded-small text-muted-foreground/70 hover:text-foreground data-popup-open:bg-muted data-popup-open:text-foreground"
           />
         }
       >
