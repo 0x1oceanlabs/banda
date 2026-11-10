@@ -12,6 +12,7 @@ import { createServer } from "node:http"
 import type { AddressInfo } from "node:net"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import {
+  addProject,
   agentAnswers,
   agentCalls,
   agentSays,
@@ -96,10 +97,11 @@ test("a Person makes a Project, starts a Thread in it, and works with it", async
   const question = thread.getByRole("group", { name: "Run a check" })
   await expect(question).toContainText("Allow Fake AI to run a command?")
   await expect(thread.getByText("Waiting for you: Run a check")).toBeVisible()
-  // The Thread's Mark, and the bar's, say it asks the Person.
+  // The Thread's Mark, and the bar's, say it asks the Person. The bar's
+  // opens the Banda menu (ADR 0098, decision 21).
   const row = sidebar.getByRole("button", { name: /hello/ })
   await expect(row).toContainText("Asks Run a check")
-  const mark = page.getByRole("button", { name: /^Sidebar/ })
+  const mark = page.getByRole("button", { name: /^Banda menu/ })
   await expect(mark).toHaveAccessibleName(/Asks you/)
   // In its header, Threads' Mark stands in the icon's place, before its
   // Project and its title (ADR 0031; ADR 0062, decision 17).
@@ -123,7 +125,7 @@ test("a Person makes a Project, starts a Thread in it, and works with it", async
   // The Person watched it finish, so nothing calls for them: its Mark in
   // the header rests, faint.
   await expect(row).not.toContainText("Asks")
-  await expect(mark).toHaveAccessibleName("Sidebar")
+  await expect(mark).toHaveAccessibleName("Banda menu")
   await expect(head.getByRole("img", { name: "Nothing runs" })).toHaveClass(
     /\bopacity-40\b/
   )
@@ -5248,7 +5250,9 @@ test("the bar's middle counts who works and who waits while the sidebar is close
   ).toBeVisible()
   await expect(counts).toBeHidden()
 
-  await bar.getByRole("button", { name: /^Sidebar/ }).click()
+  // Alt+A hides it; the bar's logo opens the Banda menu (ADR 0098,
+  // decision 21).
+  await page.keyboard.press("Alt+A")
   await expect(bar.getByRole("button", { name: "1 working" })).toBeVisible()
   const done = bar.getByRole("button", { name: "1 done" })
   await expect(done).toBeVisible()
@@ -5278,7 +5282,7 @@ test("the bar's widgets stand where look.toml's [bar] lists them, and an id it h
   const { page } = window
   await firstThread(page)
   const bar = page.getByRole("banner")
-  await bar.getByRole("button", { name: /^Sidebar/ }).click()
+  await page.keyboard.press("Alt+A")
   // The counts' calm square stands on the right now, the middle empty.
   const calm = bar.getByRole("img", {
     name: "Nothing waits for you, nothing works",
@@ -5301,8 +5305,11 @@ test("with Alt held, the mouse moves a widget along the bar, the workspaces too,
   const written = () => (existsSync(file) ? readFileSync(file, "utf8") : "")
   await firstThread(page)
   const bar = page.getByRole("banner")
-  const mark = bar.getByRole("button", { name: /^Sidebar/ })
-  await mark.click()
+  const mark = bar.getByRole("button", { name: /^Banda menu/ })
+  await page.keyboard.press("Alt+A")
+  // A key waits for nothing, as a click on the Mark did: the Banda menu
+  // that made Work is gone, its backdrop with it, before the mouse presses.
+  await expect(page.locator('[data-slot="dialog-overlay"]')).toHaveCount(0)
   const calm = bar.getByRole("img", {
     name: "Nothing waits for you, nothing works",
   })
@@ -5338,8 +5345,14 @@ test("with Alt held, the mouse moves a widget along the bar, the workspaces too,
     })
     .toBeLessThan(40)
   expect((await mark.boundingBox())!.x).toBeLessThan(40)
-  // Without Alt, a click is a click: the Mark shows the sidebar again.
+  // Without Alt, a click is a click: the Mark opens the Banda menu, and
+  // Alt+A shows the sidebar again.
   await mark.click()
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  await expect(menu).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(menu).toBeHidden()
+  await page.keyboard.press("Alt+A")
   await expect(
     page.getByRole("complementary", { name: "Sidebar" })
   ).toBeVisible()
@@ -6501,12 +6514,10 @@ test("Add Project adds a folder on disk from the Banda menu, and one banda proje
     mkdirSync(join(work, folder), { recursive: true })
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   const search = menu.getByRole("combobox", { name: "Search" })
-  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
 
-  // The sidebar's folder button opens "Add Project"; "Local folder" starts
-  // the path at ~ and lists the folders that fit what is typed.
-  await sidebar.getByRole("button", { name: "Add Project" }).click()
-  await expect(menu.getByRole("option", { name: /New Project/ })).toBeVisible()
+  // ✎'s menu opens "Add Project"; "Local folder" starts the path at ~ and
+  // lists the folders that fit what is typed.
+  await addProject(page)
   await search.fill("local")
   await search.press("Enter")
   await expect(search).toHaveValue("~/")
@@ -6554,7 +6565,7 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
 
   // Add on a folder that holds what a Harness loads asks first, in the
   // menu: what waits, Not yet then Trust, and isolation greyed for now.
-  await page.getByRole("button", { name: "Add Project", exact: true }).click()
+  await addProject(page)
   await search.fill("local")
   await search.press("Enter")
   await search.fill(`${widget}/`)
@@ -6622,7 +6633,7 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
 
   // Added again, a folder that already is a Project asks nothing, and
   // keeps the trust it has.
-  await page.getByRole("button", { name: "Add Project", exact: true }).click()
+  await addProject(page)
   await search.fill("local")
   await search.press("Enter")
   await search.fill(`${widget}/`)
@@ -6704,10 +6715,7 @@ test("Open in Files adds the folder picked in the system's picker, opened where 
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   const search = menu.getByRole("combobox", { name: "Search" })
 
-  await page
-    .getByRole("complementary", { name: "Sidebar" })
-    .getByRole("button", { name: "Add Project" })
-    .click()
+  await addProject(page)
   await search.fill("local")
   await search.press("Enter")
   await search.fill(`${work}/pi`)
@@ -7067,11 +7075,8 @@ test("the sidebar over the Strip goes once it opened a menu, a Thread or the set
   await expect(sidebar).toBeHidden()
   await shut()
 
-  // The key sheet: the menu at its Actions.
-  await sidebar
-    .getByRole("button", { name: "Every action and its key" })
-    .click()
-  await expect(menu.getByRole("group", { name: "Banda" })).toBeVisible()
+  // ✎'s menu's Add Project…: the Banda menu, at Add Project.
+  await addProject(page)
   await expect(sidebar).toBeHidden()
   await shut()
 
@@ -7362,26 +7367,13 @@ test("the sidebar's edge drags its width, which the Strip follows and the window
   await page.keyboard.press("ArrowRight")
   await expect.poll(width).toBe(272)
 
-  // Its foot, icons with no words beside them: the gear, the key sheet,
-  // the theme, the view and Add Project.
-  await sidebar
-    .getByRole("button", { name: "Every action and its key" })
-    .click()
-  const menu = page.getByRole("dialog", { name: "Banda menu" })
-  await expect(menu.getByRole("group", { name: "Banda" })).toBeVisible()
-  await page.keyboard.press("Escape")
-  await expect(menu).toBeHidden()
-  await expect(page.locator("html")).not.toHaveClass(/dark/)
-  await sidebar.getByRole("button", { name: /^Theme/ }).click()
-  await page.getByRole("menuitemradio", { name: "Dark" }).click()
-  await expect(page.locator("html")).toHaveClass(/dark/)
-  await expect
-    .poll(() => readFileSync(join(window.dir, "config/look.toml"), "utf8"))
-    .toContain('mode = "dark"')
+  // Its foot, icons with no words beside them: the gear and the view
+  // (ADR 0098, decision 21). The key sheet and the theme are the Banda
+  // menu's, and Add Project ✎'s menu's (sidebar-foot.spec.ts).
+  await expect(sidebar.getByRole("button", { name: "Settings" })).toBeVisible()
   await expect(sidebar.getByRole("button", { name: /^View: / })).toBeVisible()
-  await expect(
-    sidebar.getByRole("button", { name: "Add Project" })
-  ).toBeVisible()
+  for (const gone of ["Every action and its key", /^Theme/, "Add Project"])
+    await expect(sidebar.getByRole("button", { name: gone })).toHaveCount(0)
   await page.screenshot({ path: "test-results/8a-sidebar-foot.png" })
 })
 
