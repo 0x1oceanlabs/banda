@@ -3,11 +3,11 @@ import { cn } from "@banda/ui/lib/utils"
 import { GripHorizontalIcon } from "lucide-react"
 import { Component, memo, useEffect, useLayoutEffect, useRef } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
-import type { Center } from "@banda/contract/look"
 import type { PaneState } from "@banda/ui/pane"
 import { columnsOf, moveOf, useLookColumns, useLookGroups } from "../look"
 import { Choices } from "../registry"
 import {
+  type Column,
   type Entry,
   groupAttributes,
   isFree,
@@ -17,6 +17,7 @@ import {
   type Workspace,
 } from "./model"
 import {
+  type Aim,
   ColumnMotion,
   columnIn,
   drawnColumns,
@@ -24,6 +25,7 @@ import {
   type Place,
   places,
   type Reveal,
+  revealTo,
   room,
   scrollOf,
   shownShare,
@@ -47,7 +49,9 @@ const VIEW_STEP = 48
 /**
  * One workspace, as niri's Strip: columns side by side, each its share of
  * the screen's width, scrolling sideways. The focused column always comes
- * fully into view, by the least scroll that shows it.
+ * fully into view, by the least scroll that shows it; in a Group that
+ * fills the screen, as every one does in solo, the Group comes whole into
+ * view, from its first column.
  *
  * A sideways swipe moves the Strip with the fingers, the mod held or not; where
  * it ends, the column most in view takes the focus and comes fully into
@@ -138,9 +142,12 @@ export const Strip = memo(function Strip({
   // The zoomed Pane, the focused one, covers the workspace; the rest
   // hide under it, their pages too.
   const zooms = live && zoomed !== undefined
-  // What moves the columns: their order and their widths. A column moved
-  // along the Strip keeps the focus, and the Strip follows it.
-  const layout = columns.map((c) => `${c.id} ${c.width} ${c.min}`).join()
+  // What moves the columns: their order, their widths, and whether each
+  // fills the screen with its Group. A column moved along the Strip keeps
+  // the focus, and the Strip follows it.
+  const layout = columns
+    .map((c) => `${c.id} ${c.width} ${c.min} ${c.filled}`)
+    .join()
   const empty = workspace.columns.length === 0
   // A Project's workspace says whose it is: emptied, where it keeps its
   // place (ADR 0102, decision 2), and by its own Group's tag (decision 4).
@@ -169,9 +176,7 @@ export const Strip = memo(function Strip({
   const before = useRef(focus)
   useLayoutEffect(() => {
     const strip = scroller.current
-    if (strip) {
-      reveal(strip, places(strip, now.current.columns), focus, before.current)
-    }
+    if (strip) revealFocus(strip, now.current.columns, focus, before.current)
     before.current = focus
   }, [focus, layout])
   // The room changes when the window does, or the sidebar comes or goes
@@ -180,7 +185,7 @@ export const Strip = memo(function Strip({
     const strip = scroller.current
     if (!strip) return
     const watch = new ResizeObserver(() => {
-      reveal(strip, places(strip, now.current.columns), now.current.focus)
+      revealFocus(strip, now.current.columns, now.current.focus)
       aimed(strip)
     })
     watch.observe(strip)
@@ -201,11 +206,8 @@ export const Strip = memo(function Strip({
     revealed.current = asked
     const all = places(strip, columns)
     if (asked.how === "middle") {
-      reveal(strip, all, columns[at].id, undefined, "always")
-    } else {
-      const first = columns[runOf(columns, at).start].id
-      reveal(strip, all, first, undefined, "left")
-    }
+      reveal(strip, all, columns[at].id, { center: "always" })
+    } else revealGroup(strip, all, columns, at)
   }, [asked, live, workspace])
   // Each Tile's state, from what the Strip shows and where it is headed,
   // once it scrolled where its focus goes, above, so a Tile a key brings
@@ -255,16 +257,7 @@ export const Strip = memo(function Strip({
       scrollOf(strip).stop()
       strip.scrollLeft += x
       clearTimeout(ending)
-      ending = setTimeout(
-        () =>
-          land(
-            strip,
-            places(strip, now.current.columns),
-            now.current.focus,
-            now.current.frame
-          ),
-        SWIPE_END
-      )
+      ending = setTimeout(() => land(strip, now.current), SWIPE_END)
     }
     strip.addEventListener("wheel", onWheel, { passive: false })
     return () => {
@@ -314,10 +307,7 @@ export const Strip = memo(function Strip({
       const { way } = drag
       drag = undefined
       delete root.dataset.drag
-      if (way === "sideways") {
-        const { columns, focus, frame } = now.current
-        land(strip, places(strip, columns), focus, frame)
-      }
+      if (way === "sideways") land(strip, now.current)
     }
     const onUp = (event: PointerEvent) => {
       if (drag?.pointer === event.pointerId) finish()
@@ -556,59 +546,79 @@ class Before extends Component<{ read: () => void }> {
   }
 }
 
+/** The columns of a Strip as it draws them. */
+type Drawn = ReturnType<typeof drawnColumns>
+
 /**
- * Scrolls the Strip to show the column `id` whole, as the look's `center`
- * says: by the least scroll; to the middle; or to the middle only when it
- * does not fit beside `before`, the column focused before it, else by the
- * least scroll that shows both. It aims at where the columns end up, and
- * from where the scroll is headed, so a second step goes on from the first.
+ * Scrolls the Strip to show the focused column `id` whole, as the look
+ * says; in a Group that fills the screen, as every one does in solo, with
+ * its Group, so past a Group's edge the next one fills the screen (ADR
+ * 0102, decision 8).
+ */
+function revealFocus(
+  strip: HTMLElement,
+  columns: Drawn,
+  id: string | undefined,
+  before?: string,
+  all = places(strip, columns)
+) {
+  const at = columns.findIndex((column) => column.id === id)
+  if (columns[at]?.filled) revealGroup(strip, all, columns, at)
+  else reveal(strip, all, id, { before })
+}
+
+/**
+ * Scrolls the Strip to show the column at `at` with its Group, from its
+ * first column, as far as the one at `at` stays whole: where a Thread
+ * picked comes (ADR 0065, decision 8), and the focus in a Group that
+ * fills the screen.
+ */
+function revealGroup(
+  strip: HTMLElement,
+  all: readonly Place[],
+  columns: readonly Column[],
+  at: number
+) {
+  const first = columns[runOf(columns, at).start].id
+  reveal(strip, all, columns[at].id, { center: "left", first })
+}
+
+/**
+ * Scrolls the Strip to show the column `id` whole, as `aim` says, else as
+ * the look's `center` does (`revealTo`). It aims at where the columns end
+ * up, and from where the scroll is headed, so a second step goes on from
+ * the first.
  */
 function reveal(
   strip: HTMLElement,
   all: readonly Place[],
   id: string | undefined,
-  before?: string,
-  center: Center | "left" = columnsOf().center
+  aim: Partial<Aim> = {}
 ) {
-  const column = all.find((place) => place.id === id)
-  if (!column) return
   const scroll = scrollOf(strip)
   const at = scroll.target
+  const center = aim.center ?? columnsOf().center
   // What shows: `inner` wide, `pad` in from the left, past the outer gap
   // and the sidebar floating there.
-  const { pad, inner } = room(strip)
-  const least = (left: number, right: number) =>
-    left - pad < at
-      ? left - pad
-      : right - pad - inner > at
-        ? right - pad - inner
-        : at
-  const middle = (column.left + column.right - inner) / 2 - pad
-  let to = least(column.left, column.right)
-  if (center === "always") to = middle
-  if (center === "left") to = column.left - pad
-  const previous = all.find((place) => place.id === before)
-  if (center === "on-overflow" && previous && previous !== column) {
-    const left = Math.min(column.left, previous.left)
-    const right = Math.max(column.right, previous.right)
-    to = right - left <= inner ? least(left, right) : middle
-  }
-  const most = Math.max(0, (all.at(-1)?.right ?? 0) - pad - inner)
-  const target = Math.max(0, Math.min(most, to))
-  if (target !== at) scroll.to(target, moveOf("strip"))
+  const to = revealTo(all, room(strip), at, id, { ...aim, center })
+  if (to !== undefined && to !== at) scroll.to(to, moveOf("strip"))
 }
 
 /**
  * Where a sideways swipe ends: the focused column keeps the focus while no
  * other is more in view; else the one most in view nearest to it takes it.
- * Either comes whole into view.
+ * Either comes whole into view, with its Group where that fills the
+ * screen.
  */
 function land(
   strip: HTMLElement,
-  all: readonly Place[],
-  focus: string | undefined,
-  frame: Frame
+  {
+    columns,
+    focus,
+    frame,
+  }: { columns: Drawn; focus: string | undefined; frame: Frame }
 ) {
+  const all = places(strip, columns)
   const { pad, inner } = room(strip)
   const view = {
     from: strip.scrollLeft + pad,
@@ -622,7 +632,7 @@ function land(
     .filter(({ i }) => shares[i] >= most)
     .sort((a, b) => Math.abs(a.i - at) - Math.abs(b.i - at))[0]?.place
   if (!picked) return
-  reveal(strip, all, picked.id, focus)
+  revealFocus(strip, columns, picked.id, focus, all)
   // Where it goes shows from now, before it slides in.
   aimed(strip)
   const entry = columnIn(strip, picked.id)?.dataset.entry

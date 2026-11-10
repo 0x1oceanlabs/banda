@@ -1,7 +1,7 @@
 import type { ProjectId } from "@banda/contract"
 import type { PaneState } from "@banda/ui/pane"
 import { describe, expect, test } from "vitest"
-import { columnMoved, opened } from "./arrange"
+import { columnMoved, opened, resized } from "./arrange"
 import {
   filling,
   grouping,
@@ -16,9 +16,11 @@ import {
   open,
   runOf,
   send,
+  SIZES,
   soloed,
   shift,
   toEdge,
+  widen,
   widthIn,
   type Workspaces,
 } from "./model"
@@ -183,6 +185,48 @@ describe("a Group", () => {
       fill: false,
     })
     expect(unsoloing(strip("ab", "gg", 0))).toBeUndefined()
+  })
+
+  test("in solo the width keys leave a column that fills the screen alone as it is, and step a Group's shares as they show (ADR 0102, decision 8)", () => {
+    const keys = (state: Workspaces, by: 1 | -1, wrap: boolean) =>
+      resized(state, widen(state, by, SIZES, { wrap }))
+    // A column in none, a Group of one and a column made the screen wide:
+    // solo draws each the screen wide, whatever its width, so nothing is
+    // sent that the row would show later.
+    const full = strip("ab", "..", 0)
+    full.list[0].columns[0].full = true
+    for (const state of [strip("ab", "..", 0), strip("ab", "g.", 0), full]) {
+      const drawn = soloed(state)
+      expect(widen(drawn, 1, SIZES, { wrap: true })).toBe(drawn)
+      for (const by of [1, -1] as const)
+        for (const wrap of [false, true])
+          expect(keys(drawn, by, wrap)).toBeUndefined()
+      // In the row, it steps.
+      expect(keys(state, 1, true)?.command.method).toBe("workspaces.size")
+    }
+    // A Group `Alt+M` filled in the row is drawn alike.
+    const one = strip("ab", "g.", 0)
+    one.list[0].filled = "g"
+    expect(widen(one, 1, SIZES, { wrap: true })).toBe(one)
+    // A Group of two shares the screen: each press steps the share it
+    // shows on, and round, never to one it shows already.
+    let group = soloed(strip("abc", "gg.", 0))
+    expect(keys(group, 1, false)?.command).toEqual({
+      method: "workspaces.size",
+      params: { column: "a", width: "2/3" },
+    })
+    const shown: string[] = []
+    for (let press = 0; press < 4; press++) {
+      const next = widen(group, 1, SIZES, { wrap: true })
+      expect(resized(group, next)?.command.method).toBe("workspaces.size")
+      group = next
+      shown.push(widthIn(group.list[0], group.list[0].columns[0]))
+    }
+    expect(shown).toEqual(["0.571", "0.667", "0.4", "0.5"])
+    expect(keys(group, -1, false)?.command.params).toEqual({
+      column: "a",
+      width: "1/3",
+    })
   })
 
   test("a Group's owner is the first its Panes' Items name, left to right and top down", () => {

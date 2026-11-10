@@ -187,7 +187,12 @@ day.
      moved.
    _Built_ in step 4: solo draws every Group, and every column in none,
    the screen wide, on every workspace that holds a Pane; the workspace
-   `Alt+M` shows as the row stays as it is.
+   `Alt+M` shows as the row stays as it is. A focus that goes into a
+   Group shows it whole from its first column, as a pick does, by keys
+   and at a swipe's end. The width keys do nothing on a column that
+   fills the screen alone, so the row never gets a width the Person did
+   not see, and on a column of a Group each press steps the share it
+   shows on. A Group `Alt+M` filled in the row does the same.
 
 9. **From the Flow `free` to the row, nothing jumps.**
    - Panes already open stay where they are, and new ones follow these
