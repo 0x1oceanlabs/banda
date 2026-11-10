@@ -14,19 +14,24 @@ import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import {
   FREE,
+  call,
   countNotes,
   firstThread,
   fromLeft,
   layoutOf,
+  leaveSidebar,
   ON_SCREEN,
   openTerminal,
+  pickerOf,
   pressAtOnce,
-  projectId,
   sharesOf,
   shownOf,
+  sidebarOf,
   startWindow,
   TEN_KEYS,
   textOf,
+  threadNamed,
+  toastsOf,
   type Window,
 } from "./window"
 
@@ -39,16 +44,9 @@ test.afterEach(async () => {
 /** Columns half the Strip wide, whatever Banda's default. */
 const HALVES = '[columns]\ndefault = "1/2"\n'
 
-const sidebarOf = (page: Page) =>
-  page.getByRole("complementary", { name: "Sidebar" })
 /** The Flow's button, in the Sidebar's header. */
 const flowOf = (page: Page) =>
   sidebarOf(page).getByRole("button", { name: /^Flow: / })
-/** The Later picker, Alt+Z's. */
-const pickerOf = (page: Page) =>
-  page.getByRole("dialog").filter({ hasText: "Later ·" })
-const toastsOf = (page: Page) =>
-  page.getByRole("region", { name: "Notifications" })
 
 /**
  * Sends `text` from the message `box`: the first message of its Thread,
@@ -93,32 +91,6 @@ async function agents(window: Window, ...texts: string[]) {
   return threads
 }
 
-/** Work's id in each window, looked up once. */
-const works = new WeakMap<Window, string>()
-
-/** What the engine's `method` answers in the Project "Work", run as the
- * Person's `banda call`, from outside the Window. */
-function call(window: Window, method: string, params?: object) {
-  if (!works.has(window)) works.set(window, projectId(window, "Work"))
-  const work = works.get(window)!
-  const args = params ? ["--params", JSON.stringify(params)] : []
-  return JSON.parse(window.banda("call", method, "--project", work, ...args)).ok
-}
-
-/** Work's Thread named `title`, as the engine lists it; none until it is
- * listed. */
-function threadNamed(window: Window, title: string) {
-  const { threads } = call(window, "agents.threads") as {
-    threads: {
-      id: string
-      title: string
-      latest: { turn: string; state: string }
-      later?: { woke_seen?: string }
-    }[]
-  }
-  return threads.find((thread) => thread.title === title)
-}
-
 /** The Agent at work in the Thread named `title` ends its turn, done: its
  * Person's word goes into the turn from outside the Window. */
 function finish(window: Window, title: string) {
@@ -135,13 +107,6 @@ async function pickFlow(page: Page, name: "Free" | "Row" | "Solo") {
   await page.keyboard.press("Escape")
   await expect(page.getByRole("menuitemradio")).toHaveCount(0)
   await expect(flowOf(page)).toHaveAccessibleName(`Flow: ${name}`)
-}
-
-/** The pointer leaves the Sidebar for the Strip: its list holds still
- * under the pointer, and moves once it leaves. */
-async function leaveSidebar(page: Page) {
-  const box = (await sidebarOf(page).boundingBox())!
-  await page.mouse.move(box.x + box.width + 200, box.y + box.height / 2)
 }
 
 /**
@@ -592,7 +557,8 @@ test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, 
   await expect(row).toBeVisible()
   await expect(row).not.toContainText("·")
 
-  // Opened while it sleeps, its picker wakes it too.
+  // Opened while it sleeps, its picker wakes it too: its first line is
+  // Wake now, so Z then Enter does it.
   await row.click()
   await page.keyboard.press("Alt+KeyZ")
   await field.fill("45m")
@@ -600,7 +566,8 @@ test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, 
   await expect(row).toContainText(/ · 4\dm/)
   await row.click()
   await page.keyboard.press("Alt+KeyZ")
-  await picker.getByText("Wake now").click()
+  await expect(picker.getByRole("option").first()).toContainText("Wake now")
+  await field.press("Enter")
   await expect(picker).toBeHidden()
   await leaveSidebar(page)
   await expect(shelf).toBeHidden()

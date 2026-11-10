@@ -5,7 +5,6 @@ import { Button } from "@banda/ui/components/button"
 import { clock, useRun } from "@banda/core/react"
 import { cn } from "@banda/ui/lib/utils"
 import type { Listed, PaneState } from "@banda/ui/pane"
-import { mayPutOff } from "@banda/ui/status"
 import {
   AlarmClockIcon,
   ChevronDownIcon,
@@ -138,7 +137,7 @@ export function SectionView({
                     <AlarmClockIcon />
                     Wake
                   </Button>
-                ) : mayPutOff(row.listed) ? (
+                ) : (
                   <Button
                     variant="ghost"
                     size="icon-xs"
@@ -155,7 +154,7 @@ export function SectionView({
                   >
                     <AlarmClockIcon />
                   </Button>
-                ) : undefined
+                )
               }
             />
           ))}

@@ -68,6 +68,10 @@ test("the status says the Later, the waking, or the mark", () => {
     kind: "later",
     byAgent: false,
   })
+  // Someday keeps no time either, and says so (ADR 0098, decision 12).
+  expect(
+    statusOf(listed({ later: { at: 0, someday: true } }), "later", undefined)
+  ).toEqual({ kind: "later", someday: true, byAgent: false })
   expect(statusOf(listed({ mark: "done" }), "turn", 3)).toEqual({
     kind: "woke",
     at: 3,
@@ -91,6 +95,31 @@ test("the status says the Later, the waking, or the mark", () => {
   })
   expect(markSaid(listed({ mark: "running" }))).toEqual({ kind: "none" })
   expect(markSaid(listed())).toEqual({ kind: "ago", at: 5 })
+})
+
+test("one a call woke from Later says that call; its time coming reads as woke (ADR 0098, decision 11)", () => {
+  const woken = (
+    mark: Listed["mark"],
+    by: NonNullable<NonNullable<Listed["later"]>["woke"]>["by"]
+  ) =>
+    statusOf(listed({ mark, later: { at: 0, woke: { at: 3, by } } }), "turn", 3)
+  expect(woken("asking", "question")).toEqual({
+    kind: "word",
+    word: "Asks you",
+    tone: "attention",
+  })
+  expect(woken("failed", "failure")).toMatchObject({ kind: "word" })
+  // Its turn ended as it slept until done: the turn's own call.
+  expect(woken("done", "done")).toMatchObject({ kind: "word", word: "Done" })
+  // A turn stopped calls for nothing: it says it woke.
+  expect(woken("idle", "done")).toMatchObject({ kind: "woke", at: 3 })
+  // Put off asking, its time came: woke, with its question still.
+  expect(woken("asking", "time")).toEqual({
+    kind: "woke",
+    at: 3,
+    word: "Asks you",
+    tone: "attention",
+  })
 })
 
 test("the note says what calls in its colour, or what it was asked, muted", () => {

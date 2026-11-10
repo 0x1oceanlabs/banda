@@ -1,6 +1,5 @@
 import { expect, test } from "vitest"
 import type { Listed } from "./pane"
-import { sleeps, wokeOf } from "./lib/later"
 import { attentionOf, callsOf, mayArchive, type Stand, standOf } from "./status"
 
 const pane = { kind: "agents.thread", args: {} }
@@ -23,6 +22,25 @@ test.each<[string, Partial<Listed>, Stand]>([
   ["woke by its time", { later: { at: 0, until: 10 } }, "turn"],
   ["woke, seen", { later: { at: 0, until: 10, wokeSeen: true } }, "open"],
   ["woken by hand", { later: { at: 0, woke: { at: 5, by: "woken" } } }, "open"],
+  [
+    "asks, put off by its Person",
+    { mark: "asking", later: { at: 0, until: 1e3 } },
+    "later",
+  ],
+  [
+    "asks, woke by its time",
+    { mark: "asking", later: { at: 0, until: 10 } },
+    "turn",
+  ],
+  ["sleeps Someday", { later: { at: 0, someday: true } }, "later"],
+  [
+    "slept Someday till a question",
+    {
+      mark: "asking",
+      later: { at: 0, someday: true, woke: { at: 5, by: "question" } },
+    },
+    "turn",
+  ],
   ["rests", {}, "open"],
   ["runs", { mark: "running" }, "working"],
   ["thinks", { mark: "thinking" }, "working"],
@@ -107,19 +125,4 @@ test("a put-off Thread calls no one while it sleeps, and calls as it wakes", () 
   expect(at({ at: 0, until: 100 }, 100), "its time came").toBe(1)
   expect(at({ at: 0 }, 1e12), "until done, it sleeps on").toBe(0)
   expect(at({ at: 0, woke: { at: 10, by: "done" } }, 50), "woke early").toBe(1)
-})
-
-test("a Thread woke by itself when its time came or a call woke it", () => {
-  expect(wokeOf({ until: 100 }, 50), "asleep").toBeUndefined()
-  expect(wokeOf({ until: 100 }, 150)).toBe(100)
-  expect(wokeOf({ woke: { at: 70, by: "question" } }, 80)).toBe(70)
-  expect(
-    wokeOf({ woke: { at: 70, by: "woken" } }, 80),
-    "by hand"
-  ).toBeUndefined()
-  expect(
-    wokeOf({ woke: { at: 70, by: "message" } }, 80),
-    "it was written to"
-  ).toBeUndefined()
-  expect(sleeps({}, 1e12), "until done").toBe(true)
 })

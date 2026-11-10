@@ -140,11 +140,21 @@ export function listedOf(
   }
 }
 
-/** A Thread's Later as the sidebar reads it (ADR 0074). */
-function laterOf({ at, until, by, woke, woke_seen }: Later): ListedLater {
+/** A Thread's Later as the sidebar reads it (ADR 0074): Someday's too,
+ * which keeps no time, as one until done keeps none (ADR 0098, decision
+ * 12). */
+function laterOf({
+  at,
+  until,
+  someday,
+  by,
+  woke,
+  woke_seen,
+}: Later): ListedLater {
   return {
     at,
     ...(until === undefined ? {} : { until }),
+    ...(someday ? { someday: true } : {}),
     ...(by.kind === "agent" ? { byAgent: true } : {}),
     ...(woke ? { woke } : {}),
     ...(woke_seen ? { wokeSeen: true } : {}),

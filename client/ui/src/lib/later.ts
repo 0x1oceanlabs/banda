@@ -10,7 +10,8 @@ import type { ListedLater } from "../pane"
 type Read = Pick<ListedLater, "until" | "woke"> | undefined
 
 /** Whether a Thread under `later` sleeps at `now`: nothing woke it, and
- * its time has not come. */
+ * its time has not come. Until done and Someday keep no time, and sleep
+ * on till something wakes them (ADR 0098, decision 12). */
 export function sleeps(later: Read, now: number): boolean {
   if (!later || later.woke) return false
   return later.until === undefined || later.until > now

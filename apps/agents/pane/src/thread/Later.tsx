@@ -1,9 +1,9 @@
 /**
  * The Thread's quiet line about its Later (ADR 0074, decisions 4 and 7),
- * above the composer: while it sleeps, until when, with Wake now; once it
- * woke by itself, when, with Dismiss, until its next turn ends. What its
- * Person saw of it waking is its host's mark (`woke_seen`, ADR 0096), so
- * every window and machine shows the same.
+ * above the composer: while it sleeps, until when or Someday, with Wake
+ * now; once it woke by itself, when, with Dismiss, until its next turn
+ * ends. What its Person saw of it waking is its host's mark (`woke_seen`,
+ * ADR 0096), so every window and machine shows the same.
  */
 import { useEffect } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
@@ -87,13 +87,16 @@ export function LaterLine({
   if (!later) return null
   const byAgent = later.by.kind === "agent" ? " by its Agent" : ""
   if (sleeps(later, now)) {
-    const until =
-      later.until === undefined
-        ? "it's done"
-        : `${clock(later.until, now)} · ${left(later.until, now)} left${later.resume ? " · goes on by itself" : ""}`
+    // Someday keeps no time, as until done keeps none: it sleeps till
+    // something wakes it (ADR 0098, decision 12).
+    const when = later.someday
+      ? "someday"
+      : later.until === undefined
+        ? "until it's done"
+        : `until ${clock(later.until, now)} · ${left(later.until, now)} left${later.resume ? " · goes on by itself" : ""}`
     return (
       <Line
-        words={`Later${byAgent}, until ${until}`}
+        words={`Later${byAgent}, ${when}`}
         action="Wake now"
         onAction={onWake}
       />

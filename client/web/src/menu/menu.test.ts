@@ -382,8 +382,8 @@ describe("its branches and acts", () => {
     const asks = { ...t2, listed: { ...t2.listed, mark: "asking" as const } }
     expect(
       actsOf(asks, sources).map((act) => act.title),
-      "one that asks is answered first"
-    ).toEqual(["Open", "Open beside"])
+      "one that asks may be put off, not archived (ADR 0098, decision 11)"
+    ).toEqual(["Open", "Open beside", "Later…"])
   })
 
   test("Tab on New Thread lists what its source says: each Harness", () => {
