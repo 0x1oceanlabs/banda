@@ -199,8 +199,9 @@ function TerminalWay({
   const start = async () => {
     if (!project) return
     const terminal = newId()
-    const opened = await starting.act(() =>
-      engine.call("terminal.open", { terminal, ...program }, { project })
+    const opened = await starting.act(
+      () => engine.call("terminal.open", { terminal, ...program }, { project }),
+      `Sign in with ${way.name}`
     )
     if (opened === undefined) return
     const signIn = { harness, way: way.id }

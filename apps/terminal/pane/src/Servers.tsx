@@ -1,4 +1,9 @@
-import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import {
+  type Engine,
+  type ProjectId,
+  type ProjectSummary,
+  Refused,
+} from "@banda/contract"
 import type { Server } from "@banda/contract/terminal"
 import {
   DropdownMenu,
@@ -9,6 +14,8 @@ import {
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
 import { ProjectSign } from "@banda/ui/components/project-sign"
+import { toast } from "@banda/ui/components/sonner"
+import { problem } from "@banda/ui/lib/words"
 import { useRun } from "@banda/core/react"
 import type { WidgetProps } from "@banda/ui/module"
 import { GlobeIcon, SquareIcon } from "lucide-react"
@@ -111,11 +118,15 @@ function Row({
       globalThis.open(url, "_blank", "noopener")
     else run("browser.open", { address: url, project })
   }
-  // One that ended meanwhile is gone at the next look.
+  // One that ended meanwhile is gone at the next look; a Stop not sent,
+  // as its machine is away, says so (ADR 0106, law 4).
   const stop = () =>
     void engine
       .call("terminal.stop_server", server, { project })
-      .catch(() => {})
+      .catch((error: unknown) => {
+        if (error instanceof Refused) return
+        toast.error(problem(error, `Stop ${address(server.port)}`))
+      })
   const by = server.by === "agent" ? "Agent" : "Terminal"
   return (
     <DropdownMenuItem
