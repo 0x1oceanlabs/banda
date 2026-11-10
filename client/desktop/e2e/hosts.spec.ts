@@ -817,23 +817,18 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   await thread.getByRole("textbox", { name: "Message to Fake AI" }).focus()
 
   // Any other Pane for arc's Project waits for a later step: none reads
-  // this machine's files for it.
-  await page.keyboard.press("Alt+KeyN")
-  const other = page.getByRole("region", { name: "New Pane" })
+  // this machine's files for it. Files, by its key, says so.
+  await page.keyboard.press("Alt+KeyE")
+  const other = page.getByRole("region", { name: "Files" })
   await expect(other.getByText("Not on arc yet")).toBeVisible()
   await expect(
     other
       .locator("p", { hasText: "Not on arc yet" })
       .locator('[data-machine-icon="server"]')
   ).toBeVisible()
-  await expect(other.getByRole("button", { name: "Terminal" })).toHaveCount(0)
-  // Its header names arc after its icon and title: it names no Project.
-  expect(await headerShows(other)).toEqual([
-    "",
-    "New Pane",
-    "machine",
-    "buttons",
-  ])
+  await expect(other.getByRole("tree")).toHaveCount(0)
+  // Its header names arc after its icon and title.
+  expect(await headerShows(other)).toEqual(["", "Files", "machine", "buttons"])
   await shot(page, "pr3-3-not-on-arc")
 
   // Alt+Z on arc's Thread puts it off on arc's engine, as its Pane is

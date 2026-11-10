@@ -46,6 +46,7 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
+import { expect, type Page } from "@playwright/test"
 import { read, startWindow } from "./window"
 
 const repository = resolve(import.meta.dirname, "../../..")
@@ -555,3 +556,27 @@ export const withArc = (arc: Arc) =>
     },
     env: { PATH: `${arc.bin}:${process.env.PATH}` },
   })
+
+/** Where the pictures for the Person go, when they asked for them. */
+export const SHOTS = process.env.BANDA_E2E_SHOTS
+
+/**
+ * A picture of the window for the Person, when they asked for them, once
+ * the logo has done its move, the pointer `at` a place where it hovers
+ * nothing: with the toasts that show, where `toasts`; else once they have
+ * gone.
+ */
+export async function shot(
+  page: Page,
+  name: string,
+  { at = { x: 900, y: 700 }, toasts = false } = {}
+) {
+  if (!SHOTS) return
+  await page.mouse.move(at.x, at.y)
+  if (!toasts)
+    await expect(
+      page.getByRole("region", { name: "Notifications" }).getByRole("listitem")
+    ).toHaveCount(0, { timeout: 30_000 })
+  await page.waitForTimeout(toasts ? 500 : 3_000)
+  await page.screenshot({ path: join(SHOTS, `${name}.png`) })
+}
