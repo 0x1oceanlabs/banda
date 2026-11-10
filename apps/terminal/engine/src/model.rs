@@ -120,9 +120,9 @@ pub struct Title {
 
 /// How many of a Project's terminals run a program in front: one their
 /// shell started, or the program a terminal was opened with, until it
-/// ends. A shell that waits for what is typed runs none. A machine's
-/// update waits while one does, as it waits for a Turn (ADR 0106,
-/// decision 4).
+/// ends. A shell that waits for what is typed runs none. It is there so
+/// a machine's update can wait while one does, as it waits for a Turn
+/// (ADR 0106, decision 4).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "terminal/")]
 pub struct Running {

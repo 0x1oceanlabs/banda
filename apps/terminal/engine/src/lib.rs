@@ -30,7 +30,7 @@ pub use windows::{NO_SERVERS, NO_TERMINALS};
 
 use banda_kernel::{Call, Kind, Module, ModuleProject, Nothing, ProjectId, Refusal, Right, Stream};
 use model::{Open, Piece, Running, Servers, Size, TerminalId};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 #[cfg(unix)]
 use servers::Scanner;
@@ -54,7 +54,8 @@ const AT_ONCE: usize = 64 * 1024;
 
 #[derive(Default)]
 pub struct Terminals {
-    /// Every Project's open terminals, which each `running` counts.
+    /// Every Project's open terminals: each Project's `running` counts
+    /// its own.
     open: Arc<Mutex<HashMap<TerminalId, Arc<Terminal>>>>,
     /// Ticks as a terminal opens or closes, or a program comes to its
     /// front or leaves it, so each Project's `running` counts again.
@@ -104,8 +105,8 @@ banda_kernel::methods! {
         /// Stops a server of the Project's, and what it started.
         call stop_server(StopServer) -> (), Run;
         /// How many of the Project's terminals run a program in front,
-        /// then that again each time it changes: a machine's update waits
-        /// while one does (ADR 0106, decision 4).
+        /// then that again each time it changes, so a machine's update can
+        /// wait while one does (ADR 0106, decision 4).
         stream running(Nothing) -> Running, Read;
     }
 }
@@ -137,6 +138,44 @@ struct StopServer {
 struct Resize {
     terminal: TerminalId,
     size: Size,
+}
+
+/// What `now` makes of `changes`, then that again each time they tick and
+/// it differs, until the window lets go. One answer waits at a time; a
+/// newer one follows it.
+fn follow<V, T>(
+    mut changes: watch::Receiver<V>,
+    mut now: impl FnMut(&V) -> T + Send + 'static,
+) -> Stream
+where
+    V: Clone + Send + Sync + 'static,
+    T: Serialize + PartialEq + Send + 'static,
+{
+    let (say, heard) = mpsc::channel(1);
+    tokio::spawn(async move {
+        let mut told = None;
+        loop {
+            // A copy, so the watch is not held while `now` takes its locks.
+            let value = changes.borrow_and_update().clone();
+            let answer = now(&value);
+            if told.as_ref() != Some(&answer) {
+                let Ok(said) = serde_json::to_value(&answer) else {
+                    return;
+                };
+                if say.send(said).await.is_err() {
+                    return;
+                }
+                told = Some(answer);
+            }
+            tokio::select! {
+                changed = changes.changed() => if changed.is_err() {
+                    return;
+                },
+                () = say.closed() => return,
+            }
+        }
+    });
+    heard
 }
 
 /// How many of `project`'s terminals run a program in front.
@@ -272,32 +311,10 @@ impl Terminals {
     async fn running(&self, call: Call, _: Nothing) -> Result<Stream, Refusal> {
         let project = call.project().id();
         let open = self.open.clone();
-        let mut fronts = self.fronts.subscribe();
-        // One count waits at a time; a newer one follows it.
-        let (say, heard) = mpsc::channel(1);
-        tokio::spawn(async move {
-            let mut told = None;
-            loop {
-                fronts.mark_unchanged();
-                let now = count(&open.lock().unwrap(), project);
-                if told != Some(now) {
-                    let Ok(said) = serde_json::to_value(now) else {
-                        return;
-                    };
-                    if say.send(said).await.is_err() {
-                        return;
-                    }
-                    told = Some(now);
-                }
-                tokio::select! {
-                    changed = fronts.changed() => if changed.is_err() {
-                        return;
-                    },
-                    () = say.closed() => return,
-                }
-            }
-        });
-        Ok(heard)
+        let fronts = self.fronts.subscribe();
+        Ok(follow(fronts, move |()| {
+            count(&open.lock().unwrap(), project)
+        }))
     }
 
     #[cfg(unix)]

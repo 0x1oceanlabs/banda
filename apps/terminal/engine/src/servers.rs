@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
-use tokio::sync::{mpsc, watch};
+use tokio::sync::watch;
 
 /// The variable that names its terminal in the environment of what a
 /// terminal starts (ADR 0044, decision 2).
@@ -54,31 +54,7 @@ pub struct Scanner {
 impl Scanner {
     /// `project`'s servers, then their list again each time it changes.
     pub fn stream(self: &Arc<Self>, project: ProjectId) -> Stream {
-        let mut found = self.watch();
-        // One list waits at a time; a newer one replaces it.
-        let (say, heard) = mpsc::channel(1);
-        tokio::spawn(async move {
-            let mut told = None;
-            loop {
-                let servers = of(project, &found.borrow_and_update());
-                if told.as_ref() != Some(&servers) {
-                    let Ok(said) = serde_json::to_value(&servers) else {
-                        return;
-                    };
-                    if say.send(said).await.is_err() {
-                        return;
-                    }
-                    told = Some(servers);
-                }
-                tokio::select! {
-                    changed = found.changed() => if changed.is_err() {
-                        return;
-                    },
-                    () = say.closed() => return,
-                }
-            }
-        });
-        heard
+        crate::follow(self.watch(), move |found| of(project, found))
     }
 
     /// Every Project's servers, now and as they change. It looks while one
