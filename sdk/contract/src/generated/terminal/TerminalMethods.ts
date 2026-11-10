@@ -46,7 +46,7 @@ ports: StreamMethod<Nothing, Servers>,
 stop_server: CallMethod<StopServer, null>, 
 /**
  * How many of the Project's terminals run a program in front,
- * then that again each time it changes: a machine's update waits
- * while one does (ADR 0106, decision 4).
+ * then that again each time it changes, so a machine's update can
+ * wait while one does (ADR 0106, decision 4).
  */
 running: StreamMethod<Nothing, Running>, };

@@ -1248,8 +1248,8 @@ If Chat is removed, Agents still works through its own Thread.
   front, as `vim` or `cargo build`, or the program a terminal was opened
   with, until it ends. A shell that waits for what is typed runs none.
   The count comes from the looks that name a shell's header, so it costs
-  no polling of its own. A machine's update waits while one runs, as it
-  waits for a Turn (ADR 0106, decision 4).
+  no polling of its own. It is there so a machine's update can wait while
+  one runs, as it waits for a Turn (ADR 0106, decision 4).
 - Its methods are the `methods!` table in `apps/terminal/engine/src/lib.rs`.
 - **Its Pane** (`apps/terminal/pane`) draws a terminal with Ghostty:
   T3 Code's adapter over `libghostty-vt` compiled to WebAssembly,

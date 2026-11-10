@@ -1,8 +1,8 @@
 //! How many of a Project's terminals run a program in front, as a
 //! machine's update hears it while it waits (ADR 0106, decision 4): a
-//! shell that waits for what is typed runs none, a program it starts
-//! counts until it ends, and so does the program a terminal was opened
-//! with.
+//! shell that waits for what is typed runs none, nor does a job it sends
+//! to the background, a program it starts in front counts until it ends,
+//! and so does the program a terminal was opened with.
 // Windows has no terminals yet (ADR 0090, step 7): tests/windows.rs.
 #![cfg(unix)]
 
@@ -25,7 +25,7 @@ async fn count(stream: &mut Stream) -> u32 {
 
 /// Hears counts until the stream says `wanted`. A shell's own start may
 /// run a program in front for a moment, as a prompt that asks git does.
-async fn until(stream: &mut Stream, wanted: u32) {
+async fn until_counts(stream: &mut Stream, wanted: u32) {
     while count(stream).await != wanted {}
 }
 
@@ -48,17 +48,20 @@ async fn a_program_a_shell_runs_in_front_counts_until_it_ends() {
         world.call("terminal.write", typed)
     };
 
+    // A job sent to the background runs none: the count falls back to 0
+    // below while it still runs, as the shell keeps the front.
+    typed("sleep 100 &\r").await.unwrap();
     typed("cat\r").await.unwrap();
-    until(&mut running, 1).await;
+    until_counts(&mut running, 1).await;
     // Ctrl+C ends it, and the shell is in front again.
     typed("\x03").await.unwrap();
-    until(&mut running, 0).await;
+    until_counts(&mut running, 0).await;
     typed("cat\r").await.unwrap();
-    until(&mut running, 1).await;
+    until_counts(&mut running, 1).await;
     // A closed terminal runs nothing, whatever ran in it.
     let close = json!({ "terminal": terminal });
     world.call("terminal.close", close).await.unwrap();
-    until(&mut running, 0).await;
+    until_counts(&mut running, 0).await;
 }
 
 #[tokio::test]

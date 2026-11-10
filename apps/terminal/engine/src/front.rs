@@ -58,8 +58,8 @@ impl Front {
 
     /// Whether, at the last look, a program the shell started was in
     /// front: a group other than the shell's, as `vim` or `cargo build`
-    /// takes the terminal. Where it cannot tell, none is: an update waits
-    /// only for a program it saw.
+    /// takes the terminal. Where it cannot tell, none is, so nothing
+    /// unseen holds an update.
     pub fn program(&self) -> bool {
         matches!((self.group, self.shell), (Some(group), Some(shell)) if group != shell)
     }

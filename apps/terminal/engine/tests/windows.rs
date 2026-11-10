@@ -1,6 +1,6 @@
 //! The terminal module on Windows, which has no terminals and finds no
 //! servers yet (ADR 0090, steps 7 and 8): each call that needs them is
-//! refused, and says why, and nothing starts.
+//! refused, and says why, and nothing starts. Their count says none.
 #![cfg(windows)]
 
 mod common;
@@ -10,6 +10,7 @@ use banda_terminal::model::TerminalId;
 use banda_terminal::{NO_SERVERS, NO_TERMINALS};
 use common::World;
 use serde_json::json;
+use std::time::Duration;
 
 #[tokio::test]
 async fn a_terminal_does_not_open_and_says_it_comes_later() {
@@ -48,6 +49,9 @@ async fn the_servers_are_not_listed_nor_stopped_and_it_says_so() {
 async fn no_terminal_runs_a_program() {
     let world = World::new().await;
     let mut running = world.running(world.project).await;
-    let said = running.recv().await.unwrap();
+    let said = tokio::time::timeout(Duration::from_secs(5), running.recv())
+        .await
+        .expect("it said a count in time")
+        .unwrap();
     assert_eq!(said, json!({ "terminals": 0 }));
 }
