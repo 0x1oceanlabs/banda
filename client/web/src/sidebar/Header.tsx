@@ -1,11 +1,11 @@
-import type { ProjectId, ProjectSummary } from "@banda/contract"
-import { Button } from "@banda/ui/components/button"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { Kbd } from "@banda/ui/components/kbd"
 import { useKeyOf } from "@banda/ui/hooks/use-key-of"
 import { keyCaps } from "@banda/ui/lib/keys"
-import { SearchIcon, SquarePenIcon } from "lucide-react"
+import { SearchIcon } from "lucide-react"
 import { FlowMenu } from "./FlowMenu"
-import { useNewThread, useOpen } from "./open"
+import { NewThreadMenu } from "./NewThreadMenu"
+import { useOpen } from "./open"
 
 /** The Banda menu's key in force, as its caps, in the Search field. */
 function MenuKey() {
@@ -17,20 +17,23 @@ function MenuKey() {
 }
 
 /**
- * The sidebar's header: Search, which opens the Banda menu, the Flow's
- * menu, and New Thread, in the Project whose rows alone the list shows,
- * or else where the Person is, as Alt+Enter starts one (`Here.starts`).
+ * The sidebar's header (ADR 0098, decision 19): Search, which opens the
+ * Banda menu, the Flow's menu, and ✎, which starts a Thread in the
+ * Project whose rows alone the list shows, or else where the Person is,
+ * as Alt+Enter starts one (`Here.starts`), or, by its menu, elsewhere.
  */
 export function Header({
+  engine,
   only,
   projects,
 }: {
+  /** This machine's engine. */
+  engine: Engine
   /** The Project whose rows alone the list shows, if one. */
   only?: ProjectId
   projects: ProjectSummary[]
 }) {
   const open = useOpen()
-  const startThread = useNewThread(only, projects)
   return (
     <div className="flex items-center gap-0.5 px-2 pt-2 pb-1">
       <button
@@ -43,16 +46,9 @@ export function Header({
         <MenuKey />
       </button>
       <FlowMenu />
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="text-muted-foreground"
-        aria-label="New Thread"
-        title="New Thread"
-        onClick={startThread}
-      >
-        <SquarePenIcon />
-      </Button>
+      {/* S12a (ADR 0098, decision 17) hides ✎ here while the search in
+        place has words, as in concept-v7. */}
+      <NewThreadMenu engine={engine} only={only} projects={projects} />
     </div>
   )
 }

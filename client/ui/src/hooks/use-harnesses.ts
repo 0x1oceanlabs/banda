@@ -1,6 +1,7 @@
-import { useEffect, useSyncExternalStore } from "react"
+import { useEffect, useMemo, useSyncExternalStore } from "react"
 import { Refused, type Engine } from "@banda/contract"
-import type { HarnessView } from "@banda/contract/harnesses"
+import type { Accounted, HarnessView } from "@banda/contract/harnesses"
+import { type Live, READ_AGAIN, type Source, useMachineLive } from "./use-live"
 
 const NONE: HarnessView[] = []
 /** How long to wait before reading again after the connection broke. */
@@ -81,4 +82,32 @@ export function takeHarnesses(engine: Engine, value: HarnessView[]): void {
   one.value = value
   one.readAt = Date.now()
   for (const reader of one.readers) reader()
+}
+
+/**
+ * Who is signed in to `harness`, which asks it, so starts it if need be.
+ * It is read again as the machine says its account changed, a sign-in or
+ * sign-out anywhere, and at each new `round`, a Person's "check again".
+ */
+export function useAccount(
+  engine: Engine,
+  harness: string | undefined,
+  round = 0
+): Live<Accounted> {
+  const source = useMemo<Source<Accounted> | null>(
+    () =>
+      harness === undefined
+        ? null
+        : {
+            read: () => engine.call("harnesses.account", { harness }),
+            filter: {
+              module: "harnesses",
+              subject: harness,
+              kinds: ["account_changed"],
+            },
+            apply: () => READ_AGAIN,
+          },
+    [engine, harness]
+  )
+  return useMachineLive(engine, source, round)
 }
