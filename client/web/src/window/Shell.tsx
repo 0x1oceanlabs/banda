@@ -101,7 +101,7 @@ import { unsoloing } from "../tiling/groups"
 import { AGENTS_FILE } from "@banda/contract/agents"
 import { useFile } from "@banda/ui/lib/look"
 import { Drawer } from "./Drawer"
-import { Peek, type Peeked } from "./Peek"
+import { Peek, usePeek } from "./Peek"
 import { Sheet, useSheet, useSheetTilesGo } from "./Sheet"
 import { useMadeGoesHome } from "./made"
 import { usePlacing } from "./placing"
@@ -139,7 +139,7 @@ import {
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { ThreadMenus } from "../titles/ThreadMenu"
 import { device } from "../boot"
-import { useKeyRouter, useKeys, usePeekEsc } from "./keys"
+import { useKeyRouter, useKeys } from "./keys"
 import { useSteady } from "./steady"
 
 /** The modules' sources, as a route names one for the menu to show alone. */
@@ -180,14 +180,10 @@ export function Shell({
   const flow = useFile(AGENTS_FILE).flow
   const solo = flow === "solo"
   const [row, setRow] = useState<string>()
-  // In the Flow free every workspace is free; in the row and solo, an
-  // emptied Project's keeps its place but when it has no Threads, and one
-  // of no Project never does (ADR 0102).
-  const strict = flow !== "free"
   const [stores] = useState(newStores)
-  const { placing, gone } = usePlacing(stores, flow, projects, machine)
-  // `placing` as last drawn, held steady for the Tiles' frame.
-  const latest = useSteady({ placing })
+  // Where the Panes go, and which emptied workspaces go (ADR 0102).
+  const placingNow = usePlacing(stores, flow, projects, machine)
+  const { placing, gone, strict, projectOf } = placingNow
   const tiling = useTiling({ engine, machine, modules, home, flow, row, gone })
   const { ready, aside, workspaces, standing, drawnNow, changing } = tiling
   const { change, update } = tiling
@@ -297,11 +293,6 @@ export function Shell({
   useEffect(() => {
     projectsNow.current = projects
   }, [projects])
-  // Any Project by its ID, its folder missing or not, as the bar names it.
-  const projectOf = useCallback(
-    (id: ProjectId) => projects.find((project) => project.id === id),
-    [projects]
-  )
   useMadeGoesHome(projects, placing, change)
   // The Person archives a Thread, from its row's menu, the Banda menu or
   // Alt+S, or brings it back. Archived, it is put away: every Pane that
@@ -367,21 +358,8 @@ export function Shell({
     (how: (was: Entry) => Entry) => setDrawer((was) => was && how(was)),
     []
   )
-  // Quick Look's tile over the desk (ADR 0073, decision 7): one Pane, in
-  // no workspace, and whether it fills the desk. Esc closes it, unless a
-  // menu or a dialog over it takes the Esc first.
-  const [peek, setPeek] = useState<Peeked | null>(null)
-  const peekNow = useRef(peek)
-  useEffect(() => {
-    peekNow.current = peek
-  }, [peek])
-  const closePeek = useCallback(() => setPeek(null), [])
-  const fillPeek = useCallback(() => {
-    if (!peekNow.current) return false
-    setPeek((was) => was && { ...was, fill: !was.fill })
-    return true
-  }, [])
-  usePeekEsc(peek !== null, closePeek)
+  // Quick Look's tile over the desk (ADR 0073, decision 7).
+  const { peek, setPeek, peekNow, closePeek, fillPeek } = usePeek()
   // The Pane zoomed over the whole window, while it keeps the focus: the
   // focus elsewhere, or the overview, brings it back (ADR 0025, decision 4).
   const [zoom, setZoom] = useState<string>()
@@ -761,7 +739,7 @@ export function Shell({
           : void openFrom(
               changing,
               drawnNow(),
-              latest.placing,
+              parts.placing(),
               project,
               pane,
               ...asked
@@ -803,7 +781,7 @@ export function Shell({
         }
       },
     }),
-    [change, changing, update, parts, popOut, stores, drawnNow, latest]
+    [change, changing, update, parts, popOut, stores, drawnNow]
   )
   // What a Pane in its own window asks, the window does, as for its own.
   useEffect(
