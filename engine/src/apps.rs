@@ -80,19 +80,6 @@ const fn typed<M: MethodTable>(_build: fn(&HostContext<'_>) -> M) -> (&'static s
     (M::TS, M::DIR)
 }
 
-/// Set to `1`, the engine declares sub-agents to each Harness it starts,
-/// in any build: the switch a trial and the window's tests turn on until
-/// the window draws sub-agents and Banda always declares them, which
-/// deletes it (ADR 0103, decision 7). The engine's unit gets it from its
-/// starter, as it gets Banda's other variables.
-const SUBAGENTS_VARIABLE: &str = "BANDA_SUBAGENTS";
-
-/// Whether `value`, the engine's [`SUBAGENTS_VARIABLE`], asks it to
-/// declare sub-agents: only `1` does.
-fn subagents_asked(value: Option<std::ffi::OsString>) -> bool {
-    value.is_some_and(|value| value == "1")
-}
-
 /// How this engine builds each engine part, by its App's id. The list
 /// serves one for each App with an engine part: an App with no builder
 /// here fails the build, and a builder with no App is code nothing calls,
@@ -100,18 +87,12 @@ fn subagents_asked(value: Option<std::ffi::OsString>) -> bool {
 mod build {
     use super::*;
 
-    /// It declares sub-agents to each Harness only when
-    /// [`SUBAGENTS_VARIABLE`] asks it to.
     pub fn agents(host: &HostContext<'_>) -> Agents {
-        let agents = Agents::new(host.harnesses.clone())
+        Agents::new(host.harnesses.clone())
             .config_in(host.places.config.clone())
             .modes_chosen_in(host.places.modes_chosen())
             .piped(host.pipe.clone())
-            .counted_in(host.working.clone());
-        match subagents_asked(std::env::var_os(SUBAGENTS_VARIABLE)) {
-            true => agents.declaring_subagents(),
-            false => agents,
-        }
+            .counted_in(host.working.clone())
     }
 
     pub fn browser(_: &HostContext<'_>) -> Browser {
@@ -627,16 +608,6 @@ mod tests {
                 !(method.pass && method.tool.is_some()),
                 "{name} is a tool already"
             );
-        }
-    }
-
-    /// `BANDA_SUBAGENTS=1` turns the switch on, and nothing else does: not
-    /// an empty value, nor another word for yes (ADR 0103, decision 7).
-    #[test]
-    fn sub_agents_are_declared_only_with_banda_subagents_1() {
-        assert!(subagents_asked(Some("1".into())));
-        for value in [None, Some(""), Some("0"), Some("yes")] {
-            assert!(!subagents_asked(value.map(Into::into)), "{value:?}");
         }
     }
 }

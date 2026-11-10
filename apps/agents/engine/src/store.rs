@@ -224,7 +224,8 @@ ALTER TABLE agents_threads ADD COLUMN arrival TEXT;
 -- A Thread's sub-agents, each a lane of it (ADR 0103, decision 8): the
 -- turn it started in, its root's for a nested one; the lane that started
 -- it; its anchor, the entry where it shows; and its own words and state.
--- `stopping` is who asked it to stop, 'person' or 'agent', until it ends.
+-- `stopping` is unused: Banda stops no sub-agent (ADR 0103, call 11), so
+-- nothing writes it.
 -- `evidence` is the Harness's child session, as JSON (ADR 0002, decision
 -- 7): a Thread keeps one lane for each.
 CREATE TABLE agents_subagents (
@@ -2147,12 +2148,11 @@ pub fn insert_lane(
 }
 
 /// Keeps what `lane` is now, by its ID; its Thread, turn, parent and
-/// anchor stay. One that no longer works is no longer being stopped.
+/// anchor stay.
 pub fn set_lane(sql: &Connection, lane: &Subagent) -> Result<(), Error> {
     sql.execute(
         "UPDATE agents_subagents SET title = ?2, role = ?3, model = ?4, state = ?5, why = ?6,
-             can_stop = ?7, ended_at = ?8, prompt = ?9, report = ?10,
-             stopping = CASE WHEN ?11 THEN stopping END
+             can_stop = ?7, ended_at = ?8, prompt = ?9, report = ?10
          WHERE id = ?1",
         params![
             lane.id,
@@ -2164,8 +2164,7 @@ pub fn set_lane(sql: &Connection, lane: &Subagent) -> Result<(), Error> {
             lane.can_stop,
             lane.ended,
             lane.prompt,
-            lane.report,
-            lane.state.works()
+            lane.report
         ],
     )?;
     Ok(())
@@ -2249,19 +2248,6 @@ pub fn every_lane_at_work(sql: &Connection) -> Result<Vec<(ThreadId, Subagent)>,
         Ok((row.get(13)?, read_lane(row)?))
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
-}
-
-/// Whether a Person asked lane `sub` to stop, while it works.
-pub fn stopped_by_person(sql: &Connection, sub: SubagentId) -> Result<bool, Error> {
-    Ok(sql
-        .query_row(
-            "SELECT stopping = 'person' FROM agents_subagents WHERE id = ?1",
-            params![sub],
-            |row| row.get::<_, Option<bool>>(0),
-        )
-        .optional()?
-        .flatten()
-        .unwrap_or(false))
 }
 
 /// The words of lane `sub`'s last reply, if it replied.
@@ -3512,35 +3498,6 @@ mod tests {
     }
 
     #[test]
-    fn a_lane_no_longer_at_work_is_no_longer_being_stopped() {
-        let kept = kept();
-        let (turn, _) = kept.turn("Review it");
-        let mut lane = kept.lane(turn, None);
-        let stopping = || -> Option<String> {
-            kept.sql
-                .query_row(
-                    "SELECT stopping FROM agents_subagents WHERE id = ?1",
-                    params![lane.id],
-                    |row| row.get(0),
-                )
-                .unwrap()
-        };
-        lane.state = SubagentState::Running;
-        set_lane(&kept.sql, &lane).unwrap();
-        kept.sql
-            .execute(
-                "UPDATE agents_subagents SET stopping = 'person' WHERE id = ?1",
-                params![lane.id],
-            )
-            .unwrap();
-        set_lane(&kept.sql, &lane).unwrap();
-        assert_eq!(stopping().as_deref(), Some("person"), "it still works");
-        lane.state = SubagentState::Stopped;
-        set_lane(&kept.sql, &lane).unwrap();
-        assert_eq!(stopping(), None);
-    }
-
-    #[test]
     fn lane_rows_stay_out_of_replies_plans_and_handoff_turns() {
         use crate::model::StepState;
         let kept = kept();
@@ -3693,9 +3650,6 @@ mod tests {
         // The first turn's lane still at it after the second began.
         kept.put(Some(first), call(ToolKind::Edit), Some(lane.id));
         kept.put(Some(first), question("And this?", Some(lane.id)), None);
-        kept.sql
-            .execute("UPDATE agents_subagents SET stopping = 'person'", [])
-            .unwrap();
 
         let (to, agent) = (ThreadId::new(), AgentId::new());
         kept.thread_of(to, agent);
@@ -3719,17 +3673,17 @@ mod tests {
             lane,
             "the rest as it was"
         );
-        let unkept: Vec<(Option<String>, Option<String>)> = {
+        let unkept: Vec<Option<String>> = {
             let mut rows = kept
                 .sql
-                .prepare("SELECT evidence, stopping FROM agents_subagents WHERE thread = ?1")
+                .prepare("SELECT evidence FROM agents_subagents WHERE thread = ?1")
                 .unwrap();
-            rows.query_map(params![to], |row| Ok((row.get(0)?, row.get(1)?)))
+            rows.query_map(params![to], |row| row.get(0))
                 .unwrap()
                 .collect::<rusqlite::Result<_>>()
                 .unwrap()
         };
-        assert_eq!(unkept, [(None, None), (None, None)]);
+        assert_eq!(unkept, [None, None]);
 
         let bodies =
             |items: Vec<Item>| -> Vec<Body> { items.into_iter().map(|i| i.body).collect() };

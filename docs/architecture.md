@@ -913,16 +913,16 @@ If Chat is removed, Agents still works through its own Thread.
   a restart interrupts it (`opened`). A tool call that changes between
   turns belongs to the turn that ended, as when a command Claude Code sent
   to the background ends, and opens none.
-- **A Harness's sub-agents work in lanes of their Thread** (ADR 0103),
-  once the engine declares sub-agents to the Harnesses it starts (for now
-  with `BANDA_SUBAGENTS=1`). Each sub-agent says what it does on a child
-  session of its own, which the session's lanes channel carries apart from
-  its turns, so nothing a sub-agent says opens a turn (`lanes.rs`, one
-  task per lane, in the order the Harness said it). Its start is written
-  where its parent said it, after what came before: by the turn that
-  heard it, or by its parent's lane for a nested one, in the root's launch
-  turn; one child session is one lane (`agents_subagents`, by its
-  evidence), so a child announced again or replayed goes on in its own.
+- **A Harness's sub-agents work in lanes of their Thread** (ADR 0103):
+  Banda declares sub-agents to each Harness it starts. Each sub-agent
+  says what it does on a child session of its own, which the session's
+  lanes channel carries apart from its turns, so nothing a sub-agent says
+  opens a turn (`lanes.rs`, one task per lane, in the order the Harness
+  said it). Its start is written where its parent said it, after what
+  came before: by the turn that heard it, or by its parent's lane for a
+  nested one, in the root's launch turn; one child session is one lane
+  (`agents_subagents`, by its evidence), so a child announced again or
+  replayed goes on in its own.
   Its words are the lane's entries (`agents_items.sub`), written by a
   Transcript of the lane, and never move the Thread; its Question is the
   Thread's, which names the lane, is answered by the Thread's mode as it

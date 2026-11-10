@@ -77,9 +77,6 @@ pub struct Live {
     /// The count of the turns that run, which each [`TurnRun`] holds one
     /// of.
     working: Working,
-    /// Whether each Harness process it starts is told it shows sub-agents
-    /// (ADR 0103, decision 7).
-    subagents: bool,
     /// The Threads a move to another Project or a delete holds now, each
     /// with what holds it ([`Live::hold`]).
     holds: Mutex<HashMap<ThreadId, Hold>>,
@@ -248,15 +245,8 @@ impl Live {
     /// Hosts let go after `idle` with nothing to do; a turn the Agent
     /// went on with by itself ends after `quiet` with nothing said; each
     /// session gets `banda mcp` through `pipe`; each turn counts in
-    /// `working` while it runs; each Harness process is told it shows
-    /// sub-agents when `subagents` says so.
-    pub fn new(
-        idle: Duration,
-        quiet: Duration,
-        pipe: Option<Pipe>,
-        working: Working,
-        subagents: bool,
-    ) -> Live {
+    /// `working` while it runs.
+    pub fn new(idle: Duration, quiet: Duration, pipe: Option<Pipe>, working: Working) -> Live {
         Live {
             hosts: Hosts::new(idle),
             turns: Mutex::default(),
@@ -267,7 +257,6 @@ impl Live {
             touches: Arc::default(),
             doings: Arc::default(),
             working,
-            subagents,
             holds: Mutex::default(),
         }
     }
@@ -325,9 +314,8 @@ impl Live {
 
     /// The process of `harness` for `project`, started if it is not
     /// running, with the pass its Agents' shells share, this `banda` first
-    /// on its PATH, sub-agents declared when this engine declares them,
-    /// and the Project's trust as it is now: one started under the other
-    /// is let go.
+    /// on its PATH, and the Project's trust as it is now: one started
+    /// under the other is let go.
     ///
     /// It is one to start behind the fence, reading its sessions' extra
     /// roots there (ADR 0083, decision 1), and in the Project's folder once
@@ -359,7 +347,6 @@ impl Live {
         // read from the keyring, and their SSH agent go only to a Project
         // the Person said they trust (ADR 0083, F0-3).
         started.set_trust_said(project.trust_said()).await;
-        started.subagents = self.subagents;
         let connection = (self.hosts)
             .get(project.id(), project.environment(), &started)
             .await?;
@@ -754,7 +741,6 @@ mod tests {
             Duration::from_secs(60),
             None,
             working,
-            false,
         ))
     }
 
