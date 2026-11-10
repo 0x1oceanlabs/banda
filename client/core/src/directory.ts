@@ -26,8 +26,9 @@ export type Placed = { machine?: ProjectId; host?: string }
 export type DirectoryMemory = {
   /** Each Project's place, as kept now. */
   read: () => Readonly<Record<string, Placed>>
-  /** Keeps `placed` for `project`. */
-  put: (project: string, placed: Placed) => void
+  /** Keeps each of these places at once: a machine lists its Projects
+   * together, and each write rewrites the whole record. */
+  putAll: (places: readonly (readonly [string, Placed])[]) => void
 }
 
 /** Whether a kept value is a place: anything else a device kept is
@@ -48,8 +49,8 @@ export function inWindow(): DirectoryMemory {
   const kept: Record<string, Placed> = {}
   return {
     read: () => kept,
-    put: (project, placed) => {
-      kept[project] = placed
+    putAll: (places) => {
+      for (const [project, placed] of places) kept[project] = placed
     },
   }
 }

@@ -423,8 +423,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     this.#ours = { machine, projects }
     // The directory keeps them as this machine's, once its engine said
     // its ID, so its Panes are its own from a window's first moment.
-    if (machine !== undefined)
-      for (const id of this.#ourIds) this.#learn(id, { machine })
+    if (machine !== undefined) this.#learn(this.#ourIds, { machine })
     this.#shown.set(this.#placed(this.get()))
     // Said here too, as the hosts' rows may not change with ours.
     this.#sayMachines()
@@ -534,11 +533,14 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     return host
   }
 
-  /** Keeps `placed` for `project` in the directory, where it says
-   * something new. */
-  #learn(project: ProjectId, placed: Placed): void {
-    if (!sameData(this.#directory.read()[project], placed))
-      this.#directory.put(project, placed)
+  /** Keeps `placed` for those of `projects` the directory says something
+   * else of, in one write. */
+  #learn(projects: Iterable<ProjectId>, placed: Placed): void {
+    const kept = this.#directory.read()
+    const fresh = [...projects]
+      .filter((id) => !sameData(kept[id], placed))
+      .map((id) => [id, placed] as const)
+    if (fresh.length > 0) this.#directory.putAll(fresh)
   }
 
   /**
@@ -599,7 +601,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     const named = paneHost(pane)
     const host = named ?? opener
     if (host !== undefined && this.hostOf(project) === null)
-      this.#learn(project, { host })
+      this.#learn([project], { host })
     return named === undefined ? pane : withHost(pane, undefined)
   }
 
@@ -734,8 +736,13 @@ export class KeptHosts implements Readable<readonly Shown[]> {
         (project) => project.archived && !taken.has(project.id)
       )
       const place = { ...(said !== undefined && { machine: said }), host: name }
-      for (const { id } of [...projects, ...archived]) this.#learn(id, place)
-      if (machine !== undefined) this.#learn(machine, place)
+      this.#learn(
+        [
+          ...[...projects, ...archived].map(({ id }) => id),
+          ...(machine === undefined ? [] : [machine]),
+        ],
+        place
+      )
       return machine === host.machine && sameEach(projects, host.projects)
         ? host
         : { ...host, machine, projects }
