@@ -71,7 +71,7 @@ export function outOf(
  */
 export function startsOn(
   harnesses: readonly HarnessView[],
-  agents: Pick<Agents, "account" | "fallback">,
+  agents: Start,
   limits: readonly Limits[],
   now: number,
   signedIn: ReadonlyMap<string, boolean | undefined> = new Map()
