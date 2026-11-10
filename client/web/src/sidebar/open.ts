@@ -10,14 +10,6 @@ import type { Row } from "./arrange"
  */
 export const Dismiss = createContext<(() => void) | undefined>(undefined)
 
-/** `run`, once the Sidebar over the Strip has gone (`dismiss`). */
-export function dismissing(run: Run, dismiss?: () => void): Run {
-  return (action, args) => {
-    dismiss?.()
-    run(action, args)
-  }
-}
-
 /**
  * How a part of the sidebar runs what opens a Pane or a menu, by the
  * Window's actions (ADR 0087, decision 11): the Sidebar over the Strip
@@ -25,7 +17,12 @@ export function dismissing(run: Run, dismiss?: () => void): Run {
  * `useRun` and leaves it there.
  */
 export function useOpen(): Run {
-  return dismissing(useRun(), useContext(Dismiss))
+  const run = useRun()
+  const dismiss = useContext(Dismiss)
+  return (action, args) => {
+    dismiss?.()
+    run(action, args)
+  }
 }
 
 /**
