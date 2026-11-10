@@ -9,7 +9,7 @@ import {
 import { useNow } from "@banda/ui/hooks/use-now"
 import { sleeps } from "@banda/ui/lib/later"
 import { useThreadAround } from "../thread/context"
-import { LimitCard } from "./limit"
+import { LimitCard, LimitPassed } from "./limit"
 import type { LineProps } from "./types"
 import { CircleAlertIcon, CircleSlashIcon, RotateCcwIcon } from "lucide-react"
 
@@ -43,6 +43,9 @@ export function EndedLine({ line, facts }: LineProps<"ended">) {
       />
     )
   }
+  // One the Thread went on from already, on another account or by trying
+  // again: a quiet line of what happened, not a failure.
+  if (failure?.class === "usage_limit") return <LimitPassed turn={turn} />
   const signsIn = failure?.class === "sign_in" && onRetry !== undefined
   const advice = !signsIn && failure && adviceFor(failure)
   return (

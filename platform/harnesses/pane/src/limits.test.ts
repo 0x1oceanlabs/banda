@@ -3,7 +3,6 @@ import { DAY, HOUR, MINUTE } from "@banda/ui/lib/words"
 import { expect, test } from "vitest"
 import {
   backWords,
-  colourOf,
   elapsedOf,
   mostRoomOf,
   readAtOf,
@@ -151,9 +150,7 @@ test("the hover line names each account under its Harness", () => {
   ).toBe("out")
 })
 
-test("accounts take colours by place, and wrap after five", () => {
-  expect(colourOf(0)).toBe("var(--account-1, #3987e5)")
-  expect(colourOf(6)).toBe("var(--account-2, #9085e9)")
+test("a Harness's name is short on the bar", () => {
   expect(shortName("Claude Code")).toBe("Claude")
 })
 

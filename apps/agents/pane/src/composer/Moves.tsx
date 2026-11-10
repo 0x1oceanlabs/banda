@@ -107,7 +107,7 @@ function MoveRow({
       {room && (
         <span
           className={cn(
-            "w-10 shrink-0 text-right text-xs text-muted-foreground tabular-nums",
+            "min-w-10 shrink-0 text-right text-xs whitespace-nowrap text-muted-foreground tabular-nums",
             out && "text-destructive"
           )}
         >

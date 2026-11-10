@@ -98,7 +98,7 @@ export function AccountLogin({
     })
   const who = read.state === "ready" ? read.value.signed_in_as : undefined
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-3">
       {read.state === "loading" && (
         <span className="flex items-center gap-2">
           <Spinner /> Checking account…
@@ -123,7 +123,7 @@ export function AccountLogin({
           </p>
           <pre
             aria-label="Sign-in output"
-            className="max-h-48 overflow-auto rounded-md border p-3 text-xs whitespace-pre-wrap select-text"
+            className="max-h-48 overflow-auto rounded-md border p-3 text-xs [overflow-wrap:anywhere] whitespace-pre-wrap select-text"
           >
             {output.text || "Waiting for the sign-in instructions…"}
           </pre>

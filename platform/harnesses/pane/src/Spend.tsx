@@ -28,7 +28,6 @@ import {
   TOKENS,
   byAccount,
   byModel,
-  colourOf,
   count,
   daysOf,
   changeWords,
@@ -196,7 +195,7 @@ export function Spend({
                     className="absolute inset-y-0 left-0 rounded-full"
                     style={{
                       width: `${share * 100}%`,
-                      background: colourOf(account),
+                      background: account.colour,
                     }}
                   />
                 </div>
@@ -287,7 +286,7 @@ function Shares({
         .map(({ account, value, share }) => (
           <span
             key={account.id}
-            style={{ flex: share, background: colourOf(account) }}
+            style={{ flex: share, background: account.colour }}
             title={`${account.name}: ${write(value)}, ${Math.round(share * 100)}%`}
           />
         ))}
@@ -316,7 +315,7 @@ function DaysChart({
           a.harness && a.harness !== a.name
             ? `${a.name} · ${a.harness}`
             : a.name,
-        color: colourOf(a),
+        color: a.colour,
       },
     ])
   )
@@ -375,8 +374,8 @@ function DaysChart({
                 x2="0"
                 y2="1"
               >
-                <stop offset="5%" stopColor={colourOf(a)} stopOpacity={0.32} />
-                <stop offset="95%" stopColor={colourOf(a)} stopOpacity={0.02} />
+                <stop offset="5%" stopColor={a.colour} stopOpacity={0.32} />
+                <stop offset="95%" stopColor={a.colour} stopOpacity={0.02} />
               </linearGradient>
             ))}
           </defs>
@@ -387,7 +386,7 @@ function DaysChart({
               dataKey={a.key}
               type="monotone"
               stackId="1"
-              stroke={colourOf(a)}
+              stroke={a.colour}
               strokeWidth={1.5}
               fill={`url(#usage-${a.key})`}
               dot={false}
@@ -404,7 +403,7 @@ function DaysChart({
               key={a.key}
               dataKey={a.key}
               stackId="1"
-              fill={colourOf(a)}
+              fill={a.colour}
               stroke="var(--background)"
               strokeWidth={1}
               radius={i === accounts.length - 1 ? [3, 3, 0, 0] : 0}

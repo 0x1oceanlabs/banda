@@ -335,6 +335,28 @@ test("a failed turn's outcome follows the last thing it wrote, and a message rea
   ).toEqual(["m1", "r", "u1", "m2", "u2"])
 })
 
+test("the Agent's words that only say its limit ran out are not said twice", () => {
+  const said = "You've hit your weekly limit · resets Nov 13, 6am"
+  const state = play(
+    event(
+      "message.posted",
+      { item: "m", turn: "u1", text: "go" },
+      { author: person }
+    ),
+    event("turn.started", { turn: "u1" }),
+    event("reply.grew", { item: "r", turn: "u1", text: said }),
+    event("turn.ended", {
+      turn: "u1",
+      state: "failed",
+      reason: said,
+      failure: { class: "usage_limit" },
+    })
+  )
+  expect(
+    rows(state).map((row) => (row.kind === "item" ? row.item.id : row.turn.id))
+  ).toEqual(["m", "u1"])
+})
+
 test("a failed turn is tried again in a new turn, and only the latest can be", () => {
   const failed = play(
     event(

@@ -84,18 +84,22 @@ export function stepped(same: readonly Move[], step: 1 | -1): Move | undefined {
  * decision 6; ADR 0093, decision 8), first the main one: the fallback,
  * when it has room, else the account of its Harness with the most room,
  * else another Harness's. Then the best of each kind that is not first.
- * An account without limits, as an API key's, has all the room. */
+ * One whose limits are not read, as OpenCode's or an API key's, comes
+ * after every one whose limits say it has room. */
 export function waysOn(
   same: readonly Move[],
   others: readonly Move[],
   fallback?: string
 ): Move[] {
   const free = (move: Move) => !move.on && !move.out
+  // The most room known: one whose limits are not read, as OpenCode's or
+  // an API key's, may have none, and comes after every one that says.
+  const spent = (move: Move) => move.fullest ?? Infinity
   const best = (moves: readonly Move[]) =>
     moves
       .filter(free)
       .reduce<Move | undefined>(
-        (a, b) => (a && (a.fullest ?? 0) <= (b.fullest ?? 0) ? a : b),
+        (a, b) => (a && spent(a) <= spent(b) ? a : b),
         undefined
       )
   const kinds = [best(same), best(others)]

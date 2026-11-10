@@ -14,6 +14,7 @@ import {
   PopoverTrigger,
 } from "@banda/ui/components/popover"
 import { cn } from "@banda/ui/lib/utils"
+import { clock } from "@banda/ui/lib/words"
 import {
   CheckIcon,
   ChevronLeftIcon,
@@ -29,6 +30,7 @@ import {
   resetOf,
   type Picked,
 } from "./picker"
+import { harnessTitle } from "../harnesses"
 import { choose, chosen } from "../thread/state"
 import type { Move } from "../thread/moves"
 import { MoveConfirm, MoveList } from "./Moves"
@@ -53,6 +55,7 @@ export function ModelPicker({
   disabled,
   onChange,
   starts,
+  out,
   onStart,
   harnesses,
   moves,
@@ -70,6 +73,9 @@ export function ModelPicker({
   onChange: (settings: Settings) => Promise<boolean>
   /** A new Thread's Harnesses, if it can start on another. */
   starts?: Start[]
+  /** The account a new Thread starts on is out, till `until` when that is
+   * said: the trigger warns, and the popover says the reset. */
+  out?: { until?: number }
   /** Starts the new Thread on another Harness, with `settings`. */
   onStart?: (harness: string, settings?: Settings) => void
   /** A started Thread's moves, and whether a move to another Harness
@@ -131,7 +137,10 @@ export function ModelPicker({
     <MoveList
       same={moves.same}
       others={moves.others}
-      harnessName={name}
+      harnessName={harnessTitle(
+        harnesses,
+        emblemOf(harnesses, harness).harness
+      )}
       onPick={moveTo}
     />
   )
@@ -177,12 +186,18 @@ export function ModelPicker({
             variant="ghost"
             size="sm"
             className={cn("min-w-0", FOOTER_CONTROL)}
-            aria-label={`Model: ${label}`}
+            aria-label={`Model: ${label}${out ? `, ${name} is out of its limits` : ""}`}
           />
         }
       >
         {logo}
         {named}
+        {out && (
+          <span
+            aria-hidden
+            className="-ml-0.5 size-1.5 shrink-0 self-start rounded-full bg-warning"
+          />
+        )}
       </PopoverTrigger>
       {/* It floats as the chat's popups do (ADR 0058): a block's corner. */}
       <PopoverContent
@@ -190,6 +205,13 @@ export function ModelPicker({
         align="end"
         className="w-72 gap-0 rounded-(--block-radius) p-1"
       >
+        {out && !confirming && (
+          <p className="px-2.5 pt-1.5 pb-1 text-xs text-warning">
+            {name} is out of its limits
+            {out.until === undefined ? "" : ` until ${clock(out.until)}`}. A
+            fallback in Settings → Agents starts new Threads there meanwhile.
+          </p>
+        )}
         {confirming ? (
           <MoveConfirm
             move={confirming}

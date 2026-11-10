@@ -1,6 +1,6 @@
 /** The Usage Pane's small parts, which its tabs share. */
 import { cn } from "@banda/ui/lib/utils"
-import { type Account, colourOf } from "./usage"
+import type { Account } from "./usage"
 
 /** A row of small buttons, one pressed: the period, the chart's form. */
 export function Segments({
@@ -59,7 +59,7 @@ export function Dot({
         "inline-block size-1.5 shrink-0 rounded-full",
         !on && "ring-[1.5px] ring-muted-foreground/60 ring-inset"
       )}
-      style={on ? { background: colourOf(account) } : undefined}
+      style={on ? { background: account.colour } : undefined}
     />
   )
 }

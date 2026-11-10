@@ -94,4 +94,15 @@ describe("waysOn", () => {
     )
     expect(ids(waysOn(same, others))).toEqual(["codex"])
   })
+
+  test("a Harness whose limits say room before one whose limits are not read", () => {
+    const { same, others } = movesOf(
+      [entry("opencode", "opencode"), ...list],
+      "claude",
+      [],
+      [limits("claude", 100), limits("work", 100), limits("codex", 23)],
+      1_000
+    )
+    expect(ids(waysOn(same, others))).toEqual(["codex"])
+  })
 })

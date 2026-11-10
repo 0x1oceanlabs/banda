@@ -796,7 +796,8 @@ fn account_of(of: &str, id: &str, earlier: &[Harness]) -> Result<Harness, String
 /// account of the same Harness starts with that letter too, the first
 /// two; where those match as well, the letter and its count. A Harness's
 /// own entry takes its own colour, 0, and its accounts the four in turn
-/// (ADR 0093, decision 3). What an entry names wins.
+/// (ADR 0093, decision 3). What an entry names wins, and is taken from the
+/// turn of those that name none.
 fn looks(list: &[Harness]) -> Vec<(String, u8)> {
     let letters = |name: &str, n: usize| -> String {
         let mut chars = name.chars().filter(|c| c.is_alphanumeric());
@@ -822,14 +823,45 @@ fn looks(list: &[Harness]) -> Vec<(String, u8)> {
             at != place && other.harness() == list[place].harness() && marks[at] == marks[place]
         })
     };
+    // The colours a Harness's accounts name are theirs: one that names
+    // none takes, in turn, the four the others left, so an account added
+    // before it repaints nothing that names its own. All four named, it
+    // takes them all in turn.
+    let mut named: std::collections::HashMap<&str, Vec<u8>> = Default::default();
+    for one in list.iter().filter(|one| one.of.is_some()) {
+        let colours = named.entry(one.harness()).or_default();
+        colours.extend(
+            one.colour
+                .filter(|colour| (1..=COLOURS as u8).contains(colour)),
+        );
+    }
+    let free: std::collections::HashMap<&str, Vec<u8>> = (list.iter())
+        .map(|one| {
+            let taken = named.get(one.harness()).map_or(&[][..], Vec::as_slice);
+            let left: Vec<u8> = (1..=COLOURS as u8).filter(|c| !taken.contains(c)).collect();
+            let left = if left.is_empty() {
+                (1..=COLOURS as u8).collect()
+            } else {
+                left
+            };
+            (one.harness(), left)
+        })
+        .collect();
     (list.iter().enumerate())
         .map(|(place, harness)| {
-            let accounts_before = (list[..place].iter())
-                .filter(|other| other.of.is_some() && other.harness() == harness.harness())
+            let unnamed_before = (list[..place].iter())
+                .filter(|other| {
+                    other.of.is_some()
+                        && other.colour.is_none()
+                        && other.harness() == harness.harness()
+                })
                 .count();
             let colour = harness.colour.unwrap_or(match harness.of {
                 None => 0,
-                Some(_) => (accounts_before % COLOURS) as u8 + 1,
+                Some(_) => {
+                    let free = &free[harness.harness()];
+                    free[unnamed_before % free.len()]
+                }
             });
             let mark = if harness.mark.is_some() || !shared(&ones, place) {
                 ones[place].clone()
@@ -1953,6 +1985,24 @@ mod tests {
     }
 
     #[test]
+    fn an_account_that_names_its_colour_repaints_none_of_the_others() {
+        let colours = |text: &str| -> Vec<u8> {
+            let list = Harnesses::new(listed_in(Path::new("h"), text).unwrap());
+            (list.views().into_iter()).map(|view| view.colour).collect()
+        };
+        let found = "[[harness]]\nid = \"c2\"\nof = \"claude\"\n\
+                     [[harness]]\nid = \"c3\"\nof = \"claude\"\n";
+        let before = colours(&format!("[[harness]]\nid = \"claude\"\n{found}"));
+        // Added in the window, which names its colour, before the found two.
+        let after = colours(&format!(
+            "[[harness]]\nid = \"claude\"\n\
+             [[harness]]\nid = \"c4\"\nof = \"claude\"\ncolour = 3\n{found}"
+        ));
+        assert_eq!(before, [0, 1, 2]);
+        assert_eq!(after, [0, 3, 1, 2]);
+    }
+
+    #[test]
     fn marks_are_first_letters_and_accounts_take_the_four_colours_in_turn() {
         let entry = |id: &str, of: &str, name: &str| {
             format!("[[harness]]\nid = {id:?}\nof = {of:?}\nname = {name:?}\n")
@@ -1979,12 +2029,12 @@ mod tests {
             [
                 ("C".into(), 0),  // Claude Code's own entry: its own colour
                 ("Wo".into(), 1), // Work and wild one share W
-                ("W1".into(), 2), // wild one and Wild share Wi too
+                ("W1".into(), 3), // wild one and Wild share Wi too; 2 is Я's
                 ("C".into(), 0),  // Codex's own entry
-                ("A".into(), 3),  // Claude's third account, whatever lies between
+                ("A".into(), 4),  // Claude's third account, whatever lies between
                 ("W".into(), 1),  // Codex's first account: alone among Codex's
-                ("W2".into(), 4),
-                ("F".into(), 1), // the fifth account takes the first again
+                ("W2".into(), 1), // the three free colours begin again
+                ("F".into(), 3),
                 ("Я".into(), 2), // what its entry names
             ]
         );
@@ -2017,7 +2067,7 @@ mod tests {
                 (Some(Icon::Gateway), 1), // a gateway's models may be anyone's
                 (Some(Icon::Codex), 0),
                 (Some(Icon::Chatgpt), 0),
-                (Some(Icon::Personal), 3), // Codex's third account
+                (Some(Icon::Personal), 2), // the second of Codex's that name no colour
                 (None, 0),                 // no icons for it: its letters
             ]
         );

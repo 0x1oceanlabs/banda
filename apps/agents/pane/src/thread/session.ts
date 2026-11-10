@@ -31,7 +31,12 @@ import type { PaneProps } from "@banda/ui/pane"
 import { type Attaching, useAttachments } from "../composer/Attachments"
 import type { Values } from "../asking/form"
 import type { HarnessView } from "@banda/contract/harnesses"
-import { harnessName, harnessShort, useHarnesses } from "../harnesses"
+import {
+  byHarness,
+  harnessName,
+  harnessShort,
+  useHarnesses,
+} from "../harnesses"
 import { useStartsOn } from "./starts-on"
 import { useThread } from "./live-thread"
 import { settledTurn } from "../list/marks"
@@ -561,12 +566,22 @@ export function useThreadSession({
      * the model picker to choose one by its model; none once it started. */
     starts:
       thread === null && (everyDefaults || unplaced)
-        ? offered.flatMap(({ id, name }) => {
+        ? byHarness(offered).flatMap(({ id, name }) => {
             const settings = draftOf(id)
             const offer =
               everyDefaults?.[id]?.offer ?? (unplaced ? NO_OFFER : undefined)
             return settings && offer ? [{ id, name, settings, offer }] : []
           })
+        : undefined,
+    /** A new Thread's default is out and it starts there still, no
+     * fallback having room: its chip warns, and says the reset (ADR 0093,
+     * decision 7). */
+    startsOut:
+      thread === null &&
+      startsOn &&
+      !startsOn.fallback &&
+      harness === startsOn.default
+        ? startsOn.out
         : undefined,
     /** Starts the new Thread on `next` instead, with `settings`. */
     startOn: (next: string, settings?: Settings) => {
