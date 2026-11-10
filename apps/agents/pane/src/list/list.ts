@@ -110,7 +110,18 @@ function applied(state: ThreadList, event: Event): ThreadList {
       const { thread: id, title, harness = "", agent = "" } = fact.payload
       if (state.threads.some((thread) => thread.id === id)) return state
       const at = event.at
-      const started = { id, harness, title, agent, updated_at: at, asking: [] }
+      // Its parent, the Thread whose Agent started it, is said only here
+      // (ADR 0098, decision 24).
+      const { parent } = fact.payload
+      const started = {
+        id,
+        harness,
+        title,
+        agent,
+        ...(parent ? { parent } : {}),
+        updated_at: at,
+        asking: [],
+      }
       return { ...state, threads: [started, ...state.threads] }
     }
     case "message.posted": {

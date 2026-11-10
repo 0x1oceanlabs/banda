@@ -272,6 +272,10 @@ export type Listed = {
   /** The Agent that works in it, as a Thread's own: what it opens, as a
    * tab, opens beside its Pane (ADR 0029, decision 4). */
   agent?: string
+  /** The Thread whose Agent started it through Banda, by its id: it is
+   * that Thread's child (ADR 0098, decision 24). None for one its Person
+   * started, and for a fork. */
+  parent?: string
   /** The Agent whose Thread it is about, when another module lists it:
    * the sidebar draws it on that Thread's row, not on a row of its own,
    * and the window tells its Person of it as of any (ADR 0029, decision

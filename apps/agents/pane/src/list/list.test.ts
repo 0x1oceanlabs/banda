@@ -14,6 +14,7 @@ import {
   threadsSource,
   withDoing,
 } from "./list"
+import { listedOf } from "./rows"
 import { agent, event, person } from "../testing"
 
 const empty: ThreadList = { at: 0, threads: [] }
@@ -44,6 +45,48 @@ test("a Thread from an older log names no Harness", () => {
     { subject: "t1" }
   )
   expect(applyThreads(empty, started).threads[0].harness).toBe("")
+})
+
+test("a Thread another Agent started names its parent, as it starts (ADR 0098, decision 24)", () => {
+  const started = event(
+    "thread.started",
+    { thread: "t2", title: "Look around", agent: "a2", parent: "t1" },
+    { author: agent, subject: "t2" }
+  )
+  expect(applyThreads(empty, started).threads[0].parent).toBe("t1")
+  // One its Person started, or an older log's, names none.
+  const own = event(
+    "thread.started",
+    { thread: "t3", title: "Hello", agent: "a3" },
+    { subject: "t3" }
+  )
+  expect(applyThreads(empty, own).threads[0]).not.toHaveProperty("parent")
+})
+
+test("a child whose parent its Person deleted still names it, and lists as before (ADR 0098, decisions 14 and 24)", () => {
+  const parent = event(
+    "thread.started",
+    { thread: "t1", title: "Plan", agent: "a1" },
+    { subject: "t1" }
+  )
+  const child = event(
+    "thread.started",
+    { thread: "t2", title: "Look around", agent: "a2", parent: "t1" },
+    { author: agent, subject: "t2" }
+  )
+  const deleted = event(
+    "thread.deleted",
+    { thread: "t1" },
+    { author: person, subject: "t1" }
+  )
+  const left = [parent, child, deleted].reduce(applyThreads, empty)
+  expect(left.threads.map((t) => t.id)).toEqual(["t2"])
+  // A parent no list has now: the row carries its id as it came.
+  expect(left.threads[0].parent).toBe("t1")
+  expect(listedOf(left.threads[0], "Claude")).toMatchObject({
+    id: "t2",
+    parent: "t1",
+  })
 })
 
 test("a Thread that hears a message moves to the top", () => {

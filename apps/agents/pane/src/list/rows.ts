@@ -4,8 +4,8 @@
  * Person (a Question, why it failed, or what its Agent told it of its
  * turn, ADR 0057), how many lines its last turn that ended changed (ADR
  * 0098, decision 8), whether they saw how it ended and whether they
- * archived it, what it was last asked, its Agent, and the Pane a click
- * opens.
+ * archived it, what it was last asked, its Agent, the Thread whose Agent
+ * started it (ADR 0098, decision 24), and the Pane a click opens.
  * The window arranges the rows; this says only what each one is. Pure, so
  * plain tests cover it.
  */
@@ -129,6 +129,7 @@ export function listedOf(
     ...(harness ? { by: harness } : {}),
     ...(thread.harness ? { harness: thread.harness } : {}),
     agent: thread.agent,
+    ...(thread.parent ? { parent: thread.parent } : {}),
     ...(thread.was !== undefined ? { was: thread.was } : {}),
     ...(seenNow !== undefined ? { seen: seenNow } : {}),
     ...(archivedAt === undefined

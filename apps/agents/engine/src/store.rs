@@ -260,6 +260,21 @@ CREATE INDEX agents_items_by_sub ON agents_items (sub) WHERE sub IS NOT NULL;
 -- changed none, and for turns that ended before.
 ALTER TABLE agents_turns ADD COLUMN changed_lines TEXT;
 "#,
+    r#"
+-- The Thread whose Agent started the Thread through Banda: its parent
+-- (ADR 0098, decision 24). A Thread from before takes it from its
+-- `author`, who wrote its `thread.started` too, when that is the Agent
+-- of another Thread: the latest, as `thread_of` finds it. A fork is no
+-- one's child.
+ALTER TABLE agents_threads ADD COLUMN parent TEXT;
+UPDATE agents_threads SET parent = (
+    SELECT p.id FROM agents_threads p
+    WHERE p.agent = json_extract(agents_threads.author, '$.id')
+      AND p.id != agents_threads.id
+    ORDER BY p.updated_at DESC, p.id DESC LIMIT 1
+)
+WHERE forked_from IS NULL AND json_extract(author, '$.kind') = 'agent';
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -762,6 +777,16 @@ pub fn set_forked_from(sql: &Connection, thread: ThreadId, from: ThreadId) -> Re
     Ok(())
 }
 
+/// Keeps that the Agent of `parent` started `thread` (ADR 0098, decision
+/// 24), as it starts: a Thread's parent never changes.
+pub fn set_parent(sql: &Connection, thread: ThreadId, parent: ThreadId) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_threads SET parent = ?2 WHERE id = ?1",
+        params![thread, parent],
+    )?;
+    Ok(())
+}
+
 /// Idle Threads still assigned to a removed Account, including archived
 /// Threads. Queued Turns follow the new Account when they start.
 pub fn idle_on(sql: &Connection, harness: &str) -> Result<Vec<ThreadId>, Error> {
@@ -779,17 +804,17 @@ pub fn threads(sql: &Connection, doing: &AtWork) -> Result<Vec<ListedThread>, Er
     // The Person's marks come with each row, not by a query of their own.
     let mut statement = sql.prepare(
         "SELECT id, COALESCE(harness, ''), title, updated_at, was_title, agent, later,
-                seen, archived
+                seen, archived, parent
          FROM agents_threads ORDER BY updated_at DESC, id DESC",
     )?;
     let rows = statement.query_map([], |row| {
         let marks = (maybe_column(row, 6)?, row.get(7)?, maybe_column(row, 8)?);
-        Ok((read_thread(row)?, row.get(5)?, marks))
+        Ok((read_thread(row)?, (row.get(5)?, row.get(9)?), marks))
     })?;
     let summaries = rows.collect::<rusqlite::Result<Vec<_>>>()?;
     summaries
         .into_iter()
-        .map(|(thread, agent, (later, seen, archived))| {
+        .map(|(thread, (agent, parent), (later, seen, archived))| {
             let latest = last_begun(sql, thread.id)?;
             let now = latest.as_ref().and_then(|latest| {
                 let (turn, now) = doing.get(&thread.id)?;
@@ -798,6 +823,7 @@ pub fn threads(sql: &Connection, doing: &AtWork) -> Result<Vec<ListedThread>, Er
             });
             Ok(ListedThread {
                 agent,
+                parent,
                 latest,
                 asking: asking(sql, thread.id)?,
                 message: latest_message(sql, thread.id)?,
@@ -2600,6 +2626,55 @@ mod tests {
             "a Harness once named stays"
         );
     }
+
+    #[test]
+    fn a_thread_from_before_is_the_child_of_the_agent_that_started_it() {
+        let sql = Connection::open_in_memory().unwrap();
+        let at = MIGRATIONS
+            .iter()
+            .position(|m| m.contains("ADD COLUMN parent"))
+            .unwrap();
+        let (before, from) = MIGRATIONS.split_at(at);
+        for migration in before {
+            sql.execute_batch(migration).unwrap();
+        }
+        let person = Participant::Person(banda_kernel::PersonId::new());
+        let started = |title: &str, author: Participant, updated_at: i64| {
+            let summary = ThreadSummary {
+                id: ThreadId::new(),
+                harness: "fake".to_owned(),
+                title: title.to_owned(),
+                updated_at,
+                was: None,
+            };
+            let agent = AgentId::new();
+            insert_thread(&sql, &summary, agent, author, &Settings::default()).unwrap();
+            (summary.id, agent)
+        };
+        let (plan, planner) = started("Plan", person, 1);
+        let (child, _) = started("Look around", Participant::Agent(planner), 2);
+        let (own, _) = started("By hand", person, 3);
+        let (fork, _) = started("Plan fork", Participant::Agent(planner), 4);
+        set_forked_from(&sql, fork, plan).unwrap();
+        let (stray, _) = started(
+            "By an Agent now gone",
+            Participant::Agent(AgentId::new()),
+            5,
+        );
+        for migration in from {
+            sql.execute_batch(migration).unwrap();
+        }
+        let parents: HashMap<_, _> = threads(&sql, &AtWork::new())
+            .unwrap()
+            .into_iter()
+            .map(|t| (t.thread.id, t.parent))
+            .collect();
+        assert_eq!(parents[&child], Some(plan), "its Agent's Thread");
+        for none in [plan, own, fork, stray] {
+            assert_eq!(parents[&none], None);
+        }
+    }
+
     #[test]
     fn an_unsent_sweep_keeps_images_still_referenced_by_a_fork() {
         let sql = migrated();

@@ -43,7 +43,13 @@ harness?: string,
 /**
  * Its Agent. Older logs leave it out.
  */
-agent?: AgentId, } } | { "kind": "message.posted", "payload": { item: ItemId, turn: TurnId, text: string, images: Array<Image>, 
+agent?: AgentId, 
+/**
+ * The Thread of the event's author, when that is the Agent of
+ * another Thread (ADR 0098, decision 24). None for a Person's,
+ * and for a fork; older logs leave it out.
+ */
+parent?: ThreadId, } } | { "kind": "message.posted", "payload": { item: ItemId, turn: TurnId, text: string, images: Array<Image>, 
 /**
  * It answers what this Thread's Agent asked another Thread's
  * (ADR 0019); its author is that Thread's Agent.

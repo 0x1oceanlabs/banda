@@ -984,6 +984,12 @@ pub struct ListedThread {
     pub thread: ThreadSummary,
     /// Its Agent: the author of what it writes into other Threads.
     pub agent: AgentId,
+    /// The Thread whose Agent started it through Banda (ADR 0019): it is
+    /// that Thread's child (ADR 0098, decision 24). None for one its
+    /// Person started, and for a fork; it never changes.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<ThreadId>,
     /// Its latest turn that began. None has yet.
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1222,6 +1228,12 @@ pub enum Fact {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         agent: Option<AgentId>,
+        /// The Thread of the event's author, when that is the Agent of
+        /// another Thread (ADR 0098, decision 24). None for a Person's,
+        /// and for a fork; older logs leave it out.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        parent: Option<ThreadId>,
     },
     /// A message to the Agent, which queues a turn.
     #[serde(rename = "message.posted")]
@@ -1630,6 +1642,18 @@ pub const VERSION: u32 = 1;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_thread_an_old_log_started_has_no_parent() {
+        let old = serde_json::json!({
+            "kind": "thread.started",
+            "payload": { "thread": "0196a4f2-6a3c-7000-8000-000000000001", "title": "Hi" },
+        });
+        let Fact::ThreadStarted { parent, .. } = serde_json::from_value(old).unwrap() else {
+            panic!("a start")
+        };
+        assert_eq!(parent, None);
+    }
 
     /// Writes `VERSION` beside the generated types, as ts-rs writes them,
     /// so a window reads the facts' version from the Rust.

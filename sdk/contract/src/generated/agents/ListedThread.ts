@@ -20,6 +20,12 @@ export type ListedThread = {
  */
 agent: AgentId, 
 /**
+ * The Thread whose Agent started it through Banda (ADR 0019): it is
+ * that Thread's child (ADR 0098, decision 24). None for one its
+ * Person started, and for a fork; it never changes.
+ */
+parent?: ThreadId, 
+/**
  * Its latest turn that began. None has yet.
  */
 latest?: LatestTurn, 

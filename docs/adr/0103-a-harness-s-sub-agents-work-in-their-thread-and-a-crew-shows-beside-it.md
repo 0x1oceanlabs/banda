@@ -410,6 +410,8 @@ sub-agents and the Crew `audit-routes`:
         session's files. The asker's label is kept with the Question as
         it asks, so the dock, the list and the notification name it
         alike, even after the lane is renamed.
+      - _Amended 2026-11-10, with ADR 0098's step 14:_ `ListedThread.parent`
+        came earlier, with that step's S14a, as decision 5 says it.
 11. **A Harness's process with sub-agents at work is not idle.**
     `Connection::idle_since` is none while a lane works or asks, or while
     `background_tasks_changed` says background work goes on. The
@@ -1021,6 +1023,8 @@ it is in.
      gap: while sub-agents outlive their turn, the list, the Mark, the
      bar and the sound say Done until `ListedThread.subagents` comes
      (decision 19).
+   - _Amended 2026-11-10, with ADR 0098's step 14:_ `ListedThread.parent`
+     came with ADR 0098's S14a, so this step adds `subagents` only.
 4. **A Crew in the Thread** (decisions 2, 9, 18–20, 26, 33): the raw SDK
    frames into Crews, `agents.crew`, `ListedThread.crew` and line 2's
    Crew words, the card, the live line after the turn, the host kept

@@ -1874,7 +1874,10 @@ fn send(
                 None => fresh(tx.sql(), &harness, &start, fence)?.0,
             };
             let chosen = full_access::chosen(settings.mode, fence);
-            start_thread(tx, author, harness, title, &settings, chosen)?
+            // An Agent's new Thread is the child of the Thread it writes
+            // from (ADR 0098, decision 24).
+            let parent = by.map(|(_, from)| from);
+            start_thread(tx, author, harness, title, &settings, chosen, parent)?
         }
     };
     let running = match steer && by_person {
@@ -1974,8 +1977,16 @@ fn fork(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Forked, Er
     let title = format!("{} fork", source.title);
     // As its Thread's mode was chosen, so is the fork's.
     let chosen = store::full_access(tx.sql(), from)?;
-    let (thread, agent) =
-        start_thread(tx, author, source.harness, title.clone(), &settings, chosen)?;
+    // A fork is no one's child, whoever forked it: it names its source.
+    let (thread, agent) = start_thread(
+        tx,
+        author,
+        source.harness,
+        title.clone(),
+        &settings,
+        chosen,
+        None,
+    )?;
     store::set_forked_from(tx.sql(), thread, from)?;
     store::copy_turns(tx.sql(), (from, found.agent), turn, (thread, agent))?;
     store::set_offer(tx.sql(), thread, &store::offer(tx.sql(), from)?)?;
@@ -2011,7 +2022,8 @@ fn rewind(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<(), Erro
 }
 
 /// A new Thread on `harness`, and its own Agent, the only one: in
-/// `settings`, its Full access marked as `chosen` (ADR 0083).
+/// `settings`, its Full access marked as `chosen` (ADR 0083), and the
+/// child of `parent`, the Thread whose Agent started it, if one did.
 fn start_thread(
     tx: &mut Tx<'_>,
     author: Participant,
@@ -2019,6 +2031,7 @@ fn start_thread(
     title: String,
     settings: &Settings,
     chosen: Option<Chosen>,
+    parent: Option<ThreadId>,
 ) -> Result<(ThreadId, AgentId), Error> {
     let summary = ThreadSummary {
         id: ThreadId::new(),
@@ -2030,11 +2043,15 @@ fn start_thread(
     let agent = AgentId::new();
     store::insert_thread(tx.sql(), &summary, agent, author, settings)?;
     store::set_full_access(tx.sql(), summary.id, chosen)?;
+    if let Some(parent) = parent {
+        store::set_parent(tx.sql(), summary.id, parent)?;
+    }
     let fact = Fact::ThreadStarted {
         thread: summary.id,
         title: summary.title,
         harness: Some(summary.harness),
         agent: Some(agent),
+        parent,
     };
     emit(tx, author, summary.id, &fact)?;
     Ok((summary.id, agent))
