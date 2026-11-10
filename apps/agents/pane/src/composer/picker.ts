@@ -58,6 +58,20 @@ export function modelName(choice: OptionChoice): string {
     : choice.name
 }
 
+/** The name of the model a Thread runs on, as its picker says it; none
+ * while its Harness has said no models. A sub-agent's row shows its own
+ * model only when it differs (ADR 0103, decision 15). */
+export function modelNow(
+  settings: Settings,
+  options: HarnessOption[]
+): string | undefined {
+  const { model } = pickedOf(options)
+  if (!model) return undefined
+  const value = chosen(settings, model)
+  const now = model.choices.find((choice) => choice.value === value)
+  return now && modelName(now)
+}
+
 /** Where on the slider the effort chosen is, and whether it is the
  * Harness's default, which sits in the middle until a level is chosen. */
 export function levelAt(

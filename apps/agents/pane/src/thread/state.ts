@@ -22,6 +22,20 @@ import {
   type Usage,
 } from "@banda/contract/agents"
 import { settledTurn } from "../list/marks"
+import {
+  askedByLane,
+  atWork,
+  changedBy,
+  changeOne,
+  entryOf,
+  laneChanged,
+  laneEnded,
+  namedBy,
+  startedBy,
+  subOf,
+} from "./facts"
+
+export { atWork } from "./facts"
 
 export type ThreadState = {
   /** The last position in the Project's log this state includes. */
@@ -118,15 +132,6 @@ export function choose(
   return { ...settings, options: { ...settings.options, [option]: value } }
 }
 
-/** `list` with its one of `id` changed by `change`. */
-function changeOne<T extends { id: string }>(
-  list: T[],
-  id: string,
-  change: (one: T) => T
-): T[] {
-  return list.map((one) => (one.id === id ? change(one) : one))
-}
-
 function changeItem(
   state: ThreadState,
   id: string,
@@ -139,11 +144,6 @@ function changeItem(
  * engine's `edits` keeps them: a call's kind is set as it starts. */
 const EDITS: ReadonlySet<ToolKind> = new Set(["edit", "delete", "move"])
 
-/** Whether a sub-agent works: it runs, or asks. */
-export function atWork(lane: Subagent): boolean {
-  return lane.state === "running" || lane.state === "asks"
-}
-
 /** A tool call as the Thread shows it. */
 export type Tool = Extract<Body, { kind: "tool" }>
 
@@ -155,26 +155,19 @@ export type IssueBody = Extract<Body, { kind: "issue" }>
 /** An item that is a Question. */
 export type Asked = Item & { body: QuestionBody }
 
-function changeTool(
+/** The entry `fact` names changed by it: among the Thread's entries, or
+ * a sub-agent's call among its edits, where that is kept. */
+function changeNamed(
   state: ThreadState,
-  id: string,
-  change: (tool: Tool) => Tool
+  fact: Fact
 ): Pick<ThreadState, "items" | "edits"> {
-  const changed = (item: Item): Item =>
-    item.body.kind === "tool" ? { ...item, body: change(item.body) } : item
-  // A sub-agent's call is changed where it is kept, among its edits.
+  const id = namedBy(fact)
+  if (id === undefined) return { items: state.items, edits: state.edits }
+  const change = (item: Item) => changedBy(item, fact)
   const edits = state.edits.some((item) => item.id === id)
-    ? changeOne(state.edits, id, changed)
+    ? changeOne(state.edits, id, change)
     : state.edits
-  return { items: changeItem(state, id, changed), edits }
-}
-
-/** A call as it starts. */
-function called(
-  payload: Extract<Fact, { kind: "tool.started" }>["payload"]
-): Body {
-  const { title, tool, status, content } = payload
-  return { kind: "tool", title, tool, status, content }
+  return { items: changeItem(state, id, change), edits }
 }
 
 /** The items with `id` after every other, changed by `change`. */
@@ -287,26 +280,18 @@ function project(state: ThreadState, event: Event): ThreadState {
   const next = { ...state, at: event.seq }
   const fact = decodeFact(event)
   if (!fact) return next
-  const item = (id: string, body: Item["body"], turn?: string): Item => ({
-    id,
-    turn,
-    author: event.author,
-    at: event.at,
-    body,
-  })
+  const item = (id: string, body: Item["body"], turn?: string): Item =>
+    entryOf(event, id, body, turn)
+  // The entry the fact starts, for the kinds that start one.
+  const started = () => [...state.items, startedBy(fact, event)!]
   // A sub-agent's entries stay out of the Thread (ADR 0103, decision 8):
   // its Questions are the Thread's, and of its work only its edits come,
   // which its turns' changes count. Any entry with a `sub` is cut here, so
   // a kind added later is too.
-  const sub = (fact.payload as { sub?: string }).sub
-  if (sub !== undefined && fact.kind !== "question.asked") {
+  if (subOf(fact) !== undefined && fact.kind !== "question.asked") {
     if (fact.kind !== "tool.started" || !EDITS.has(fact.payload.tool))
       return next
-    const { item: id, turn } = fact.payload
-    return {
-      ...next,
-      edits: [...state.edits, item(id, called(fact.payload), turn)],
-    }
+    return { ...next, edits: [...state.edits, startedBy(fact, event)!] }
   }
   switch (fact.kind) {
     case "message.posted":
@@ -441,113 +426,21 @@ function project(state: ThreadState, event: Event): ThreadState {
       }
     }
     case "reply.grew":
-    case "thought.grew": {
-      const { item: id, turn, text } = fact.payload
-      const body: Body =
-        fact.kind === "reply.grew"
-          ? { kind: "message", text, images: [] }
-          : { kind: "thought", text }
-      if (!state.items.some((i) => i.id === id)) {
-        return { ...next, items: [...state.items, item(id, body, turn)] }
-      }
-      return {
-        ...next,
-        items: changeItem(state, id, (i) =>
-          (i.body.kind === "message" || i.body.kind === "thought") &&
-          i.body.kind === body.kind
-            ? { ...i, body: { ...i.body, text: i.body.text + text } }
-            : i
-        ),
-      }
-    }
-    case "tool.started": {
-      const { item: id, turn } = fact.payload
-      const body = called(fact.payload)
-      return { ...next, items: [...state.items, item(id, body, turn)] }
-    }
-    case "tool.changed": {
-      const { item: id, title, status, content, exit } = fact.payload
-      return {
-        ...next,
-        ...changeTool(state, id, (tool) => ({
-          ...tool,
-          title: title ?? tool.title,
-          status: status ?? tool.status,
-          content: content ?? tool.content,
-          output:
-            exit === undefined
-              ? tool.output
-              : { text: "", cut: false, ...tool.output, exit },
-        })),
-      }
-    }
-    case "tool.output": {
-      const { item: id, text, cut } = fact.payload
-      return {
-        ...next,
-        ...changeTool(state, id, (tool) => ({
-          ...tool,
-          output: {
-            ...tool.output,
-            text: (tool.output?.text ?? "") + text,
-            cut: cut || (tool.output?.cut ?? false),
-          },
-        })),
-      }
-    }
-    case "question.asked": {
-      const { item: id, turn, title, choices, form, plan } = fact.payload
-      const body: Body = {
-        kind: "question",
-        title,
-        choices,
-        form,
-        plan,
-        state: "open",
-        // The sub-agent that asks; its Question is the Thread's all the same.
-        ...(sub && { sub }),
-      }
-      return { ...next, items: [...state.items, item(id, body, turn)] }
-    }
+    case "thought.grew":
+      // A reply or a thought grows the entry it started, if it has.
+      return state.items.some((i) => i.id === fact.payload.item)
+        ? { ...next, ...changeNamed(state, fact) }
+        : { ...next, items: started() }
+    case "tool.started":
+    case "question.asked":
+    case "plan.made":
+      return { ...next, items: started() }
+    case "tool.changed":
+    case "tool.output":
     case "question.answered":
-    case "question.closed": {
-      const answered = fact.kind === "question.answered"
-      const { choice, values } = answered ? fact.payload : {}
-      return {
-        ...next,
-        items: changeItem(state, fact.payload.item, (i) =>
-          i.body.kind === "question"
-            ? {
-                ...i,
-                body: {
-                  ...i.body,
-                  state: answered ? "answered" : "closed",
-                  answer: choice ?? i.body.answer,
-                  values: values ?? i.body.values,
-                },
-              }
-            : i
-        ),
-      }
-    }
-    case "plan.made": {
-      const { item: id, turn, steps } = fact.payload
-      return {
-        ...next,
-        items: [...state.items, item(id, { kind: "plan", steps }, turn)],
-      }
-    }
-    case "plan.changed": {
-      const { item: id, steps } = fact.payload
-      return {
-        ...next,
-        items: changeItem(state, id, (item) =>
-          item.body.kind === "plan"
-            ? { ...item, body: { kind: "plan", steps } }
-            : item
-        ),
-      }
-    }
+    case "question.closed":
+    case "plan.changed":
+      return { ...next, ...changeNamed(state, fact) }
     case "thread.used":
       return { ...next, usage: fact.payload.usage }
     case "thread.moved": {
@@ -555,13 +448,8 @@ function project(state: ThreadState, event: Event): ThreadState {
       const body = { kind: "moved", from, to, how } as const
       return { ...next, items: [...state.items, item(id, body, turn)] }
     }
-    case "notice.posted": {
-      const { item: id, turn, text } = fact.payload
-      return {
-        ...next,
-        items: [...state.items, item(id, { kind: "notice", text }, turn)],
-      }
-    }
+    case "notice.posted":
+      return { ...next, items: started() }
     case "issue.drafted": {
       const { item: id, turn, ...draft } = fact.payload
       const body = { kind: "issue", ...draft, state: "drafted" } as const
@@ -601,48 +489,21 @@ function project(state: ThreadState, event: Event): ThreadState {
       return { ...next, subagents, items: [...state.items, anchor] }
     }
     case "subagent.changed": {
-      const { subagent: id, role, ...given } = fact.payload
+      const { subagent: id, ...change } = fact.payload
       return {
         ...next,
-        subagents: changeOne(state.subagents, id, (lane) => {
-          const changed: Subagent = { ...lane, ...given }
-          if (role === null) delete changed.role
-          else if (role !== undefined) changed.role = role
-          // At work again, it has not ended.
-          if (given.state !== undefined && atWork(changed)) {
-            delete changed.ended
-            delete changed.why
-          }
-          return changed
-        }),
+        subagents: changeOne(state.subagents, id, (lane) =>
+          laneChanged(lane, change)
+        ),
       }
     }
-    case "subagent.ended": {
-      const {
-        subagent: id,
-        state: ended,
-        why,
-        report,
-        ended: at,
-      } = fact.payload
+    case "subagent.ended":
       return {
         ...next,
-        // Ended, it can no longer be stopped; the why is this end's.
-        subagents: changeOne(state.subagents, id, (lane) => {
-          const changed: Subagent = {
-            ...lane,
-            state: ended,
-            ended: at,
-            can_stop: false,
-            why,
-            report: report ?? lane.report,
-          }
-          if (why === undefined) delete changed.why
-          if (changed.report === undefined) delete changed.report
-          return changed
-        }),
+        subagents: changeOne(state.subagents, fact.payload.subagent, (lane) =>
+          laneEnded(lane, fact.payload)
+        ),
       }
-    }
     case "visual.shown": {
       const { item: id, turn, visual, title, height, heights } = fact.payload
       const body = { kind: "visual", visual, title, height, heights } as const
@@ -838,9 +699,18 @@ const UNFINISHED: ReadonlySet<TurnView["state"]> = new Set([
   "interrupted",
 ])
 
+/** The entry the Agent may still be writing: its last, but a Question
+ * one of its sub-agents asks, which comes beside its reply (ADR 0103,
+ * decision 8). A sub-agent's anchor is the Agent's own: its reply or
+ * thought ends as it starts one. */
+export function writing(state: ThreadState): Item | undefined {
+  return state.items.findLast((item) => !askedByLane(item))
+}
+
 /** The Thread's items, each unfinished turn's outcome after its last one:
  * what it wrote, or else the message that asked for it. The messages that
- * wait are not among them ({@link waiting}), nor those taken back. */
+ * wait are not among them ({@link waiting}), nor those taken back, nor a
+ * sub-agent's Questions, which its row says (ADR 0103, decision 28). */
 export function rows(state: ThreadState): Row[] {
   const gone = withdrawn(state)
   const waits = new Set(waiting(state).map(({ item }) => item.id))
@@ -849,7 +719,8 @@ export function rows(state: ThreadState): Row[] {
     (item) =>
       !waits.has(item.id) &&
       !(gone.has(item.id) && !item.turn) &&
-      !said.has(item.id)
+      !said.has(item.id) &&
+      !askedByLane(item)
   )
   return flow({ ...state, items })
 }

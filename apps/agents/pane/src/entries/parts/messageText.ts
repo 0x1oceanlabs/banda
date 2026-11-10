@@ -12,11 +12,23 @@ export function clamped(text: string): boolean {
   return false
 }
 
+/** The first line of `text` with words in it, without the markup that
+ * starts a heading, a list or a quote, or marks words bold or as code: a
+ * plan's title, a sub-agent's report as its row says it. */
+export function firstLine(text: string | undefined): string | undefined {
+  const line = text
+    ?.split("\n")
+    .map((one) => one.trim())
+    .find(Boolean)
+  const plain = line
+    ?.replace(/^(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)+/, "")
+    // Bold, emphasis and code marks, but an underscore inside a name.
+    .replace(/\*\*|__|`|(?<!\w)[*_]|[*_](?!\w)/g, "")
+    .trim()
+  return plain || undefined
+}
+
 /** A plan's title: its first line, without markdown's marks. */
 export function planTitle(text: string): string {
-  const first = text.split("\n").find((line) => line.trim() !== "") ?? ""
-  return first
-    .replace(/^[#>*\-\s]+/, "")
-    .replace(/[*_`]/g, "")
-    .trim()
+  return firstLine(text) ?? ""
 }

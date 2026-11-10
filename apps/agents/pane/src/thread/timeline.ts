@@ -20,6 +20,7 @@ import {
   merged,
   total,
 } from "../entries/parts/changes"
+import { askedByLane } from "./facts"
 import {
   isReply,
   planOf,
@@ -35,6 +36,9 @@ export type Line =
   | Row
   /** Two or more tool calls and thoughts in a row, from one turn. */
   | { kind: "work"; id: string; turn?: string; items: Item[] }
+  /** Two or more sub-agents in a row, started in one turn, with nothing
+   * between them: their anchors (ADR 0103, decision 14). */
+  | { kind: "subagents"; id: string; turn?: string; items: Item[] }
   /** What a turn that ended did before its last reply, its lines of work
    * opened into their calls: one list. */
   | { kind: "fold"; id: string; turn: TurnView; lines: Line[] }
@@ -57,9 +61,13 @@ function isWork(line: Line): line is Extract<Row, { kind: "item" }> {
   return line.kind === "item" && isWorkKind(line.item.body.kind)
 }
 
-/** Whether `line` is an entry that stays out of its turn's fold. */
+/** Whether `line` is an entry that stays out of its turn's fold, or the
+ * sub-agents its anchors start. */
 function staysOut(line: Line): boolean {
-  return line.kind === "item" && staysKind(line.item.body.kind)
+  return (
+    line.kind === "subagents" ||
+    (line.kind === "item" && staysKind(line.item.body.kind))
+  )
 }
 
 /** The turn a line belongs to, if any. */
@@ -68,34 +76,51 @@ function turnOf(line: Line): string | undefined {
     case "item":
       return line.item.turn
     case "work":
+    case "subagents":
       return line.turn
     default:
       return line.turn.id
   }
 }
 
+/** What a run of rows makes once it has two: a line of work, or the
+ * sub-agents' group. */
+type Run = "work" | "subagents"
+
+function runOf(item: Item): Run | undefined {
+  if (isWorkKind(item.body.kind)) return "work"
+  if (item.body.kind === "subagent") return "subagents"
+  return undefined
+}
+
+/** Calls and thoughts in a row from one turn make one line of work, and
+ * sub-agents in a row from one turn one group; one alone stays itself. */
 function group(input: Row[]): Line[] {
   const lines: Line[] = []
-  let work: Item[] = []
+  let run: Item[] = []
+  let kind: Run = "work"
   const flush = () => {
-    if (work.length === 1) lines.push({ kind: "item", item: work[0] })
-    else if (work.length > 1)
+    if (run.length === 1) lines.push({ kind: "item", item: run[0] })
+    else if (run.length > 1)
       lines.push({
-        kind: "work",
-        id: `work-${work[0].id}`,
-        turn: work[0].turn,
-        items: work,
+        kind,
+        id: `${kind}-${run[0].id}`,
+        turn: run[0].turn,
+        items: run,
       })
-    work = []
+    run = []
   }
   for (const row of input) {
-    if (isWork(row) && (work.length === 0 || work[0].turn === row.item.turn))
-      work.push(row.item)
-    else {
+    const next = row.kind === "item" ? runOf(row.item) : undefined
+    if (row.kind !== "item" || next === undefined) {
       flush()
-      if (isWork(row)) work.push(row.item)
-      else lines.push(row)
+      lines.push(row)
+      continue
     }
+    if (run.length > 0 && (next !== kind || run[0].turn !== row.item.turn))
+      flush()
+    kind = next
+    run.push(row.item)
   }
   flush()
   return lines
@@ -226,9 +251,13 @@ export type Doing =
   | { kind: "thinking" }
 
 /** What `turn` does now: it waits on its Person while a Question of it is
- * open, or else what it did last, while that still goes. */
+ * open, or else what it did last, while that still goes. A sub-agent's
+ * Question is not its: the sub-agent's row says what it asks (ADR 0103,
+ * decision 28). */
 export function doing(state: ThreadState, turn: TurnView): Doing | undefined {
-  const own = state.items.filter((item) => item.turn === turn.id)
+  const own = state.items.filter(
+    (item) => item.turn === turn.id && !askedByLane(item)
+  )
   const open = (item: Item) =>
     item.body.kind === "question" && item.body.state === "open"
   if (own.some(open)) return { kind: "asking" }

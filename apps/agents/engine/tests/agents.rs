@@ -128,6 +128,11 @@ impl banda_kernel::Module for Telling {
     }
 }
 
+/// The last view a test read of each Thread or sub-agent, by its ID: how
+/// many checkpoints it has, the Project it was read in, the view, and
+/// where in that Project's log it stood.
+type Last<V> = Mutex<BTreeMap<String, (usize, ProjectId, V, i64)>>;
+
 struct World {
     kernel: Arc<Kernel>,
     owner: PersonId,
@@ -279,6 +284,7 @@ impl World {
             .unwrap();
         let view: ThreadView = serde_json::from_value(view).unwrap();
         self.checkpoint(&view).await;
+        self.lane_checkpoints(&view).await;
         view
     }
 
@@ -287,16 +293,56 @@ impl World {
     /// view it reads now. The Pane's tests apply those facts to the first
     /// view and must get this one (ADR 0014, decision 3).
     async fn checkpoint(&self, view: &ThreadView) {
-        static LAST: Mutex<BTreeMap<String, (usize, ProjectId, ThreadView)>> =
-            Mutex::new(BTreeMap::new());
+        static LAST: Last<ThreadView> = Mutex::new(BTreeMap::new());
         let Some(folder) = std::env::var_os("BANDA_CHECKPOINTS") else {
             return;
         };
         let thread = view.thread.id.to_string();
-        let (n, start) = {
-            let mut last = LAST.lock().unwrap();
-            let Some((n, project, before)) = last.get_mut(&thread) else {
-                last.insert(thread, (0, self.project, view.clone()));
+        self.write_checkpoint(&LAST, Path::new(&folder), &thread, &thread, view, view.at)
+            .await;
+    }
+
+    /// With `BANDA_CHECKPOINTS` set, writes in its `lanes` folder each
+    /// change a test's read of a Thread shows of its sub-agents, as
+    /// [`World::checkpoint`] does for the Thread: a sub-agent's view as it
+    /// read it before, its Thread's facts after that, and its view now
+    /// (ADR 0103, decision 15).
+    async fn lane_checkpoints(&self, view: &ThreadView) {
+        static LAST: Last<SubagentView> = Mutex::new(BTreeMap::new());
+        let Some(folder) = std::env::var_os("BANDA_CHECKPOINTS") else {
+            return;
+        };
+        let folder = Path::new(&folder).join("lanes");
+        for lane in &view.subagents {
+            let params = json!({ "subagent": lane.id });
+            // A rewind may have taken it since its Thread was read.
+            let Ok(read) = self.call(self.person(), "agents.subagent", params).await else {
+                continue;
+            };
+            let now: SubagentView = serde_json::from_value(read).unwrap();
+            let thread = now.thread.to_string();
+            self.write_checkpoint(&LAST, &folder, &lane.id.to_string(), &thread, &now, now.at)
+                .await;
+        }
+    }
+
+    /// Writes `<folder>/<id>-<n>.json` once `last` holds an earlier view of
+    /// `id` than `now`, at `at`: that view, the facts of Thread `thread`
+    /// after it, and `now`, which `last` keeps for the next. The first
+    /// view of `id` is only kept.
+    async fn write_checkpoint<V: serde::Serialize + Clone>(
+        &self,
+        last: &Last<V>,
+        folder: &Path,
+        id: &str,
+        thread: &str,
+        now: &V,
+        at: i64,
+    ) {
+        let (n, start, from) = {
+            let mut last = last.lock().unwrap();
+            let Some((n, project, before, from)) = last.get_mut(id) else {
+                last.insert(id.to_owned(), (0, self.project, now.clone(), at));
                 return;
             };
             // A Thread moved to another Project (ADR 0098) is read there
@@ -304,30 +350,33 @@ impl World {
             // facts lead from one to the other.
             if *project != self.project {
                 *project = self.project;
-                *before = view.clone();
+                *before = now.clone();
+                *from = at;
                 return;
             }
-            if before.at == view.at {
+            if *from == at {
                 return;
             }
             *n += 1;
-            (*n, std::mem::replace(before, view.clone()))
+            let start = std::mem::replace(before, now.clone());
+            (*n, start, std::mem::replace(from, at))
         };
         let filter = EventFilter {
             module: Some("agents".to_owned()),
-            subject: Some(thread.clone()),
+            subject: Some(thread.to_owned()),
             kinds: None,
         };
         let project = self.kernel.project(self.project).await.unwrap();
         let events: Vec<_> = project
-            .events_after(start.at, filter, usize::MAX)
+            .events_after(from, filter, usize::MAX)
             .await
             .unwrap()
             .into_iter()
-            .filter(|event| event.seq <= view.at)
+            .filter(|event| event.seq <= at)
             .collect();
-        let checkpoint = json!({ "start": start, "events": events, "end": view });
-        let path = Path::new(&folder).join(format!("{thread}-{n}.json"));
+        let checkpoint = json!({ "start": start, "events": events, "end": now });
+        std::fs::create_dir_all(folder).unwrap();
+        let path = folder.join(format!("{id}-{n}.json"));
         std::fs::write(path, serde_json::to_vec(&checkpoint).unwrap()).unwrap();
     }
 

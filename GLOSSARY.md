@@ -97,14 +97,15 @@ _Avoid_: chat.
 
 **Entry**:
 One thing a Thread shows, one for each kind of its body: a message, a
-thought, a call, a plan, a Question, a notice, an Issue, a Visual. Each
-kind is drawn by a file of its own (ADR 0091).
+thought, a call, a plan, a Question, a notice, an Issue, a Visual, a
+sub-agent's row where it started (ADR 0103). Each kind is drawn by a file
+of its own (ADR 0091).
 _Avoid_: item (that is `item@1`), event.
 
 **Line**:
 What a Thread's timeline adds between its entries: the work line, a fold,
 the live line, a turn that ended, a turn's changes, a proposed plan (ADR
-0091).
+0091), the group of sub-agents one message started (ADR 0103).
 _Avoid_: row (that is how the sidebar list draws an Item).
 
 **Plan**:

@@ -68,6 +68,17 @@ export function pulsesOf(
   return pulses
 }
 
+/** What Thread `thread` touches now, as Follow follows it: the latest of
+ * its workers' files, its turn's or one of its sub-agents' (ADR 0073,
+ * decision 9, as ADR 0103 amends it). The engine moves a worker's touch
+ * to the end of the list each time it touches a file. */
+export function touchOf(
+  touched: readonly Touched[],
+  thread: string
+): Touched | undefined {
+  return touched.findLast((one) => one.thread === thread)
+}
+
 /** Where Follow goes: a file, whole, and the line its tool call named. */
 export type Target = {
   path: string

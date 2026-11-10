@@ -1,10 +1,10 @@
 /**
  * What every part of a Thread reads, from its Thread and not through props
  * (ADR 0091, decision 4): its Project, the Thread, the engine, the other
- * host its Project is on, the image reader, and the acts. It holds only
- * what does not change while the Thread is drawn, so it re-renders
- * nothing: the acts keep one identity and call the latest the Thread
- * gave.
+ * host its Project is on, the image reader, the acts, and which of its
+ * sub-agents' rows are open. It holds only what does not change while the
+ * Thread is drawn, so it re-renders nothing: the acts keep one identity
+ * and call the latest the Thread gave.
  */
 import {
   createContext,
@@ -12,9 +12,16 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
+  useSyncExternalStore,
 } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
-import type { Item, ListedThread, TurnView } from "@banda/contract/agents"
+import type {
+  Item,
+  ListedThread,
+  SubagentId,
+  TurnView,
+} from "@banda/contract/agents"
 import type { ImageReader } from "../entries/parts/MessageImages"
 import type { VisualArgs } from "../visual/Frame"
 
@@ -57,6 +64,38 @@ export type ThreadAround = {
   host?: string
   reader: ImageReader
   acts: ThreadActs
+  /** Which sub-agents' rows are open. */
+  opened: OpenedRows
+}
+
+/**
+ * Which sub-agents' rows the Thread has opened in place (ADR 0103,
+ * decision 15), kept by the sub-agent and not by its row: a lone row that
+ * joins a group as another sub-agent starts beside it is drawn anew, and a
+ * group that folds hides its rows, and each opens again as it was left.
+ */
+export type OpenedRows = {
+  has: (sub: SubagentId) => boolean
+  set: (sub: SubagentId, open: boolean) => void
+  listen: (heard: () => void) => () => void
+}
+
+function openedRows(): OpenedRows {
+  const open = new Set<SubagentId>()
+  const heard = new Set<() => void>()
+  return {
+    has: (sub) => open.has(sub),
+    set: (sub, now) => {
+      if (open.has(sub) === now) return
+      if (now) open.add(sub)
+      else open.delete(sub)
+      heard.forEach((hear) => hear())
+    },
+    listen: (hear) => {
+      heard.add(hear)
+      return () => void heard.delete(hear)
+    },
+  }
 }
 
 const Around = createContext<ThreadAround | null>(null)
@@ -66,6 +105,13 @@ export function useThreadAround(): ThreadAround {
   const around = useContext(Around)
   if (!around) throw new Error("A Thread's part is drawn in a Thread.")
   return around
+}
+
+/** Whether `sub`'s row is open, and how to open or close it. */
+export function useOpened(sub: SubagentId): [boolean, (open: boolean) => void] {
+  const { opened } = useThreadAround()
+  const open = useSyncExternalStore(opened.listen, () => opened.has(sub))
+  return [open, (now) => opened.set(sub, now)]
 }
 
 /** Gives a Thread's parts what they read: `acts` may be new on every
@@ -78,7 +124,7 @@ export function ThreadAroundProvider({
   reader,
   acts,
   children,
-}: ThreadAround & { children: React.ReactNode }) {
+}: Omit<ThreadAround, "opened"> & { children: React.ReactNode }) {
   const latest = useRef(acts)
   useLayoutEffect(() => {
     latest.current = acts
@@ -102,9 +148,11 @@ export function ThreadAroundProvider({
     }),
     [canPutOff, canSet]
   )
+  // Kept by sub-agent IDs, which no other Thread has.
+  const [opened] = useState(openedRows)
   const around = useMemo(
-    () => ({ engine, project, thread, host, reader, acts: stable }),
-    [engine, project, thread, host, reader, stable]
+    () => ({ engine, project, thread, host, reader, acts: stable, opened }),
+    [engine, project, thread, host, reader, stable, opened]
   )
   return <Around.Provider value={around}>{children}</Around.Provider>
 }

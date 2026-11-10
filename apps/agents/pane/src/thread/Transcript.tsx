@@ -1,7 +1,12 @@
 /** A Thread's transcript: its entries and lines, in the scroller that
  * follows the live edge (ADR 0058, ADR 0091). */
 import { useMemo, useRef } from "react"
-import type { Item, TurnView } from "@banda/contract/agents"
+import type {
+  Item,
+  Subagent,
+  SubagentId,
+  TurnView,
+} from "@banda/contract/agents"
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -11,6 +16,7 @@ import {
   MessageScrollerViewport,
 } from "@banda/ui/components/message-scroller"
 import { Spinner } from "@banda/ui/components/spinner"
+import { useNow } from "@banda/ui/hooks/use-now"
 import {
   Trace,
   TraceIcon,
@@ -23,12 +29,17 @@ import {
   type Listing,
   steerable,
   threadOf,
-  type ThreadState,
   type Waiting,
   working,
   writerOf,
+  writing,
 } from "./state"
 import { Writer } from "../entries/parts/Messages"
+import type { SubagentRow } from "../entries/types"
+import { modelNow } from "../composer/picker"
+import type { Lanes } from "./findIn"
+import type { Followed } from "./live-thread"
+import { byId, direct, rowOf } from "./subagents"
 import { awaiting, thoughtTimes, timeline } from "./timeline"
 import { key, LineOf } from "../lines"
 import type { LineFacts } from "../lines/types"
@@ -50,6 +61,7 @@ export function Transcript({
   state,
   waits,
   name,
+  short,
   queue,
   writers,
   answering,
@@ -61,10 +73,12 @@ export function Transcript({
   forYou: boolean
   /** What the Person looks for in it, if anything. */
   finding: string
-  state: ThreadState
+  state: Followed
   /** The messages that wait, from {@link waiting}. */
   waits: Waiting[]
   name: string
+  /** Its Harness's short name, "Claude", who sets its sub-agents to work. */
+  short: string
   queue: QueueActions
   /** Where the Thread may move, for a limit's card. */
   moves?: Moves
@@ -79,6 +93,27 @@ export function Transcript({
   const asks = useMemo(() => awaiting(state), [state])
   const thoughts = useMemo(() => thoughtTimes(state), [state])
   const last = state.items.at(-1)
+  const growing = writing(state)
+  // Its sub-agents, and the model it runs on, which their rows name only
+  // when theirs is another (ADR 0103, decision 15).
+  const model = useMemo(
+    () => modelNow(state.settings, state.offer.options),
+    [state.settings, state.offer.options]
+  )
+  const lanes = useMemo<Lanes>(
+    () => ({ byId: byId(state.subagents), model }),
+    [state.subagents, model]
+  )
+  // A working row's time moves by the minute, as the sidebar's ages do;
+  // only the live line counts the seconds (ADR 0103, decision 20).
+  const now = useNow(
+    MINUTE,
+    state.subagents.some((lane) => !lane.ended)
+  )
+  const rows = useMemo(
+    () => rowsOf(state, lanes, short, now),
+    [state, lanes, short, now]
+  )
   const turns = useMemo(
     () => new Map(state.turns.map((one) => [one.id, one])),
     [state.turns]
@@ -91,13 +126,18 @@ export function Transcript({
       turn: turnState(item.turn),
       asks: asks.has(item.id),
       took: thoughts.get(item.id),
-      live: turn?.state === "running" && item === last,
+      live: turn?.state === "running" && item === growing,
       writer: writerOf(writers, item),
       forks: forkAt(turns, item),
       edits: editAt(state.turns, item),
+      subagentRow:
+        item.body.kind === "subagent"
+          ? rows.get(item.body.subagent)
+          : undefined,
     }),
     turnState,
     finding,
+    lanes,
     name,
     harness: state.harness,
     answering,
@@ -203,6 +243,47 @@ export function Transcript({
         <ScrollPlace thread={thread} viewport={viewport} last={last?.id} />
       </MessageScroller>
     </MessageScrollerProvider>
+  )
+}
+
+const MINUTE = 60_000
+
+/** Each row as it was last drawn, by its sub-agent's record: a row that
+ * says the same keeps its object, so only one that changed draws again
+ * (ADR 0088, decision 9). */
+const drawn = new WeakMap<Subagent, SubagentRow>()
+
+/** What a row says, to tell whether it says something else. */
+const wording = (row: SubagentRow) => JSON.stringify([row.said, row.asker])
+
+/** The row of each sub-agent the Thread shows, the ones no sub-agent
+ * started (ADR 0103, decision 16), by its ID, as the Thread words it:
+ * set to work by its Harness, `short`, its parent's model the Thread's,
+ * at `now`. */
+function rowsOf(
+  state: Followed,
+  lanes: Lanes,
+  short: string,
+  now: number
+): Map<SubagentId, SubagentRow> {
+  return new Map(
+    direct(state.subagents).map((lane) => {
+      const row: SubagentRow = {
+        lane,
+        said: rowOf(lane, {
+          lanes: state.subagents,
+          heard: state.heard,
+          items: state.items,
+          parentModel: lanes.model,
+          now,
+        }),
+        asker: short,
+      }
+      const was = drawn.get(lane)
+      if (was && wording(was) === wording(row)) return [lane.id, was]
+      drawn.set(lane, row)
+      return [lane.id, row]
+    })
   )
 }
 

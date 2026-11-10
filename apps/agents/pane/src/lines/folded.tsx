@@ -1,18 +1,10 @@
 /** What a line of work and a fold share: one line that says what they did
  * and how much they changed, opening to their list (ADR 0058, decision
  * 4). */
-import { Fragment, useState } from "react"
-import {
-  Trace,
-  TraceCollapsible,
-  TraceCollapsibleContent,
-  TraceCollapsibleTrigger,
-  TraceIcon,
-  TraceLine,
-  TraceTitle,
-} from "@banda/ui/components/trace"
+import { useState } from "react"
+import { Trace } from "@banda/ui/components/trace"
+import { WorkFold } from "../entries/parts/WorkFold"
 import type { Did, Line } from "../thread/timeline"
-import { DiffCounts } from "@banda/ui/components/diff"
 import type { LineFacts } from "./types"
 import { key, LineOf } from "./index"
 
@@ -36,18 +28,15 @@ export function Folded({
   const [open, setOpen] = useState(false)
   return (
     <Trace>
-      <TraceCollapsible open={open || found} onOpenChange={setOpen}>
-        <TraceCollapsibleTrigger>
-          <TraceLine>
-            <TraceIcon>{icon}</TraceIcon>
-            <TraceTitle>{title}</TraceTitle>
-            <Counts did={did} />
-          </TraceLine>
-        </TraceCollapsibleTrigger>
-        <TraceCollapsibleContent>
-          <List lines={lines} facts={facts} />
-        </TraceCollapsibleContent>
-      </TraceCollapsible>
+      <WorkFold
+        icon={icon}
+        title={title}
+        did={did}
+        open={open || found}
+        onOpenChange={setOpen}
+      >
+        <List lines={lines} facts={facts} />
+      </WorkFold>
     </Trace>
   )
 }
@@ -80,34 +69,4 @@ function room(line: Line): string | undefined {
     default:
       return "my-2"
   }
-}
-
-/** "ran 3 commands (1 failed), edited 2 files": what failed in the
- * destructive colour. */
-export function Kinds({
-  did: { kinds },
-  capital,
-}: {
-  did: Did
-  capital?: boolean
-}) {
-  return kinds.map(({ words, failed }, at) => (
-    <Fragment key={at}>
-      {at > 0 && ", "}
-      {capital && at === 0 ? words[0].toUpperCase() + words.slice(1) : words}
-      {failed > 0 && (
-        <>
-          {" "}
-          <span className="text-destructive">({failed} failed)</span>
-        </>
-      )}
-    </Fragment>
-  ))
-}
-
-/** The lines a run of work added and removed, if it changed any. */
-function Counts({ did: { added, removed } }: { did: Did }) {
-  return added + removed > 0 ? (
-    <DiffCounts added={added} removed={removed} />
-  ) : null
 }

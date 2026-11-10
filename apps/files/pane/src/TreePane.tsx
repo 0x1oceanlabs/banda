@@ -93,6 +93,7 @@ import {
   pulsesOf,
   type Target,
   threadOf,
+  touchOf,
   turnedIn,
   wholeFrom,
 } from "./agent"
@@ -531,9 +532,7 @@ function FolderView({
     () => pulsesOf(touched, here, projectTop, colour),
     [touched, here, projectTop, colour]
   )
-  const mine = thread
-    ? touched.find((one) => one.thread === thread.id)
-    : undefined
+  const mine = thread ? touchOf(touched, thread.id) : undefined
   const turn = thread?.latest?.turn ?? null
   const turnedPaths = useTurned(
     engine,

@@ -115,7 +115,21 @@ function MessageScrollerButton({
   )
 }
 
+/**
+ * Tells the scroller around `from` that the Person moved its view, as a
+ * scroll of theirs does: it stops following its end, so what they open
+ * there grows downward and nothing above it moves, until they are back at
+ * the end. The scroller hears that only from a wheel, a touch or a key on
+ * its viewport, so it is told by a wheel that moves nothing.
+ */
+function stopFollowing(from: Element) {
+  from
+    .closest("[data-slot=message-scroller-viewport]")
+    ?.dispatchEvent(new WheelEvent("wheel", { bubbles: true }))
+}
+
 export {
+  stopFollowing,
   MessageScrollerProvider,
   MessageScroller,
   MessageScrollerViewport,

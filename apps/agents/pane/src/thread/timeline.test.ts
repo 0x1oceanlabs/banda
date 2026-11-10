@@ -12,6 +12,7 @@ import {
   type Line,
   thoughtTimes,
   timeline,
+  workOf,
 } from "./timeline"
 
 function play(...events: Event[]) {
@@ -46,6 +47,8 @@ function shape(lines: Line[]): unknown[] {
         return line.item.id
       case "work":
         return { work: line.items.map((item) => item.id) }
+      case "subagents":
+        return { subagents: line.items.map((item) => item.id) }
       case "fold":
         return { fold: shape(line.lines) }
       case "working":
@@ -459,4 +462,140 @@ test("a turn's changes count its sub-agents' edits; its work says the Agent's ow
     { changes: ["/b.md", "/a.md"] },
   ])
   expect(didWords(did(state.items, "done"))).toBe("edited a file")
+})
+
+/** Sub-agent `id` of turn `turn` starting, its anchor `item`. */
+const started = (item: string, id: string, turn = "u") =>
+  event("subagent.started", {
+    item,
+    subagent: {
+      id,
+      turn,
+      title: `Lane ${id}`,
+      state: "running",
+      can_stop: true,
+      started: 1,
+    },
+  })
+
+/** Sub-agent `sub` asks its Person. */
+const subAsks = (item: string, sub: string, turn = "u") =>
+  event("question.asked", {
+    item,
+    turn,
+    sub,
+    title: `Allow ${sub}?`,
+    choices: [{ id: "yes", name: "Allow", allows: true, always: false }],
+  })
+
+test("consecutive sub-agents of one turn are one group, and a lone one is its row", () => {
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    started("s1", "a"),
+    // A sub-agent's Question between them is no line of the Thread.
+    subAsks("q", "a"),
+    started("s2", "b"),
+    started("s3", "c"),
+    reply("r"),
+    started("s4", "d"),
+    event("thought.grew", { item: "t", turn: "u", text: "Hm" }),
+    started("s5", "e")
+  )
+  expect(shape(timeline(state))).toEqual([
+    "m",
+    { subagents: ["s1", "s2", "s3"] },
+    "r",
+    "s4",
+    "t",
+    "s5",
+    "working",
+  ])
+  const group = timeline(state)[1]
+  expect(group).toMatchObject({
+    kind: "subagents",
+    id: "subagents-s1",
+    turn: "u",
+  })
+})
+
+test("sub-agents of two turns are two lines, and stay out of a finished turn's fold", () => {
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    tool("a"),
+    started("s1", "a"),
+    started("s2", "b"),
+    tool("b"),
+    reply("r"),
+    event("turn.ended", { turn: "u", state: "done" }),
+    asked("v", "n"),
+    event("turn.started", { turn: "v" }),
+    started("s3", "c", "v")
+  )
+  expect(shape(timeline(state))).toEqual([
+    "m",
+    { fold: ["a", "b"] },
+    { subagents: ["s1", "s2"] },
+    "r",
+    "n",
+    "s3",
+    "working",
+  ])
+})
+
+test("a sub-agent's Question is no line of the Thread and no 'Waiting for you'", () => {
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    started("s", "a"),
+    tool("c"),
+    subAsks("q", "a")
+  )
+  const lines = timeline(state)
+  expect(shape(lines)).toEqual(["m", "s", "c", "working, calling"])
+  const turn = state.turns[0]
+  expect(doing(state, turn)?.kind).toBe("calling")
+  // The Agent's own Question still waits for you.
+  const own = apply(
+    state,
+    event("question.asked", {
+      item: "p",
+      turn: "u",
+      title: "Allow pnpm c?",
+      choices: [],
+    })
+  )
+  expect(doing(own, own.turns[0])).toEqual({ kind: "asking" })
+})
+
+test("the work line counts the Agent's own work, not its sub-agents'", () => {
+  const laneCall = (item: string) =>
+    event("tool.started", {
+      item,
+      turn: "u",
+      sub: "a",
+      title: `Read ${item}`,
+      tool: "read",
+      status: "done",
+      content: [],
+    })
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    event("thought.grew", { item: "t", turn: "u", text: "Hm" }),
+    started("s", "a"),
+    laneCall("x"),
+    laneCall("y"),
+    tool("a"),
+    event("tool.changed", { item: "a", status: "done" }),
+    tool("b"),
+    event("tool.changed", { item: "b", status: "done" }),
+    reply("r"),
+    event("turn.ended", { turn: "u", state: "done" })
+  )
+  const lines = timeline(state)
+  expect(shape(lines)).toEqual(["m", { fold: ["t", "a", "b"] }, "s", "r"])
+  const fold = lines[1] as Extract<Line, { kind: "fold" }>
+  expect(didWords(did(workOf(fold.lines), "done"))).toBe("ran 2 commands")
 })

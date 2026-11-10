@@ -582,7 +582,7 @@ The kit draws where the ADRs go; the window is on its way there.
 | the Mark | ADR 0099's seven looks, doings, satellites | the eight states before ADR 0099 |
 | `--woke` | `#f5c542` | not a token yet |
 | the effort's top level | magenta, `--effort-top` ([0031] d3) | not drawn: no token holds it |
-| satellites, Crews, the status bar | drawn | not built: the mocks of 2026-11-10 |
+| satellites, Crews, the status bar | drawn | satellites and the sub-agents' rows in the Thread built ([0103] step 1); Crews and the status bar not yet: the mocks of 2026-11-10 |
 
 A mock follows the kit. A change to the window follows the ADRs, and says
 in its PR which of these it closes.

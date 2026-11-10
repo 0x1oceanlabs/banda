@@ -10,6 +10,7 @@ import {
   QUIET,
   type Target,
   threadOf,
+  touchOf,
   turnedIn,
   turnPaths,
 } from "./agent"
@@ -107,6 +108,23 @@ test("Follow goes to each write, and to a read only once the last write is HOLD 
   expect(nextTarget(target, touch("/w/b.ts", "write", 1000, 12), top)).toBe(
     target
   )
+})
+
+test("Follow follows the Thread's latest touch among its sub-agents'", () => {
+  // The engine keeps one touch per worker, the latest last: the turn's,
+  // then a sub-agent's, and another Thread's between them.
+  const turn = { ...touch("/w/a.ts", "write", 1000), thread: "t" }
+  const lane = {
+    ...touch("/w/b.ts", "read", 2000),
+    thread: "t",
+    sub: "s",
+  } as Touched
+  const other = { ...touch("/w/c.ts", "write", 3000), thread: "u" }
+  expect(touchOf([turn, other, lane], "t")).toBe(lane)
+  // The turn touches again: its entry moves to the end.
+  const again = { ...turn, path: "/w/d.ts", at: 4000 }
+  expect(touchOf([other, lane, again], "t")).toBe(again)
+  expect(touchOf([other], "t")).toBeUndefined()
 })
 
 test("Follow waits while the Person works: QUIET after a key or a click, and while they hold something", () => {
