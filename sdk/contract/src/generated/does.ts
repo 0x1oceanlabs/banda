@@ -157,6 +157,8 @@ export const DOES = {
   "keys.settings_set": "act",
   "keys.settings_reset": "act",
   "keys.settings_rename": "act",
+  "keys.settings_read": "read",
+  "keys.settings_changed": "read",
   "machines.get": "read",
   "problems.list": "read",
   "problems.problem": "read",

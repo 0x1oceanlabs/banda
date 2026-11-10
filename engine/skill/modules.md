@@ -222,9 +222,9 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 
 ## Keys (`keys`)
 
-Banda's keys (ADR 0071): every action with its keys in force, and the lines of keys.toml that bind them, written as `banda settings set` writes after the look's checks. `banda keys` is its command; an Agent has its methods as tools. It writes the rest of Banda's settings for an Agent too, whose files are read-only behind the fence, and refuses what only the Person changes (ADR 0083).
+Banda's keys (ADR 0071): every action with its keys in force, and the lines of keys.toml that bind them, written as `banda settings set` writes after the look's checks. `banda keys` is its command; an Agent has its methods as tools. It writes the rest of Banda's settings for an Agent too, whose files are read-only behind the fence, and refuses what only the Person changes (ADR 0083). It reads a machine's own part of each settings file, and says as it changes, for a window of another device (ADR 0106).
 
-Its methods, `banda call keys.<method>`: `list`, `bind`, `free`, `reset`, `set_mod`, `settings_set`, `settings_reset`, `settings_rename`.
+Its methods, `banda call keys.<method>`: `list`, `bind`, `free`, `reset`, `set_mod`, `settings_set`, `settings_reset`, `settings_rename`, `settings_read`, `settings_changed`.
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 

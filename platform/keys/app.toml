@@ -3,7 +3,7 @@
 id = "keys"
 kind = "platform"
 name = "Keys"
-about = "Banda's keys (ADR 0071): every action with its keys in force, and the lines of keys.toml that bind them, written as `banda settings set` writes after the look's checks. `banda keys` is its command; an Agent has its methods as tools. It writes the rest of Banda's settings for an Agent too, whose files are read-only behind the fence, and refuses what only the Person changes (ADR 0083)."
+about = "Banda's keys (ADR 0071): every action with its keys in force, and the lines of keys.toml that bind them, written as `banda settings set` writes after the look's checks. `banda keys` is its command; an Agent has its methods as tools. It writes the rest of Banda's settings for an Agent too, whose files are read-only behind the fence, and refuses what only the Person changes (ADR 0083). It reads a machine's own part of each settings file, and says as it changes, for a window of another device (ADR 0106)."
 version = "0.1.0"
 # The major of the App API it is written to (ADR 0062, ADR 0082).
 api = 1
