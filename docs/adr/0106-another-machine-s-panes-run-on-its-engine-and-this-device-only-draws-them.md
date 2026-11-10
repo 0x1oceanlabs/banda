@@ -543,6 +543,14 @@ round trip.
      file that session may read, so an Agent's pass mints a token only
      for what its own reads reach. A token serves the one file it names,
      and nothing else.
+   - _Amended 2026-11-10, with step 4a:_ the URL is not signed. A token
+     is 256 bits from the system's randomness, kept only in the engine's
+     memory beside the file it serves, so it names nothing and a restart
+     ends every token. And an Agent is given none yet: `/b/` serves
+     outside the fence, so it would not read a file as an Agent's own
+     reads do. The window asks for what it draws, as the window's hosts
+     gave links to the window alone, and an answer to an Agent carries no
+     URLs. Every way the engine gives a token keeps that one rule (#1264).
    - The engine serves `GET /b/` and `GET /p/` beside `/ws`. A `/p/` page
      is sandboxed with an opaque origin, since any loopback origin may
      open `/ws` (`origin_allowed`, `kernel/src/api.rs:266`).
