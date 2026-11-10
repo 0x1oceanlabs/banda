@@ -267,11 +267,19 @@ function useArranging(
       const at = { x: event.clientX, y: event.clientY }
       setDrag({ ...drag, ...target(drag.id, at.x, at.y), at })
     }
-    const up = () => {
+    const up = (event: PointerEvent) => {
       if (!drag) return
       setDrag(null)
-      const after = moved(base, drag.id, drag.part, drag.index)
-      if (drag.away || same(after, base)) return
+      // Where the pointer lets go: on a busy page the release can come
+      // with the last moves, before any of them is drawn, and `drag` is
+      // then a step behind it.
+      const { part, index, away } = target(
+        drag.id,
+        event.clientX,
+        event.clientY
+      )
+      const after = moved(base, drag.id, part, index)
+      if (away || same(after, base)) return
       setPending(after)
       write(after)
     }
