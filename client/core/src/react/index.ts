@@ -17,6 +17,7 @@ export {
   useNowOf,
   useOurs,
   usePaneOn,
+  usePlaced,
   useReach,
   useShownNow,
   useShownOf,

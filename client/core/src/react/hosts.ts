@@ -56,6 +56,33 @@ export function useShownOf(host: string | undefined): Shown | undefined {
   return useHostsBy(select)
 }
 
+/** The machine that has `project` (`KeptHosts.hostOf`), drawn again as
+ * that changes. */
+function useHostOf(project: ProjectId, named: string | undefined) {
+  const kept = useContext(HostsContext)
+  const on = useCallback(
+    () => kept.hostOf(project, named),
+    [kept, project, named]
+  )
+  return useStore(kept, on)
+}
+
+/**
+ * The other machine that has `project`, by its key in `hosts.toml`, and
+ * as the Window shows it now; neither for this machine's, nor for one no
+ * machine the Window knows has. What an App reads of a Pane's place (ADR
+ * 0106, decision 1), which hands it no engine: its acts go through
+ * `WindowApi.sessionOf`.
+ */
+export function usePlaced(
+  project: ProjectId,
+  named: string | undefined
+): { host?: string; shown?: Shown } {
+  const host = useHostOf(project, named) ?? undefined
+  const shown = useShownOf(host)
+  return host === undefined ? {} : { host, shown }
+}
+
 /** Where a Pane reaches its engine: this machine's; or another host's,
  * by its name, with what the Window knows of that host yet, and its
  * engine once it knows it; or none, `host` null, as no machine the
@@ -78,11 +105,7 @@ export type Reach =
  */
 export function useReach(project: ProjectId, named: string | undefined): Reach {
   const kept = useContext(HostsContext)
-  const on = useCallback(
-    () => kept.hostOf(project, named),
-    [kept, project, named]
-  )
-  const host = useStore(kept, on)
+  const host = useHostOf(project, named)
   const shown = useShownOf(host ?? undefined)
   if (host === null) return { host }
   if (host === undefined) return { engine: kept.sessionOf(project) }

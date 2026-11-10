@@ -14,7 +14,7 @@ import {
   KEEP,
   Unreachable,
   useQueue,
-  useReach,
+  usePlaced,
   useWaiting,
   type Wait,
   waitsFor,
@@ -500,8 +500,7 @@ export function useThreadSession({
   // (Q6). The machine that waits is the one the directory says has its
   // Project, by its hosts.toml name, as the queue keeps it (ADR 0106,
   // decision 1).
-  const { host: there, shown } = useReach(project, args.host)
-  const host = there ?? undefined
+  const { host, shown } = usePlaced(project, args.host)
   const queued = useQueue()
   const later = thread !== null && waitsFor(shown, reach)
   const on = useSeenNamed(host)?.name
