@@ -54,7 +54,10 @@ function GitRows({
           icon={<GitBranchPlusIcon />}
           disabled={init.busy}
           onClick={() =>
-            void init.act(() => engine.call("git.init", {}, { project }))
+            void init.act(
+              () => engine.call("git.init", {}, { project }),
+              "Initialize Git"
+            )
           }
         >
           {init.busy ? "Initializing…" : "Initialize Git"}

@@ -37,7 +37,8 @@ import { useFolds } from "./folds"
 import { useDiffRead, type Drawn } from "./read"
 import { BaseMenu, ScopeMenu } from "./ScopeMenu"
 import { CHANGES, changeOf, isTest, labelOf, type Scope } from "./scope"
-import { actsOf, allOf, fileAsk, hunkAsk, type Act } from "./stage"
+import { change } from "./change"
+import { actsOf, allOf, fileAsk, hunkAsk, NAMES, type Act } from "./stage"
 import { filesOf } from "./status"
 import { GitAlert } from "./GitAlert"
 
@@ -187,7 +188,7 @@ function DiffPane({
     if (busy) return
     const shown = diff
     void acting
-      .act(() => engine.call(`git.${what}`, ask, { project }))
+      .act(() => change(engine, project, what, ask), NAMES[what])
       .then(() => {
         setBefore(shown)
         fresh()
