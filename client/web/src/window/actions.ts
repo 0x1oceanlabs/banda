@@ -129,8 +129,8 @@ export type Shell = WindowApi & {
   /** Has what peeks over the desk fill it, or float again (ADR 0073,
    * decision 7); false when nothing peeks. */
   fillPeek: () => boolean
-  /** Takes the Sheet away while it has the keys (ADR 0102, decision 5);
-   * false when it has not. */
+  /** Takes the Sheet away while it shows (ADR 0102, decision 5); false
+   * when none does. */
   closeSheet: () => boolean
   /** In solo, the workspace in view as the row for a while, or back to
    * solo (ADR 0079); false when the Flow is not solo. */
@@ -860,7 +860,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     section: "Panes",
     title: "Close the Pane",
     keys: [{ code: "KeyW", mod: true }],
-    // The Sheet, when it has the keys; else the focused Pane.
+    // The Sheet, while it shows; else the focused Pane.
     run: (shell) =>
       shell.closeSheet() ||
       shell.change((w) => {
@@ -945,7 +945,11 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     unlisted: true,
     run: (shell, args) => {
       const picked = pickOf(args)
-      if (picked) shell.pick(picked.project, picked.pane)
+      if (!picked) return
+      // To a Pane, even the one in focus, which no focus goes to: the
+      // Sheet goes (ADR 0102, decision 5).
+      shell.closeSheet()
+      shell.pick(picked.project, picked.pane)
     },
   },
   {

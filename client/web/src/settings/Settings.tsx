@@ -45,18 +45,20 @@ export function Settings({
   const at = useMemo(() => parseLink(args.link), [args.link])
   const [words, setWords] = useState("")
   const field = useRef<HTMLInputElement>(null)
+  const root = useRef<HTMLDivElement>(null)
   const keyed = useLookSettings()
   const problems = useLookProblems()
 
-  // A link's row comes into view, lit.
+  // A link's row comes into view, lit: in these settings alone.
   useEffect(() => {
     if (!at.key) return
-    document
-      .querySelector(`[data-key="${CSS.escape(at.key)}"]`)
+    root.current
+      ?.querySelector(`[data-key="${CSS.escape(at.key)}"]`)
       ?.scrollIntoView({ block: "center" })
   }, [at])
   // While the Pane has the focus, / searches (`settings.search`, ADR
-  // 0071), but in a field; Esc in the search clears it.
+  // 0071), but in a field; Esc in the search clears it, and only then
+  // takes the Sheet away.
   const scope = useScope(
     "settings",
     {
@@ -123,7 +125,7 @@ export function Settings({
   // of icons over the page; in a wide one, a list beside it.
   return (
     <div ref={scope} className="@container h-full text-foreground">
-      <div className="flex h-full flex-col @3xl:flex-row">
+      <div ref={root} className="flex h-full flex-col @3xl:flex-row">
         <nav
           aria-label="Settings sections"
           className="flex shrink-0 flex-col gap-0.5 border-b bg-sidebar/60 p-2 @3xl:w-56 @3xl:border-r @3xl:border-b-0"
@@ -137,7 +139,9 @@ export function Settings({
               value={words}
               onChange={(event) => setWords(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Escape") setWords("")
+                if (event.key !== "Escape" || !words) return
+                event.preventDefault()
+                setWords("")
               }}
               placeholder="Search settings"
               aria-label="Search settings"

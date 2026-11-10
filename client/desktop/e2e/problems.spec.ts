@@ -105,6 +105,9 @@ test("a new Problem tells once, silently, and opens in Settings → Problems (AD
   await expect(
     settings.getByRole("heading", { name: "Problems" })
   ).toBeVisible()
+  // The Sheet keeps the keys, though the toast gives them back to the
+  // composer as it goes (ADR 0102, decision 5).
+  await expect(settings).toBeFocused()
   const row = settings.getByRole("button", { name: /panic the watch broke/ })
   await expect(row).toHaveAttribute("aria-expanded", "true")
   await expect(settings).toContainText(
@@ -129,6 +132,12 @@ test("a new Problem tells once, silently, and opens in Settings → Problems (AD
   await expect(
     settings.getByRole("button", { name: /panic the index broke/ })
   ).toHaveAttribute("aria-expanded", "true")
+  // Esc gives the keys back to the Thread.
+  await page.keyboard.press("Escape")
+  await expect(settings).toHaveCount(0)
+  await expect(
+    page.locator("section[data-tile][data-focused=true]")
+  ).toBeFocused()
 })
 
 test("Look into it asks an Agent in a new Thread, in the Project of Banda's checkout (ADR 0039)", async () => {
@@ -171,4 +180,6 @@ test("Look into it asks an Agent in a new Thread, in the Project of Banda's chec
     (one) => one.message === "the index broke"
   )
   await expect.poll(() => asked(index!.fingerprint)).toBe(true)
+  // Its Thread takes the keys, and the Sheet goes (ADR 0102, decision 5).
+  await expect(settings).toHaveCount(0)
 })

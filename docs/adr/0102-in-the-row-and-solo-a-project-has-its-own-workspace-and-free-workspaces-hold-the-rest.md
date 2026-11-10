@@ -108,7 +108,15 @@ day.
    for, in every Flow. A press on the tiles takes it away; the sidebar
    and the bar do not, so their gear goes to it where it is. The
    notifications stay the bell's list (ADR 0048), and a Pane of no
-   Project other than these opens as before.
+   Project other than these opens as before. While it shows it has the
+   keys: `Alt+W` and `Esc` take it away wherever the focus is (a search
+   with words clears first), and so do a pick, even of the Pane in focus,
+   and the focus going to a Pane or the overview. That is any Pane that
+   takes the focus, as the neighbour of one closed behind the Sheet does.
+   As it goes, keys nothing took go back to the Pane they came from, else
+   to the focused one. The launcher and an empty workspace offer no kind
+   that comes as the Sheet, and such a tile kept from before step 5
+   closes once.
 
 6. **Moving a Pane between workspaces.**
    - A Project's Pane, or a whole Group, moves freely between its
