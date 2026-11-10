@@ -21,8 +21,15 @@ use ts_rs::TS;
 
 /// The module's settings file in `~/.config/banda` (ADR 0016): how the
 /// browser looks and searches, which the look resolves for the window.
-pub const SETTINGS: [banda_look::SettingsFile; 1] =
-    [banda_look::SettingsFile::of::<settings::BrowserSettings>()];
+/// What Agents may do in the browser is the machine's, where they run;
+/// the Person's own browser is the device's (ADR 0101, decision 3).
+pub const SETTINGS: [banda_look::SettingsFile; 1] = [FILE];
+
+const FILE: banda_look::SettingsFile = banda_look::SettingsFile::of::<settings::BrowserSettings>()
+    .class(
+        banda_look::Class::Device,
+        &[("agents", banda_look::Class::Machine)],
+    );
 
 /// How long the window has to list its tabs.
 const LISTING: Duration = Duration::from_secs(10);

@@ -6,22 +6,26 @@
   "properties": {
     "font": {
       "description": "The font: a font's name, or a CSS list of them. Left out, the\nlook's mono font.",
-      "type": "string"
+      "type": "string",
+      "x-class": "device"
     },
     "size": {
       "description": "The text's size, in pixels. Left out, three quarters of the look's\ntext size.",
       "type": "number",
       "format": "double",
       "minimum": 6,
-      "maximum": 32
+      "maximum": 32,
+      "x-class": "device"
     },
     "ligatures": {
       "description": "Whether -> => != and the like are drawn as one sign, as the font\ndraws them.",
-      "type": "boolean"
+      "type": "boolean",
+      "x-class": "device"
     },
     "cursor": {
       "description": "The cursor, until a program asks for another.",
-      "$ref": "#/$defs/CursorSettings"
+      "$ref": "#/$defs/CursorSettings",
+      "x-class": "device"
     }
   },
   "additionalProperties": false,

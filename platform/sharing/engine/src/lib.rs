@@ -37,9 +37,11 @@ use ts_rs::TS;
 use uuid::Uuid;
 
 /// The module's settings file in `~/.config/banda` (ADR 0016): what the
-/// Person shares, which the look resolves for the window.
+/// Person shares, which the look resolves for the window. What a machine
+/// sends is its own (ADR 0101, decision 3).
 pub const SETTINGS: [banda_look::SettingsFile; 1] =
-    [banda_look::SettingsFile::of::<settings::SharingSettings>()];
+    [banda_look::SettingsFile::of::<settings::SharingSettings>()
+        .class(banda_look::Class::Machine, &[])];
 
 /// How long an event is kept, sent or waiting: seven days, in ms.
 pub(crate) const KEPT_MS: i64 = 7 * 24 * 60 * 60 * 1000;

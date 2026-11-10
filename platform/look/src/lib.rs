@@ -32,7 +32,7 @@ pub use banda_theme::hyprland::{Hyprland, Windows};
 use banda_theme::palette::Palette;
 use banda_theme::{Device, Mode, Picked, Theme, Wrong, fonts, tokens, wallpaper};
 pub use banda_theme::{Origin, Places, path_of};
-pub use file::{OneFile, SettingsFile};
+pub use file::{Class, OneFile, SettingsFile};
 use motion::Motion;
 use serde::Serialize;
 use settings::{
@@ -480,23 +480,28 @@ pub struct Resolved {
 }
 
 /// The files the look reads: its own, the sidebar's and the keys' (ADR
-/// 0016).
+/// 0016). How Banda looks is the device's but for `[notify]`, which the
+/// Person means everywhere, as the sidebar and the keys bound; the mod is
+/// held by the hand at this device (ADR 0101, decisions 3 and 4).
 pub const FILES: [SettingsFile; 3] = [
     SettingsFile::new::<Settings>(
         "look.toml",
         || TEMPLATE.to_owned(),
         |path, text| checked(|problems| read_settings(path, text, problems)),
-    ),
+    )
+    .class(Class::Device, &[("notify", Class::Shared)]),
     SettingsFile::new::<sidebar::SidebarSettings>(
         "sidebar.toml",
         || sidebar::TEMPLATE.to_owned(),
         |path, text| checked(|problems| sidebar::read_sidebar(path, text, false, problems)),
-    ),
+    )
+    .class(Class::Shared, &[]),
     SettingsFile::new::<keys::KeysSettings>(
         "keys.toml",
         || keys::TEMPLATE.to_owned(),
         |path, text| checked(|problems| keys::read_keys(path, text, problems)),
-    ),
+    )
+    .class(Class::Shared, &[("mod", Class::Device)]),
 ];
 
 /// The problems `read` finds.
