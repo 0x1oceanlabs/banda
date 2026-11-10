@@ -26,6 +26,9 @@
  * say. A new ssh then waits its ConnectTimeout and gives up. The forward
  * notes each message the window sends arc, so a test counts what a
  * gesture costs.
+ *
+ * hosts.spec.ts still makes an arc of its own, as #1189 changes it; it
+ * takes this one in #1221.
  */
 import { execFileSync, spawn } from "node:child_process"
 import { once } from "node:events"
