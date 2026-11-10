@@ -5,7 +5,7 @@
  */
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import type { Named } from "@banda/contract/machines"
-import { createContext, useCallback, useContext, useEffect } from "react"
+import { createContext, useCallback, useContext, useLayoutEffect } from "react"
 import {
   awayFor,
   FORGETTING,
@@ -58,18 +58,23 @@ export function useShownOf(host: string | undefined): Shown | undefined {
 
 /** Where a Pane reaches its engine: this machine's; or another host's,
  * by its name, with what the Window knows of that host yet, and its
- * engine once it knows it. */
+ * engine once it knows it; or none, `host` null, as no machine the
+ * Window knows has its Project. */
 export type Reach =
   | { host?: undefined; shown?: undefined; engine: Engine }
   | { host: string; shown: Shown | undefined; engine: Engine | undefined }
+  | { host: null; shown?: undefined; engine?: undefined }
 
 /**
- * Where a Pane of `project`, whose args name host `named`, reaches its
- * engine (ADR 0081, decision 4): the session it is drawn from
- * (`KeptHosts.sessionOf`), this machine's for its own Projects, else its
- * host's, kept while that host is out of reach; none while the Window
- * does not know that host yet. Drawn again only as the host it is on, or
- * what the Window knows of that host, changes.
+ * Where a Pane of `project` reaches its engine (ADR 0081, decision 4),
+ * its machine as the directory says, its args naming host `named` only
+ * as an arrangement written before kept it (`KeptHosts.hostOf`): the
+ * session it is drawn from (`KeptHosts.sessionOf`), this machine's for
+ * its own Projects, else its host's, kept while that host is out of
+ * reach, as after a restart while it is away; none while the Window does
+ * not know that host yet; and none, failing closed, for a Project no
+ * machine the Window knows has (ADR 0106, decision 1). Drawn again only
+ * as the host it is on, or what the Window knows of that host, changes.
  */
 export function useReach(project: ProjectId, named: string | undefined): Reach {
   const kept = useContext(HostsContext)
@@ -78,7 +83,8 @@ export function useReach(project: ProjectId, named: string | undefined): Reach {
     [kept, project, named]
   )
   const host = useStore(kept, on)
-  const shown = useShownOf(host)
+  const shown = useShownOf(host ?? undefined)
+  if (host === null) return { host }
   if (host === undefined) return { engine: kept.sessionOf(project) }
   const pane = { args: { host } }
   return {
@@ -88,10 +94,11 @@ export function useReach(project: ProjectId, named: string | undefined): Reach {
   }
 }
 
-/** The other host a Pane of `project` is on, whose args name host
- * `named`, by its name and icon, or the one this device last saw
- * (`KeptHosts.seen`); none for this machine's, or with no Pane yet. Drawn
- * again only as they change. */
+/** The other host a Pane of `project` is on (`KeptHosts.hostOf`, its args
+ * naming host `named` only as an arrangement written before kept it), by
+ * its name and icon, or the one this device last saw (`KeptHosts.seen`);
+ * none for this machine's, for one no machine the Window knows has, or
+ * with no Pane yet. Drawn again only as they change. */
 export function useNamedOf(
   project: ProjectId | undefined,
   named: string | undefined
@@ -101,7 +108,9 @@ export function useNamedOf(
     (hosts: readonly Shown[]) => {
       const host =
         project === undefined ? undefined : kept.hostOf(project, named)
-      return host === undefined ? undefined : namedIn(hosts, host, kept.seen)
+      return host === undefined || host === null
+        ? undefined
+        : namedIn(hosts, host, kept.seen)
     },
     [kept, project, named]
   )
@@ -134,8 +143,9 @@ export function useShownNow(): (name: string) => Shown | undefined {
   )
 }
 
-/** A Pane of a Project as a pick opens it (`KeptHosts.paneOn`); the same
- * function while the Window's hosts stay. */
+/** A Pane of a Project as a pick or a Pane opens it, with no host in its
+ * args (`KeptHosts.paneOn`); the same function while the Window's hosts
+ * stay. */
 export function usePaneOn(): (
   project: ProjectId,
   pane: PaneState
@@ -155,13 +165,16 @@ type OursRead =
 
 /** Tells `hosts` this machine's Projects, as `listed` reads them, which
  * win an ID a host has too, and its Host scope's ID, `machine`, where
- * the Window has it (`KeptHosts.ours`). */
+ * the Window has it (`KeptHosts.ours`): as the Window draws them, before
+ * any effect of what it draws runs, as a module's start, so none acts on
+ * this machine's Project while the hosts take it for one no machine has
+ * (ADR 0106, decision 1). */
 export function useOurs(
   hosts: KeptHosts,
   listed: OursRead,
   machine?: ProjectId
 ): void {
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (listed.state === "ready") hosts.ours(listed.value, machine)
   }, [hosts, listed, machine])
 }

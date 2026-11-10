@@ -29,9 +29,9 @@ import {
   paneHost,
   type PaneState,
   type Place,
-  withHost,
   within,
 } from "@banda/ui/pane"
+import { withHost } from "@banda/core"
 import type { Args } from "@banda/ui/module"
 import { holdTile, TileBox, TileContext } from "@banda/ui/lib/tile"
 import {
@@ -42,7 +42,13 @@ import {
 } from "lucide-react"
 import { launcher } from "../launcher"
 import { kindOf, labelOf, sayLabel, showsOf, useLabel } from "../registry"
-import { reachWords, usePaneOn, useReach, useWaiting } from "@banda/core/react"
+import {
+  reachWords,
+  UNKNOWN,
+  usePaneOn,
+  useReach,
+  useWaiting,
+} from "@banda/core/react"
 import { sayComposer } from "../window/attach"
 import { heightAt } from "./layout"
 import type { Plan } from "./arrange"
@@ -124,14 +130,11 @@ type Handle = Pick<
 
 /** The handle of the Pane of kind `kind` at `entry` in `project`, a
  * Project of another host's when `host` names one (ADR 0081): what it
- * opens, and its own args, keep that host, as it knows only that host's
- * Projects, unless what it opens names its own, as a new Thread moved to
- * another machine's Project does (ADR 0095, decision 7), or is in a
- * Project this machine has, as that wins a clash; and it takes nothing
- * this machine attaches, as that names this machine's files. The
- * Window's hosts decide that here, once, by their one rule (`paneOn`,
- * `KeptHosts.paneOn`), so what it opens, or its args a clash took back,
- * never says another host for a frame (#1004). */
+ * opens, and its own args, name no host, as the directory says which
+ * machine has each Project (ADR 0106, decision 1), whatever host its args
+ * were handed (`paneOn`, `KeptHosts.paneOn`), so the arrangement keeps
+ * none; and it takes nothing this machine attaches, as that names this
+ * machine's files. */
 export function handleOf(
   frame: Frame,
   entry: string,
@@ -140,15 +143,10 @@ export function handleOf(
   host: string | undefined,
   paneOn: (project: ProjectId, pane: PaneState) => PaneState
 ): Handle {
-  const there = (pane: PaneState) =>
-    host === undefined || paneHost(pane) !== undefined
-      ? pane
-      : withHost(pane, host)
   return {
     open: (pane, place, into = project) =>
-      frame.open(into, paneOn(into, there(pane)), entry, place),
-    update: (args) =>
-      frame.update(entry, paneOn(project, there({ kind, args }))),
+      frame.open(into, paneOn(into, pane), entry, place),
+    update: (args) => frame.update(entry, paneOn(project, { kind, args })),
     close: () => frame.close(entry),
     label: (label) => sayLabel(entry, label),
     // Its composer, the same between draws, so the Pane says it once.
@@ -223,9 +221,12 @@ export const PaneFrame = memo(function PaneFrame({
   const { title, detail, edits, Icon } = labelOf(entry.pane, useLabel(entry.id))
   // A Project of another host's is that host's engine's (ADR 0081): only
   // a kind that opens there does, on it; another says it is not there yet.
-  const named = paneHost(entry.pane)
-  const reach = useReach(entry.project, named)
-  const there = reach.host
+  // Its host is the one the directory says, its args' only as an
+  // arrangement written before kept it; a Project no machine the Window
+  // knows has shows why, and opens on none (ADR 0106, decision 1).
+  const reach = useReach(entry.project, paneHost(entry.pane))
+  const unknown = reach.host === null
+  const there = reach.host ?? undefined
   const words =
     there === undefined ? undefined : reachWords(there, reach.shown, seenNamed)
   // Its host out of reach while the Pane shows: a pill under its header
@@ -244,14 +245,11 @@ export const PaneFrame = memo(function PaneFrame({
   )
   const { close } = handle
   const subject = showsOf(entry.pane)
-  // It with the host it is on in its args: its Pane reads that at once,
-  // as Here does, and the args keep it, so it comes back there after a
-  // restart. One opened where its host went unsaid takes it, and one this
-  // machine's Project took back, as it wins a clash, lets it go.
+  // It with the host it is on in its args, as the directory says: its
+  // Pane reads that at once, as Here does, while the Thread still asks.
+  // The arrangement never keeps it: what the Pane opens or changes goes
+  // back without it (`handleOf`).
   const onHost = useMemo(() => withHost(entry.pane, there), [entry.pane, there])
-  useEffect(() => {
-    if (onHost !== entry.pane) frame.update(entry.id, onHost)
-  }, [frame, entry.id, entry.pane, onHost])
   // Its owner: its Project, on the host it is on. What it runs goes
   // through the one router from it, and whether it shows on another
   // machine is that machine's to say, by the Apps its welcome lists, so
@@ -483,6 +481,8 @@ export const PaneFrame = memo(function PaneFrame({
                 <SquareArrowOutUpRightIcon className="size-5" />
                 In its own window
               </button>
+            ) : unknown ? (
+              <Elsewhere machine={undefined}>{UNKNOWN}</Elsewhere>
             ) : machine && !reach.shown ? (
               <Elsewhere machine={machine}>{words}</Elsewhere>
             ) : "why" in gate ? (

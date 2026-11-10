@@ -15,15 +15,15 @@
  */
 import type { ProjectId } from "@banda/contract"
 import type { Cap } from "./device"
-import { type KeptHosts, namedIn } from "./hosts"
+import { type KeptHosts, namedIn, UNKNOWN } from "./hosts"
 import { paneHost, type PaneState } from "./pane"
 import type { Args } from "./run"
 
 /**
  * Whose an act's values are (ADR 0106, law 3): a Project's, whose machine
- * is the one that has it, as `pane`'s args may say until the directory
- * does (1a″); a machine's own, by its Host scope's ID; the device's; or
- * the window's.
+ * is the one that has it, as the directory says, `pane`'s args only for an
+ * arrangement written before it did (`KeptHosts.hostOf`); a machine's own,
+ * by its Host scope's ID; the device's; or the window's.
  */
 export type Owner =
   | { project: ProjectId; pane?: Pick<PaneState, "args"> }
@@ -81,11 +81,11 @@ type Where = { here: true } | { host: string } | { nowhere: string }
 
 /**
  * Where `owner`'s values are, as the Window's hosts place them: a Project
- * on the machine that has it (`KeptHosts.hostOf`, its pane's args naming
- * the host until the directory does); a machine by its Host scope's ID,
- * among those the Window shows; none for the device's and the window's.
- * A machine the Window does not show is nowhere: an act on it fails
- * closed, never on this machine.
+ * on the machine that has it (`KeptHosts.hostOf`, by the directory); a
+ * machine by its Host scope's ID, among those the Window shows; none for
+ * the device's and the window's. A machine the Window does not show, or a
+ * Project no machine it knows has, is nowhere: an act on it fails closed,
+ * never on this machine.
  */
 function whereOf(hosts: Hosts, owner: Owner): Where | undefined {
   if (owner === "device" || owner === "window") return undefined
@@ -97,6 +97,7 @@ function whereOf(hosts: Hosts, owner: Owner): Where | undefined {
     return machine.host === undefined ? { here: true } : { host: machine.host }
   }
   const host = hosts.hostOf(owner.project, owner.pane && paneHost(owner.pane))
+  if (host === null) return { nowhere: UNKNOWN }
   return host === undefined ? { here: true } : { host }
 }
 
@@ -150,27 +151,27 @@ export function routeAct(
   let runWith = args
   if (asked !== undefined) {
     // The Pane's own Project, and Here's as a Pane's act comes again
-    // through the window's run from the Pane in focus, is placed first by
-    // the host it is on; so is one no machine lists that a Pane names, as
-    // its host has not listed it yet, which goes there, never to this
-    // machine. One another machine lists is placed by that listing, so a
-    // Pane never lends its host to a third machine's Project.
+    // through the window's run from the Pane in focus, is placed as the
+    // Pane is; so is one no machine the Window knows has that a Pane
+    // names, as its host has not listed it yet, which goes there, never
+    // to this machine. One another machine has is placed by the directory,
+    // so a Pane never lends its host to a third machine's Project. Args
+    // name no host: the directory places a Project by its ID alone.
     const by = "pane" in from ? from.pane : from.here
-    const hint =
+    const lends =
       typeof by === "object" &&
       "project" in by &&
       (by.project === asked ||
-        (pane !== undefined && hosts.hostOf(asked, undefined) === undefined))
-        ? by.pane && paneHost(by.pane)
-        : undefined
-    const host = typeof args?.host === "string" ? args.host : hint
-    owner = { project: asked, pane: { args: host ? { host } : {} } }
+        (pane !== undefined && hosts.hostOf(asked) === null))
+    owner = lends ? { project: asked, pane: by.pane } : { project: asked }
     // A Pane of the window's or the device's, as the Sheet's, holds no
     // machine's values, so the Project it names is placed alone.
     const its = pane !== undefined ? whereOf(hosts, pane) : undefined
     if (its !== undefined) {
       if ("nowhere" in its) return refused(its.nowhere)
-      if (!sameWhere(whereOf(hosts, owner)!, its)) {
+      const whose = whereOf(hosts, owner)!
+      if ("nowhere" in whose) return refused(whose.nowhere)
+      if (!sameWhere(whose, its)) {
         const name = "host" in its ? nameOf(hosts, its.host) : "this machine"
         return refused(`That is not on ${name}`)
       }

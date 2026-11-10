@@ -120,14 +120,15 @@ export type WindowApi = {
   /**
    * The session of the machine that owns a Project (ADR 0089, decision
    * 5), where every act an App makes goes: this machine's engine for its
-   * own Projects, else that host's, never this machine's in its place
-   * (ADR 0081). `pane` of it, or an act's args on it, may name its host,
-   * as `args.host`: an item action's Item another host lists, or a
-   * toast's answer to a Thread there. A host the Window does not reach
-   * now refuses at once: it throws `Unreachable`, in the words its Panes'
-   * pill says ("arc is away"), and nothing waits to run by itself once it
-   * is back. A host the Window does not know, as one taken out of
-   * hosts.toml, refuses so too: "This window does not reach arc".
+   * own Projects, else that host's, as the Window's directory says which
+   * machine has the Project, never this machine's in its place (ADR 0081;
+   * ADR 0106, decision 1). `pane` of it is read only where its args name
+   * a host as an arrangement written before kept it. A host the Window
+   * does not reach now refuses at once: it throws `Unreachable`, in the
+   * words its Panes' pill says ("arc is away"), and nothing waits to run
+   * by itself once it is back. A host the Window does not know, as one
+   * taken out of hosts.toml, refuses so too: "This window does not reach
+   * arc"; and so does a Project no machine the Window knows has.
    */
   sessionOf: (project: ProjectId, pane?: Pick<PaneState, "args">) => Engine
   /** What waits for a machine that is away (ADR 0105): a message to a

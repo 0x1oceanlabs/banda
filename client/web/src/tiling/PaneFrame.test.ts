@@ -42,9 +42,9 @@ const mine = {
 } satisfies ProjectSummary
 
 /** Where the Window's hosts place a Pane of a Project (`KeptHosts.paneOn`),
- * as the Window gives it: this machine has `mine` and its Host scope
- * `m0`, and no host is shown. */
-function paneOnOf() {
+ * as the Window gives it, and those hosts: this machine has `mine` and
+ * its Host scope `m0`, and no host is shown. */
+function placing() {
   const kept = new KeptHosts(
     {
       follow: () => undefined,
@@ -54,40 +54,43 @@ function paneOnOf() {
     FORGETTING
   )
   kept.ours([mine], "m0" as ProjectId)
-  return (project: ProjectId, pane: PaneState) => kept.paneOn(project, pane)
+  const paneOn = (project: ProjectId, pane: PaneState) =>
+    kept.paneOn(project, pane)
+  return { kept, paneOn }
 }
 
-test("a Pane on another host opens on that host what names none, and what names its own where it names it", () => {
+const paneOnOf = () => placing().paneOn
+
+test("a Pane on another host opens what it opens, and changes its args, naming no host, so the arrangement keeps none: the directory places each by its Project (ADR 0106, decision 1)", () => {
   const { frame, open, update } = frameOf()
   const project = "banda" as ProjectId
-  const paneOn = paneOnOf()
+  const { kept, paneOn } = placing()
   const arc = handleOf(frame, "e1", project, "agents.thread", "arc", paneOn)
 
-  // What it opens in its own Project or another of arc's is arc's.
+  // What it opens in its own Project is arc's by that Project, not by a
+  // host it stamps.
   arc.open(thread(), "instead")
-  expect(open).toHaveBeenLastCalledWith(
-    project,
-    thread({ host: "arc" }),
-    "e1",
-    "instead"
-  )
-  // A new Thread moved to a third machine's Project opens there, not on
-  // arc with devbox's Project.
+  expect(open).toHaveBeenLastCalledWith(project, thread(), "e1", "instead")
+  // A new Thread moved to a third machine's Project, naming that machine
+  // as the Message box's picker found it, opens naming none: the
+  // directory keeps where that Project is, so it goes there, not to arc.
   arc.open(thread({ host: "devbox" }), "instead", "d1" as ProjectId)
-  expect(open).toHaveBeenLastCalledWith(
-    "d1",
-    thread({ host: "devbox" }),
-    "e1",
-    "instead"
-  )
-  // Its own args keep arc.
+  expect(open).toHaveBeenLastCalledWith("d1", thread(), "e1", "instead")
+  expect(kept.hostOf("d1" as ProjectId)).toBe("devbox")
+  // Its own args name no host either, even one stamped on them.
   arc.update({ thread: "t1" })
   expect(update).toHaveBeenLastCalledWith("e1", {
     kind: "agents.thread",
-    args: { thread: "t1", host: "arc" },
+    args: { thread: "t1" },
+  })
+  arc.update({ thread: "t1", host: "arc" })
+  expect(update).toHaveBeenLastCalledWith("e1", {
+    kind: "agents.thread",
+    args: { thread: "t1" },
   })
 
-  // This machine's Pane opens what it names as it names it.
+  // This machine's Pane opens what names another host on that host, by
+  // the directory, naming none.
   const here = handleOf(
     frame,
     "e2",
@@ -97,12 +100,8 @@ test("a Pane on another host opens on that host what names none, and what names 
     paneOn
   )
   here.open(thread({ host: "arc" }), "instead", "r1" as ProjectId)
-  expect(open).toHaveBeenLastCalledWith(
-    "r1",
-    thread({ host: "arc" }),
-    "e2",
-    "instead"
-  )
+  expect(open).toHaveBeenLastCalledWith("r1", thread(), "e2", "instead")
+  expect(kept.hostOf("r1" as ProjectId)).toBe("arc")
   here.open(thread())
   expect(open).toHaveBeenLastCalledWith(project, thread(), "e2", undefined)
 })

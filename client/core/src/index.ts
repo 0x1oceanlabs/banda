@@ -15,6 +15,12 @@ export {
   poppedOf,
   poppedRoute,
 } from "./device"
+export {
+  type DirectoryMemory,
+  inWindow,
+  isPlaced,
+  type Placed,
+} from "./directory"
 export type { Here, HereStore } from "./here"
 export {
   agentsWork,
@@ -28,7 +34,6 @@ export {
   FORGETTING,
   heldWords,
   holds,
-  hostOfPane,
   type HostsDevice,
   KeptHosts,
   keyNamed,
@@ -44,6 +49,7 @@ export {
   reachWords,
   type Shown,
   shownOf,
+  UNKNOWN,
   Unreachable,
 } from "./hosts"
 export { KeptHere } from "./kept-here"

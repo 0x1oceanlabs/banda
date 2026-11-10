@@ -24,20 +24,22 @@ export type Place =
   "right" | "below" | "instead" | "group" | "project" | "own" | "free"
 
 /**
- * The other host of `hosts.toml` whose Project a Pane shows, by its name,
- * as its args keep it under `host` (ADR 0081, decision 4): the arrangement
- * keeps it, so the Pane comes back there after a restart. None for this
- * machine's. An act on it names its host in its args the same way, as a
- * toast's answer does. It stands in for the client's Placement (ADR 0082)
- * until there is one.
+ * The other host of `hosts.toml` a Pane's args name under `host`, by its
+ * name; none for this machine's. The directory says which machine has a
+ * Project (ADR 0106, decision 1), so nothing writes it into the
+ * arrangement any more: an arrangement written before keeps it, and it is
+ * read only where the directory knows nothing of that Project
+ * (`KeptHosts.hostOf`). The Frame hands its Pane the host the directory
+ * says in its args (`withHost`), as the Thread still asks it, until its
+ * slices take that away.
  */
 export function paneHost(pane: Pick<PaneState, "args">): string | undefined {
   const host = pane.args.host
   return typeof host === "string" && host !== "" ? host : undefined
 }
 
-/** `pane` as a Pane of host `host`'s Project keeps it; of this machine's,
- * `host` none, with no host. */
+/** `pane` with host `host` in its args, as the Frame hands it to its Pane;
+ * with none, `host` none. */
 export function withHost(pane: PaneState, host: string | undefined): PaneState {
   if (paneHost(pane) === host) return pane
   const args = { ...pane.args }

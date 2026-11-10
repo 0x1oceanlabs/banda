@@ -21,9 +21,12 @@ export type Here = {
   workspace: { id: string; project?: ProjectId } | null
   /** The Pane in focus, its Project, the one thing it shows, by the id
    * its App lists it with (`PaneKind.shows`): a Thread's for a Thread,
-   * and the other host of `hosts.toml` its Project is on, the one whose
-   * engine its frame gives it (ADR 0081): an act that would go to this
-   * machine's engine stays off there. None while no Pane has the focus. */
+   * and the other host of `hosts.toml` its Project is on, as the Window's
+   * hosts place it (`KeptHosts.hostOf`), the one whose engine its frame
+   * gives it (ADR 0081): an act that would go to this machine's engine
+   * stays off there. None for this machine's, nor for a Project no machine
+   * the Window knows has, which the router refuses by its Project alone.
+   * None while no Pane has the focus. */
   pane: {
     id: string
     project: ProjectId

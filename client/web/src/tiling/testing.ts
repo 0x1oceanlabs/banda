@@ -17,8 +17,9 @@ export const ON_ARC = { project: R1, pane: { args: { host: "arc" } } }
 
 /**
  * The hosts with arc's engine open, its welcome listing `modules`; none
- * before it said. This machine wins an ID both have, and a Project arc's
- * Pane names is arc's.
+ * before it said. This machine wins an ID both have; a Project no machine
+ * has is the host an old arrangement's args name, else no machine's, and
+ * an act on it fails closed (`KeptHosts.hostOf`).
  */
 export function arcHosts(modules: readonly string[] | undefined): Hosts {
   const arc = {
@@ -34,9 +35,7 @@ export function arcHosts(modules: readonly string[] | undefined): Hosts {
   return {
     get: () => [arc],
     hostOf: (project, named) =>
-      project === MINE
-        ? undefined
-        : (named ?? (project === R1 ? "arc" : undefined)),
+      project === MINE ? undefined : project === R1 ? "arc" : (named ?? null),
     seen: (name) => ({ name, icon: "server" }),
     machines: { get: () => machines, subscribe: () => () => undefined },
     modulesOf: (name) => (name === "arc" ? modules : undefined),

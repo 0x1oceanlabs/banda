@@ -1,6 +1,7 @@
 import type { Engine, ProjectId } from "@banda/contract"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, expect, test, vi } from "vitest"
+import { inWindow } from "../directory"
 import { FORGETTING, KeptHosts, reachWords } from "../hosts"
 import { away, desktop, live, project, Socket } from "../testing"
 import { HostsContext, type Reach, useEngineOf, useReach } from "./hosts"
@@ -10,7 +11,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-test("a Pane reaches the engine of the host its args name, else of the host listing its Project; this machine's wins a clash", async () => {
+test("a Pane reaches the engine of the host listing its Project, else of the one its old args name; this machine's wins a clash, and one no machine has reaches none", async () => {
   vi.useFakeTimers()
   vi.stubGlobal("WebSocket", Socket)
   Socket.opened = []
@@ -53,8 +54,10 @@ test("a Pane reaches the engine of the host its args name, else of the host list
   expect(reach("r1").engine).toBe(arc)
   // A clash: this machine's Project, on its own engine, whatever the args.
   expect(reach("mine", "arc")).toEqual({ engine: here })
-  expect(reach("x")).toEqual({ engine: here })
   expect(hosts.hostOf("mine" as ProjectId, "arc")).toBeUndefined()
+  // A Project no machine the Window knows has: none, never this
+  // machine's engine in its place (ADR 0106, decision 1).
+  expect(reach("x")).toEqual({ host: null })
 
   let engineOf: ReturnType<typeof useEngineOf> | undefined
   const Shell = () => {
@@ -81,14 +84,58 @@ test("a Pane reaches the engine of the host its args name, else of the host list
   expect(gone.engine).toBe(arc)
   expect(reachWords("arc", gone.shown, hosts.seen)).toBe("arc is away")
   expect(() => engineOf!("r1" as ProjectId, on("arc"))).toThrow("arc is away")
-  // One the Window does not know: none to draw from, nor to act on.
-  expect(reach("r1", "devbox")).toEqual({
+  // The listing wins over what old args name.
+  expect(reach("r1", "devbox").host).toBe("arc")
+  // A host the Window does not know: none to draw from, nor to act on.
+  expect(reach("x", "devbox")).toEqual({
     host: "devbox",
     shown: undefined,
     engine: undefined,
   })
-  expect(() => engineOf!("r1" as ProjectId, on("devbox"))).toThrow(
+  expect(() => engineOf!("x" as ProjectId, on("devbox"))).toThrow(
     "This window does not reach devbox"
   )
+  expect(() => engineOf!("x" as ProjectId)).toThrow(
+    "This window does not reach that machine"
+  )
   arc.close()
+})
+
+test("a Pane restored while its machine is away reaches that machine by the directory the device kept, and says it is away, not this machine's refusal", () => {
+  vi.stubGlobal("WebSocket", Socket)
+  Socket.opened = []
+  const kept = inWindow()
+  const here = { here: true } as unknown as Engine
+  // The window before: arc listed "r1".
+  const before = desktop()
+  const first = new KeptHosts(before.device, FORGETTING, here, {
+    directory: kept,
+  })
+  first.follow()
+  before.tell([live])
+  first.ours([project("mine")])
+  first.projects("arc", [project("r1")])
+
+  // Started again with arc away from its first moment: its Pane, whose
+  // args name no host, is arc's.
+  const after = desktop()
+  const hosts = new KeptHosts(after.device, FORGETTING, here, {
+    directory: kept,
+  })
+  hosts.follow()
+  after.tell([away])
+  let got: Reach | undefined
+  const Pane = () => {
+    got = useReach("r1" as ProjectId, undefined)
+    return null
+  }
+  renderToStaticMarkup(
+    <HostsContext value={hosts}>
+      <Pane />
+    </HostsContext>
+  )
+  expect(got!.host).toBe("arc")
+  expect(got!.engine).toBe(hosts.engine("arc"))
+  expect(reachWords("arc", got!.shown, hosts.seen)).toBe("arc is away")
+  hosts.engine("arc").close()
 })
