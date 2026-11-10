@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { type Params, Refused } from "@banda/contract"
+import type { Params } from "@banda/contract"
 import type { Image } from "@banda/contract/agents"
 import { DialogTrigger } from "@banda/ui/components/dialog"
 import { Spinner } from "@banda/ui/components/spinner"
@@ -23,7 +23,7 @@ import {
 } from "./images"
 import { type ImageReader, useUrl } from "../entries/parts/MessageImages"
 import { ImagePreview } from "@banda/ui/components/image-preview"
-import { useDraftImages } from "./drafts"
+import { imageGone, useDraftImages } from "./drafts"
 
 /** What `agents.attach` takes for one image. */
 export type Attaching = Params<"agents.attach">
@@ -79,7 +79,7 @@ export function useAttachments({
   useEffect(() => {
     for (const { id } of kept)
       reader.read(id).catch((error: unknown) => {
-        if (error instanceof Refused && error.refusal.code === "not_found")
+        if (imageGone(error))
           setKept((all) => all.filter((one) => one.id !== id))
       })
   }, [kept, reader, setKept])

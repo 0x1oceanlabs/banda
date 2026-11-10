@@ -57,7 +57,7 @@ import { mark, type PersonMark } from "../list/sent"
 import { type WhenPresent, whenPresent } from "./presence"
 import { useLooking } from "./looking"
 import { imagesOf, tellBack, whenBackTitle } from "./WhenBack"
-import { putBack } from "../composer/drafts"
+import { putBack, useDraftKey } from "../composer/drafts"
 import {
   asked,
   declined,
@@ -93,6 +93,9 @@ export type ThreadArgs = {
    * (`paneHost`, ADR 0081): the window gives the Pane that host's
    * engine, and what reaches this machine's files stays off. */
   host?: string
+  /** A new Thread's draft's key, kept once something is written in it, so
+   * the draft is there after a restart (#838). */
+  draft?: string
 }
 
 /** A Thread not yet started, on this computer's first Harness. */
@@ -215,6 +218,11 @@ export function useThreadSession({
   update,
 }: PaneProps<ThreadArgs>) {
   const { thread } = args
+  // Where the composer keeps its draft: a new Thread's under a key its
+  // args keep once something is written, as there after a restart (#838).
+  const draft = useDraftKey(thread, args.draft, (id) =>
+    update({ ...args, draft: id })
+  )
   const machine = useMachine(engine)
   const unplaced = project === machine && !args.scratch
   const creation = useRef(args.scratchCommand ?? newId())
@@ -264,7 +272,13 @@ export function useThreadSession({
     thread === null
       ? args.harness || startsOn?.id || offered[0]?.id || ""
       : (state?.harness ?? args.harness)
-  const name = harnessName(harnesses, harness) || "the Agent"
+  // The messages that wait for the Thread's machine (ADR 0105), which
+  // keep what the Pane shows before that machine answers, as after a
+  // restart while it is away: its Harness's name (Q6, #956) and skills.
+  const { host } = args
+  const waitsHere = useWaiting(host, thread)
+  const shows = waitsHere.find((wait) => wait.shows)?.shows
+  const name = harnessName(harnesses, harness, shows?.to) || "the Agent"
   const short = harnessShort(harnesses, harness) || name
 
   // The header follows the Thread: its title, once the first message gives
@@ -306,8 +320,20 @@ export function useThreadSession({
     everyDefaults?.[id]?.settings ??
     (unplaced ? DEFAULT_SETTINGS : undefined)
   const settings = thread === null ? draftOf(harness) : state?.settings
+  // Before its machine answers, the skills a waiting message kept, by
+  // name: its composer offers them as it did (Q6).
+  const skills = shows?.skills
+  const offerKept = useMemo(
+    () =>
+      skills && {
+        ...NO_OFFER,
+        skills: skills.map((name) => ({ name, description: "" })),
+      },
+    [skills]
+  )
   const offer: Offer =
-    (thread === null ? defaults?.offer : state?.offer) ?? NO_OFFER
+    (thread === null ? defaults?.offer : (state?.offer ?? offerKept)) ??
+    NO_OFFER
   const configure = async (next: Settings): Promise<boolean> => {
     if (thread === null) {
       setDrafts((drafts) => ({ ...drafts, [harness]: next }))
@@ -328,7 +354,7 @@ export function useThreadSession({
   }
 
   const images = useAttachments({
-    thread,
+    thread: draft,
     attach: async (image: Attaching) =>
       engine.command("agents.attach", image, await ensureProject()),
     reader,
@@ -467,8 +493,9 @@ export function useThreadSession({
   // While a started Thread's machine is away, stopped or on another
   // build, a message waits for it, by Send itself (ADR 0105, Q2), for 10
   // minutes from now, unless the Person keeps it longer. A new Thread's
-  // first words stay in its composer.
-  const { host } = args
+  // first words stay in its composer. It keeps what its Pane shows before
+  // that machine answers: its Project, its title and its Harness's name
+  // (Q6).
   const queued = useQueue()
   const shown = useShownOf(host)
   const later = thread !== null && waitsFor(shown, reach)
@@ -477,9 +504,12 @@ export function useThreadSession({
     later && on !== undefined
       ? (now: number) => whenBackTitle(on, now + KEEP, now)
       : undefined
-  const waitsHere = useWaiting(host, thread)
   const sendWhenBack = (text: string, images: Image[]) => {
     if (thread === null || host === undefined) return false
+    const summary =
+      shown?.projects.find((one) => one.id === project) ??
+      queued.get().find((one) => one.project === project && one.shows?.project)
+        ?.shows?.project
     queued.add({
       call: {
         method: "agents.send",
@@ -501,24 +531,29 @@ export function useThreadSession({
       carried: images,
       pane: {
         kind: "agents.thread",
-        args: { thread, harness, title: args.title, host },
+        args: { thread, harness, title: state?.title ?? args.title, host },
+      },
+      shows: {
+        ...(summary && { project: summary }),
+        to: name,
+        ...(offer.skills.length > 0 && {
+          skills: offer.skills.map((skill) => skill.name),
+        }),
       },
       at: Date.now(),
     })
     return true
   }
   // What comes back to this Thread that no Window takes, as in a window
-  // of its own, goes back into its draft here.
+  // of its own, goes back into its draft here, and is said here where
+  // only this window shows the Thread.
   useEffect(
     () =>
       thread === null || host === undefined
         ? undefined
         : queued.onBack(
-            (back) =>
-              back.wait.host === host &&
-              back.wait.item === thread &&
-              (tellBack(back), true),
-            { after: true }
+            (back) => back.wait.host === host && (tellBack(back), true),
+            { item: thread }
           ),
     [queued, host, thread]
   )
@@ -688,6 +723,8 @@ export function useThreadSession({
     /** Whether the Thread plans first, when its Harness offers plans. */
     plan: offer.plans ? settings?.plan : undefined,
     setPlan: (plan: boolean) => settings && configure({ ...settings, plan }),
+    /** Where the composer keeps its draft (`useDraftKey`). */
+    draft,
     /** What the Person sent, for ↑ in the composer. */
     history: () => (state ? sent(state) : []),
     /** Whether a message sent now goes into the turn that runs. */

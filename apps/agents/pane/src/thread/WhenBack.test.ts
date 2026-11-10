@@ -52,6 +52,14 @@ const message = (text: string, images: string[] = []) => ({
   at: at1432,
 })
 
+/** Message `text` as it waits until 14:42, the first queued. */
+const waiting = (text: string, images: string[] = []) => ({
+  ...message(text, images),
+  until: at1442,
+  notAfter: at1442,
+  seq: 1,
+})
+
 test("Send says it sends once the machine is back, until 10 minutes from now, and its key", () => {
   expect(whenBackTitle("arc", at1442, at1432)).toBe(
     `Sends once arc is back, until ${time(at1442, at1432)} ↵`
@@ -66,10 +74,7 @@ test("Send says it sends once the machine is back, until 10 minutes from now, an
 
 test("a waiting message's row says until when, with Keep for, Edit and Cancel; one on its way offers none; one that may have gone through says so, with Cancel alone", () => {
   vi.useFakeTimers({ now: at1432 })
-  const waits = {
-    ...message("and run them again with 8 shards"),
-    until: at1442,
-  }
+  const waits = waiting("and run them again with 8 shards")
   expect(rowOf(waits)).toEqual({
     text: "and run them again with 8 shards",
     says: `until ${time(at1442)}`,
@@ -90,7 +95,7 @@ test("a waiting message's row says until when, with Keep for, Edit and Cancel; o
     cancel: true,
   })
   // Images alone: no words, the images shown above as in the Queue.
-  const images = { ...message("", ["i1", "i2"]), until: at1442 }
+  const images = waiting("", ["i1", "i2"])
   expect(rowOf(images).text).toBe("")
   expect(imagesOf(images).map(({ id }) => id)).toEqual(["i1", "i2"])
 })
@@ -149,9 +154,10 @@ test("a message that did not go in its time goes back into its draft with a toas
 
   // Another module's is not the agents module's.
   const others: string[] = []
-  waiting.onBack((back) => others.push(back.wait.text) > 0, { after: true })
+  waiting.onBack((back) => others.push(back.wait.text) > 0, { item: "t9" })
   waiting.add({
     ...message("a terminal's"),
+    item: "t9",
     pane: { kind: "terminal", args: {} },
     at: Date.now(),
   })

@@ -2101,6 +2101,263 @@ test("with arc away, a message to its Thread waits as Send when back, shown at i
   await stopEngine()
 })
 
+/** arc's Thread "Bench window tests" in `page`. */
+const benchIn = (page: Page) =>
+  page.getByRole("region", { name: "Bench window tests", exact: true })
+
+/** The window quit and started again on what it left, its storage
+ * too: a start that went well, as the test says, however soon it ends
+ * (ADR 0039). */
+async function again(was: Window, arc: Arc): Promise<Window> {
+  await was.page.evaluate(() => localStorage.removeItem("banda.starts"))
+  await was.app.close()
+  return withArc(arc, program, was.dir)
+}
+
+/** Opens arc's Thread "Bench window tests", lets arc go, and queues
+ * `words` there; what its row says of when it gives up: "until 14:42". */
+async function waitingOn(page: Page, words: string): Promise<string> {
+  await arcOf(page).getByText("Bench window tests").click()
+  const thread = benchIn(page)
+  await expect(thread.getByText("You said: Bench window tests")).toBeVisible()
+  arc!.down(true)
+  arc!.cut()
+  await expect(thread.locator("[data-machine-pill]")).toContainText(
+    "arc is away",
+    { timeout: 30_000 }
+  )
+  const composer = thread.getByRole("textbox", { name: "Message to Fake AI" })
+  await composer.fill(words)
+  await composer.press("Enter")
+  const waits = thread.getByRole("list", { name: "Waiting for arc" })
+  await expect(waits).toContainText(words)
+  return (await waits.getByRole("button", { name: /^until / }).textContent())!
+}
+
+test("what waits for arc is this device's: the window started again with arc away, it still waits, its Pane showing what the message kept of its Thread; arc back, it goes once (H5e-2)", async () => {
+  test.setTimeout(shots ? 300_000 : 180_000)
+  arc = newArc()
+  const banda = await seed(arc)
+  const stopEngine = await held(arc)
+  window = await withArc(arc)
+  const words = "and run them again with 8 shards"
+  const until = await waitingOn(window.page, words)
+  const [only] = threadsOf(arc, banda)
+
+  // The window starts again on what it left, arc still away, and its
+  // clock is moved on by hand: the message is still there, as it was.
+  window = await again(window, arc)
+  const { page } = window
+  await page.clock.install()
+  await page.reload()
+  const thread = benchIn(page)
+  const waits = thread.getByRole("list", { name: "Waiting for arc" })
+  await expect(waits.getByRole("listitem")).toHaveCount(1)
+  await expect(waits).toContainText(words)
+  await expect(waits).toContainText(`Waits for arc · ${until}`)
+  await expect(waits.getByRole("button", { name: "Edit" })).toBeVisible()
+  await expect(waits.getByRole("button", { name: "Cancel" })).toBeVisible()
+  // Nothing above it: the window has not read the Thread from arc.
+  await expect(thread.getByText("You said: Bench window tests")).toHaveCount(0)
+  // Its header and its composer, from what the message kept: its
+  // Project, arc, its title, and its Harness's name; no Mark, as the
+  // window does not know how the Thread stands, nor model nor mode.
+  await expect(thread.locator("header").first()).toContainText("banda", {
+    timeout: 10_000,
+  })
+  expect(await headerShows(thread)).toEqual([
+    "project",
+    "machine",
+    "Bench window tests",
+    "buttons",
+  ])
+  const composer = thread.getByRole("textbox", { name: "Message to Fake AI" })
+  await expect(composer).toHaveAttribute(
+    "aria-placeholder",
+    "Write to Fake AI on arc. @ files, / commands, $ skills"
+  )
+  await expect(thread.getByRole("button", { name: /^Model: / })).toHaveCount(0)
+  await expect(thread.getByRole("button", { name: /^Mode: / })).toHaveCount(0)
+  // The pill counts it, and says no minutes, as the window does not know
+  // since when arc is away.
+  const pill = thread.locator("[data-machine-pill]")
+  await expect(pill).toHaveText("arc is away · 1 waiting", { timeout: 30_000 })
+  await page.clock.fastForward("03:00")
+  await expect(pill).toHaveText("arc is away · 1 waiting")
+  await expect(waits).toContainText(`Waits for arc · ${until}`)
+  await shot(page, "h5e-7")
+
+  // arc back: it goes once, by the ID it was queued with, and arc's
+  // Agent answers once.
+  arc.down(false)
+  await expect(pill).toHaveCount(0, { timeout: 60_000 })
+  await expect(waits).toHaveCount(0, { timeout: 10_000 })
+  const answered = thread.getByText("The tests passed.")
+  await expect(answered).toBeVisible({ timeout: 30_000 })
+  await expect.poll(() => sentOf(arc!, banda, only!.id, words)).toBe(1)
+  await page.waitForTimeout(1_000)
+  await expect(thread.getByText(words, { exact: true })).toHaveCount(1)
+  await expect(answered).toHaveCount(1)
+  expect(sentOf(arc, banda, only!.id, words)).toBe(1)
+  await stopEngine()
+})
+
+test("a message whose time ran out while the window was closed is never sent: as the window starts, its words are back in the draft and a toast says so (H5e-2)", async () => {
+  test.setTimeout(180_000)
+  arc = newArc()
+  const banda = await seed(arc)
+  const stopEngine = await held(arc)
+  window = await withArc(arc)
+  // The page's clock runs 20 minutes behind: the message's 10 minutes
+  // are up by the time the window starts again on the real one.
+  await window.page.clock.install({ time: Date.now() - 20 * 60_000 })
+  await window.page.reload()
+  const words = "and run them again with 8 shards"
+  const until = await waitingOn(window.page, words)
+  const [only] = threadsOf(arc, banda)
+
+  window = await again(window, arc)
+  const { page } = window
+  const thread = benchIn(page)
+  const notSent = page
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+    .filter({
+      hasText: `Not sent: arc was still away at ${until.slice("until ".length)}.`,
+    })
+  await expect(notSent).toBeVisible()
+  // Its Thread is on screen: no Open.
+  await expect(notSent.getByRole("button", { name: "Open" })).toHaveCount(0)
+  // Nothing waits that keeps its Harness's name: the Pane says its ID
+  // until arc answers (#956).
+  const composer = thread.getByRole("textbox", { name: /^Message to / })
+  await expect(composer).toHaveText(words)
+  await expect.poll(() => draftOf(page, only!.id)).toBe(words)
+  await expect(
+    thread.getByRole("button", { name: "Send when back" })
+  ).toBeVisible()
+  await expect(
+    thread.getByRole("list", { name: "Waiting for arc" })
+  ).toHaveCount(0)
+  const pill = thread.locator("[data-machine-pill]")
+  await expect(pill).toHaveText("arc is away")
+
+  // arc back, nothing goes there.
+  arc.down(false)
+  await expect(pill).toHaveCount(0, { timeout: 60_000 })
+  await page.waitForTimeout(2_000)
+  expect(sentOf(arc, banda, only!.id, words)).toBe(0)
+  await expect(composer).toHaveText(words)
+  await stopEngine()
+})
+
+test("a message queued in a Thread in a window of its own is in this device's one queue: the main window's pill counts it; past its time it comes back in that window; it still waits as its Pane comes back in its place, and arc back, it goes once (#1299)", async () => {
+  test.setTimeout(shots ? 300_000 : 180_000)
+  arc = newArc()
+  const banda = await seed(arc)
+  const stopEngine = await held(arc)
+  send(arc, banda, "Profile the build")
+  await expect
+    .poll(() => states(arc!, banda))
+    .toContainEqual(["Profile the build", "done"])
+  const only = threadsOf(arc, banda).find(
+    (one) => one.title === "Bench window tests"
+  )!
+  window = await withArc(arc)
+  const { page, app } = window
+  // The clock moves on by hand from here, in each of the app's windows.
+  await page.clock.install()
+  await page.reload()
+  await arcOf(page).getByText("Bench window tests").click()
+  const bench = benchIn(page)
+  await expect(bench.getByText("You said: Bench window tests")).toBeVisible()
+
+  // Its Thread in a window of its own; another of arc's Threads in the
+  // main window.
+  await bench.getByRole("button", { name: "Pane menu" }).click()
+  const [popped] = await Promise.all([
+    app.waitForEvent("window"),
+    page.getByRole("menuitem", { name: "In its own window" }).click(),
+  ])
+  await popped.waitForLoadState()
+  const alone = benchIn(popped)
+  await expect(alone.getByText("You said: Bench window tests")).toBeVisible()
+  await arcOf(page).getByText("Profile the build").click()
+  const other = page.getByRole("region", {
+    name: "Profile the build",
+    exact: true,
+  })
+  await expect(other.getByText("You said: Profile the build")).toBeVisible()
+
+  // arc goes; a message waits in that window, and the main window's pill
+  // counts it, though no Pane there shows its Thread.
+  arc.down(true)
+  arc.cut()
+  const pill = other.locator("[data-machine-pill]")
+  await expect(pill).toContainText("arc is away", { timeout: 30_000 })
+  await expect(alone.locator("[data-machine-pill]")).toContainText(
+    "arc is away",
+    { timeout: 30_000 }
+  )
+  const words = "and run them again with 8 shards"
+  const ask = alone.getByRole("textbox", { name: "Message to Fake AI" })
+  // Its header stays as it is while the message waits: that window lists
+  // no Items.
+  const header = await headerShows(alone)
+  await ask.fill(words)
+  await ask.press("Enter")
+  await expect(
+    alone.getByRole("list", { name: "Waiting for arc" })
+  ).toContainText(words)
+  expect(await headerShows(alone)).toEqual(header)
+  await expect(pill).toHaveText(/^arc is away( · \d+ min)? · 1 waiting$/)
+  await shot(page, "h5e-8")
+
+  // Past its time, the main window gives it back to that window, which
+  // has the draft: its words are back in its composer, and its toast is
+  // there, with no Open, as its Thread is on screen; none here.
+  await page.clock.fastForward("10:00")
+  const notSent = popped
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+    .filter({ hasText: /^Not sent: arc was still away at / })
+  await expect(notSent).toHaveCount(1)
+  await expect(notSent.getByRole("button", { name: "Open" })).toHaveCount(0)
+  await expect(ask).toHaveText(words)
+  await expect(
+    page.getByRole("region", { name: "Notifications" }).getByRole("listitem")
+  ).toHaveCount(0)
+  await expect(pill).toHaveText(/^arc is away · \d+ min$/)
+  await expect.poll(() => draftOf(page, only.id)).toBe(words)
+  await ask.press("Enter")
+  await expect(
+    alone.getByRole("list", { name: "Waiting for arc" })
+  ).toContainText(words)
+  await expect(pill).toHaveText(/^arc is away · \d+ min · 1 waiting$/)
+  await expect(notSent).toHaveCount(1)
+
+  // Its window closed, the Pane is back in its place: the message still
+  // waits there, once.
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()
+      .find((one) => one.webContents.getURL().includes("#pane/"))
+      ?.close()
+  )
+  const waits = bench.getByRole("list", { name: "Waiting for arc" })
+  await expect(waits.getByRole("listitem")).toHaveCount(1)
+  await expect(waits).toContainText(words)
+  await expect(pill).toHaveText(/^arc is away · \d+ min · 1 waiting$/)
+
+  // arc back: the main window sends it, once.
+  arc.down(false)
+  await expect(pill).toHaveCount(0, { timeout: 60_000 })
+  await expect(waits).toHaveCount(0, { timeout: 10_000 })
+  await expect.poll(() => sentOf(arc!, banda, only.id, words)).toBe(1)
+  await page.waitForTimeout(2_000)
+  expect(sentOf(arc, banda, only.id, words)).toBe(1)
+  await stopEngine()
+})
+
 test("the counts list and Alt+U place arc's Threads where the sidebar list does, among this machine's (ADR 0079, decision 4; #999)", async () => {
   test.setTimeout(shots ? 300_000 : 120_000)
   arc = newArc()

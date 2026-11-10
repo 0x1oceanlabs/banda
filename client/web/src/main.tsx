@@ -6,7 +6,7 @@ import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { Engine } from "@banda/contract"
 import "@banda/ui/globals.css"
-import { HostsContext, KeptHosts, poppedOf } from "@banda/core/react"
+import { HostsContext, KeptHosts, onDevice, poppedOf } from "@banda/core/react"
 import { moveEnterKey } from "./enter-key"
 import { followFrame } from "./frame"
 import { followLook } from "./look"
@@ -50,9 +50,14 @@ if (host && engine) {
       ? import("./window/Popped").then(({ Popped }) => {
           // A Pane on another host reaches it from here too (ADR 0081),
           // for the window's life; one of this machine's, its engine.
+          // What waits for a host is the main window's to send: this one
+          // queues it there, through the device (#1299).
           const names = { seen: seenNamed, follow: followNamed }
-          const hosts = new KeptHosts(device.hosts, names, engine)
-          hosts.follow()
+          const hosts = new KeptHosts(device.hosts, names, engine, {
+            waiting: onDevice(() => localStorage, window),
+            drains: false,
+          })
+          window.addEventListener("pagehide", hosts.follow())
           return (
             <HostsContext value={hosts}>
               <Popped engine={engine} pane={popped} />

@@ -129,6 +129,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     startOn,
     plan,
     setPlan,
+    draft,
     history,
     steering,
     images,
@@ -583,7 +584,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
           machine={on}
           held={whenBack === undefined ? held : undefined}
           whenBack={whenBack}
-          thread={thread}
+          thread={draft}
           history={history}
           placeholder={
             asking

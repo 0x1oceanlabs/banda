@@ -18,6 +18,7 @@ import { type Frame, PaneFrame } from "../tiling/PaneFrame"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { Previewers } from "@banda/ui/lib/previewers"
 import { Slots } from "@banda/ui/slots"
+import { Toaster } from "@banda/ui/components/sonner"
 
 /**
  * A Pane in a window of its own (ADR 0025, decision 9). The window keeps
@@ -141,6 +142,9 @@ export function Popped({ engine, pane }: { engine: Engine; pane: string }) {
               : "Banda's engine is starting…"}
           </p>
         )}
+        {/* What its Pane says, as a message to its Thread that came back
+            (ADR 0105), it says here. */}
+        <Toaster />
       </div>
     </KeysInForce.Provider>
   )
