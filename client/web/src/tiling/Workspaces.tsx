@@ -31,6 +31,7 @@ export function Workspaces({
   modules,
   projectOf,
   strict,
+  gone,
   shows,
   marked,
   away,
@@ -53,6 +54,8 @@ export function Workspaces({
   /** In the row and solo, where a Project's workspace holds its Panes
    * only (ADR 0102). */
   strict: boolean
+  /** The Projects known to have no Threads (`Strip`). */
+  gone: readonly ProjectId[]
   /** What the Panes show, as their Apps list it, and how each calls. */
   shows: Shows
   /** An Agent opened it, and the Person has not looked at it yet. */
@@ -234,6 +237,7 @@ export function Workspaces({
               modules={modules}
               projectOf={projectOf}
               strict={strict}
+              gone={gone}
               shows={shows}
               marked={marked}
               away={away}

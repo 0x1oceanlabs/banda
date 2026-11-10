@@ -55,6 +55,13 @@ day.
      Project has no Threads left.
    - The bar shows a Project's workspace by its Sign alone, and a free
      one by its number (changed in #1127: no call dot, no Group map).
+   _Built_ after step 6: emptied, a Project's workspace that keeps its
+   place says whose it is and that it keeps its place until the Person
+   closes it. "Close the workspace", under those words, in the Banda menu
+   and as a cross on its row in the overview, lets it go, and the
+   Project's next Thread makes it again at the end. One whose Project has
+   no Threads says only that it is empty, as a free one does. In the Flow
+   free, an emptied one goes once the Person leaves it, a Project's too.
 
 3. **Where a Pane opens, in this order:**
    1. A Pane an Agent opens goes into the Agent's Group, even when it is
@@ -114,7 +121,10 @@ day.
    free workspace: the two differ there yet. Moved off the Project's
    workspace, the own Group is a Group like any other, and the next Pane
    starts a new one. `Alt+Shift+N` and the Pane menu move a
-   Pane of the own Group alone; a drag of its handle still takes it whole.
+   Pane of the own Group alone; a drag of its handle still takes it whole. After step 6, the tag stays on the
+   own Group while the handle is off, and a first Pane started from the
+   buttons of an emptied Project's workspace goes where the keys put it,
+   so a terminal makes the own Group there.
 
 5. **Settings, Usage and the notifications come as a Sheet over the
    workspace.**

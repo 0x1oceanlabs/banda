@@ -131,6 +131,7 @@ import {
   strayedIn,
   runAction,
   targetsOf,
+  startingHere,
   updating,
   type Shell as Parts,
   windowApiOf,
@@ -179,13 +180,15 @@ export function Shell({
   const flow = useFile(AGENTS_FILE).flow
   const solo = flow === "solo"
   const [row, setRow] = useState<string>()
-  // A Project with no Threads, or of no Project, lets its emptied workspace
-  // go; the Panes the Person opens go where the Flow says.
+  // In the Flow free every workspace is free; in the row and solo, an
+  // emptied Project's keeps its place but when it has no Threads, and one
+  // of no Project never does (ADR 0102).
+  const strict = flow !== "free"
   const [stores] = useState(newStores)
   const { placing, gone } = usePlacing(stores, flow, projects, machine)
   // `placing` as last drawn, held steady for the Tiles' frame.
   const latest = useSteady({ placing })
-  const tiling = useTiling({ engine, machine, modules, home, solo, row, gone })
+  const tiling = useTiling({ engine, machine, modules, home, flow, row, gone })
   const { ready, aside, workspaces, standing, drawnNow, changing } = tiling
   const { change, update } = tiling
   const inView = current(workspaces).id
@@ -440,18 +443,15 @@ export function Shell({
     [change]
   )
   // A swipe up or down with the mod held steps once; a first Pane
-  // started on an empty workspace opens there, in its Project, whatever
-  // its kind's home.
+  // started on an empty workspace opens in its Project, there or into
+  // the Project's own Group (`startingHere`).
   const stepBy = useCallback(
     (by: 1 | -1) => change((w) => step(w, by)),
     [change]
   )
   const startHere = useCallback(
-    (pane: PaneState) =>
-      change((w) =>
-        opening(w, projectIn(w) ?? home, pane, { place: "right", again: true })
-      ),
-    [change, home]
+    (pane: PaneState) => change((w) => startingHere(w, home, pane, placing)),
+    [change, home, placing]
   )
   // Alt+Space or Alt+K again, or the other of them, closes the menu.
   const toggleMenu = useCallback(
@@ -875,7 +875,8 @@ export function Shell({
                     overview={overview}
                     modules={modules}
                     projectOf={projectOf}
-                    strict={flow !== "free"}
+                    strict={strict}
+                    gone={gone}
                     shows={shows}
                     marked={marked}
                     away={away}
@@ -947,7 +948,8 @@ export function Shell({
                     onExited={leftOverview}
                     workspaces={workspaces}
                     projectOf={projectOf}
-                    strict={flow !== "free"}
+                    strict={strict}
+                    gone={gone}
                     shows={shows}
                     frame={frame}
                     onPick={(entry) => change((w) => focusEntry(w, entry))}

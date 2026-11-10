@@ -620,6 +620,22 @@
       "keys": []
     },
     {
+      "id": "workspace.close",
+      "title": "Close the workspace",
+      "section": "Workspaces",
+      "keys": [],
+      "args": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "type": "string",
+            "description": "the workspace's id; none for the one on screen"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "id": "pane.pick",
       "title": "Go to a Pane where a workspace shows it, or open it",
       "section": "Panes",

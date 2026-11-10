@@ -340,6 +340,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - The workspace below (`workspace.down`), Alt+PageDown
 - Move the workspace down (`workspace.move-down`), Alt+Shift+PageDown
 - A new workspace: the empty one at the bottom (`workspace.new`)
+- Close the workspace (`workspace.close`); takes `workspace` (the workspace's id; none for the one on screen)
 - Go to what calls you (`calls.answer`), Alt+U
 - Archive the Thread you look at, or bring it back (`sidebar.archive`), Alt+S; takes `project` (the Project of the Item it acts on), `item` (the Item's id in its Project, as a Thread's; none for the one in focus)
 - Banda menu (`menu.open`), Alt+Space; takes `source` (a source's id, to show its rows alone, as files.find)

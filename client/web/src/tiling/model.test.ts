@@ -34,6 +34,7 @@ import {
   send,
   shift,
   inBar,
+  keepsPlace,
   start,
   step,
   takesGroup,
@@ -107,6 +108,16 @@ describe("a Project's workspace", () => {
     expect(kept.list).toHaveLength(4)
     expect(new Set(kept.list.map((w) => w.id)).size).toBe(4)
     expect(inBar(kept).map((w) => w.id)).toEqual(kept.list.map((w) => w.id))
+  })
+
+  test("keeps its place emptied in the row and solo, but when its Project has no Threads; in the Flow free none does (ADR 0102)", () => {
+    const mine = "p1" as ProjectId
+    const project = { id: "w0", columns: [], focus: 0, project: mine }
+    const free = { id: "w1", columns: [], focus: 0 }
+    expect(keepsPlace(project, [], true)).toBe(true)
+    expect(keepsPlace(project, [mine], true)).toBe(false)
+    expect(keepsPlace(project, [], false)).toBe(false)
+    expect(keepsPlace(free, [], true)).toBe(false)
   })
 })
 

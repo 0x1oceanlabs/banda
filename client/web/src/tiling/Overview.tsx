@@ -37,6 +37,7 @@ import {
   find,
   focused,
   groupAttributes,
+  keepsPlace,
   padded,
   share,
   type Workspaces,
@@ -125,6 +126,7 @@ export function Overview({
   workspaces,
   projectOf,
   strict,
+  gone,
   shows,
   frame,
   onPick,
@@ -140,10 +142,13 @@ export function Overview({
   /** In the row and solo, where a Project's workspace holds its Panes
    * only (ADR 0102). */
   strict: boolean
+  /** The Projects known to have no Threads, whose emptied workspace goes
+   * once the window leaves it (`keepsPlace`). */
+  gone: readonly ProjectId[]
   /** The Thread each Pane shows, as its module lists it, and how it
    * calls the Person. */
   shows: Shows
-  frame: Pick<Frame, "arrange" | "focus" | "close">
+  frame: Pick<Frame, "arrange" | "focus" | "close" | "run">
   /** Puts the focus on a Pane, and goes to its workspace. */
   onPick: (entry: string) => void
   /** Moves the focus as the arrows do here. */
@@ -661,6 +666,17 @@ export function Overview({
                       projectOf={projectOf}
                       shows={shows}
                       onClosePane={frame.close}
+                      onCloseWorkspace={
+                        // An emptied Project's workspace goes when the
+                        // Person closes it (ADR 0102, decision 2).
+                        workspace.columns.length === 0 &&
+                        keepsPlace(workspace, gone, strict)
+                          ? () =>
+                              frame.run("workspace.close", {
+                                workspace: workspace.id,
+                              })
+                          : undefined
+                      }
                       onPick={(entry) => {
                         onPick(entry)
                         onClose()
@@ -717,6 +733,7 @@ function Row({
   shows,
   onPick,
   onClosePane,
+  onCloseWorkspace,
   onGo,
 }: {
   workspace: Workspaces["list"][number]
@@ -735,6 +752,9 @@ function Row({
   onPick: (entry: string) => void
   /** Closes a Pane, as Alt+W does: a middle click on it, or its cross. */
   onClosePane: (entry: string) => void
+  /** Closes the workspace, as a middle click on it or its cross does;
+   * none where it cannot be closed. */
+  onCloseWorkspace?: () => void
   onGo: () => void
 }) {
   const closeTitle = useKeyLabel()("pane.close", "Close")
@@ -750,7 +770,7 @@ function Row({
       aria-label={`Workspace ${number}`}
       aria-current={current || undefined}
       // An empty one is a slim place to drop a Pane, not a whole screen.
-      className="flex shrink-0 cursor-pointer gap-(--gap-inner) overflow-x-auto overflow-y-hidden rounded-(--overview-plate) [scrollbar-width:none] group-data-lifted/place:shadow-[0_12px_28px_rgb(0_0_0/0.4)] data-empty:items-center data-empty:justify-center data-empty:bg-overview-foreground/4 data-empty:text-overview-foreground/40 data-empty:transition-colors data-empty:hover:bg-overview-foreground/8 motion-reduce:transition-none"
+      className="flex shrink-0 cursor-pointer gap-(--gap-inner) overflow-x-auto overflow-y-hidden rounded-(--overview-plate) [scrollbar-width:none] group-data-lifted/place:shadow-[0_12px_28px_rgb(0_0_0/0.4)] data-empty:relative data-empty:items-center data-empty:justify-center data-empty:bg-overview-foreground/4 data-empty:text-overview-foreground/40 data-empty:transition-colors data-empty:hover:bg-overview-foreground/8 motion-reduce:transition-none"
       style={
         {
           width,
@@ -765,9 +785,20 @@ function Row({
         event.stopPropagation()
         onGo()
       }}
+      onAuxClick={(event) => {
+        if (event.button === 1) onCloseWorkspace?.()
+      }}
     >
       {empty && (
         <PlusIcon aria-label="Empty: drop a Pane here" className="size-3.5" />
+      )}
+      {onCloseWorkspace && (
+        <Cross
+          label={`Close workspace ${number}`}
+          title="Close the workspace"
+          className="top-1/2 -translate-y-1/2 group-hover/place:opacity-100"
+          onClose={onCloseWorkspace}
+        />
       )}
       {drawnColumns(workspace, look).map((column, c) => {
         return (
@@ -824,21 +855,12 @@ function Row({
                 >
                   {/* For the mouse; the keys close a Pane with Alt+W. The
                       focus stays with the overview, which takes the keys. */}
-                  <Button
-                    variant="secondary"
-                    size="icon-xs"
-                    tabIndex={-1}
-                    aria-label={`Close ${title}`}
+                  <Cross
+                    label={`Close ${title}`}
                     title={closeTitle}
-                    className="absolute top-1.5 right-1.5 z-1 rounded-md border border-overview-foreground/20 bg-popover text-popover-foreground opacity-0 shadow-sm transition-opacity duration-150 group-hover/over:opacity-100 hover:bg-popover hover:text-destructive motion-reduce:transition-none [@media(hover:none)]:opacity-100"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onClosePane(entry.id)
-                    }}
-                  >
-                    <XIcon />
-                  </Button>
+                    className="top-1.5 group-hover/over:opacity-100"
+                    onClose={() => onClosePane(entry.id)}
+                  />
                   {/* What the Apps show of it at a size to read: how its
                       Thread is, and what it asks when it calls. With
                       nothing to show, no label. */}
@@ -877,6 +899,42 @@ function Row({
         )
       })}
     </div>
+  )
+}
+
+/** A cross that closes what it stands on, shown under the pointer. The
+ * focus stays with the overview, which takes the keys. */
+function Cross({
+  label,
+  title,
+  className,
+  onClose,
+}: {
+  label: string
+  title: string
+  /** Where it stands, and what hover shows it. */
+  className: string
+  onClose: () => void
+}) {
+  return (
+    <Button
+      variant="secondary"
+      size="icon-xs"
+      tabIndex={-1}
+      aria-label={label}
+      title={title}
+      className={cn(
+        "absolute right-1.5 z-1 rounded-md border border-overview-foreground/20 bg-popover text-popover-foreground opacity-0 shadow-sm transition-opacity duration-150 hover:bg-popover hover:text-destructive motion-reduce:transition-none [@media(hover:none)]:opacity-100",
+        className
+      )}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={(event) => {
+        event.stopPropagation()
+        onClose()
+      }}
+    >
+      <XIcon />
+    </Button>
   )
 }
 

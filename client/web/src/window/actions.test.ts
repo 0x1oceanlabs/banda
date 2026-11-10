@@ -5,7 +5,7 @@ import { takeLook } from "@banda/ui/lib/look"
 import type { Args } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
-import type { Change } from "../tiling/arrange"
+import type { Change, Plan } from "../tiling/arrange"
 import {
   type Column,
   entries,
@@ -33,6 +33,7 @@ import {
   runAction,
   type Shell,
   targetsOf,
+  startingHere,
   updating,
   windowApiOf,
   arranging,
@@ -755,4 +756,109 @@ test("Arrange by Project names the Projects that have a workspace, and with one 
     projects: ["a"],
     only: "a",
   })
+})
+
+test("a first Pane started on an emptied Project's workspace goes where the keys put it, into its own Group, and on one of no Project there (ADR 0102, decision 4)", () => {
+  const terminal = { kind: "terminal.terminal", args: {} }
+  const row: Placing = { flow: "row", scratch: () => false }
+  const emptied: Workspaces = {
+    list: [
+      { id: "mine", project: "a", focus: 0, columns: [] },
+      { id: "bottom", focus: 0, columns: [] },
+    ],
+    current: 0,
+  }
+  expect(placeFor(emptied, "a", terminal, row)).toBe("own")
+  expect(startingHere(emptied, "home", terminal, row)).toMatchObject({
+    command: {
+      method: "workspaces.open",
+      params: { project: "a", place: { to: "own", project: "a" } },
+    },
+  })
+  // On the empty one at the bottom, a column there, in the home Project.
+  const plus = { ...emptied, current: 1 }
+  expect(startingHere(plus, "home", terminal, row)).toMatchObject({
+    command: {
+      params: {
+        project: "home",
+        place: { to: "column", workspace: "bottom", index: 0 },
+      },
+    },
+  })
+  // In the Flow free, there too, in its Project.
+  const free = { ...row, flow: "free" } as const
+  expect(startingHere(emptied, "home", terminal, free)).toMatchObject({
+    command: {
+      params: {
+        project: "a",
+        place: { to: "column", workspace: "mine", index: 0 },
+      },
+    },
+  })
+})
+
+test("workspace.close leaves an emptied workspace for the one above, or below from the first, then lets it go; by its ID from elsewhere, the window stays (ADR 0102, decision 2)", () => {
+  const terminal = { kind: "terminal.terminal", args: {} }
+  const busy = {
+    id: "theirs",
+    project: "b",
+    focus: 0,
+    columns: [
+      {
+        id: "c",
+        active: 0,
+        entries: [{ id: "e", project: "b", pane: terminal }],
+      },
+    ],
+  }
+  const mine = { id: "mine", project: "a", focus: 0, columns: [] }
+  const bottom = { id: "bottom", focus: 0, columns: [] }
+  const closing = (list: Workspace[], current: number) => {
+    let state: Workspaces = { list, current }
+    const sent: unknown[] = []
+    const shell = {
+      change: (how: (w: Workspaces) => Workspaces | Plan | undefined) => {
+        const step = how(state)
+        if (step && "command" in step) sent.push(step.command)
+        else if (step) state = step
+      },
+      here: {
+        get: () => ({ workspace: { id: state.list[state.current]!.id } }),
+      },
+    } as unknown as Shell
+    const close = (args?: Args) => {
+      runAction(shell, "workspace.close", args)
+      return { at: state.current, sent: [...sent] }
+    }
+    return close
+  }
+  const tidy = (keep: string, projects: string[]) => ({
+    method: "workspaces.tidy",
+    params: { keep, projects },
+  })
+
+  // From the one on screen: up, then it goes.
+  expect(closing([busy, mine, bottom], 1)()).toEqual({
+    at: 0,
+    sent: [tidy("theirs", ["b"])],
+  })
+  // From the first: down.
+  expect(closing([mine, busy, bottom], 0)()).toEqual({
+    at: 1,
+    sent: [tidy("theirs", ["b"])],
+  })
+  // By its ID, from the overview while another is on screen: it stays.
+  expect(closing([busy, mine, bottom], 0)({ workspace: "mine" })).toEqual({
+    at: 0,
+    sent: [tidy("theirs", ["b"])],
+  })
+  // One that holds a Pane, the empty one at the bottom: nothing.
+  expect(closing([busy, mine, bottom], 0)()).toEqual({ at: 0, sent: [] })
+  expect(closing([busy, mine, bottom], 2)()).toEqual({ at: 2, sent: [] })
+
+  // In the Banda menu, with no key: a held Alt+W would go on to close
+  // the Panes of the workspace it goes to.
+  const action = ACTIONS.find((action) => action.id === "workspace.close")
+  expect(action?.keys).toBeUndefined()
+  expect(action?.unlisted).toBeUndefined()
 })

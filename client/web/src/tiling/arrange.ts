@@ -31,6 +31,7 @@ import {
   type Entry,
   entries,
   find,
+  keepsPlace,
   samePane,
   type Workspace,
   type Workspaces,
@@ -537,17 +538,17 @@ export function resized(
 
 /**
  * Lets the empty workspaces go that the Person no longer looks at, as
- * niri does, once the window has left them; none when there are none. A
- * Project's stays but when its Project is known to have no Threads, one of
- * `gone` (ADR 0102, decision 2).
+ * niri does, once the window has left them; none when there are none.
+ * One that `keepsPlace` stays: a Project's, in the row and solo, but when
+ * its Project is one of `gone` (ADR 0102, decision 2).
  */
 export function tidied(
   state: Workspaces,
-  gone: readonly ProjectId[] = []
+  gone: readonly ProjectId[] = [],
+  strict = true
 ): Command | undefined {
   const last = state.list.length - 1
-  const kept = (workspace: Workspace) =>
-    workspace.project !== undefined && !gone.includes(workspace.project)
+  const kept = (workspace: Workspace) => keepsPlace(workspace, gone, strict)
   const empty = state.list.some(
     (workspace, i) =>
       workspace.columns.length === 0 &&
@@ -564,6 +565,33 @@ export function tidied(
     method: "workspaces.tidy",
     params: { keep, ...(projects.length > 0 && { projects }) },
   }
+}
+
+/** Where workspace `id` stands, when the Person may close it: it is
+ * empty, and not the empty one at the bottom. */
+export function closableAt(state: Workspaces, id: string): number | undefined {
+  const at = state.list.findIndex((workspace) => workspace.id === id)
+  const workspace = state.list[at]
+  return workspace?.columns.length === 0 && at !== state.list.length - 1
+    ? at
+    : undefined
+}
+
+/**
+ * Lets the empty workspace `id` go, as the Person closes it, a Project's
+ * too: tidied, with its Project counted gone. The Project's next Thread
+ * makes its workspace again at the end (ADR 0102, decision 2). The window
+ * stays on the one it shows, so it leaves `id` first; none while it is on
+ * it, or `id` is not `closableAt`.
+ */
+export function closingWorkspace(
+  state: Workspaces,
+  id: string
+): Command | undefined {
+  const at = closableAt(state, id)
+  if (at === undefined || at === state.current) return undefined
+  const { project } = state.list[at]
+  return tidied(state, project === undefined ? [] : [project])
 }
 
 /**

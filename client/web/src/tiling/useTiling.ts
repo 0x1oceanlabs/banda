@@ -13,6 +13,7 @@ import {
   type ProjectId,
   Refused,
 } from "@banda/contract"
+import type { Flow } from "@banda/contract/agents"
 import { type Readable, Store, useStore } from "@banda/core/react"
 import type { PaneState } from "@banda/ui/pane"
 import { groupedOf, startable, widthOf } from "../registry"
@@ -61,17 +62,18 @@ const standingIn = (seen: Seen) => seen.standing
  * before drew (roma-day.spec.ts holds it), and the commands go in that
  * order. It names no App and imports nothing of the Window. `machine`,
  * `modules` and `home` are for the arrangement a window kept before,
- * which moves to the engine once. With `solo`, every Group and every
- * column in none is drawn the whole screen wide, on any workspace (ADR
- * 0079; ADR 0102, decision 8), but on the workspace `row` names: the
- * engine's arrangement stays as it is.
+ * which moves to the engine once. In the Flow solo, every Group and
+ * every column in none is drawn the whole screen wide, on any workspace
+ * (ADR 0079; ADR 0102, decision 8), but on the workspace `row` names: the
+ * engine's arrangement stays as it is. In the Flow free, every workspace
+ * is free, and goes emptied once the window leaves it (decision 1).
  */
 export function useTiling({
   engine,
   machine,
   modules,
   home,
-  solo = false,
+  flow = "row",
   row,
   gone = NONE,
 }: {
@@ -79,13 +81,14 @@ export function useTiling({
   machine: ProjectId | undefined
   modules: readonly string[]
   home: ProjectId
-  solo?: boolean
+  flow?: Flow
   /** In solo, the workspace `Alt+M` shows as the row for a while. */
   row?: string
   /** The Projects known to have no Threads, whose emptied workspace goes;
    * every other Project's stays (ADR 0102, decision 2). */
   gone?: readonly ProjectId[]
 }) {
+  const solo = flow === "solo"
   // The arrangement is the engine's; the view, the window's (ADR 0025).
   const live = useArranged(engine)
   const ready = live.state === "ready"
@@ -179,12 +182,14 @@ export function useTiling({
   // before it.
   const tidying = useRef("")
   useEffect(() => {
-    const command = ready ? tidied(workspaces, gone) : undefined
+    const command = ready
+      ? tidied(workspaces, gone, flow !== "free")
+      : undefined
     const key = command ? JSON.stringify([command, workspaces.list.length]) : ""
     if (key === tidying.current) return
     tidying.current = key
     if (command) sent({ command, focus: false })
-  }, [workspaces, ready, sent, gone])
+  }, [workspaces, ready, sent, gone, flow])
 
   // A change, worked out from what is drawn now and drawn at once; it
   // gives the Pane it focuses. One the engine refuses is drawn no more

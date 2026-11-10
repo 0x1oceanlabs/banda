@@ -3,6 +3,7 @@ import type { PaneState } from "@banda/ui/pane"
 import { describe, expect, test } from "vitest"
 import {
   applyChange,
+  closingWorkspace,
   columnMoved,
   keptOf,
   moved,
@@ -16,6 +17,7 @@ import {
   withAsked,
   workspaceMoved,
 } from "./arrange"
+import { apply } from "./arrangement"
 import {
   close,
   current,
@@ -336,6 +338,49 @@ describe("plans", () => {
       method: "workspaces.tidy",
       params: { keep: current(both).id, projects: [mine] },
     })
+    // In the Flow free every workspace is free: a Project's goes too, as
+    // before ADR 0102 (decision 1).
+    expect(tidied(kept, [], false)).toEqual(tidied(kept, [mine]))
+    expect(tidied(both, [], false)).toEqual({
+      method: "workspaces.tidy",
+      params: { keep: current(both).id },
+    })
+  })
+
+  test("closes an emptied workspace the window has left, a Project's too, and keeps the rest (ADR 0102, decision 2)", () => {
+    const state = arranged()
+    // As the engine names them, so its copy runs the command.
+    const uuid = (n: number) => `00000000-0000-4000-8000-00000000000${n}`
+    const [mine, theirs] = [uuid(1), uuid(2)] as ProjectId[]
+    const [busy, bottom] = state.list
+    const closing: Workspaces = {
+      list: [
+        busy!,
+        { id: uuid(3), columns: [], focus: 0, project: mine },
+        { id: uuid(4), columns: [], focus: 0, project: theirs },
+        bottom!,
+      ],
+      current: 0,
+    }
+    const command = closingWorkspace(closing, uuid(3))
+    expect(command).toEqual({
+      method: "workspaces.tidy",
+      params: { keep: busy!.id, projects: [theirs] },
+    })
+    // As the engine runs it, that one goes alone.
+    const after = apply(keptOf(closing), command!, uuid(5))
+    expect("list" in after && after.list.map((one) => one.id)).toEqual([
+      busy!.id,
+      uuid(4),
+      bottom!.id,
+    ])
+    // None while the window is on it, while it holds a Pane, for the
+    // empty one at the bottom, or one that is not there.
+    const there = { ...closing, current: 1 }
+    expect(closingWorkspace(there, uuid(3))).toBeUndefined()
+    expect(closingWorkspace(there, busy!.id)).toBeUndefined()
+    expect(closingWorkspace(closing, bottom!.id)).toBeUndefined()
+    expect(closingWorkspace(closing, uuid(6))).toBeUndefined()
   })
 })
 

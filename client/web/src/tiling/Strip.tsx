@@ -1,3 +1,4 @@
+import { Button } from "@banda/ui/components/button"
 import { cn } from "@banda/ui/lib/utils"
 import { GripHorizontalIcon } from "lucide-react"
 import { Component, memo, useEffect, useLayoutEffect, useRef } from "react"
@@ -10,6 +11,7 @@ import {
   type Entry,
   groupAttributes,
   isFree,
+  keepsPlace,
   runOf,
   share,
   type Workspace,
@@ -67,6 +69,7 @@ export const Strip = memo(function Strip({
   modules,
   projectOf,
   strict,
+  gone,
   shows,
   marked,
   away,
@@ -89,6 +92,9 @@ export const Strip = memo(function Strip({
   /** In the row and solo, where a Project's workspace holds its Panes
    * only (ADR 0102). */
   strict: boolean
+  /** The Projects known to have no Threads, whose emptied workspace goes
+   * once the window leaves it (`keepsPlace`). */
+  gone: readonly ProjectId[]
   /** What its Panes show, as their Apps list it, and how each calls. */
   shows: Shows
   /** An Agent opened it, and the Person has not looked at it yet. */
@@ -136,6 +142,13 @@ export const Strip = memo(function Strip({
   // along the Strip keeps the focus, and the Strip follows it.
   const layout = columns.map((c) => `${c.id} ${c.width} ${c.min}`).join()
   const empty = workspace.columns.length === 0
+  // A Project's workspace says whose it is: emptied, where it keeps its
+  // place (ADR 0102, decision 2), and by its own Group's tag (decision 4).
+  const whose =
+    workspace.project === undefined
+      ? undefined
+      : projectOf(workspace.project)?.name
+  const kept = empty && keepsPlace(workspace, gone, strict)
 
   // Columns grow, shrink and go to new places on the look's springs.
   const motion = useRef(new ColumnMotion())
@@ -357,10 +370,25 @@ export const Strip = memo(function Strip({
           here, over these words. */}
       {empty && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 pl-[calc(--spacing(6)+var(--sidebar-inset))]">
-          <p className="text-sm text-muted-foreground">
-            This workspace is empty. Open a Pane:
+          <p className="text-center text-sm text-balance text-muted-foreground">
+            {kept
+              ? `${whose ?? "This Project"}'s workspace is empty. It keeps its place until you close it.`
+              : "This workspace is empty. Open a Pane:"}
           </p>
           <Choices modules={modules} onPick={onStart} />
+          {/* It goes when the Person closes it (ADR 0102, decision 2). */}
+          {kept && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={() =>
+                frame.run("workspace.close", { workspace: workspace.id })
+              }
+            >
+              Close the workspace
+            </Button>
+          )}
         </div>
       )}
       {columns.map((column, c) => {
@@ -368,6 +396,7 @@ export const Strip = memo(function Strip({
         const bar = column.decked && !zooms
         const { group, ends } = column
         const lit = group !== undefined && selected && focusedGroup === group
+        const own = group !== undefined && group === workspace.own
         return (
           <div
             key={column.id}
@@ -396,23 +425,27 @@ export const Strip = memo(function Strip({
                 data-focused={lit ? "" : undefined}
               />
             )}
-            {group !== undefined && ends.first && groups.handle && !zooms && (
-              <GroupHandle
-                group={group}
-                name={
-                  owned.get(group)?.name ??
-                  // The Project's own Group has no owner: its tag is the
-                  // Project's name (ADR 0102, decision 4).
-                  (group === workspace.own && workspace.project !== undefined
-                    ? projectOf(workspace.project)?.name
-                    : undefined)
-                }
-                pane={column.entries[0]?.id}
-                panes={columns
-                  .slice(c, runOf(columns, c).end)
-                  .reduce((sum, one) => sum + one.entries.length, 0)}
-              />
-            )}
+            {group !== undefined &&
+              ends.first &&
+              !zooms &&
+              (groups.handle ? (
+                <GroupHandle
+                  group={group}
+                  name={
+                    owned.get(group)?.name ??
+                    // The own Group has no owner: its tag is the Project's
+                    // name (ADR 0102, decision 4).
+                    (own ? whose : undefined)
+                  }
+                  pane={column.entries[0]?.id}
+                  panes={columns
+                    .slice(c, runOf(columns, c).end)
+                    .reduce((sum, one) => sum + one.entries.length, 0)}
+                />
+              ) : (
+                // With the handle off, the own Group still bears its tag.
+                own && whose !== undefined && <OwnTag name={whose} />
+              ))}
             {bar && (
               <Tabs
                 entries={column.entries}
@@ -452,6 +485,10 @@ export const Strip = memo(function Strip({
   )
 })
 
+/** A Group's handle and the own Group's tag: a pill on its top edge. */
+const PILL =
+  "absolute top-[calc(-1*var(--group-pad)-0.375rem)] left-3 z-10 flex h-3 items-center rounded-full bg-popover px-1.5 text-[0.625rem] leading-3 text-muted-foreground ring-1 ring-border select-none"
+
 /**
  * A Group's handle (ADR 0065, decision 6): on its top edge, it shows
  * under the pointer, says the Group's name and its number of Panes, and
@@ -478,10 +515,29 @@ function GroupHandle({
       role="button"
       aria-label={label}
       title="Drag to move the Group"
-      className="absolute top-[calc(-1*var(--group-pad)-0.375rem)] left-3 z-10 flex h-3 cursor-grab items-center gap-1 rounded-full bg-popover px-1.5 text-[0.625rem] leading-3 text-muted-foreground opacity-0 shadow-sm ring-1 ring-border transition-opacity duration-150 select-none data-hover:opacity-100 data-lifted:opacity-100 motion-reduce:transition-none"
+      className={cn(
+        PILL,
+        "cursor-grab gap-1 opacity-0 shadow-sm transition-opacity duration-150 data-hover:opacity-100 data-lifted:opacity-100 motion-reduce:transition-none"
+      )}
     >
       <GripHorizontalIcon aria-hidden className="size-2.5" />
       {label}
+    </div>
+  )
+}
+
+/**
+ * The Project's own Group's tag (ADR 0102, decision 4): the Project's
+ * name, where the Group's handle would stand, there while the handle is
+ * off. It only says; the handle carries.
+ */
+function OwnTag({ name }: { name: string }) {
+  return (
+    <div
+      data-group-tag=""
+      className={cn(PILL, "pointer-events-none whitespace-nowrap")}
+    >
+      {name}
     </div>
   )
 }

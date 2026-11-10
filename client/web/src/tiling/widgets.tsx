@@ -188,7 +188,9 @@ function WorkspaceList({
               <span
                 className={cn(
                   "relative flex size-6 shrink-0 items-center justify-center rounded-md",
-                  // Emptied, it goes once the Person leaves it.
+                  // Emptied: a free one goes once the Person leaves it; in
+                  // the row and solo, a Project's keeps its place while its
+                  // Project has Threads (ADR 0102, decision 2).
                   w.empty && "border border-dashed border-muted-foreground/50"
                 )}
               >

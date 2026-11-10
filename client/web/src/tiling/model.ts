@@ -273,6 +273,23 @@ export function takesGroup(
   return column?.group !== undefined && column.group !== workspace.own
 }
 
+/** Whether `workspace`, emptied, keeps its place once the window leaves
+ * it: in the row and solo, `strict`, a Project's does, but when its
+ * Project is known to have no Threads, one of `gone` (ADR 0102, decision
+ * 2). In the Flow free every workspace is free, and none does (decision
+ * 1). */
+export function keepsPlace(
+  workspace: Workspace,
+  gone: readonly ProjectId[],
+  strict: boolean
+): boolean {
+  return (
+    strict &&
+    workspace.project !== undefined &&
+    !gone.includes(workspace.project)
+  )
+}
+
 /** The Project Pane `pane` moves as: its own alone; `whole`, with its
  * Group, the Group's lead's, as `lead` says (an Agent's Thread), else its
  * first Pane's. */
