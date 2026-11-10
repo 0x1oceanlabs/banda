@@ -20,7 +20,8 @@ import { useLaterClock, useLists } from "../calls/stores"
 import { useLookSidebar } from "../look"
 import { ThreadMark, toneOf } from "@banda/ui/components/banda-mark"
 import { keysOf, order, useElsewhere } from "./order"
-import { Status } from "./Row"
+import { markSaid } from "./card"
+import { Status } from "./CardStatus"
 import { type Counted, inOrder, type Tally, tally } from "./tally"
 
 /** Each count's words, after its number. */
@@ -180,7 +181,7 @@ function List({
           <ThreadMark listed={listed} news={false} />
           <span className="min-w-0 flex-1 truncate">{listed.title}</span>
           {where && <ProjectSign project={where} />}
-          <Status listed={listed} />
+          <Status said={markSaid(listed)} />
         </DropdownMenuItem>
       )
     })
